@@ -278,13 +278,26 @@ class FeatureRow(QWidget):
         if yes:
             self.reset()
 
-    def set_display(self, value: str, shared: bool):
+    def set_display(self, value: str, shared: bool, contrastive: bool = False):
         """
         Display a feature value in Seg→Feat mode.
         value: '+', '-', or '' (inapplicable / mixed across segments)
         shared: whether this value is consistent across all selected segs
+        contrastive: True when segments split cleanly on + vs - for this feature
         """
-        if not value or not shared:
+        if contrastive:
+            self.badge.setText("\u00b1")
+            self.badge.setStyleSheet(
+                f"background: {C['accent_light']}; color: {C['accent']};"
+                " border-radius: 4px; font-weight: bold;"
+            )
+            self.name_label.setStyleSheet(
+                f"color: {C['accent']}; font-weight: bold;"
+            )
+            self.setStyleSheet(
+                f"background: {C['accent_light']}; border-radius: 6px;"
+            )
+        elif not value or not shared:
             self.badge.setText("\u00b7")
             self.badge.setStyleSheet(
                 f"background: {C['tag_gray']};"
@@ -982,6 +995,30 @@ class MainWindow(QMainWindow):
     # Seg → Feat logic
     # ------------------------------------------------------------------
 
+    def _compute_contrastive(self, segs: list) -> dict:
+        """
+        Return {feature: {'+': [segs...], '-': [segs...]}} for every feature
+        where at least one segment is '+' and at least one is '-'.
+        Features where some segs have '0' and others have '+'/'-' are excluded;
+        only clean binary splits count as contrast.
+        """
+        assert self.engine is not None
+        result = {}
+        for feat in self.engine.features:
+            plus_segs = [
+                s
+                for s in segs
+                if self.engine.segments[s].get(feat, "0") == "+"
+            ]
+            minus_segs = [
+                s
+                for s in segs
+                if self.engine.segments[s].get(feat, "0") == "-"
+            ]
+            if plus_segs and minus_segs:
+                result[feat] = {"+": plus_segs, "-": minus_segs}
+        return result
+
     def _update_seg_to_feat(self):
         segs = self._selected_segments
         if not segs or not self.engine:
@@ -997,12 +1034,15 @@ class MainWindow(QMainWindow):
             self._show_single_segment_analysis(segs[0], feats)
         else:
             common = self.engine.common_features(segs)
+            contrastive = self._compute_contrastive(segs)
             for feat, row in self._feat_rows.items():
                 if feat in common:
                     row.set_display(common[feat], shared=True)
+                elif feat in contrastive:
+                    row.set_display("", shared=False, contrastive=True)
                 else:
                     row.set_display("", shared=False)
-            self._show_multi_segment_analysis(segs, common)
+            self._show_multi_segment_analysis(segs, common, contrastive)
 
     def _show_single_segment_analysis(self, seg: str, feats: dict):
         plus_feats = [f for f, v in feats.items() if v == "+"]
@@ -1021,7 +1061,9 @@ class MainWindow(QMainWindow):
         )
         self.analysis.set_html(html)
 
-    def _show_multi_segment_analysis(self, segs: list, common: dict):
+    def _show_multi_segment_analysis(
+        self, segs: list, common: dict, contrastive: dict
+    ):
         assert self.engine is not None
         seg_tags = " ".join(self._tag(f"/{s}/", "blue") for s in segs)
 
@@ -1035,6 +1077,31 @@ class MainWindow(QMainWindow):
             common_html = (
                 f"<p><b>Shared features:</b>"
                 f" <i style='color:{C['text_dim']}'>none</i></p>"
+            )
+
+        if contrastive:
+            rows = []
+            for feat, groups in contrastive.items():
+                plus_segs = " ".join(
+                    self._tag(f"/{s}/", "blue") for s in groups["+"]
+                )
+                minus_segs = " ".join(
+                    self._tag(f"/{s}/", "blue") for s in groups["-"]
+                )
+                rows.append(
+                    f"{self._tag(f'+{feat}', 'green')} {plus_segs}"
+                    f" &nbsp; {self._tag(chr(8722)+feat, 'red')} {minus_segs}"
+                )
+            contrast_html = (
+                "<p><b>Contrasting features:</b><br>"
+                + "<br>".join(rows)
+                + "</p>"
+            )
+        else:
+            contrast_html = (
+                f"<p><b>Contrasting features:</b>"
+                f" <i style='color:{C['text_dim']}'>none \u2014 segments"
+                " are featurally identical</i></p>"
             )
 
         is_nc, spec = self.engine.is_natural_class(segs)
@@ -1061,7 +1128,10 @@ class MainWindow(QMainWindow):
             )
 
         html = (
-            f"<p><b>Selected:</b> {seg_tags}</p>" f"{common_html}" f"{nc_html}"
+            f"<p><b>Selected:</b> {seg_tags}</p>"
+            f"{common_html}"
+            f"{contrast_html}"
+            f"{nc_html}"
         )
         self.analysis.set_html(html)
 
