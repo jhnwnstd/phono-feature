@@ -169,6 +169,8 @@ _RELABEL_PATTERNS: Dict[FrozenSet[str], str] = {
     frozenset(
         {"Lateral Approximants", "Approximants", "Trills", "Taps & Flaps"}
     ): "Liquids",
+    # Lateral Approximants + Vibrants (Trills+Taps merged before Approximants joined)
+    frozenset({"Lateral Approximants", "Trills", "Taps & Flaps"}): "Liquids",
 }
 
 # ---------------------------------------------------------------------------
@@ -176,12 +178,20 @@ _RELABEL_PATTERNS: Dict[FrozenSet[str], str] = {
 # ---------------------------------------------------------------------------
 
 _MERGE_BLOCKED: Set[FrozenSet[str]] = {
-    frozenset({"Rhotics", "Fricatives"}),
-    frozenset({"Rhotics", "Sibilants"}),
-    frozenset({"Rhotics", "Plosives"}),
+    # Pre-relabel: individual Trills / Taps must not merge with obstruents
+    frozenset({"Trills", "Fricatives"}),
+    frozenset({"Trills", "Sibilants"}),
+    frozenset({"Trills", "Plosives"}),
+    frozenset({"Taps & Flaps", "Fricatives"}),
+    frozenset({"Taps & Flaps", "Sibilants"}),
+    frozenset({"Taps & Flaps", "Plosives"}),
+    # Post-relabel derived groups
     frozenset({"Vibrants", "Fricatives"}),
     frozenset({"Vibrants", "Sibilants"}),
     frozenset({"Vibrants", "Plosives"}),
+    frozenset({"Rhotics", "Fricatives"}),
+    frozenset({"Rhotics", "Sibilants"}),
+    frozenset({"Rhotics", "Plosives"}),
     frozenset({"Liquids", "Fricatives"}),
     frozenset({"Liquids", "Plosives"}),
     # Prevent re-merging the two groups we explicitly split
@@ -339,12 +349,20 @@ def merge_cost(
 
 
 def _is_outlier(new_cost: float, past_costs: List[float]) -> bool:
-    """Return True if new_cost is > mean + 1 std of past costs."""
+    """Return True if new_cost is a statistical outlier vs past costs.
+
+    Requires at least 3 samples before the elbow can activate — prevents
+    a single free merge (cost=0.0) from collapsing std to 0 and triggering
+    the elbow on the very next step.  When std==0 (all past costs identical),
+    anything strictly more expensive stops the merging.
+    """
     if len(past_costs) < 1:
         return False
     mean = sum(past_costs) / len(past_costs)
     variance = sum((c - mean) ** 2 for c in past_costs) / len(past_costs)
     std = math.sqrt(variance)
+    if std == 0:
+        return new_cost > mean
     return new_cost > mean + std
 
 
