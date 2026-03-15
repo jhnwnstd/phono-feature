@@ -205,12 +205,16 @@ class FeatureEngine:
 
         segment_set = set(segments)
 
-        # Features whose value is identical across every target segment
+        # Features whose value is identical across every target segment.
+        # Inapplicable features (value "0") are excluded — they produce
+        # specs that look identical after display filtering.
         candidates: Dict[str, str] = {}
         for feature in self.features:
             values = {self.segments[seg].get(feature, "0") for seg in segments}
             if len(values) == 1:
-                candidates[feature] = values.pop()
+                val = values.pop()
+                if val != "0":
+                    candidates[feature] = val
 
         # Segments outside the target set that must be excluded
         outside = [s for s in self.segments if s not in segment_set]
