@@ -755,9 +755,9 @@ class MainWindow(QMainWindow):
             "Select an inventory from the dropdown to begin."
         )
 
-    def _build_segment_panel(self) -> QWidget:
-        container = QWidget()
-        container.setStyleSheet(f"background: {C['panel']};")
+    def _build_segment_panel(self) -> QFrame:
+        container = QFrame()
+        container.setStyleSheet(f"background: {C['panel']}; border: none;")
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -816,9 +816,9 @@ class MainWindow(QMainWindow):
 
         return container
 
-    def _build_feature_panel(self) -> QWidget:
-        container = QWidget()
-        container.setStyleSheet(f"background: {C['bg']};")
+    def _build_feature_panel(self) -> QFrame:
+        container = QFrame()
+        container.setStyleSheet(f"background: {C['bg']}; border: none;")
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -1105,6 +1105,17 @@ class MainWindow(QMainWindow):
         )
         self.feat_mode_btn.setStyleSheet(
             style_inactive if is_s2f else style_active
+        )
+
+        self.seg_panel.setStyleSheet(
+            f"background: {C['panel']};"
+            f" border: 2px solid {C['accent'] if is_s2f else C['border']};"
+            " border-radius: 8px;"
+        )
+        self.feat_panel.setStyleSheet(
+            f"background: {C['bg']};"
+            f" border: 2px solid {C['accent'] if not is_s2f else C['border']};"
+            " border-radius: 8px;"
         )
 
         for row in self._feat_rows.values():
