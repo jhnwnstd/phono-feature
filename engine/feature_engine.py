@@ -47,7 +47,9 @@ class FeatureEngine:
         if feature not in self.features:
             raise KeyError(f"Feature '{feature}' not found in inventory")
 
-    def _find_segments_unsorted(self, feature_spec: Dict[str, str]) -> List[str]:
+    def _find_segments_unsorted(
+        self, feature_spec: Dict[str, str]
+    ) -> List[str]:
         """Match segments against a feature spec without sorting (internal use)."""
         matching = []
         for segment, features in self.segments.items():
@@ -164,7 +166,9 @@ class FeatureEngine:
                 )
         return sorted(self._find_segments_unsorted(feature_spec))
 
-    def find_all_minimal_bundles(self, segments: List[str]) -> List[Dict[str, str]]:
+    def find_all_minimal_bundles(
+        self, segments: List[str]
+    ) -> List[Dict[str, str]]:
         """
         Find every minimal feature bundle that uniquely characterizes a segment set.
 
@@ -224,7 +228,9 @@ class FeatureEngine:
                 if self.segments[seg].get(feat, "0") != val
             }
             if not exc:
-                return []  # This segment cannot be excluded → not a natural class
+                return (
+                    []
+                )  # This segment cannot be excluded → not a natural class
             excluders.append(exc)
 
         # Sort candidates by descending coverage (hits the most outside segments first)
@@ -238,7 +244,9 @@ class FeatureEngine:
         results: List[Dict[str, str]] = []
         best_size: Optional[int] = None
 
-        def backtrack(idx: int, chosen: List[str], chosen_set: Set[str]) -> None:
+        def backtrack(
+            idx: int, chosen: List[str], chosen_set: Set[str]
+        ) -> None:
             nonlocal best_size
 
             # All outside segments are excluded — record solution
@@ -260,7 +268,9 @@ class FeatureEngine:
 
             # Prune: remaining candidates cannot cover every uncovered outside segment
             remaining = set(candidate_list[idx:])
-            if not all((exc & chosen_set) or (exc & remaining) for exc in excluders):
+            if not all(
+                (exc & chosen_set) or (exc & remaining) for exc in excluders
+            ):
                 return
 
             f = candidate_list[idx]
@@ -271,7 +281,8 @@ class FeatureEngine:
             # Branch B: exclude f — only if remaining can still cover everything
             remaining_without = set(candidate_list[idx + 1 :])
             if all(
-                (exc & chosen_set) or (exc & remaining_without) for exc in excluders
+                (exc & chosen_set) or (exc & remaining_without)
+                for exc in excluders
             ):
                 backtrack(idx + 1, chosen, chosen_set)
 
@@ -397,9 +408,7 @@ class FeatureEngine:
         self._validate_segment(seg2)
         f1 = self.segments[seg1]
         f2 = self.segments[seg2]
-        return sum(
-            f1.get(f, "0") != f2.get(f, "0") for f in self.features
-        )
+        return sum(f1.get(f, "0") != f2.get(f, "0") for f in self.features)
 
     def find_nearest_segments(
         self, segment: str, n: int = 5
