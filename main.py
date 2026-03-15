@@ -15,7 +15,10 @@ Usage:
 
 """
 
+import os
 import sys
+
+os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 
 from PyQt6.QtCore import QCommandLineParser
 from PyQt6.QtWidgets import QApplication
