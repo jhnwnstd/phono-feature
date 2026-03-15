@@ -15,7 +15,7 @@ from PyQt6.QtCore import (
     QTimer,
     pyqtSignal,
 )
-from PyQt6.QtGui import QFont, QStandardItemModel
+from PyQt6.QtGui import QCursor, QFont, QGuiApplication, QScreen, QStandardItemModel
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -147,13 +147,39 @@ _FEATURE_ORDER_INDEX: dict = {f: i for i, f in enumerate(_FEATURE_ORDER)}
 _FEATURE_GROUPS: list = [
     ("Major Class", ["Syllabic", "Consonantal", "Sonorant", "Approximant"]),
     ("Laryngeal", ["Voice", "SpreadGl", "ConstrGl"]),
-    ("Manner", ["Continuant", "Strident", "DelRel", "Nasal", "Lateral", "Trill", "Tap", "Click"]),
-    ("Place", ["LABIAL", "Round", "Labiodental", "CORONAL", "Anterior", "Distributed",
-               "DORSAL", "High", "Low", "Back", "Front", "Tense"]),
+    (
+        "Manner",
+        [
+            "Continuant",
+            "Strident",
+            "DelRel",
+            "Nasal",
+            "Lateral",
+            "Trill",
+            "Tap",
+            "Click",
+        ],
+    ),
+    (
+        "Place",
+        [
+            "LABIAL",
+            "Round",
+            "Labiodental",
+            "CORONAL",
+            "Anterior",
+            "Distributed",
+            "DORSAL",
+            "High",
+            "Low",
+            "Back",
+            "Front",
+            "Tense",
+        ],
+    ),
     ("Pharyngeal / ATR", ["ConstrPharynx", "Pharyngeal", "ATR"]),
     ("Prosodic", ["Long", "Stress", "Tone", "UpperRegister"]),
 ]
-_KNOWN_FEATURES: set = {f for _, feats in _FEATURE_GROUPS for f in feats}
 
 
 def _sort_features(features: list) -> list:
@@ -165,6 +191,7 @@ def _sort_features(features: list) -> list:
 def _sort_spec(spec: dict) -> dict:
     """Return a feature bundle dict with keys in canonical phonological order."""
     return {f: spec[f] for f in _sort_features(list(spec.keys()))}
+
 
 # ---------------------------------------------------------------------------
 # Shared scrollbar style — thin, unobtrusive overlay track
@@ -540,7 +567,7 @@ class AnalysisPanel(QWidget):
         """
             + _SCROLLBAR_STYLE
         )
-        self.content.setFixedHeight(220)
+        self.content.setMinimumHeight(60)
 
         layout.addWidget(self.title)
         layout.addWidget(self.content)
@@ -696,9 +723,12 @@ class MainWindow(QMainWindow):
         self._feat_rows: dict = {}  # feature  → FeatureRow
         self._selected_segments: list = []
         self._selected_features: dict = {}  # feature → '+'/'-'
-        self._saved_seg_state: list = []  # preserved across mode switches
-        self._saved_feat_state: dict = {}  # preserved across mode switches
+        # Exact state of each mode when leaving it; projected into the other
+        # mode as a convenience pre-fill on switch.
+        self._saved_seg_state: list = []
+        self._saved_feat_state: dict = {}
         self._current_path: Optional[str] = None
+        self._did_first_show = False
 
         self.setWindowTitle("Segment & Feature Engine")
         self.setMinimumSize(900, 680)
@@ -725,7 +755,7 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         app = QApplication.instance()
-        assert app is not None
+        assert isinstance(app, QApplication)
         app.installEventFilter(self)
         self._set_mode("seg_to_feat")
         self._restore_settings(startup_path)
@@ -827,12 +857,21 @@ class MainWindow(QMainWindow):
         self.feat_panel = self._build_feature_panel()
         splitter.addWidget(self.feat_panel)
 
-        splitter.setSizes([520, 380])
-        root.addWidget(splitter, stretch=1)
+        splitter.setSizes([500, 420])
 
         # ── bottom: analysis ──────────────────────────────────────────
         self.analysis = AnalysisPanel()
-        root.addWidget(self.analysis)
+
+        vsplit = QSplitter(Qt.Orientation.Vertical)
+        vsplit.setHandleWidth(4)
+        vsplit.setStyleSheet("QSplitter::handle { background: transparent; }")
+        vsplit.addWidget(splitter)
+        vsplit.addWidget(self.analysis)
+        vsplit.setSizes([700, 220])
+        vsplit.setStretchFactor(0, 1)
+        vsplit.setStretchFactor(1, 0)
+
+        root.addWidget(vsplit)
 
         # ── status bar ────────────────────────────────────────────────
         self.status = QStatusBar()
@@ -995,11 +1034,79 @@ class MainWindow(QMainWindow):
     # Settings persistence
     # ------------------------------------------------------------------
 
-    def _restore_settings(self, startup_path: Optional[str]):
-        """Restore window geometry, mode, and last inventory on launch."""
-        geometry = self._settings.value("geometry")
-        if geometry:
-            self.restoreGeometry(geometry)
+    def _target_screen(self) -> Optional[QScreen]:
+        """Return the screen under the cursor, falling back to primaryScreen."""
+        app = QApplication.instance()
+        assert isinstance(app, QApplication)
+        return QGuiApplication.screenAt(QCursor.pos()) or app.primaryScreen()
+
+    def _ensure_visible_on_screen(self) -> None:
+        """
+        Run after the first show via QTimer so the WM has decorated the window.
+        Clamps the framed window onto a real screen if it landed off-screen or
+        was restored to a bad position.
+        """
+        app = QApplication.instance()
+        assert isinstance(app, QApplication)
+
+        frame = self.frameGeometry()
+        on_screen = any(s.geometry().intersects(frame) for s in app.screens())
+
+        if on_screen and frame.width() >= 300 and frame.height() >= 200:
+            self.raise_()
+            self.activateWindow()
+            return
+
+        screen = self._target_screen()
+        if screen is None:
+            return
+
+        avail = screen.availableGeometry()
+        w = min(max(self.width(), 900), avail.width() - 40)
+        h = min(max(self.height(), 680), avail.height() - 40)
+        self.resize(w, h)
+
+        frame = self.frameGeometry()
+        frame.moveCenter(avail.center())
+        self.move(frame.topLeft())
+
+        self.raise_()
+        self.activateWindow()
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        if not self._did_first_show:
+            self._did_first_show = True
+            QTimer.singleShot(0, self._ensure_visible_on_screen)
+
+    def _restore_settings(self, startup_path: Optional[str]) -> None:
+        """Restore window size/position, mode, and last inventory on launch."""
+        # Drop the old binary geometry blob — it encodes absolute positions that
+        # can place the window off-screen after a display config change.
+        self._settings.remove("geometry")
+
+        size = self._settings.value("window_size")
+        pos = self._settings.value("window_pos")
+        screen = self._target_screen()
+
+        if size is not None:
+            self.resize(size)
+        else:
+            if screen is not None:
+                avail = screen.availableGeometry()
+                self.resize(
+                    min(1100, max(900, avail.width() - 40)),
+                    min(940, max(680, avail.height() - 40)),
+                )
+            else:
+                self.resize(1100, 940)
+
+        if pos is not None:
+            self.move(pos)
+        elif screen is not None:
+            frame = self.frameGeometry()
+            frame.moveCenter(screen.availableGeometry().center())
+            self.move(frame.topLeft())
 
         # Determine which inventory to open
         path = startup_path or self._settings.value("last_inventory")
@@ -1015,7 +1122,17 @@ class MainWindow(QMainWindow):
             self._set_mode(saved_mode)
 
     def closeEvent(self, event):  # type: ignore[override]
-        self._settings.setValue("geometry", self.saveGeometry())
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            app.removeEventFilter(self)
+        self._settings.remove("geometry")
+        if self.isMaximized() or self.isFullScreen():
+            normal = self.normalGeometry()
+            self._settings.setValue("window_pos", normal.topLeft())
+            self._settings.setValue("window_size", normal.size())
+        else:
+            self._settings.setValue("window_pos", self.pos())
+            self._settings.setValue("window_size", self.size())
         self._settings.setValue("mode", self._mode)
         if self._current_path:
             self._settings.setValue("last_inventory", self._current_path)
@@ -1171,9 +1288,10 @@ class MainWindow(QMainWindow):
         self.seg_grid_widget.set_groups(groups, new_buttons)
         self._seg_buttons = new_buttons
 
-    def _build_feature_group(self, title: str, features: list) -> Optional[QFrame]:
+    def _build_feature_group(
+        self, title: str, features: list
+    ) -> Optional[QFrame]:
         """Build a labelled group card for the given features. Returns None if no features are active."""
-        assert self.engine is not None
         active = [f for f in features if f in self._feat_rows]
         if not active:
             return None
@@ -1222,7 +1340,9 @@ class MainWindow(QMainWindow):
         active_feature_set = {
             f
             for f in self.engine.features
-            if any(seg.get(f, "0") != "0" for seg in self.engine.segments.values())
+            if any(
+                seg.get(f, "0") != "0" for seg in self.engine.segments.values()
+            )
         }
 
         # Build all FeatureRow widgets first so _build_feature_group can find them
@@ -1390,7 +1510,11 @@ class MainWindow(QMainWindow):
 
     def eventFilter(self, a0, a1):
         """Activate a panel on any mouse press anywhere inside it."""
-        if a1 is not None and hasattr(a1, 'type') and a1.type() == QEvent.Type.MouseButtonPress:
+        if (
+            a1 is not None
+            and hasattr(a1, "type")
+            and a1.type() == QEvent.Type.MouseButtonPress
+        ):
             w = a0
             while w is not None:
                 if w is self.seg_panel:
@@ -1514,11 +1638,13 @@ class MainWindow(QMainWindow):
                         "suggested" if seg in suggested_set else "default"
                     )
 
-            self._show_multi_segment_analysis(segs, common, contrastive, suggested)
+            self._show_multi_segment_analysis(
+                segs, common, contrastive, suggested
+            )
 
     def _show_single_segment_analysis(self, seg: str, feats: dict):
-        plus_feats = [f for f, v in feats.items() if v == "+"]
-        minus_feats = [f for f, v in feats.items() if v == "-"]
+        plus_feats = _sort_features([f for f, v in feats.items() if v == "+"])
+        minus_feats = _sort_features([f for f, v in feats.items() if v == "-"])
 
         plus_tags = " ".join(self._tag(f"+{f}", "green") for f in plus_feats)
         minus_tags = " ".join(
@@ -1542,7 +1668,7 @@ class MainWindow(QMainWindow):
         if common:
             c_tags = " ".join(
                 self._tag(f"{v}{f}", "green" if v == "+" else "red")
-                for f, v in common.items()
+                for f, v in _sort_spec(common).items()
             )
             common_html = f"<p><b>Shared features:</b><br>{c_tags}</p>"
         else:
@@ -1553,7 +1679,8 @@ class MainWindow(QMainWindow):
 
         if contrastive:
             rows = []
-            for feat, groups in contrastive.items():
+            for feat in _sort_features(list(contrastive)):
+                groups = contrastive[feat]
                 plus_segs = " ".join(
                     self._tag(f"/{s}/", "blue") for s in groups["+"]
                 )
@@ -1596,7 +1723,8 @@ class MainWindow(QMainWindow):
             elif len(specs) == 1:
                 spec_tags = " ".join(
                     self._tag(f"{v}{f}", "green" if v == "+" else "red")
-                    for f, v in _sort_spec(specs[0]).items() if v != "0"
+                    for f, v in _sort_spec(specs[0]).items()
+                    if v != "0"
                 )
                 nc_html = (
                     f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
@@ -1607,9 +1735,12 @@ class MainWindow(QMainWindow):
                 for i, spec in enumerate(specs, 1):
                     row_tags = " ".join(
                         self._tag(f"{v}{f}", "green" if v == "+" else "red")
-                        for f, v in _sort_spec(spec).items() if v != "0"
+                        for f, v in _sort_spec(spec).items()
+                        if v != "0"
                     )
-                    rows.append(f"<span style='color:{C['text_dim']}'>{i}.</span> {row_tags}")
+                    rows.append(
+                        f"<span style='color:{C['text_dim']}'>{i}.</span> {row_tags}"
+                    )
                 nc_html = (
                     f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
                     f"<p><b>Minimal specifications ({len(specs)}):</b><br>"
@@ -1626,7 +1757,7 @@ class MainWindow(QMainWindow):
                     f" <span style='color:{C['minus']}'>No</span>"
                     f" \u2014 add {len(suggested)} segment"
                     f"{'s' if len(suggested) != 1 else ''}"
-                    f" to complete the minimal natural class:<br>{sug_tags}</p>"
+                    f" to complete the smallest shared-feature class:<br>{sug_tags}</p>"
                 )
             else:
                 nc_html = (
@@ -1666,7 +1797,7 @@ class MainWindow(QMainWindow):
         assert self.engine is not None
         feat_tags = " ".join(
             self._tag(f"{v}{f}", "green" if v == "+" else "red")
-            for f, v in feature_dict.items()
+            for f, v in _sort_spec(feature_dict).items()
         )
 
         if matching:
