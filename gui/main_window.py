@@ -1731,19 +1731,24 @@ class MainWindow(QMainWindow):
                     f"<p><b>Minimal specification:</b><br>{spec_tags}</p>"
                 )
             else:
-                rows = []
-                for i, spec in enumerate(specs, 1):
+                seen: set = set()
+                rows: list = []
+                for spec in specs:
+                    filtered = {f: v for f, v in _sort_spec(spec).items() if v != "0"}
+                    key = tuple(sorted(filtered.items()))
+                    if key in seen:
+                        continue
+                    seen.add(key)
                     row_tags = " ".join(
                         self._tag(f"{v}{f}", "green" if v == "+" else "red")
-                        for f, v in _sort_spec(spec).items()
-                        if v != "0"
+                        for f, v in filtered.items()
                     )
                     rows.append(
-                        f"<span style='color:{C['text_dim']}'>{i}.</span> {row_tags}"
+                        f"<span style='color:{C['text_dim']}'>{len(rows) + 1}.</span> {row_tags}"
                     )
                 nc_html = (
                     f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
-                    f"<p><b>Minimal specifications ({len(specs)}):</b><br>"
+                    f"<p><b>Minimal specifications ({len(rows)}):</b><br>"
                     + "<br>".join(rows)
                     + "</p>"
                 )
