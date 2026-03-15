@@ -284,7 +284,7 @@ def _ipa_place(feats: Dict[str, str]) -> int:
 
 # Groups frozen after initial assignment: never dissolve, never accept
 # overflow from singleton merging.
-_FROZEN_GROUPS: Set[str] = {"Plosives"}
+_FROZEN_GROUPS: Set[str] = {"Plosives", "Laryngeals"}
 
 
 def _should_merge_up(group_size: int, inventory_size: int) -> bool:
@@ -383,6 +383,8 @@ def group_segments(
         best_contras = float("inf")
         best_matches = -1
         for name, spec in ALL_GROUPS:
+            if name in _FROZEN_GROUPS:
+                continue  # fallback never assigns to frozen groups
             relevant = [f for f in spec if f in active_features]
             if not relevant:
                 continue
@@ -481,6 +483,34 @@ def group_segments(
         new_label = _RELABEL_PATTERNS.get(origin_set)
         if new_label and new_label != gname:
             assignment[new_label] = assignment.pop(gname)
+
+    # ---- Step 3b: Merge derived groups that belong together ----
+    # After relabeling, Vibrants and Liquids may coexist when the two
+    # halves of "Rhotics" ended up in different derived groups.  If either
+    # is below threshold, combine them under Liquids.
+
+    _DERIVED_MERGES: List[Tuple[FrozenSet[str], str]] = [
+        (frozenset({"Vibrants", "Liquids"}), "Liquids"),
+        (frozenset({"Vibrants", "Lateral Approximants"}), "Liquids"),
+        (frozenset({"Rhotics", "Lateral Approximants"}), "Liquids"),
+    ]
+    for pair, label in _DERIVED_MERGES:
+        present = [g for g in pair if g in assignment]
+        if len(present) < 2:
+            continue
+        if any(g in _FROZEN_GROUPS for g in present):
+            continue
+        # Merge if at least one participating group is below threshold.
+        if not any(
+            _should_merge_up(len(assignment[g]), len(inventory))
+            for g in present
+        ):
+            continue
+        target = present[0]
+        for g in present[1:]:
+            assignment[target].extend(assignment.pop(g))
+        if label != target:
+            assignment[label] = assignment.pop(target)
 
     # ---- Step 4: Sort by display order and IPA place ----
 
