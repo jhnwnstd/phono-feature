@@ -12,15 +12,16 @@ The analyzer uses statistical methods to identify:
 - Confidence levels based on coverage and permutation testing
 """
 
-import numpy as np
-from typing import Dict, List, Set, Tuple, Optional
 from collections import defaultdict
+from typing import Dict, List, Optional
+
+import numpy as np
 
 
 class GeometryNode:
     """Represents a node in a feature geometry tree."""
 
-    def __init__(self, feature: str, parent: Optional['GeometryNode'] = None):
+    def __init__(self, feature: str, parent: Optional["GeometryNode"] = None):
         """
         Initialize a geometry node.
 
@@ -30,18 +31,18 @@ class GeometryNode:
         """
         self.feature = feature
         self.parent = parent
-        self.children = []
-        self.siblings = []  # Features at the same level
+        self.children: List["GeometryNode"] = []
+        self.siblings: List["GeometryNode"] = []  # Features at the same level
         self.confidence = "low"  # "high", "moderate", or "low"
         self.coverage = 0.0  # Proportion of segments where dependency holds
         self.p_value = 1.0  # Permutation test p-value
 
-    def add_child(self, child: 'GeometryNode') -> None:
+    def add_child(self, child: "GeometryNode") -> None:
         """Add a child node."""
         child.parent = self
         self.children.append(child)
 
-    def add_sibling(self, sibling: 'GeometryNode') -> None:
+    def add_sibling(self, sibling: "GeometryNode") -> None:
         """Add a sibling node (mutual relationship)."""
         if sibling not in self.siblings:
             self.siblings.append(sibling)
@@ -56,7 +57,7 @@ class GeometryNode:
             "coverage": self.coverage,
             "p_value": self.p_value,
             "children": [child.to_dict() for child in self.children],
-            "siblings": [sib.feature for sib in self.siblings]
+            "siblings": [sib.feature for sib in self.siblings],
         }
 
 
@@ -85,7 +86,9 @@ class GeometryAnalyzer:
             engine: FeatureEngine instance with loaded inventory
         """
         self.engine = engine
-        self.dependencies = {}  # feature -> {parent: GeometryNode, coverage: float, p_value: float}
+        self.dependencies = (
+            {}
+        )  # feature -> {parent: GeometryNode, coverage: float, p_value: float}
         self.geometry_tree = None
 
     def analyze(self) -> GeometryNode:
@@ -106,7 +109,6 @@ class GeometryAnalyzer:
     def _compute_dependencies(self) -> None:
         """Compute all pairwise feature dependencies."""
         features = self.engine.get_contrastive_features()
-        n_features = len(features)
 
         for i, child_feat in enumerate(features):
             best_parent = None
@@ -134,7 +136,7 @@ class GeometryAnalyzer:
                 self.dependencies[child_feat] = {
                     "parent": best_parent,
                     "coverage": best_coverage,
-                    "p_value": best_p_value
+                    "p_value": best_p_value,
                 }
 
     def _compute_coverage(self, parent_feat: str, child_feat: str) -> float:
@@ -187,7 +189,9 @@ class GeometryAnalyzer:
 
         # Get child feature values as array
         segments = list(self.engine.segments.keys())
-        child_values = [self.engine.segments[s].get(child_feat, "0") for s in segments]
+        child_values = [
+            self.engine.segments[s].get(child_feat, "0") for s in segments
+        ]
 
         # Count permutations with coverage >= observed
         extreme_count = 0
@@ -202,7 +206,9 @@ class GeometryAnalyzer:
             # Temporarily replace values and compute coverage
             original_values = {}
             for i, seg in enumerate(segments):
-                original_values[seg] = self.engine.segments[seg].get(child_feat, "0")
+                original_values[seg] = self.engine.segments[seg].get(
+                    child_feat, "0"
+                )
                 self.engine.segments[seg][child_feat] = permuted[i]
 
             permuted_coverage = self._compute_coverage(parent_feat, child_feat)
@@ -245,7 +251,10 @@ class GeometryAnalyzer:
             child_node.coverage = coverage
             child_node.p_value = p_value
 
-            if coverage >= self.HIGH_COVERAGE_THRESHOLD and p_value < self.SIGNIFICANCE_LEVEL:
+            if (
+                coverage >= self.HIGH_COVERAGE_THRESHOLD
+                and p_value < self.SIGNIFICANCE_LEVEL
+            ):
                 child_node.confidence = "high"
             elif coverage >= self.MODERATE_COVERAGE_THRESHOLD:
                 child_node.confidence = "moderate"
@@ -265,7 +274,7 @@ class GeometryAnalyzer:
         for parent_feat, children in parent_to_children.items():
             if len(children) > 1:
                 for i, child1 in enumerate(children):
-                    for child2 in children[i + 1:]:
+                    for child2 in children[i + 1 :]:
                         nodes[child1].add_sibling(nodes[child2])
 
         # Create artificial root if multiple roots exist
@@ -298,24 +307,31 @@ class GeometryAnalyzer:
             coverage = dep_info["coverage"]
             p_value = dep_info["p_value"]
 
-            if coverage >= self.HIGH_COVERAGE_THRESHOLD and p_value < self.SIGNIFICANCE_LEVEL:
+            if (
+                coverage >= self.HIGH_COVERAGE_THRESHOLD
+                and p_value < self.SIGNIFICANCE_LEVEL
+            ):
                 confidence = "high"
             elif coverage >= self.MODERATE_COVERAGE_THRESHOLD:
                 confidence = "moderate"
             else:
                 confidence = "low"
 
-            summary.append({
-                "child": child_feat,
-                "parent": parent_feat,
-                "coverage": coverage,
-                "p_value": p_value,
-                "confidence": confidence
-            })
+            summary.append(
+                {
+                    "child": child_feat,
+                    "parent": parent_feat,
+                    "coverage": coverage,
+                    "p_value": p_value,
+                    "confidence": confidence,
+                }
+            )
 
         # Sort by confidence, then coverage
         confidence_order = {"high": 0, "moderate": 1, "low": 2}
-        summary.sort(key=lambda x: (confidence_order[x["confidence"]], -x["coverage"]))
+        summary.sort(
+            key=lambda x: (confidence_order[x["confidence"]], -x["coverage"])
+        )
 
         return summary
 
@@ -345,7 +361,9 @@ class GeometryAnalyzer:
             self.analyze()
 
         # Find the node
-        def find_node(node: GeometryNode, target: str) -> Optional[GeometryNode]:
+        def find_node(
+            node: GeometryNode, target: str
+        ) -> Optional[GeometryNode]:
             if node.feature == target:
                 return node
             for child in node.children:
@@ -359,7 +377,7 @@ class GeometryAnalyzer:
             return []
 
         path = []
-        current = node
+        current: Optional[GeometryNode] = node
         while current is not None:
             path.append(current.feature)
             current = current.parent

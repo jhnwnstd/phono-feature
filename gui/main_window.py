@@ -9,21 +9,32 @@ Provides a tabbed interface with:
 - Feature Geometry: Visualization of feature dependencies (future)
 """
 
-from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QTableWidget, QTableWidgetItem, QPushButton, QLabel, QFileDialog,
-    QTextEdit, QLineEdit, QListWidget, QGroupBox, QGridLayout,
-    QHeaderView, QMessageBox, QSplitter, QComboBox, QCheckBox
-)
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont
-import sys
 import os
 
-# Import engine modules
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
 from engine.feature_engine import FeatureEngine
-from engine.geometry import GeometryAnalyzer
 
 
 class InventoryLoaderPanel(QWidget):
@@ -57,18 +68,26 @@ class InventoryLoaderPanel(QWidget):
         # First row
         row1 = QHBoxLayout()
         self.hayes_english_btn = QPushButton("Hayes English (39 seg)")
-        self.hayes_english_btn.clicked.connect(lambda: self.quick_load("hayes_english.json"))
+        self.hayes_english_btn.clicked.connect(
+            lambda: self.quick_load("hayes_english.json")
+        )
         self.hayes_universal_btn = QPushButton("Hayes Universal (140 seg)")
-        self.hayes_universal_btn.clicked.connect(lambda: self.quick_load("hayes_universal.json"))
+        self.hayes_universal_btn.clicked.connect(
+            lambda: self.quick_load("hayes_universal.json")
+        )
         row1.addWidget(self.hayes_english_btn)
         row1.addWidget(self.hayes_universal_btn)
 
         # Second row
         row2 = QHBoxLayout()
         self.featureize_btn = QPushButton("Featureize (32 seg)")
-        self.featureize_btn.clicked.connect(lambda: self.quick_load("featureize.json"))
+        self.featureize_btn.clicked.connect(
+            lambda: self.quick_load("featureize.json")
+        )
         self.blevins_btn = QPushButton("Blevins (141 seg)")
-        self.blevins_btn.clicked.connect(lambda: self.quick_load("blevins_features.json"))
+        self.blevins_btn.clicked.connect(
+            lambda: self.quick_load("blevins_features.json")
+        )
         row2.addWidget(self.featureize_btn)
         row2.addWidget(self.blevins_btn)
 
@@ -91,7 +110,12 @@ class InventoryLoaderPanel(QWidget):
         stats_group = QGroupBox("Inventory Statistics")
         stats_layout = QGridLayout()
         self.stats_labels = {}
-        stats_fields = ["Segment Count", "Feature Count", "Contrastive Features", "Avg Distance"]
+        stats_fields = [
+            "Segment Count",
+            "Feature Count",
+            "Contrastive Features",
+            "Avg Distance",
+        ]
         for i, field in enumerate(stats_fields):
             label = QLabel(f"{field}:")
             value = QLabel("—")
@@ -116,13 +140,17 @@ class InventoryLoaderPanel(QWidget):
                 self.file_label.setText(os.path.basename(file_path))
                 self.update_displays()
                 self.inventory_loaded.emit()
-                QMessageBox.information(self, "Success", "Inventory loaded successfully!")
+                QMessageBox.information(
+                    self, "Success", "Inventory loaded successfully!"
+                )
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to load inventory:\n{str(e)}")
+                QMessageBox.critical(
+                    self, "Error", f"Failed to load inventory:\n{str(e)}"
+                )
 
     def quick_load(self, filename):
         """Quick load from config directory."""
-        config_dir = os.path.join(os.path.dirname(__file__), '..', 'config')
+        config_dir = os.path.join(os.path.dirname(__file__), "..", "config")
         file_path = os.path.join(config_dir, filename)
         if os.path.exists(file_path):
             try:
@@ -131,9 +159,13 @@ class InventoryLoaderPanel(QWidget):
                 self.update_displays()
                 self.inventory_loaded.emit()
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to load inventory:\n{str(e)}")
+                QMessageBox.critical(
+                    self, "Error", f"Failed to load inventory:\n{str(e)}"
+                )
         else:
-            QMessageBox.warning(self, "Not Found", f"File not found: {filename}")
+            QMessageBox.warning(
+                self, "Not Found", f"File not found: {filename}"
+            )
 
     def update_displays(self):
         """Update metadata and statistics displays."""
@@ -147,8 +179,12 @@ class InventoryLoaderPanel(QWidget):
         stats = self.engine.get_inventory_stats()
         self.stats_labels["Segment Count"].setText(str(stats["segment_count"]))
         self.stats_labels["Feature Count"].setText(str(stats["feature_count"]))
-        self.stats_labels["Contrastive Features"].setText(str(stats["contrastive_features"]))
-        self.stats_labels["Avg Distance"].setText(f"{stats['avg_feature_distance']:.2f}")
+        self.stats_labels["Contrastive Features"].setText(
+            str(stats["contrastive_features"])
+        )
+        self.stats_labels["Avg Distance"].setText(
+            f"{stats['avg_feature_distance']:.2f}"
+        )
 
 
 class InventoryBrowserPanel(QWidget):
@@ -227,9 +263,12 @@ class InventoryBrowserPanel(QWidget):
                     # Add a subtle yellow tint
                     current_color = item.background().color()
                     blended = QColor(
-                        (current_color.red() + color_contrastive_bg.red()) // 2,
-                        (current_color.green() + color_contrastive_bg.green()) // 2,
-                        (current_color.blue() + color_contrastive_bg.blue()) // 2
+                        (current_color.red() + color_contrastive_bg.red())
+                        // 2,
+                        (current_color.green() + color_contrastive_bg.green())
+                        // 2,
+                        (current_color.blue() + color_contrastive_bg.blue())
+                        // 2,
                     )
                     item.setBackground(blended)
 
@@ -359,7 +398,9 @@ class NaturalClassFinderPanel(QWidget):
         layout = QVBoxLayout()
 
         # Segments to Features
-        seg2feat_group = QGroupBox("Segments → Features: Find characterizing features")
+        seg2feat_group = QGroupBox(
+            "Segments → Features: Find characterizing features"
+        )
         seg2feat_layout = QVBoxLayout()
 
         seg2feat_input_layout = QHBoxLayout()
@@ -381,7 +422,9 @@ class NaturalClassFinderPanel(QWidget):
         layout.addWidget(seg2feat_group)
 
         # Features to Segments
-        feat2seg_group = QGroupBox("Features → Segments: Find matching segments")
+        feat2seg_group = QGroupBox(
+            "Features → Segments: Find matching segments"
+        )
         feat2seg_layout = QVBoxLayout()
 
         feat2seg_input_layout = QHBoxLayout()
@@ -394,7 +437,9 @@ class NaturalClassFinderPanel(QWidget):
         feat2seg_input_layout.addWidget(self.feat_find_btn)
         feat2seg_layout.addLayout(feat2seg_input_layout)
 
-        help_label = QLabel("Format: feature:value,feature:value (e.g., voice:+,continuant:-)")
+        help_label = QLabel(
+            "Format: feature:value,feature:value (e.g., voice:+,continuant:-)"
+        )
         help_label.setStyleSheet("color: gray; font-size: 10px;")
         feat2seg_layout.addWidget(help_label)
 
@@ -429,7 +474,9 @@ class NaturalClassFinderPanel(QWidget):
         # Validate segments
         invalid = [s for s in segments if s not in self.engine.segments]
         if invalid:
-            self.seg2feat_result.setText(f"Invalid segments: {', '.join(invalid)}")
+            self.seg2feat_result.setText(
+                f"Invalid segments: {', '.join(invalid)}"
+            )
             return
 
         try:
@@ -438,7 +485,7 @@ class NaturalClassFinderPanel(QWidget):
             result = f"<b>Input segments:</b> {', '.join(segments)}<br>"
             result += f"<b>Class size:</b> {len(segments)}<br><br>"
 
-            result += f"<b>Characterizing features:</b><br>"
+            result += "<b>Characterizing features:</b><br>"
             if bundle:
                 for feature, value in sorted(bundle.items()):
                     result += f"&nbsp;&nbsp;{feature}: {value}<br>"
@@ -450,12 +497,14 @@ class NaturalClassFinderPanel(QWidget):
             # Check if this picks out exactly the target segments
             found_segments = self.engine.find_segments(bundle)
             if set(found_segments) == set(segments):
-                result += f"<br><span style='color: green;'>✓ Bundle picks out exactly the target segments</span>"
+                result += "<br><span style='color: green;'>✓ Bundle picks out exactly the target segments</span>"
             else:
                 result += f"<br><span style='color: orange;'>⚠ Bundle also picks out: {', '.join(set(found_segments) - set(segments))}</span>"
 
             self.seg2feat_result.setHtml(result)
-            self.classes_display.setHtml(f"<b>Natural class analysis:</b><br>{result}")
+            self.classes_display.setHtml(
+                f"<b>Natural class analysis:</b><br>{result}"
+            )
 
         except Exception as e:
             self.seg2feat_result.setText(f"Error: {str(e)}")
@@ -470,22 +519,24 @@ class NaturalClassFinderPanel(QWidget):
         # Parse feature specification
         try:
             bundle = {}
-            pairs = feat_text.split(',')
+            pairs = feat_text.split(",")
             for pair in pairs:
-                if ':' not in pair:
+                if ":" not in pair:
                     raise ValueError(f"Invalid format: {pair}")
-                feature, value = pair.split(':', 1)
+                feature, value = pair.split(":", 1)
                 feature = feature.strip()
                 value = value.strip()
                 if feature not in self.engine.features:
                     raise ValueError(f"Unknown feature: {feature}")
-                if value not in ['+', '-', '0']:
-                    raise ValueError(f"Invalid value: {value} (must be +, -, or 0)")
+                if value not in ["+", "-", "0"]:
+                    raise ValueError(
+                        f"Invalid value: {value} (must be +, -, or 0)"
+                    )
                 bundle[feature] = value
 
             segments = self.engine.find_segments(bundle)
 
-            result = f"<b>Feature specification:</b><br>"
+            result = "<b>Feature specification:</b><br>"
             for feature, value in sorted(bundle.items()):
                 result += f"&nbsp;&nbsp;{feature}: {value}<br>"
 
@@ -496,7 +547,9 @@ class NaturalClassFinderPanel(QWidget):
                 result += "&nbsp;&nbsp;(none)"
 
             self.feat2seg_result.setHtml(result)
-            self.classes_display.setHtml(f"<b>Natural class analysis:</b><br>{result}")
+            self.classes_display.setHtml(
+                f"<b>Natural class analysis:</b><br>{result}"
+            )
 
         except Exception as e:
             self.feat2seg_result.setText(f"Error: {str(e)}")
