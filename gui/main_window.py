@@ -101,12 +101,12 @@ _SCROLLBAR_STYLE = f"""
         border: none;
     }}
     QScrollBar::handle:vertical {{
-        background: {C['border']};
+        background: {C["border"]};
         border-radius: 3px;
         min-height: 24px;
     }}
     QScrollBar::handle:vertical:hover {{
-        background: {C['text_dim']};
+        background: {C["text_dim"]};
     }}
     QScrollBar::add-line:vertical,
     QScrollBar::sub-line:vertical {{
@@ -125,12 +125,12 @@ _SCROLLBAR_STYLE = f"""
         border: none;
     }}
     QScrollBar::handle:horizontal {{
-        background: {C['border']};
+        background: {C["border"]};
         border-radius: 3px;
         min-width: 24px;
     }}
     QScrollBar::handle:horizontal:hover {{
-        background: {C['text_dim']};
+        background: {C["text_dim"]};
     }}
     QScrollBar::add-line:horizontal,
     QScrollBar::sub-line:horizontal {{
@@ -174,7 +174,7 @@ class SegmentButton(QPushButton):
             self.setStyleSheet(
                 f"""
                 QPushButton {{
-                    background-color: {C['seg_selected']};
+                    background-color: {C["seg_selected"]};
                     color: #FFFFFF;
                     border: 2px solid #1D4ED8;
                     border-radius: 8px;
@@ -186,7 +186,7 @@ class SegmentButton(QPushButton):
             self.setStyleSheet(
                 f"""
                 QPushButton {{
-                    background-color: {C['seg_matched']};
+                    background-color: {C["seg_matched"]};
                     color: #FFFFFF;
                     border: 2px solid #1D4ED8;
                     border-radius: 8px;
@@ -198,9 +198,9 @@ class SegmentButton(QPushButton):
             self.setStyleSheet(
                 f"""
                 QPushButton {{
-                    background-color: {C['seg_unmatched']};
-                    color: {C['text_dim']};
-                    border: 1px solid {C['border']};
+                    background-color: {C["seg_unmatched"]};
+                    color: {C["text_dim"]};
+                    border: 1px solid {C["border"]};
                     border-radius: 8px;
                 }}
             """
@@ -209,17 +209,17 @@ class SegmentButton(QPushButton):
             self.setStyleSheet(
                 f"""
                 QPushButton {{
-                    background-color: {C['seg_default']};
-                    color: {C['text']};
-                    border: 1.5px solid {C['border']};
+                    background-color: {C["seg_default"]};
+                    color: {C["text"]};
+                    border: 1.5px solid {C["border"]};
                     border-radius: 8px;
                 }}
                 QPushButton:hover {{
-                    background-color: {C['accent_light']};
-                    border: 1.5px solid {C['accent']};
+                    background-color: {C["accent_light"]};
+                    border: 1.5px solid {C["accent"]};
                 }}
                 QPushButton:checked {{
-                    background-color: {C['seg_selected']};
+                    background-color: {C["seg_selected"]};
                     color: white;
                     border: 2px solid #1D4ED8;
                     font-weight: bold;
@@ -296,9 +296,9 @@ class FeatureRow(QWidget):
         btn.setStyleSheet(
             f"""
             QPushButton {{
-                background: {C['analysis_bg']};
-                color: {C['text_dim']};
-                border: 1.5px solid {C['border']};
+                background: {C["analysis_bg"]};
+                color: {C["text_dim"]};
+                border: 1.5px solid {C["border"]};
                 border-radius: 5px;
             }}
             QPushButton:hover {{
@@ -423,8 +423,7 @@ class AnalysisPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setStyleSheet(
-            f"background: {C['analysis_bg']};"
-            f" border-top: 1px solid {C['border']};"
+            f"background: {C['analysis_bg']}; border-top: 1px solid {C['border']};"
         )
 
         layout = QVBoxLayout(self)
@@ -443,9 +442,9 @@ class AnalysisPanel(QWidget):
         self.content.setStyleSheet(
             f"""
             QTextEdit {{
-                background: {C['panel']};
-                color: {C['text']};
-                border: 1px solid {C['border']};
+                background: {C["panel"]};
+                color: {C["text"]};
+                border: 1px solid {C["border"]};
                 border-radius: 6px;
                 padding: 8px;
             }}
@@ -608,7 +607,7 @@ class MainWindow(QMainWindow):
         self._feat_rows: dict = {}  # feature  → FeatureRow
         self._selected_segments: list = []
         self._selected_features: dict = {}  # feature → '+'/'-'
-        self._saved_seg_state: list = []   # preserved across mode switches
+        self._saved_seg_state: list = []  # preserved across mode switches
         self._saved_feat_state: dict = {}  # preserved across mode switches
         self._current_path: Optional[str] = None
 
@@ -636,7 +635,9 @@ class MainWindow(QMainWindow):
         self._settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
 
         self._build_ui()
-        QApplication.instance().installEventFilter(self)
+        app = QApplication.instance()
+        assert app is not None
+        app.installEventFilter(self)
         self._set_mode("seg_to_feat")
         self._restore_settings(startup_path)
 
@@ -651,8 +652,8 @@ class MainWindow(QMainWindow):
         toolbar.setStyleSheet(
             f"""
             QToolBar {{
-                background: {C['panel']};
-                border-bottom: 1px solid {C['border']};
+                background: {C["panel"]};
+                border-bottom: 1px solid {C["border"]};
                 padding: 4px 8px;
                 spacing: 6px;
             }}
@@ -668,25 +669,25 @@ class MainWindow(QMainWindow):
         self.config_combo.setStyleSheet(
             f"""
             QComboBox {{
-                background: {C['panel']};
-                color: {C['text']};
-                border: 1.5px solid {C['border']};
+                background: {C["panel"]};
+                color: {C["text"]};
+                border: 1.5px solid {C["border"]};
                 border-radius: 6px;
                 padding: 0 10px;
             }}
             QComboBox:hover {{
-                border: 1.5px solid {C['accent']};
+                border: 1.5px solid {C["accent"]};
             }}
             QComboBox::drop-down {{
                 border: none;
                 padding-right: 8px;
             }}
             QComboBox QAbstractItemView {{
-                background: {C['panel']};
-                color: {C['text']};
-                border: 1px solid {C['border']};
-                selection-background-color: {C['accent_light']};
-                selection-color: {C['accent']};
+                background: {C["panel"]};
+                color: {C["text"]};
+                border: 1px solid {C["border"]};
+                selection-background-color: {C["accent_light"]};
+                selection-color: {C["accent"]};
                 outline: none;
             }}
         """
@@ -702,16 +703,16 @@ class MainWindow(QMainWindow):
         browse_btn.setStyleSheet(
             f"""
             QPushButton {{
-                background: {C['bg']};
-                color: {C['text']};
-                border: 1.5px solid {C['border']};
+                background: {C["bg"]};
+                color: {C["text"]};
+                border: 1.5px solid {C["border"]};
                 border-radius: 6px;
                 padding: 0 12px;
             }}
             QPushButton:hover {{
-                background: {C['accent_light']};
-                border: 1.5px solid {C['accent']};
-                color: {C['accent']};
+                background: {C["accent_light"]};
+                border: 1.5px solid {C["accent"]};
+                color: {C["accent"]};
             }}
         """
         )
@@ -767,7 +768,9 @@ class MainWindow(QMainWindow):
         header = QHBoxLayout()
         self._seg_title = QLabel("SEGMENTS")
         self._seg_title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
-        self._seg_title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1.5px;")
+        self._seg_title.setStyleSheet(
+            f"color: {C['text_dim']}; letter-spacing: 1.5px;"
+        )
 
         self.clear_seg_btn = QPushButton("Clear")
         self.clear_seg_btn.setFixedHeight(26)
@@ -775,15 +778,15 @@ class MainWindow(QMainWindow):
         self.clear_seg_btn.setStyleSheet(
             f"""
             QPushButton {{
-                color: {C['text_dim']};
+                color: {C["text_dim"]};
                 background: transparent;
-                border: 1px solid {C['border']};
+                border: 1px solid {C["border"]};
                 border-radius: 5px;
                 padding: 0 10px;
             }}
             QPushButton:hover {{
-                color: {C['text']};
-                background: {C['bg']};
+                color: {C["text"]};
+                background: {C["bg"]};
             }}
         """
         )
@@ -809,7 +812,9 @@ class MainWindow(QMainWindow):
 
         self.seg_grid_widget = SegmentGridWidget()
         self._seg_scroll.setWidget(self.seg_grid_widget)
-        self._seg_scroll.viewport().setStyleSheet("background: transparent;")
+        vp = self._seg_scroll.viewport()
+        assert vp is not None
+        vp.setStyleSheet("background: transparent;")
         vlay.addWidget(self._seg_scroll, stretch=1)
 
         self.seg_hint = QLabel("\u2190 Select an inventory to see segments")
@@ -833,7 +838,9 @@ class MainWindow(QMainWindow):
         header = QHBoxLayout()
         self._feat_title = QLabel("FEATURES")
         self._feat_title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
-        self._feat_title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1.5px;")
+        self._feat_title.setStyleSheet(
+            f"color: {C['text_dim']}; letter-spacing: 1.5px;"
+        )
 
         self.clear_feat_btn = QPushButton("Clear")
         self.clear_feat_btn.setFixedHeight(26)
@@ -841,15 +848,15 @@ class MainWindow(QMainWindow):
         self.clear_feat_btn.setStyleSheet(
             f"""
             QPushButton {{
-                color: {C['text_dim']};
+                color: {C["text_dim"]};
                 background: transparent;
-                border: 1px solid {C['border']};
+                border: 1px solid {C["border"]};
                 border-radius: 5px;
                 padding: 0 10px;
             }}
             QPushButton:hover {{
-                color: {C['text']};
-                background: {C['panel']};
+                color: {C["text"]};
+                background: {C["panel"]};
             }}
         """
         )
@@ -1085,8 +1092,8 @@ class MainWindow(QMainWindow):
             card.setStyleSheet(
                 f"""
                 QFrame {{
-                    background: {C['panel']};
-                    border: 1px solid {C['border']};
+                    background: {C["panel"]};
+                    border: 1px solid {C["border"]};
                     border-radius: 7px;
                 }}
             """
@@ -1110,8 +1117,10 @@ class MainWindow(QMainWindow):
                 # Project into feat mode: shared (non-contradictory) features only
                 if self._selected_segments and self.engine:
                     self._saved_feat_state = {
-                        f: v for f, v in
-                        self.engine.common_features(self._selected_segments).items()
+                        f: v
+                        for f, v in self.engine.common_features(
+                            self._selected_segments
+                        ).items()
                         if v in ("+", "-")
                     }
                 else:
@@ -1129,25 +1138,34 @@ class MainWindow(QMainWindow):
         self._mode = mode
         is_s2f = mode == "seg_to_feat"
 
-        seg_bg  = C["panel"] if is_s2f     else C["bg"]
+        seg_bg = C["panel"] if is_s2f else C["bg"]
         feat_bg = C["panel"] if not is_s2f else C["bg"]
 
         # Paint scroll viewport and content widget explicitly so no grey bleeds through
-        bg_css = f"background: {seg_bg};"
-        self._seg_scroll.viewport().setStyleSheet(bg_css)
-        self.seg_grid_widget.setStyleSheet(bg_css)
-        bg_css = f"background: {feat_bg};"
-        self._feat_scroll.viewport().setStyleSheet(bg_css)
-        self.feat_list_widget.setStyleSheet(bg_css)
+        seg_vp = self._seg_scroll.viewport()
+        feat_vp = self._feat_scroll.viewport()
+        assert seg_vp is not None and feat_vp is not None
+        seg_vp.setStyleSheet(f"background: {seg_bg};")
+        self.seg_grid_widget.setStyleSheet(f"background: {seg_bg};")
+        feat_vp.setStyleSheet(f"background: {feat_bg};")
+        self.feat_list_widget.setStyleSheet(f"background: {feat_bg};")
 
         self.seg_panel.setStyleSheet(
             f"QFrame#seg_panel {{ background: {seg_bg};"
-            + (f" border: 1.5px solid {C['accent']};" if is_s2f else " border: none;")
+            + (
+                f" border: 1.5px solid {C['accent']};"
+                if is_s2f
+                else " border: none;"
+            )
             + "}"
         )
         self.feat_panel.setStyleSheet(
             f"QFrame#feat_panel {{ background: {feat_bg};"
-            + (f" border: 1.5px solid {C['accent']};" if not is_s2f else " border: none;")
+            + (
+                f" border: 1.5px solid {C['accent']};"
+                if not is_s2f
+                else " border: none;"
+            )
             + "}"
         )
 
@@ -1163,10 +1181,14 @@ class MainWindow(QMainWindow):
             row.set_panel_active(not is_s2f)
             row.set_interactive(not is_s2f)
 
-        _clear_active   = (f"color: {C['text']}; background: transparent;"
-                           f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;")
-        _clear_inactive = (f"color: {C['text_dim']}; background: transparent;"
-                           f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;")
+        _clear_active = (
+            f"color: {C['text']}; background: transparent;"
+            f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;"
+        )
+        _clear_inactive = (
+            f"color: {C['text_dim']}; background: transparent;"
+            f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;"
+        )
         self.clear_seg_btn.setStyleSheet(
             f"QPushButton {{ {_clear_active if is_s2f else _clear_inactive} }}"
             f" QPushButton:hover {{ color: {C['text']}; background: {C['bg']}; }}"
@@ -1200,12 +1222,14 @@ class MainWindow(QMainWindow):
         if is_s2f:
             self.status.showMessage(
                 "Click a segment to inspect its features."
-                if self.engine else "Select an inventory from the dropdown to begin."
+                if self.engine
+                else "Select an inventory from the dropdown to begin."
             )
         else:
             self.status.showMessage(
                 "Toggle feature values (+/\u2212) to find matching segments."
-                if self.engine else "Select an inventory from the dropdown to begin."
+                if self.engine
+                else "Select an inventory from the dropdown to begin."
             )
 
     def eventFilter(self, obj, event):
@@ -1403,12 +1427,7 @@ class MainWindow(QMainWindow):
                 " feature bundle in this inventory.</span></p>"
             )
 
-        html = (
-            f"<p><b>Selected:</b> {seg_tags}</p>"
-            f"{common_html}"
-            f"{contrast_html}"
-            f"{nc_html}"
-        )
+        html = f"<p><b>Selected:</b> {seg_tags}</p>{common_html}{contrast_html}{nc_html}"
         self.analysis.set_html(html)
 
     # ------------------------------------------------------------------
@@ -1443,10 +1462,7 @@ class MainWindow(QMainWindow):
 
         if matching:
             seg_tags = " ".join(self._tag(f"/{s}/", "blue") for s in matching)
-            segs_html = (
-                f"<p><b>Matching segments ({len(matching)}):</b>"
-                f"<br>{seg_tags}</p>"
-            )
+            segs_html = f"<p><b>Matching segments ({len(matching)}):</b><br>{seg_tags}</p>"
         else:
             segs_html = (
                 "<p><b>Matching segments:</b>"
@@ -1454,7 +1470,7 @@ class MainWindow(QMainWindow):
                 " satisfies all selected features.</i></p>"
             )
 
-        html = f"<p><b>Query:</b> {feat_tags}</p>" f"{segs_html}"
+        html = f"<p><b>Query:</b> {feat_tags}</p>{segs_html}"
         self.analysis.set_html(html)
 
     # ------------------------------------------------------------------
