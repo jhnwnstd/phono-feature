@@ -72,6 +72,13 @@ C = {
 _SETTINGS_ORG = "features"
 _SETTINGS_APP = "SegFeatureEngine"
 
+_TAG_PALETTES = {
+    "blue": (C["tag_blue"], C["tag_blue_text"]),
+    "green": (C["tag_green"], C["tag_green_text"]),
+    "red": (C["tag_red"], C["tag_red_text"]),
+    "gray": (C["tag_gray"], C["tag_gray_text"]),
+}
+
 # ---------------------------------------------------------------------------
 # Segment grid layout constant
 # ---------------------------------------------------------------------------
@@ -919,7 +926,7 @@ class MainWindow(QMainWindow):
             row.set_interactive(not is_s2f)
 
         self._clear_segments(silent=True)
-        self._clear_features(silent=True)
+        self._selected_features.clear()
         self.analysis.clear()
 
         if is_s2f:
@@ -1136,13 +1143,7 @@ class MainWindow(QMainWindow):
 
     def _tag(self, text: str, colour: str) -> str:
         """Render a coloured inline chip."""
-        palettes = {
-            "blue": (C["tag_blue"], C["tag_blue_text"]),
-            "green": (C["tag_green"], C["tag_green_text"]),
-            "red": (C["tag_red"], C["tag_red_text"]),
-            "gray": (C["tag_gray"], C["tag_gray_text"]),
-        }
-        bg, fg = palettes.get(colour, (C["tag_gray"], C["tag_gray_text"]))
+        bg, fg = _TAG_PALETTES.get(colour, (C["tag_gray"], C["tag_gray_text"]))
         return (
             f"<span style='"
             f"background:{bg}; color:{fg}; border-radius:4px;"
