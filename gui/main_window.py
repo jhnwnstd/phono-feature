@@ -10,6 +10,7 @@ from typing import Optional
 from PyQt6.QtCore import (
     QFileSystemWatcher,
     QSettings,
+    QSignalBlocker,
     Qt,
     QTimer,
     pyqtSignal,
@@ -605,6 +606,7 @@ class MainWindow(QMainWindow):
         # -- file-system watcher: auto-reload when config JSON changes --
         self._watcher = QFileSystemWatcher(self)
         self._watcher.fileChanged.connect(self._on_file_changed)
+        self._watcher.directoryChanged.connect(self._on_directory_changed)
         # Small delay so editors that do delete-then-write don't re-trigger
         self._reload_timer = QTimer(self)
         self._reload_timer.setSingleShot(True)
@@ -757,7 +759,8 @@ class MainWindow(QMainWindow):
 
     def _build_segment_panel(self) -> QFrame:
         container = QFrame()
-        container.setStyleSheet(f"background: {C['panel']};")
+        container.setObjectName("seg_panel")
+        container.setStyleSheet(f"QFrame#seg_panel {{ background: {C['panel']}; }}")
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -801,7 +804,7 @@ class MainWindow(QMainWindow):
         seg_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
-        seg_scroll.setStyleSheet("background: transparent;" + _SCROLLBAR_STYLE)
+        seg_scroll.setStyleSheet("QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE)
 
         self.seg_grid_widget = SegmentGridWidget()
         self.seg_grid_widget.setStyleSheet("background: transparent;")
@@ -818,7 +821,8 @@ class MainWindow(QMainWindow):
 
     def _build_feature_panel(self) -> QFrame:
         container = QFrame()
-        container.setStyleSheet(f"background: {C['bg']};")
+        container.setObjectName("feat_panel")
+        container.setStyleSheet(f"QFrame#feat_panel {{ background: {C['bg']}; }}")
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -856,7 +860,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background: transparent;" + _SCROLLBAR_STYLE)
+        scroll.setStyleSheet("QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE)
 
         self.feat_list_widget = QWidget()
         self.feat_list_widget.setStyleSheet("background: transparent;")
@@ -964,12 +968,19 @@ class MainWindow(QMainWindow):
                 f"{len(engine.features)} features."
             )
 
-            # Update file-system watcher
+            # Update file-system watcher (file + containing directory)
             if self._current_path and self._current_path != path:
                 self._watcher.removePath(self._current_path)
+                old_dir = os.path.dirname(os.path.abspath(self._current_path))
+                new_dir = os.path.dirname(os.path.abspath(path))
+                if old_dir != new_dir:
+                    self._watcher.removePath(old_dir)
             self._current_path = path
             if path not in self._watcher.files():
                 self._watcher.addPath(path)
+            parent_dir = os.path.dirname(os.path.abspath(path))
+            if parent_dir not in self._watcher.directories():
+                self._watcher.addPath(parent_dir)
 
             # Persist for next launch
             self._settings.setValue("last_inventory", path)
@@ -997,6 +1008,16 @@ class MainWindow(QMainWindow):
             ),
         )
         self._reload_timer.start()
+
+    def _on_directory_changed(self, _directory: str):
+        """Called when the watched directory changes (file created/renamed/deleted)."""
+        if not self._current_path:
+            return
+        # If the target file has reappeared but fell out of the file watcher, re-arm it.
+        if (os.path.isfile(self._current_path)
+                and self._current_path not in self._watcher.files()):
+            self._watcher.addPath(self._current_path)
+            self._reload_timer.start()
 
     def _do_auto_reload(self):
         """Reload the current inventory after the debounce period."""
@@ -1077,8 +1098,10 @@ class MainWindow(QMainWindow):
         self._mode = mode
         is_s2f = mode == "seg_to_feat"
 
-        self.seg_mode_btn.setChecked(is_s2f)
-        self.feat_mode_btn.setChecked(not is_s2f)
+        with QSignalBlocker(self.seg_mode_btn):
+            self.seg_mode_btn.setChecked(is_s2f)
+        with QSignalBlocker(self.feat_mode_btn):
+            self.feat_mode_btn.setChecked(not is_s2f)
 
         style_active = f"""
             QPushButton {{
@@ -1108,12 +1131,14 @@ class MainWindow(QMainWindow):
         )
 
         self.seg_panel.setStyleSheet(
-            f"background: {C['panel']};"
-            + (f" border-top: 3px solid {C['accent']};" if is_s2f else "")
+            f"QFrame#seg_panel {{ background: {C['panel']};"
+            + (f" border: 1.5px solid {C['accent']};" if is_s2f else " border: none;")
+            + "}"
         )
         self.feat_panel.setStyleSheet(
-            f"background: {C['bg']};"
-            + (f" border-top: 3px solid {C['accent']};" if not is_s2f else "")
+            f"QFrame#feat_panel {{ background: {C['bg']};"
+            + (f" border: 1.5px solid {C['accent']};" if not is_s2f else " border: none;")
+            + "}"
         )
 
         for row in self._feat_rows.values():
