@@ -760,7 +760,9 @@ class MainWindow(QMainWindow):
     def _build_segment_panel(self) -> QFrame:
         container = QFrame()
         container.setObjectName("seg_panel")
-        container.setStyleSheet(f"QFrame#seg_panel {{ background: {C['panel']}; }}")
+        container.setStyleSheet(
+            f"QFrame#seg_panel {{ background: {C['panel']}; }}"
+        )
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -804,7 +806,9 @@ class MainWindow(QMainWindow):
         seg_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
-        seg_scroll.setStyleSheet("QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE)
+        seg_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE
+        )
 
         self.seg_grid_widget = SegmentGridWidget()
         self.seg_grid_widget.setStyleSheet("background: transparent;")
@@ -822,7 +826,9 @@ class MainWindow(QMainWindow):
     def _build_feature_panel(self) -> QFrame:
         container = QFrame()
         container.setObjectName("feat_panel")
-        container.setStyleSheet(f"QFrame#feat_panel {{ background: {C['bg']}; }}")
+        container.setStyleSheet(
+            f"QFrame#feat_panel {{ background: {C['bg']}; }}"
+        )
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -860,7 +866,9 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE)
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE
+        )
 
         self.feat_list_widget = QWidget()
         self.feat_list_widget.setStyleSheet("background: transparent;")
@@ -1014,8 +1022,10 @@ class MainWindow(QMainWindow):
         if not self._current_path:
             return
         # If the target file has reappeared but fell out of the file watcher, re-arm it.
-        if (os.path.isfile(self._current_path)
-                and self._current_path not in self._watcher.files()):
+        if (
+            os.path.isfile(self._current_path)
+            and self._current_path not in self._watcher.files()
+        ):
             self._watcher.addPath(self._current_path)
             self._reload_timer.start()
 
@@ -1132,12 +1142,20 @@ class MainWindow(QMainWindow):
 
         self.seg_panel.setStyleSheet(
             f"QFrame#seg_panel {{ background: {C['panel']};"
-            + (f" border: 1.5px solid {C['accent']};" if is_s2f else " border: none;")
+            + (
+                f" border: 1.5px solid {C['accent']};"
+                if is_s2f
+                else " border: none;"
+            )
             + "}"
         )
         self.feat_panel.setStyleSheet(
             f"QFrame#feat_panel {{ background: {C['bg']};"
-            + (f" border: 1.5px solid {C['accent']};" if not is_s2f else " border: none;")
+            + (
+                f" border: 1.5px solid {C['accent']};"
+                if not is_s2f
+                else " border: none;"
+            )
             + "}"
         )
 
