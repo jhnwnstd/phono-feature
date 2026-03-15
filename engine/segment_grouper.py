@@ -66,6 +66,7 @@ ALL_GROUPS: List[Tuple[str, Dict[str, str]]] = [
             "continuant": "+",
             "lateral": "+",
             "sonorant": "+",
+            "tap": "-",
         },
     ),
     ("Trills", {"trill": "+"}),
@@ -171,32 +172,61 @@ _RELABEL_PATTERNS: Dict[FrozenSet[str], str] = {
     ): "Liquids",
     # Lateral Approximants + Vibrants (Trills+Taps merged before Approximants joined)
     frozenset({"Lateral Approximants", "Trills", "Taps & Flaps"}): "Liquids",
+    # Lateral Approximants + Taps (no Trills/Approximants in inventory)
+    frozenset({"Lateral Approximants", "Taps & Flaps"}): "Liquids",
+    # Lateral Approximants + Trills (no Taps/Approximants in inventory)
+    frozenset({"Lateral Approximants", "Trills"}): "Liquids",
 }
 
 # ---------------------------------------------------------------------------
 # Merge blocking: pairs of current group names that must never merge
 # ---------------------------------------------------------------------------
 
-_MERGE_BLOCKED: Set[FrozenSet[str]] = {
-    # Pre-relabel: individual Trills / Taps must not merge with obstruents
-    frozenset({"Trills", "Fricatives"}),
-    frozenset({"Trills", "Sibilants"}),
-    frozenset({"Trills", "Plosives"}),
-    frozenset({"Taps & Flaps", "Fricatives"}),
-    frozenset({"Taps & Flaps", "Sibilants"}),
-    frozenset({"Taps & Flaps", "Plosives"}),
-    # Post-relabel derived groups
-    frozenset({"Vibrants", "Fricatives"}),
-    frozenset({"Vibrants", "Sibilants"}),
-    frozenset({"Vibrants", "Plosives"}),
-    frozenset({"Rhotics", "Fricatives"}),
-    frozenset({"Rhotics", "Sibilants"}),
-    frozenset({"Rhotics", "Plosives"}),
-    frozenset({"Liquids", "Fricatives"}),
-    frozenset({"Liquids", "Plosives"}),
-    # Prevent re-merging the two groups we explicitly split
-    frozenset({"Semivowels", "Laryngeals"}),
+# ---------------------------------------------------------------------------
+# Merge blocking — computed from sonority classes
+# ---------------------------------------------------------------------------
+# Sonorant groups must never merge with obstruent groups.  Within sonorant
+# consonants the legal merge paths (Trills↔Taps, ±Approximants, ±Laterals)
+# are left open so Vibrants / Rhotics / Liquids can form.  Nasals and
+# Semivowels are kept separate from each other and from other sonorants
+# except Approximants (Semivowels↔Approximants stays open because some
+# inventories mark ɹ/ʋ as [-consonantal]).
+
+_OBSTRUENTS = {
+    "Plosives", "Affricates", "Lateral Affricates",
+    "Sibilants", "Fricatives", "Lateral Fricatives", "Laryngeals",
 }
+_SONORANT_C = {
+    "Nasals", "Trills", "Taps & Flaps", "Lateral Approximants",
+    "Approximants", "Vibrants", "Rhotics", "Liquids",
+}
+
+_MERGE_BLOCKED: Set[FrozenSet[str]] = set()
+
+# Sonorant ↔ obstruent: never
+for _o in _OBSTRUENTS:
+    for _s in _SONORANT_C | {"Semivowels", "Vowels"}:
+        _MERGE_BLOCKED.add(frozenset({_o, _s}))
+
+# Vowels ↔ everything except themselves
+for _g in _OBSTRUENTS | _SONORANT_C | {"Semivowels"}:
+    _MERGE_BLOCKED.add(frozenset({_g, "Vowels"}))
+
+# Nasals ↔ non-nasal sonorants (nasals are a distinct manner class)
+for _s in _SONORANT_C - {"Nasals"}:
+    _MERGE_BLOCKED.add(frozenset({"Nasals", _s}))
+_MERGE_BLOCKED.add(frozenset({"Nasals", "Semivowels"}))
+
+# Semivowels ↔ sonorants that aren't Approximants
+# (Semivowels↔Approximants stays open: ɹ/ʋ can be [-consonantal])
+for _s in _SONORANT_C - {"Approximants"}:
+    _MERGE_BLOCKED.add(frozenset({"Semivowels", _s}))
+
+# Plosives and Laryngeals must not merge with other obstruent groups
+for _o in _OBSTRUENTS - {"Plosives"}:
+    _MERGE_BLOCKED.add(frozenset({"Plosives", _o}))
+for _o in _OBSTRUENTS - {"Laryngeals"}:
+    _MERGE_BLOCKED.add(frozenset({"Laryngeals", _o}))
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +386,7 @@ def _is_outlier(new_cost: float, past_costs: List[float]) -> bool:
     the elbow on the very next step.  When std==0 (all past costs identical),
     anything strictly more expensive stops the merging.
     """
-    if len(past_costs) < 1:
+    if len(past_costs) < 3:
         return False
     mean = sum(past_costs) / len(past_costs)
     variance = sum((c - mean) ** 2 for c in past_costs) / len(past_costs)
@@ -463,6 +493,8 @@ def group_segments(
             break
 
         past_costs.append(best_cost)
+        victim_size = len(assignment[best_victim])
+        target_size = len(assignment[best_target])
         assignment[best_target].extend(assignment.pop(best_victim))
         origins[best_target] = origins[best_target] | origins.pop(best_victim)
 
@@ -473,6 +505,12 @@ def group_segments(
             origins[new_label] = origins.pop(best_target)
             if new_label not in local_spec:
                 local_spec[new_label] = local_spec.get(best_target, {})
+        elif victim_size > target_size:
+            # The larger group was the victim (lower per-member cost) —
+            # swap the label so the majority's name survives.
+            assignment[best_victim] = assignment.pop(best_target)
+            origins[best_victim] = origins.pop(best_target)
+            local_spec.setdefault(best_victim, local_spec.get(best_target, {}))
 
     return {
         name: sorted(
