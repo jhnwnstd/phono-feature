@@ -49,7 +49,7 @@ C = {
     "accent_light": "#DBEAFE",
     "seg_default": "#F8FAFC",
     "seg_selected": "#2563EB",
-    "seg_matched": "#16A34A",
+    "seg_matched": "#2563EB",
     "seg_unmatched": "#E2E8F0",
     "plus": "#15803D",
     "plus_bg": "#DCFCE7",
@@ -187,7 +187,7 @@ class SegmentButton(QPushButton):
                 QPushButton {{
                     background-color: {C['seg_matched']};
                     color: #FFFFFF;
-                    border: 2px solid #15803D;
+                    border: 2px solid #1D4ED8;
                     border-radius: 8px;
                     font-weight: bold;
                 }}
