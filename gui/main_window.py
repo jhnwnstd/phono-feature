@@ -1040,7 +1040,14 @@ class MainWindow(QMainWindow):
         self._feat_rows.clear()
         self._selected_features.clear()
 
-        for feat in self.engine.features:
+        active_features = [
+            f
+            for f in self.engine.features
+            if any(
+                seg.get(f, "0") != "0" for seg in self.engine.segments.values()
+            )
+        ]
+        for feat in active_features:
             row = FeatureRow(feat)
             row.value_changed.connect(self._on_feature_changed)
             self._feat_rows[feat] = row
