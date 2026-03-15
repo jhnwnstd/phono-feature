@@ -14,8 +14,6 @@ All phonological logic is independent of the GUI and can be used in scripts.
 import json
 from typing import Dict, List, Tuple, Union
 
-import numpy as np
-
 
 class FeatureEngine:
     """
@@ -38,8 +36,6 @@ class FeatureEngine:
         self.metadata = {}
         self.features = []
         self.segments = {}
-        self._segment_matrix = None  # numpy array for efficient computation
-        self._segment_order = []  # segment symbols in matrix order
 
     def load_inventory(self, filepath: str) -> None:
         """
@@ -64,24 +60,6 @@ class FeatureEngine:
         self.metadata = data.get("metadata", {})
         self.features = data["features"]
         self.segments = data["segments"]
-
-        # Build internal numpy matrix for efficient computation
-        self._build_segment_matrix()
-
-    def _build_segment_matrix(self) -> None:
-        """Build internal numpy matrix representation of segments."""
-        self._segment_order = sorted(self.segments.keys())
-        n_segments = len(self._segment_order)
-        n_features = len(self.features)
-
-        self._segment_matrix = np.zeros(
-            (n_segments, n_features), dtype=np.int8
-        )
-
-        for i, segment in enumerate(self._segment_order):
-            for j, feature in enumerate(self.features):
-                value = self.segments[segment].get(feature, "0")
-                self._segment_matrix[i, j] = self.FEATURE_ENCODING[value]
 
     def get_segment_features(self, segment: str) -> Dict[str, str]:
         """
@@ -173,12 +151,12 @@ class FeatureEngine:
         Raises:
             ValueError: If any segment not in inventory
         """
+        if not segments:
+            return ({}, True)
+
         for seg in segments:
             if seg not in self.segments:
                 raise ValueError(f"Segment '{seg}' not in inventory")
-
-        if not segments:
-            return ({}, True)
 
         segment_set = set(segments)
 
@@ -197,22 +175,17 @@ class FeatureEngine:
             if len(values) == 1:
                 candidate_features[feature] = values.pop()
 
-        # Find minimal bundle - remove features one at a time and check if class expands
+        # Greedily remove redundant features; result is always minimal by construction.
         minimal_bundle = candidate_features.copy()
-        is_minimal = True
 
         for feature in candidate_features:
             test_bundle = {
                 k: v for k, v in minimal_bundle.items() if k != feature
             }
-            matches = set(self.find_segments(test_bundle))
-
-            if matches == segment_set:
-                # This feature is redundant
+            if set(self.find_segments(test_bundle)) == segment_set:
                 del minimal_bundle[feature]
-                is_minimal = False
 
-        return (minimal_bundle, is_minimal)
+        return (minimal_bundle, True)
 
     def is_contrastive(self, feature: str) -> bool:
         """
@@ -404,7 +377,7 @@ class FeatureEngine:
                     distances.append(
                         self.segment_distance(segments[i], segments[j])
                     )
-            stats["avg_feature_distance"] = np.mean(distances)
+            stats["avg_feature_distance"] = sum(distances) / len(distances)
         else:
             stats["avg_feature_distance"] = 0.0
 

@@ -146,7 +146,7 @@ def _normalize_key(key: str) -> str:
     k = k.replace("del.rel.", "delrel")
     k = k.replace("delayed_release", "delrel")
     k = k.replace("s.g.", "spreadgl")
-    k = k.replace("c.g.", "constgl")
+    k = k.replace("c.g.", "constrgl")
     k = k.replace(".", "").replace("_", "").replace(" ", "")
     return k
 

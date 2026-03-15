@@ -86,10 +86,11 @@ class GeometryAnalyzer:
             engine: FeatureEngine instance with loaded inventory
         """
         self.engine = engine
-        self.dependencies = (
+        self.dependencies: Dict = (
             {}
-        )  # feature -> {parent: GeometryNode, coverage: float, p_value: float}
+        )  # feature -> {parent, coverage, p_value, confidence}
         self.geometry_tree = None
+        self._rng = np.random.RandomState(42)
 
     def analyze(self) -> GeometryNode:
         """
@@ -124,8 +125,10 @@ class GeometryAnalyzer:
                 coverage = self._compute_coverage(parent_feat, child_feat)
 
                 if coverage > best_coverage:
-                    # Run permutation test
-                    p_value = self._permutation_test(parent_feat, child_feat)
+                    # Run permutation test (pass coverage to avoid recomputing it)
+                    p_value = self._permutation_test(
+                        parent_feat, child_feat, coverage
+                    )
 
                     if p_value < self.SIGNIFICANCE_LEVEL:
                         best_parent = parent_feat
@@ -171,7 +174,9 @@ class GeometryAnalyzer:
 
         return holds_count / applicable_count
 
-    def _permutation_test(self, parent_feat: str, child_feat: str) -> float:
+    def _permutation_test(
+        self, parent_feat: str, child_feat: str, observed_coverage: float
+    ) -> float:
         """
         Perform permutation test for dependency significance.
 
@@ -185,38 +190,28 @@ class GeometryAnalyzer:
         Returns:
             P-value from permutation test
         """
-        observed_coverage = self._compute_coverage(parent_feat, child_feat)
-
-        # Get child feature values as array
         segments = list(self.engine.segments.keys())
         child_values = [
             self.engine.segments[s].get(child_feat, "0") for s in segments
         ]
+        parent_values = [
+            self.engine.segments[s].get(parent_feat, "0") for s in segments
+        ]
 
-        # Count permutations with coverage >= observed
         extreme_count = 0
-
-        rng = np.random.RandomState(42)  # Fixed seed for reproducibility
-
         for _ in range(self.PERMUTATION_ITERATIONS):
-            # Shuffle child values
             permuted = child_values.copy()
-            rng.shuffle(permuted)
-
-            # Temporarily replace values and compute coverage
-            original_values = {}
-            for i, seg in enumerate(segments):
-                original_values[seg] = self.engine.segments[seg].get(
-                    child_feat, "0"
+            self._rng.shuffle(permuted)
+            applicable = sum(1 for v in permuted if v != "0")
+            if applicable == 0:
+                permuted_coverage = 0.0
+            else:
+                holds = sum(
+                    1
+                    for i in range(len(segments))
+                    if permuted[i] != "0" and parent_values[i] != "0"
                 )
-                self.engine.segments[seg][child_feat] = permuted[i]
-
-            permuted_coverage = self._compute_coverage(parent_feat, child_feat)
-
-            # Restore original values
-            for seg in segments:
-                self.engine.segments[seg][child_feat] = original_values[seg]
-
+                permuted_coverage = holds / applicable
             if permuted_coverage >= observed_coverage:
                 extreme_count += 1
 
@@ -247,7 +242,7 @@ class GeometryAnalyzer:
 
             parent_node.add_child(child_node)
 
-            # Set confidence level
+            # Set confidence level once; store in dep_info to avoid recomputing.
             child_node.coverage = coverage
             child_node.p_value = p_value
 
@@ -260,6 +255,8 @@ class GeometryAnalyzer:
                 child_node.confidence = "moderate"
             else:
                 child_node.confidence = "low"
+
+            self.dependencies[child_feat]["confidence"] = child_node.confidence
 
             # Remove from root candidates
             if child_feat in root_candidates:
@@ -303,27 +300,13 @@ class GeometryAnalyzer:
         summary = []
 
         for child_feat, dep_info in self.dependencies.items():
-            parent_feat = dep_info["parent"]
-            coverage = dep_info["coverage"]
-            p_value = dep_info["p_value"]
-
-            if (
-                coverage >= self.HIGH_COVERAGE_THRESHOLD
-                and p_value < self.SIGNIFICANCE_LEVEL
-            ):
-                confidence = "high"
-            elif coverage >= self.MODERATE_COVERAGE_THRESHOLD:
-                confidence = "moderate"
-            else:
-                confidence = "low"
-
             summary.append(
                 {
                     "child": child_feat,
-                    "parent": parent_feat,
-                    "coverage": coverage,
-                    "p_value": p_value,
-                    "confidence": confidence,
+                    "parent": dep_info["parent"],
+                    "coverage": dep_info["coverage"],
+                    "p_value": dep_info["p_value"],
+                    "confidence": dep_info["confidence"],
                 }
             )
 
