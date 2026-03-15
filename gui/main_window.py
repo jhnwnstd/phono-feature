@@ -3,6 +3,7 @@ gui/main_window.py
 PyQt6 GUI for the Segment & Feature Engine.
 """
 
+import math
 import os
 from typing import Optional
 
@@ -80,10 +81,67 @@ _TAG_PALETTES = {
 }
 
 # ---------------------------------------------------------------------------
-# Segment grid layout constant
+# Segment button geometry
 # ---------------------------------------------------------------------------
 
-_SEG_COLS = 12  # buttons per row in the segment grid
+_BTN_W = 40  # SegmentButton fixed width  (must match setFixedSize in __init__)
+_BTN_H = 32  # SegmentButton fixed height
+_BTN_GAP = 4  # QGridLayout spacing
+
+# ---------------------------------------------------------------------------
+# Shared scrollbar style — thin, unobtrusive overlay track
+# ---------------------------------------------------------------------------
+
+_SCROLLBAR_STYLE = f"""
+    QScrollBar:vertical {{
+        background: transparent;
+        width: 6px;
+        margin: 0;
+        border: none;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {C['border']};
+        border-radius: 3px;
+        min-height: 24px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: {C['text_dim']};
+    }}
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {{
+        height: 0;
+        background: none;
+        border: none;
+    }}
+    QScrollBar::add-page:vertical,
+    QScrollBar::sub-page:vertical {{
+        background: none;
+    }}
+    QScrollBar:horizontal {{
+        background: transparent;
+        height: 6px;
+        margin: 0;
+        border: none;
+    }}
+    QScrollBar::handle:horizontal {{
+        background: {C['border']};
+        border-radius: 3px;
+        min-width: 24px;
+    }}
+    QScrollBar::handle:horizontal:hover {{
+        background: {C['text_dim']};
+    }}
+    QScrollBar::add-line:horizontal,
+    QScrollBar::sub-line:horizontal {{
+        width: 0;
+        background: none;
+        border: none;
+    }}
+    QScrollBar::add-page:horizontal,
+    QScrollBar::sub-page:horizontal {{
+        background: none;
+    }}
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -381,6 +439,7 @@ class AnalysisPanel(QWidget):
                 padding: 8px;
             }}
         """
+            + _SCROLLBAR_STYLE
         )
         self.content.setFixedHeight(160)
 
@@ -392,6 +451,129 @@ class AnalysisPanel(QWidget):
 
     def clear(self):
         self.content.clear()
+
+
+# ---------------------------------------------------------------------------
+# SegmentGridWidget — fluid reflowing grid of segment buttons
+# ---------------------------------------------------------------------------
+
+
+class SegmentGridWidget(QWidget):
+    """
+    Lays out segment buttons in a QGridLayout whose column count is computed
+    from the widget's current width on every resize.
+
+    Column-count policy:
+      - Compute max_possible_cols from available pixel width.
+      - If the largest group fits in one row  → use exactly that many cols
+        (every group in a single row, no scroll needed).
+      - Otherwise → target ⌈max_N / 2⌉ cols so the largest group splits
+        into two even rows; cap at max_possible_cols when the panel is narrow.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._groups: dict = {}  # manner → [seg, ...]
+        self._buttons: dict = (
+            {}
+        )  # seg    → SegmentButton  (owned by this widget)
+        self._headers: list = []  # QLabel per manner group
+        self._n_cols: int = 0  # column count currently in use
+
+        self._grid = QGridLayout(self)
+        self._grid.setSpacing(_BTN_GAP)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
+
+        # Debounce resize events so we don't thrash the layout during drags
+        self._resize_timer = QTimer(self)
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.setInterval(40)
+        self._resize_timer.timeout.connect(self._do_relayout)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def set_groups(self, groups: dict, buttons: dict):
+        """Replace all content.  Old buttons are deleted; new ones are shown."""
+        # Remove everything from layout (widgets stay alive until deleteLater)
+        while self._grid.count():
+            self._grid.takeAt(0)
+
+        # Delete previous buttons and headers
+        for btn in self._buttons.values():
+            btn.deleteLater()
+        for hdr in self._headers:
+            hdr.deleteLater()
+        self._headers.clear()
+
+        self._groups = groups
+        self._buttons = buttons
+
+        # Pre-create header labels (one per group); add to layout in _do_relayout
+        for manner in groups:
+            hdr = QLabel(manner.upper())
+            hdr.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
+            hdr.setStyleSheet(
+                f"color: {C['text_dim']}; letter-spacing: 1px;"
+                " padding: 4px 2px 1px 2px;"
+            )
+            hdr.setParent(self)
+            self._headers.append(hdr)
+
+        self._n_cols = 0  # force a full relayout
+        self._do_relayout()
+
+    # ------------------------------------------------------------------
+    # Resize / layout
+    # ------------------------------------------------------------------
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._resize_timer.start()
+
+    def _compute_n_cols(self) -> int:
+        stride = _BTN_W + _BTN_GAP
+        max_possible = max(1, (self.width() + _BTN_GAP) // stride)
+        if not self._groups:
+            return max_possible
+        max_N = max(len(segs) for segs in self._groups.values())
+        if max_N <= max_possible:
+            # Single row for every group — use exactly as many cols as needed
+            return max_N
+        # Even 2-row split for the widest group, bounded by available width
+        return min(max_possible, math.ceil(max_N / 2))
+
+    def _do_relayout(self):
+        n_cols = self._compute_n_cols()
+        if n_cols == self._n_cols:
+            return
+        self._n_cols = n_cols
+
+        # Remove all items from layout without deleting the widgets
+        while self._grid.count():
+            self._grid.takeAt(0)
+
+        grid_row = 0
+        hdr_iter = iter(self._headers)
+        for manner, segs in self._groups.items():
+            hdr = next(hdr_iter)
+            self._grid.addWidget(hdr, grid_row, 0, 1, n_cols)
+            hdr.show()
+            grid_row += 1
+
+            for col_i, seg in enumerate(segs):
+                btn = self._buttons[seg]
+                self._grid.addWidget(
+                    btn,
+                    grid_row + col_i // n_cols,
+                    col_i % n_cols,
+                )
+                btn.show()
+            grid_row += math.ceil(len(segs) / n_cols)
 
 
 # ---------------------------------------------------------------------------
@@ -613,15 +795,16 @@ class MainWindow(QMainWindow):
         seg_scroll = QScrollArea()
         seg_scroll.setWidgetResizable(True)
         seg_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        seg_scroll.setStyleSheet("background: transparent;")
-
-        self.seg_grid_widget = QWidget()
-        self.seg_grid_widget.setStyleSheet("background: transparent;")
-        self.seg_grid = QGridLayout(self.seg_grid_widget)
-        self.seg_grid.setSpacing(4)
-        self.seg_grid.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        seg_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
+        seg_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        seg_scroll.setStyleSheet("background: transparent;" + _SCROLLBAR_STYLE)
+
+        self.seg_grid_widget = SegmentGridWidget()
+        self.seg_grid_widget.setStyleSheet("background: transparent;")
         seg_scroll.setWidget(self.seg_grid_widget)
         vlay.addWidget(seg_scroll, stretch=1)
 
@@ -673,7 +856,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background: transparent;")
+        scroll.setStyleSheet("background: transparent;" + _SCROLLBAR_STYLE)
 
         self.feat_list_widget = QWidget()
         self.feat_list_widget.setStyleSheet("background: transparent;")
@@ -828,41 +1011,23 @@ class MainWindow(QMainWindow):
 
     def _populate_segments(self):
         assert self.engine is not None
-        while self.seg_grid.count():
-            item = self.seg_grid.takeAt(0)
-            if item is not None:
-                w = item.widget()
-                if w is not None:
-                    w.deleteLater()
-        self._seg_buttons.clear()
         self._selected_segments.clear()
         self.seg_hint.hide()
 
         groups = group_segments(self.engine.segments)
-        grid_row = 0
 
-        for manner, segs in groups.items():
-            hdr = QLabel(manner.upper())
-            hdr.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
-            hdr.setStyleSheet(
-                f"color: {C['text_dim']}; letter-spacing: 1px;"
-                " padding: 4px 2px 1px 2px;"
-            )
-            self.seg_grid.addWidget(hdr, grid_row, 0, 1, _SEG_COLS)
-            grid_row += 1
-
-            for col_i, seg in enumerate(segs):
+        # Build fresh button dict — set_groups owns deletion of previous ones
+        new_buttons: dict = {}
+        for segs in groups.values():
+            for seg in segs:
                 btn = SegmentButton(seg)
                 btn.clicked.connect(
                     lambda checked, s=seg: self._on_segment_clicked(s, checked)
                 )
-                self._seg_buttons[seg] = btn
-                self.seg_grid.addWidget(
-                    btn,
-                    grid_row + col_i // _SEG_COLS,
-                    col_i % _SEG_COLS,
-                )
-            grid_row += (len(segs) + _SEG_COLS - 1) // _SEG_COLS
+                new_buttons[seg] = btn
+
+        self.seg_grid_widget.set_groups(groups, new_buttons)
+        self._seg_buttons = new_buttons
 
     def _populate_features(self):
         assert self.engine is not None
