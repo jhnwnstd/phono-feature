@@ -156,6 +156,70 @@ def _normalize_feats(feat_dict: Dict[str, str]) -> Dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# IPA canonical place ordering (left → right on the IPA chart)
+# ---------------------------------------------------------------------------
+
+_VOICE_IDX: Dict[str, int] = {"-": 0, "+": 1, "0": 2}
+
+
+def _ipa_place(feats: Dict[str, str]) -> int:
+    """Map normalised feature dict to IPA place-of-articulation index.
+
+    Index  Place
+      0    Bilabial
+      1    Labiodental
+      2    Dental
+      3    Alveolar
+      4    Postalveolar
+      5    Retroflex
+      6    Palatal
+      7    Velar  (incl. labial-velar w/ʍ — dorsal dominates)
+      8    Uvular
+      9    Pharyngeal
+     10    Glottal
+     11    Vowels / unclassified
+    """
+    constrgl = feats.get("constrgl", "0")
+    if constrgl == "+":
+        return 10  # glottal stop (ʔ)
+
+    consp = feats.get("constrpharynx", "0")
+    phary = feats.get("pharyngeal", "0")
+    if consp == "+" or phary == "+":
+        return 9  # pharyngeal (ħ, ʕ)
+
+    dor = feats.get("dorsal", "0")
+    hi = feats.get("high", "0")
+    bk = feats.get("back", "0")
+    if dor == "+":
+        if hi == "-":
+            return 8  # uvular
+        if bk == "-":
+            return 6  # palatal (back explicitly front/minus)
+        return 7  # velar (back=+ or back=0; includes labial-velars w/ʍ)
+
+    cor = feats.get("coronal", "0")
+    ant = feats.get("anterior", "0")
+    dist = feats.get("distributed", "0")
+    if cor == "+":
+        if ant == "-":
+            return 5 if dist == "-" else 4  # retroflex / postalveolar
+        return 2 if dist == "+" else 3  # dental / alveolar
+
+    lab = feats.get("labial", "0")
+    labd = feats.get("labiodental", "0")
+    if lab == "+":
+        return 1 if labd == "+" else 0  # labiodental / bilabial
+
+    cons = feats.get("consonantal", "0")
+    syl = feats.get("syllabic", "0")
+    if cons == "-" and syl == "-":
+        return 10  # h, ɦ (no place features)
+
+    return 11  # vowels or unclassified
+
+
+# ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
 
@@ -297,11 +361,14 @@ def group_segments(
         past_costs.append(best_cost)
         assignment[best_target].extend(assignment.pop(best_victim))
 
-    _voice_order = {"-": 0, "+": 1, "0": 2}
     return {
         name: sorted(
             assignment[name],
-            key=lambda s: (_voice_order.get(norm[s].get("voice", "0"), 2), s),
+            key=lambda s: (
+                _ipa_place(norm[s]),
+                _VOICE_IDX.get(norm[s].get("voice", "0"), 2),
+                s,
+            ),
         )
         for name in DISPLAY_ORDER
         if assignment.get(name)
