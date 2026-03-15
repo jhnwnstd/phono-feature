@@ -8,11 +8,16 @@ Groups are initially assigned by argmax feature-spec scoring, then
 iteratively merged until the next merge would cost significantly more than
 previous merges (elbow / dendrogram-cut stopping criterion).  No hardcoded
 group-count targets or minimum-size thresholds.
+
+After each merge, the result is checked against _RELABEL_PATTERNS: if the
+combined origin set matches a known phonological class (Vibrants, Rhotics,
+Liquids), the group is renamed accordingly.  _MERGE_BLOCKED prevents
+linguistically incoherent merges that the elbow might otherwise permit.
 """
 
 import math
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+from typing import Dict, FrozenSet, List, Set, Tuple
 
 # ---------------------------------------------------------------------------
 # Group taxonomy
@@ -102,8 +107,17 @@ ALL_GROUPS: List[Tuple[str, Dict[str, str]]] = [
             "tap": "-",
         },
     ),
-    # [-consonantal, -syllabic]: glides (j, w) and laryngeals (h, ʔ)
-    ("Laryngeals", {"consonantal": "-", "syllabic": "-"}),
+    # [-consonantal, -syllabic] split by sonorant:
+    #   Semivowels = glides (j, w) — [+sonorant]
+    #   Laryngeals = h, ɦ, ʔ    — [-sonorant]
+    (
+        "Semivowels",
+        {"consonantal": "-", "syllabic": "-", "sonorant": "+"},
+    ),
+    (
+        "Laryngeals",
+        {"consonantal": "-", "syllabic": "-", "sonorant": "-"},
+    ),
     ("Vowels", {"syllabic": "+"}),
 ]
 
@@ -111,6 +125,8 @@ SPEC: Dict[str, Dict[str, str]] = {name: spec for name, spec in ALL_GROUPS}
 
 # Display order: least sonorous → most sonorous.
 # Independent of ALL_GROUPS order (which is by feature-spec specificity).
+# Derived labels (Vibrants, Rhotics, Liquids) are interleaved at the
+# positions they occupy when they emerge from merges.
 DISPLAY_ORDER: List[str] = [
     "Clicks",
     "Plosives",
@@ -120,13 +136,57 @@ DISPLAY_ORDER: List[str] = [
     "Fricatives",
     "Lateral Fricatives",
     "Nasals",
+    "Vibrants",  # Trills + Taps & Flaps (if they merge first)
     "Trills",
     "Taps & Flaps",
+    "Rhotics",  # Trills / Taps / Approximants merged
     "Lateral Approximants",
+    "Liquids",  # Lateral Approximants + Rhotics/Approximants
     "Approximants",
-    "Laryngeals",
+    "Semivowels",  # glides: j, w ([-consonantal, +sonorant])
+    "Laryngeals",  # h, ɦ, ʔ  ([-consonantal, -sonorant])
     "Vowels",
 ]
+
+# ---------------------------------------------------------------------------
+# Merge relabeling: frozenset of original group names → derived label
+# ---------------------------------------------------------------------------
+# Keys are sets of ALL_GROUPS names (origins), not current display names.
+
+_RELABEL_PATTERNS: Dict[FrozenSet[str], str] = {
+    # Vibrants: Trills + Taps merge before reaching Approximants
+    frozenset({"Trills", "Taps & Flaps"}): "Vibrants",
+    # Rhotics: any combination that includes Approximants with Trills/Taps
+    frozenset({"Trills", "Approximants"}): "Rhotics",
+    frozenset({"Taps & Flaps", "Approximants"}): "Rhotics",
+    frozenset({"Trills", "Taps & Flaps", "Approximants"}): "Rhotics",
+    # Liquids: Lateral Approximants + anything containing Approximants
+    frozenset({"Lateral Approximants", "Approximants"}): "Liquids",
+    frozenset({"Lateral Approximants", "Approximants", "Trills"}): "Liquids",
+    frozenset(
+        {"Lateral Approximants", "Approximants", "Taps & Flaps"}
+    ): "Liquids",
+    frozenset(
+        {"Lateral Approximants", "Approximants", "Trills", "Taps & Flaps"}
+    ): "Liquids",
+}
+
+# ---------------------------------------------------------------------------
+# Merge blocking: pairs of current group names that must never merge
+# ---------------------------------------------------------------------------
+
+_MERGE_BLOCKED: Set[FrozenSet[str]] = {
+    frozenset({"Rhotics", "Fricatives"}),
+    frozenset({"Rhotics", "Sibilants"}),
+    frozenset({"Rhotics", "Plosives"}),
+    frozenset({"Vibrants", "Fricatives"}),
+    frozenset({"Vibrants", "Sibilants"}),
+    frozenset({"Vibrants", "Plosives"}),
+    frozenset({"Liquids", "Fricatives"}),
+    frozenset({"Liquids", "Plosives"}),
+    # Prevent re-merging the two groups we explicitly split
+    frozenset({"Semivowels", "Laryngeals"}),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -263,20 +323,18 @@ def group_cohesion(
 
 def merge_cost(
     victims: List[str],
-    victim_name: str,
-    target_name: str,
+    victim_spec: Dict[str, str],
+    target_spec: Dict[str, str],
     inventory: Dict[str, Dict[str, str]],
 ) -> float:
     """Drop in mean cohesion when victim's members move to target.
 
     Higher = worse merge (segments fit target poorly).
     """
-    spec_v = SPEC.get(victim_name, {})
-    spec_t = SPEC.get(target_name, {})
-    if not victims or not spec_v or not spec_t:
+    if not victims or not victim_spec or not target_spec:
         return 1.0
-    before = sum(seg_score(inventory[s], spec_v) for s in victims)
-    after = sum(seg_score(inventory[s], spec_t) for s in victims)
+    before = sum(seg_score(inventory[s], victim_spec) for s in victims)
+    after = sum(seg_score(inventory[s], target_spec) for s in victims)
     return max(0.0, (before - after) / len(victims))
 
 
@@ -295,12 +353,24 @@ def _find_best_merge(
     members: List[str],
     surviving: Set[str],
     inventory: Dict[str, Dict[str, str]],
+    local_spec: Dict[str, Dict[str, str]],
 ) -> Tuple[str, float]:
-    """Find the surviving group that absorbs victim at lowest cohesion cost."""
-    candidates = [g for g in surviving if g != victim]
+    """Find the surviving group that absorbs victim at lowest cohesion cost.
+
+    Skips any candidate whose merge with victim is in _MERGE_BLOCKED.
+    """
+    v_spec = local_spec.get(victim, {})
+    candidates = [
+        g
+        for g in surviving
+        if g != victim and frozenset({victim, g}) not in _MERGE_BLOCKED
+    ]
     if not candidates:
         return "", float("inf")
-    costs = {g: merge_cost(members, victim, g, inventory) for g in candidates}
+    costs = {
+        g: merge_cost(members, v_spec, local_spec.get(g, {}), inventory)
+        for g in candidates
+    }
     best = min(costs, key=lambda g: costs[g])
     return best, costs[best]
 
@@ -318,6 +388,12 @@ def group_segments(
     Uses hierarchical agglomerative merging: starts with argmax assignment
     to all groups, then iteratively merges the cheapest available group pair
     until the next merge cost is a statistical outlier vs. past costs (elbow).
+
+    After each merge the combined origin set is checked against
+    _RELABEL_PATTERNS; matching results are renamed (e.g. Trills + Taps →
+    Vibrants, Approximants + Trills/Taps → Rhotics, Lateral Approximants +
+    Rhotics/Approximants → Liquids).  _MERGE_BLOCKED prevents
+    linguistically incoherent merges regardless of cost.
 
     Args:
         inventory: {symbol: {feature: value}} — raw from FeatureEngine.segments
@@ -340,26 +416,45 @@ def group_segments(
         best_name, _ = max(scored, key=lambda x: x[1])
         assignment[best_name].append(sym)
 
+    # Track which original ALL_GROUPS names live inside each current group.
+    origins: Dict[str, FrozenSet[str]] = {
+        name: frozenset({name}) for name in assignment
+    }
+
+    # Local spec copy — extended with specs for relabeled groups.
+    local_spec: Dict[str, Dict[str, str]] = dict(SPEC)
+
     # Iterative merging with elbow-detection stopping criterion.
     past_costs: List[float] = []
     while len(assignment) > 1:
         surviving: Set[str] = set(assignment.keys())
 
-        # Find the cheapest merge across all current groups.
+        # Find the cheapest non-blocked merge across all current groups.
         best_victim: str = ""
         best_target: str = ""
         best_cost: float = float("inf")
         for victim, members in assignment.items():
-            target, cost = _find_best_merge(victim, members, surviving, norm)
+            target, cost = _find_best_merge(
+                victim, members, surviving, norm, local_spec
+            )
             if cost < best_cost:
                 best_victim, best_target, best_cost = victim, target, cost
 
-        # Stop when next merge is a statistical outlier vs. prior merges.
-        if _is_outlier(best_cost, past_costs):
+        # Stop if no valid merge exists or next merge is a statistical outlier.
+        if best_cost == float("inf") or _is_outlier(best_cost, past_costs):
             break
 
         past_costs.append(best_cost)
         assignment[best_target].extend(assignment.pop(best_victim))
+        origins[best_target] = origins[best_target] | origins.pop(best_victim)
+
+        # Check for a relabel based on the combined origin set.
+        new_label = _RELABEL_PATTERNS.get(origins[best_target])
+        if new_label and new_label != best_target:
+            assignment[new_label] = assignment.pop(best_target)
+            origins[new_label] = origins.pop(best_target)
+            if new_label not in local_spec:
+                local_spec[new_label] = local_spec.get(best_target, {})
 
     return {
         name: sorted(
