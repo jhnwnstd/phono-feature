@@ -6,7 +6,13 @@ PyQt6 GUI for the Segment & Feature Engine.
 import os
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import (
+    QFileSystemWatcher,
+    QSettings,
+    Qt,
+    QTimer,
+    pyqtSignal,
+)
 from PyQt6.QtGui import QFont, QStandardItemModel
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -61,6 +67,9 @@ C = {
     "tag_gray": "#F1F5F9",
     "tag_gray_text": "#64748B",
 }
+
+_SETTINGS_ORG = "features"
+_SETTINGS_APP = "SegFeatureEngine"
 
 
 # ---------------------------------------------------------------------------
@@ -364,7 +373,7 @@ class AnalysisPanel(QWidget):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, startup_path: Optional[str] = None):
         super().__init__()
         self.engine: Optional[FeatureEngine] = None
         self._mode = "seg_to_feat"  # 'seg_to_feat' | 'feat_to_seg'
@@ -372,13 +381,33 @@ class MainWindow(QMainWindow):
         self._feat_rows: dict = {}  # feature  → FeatureRow
         self._selected_segments: list = []
         self._selected_features: dict = {}  # feature → '+'/'-'
+        self._current_path: Optional[str] = None
 
         self.setWindowTitle("Segment & Feature Engine")
         self.setMinimumSize(900, 680)
         self.setStyleSheet(f"background-color: {C['bg']};")
 
+        # -- 150 ms debounce: batch rapid selection changes before analysis --
+        self._debounce = QTimer(self)
+        self._debounce.setSingleShot(True)
+        self._debounce.setInterval(150)
+        self._debounce.timeout.connect(self._run_pending_update)
+
+        # -- file-system watcher: auto-reload when config JSON changes --
+        self._watcher = QFileSystemWatcher(self)
+        self._watcher.fileChanged.connect(self._on_file_changed)
+        # Small delay so editors that do delete-then-write don't re-trigger
+        self._reload_timer = QTimer(self)
+        self._reload_timer.setSingleShot(True)
+        self._reload_timer.setInterval(600)
+        self._reload_timer.timeout.connect(self._do_auto_reload)
+
+        # -- persistent settings --
+        self._settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+
         self._build_ui()
         self._set_mode("seg_to_feat")
+        self._restore_settings(startup_path)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -623,6 +652,36 @@ class MainWindow(QMainWindow):
         return container
 
     # ------------------------------------------------------------------
+    # Settings persistence
+    # ------------------------------------------------------------------
+
+    def _restore_settings(self, startup_path: Optional[str]):
+        """Restore window geometry, mode, and last inventory on launch."""
+        geometry = self._settings.value("geometry")
+        if geometry:
+            self.restoreGeometry(geometry)
+
+        # Determine which inventory to open
+        path = startup_path or self._settings.value("last_inventory")
+        if path and isinstance(path, str) and os.path.isfile(path):
+            idx = self.config_combo.findData(path)
+            if idx >= 0:
+                self.config_combo.setCurrentIndex(idx)
+            self._load_path(path)
+
+        # Restore mode after loading (overrides _load_path's default mode)
+        saved_mode = self._settings.value("mode", "seg_to_feat")
+        if saved_mode in ("seg_to_feat", "feat_to_seg"):
+            self._set_mode(saved_mode)
+
+    def closeEvent(self, event):  # type: ignore[override]
+        self._settings.setValue("geometry", self.saveGeometry())
+        self._settings.setValue("mode", self._mode)
+        if self._current_path:
+            self._settings.setValue("last_inventory", self._current_path)
+        super().closeEvent(event)
+
+    # ------------------------------------------------------------------
     # Config loading
     # ------------------------------------------------------------------
 
@@ -634,7 +693,7 @@ class MainWindow(QMainWindow):
         self.config_combo.clear()
         self.config_combo.addItem("Select inventory\u2026", userData=None)
 
-        # Disable the placeholder row
+        # Disable the placeholder row so it cannot be picked
         model = self.config_combo.model()
         if isinstance(model, QStandardItemModel):
             item = model.item(0)
@@ -663,7 +722,7 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        # If the file is already in the dropdown, select it; otherwise add it
+        # Select existing entry or add a new one
         idx = self.config_combo.findData(path)
         if idx < 0:
             pretty = os.path.splitext(os.path.basename(path))[0]
@@ -674,7 +733,7 @@ class MainWindow(QMainWindow):
         self._load_path(path)
 
     def _load_path(self, path: str):
-        """Core loading logic shared by dropdown and browse."""
+        """Core loading logic shared by dropdown, browse, and auto-reload."""
         try:
             engine = FeatureEngine()
             engine.load_inventory(path)
@@ -685,12 +744,51 @@ class MainWindow(QMainWindow):
                 f"{len(engine.segments)} segments, "
                 f"{len(engine.features)} features."
             )
+
+            # Update file-system watcher
+            if self._current_path and self._current_path != path:
+                self._watcher.removePath(self._current_path)
+            self._current_path = path
+            if path not in self._watcher.files():
+                self._watcher.addPath(path)
+
+            # Persist for next launch
+            self._settings.setValue("last_inventory", path)
+
             self._populate_segments()
             self._populate_features()
             self._set_mode(self._mode)
             self.analysis.clear()
         except Exception as e:
-            self.status.showMessage(f"Error loading \u201c{path}\u201d: {e}")
+            self.status.showMessage(f"Error: {e}")
+
+    # ------------------------------------------------------------------
+    # File-system watcher: auto-reload on disk change
+    # ------------------------------------------------------------------
+
+    def _on_file_changed(self, path: str):
+        """Called by QFileSystemWatcher when the watched file changes."""
+        # Some editors remove and recreate the file; re-add if needed.
+        QTimer.singleShot(
+            200,
+            lambda: (
+                self._watcher.addPath(path)
+                if path not in self._watcher.files()
+                else None
+            ),
+        )
+        self._reload_timer.start()
+
+    def _do_auto_reload(self):
+        """Reload the current inventory after the debounce period."""
+        if self._current_path and os.path.isfile(self._current_path):
+            self._load_path(self._current_path)
+            fname = os.path.basename(self._current_path)
+            self.status.showMessage(f"Auto-reloaded \u201c{fname}\u201d")
+
+    # ------------------------------------------------------------------
+    # Populate panels
+    # ------------------------------------------------------------------
 
     def _populate_segments(self):
         assert self.engine is not None
@@ -801,7 +899,7 @@ class MainWindow(QMainWindow):
             )
 
     # ------------------------------------------------------------------
-    # Event handlers
+    # Event handlers  (state changes are immediate; analysis is debounced)
     # ------------------------------------------------------------------
 
     def _on_segment_clicked(self, segment: str, checked: bool):
@@ -818,7 +916,7 @@ class MainWindow(QMainWindow):
             btn.set_state("default")
             if segment in self._selected_segments:
                 self._selected_segments.remove(segment)
-        self._update_seg_to_feat()
+        self._debounce.start()
 
     def _on_feature_changed(self, feature: str, value: str):
         if self._mode != "feat_to_seg":
@@ -827,7 +925,14 @@ class MainWindow(QMainWindow):
             self._selected_features[feature] = value
         else:
             self._selected_features.pop(feature, None)
-        self._update_feat_to_seg()
+        self._debounce.start()
+
+    def _run_pending_update(self):
+        """Fired by the debounce timer; dispatches to the active mode."""
+        if self._mode == "seg_to_feat":
+            self._update_seg_to_feat()
+        else:
+            self._update_feat_to_seg()
 
     # ------------------------------------------------------------------
     # Seg → Feat logic
