@@ -1103,19 +1103,29 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _set_mode(self, mode: str):
-        if mode != self._mode and self.engine:
-            if self._mode == "seg_to_feat" and self._selected_segments:
-                # Carry non-contradictory (shared) features into the feature query
-                self._saved_feat_state = {
-                    f: v for f, v in
-                    self.engine.common_features(self._selected_segments).items()
-                    if v in ("+", "-")
-                }
-            elif self._mode == "feat_to_seg" and self._selected_features:
-                # Carry the matched segments into the segment selection
-                self._saved_seg_state = list(
-                    self.engine.find_segments(self._selected_features)
-                )
+        if mode != self._mode:
+            if self._mode == "seg_to_feat":
+                # Preserve exact seg selection so toggling back restores it
+                self._saved_seg_state = list(self._selected_segments)
+                # Project into feat mode: shared (non-contradictory) features only
+                if self._selected_segments and self.engine:
+                    self._saved_feat_state = {
+                        f: v for f, v in
+                        self.engine.common_features(self._selected_segments).items()
+                        if v in ("+", "-")
+                    }
+                else:
+                    self._saved_feat_state = {}
+            else:
+                # Preserve exact feat query so toggling back restores it
+                self._saved_feat_state = dict(self._selected_features)
+                # Project into seg mode: segments matched by current feature query
+                if self._selected_features and self.engine:
+                    self._saved_seg_state = list(
+                        self.engine.find_segments(self._selected_features)
+                    )
+                else:
+                    self._saved_seg_state = []
         self._mode = mode
         is_s2f = mode == "seg_to_feat"
 
