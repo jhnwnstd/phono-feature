@@ -13,12 +13,11 @@ Provides tools for:
 Usage:
     python main.py
 
-Author: Claude
-License: MIT
 """
 
 import sys
 
+from PyQt6.QtCore import QCommandLineParser
 from PyQt6.QtWidgets import QApplication
 
 from gui.main_window import MainWindow
@@ -33,8 +32,22 @@ def main():
     # Set application-wide style
     app.setStyle("Fusion")
 
+    # Parse optional positional inventory path argument
+    parser = QCommandLineParser()
+    parser.setApplicationDescription("Phonology Segment & Feature Engine")
+    parser.addHelpOption()
+    parser.addPositionalArgument(
+        "inventory",
+        "Path to a JSON inventory file to load on startup.",
+        "[inventory]",
+    )
+    parser.process(app)
+
+    positional = parser.positionalArguments()
+    startup_path = positional[0] if positional else None
+
     # Create and show main window
-    window = MainWindow()
+    window = MainWindow(startup_path=startup_path)
     window.show()
 
     # Run application
