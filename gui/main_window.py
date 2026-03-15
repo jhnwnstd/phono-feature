@@ -794,8 +794,10 @@ class MainWindow(QMainWindow):
         assert self.engine is not None
         while self.seg_grid.count():
             item = self.seg_grid.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            if item is not None:
+                w = item.widget()
+                if w is not None:
+                    w.deleteLater()
         self._seg_buttons.clear()
         self._selected_segments.clear()
         self.seg_hint.hide()
@@ -813,8 +815,10 @@ class MainWindow(QMainWindow):
         assert self.engine is not None
         while self.feat_list_layout.count():
             item = self.feat_list_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            if item is not None:
+                w = item.widget()
+                if w is not None:
+                    w.deleteLater()
         self._feat_rows.clear()
         self._selected_features.clear()
 
