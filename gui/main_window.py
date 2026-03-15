@@ -7,8 +7,9 @@ import os
 from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QStandardItemModel
 from PyQt6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -181,13 +182,13 @@ class FeatureRow(QWidget):
         self.plus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self._style_btn(self.plus_btn, "+")
 
-        self.minus_btn = QPushButton("−")
+        self.minus_btn = QPushButton("\u2212")
         self.minus_btn.setFixedSize(30, 26)
         self.minus_btn.setCheckable(True)
         self.minus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self._style_btn(self.minus_btn, "-")
 
-        self.badge = QLabel("")
+        self.badge = QLabel("\u00b7")
         self.badge.setFixedSize(34, 26)
         self.badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.badge.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
@@ -261,7 +262,7 @@ class FeatureRow(QWidget):
         shared: whether this value is consistent across all selected segs
         """
         if not value or not shared:
-            self.badge.setText("·")
+            self.badge.setText("\u00b7")
             self.badge.setStyleSheet(
                 f"background: {C['tag_gray']};"
                 f" color: {C['tag_gray_text']}; border-radius: 4px;"
@@ -294,8 +295,13 @@ class FeatureRow(QWidget):
         self._current_value = ""
         self.plus_btn.setChecked(False)
         self.minus_btn.setChecked(False)
-        self.badge.setText("")
-        self.name_label.setStyleSheet(f"color: {C['text']};")
+        # Neutral dot badge (visible in display mode, hidden in interactive)
+        self.badge.setText("\u00b7")
+        self.badge.setStyleSheet(
+            f"background: {C['tag_gray']};"
+            f" color: {C['tag_gray_text']}; border-radius: 4px;"
+        )
+        self.name_label.setStyleSheet(f"color: {C['text_dim']};")
         self.setStyleSheet("background: transparent; border-radius: 6px;")
 
     @property
@@ -388,35 +394,69 @@ class MainWindow(QMainWindow):
                 background: {C['panel']};
                 border-bottom: 1px solid {C['border']};
                 padding: 4px 8px;
-                spacing: 8px;
+                spacing: 6px;
             }}
         """
         )
         self.addToolBar(toolbar)
 
-        load_btn = QPushButton("  Load Config…")
-        load_btn.setFont(QFont("Noto Sans", 10))
-        load_btn.setFixedHeight(32)
-        load_btn.setStyleSheet(
+        # Config dropdown
+        self.config_combo = QComboBox()
+        self.config_combo.setFont(QFont("Noto Sans", 10))
+        self.config_combo.setFixedHeight(32)
+        self.config_combo.setMinimumWidth(220)
+        self.config_combo.setStyleSheet(
             f"""
-            QPushButton {{
-                background: {C['accent']};
-                color: white;
-                border: none;
+            QComboBox {{
+                background: {C['panel']};
+                color: {C['text']};
+                border: 1.5px solid {C['border']};
                 border-radius: 6px;
-                padding: 0 14px;
-                font-weight: bold;
+                padding: 0 10px;
             }}
-            QPushButton:hover {{ background: #1D4ED8; }}
+            QComboBox:hover {{
+                border: 1.5px solid {C['accent']};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                padding-right: 8px;
+            }}
+            QComboBox QAbstractItemView {{
+                background: {C['panel']};
+                color: {C['text']};
+                border: 1px solid {C['border']};
+                selection-background-color: {C['accent_light']};
+                selection-color: {C['accent']};
+                outline: none;
+            }}
         """
         )
-        load_btn.clicked.connect(self._load_config)
-        toolbar.addWidget(load_btn)
+        self._populate_config_dropdown()
+        self.config_combo.activated.connect(self._on_config_selected)
+        toolbar.addWidget(self.config_combo)
 
-        self.config_label = QLabel("  No config loaded")
-        self.config_label.setFont(QFont("Noto Sans", 9))
-        self.config_label.setStyleSheet(f"color: {C['text_dim']};")
-        toolbar.addWidget(self.config_label)
+        # Browse button
+        browse_btn = QPushButton("Browse\u2026")
+        browse_btn.setFont(QFont("Noto Sans", 10))
+        browse_btn.setFixedHeight(32)
+        browse_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background: {C['bg']};
+                color: {C['text']};
+                border: 1.5px solid {C['border']};
+                border-radius: 6px;
+                padding: 0 12px;
+            }}
+            QPushButton:hover {{
+                background: {C['accent_light']};
+                border: 1.5px solid {C['accent']};
+                color: {C['accent']};
+            }}
+        """
+        )
+        browse_btn.clicked.connect(self._browse_config)
+        toolbar.addWidget(browse_btn)
 
         spacer = QWidget()
         spacer.setSizePolicy(
@@ -429,8 +469,8 @@ class MainWindow(QMainWindow):
         mode_label.setStyleSheet(f"color: {C['text']};")
         toolbar.addWidget(mode_label)
 
-        self.seg_mode_btn = QPushButton("Segment → Features")
-        self.feat_mode_btn = QPushButton("Features → Segments")
+        self.seg_mode_btn = QPushButton("Segment \u2192 Features")
+        self.feat_mode_btn = QPushButton("Features \u2192 Segments")
         for btn, mode in (
             (self.seg_mode_btn, "seg_to_feat"),
             (self.feat_mode_btn, "feat_to_seg"),
@@ -473,7 +513,9 @@ class MainWindow(QMainWindow):
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
         )
         self.setStatusBar(self.status)
-        self.status.showMessage("Load a JSON config to begin.")
+        self.status.showMessage(
+            "Select an inventory from the dropdown to begin."
+        )
 
     def _build_segment_panel(self) -> QWidget:
         container = QWidget()
@@ -518,7 +560,7 @@ class MainWindow(QMainWindow):
         vlay.addWidget(self.seg_grid_widget)
         vlay.addStretch()
 
-        self.seg_hint = QLabel("← Load a config to see segments")
+        self.seg_hint = QLabel("\u2190 Select an inventory to see segments")
         self.seg_hint.setFont(QFont("Noto Sans", 9))
         self.seg_hint.setStyleSheet(f"color: {C['text_dim']};")
         self.seg_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -584,28 +626,71 @@ class MainWindow(QMainWindow):
     # Config loading
     # ------------------------------------------------------------------
 
-    def _load_config(self):
+    def _populate_config_dropdown(self):
+        """Scan config/ directory and fill the dropdown."""
+        config_dir = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "config")
+        )
+        self.config_combo.clear()
+        self.config_combo.addItem("Select inventory\u2026", userData=None)
+
+        # Disable the placeholder row
+        model = self.config_combo.model()
+        if isinstance(model, QStandardItemModel):
+            item = model.item(0)
+            if item is not None:
+                item.setEnabled(False)
+
+        if os.path.isdir(config_dir):
+            for fname in sorted(os.listdir(config_dir)):
+                if fname.endswith(".json"):
+                    path = os.path.join(config_dir, fname)
+                    pretty = fname[:-5].replace("_", " ").title()
+                    self.config_combo.addItem(pretty, userData=path)
+
+        self.config_combo.setCurrentIndex(0)
+
+    def _on_config_selected(self, index: int):
+        """Load the config chosen from the dropdown."""
+        path = self.config_combo.itemData(index)
+        if path:
+            self._load_path(path)
+
+    def _browse_config(self):
+        """Open a file dialog and load the chosen JSON."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Open Phonological Inventory", "", "JSON Files (*.json)"
         )
         if not path:
             return
+        # If the file is already in the dropdown, select it; otherwise add it
+        idx = self.config_combo.findData(path)
+        if idx < 0:
+            pretty = os.path.splitext(os.path.basename(path))[0]
+            pretty = pretty.replace("_", " ").title()
+            self.config_combo.addItem(pretty, userData=path)
+            idx = self.config_combo.count() - 1
+        self.config_combo.setCurrentIndex(idx)
+        self._load_path(path)
+
+    def _load_path(self, path: str):
+        """Core loading logic shared by dropdown and browse."""
         try:
             engine = FeatureEngine()
             engine.load_inventory(path)
             self.engine = engine
             name = engine.metadata.get("name", os.path.basename(path))
-            self.config_label.setText(f"  {os.path.basename(path)}  —  {name}")
             self.status.showMessage(
-                f"Loaded {len(engine.segments)} segments,"
-                f" {len(engine.features)} features."
+                f"{name}  \u2014  "
+                f"{len(engine.segments)} segments, "
+                f"{len(engine.features)} features."
             )
             self._populate_segments()
             self._populate_features()
             self._set_mode(self._mode)
             self.analysis.clear()
         except Exception as e:
-            self.status.showMessage(f"Error loading config: {e}")
+            self.status.showMessage(f"Error loading \u201c{path}\u201d: {e}")
 
     def _populate_segments(self):
         assert self.engine is not None
@@ -705,10 +790,14 @@ class MainWindow(QMainWindow):
         if is_s2f:
             self.status.showMessage(
                 "Select one or more segments to inspect their features."
+                if self.engine
+                else "Select an inventory from the dropdown to begin."
             )
         else:
             self.status.showMessage(
-                "Select feature values (+/−) to find matching segments."
+                "Select feature values (+/\u2212) to find matching segments."
+                if self.engine
+                else "Select an inventory from the dropdown to begin."
             )
 
     # ------------------------------------------------------------------
@@ -717,6 +806,8 @@ class MainWindow(QMainWindow):
 
     def _on_segment_clicked(self, segment: str, checked: bool):
         if self._mode != "seg_to_feat":
+            # Prevent visual toggle in feat_to_seg mode
+            self._seg_buttons[segment].setChecked(False)
             return
         btn = self._seg_buttons[segment]
         if checked:
