@@ -12,7 +12,9 @@ All phonological logic is independent of the GUI and can be used in scripts.
 """
 
 import json
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
+
+_VALID_VALUES = {"+", "-", "0"}
 
 
 class FeatureEngine:
@@ -27,15 +29,35 @@ class FeatureEngine:
     - Calculating phonological distances
     """
 
-    # Feature value encoding for internal computation
-    FEATURE_ENCODING = {"+": 1, "-": -1, "0": 0}
-    FEATURE_DECODING = {1: "+", -1: "-", 0: "0"}
-
     def __init__(self):
         """Initialize an empty feature engine."""
         self.metadata = {}
         self.features = []
         self.segments = {}
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _validate_segment(self, segment: str) -> None:
+        if segment not in self.segments:
+            raise KeyError(f"Segment '{segment}' not found in inventory")
+
+    def _validate_feature(self, feature: str) -> None:
+        if feature not in self.features:
+            raise KeyError(f"Feature '{feature}' not found in inventory")
+
+    def _find_segments_unsorted(self, feature_spec: Dict[str, str]) -> List[str]:
+        """Match segments against a feature spec without sorting (internal use)."""
+        matching = []
+        for segment, features in self.segments.items():
+            if all(features.get(f, "0") == v for f, v in feature_spec.items()):
+                matching.append(segment)
+        return matching
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def load_inventory(self, filepath: str) -> None:
         """
@@ -46,16 +68,36 @@ class FeatureEngine:
 
         Raises:
             FileNotFoundError: If file doesn't exist
-            ValueError: If JSON format is invalid
+            ValueError: If JSON structure or values are invalid
         """
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        # Validate required fields
         if "features" not in data or "segments" not in data:
             raise ValueError(
                 "Inventory must contain 'features' and 'segments' fields"
             )
+        if not isinstance(data["features"], list) or not all(
+            isinstance(f, str) for f in data["features"]
+        ):
+            raise ValueError("'features' must be a list of strings")
+        if len(data["features"]) != len(set(data["features"])):
+            raise ValueError("'features' list contains duplicate names")
+        if not isinstance(data["segments"], dict):
+            raise ValueError("'segments' must be a dictionary")
+
+        for seg_name, seg_feats in data["segments"].items():
+            if not isinstance(seg_feats, dict):
+                raise ValueError(
+                    f"Segment '{seg_name}' feature bundle must be a dictionary"
+                )
+            for feat_name, feat_val in seg_feats.items():
+                if feat_val not in _VALID_VALUES:
+                    raise ValueError(
+                        f"Segment '{seg_name}' feature '{feat_name}'"
+                        f" has invalid value '{feat_val}'"
+                        f" (expected one of {sorted(_VALID_VALUES)})"
+                    )
 
         self.metadata = data.get("metadata", {})
         self.features = data["features"]
@@ -69,20 +111,14 @@ class FeatureEngine:
             segment: Segment symbol (e.g. "p", "b", "m")
 
         Returns:
-            Dictionary mapping feature names to values ("+", "-", "0")
-            Missing features are filled in with "0" (inapplicable)
+            Dictionary mapping feature names to values ("+", "-", "0").
+            Features absent from the segment's entry are returned as "0".
 
         Raises:
             KeyError: If segment not in inventory
         """
-        if segment not in self.segments:
-            raise KeyError(f"Segment '{segment}' not found in inventory")
-
-        # Return complete feature specification with missing features as "0"
-        result = {}
-        for feature in self.features:
-            result[feature] = self.segments[segment].get(feature, "0")
-        return result
+        self._validate_segment(segment)
+        return {f: self.segments[segment].get(f, "0") for f in self.features}
 
     def get_feature_value(self, segment: str, feature: str) -> str:
         """
@@ -98,61 +134,66 @@ class FeatureEngine:
         Raises:
             KeyError: If segment or feature not found
         """
-        if segment not in self.segments:
-            raise KeyError(f"Segment '{segment}' not found in inventory")
-        if feature not in self.features:
-            raise KeyError(f"Feature '{feature}' not found in inventory")
+        self._validate_segment(segment)
+        self._validate_feature(feature)
         return self.segments[segment].get(feature, "0")
 
     def find_segments(self, feature_spec: Dict[str, str]) -> List[str]:
         """
         Find all segments matching a feature specification.
 
-        Partial specifications are supported - only the specified features
-        need to match. Inapplicable features ("0") are treated specially:
-        a query with feature=0 matches only segments with 0 for that feature.
+        Partial specifications are supported — only the specified features
+        need to match. Querying feature="0" matches only segments that have
+        "0" (inapplicable) for that feature.
 
         Args:
             feature_spec: Dictionary of feature:value pairs to match
 
         Returns:
-            List of segment symbols matching the specification
+            Sorted list of segment symbols matching the specification
+
+        Raises:
+            KeyError: If any feature in feature_spec is not in the inventory
+            ValueError: If any value in feature_spec is not "+", "-", or "0"
         """
-        matching = []
+        for feature, value in feature_spec.items():
+            self._validate_feature(feature)
+            if value not in _VALID_VALUES:
+                raise ValueError(
+                    f"Invalid feature value '{value}' for '{feature}'"
+                )
+        return sorted(self._find_segments_unsorted(feature_spec))
 
-        for segment, features in self.segments.items():
-            match = True
-            for feature, value in feature_spec.items():
-                if features.get(feature, "0") != value:
-                    match = False
-                    break
-            if match:
-                matching.append(segment)
-
-        return sorted(matching)
-
-    def compute_natural_class(
-        self, segments: List[str]
-    ) -> Tuple[Dict[str, str], bool]:
+    def find_all_minimal_bundles(self, segments: List[str]) -> List[Dict[str, str]]:
         """
-        Compute the minimal feature bundle that characterizes a set of segments.
+        Find every minimal feature bundle that uniquely characterizes a segment set.
 
-        A natural class is characterized by the smallest set of features that
-        picks out exactly the given segments and no others.
+        A bundle B characterizes S when find_segments(B) == S exactly.
+        This method returns ALL bundles of the smallest possible size,
+        not just one greedy solution.
+
+        Algorithm (hitting-set backtracking):
+          1. Collect candidate features — those with a constant value across S.
+          2. For each segment outside S, record which candidates can exclude it
+             (i.e., have a different value than S's value for that feature).
+          3. Backtrack over subsets of candidates, pruning aggressively:
+             - depth ≥ best size found so far
+             - remaining candidates cannot cover an uncovered outside segment
+          4. Return all subsets that hit every outside segment.
 
         Args:
             segments: List of segment symbols
 
         Returns:
-            Tuple of (feature_bundle, is_minimal)
-            - feature_bundle: Dict of features that characterize the class
-            - is_minimal: True if no feature can be removed without expanding the class
+            All minimal feature bundles as a list of {feature: value} dicts.
+            Returns [{}] for a universal class (S == all segments).
+            Returns [] if S cannot be uniquely characterised.
 
         Raises:
-            ValueError: If any segment not in inventory
+            ValueError: If any segment is not in the inventory
         """
         if not segments:
-            return ({}, True)
+            return [{}]
 
         for seg in segments:
             if seg not in self.segments:
@@ -160,32 +201,101 @@ class FeatureEngine:
 
         segment_set = set(segments)
 
-        # Find features that are constant across the target segments
-        candidate_features = {}
-
+        # Features whose value is identical across every target segment
+        candidates: Dict[str, str] = {}
         for feature in self.features:
-            values = set()
-
-            for seg in segments:
-                val = self.segments[seg].get(feature, "0")
-                values.add(val)
-
-            # Feature is a candidate ONLY if all segments have the exact same value
-            # This ensures the bundle will match exactly these segments
+            values = {self.segments[seg].get(feature, "0") for seg in segments}
             if len(values) == 1:
-                candidate_features[feature] = values.pop()
+                candidates[feature] = values.pop()
 
-        # Greedily remove redundant features; result is always minimal by construction.
-        minimal_bundle = candidate_features.copy()
+        # Segments outside the target set that must be excluded
+        outside = [s for s in self.segments if s not in segment_set]
 
-        for feature in candidate_features:
-            test_bundle = {
-                k: v for k, v in minimal_bundle.items() if k != feature
+        # Universal class — S is the entire inventory
+        if not outside:
+            return [{}]
+
+        # For each outside segment, which candidates exclude it?
+        excluders: List[Set[str]] = []
+        for seg in outside:
+            exc: Set[str] = {
+                feat
+                for feat, val in candidates.items()
+                if self.segments[seg].get(feat, "0") != val
             }
-            if set(self.find_segments(test_bundle)) == segment_set:
-                del minimal_bundle[feature]
+            if not exc:
+                return []  # This segment cannot be excluded → not a natural class
+            excluders.append(exc)
 
-        return (minimal_bundle, True)
+        # Sort candidates by descending coverage (hits the most outside segments first)
+        candidate_list = sorted(
+            candidates.keys(),
+            key=lambda f: sum(1 for exc in excluders if f in exc),
+            reverse=True,
+        )
+        n = len(candidate_list)
+
+        results: List[Dict[str, str]] = []
+        best_size: Optional[int] = None
+
+        def backtrack(idx: int, chosen: List[str], chosen_set: Set[str]) -> None:
+            nonlocal best_size
+
+            # All outside segments are excluded — record solution
+            if all(exc & chosen_set for exc in excluders):
+                k = len(chosen)
+                if best_size is None or k < best_size:
+                    best_size = k
+                    results.clear()
+                    results.append({f: candidates[f] for f in chosen})
+                elif k == best_size:
+                    results.append({f: candidates[f] for f in chosen})
+                return
+
+            # Prune: already at or past the best depth
+            if best_size is not None and len(chosen) >= best_size:
+                return
+            if idx >= n:
+                return
+
+            # Prune: remaining candidates cannot cover every uncovered outside segment
+            remaining = set(candidate_list[idx:])
+            if not all((exc & chosen_set) or (exc & remaining) for exc in excluders):
+                return
+
+            f = candidate_list[idx]
+
+            # Branch A: include f
+            backtrack(idx + 1, chosen + [f], chosen_set | {f})
+
+            # Branch B: exclude f — only if remaining can still cover everything
+            remaining_without = set(candidate_list[idx + 1 :])
+            if all(
+                (exc & chosen_set) or (exc & remaining_without) for exc in excluders
+            ):
+                backtrack(idx + 1, chosen, chosen_set)
+
+        backtrack(0, [], set())
+        return results
+
+    def compute_natural_class(self, segments: List[str]) -> Dict[str, str]:
+        """
+        Return one minimal feature bundle characterising the segment set.
+
+        Delegates to find_all_minimal_bundles and returns the first result.
+        Use find_all_minimal_bundles directly when all solutions are needed.
+
+        Args:
+            segments: List of segment symbols
+
+        Returns:
+            One minimal feature bundle, or {} if the set cannot be characterised.
+
+        Raises:
+            ValueError: If any segment is not in the inventory
+        """
+        bundles = self.find_all_minimal_bundles(segments)
+        return bundles[0] if bundles else {}
 
     def is_contrastive(self, feature: str) -> bool:
         """
@@ -203,15 +313,12 @@ class FeatureEngine:
         Raises:
             KeyError: If feature not in inventory
         """
-        if feature not in self.features:
-            raise KeyError(f"Feature '{feature}' not in inventory")
-
-        values = set()
-        for segment in self.segments.values():
-            val = segment.get(feature, "0")
-            if val != "0":
-                values.add(val)
-
+        self._validate_feature(feature)
+        values = {
+            seg.get(feature, "0")
+            for seg in self.segments.values()
+            if seg.get(feature, "0") != "0"
+        }
         return len(values) > 1
 
     def get_contrastive_features(self) -> List[str]:
@@ -232,9 +339,14 @@ class FeatureEngine:
 
         Returns:
             Dict mapping feature names to their shared value ('+' or '-')
+
+        Raises:
+            KeyError: If any segment is not in the inventory
         """
         if not segments:
             return {}
+        for seg in segments:
+            self._validate_segment(seg)
         result = {}
         for feature in self.features:
             values = {self.segments[seg].get(feature, "0") for seg in segments}
@@ -246,21 +358,23 @@ class FeatureEngine:
 
     def is_natural_class(
         self, segments: List[str]
-    ) -> Tuple[bool, Dict[str, str]]:
+    ) -> Tuple[bool, List[Dict[str, str]]]:
         """
-        Check whether a set of segments forms a natural class.
+        Check whether a set of segments forms a natural class in this inventory.
+
+        A set is a natural class if there exists a conjunctive feature bundle
+        whose extension equals exactly the given set.
 
         Args:
             segments: List of segment symbols
 
         Returns:
-            Tuple of (is_natural_class, minimal_specification).
-            minimal_specification is populated only when True.
+            Tuple of (is_natural_class, minimal_specifications).
+            minimal_specifications is a list of all minimal bundles when True,
+            or an empty list when False.
         """
-        bundle, _ = self.compute_natural_class(segments)
-        found = set(self.find_segments(bundle))
-        is_nc = found == set(segments)
-        return is_nc, bundle if is_nc else {}
+        bundles = self.find_all_minimal_bundles(segments)
+        return (True, bundles) if bundles else (False, [])
 
     def segment_distance(self, seg1: str, seg2: str) -> int:
         """
@@ -279,22 +393,13 @@ class FeatureEngine:
         Raises:
             KeyError: If either segment not in inventory
         """
-        if seg1 not in self.segments:
-            raise KeyError(f"Segment '{seg1}' not in inventory")
-        if seg2 not in self.segments:
-            raise KeyError(f"Segment '{seg2}' not in inventory")
-
-        features1 = self.segments[seg1]
-        features2 = self.segments[seg2]
-
-        distance = 0
-        for feature in self.features:
-            val1 = features1.get(feature, "0")
-            val2 = features2.get(feature, "0")
-            if val1 != val2:
-                distance += 1
-
-        return distance
+        self._validate_segment(seg1)
+        self._validate_segment(seg2)
+        f1 = self.segments[seg1]
+        f2 = self.segments[seg2]
+        return sum(
+            f1.get(f, "0") != f2.get(f, "0") for f in self.features
+        )
 
     def find_nearest_segments(
         self, segment: str, n: int = 5
@@ -312,18 +417,13 @@ class FeatureEngine:
         Raises:
             KeyError: If segment not in inventory
         """
-        if segment not in self.segments:
-            raise KeyError(f"Segment '{segment}' not in inventory")
-
-        distances = []
-        for other in self.segments:
-            if other != segment:
-                dist = self.segment_distance(segment, other)
-                distances.append((other, dist))
-
-        distances.sort(
-            key=lambda x: (x[1], x[0])
-        )  # Sort by distance, then alphabetically
+        self._validate_segment(segment)
+        distances = [
+            (other, self.segment_distance(segment, other))
+            for other in self.segments
+            if other != segment
+        ]
+        distances.sort(key=lambda x: (x[1], x[0]))
         return distances[:n]
 
     def get_feature_distribution(self, feature: str) -> Dict[str, int]:
@@ -339,14 +439,10 @@ class FeatureEngine:
         Raises:
             KeyError: If feature not in inventory
         """
-        if feature not in self.features:
-            raise KeyError(f"Feature '{feature}' not in inventory")
-
-        distribution = {"+": 0, "-": 0, "0": 0}
+        self._validate_feature(feature)
+        distribution: Dict[str, int] = {"+": 0, "-": 0, "0": 0}
         for segment in self.segments.values():
-            val = segment.get(feature, "0")
-            distribution[val] += 1
-
+            distribution[segment.get(feature, "0")] += 1
         return distribution
 
     def get_inventory_stats(self) -> Dict[str, Union[int, float, str]]:
@@ -361,22 +457,20 @@ class FeatureEngine:
             - contrastive_features: Number of contrastive features
             - avg_feature_distance: Average pairwise distance
         """
-        stats = {
+        stats: Dict[str, Union[int, float, str]] = {
             "name": self.metadata.get("name", "Unknown"),
             "segment_count": len(self.segments),
             "feature_count": len(self.features),
             "contrastive_features": len(self.get_contrastive_features()),
         }
 
-        # Compute average pairwise distance
         if len(self.segments) > 1:
-            distances = []
-            segments = list(self.segments.keys())
-            for i in range(len(segments)):
-                for j in range(i + 1, len(segments)):
-                    distances.append(
-                        self.segment_distance(segments[i], segments[j])
-                    )
+            segs = list(self.segments.keys())
+            distances = [
+                self.segment_distance(segs[i], segs[j])
+                for i in range(len(segs))
+                for j in range(i + 1, len(segs))
+            ]
             stats["avg_feature_distance"] = sum(distances) / len(distances)
         else:
             stats["avg_feature_distance"] = 0.0
@@ -395,6 +489,5 @@ class FeatureEngine:
             "features": self.features,
             "segments": self.segments,
         }
-
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)

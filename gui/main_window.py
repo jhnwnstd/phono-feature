@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSplitter,
     QStatusBar,
     QTextEdit,
@@ -88,6 +89,82 @@ _TAG_PALETTES = {
 _BTN_W = 40  # SegmentButton fixed width  (must match setFixedSize in __init__)
 _BTN_H = 32  # SegmentButton fixed height
 _BTN_GAP = 4  # QGridLayout spacing
+
+# ---------------------------------------------------------------------------
+# Canonical feature display order (linguistically motivated hierarchy)
+# Features absent from this list appear at the end in their original order.
+# ---------------------------------------------------------------------------
+
+_FEATURE_ORDER: list = [
+    # Major class
+    "Syllabic",
+    "Consonantal",
+    "Sonorant",
+    "Approximant",
+    # Laryngeal
+    "Voice",
+    "SpreadGl",
+    "ConstrGl",
+    # Manner
+    "Continuant",
+    "Strident",
+    "DelRel",
+    "Nasal",
+    "Lateral",
+    "Trill",
+    "Tap",
+    "Click",
+    # Place — LABIAL node + dependents
+    "LABIAL",
+    "Round",
+    "Labiodental",
+    # Place — CORONAL node + dependents
+    "CORONAL",
+    "Anterior",
+    "Distributed",
+    # Place — DORSAL node + dependents
+    "DORSAL",
+    "High",
+    "Low",
+    "Back",
+    "Front",
+    "Tense",
+    # Pharyngeal / advanced tongue root
+    "ConstrPharynx",
+    "Pharyngeal",
+    "ATR",
+    # Prosodic
+    "Long",
+    "Stress",
+    "Tone",
+    "UpperRegister",
+]
+
+_FEATURE_ORDER_INDEX: dict = {f: i for i, f in enumerate(_FEATURE_ORDER)}
+
+# Feature groups for the two-column panel layout.
+# First 3 groups → left column; last 3 → right column.
+_FEATURE_GROUPS: list = [
+    ("Major Class", ["Syllabic", "Consonantal", "Sonorant", "Approximant"]),
+    ("Laryngeal", ["Voice", "SpreadGl", "ConstrGl"]),
+    ("Manner", ["Continuant", "Strident", "DelRel", "Nasal", "Lateral", "Trill", "Tap", "Click"]),
+    ("Place", ["LABIAL", "Round", "Labiodental", "CORONAL", "Anterior", "Distributed",
+               "DORSAL", "High", "Low", "Back", "Front", "Tense"]),
+    ("Pharyngeal / ATR", ["ConstrPharynx", "Pharyngeal", "ATR"]),
+    ("Prosodic", ["Long", "Stress", "Tone", "UpperRegister"]),
+]
+_KNOWN_FEATURES: set = {f for _, feats in _FEATURE_GROUPS for f in feats}
+
+
+def _sort_features(features: list) -> list:
+    """Return features in canonical phonological order; unknowns trail in original order."""
+    n = len(_FEATURE_ORDER)
+    return sorted(features, key=lambda f: _FEATURE_ORDER_INDEX.get(f, n))
+
+
+def _sort_spec(spec: dict) -> dict:
+    """Return a feature bundle dict with keys in canonical phonological order."""
+    return {f: spec[f] for f in _sort_features(list(spec.keys()))}
 
 # ---------------------------------------------------------------------------
 # Shared scrollbar style — thin, unobtrusive overlay track
@@ -262,34 +339,35 @@ class FeatureRow(QWidget):
         self._panel_active = False
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 3, 10, 3)
-        layout.setSpacing(6)
+        layout.setContentsMargins(8, 3, 8, 3)
+        layout.setSpacing(4)
 
         self.name_label = QLabel(feature_name)
         self.name_label.setFont(QFont("Noto Sans", 10))
-        self.name_label.setMinimumWidth(110)
+        self.name_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self.name_label.setStyleSheet(f"color: {C['text']};")
 
         self.plus_btn = QPushButton("+")
-        self.plus_btn.setFixedSize(30, 26)
+        self.plus_btn.setFixedSize(28, 24)
         self.plus_btn.setCheckable(True)
         self.plus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self._style_btn(self.plus_btn, "+")
 
         self.minus_btn = QPushButton("\u2212")
-        self.minus_btn.setFixedSize(30, 26)
+        self.minus_btn.setFixedSize(28, 24)
         self.minus_btn.setCheckable(True)
         self.minus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self._style_btn(self.minus_btn, "-")
 
         self.badge = QLabel("\u00b7")
-        self.badge.setFixedSize(34, 26)
+        self.badge.setFixedSize(30, 24)
         self.badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.badge.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self.badge.hide()
 
         layout.addWidget(self.name_label)
-        layout.addStretch()
         layout.addWidget(self.badge)
         layout.addWidget(self.plus_btn)
         layout.addWidget(self.minus_btn)
@@ -462,7 +540,7 @@ class AnalysisPanel(QWidget):
         """
             + _SCROLLBAR_STYLE
         )
-        self.content.setFixedHeight(160)
+        self.content.setFixedHeight(220)
 
         layout.addWidget(self.title)
         layout.addWidget(self.content)
@@ -749,7 +827,7 @@ class MainWindow(QMainWindow):
         self.feat_panel = self._build_feature_panel()
         splitter.addWidget(self.feat_panel)
 
-        splitter.setSizes([560, 340])
+        splitter.setSizes([520, 380])
         root.addWidget(splitter, stretch=1)
 
         # ── bottom: analysis ──────────────────────────────────────────
@@ -885,13 +963,30 @@ class MainWindow(QMainWindow):
             "QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE
         )
 
-        self.feat_list_widget = QWidget()
-        self.feat_list_layout = QVBoxLayout(self.feat_list_widget)
-        self.feat_list_layout.setContentsMargins(0, 0, 0, 0)
-        self.feat_list_layout.setSpacing(3)
-        self.feat_list_layout.addStretch()
+        self._feat_content = QWidget()
+        self._feat_content.setStyleSheet("background: transparent;")
+        feat_main_layout = QHBoxLayout(self._feat_content)
+        feat_main_layout.setContentsMargins(0, 0, 0, 0)
+        feat_main_layout.setSpacing(8)
 
-        self._feat_scroll.setWidget(self.feat_list_widget)
+        self._feat_left_col = QWidget()
+        self._feat_left_col.setStyleSheet("background: transparent;")
+        self._feat_left_layout = QVBoxLayout(self._feat_left_col)
+        self._feat_left_layout.setContentsMargins(0, 0, 0, 0)
+        self._feat_left_layout.setSpacing(8)
+        self._feat_left_layout.addStretch()
+
+        self._feat_right_col = QWidget()
+        self._feat_right_col.setStyleSheet("background: transparent;")
+        self._feat_right_layout = QVBoxLayout(self._feat_right_col)
+        self._feat_right_layout.setContentsMargins(0, 0, 0, 0)
+        self._feat_right_layout.setSpacing(8)
+        self._feat_right_layout.addStretch()
+
+        feat_main_layout.addWidget(self._feat_left_col, stretch=1)
+        feat_main_layout.addWidget(self._feat_right_col, stretch=1)
+
+        self._feat_scroll.setWidget(self._feat_content)
         vlay.addWidget(self._feat_scroll, stretch=1)
 
         return container
@@ -1076,45 +1171,95 @@ class MainWindow(QMainWindow):
         self.seg_grid_widget.set_groups(groups, new_buttons)
         self._seg_buttons = new_buttons
 
+    def _build_feature_group(self, title: str, features: list) -> Optional[QFrame]:
+        """Build a labelled group card for the given features. Returns None if no features are active."""
+        assert self.engine is not None
+        active = [f for f in features if f in self._feat_rows]
+        if not active:
+            return None
+
+        group_frame = QFrame()
+        group_frame.setStyleSheet(
+            f"""
+            QFrame {{
+                background: {C["panel"]};
+                border: 1px solid {C["border"]};
+                border-radius: 7px;
+            }}
+        """
+        )
+        glay = QVBoxLayout(group_frame)
+        glay.setContentsMargins(0, 6, 0, 6)
+        glay.setSpacing(1)
+
+        title_label = QLabel(title)
+        title_label.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
+        title_label.setStyleSheet(
+            f"color: {C['text_dim']}; letter-spacing: 1px; background: transparent; border: none; padding: 0 8px 2px 8px;"
+        )
+        glay.addWidget(title_label)
+
+        for feat in active:
+            glay.addWidget(self._feat_rows[feat])
+
+        return group_frame
+
     def _populate_features(self):
         assert self.engine is not None
-        while self.feat_list_layout.count():
-            item = self.feat_list_layout.takeAt(0)
-            if item is not None:
-                w = item.widget()
-                if w is not None:
-                    w.deleteLater()
+
+        # Clear both columns
+        for layout in (self._feat_left_layout, self._feat_right_layout):
+            while layout.count():
+                item = layout.takeAt(0)
+                if item is not None:
+                    w = item.widget()
+                    if w is not None:
+                        w.deleteLater()
+
         self._feat_rows.clear()
         self._selected_features.clear()
 
-        active_features = [
+        active_feature_set = {
             f
             for f in self.engine.features
-            if any(
-                seg.get(f, "0") != "0" for seg in self.engine.segments.values()
-            )
-        ]
-        for feat in active_features:
+            if any(seg.get(f, "0") != "0" for seg in self.engine.segments.values())
+        }
+
+        # Build all FeatureRow widgets first so _build_feature_group can find them
+        for feat in active_feature_set:
             row = FeatureRow(feat)
             row.value_changed.connect(self._on_feature_changed)
             self._feat_rows[feat] = row
 
-            card = QFrame()
-            card.setStyleSheet(
-                f"""
-                QFrame {{
-                    background: {C["panel"]};
-                    border: 1px solid {C["border"]};
-                    border-radius: 7px;
-                }}
-            """
-            )
-            card_lay = QVBoxLayout(card)
-            card_lay.setContentsMargins(0, 0, 0, 0)
-            card_lay.addWidget(row)
-            self.feat_list_layout.addWidget(card)
+        # Collect features not in any known group
+        grouped_features = set()
+        for _, feats in _FEATURE_GROUPS:
+            grouped_features.update(feats)
+        unknown_active = _sort_features(
+            [f for f in active_feature_set if f not in grouped_features]
+        )
+        # Left column: first 3 groups (Major Class, Laryngeal, Manner)
+        # Right column: last 3 groups (Place, Pharyngeal/ATR, Prosodic)
+        left_groups = _FEATURE_GROUPS[:3]
+        right_groups = _FEATURE_GROUPS[3:]
 
-        self.feat_list_layout.addStretch()
+        for group_title, group_feats in left_groups:
+            card = self._build_feature_group(group_title, group_feats)
+            if card is not None:
+                self._feat_left_layout.addWidget(card)
+
+        if unknown_active:
+            unknown_card = self._build_feature_group("Other", unknown_active)
+            if unknown_card is not None:
+                self._feat_left_layout.addWidget(unknown_card)
+
+        for group_title, group_feats in right_groups:
+            card = self._build_feature_group(group_title, group_feats)
+            if card is not None:
+                self._feat_right_layout.addWidget(card)
+
+        self._feat_left_layout.addStretch()
+        self._feat_right_layout.addStretch()
 
     # ------------------------------------------------------------------
     # Mode management
@@ -1159,7 +1304,7 @@ class MainWindow(QMainWindow):
         seg_vp.setStyleSheet(f"background: {seg_bg};")
         self.seg_grid_widget.setStyleSheet(f"background: {seg_bg};")
         feat_vp.setStyleSheet(f"background: {feat_bg};")
-        self.feat_list_widget.setStyleSheet(f"background: {feat_bg};")
+        self._feat_content.setStyleSheet(f"background: {feat_bg};")
 
         self.seg_panel.setStyleSheet(
             f"QFrame#seg_panel {{ background: {seg_bg};"
@@ -1243,10 +1388,10 @@ class MainWindow(QMainWindow):
                 else "Select an inventory from the dropdown to begin."
             )
 
-    def eventFilter(self, obj, event):
+    def eventFilter(self, a0, a1):
         """Activate a panel on any mouse press anywhere inside it."""
-        if event.type() == QEvent.Type.MouseButtonPress:
-            w = obj
+        if a1 is not None and hasattr(a1, 'type') and a1.type() == QEvent.Type.MouseButtonPress:
+            w = a0
             while w is not None:
                 if w is self.seg_panel:
                     if self._mode != "seg_to_feat":
@@ -1438,21 +1583,39 @@ class MainWindow(QMainWindow):
                 " are featurally identical</i></p>"
             )
 
-        is_nc, spec = self.engine.is_natural_class(segs)
+        is_nc, specs = self.engine.is_natural_class(segs)
         if is_nc:
-            if spec:
+            if not specs or not specs[0]:
+                # Universal class — no features needed
+                _univ = "\u2205 (universal \u2014 all segments)"
+                nc_html = (
+                    f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
+                    f"<p><b>Minimal specification:</b>"
+                    f" {self._tag(_univ, 'gray')}</p>"
+                )
+            elif len(specs) == 1:
                 spec_tags = " ".join(
                     self._tag(f"{v}{f}", "green" if v == "+" else "red")
-                    for f, v in spec.items()
+                    for f, v in _sort_spec(specs[0]).items() if v != "0"
+                )
+                nc_html = (
+                    f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
+                    f"<p><b>Minimal specification:</b><br>{spec_tags}</p>"
                 )
             else:
-                spec_tags = self._tag(
-                    "\u2205 (universal \u2014 all segments)", "gray"
+                rows = []
+                for i, spec in enumerate(specs, 1):
+                    row_tags = " ".join(
+                        self._tag(f"{v}{f}", "green" if v == "+" else "red")
+                        for f, v in _sort_spec(spec).items() if v != "0"
+                    )
+                    rows.append(f"<span style='color:{C['text_dim']}'>{i}.</span> {row_tags}")
+                nc_html = (
+                    f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
+                    f"<p><b>Minimal specifications ({len(specs)}):</b><br>"
+                    + "<br>".join(rows)
+                    + "</p>"
                 )
-            nc_html = (
-                f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
-                f"<p><b>Minimal specification:</b><br>{spec_tags}</p>"
-            )
         else:
             if suggested:
                 sug_tags = " ".join(
