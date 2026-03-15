@@ -1253,9 +1253,16 @@ class MainWindow(QMainWindow):
                 minus_segs = " ".join(
                     self._tag(f"/{s}/", "blue") for s in groups["-"]
                 )
+                minus_sign = chr(8722)
+                clr_plus = C["plus"]
+                clr_minus = C["minus"]
                 rows.append(
-                    f"{self._tag(f'+{feat}', 'green')} {plus_segs}"
-                    f" &nbsp; {self._tag(chr(8722)+feat, 'red')} {minus_segs}"
+                    f"{self._tag(feat, 'gray')}"
+                    f" <span style='color:{clr_plus};font-weight:bold'>+</span>"
+                    f" {plus_segs}"
+                    f" &nbsp;"
+                    f" <span style='color:{clr_minus};font-weight:bold'>{minus_sign}</span>"
+                    f" {minus_segs}"
                 )
             contrast_html = (
                 "<p><b>Contrasting features:</b><br>"
