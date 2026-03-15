@@ -20,10 +20,10 @@ import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 
-from PyQt6.QtCore import QCommandLineParser
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QCommandLineParser  # noqa: E402
+from PyQt6.QtWidgets import QApplication  # noqa: E402
 
-from gui.main_window import MainWindow
+from gui.main_window import MainWindow  # noqa: E402
 
 
 def main():
