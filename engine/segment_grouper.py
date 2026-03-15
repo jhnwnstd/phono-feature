@@ -297,8 +297,12 @@ def group_segments(
         past_costs.append(best_cost)
         assignment[best_target].extend(assignment.pop(best_victim))
 
+    _voice_order = {"-": 0, "+": 1, "0": 2}
     return {
-        name: sorted(assignment[name])
+        name: sorted(
+            assignment[name],
+            key=lambda s: (_voice_order.get(norm[s].get("voice", "0"), 2), s),
+        )
         for name in DISPLAY_ORDER
         if assignment.get(name)
     }
