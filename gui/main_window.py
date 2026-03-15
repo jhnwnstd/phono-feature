@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 )
 
 from engine.feature_engine import FeatureEngine
+from engine.segment_grouper import group_segments
 
 # ---------------------------------------------------------------------------
 # Colour palette
@@ -71,6 +72,12 @@ C = {
 _SETTINGS_ORG = "features"
 _SETTINGS_APP = "SegFeatureEngine"
 
+# ---------------------------------------------------------------------------
+# Segment grid layout constant
+# ---------------------------------------------------------------------------
+
+_SEG_COLS = 12  # buttons per row in the segment grid
+
 
 # ---------------------------------------------------------------------------
 # SegmentButton
@@ -84,8 +91,8 @@ class SegmentButton(QPushButton):
         super().__init__(segment, parent)
         self.segment = segment
         self.setCheckable(True)
-        self.setFixedSize(54, 46)
-        self.setFont(QFont("Noto Sans", 14))
+        self.setFixedSize(40, 32)
+        self.setFont(QFont("Noto Sans", 11))
         self._state = "default"
         self._apply_style()
 
@@ -529,7 +536,7 @@ class MainWindow(QMainWindow):
         self.feat_panel = self._build_feature_panel()
         splitter.addWidget(self.feat_panel)
 
-        splitter.setSizes([420, 480])
+        splitter.setSizes([560, 340])
         root.addWidget(splitter, stretch=1)
 
         # ── bottom: analysis ──────────────────────────────────────────
@@ -583,11 +590,20 @@ class MainWindow(QMainWindow):
         header.addWidget(self.clear_seg_btn)
         vlay.addLayout(header)
 
+        seg_scroll = QScrollArea()
+        seg_scroll.setWidgetResizable(True)
+        seg_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        seg_scroll.setStyleSheet("background: transparent;")
+
         self.seg_grid_widget = QWidget()
+        self.seg_grid_widget.setStyleSheet("background: transparent;")
         self.seg_grid = QGridLayout(self.seg_grid_widget)
-        self.seg_grid.setSpacing(6)
-        vlay.addWidget(self.seg_grid_widget)
-        vlay.addStretch()
+        self.seg_grid.setSpacing(4)
+        self.seg_grid.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
+        seg_scroll.setWidget(self.seg_grid_widget)
+        vlay.addWidget(seg_scroll, stretch=1)
 
         self.seg_hint = QLabel("\u2190 Select an inventory to see segments")
         self.seg_hint.setFont(QFont("Noto Sans", 9))
@@ -802,14 +818,31 @@ class MainWindow(QMainWindow):
         self._selected_segments.clear()
         self.seg_hint.hide()
 
-        cols = 6
-        for i, seg in enumerate(self.engine.segments):
-            btn = SegmentButton(seg)
-            btn.clicked.connect(
-                lambda checked, s=seg: self._on_segment_clicked(s, checked)
+        groups = group_segments(self.engine.segments)
+        grid_row = 0
+
+        for manner, segs in groups.items():
+            hdr = QLabel(manner.upper())
+            hdr.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
+            hdr.setStyleSheet(
+                f"color: {C['text_dim']}; letter-spacing: 1px;"
+                " padding: 4px 2px 1px 2px;"
             )
-            self._seg_buttons[seg] = btn
-            self.seg_grid.addWidget(btn, i // cols, i % cols)
+            self.seg_grid.addWidget(hdr, grid_row, 0, 1, _SEG_COLS)
+            grid_row += 1
+
+            for col_i, seg in enumerate(segs):
+                btn = SegmentButton(seg)
+                btn.clicked.connect(
+                    lambda checked, s=seg: self._on_segment_clicked(s, checked)
+                )
+                self._seg_buttons[seg] = btn
+                self.seg_grid.addWidget(
+                    btn,
+                    grid_row + col_i // _SEG_COLS,
+                    col_i % _SEG_COLS,
+                )
+            grid_row += (len(segs) + _SEG_COLS - 1) // _SEG_COLS
 
     def _populate_features(self):
         assert self.engine is not None
