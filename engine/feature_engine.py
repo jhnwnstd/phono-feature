@@ -12,8 +12,9 @@ All phonological logic is independent of the GUI and can be used in scripts.
 """
 
 import json
+from typing import Dict, List, Tuple, Union
+
 import numpy as np
-from typing import Dict, List, Set, Tuple, Optional, Union
 
 
 class FeatureEngine:
@@ -51,12 +52,14 @@ class FeatureEngine:
             FileNotFoundError: If file doesn't exist
             ValueError: If JSON format is invalid
         """
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         # Validate required fields
         if "features" not in data or "segments" not in data:
-            raise ValueError("Inventory must contain 'features' and 'segments' fields")
+            raise ValueError(
+                "Inventory must contain 'features' and 'segments' fields"
+            )
 
         self.metadata = data.get("metadata", {})
         self.features = data["features"]
@@ -71,7 +74,9 @@ class FeatureEngine:
         n_segments = len(self._segment_order)
         n_features = len(self.features)
 
-        self._segment_matrix = np.zeros((n_segments, n_features), dtype=np.int8)
+        self._segment_matrix = np.zeros(
+            (n_segments, n_features), dtype=np.int8
+        )
 
         for i, segment in enumerate(self._segment_order):
             for j, feature in enumerate(self.features):
@@ -148,7 +153,9 @@ class FeatureEngine:
 
         return sorted(matching)
 
-    def compute_natural_class(self, segments: List[str]) -> Tuple[Dict[str, str], bool]:
+    def compute_natural_class(
+        self, segments: List[str]
+    ) -> Tuple[Dict[str, str], bool]:
         """
         Compute the minimal feature bundle that characterizes a set of segments.
 
@@ -195,7 +202,9 @@ class FeatureEngine:
         is_minimal = True
 
         for feature in candidate_features:
-            test_bundle = {k: v for k, v in minimal_bundle.items() if k != feature}
+            test_bundle = {
+                k: v for k, v in minimal_bundle.items() if k != feature
+            }
             matches = set(self.find_segments(test_bundle))
 
             if matches == segment_set:
@@ -275,7 +284,9 @@ class FeatureEngine:
 
         return distance
 
-    def find_nearest_segments(self, segment: str, n: int = 5) -> List[Tuple[str, int]]:
+    def find_nearest_segments(
+        self, segment: str, n: int = 5
+    ) -> List[Tuple[str, int]]:
         """
         Find the nearest segments to a given segment by feature distance.
 
@@ -298,7 +309,9 @@ class FeatureEngine:
                 dist = self.segment_distance(segment, other)
                 distances.append((other, dist))
 
-        distances.sort(key=lambda x: (x[1], x[0]))  # Sort by distance, then alphabetically
+        distances.sort(
+            key=lambda x: (x[1], x[0])
+        )  # Sort by distance, then alphabetically
         return distances[:n]
 
     def get_feature_distribution(self, feature: str) -> Dict[str, int]:
@@ -340,7 +353,7 @@ class FeatureEngine:
             "name": self.metadata.get("name", "Unknown"),
             "segment_count": len(self.segments),
             "feature_count": len(self.features),
-            "contrastive_features": len(self.get_contrastive_features())
+            "contrastive_features": len(self.get_contrastive_features()),
         }
 
         # Compute average pairwise distance
@@ -349,7 +362,9 @@ class FeatureEngine:
             segments = list(self.segments.keys())
             for i in range(len(segments)):
                 for j in range(i + 1, len(segments)):
-                    distances.append(self.segment_distance(segments[i], segments[j]))
+                    distances.append(
+                        self.segment_distance(segments[i], segments[j])
+                    )
             stats["avg_feature_distance"] = np.mean(distances)
         else:
             stats["avg_feature_distance"] = 0.0
@@ -366,8 +381,8 @@ class FeatureEngine:
         data = {
             "metadata": self.metadata,
             "features": self.features,
-            "segments": self.segments
+            "segments": self.segments,
         }
 
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)

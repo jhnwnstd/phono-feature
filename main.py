@@ -18,7 +18,9 @@ License: MIT
 """
 
 import sys
+
 from PyQt6.QtWidgets import QApplication
+
 from gui.main_window import MainWindow
 
 
@@ -29,7 +31,7 @@ def main():
     app.setOrganizationName("Phonology Research Tools")
 
     # Set application-wide style
-    app.setStyle('Fusion')
+    app.setStyle("Fusion")
 
     # Create and show main window
     window = MainWindow()
@@ -39,5 +41,5 @@ def main():
     sys.exit(app.exec())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
