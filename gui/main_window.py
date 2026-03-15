@@ -163,7 +163,7 @@ class SegmentButton(QPushButton):
         self._apply_style()
 
     def set_state(self, state: str):
-        """state: 'default' | 'selected' | 'matched' | 'unmatched'"""
+        """state: 'default' | 'selected' | 'matched' | 'unmatched' | 'suggested'"""
         if self._state != state:
             self._state = state
             self._apply_style()
@@ -201,6 +201,17 @@ class SegmentButton(QPushButton):
                     background-color: {C["seg_unmatched"]};
                     color: {C["text_dim"]};
                     border: 1px solid {C["border"]};
+                    border-radius: 8px;
+                }}
+            """
+            )
+        elif s == "suggested":
+            self.setStyleSheet(
+                f"""
+                QPushButton {{
+                    background-color: {C["accent_light"]};
+                    color: {C["accent"]};
+                    border: 1.5px dashed {C["accent"]};
                     border-radius: 8px;
                 }}
             """
@@ -1316,14 +1327,21 @@ class MainWindow(QMainWindow):
         segs = self._selected_segments
         if not segs or not self.engine:
             self._reset_feature_display()
+            for btn in self._seg_buttons.values():
+                btn.set_state("default")
             self.analysis.clear()
             return
+
+        selected_set = set(segs)
 
         if len(segs) == 1:
             feats = self.engine.get_segment_features(segs[0])
             for feat, row in self._feat_rows.items():
                 v = feats.get(feat, "0")
                 row.set_display("" if v == "0" else v, shared=True)
+            for seg, btn in self._seg_buttons.items():
+                if seg not in selected_set:
+                    btn.set_state("default")
             self._show_single_segment_analysis(segs[0], feats)
         else:
             common = self.engine.common_features(segs)
@@ -1335,7 +1353,23 @@ class MainWindow(QMainWindow):
                     row.set_display("", shared=False, contrastive=True)
                 else:
                     row.set_display("", shared=False)
-            self._show_multi_segment_analysis(segs, common, contrastive)
+
+            # Natural class completion: find segments that would extend the
+            # current selection to the smallest valid natural class.
+            is_nc, _ = self.engine.is_natural_class(segs)
+            suggested: list = []
+            if not is_nc and common:
+                nc_extension = self.engine.find_segments(common)
+                suggested = [s for s in nc_extension if s not in selected_set]
+
+            suggested_set = set(suggested)
+            for seg, btn in self._seg_buttons.items():
+                if seg not in selected_set:
+                    btn.set_state(
+                        "suggested" if seg in suggested_set else "default"
+                    )
+
+            self._show_multi_segment_analysis(segs, common, contrastive, suggested)
 
     def _show_single_segment_analysis(self, seg: str, feats: dict):
         plus_feats = [f for f, v in feats.items() if v == "+"]
@@ -1355,7 +1389,7 @@ class MainWindow(QMainWindow):
         self.analysis.set_html(html)
 
     def _show_multi_segment_analysis(
-        self, segs: list, common: dict, contrastive: dict
+        self, segs: list, common: dict, contrastive: dict, suggested: list
     ):
         assert self.engine is not None
         seg_tags = " ".join(self._tag(f"/{s}/", "blue") for s in segs)
@@ -1420,12 +1454,24 @@ class MainWindow(QMainWindow):
                 f"<p><b>Minimal specification:</b><br>{spec_tags}</p>"
             )
         else:
-            nc_html = (
-                "<p><b>Natural class:</b>"
-                f" <span style='color:{C['minus']}'>No \u2014"
-                " these segments cannot be uniquely picked out by any"
-                " feature bundle in this inventory.</span></p>"
-            )
+            if suggested:
+                sug_tags = " ".join(
+                    self._tag(f"/{s}/", "gray") for s in suggested
+                )
+                nc_html = (
+                    "<p><b>Natural class:</b>"
+                    f" <span style='color:{C['minus']}'>No</span>"
+                    f" \u2014 add {len(suggested)} segment"
+                    f"{'s' if len(suggested) != 1 else ''}"
+                    f" to complete the minimal natural class:<br>{sug_tags}</p>"
+                )
+            else:
+                nc_html = (
+                    "<p><b>Natural class:</b>"
+                    f" <span style='color:{C['minus']}'>No \u2014"
+                    " these segments cannot be uniquely picked out by any"
+                    " feature bundle in this inventory.</span></p>"
+                )
 
         html = f"<p><b>Selected:</b> {seg_tags}</p>{common_html}{contrast_html}{nc_html}"
         self.analysis.set_html(html)
