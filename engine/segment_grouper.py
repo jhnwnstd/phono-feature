@@ -2,20 +2,28 @@
 engine/segment_grouper.py
 
 Groups an inventory's segments into phonological categories for GUI display
-using hierarchical agglomerative clustering on groups.
+using discrete membership testing and specificity-based assignment.
 
-Groups are initially assigned by argmax feature-spec scoring, then
-iteratively merged until the next merge would cost significantly more than
-previous merges (elbow / dendrogram-cut stopping criterion).  No hardcoded
-group-count targets or minimum-size thresholds.
+Each segment is tested against every group's defining spec with a hard
+boolean membership test (exact match required, inapplicable features
+treated as compatible).  The segment is assigned to the *most specific*
+group it qualifies for — the one with the most testable features in its
+spec.
 
-After each merge, the result is checked against _RELABEL_PATTERNS: if the
-combined origin set matches a known phonological class (Vibrants, Rhotics,
-Liquids), the group is renamed accordingly.  _MERGE_BLOCKED prevents
-linguistically incoherent merges that the elbow might otherwise permit.
+Features absent from the inventory entirely (no segment carries a non-zero
+value) are distinguished from features inapplicable to a particular
+segment (value "0").  Absent features are skipped during membership
+testing; inapplicable features are treated as compatible.
+
+After initial assignment, singleton / very small groups are merged upward
+through the specificity hierarchy: each member moves to its next-best
+matching group until all groups meet a minimum size or no further parent
+exists.  Plosives are frozen after initial assignment.
+
+Combined groups are checked against _RELABEL_PATTERNS and renamed when
+they match a known phonological class (Vibrants, Rhotics, Liquids).
 """
 
-import math
 from collections import defaultdict
 from typing import Dict, FrozenSet, List, Set, Tuple
 
@@ -178,56 +186,6 @@ _RELABEL_PATTERNS: Dict[FrozenSet[str], str] = {
     frozenset({"Lateral Approximants", "Trills"}): "Liquids",
 }
 
-# ---------------------------------------------------------------------------
-# Merge blocking: pairs of current group names that must never merge
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# Merge blocking — computed from sonority classes
-# ---------------------------------------------------------------------------
-# Sonorant groups must never merge with obstruent groups.  Within sonorant
-# consonants the legal merge paths (Trills↔Taps, ±Approximants, ±Laterals)
-# are left open so Vibrants / Rhotics / Liquids can form.  Nasals and
-# Semivowels are kept separate from each other and from other sonorants
-# except Approximants (Semivowels↔Approximants stays open because some
-# inventories mark ɹ/ʋ as [-consonantal]).
-
-_OBSTRUENTS = {
-    "Plosives", "Affricates", "Lateral Affricates",
-    "Sibilants", "Fricatives", "Lateral Fricatives", "Laryngeals",
-}
-_SONORANT_C = {
-    "Nasals", "Trills", "Taps & Flaps", "Lateral Approximants",
-    "Approximants", "Vibrants", "Rhotics", "Liquids",
-}
-
-_MERGE_BLOCKED: Set[FrozenSet[str]] = set()
-
-# Sonorant ↔ obstruent: never
-for _o in _OBSTRUENTS:
-    for _s in _SONORANT_C | {"Semivowels", "Vowels"}:
-        _MERGE_BLOCKED.add(frozenset({_o, _s}))
-
-# Vowels ↔ everything except themselves
-for _g in _OBSTRUENTS | _SONORANT_C | {"Semivowels"}:
-    _MERGE_BLOCKED.add(frozenset({_g, "Vowels"}))
-
-# Nasals ↔ non-nasal sonorants (nasals are a distinct manner class)
-for _s in _SONORANT_C - {"Nasals"}:
-    _MERGE_BLOCKED.add(frozenset({"Nasals", _s}))
-_MERGE_BLOCKED.add(frozenset({"Nasals", "Semivowels"}))
-
-# Semivowels ↔ sonorants that aren't Approximants
-# (Semivowels↔Approximants stays open: ɹ/ʋ can be [-consonantal])
-for _s in _SONORANT_C - {"Approximants"}:
-    _MERGE_BLOCKED.add(frozenset({"Semivowels", _s}))
-
-# Plosives and Laryngeals must not merge with other obstruent groups
-for _o in _OBSTRUENTS - {"Plosives"}:
-    _MERGE_BLOCKED.add(frozenset({"Plosives", _o}))
-for _o in _OBSTRUENTS - {"Laryngeals"}:
-    _MERGE_BLOCKED.add(frozenset({"Laryngeals", _o}))
-
 
 # ---------------------------------------------------------------------------
 # Key normalisation
@@ -260,6 +218,7 @@ def _normalize_feats(feat_dict: Dict[str, str]) -> Dict[str, str]:
 # ---------------------------------------------------------------------------
 
 _VOICE_IDX: Dict[str, int] = {"-": 0, "+": 1, "0": 2}
+_FEAT_IDX: Dict[str, int] = {"-": 0, "+": 1, "0": 2}
 
 
 def _ipa_place(feats: Dict[str, str]) -> int:
@@ -320,112 +279,24 @@ def _ipa_place(feats: Dict[str, str]) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Scoring
-# ---------------------------------------------------------------------------
-
-
-def seg_score(seg_feats: Dict[str, str], spec: Dict[str, str]) -> float:
-    """How well does a segment match a group's defining spec?
-
-    Per-feature rules:
-      val == req   → 1.0   exact match
-      val == "0"   → 0.5   inapplicable — not a mismatch
-      contradiction→ 0.0
-    """
-    if not spec:
-        return 0.0
-    total = 0.0
-    for feat, req in spec.items():
-        v = seg_feats.get(feat, "0")
-        if v == req:
-            total += 1.0
-        elif v == "0":
-            total += 0.5
-    return total / len(spec)
-
-
-# ---------------------------------------------------------------------------
-# Group-level operations
-# ---------------------------------------------------------------------------
-
-
-def group_cohesion(
-    members: List[str],
-    group_name: str,
-    inventory: Dict[str, Dict[str, str]],
-) -> float:
-    """Mean score of all members against the group's spec."""
-    spec = SPEC.get(group_name, {})
-    if not members or not spec:
-        return 0.0
-    return sum(seg_score(inventory[s], spec) for s in members) / len(members)
-
-
-def merge_cost(
-    victims: List[str],
-    victim_spec: Dict[str, str],
-    target_spec: Dict[str, str],
-    inventory: Dict[str, Dict[str, str]],
-) -> float:
-    """Drop in mean cohesion when victim's members move to target.
-
-    Higher = worse merge (segments fit target poorly).
-    """
-    if not victims or not victim_spec or not target_spec:
-        return 1.0
-    before = sum(seg_score(inventory[s], victim_spec) for s in victims)
-    after = sum(seg_score(inventory[s], target_spec) for s in victims)
-    return max(0.0, (before - after) / len(victims))
-
-
-def _is_outlier(new_cost: float, past_costs: List[float]) -> bool:
-    """Return True if new_cost is a statistical outlier vs past costs.
-
-    Requires at least 3 samples before the elbow can activate — prevents
-    a single free merge (cost=0.0) from collapsing std to 0 and triggering
-    the elbow on the very next step.  When std==0 (all past costs identical),
-    anything strictly more expensive stops the merging.
-    """
-    if len(past_costs) < 3:
-        return False
-    mean = sum(past_costs) / len(past_costs)
-    variance = sum((c - mean) ** 2 for c in past_costs) / len(past_costs)
-    std = math.sqrt(variance)
-    if std == 0:
-        return new_cost > mean
-    return new_cost > mean + std
-
-
-def _find_best_merge(
-    victim: str,
-    members: List[str],
-    surviving: Set[str],
-    inventory: Dict[str, Dict[str, str]],
-    local_spec: Dict[str, Dict[str, str]],
-) -> Tuple[str, float]:
-    """Find the surviving group that absorbs victim at lowest cohesion cost.
-
-    Skips any candidate whose merge with victim is in _MERGE_BLOCKED.
-    """
-    v_spec = local_spec.get(victim, {})
-    candidates = [
-        g
-        for g in surviving
-        if g != victim and frozenset({victim, g}) not in _MERGE_BLOCKED
-    ]
-    if not candidates:
-        return "", float("inf")
-    costs = {
-        g: merge_cost(members, v_spec, local_spec.get(g, {}), inventory)
-        for g in candidates
-    }
-    best = min(costs, key=lambda g: costs[g])
-    return best, costs[best]
-
-
-# ---------------------------------------------------------------------------
 # Main grouping function
 # ---------------------------------------------------------------------------
+
+# Groups frozen after initial assignment: never dissolve, never accept
+# overflow from singleton merging.
+_FROZEN_GROUPS: Set[str] = {"Plosives"}
+
+
+def _should_merge_up(group_size: int, inventory_size: int) -> bool:
+    """True if a group is too small to display on its own.
+
+    A group needs at least ~5% of the inventory OR at least 3 segments,
+    whichever is larger — so small inventories get more aggressive merging
+    and large inventories preserve more fine-grained distinctions.
+    """
+    min_absolute = 3
+    min_relative = max(min_absolute, int(inventory_size * 0.05))
+    return group_size < min_relative
 
 
 def group_segments(
@@ -433,15 +304,27 @@ def group_segments(
 ) -> Dict[str, List[str]]:
     """Assign every segment to a phonological display group.
 
-    Uses hierarchical agglomerative merging: starts with argmax assignment
-    to all groups, then iteratively merges the cheapest available group pair
-    until the next merge cost is a statistical outlier vs. past costs (elbow).
+    Uses discrete membership testing:
 
-    After each merge the combined origin set is checked against
-    _RELABEL_PATTERNS; matching results are renamed (e.g. Trills + Taps →
-    Vibrants, Approximants + Trills/Taps → Rhotics, Lateral Approximants +
-    Rhotics/Approximants → Liquids).  _MERGE_BLOCKED prevents
-    linguistically incoherent merges regardless of cost.
+    1. **Feature detection** — identify which features are active in the
+       inventory (at least one segment carries a non-zero value).
+
+    2. **Hard membership** — a segment qualifies for a group if every
+       spec feature *present in the inventory* either matches exactly or
+       is inapplicable ("0") to the segment.  Spec features absent from
+       the inventory are skipped (the group is only testable on features
+       the data actually provides).
+
+    3. **Specificity assignment** — each segment is placed in the most
+       specific matching group (the one with the most testable features).
+       Segments matching no group fall back to fewest-contradictions.
+
+    4. **Singleton merging** — groups smaller than _MIN_GROUP_SIZE have
+       their members moved to each member's next-best group in its
+       membership chain.  _FROZEN_GROUPS are exempt.
+
+    5. **Relabeling** — combined groups are checked against
+       _RELABEL_PATTERNS and renamed (e.g. Trills + Taps → Vibrants).
 
     Args:
         inventory: {symbol: {feature: value}} — raw from FeatureEngine.segments
@@ -457,66 +340,157 @@ def group_segments(
         sym: _normalize_feats(feats) for sym, feats in inventory.items()
     }
 
-    # Initial assignment: each segment → highest-scoring group (argmax).
+    # ---- Step 0: Detect features active in this inventory ----
+
+    active_features: Set[str] = set()
+    for feats in norm.values():
+        for k, v in feats.items():
+            if v != "0":
+                active_features.add(k)
+
+    # ---- Helpers ----
+
+    def is_member(seg_feats: Dict[str, str], spec: Dict[str, str]) -> bool:
+        """True if segment satisfies all spec features present in inventory."""
+        relevant = [f for f in spec if f in active_features]
+        if not relevant:
+            return False  # spec has no testable features in this inventory
+        for feat in relevant:
+            val = seg_feats.get(feat, "0")
+            if val == "0":
+                continue  # inapplicable: compatible
+            if val != spec[feat]:
+                return False  # contradiction: excluded
+        return True
+
+    def specificity(spec: Dict[str, str]) -> int:
+        """Count of spec features present in inventory."""
+        return sum(1 for f in spec if f in active_features)
+
+    def membership_chain(seg_feats: Dict[str, str]) -> List[str]:
+        """All matching groups, most specific first."""
+        matches = [
+            (name, specificity(spec))
+            for name, spec in ALL_GROUPS
+            if is_member(seg_feats, spec)
+        ]
+        matches.sort(key=lambda x: -x[1])
+        return [name for name, _ in matches]
+
+    def fallback_assignment(seg_feats: Dict[str, str]) -> str:
+        """For segments matching no group: fewest contradictions wins."""
+        best_name = ""
+        best_contras = float("inf")
+        best_matches = -1
+        for name, spec in ALL_GROUPS:
+            relevant = [f for f in spec if f in active_features]
+            if not relevant:
+                continue
+            contras = 0
+            matched = 0
+            for feat in relevant:
+                val = seg_feats.get(feat, "0")
+                if val == "0":
+                    continue
+                if val == spec[feat]:
+                    matched += 1
+                else:
+                    contras += 1
+            if contras < best_contras or (
+                contras == best_contras and matched > best_matches
+            ):
+                best_name, best_contras, best_matches = name, contras, matched
+        return best_name
+
+    # ---- Step 1: Assign to most specific matching group ----
+
     assignment: Dict[str, List[str]] = defaultdict(list)
+    chains: Dict[str, List[str]] = {}
+
     for sym, feats in norm.items():
-        scored = [(name, seg_score(feats, spec)) for name, spec in ALL_GROUPS]
-        best_name, _ = max(scored, key=lambda x: x[1])
-        assignment[best_name].append(sym)
+        chain = membership_chain(feats)
+        if chain:
+            assignment[chain[0]].append(sym)
+            chains[sym] = chain
+        else:
+            fb = fallback_assignment(feats)
+            if fb:
+                assignment[fb].append(sym)
+            chains[sym] = [fb] if fb else []
 
-    # Track which original ALL_GROUPS names live inside each current group.
-    origins: Dict[str, FrozenSet[str]] = {
-        name: frozenset({name}) for name in assignment
-    }
+    # Record each segment's initial group for origin tracking.
+    initial_group: Dict[str, str] = {}
+    for gname, members in assignment.items():
+        for sym in members:
+            initial_group[sym] = gname
 
-    # Local spec copy — extended with specs for relabeled groups.
-    local_spec: Dict[str, Dict[str, str]] = dict(SPEC)
+    # ---- Step 2: Merge small groups upward ----
+    # Members of small groups move to their next-best group in the
+    # membership chain.  Only principled moves (the segment actually
+    # qualifies for the parent group) are made.
 
-    # Iterative merging with elbow-detection stopping criterion.
-    past_costs: List[float] = []
-    while len(assignment) > 1:
-        surviving: Set[str] = set(assignment.keys())
+    changed = True
+    while changed:
+        changed = False
+        for gname in list(assignment.keys()):
+            if gname in _FROZEN_GROUPS:
+                continue
+            if not _should_merge_up(len(assignment[gname]), len(inventory)):
+                continue
+            for sym in list(assignment[gname]):
+                chain = chains.get(sym, [])
+                parent = next(
+                    (c for c in chain
+                     if c != gname
+                     and c in assignment
+                     and c not in _FROZEN_GROUPS),
+                    None,
+                )
+                if parent is not None:
+                    assignment[gname].remove(sym)
+                    assignment[parent].append(sym)
+                    changed = True
+            if not assignment[gname]:
+                del assignment[gname]
 
-        # Find the cheapest non-blocked merge across all current groups.
-        best_victim: str = ""
-        best_target: str = ""
-        best_cost: float = float("inf")
-        for victim, members in assignment.items():
-            target, cost = _find_best_merge(
-                victim, members, surviving, norm, local_spec
-            )
-            if cost < best_cost:
-                best_victim, best_target, best_cost = victim, target, cost
+    # ---- Step 2b: Merge related singletons via relabel patterns ----
+    # If two small groups are both present and their combination matches
+    # a _RELABEL_PATTERNS entry, merge them under the derived label.
+    # This handles cases like singleton Taps + singleton Laterals → Liquids
+    # where neither segment has the other's group in its membership chain.
 
-        # Stop if no valid merge exists or next merge is a statistical outlier.
-        if best_cost == float("inf") or _is_outlier(best_cost, past_costs):
-            break
+    for origin_set, new_label in _RELABEL_PATTERNS.items():
+        present = [g for g in origin_set if g in assignment]
+        if len(present) < 2:
+            continue
+        # Only merge if ALL participating groups are small.
+        if any(not _should_merge_up(len(assignment[g]), len(inventory)) for g in present):
+            continue
+        if any(g in _FROZEN_GROUPS for g in present):
+            continue
+        # Pick the first present group as the merge target, then relabel.
+        target = present[0]
+        for g in present[1:]:
+            assignment[target].extend(assignment.pop(g))
+        assignment[new_label] = assignment.pop(target)
 
-        past_costs.append(best_cost)
-        victim_size = len(assignment[best_victim])
-        target_size = len(assignment[best_target])
-        assignment[best_target].extend(assignment.pop(best_victim))
-        origins[best_target] = origins[best_target] | origins.pop(best_victim)
+    # ---- Step 3: Relabeling ----
 
-        # Check for a relabel based on the combined origin set.
-        new_label = _RELABEL_PATTERNS.get(origins[best_target])
-        if new_label and new_label != best_target:
-            assignment[new_label] = assignment.pop(best_target)
-            origins[new_label] = origins.pop(best_target)
-            if new_label not in local_spec:
-                local_spec[new_label] = local_spec.get(best_target, {})
-        elif victim_size > target_size:
-            # The larger group was the victim (lower per-member cost) —
-            # swap the label so the majority's name survives.
-            assignment[best_victim] = assignment.pop(best_target)
-            origins[best_victim] = origins.pop(best_target)
-            local_spec.setdefault(best_victim, local_spec.get(best_target, {}))
+    for gname in list(assignment.keys()):
+        origin_set = frozenset(initial_group[sym] for sym in assignment[gname])
+        new_label = _RELABEL_PATTERNS.get(origin_set)
+        if new_label and new_label != gname:
+            assignment[new_label] = assignment.pop(gname)
+
+    # ---- Step 4: Sort by display order and IPA place ----
 
     return {
         name: sorted(
             assignment[name],
             key=lambda s: (
                 _ipa_place(norm[s]),
+                _FEAT_IDX.get(norm[s].get("lateral", "0"), 2),
+                _FEAT_IDX.get(norm[s].get("strident", "0"), 2),
                 _VOICE_IDX.get(norm[s].get("voice", "0"), 2),
                 s,
             ),
