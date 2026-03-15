@@ -757,7 +757,7 @@ class MainWindow(QMainWindow):
 
     def _build_segment_panel(self) -> QFrame:
         container = QFrame()
-        container.setStyleSheet(f"background: {C['panel']}; border: none;")
+        container.setStyleSheet(f"background: {C['panel']};")
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -818,7 +818,7 @@ class MainWindow(QMainWindow):
 
     def _build_feature_panel(self) -> QFrame:
         container = QFrame()
-        container.setStyleSheet(f"background: {C['bg']}; border: none;")
+        container.setStyleSheet(f"background: {C['bg']};")
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -1109,13 +1109,11 @@ class MainWindow(QMainWindow):
 
         self.seg_panel.setStyleSheet(
             f"background: {C['panel']};"
-            f" border: 2px solid {C['accent'] if is_s2f else C['border']};"
-            " border-radius: 8px;"
+            + (f" border-top: 3px solid {C['accent']};" if is_s2f else "")
         )
         self.feat_panel.setStyleSheet(
             f"background: {C['bg']};"
-            f" border: 2px solid {C['accent'] if not is_s2f else C['border']};"
-            " border-radius: 8px;"
+            + (f" border-top: 3px solid {C['accent']};" if not is_s2f else "")
         )
 
         for row in self._feat_rows.values():
