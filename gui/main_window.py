@@ -8,15 +8,16 @@ import os
 from typing import Optional
 
 from PyQt6.QtCore import (
+    QEvent,
     QFileSystemWatcher,
     QSettings,
-    QSignalBlocker,
     Qt,
     QTimer,
     pyqtSignal,
 )
 from PyQt6.QtGui import QFont, QStandardItemModel
 from PyQt6.QtWidgets import (
+    QApplication,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -26,7 +27,6 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QSplitter,
     QStatusBar,
     QTextEdit,
@@ -248,6 +248,7 @@ class FeatureRow(QWidget):
         self.feature = feature_name
         self._current_value = ""
         self._interactive = True
+        self._panel_active = False
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 3, 10, 3)
@@ -334,8 +335,7 @@ class FeatureRow(QWidget):
         self.plus_btn.setVisible(yes)
         self.minus_btn.setVisible(yes)
         self.badge.setVisible(not yes)
-        if yes:
-            self.reset()
+        self.reset()
 
     def set_display(self, value: str, shared: bool, contrastive: bool = False):
         """
@@ -386,6 +386,15 @@ class FeatureRow(QWidget):
                 f"color: {C['text']}; font-weight: bold;"
             )
 
+    def restore_value(self, value: str):
+        """Silently restore a saved +/- value (no signal emitted)."""
+        self._current_value = value
+        self.plus_btn.setChecked(value == "+")
+        self.minus_btn.setChecked(value == "-")
+
+    def set_panel_active(self, active: bool):
+        self._panel_active = active
+
     def reset(self):
         self._current_value = ""
         self.plus_btn.setChecked(False)
@@ -396,7 +405,8 @@ class FeatureRow(QWidget):
             f"background: {C['tag_gray']};"
             f" color: {C['tag_gray_text']}; border-radius: 4px;"
         )
-        self.name_label.setStyleSheet(f"color: {C['text_dim']};")
+        name_color = C["text"] if self._panel_active else C["text_dim"]
+        self.name_label.setStyleSheet(f"color: {name_color};")
         self.setStyleSheet("background: transparent; border-radius: 6px;")
 
     @property
@@ -528,6 +538,13 @@ class SegmentGridWidget(QWidget):
         self._n_cols = 0  # force a full relayout
         self._do_relayout()
 
+    def set_headers_active(self, active: bool):
+        color = C["text"] if active else C["text_dim"]
+        for hdr in self._headers:
+            hdr.setStyleSheet(
+                f"color: {color}; letter-spacing: 1px; padding: 4px 2px 1px 2px;"
+            )
+
     # ------------------------------------------------------------------
     # Resize / layout
     # ------------------------------------------------------------------
@@ -591,6 +608,8 @@ class MainWindow(QMainWindow):
         self._feat_rows: dict = {}  # feature  → FeatureRow
         self._selected_segments: list = []
         self._selected_features: dict = {}  # feature → '+'/'-'
+        self._saved_seg_state: list = []   # preserved across mode switches
+        self._saved_feat_state: dict = {}  # preserved across mode switches
         self._current_path: Optional[str] = None
 
         self.setWindowTitle("Segment & Feature Engine")
@@ -617,6 +636,7 @@ class MainWindow(QMainWindow):
         self._settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
 
         self._build_ui()
+        QApplication.instance().installEventFilter(self)
         self._set_mode("seg_to_feat")
         self._restore_settings(startup_path)
 
@@ -698,29 +718,6 @@ class MainWindow(QMainWindow):
         browse_btn.clicked.connect(self._browse_config)
         toolbar.addWidget(browse_btn)
 
-        spacer = QWidget()
-        spacer.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
-        )
-        toolbar.addWidget(spacer)
-
-        mode_label = QLabel("Mode:")
-        mode_label.setFont(QFont("Noto Sans", 10))
-        mode_label.setStyleSheet(f"color: {C['text']};")
-        toolbar.addWidget(mode_label)
-
-        self.seg_mode_btn = QPushButton("Segment \u2192 Features")
-        self.feat_mode_btn = QPushButton("Features \u2192 Segments")
-        for btn, mode in (
-            (self.seg_mode_btn, "seg_to_feat"),
-            (self.feat_mode_btn, "feat_to_seg"),
-        ):
-            btn.setCheckable(True)
-            btn.setFixedHeight(32)
-            btn.setFont(QFont("Noto Sans", 10))
-            btn.clicked.connect(lambda _, m=mode: self._set_mode(m))
-            toolbar.addWidget(btn)
-
         # ── central widget ────────────────────────────────────────────
         central = QWidget()
         self.setCentralWidget(central)
@@ -768,9 +765,9 @@ class MainWindow(QMainWindow):
         vlay.setSpacing(10)
 
         header = QHBoxLayout()
-        title = QLabel("SEGMENTS")
-        title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1.5px;")
+        self._seg_title = QLabel("SEGMENTS")
+        self._seg_title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
+        self._seg_title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1.5px;")
 
         self.clear_seg_btn = QPushButton("Clear")
         self.clear_seg_btn.setFixedHeight(26)
@@ -792,28 +789,28 @@ class MainWindow(QMainWindow):
         )
         self.clear_seg_btn.clicked.connect(self._clear_segments)
 
-        header.addWidget(title)
+        header.addWidget(self._seg_title)
         header.addStretch()
         header.addWidget(self.clear_seg_btn)
         vlay.addLayout(header)
 
-        seg_scroll = QScrollArea()
-        seg_scroll.setWidgetResizable(True)
-        seg_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        seg_scroll.setHorizontalScrollBarPolicy(
+        self._seg_scroll = QScrollArea()
+        self._seg_scroll.setWidgetResizable(True)
+        self._seg_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._seg_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        seg_scroll.setVerticalScrollBarPolicy(
+        self._seg_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
-        seg_scroll.setStyleSheet(
+        self._seg_scroll.setStyleSheet(
             "QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE
         )
 
         self.seg_grid_widget = SegmentGridWidget()
-        self.seg_grid_widget.setStyleSheet("background: transparent;")
-        seg_scroll.setWidget(self.seg_grid_widget)
-        vlay.addWidget(seg_scroll, stretch=1)
+        self._seg_scroll.setWidget(self.seg_grid_widget)
+        self._seg_scroll.viewport().setStyleSheet("background: transparent;")
+        vlay.addWidget(self._seg_scroll, stretch=1)
 
         self.seg_hint = QLabel("\u2190 Select an inventory to see segments")
         self.seg_hint.setFont(QFont("Noto Sans", 9))
@@ -834,9 +831,9 @@ class MainWindow(QMainWindow):
         vlay.setSpacing(10)
 
         header = QHBoxLayout()
-        title = QLabel("FEATURES")
-        title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1.5px;")
+        self._feat_title = QLabel("FEATURES")
+        self._feat_title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
+        self._feat_title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1.5px;")
 
         self.clear_feat_btn = QPushButton("Clear")
         self.clear_feat_btn.setFixedHeight(26)
@@ -858,27 +855,26 @@ class MainWindow(QMainWindow):
         )
         self.clear_feat_btn.clicked.connect(self._clear_features)
 
-        header.addWidget(title)
+        header.addWidget(self._feat_title)
         header.addStretch()
         header.addWidget(self.clear_feat_btn)
         vlay.addLayout(header)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(
+        self._feat_scroll = QScrollArea()
+        self._feat_scroll.setWidgetResizable(True)
+        self._feat_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._feat_scroll.setStyleSheet(
             "QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE
         )
 
         self.feat_list_widget = QWidget()
-        self.feat_list_widget.setStyleSheet("background: transparent;")
         self.feat_list_layout = QVBoxLayout(self.feat_list_widget)
         self.feat_list_layout.setContentsMargins(0, 0, 0, 0)
         self.feat_list_layout.setSpacing(3)
         self.feat_list_layout.addStretch()
 
-        scroll.setWidget(self.feat_list_widget)
-        vlay.addWidget(scroll, stretch=1)
+        self._feat_scroll.setWidget(self.feat_list_widget)
+        vlay.addWidget(self._feat_scroll, stretch=1)
 
         return container
 
@@ -993,6 +989,8 @@ class MainWindow(QMainWindow):
             # Persist for next launch
             self._settings.setValue("last_inventory", path)
 
+            self._saved_seg_state = []
+            self._saved_feat_state = {}
             self._populate_segments()
             self._populate_features()
             self._set_mode(self._mode)
@@ -1105,79 +1103,116 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _set_mode(self, mode: str):
+        if mode != self._mode and self.engine:
+            if self._mode == "seg_to_feat" and self._selected_segments:
+                # Carry non-contradictory (shared) features into the feature query
+                self._saved_feat_state = {
+                    f: v for f, v in
+                    self.engine.common_features(self._selected_segments).items()
+                    if v in ("+", "-")
+                }
+            elif self._mode == "feat_to_seg" and self._selected_features:
+                # Carry the matched segments into the segment selection
+                self._saved_seg_state = list(
+                    self.engine.find_segments(self._selected_features)
+                )
         self._mode = mode
         is_s2f = mode == "seg_to_feat"
 
-        with QSignalBlocker(self.seg_mode_btn):
-            self.seg_mode_btn.setChecked(is_s2f)
-        with QSignalBlocker(self.feat_mode_btn):
-            self.feat_mode_btn.setChecked(not is_s2f)
+        seg_bg  = C["panel"] if is_s2f     else C["bg"]
+        feat_bg = C["panel"] if not is_s2f else C["bg"]
 
-        style_active = f"""
-            QPushButton {{
-                background: {C['accent']};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 0 14px;
-                font-weight: bold;
-            }}
-        """
-        style_inactive = f"""
-            QPushButton {{
-                background: {C['bg']};
-                color: {C['text']};
-                border: 1px solid {C['border']};
-                border-radius: 6px;
-                padding: 0 14px;
-            }}
-            QPushButton:hover {{ background: {C['accent_light']}; }}
-        """
-        self.seg_mode_btn.setStyleSheet(
-            style_active if is_s2f else style_inactive
-        )
-        self.feat_mode_btn.setStyleSheet(
-            style_inactive if is_s2f else style_active
-        )
+        # Paint scroll viewport and content widget explicitly so no grey bleeds through
+        bg_css = f"background: {seg_bg};"
+        self._seg_scroll.viewport().setStyleSheet(bg_css)
+        self.seg_grid_widget.setStyleSheet(bg_css)
+        bg_css = f"background: {feat_bg};"
+        self._feat_scroll.viewport().setStyleSheet(bg_css)
+        self.feat_list_widget.setStyleSheet(bg_css)
 
         self.seg_panel.setStyleSheet(
-            f"QFrame#seg_panel {{ background: {C['panel']};"
-            + (
-                f" border: 1.5px solid {C['accent']};"
-                if is_s2f
-                else " border: none;"
-            )
+            f"QFrame#seg_panel {{ background: {seg_bg};"
+            + (f" border: 1.5px solid {C['accent']};" if is_s2f else " border: none;")
             + "}"
         )
         self.feat_panel.setStyleSheet(
-            f"QFrame#feat_panel {{ background: {C['bg']};"
-            + (
-                f" border: 1.5px solid {C['accent']};"
-                if not is_s2f
-                else " border: none;"
-            )
+            f"QFrame#feat_panel {{ background: {feat_bg};"
+            + (f" border: 1.5px solid {C['accent']};" if not is_s2f else " border: none;")
             + "}"
         )
 
+        self._seg_title.setStyleSheet(
+            f"color: {C['text'] if is_s2f else C['text_dim']}; letter-spacing: 1.5px;"
+        )
+        self._feat_title.setStyleSheet(
+            f"color: {C['text'] if not is_s2f else C['text_dim']}; letter-spacing: 1.5px;"
+        )
+        self.seg_grid_widget.set_headers_active(is_s2f)
+
         for row in self._feat_rows.values():
+            row.set_panel_active(not is_s2f)
             row.set_interactive(not is_s2f)
 
+        _clear_active   = (f"color: {C['text']}; background: transparent;"
+                           f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;")
+        _clear_inactive = (f"color: {C['text_dim']}; background: transparent;"
+                           f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;")
+        self.clear_seg_btn.setStyleSheet(
+            f"QPushButton {{ {_clear_active if is_s2f else _clear_inactive} }}"
+            f" QPushButton:hover {{ color: {C['text']}; background: {C['bg']}; }}"
+        )
+        self.clear_feat_btn.setStyleSheet(
+            f"QPushButton {{ {_clear_active if not is_s2f else _clear_inactive} }}"
+            f" QPushButton:hover {{ color: {C['text']}; background: {C['panel']}; }}"
+        )
+
         self._clear_segments(silent=True)
-        self._selected_features.clear()
+        self._clear_features(silent=True)
         self.analysis.clear()
+
+        # Restore the saved state for the mode we just entered
+        if is_s2f and self._saved_seg_state:
+            for seg in self._saved_seg_state:
+                if seg in self._seg_buttons:
+                    self._selected_segments.append(seg)
+                    self._seg_buttons[seg].set_state("selected")
+                    self._seg_buttons[seg].setChecked(True)
+            if self._selected_segments:
+                self._update_seg_to_feat()
+        elif not is_s2f and self._saved_feat_state:
+            for feat, val in self._saved_feat_state.items():
+                if feat in self._feat_rows:
+                    self._selected_features[feat] = val
+                    self._feat_rows[feat].restore_value(val)
+            if self._selected_features:
+                self._update_feat_to_seg()
 
         if is_s2f:
             self.status.showMessage(
-                "Select one or more segments to inspect their features."
-                if self.engine
-                else "Select an inventory from the dropdown to begin."
+                "Click a segment to inspect its features."
+                if self.engine else "Select an inventory from the dropdown to begin."
             )
         else:
             self.status.showMessage(
-                "Select feature values (+/\u2212) to find matching segments."
-                if self.engine
-                else "Select an inventory from the dropdown to begin."
+                "Toggle feature values (+/\u2212) to find matching segments."
+                if self.engine else "Select an inventory from the dropdown to begin."
             )
+
+    def eventFilter(self, obj, event):
+        """Activate a panel on any mouse press anywhere inside it."""
+        if event.type() == QEvent.Type.MouseButtonPress:
+            w = obj
+            while w is not None:
+                if w is self.seg_panel:
+                    if self._mode != "seg_to_feat":
+                        self._set_mode("seg_to_feat")
+                    break
+                if w is self.feat_panel:
+                    if self._mode != "feat_to_seg":
+                        self._set_mode("feat_to_seg")
+                    break
+                w = w.parent()
+        return False  # never consume the event
 
     # ------------------------------------------------------------------
     # Event handlers  (state changes are immediate; analysis is debounced)
@@ -1347,13 +1382,13 @@ class MainWindow(QMainWindow):
                     "\u2205 (universal \u2014 all segments)", "gray"
                 )
             nc_html = (
-                "<p><b>Natural class:</b> \u2705 Yes</p>"
+                f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
                 f"<p><b>Minimal specification:</b><br>{spec_tags}</p>"
             )
         else:
             nc_html = (
                 "<p><b>Natural class:</b>"
-                f" <span style='color:{C['minus']}'>\u274c No \u2014"
+                f" <span style='color:{C['minus']}'>No \u2014"
                 " these segments cannot be uniquely picked out by any"
                 " feature bundle in this inventory.</span></p>"
             )
@@ -1409,33 +1444,7 @@ class MainWindow(QMainWindow):
                 " satisfies all selected features.</i></p>"
             )
 
-        nc_html = ""
-        if matching:
-            is_nc, spec = self.engine.is_natural_class(matching)
-            if is_nc:
-                if spec:
-                    spec_tags = " ".join(
-                        self._tag(f"{v}{f}", "green" if v == "+" else "red")
-                        for f, v in spec.items()
-                    )
-                else:
-                    spec_tags = self._tag("\u2205 (universal class)", "gray")
-                nc_html = (
-                    "<p><b>Natural class:</b> \u2705 Yes</p>"
-                    f"<p><b>Minimal specification:</b><br>{spec_tags}</p>"
-                )
-                if set(spec.items()) != set(feature_dict.items()):
-                    nc_html += (
-                        f"<p><i style='color:{C['text_dim']}'>"
-                        "Your query contained redundant features.</i></p>"
-                    )
-            else:
-                nc_html = (
-                    "<p><b>Natural class:</b>"
-                    f" <span style='color:{C['minus']}'>\u274c No</span></p>"
-                )
-
-        html = f"<p><b>Query:</b> {feat_tags}</p>" f"{segs_html}" f"{nc_html}"
+        html = f"<p><b>Query:</b> {feat_tags}</p>" f"{segs_html}"
         self.analysis.set_html(html)
 
     # ------------------------------------------------------------------
@@ -1463,6 +1472,8 @@ class MainWindow(QMainWindow):
             btn.setChecked(False)
         self._reset_feature_display()
         if not silent:
+            self._saved_seg_state = []
+            self._saved_feat_state = {}
             self.analysis.clear()
 
     def _clear_features(self, silent=False):
@@ -1472,4 +1483,6 @@ class MainWindow(QMainWindow):
         for btn in self._seg_buttons.values():
             btn.set_state("default")
         if not silent:
+            self._saved_seg_state = []
+            self._saved_feat_state = {}
             self.analysis.clear()
