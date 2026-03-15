@@ -1,612 +1,940 @@
 """
-Main GUI window for the phonology segment and feature engine.
-
-Provides a tabbed interface with:
-- Inventory Loader: Load JSON files and view metadata
-- Inventory Browser: Table view of all segments and features
-- Segment Inspector: Detailed view of individual segments
-- Natural Class Finder: Two-way segment/feature interaction
-- Feature Geometry: Visualization of feature dependencies (future)
+gui/main_window.py
+PyQt6 GUI for the Segment & Feature Engine.
 """
 
 import os
+from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
     QFileDialog,
+    QFrame,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
-    QListWidget,
     QMainWindow,
-    QMessageBox,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QTabWidget,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
+    QStatusBar,
     QTextEdit,
+    QToolBar,
     QVBoxLayout,
     QWidget,
 )
 
 from engine.feature_engine import FeatureEngine
 
+# ---------------------------------------------------------------------------
+# Colour palette
+# ---------------------------------------------------------------------------
 
-class InventoryLoaderPanel(QWidget):
-    """Panel for loading inventories and displaying metadata."""
+C = {
+    "bg": "#F0F2F5",
+    "panel": "#FFFFFF",
+    "border": "#D0D5DD",
+    "accent": "#2563EB",
+    "accent_light": "#DBEAFE",
+    "seg_default": "#F8FAFC",
+    "seg_selected": "#2563EB",
+    "seg_matched": "#16A34A",
+    "seg_unmatched": "#E2E8F0",
+    "plus": "#15803D",
+    "plus_bg": "#DCFCE7",
+    "minus": "#B91C1C",
+    "minus_bg": "#FEE2E2",
+    "shared_plus": "#DCFCE7",
+    "shared_minus": "#FEE2E2",
+    "text": "#1E293B",
+    "text_dim": "#94A3B8",
+    "analysis_bg": "#F8FAFC",
+    "tag_blue": "#DBEAFE",
+    "tag_blue_text": "#1D4ED8",
+    "tag_green": "#DCFCE7",
+    "tag_green_text": "#15803D",
+    "tag_red": "#FEE2E2",
+    "tag_red_text": "#B91C1C",
+    "tag_gray": "#F1F5F9",
+    "tag_gray_text": "#64748B",
+}
 
-    inventory_loaded = pyqtSignal()
 
-    def __init__(self, engine):
-        super().__init__()
-        self.engine = engine
-        self.init_ui()
+# ---------------------------------------------------------------------------
+# SegmentButton
+# ---------------------------------------------------------------------------
 
-    def init_ui(self):
-        layout = QVBoxLayout()
 
-        # File selection
-        file_group = QGroupBox("Load Inventory")
-        file_layout = QHBoxLayout()
-        self.file_label = QLabel("No inventory loaded")
-        self.load_btn = QPushButton("Browse...")
-        self.load_btn.clicked.connect(self.load_inventory)
-        file_layout.addWidget(self.file_label)
-        file_layout.addWidget(self.load_btn)
-        file_group.setLayout(file_layout)
-        layout.addWidget(file_group)
+class SegmentButton(QPushButton):
+    """Toggleable button for a single phonological segment."""
 
-        # Quick load buttons
-        quick_group = QGroupBox("Quick Load")
-        quick_layout = QVBoxLayout()
+    def __init__(self, segment: str, parent=None):
+        super().__init__(segment, parent)
+        self.segment = segment
+        self.setCheckable(True)
+        self.setFixedSize(54, 46)
+        self.setFont(QFont("Noto Sans", 14))
+        self._state = "default"
+        self._apply_style()
 
-        # First row
-        row1 = QHBoxLayout()
-        self.hayes_english_btn = QPushButton("Hayes English (39 seg)")
-        self.hayes_english_btn.clicked.connect(
-            lambda: self.quick_load("hayes_english.json")
-        )
-        self.hayes_universal_btn = QPushButton("Hayes Universal (140 seg)")
-        self.hayes_universal_btn.clicked.connect(
-            lambda: self.quick_load("hayes_universal.json")
-        )
-        row1.addWidget(self.hayes_english_btn)
-        row1.addWidget(self.hayes_universal_btn)
+    def set_state(self, state: str):
+        """state: 'default' | 'selected' | 'matched' | 'unmatched'"""
+        if self._state != state:
+            self._state = state
+            self._apply_style()
 
-        # Second row
-        row2 = QHBoxLayout()
-        self.featureize_btn = QPushButton("Featureize (32 seg)")
-        self.featureize_btn.clicked.connect(
-            lambda: self.quick_load("featureize.json")
-        )
-        self.blevins_btn = QPushButton("Blevins (141 seg)")
-        self.blevins_btn.clicked.connect(
-            lambda: self.quick_load("blevins_features.json")
-        )
-        row2.addWidget(self.featureize_btn)
-        row2.addWidget(self.blevins_btn)
-
-        quick_layout.addLayout(row1)
-        quick_layout.addLayout(row2)
-        quick_group.setLayout(quick_layout)
-        layout.addWidget(quick_group)
-
-        # Metadata display
-        metadata_group = QGroupBox("Inventory Metadata")
-        metadata_layout = QVBoxLayout()
-        self.metadata_display = QTextEdit()
-        self.metadata_display.setReadOnly(True)
-        self.metadata_display.setMaximumHeight(200)
-        metadata_layout.addWidget(self.metadata_display)
-        metadata_group.setLayout(metadata_layout)
-        layout.addWidget(metadata_group)
-
-        # Statistics display
-        stats_group = QGroupBox("Inventory Statistics")
-        stats_layout = QGridLayout()
-        self.stats_labels = {}
-        stats_fields = [
-            "Segment Count",
-            "Feature Count",
-            "Contrastive Features",
-            "Avg Distance",
-        ]
-        for i, field in enumerate(stats_fields):
-            label = QLabel(f"{field}:")
-            value = QLabel("—")
-            value.setStyleSheet("font-weight: bold;")
-            stats_layout.addWidget(label, i, 0)
-            stats_layout.addWidget(value, i, 1)
-            self.stats_labels[field] = value
-        stats_group.setLayout(stats_layout)
-        layout.addWidget(stats_group)
-
-        layout.addStretch()
-        self.setLayout(layout)
-
-    def load_inventory(self):
-        """Open file dialog and load inventory."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Load Inventory", "", "JSON Files (*.json);;All Files (*)"
-        )
-        if file_path:
-            try:
-                self.engine.load_inventory(file_path)
-                self.file_label.setText(os.path.basename(file_path))
-                self.update_displays()
-                self.inventory_loaded.emit()
-                QMessageBox.information(
-                    self, "Success", "Inventory loaded successfully!"
-                )
-            except Exception as e:
-                QMessageBox.critical(
-                    self, "Error", f"Failed to load inventory:\n{str(e)}"
-                )
-
-    def quick_load(self, filename):
-        """Quick load from config directory."""
-        config_dir = os.path.join(os.path.dirname(__file__), "..", "config")
-        file_path = os.path.join(config_dir, filename)
-        if os.path.exists(file_path):
-            try:
-                self.engine.load_inventory(file_path)
-                self.file_label.setText(filename)
-                self.update_displays()
-                self.inventory_loaded.emit()
-            except Exception as e:
-                QMessageBox.critical(
-                    self, "Error", f"Failed to load inventory:\n{str(e)}"
-                )
+    def _apply_style(self):
+        s = self._state
+        if s == "selected":
+            self.setStyleSheet(
+                f"""
+                QPushButton {{
+                    background-color: {C['seg_selected']};
+                    color: #FFFFFF;
+                    border: 2px solid #1D4ED8;
+                    border-radius: 8px;
+                    font-weight: bold;
+                }}
+            """
+            )
+        elif s == "matched":
+            self.setStyleSheet(
+                f"""
+                QPushButton {{
+                    background-color: {C['seg_matched']};
+                    color: #FFFFFF;
+                    border: 2px solid #15803D;
+                    border-radius: 8px;
+                    font-weight: bold;
+                }}
+            """
+            )
+        elif s == "unmatched":
+            self.setStyleSheet(
+                f"""
+                QPushButton {{
+                    background-color: {C['seg_unmatched']};
+                    color: {C['text_dim']};
+                    border: 1px solid {C['border']};
+                    border-radius: 8px;
+                }}
+            """
+            )
         else:
-            QMessageBox.warning(
-                self, "Not Found", f"File not found: {filename}"
+            self.setStyleSheet(
+                f"""
+                QPushButton {{
+                    background-color: {C['seg_default']};
+                    color: {C['text']};
+                    border: 1.5px solid {C['border']};
+                    border-radius: 8px;
+                }}
+                QPushButton:hover {{
+                    background-color: {C['accent_light']};
+                    border: 1.5px solid {C['accent']};
+                }}
+                QPushButton:checked {{
+                    background-color: {C['seg_selected']};
+                    color: white;
+                    border: 2px solid #1D4ED8;
+                    font-weight: bold;
+                }}
+            """
             )
 
-    def update_displays(self):
-        """Update metadata and statistics displays."""
-        # Metadata
-        metadata_text = ""
-        for key, value in self.engine.metadata.items():
-            metadata_text += f"<b>{key.title()}:</b> {value}<br>"
-        self.metadata_display.setHtml(metadata_text)
 
-        # Statistics
-        stats = self.engine.get_inventory_stats()
-        self.stats_labels["Segment Count"].setText(str(stats["segment_count"]))
-        self.stats_labels["Feature Count"].setText(str(stats["feature_count"]))
-        self.stats_labels["Contrastive Features"].setText(
-            str(stats["contrastive_features"])
+# ---------------------------------------------------------------------------
+# FeatureRow
+# ---------------------------------------------------------------------------
+
+
+class FeatureRow(QWidget):
+    """
+    One feature row in the feature panel.
+
+    In INTERACTIVE mode (Feat → Seg): shows [+] [–] toggle buttons.
+    In DISPLAY mode (Seg → Feat): shows a coloured value badge.
+    """
+
+    value_changed = pyqtSignal(str, str)  # feature_name, value ('+'/'-'/'')
+
+    def __init__(self, feature_name: str, parent=None):
+        super().__init__(parent)
+        self.feature = feature_name
+        self._current_value = ""
+        self._interactive = True
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 3, 10, 3)
+        layout.setSpacing(6)
+
+        self.name_label = QLabel(feature_name)
+        self.name_label.setFont(QFont("Noto Sans", 10))
+        self.name_label.setMinimumWidth(110)
+        self.name_label.setStyleSheet(f"color: {C['text']};")
+
+        self.plus_btn = QPushButton("+")
+        self.plus_btn.setFixedSize(30, 26)
+        self.plus_btn.setCheckable(True)
+        self.plus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
+        self._style_btn(self.plus_btn, "+")
+
+        self.minus_btn = QPushButton("−")
+        self.minus_btn.setFixedSize(30, 26)
+        self.minus_btn.setCheckable(True)
+        self.minus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
+        self._style_btn(self.minus_btn, "-")
+
+        self.badge = QLabel("")
+        self.badge.setFixedSize(34, 26)
+        self.badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.badge.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
+        self.badge.hide()
+
+        layout.addWidget(self.name_label)
+        layout.addStretch()
+        layout.addWidget(self.badge)
+        layout.addWidget(self.plus_btn)
+        layout.addWidget(self.minus_btn)
+
+        self.plus_btn.clicked.connect(lambda: self._on_click("+"))
+        self.minus_btn.clicked.connect(lambda: self._on_click("-"))
+
+        self.setAutoFillBackground(True)
+        self.setStyleSheet("background: transparent; border-radius: 6px;")
+
+    def _style_btn(self, btn: QPushButton, polarity: str):
+        active_bg = C["plus_bg"] if polarity == "+" else C["minus_bg"]
+        active_text = C["plus"] if polarity == "+" else C["minus"]
+        border = C["plus"] if polarity == "+" else C["minus"]
+        btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background: {C['analysis_bg']};
+                color: {C['text_dim']};
+                border: 1.5px solid {C['border']};
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background: {active_bg};
+                color: {active_text};
+                border: 1.5px solid {border};
+            }}
+            QPushButton:checked {{
+                background: {active_bg};
+                color: {active_text};
+                border: 2px solid {border};
+                font-weight: bold;
+            }}
+        """
         )
-        self.stats_labels["Avg Distance"].setText(
-            f"{stats['avg_feature_distance']:.2f}"
-        )
 
+    def _on_click(self, polarity: str):
+        if self._current_value == polarity:
+            self._current_value = ""
+            self.plus_btn.setChecked(False)
+            self.minus_btn.setChecked(False)
+        else:
+            self._current_value = polarity
+            self.plus_btn.setChecked(polarity == "+")
+            self.minus_btn.setChecked(polarity == "-")
+        self.value_changed.emit(self.feature, self._current_value)
 
-class InventoryBrowserPanel(QWidget):
-    """Panel for browsing the full inventory in table form."""
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
-    segment_selected = pyqtSignal(str)
+    def set_interactive(self, yes: bool):
+        self._interactive = yes
+        self.plus_btn.setVisible(yes)
+        self.minus_btn.setVisible(yes)
+        self.badge.setVisible(not yes)
+        if yes:
+            self.reset()
 
-    def __init__(self, engine):
-        super().__init__()
-        self.engine = engine
-        self.init_ui()
-
-    def init_ui(self):
-        layout = QVBoxLayout()
-
-        # Controls
-        controls = QHBoxLayout()
-        controls.addWidget(QLabel("Sort by:"))
-        self.sort_combo = QComboBox()
-        self.sort_combo.addItem("Segment (alphabetical)")
-        self.sort_combo.currentTextChanged.connect(self.update_table)
-        controls.addWidget(self.sort_combo)
-        controls.addStretch()
-        self.highlight_checkbox = QCheckBox("Highlight contrastive features")
-        self.highlight_checkbox.setChecked(True)
-        self.highlight_checkbox.stateChanged.connect(self.update_table)
-        controls.addWidget(self.highlight_checkbox)
-        layout.addLayout(controls)
-
-        # Table
-        self.table = QTableWidget()
-        self.table.cellClicked.connect(self.on_cell_clicked)
-        layout.addWidget(self.table)
-
-        self.setLayout(layout)
-
-    def update_table(self):
-        """Rebuild the table with current inventory."""
-        if not self.engine.segments:
-            return
-
-        segments = sorted(self.engine.segments.keys())
-        features = self.engine.features
-        contrastive = set(self.engine.get_contrastive_features())
-
-        self.table.setRowCount(len(features))
-        self.table.setColumnCount(len(segments))
-        self.table.setHorizontalHeaderLabels(segments)
-        self.table.setVerticalHeaderLabels(features)
-
-        # Color scheme
-        color_plus = QColor(100, 200, 100)  # Green
-        color_minus = QColor(200, 100, 100)  # Red
-        color_zero = QColor(220, 220, 220)  # Gray
-        color_contrastive_bg = QColor(255, 255, 200)  # Light yellow
-
-        highlight = self.highlight_checkbox.isChecked()
-
-        for i, feature in enumerate(features):
-            is_contrastive = feature in contrastive
-            for j, segment in enumerate(segments):
-                value = self.engine.segments[segment].get(feature, "0")
-                item = QTableWidgetItem(value)
-                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-
-                # Set colors
-                if value == "+":
-                    item.setBackground(color_plus)
-                elif value == "-":
-                    item.setBackground(color_minus)
-                elif value == "0":
-                    item.setBackground(color_zero)
-
-                # Highlight contrastive features
-                if highlight and is_contrastive:
-                    # Add a subtle yellow tint
-                    current_color = item.background().color()
-                    blended = QColor(
-                        (current_color.red() + color_contrastive_bg.red())
-                        // 2,
-                        (current_color.green() + color_contrastive_bg.green())
-                        // 2,
-                        (current_color.blue() + color_contrastive_bg.blue())
-                        // 2,
-                    )
-                    item.setBackground(blended)
-
-                self.table.setItem(i, j, item)
-
-        self.table.resizeColumnsToContents()
-        self.table.resizeRowsToContents()
-
-    def on_cell_clicked(self, row, col):
-        """Handle cell click - select segment."""
-        segment = self.table.horizontalHeaderItem(col).text()
-        self.segment_selected.emit(segment)
-
-
-class SegmentInspectorPanel(QWidget):
-    """Panel for inspecting individual segments in detail."""
-
-    def __init__(self, engine):
-        super().__init__()
-        self.engine = engine
-        self.current_segment = None
-        self.init_ui()
-
-    def init_ui(self):
-        layout = QVBoxLayout()
-
-        # Segment selector
-        selector_layout = QHBoxLayout()
-        selector_layout.addWidget(QLabel("Segment:"))
-        self.segment_combo = QComboBox()
-        self.segment_combo.currentTextChanged.connect(self.display_segment)
-        selector_layout.addWidget(self.segment_combo)
-        selector_layout.addStretch()
-        layout.addLayout(selector_layout)
-
-        # Segment display
-        self.segment_label = QLabel()
-        self.segment_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = QFont()
-        font.setPointSize(48)
-        self.segment_label.setFont(font)
-        layout.addWidget(self.segment_label)
-
-        # Feature specification
-        features_group = QGroupBox("Feature Specification")
-        self.features_table = QTableWidget()
-        self.features_table.setColumnCount(2)
-        self.features_table.setHorizontalHeaderLabels(["Feature", "Value"])
-        self.features_table.horizontalHeader().setStretchLastSection(True)
-        features_layout = QVBoxLayout()
-        features_layout.addWidget(self.features_table)
-        features_group.setLayout(features_layout)
-        layout.addWidget(features_group)
-
-        # Nearest neighbors
-        neighbors_group = QGroupBox("Nearest Phonological Neighbors")
-        self.neighbors_list = QListWidget()
-        neighbors_layout = QVBoxLayout()
-        neighbors_layout.addWidget(self.neighbors_list)
-        neighbors_group.setLayout(neighbors_layout)
-        layout.addWidget(neighbors_group)
-
-        self.setLayout(layout)
-
-    def update_segments(self):
-        """Update the segment selector with current inventory."""
-        self.segment_combo.clear()
-        if self.engine.segments:
-            segments = sorted(self.engine.segments.keys())
-            self.segment_combo.addItems(segments)
-
-    def select_segment(self, segment):
-        """Programmatically select a segment."""
-        index = self.segment_combo.findText(segment)
-        if index >= 0:
-            self.segment_combo.setCurrentIndex(index)
-
-    def display_segment(self, segment):
-        """Display detailed information about a segment."""
-        if not segment or segment not in self.engine.segments:
-            return
-
-        self.current_segment = segment
-        self.segment_label.setText(segment)
-
-        # Feature specification
-        features = self.engine.get_segment_features(segment)
-        self.features_table.setRowCount(len(features))
-
-        color_plus = QColor(100, 200, 100)
-        color_minus = QColor(200, 100, 100)
-        color_zero = QColor(220, 220, 220)
-
-        for i, (feature, value) in enumerate(sorted(features.items())):
-            feature_item = QTableWidgetItem(feature)
-            value_item = QTableWidgetItem(value)
-            value_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-
+    def set_display(self, value: str, shared: bool):
+        """
+        Display a feature value in Seg→Feat mode.
+        value: '+', '-', or '' (inapplicable / mixed across segments)
+        shared: whether this value is consistent across all selected segs
+        """
+        if not value or not shared:
+            self.badge.setText("·")
+            self.badge.setStyleSheet(
+                f"background: {C['tag_gray']};"
+                f" color: {C['tag_gray_text']}; border-radius: 4px;"
+            )
+            self.name_label.setStyleSheet(f"color: {C['text_dim']};")
+            self.setStyleSheet("background: transparent; border-radius: 6px;")
+        else:
+            self.badge.setText(value)
             if value == "+":
-                value_item.setBackground(color_plus)
-            elif value == "-":
-                value_item.setBackground(color_minus)
-            elif value == "0":
-                value_item.setBackground(color_zero)
-
-            self.features_table.setItem(i, 0, feature_item)
-            self.features_table.setItem(i, 1, value_item)
-
-        self.features_table.resizeColumnsToContents()
-
-        # Nearest neighbors
-        self.neighbors_list.clear()
-        neighbors = self.engine.find_nearest_segments(segment, n=5)
-        for neighbor, distance in neighbors:
-            self.neighbors_list.addItem(f"{neighbor}  (distance: {distance})")
-
-
-class NaturalClassFinderPanel(QWidget):
-    """Panel for finding natural classes - two-way interaction."""
-
-    def __init__(self, engine):
-        super().__init__()
-        self.engine = engine
-        self.init_ui()
-
-    def init_ui(self):
-        layout = QVBoxLayout()
-
-        # Segments to Features
-        seg2feat_group = QGroupBox(
-            "Segments → Features: Find characterizing features"
-        )
-        seg2feat_layout = QVBoxLayout()
-
-        seg2feat_input_layout = QHBoxLayout()
-        seg2feat_input_layout.addWidget(QLabel("Segments (space-separated):"))
-        self.seg_input = QLineEdit()
-        self.seg_input.setPlaceholderText("e.g., p t k")
-        seg2feat_input_layout.addWidget(self.seg_input)
-        self.seg_find_btn = QPushButton("Find Features")
-        self.seg_find_btn.clicked.connect(self.find_features_from_segments)
-        seg2feat_input_layout.addWidget(self.seg_find_btn)
-        seg2feat_layout.addLayout(seg2feat_input_layout)
-
-        self.seg2feat_result = QTextEdit()
-        self.seg2feat_result.setReadOnly(True)
-        self.seg2feat_result.setMaximumHeight(150)
-        seg2feat_layout.addWidget(self.seg2feat_result)
-
-        seg2feat_group.setLayout(seg2feat_layout)
-        layout.addWidget(seg2feat_group)
-
-        # Features to Segments
-        feat2seg_group = QGroupBox(
-            "Features → Segments: Find matching segments"
-        )
-        feat2seg_layout = QVBoxLayout()
-
-        feat2seg_input_layout = QHBoxLayout()
-        feat2seg_input_layout.addWidget(QLabel("Feature specification:"))
-        self.feat_input = QLineEdit()
-        self.feat_input.setPlaceholderText("e.g., voice:+,nasal:-")
-        feat2seg_input_layout.addWidget(self.feat_input)
-        self.feat_find_btn = QPushButton("Find Segments")
-        self.feat_find_btn.clicked.connect(self.find_segments_from_features)
-        feat2seg_input_layout.addWidget(self.feat_find_btn)
-        feat2seg_layout.addLayout(feat2seg_input_layout)
-
-        help_label = QLabel(
-            "Format: feature:value,feature:value (e.g., voice:+,continuant:-)"
-        )
-        help_label.setStyleSheet("color: gray; font-size: 10px;")
-        feat2seg_layout.addWidget(help_label)
-
-        self.feat2seg_result = QTextEdit()
-        self.feat2seg_result.setReadOnly(True)
-        self.feat2seg_result.setMaximumHeight(150)
-        feat2seg_layout.addWidget(self.feat2seg_result)
-
-        feat2seg_group.setLayout(feat2seg_layout)
-        layout.addWidget(feat2seg_group)
-
-        # Natural classes display
-        classes_group = QGroupBox("Natural Class Analysis")
-        self.classes_display = QTextEdit()
-        self.classes_display.setReadOnly(True)
-        classes_layout = QVBoxLayout()
-        classes_layout.addWidget(self.classes_display)
-        classes_group.setLayout(classes_layout)
-        layout.addWidget(classes_group)
-
-        self.setLayout(layout)
-
-    def find_features_from_segments(self):
-        """Find features that characterize the given segments."""
-        segment_text = self.seg_input.text().strip()
-        if not segment_text:
-            self.seg2feat_result.setText("Please enter segments.")
-            return
-
-        segments = segment_text.split()
-
-        # Validate segments
-        invalid = [s for s in segments if s not in self.engine.segments]
-        if invalid:
-            self.seg2feat_result.setText(
-                f"Invalid segments: {', '.join(invalid)}"
-            )
-            return
-
-        try:
-            bundle, is_minimal = self.engine.compute_natural_class(segments)
-
-            result = f"<b>Input segments:</b> {', '.join(segments)}<br>"
-            result += f"<b>Class size:</b> {len(segments)}<br><br>"
-
-            result += "<b>Characterizing features:</b><br>"
-            if bundle:
-                for feature, value in sorted(bundle.items()):
-                    result += f"&nbsp;&nbsp;{feature}: {value}<br>"
+                self.badge.setStyleSheet(
+                    f"background: {C['plus_bg']}; color: {C['plus']};"
+                    " border-radius: 4px; font-weight: bold;"
+                )
+                self.setStyleSheet(
+                    f"background: {C['shared_plus']}; border-radius: 6px;"
+                )
             else:
-                result += "&nbsp;&nbsp;(no distinctive features required)<br>"
-
-            result += f"<br><b>Minimal bundle:</b> {'Yes' if is_minimal else 'No'}<br>"
-
-            # Check if this picks out exactly the target segments
-            found_segments = self.engine.find_segments(bundle)
-            if set(found_segments) == set(segments):
-                result += "<br><span style='color: green;'>✓ Bundle picks out exactly the target segments</span>"
-            else:
-                result += f"<br><span style='color: orange;'>⚠ Bundle also picks out: {', '.join(set(found_segments) - set(segments))}</span>"
-
-            self.seg2feat_result.setHtml(result)
-            self.classes_display.setHtml(
-                f"<b>Natural class analysis:</b><br>{result}"
+                self.badge.setStyleSheet(
+                    f"background: {C['minus_bg']}; color: {C['minus']};"
+                    " border-radius: 4px; font-weight: bold;"
+                )
+                self.setStyleSheet(
+                    f"background: {C['shared_minus']}; border-radius: 6px;"
+                )
+            self.name_label.setStyleSheet(
+                f"color: {C['text']}; font-weight: bold;"
             )
 
-        except Exception as e:
-            self.seg2feat_result.setText(f"Error: {str(e)}")
+    def reset(self):
+        self._current_value = ""
+        self.plus_btn.setChecked(False)
+        self.minus_btn.setChecked(False)
+        self.badge.setText("")
+        self.name_label.setStyleSheet(f"color: {C['text']};")
+        self.setStyleSheet("background: transparent; border-radius: 6px;")
 
-    def find_segments_from_features(self):
-        """Find segments matching the given feature specification."""
-        feat_text = self.feat_input.text().strip()
-        if not feat_text:
-            self.feat2seg_result.setText("Please enter feature specification.")
-            return
+    @property
+    def current_value(self) -> str:
+        return self._current_value
 
-        # Parse feature specification
-        try:
-            bundle = {}
-            pairs = feat_text.split(",")
-            for pair in pairs:
-                if ":" not in pair:
-                    raise ValueError(f"Invalid format: {pair}")
-                feature, value = pair.split(":", 1)
-                feature = feature.strip()
-                value = value.strip()
-                if feature not in self.engine.features:
-                    raise ValueError(f"Unknown feature: {feature}")
-                if value not in ["+", "-", "0"]:
-                    raise ValueError(
-                        f"Invalid value: {value} (must be +, -, or 0)"
-                    )
-                bundle[feature] = value
 
-            segments = self.engine.find_segments(bundle)
+# ---------------------------------------------------------------------------
+# AnalysisPanel
+# ---------------------------------------------------------------------------
 
-            result = "<b>Feature specification:</b><br>"
-            for feature, value in sorted(bundle.items()):
-                result += f"&nbsp;&nbsp;{feature}: {value}<br>"
 
-            result += f"<br><b>Matching segments ({len(segments)}):</b><br>"
-            if segments:
-                result += "&nbsp;&nbsp;" + ", ".join(segments)
-            else:
-                result += "&nbsp;&nbsp;(none)"
+class AnalysisPanel(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(
+            f"background: {C['analysis_bg']};"
+            f" border-top: 1px solid {C['border']};"
+        )
 
-            self.feat2seg_result.setHtml(result)
-            self.classes_display.setHtml(
-                f"<b>Natural class analysis:</b><br>{result}"
-            )
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(8)
 
-        except Exception as e:
-            self.feat2seg_result.setText(f"Error: {str(e)}")
+        self.title = QLabel("Analysis")
+        self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
+        self.title.setStyleSheet(
+            f"color: {C['text_dim']}; letter-spacing: 1px;"
+        )
+
+        self.content = QTextEdit()
+        self.content.setReadOnly(True)
+        self.content.setFont(QFont("Noto Sans Mono", 10))
+        self.content.setStyleSheet(
+            f"""
+            QTextEdit {{
+                background: {C['panel']};
+                color: {C['text']};
+                border: 1px solid {C['border']};
+                border-radius: 6px;
+                padding: 8px;
+            }}
+        """
+        )
+        self.content.setFixedHeight(160)
+
+        layout.addWidget(self.title)
+        layout.addWidget(self.content)
+
+    def set_html(self, html: str):
+        self.content.setHtml(html)
+
+    def clear(self):
+        self.content.clear()
+
+
+# ---------------------------------------------------------------------------
+# MainWindow
+# ---------------------------------------------------------------------------
 
 
 class MainWindow(QMainWindow):
-    """Main application window."""
-
     def __init__(self):
         super().__init__()
-        self.engine = FeatureEngine()
-        self.init_ui()
+        self.engine: Optional[FeatureEngine] = None
+        self._mode = "seg_to_feat"  # 'seg_to_feat' | 'feat_to_seg'
+        self._seg_buttons: dict = {}  # segment → SegmentButton
+        self._feat_rows: dict = {}  # feature  → FeatureRow
+        self._selected_segments: list = []
+        self._selected_features: dict = {}  # feature → '+'/'-'
 
-    def init_ui(self):
-        self.setWindowTitle("Phonology Segment & Feature Engine")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setWindowTitle("Segment & Feature Engine")
+        self.setMinimumSize(900, 680)
+        self.setStyleSheet(f"background-color: {C['bg']};")
 
-        # Create tab widget
-        self.tabs = QTabWidget()
+        self._build_ui()
+        self._set_mode("seg_to_feat")
 
-        # Create panels
-        self.loader_panel = InventoryLoaderPanel(self.engine)
-        self.browser_panel = InventoryBrowserPanel(self.engine)
-        self.inspector_panel = SegmentInspectorPanel(self.engine)
-        self.natural_class_panel = NaturalClassFinderPanel(self.engine)
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
 
-        # Connect signals
-        self.loader_panel.inventory_loaded.connect(self.on_inventory_loaded)
-        self.browser_panel.segment_selected.connect(self.on_segment_selected)
+    def _build_ui(self):
+        # ── toolbar ──────────────────────────────────────────────────
+        toolbar = QToolBar()
+        toolbar.setMovable(False)
+        toolbar.setStyleSheet(
+            f"""
+            QToolBar {{
+                background: {C['panel']};
+                border-bottom: 1px solid {C['border']};
+                padding: 4px 8px;
+                spacing: 8px;
+            }}
+        """
+        )
+        self.addToolBar(toolbar)
 
-        # Add tabs
-        self.tabs.addTab(self.loader_panel, "Inventory Loader")
-        self.tabs.addTab(self.browser_panel, "Inventory Browser")
-        self.tabs.addTab(self.inspector_panel, "Segment Inspector")
-        self.tabs.addTab(self.natural_class_panel, "Natural Class Finder")
+        load_btn = QPushButton("  Load Config…")
+        load_btn.setFont(QFont("Noto Sans", 10))
+        load_btn.setFixedHeight(32)
+        load_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background: {C['accent']};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 0 14px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ background: #1D4ED8; }}
+        """
+        )
+        load_btn.clicked.connect(self._load_config)
+        toolbar.addWidget(load_btn)
 
-        self.setCentralWidget(self.tabs)
+        self.config_label = QLabel("  No config loaded")
+        self.config_label.setFont(QFont("Noto Sans", 9))
+        self.config_label.setStyleSheet(f"color: {C['text_dim']};")
+        toolbar.addWidget(self.config_label)
 
-        # Status bar
-        self.statusBar().showMessage("Ready. Load an inventory to begin.")
+        spacer = QWidget()
+        spacer.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        toolbar.addWidget(spacer)
 
-    def on_inventory_loaded(self):
-        """Handle inventory loaded event."""
-        self.browser_panel.update_table()
-        self.inspector_panel.update_segments()
+        mode_label = QLabel("Mode:")
+        mode_label.setFont(QFont("Noto Sans", 10))
+        mode_label.setStyleSheet(f"color: {C['text']};")
+        toolbar.addWidget(mode_label)
 
-        # Auto-populate sort combo with features
-        current_features = ["Segment (alphabetical)"] + self.engine.features
-        self.browser_panel.sort_combo.clear()
-        self.browser_panel.sort_combo.addItems(current_features)
+        self.seg_mode_btn = QPushButton("Segment → Features")
+        self.feat_mode_btn = QPushButton("Features → Segments")
+        for btn, mode in (
+            (self.seg_mode_btn, "seg_to_feat"),
+            (self.feat_mode_btn, "feat_to_seg"),
+        ):
+            btn.setCheckable(True)
+            btn.setFixedHeight(32)
+            btn.setFont(QFont("Noto Sans", 10))
+            btn.clicked.connect(lambda _, m=mode: self._set_mode(m))
+            toolbar.addWidget(btn)
 
-        self.statusBar().showMessage(
-            f"Loaded: {self.engine.metadata.get('name', 'Inventory')} "
-            f"({len(self.engine.segments)} segments, {len(self.engine.features)} features)"
+        # ── central widget ────────────────────────────────────────────
+        central = QWidget()
+        self.setCentralWidget(central)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setHandleWidth(1)
+        splitter.setStyleSheet(
+            f"QSplitter::handle {{ background: {C['border']}; }}"
         )
 
-    def on_segment_selected(self, segment):
-        """Handle segment selection from browser."""
-        self.tabs.setCurrentWidget(self.inspector_panel)
-        self.inspector_panel.select_segment(segment)
+        self.seg_panel = self._build_segment_panel()
+        splitter.addWidget(self.seg_panel)
+
+        self.feat_panel = self._build_feature_panel()
+        splitter.addWidget(self.feat_panel)
+
+        splitter.setSizes([420, 480])
+        root.addWidget(splitter, stretch=1)
+
+        # ── bottom: analysis ──────────────────────────────────────────
+        self.analysis = AnalysisPanel()
+        root.addWidget(self.analysis)
+
+        # ── status bar ────────────────────────────────────────────────
+        self.status = QStatusBar()
+        self.status.setStyleSheet(
+            f"background: {C['panel']}; border-top: 1px solid {C['border']};"
+        )
+        self.setStatusBar(self.status)
+        self.status.showMessage("Load a JSON config to begin.")
+
+    def _build_segment_panel(self) -> QWidget:
+        container = QWidget()
+        container.setStyleSheet(f"background: {C['panel']};")
+        vlay = QVBoxLayout(container)
+        vlay.setContentsMargins(14, 14, 14, 10)
+        vlay.setSpacing(10)
+
+        header = QHBoxLayout()
+        title = QLabel("SEGMENTS")
+        title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1.5px;")
+
+        self.clear_seg_btn = QPushButton("Clear")
+        self.clear_seg_btn.setFixedHeight(26)
+        self.clear_seg_btn.setFont(QFont("Noto Sans", 9))
+        self.clear_seg_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                color: {C['text_dim']};
+                background: transparent;
+                border: 1px solid {C['border']};
+                border-radius: 5px;
+                padding: 0 10px;
+            }}
+            QPushButton:hover {{
+                color: {C['text']};
+                background: {C['bg']};
+            }}
+        """
+        )
+        self.clear_seg_btn.clicked.connect(self._clear_segments)
+
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(self.clear_seg_btn)
+        vlay.addLayout(header)
+
+        self.seg_grid_widget = QWidget()
+        self.seg_grid = QGridLayout(self.seg_grid_widget)
+        self.seg_grid.setSpacing(6)
+        vlay.addWidget(self.seg_grid_widget)
+        vlay.addStretch()
+
+        self.seg_hint = QLabel("← Load a config to see segments")
+        self.seg_hint.setFont(QFont("Noto Sans", 9))
+        self.seg_hint.setStyleSheet(f"color: {C['text_dim']};")
+        self.seg_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        vlay.addWidget(self.seg_hint)
+
+        return container
+
+    def _build_feature_panel(self) -> QWidget:
+        container = QWidget()
+        container.setStyleSheet(f"background: {C['bg']};")
+        vlay = QVBoxLayout(container)
+        vlay.setContentsMargins(14, 14, 14, 10)
+        vlay.setSpacing(10)
+
+        header = QHBoxLayout()
+        title = QLabel("FEATURES")
+        title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1.5px;")
+
+        self.clear_feat_btn = QPushButton("Clear")
+        self.clear_feat_btn.setFixedHeight(26)
+        self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
+        self.clear_feat_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                color: {C['text_dim']};
+                background: transparent;
+                border: 1px solid {C['border']};
+                border-radius: 5px;
+                padding: 0 10px;
+            }}
+            QPushButton:hover {{
+                color: {C['text']};
+                background: {C['panel']};
+            }}
+        """
+        )
+        self.clear_feat_btn.clicked.connect(self._clear_features)
+
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(self.clear_feat_btn)
+        vlay.addLayout(header)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background: transparent;")
+
+        self.feat_list_widget = QWidget()
+        self.feat_list_widget.setStyleSheet("background: transparent;")
+        self.feat_list_layout = QVBoxLayout(self.feat_list_widget)
+        self.feat_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.feat_list_layout.setSpacing(3)
+        self.feat_list_layout.addStretch()
+
+        scroll.setWidget(self.feat_list_widget)
+        vlay.addWidget(scroll, stretch=1)
+
+        return container
+
+    # ------------------------------------------------------------------
+    # Config loading
+    # ------------------------------------------------------------------
+
+    def _load_config(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open Phonological Inventory", "", "JSON Files (*.json)"
+        )
+        if not path:
+            return
+        try:
+            engine = FeatureEngine()
+            engine.load_inventory(path)
+            self.engine = engine
+            name = engine.metadata.get("name", os.path.basename(path))
+            self.config_label.setText(f"  {os.path.basename(path)}  —  {name}")
+            self.status.showMessage(
+                f"Loaded {len(engine.segments)} segments,"
+                f" {len(engine.features)} features."
+            )
+            self._populate_segments()
+            self._populate_features()
+            self._set_mode(self._mode)
+            self.analysis.clear()
+        except Exception as e:
+            self.status.showMessage(f"Error loading config: {e}")
+
+    def _populate_segments(self):
+        assert self.engine is not None
+        while self.seg_grid.count():
+            item = self.seg_grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._seg_buttons.clear()
+        self._selected_segments.clear()
+        self.seg_hint.hide()
+
+        cols = 6
+        for i, seg in enumerate(self.engine.segments):
+            btn = SegmentButton(seg)
+            btn.clicked.connect(
+                lambda checked, s=seg: self._on_segment_clicked(s, checked)
+            )
+            self._seg_buttons[seg] = btn
+            self.seg_grid.addWidget(btn, i // cols, i % cols)
+
+    def _populate_features(self):
+        assert self.engine is not None
+        while self.feat_list_layout.count():
+            item = self.feat_list_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._feat_rows.clear()
+        self._selected_features.clear()
+
+        for feat in self.engine.features:
+            row = FeatureRow(feat)
+            row.value_changed.connect(self._on_feature_changed)
+            self._feat_rows[feat] = row
+
+            card = QFrame()
+            card.setStyleSheet(
+                f"""
+                QFrame {{
+                    background: {C['panel']};
+                    border: 1px solid {C['border']};
+                    border-radius: 7px;
+                }}
+            """
+            )
+            card_lay = QVBoxLayout(card)
+            card_lay.setContentsMargins(0, 0, 0, 0)
+            card_lay.addWidget(row)
+            self.feat_list_layout.addWidget(card)
+
+        self.feat_list_layout.addStretch()
+
+    # ------------------------------------------------------------------
+    # Mode management
+    # ------------------------------------------------------------------
+
+    def _set_mode(self, mode: str):
+        self._mode = mode
+        is_s2f = mode == "seg_to_feat"
+
+        self.seg_mode_btn.setChecked(is_s2f)
+        self.feat_mode_btn.setChecked(not is_s2f)
+
+        style_active = f"""
+            QPushButton {{
+                background: {C['accent']};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 0 14px;
+                font-weight: bold;
+            }}
+        """
+        style_inactive = f"""
+            QPushButton {{
+                background: {C['bg']};
+                color: {C['text']};
+                border: 1px solid {C['border']};
+                border-radius: 6px;
+                padding: 0 14px;
+            }}
+            QPushButton:hover {{ background: {C['accent_light']}; }}
+        """
+        self.seg_mode_btn.setStyleSheet(
+            style_active if is_s2f else style_inactive
+        )
+        self.feat_mode_btn.setStyleSheet(
+            style_inactive if is_s2f else style_active
+        )
+
+        for row in self._feat_rows.values():
+            row.set_interactive(not is_s2f)
+
+        self._clear_segments(silent=True)
+        self._clear_features(silent=True)
+        self.analysis.clear()
+
+        if is_s2f:
+            self.status.showMessage(
+                "Select one or more segments to inspect their features."
+            )
+        else:
+            self.status.showMessage(
+                "Select feature values (+/−) to find matching segments."
+            )
+
+    # ------------------------------------------------------------------
+    # Event handlers
+    # ------------------------------------------------------------------
+
+    def _on_segment_clicked(self, segment: str, checked: bool):
+        if self._mode != "seg_to_feat":
+            return
+        btn = self._seg_buttons[segment]
+        if checked:
+            btn.set_state("selected")
+            if segment not in self._selected_segments:
+                self._selected_segments.append(segment)
+        else:
+            btn.set_state("default")
+            if segment in self._selected_segments:
+                self._selected_segments.remove(segment)
+        self._update_seg_to_feat()
+
+    def _on_feature_changed(self, feature: str, value: str):
+        if self._mode != "feat_to_seg":
+            return
+        if value:
+            self._selected_features[feature] = value
+        else:
+            self._selected_features.pop(feature, None)
+        self._update_feat_to_seg()
+
+    # ------------------------------------------------------------------
+    # Seg → Feat logic
+    # ------------------------------------------------------------------
+
+    def _update_seg_to_feat(self):
+        segs = self._selected_segments
+        if not segs or not self.engine:
+            self._reset_feature_display()
+            self.analysis.clear()
+            return
+
+        if len(segs) == 1:
+            feats = self.engine.get_segment_features(segs[0])
+            for feat, row in self._feat_rows.items():
+                v = feats.get(feat, "0")
+                row.set_display("" if v == "0" else v, shared=True)
+            self._show_single_segment_analysis(segs[0], feats)
+        else:
+            common = self.engine.common_features(segs)
+            for feat, row in self._feat_rows.items():
+                if feat in common:
+                    row.set_display(common[feat], shared=True)
+                else:
+                    row.set_display("", shared=False)
+            self._show_multi_segment_analysis(segs, common)
+
+    def _show_single_segment_analysis(self, seg: str, feats: dict):
+        plus_feats = [f for f, v in feats.items() if v == "+"]
+        minus_feats = [f for f, v in feats.items() if v == "-"]
+
+        plus_tags = " ".join(self._tag(f"+{f}", "green") for f in plus_feats)
+        minus_tags = " ".join(
+            self._tag(f"\u2212{f}", "red") for f in minus_feats
+        )
+
+        html = (
+            f"<p><b style='color:{C['text']}'>/{seg}/</b>"
+            f" &nbsp;\u2014&nbsp; full feature bundle:</p>"
+            f"<p>{plus_tags}</p>"
+            f"<p>{minus_tags}</p>"
+        )
+        self.analysis.set_html(html)
+
+    def _show_multi_segment_analysis(self, segs: list, common: dict):
+        assert self.engine is not None
+        seg_tags = " ".join(self._tag(f"/{s}/", "blue") for s in segs)
+
+        if common:
+            c_tags = " ".join(
+                self._tag(f"{v}{f}", "green" if v == "+" else "red")
+                for f, v in common.items()
+            )
+            common_html = f"<p><b>Shared features:</b><br>{c_tags}</p>"
+        else:
+            common_html = (
+                f"<p><b>Shared features:</b>"
+                f" <i style='color:{C['text_dim']}'>none</i></p>"
+            )
+
+        is_nc, spec = self.engine.is_natural_class(segs)
+        if is_nc:
+            if spec:
+                spec_tags = " ".join(
+                    self._tag(f"{v}{f}", "green" if v == "+" else "red")
+                    for f, v in spec.items()
+                )
+            else:
+                spec_tags = self._tag(
+                    "\u2205 (universal \u2014 all segments)", "gray"
+                )
+            nc_html = (
+                "<p><b>Natural class:</b> \u2705 Yes</p>"
+                f"<p><b>Minimal specification:</b><br>{spec_tags}</p>"
+            )
+        else:
+            nc_html = (
+                "<p><b>Natural class:</b>"
+                f" <span style='color:{C['minus']}'>\u274c No \u2014"
+                " these segments cannot be uniquely picked out by any"
+                " feature bundle in this inventory.</span></p>"
+            )
+
+        html = (
+            f"<p><b>Selected:</b> {seg_tags}</p>" f"{common_html}" f"{nc_html}"
+        )
+        self.analysis.set_html(html)
+
+    # ------------------------------------------------------------------
+    # Feat → Seg logic
+    # ------------------------------------------------------------------
+
+    def _update_feat_to_seg(self):
+        if not self.engine:
+            return
+
+        selected_feats = self._selected_features
+        if not selected_feats:
+            for btn in self._seg_buttons.values():
+                btn.set_state("default")
+            self.analysis.clear()
+            return
+
+        matching = self.engine.find_segments(selected_feats)
+        matching_set = set(matching)
+
+        for seg, btn in self._seg_buttons.items():
+            btn.set_state("matched" if seg in matching_set else "unmatched")
+
+        self._show_feat_to_seg_analysis(selected_feats, matching)
+
+    def _show_feat_to_seg_analysis(self, feature_dict: dict, matching: list):
+        assert self.engine is not None
+        feat_tags = " ".join(
+            self._tag(f"{v}{f}", "green" if v == "+" else "red")
+            for f, v in feature_dict.items()
+        )
+
+        if matching:
+            seg_tags = " ".join(self._tag(f"/{s}/", "blue") for s in matching)
+            segs_html = (
+                f"<p><b>Matching segments ({len(matching)}):</b>"
+                f"<br>{seg_tags}</p>"
+            )
+        else:
+            segs_html = (
+                "<p><b>Matching segments:</b>"
+                f" <i style='color:{C['text_dim']}'>none \u2014 no segment"
+                " satisfies all selected features.</i></p>"
+            )
+
+        nc_html = ""
+        if matching:
+            is_nc, spec = self.engine.is_natural_class(matching)
+            if is_nc:
+                if spec:
+                    spec_tags = " ".join(
+                        self._tag(f"{v}{f}", "green" if v == "+" else "red")
+                        for f, v in spec.items()
+                    )
+                else:
+                    spec_tags = self._tag("\u2205 (universal class)", "gray")
+                nc_html = (
+                    "<p><b>Natural class:</b> \u2705 Yes</p>"
+                    f"<p><b>Minimal specification:</b><br>{spec_tags}</p>"
+                )
+                if set(spec.items()) != set(feature_dict.items()):
+                    nc_html += (
+                        f"<p><i style='color:{C['text_dim']}'>"
+                        "Your query contained redundant features.</i></p>"
+                    )
+            else:
+                nc_html = (
+                    "<p><b>Natural class:</b>"
+                    f" <span style='color:{C['minus']}'>\u274c No</span></p>"
+                )
+
+        html = f"<p><b>Query:</b> {feat_tags}</p>" f"{segs_html}" f"{nc_html}"
+        self.analysis.set_html(html)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _tag(self, text: str, colour: str) -> str:
+        """Render a coloured inline chip."""
+        palettes = {
+            "blue": (C["tag_blue"], C["tag_blue_text"]),
+            "green": (C["tag_green"], C["tag_green_text"]),
+            "red": (C["tag_red"], C["tag_red_text"]),
+            "gray": (C["tag_gray"], C["tag_gray_text"]),
+        }
+        bg, fg = palettes.get(colour, (C["tag_gray"], C["tag_gray_text"]))
+        return (
+            f"<span style='"
+            f"background:{bg}; color:{fg}; border-radius:4px;"
+            f" padding:2px 7px; margin:2px; font-family:monospace;"
+            f" font-size:10pt;'>{text}</span>"
+        )
+
+    def _reset_feature_display(self):
+        for row in self._feat_rows.values():
+            row.reset()
+
+    def _clear_segments(self, silent=False):
+        self._selected_segments.clear()
+        for btn in self._seg_buttons.values():
+            btn.set_state("default")
+            btn.setChecked(False)
+        self._reset_feature_display()
+        if not silent:
+            self.analysis.clear()
+
+    def _clear_features(self, silent=False):
+        self._selected_features.clear()
+        for row in self._feat_rows.values():
+            row.reset()
+        for btn in self._seg_buttons.values():
+            btn.set_state("default")
+        if not silent:
+            self.analysis.clear()

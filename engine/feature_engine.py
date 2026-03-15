@@ -250,6 +250,45 @@ class FeatureEngine:
         """
         return [f for f in self.features if self.is_contrastive(f)]
 
+    def common_features(self, segments: List[str]) -> Dict[str, str]:
+        """
+        Get features with a shared +/- value across all given segments.
+
+        Args:
+            segments: List of segment symbols
+
+        Returns:
+            Dict mapping feature names to their shared value ('+' or '-')
+        """
+        if not segments:
+            return {}
+        result = {}
+        for feature in self.features:
+            values = {self.segments[seg].get(feature, "0") for seg in segments}
+            if len(values) == 1:
+                v = values.pop()
+                if v != "0":
+                    result[feature] = v
+        return result
+
+    def is_natural_class(
+        self, segments: List[str]
+    ) -> Tuple[bool, Dict[str, str]]:
+        """
+        Check whether a set of segments forms a natural class.
+
+        Args:
+            segments: List of segment symbols
+
+        Returns:
+            Tuple of (is_natural_class, minimal_specification).
+            minimal_specification is populated only when True.
+        """
+        bundle, _ = self.compute_natural_class(segments)
+        found = set(self.find_segments(bundle))
+        is_nc = found == set(segments)
+        return is_nc, bundle if is_nc else {}
+
     def segment_distance(self, seg1: str, seg2: str) -> int:
         """
         Compute phonological distance between two segments.
