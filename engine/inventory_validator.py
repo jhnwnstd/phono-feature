@@ -194,6 +194,30 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
                     f"... and {len(inconsistent) - 3} more inconsistent segments"
                 )
 
+    # -- Duplicate segments: same specified (non-0) features and values --
+
+    sig_to_segs: dict = {}
+    for seg_name, seg_feats in segments.items():
+        if not isinstance(seg_feats, dict):
+            continue
+        # Signature = only the specified features (ignore "0" / underspecified)
+        sig = tuple(sorted(
+            (f, v) for f, v in seg_feats.items() if v != "0"
+        ))
+        sig_to_segs.setdefault(sig, []).append(seg_name)
+
+    dupes = {
+        tuple(names): names
+        for names in sig_to_segs.values()
+        if len(names) > 1
+    }
+    if dupes:
+        for names in dupes.values():
+            warnings.append(
+                f"Featurally identical segments (same specified features): "
+                f"{', '.join(names)}"
+            )
+
     # -- Feature naming convention --
     # Only place nodes (CORONAL, LABIAL, DORSAL) should be all-caps.
     # All other features should start with a capital letter (title case).
