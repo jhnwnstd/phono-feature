@@ -56,7 +56,10 @@ class FeatureEngine:
         return seg_val == spec_val or seg_val == "0"
 
     def _find_segments_unsorted(
-        self, feature_spec: Dict[str, str], *, underspec_compatible: bool = False
+        self,
+        feature_spec: Dict[str, str],
+        *,
+        underspec_compatible: bool = False,
     ) -> List[str]:
         """Match segments against a feature spec without sorting.
 
@@ -67,9 +70,11 @@ class FeatureEngine:
         matching = []
         for segment, features in self.segments.items():
             if all(
-                self._feat_match(features.get(f, "0"), v)
-                if underspec_compatible
-                else features.get(f, "0") == v
+                (
+                    self._feat_match(features.get(f, "0"), v)
+                    if underspec_compatible
+                    else features.get(f, "0") == v
+                )
                 for f, v in feature_spec.items()
             ):
                 matching.append(segment)
