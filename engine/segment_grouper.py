@@ -96,10 +96,10 @@ ALL_GROUPS: List[Tuple[str, Dict[str, str]]] = [
         "Semivowels",
         {"consonantal": "-", "syllabic": "-", "sonorant": "+"},
     ),
-    (
-        "Laryngeals",
-        {"consonantal": "-", "syllabic": "-", "sonorant": "-"},
-    ),
+    # Laryngeals is NOT a primary group — it is created as a fallback
+    # in Step 3c when placeless segments with spreadgl/constrgl need
+    # separation from Semivowels.  Segments like h/ɦ that are
+    # [-consonantal, -sonorant] go to fallback → Fricatives instead.
     ("Vowels", {"syllabic": "+"}),
 ]
 
@@ -274,7 +274,7 @@ def _ipa_place(feats: Dict[str, str]) -> int:
 # Main grouping function
 # ---------------------------------------------------------------------------
 
-_FROZEN_GROUPS: Set[str] = {"Plosives", "Laryngeals"}
+_FROZEN_GROUPS: Set[str] = {"Plosives"}
 
 
 def _should_merge_up(group_size: int, inventory_size: int) -> bool:
