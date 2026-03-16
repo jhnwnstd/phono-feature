@@ -12,10 +12,9 @@ The analyzer uses statistical methods to identify:
 - Confidence levels based on coverage and permutation testing
 """
 
+import random
 from collections import defaultdict
 from typing import Dict, List, Optional
-
-import random
 
 
 class GeometryNode:

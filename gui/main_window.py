@@ -45,39 +45,12 @@ from PyQt6.QtWidgets import (
 from engine.feature_engine import FeatureEngine
 from engine.inventory_validator import validate_inventory
 from engine.segment_grouper import group_segments
+from gui.palette import C
 
 # ---------------------------------------------------------------------------
-# Colour palette
+# Colour palette (defined in gui/palette.py, re-exported here)
 # ---------------------------------------------------------------------------
 
-C = {
-    "bg": "#F0F2F5",
-    "panel": "#FFFFFF",
-    "border": "#D0D5DD",
-    "accent": "#2563EB",
-    "accent_light": "#DBEAFE",
-    "seg_default": "#F8FAFC",
-    "seg_selected": "#2563EB",
-    "seg_matched": "#2563EB",
-    "seg_unmatched": "#E2E8F0",
-    "plus": "#15803D",
-    "plus_bg": "#DCFCE7",
-    "minus": "#B91C1C",
-    "minus_bg": "#FEE2E2",
-    "shared_plus": "#DCFCE7",
-    "shared_minus": "#FEE2E2",
-    "text": "#1E293B",
-    "text_dim": "#94A3B8",
-    "analysis_bg": "#F8FAFC",
-    "tag_blue": "#DBEAFE",
-    "tag_blue_text": "#1D4ED8",
-    "tag_green": "#DCFCE7",
-    "tag_green_text": "#15803D",
-    "tag_red": "#FEE2E2",
-    "tag_red_text": "#B91C1C",
-    "tag_gray": "#F1F5F9",
-    "tag_gray_text": "#64748B",
-}
 
 _SETTINGS_ORG = "features"
 _SETTINGS_APP = "SegFeatureEngine"
@@ -978,6 +951,28 @@ class MainWindow(QMainWindow):
         browse_btn.clicked.connect(self._browse_config)
         toolbar.addWidget(browse_btn)
 
+        builder_btn = QPushButton("Builder")
+        builder_btn.setFont(QFont("Noto Sans", 10))
+        builder_btn.setFixedHeight(32)
+        builder_btn.setStyleSheet(
+            f"""
+            QPushButton {{
+                background: {C["bg"]};
+                color: {C["text"]};
+                border: 1.5px solid {C["border"]};
+                border-radius: 6px;
+                padding: 0 12px;
+            }}
+            QPushButton:hover {{
+                background: {C["accent_light"]};
+                border: 1.5px solid {C["accent"]};
+                color: {C["accent"]};
+            }}
+        """
+        )
+        builder_btn.clicked.connect(self._open_builder)
+        toolbar.addWidget(builder_btn)
+
         # ── central widget ────────────────────────────────────────────
         central = QWidget()
         self.setCentralWidget(central)
@@ -999,8 +994,13 @@ class MainWindow(QMainWindow):
 
         # Match segment and feature content widths (including margins)
         _stride = _BTN_W + _BTN_GAP
-        _seg_w = (SegmentGridWidget.MAX_COLS * _stride
-                  + 12 + _VOWEL_LABEL_W + 6 * _stride + 28)
+        _seg_w = (
+            SegmentGridWidget.MAX_COLS * _stride
+            + 12
+            + _VOWEL_LABEL_W
+            + 6 * _stride
+            + 28
+        )
         splitter.setSizes([_seg_w + 30, 430])
         splitter.setStretchFactor(0, 1)  # segments take extra space
         splitter.setStretchFactor(1, 0)  # features stay fixed width
@@ -1010,7 +1010,9 @@ class MainWindow(QMainWindow):
 
         self._vsplit = QSplitter(Qt.Orientation.Vertical)
         self._vsplit.setHandleWidth(4)
-        self._vsplit.setStyleSheet("QSplitter::handle { background: transparent; }")
+        self._vsplit.setStyleSheet(
+            "QSplitter::handle { background: transparent; }"
+        )
         self._vsplit.addWidget(splitter)
         self._vsplit.addWidget(self.analysis)
         self._vsplit.setSizes([700, 220])
@@ -1269,12 +1271,17 @@ class MainWindow(QMainWindow):
         else:
             # Width: consonant grid at MAX_COLS + vowel chart + features
             _stride = _BTN_W + _BTN_GAP
-            _seg_w = (SegmentGridWidget.MAX_COLS * _stride
-                      + 12  # HBox spacing
-                      + _VOWEL_LABEL_W + 6 * _stride
-                      + 28)  # panel margins
+            _seg_w = (
+                SegmentGridWidget.MAX_COLS * _stride
+                + 12  # HBox spacing
+                + _VOWEL_LABEL_W
+                + 6 * _stride
+                + 28
+            )  # panel margins
             _feat_w = 430  # two feature columns + margins + buffer
-            _default_w = _seg_w + 30 + _feat_w + 1  # +30 seg breathing room, +1 splitter
+            _default_w = (
+                _seg_w + 30 + _feat_w + 1
+            )  # +30 seg breathing room, +1 splitter
             _default_h = 950  # fits tallest feature set + analysis
             if screen is not None:
                 avail = screen.availableGeometry()
@@ -1372,6 +1379,13 @@ class MainWindow(QMainWindow):
             idx = self.config_combo.count() - 1
         self.config_combo.setCurrentIndex(idx)
         self._load_path(path)
+
+    def _open_builder(self):
+        from gui.inventory_builder import InventoryBuilder
+
+        self._builder = InventoryBuilder(self)
+        self._builder.show()
+        self._builder._show_setup_dialog()
 
     def _load_path(self, path: str):
         """Core loading logic shared by dropdown, browse, and auto-reload."""
