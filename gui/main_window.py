@@ -182,10 +182,9 @@ _FEATURE_GROUPS: list = [
             "Low",
             "Back",
             "Front",
-            "Tense",
         ],
     ),
-    ("Pharyngeal / ATR", ["ConstrPharynx", "Pharyngeal", "ATR"]),
+    ("Tongue-Root / Pharyngeal", ["ConstrPharynx", "Pharyngeal", "ATR", "Tense"]),
     ("Prosodic", ["Long", "Stress", "Tone", "UpperRegister"]),
 ]
 
@@ -1370,7 +1369,7 @@ class MainWindow(QMainWindow):
                 f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"
                 + "".join(f"<p>{e}</p>" for e in errors)
                 + (
-                    f"<p><b>Warnings:</b></p>"
+                    "<p><b>Warnings:</b></p>"
                     + "".join(f"<p>{w}</p>" for w in warnings)
                     if warnings
                     else ""
