@@ -86,8 +86,8 @@ _TAG_PALETTES = {
 # Segment button geometry
 # ---------------------------------------------------------------------------
 
-_BTN_W = 40  # SegmentButton fixed width  (must match setFixedSize in __init__)
-_BTN_H = 32  # SegmentButton fixed height
+_BTN_W = 36  # SegmentButton fixed width  (must match setFixedSize in __init__)
+_BTN_H = 28  # SegmentButton fixed height
 _BTN_GAP = 4  # QGridLayout spacing
 
 # ---------------------------------------------------------------------------
@@ -261,8 +261,8 @@ class SegmentButton(QPushButton):
         super().__init__(segment, parent)
         self.segment = segment
         self.setCheckable(True)
-        self.setFixedSize(40, 32)
-        self.setFont(QFont("Noto Sans", 11))
+        self.setFixedSize(36, 28)
+        self.setFont(QFont("Noto Sans", 9))
         self._state = "default"
         self._apply_style()
 
@@ -1628,7 +1628,9 @@ class MainWindow(QMainWindow):
             is_nc, _ = self.engine.is_natural_class(segs)
             suggested: list = []
             if not is_nc and common:
-                nc_extension = self.engine.find_segments(common)
+                nc_extension = self.engine.find_segments(
+                    common, underspec_compatible=True
+                )
                 suggested = [s for s in nc_extension if s not in selected_set]
 
             suggested_set = set(suggested)
@@ -1643,6 +1645,7 @@ class MainWindow(QMainWindow):
             )
 
     def _show_single_segment_analysis(self, seg: str, feats: dict):
+        assert self.engine is not None
         plus_feats = _sort_features([f for f, v in feats.items() if v == "+"])
         minus_feats = _sort_features([f for f, v in feats.items() if v == "-"])
 
@@ -1657,6 +1660,20 @@ class MainWindow(QMainWindow):
             f"<p>{plus_tags}</p>"
             f"<p>{minus_tags}</p>"
         )
+
+        is_nc, specs = self.engine.is_natural_class([seg])
+        if not is_nc:
+            # Expand to equivalence class: all segments identical except
+            # for underspecified features (e.g. ŋ → {ŋ, ŋ+, ŋ˗}).
+            non_zero = {f: v for f, v in feats.items() if v != "0"}
+            equiv = self.engine.find_segments(
+                non_zero, underspec_compatible=True
+            )
+            if len(equiv) > 1:
+                is_nc, specs = self.engine.is_natural_class(equiv)
+        if is_nc and specs:
+            html += self._render_spec_list(specs)
+
         self.analysis.set_html(html)
 
     def _show_multi_segment_analysis(
@@ -1704,54 +1721,40 @@ class MainWindow(QMainWindow):
                 + "</p>"
             )
         else:
-            contrast_html = (
-                f"<p><b>Contrasting features:</b>"
-                f" <i style='color:{C['text_dim']}'>none \u2014 segments"
-                " are featurally identical</i></p>"
-            )
+            # Check if segments differ only in underspecification (0 vs +/-)
+            has_underspec_diff = False
+            for feat in self.engine.features:
+                vals = {self.engine.segments[s].get(feat, "0") for s in segs}
+                if len(vals) > 1 and "0" in vals:
+                    has_underspec_diff = True
+                    break
+            if has_underspec_diff:
+                contrast_html = (
+                    f"<p><b>Contrasting features:</b>"
+                    f" <i style='color:{C['text_dim']}'>none \u2014 segments"
+                    " differ only in underspecification</i></p>"
+                )
+            else:
+                contrast_html = (
+                    f"<p><b>Contrasting features:</b>"
+                    f" <i style='color:{C['text_dim']}'>none \u2014 segments"
+                    " are featurally identical</i></p>"
+                )
 
         is_nc, specs = self.engine.is_natural_class(segs)
+        spec_html = ""
         if is_nc:
+            nc_html = (
+                f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
+            )
             if not specs or not specs[0]:
-                # Universal class — no features needed
                 _univ = "\u2205 (universal \u2014 all segments)"
-                nc_html = (
-                    f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
+                spec_html = (
                     f"<p><b>Minimal specification:</b>"
                     f" {self._tag(_univ, 'gray')}</p>"
                 )
-            elif len(specs) == 1:
-                spec_tags = " ".join(
-                    self._tag(f"{v}{f}", "green" if v == "+" else "red")
-                    for f, v in _sort_spec(specs[0]).items()
-                    if v != "0"
-                )
-                nc_html = (
-                    f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
-                    f"<p><b>Minimal specification:</b><br>{spec_tags}</p>"
-                )
             else:
-                seen: set = set()
-                rows: list = []
-                for spec in specs:
-                    filtered = {f: v for f, v in _sort_spec(spec).items() if v != "0"}
-                    key = tuple(sorted(filtered.items()))
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    row_tags = " ".join(
-                        self._tag(f"{v}{f}", "green" if v == "+" else "red")
-                        for f, v in filtered.items()
-                    )
-                    rows.append(
-                        f"<span style='color:{C['text_dim']}'>{len(rows) + 1}.</span> {row_tags}"
-                    )
-                nc_html = (
-                    f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
-                    f"<p><b>Minimal specifications ({len(rows)}):</b><br>"
-                    + "<br>".join(rows)
-                    + "</p>"
-                )
+                spec_html = self._render_spec_list(specs)
         else:
             if suggested:
                 sug_tags = " ".join(
@@ -1772,7 +1775,7 @@ class MainWindow(QMainWindow):
                     " feature bundle in this inventory.</span></p>"
                 )
 
-        html = f"<p><b>Selected:</b> {seg_tags}</p>{common_html}{contrast_html}{nc_html}"
+        html = f"<p><b>Selected:</b> {seg_tags}</p>{common_html}{spec_html}{contrast_html}{nc_html}"
         self.analysis.set_html(html)
 
     # ------------------------------------------------------------------
@@ -1830,6 +1833,42 @@ class MainWindow(QMainWindow):
             f"background:{bg}; color:{fg}; border-radius:4px;"
             f" padding:2px 7px; margin:2px; font-family:monospace;"
             f" font-size:10pt;'>{text}</span>"
+        )
+
+    def _render_spec_list(self, specs: list) -> str:
+        """Render a deduplicated list of minimal specifications as HTML.
+
+        Underspecified features (value "0") are hidden from display;
+        specs that become identical after filtering are collapsed.
+        """
+        seen: set = set()
+        rows: list = []
+        for spec in specs:
+            filtered = {
+                f: v for f, v in _sort_spec(spec).items() if v != "0"
+            }
+            if not filtered:
+                continue
+            key = tuple(sorted(filtered.items()))
+            if key in seen:
+                continue
+            seen.add(key)
+            row_tags = " ".join(
+                self._tag(f"{v}{f}", "green" if v == "+" else "red")
+                for f, v in filtered.items()
+            )
+            rows.append(
+                f"<span style='color:{C['text_dim']}'>{len(rows) + 1}.</span> {row_tags}"
+            )
+        if not rows:
+            return ""
+        if len(rows) == 1:
+            content = rows[0].split("</span> ", 1)[1]
+            return f"<p><b>Minimal specification:</b><br>{content}</p>"
+        return (
+            f"<p><b>Minimal specifications ({len(rows)}):</b><br>"
+            + "<br>".join(rows)
+            + "</p>"
         )
 
     def _reset_feature_display(self):

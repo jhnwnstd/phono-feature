@@ -47,13 +47,31 @@ class FeatureEngine:
         if feature not in self.features:
             raise KeyError(f"Feature '{feature}' not found in inventory")
 
+    @staticmethod
+    def _feat_match(seg_val: str, spec_val: str) -> bool:
+        """True if a segment's feature value matches a spec value.
+
+        Underspecified ("0") in the segment is compatible with any spec.
+        """
+        return seg_val == spec_val or seg_val == "0"
+
     def _find_segments_unsorted(
-        self, feature_spec: Dict[str, str]
+        self, feature_spec: Dict[str, str], *, underspec_compatible: bool = False
     ) -> List[str]:
-        """Match segments against a feature spec without sorting (internal use)."""
+        """Match segments against a feature spec without sorting.
+
+        If underspec_compatible is True, underspecified ("0") in a segment
+        is treated as compatible with any spec value.  Used for natural
+        class analysis.  Default (False) requires exact value match.
+        """
         matching = []
         for segment, features in self.segments.items():
-            if all(features.get(f, "0") == v for f, v in feature_spec.items()):
+            if all(
+                self._feat_match(features.get(f, "0"), v)
+                if underspec_compatible
+                else features.get(f, "0") == v
+                for f, v in feature_spec.items()
+            ):
                 matching.append(segment)
         return matching
 
@@ -140,16 +158,23 @@ class FeatureEngine:
         self._validate_feature(feature)
         return self.segments[segment].get(feature, "0")
 
-    def find_segments(self, feature_spec: Dict[str, str]) -> List[str]:
+    def find_segments(
+        self,
+        feature_spec: Dict[str, str],
+        *,
+        underspec_compatible: bool = False,
+    ) -> List[str]:
         """
         Find all segments matching a feature specification.
 
         Partial specifications are supported — only the specified features
-        need to match. Querying feature="0" matches only segments that have
-        "0" (inapplicable) for that feature.
+        need to match.
 
         Args:
             feature_spec: Dictionary of feature:value pairs to match
+            underspec_compatible: If True, segments with "0" for a feature
+                are treated as compatible with any spec value.  Useful for
+                natural class analysis.
 
         Returns:
             Sorted list of segment symbols matching the specification
@@ -164,7 +189,11 @@ class FeatureEngine:
                 raise ValueError(
                     f"Invalid feature value '{value}' for '{feature}'"
                 )
-        return sorted(self._find_segments_unsorted(feature_spec))
+        return sorted(
+            self._find_segments_unsorted(
+                feature_spec, underspec_compatible=underspec_compatible
+            )
+        )
 
     def find_all_minimal_bundles(
         self, segments: List[str]
@@ -205,16 +234,16 @@ class FeatureEngine:
 
         segment_set = set(segments)
 
-        # Features whose value is identical across every target segment.
-        # Inapplicable features (value "0") are excluded — they produce
-        # specs that look identical after display filtering.
+        # Features whose non-zero values agree across every target segment.
+        # Underspecified ("0") is compatible with any value.
         candidates: Dict[str, str] = {}
         for feature in self.features:
             values = {self.segments[seg].get(feature, "0") for seg in segments}
-            if len(values) == 1:
-                val = values.pop()
-                if val != "0":
-                    candidates[feature] = val
+            specified = values - {"0"}
+            if len(specified) == 1:
+                candidates[feature] = specified.pop()
+            elif len(specified) == 0 and "0" in values:
+                pass  # all underspecified — not a useful candidate
 
         # Segments outside the target set that must be excluded
         outside = [s for s in self.segments if s not in segment_set]
@@ -224,12 +253,15 @@ class FeatureEngine:
             return [{}]
 
         # For each outside segment, which candidates exclude it?
+        # A candidate excludes an outside segment when the segment has a
+        # non-zero value that differs from the candidate value.
+        # If the outside segment is underspecified (0), it's compatible.
         excluders: List[Set[str]] = []
         for seg in outside:
             exc: Set[str] = {
                 feat
                 for feat, val in candidates.items()
-                if self.segments[seg].get(feat, "0") != val
+                if not self._feat_match(self.segments[seg].get(feat, "0"), val)
             }
             if not exc:
                 return (

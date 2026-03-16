@@ -177,8 +177,40 @@ def _normalize_feats(feat_dict: Dict[str, str]) -> Dict[str, str]:
 # IPA place ordering (left -> right on the IPA chart)
 # ---------------------------------------------------------------------------
 
-_VOICE_IDX: Dict[str, int] = {"-": 0, "+": 1, "0": 2}
-_FEAT_IDX: Dict[str, int] = {"-": 0, "+": 1, "0": 2}
+_VAL_ORD: Dict[str, int] = {"-": 0, "+": 1, "0": 2}
+
+# Feature-based sort order for segments within a group.
+# Tuple of (feature_name, value_ordering) pairs applied in sequence.
+# value_ordering maps feature values to sort indices.
+_SORT_KEYS: List[Tuple[str, Dict[str, int]]] = [
+    # 1. Place of articulation (handled by _ipa_place, prepended separately)
+    # 2. Manner sub-features within same place
+    ("lateral",    _VAL_ORD),          # non-lateral before lateral
+    ("strident",   _VAL_ORD),          # non-strident before strident
+    ("nasal",      _VAL_ORD),          # oral before nasal
+    ("continuant", _VAL_ORD),          # stops before fricatives
+    ("delrel",     _VAL_ORD),          # non-affricate before affricate
+    # 3. Laryngeal features: voiceless < voiced, plain < aspirated < ejective
+    ("voice",      {"-": 0, "+": 1, "0": 2}),
+    ("spreadgl",   _VAL_ORD),          # plain before aspirated
+    ("constrgl",   _VAL_ORD),          # plain before ejective
+    # 4. Secondary articulations
+    ("round",      _VAL_ORD),
+    ("front",      {"+": 0, "-": 1, "0": 2}),  # front before back
+    ("back",       _VAL_ORD),
+    ("high",       {"+": 0, "-": 1, "0": 2}),  # high before low
+    ("low",        _VAL_ORD),
+    ("tense",      _VAL_ORD),
+    ("long",       _VAL_ORD),
+]
+
+
+def _segment_sort_key(feats: Dict[str, str]) -> tuple:
+    """Full feature-based sort key for a segment."""
+    key: list = [_ipa_place(feats)]
+    for feat, ordering in _SORT_KEYS:
+        key.append(ordering.get(feats.get(feat, "0"), 2))
+    return tuple(key)
 
 
 def _ipa_place(feats: Dict[str, str]) -> int:
@@ -196,7 +228,11 @@ def _ipa_place(feats: Dict[str, str]) -> int:
         if hi == "-":
             return 8  # uvular
         if bk == "-":
-            return 6  # palatal
+            # True palatals (c, ɉ) have anterior:-;
+            # advanced velars (k+, ɡ+) have anterior:0.
+            if feats.get("anterior", "0") == "-":
+                return 6  # palatal
+            return 7  # advanced velar → groups with plain velars
         return 7  # velar
 
     cor = feats.get("coronal", "0")
@@ -407,17 +443,11 @@ def group_segments(
             if not assignment["Semivowels"]:
                 del assignment["Semivowels"]
 
-    # Step 4: Sort by display order and IPA place.
+    # Step 4: Sort by display order and feature-based key.
     return {
         name: sorted(
             assignment[name],
-            key=lambda s: (
-                _ipa_place(norm[s]),
-                _FEAT_IDX.get(norm[s].get("lateral", "0"), 2),
-                _FEAT_IDX.get(norm[s].get("strident", "0"), 2),
-                _VOICE_IDX.get(norm[s].get("voice", "0"), 2),
-                s,
-            ),
+            key=lambda s: _segment_sort_key(norm[s]),
         )
         for name in DISPLAY_ORDER
         if assignment.get(name)
