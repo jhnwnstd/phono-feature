@@ -1278,10 +1278,6 @@ class MainWindow(QMainWindow):
 
         # Determine which inventory to open
         path = startup_path or self._settings.value("last_inventory")
-        if not (path and isinstance(path, str) and os.path.isfile(path)):
-            # Fall back to the first inventory in the dropdown
-            if self.config_combo.count() > 1:
-                path = self.config_combo.itemData(1)
         if path and isinstance(path, str) and os.path.isfile(path):
             idx = self.config_combo.findData(path)
             if idx >= 0:
@@ -1708,22 +1704,15 @@ class MainWindow(QMainWindow):
             row.set_panel_active(not is_s2f)
             row.set_interactive(not is_s2f)
 
-        _clear_active = (
+        _clear_style = (
             f"color: {C['text']}; background: transparent;"
             f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;"
         )
-        _clear_inactive = (
-            f"color: {C['text_dim']}; background: transparent;"
-            f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;"
-        )
-        self.clear_seg_btn.setStyleSheet(
-            f"QPushButton {{ {_clear_active if is_s2f else _clear_inactive} }}"
-            f" QPushButton:hover {{ color: {C['text']}; background: {C['bg']}; }}"
-        )
-        self.clear_feat_btn.setStyleSheet(
-            f"QPushButton {{ {_clear_active if not is_s2f else _clear_inactive} }}"
-            f" QPushButton:hover {{ color: {C['text']}; background: {C['panel']}; }}"
-        )
+        for btn in (self.clear_seg_btn, self.clear_feat_btn):
+            btn.setStyleSheet(
+                f"QPushButton {{ {_clear_style} }}"
+                f" QPushButton:hover {{ color: {C['text']}; background: {C['bg']}; }}"
+            )
 
         self._clear_segments(silent=True)
         self._clear_features(silent=True)
