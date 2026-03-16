@@ -3381,7 +3381,7 @@
       "High": "-",
       "Low": "-",
       "Back": "-",
-      "ATR": "-",
+      "ATR": "0",
       "Click": "-",
       "Pharyngeal": "-"
     },
@@ -3553,7 +3553,7 @@
       "Distributed": "0",
       "DORSAL": "+",
       "High": "-",
-      "Low": "+",
+      "Low": "-",
       "Back": "-",
       "ATR": "-",
       "Click": "-",
