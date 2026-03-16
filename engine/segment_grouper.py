@@ -137,9 +137,20 @@ _RELABEL_PATTERNS: Dict[FrozenSet[str], str] = {
     frozenset({"Taps & Flaps", "Central Approximants"}): "Rhotics",
     frozenset({"Trills", "Taps & Flaps", "Central Approximants"}): "Rhotics",
     frozenset({"Lateral Approximants", "Central Approximants"}): "Liquids",
-    frozenset({"Lateral Approximants", "Central Approximants", "Trills"}): "Liquids",
-    frozenset({"Lateral Approximants", "Central Approximants", "Taps & Flaps"}): "Liquids",
-    frozenset({"Lateral Approximants", "Central Approximants", "Trills", "Taps & Flaps"}): "Liquids",
+    frozenset(
+        {"Lateral Approximants", "Central Approximants", "Trills"}
+    ): "Liquids",
+    frozenset(
+        {"Lateral Approximants", "Central Approximants", "Taps & Flaps"}
+    ): "Liquids",
+    frozenset(
+        {
+            "Lateral Approximants",
+            "Central Approximants",
+            "Trills",
+            "Taps & Flaps",
+        }
+    ): "Liquids",
     frozenset({"Lateral Approximants", "Trills", "Taps & Flaps"}): "Liquids",
     frozenset({"Lateral Approximants", "Taps & Flaps"}): "Liquids",
     frozenset({"Lateral Approximants", "Trills"}): "Liquids",
@@ -185,23 +196,25 @@ _VAL_ORD: Dict[str, int] = {"-": 0, "+": 1, "0": 2}
 _SORT_KEYS: List[Tuple[str, Dict[str, int]]] = [
     # 1. Place of articulation (handled by _ipa_place, prepended separately)
     # 2. Manner sub-features within same place
-    ("lateral",    _VAL_ORD),          # non-lateral before lateral
-    ("strident",   _VAL_ORD),          # non-strident before strident
-    ("nasal",      _VAL_ORD),          # oral before nasal
-    ("continuant", _VAL_ORD),          # stops before fricatives
-    ("delrel",     _VAL_ORD),          # non-affricate before affricate
-    # 3. Laryngeal features: voiceless < voiced, plain < aspirated < ejective
-    ("voice",      {"-": 0, "+": 1, "0": 2}),
-    ("spreadgl",   _VAL_ORD),          # plain before aspirated
-    ("constrgl",   _VAL_ORD),          # plain before ejective
-    # 4. Secondary articulations
-    ("round",      _VAL_ORD),
-    ("front",      {"+": 0, "-": 1, "0": 2}),  # front before back
-    ("back",       _VAL_ORD),
-    ("high",       {"+": 0, "-": 1, "0": 2}),  # high before low
-    ("low",        _VAL_ORD),
-    ("tense",      _VAL_ORD),
-    ("long",       _VAL_ORD),
+    ("lateral", _VAL_ORD),  # non-lateral before lateral
+    ("strident", _VAL_ORD),  # non-strident before strident
+    ("nasal", _VAL_ORD),  # oral before nasal
+    ("continuant", _VAL_ORD),  # stops before fricatives
+    ("delrel", _VAL_ORD),  # non-affricate before affricate
+    # 3. Sub-place refinement: keeps fronted/retracted/plain variants together
+    ("front", {"+": 0, "-": 1, "0": 2}),
+    ("back", _VAL_ORD),
+    ("labial", _VAL_ORD),  # plain before labial-coarticulated (k before k͡p)
+    # 4. Laryngeal: voicing pairs adjacent at each sub-place
+    ("voice", {"-": 0, "+": 1, "0": 2}),
+    ("spreadgl", _VAL_ORD),  # plain before aspirated
+    ("constrgl", _VAL_ORD),  # plain before ejective
+    # 5. Secondary articulations
+    ("round", _VAL_ORD),
+    ("high", {"+": 0, "-": 1, "0": 2}),
+    ("low", _VAL_ORD),
+    ("tense", _VAL_ORD),
+    ("long", _VAL_ORD),
 ]
 
 
@@ -218,7 +231,10 @@ def _ipa_place(feats: Dict[str, str]) -> int:
     if feats.get("constrgl", "0") == "+":
         return 10  # glottal
 
-    if feats.get("constrpharynx", "0") == "+" or feats.get("pharyngeal", "0") == "+":
+    if (
+        feats.get("constrpharynx", "0") == "+"
+        or feats.get("pharyngeal", "0") == "+"
+    ):
         return 9  # pharyngeal
 
     dor = feats.get("dorsal", "0")
@@ -247,7 +263,10 @@ def _ipa_place(feats: Dict[str, str]) -> int:
     if lab == "+":
         return 1 if feats.get("labiodental", "0") == "+" else 0
 
-    if feats.get("consonantal", "0") == "-" and feats.get("syllabic", "0") == "-":
+    if (
+        feats.get("consonantal", "0") == "-"
+        and feats.get("syllabic", "0") == "-"
+    ):
         return 10  # h, ɦ
 
     return 11  # vowels / unclassified
@@ -370,10 +389,13 @@ def group_segments(
             for sym in list(assignment[gname]):
                 chain = chains.get(sym, [])
                 parent = next(
-                    (c for c in chain
-                     if c != gname
-                     and c in assignment
-                     and c not in _FROZEN_GROUPS),
+                    (
+                        c
+                        for c in chain
+                        if c != gname
+                        and c in assignment
+                        and c not in _FROZEN_GROUPS
+                    ),
                     None,
                 )
                 if parent is not None:
@@ -388,7 +410,10 @@ def group_segments(
         present = [g for g in origin_set if g in assignment]
         if len(present) < 2:
             continue
-        if any(not _should_merge_up(len(assignment[g]), len(inventory)) for g in present):
+        if any(
+            not _should_merge_up(len(assignment[g]), len(inventory))
+            for g in present
+        ):
             continue
         if any(g in _FROZEN_GROUPS for g in present):
             continue
@@ -400,8 +425,8 @@ def group_segments(
     # Step 3: Relabel groups whose origin set matches a known class.
     for gname in list(assignment.keys()):
         origin_set = frozenset(initial_group[sym] for sym in assignment[gname])
-        new_label = _RELABEL_PATTERNS.get(origin_set)
-        if new_label and new_label != gname:
+        new_label: str | None = _RELABEL_PATTERNS.get(origin_set)
+        if new_label is not None and new_label != gname:
             assignment[new_label] = assignment.pop(gname)
 
     # Step 3b: Merge derived groups that belong together.
@@ -429,7 +454,8 @@ def group_segments(
     _PLACE_FEATURES = {"labial", "coronal", "dorsal"}
     if "Semivowels" in assignment and _LARYNGEAL_FEATURES & active_features:
         laryngeal_segs = [
-            sym for sym in assignment["Semivowels"]
+            sym
+            for sym in assignment["Semivowels"]
             if any(norm[sym].get(f, "0") == "+" for f in _LARYNGEAL_FEATURES)
             and not any(norm[sym].get(f, "0") == "+" for f in _PLACE_FEATURES)
         ]

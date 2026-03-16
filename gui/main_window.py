@@ -15,7 +15,13 @@ from PyQt6.QtCore import (
     QTimer,
     pyqtSignal,
 )
-from PyQt6.QtGui import QCursor, QFont, QGuiApplication, QScreen, QStandardItemModel
+from PyQt6.QtGui import (
+    QCursor,
+    QFont,
+    QGuiApplication,
+    QScreen,
+    QStandardItemModel,
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -1744,9 +1750,7 @@ class MainWindow(QMainWindow):
         is_nc, specs = self.engine.is_natural_class(segs)
         spec_html = ""
         if is_nc:
-            nc_html = (
-                f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
-            )
+            nc_html = f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
             if not specs or not specs[0]:
                 _univ = "\u2205 (universal \u2014 all segments)"
                 spec_html = (
@@ -1775,7 +1779,7 @@ class MainWindow(QMainWindow):
                     " feature bundle in this inventory.</span></p>"
                 )
 
-        html = f"<p><b>Selected:</b> {seg_tags}</p>{common_html}{spec_html}{contrast_html}{nc_html}"
+        html = f"<p><b>Selected:</b> {seg_tags}</p>{nc_html}{common_html}{spec_html}{contrast_html}"
         self.analysis.set_html(html)
 
     # ------------------------------------------------------------------
@@ -1844,9 +1848,7 @@ class MainWindow(QMainWindow):
         seen: set = set()
         rows: list = []
         for spec in specs:
-            filtered = {
-                f: v for f, v in _sort_spec(spec).items() if v != "0"
-            }
+            filtered = {f: v for f, v in _sort_spec(spec).items() if v != "0"}
             if not filtered:
                 continue
             key = tuple(sorted(filtered.items()))
