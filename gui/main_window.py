@@ -716,6 +716,125 @@ class SegmentGridWidget(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# VowelChartWidget — IPA-style vowel trapezoid
+# ---------------------------------------------------------------------------
+
+_VOWEL_HEIGHT: list = [
+    ("Close",      "+", "-", "+"),
+    ("Near-close", "+", "-", "-"),
+    ("Close-mid",  "-", "-", "+"),
+    ("Open-mid",   "-", "-", "-"),
+    ("Open",       "-", "+", None),
+]
+
+
+def _vowel_grid_pos(feats: dict) -> tuple:
+    """Return (row, col) for a vowel in the IPA chart grid.
+
+    Columns: 0=front-unround, 1=front-round, 2=central-unround,
+             3=central-round, 4=back-unround, 5=back-round.
+    """
+    hi = feats.get("high", "0")
+    lo = feats.get("low", "0")
+    tn = feats.get("tense", "0") or feats.get("atr", "0")
+    fr = feats.get("front", "0") or feats.get("coronal", "0")
+    bk = feats.get("back", "0")
+    rn = feats.get("round", "0")
+
+    row = 3
+    for i, (_, h, l, t) in enumerate(_VOWEL_HEIGHT):
+        if hi == h and lo == l and (t is None or tn == t):
+            row = i
+            break
+
+    if fr == "+":
+        col = 0 if rn != "+" else 1
+    elif bk == "+":
+        col = 4 if rn != "+" else 5
+    else:
+        col = 2 if rn != "+" else 3
+
+    return row, col
+
+
+class VowelChartWidget(QWidget):
+    """Displays vowels in an IPA-style grid: height x backness x rounding."""
+
+    _COL_HEADERS = ["Front", "Central", "Back"]
+    _ROW_HEADERS = [label for label, *_ in _VOWEL_HEIGHT]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._buttons: dict = {}
+        self._grid = QGridLayout(self)
+        self._grid.setSpacing(_BTN_GAP)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+
+    def clear(self):
+        """Remove all buttons and labels."""
+        while self._grid.count():
+            self._grid.takeAt(0)
+        for btn in self._buttons.values():
+            btn.deleteLater()
+        self._buttons.clear()
+        for child in self.findChildren(QLabel):
+            child.deleteLater()
+
+    def set_vowels(self, segs: list, buttons: dict, norm_feats: dict):
+        """Lay out vowel buttons in the IPA chart grid."""
+        self.clear()
+        self._buttons = buttons
+
+        hdr_style = (
+            f"color: {C['text_dim']}; letter-spacing: 1px;"
+            " padding: 2px 2px 0 2px;"
+        )
+        hdr_font = QFont("Noto Sans", 8, QFont.Weight.Bold)
+
+        title = QLabel("VOWELS")
+        title.setFont(hdr_font)
+        title.setStyleSheet(hdr_style)
+        self._grid.addWidget(title, 0, 0, 1, 7)
+
+        for ci, label in enumerate(self._COL_HEADERS):
+            lbl = QLabel(label)
+            lbl.setFont(QFont("Noto Sans", 7))
+            lbl.setStyleSheet(f"color: {C['text_dim']};")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._grid.addWidget(lbl, 1, 1 + ci * 2, 1, 2)
+
+        occupied: dict = {}
+        for seg in segs:
+            feats = norm_feats.get(seg, {})
+            r, c = _vowel_grid_pos(feats)
+            occupied.setdefault((r, c), []).append(seg)
+
+        grid_row = 2
+        for ri, label in enumerate(self._ROW_HEADERS):
+            if not any((ri, c) in occupied for c in range(6)):
+                continue
+            lbl = QLabel(label)
+            lbl.setFont(QFont("Noto Sans", 7))
+            lbl.setStyleSheet(f"color: {C['text_dim']}; padding-right: 4px;")
+            lbl.setAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+            max_stack = max(
+                (len(occupied.get((ri, c), [])) for c in range(6)), default=1
+            )
+            self._grid.addWidget(lbl, grid_row, 0, max_stack, 1)
+
+            for ci in range(6):
+                for si, seg in enumerate(occupied.get((ri, ci), [])):
+                    btn = self._buttons.get(seg)
+                    if btn:
+                        btn.show()
+                        self._grid.addWidget(btn, grid_row + si, 1 + ci)
+
+            grid_row += max(1, max_stack)
+
+
+# ---------------------------------------------------------------------------
 # MainWindow
 # ---------------------------------------------------------------------------
 
@@ -944,8 +1063,21 @@ class MainWindow(QMainWindow):
             "QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE
         )
 
+        seg_content = QWidget()
+        seg_content.setStyleSheet("background: transparent;")
+        seg_content_layout = QVBoxLayout(seg_content)
+        seg_content_layout.setContentsMargins(0, 0, 0, 0)
+        seg_content_layout.setSpacing(4)
+
         self.seg_grid_widget = SegmentGridWidget()
-        self._seg_scroll.setWidget(self.seg_grid_widget)
+        seg_content_layout.addWidget(self.seg_grid_widget)
+
+        self.vowel_chart_widget = VowelChartWidget()
+        self.vowel_chart_widget.hide()
+        seg_content_layout.addWidget(self.vowel_chart_widget)
+
+        seg_content_layout.addStretch()
+        self._seg_scroll.setWidget(seg_content)
         vp = self._seg_scroll.viewport()
         assert vp is not None
         vp.setStyleSheet("background: transparent;")
@@ -1280,19 +1412,45 @@ class MainWindow(QMainWindow):
         self.seg_hint.hide()
 
         groups = group_segments(self.engine.segments)
+        vowel_segs = groups.pop("Vowels", [])
 
-        # Build fresh button dict — set_groups owns deletion of previous ones
-        new_buttons: dict = {}
+        # Build consonant buttons
+        consonant_buttons: dict = {}
         for segs in groups.values():
             for seg in segs:
                 btn = SegmentButton(seg)
                 btn.clicked.connect(
                     lambda checked, s=seg: self._on_segment_clicked(s, checked)
                 )
-                new_buttons[seg] = btn
+                consonant_buttons[seg] = btn
 
-        self.seg_grid_widget.set_groups(groups, new_buttons)
-        self._seg_buttons = new_buttons
+        self.seg_grid_widget.set_groups(groups, consonant_buttons)
+
+        # Build vowel buttons separately (vowel chart owns these)
+        vowel_buttons: dict = {}
+        if vowel_segs:
+            from engine.segment_grouper import _normalize_feats
+
+            for seg in vowel_segs:
+                btn = SegmentButton(seg)
+                btn.clicked.connect(
+                    lambda checked, s=seg: self._on_segment_clicked(s, checked)
+                )
+                vowel_buttons[seg] = btn
+
+            norm_feats = {
+                seg: _normalize_feats(self.engine.segments[seg])
+                for seg in vowel_segs
+            }
+            self.vowel_chart_widget.set_vowels(
+                vowel_segs, vowel_buttons, norm_feats
+            )
+            self.vowel_chart_widget.show()
+        else:
+            self.vowel_chart_widget.clear()
+            self.vowel_chart_widget.hide()
+
+        self._seg_buttons = {**consonant_buttons, **vowel_buttons}
 
     def _build_feature_group(
         self, title: str, features: list
