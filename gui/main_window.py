@@ -1359,6 +1359,7 @@ class MainWindow(QMainWindow):
 
     def _load_path(self, path: str):
         """Core loading logic shared by dropdown, browse, and auto-reload."""
+        path = os.path.abspath(path)
         # Validate before loading — catches malformed JSON, bad values, etc.
         errors, warnings = validate_inventory(path)
         if errors:
@@ -1403,6 +1404,11 @@ class MainWindow(QMainWindow):
             parent_dir = os.path.dirname(os.path.abspath(path))
             if parent_dir not in self._watcher.directories():
                 self._watcher.addPath(parent_dir)
+
+            # Sync the dropdown to reflect the loaded inventory
+            idx = self.config_combo.findData(path)
+            if idx >= 0:
+                self.config_combo.setCurrentIndex(idx)
 
             # Persist for next launch
             self._settings.setValue("last_inventory", path)
