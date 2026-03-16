@@ -184,7 +184,10 @@ _FEATURE_GROUPS: list = [
             "Front",
         ],
     ),
-    ("Tongue-Root / Pharyngeal", ["ConstrPharynx", "Pharyngeal", "ATR", "Tense"]),
+    (
+        "Tongue-Root / Pharyngeal",
+        ["ConstrPharynx", "Pharyngeal", "ATR", "Tense"],
+    ),
     ("Prosodic", ["Long", "Stress", "Tone", "UpperRegister"]),
 ]
 
