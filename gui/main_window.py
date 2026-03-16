@@ -92,9 +92,10 @@ _TAG_PALETTES = {
 # Segment button geometry
 # ---------------------------------------------------------------------------
 
-_BTN_W = 36  # SegmentButton fixed width  (must match setFixedSize in __init__)
-_BTN_H = 28  # SegmentButton fixed height
+_BTN_W = 33  # SegmentButton fixed width  (must match setFixedSize in __init__)
+_BTN_H = 26  # SegmentButton fixed height
 _BTN_GAP = 4  # QGridLayout spacing
+_VOWEL_LABEL_W = 72  # px — fits "Near-close" at 7pt with padding
 
 # ---------------------------------------------------------------------------
 # Canonical feature display order (linguistically motivated hierarchy)
@@ -263,90 +264,75 @@ _SCROLLBAR_STYLE = f"""
 class SegmentButton(QPushButton):
     """Toggleable button for a single phonological segment."""
 
+    # Pre-computed stylesheets — avoids f-string interpolation on every state change
+    _STYLES: dict = {
+        "selected": f"""
+            QPushButton {{
+                background-color: {C["seg_selected"]};
+                color: #FFFFFF;
+                border: 2px solid #1D4ED8;
+                border-radius: 8px;
+                font-weight: bold;
+            }}
+        """,
+        "matched": f"""
+            QPushButton {{
+                background-color: {C["seg_matched"]};
+                color: #FFFFFF;
+                border: 2px solid #1D4ED8;
+                border-radius: 8px;
+                font-weight: bold;
+            }}
+        """,
+        "unmatched": f"""
+            QPushButton {{
+                background-color: {C["seg_unmatched"]};
+                color: {C["text_dim"]};
+                border: 1px solid {C["border"]};
+                border-radius: 8px;
+            }}
+        """,
+        "suggested": f"""
+            QPushButton {{
+                background-color: {C["accent_light"]};
+                color: {C["accent"]};
+                border: 1.5px dashed {C["accent"]};
+                border-radius: 8px;
+            }}
+        """,
+        "default": f"""
+            QPushButton {{
+                background-color: {C["seg_default"]};
+                color: {C["text"]};
+                border: 1.5px solid {C["border"]};
+                border-radius: 8px;
+            }}
+            QPushButton:hover {{
+                background-color: {C["accent_light"]};
+                border: 1.5px solid {C["accent"]};
+            }}
+            QPushButton:checked {{
+                background-color: {C["seg_selected"]};
+                color: white;
+                border: 2px solid #1D4ED8;
+                font-weight: bold;
+            }}
+        """,
+    }
+
     def __init__(self, segment: str, parent=None):
         super().__init__(segment, parent)
         self.segment = segment
         self.setCheckable(True)
-        self.setFixedSize(36, 28)
+        self.setFixedSize(33, 26)
         self.setFont(QFont("Noto Sans", 9))
         self._state = "default"
-        self._apply_style()
+        self.setStyleSheet(self._STYLES["default"])
 
     def set_state(self, state: str):
-        """state: 'default' | 'selected' | 'matched' | 'unmatched' | 'suggested'"""
         if self._state != state:
             self._state = state
-            self._apply_style()
-
-    def _apply_style(self):
-        s = self._state
-        if s == "selected":
-            self.setStyleSheet(
-                f"""
-                QPushButton {{
-                    background-color: {C["seg_selected"]};
-                    color: #FFFFFF;
-                    border: 2px solid #1D4ED8;
-                    border-radius: 8px;
-                    font-weight: bold;
-                }}
-            """
-            )
-        elif s == "matched":
-            self.setStyleSheet(
-                f"""
-                QPushButton {{
-                    background-color: {C["seg_matched"]};
-                    color: #FFFFFF;
-                    border: 2px solid #1D4ED8;
-                    border-radius: 8px;
-                    font-weight: bold;
-                }}
-            """
-            )
-        elif s == "unmatched":
-            self.setStyleSheet(
-                f"""
-                QPushButton {{
-                    background-color: {C["seg_unmatched"]};
-                    color: {C["text_dim"]};
-                    border: 1px solid {C["border"]};
-                    border-radius: 8px;
-                }}
-            """
-            )
-        elif s == "suggested":
-            self.setStyleSheet(
-                f"""
-                QPushButton {{
-                    background-color: {C["accent_light"]};
-                    color: {C["accent"]};
-                    border: 1.5px dashed {C["accent"]};
-                    border-radius: 8px;
-                }}
-            """
-            )
-        else:
-            self.setStyleSheet(
-                f"""
-                QPushButton {{
-                    background-color: {C["seg_default"]};
-                    color: {C["text"]};
-                    border: 1.5px solid {C["border"]};
-                    border-radius: 8px;
-                }}
-                QPushButton:hover {{
-                    background-color: {C["accent_light"]};
-                    border: 1.5px solid {C["accent"]};
-                }}
-                QPushButton:checked {{
-                    background-color: {C["seg_selected"]};
-                    color: white;
-                    border: 2px solid #1D4ED8;
-                    font-weight: bold;
-                }}
-            """
-            )
+            self.setStyleSheet(self._STYLES[state])
 
 
 # ---------------------------------------------------------------------------
@@ -457,7 +443,6 @@ class FeatureRow(QWidget):
         self.plus_btn.setVisible(yes)
         self.minus_btn.setVisible(yes)
         self.badge.setVisible(not yes)
-        self.reset()
 
     def set_display(self, value: str, shared: bool, contrastive: bool = False):
         """
@@ -517,19 +502,24 @@ class FeatureRow(QWidget):
     def set_panel_active(self, active: bool):
         self._panel_active = active
 
+    _BADGE_NEUTRAL = (
+        f"background: {C['tag_gray']};"
+        f" color: {C['tag_gray_text']}; border-radius: 4px;"
+    )
+    _ROW_NEUTRAL = "background: transparent; border-radius: 6px;"
+    _NAME_ACTIVE = f"color: {C['text']};"
+    _NAME_INACTIVE = f"color: {C['text_dim']};"
+
     def reset(self):
         self._current_value = ""
         self.plus_btn.setChecked(False)
         self.minus_btn.setChecked(False)
-        # Neutral dot badge (visible in display mode, hidden in interactive)
         self.badge.setText("\u00b7")
-        self.badge.setStyleSheet(
-            f"background: {C['tag_gray']};"
-            f" color: {C['tag_gray_text']}; border-radius: 4px;"
+        self.badge.setStyleSheet(self._BADGE_NEUTRAL)
+        self.name_label.setStyleSheet(
+            self._NAME_ACTIVE if self._panel_active else self._NAME_INACTIVE
         )
-        name_color = C["text"] if self._panel_active else C["text_dim"]
-        self.name_label.setStyleSheet(f"color: {name_color};")
-        self.setStyleSheet("background: transparent; border-radius: 6px;")
+        self.setStyleSheet(self._ROW_NEUTRAL)
 
     @property
     def current_value(self) -> str:
@@ -619,6 +609,10 @@ class SegmentGridWidget(QWidget):
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
         )
 
+        # Allow the widget to shrink freely — prevents feedback loop where
+        # grid content sets a minimum width that blocks resize.
+        self.setMinimumWidth(0)
+
         # Debounce resize events so we don't thrash the layout during drags
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
@@ -674,17 +668,19 @@ class SegmentGridWidget(QWidget):
         super().resizeEvent(event)
         self._resize_timer.start()
 
+    MAX_COLS = 12
+
     def _compute_n_cols(self) -> int:
         stride = _BTN_W + _BTN_GAP
-        max_possible = max(1, (self.width() + _BTN_GAP) // stride)
+        max_possible = min(
+            max(1, (self.width() + _BTN_GAP) // stride), self.MAX_COLS
+        )
         if not self._groups:
             return max_possible
         max_N = max(len(segs) for segs in self._groups.values())
         if max_N <= max_possible:
-            # Single row for every group — use exactly as many cols as needed
             return max_N
-        # Even 2-row split for the widest group, bounded by available width
-        return min(max_possible, math.ceil(max_N / 2))
+        return max_possible
 
     def _do_relayout(self):
         n_cols = self._compute_n_cols()
@@ -736,8 +732,8 @@ def _vowel_grid_pos(feats: dict) -> tuple:
     """
     hi = feats.get("high", "0")
     lo = feats.get("low", "0")
-    tn = feats.get("tense", "0") or feats.get("atr", "0")
-    fr = feats.get("front", "0") or feats.get("coronal", "0")
+    tn = feats.get("tense") or feats.get("atr") or "0"
+    fr = feats.get("front") or feats.get("coronal") or "0"
     bk = feats.get("back", "0")
     rn = feats.get("round", "0")
 
@@ -766,9 +762,21 @@ class VowelChartWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._buttons: dict = {}
+        self._header_labels: list = []
         self._grid = QGridLayout(self)
         self._grid.setSpacing(_BTN_GAP)
-        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setContentsMargins(0, 0, 8, 0)
+
+    _HDR_ACTIVE = f"color: {C['text']};"
+    _HDR_INACTIVE = f"color: {C['text_dim']};"
+    _ROW_ACTIVE = f"color: {C['text']}; padding-right: 4px;"
+    _ROW_INACTIVE = f"color: {C['text_dim']}; padding-right: 4px;"
+
+    def set_headers_active(self, active: bool):
+        hdr = self._HDR_ACTIVE if active else self._HDR_INACTIVE
+        row = self._ROW_ACTIVE if active else self._ROW_INACTIVE
+        for lbl, is_row in self._header_labels:
+            lbl.setStyleSheet(row if is_row else hdr)
 
     def clear(self):
         """Remove all buttons and labels."""
@@ -777,24 +785,25 @@ class VowelChartWidget(QWidget):
         for btn in self._buttons.values():
             btn.deleteLater()
         self._buttons.clear()
-        for child in self.findChildren(QLabel):
-            child.deleteLater()
+        for lbl, _ in self._header_labels:
+            lbl.deleteLater()
+        self._header_labels.clear()
 
     def set_vowels(self, segs: list, buttons: dict, norm_feats: dict):
         """Lay out vowel buttons in the IPA chart grid."""
         self.clear()
         self._buttons = buttons
 
-        hdr_style = (
-            f"color: {C['text_dim']}; letter-spacing: 1px;"
-            " padding: 2px 2px 0 2px;"
-        )
         hdr_font = QFont("Noto Sans", 8, QFont.Weight.Bold)
 
         title = QLabel("VOWELS")
         title.setFont(hdr_font)
-        title.setStyleSheet(hdr_style)
+        title.setStyleSheet(
+            f"color: {C['text_dim']}; letter-spacing: 1px;"
+            " padding: 2px 2px 0 2px;"
+        )
         self._grid.addWidget(title, 0, 0, 1, 7)
+        self._header_labels.append((title, False))
 
         for ci, label in enumerate(self._COL_HEADERS):
             lbl = QLabel(label)
@@ -802,6 +811,7 @@ class VowelChartWidget(QWidget):
             lbl.setStyleSheet(f"color: {C['text_dim']};")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._grid.addWidget(lbl, 1, 1 + ci * 2, 1, 2)
+            self._header_labels.append((lbl, False))
 
         occupied: dict = {}
         for seg in segs:
@@ -819,10 +829,12 @@ class VowelChartWidget(QWidget):
             lbl.setAlignment(
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
+            lbl.setMinimumWidth(_VOWEL_LABEL_W - 4)
             max_stack = max(
                 (len(occupied.get((ri, c), [])) for c in range(6)), default=1
             )
             self._grid.addWidget(lbl, grid_row, 0, max_stack, 1)
+            self._header_labels.append((lbl, True))
 
             for ci in range(6):
                 for si, seg in enumerate(occupied.get((ri, ci), [])):
@@ -982,7 +994,7 @@ class MainWindow(QMainWindow):
         self.feat_panel = self._build_feature_panel()
         splitter.addWidget(self.feat_panel)
 
-        splitter.setSizes([500, 420])
+        splitter.setSizes([630, 370])
 
         # ── bottom: analysis ──────────────────────────────────────────
         self.analysis = AnalysisPanel()
@@ -1054,7 +1066,7 @@ class MainWindow(QMainWindow):
         self._seg_scroll.setWidgetResizable(True)
         self._seg_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._seg_scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
         self._seg_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
@@ -1065,18 +1077,30 @@ class MainWindow(QMainWindow):
 
         seg_content = QWidget()
         seg_content.setStyleSheet("background: transparent;")
-        seg_content_layout = QVBoxLayout(seg_content)
-        seg_content_layout.setContentsMargins(0, 0, 0, 0)
-        seg_content_layout.setSpacing(4)
 
+        seg_content_layout = QHBoxLayout(seg_content)
+        seg_content_layout.setContentsMargins(0, 0, 0, 0)
+        seg_content_layout.setSpacing(12)
+
+        left_wrap = QWidget()
+        left_wrap.setStyleSheet("background: transparent;")
+        left_lay = QVBoxLayout(left_wrap)
+        left_lay.setContentsMargins(0, 0, 0, 0)
+        left_lay.setSpacing(0)
         self.seg_grid_widget = SegmentGridWidget()
-        seg_content_layout.addWidget(self.seg_grid_widget)
+        left_lay.addWidget(self.seg_grid_widget)
+        left_lay.addStretch()
 
         self.vowel_chart_widget = VowelChartWidget()
         self.vowel_chart_widget.hide()
-        seg_content_layout.addWidget(self.vowel_chart_widget)
+        self.vowel_chart_widget.setFixedWidth(_VOWEL_LABEL_W + 6 * (_BTN_W + _BTN_GAP))
 
-        seg_content_layout.addStretch()
+        seg_content_layout.addWidget(left_wrap, stretch=1)
+        seg_content_layout.addWidget(
+            self.vowel_chart_widget, stretch=0,
+            alignment=Qt.AlignmentFlag.AlignTop,
+        )
+
         self._seg_scroll.setWidget(seg_content)
         vp = self._seg_scroll.viewport()
         assert vp is not None
@@ -1248,6 +1272,10 @@ class MainWindow(QMainWindow):
 
         # Determine which inventory to open
         path = startup_path or self._settings.value("last_inventory")
+        if not (path and isinstance(path, str) and os.path.isfile(path)):
+            # Fall back to the first inventory in the dropdown
+            if self.config_combo.count() > 1:
+                path = self.config_combo.itemData(1)
         if path and isinstance(path, str) and os.path.isfile(path):
             idx = self.config_combo.findData(path)
             if idx >= 0:
@@ -1361,7 +1389,7 @@ class MainWindow(QMainWindow):
             self._saved_feat_state = {}
             self._populate_segments()
             self._populate_features()
-            self._set_mode(self._mode)
+            self._apply_mode_to_new_widgets()
             self.analysis.clear()
         except Exception as e:
             self.status.showMessage(f"Error: {e}")
@@ -1411,7 +1439,18 @@ class MainWindow(QMainWindow):
         self._selected_segments.clear()
         self.seg_hint.hide()
 
-        groups = group_segments(self.engine.segments)
+        # Cache grouping on the engine so auto-reload skips recomputation
+        if not hasattr(self.engine, "_cached_groups"):
+            from engine.segment_grouper import _normalize_feats
+
+            self.engine._cached_groups = group_segments(self.engine.segments)
+            self.engine._cached_norm_feats = {
+                seg: _normalize_feats(self.engine.segments[seg])
+                for seg in self.engine.segments
+            }
+
+        groups = dict(self.engine._cached_groups)  # shallow copy — pop mutates
+        norm_feats = self.engine._cached_norm_feats
         vowel_segs = groups.pop("Vowels", [])
 
         # Build consonant buttons
@@ -1429,8 +1468,6 @@ class MainWindow(QMainWindow):
         # Build vowel buttons separately (vowel chart owns these)
         vowel_buttons: dict = {}
         if vowel_segs:
-            from engine.segment_grouper import _normalize_feats
-
             for seg in vowel_segs:
                 btn = SegmentButton(seg)
                 btn.clicked.connect(
@@ -1438,10 +1475,6 @@ class MainWindow(QMainWindow):
                 )
                 vowel_buttons[seg] = btn
 
-            norm_feats = {
-                seg: _normalize_feats(self.engine.segments[seg])
-                for seg in vowel_segs
-            }
             self.vowel_chart_widget.set_vowels(
                 vowel_segs, vowel_buttons, norm_feats
             )
@@ -1489,6 +1522,21 @@ class MainWindow(QMainWindow):
     def _populate_features(self):
         assert self.engine is not None
 
+        active_feature_set = {
+            f
+            for f in self.engine.features
+            if any(
+                seg.get(f, "0") != "0" for seg in self.engine.segments.values()
+            )
+        }
+
+        # Skip full rebuild if the feature set hasn't changed
+        if active_feature_set == set(self._feat_rows.keys()):
+            self._selected_features.clear()
+            for row in self._feat_rows.values():
+                row.reset()
+            return
+
         # Clear both columns
         for layout in (self._feat_left_layout, self._feat_right_layout):
             while layout.count():
@@ -1500,14 +1548,6 @@ class MainWindow(QMainWindow):
 
         self._feat_rows.clear()
         self._selected_features.clear()
-
-        active_feature_set = {
-            f
-            for f in self.engine.features
-            if any(
-                seg.get(f, "0") != "0" for seg in self.engine.segments.values()
-            )
-        }
 
         # Build all FeatureRow widgets first so _build_feature_group can find them
         for feat in active_feature_set:
@@ -1553,6 +1593,21 @@ class MainWindow(QMainWindow):
     # Mode management
     # ------------------------------------------------------------------
 
+    def _apply_mode_to_new_widgets(self):
+        """After populating new widgets, apply the current mode's interactivity.
+
+        Skips expensive panel-level stylesheet changes since those haven't
+        changed — only the newly created feature rows and buttons need updating.
+        """
+        is_s2f = self._mode == "seg_to_feat"
+        self.seg_grid_widget.set_headers_active(is_s2f)
+        self.vowel_chart_widget.set_headers_active(is_s2f)
+        for row in self._feat_rows.values():
+            row.set_panel_active(not is_s2f)
+            row.set_interactive(not is_s2f)
+        self._clear_segments(silent=True)
+        self._clear_features(silent=True)
+
     def _set_mode(self, mode: str):
         if mode != self._mode:
             if self._mode == "seg_to_feat":
@@ -1585,7 +1640,6 @@ class MainWindow(QMainWindow):
         seg_bg = C["panel"] if is_s2f else C["bg"]
         feat_bg = C["panel"] if not is_s2f else C["bg"]
 
-        # Paint scroll viewport and content widget explicitly so no grey bleeds through
         seg_vp = self._seg_scroll.viewport()
         feat_vp = self._feat_scroll.viewport()
         assert seg_vp is not None and feat_vp is not None
@@ -1620,6 +1674,7 @@ class MainWindow(QMainWindow):
             f"color: {C['text'] if not is_s2f else C['text_dim']}; letter-spacing: 1.5px;"
         )
         self.seg_grid_widget.set_headers_active(is_s2f)
+        self.vowel_chart_widget.set_headers_active(is_s2f)
 
         for row in self._feat_rows.values():
             row.set_panel_active(not is_s2f)
@@ -1678,11 +1733,7 @@ class MainWindow(QMainWindow):
 
     def eventFilter(self, a0, a1):
         """Activate a panel on any mouse press anywhere inside it."""
-        if (
-            a1 is not None
-            and hasattr(a1, "type")
-            and a1.type() == QEvent.Type.MouseButtonPress
-        ):
+        if a1 is not None and a1.type() == QEvent.Type.MouseButtonPress:
             w = a0
             while w is not None:
                 if w is self.seg_panel:
@@ -1694,7 +1745,7 @@ class MainWindow(QMainWindow):
                         self._set_mode("feat_to_seg")
                     break
                 w = w.parent()
-        return False  # never consume the event
+        return False
 
     # ------------------------------------------------------------------
     # Event handlers  (state changes are immediate; analysis is debounced)
@@ -2042,8 +2093,9 @@ class MainWindow(QMainWindow):
     def _clear_segments(self, silent=False):
         self._selected_segments.clear()
         for btn in self._seg_buttons.values():
-            btn.set_state("default")
-            btn.setChecked(False)
+            if btn._state != "default":
+                btn.set_state("default")
+                btn.setChecked(False)
         self._reset_feature_display()
         if not silent:
             self._saved_seg_state = []
@@ -2053,9 +2105,11 @@ class MainWindow(QMainWindow):
     def _clear_features(self, silent=False):
         self._selected_features.clear()
         for row in self._feat_rows.values():
-            row.reset()
+            if row._current_value:
+                row.reset()
         for btn in self._seg_buttons.values():
-            btn.set_state("default")
+            if btn._state != "default":
+                btn.set_state("default")
         if not silent:
             self._saved_seg_state = []
             self._saved_feat_state = {}
