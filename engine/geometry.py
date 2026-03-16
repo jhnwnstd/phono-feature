@@ -15,7 +15,7 @@ The analyzer uses statistical methods to identify:
 from collections import defaultdict
 from typing import Dict, List, Optional
 
-import numpy as np
+import random
 
 
 class GeometryNode:
@@ -90,7 +90,7 @@ class GeometryAnalyzer:
             {}
         )  # feature -> {parent, coverage, p_value, confidence}
         self.geometry_tree = None
-        self._rng = np.random.RandomState(42)
+        self._rng = random.Random(42)
 
     def analyze(self) -> GeometryNode:
         """
