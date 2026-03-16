@@ -40,12 +40,16 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        errors.append(f"Invalid JSON: {e.msg} (line {e.lineno}, col {e.colno})")
+        errors.append(
+            f"Invalid JSON: {e.msg} (line {e.lineno}, col {e.colno})"
+        )
         return errors, warnings
 
     if not isinstance(data, dict):
-        errors.append("Top-level JSON value must be an object, not "
-                       f"{type(data).__name__}")
+        errors.append(
+            "Top-level JSON value must be an object, not "
+            f"{type(data).__name__}"
+        )
         return errors, warnings
 
     # -- Required keys --
@@ -159,7 +163,11 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
 
     seg_names = list(segments.keys())
     if seg_names:
-        first_feats = set(segments[seg_names[0]].keys()) if isinstance(segments[seg_names[0]], dict) else set()
+        first_feats = (
+            set(segments[seg_names[0]].keys())
+            if isinstance(segments[seg_names[0]], dict)
+            else set()
+        )
         inconsistent = []
         for seg_name in seg_names[1:]:
             seg_feats = segments[seg_name]
@@ -209,6 +217,8 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
 
     name = data.get("name")
     if name is not None and not isinstance(name, str):
-        warnings.append(f"'name' should be a string, got {type(name).__name__}")
+        warnings.append(
+            f"'name' should be a string, got {type(name).__name__}"
+        )
 
     return errors, warnings
