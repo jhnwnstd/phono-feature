@@ -201,18 +201,11 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
         if not isinstance(seg_feats, dict):
             continue
         # Signature = only the specified features (ignore "0" / underspecified)
-        sig = tuple(sorted(
-            (f, v) for f, v in seg_feats.items() if v != "0"
-        ))
+        sig = tuple(sorted((f, v) for f, v in seg_feats.items() if v != "0"))
         sig_to_segs.setdefault(sig, []).append(seg_name)
 
-    dupes = {
-        tuple(names): names
-        for names in sig_to_segs.values()
-        if len(names) > 1
-    }
-    if dupes:
-        for names in dupes.values():
+    for names in sig_to_segs.values():
+        if len(names) > 1:
             warnings.append(
                 f"Featurally identical segments (same specified features): "
                 f"{', '.join(names)}"
