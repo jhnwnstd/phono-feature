@@ -1002,16 +1002,17 @@ class MainWindow(QMainWindow):
         # ── bottom: analysis ──────────────────────────────────────────
         self.analysis = AnalysisPanel()
 
-        vsplit = QSplitter(Qt.Orientation.Vertical)
-        vsplit.setHandleWidth(4)
-        vsplit.setStyleSheet("QSplitter::handle { background: transparent; }")
-        vsplit.addWidget(splitter)
-        vsplit.addWidget(self.analysis)
-        vsplit.setSizes([700, 220])
-        vsplit.setStretchFactor(0, 1)
-        vsplit.setStretchFactor(1, 0)
+        self._vsplit = QSplitter(Qt.Orientation.Vertical)
+        self._vsplit.setHandleWidth(4)
+        self._vsplit.setStyleSheet("QSplitter::handle { background: transparent; }")
+        self._vsplit.addWidget(splitter)
+        self._vsplit.addWidget(self.analysis)
+        self._vsplit.setSizes([700, 220])
+        self._vsplit.setStretchFactor(0, 1)
+        self._vsplit.setStretchFactor(1, 0)
+        self._min_analysis_h = 220
 
-        root.addWidget(vsplit)
+        root.addWidget(self._vsplit)
 
         # ── status bar ────────────────────────────────────────────────
         self.status = QStatusBar()
@@ -1419,6 +1420,7 @@ class MainWindow(QMainWindow):
             self._populate_features()
             self._apply_mode_to_new_widgets()
             self.analysis.clear()
+            QTimer.singleShot(0, self._rebalance_vsplit)
         except Exception as e:
             self.status.showMessage(f"Error: {e}")
 
@@ -1622,6 +1624,33 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Mode management
     # ------------------------------------------------------------------
+
+    def _rebalance_vsplit(self) -> None:
+        """Give the analysis panel as much height as possible without causing
+        the segment or feature panels to need scrolling.  Never shrinks the
+        analysis below ``_min_analysis_h``.
+        """
+        QApplication.processEvents()
+        total = self._vsplit.height()
+        if total <= 0:
+            return
+
+        # Content height the top panel actually needs (max of seg and feat)
+        seg_content = self._seg_scroll.widget()
+        feat_content = self._feat_scroll.widget()
+        seg_h = seg_content.sizeHint().height() if seg_content else 0
+        feat_h = feat_content.sizeHint().height() if feat_content else 0
+        # Add panel chrome (header, margins, padding)
+        chrome = 80
+        needed = max(seg_h, feat_h) + chrome
+
+        analysis_h = max(self._min_analysis_h, total - needed)
+        top_h = total - analysis_h
+        if top_h < 200:
+            top_h = 200
+            analysis_h = total - top_h
+
+        self._vsplit.setSizes([top_h, analysis_h])
 
     def _apply_mode_to_new_widgets(self):
         """After populating new widgets, apply the current mode's interactivity.
