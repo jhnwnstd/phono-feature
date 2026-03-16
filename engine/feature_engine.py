@@ -209,7 +209,7 @@ class FeatureEngine:
         """
         Find every minimal feature bundle that uniquely characterizes a segment set.
 
-        A bundle B characterizes S when find_segments(B) == S exactly.
+        A bundle B characterizes S when find_segments(B, underspec_compatible=True) == S.
         This method returns ALL bundles of the smallest possible size,
         not just one greedy solution.
 

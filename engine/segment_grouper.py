@@ -194,6 +194,7 @@ _VAL_ORD: Dict[str, int] = {"-": 0, "+": 1, "0": 2}
 _SORT_KEYS: List[Tuple[str, Dict[str, int]]] = [
     # 1. Place of articulation (handled by _ipa_place, prepended separately)
     # 2. Manner sub-features within same place
+    ("sonorant", _VAL_ORD),  # obstruents before sonorants
     ("lateral", _VAL_ORD),  # non-lateral before lateral
     ("strident", _VAL_ORD),  # non-strident before strident
     ("nasal", _VAL_ORD),  # oral before nasal

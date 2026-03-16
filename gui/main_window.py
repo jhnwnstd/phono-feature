@@ -997,7 +997,13 @@ class MainWindow(QMainWindow):
         self.feat_panel = self._build_feature_panel()
         splitter.addWidget(self.feat_panel)
 
-        splitter.setSizes([630, 370])
+        # Match segment and feature content widths (including margins)
+        _stride = _BTN_W + _BTN_GAP
+        _seg_w = (SegmentGridWidget.MAX_COLS * _stride
+                  + 12 + _VOWEL_LABEL_W + 6 * _stride + 28)
+        splitter.setSizes([_seg_w + 30, 430])
+        splitter.setStretchFactor(0, 1)  # segments take extra space
+        splitter.setStretchFactor(1, 0)  # features stay fixed width
 
         # ── bottom: analysis ──────────────────────────────────────────
         self.analysis = AnalysisPanel()
@@ -1261,14 +1267,23 @@ class MainWindow(QMainWindow):
         if size is not None:
             self.resize(size)
         else:
+            # Width: consonant grid at MAX_COLS + vowel chart + features
+            _stride = _BTN_W + _BTN_GAP
+            _seg_w = (SegmentGridWidget.MAX_COLS * _stride
+                      + 12  # HBox spacing
+                      + _VOWEL_LABEL_W + 6 * _stride
+                      + 28)  # panel margins
+            _feat_w = 430  # two feature columns + margins + buffer
+            _default_w = _seg_w + 30 + _feat_w + 1  # +30 seg breathing room, +1 splitter
+            _default_h = 950  # fits tallest feature set + analysis
             if screen is not None:
                 avail = screen.availableGeometry()
                 self.resize(
-                    min(1100, max(900, avail.width() - 40)),
-                    min(940, max(680, avail.height() - 40)),
+                    min(_default_w, max(900, avail.width() - 40)),
+                    min(_default_h, max(680, avail.height() - 40)),
                 )
             else:
-                self.resize(1100, 940)
+                self.resize(_default_w, _default_h)
 
         if pos is not None:
             self.move(pos)
@@ -1626,29 +1641,26 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _rebalance_vsplit(self) -> None:
-        """Give the analysis panel as much height as possible without causing
-        the segment or feature panels to need scrolling.  Never shrinks the
-        analysis below ``_min_analysis_h``.
+        """Size the top panel so segments/features don't need scrollbars.
+
+        Priority: avoid scrollbars in the content panels.  The analysis
+        panel gets whatever vertical space remains, down to a hard floor
+        of ``_min_analysis_h``.
         """
         QApplication.processEvents()
         total = self._vsplit.height()
         if total <= 0:
             return
 
-        # Content height the top panel actually needs (max of seg and feat)
-        seg_content = self._seg_scroll.widget()
         feat_content = self._feat_scroll.widget()
-        seg_h = seg_content.sizeHint().height() if seg_content else 0
         feat_h = feat_content.sizeHint().height() if feat_content else 0
-        # Add panel chrome (header, margins, padding)
         chrome = 80
-        needed = max(seg_h, feat_h) + chrome
+        needed = feat_h + chrome
 
-        analysis_h = max(self._min_analysis_h, total - needed)
-        top_h = total - analysis_h
-        if top_h < 200:
-            top_h = 200
-            analysis_h = total - top_h
+        # Give the top panel what it needs; analysis gets the rest.
+        top_h = min(needed, total - self._min_analysis_h)
+        top_h = max(top_h, 200)
+        analysis_h = total - top_h
 
         self._vsplit.setSizes([top_h, analysis_h])
 
