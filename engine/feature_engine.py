@@ -67,16 +67,19 @@ class FeatureEngine:
         is treated as compatible with any spec value.  Used for natural
         class analysis.  Default (False) requires exact value match.
         """
+        match = self._feat_match if underspec_compatible else None
         matching = []
         for segment, features in self.segments.items():
-            if all(
-                (
-                    self._feat_match(features.get(f, "0"), v)
-                    if underspec_compatible
-                    else features.get(f, "0") == v
+            if match is not None:
+                ok = all(
+                    match(features.get(f, "0"), v)
+                    for f, v in feature_spec.items()
                 )
-                for f, v in feature_spec.items()
-            ):
+            else:
+                ok = all(
+                    features.get(f, "0") == v for f, v in feature_spec.items()
+                )
+            if ok:
                 matching.append(segment)
         return matching
 
@@ -366,12 +369,14 @@ class FeatureEngine:
             KeyError: If feature not in inventory
         """
         self._validate_feature(feature)
-        values = {
-            seg.get(feature, "0")
-            for seg in self.segments.values()
-            if seg.get(feature, "0") != "0"
-        }
-        return len(values) > 1
+        values = set()
+        for seg in self.segments.values():
+            v = seg.get(feature, "0")
+            if v != "0":
+                values.add(v)
+                if len(values) > 1:
+                    return True
+        return False
 
     def get_contrastive_features(self) -> List[str]:
         """

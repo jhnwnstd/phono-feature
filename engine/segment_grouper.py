@@ -103,8 +103,6 @@ ALL_GROUPS: List[Tuple[str, Dict[str, str]]] = [
     ("Vowels", {"syllabic": "+"}),
 ]
 
-SPEC: Dict[str, Dict[str, str]] = {name: spec for name, spec in ALL_GROUPS}
-
 # Display order: least sonorous -> most sonorous.
 DISPLAY_ORDER: List[str] = [
     "Clicks",

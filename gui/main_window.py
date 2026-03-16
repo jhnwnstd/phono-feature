@@ -43,6 +43,7 @@ from PyQt6.QtWidgets import (
 )
 
 from engine.feature_engine import FeatureEngine
+from engine.inventory_validator import validate_inventory
 from engine.segment_grouper import group_segments
 
 # ---------------------------------------------------------------------------
@@ -716,11 +717,11 @@ class SegmentGridWidget(QWidget):
 # ---------------------------------------------------------------------------
 
 _VOWEL_HEIGHT: list = [
-    ("Close",      "+", "-", "+"),
+    ("Close", "+", "-", "+"),
     ("Near-close", "+", "-", "-"),
-    ("Close-mid",  "-", "-", "+"),
-    ("Open-mid",   "-", "-", "-"),
-    ("Open",       "-", "+", None),
+    ("Close-mid", "-", "-", "+"),
+    ("Open-mid", "-", "-", "-"),
+    ("Open", "-", "+", None),
 ]
 
 
@@ -867,7 +868,7 @@ class MainWindow(QMainWindow):
         self._current_path: Optional[str] = None
         self._did_first_show = False
 
-        self.setWindowTitle("Segment & Feature Engine")
+        self.setWindowTitle("Language Doodad")
         self.setMinimumSize(900, 680)
         self.setStyleSheet(f"background-color: {C['bg']};")
 
@@ -1093,11 +1094,14 @@ class MainWindow(QMainWindow):
 
         self.vowel_chart_widget = VowelChartWidget()
         self.vowel_chart_widget.hide()
-        self.vowel_chart_widget.setFixedWidth(_VOWEL_LABEL_W + 6 * (_BTN_W + _BTN_GAP))
+        self.vowel_chart_widget.setFixedWidth(
+            _VOWEL_LABEL_W + 6 * (_BTN_W + _BTN_GAP)
+        )
 
         seg_content_layout.addWidget(left_wrap, stretch=1)
         seg_content_layout.addWidget(
-            self.vowel_chart_widget, stretch=0,
+            self.vowel_chart_widget,
+            stretch=0,
             alignment=Qt.AlignmentFlag.AlignTop,
         )
 
@@ -1357,6 +1361,26 @@ class MainWindow(QMainWindow):
 
     def _load_path(self, path: str):
         """Core loading logic shared by dropdown, browse, and auto-reload."""
+        # Validate before loading — catches malformed JSON, bad values, etc.
+        errors, warnings = validate_inventory(path)
+        if errors:
+            msg = f"Cannot load {os.path.basename(path)}: {errors[0]}"
+            self.status.showMessage(msg)
+            self.analysis.set_html(
+                f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"
+                + "".join(f"<p>{e}</p>" for e in errors)
+                + (
+                    f"<p><b>Warnings:</b></p>"
+                    + "".join(f"<p>{w}</p>" for w in warnings)
+                    if warnings
+                    else ""
+                )
+            )
+            return
+        if warnings:
+            for w in warnings:
+                self.status.showMessage(f"Warning: {w}")
+
         try:
             engine = FeatureEngine()
             engine.load_inventory(path)
@@ -1572,7 +1596,9 @@ class MainWindow(QMainWindow):
         for title, feats_list in all_groups:
             card = self._build_feature_group(title, feats_list)
             if card is not None:
-                active_count = sum(1 for f in feats_list if f in self._feat_rows)
+                active_count = sum(
+                    1 for f in feats_list if f in self._feat_rows
+                )
                 cards.append((card, active_count))
 
         # Distribute cards to balance total feature count per column
