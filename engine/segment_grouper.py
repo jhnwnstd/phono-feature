@@ -425,9 +425,9 @@ def group_segments(
     # Step 3: Relabel groups whose origin set matches a known class.
     for gname in list(assignment.keys()):
         origin_set = frozenset(initial_group[sym] for sym in assignment[gname])
-        new_label: str | None = _RELABEL_PATTERNS.get(origin_set)
-        if new_label is not None and new_label != gname:
-            assignment[new_label] = assignment.pop(gname)
+        relabel: str | None = _RELABEL_PATTERNS.get(origin_set)
+        if relabel is not None and relabel != gname:
+            assignment[relabel] = assignment.pop(gname)
 
     # Step 3b: Merge derived groups that belong together.
     for pair, label in _DERIVED_MERGES:

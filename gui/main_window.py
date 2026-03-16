@@ -1364,25 +1364,29 @@ class MainWindow(QMainWindow):
         unknown_active = _sort_features(
             [f for f in active_feature_set if f not in grouped_features]
         )
-        # Left column: first 3 groups (Major Class, Laryngeal, Manner)
-        # Right column: last 3 groups (Place, Pharyngeal/ATR, Prosodic)
-        left_groups = _FEATURE_GROUPS[:3]
-        right_groups = _FEATURE_GROUPS[3:]
 
-        for group_title, group_feats in left_groups:
-            card = self._build_feature_group(group_title, group_feats)
-            if card is not None:
-                self._feat_left_layout.addWidget(card)
-
+        # Build cards and count active features per group
+        all_groups = list(_FEATURE_GROUPS)
         if unknown_active:
-            unknown_card = self._build_feature_group("Other", unknown_active)
-            if unknown_card is not None:
-                self._feat_left_layout.addWidget(unknown_card)
+            all_groups.append(("Other", unknown_active))
 
-        for group_title, group_feats in right_groups:
-            card = self._build_feature_group(group_title, group_feats)
+        cards: list = []
+        for title, feats_list in all_groups:
+            card = self._build_feature_group(title, feats_list)
             if card is not None:
+                active_count = sum(1 for f in feats_list if f in self._feat_rows)
+                cards.append((card, active_count))
+
+        # Distribute cards to balance total feature count per column
+        left_count = 0
+        right_count = 0
+        for card, count in cards:
+            if left_count <= right_count:
+                self._feat_left_layout.addWidget(card)
+                left_count += count
+            else:
                 self._feat_right_layout.addWidget(card)
+                right_count += count
 
         self._feat_left_layout.addStretch()
         self._feat_right_layout.addStretch()
