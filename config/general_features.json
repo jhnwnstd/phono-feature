@@ -1,18 +1,24 @@
 {
   "name": "General IPA Feature Inventory",
-  "version": "2.0",
-  "source": "Compiled from Chomsky & Halle (1968), Hayes (2009), Clements & Hume (1995), Ladefoged & Maddieson (1996), and post-2000 research. See accompanying document 'Distinctive Features: Definitions, Evidence, and Justifications v2'.",
+  "version": "2.1",
+  "source": "Compiled from Chomsky & Halle (1968), Hayes (2009), Clements & Hume (1995), Ladefoged & Maddieson (1996), and post-2000 research. Cross-system verification v2.1: corrections applied per Miller (2011/2016) on click posterior closure, Walker (2011) on laryngeal sonorance, and Hayes (2009) on strident/coronal. See accompanying document 'Distinctive Features v2' and inline notes.",
   "notes": {
-    "consonantal": "ɹ ɻ ʋ are [+consonantal] per cluster/sonority/syllabic evidence. ɰ ɥ are [-consonantal] (true glides). ʔ is [+consonantal, -sonorant] per Hayes system.",
-    "strident": "ɬ ɮ are [-strident]. Navajo sibilant harmony shows lateral fricatives are fully transparent — neither trigger nor target — proving they are not sibilants.",
+    "consonantal": "ɹ ɻ ʋ are [+consonantal] per cluster/sonority/syllabic evidence. ɰ ɥ are [-consonantal] (true glides). ʔ is [-consonantal, -sonorant]: cross-system majority (SPE, Hayes, PHOIBLE, Clements & Hume). It lacks supralaryngeal constriction. [+consonantal] for ʔ is a minority language-specific position only.",
+    "strident": "ɬ ɮ are [-strident]. Navajo sibilant harmony shows lateral fricatives are fully transparent — neither trigger nor target — proving they are not sibilants. p͡f b͡v are also [-strident] following Hayes (2009), which restricts strident to coronals.",
     "implosives": "Default [-sonorant] for ɓ ɗ ɠ ʛ. Sande & Oakley (2023) show 38% of languages have implosives pattern with sonorants; language-specific evidence should override.",
-    "glottal_stop": "ʔ is [+consonantal, -sonorant] (Hayes/SPE analysis). In the Blevins analysis it would be [-consonantal, +sonorant, +ConstrGl]; change if using Blevins framework.",
-    "h": "h is [-consonantal, +sonorant] (placeless voiceless glide). Harmony transparency data supports [+sonorant] (Walker 2011).",
-    "clicks": "Click posterior closure is uvular [DORSAL, -high, +back] per Miller et al. (2009a) ultrasound data on N|uu. Laryngeal features (SpreadGl, Voice, Nasal) overlay clicks just as for pulmonic stops. Only tenuis click base forms are listed here.",
+    "glottal_stop": "ʔ is [-consonantal, -sonorant, +constrgl] — cross-system consensus (SPE, Hayes, PHOIBLE, Clements & Hume). It lacks supralaryngeal constriction, hence [-consonantal]. In the Blevins analysis ʔ would additionally be [+sonorant]; in some language-specific analyses it is treated as [+consonantal] when it patterns with oral stops, but this is not the default.",
+    "h": "h is [-consonantal, +sonorant] (placeless voiceless glide). Harmony transparency data supports [+sonorant] (Walker 2011). PHOIBLE codes h as [-sonorant]; this inventory follows Hayes/SPE.",
+    "clicks": "Click posterior closure is uvular [DORSAL, -high, +back] per Miller et al. (2009a) ultrasound data on N|uu confirmed by Miller (2016) on Mangetti Dune !Xung. Miller (2011): 'the posterior constriction is uvular in those Khoisan languages in which posterior place has been investigated with articulatory methods.' The term 'velaric airstream' reflects pre-ultrasound assumptions (Doke 1923). Laryngeal features (SpreadGl, Voice, Nasal) overlay clicks just as for pulmonic stops. ǃ anterior closure is [+anterior, -distributed] (alveolar default); postalveolar variants are [-anterior]. Only tenuis click base forms listed.",
     "trill_continuant": "Trills and taps are [+continuant] following Hayes (2009). Steriade (1993) Aperture Theory provides compelling arguments for [-continuant] for trills in strong positions; see document for discussion.",
     "ATR": "ATR is distinct from tense/lax per Tiede (1996) MRI evidence. [+ATR] applied to canonical [+ATR] vowels in African harmony systems (i e u o and tense counterparts). Needs language-specific calibration.",
     "approximant": "[+approximant] marks the class of vowels + glides + liquids (all sonorants except nasals). Optional feature; many analyses express this class as [+sonorant, -nasal].",
-    "rhotic_vowel": "ɚ (rhotacised schwa) is a vowel with [+coronal] specification from the r-colouring gesture; [CORONAL, -anterior, +distributed] captures the tongue shape."
+    "rhotic_vowel": "ɚ (rhotacised schwa) is a vowel with [+coronal] specification from the r-colouring gesture; [CORONAL, -anterior, +distributed] captures the tongue shape.",
+    "ejectives": "Ejective consonants (p' t' k' s' ʃ' t͡s') are [-voice, -spreadgl, +constrgl]. [+spreadgl, +constrgl] simultaneously is physically impossible. Ejective fricatives (s' ʃ') follow the same laryngeal pattern as ejective stops — SpreadGl corrected from + to - in v2.1.",
+    "alveolopalatals": "t͡ɕ d͡ʑ ɕ ʑ: [-anterior, +distributed, DORSAL+, +high, -back]. Majority analysis: postalveolar [-anterior] with palatal secondary articulation captured by DORSAL [+high, -back]. The dual CORONAL+DORSAL specification distinguishes them from plain postalveolars (ʃ ʒ t͡ʃ d͡ʒ). Anterior value corrected from + to - in v2.1 per Clements & Hume (1995) and PHOIBLE.",
+    "labiodental_affricates": "p͡f b͡v are [-strident]: Hayes (2009) restricts [strident] to coronals. Labiodental identity is captured by [LABIAL, +labiodental]. SPE gives [+strident] for labiodentals; this inventory follows Hayes. Strident corrected from + to - in v2.1.",
+    "j_glide_coronal": "j ɥ are [-CORONAL], following Hayes (2009), SPE, and PHOIBLE. Clements & Hume (1995) and Hume (1994) assign CORONAL to palatal glides and front vowels; Halle, Vaux & Wolfe (2000) explicitly reject this. [-CORONAL] is the cross-system majority. CORONAL removed from j and ɥ in v2.1.",
+    "central_open_mid": "ɜ ɞ are central vowels [-CORONAL, -back]. They are the open-mid counterparts of ɘ/ɵ, not front vowels. CORONAL removed in v2.1 — central vowels do not bear CORONAL in any major framework.",
+    "open_a_central": "a is [-CORONAL, -back] (phonologically central) following Hayes (2009). IPA classifies /a/ as 'open front', but phonological convention treats it as central — it is the unrounded counterpart of ɑ (+back) and pairs with ɑ on the [back] dimension. CORONAL removed in v2.1."
   },
   "features": [
     "Syllabic",
@@ -39,7 +45,7 @@
     "High",
     "Low",
     "Back",
-    "PHARYNGEAL",
+    "Pharyngeal",
     "ATR",
     "Click"
   ],
@@ -69,9 +75,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "b": {
       "Syllabic": "-",
@@ -98,9 +104,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "t": {
       "Syllabic": "-",
@@ -127,9 +133,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "d": {
       "Syllabic": "-",
@@ -156,9 +162,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʈ": {
       "Syllabic": "-",
@@ -185,9 +191,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɖ": {
       "Syllabic": "-",
@@ -214,9 +220,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "c": {
       "Syllabic": "-",
@@ -243,9 +249,9 @@
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɟ": {
       "Syllabic": "-",
@@ -272,9 +278,9 @@
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "k": {
       "Syllabic": "-",
@@ -301,9 +307,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɡ": {
       "Syllabic": "-",
@@ -330,9 +336,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "q": {
       "Syllabic": "-",
@@ -359,9 +365,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɢ": {
       "Syllabic": "-",
@@ -388,13 +394,13 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʔ": {
       "Syllabic": "-",
-      "Consonantal": "+",
+      "Consonantal": "-",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
@@ -417,9 +423,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "t͡ʃ": {
       "Syllabic": "-",
@@ -446,9 +452,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "d͡ʒ": {
       "Syllabic": "-",
@@ -475,9 +481,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "t͡s": {
       "Syllabic": "-",
@@ -504,9 +510,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "d͡z": {
       "Syllabic": "-",
@@ -533,9 +539,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "t͡ɕ": {
       "Syllabic": "-",
@@ -556,15 +562,15 @@
       "Round": "0",
       "Labiodental": "0",
       "CORONAL": "+",
-      "Anterior": "+",
+      "Anterior": "-",
       "Distributed": "+",
       "DORSAL": "+",
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "d͡ʑ": {
       "Syllabic": "-",
@@ -585,15 +591,15 @@
       "Round": "0",
       "Labiodental": "0",
       "CORONAL": "+",
-      "Anterior": "+",
+      "Anterior": "-",
       "Distributed": "+",
       "DORSAL": "+",
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʈ͡ʂ": {
       "Syllabic": "-",
@@ -620,9 +626,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɖ͡ʐ": {
       "Syllabic": "-",
@@ -649,9 +655,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "t͡ɬ": {
       "Syllabic": "-",
@@ -678,9 +684,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "d͡ɮ": {
       "Syllabic": "-",
@@ -707,9 +713,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "p͡f": {
       "Syllabic": "-",
@@ -722,7 +728,7 @@
       "Lateral": "-",
       "Trill": "-",
       "Tap": "-",
-      "Strident": "+",
+      "Strident": "-",
       "Voice": "-",
       "SpreadGl": "+",
       "ConstrGl": "-",
@@ -736,9 +742,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "b͡v": {
       "Syllabic": "-",
@@ -751,7 +757,7 @@
       "Lateral": "-",
       "Trill": "-",
       "Tap": "-",
-      "Strident": "+",
+      "Strident": "-",
       "Voice": "+",
       "SpreadGl": "-",
       "ConstrGl": "-",
@@ -765,9 +771,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "p'": {
       "Syllabic": "-",
@@ -794,9 +800,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "t'": {
       "Syllabic": "-",
@@ -823,9 +829,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "k'": {
       "Syllabic": "-",
@@ -852,9 +858,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "s'": {
       "Syllabic": "-",
@@ -869,7 +875,7 @@
       "Tap": "-",
       "Strident": "+",
       "Voice": "-",
-      "SpreadGl": "+",
+      "SpreadGl": "-",
       "ConstrGl": "+",
       "LABIAL": "-",
       "Round": "0",
@@ -881,9 +887,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʃ'": {
       "Syllabic": "-",
@@ -898,7 +904,7 @@
       "Tap": "-",
       "Strident": "+",
       "Voice": "-",
-      "SpreadGl": "+",
+      "SpreadGl": "-",
       "ConstrGl": "+",
       "LABIAL": "-",
       "Round": "0",
@@ -910,9 +916,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "t͡s'": {
       "Syllabic": "-",
@@ -939,9 +945,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɓ": {
       "Syllabic": "-",
@@ -968,9 +974,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɗ": {
       "Syllabic": "-",
@@ -997,9 +1003,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɠ": {
       "Syllabic": "-",
@@ -1026,9 +1032,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʛ": {
       "Syllabic": "-",
@@ -1055,9 +1061,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "m": {
       "Syllabic": "-",
@@ -1084,9 +1090,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɱ": {
       "Syllabic": "-",
@@ -1113,9 +1119,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "n": {
       "Syllabic": "-",
@@ -1142,9 +1148,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɳ": {
       "Syllabic": "-",
@@ -1171,9 +1177,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɲ": {
       "Syllabic": "-",
@@ -1200,9 +1206,9 @@
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ŋ": {
       "Syllabic": "-",
@@ -1229,9 +1235,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɴ": {
       "Syllabic": "-",
@@ -1258,9 +1264,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "f": {
       "Syllabic": "-",
@@ -1287,9 +1293,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "v": {
       "Syllabic": "-",
@@ -1316,9 +1322,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "θ": {
       "Syllabic": "-",
@@ -1345,9 +1351,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ð": {
       "Syllabic": "-",
@@ -1374,9 +1380,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "s": {
       "Syllabic": "-",
@@ -1403,9 +1409,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "z": {
       "Syllabic": "-",
@@ -1432,9 +1438,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʃ": {
       "Syllabic": "-",
@@ -1461,9 +1467,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʒ": {
       "Syllabic": "-",
@@ -1490,9 +1496,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʂ": {
       "Syllabic": "-",
@@ -1519,9 +1525,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʐ": {
       "Syllabic": "-",
@@ -1548,9 +1554,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɕ": {
       "Syllabic": "-",
@@ -1571,15 +1577,15 @@
       "Round": "0",
       "Labiodental": "0",
       "CORONAL": "+",
-      "Anterior": "+",
+      "Anterior": "-",
       "Distributed": "+",
       "DORSAL": "+",
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʑ": {
       "Syllabic": "-",
@@ -1600,15 +1606,15 @@
       "Round": "0",
       "Labiodental": "0",
       "CORONAL": "+",
-      "Anterior": "+",
+      "Anterior": "-",
       "Distributed": "+",
       "DORSAL": "+",
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "x": {
       "Syllabic": "-",
@@ -1635,9 +1641,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɣ": {
       "Syllabic": "-",
@@ -1664,9 +1670,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "χ": {
       "Syllabic": "-",
@@ -1693,9 +1699,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʁ": {
       "Syllabic": "-",
@@ -1722,9 +1728,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ħ": {
       "Syllabic": "-",
@@ -1751,9 +1757,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "+",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "+"
     },
     "ʕ": {
       "Syllabic": "-",
@@ -1780,9 +1786,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "+",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "+"
     },
     "ɸ": {
       "Syllabic": "-",
@@ -1809,9 +1815,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "β": {
       "Syllabic": "-",
@@ -1838,9 +1844,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ç": {
       "Syllabic": "-",
@@ -1867,9 +1873,9 @@
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʝ": {
       "Syllabic": "-",
@@ -1896,9 +1902,9 @@
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɬ": {
       "Syllabic": "-",
@@ -1925,9 +1931,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɮ": {
       "Syllabic": "-",
@@ -1954,9 +1960,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɧ": {
       "Syllabic": "-",
@@ -1983,9 +1989,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "h": {
       "Syllabic": "-",
@@ -2012,9 +2018,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɦ": {
       "Syllabic": "-",
@@ -2041,9 +2047,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "l": {
       "Syllabic": "-",
@@ -2070,9 +2076,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɫ": {
       "Syllabic": "-",
@@ -2099,9 +2105,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɭ": {
       "Syllabic": "-",
@@ -2128,9 +2134,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʎ": {
       "Syllabic": "-",
@@ -2157,9 +2163,9 @@
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʟ": {
       "Syllabic": "-",
@@ -2186,9 +2192,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʟ̠": {
       "Syllabic": "-",
@@ -2215,9 +2221,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "r": {
       "Syllabic": "-",
@@ -2244,9 +2250,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʀ": {
       "Syllabic": "-",
@@ -2273,9 +2279,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʙ": {
       "Syllabic": "-",
@@ -2302,9 +2308,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "r̥": {
       "Syllabic": "-",
@@ -2331,9 +2337,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɾ": {
       "Syllabic": "-",
@@ -2360,9 +2366,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɽ": {
       "Syllabic": "-",
@@ -2389,9 +2395,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɺ": {
       "Syllabic": "-",
@@ -2418,9 +2424,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ⱱ": {
       "Syllabic": "-",
@@ -2447,9 +2453,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɹ": {
       "Syllabic": "-",
@@ -2476,9 +2482,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɻ": {
       "Syllabic": "-",
@@ -2505,9 +2511,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʋ": {
       "Syllabic": "-",
@@ -2534,9 +2540,9 @@
       "High": "0",
       "Low": "0",
       "Back": "0",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "j": {
       "Syllabic": "-",
@@ -2556,16 +2562,16 @@
       "LABIAL": "-",
       "Round": "0",
       "Labiodental": "0",
-      "CORONAL": "+",
-      "Anterior": "-",
-      "Distributed": "+",
+      "CORONAL": "-",
+      "Anterior": "0",
+      "Distributed": "0",
       "DORSAL": "+",
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɥ": {
       "Syllabic": "-",
@@ -2585,16 +2591,16 @@
       "LABIAL": "+",
       "Round": "+",
       "Labiodental": "0",
-      "CORONAL": "+",
-      "Anterior": "-",
-      "Distributed": "+",
+      "CORONAL": "-",
+      "Anterior": "0",
+      "Distributed": "0",
       "DORSAL": "+",
       "High": "+",
       "Low": "0",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "w": {
       "Syllabic": "-",
@@ -2621,9 +2627,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɰ": {
       "Syllabic": "-",
@@ -2650,9 +2656,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɰ̠": {
       "Syllabic": "-",
@@ -2679,9 +2685,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʍ": {
       "Syllabic": "-",
@@ -2708,9 +2714,9 @@
       "High": "+",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʘ": {
       "Syllabic": "-",
@@ -2737,9 +2743,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "+"
+      "Click": "+",
+      "Pharyngeal": "-"
     },
     "ǀ": {
       "Syllabic": "-",
@@ -2766,9 +2772,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "+"
+      "Click": "+",
+      "Pharyngeal": "-"
     },
     "ǃ": {
       "Syllabic": "-",
@@ -2789,15 +2795,15 @@
       "Round": "0",
       "Labiodental": "0",
       "CORONAL": "+",
-      "Anterior": "-",
+      "Anterior": "+",
       "Distributed": "-",
       "DORSAL": "+",
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "+"
+      "Click": "+",
+      "Pharyngeal": "-"
     },
     "ǂ": {
       "Syllabic": "-",
@@ -2824,9 +2830,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "+"
+      "Click": "+",
+      "Pharyngeal": "-"
     },
     "ǁ": {
       "Syllabic": "-",
@@ -2853,9 +2859,9 @@
       "High": "-",
       "Low": "0",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "0",
-      "Click": "+"
+      "Click": "+",
+      "Pharyngeal": "-"
     },
     "i": {
       "Syllabic": "+",
@@ -2882,9 +2888,9 @@
       "High": "+",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "+",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "y": {
       "Syllabic": "+",
@@ -2911,9 +2917,9 @@
       "High": "+",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "+",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɪ": {
       "Syllabic": "+",
@@ -2940,9 +2946,9 @@
       "High": "+",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʏ": {
       "Syllabic": "+",
@@ -2969,9 +2975,9 @@
       "High": "+",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɯ": {
       "Syllabic": "+",
@@ -2998,9 +3004,9 @@
       "High": "+",
       "Low": "-",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "+",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "u": {
       "Syllabic": "+",
@@ -3027,9 +3033,9 @@
       "High": "+",
       "Low": "-",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "+",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʊ": {
       "Syllabic": "+",
@@ -3056,9 +3062,9 @@
       "High": "+",
       "Low": "-",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɨ": {
       "Syllabic": "+",
@@ -3085,9 +3091,9 @@
       "High": "+",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "+",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʉ": {
       "Syllabic": "+",
@@ -3114,9 +3120,9 @@
       "High": "+",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "+",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "e": {
       "Syllabic": "+",
@@ -3143,9 +3149,9 @@
       "High": "-",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "+",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ø": {
       "Syllabic": "+",
@@ -3172,67 +3178,9 @@
       "High": "-",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "+",
-      "Click": "-"
-    },
-    "ɛ": {
-      "Syllabic": "+",
-      "Consonantal": "-",
-      "Sonorant": "+",
-      "Approximant": "+",
-      "Continuant": "+",
-      "DelRel": "-",
-      "Nasal": "-",
-      "Lateral": "-",
-      "Trill": "-",
-      "Tap": "-",
-      "Strident": "-",
-      "Voice": "+",
-      "SpreadGl": "-",
-      "ConstrGl": "-",
-      "LABIAL": "-",
-      "Round": "-",
-      "Labiodental": "0",
-      "CORONAL": "+",
-      "Anterior": "0",
-      "Distributed": "0",
-      "DORSAL": "+",
-      "High": "-",
-      "Low": "-",
-      "Back": "-",
-      "PHARYNGEAL": "-",
-      "ATR": "-",
-      "Click": "-"
-    },
-    "œ": {
-      "Syllabic": "+",
-      "Consonantal": "-",
-      "Sonorant": "+",
-      "Approximant": "+",
-      "Continuant": "+",
-      "DelRel": "-",
-      "Nasal": "-",
-      "Lateral": "-",
-      "Trill": "-",
-      "Tap": "-",
-      "Strident": "-",
-      "Voice": "+",
-      "SpreadGl": "-",
-      "ConstrGl": "-",
-      "LABIAL": "+",
-      "Round": "+",
-      "Labiodental": "0",
-      "CORONAL": "+",
-      "Anterior": "0",
-      "Distributed": "0",
-      "DORSAL": "+",
-      "High": "-",
-      "Low": "-",
-      "Back": "-",
-      "PHARYNGEAL": "-",
-      "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɤ": {
       "Syllabic": "+",
@@ -3259,9 +3207,9 @@
       "High": "-",
       "Low": "-",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "+",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "o": {
       "Syllabic": "+",
@@ -3288,127 +3236,11 @@
       "High": "-",
       "Low": "-",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "+",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
-    "ɔ": {
-      "Syllabic": "+",
-      "Consonantal": "-",
-      "Sonorant": "+",
-      "Approximant": "+",
-      "Continuant": "+",
-      "DelRel": "-",
-      "Nasal": "-",
-      "Lateral": "-",
-      "Trill": "-",
-      "Tap": "-",
-      "Strident": "-",
-      "Voice": "+",
-      "SpreadGl": "-",
-      "ConstrGl": "-",
-      "LABIAL": "+",
-      "Round": "+",
-      "Labiodental": "0",
-      "CORONAL": "-",
-      "Anterior": "0",
-      "Distributed": "0",
-      "DORSAL": "+",
-      "High": "-",
-      "Low": "-",
-      "Back": "+",
-      "PHARYNGEAL": "-",
-      "ATR": "-",
-      "Click": "-"
-    },
-    "ə": {
-      "Syllabic": "+",
-      "Consonantal": "-",
-      "Sonorant": "+",
-      "Approximant": "+",
-      "Continuant": "+",
-      "DelRel": "-",
-      "Nasal": "-",
-      "Lateral": "-",
-      "Trill": "-",
-      "Tap": "-",
-      "Strident": "-",
-      "Voice": "+",
-      "SpreadGl": "-",
-      "ConstrGl": "-",
-      "LABIAL": "-",
-      "Round": "-",
-      "Labiodental": "0",
-      "CORONAL": "-",
-      "Anterior": "0",
-      "Distributed": "0",
-      "DORSAL": "+",
-      "High": "-",
-      "Low": "-",
-      "Back": "-",
-      "PHARYNGEAL": "-",
-      "ATR": "-",
-      "Click": "-"
-    },
-    "ɘ": {
-      "Syllabic": "+",
-      "Consonantal": "-",
-      "Sonorant": "+",
-      "Approximant": "+",
-      "Continuant": "+",
-      "DelRel": "-",
-      "Nasal": "-",
-      "Lateral": "-",
-      "Trill": "-",
-      "Tap": "-",
-      "Strident": "-",
-      "Voice": "+",
-      "SpreadGl": "-",
-      "ConstrGl": "-",
-      "LABIAL": "-",
-      "Round": "-",
-      "Labiodental": "0",
-      "CORONAL": "-",
-      "Anterior": "0",
-      "Distributed": "0",
-      "DORSAL": "+",
-      "High": "-",
-      "Low": "-",
-      "Back": "-",
-      "PHARYNGEAL": "-",
-      "ATR": "+",
-      "Click": "-"
-    },
-    "ɵ": {
-      "Syllabic": "+",
-      "Consonantal": "-",
-      "Sonorant": "+",
-      "Approximant": "+",
-      "Continuant": "+",
-      "DelRel": "-",
-      "Nasal": "-",
-      "Lateral": "-",
-      "Trill": "-",
-      "Tap": "-",
-      "Strident": "-",
-      "Voice": "+",
-      "SpreadGl": "-",
-      "ConstrGl": "-",
-      "LABIAL": "+",
-      "Round": "+",
-      "Labiodental": "0",
-      "CORONAL": "-",
-      "Anterior": "0",
-      "Distributed": "0",
-      "DORSAL": "+",
-      "High": "-",
-      "Low": "-",
-      "Back": "-",
-      "PHARYNGEAL": "-",
-      "ATR": "+",
-      "Click": "-"
-    },
-    "ɜ": {
+    "ɛ": {
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3433,11 +3265,11 @@
       "High": "-",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
-    "ɞ": {
+    "œ": {
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3462,9 +3294,9 @@
       "High": "-",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ʌ": {
       "Syllabic": "+",
@@ -3491,11 +3323,40 @@
       "High": "-",
       "Low": "-",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
-    "ɚ": {
+    "ɔ": {
+      "Syllabic": "+",
+      "Consonantal": "-",
+      "Sonorant": "+",
+      "Approximant": "+",
+      "Continuant": "+",
+      "DelRel": "-",
+      "Nasal": "-",
+      "Lateral": "-",
+      "Trill": "-",
+      "Tap": "-",
+      "Strident": "-",
+      "Voice": "+",
+      "SpreadGl": "-",
+      "ConstrGl": "-",
+      "LABIAL": "+",
+      "Round": "+",
+      "Labiodental": "0",
+      "CORONAL": "-",
+      "Anterior": "0",
+      "Distributed": "0",
+      "DORSAL": "+",
+      "High": "-",
+      "Low": "-",
+      "Back": "+",
+      "ATR": "-",
+      "Click": "-",
+      "Pharyngeal": "-"
+    },
+    "ə": {
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3513,16 +3374,132 @@
       "LABIAL": "-",
       "Round": "-",
       "Labiodental": "0",
-      "CORONAL": "+",
-      "Anterior": "-",
-      "Distributed": "+",
+      "CORONAL": "-",
+      "Anterior": "0",
+      "Distributed": "0",
       "DORSAL": "+",
       "High": "-",
       "Low": "-",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
+    },
+    "ɘ": {
+      "Syllabic": "+",
+      "Consonantal": "-",
+      "Sonorant": "+",
+      "Approximant": "+",
+      "Continuant": "+",
+      "DelRel": "-",
+      "Nasal": "-",
+      "Lateral": "-",
+      "Trill": "-",
+      "Tap": "-",
+      "Strident": "-",
+      "Voice": "+",
+      "SpreadGl": "-",
+      "ConstrGl": "-",
+      "LABIAL": "-",
+      "Round": "-",
+      "Labiodental": "0",
+      "CORONAL": "-",
+      "Anterior": "0",
+      "Distributed": "0",
+      "DORSAL": "+",
+      "High": "-",
+      "Low": "-",
+      "Back": "-",
+      "ATR": "+",
+      "Click": "-",
+      "Pharyngeal": "-"
+    },
+    "ɵ": {
+      "Syllabic": "+",
+      "Consonantal": "-",
+      "Sonorant": "+",
+      "Approximant": "+",
+      "Continuant": "+",
+      "DelRel": "-",
+      "Nasal": "-",
+      "Lateral": "-",
+      "Trill": "-",
+      "Tap": "-",
+      "Strident": "-",
+      "Voice": "+",
+      "SpreadGl": "-",
+      "ConstrGl": "-",
+      "LABIAL": "+",
+      "Round": "+",
+      "Labiodental": "0",
+      "CORONAL": "-",
+      "Anterior": "0",
+      "Distributed": "0",
+      "DORSAL": "+",
+      "High": "-",
+      "Low": "-",
+      "Back": "-",
+      "ATR": "+",
+      "Click": "-",
+      "Pharyngeal": "-"
+    },
+    "ɜ": {
+      "Syllabic": "+",
+      "Consonantal": "-",
+      "Sonorant": "+",
+      "Approximant": "+",
+      "Continuant": "+",
+      "DelRel": "-",
+      "Nasal": "-",
+      "Lateral": "-",
+      "Trill": "-",
+      "Tap": "-",
+      "Strident": "-",
+      "Voice": "+",
+      "SpreadGl": "-",
+      "ConstrGl": "-",
+      "LABIAL": "-",
+      "Round": "-",
+      "Labiodental": "0",
+      "CORONAL": "-",
+      "Anterior": "0",
+      "Distributed": "0",
+      "DORSAL": "+",
+      "High": "-",
+      "Low": "-",
+      "Back": "-",
+      "ATR": "-",
+      "Click": "-",
+      "Pharyngeal": "-"
+    },
+    "ɞ": {
+      "Syllabic": "+",
+      "Consonantal": "-",
+      "Sonorant": "+",
+      "Approximant": "+",
+      "Continuant": "+",
+      "DelRel": "-",
+      "Nasal": "-",
+      "Lateral": "-",
+      "Trill": "-",
+      "Tap": "-",
+      "Strident": "-",
+      "Voice": "+",
+      "SpreadGl": "-",
+      "ConstrGl": "-",
+      "LABIAL": "+",
+      "Round": "+",
+      "Labiodental": "0",
+      "CORONAL": "-",
+      "Anterior": "0",
+      "Distributed": "0",
+      "DORSAL": "+",
+      "High": "-",
+      "Low": "-",
+      "Back": "-",
+      "ATR": "-",
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "æ": {
       "Syllabic": "+",
@@ -3549,9 +3526,9 @@
       "High": "-",
       "Low": "+",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɐ": {
       "Syllabic": "+",
@@ -3578,9 +3555,9 @@
       "High": "-",
       "Low": "+",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "a": {
       "Syllabic": "+",
@@ -3600,16 +3577,16 @@
       "LABIAL": "-",
       "Round": "-",
       "Labiodental": "0",
-      "CORONAL": "+",
+      "CORONAL": "-",
       "Anterior": "0",
       "Distributed": "0",
       "DORSAL": "+",
       "High": "-",
       "Low": "+",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɑ": {
       "Syllabic": "+",
@@ -3636,9 +3613,9 @@
       "High": "-",
       "Low": "+",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɒ": {
       "Syllabic": "+",
@@ -3665,9 +3642,9 @@
       "High": "-",
       "Low": "+",
       "Back": "+",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
     },
     "ɶ": {
       "Syllabic": "+",
@@ -3694,9 +3671,38 @@
       "High": "-",
       "Low": "+",
       "Back": "-",
-      "PHARYNGEAL": "-",
       "ATR": "-",
-      "Click": "-"
+      "Click": "-",
+      "Pharyngeal": "-"
+    },
+    "ɚ": {
+      "Syllabic": "+",
+      "Consonantal": "-",
+      "Sonorant": "+",
+      "Approximant": "+",
+      "Continuant": "+",
+      "DelRel": "-",
+      "Nasal": "-",
+      "Lateral": "-",
+      "Trill": "-",
+      "Tap": "-",
+      "Strident": "-",
+      "Voice": "+",
+      "SpreadGl": "-",
+      "ConstrGl": "-",
+      "LABIAL": "-",
+      "Round": "-",
+      "Labiodental": "0",
+      "CORONAL": "+",
+      "Anterior": "-",
+      "Distributed": "+",
+      "DORSAL": "+",
+      "High": "-",
+      "Low": "-",
+      "Back": "-",
+      "ATR": "-",
+      "Click": "-",
+      "Pharyngeal": "-"
     }
   }
 }
