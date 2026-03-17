@@ -1407,7 +1407,9 @@ class MainWindow(QMainWindow):
 
     def _browse_config(self):
         """Open a file dialog and load the chosen JSON."""
-        dlg = QFileDialog(self, "Open Phonological Inventory", "", "JSON Files (*.json)")
+        dlg = QFileDialog(
+            self, "Open Phonological Inventory", "", "JSON Files (*.json)"
+        )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
         dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
         # Center on parent's screen for multi-monitor setups
