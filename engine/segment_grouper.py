@@ -310,16 +310,15 @@ def group_segments(
         relevant = [f for f in spec if f in active_features]
         if not relevant:
             return False
-        matched = 0
+        matched_any = False
         for feat in relevant:
             val = seg_feats.get(feat, "0")
             if val == "0":
                 continue
             if val != spec[feat]:
                 return False
-            matched += 1
-        # At least one feature must positively match; all-"0" is not membership
-        return matched > 0
+            matched_any = True
+        return matched_any
 
     def specificity(spec: Dict[str, str]) -> int:
         return sum(1 for f in spec if f in active_features)
