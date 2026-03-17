@@ -24,8 +24,6 @@ import sys
 from PyQt6.QtCore import QCommandLineParser
 from PyQt6.QtWidgets import QApplication
 
-from gui.main_window import MainWindow
-
 
 def _argv_requests_qt_platform(argv: list[str]) -> bool:
     return any(
@@ -33,11 +31,8 @@ def _argv_requests_qt_platform(argv: list[str]) -> bool:
     )
 
 
-def _detect_qt_platform(argv: list[str]) -> str | None:
-    if os.environ.get("QT_QPA_PLATFORM"):
-        return None
-    if _argv_requests_qt_platform(argv):
-        return None
+def _auto_qt_platform() -> str | None:
+    """Pick a Qt platform plugin for Linux, or None to let Qt decide."""
     if not sys.platform.startswith("linux"):
         return None
 
@@ -61,9 +56,10 @@ def _detect_qt_platform(argv: list[str]) -> str | None:
 def main() -> int:
     argv = sys.argv[:]
 
-    platform = _detect_qt_platform(argv)
-    if platform is not None:
-        argv[1:1] = ["-platform", platform]
+    if not os.environ.get("QT_QPA_PLATFORM") and not _argv_requests_qt_platform(argv):
+        platform = _auto_qt_platform()
+        if platform is not None:
+            argv[1:1] = ["-platform", platform]
 
     app = QApplication(argv)
     app.setApplicationName("Phonology Segment & Feature Engine")
@@ -82,6 +78,9 @@ def main() -> int:
 
     positional = parser.positionalArguments()
     startup_path = positional[0] if positional else None
+
+    # Lazy import: avoid loading the full GUI module tree when --help exits early
+    from gui.main_window import MainWindow
 
     window = MainWindow(startup_path=startup_path)
     window.show()
