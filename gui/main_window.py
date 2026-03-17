@@ -1383,7 +1383,8 @@ class MainWindow(QMainWindow):
     def _open_builder(self):
         from gui.inventory_builder import InventoryBuilder
 
-        self._builder = InventoryBuilder(self)
+        self._builder = InventoryBuilder(parent=self)
+        self._builder.setWindowFlag(Qt.WindowType.Window)  # own taskbar entry
         self._builder.show()
         self._builder._show_setup_dialog()
 

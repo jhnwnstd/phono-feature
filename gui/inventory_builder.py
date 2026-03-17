@@ -72,35 +72,6 @@ _FEATURE_PRESETS = {
         "Long",
         "Stress",
     ],
-    "Winstead (27)": [
-        "Syllabic",
-        "Consonantal",
-        "Sonorant",
-        "Approximant",
-        "Continuant",
-        "DelRel",
-        "Nasal",
-        "Lateral",
-        "Trill",
-        "Tap",
-        "Strident",
-        "Voice",
-        "SpreadGl",
-        "ConstrGl",
-        "LABIAL",
-        "Round",
-        "Labiodental",
-        "CORONAL",
-        "Anterior",
-        "Distributed",
-        "DORSAL",
-        "High",
-        "Low",
-        "Back",
-        "Pharyngeal",
-        "ATR",
-        "Click",
-    ],
     "Custom": [],
 }
 
@@ -162,6 +133,7 @@ class InputDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("New Inventory — Setup")
         self.setMinimumSize(500, 500)
+        self.setWindowModality(Qt.WindowModality.WindowModal)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
@@ -288,6 +260,19 @@ class InventoryBuilder(QMainWindow):
         self._current_path: Optional[str] = None
 
         self._build_ui()
+
+        # Position on the same screen as the parent window
+        if parent is not None:
+            parent_screen = parent.screen()
+            if parent_screen is not None:
+                avail = parent_screen.availableGeometry()
+                self.resize(
+                    min(1000, avail.width() - 80),
+                    min(700, avail.height() - 80),
+                )
+                frame = self.frameGeometry()
+                frame.moveCenter(avail.center())
+                self.move(frame.topLeft())
 
         if load_path:
             self._load_existing(load_path)
@@ -474,22 +459,21 @@ class InventoryBuilder(QMainWindow):
         v_header = self._table.verticalHeader()
         if v_header:
             v_header.setFont(QFont("Noto Sans", 11))
-            v_header.setDefaultSectionSize(30)
+            v_header.setDefaultSectionSize(28)
             v_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
 
         h_header = self._table.horizontalHeader()
         if h_header:
             h_header.setFont(QFont("Noto Sans", 9))
-            h_header.setDefaultSectionSize(70)
-            h_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-            h_header.setMinimumSectionSize(50)
+            h_header.setSectionResizeMode(
+                QHeaderView.ResizeMode.ResizeToContents
+            )
+            h_header.setMinimumSectionSize(44)
 
-        # Fill with default "0" cells (preserve existing values if any)
+        # Fill with default "0" cells
         for r in range(len(self._segments)):
             for c in range(len(self._features)):
-                existing = self._table.item(r, c)
-                val = existing.text() if existing else "0"
-                self._table.setItem(r, c, _make_cell(val))
+                self._table.setItem(r, c, _make_cell("0"))
 
     def _on_cell_clicked(self, row: int, col: int):
         item = self._table.item(row, col)
