@@ -109,11 +109,11 @@ _FEATURE_ORDER: list = [
     "Low",
     "Back",
     "Front",
-    "Tense",
     # Pharyngeal / advanced tongue root
     "ConstrPharynx",
     "Pharyngeal",
     "ATR",
+    "Tense",
     # Prosodic
     "Long",
     "Stress",
@@ -1380,7 +1380,10 @@ class MainWindow(QMainWindow):
         self.config_combo.clear()
         self.config_combo.addItem("Select inventory\u2026", userData=None)
 
-        # Disable the placeholder row so it cannot be picked
+        # Disable the placeholder row so it cannot be picked.
+        # QStandardItemModel is the default; the guard is defensive against
+        # style plugins that substitute a different model type.  If it fails,
+        # _on_config_selected's `if path:` guard still prevents any action.
         model = self.config_combo.model()
         if isinstance(model, QStandardItemModel):
             item = model.item(0)
@@ -1420,6 +1423,10 @@ class MainWindow(QMainWindow):
         self._load_path(path)
 
     def _open_builder(self):
+        if hasattr(self, "_builder") and self._builder.isVisible():
+            self._builder.raise_()
+            self._builder.activateWindow()
+            return
         from gui.inventory_builder import InventoryBuilder
 
         self._builder = InventoryBuilder(parent=self)
@@ -1534,11 +1541,14 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _populate_segments(self):
-        assert self.engine is not None
+        if self.engine is None:
+            return
         self._selected_segments.clear()
         self.seg_hint.hide()
 
-        # Cache grouping on the engine so auto-reload skips recomputation
+        # Cache grouping on the engine object.  Safe because _load_path
+        # creates a fresh FeatureEngine each time, so a stale cache is
+        # impossible — the old engine (and its cache) is discarded.
         if not hasattr(self.engine, "_cached_groups"):
             from engine.segment_grouper import _normalize_feats
 
@@ -1619,7 +1629,8 @@ class MainWindow(QMainWindow):
         return group_frame
 
     def _populate_features(self):
-        assert self.engine is not None
+        if self.engine is None:
+            return
 
         active_feature_set: set = set()
         for seg_feats in self.engine.segments.values():
@@ -1814,26 +1825,36 @@ class MainWindow(QMainWindow):
                 f" QPushButton:hover {{ color: {C['text']}; background: {C['bg']}; }}"
             )
 
-        self._clear_segments(silent=True)
-        self._clear_features(silent=True)
         self.analysis.clear()
 
-        # Restore the saved state for the mode we just entered
-        if is_s2f and self._saved_seg_state:
-            for seg in self._saved_seg_state:
-                if seg in self._seg_buttons:
-                    self._selected_segments.append(seg)
-                    self._seg_buttons[seg].set_state("selected")
-                    self._seg_buttons[seg].setChecked(True)
-            if self._selected_segments:
-                self._update_seg_to_feat()
-        elif not is_s2f and self._saved_feat_state:
-            for feat, val in self._saved_feat_state.items():
-                if feat in self._feat_rows:
-                    self._selected_features[feat] = val
-                    self._feat_rows[feat].restore_value(val)
-            if self._selected_features:
-                self._update_feat_to_seg()
+        # Single-pass: set each button/row to its final state directly,
+        # avoiding a clear-all then restore-some two-pass sequence.
+        restore_segs = set(self._saved_seg_state) if is_s2f else set()
+        self._selected_segments.clear()
+        for seg, btn in self._seg_buttons.items():
+            if seg in restore_segs:
+                self._selected_segments.append(seg)
+                if btn._state != "selected":
+                    btn.set_state("selected")
+                    btn.setChecked(True)
+            elif btn._state != "default":
+                btn.set_state("default")
+                btn.setChecked(False)
+
+        restore_feats = self._saved_feat_state if not is_s2f else {}
+        self._selected_features.clear()
+        for feat, row in self._feat_rows.items():
+            if feat in restore_feats:
+                self._selected_features[feat] = restore_feats[feat]
+                row.restore_value(restore_feats[feat])
+            elif row._current_value:
+                row.reset()
+
+        self._reset_feature_display()
+        if is_s2f and self._selected_segments:
+            self._update_seg_to_feat()
+        elif not is_s2f and self._selected_features:
+            self._update_feat_to_seg()
 
         if is_s2f:
             self.status.showMessage(
@@ -1850,6 +1871,8 @@ class MainWindow(QMainWindow):
 
     def eventFilter(self, a0, a1):
         """Activate a panel on any mouse press anywhere inside it."""
+        if not isinstance(a0, QWidget):
+            return False
         if a1 is not None and a1.type() == QEvent.Type.MouseButtonPress:
             w = a0
             while w is not None:
@@ -1906,12 +1929,13 @@ class MainWindow(QMainWindow):
 
     def _compute_contrastive(self, segs: list) -> dict:
         """
-        Return {feature: {'+': [segs...], '-': [segs...]}} for every feature
-        where at least one segment is '+' and at least one is '-'.
-        Features where some segs have '0' and others have '+'/'-' are excluded;
-        only clean binary splits count as contrast.
+        Return {feature: {'+': [segs...], '-': [segs...], '0': [segs...]}}
+        for every feature where at least one segment is '+' and at least one
+        is '-'.  Segments with '0' (inapplicable / unspecified) are tracked
+        separately so the display can account for all selected segments.
         """
-        assert self.engine is not None
+        if self.engine is None:
+            return {}
         result = {}
         for feat in self.engine.features:
             plus_segs = [
@@ -1925,7 +1949,15 @@ class MainWindow(QMainWindow):
                 if self.engine.segments[s].get(feat, "0") == "-"
             ]
             if plus_segs and minus_segs:
-                result[feat] = {"+": plus_segs, "-": minus_segs}
+                zero_segs = [
+                    s
+                    for s in segs
+                    if self.engine.segments[s].get(feat, "0") == "0"
+                ]
+                entry: dict = {"+": plus_segs, "-": minus_segs}
+                if zero_segs:
+                    entry["0"] = zero_segs
+                result[feat] = entry
         return result
 
     def _update_seg_to_feat(self):
@@ -1981,7 +2013,8 @@ class MainWindow(QMainWindow):
             )
 
     def _show_single_segment_analysis(self, seg: str, feats: dict):
-        assert self.engine is not None
+        if self.engine is None:
+            return
         plus_feats = _sort_features([f for f, v in feats.items() if v == "+"])
         minus_feats = _sort_features([f for f, v in feats.items() if v == "-"])
 
@@ -2009,13 +2042,20 @@ class MainWindow(QMainWindow):
                 is_nc, specs = self.engine.is_natural_class(equiv)
         if is_nc and specs:
             html += self._render_spec_list(specs)
+        else:
+            html += (
+                f"<p style='color:{C['text_dim']}'><i>"
+                "Cannot be uniquely characterized in this inventory."
+                "</i></p>"
+            )
 
         self.analysis.set_html(html)
 
     def _show_multi_segment_analysis(
         self, segs: list, common: dict, contrastive: dict, suggested: list
     ):
-        assert self.engine is not None
+        if self.engine is None:
+            return
         seg_tags = " ".join(self._tag(f"/{s}/", "blue") for s in segs)
 
         if common:
@@ -2043,7 +2083,7 @@ class MainWindow(QMainWindow):
                 minus_sign = chr(8722)
                 clr_plus = C["plus"]
                 clr_minus = C["minus"]
-                rows.append(
+                row_html = (
                     f"{self._tag(feat, 'gray')}"
                     f" <span style='color:{clr_plus};font-weight:bold'>+</span>"
                     f" {plus_segs}"
@@ -2051,6 +2091,16 @@ class MainWindow(QMainWindow):
                     f" <span style='color:{clr_minus};font-weight:bold'>{minus_sign}</span>"
                     f" {minus_segs}"
                 )
+                if "0" in groups:
+                    zero_segs = " ".join(
+                        self._tag(f"/{s}/", "gray") for s in groups["0"]
+                    )
+                    row_html += (
+                        f" &nbsp;"
+                        f" <span style='color:{C['text_dim']}'>0</span>"
+                        f" {zero_segs}"
+                    )
+                rows.append(row_html)
             contrast_html = (
                 "<p><b>Contrasting features:</b><br>"
                 + "<br>".join(rows)
@@ -2136,7 +2186,8 @@ class MainWindow(QMainWindow):
         self._show_feat_to_seg_analysis(selected_feats, matching)
 
     def _show_feat_to_seg_analysis(self, feature_dict: dict, matching: list):
-        assert self.engine is not None
+        if self.engine is None:
+            return
         feat_tags = " ".join(
             self._tag(f"{v}{f}", "green" if v == "+" else "red")
             for f, v in _sort_spec(feature_dict).items()

@@ -42,14 +42,17 @@ from gui.palette import C
 # ---------------------------------------------------------------------------
 
 _FEATURE_PRESETS = {
-    "Hayes (28)": [
+    "Default (33)": [
+        # Major class
         "Syllabic",
         "Consonantal",
         "Sonorant",
         "Approximant",
+        # Laryngeal
         "Voice",
         "SpreadGl",
         "ConstrGl",
+        # Manner
         "Continuant",
         "Strident",
         "DelRel",
@@ -57,20 +60,30 @@ _FEATURE_PRESETS = {
         "Lateral",
         "Trill",
         "Tap",
+        "Click",
+        # Place — LABIAL node + dependents
         "LABIAL",
         "Round",
         "Labiodental",
+        # Place — CORONAL node + dependents
         "CORONAL",
         "Anterior",
         "Distributed",
+        # Place — DORSAL node + dependents
         "DORSAL",
         "High",
         "Low",
         "Back",
         "Front",
+        # Pharyngeal / advanced tongue root
+        "Pharyngeal",
+        "ATR",
         "Tense",
+        # Prosodic
         "Long",
         "Stress",
+        "Tone",
+        "UpperRegister",
     ],
     "Custom": [],
 }
