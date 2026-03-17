@@ -692,12 +692,22 @@ class SegmentGridWidget(QWidget):
 # ---------------------------------------------------------------------------
 
 _VOWEL_HEIGHT: list = [
-    ("Close", "+", "-", "+"),
+    ("Close",      "+", "-", "+"),
     ("Near-close", "+", "-", "-"),
-    ("Close-mid", "-", "-", "+"),
-    ("Open-mid", "-", "-", "-"),
-    ("Open", "-", "+", None),
+    ("Close-mid",  "-", "-", "+"),
+    ("Open-mid",   "-", "-", "-"),
+    ("Near-open",  "-", "+", "-"),
+    ("Open",       "-", "+", None),
 ]
+
+
+def _nonzero(val: str | None) -> str | None:
+    """Return *val* only if it carries real feature information ('+' or '-').
+
+    Treats None and "0" as absent so ``or``-chained fallbacks work correctly:
+    ``_nonzero(feats.get("tense")) or _nonzero(feats.get("atr")) or "0"``
+    """
+    return val if val and val != "0" else None
 
 
 def _vowel_grid_pos(feats: dict) -> tuple:
@@ -708,11 +718,21 @@ def _vowel_grid_pos(feats: dict) -> tuple:
     """
     hi = feats.get("high", "0")
     lo = feats.get("low", "0")
-    tn = feats.get("tense") or feats.get("atr") or "0"
-    fr = feats.get("front") or feats.get("coronal") or "0"
+    tn = _nonzero(feats.get("tense")) or _nonzero(feats.get("atr")) or "0"
+
+    # CORONAL as front-proxy: only when anterior is unset (true front vowels).
+    # Rhotics like ɚ have CORONAL:+ with anterior:- — that marks the rhotic
+    # gesture, not frontness.
+    coronal_val = _nonzero(feats.get("coronal"))
+    if coronal_val == "+" and feats.get("anterior") == "-":
+        coronal_val = None
+    fr = _nonzero(feats.get("front")) or coronal_val or "0"
+
     bk = feats.get("back", "0")
     rn = feats.get("round", "0")
 
+    # Default to Open-mid (row 3) for unspecified mid vowels (hi:-, lo:-, tn:0)
+    # like ə — conservative phonological assumption (unmarked mid = lax).
     row = 3
     for i, (_, h, l, t) in enumerate(_VOWEL_HEIGHT):
         if hi == h and lo == l and (t is None or tn == t):
@@ -806,20 +826,32 @@ class VowelChartWidget(QWidget):
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
             lbl.setMinimumWidth(_VOWEL_LABEL_W - 4)
-            max_stack = max(
-                (len(occupied.get((ri, c), [])) for c in range(6)), default=1
-            )
-            self._grid.addWidget(lbl, grid_row, 0, max_stack, 1)
+            self._grid.addWidget(lbl, grid_row, 0)
             self._header_labels.append((lbl, True))
 
             for ci in range(6):
-                for si, seg in enumerate(occupied.get((ri, ci), [])):
-                    btn = self._buttons.get(seg)
+                cell_segs = occupied.get((ri, ci), [])
+                if not cell_segs:
+                    continue
+                if len(cell_segs) == 1:
+                    btn = self._buttons.get(cell_segs[0])
                     if btn:
                         btn.show()
-                        self._grid.addWidget(btn, grid_row + si, 1 + ci)
+                        self._grid.addWidget(btn, grid_row, 1 + ci)
+                else:
+                    cell = QWidget()
+                    cell.setStyleSheet("background: transparent;")
+                    vbox = QVBoxLayout(cell)
+                    vbox.setContentsMargins(0, 0, 0, 0)
+                    vbox.setSpacing(1)
+                    for seg in cell_segs:
+                        btn = self._buttons.get(seg)
+                        if btn:
+                            btn.show()
+                            vbox.addWidget(btn)
+                    self._grid.addWidget(cell, grid_row, 1 + ci)
 
-            grid_row += max(1, max_stack)
+            grid_row += 1
 
 
 # ---------------------------------------------------------------------------
