@@ -56,7 +56,9 @@ def _auto_qt_platform() -> str | None:
 def main() -> int:
     argv = sys.argv[:]
 
-    if not os.environ.get("QT_QPA_PLATFORM") and not _argv_requests_qt_platform(argv):
+    if not os.environ.get(
+        "QT_QPA_PLATFORM"
+    ) and not _argv_requests_qt_platform(argv):
         platform = _auto_qt_platform()
         if platform is not None:
             argv[1:1] = ["-platform", platform]
