@@ -157,7 +157,8 @@
       "Syllabic": "-",
       "Tap": "-",
       "Trill": "-",
-      "Voice": "-"
+      "Voice": "-",
+      "Strident": "-"
     },
     "h": {
       "Continuant": "+",
@@ -214,7 +215,6 @@
       "Front": "+",
       "High": "+",
       "Sonorant": "+",
-      "Tense": "+",
       "Voice": "+",
       "CORONAL": "-",
       "LABIAL": "-",
@@ -255,7 +255,9 @@
       "Syllabic": "-",
       "Tap": "-",
       "Trill": "-",
-      "Voice": "-"
+      "Voice": "-",
+      "Front": "-",
+      "Back": "-"
     },
     "l": {
       "CORONAL": "+",
@@ -495,7 +497,8 @@
       "Stress": "-",
       "Syllabic": "-",
       "Tap": "-",
-      "Trill": "-"
+      "Trill": "-",
+      "Strident": "-"
     },
     "w": {
       "DORSAL": "+",
@@ -506,7 +509,6 @@
       "High": "+",
       "Round": "+",
       "Sonorant": "+",
-      "Tense": "+",
       "Voice": "+",
       "CORONAL": "-",
       "Consonantal": "-",
@@ -619,7 +621,9 @@
       "Stress": "-",
       "Syllabic": "-",
       "Tap": "-",
-      "Trill": "-"
+      "Trill": "-",
+      "Front": "-",
+      "Back": "-"
     },
     "ɑ": {
       "DORSAL": "+",
@@ -706,7 +710,7 @@
       "Sonorant": "+",
       "Syllabic": "+",
       "Voice": "+",
-      "DORSAL": "-",
+      "DORSAL": "+",
       "LABIAL": "-",
       "Anterior": "-",
       "Consonantal": "-",
@@ -720,7 +724,12 @@
       "Stress": "-",
       "Strident": "-",
       "Tap": "-",
-      "Trill": "-"
+      "Trill": "-",
+      "High": "-",
+      "Low": "-",
+      "Back": "-",
+      "Front": "-",
+      "Tense": "-"
     },
     "ɛ": {
       "DORSAL": "+",
@@ -770,7 +779,9 @@
       "Stress": "-",
       "Syllabic": "-",
       "Tap": "-",
-      "Trill": "-"
+      "Trill": "-",
+      "Front": "-",
+      "Back": "-"
     },
     "ɪ": {
       "DORSAL": "+",
@@ -825,9 +836,9 @@
     "ɾ": {
       "CORONAL": "+",
       "Anterior": "+",
-      "Approximant": "+",
+      "Approximant": "-",
       "Consonantal": "+",
-      "Continuant": "+",
+      "Continuant": "-",
       "Sonorant": "+",
       "Tap": "+",
       "Voice": "+",
@@ -932,7 +943,6 @@
       "High": "+",
       "Round": "+",
       "SpreadGl": "+",
-      "Tense": "+",
       "CORONAL": "-",
       "Approximant": "-",
       "Consonantal": "-",
@@ -1000,5 +1010,7 @@
       "Trill": "-",
       "Voice": "-"
     }
-  }
+  },
+  "name": "English Phoneme Inventory (Hayes 2009)",
+  "version": "1.1"
 }
