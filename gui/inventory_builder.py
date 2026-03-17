@@ -91,6 +91,44 @@ _FEATURE_PRESETS = {
 _VALID_VALUES = {"+", "-", "0"}
 
 
+def _center_on_parent(dialog, parent):
+    """Move *dialog* to the center of *parent*'s screen.
+
+    On multi-monitor setups (especially WSL2/X11), Qt's static dialog
+    helpers sometimes place windows on the primary monitor instead of
+    the parent's monitor.  This ensures co-location.
+    """
+    if parent is None:
+        return
+    screen = parent.screen()
+    if screen is None:
+        return
+    geo = screen.availableGeometry()
+    frame = dialog.frameGeometry()
+    frame.moveCenter(geo.center())
+    dialog.move(frame.topLeft())
+
+
+def _ask_question(parent, title: str, text: str, buttons=None, default=None):
+    """Show a question dialog centered on *parent*'s screen."""
+    if buttons is None:
+        buttons = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+    if default is None:
+        default = QMessageBox.StandardButton.No
+    box = QMessageBox(QMessageBox.Icon.Question, title, text, buttons, parent)
+    box.setDefaultButton(default)
+    _center_on_parent(box, parent)
+    return box.exec()
+
+
+def _show_warning(parent, title: str, text: str):
+    """Show a warning dialog centered on *parent*'s screen."""
+    box = QMessageBox(QMessageBox.Icon.Warning, title, text,
+                      QMessageBox.StandardButton.Ok, parent)
+    _center_on_parent(box, parent)
+    box.exec()
+
+
 # ---------------------------------------------------------------------------
 # FeatureCell — clickable table cell that cycles through +, −, 0
 # ---------------------------------------------------------------------------
@@ -438,6 +476,7 @@ class InventoryBuilder(QMainWindow):
         if not self._check_unsaved():
             return
         dlg = InputDialog(self)
+        _center_on_parent(dlg, self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
@@ -446,14 +485,10 @@ class InventoryBuilder(QMainWindow):
         name = dlg.get_name()
 
         if not segments:
-            QMessageBox.warning(
-                self, "No segments", "Please enter at least one segment."
-            )
+            _show_warning(self, "No segments", "Please enter at least one segment.")
             return
         if not features:
-            QMessageBox.warning(
-                self, "No features", "Please enter at least one feature."
-            )
+            _show_warning(self, "No features", "Please enter at least one feature.")
             return
 
         # Check for duplicate segments
@@ -531,9 +566,12 @@ class InventoryBuilder(QMainWindow):
         """Prompt for a new segment and add a column."""
         from PyQt6.QtWidgets import QInputDialog
 
-        text, ok = QInputDialog.getText(
-            self, "Add Segment", "Segment symbol (IPA):"
-        )
+        dlg = QInputDialog(self)
+        dlg.setWindowTitle("Add Segment")
+        dlg.setLabelText("Segment symbol (IPA):")
+        _center_on_parent(dlg, self)
+        ok = dlg.exec() == QDialog.DialogCode.Accepted
+        text = dlg.textValue()
         if not ok or not text.strip():
             return
         seg = text.strip()
@@ -554,7 +592,12 @@ class InventoryBuilder(QMainWindow):
         """Prompt for a new feature and add a row."""
         from PyQt6.QtWidgets import QInputDialog
 
-        text, ok = QInputDialog.getText(self, "Add Feature", "Feature name:")
+        dlg = QInputDialog(self)
+        dlg.setWindowTitle("Add Feature")
+        dlg.setLabelText("Feature name:")
+        _center_on_parent(dlg, self)
+        ok = dlg.exec() == QDialog.DialogCode.Accepted
+        text = dlg.textValue()
         if not ok or not text.strip():
             return
         feat = text.strip()
@@ -578,13 +621,7 @@ class InventoryBuilder(QMainWindow):
             self._status.showMessage("Select a column to remove.")
             return
         seg = self._segments[col]
-        reply = QMessageBox.question(
-            self,
-            "Remove segment",
-            f"Remove segment '{seg}'?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
+        reply = _ask_question(self, "Remove segment", f"Remove segment '{seg}'?")
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._segments.pop(col)
@@ -599,13 +636,7 @@ class InventoryBuilder(QMainWindow):
             self._status.showMessage("Select a row to remove.")
             return
         feat = self._features[row]
-        reply = QMessageBox.question(
-            self,
-            "Remove feature",
-            f"Remove feature '{feat}'?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
+        reply = _ask_question(self, "Remove feature", f"Remove feature '{feat}'?")
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._features.pop(row)
@@ -655,9 +686,12 @@ class InventoryBuilder(QMainWindow):
         config_dir = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "config")
         )
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save Inventory", config_dir, "JSON Files (*.json)"
-        )
+        dlg = QFileDialog(self, "Save Inventory", config_dir, "JSON Files (*.json)")
+        dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        _center_on_parent(dlg, self)
+        if not dlg.exec():
+            return
+        path = dlg.selectedFiles()[0] if dlg.selectedFiles() else ""
         if not path:
             return
         if not path.endswith(".json"):
@@ -679,9 +713,13 @@ class InventoryBuilder(QMainWindow):
         config_dir = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "config")
         )
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Open Inventory", config_dir, "JSON Files (*.json)"
-        )
+        dlg = QFileDialog(self, "Open Inventory", config_dir, "JSON Files (*.json)")
+        dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
+        dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
+        _center_on_parent(dlg, self)
+        if not dlg.exec():
+            return
+        path = dlg.selectedFiles()[0] if dlg.selectedFiles() else ""
         if path:
             self._load_existing(path)
 
@@ -691,7 +729,7 @@ class InventoryBuilder(QMainWindow):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
-            QMessageBox.warning(self, "Load error", str(e))
+            _show_warning(self, "Load error", str(e))
             return
 
         self._inv_name = data.get("name", os.path.basename(path))
@@ -737,14 +775,16 @@ class InventoryBuilder(QMainWindow):
         """Return True if it's OK to discard changes (or there are none)."""
         if not self._dirty:
             return True
-        reply = QMessageBox.question(
+        reply = _ask_question(
             self,
             "Unsaved changes",
             "You have unsaved changes. Discard them?",
-            QMessageBox.StandardButton.Save
-            | QMessageBox.StandardButton.Discard
-            | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
+            buttons=(
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel
+            ),
+            default=QMessageBox.StandardButton.Cancel,
         )
         if reply == QMessageBox.StandardButton.Save:
             self._save()
