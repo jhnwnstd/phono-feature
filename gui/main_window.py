@@ -326,6 +326,35 @@ class FeatureRow(QWidget):
 
     value_changed = pyqtSignal(str, str)  # feature_name, value ('+'/'-'/'')
 
+    # Pre-computed stylesheets for set_display() — avoids f-string per call
+    _BADGE_CONTRASTIVE = (
+        f"background: {C['accent_light']}; color: {C['accent']};"
+        " border-radius: 4px; font-weight: bold;"
+    )
+    _NAME_CONTRASTIVE = f"color: {C['accent']}; font-weight: bold;"
+    _ROW_CONTRASTIVE = f"background: {C['accent_light']}; border-radius: 6px;"
+
+    _BADGE_NEUTRAL = (
+        f"background: {C['tag_gray']};"
+        f" color: {C['tag_gray_text']}; border-radius: 4px;"
+    )
+    _NAME_DIM = f"color: {C['text_dim']};"
+    _ROW_TRANSPARENT = "background: transparent; border-radius: 6px;"
+
+    _BADGE_PLUS = (
+        f"background: {C['plus_bg']}; color: {C['plus']};"
+        " border-radius: 4px; font-weight: bold;"
+    )
+    _ROW_PLUS = f"background: {C['shared_plus']}; border-radius: 6px;"
+
+    _BADGE_MINUS = (
+        f"background: {C['minus_bg']}; color: {C['minus']};"
+        " border-radius: 4px; font-weight: bold;"
+    )
+    _ROW_MINUS = f"background: {C['shared_minus']}; border-radius: 6px;"
+
+    _NAME_BOLD = f"color: {C['text']}; font-weight: bold;"
+
     def __init__(self, feature_name: str, parent=None):
         super().__init__(parent)
         self.feature = feature_name
@@ -429,45 +458,23 @@ class FeatureRow(QWidget):
         """
         if contrastive:
             self.badge.setText("\u00b1")
-            self.badge.setStyleSheet(
-                f"background: {C['accent_light']}; color: {C['accent']};"
-                " border-radius: 4px; font-weight: bold;"
-            )
-            self.name_label.setStyleSheet(
-                f"color: {C['accent']}; font-weight: bold;"
-            )
-            self.setStyleSheet(
-                f"background: {C['accent_light']}; border-radius: 6px;"
-            )
+            self.badge.setStyleSheet(self._BADGE_CONTRASTIVE)
+            self.name_label.setStyleSheet(self._NAME_CONTRASTIVE)
+            self.setStyleSheet(self._ROW_CONTRASTIVE)
         elif not value or not shared:
             self.badge.setText("\u00b7")
-            self.badge.setStyleSheet(
-                f"background: {C['tag_gray']};"
-                f" color: {C['tag_gray_text']}; border-radius: 4px;"
-            )
-            self.name_label.setStyleSheet(f"color: {C['text_dim']};")
-            self.setStyleSheet("background: transparent; border-radius: 6px;")
+            self.badge.setStyleSheet(self._BADGE_NEUTRAL)
+            self.name_label.setStyleSheet(self._NAME_DIM)
+            self.setStyleSheet(self._ROW_TRANSPARENT)
         else:
             self.badge.setText(value)
             if value == "+":
-                self.badge.setStyleSheet(
-                    f"background: {C['plus_bg']}; color: {C['plus']};"
-                    " border-radius: 4px; font-weight: bold;"
-                )
-                self.setStyleSheet(
-                    f"background: {C['shared_plus']}; border-radius: 6px;"
-                )
+                self.badge.setStyleSheet(self._BADGE_PLUS)
+                self.setStyleSheet(self._ROW_PLUS)
             else:
-                self.badge.setStyleSheet(
-                    f"background: {C['minus_bg']}; color: {C['minus']};"
-                    " border-radius: 4px; font-weight: bold;"
-                )
-                self.setStyleSheet(
-                    f"background: {C['shared_minus']}; border-radius: 6px;"
-                )
-            self.name_label.setStyleSheet(
-                f"color: {C['text']}; font-weight: bold;"
-            )
+                self.badge.setStyleSheet(self._BADGE_MINUS)
+                self.setStyleSheet(self._ROW_MINUS)
+            self.name_label.setStyleSheet(self._NAME_BOLD)
 
     def restore_value(self, value: str):
         """Silently restore a saved +/- value (no signal emitted)."""
@@ -692,12 +699,12 @@ class SegmentGridWidget(QWidget):
 # ---------------------------------------------------------------------------
 
 _VOWEL_HEIGHT: list = [
-    ("Close",      "+", "-", "+"),
+    ("Close", "+", "-", "+"),
     ("Near-close", "+", "-", "-"),
-    ("Close-mid",  "-", "-", "+"),
-    ("Open-mid",   "-", "-", "-"),
-    ("Near-open",  "-", "+", "-"),
-    ("Open",       "-", "+", None),
+    ("Close-mid", "-", "-", "+"),
+    ("Open-mid", "-", "-", "-"),
+    ("Near-open", "-", "+", "-"),
+    ("Open", "-", "+", None),
 ]
 
 
@@ -1614,13 +1621,12 @@ class MainWindow(QMainWindow):
     def _populate_features(self):
         assert self.engine is not None
 
-        active_feature_set = {
-            f
-            for f in self.engine.features
-            if any(
-                seg.get(f, "0") != "0" for seg in self.engine.segments.values()
-            )
-        }
+        active_feature_set: set = set()
+        for seg_feats in self.engine.segments.values():
+            for f, v in seg_feats.items():
+                if v != "0":
+                    active_feature_set.add(f)
+        active_feature_set &= set(self.engine.features)
 
         # Skip full rebuild if the feature set hasn't changed
         if active_feature_set == set(self._feat_rows.keys()):

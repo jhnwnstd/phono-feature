@@ -422,7 +422,9 @@ def group_segments(
         assignment[new_label] = assignment.pop(target)
 
     # Step 3: Relabel groups whose origin set matches a known class.
-    for gname in list(assignment.keys()):
+    for gname in list(
+        assignment.keys()
+    ):  # list() needed: loop may mutate dict
         origin_set = frozenset(initial_group[sym] for sym in assignment[gname])
         relabel: str | None = _RELABEL_PATTERNS.get(origin_set)
         if relabel is not None and relabel != gname:
