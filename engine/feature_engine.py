@@ -520,13 +520,19 @@ class FeatureEngine:
         }
 
         if len(self.segments) > 1:
-            segs = list(self.segments.keys())
-            distances = [
-                self.segment_distance(segs[i], segs[j])
-                for i in range(len(segs))
-                for j in range(i + 1, len(segs))
-            ]
-            stats["avg_feature_distance"] = sum(distances) / len(distances)
+            seg_feats = list(self.segments.values())
+            features = self.features
+            total = 0
+            count = 0
+            for i in range(len(seg_feats)):
+                fi = seg_feats[i]
+                for j in range(i + 1, len(seg_feats)):
+                    fj = seg_feats[j]
+                    total += sum(
+                        fi.get(f, "0") != fj.get(f, "0") for f in features
+                    )
+                    count += 1
+            stats["avg_feature_distance"] = total / count
         else:
             stats["avg_feature_distance"] = 0.0
 

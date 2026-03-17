@@ -14,7 +14,7 @@ import os
 from typing import Optional
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -75,8 +75,7 @@ _FEATURE_PRESETS = {
     "Custom": [],
 }
 
-# Place nodes that should remain all-caps
-_ALLCAPS = {"CORONAL", "LABIAL", "DORSAL"}
+_VALID_VALUES = {"+", "-", "0"}
 
 
 # ---------------------------------------------------------------------------
@@ -93,32 +92,31 @@ def _make_cell(value: str = "0") -> QTableWidgetItem:
     return item
 
 
+_CELL_BRUSH = {
+    "+": (QBrush(QColor(C["plus"])), QBrush(QColor(C["plus_bg"]))),
+    "-": (QBrush(QColor(C["minus"])), QBrush(QColor(C["minus_bg"]))),
+    "−": (QBrush(QColor(C["minus"])), QBrush(QColor(C["minus_bg"]))),
+    "0": (QBrush(QColor(C["text_dim"])), QBrush(QColor("#FFFFFF"))),
+}
+_CELL_FONT_BOLD = QFont("Noto Sans", 10, QFont.Weight.Bold)
+_CELL_FONT_NORMAL = QFont("Noto Sans", 10)
+
+
 def _style_cell(item: QTableWidgetItem, value: str):
     """Apply colour to a cell based on its value."""
-    from PyQt6.QtGui import QBrush, QColor
-
-    if value == "+":
-        item.setForeground(QBrush(QColor(C["plus"])))
-        item.setBackground(QBrush(QColor(C["plus_bg"])))
-        item.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-    elif value == "−" or value == "-":
-        item.setForeground(QBrush(QColor(C["minus"])))
-        item.setBackground(QBrush(QColor(C["minus_bg"])))
-        item.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-    else:
-        item.setForeground(QBrush(QColor(C["text_dim"])))
-        item.setBackground(QBrush(QColor("#FFFFFF")))
-        item.setFont(QFont("Noto Sans", 10))
+    fg, bg = _CELL_BRUSH.get(value, _CELL_BRUSH["0"])
+    item.setForeground(fg)
+    item.setBackground(bg)
+    item.setFont(_CELL_FONT_BOLD if value != "0" else _CELL_FONT_NORMAL)
 
 
 def _cycle_value(current: str) -> str:
-    """Cycle: 0 → + → − → 0."""
+    """Cycle: 0 → + → − → 0.  Any unrecognised value resets to 0."""
     if current == "0":
         return "+"
-    elif current == "+":
+    if current == "+":
         return "−"
-    else:
-        return "0"
+    return "0"  # covers both ASCII "-" and Unicode "−", plus any bad state
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +256,7 @@ class InventoryBuilder(QMainWindow):
         self._features: list = []
         self._inv_name: str = "Untitled Inventory"
         self._current_path: Optional[str] = None
+        self._dirty: bool = False
 
         self._build_ui()
 
@@ -407,6 +406,8 @@ class InventoryBuilder(QMainWindow):
         )
 
     def _show_setup_dialog(self):
+        if not self._check_unsaved():
+            return
         dlg = InputDialog(self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
@@ -439,6 +440,7 @@ class InventoryBuilder(QMainWindow):
         self._features = features
         self._inv_name = name
         self._current_path = None
+        self._dirty = True
         self._rebuild_table()
         self._update_title()
         self._status.showMessage(
@@ -494,6 +496,7 @@ class InventoryBuilder(QMainWindow):
         new_val = _cycle_value(current)
         item.setText(new_val)
         _style_cell(item, new_val)
+        self._dirty = True
 
     def _add_segment(self):
         """Prompt for a new segment and add a column."""
@@ -515,6 +518,7 @@ class InventoryBuilder(QMainWindow):
         self._table.setHorizontalHeaderItem(col, QTableWidgetItem(seg))
         for r in range(len(self._features)):
             self._table.setItem(r, col, _make_cell("0"))
+        self._dirty = True
         self._status.showMessage(f"Added segment '{seg}'.")
 
     def _add_feature(self):
@@ -535,6 +539,7 @@ class InventoryBuilder(QMainWindow):
         self._table.setVerticalHeaderItem(row, QTableWidgetItem(feat))
         for c in range(len(self._segments)):
             self._table.setItem(row, c, _make_cell("0"))
+        self._dirty = True
         self._status.showMessage(f"Added feature '{feat}'.")
 
     def _to_dict(self) -> dict:
@@ -542,14 +547,24 @@ class InventoryBuilder(QMainWindow):
 
         Table layout: rows=features, cols=segments.
         """
+        assert self._table.columnCount() == len(self._segments), (
+            f"Table cols ({self._table.columnCount()}) != segments ({len(self._segments)})"
+        )
+        assert self._table.rowCount() == len(self._features), (
+            f"Table rows ({self._table.rowCount()}) != features ({len(self._features)})"
+        )
+
         segments = {}
         for c, seg in enumerate(self._segments):
             feats = {}
             for r, feat in enumerate(self._features):
                 item = self._table.item(r, c)
                 val = item.text() if item else "0"
+                # Normalise Unicode minus → ASCII; clamp bad values to "0"
                 if val == "\u2212":
                     val = "-"
+                if val not in _VALID_VALUES:
+                    val = "0"
                 feats[feat] = val
             segments[seg] = feats
 
@@ -584,9 +599,12 @@ class InventoryBuilder(QMainWindow):
         data = self._to_dict()
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        self._dirty = False
         self._status.showMessage(f"Saved to {os.path.basename(path)}")
 
     def _open_file(self):
+        if not self._check_unsaved():
+            return
         config_dir = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "config")
         )
@@ -620,6 +638,12 @@ class InventoryBuilder(QMainWindow):
             self._features = sorted(all_feats)
 
         self._segments = list(segments_dict.keys())
+
+        # Dedup (preserving order) — guards against malformed files
+        seen_s: set = set()
+        self._segments = [s for s in self._segments if not (s in seen_s or seen_s.add(s))]  # type: ignore[func-returns-value]
+        seen_f: set = set()
+        self._features = [f for f in self._features if not (f in seen_f or seen_f.add(f))]  # type: ignore[func-returns-value]
         self._current_path = path
 
         self._rebuild_table()
@@ -631,11 +655,36 @@ class InventoryBuilder(QMainWindow):
                 val = seg_feats.get(feat, "0")
                 self._table.setItem(r, c, _make_cell(val))
 
+        self._dirty = False
         self._update_title()
         self._status.showMessage(
             f"Loaded {os.path.basename(path)}: "
             f"{len(self._segments)} segments \u00d7 {len(self._features)} features."
         )
+
+    def _check_unsaved(self) -> bool:
+        """Return True if it's OK to discard changes (or there are none)."""
+        if not self._dirty:
+            return True
+        reply = QMessageBox.question(
+            self,
+            "Unsaved changes",
+            "You have unsaved changes. Discard them?",
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if reply == QMessageBox.StandardButton.Save:
+            self._save()
+            return not self._dirty  # False if save was cancelled
+        return reply == QMessageBox.StandardButton.Discard
+
+    def closeEvent(self, event):
+        if self._check_unsaved():
+            event.accept()
+        else:
+            event.ignore()
 
     def _update_title(self):
         name = self._inv_name or "Untitled"

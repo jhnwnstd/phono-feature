@@ -76,10 +76,11 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
                 errors.append(
                     f"'features' contains non-string entries: {non_str[:5]}"
                 )
-            dupes = [f for f in features if features.count(f) > 1]
+            seen: set = set()
+            dupes = {f for f in features if f in seen or seen.add(f)}  # type: ignore[func-returns-value]
             if dupes:
                 errors.append(
-                    f"'features' contains duplicates: {sorted(set(dupes))}"
+                    f"'features' contains duplicates: {sorted(dupes)}"
                 )
 
     # -- Segments dict --
