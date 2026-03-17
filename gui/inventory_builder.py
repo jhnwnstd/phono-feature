@@ -377,6 +377,22 @@ class InventoryBuilder(QMainWindow):
         add_feat_btn.clicked.connect(self._add_feature)
         toolbar.addWidget(add_feat_btn)
 
+        toolbar.addSeparator()
+
+        rm_seg_btn = QPushButton("\u2212 Segment")
+        rm_seg_btn.setFont(QFont("Noto Sans", 10))
+        rm_seg_btn.setFixedHeight(32)
+        rm_seg_btn.setStyleSheet(btn_style)
+        rm_seg_btn.clicked.connect(self._remove_segment)
+        toolbar.addWidget(rm_seg_btn)
+
+        rm_feat_btn = QPushButton("\u2212 Feature")
+        rm_feat_btn.setFont(QFont("Noto Sans", 10))
+        rm_feat_btn.setFixedHeight(32)
+        rm_feat_btn.setStyleSheet(btn_style)
+        rm_feat_btn.clicked.connect(self._remove_feature)
+        toolbar.addWidget(rm_feat_btn)
+
         # Central table
         central = QWidget()
         self.setCentralWidget(central)
@@ -554,6 +570,48 @@ class InventoryBuilder(QMainWindow):
             self._table.setItem(row, c, _make_cell("0"))
         self._dirty = True
         self._status.showMessage(f"Added feature '{feat}'.")
+
+    def _remove_segment(self):
+        """Remove the currently selected column (segment), or prompt if none."""
+        col = self._table.currentColumn()
+        if col < 0 or col >= len(self._segments):
+            self._status.showMessage("Select a column to remove.")
+            return
+        seg = self._segments[col]
+        reply = QMessageBox.question(
+            self,
+            "Remove segment",
+            f"Remove segment '{seg}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._segments.pop(col)
+        self._table.removeColumn(col)
+        self._dirty = True
+        self._status.showMessage(f"Removed segment '{seg}'.")
+
+    def _remove_feature(self):
+        """Remove the currently selected row (feature), or prompt if none."""
+        row = self._table.currentRow()
+        if row < 0 or row >= len(self._features):
+            self._status.showMessage("Select a row to remove.")
+            return
+        feat = self._features[row]
+        reply = QMessageBox.question(
+            self,
+            "Remove feature",
+            f"Remove feature '{feat}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._features.pop(row)
+        self._table.removeRow(row)
+        self._dirty = True
+        self._status.showMessage(f"Removed feature '{feat}'.")
 
     def _to_dict(self) -> dict:
         """Convert the current grid to the JSON-compatible dict format.
