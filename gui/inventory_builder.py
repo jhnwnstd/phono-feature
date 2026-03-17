@@ -112,7 +112,9 @@ def _center_on_parent(dialog, parent):
 def _ask_question(parent, title: str, text: str, buttons=None, default=None):
     """Show a question dialog centered on *parent*'s screen."""
     if buttons is None:
-        buttons = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        buttons = (
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
     if default is None:
         default = QMessageBox.StandardButton.No
     box = QMessageBox(QMessageBox.Icon.Question, title, text, buttons, parent)
@@ -123,8 +125,13 @@ def _ask_question(parent, title: str, text: str, buttons=None, default=None):
 
 def _show_warning(parent, title: str, text: str):
     """Show a warning dialog centered on *parent*'s screen."""
-    box = QMessageBox(QMessageBox.Icon.Warning, title, text,
-                      QMessageBox.StandardButton.Ok, parent)
+    box = QMessageBox(
+        QMessageBox.Icon.Warning,
+        title,
+        text,
+        QMessageBox.StandardButton.Ok,
+        parent,
+    )
     _center_on_parent(box, parent)
     box.exec()
 
@@ -308,6 +315,8 @@ class InventoryBuilder(QMainWindow):
         self._inv_name: str = "Untitled Inventory"
         self._current_path: Optional[str] = None
         self._dirty: bool = False
+        self._selected_remove_col: Optional[int] = None
+        self._selected_remove_row: Optional[int] = None
 
         self._build_ui()
 
@@ -417,19 +426,33 @@ class InventoryBuilder(QMainWindow):
 
         toolbar.addSeparator()
 
-        rm_seg_btn = QPushButton("\u2212 Segment")
-        rm_seg_btn.setFont(QFont("Noto Sans", 10))
-        rm_seg_btn.setFixedHeight(32)
-        rm_seg_btn.setStyleSheet(btn_style)
-        rm_seg_btn.clicked.connect(self._remove_segment)
-        toolbar.addWidget(rm_seg_btn)
+        self._rm_seg_btn = QPushButton("\u2212 Segment")
+        self._rm_seg_btn.setFont(QFont("Noto Sans", 10))
+        self._rm_seg_btn.setFixedHeight(32)
+        self._rm_seg_btn.setEnabled(False)
+        self._rm_seg_btn.clicked.connect(self._remove_segment)
+        toolbar.addWidget(self._rm_seg_btn)
 
-        rm_feat_btn = QPushButton("\u2212 Feature")
-        rm_feat_btn.setFont(QFont("Noto Sans", 10))
-        rm_feat_btn.setFixedHeight(32)
-        rm_feat_btn.setStyleSheet(btn_style)
-        rm_feat_btn.clicked.connect(self._remove_feature)
-        toolbar.addWidget(rm_feat_btn)
+        self._rm_feat_btn = QPushButton("\u2212 Feature")
+        self._rm_feat_btn.setFont(QFont("Noto Sans", 10))
+        self._rm_feat_btn.setFixedHeight(32)
+        self._rm_feat_btn.setEnabled(False)
+        self._rm_feat_btn.clicked.connect(self._remove_feature)
+        toolbar.addWidget(self._rm_feat_btn)
+
+        self._btn_style_enabled = btn_style
+        self._btn_style_disabled = f"""
+            QPushButton {{
+                background: {C["bg"]};
+                color: {C["text_dim"]};
+                border: 1.5px solid {C["border"]};
+                border-radius: 6px;
+                padding: 0 12px;
+            }}
+        """
+        # Style starts disabled; _update_remove_btns called after table exists
+        self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
+        self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
 
         # Central table
         central = QWidget()
@@ -460,6 +483,14 @@ class InventoryBuilder(QMainWindow):
         )
         self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.installEventFilter(self)
+
+        # Header clicks select full row/column — track which for remove buttons
+        h_header = self._table.horizontalHeader()
+        v_header = self._table.verticalHeader()
+        if h_header:
+            h_header.sectionClicked.connect(self._on_col_header_clicked)
+        if v_header:
+            v_header.sectionClicked.connect(self._on_row_header_clicked)
         layout.addWidget(self._table)
 
         # Status bar
@@ -485,20 +516,21 @@ class InventoryBuilder(QMainWindow):
         name = dlg.get_name()
 
         if not segments:
-            _show_warning(self, "No segments", "Please enter at least one segment.")
+            _show_warning(
+                self, "No segments", "Please enter at least one segment."
+            )
             return
         if not features:
-            _show_warning(self, "No features", "Please enter at least one feature.")
+            _show_warning(
+                self, "No features", "Please enter at least one feature."
+            )
             return
 
-        # Check for duplicate segments
-        seen = set()
-        unique = []
-        for s in segments:
-            if s not in seen:
-                seen.add(s)
-                unique.append(s)
-        segments = unique
+        # Deduplicate segments and features (preserving order)
+        seen_s: set = set()
+        segments = [s for s in segments if not (s in seen_s or seen_s.add(s))]  # type: ignore[func-returns-value]
+        seen_f: set = set()
+        features = [f for f in features if not (f in seen_f or seen_f.add(f))]  # type: ignore[func-returns-value]
 
         self._segments = segments
         self._features = features
@@ -552,6 +584,34 @@ class InventoryBuilder(QMainWindow):
                     return True
         return super().eventFilter(obj, event)
 
+    def _on_col_header_clicked(self, col: int):
+        """A segment column header was clicked — enable segment removal only."""
+        self._selected_remove_col = col
+        self._selected_remove_row = None
+        self._table.selectColumn(col)
+        self._rm_seg_btn.setEnabled(True)
+        self._rm_seg_btn.setStyleSheet(self._btn_style_enabled)
+        self._rm_feat_btn.setEnabled(False)
+        self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
+
+    def _on_row_header_clicked(self, row: int):
+        """A feature row header was clicked — enable feature removal only."""
+        self._selected_remove_row = row
+        self._selected_remove_col = None
+        self._table.selectRow(row)
+        self._rm_feat_btn.setEnabled(True)
+        self._rm_feat_btn.setStyleSheet(self._btn_style_enabled)
+        self._rm_seg_btn.setEnabled(False)
+        self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
+
+    def _disable_remove_btns(self):
+        self._selected_remove_col = None
+        self._selected_remove_row = None
+        self._rm_seg_btn.setEnabled(False)
+        self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
+        self._rm_feat_btn.setEnabled(False)
+        self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
+
     def _on_cell_clicked(self, row: int, col: int):
         item = self._table.item(row, col)
         if item is None:
@@ -561,6 +621,7 @@ class InventoryBuilder(QMainWindow):
         item.setText(new_val)
         _style_cell(item, new_val)
         self._dirty = True
+        self._disable_remove_btns()
 
     def _add_segment(self):
         """Prompt for a new segment and add a column."""
@@ -615,33 +676,37 @@ class InventoryBuilder(QMainWindow):
         self._status.showMessage(f"Added feature '{feat}'.")
 
     def _remove_segment(self):
-        """Remove the currently selected column (segment), or prompt if none."""
-        col = self._table.currentColumn()
-        if col < 0 or col >= len(self._segments):
-            self._status.showMessage("Select a column to remove.")
+        """Remove the header-selected column (segment)."""
+        col = self._selected_remove_col
+        if col is None or col < 0 or col >= len(self._segments):
             return
         seg = self._segments[col]
-        reply = _ask_question(self, "Remove segment", f"Remove segment '{seg}'?")
+        reply = _ask_question(
+            self, "Remove segment", f"Remove segment '{seg}'?"
+        )
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._segments.pop(col)
         self._table.removeColumn(col)
         self._dirty = True
+        self._disable_remove_btns()
         self._status.showMessage(f"Removed segment '{seg}'.")
 
     def _remove_feature(self):
-        """Remove the currently selected row (feature), or prompt if none."""
-        row = self._table.currentRow()
-        if row < 0 or row >= len(self._features):
-            self._status.showMessage("Select a row to remove.")
+        """Remove the header-selected row (feature)."""
+        row = self._selected_remove_row
+        if row is None or row < 0 or row >= len(self._features):
             return
         feat = self._features[row]
-        reply = _ask_question(self, "Remove feature", f"Remove feature '{feat}'?")
+        reply = _ask_question(
+            self, "Remove feature", f"Remove feature '{feat}'?"
+        )
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._features.pop(row)
         self._table.removeRow(row)
         self._dirty = True
+        self._disable_remove_btns()
         self._status.showMessage(f"Removed feature '{feat}'.")
 
     def _to_dict(self) -> dict:
@@ -649,12 +714,12 @@ class InventoryBuilder(QMainWindow):
 
         Table layout: rows=features, cols=segments.
         """
-        assert self._table.columnCount() == len(self._segments), (
-            f"Table cols ({self._table.columnCount()}) != segments ({len(self._segments)})"
-        )
-        assert self._table.rowCount() == len(self._features), (
-            f"Table rows ({self._table.rowCount()}) != features ({len(self._features)})"
-        )
+        assert self._table.columnCount() == len(
+            self._segments
+        ), f"Table cols ({self._table.columnCount()}) != segments ({len(self._segments)})"
+        assert self._table.rowCount() == len(
+            self._features
+        ), f"Table rows ({self._table.rowCount()}) != features ({len(self._features)})"
 
         segments = {}
         for c, seg in enumerate(self._segments):
@@ -672,6 +737,7 @@ class InventoryBuilder(QMainWindow):
 
         return {
             "name": self._inv_name,
+            "metadata": {"name": self._inv_name},
             "features": list(self._features),
             "segments": segments,
         }
@@ -686,7 +752,9 @@ class InventoryBuilder(QMainWindow):
         config_dir = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "config")
         )
-        dlg = QFileDialog(self, "Save Inventory", config_dir, "JSON Files (*.json)")
+        dlg = QFileDialog(
+            self, "Save Inventory", config_dir, "JSON Files (*.json)"
+        )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         _center_on_parent(dlg, self)
         if not dlg.exec():
@@ -713,7 +781,9 @@ class InventoryBuilder(QMainWindow):
         config_dir = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "config")
         )
-        dlg = QFileDialog(self, "Open Inventory", config_dir, "JSON Files (*.json)")
+        dlg = QFileDialog(
+            self, "Open Inventory", config_dir, "JSON Files (*.json)"
+        )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
         dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
         _center_on_parent(dlg, self)
@@ -732,7 +802,11 @@ class InventoryBuilder(QMainWindow):
             _show_warning(self, "Load error", str(e))
             return
 
-        self._inv_name = data.get("name", os.path.basename(path))
+        self._inv_name = (
+            data.get("metadata", {}).get("name")
+            or data.get("name")
+            or os.path.basename(path)
+        )
         segments_dict = data.get("segments", {})
 
         # Extract features: prefer declared list, fall back to union of all segment keys
