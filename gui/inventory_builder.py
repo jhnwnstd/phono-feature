@@ -393,6 +393,7 @@ class InventoryBuilder(QMainWindow):
             """
         )
         self._table.cellClicked.connect(self._on_cell_clicked)
+        self._table.installEventFilter(self)
         layout.addWidget(self._table)
 
         # Status bar
@@ -446,34 +447,44 @@ class InventoryBuilder(QMainWindow):
         )
 
     def _rebuild_table(self):
-        """Build the table from current segments and features."""
+        """Build the table: rows=features, cols=segments."""
         self._table.clear()
-        self._table.setRowCount(len(self._segments))
-        self._table.setColumnCount(len(self._features))
+        self._table.setRowCount(len(self._features))
+        self._table.setColumnCount(len(self._segments))
 
-        # Headers
-        self._table.setVerticalHeaderLabels(self._segments)
-        self._table.setHorizontalHeaderLabels(self._features)
+        # Headers: features down the left, segments across the top
+        self._table.setVerticalHeaderLabels(self._features)
+        self._table.setHorizontalHeaderLabels(self._segments)
 
-        # Style headers
         v_header = self._table.verticalHeader()
         if v_header:
-            v_header.setFont(QFont("Noto Sans", 11))
-            v_header.setDefaultSectionSize(28)
-            v_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+            v_header.setFont(QFont("Noto Sans", 9))
+            v_header.setSectionResizeMode(
+                QHeaderView.ResizeMode.ResizeToContents
+            )
+            v_header.setMinimumSectionSize(24)
 
         h_header = self._table.horizontalHeader()
         if h_header:
-            h_header.setFont(QFont("Noto Sans", 9))
-            h_header.setSectionResizeMode(
-                QHeaderView.ResizeMode.ResizeToContents
-            )
-            h_header.setMinimumSectionSize(44)
+            h_header.setFont(QFont("Noto Sans", 11))
+            h_header.setDefaultSectionSize(36)
+            h_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+            h_header.setMinimumSectionSize(32)
 
         # Fill with default "0" cells
-        for r in range(len(self._segments)):
-            for c in range(len(self._features)):
+        for r in range(len(self._features)):
+            for c in range(len(self._segments)):
                 self._table.setItem(r, c, _make_cell("0"))
+
+    def eventFilter(self, obj, event):
+        if obj is self._table and event.type() == event.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Space:
+                row = self._table.currentRow()
+                col = self._table.currentColumn()
+                if row >= 0 and col >= 0:
+                    self._on_cell_clicked(row, col)
+                    return True
+        return super().eventFilter(obj, event)
 
     def _on_cell_clicked(self, row: int, col: int):
         item = self._table.item(row, col)
@@ -485,7 +496,7 @@ class InventoryBuilder(QMainWindow):
         _style_cell(item, new_val)
 
     def _add_segment(self):
-        """Prompt for a new segment and add a row."""
+        """Prompt for a new segment and add a column."""
         from PyQt6.QtWidgets import QInputDialog
 
         text, ok = QInputDialog.getText(
@@ -499,15 +510,15 @@ class InventoryBuilder(QMainWindow):
             return
 
         self._segments.append(seg)
-        row = self._table.rowCount()
-        self._table.insertRow(row)
-        self._table.setVerticalHeaderItem(row, QTableWidgetItem(seg))
-        for c in range(len(self._features)):
-            self._table.setItem(row, c, _make_cell("0"))
+        col = self._table.columnCount()
+        self._table.insertColumn(col)
+        self._table.setHorizontalHeaderItem(col, QTableWidgetItem(seg))
+        for r in range(len(self._features)):
+            self._table.setItem(r, col, _make_cell("0"))
         self._status.showMessage(f"Added segment '{seg}'.")
 
     def _add_feature(self):
-        """Prompt for a new feature and add a column."""
+        """Prompt for a new feature and add a row."""
         from PyQt6.QtWidgets import QInputDialog
 
         text, ok = QInputDialog.getText(self, "Add Feature", "Feature name:")
@@ -519,23 +530,25 @@ class InventoryBuilder(QMainWindow):
             return
 
         self._features.append(feat)
-        col = self._table.columnCount()
-        self._table.insertColumn(col)
-        self._table.setHorizontalHeaderItem(col, QTableWidgetItem(feat))
-        for r in range(len(self._segments)):
-            self._table.setItem(r, col, _make_cell("0"))
+        row = self._table.rowCount()
+        self._table.insertRow(row)
+        self._table.setVerticalHeaderItem(row, QTableWidgetItem(feat))
+        for c in range(len(self._segments)):
+            self._table.setItem(row, c, _make_cell("0"))
         self._status.showMessage(f"Added feature '{feat}'.")
 
     def _to_dict(self) -> dict:
-        """Convert the current grid to the JSON-compatible dict format."""
+        """Convert the current grid to the JSON-compatible dict format.
+
+        Table layout: rows=features, cols=segments.
+        """
         segments = {}
-        for r, seg in enumerate(self._segments):
+        for c, seg in enumerate(self._segments):
             feats = {}
-            for c, feat in enumerate(self._features):
+            for r, feat in enumerate(self._features):
                 item = self._table.item(r, c)
                 val = item.text() if item else "0"
-                # Normalize display minus to ASCII
-                if val == "−":
+                if val == "\u2212":
                     val = "-"
                 feats[feat] = val
             segments[seg] = feats
@@ -611,13 +624,12 @@ class InventoryBuilder(QMainWindow):
 
         self._rebuild_table()
 
-        # Fill in the values
-        for r, seg in enumerate(self._segments):
+        # Fill in the values (rows=features, cols=segments)
+        for c, seg in enumerate(self._segments):
             seg_feats = segments_dict.get(seg, {})
-            for c, feat in enumerate(self._features):
+            for r, feat in enumerate(self._features):
                 val = seg_feats.get(feat, "0")
-                item = _make_cell(val)
-                self._table.setItem(r, c, item)
+                self._table.setItem(r, c, _make_cell(val))
 
         self._update_title()
         self._status.showMessage(
