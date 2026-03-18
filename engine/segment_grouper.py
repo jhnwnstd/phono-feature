@@ -528,9 +528,7 @@ def group_segments(
         has_laryngeal = any(
             feats.get(f, "0") == "+" for f in _LARYNGEAL_FEATURES
         )
-        has_place = any(
-            feats.get(f, "0") == "+" for f in _PLACE_FEATURES
-        )
+        has_place = any(feats.get(f, "0") == "+" for f in _PLACE_FEATURES)
         is_vowel = feats.get("syllabic", "0") == "+"
         is_click = feats.get("click", "0") == "+"
         return (
