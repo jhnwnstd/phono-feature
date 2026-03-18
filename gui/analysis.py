@@ -9,7 +9,6 @@ engine data (segments, features, specs) and produce markup.
 from gui.constants import TAG_PALETTES, sort_features, sort_spec
 from gui.palette import C
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -76,20 +75,14 @@ def compute_contrastive(engine, segs: list) -> dict:
     result = {}
     for feat in engine.features:
         plus_segs = [
-            s
-            for s in segs
-            if engine.segments[s].get(feat, "0") == "+"
+            s for s in segs if engine.segments[s].get(feat, "0") == "+"
         ]
         minus_segs = [
-            s
-            for s in segs
-            if engine.segments[s].get(feat, "0") == "-"
+            s for s in segs if engine.segments[s].get(feat, "0") == "-"
         ]
         if plus_segs and minus_segs:
             zero_segs = [
-                s
-                for s in segs
-                if engine.segments[s].get(feat, "0") == "0"
+                s for s in segs if engine.segments[s].get(feat, "0") == "0"
             ]
             entry: dict = {"+": plus_segs, "-": minus_segs}
             if zero_segs:
@@ -189,9 +182,7 @@ def render_multi_segment(
                 )
             rows.append(row_html)
         contrast_html = (
-            "<p><b>Contrasting features:</b><br>"
-            + "<br>".join(rows)
-            + "</p>"
+            "<p><b>Contrasting features:</b><br>" + "<br>".join(rows) + "</p>"
         )
     else:
         # Check if segments differ only in underspecification (0 vs +/-)
@@ -261,7 +252,9 @@ def render_feat_to_seg(engine, feature_dict: dict, matching: list) -> str:
 
     if matching:
         seg_tags = " ".join(tag(f"/{s}/", "blue") for s in matching)
-        segs_html = f"<p><b>Matching segments ({len(matching)}):</b><br>{seg_tags}</p>"
+        segs_html = (
+            f"<p><b>Matching segments ({len(matching)}):</b><br>{seg_tags}</p>"
+        )
     else:
         segs_html = (
             "<p><b>Matching segments:</b>"

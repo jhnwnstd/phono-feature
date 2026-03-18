@@ -1,12 +1,6 @@
 """
-gui/inventory_builder.py
-Inventory Builder — create new phonological feature inventories via a grid editor.
-
-Provides a dialog where users can:
-  1. Enter segment symbols (IPA Unicode characters)
-  2. Enter feature names
-  3. Fill in +/−/0 values for each segment × feature cell
-  4. Save the result as a JSON file compatible with the main engine
+gui/builder/window.py
+InventoryBuilder — main grid editor window for creating/editing inventories.
 """
 
 import json
@@ -14,293 +8,31 @@ import os
 from typing import Optional
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QBrush, QColor, QFont
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QComboBox,
     QDialog,
     QFileDialog,
-    QHBoxLayout,
     QHeaderView,
-    QLabel,
-    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
-    QTextEdit,
     QToolBar,
     QVBoxLayout,
     QWidget,
 )
 
+from gui.builder.dialogs import (
+    InputDialog,
+    ask_question,
+    center_on_parent,
+    show_warning,
+)
+from gui.builder.grid import cycle_value, make_cell, style_cell
+from gui.builder.presets import VALID_VALUES
 from gui.palette import C
-
-# ---------------------------------------------------------------------------
-# Standard feature presets
-# ---------------------------------------------------------------------------
-
-_FEATURE_PRESETS = {
-    "Default (33)": [
-        # Major class
-        "Syllabic",
-        "Consonantal",
-        "Sonorant",
-        "Approximant",
-        # Laryngeal
-        "Voice",
-        "SpreadGl",
-        "ConstrGl",
-        # Manner
-        "Continuant",
-        "Strident",
-        "DelRel",
-        "Nasal",
-        "Lateral",
-        "Trill",
-        "Tap",
-        "Click",
-        # Place — LABIAL node + dependents
-        "LABIAL",
-        "Round",
-        "Labiodental",
-        # Place — CORONAL node + dependents
-        "CORONAL",
-        "Anterior",
-        "Distributed",
-        # Place — DORSAL node + dependents
-        "DORSAL",
-        "High",
-        "Low",
-        "Back",
-        "Front",
-        # Pharyngeal / advanced tongue root
-        "Pharyngeal",
-        "ATR",
-        "Tense",
-        # Prosodic
-        "Long",
-        "Stress",
-        "Tone",
-        "UpperRegister",
-    ],
-    "Custom": [],
-}
-
-_VALID_VALUES = {"+", "-", "0"}
-
-
-def _center_on_parent(dialog, parent):
-    """Move *dialog* to the center of *parent*'s screen.
-
-    On multi-monitor setups (especially WSL2/X11), Qt's static dialog
-    helpers sometimes place windows on the primary monitor instead of
-    the parent's monitor.  This ensures co-location.
-    """
-    if parent is None:
-        return
-    screen = parent.screen()
-    if screen is None:
-        return
-    geo = screen.availableGeometry()
-    frame = dialog.frameGeometry()
-    frame.moveCenter(geo.center())
-    dialog.move(frame.topLeft())
-
-
-def _ask_question(parent, title: str, text: str, buttons=None, default=None):
-    """Show a question dialog centered on *parent*'s screen."""
-    if buttons is None:
-        buttons = (
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-    if default is None:
-        default = QMessageBox.StandardButton.No
-    box = QMessageBox(QMessageBox.Icon.Question, title, text, buttons, parent)
-    box.setDefaultButton(default)
-    _center_on_parent(box, parent)
-    return box.exec()
-
-
-def _show_warning(parent, title: str, text: str):
-    """Show a warning dialog centered on *parent*'s screen."""
-    box = QMessageBox(
-        QMessageBox.Icon.Warning,
-        title,
-        text,
-        QMessageBox.StandardButton.Ok,
-        parent,
-    )
-    _center_on_parent(box, parent)
-    box.exec()
-
-
-# ---------------------------------------------------------------------------
-# FeatureCell — clickable table cell that cycles through +, −, 0
-# ---------------------------------------------------------------------------
-
-
-def _make_cell(value: str = "0") -> QTableWidgetItem:
-    """Create a styled table cell with the given feature value."""
-    item = QTableWidgetItem(value)
-    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-    item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
-    _style_cell(item, value)
-    return item
-
-
-_CELL_BRUSH = {
-    "+": (QBrush(QColor(C["plus"])), QBrush(QColor(C["plus_bg"]))),
-    "-": (QBrush(QColor(C["minus"])), QBrush(QColor(C["minus_bg"]))),
-    "−": (QBrush(QColor(C["minus"])), QBrush(QColor(C["minus_bg"]))),
-    "0": (QBrush(QColor(C["text_dim"])), QBrush(QColor("#FFFFFF"))),
-}
-_CELL_FONT_BOLD = QFont("Noto Sans", 10, QFont.Weight.Bold)
-_CELL_FONT_NORMAL = QFont("Noto Sans", 10)
-
-
-def _style_cell(item: QTableWidgetItem, value: str):
-    """Apply colour to a cell based on its value."""
-    fg, bg = _CELL_BRUSH.get(value, _CELL_BRUSH["0"])
-    item.setForeground(fg)
-    item.setBackground(bg)
-    item.setFont(_CELL_FONT_BOLD if value != "0" else _CELL_FONT_NORMAL)
-
-
-def _cycle_value(current: str) -> str:
-    """Cycle: 0 → + → − → 0.  Any unrecognised value resets to 0."""
-    if current == "0":
-        return "+"
-    if current == "+":
-        return "−"
-    return "0"  # covers both ASCII "-" and Unicode "−", plus any bad state
-
-
-# ---------------------------------------------------------------------------
-# Segment/Feature input dialog
-# ---------------------------------------------------------------------------
-
-
-class InputDialog(QDialog):
-    """Dialog for entering segments and features before opening the grid."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("New Inventory — Setup")
-        self.setMinimumSize(500, 500)
-        self.setWindowModality(Qt.WindowModality.WindowModal)
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
-
-        # Inventory name
-        name_lay = QHBoxLayout()
-        name_lay.addWidget(QLabel("Inventory name:"))
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("e.g. My Language Inventory")
-        name_lay.addWidget(self.name_edit)
-        layout.addLayout(name_lay)
-
-        # Segments input
-        seg_label = QLabel("Segments (one per line, or space-separated):")
-        seg_label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-        layout.addWidget(seg_label)
-
-        self.seg_edit = QTextEdit()
-        self.seg_edit.setPlaceholderText(
-            "p b t d k ɡ\nm n ŋ\nf v s z ʃ ʒ\n..."
-        )
-        self.seg_edit.setFont(QFont("Noto Sans", 12))
-        layout.addWidget(self.seg_edit)
-
-        # Feature preset
-        feat_preset_lay = QHBoxLayout()
-        feat_preset_lay.addWidget(QLabel("Feature set:"))
-        self.preset_combo = QComboBox()
-        for name in _FEATURE_PRESETS:
-            self.preset_combo.addItem(name)
-        self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
-        feat_preset_lay.addWidget(self.preset_combo)
-        layout.addLayout(feat_preset_lay)
-
-        # Features input
-        feat_label = QLabel("Features (one per line, or comma-separated):")
-        feat_label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-        layout.addWidget(feat_label)
-
-        self.feat_edit = QTextEdit()
-        self.feat_edit.setFont(QFont("Noto Sans", 10))
-        layout.addWidget(self.feat_edit)
-
-        # Pre-fill with first preset
-        self._on_preset_changed(self.preset_combo.currentText())
-
-        # Buttons
-        btn_lay = QHBoxLayout()
-        btn_lay.addStretch()
-
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        btn_lay.addWidget(cancel_btn)
-
-        ok_btn = QPushButton("Create Grid")
-        ok_btn.setStyleSheet(
-            f"""
-            QPushButton {{
-                background: {C["accent"]};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 20px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background: #1D4ED8;
-            }}
-            """
-        )
-        ok_btn.clicked.connect(self.accept)
-        btn_lay.addWidget(ok_btn)
-
-        layout.addLayout(btn_lay)
-
-    def _on_preset_changed(self, name: str):
-        features = _FEATURE_PRESETS.get(name, [])
-        if features:
-            self.feat_edit.setPlainText("\n".join(features))
-            self.feat_edit.setReadOnly(False)
-        else:
-            self.feat_edit.clear()
-            self.feat_edit.setReadOnly(False)
-            self.feat_edit.setPlaceholderText(
-                "Syllabic\nConsonantal\nSonorant\n..."
-            )
-
-    def get_segments(self) -> list:
-        text = self.seg_edit.toPlainText().strip()
-        if not text:
-            return []
-        # Split on whitespace and newlines, filter empty
-        return [
-            s.strip() for s in text.replace("\n", " ").split() if s.strip()
-        ]
-
-    def get_features(self) -> list:
-        text = self.feat_edit.toPlainText().strip()
-        if not text:
-            return []
-        # Split on newlines or commas
-        raw = text.replace(",", "\n").split("\n")
-        return [f.strip() for f in raw if f.strip()]
-
-    def get_name(self) -> str:
-        return self.name_edit.text().strip() or "Untitled Inventory"
-
-
-# ---------------------------------------------------------------------------
-# InventoryBuilder — main grid editor window
-# ---------------------------------------------------------------------------
 
 
 class InventoryBuilder(QMainWindow):
@@ -335,6 +67,10 @@ class InventoryBuilder(QMainWindow):
 
         if load_path:
             self._load_existing(load_path)
+
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
 
     def _build_ui(self):
         toolbar = QToolBar()
@@ -450,7 +186,6 @@ class InventoryBuilder(QMainWindow):
                 padding: 0 12px;
             }}
         """
-        # Style starts disabled; _update_remove_btns called after table exists
         self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
         self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
 
@@ -484,7 +219,6 @@ class InventoryBuilder(QMainWindow):
         self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.installEventFilter(self)
 
-        # Header clicks select full row/column — track which for remove buttons
         h_header = self._table.horizontalHeader()
         v_header = self._table.verticalHeader()
         if h_header:
@@ -503,11 +237,15 @@ class InventoryBuilder(QMainWindow):
             "Create a new inventory or open an existing one."
         )
 
+    # ------------------------------------------------------------------
+    # Setup dialog
+    # ------------------------------------------------------------------
+
     def _show_setup_dialog(self):
         if not self._check_unsaved():
             return
         dlg = InputDialog(self)
-        _center_on_parent(dlg, self)
+        center_on_parent(dlg, self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
@@ -516,12 +254,12 @@ class InventoryBuilder(QMainWindow):
         name = dlg.get_name()
 
         if not segments:
-            _show_warning(
+            show_warning(
                 self, "No segments", "Please enter at least one segment."
             )
             return
         if not features:
-            _show_warning(
+            show_warning(
                 self, "No features", "Please enter at least one feature."
             )
             return
@@ -544,16 +282,20 @@ class InventoryBuilder(QMainWindow):
             "Click cells to cycle through +/\u2212/0."
         )
 
+    # ------------------------------------------------------------------
+    # Table management
+    # ------------------------------------------------------------------
+
     def _rebuild_table(self):
         """Build the table: rows=features, cols=segments."""
         self._table.clear()
         self._table.setRowCount(len(self._features))
         self._table.setColumnCount(len(self._segments))
 
-        # Headers: features down the left, segments across the top
         self._table.setVerticalHeaderLabels(self._features)
         self._table.setHorizontalHeaderLabels(self._segments)
 
+        # clear() may replace header objects, so reconnect signals each time.
         v_header = self._table.verticalHeader()
         if v_header:
             v_header.setFont(QFont("Noto Sans", 9))
@@ -561,6 +303,7 @@ class InventoryBuilder(QMainWindow):
                 QHeaderView.ResizeMode.ResizeToContents
             )
             v_header.setMinimumSectionSize(24)
+            v_header.sectionClicked.connect(self._on_row_header_clicked)
 
         h_header = self._table.horizontalHeader()
         if h_header:
@@ -568,11 +311,11 @@ class InventoryBuilder(QMainWindow):
             h_header.setDefaultSectionSize(36)
             h_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             h_header.setMinimumSectionSize(32)
+            h_header.sectionClicked.connect(self._on_col_header_clicked)
 
-        # Fill with default "0" cells
         for r in range(len(self._features)):
             for c in range(len(self._segments)):
-                self._table.setItem(r, c, _make_cell("0"))
+                self._table.setItem(r, c, make_cell("0"))
 
     def eventFilter(self, obj, event):
         if obj is self._table and event.type() == event.Type.KeyPress:
@@ -583,6 +326,10 @@ class InventoryBuilder(QMainWindow):
                     self._on_cell_clicked(row, col)
                     return True
         return super().eventFilter(obj, event)
+
+    # ------------------------------------------------------------------
+    # Header selection / remove button state
+    # ------------------------------------------------------------------
 
     def _on_col_header_clicked(self, col: int):
         """A segment column header was clicked — enable segment removal only."""
@@ -617,11 +364,15 @@ class InventoryBuilder(QMainWindow):
         if item is None:
             return
         current = item.text()
-        new_val = _cycle_value(current)
+        new_val = cycle_value(current)
         item.setText(new_val)
-        _style_cell(item, new_val)
+        style_cell(item, new_val)
         self._dirty = True
         self._disable_remove_btns()
+
+    # ------------------------------------------------------------------
+    # Add / remove segments and features
+    # ------------------------------------------------------------------
 
     def _add_segment(self):
         """Prompt for a new segment and add a column."""
@@ -630,7 +381,7 @@ class InventoryBuilder(QMainWindow):
         dlg = QInputDialog(self)
         dlg.setWindowTitle("Add Segment")
         dlg.setLabelText("Segment symbol (IPA):")
-        _center_on_parent(dlg, self)
+        center_on_parent(dlg, self)
         ok = dlg.exec() == QDialog.DialogCode.Accepted
         text = dlg.textValue()
         if not ok or not text.strip():
@@ -645,7 +396,7 @@ class InventoryBuilder(QMainWindow):
         self._table.insertColumn(col)
         self._table.setHorizontalHeaderItem(col, QTableWidgetItem(seg))
         for r in range(len(self._features)):
-            self._table.setItem(r, col, _make_cell("0"))
+            self._table.setItem(r, col, make_cell("0"))
         self._dirty = True
         self._status.showMessage(f"Added segment '{seg}'.")
 
@@ -656,7 +407,7 @@ class InventoryBuilder(QMainWindow):
         dlg = QInputDialog(self)
         dlg.setWindowTitle("Add Feature")
         dlg.setLabelText("Feature name:")
-        _center_on_parent(dlg, self)
+        center_on_parent(dlg, self)
         ok = dlg.exec() == QDialog.DialogCode.Accepted
         text = dlg.textValue()
         if not ok or not text.strip():
@@ -671,7 +422,7 @@ class InventoryBuilder(QMainWindow):
         self._table.insertRow(row)
         self._table.setVerticalHeaderItem(row, QTableWidgetItem(feat))
         for c in range(len(self._segments)):
-            self._table.setItem(row, c, _make_cell("0"))
+            self._table.setItem(row, c, make_cell("0"))
         self._dirty = True
         self._status.showMessage(f"Added feature '{feat}'.")
 
@@ -681,7 +432,7 @@ class InventoryBuilder(QMainWindow):
         if col is None or col < 0 or col >= len(self._segments):
             return
         seg = self._segments[col]
-        reply = _ask_question(
+        reply = ask_question(
             self, "Remove segment", f"Remove segment '{seg}'?"
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -698,7 +449,7 @@ class InventoryBuilder(QMainWindow):
         if row is None or row < 0 or row >= len(self._features):
             return
         feat = self._features[row]
-        reply = _ask_question(
+        reply = ask_question(
             self, "Remove feature", f"Remove feature '{feat}'?"
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -709,17 +460,14 @@ class InventoryBuilder(QMainWindow):
         self._disable_remove_btns()
         self._status.showMessage(f"Removed feature '{feat}'.")
 
-    def _to_dict(self) -> dict:
-        """Convert the current grid to the JSON-compatible dict format.
+    # ------------------------------------------------------------------
+    # Serialization (save / load)
+    # ------------------------------------------------------------------
 
-        Table layout: rows=features, cols=segments.
-        """
-        assert self._table.columnCount() == len(
-            self._segments
-        ), f"Table cols ({self._table.columnCount()}) != segments ({len(self._segments)})"
-        assert self._table.rowCount() == len(
-            self._features
-        ), f"Table rows ({self._table.rowCount()}) != features ({len(self._features)})"
+    def _to_dict(self) -> dict:
+        """Convert the current grid to the JSON-compatible dict format."""
+        assert self._table.columnCount() == len(self._segments)
+        assert self._table.rowCount() == len(self._features)
 
         segments = {}
         for c, seg in enumerate(self._segments):
@@ -727,10 +475,9 @@ class InventoryBuilder(QMainWindow):
             for r, feat in enumerate(self._features):
                 item = self._table.item(r, c)
                 val = item.text() if item else "0"
-                # Normalise Unicode minus → ASCII; clamp bad values to "0"
                 if val == "\u2212":
                     val = "-"
-                if val not in _VALID_VALUES:
+                if val not in VALID_VALUES:
                     val = "0"
                 feats[feat] = val
             segments[seg] = feats
@@ -750,13 +497,13 @@ class InventoryBuilder(QMainWindow):
 
     def _save_as(self):
         config_dir = os.path.normpath(
-            os.path.join(os.path.dirname(__file__), "..", "config")
+            os.path.join(os.path.dirname(__file__), "..", "..", "config")
         )
         dlg = QFileDialog(
             self, "Save Inventory", config_dir, "JSON Files (*.json)"
         )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
-        _center_on_parent(dlg, self)
+        center_on_parent(dlg, self)
         if not dlg.exec():
             return
         path = dlg.selectedFiles()[0] if dlg.selectedFiles() else ""
@@ -779,14 +526,14 @@ class InventoryBuilder(QMainWindow):
         if not self._check_unsaved():
             return
         config_dir = os.path.normpath(
-            os.path.join(os.path.dirname(__file__), "..", "config")
+            os.path.join(os.path.dirname(__file__), "..", "..", "config")
         )
         dlg = QFileDialog(
             self, "Open Inventory", config_dir, "JSON Files (*.json)"
         )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
         dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
-        _center_on_parent(dlg, self)
+        center_on_parent(dlg, self)
         if not dlg.exec():
             return
         path = dlg.selectedFiles()[0] if dlg.selectedFiles() else ""
@@ -799,7 +546,7 @@ class InventoryBuilder(QMainWindow):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
-            _show_warning(self, "Load error", str(e))
+            show_warning(self, "Load error", str(e))
             return
 
         self._inv_name = (
@@ -809,7 +556,6 @@ class InventoryBuilder(QMainWindow):
         )
         segments_dict = data.get("segments", {})
 
-        # Extract features: prefer declared list, fall back to union of all segment keys
         declared = data.get("features", [])
         if declared:
             self._features = list(declared)
@@ -822,7 +568,7 @@ class InventoryBuilder(QMainWindow):
 
         self._segments = list(segments_dict.keys())
 
-        # Dedup (preserving order) — guards against malformed files
+        # Dedup (preserving order)
         seen_s: set = set()
         self._segments = [s for s in self._segments if not (s in seen_s or seen_s.add(s))]  # type: ignore[func-returns-value]
         seen_f: set = set()
@@ -831,12 +577,11 @@ class InventoryBuilder(QMainWindow):
 
         self._rebuild_table()
 
-        # Fill in the values (rows=features, cols=segments)
         for c, seg in enumerate(self._segments):
             seg_feats = segments_dict.get(seg, {})
             for r, feat in enumerate(self._features):
                 val = seg_feats.get(feat, "0")
-                self._table.setItem(r, c, _make_cell(val))
+                self._table.setItem(r, c, make_cell(val))
 
         self._dirty = False
         self._update_title()
@@ -845,11 +590,15 @@ class InventoryBuilder(QMainWindow):
             f"{len(self._segments)} segments \u00d7 {len(self._features)} features."
         )
 
+    # ------------------------------------------------------------------
+    # Unsaved changes guard
+    # ------------------------------------------------------------------
+
     def _check_unsaved(self) -> bool:
         """Return True if it's OK to discard changes (or there are none)."""
         if not self._dirty:
             return True
-        reply = _ask_question(
+        reply = ask_question(
             self,
             "Unsaved changes",
             "You have unsaved changes. Discard them?",
@@ -862,7 +611,7 @@ class InventoryBuilder(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Save:
             self._save()
-            return not self._dirty  # False if save was cancelled
+            return not self._dirty
         return reply == QMessageBox.StandardButton.Discard
 
     def closeEvent(self, event):
@@ -875,6 +624,6 @@ class InventoryBuilder(QMainWindow):
         name = self._inv_name or "Untitled"
         if self._current_path:
             fname = os.path.basename(self._current_path)
-            self.setWindowTitle(f"{name} ({fname}) — Inventory Builder")
+            self.setWindowTitle(f"{name} ({fname}) \u2014 Inventory Builder")
         else:
-            self.setWindowTitle(f"{name} — Inventory Builder")
+            self.setWindowTitle(f"{name} \u2014 Inventory Builder")
