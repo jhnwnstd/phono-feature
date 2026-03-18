@@ -929,7 +929,7 @@ class MainWindow(QMainWindow):
         seg_content = self._seg_scroll.widget()
         seg_content_w = seg_content.sizeHint().width() if seg_content else 400
         seg_chrome = 28 + 6  # panel margins (14*2) + scrollbar clearance
-        seg_padding = 30  # breathing room so content isn't flush to edges
+        seg_padding = 50  # breathing room so content isn't flush to edges
         seg_need_w = seg_content_w + seg_chrome + seg_padding
 
         # -- Measure feature panel content --
@@ -938,7 +938,7 @@ class MainWindow(QMainWindow):
             feat_content.sizeHint().width() if feat_content else 380
         )
         feat_chrome = 28 + 6
-        feat_padding = 24
+        feat_padding = 40
         feat_need_w = feat_content_w + feat_chrome + feat_padding
         feat_content_h = (
             feat_content.sizeHint().height() if feat_content else 400
@@ -953,19 +953,31 @@ class MainWindow(QMainWindow):
             top_need_h + analysis_h + toolbar_h + 30
         )  # extra overall height
 
-        # -- Size window (only on first load without saved size) --
-        if not self._has_saved_size:
-            screen = self._target_screen()
-            if screen is not None:
-                avail = screen.availableGeometry()
-                w = min(seg_need_w + feat_need_w + 1, avail.width() - 40)
-                h = min(total_need_h, avail.height() - 40)
-                self.resize(max(w, 640), max(h, 480))
+        # -- Size window to fit content on every inventory load --
+        screen = self._target_screen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            need_w = seg_need_w + feat_need_w + 1
+            need_h = total_need_h
 
+            # Grow to fit content, but never shrink below current size
+            # (respects the user if they manually enlarged the window).
+            cur_w = self.width()
+            cur_h = self.height()
+            new_w = min(max(need_w, cur_w), avail.width() - 40)
+            new_h = min(max(need_h, cur_h), avail.height() - 40)
+            new_w = max(new_w, 640)
+            new_h = max(new_h, 480)
+
+            if new_w != cur_w or new_h != cur_h:
+                self.resize(new_w, new_h)
+
+            # Center on first load only
+            if not self._has_saved_size:
                 frame = self.frameGeometry()
                 frame.moveCenter(avail.center())
                 self.move(frame.topLeft())
-            self._has_saved_size = True  # only auto-size once
+                self._has_saved_size = True
 
         # -- Apply to horizontal splitter --
         # Give both panels exactly what their content needs.
