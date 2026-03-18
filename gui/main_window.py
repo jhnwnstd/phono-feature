@@ -14,9 +14,7 @@ from PyQt6.QtCore import (
     QTimer,
 )
 from PyQt6.QtGui import (
-    QCursor,
     QFont,
-    QGuiApplication,
     QScreen,
     QStandardItemModel,
 )
