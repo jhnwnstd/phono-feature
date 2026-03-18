@@ -5,6 +5,18 @@ Absent inventory features are skipped; inapplicable segment values ("0")
 are treated as compatible.  Small groups merge upward through the
 specificity hierarchy.  Combined groups are relabeled when they match
 known phonological classes (Vibrants, Rhotics, Liquids).
+
+Heuristic notes:
+- Fallback assignment is order-sensitive on ties: when two classes have
+  the same contradiction and match counts, the earlier class in ALL_GROUPS
+  wins.  This is intentional — taxonomy ordering encodes specificity
+  priority.
+- Laryngeal rescue (Step 3c) scans all groups, not just Semivowels,
+  to catch placeless spreadgl/constrgl segments wherever they landed.
+- Underspecified segments ("0" on most features) can qualify for specific
+  classes if they don't contradict. The matched_any guard prevents pure-
+  zero membership, but a segment with just one matching feature can still
+  land in a highly specific class.
 """
 
 from collections import defaultdict
@@ -96,10 +108,9 @@ ALL_GROUPS: List[Tuple[str, Dict[str, str]]] = [
         "Semivowels",
         {"consonantal": "-", "syllabic": "-", "sonorant": "+"},
     ),
-    # Laryngeals is NOT a primary group — it is created as a fallback
-    # in Step 3c when placeless segments with spreadgl/constrgl need
-    # separation from Semivowels.  Segments like h/ɦ that are
-    # [-consonantal, -sonorant] go to fallback → Fricatives instead.
+    # Laryngeals is NOT a primary group — it is populated by the global
+    # laryngeal rescue (Step 3c) which peels placeless spreadgl/constrgl
+    # segments out of whatever group they initially landed in.
     ("Vowels", {"syllabic": "+"}),
 ]
 
@@ -333,6 +344,11 @@ def group_segments(
         return [name for name, _ in matches]
 
     def fallback_assignment(seg_feats: Dict[str, str]) -> str:
+        """Best-fit group by fewest contradictions, then most matches.
+
+        On ties, the earlier group in ALL_GROUPS wins — this is intentional
+        as taxonomy ordering encodes specificity priority.
+        """
         best_name = ""
         best_contras = float("inf")
         best_matches = -1
@@ -407,6 +423,7 @@ def group_segments(
                 del assignment[gname]
 
     # Step 2b: Merge small groups that match a relabel pattern.
+    # Uses setdefault+extend to avoid overwriting an existing group.
     for origin_set, new_label in _RELABEL_PATTERNS.items():
         present = [g for g in origin_set if g in assignment]
         if len(present) < 2:
@@ -418,19 +435,20 @@ def group_segments(
             continue
         if any(g in _FROZEN_GROUPS for g in present):
             continue
-        target = present[0]
-        for g in present[1:]:
-            assignment[target].extend(assignment.pop(g))
-        assignment[new_label] = assignment.pop(target)
+        merged: List[str] = []
+        for g in present:
+            merged.extend(assignment.pop(g))
+        assignment.setdefault(new_label, []).extend(merged)
 
     # Step 3: Relabel groups whose origin set matches a known class.
-    for gname in list(
-        assignment.keys()
-    ):  # list() needed: loop may mutate dict
+    for gname in list(assignment.keys()):
+        if gname not in assignment:
+            continue
         origin_set = frozenset(initial_group[sym] for sym in assignment[gname])
         relabel: str | None = _RELABEL_PATTERNS.get(origin_set)
         if relabel is not None and relabel != gname:
-            assignment[relabel] = assignment.pop(gname)
+            members = assignment.pop(gname)
+            assignment.setdefault(relabel, []).extend(members)
 
     # Step 3b: Merge derived groups that belong together.
     for pair, label in _DERIVED_MERGES:
@@ -444,33 +462,40 @@ def group_segments(
             for g in present
         ):
             continue
-        target = present[0]
-        for g in present[1:]:
-            assignment[target].extend(assignment.pop(g))
-        if label != target:
-            assignment[label] = assignment.pop(target)
+        merged = []
+        for g in present:
+            merged.extend(assignment.pop(g))
+        assignment.setdefault(label, []).extend(merged)
 
-    # Step 3c: Laryngeal rescue — split spreadgl:+ / constrgl:+ segments
-    # out of Semivowels into Laryngeals (for inventories like Blevins where
-    # h/ɦ/ʔ are [+sonorant, -consonantal]).
+    # Step 3c: Global laryngeal rescue — peel placeless segments with
+    # spreadgl:+ or constrgl:+ out of ANY group into Laryngeals.
+    # This catches h/ɦ/ʔ regardless of where they initially landed
+    # (Semivowels, Fricatives, etc.).
     _LARYNGEAL_FEATURES = {"spreadgl", "constrgl"}
-    _PLACE_FEATURES = {"labial", "coronal", "dorsal"}
-    if "Semivowels" in assignment and _LARYNGEAL_FEATURES & active_features:
-        laryngeal_segs = [
-            sym
-            for sym in assignment["Semivowels"]
-            if any(norm[sym].get(f, "0") == "+" for f in _LARYNGEAL_FEATURES)
-            and not any(norm[sym].get(f, "0") == "+" for f in _PLACE_FEATURES)
-        ]
+    _PLACE_FEATURES = {"labial", "coronal", "dorsal", "pharyngeal"}
+    if _LARYNGEAL_FEATURES & active_features:
+        laryngeal_segs: List[str] = []
+        for gname in list(assignment.keys()):
+            if gname == "Laryngeals":
+                continue
+            peeled = [
+                sym
+                for sym in assignment[gname]
+                if any(
+                    norm[sym].get(f, "0") == "+" for f in _LARYNGEAL_FEATURES
+                )
+                and not any(
+                    norm[sym].get(f, "0") == "+" for f in _PLACE_FEATURES
+                )
+            ]
+            if peeled:
+                for sym in peeled:
+                    assignment[gname].remove(sym)
+                laryngeal_segs.extend(peeled)
+                if not assignment[gname]:
+                    del assignment[gname]
         if laryngeal_segs:
-            for sym in laryngeal_segs:
-                assignment["Semivowels"].remove(sym)
-            if "Laryngeals" in assignment:
-                assignment["Laryngeals"].extend(laryngeal_segs)
-            else:
-                assignment["Laryngeals"] = laryngeal_segs
-            if not assignment["Semivowels"]:
-                del assignment["Semivowels"]
+            assignment.setdefault("Laryngeals", []).extend(laryngeal_segs)
 
     # Step 4: Sort by display order and feature-based key.
     return {
