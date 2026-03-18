@@ -235,6 +235,9 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.feat_panel)
 
         self._hsplit = splitter
+        # Pre-load default: balanced split. _fit_to_content overrides
+        # these once an inventory is loaded.
+        splitter.setSizes([500, 400])
         splitter.setStretchFactor(0, 1)  # segments take extra space
         splitter.setStretchFactor(1, 0)  # features stay fixed width
 
