@@ -3,13 +3,17 @@
 Architecture:
   1. Primary assignment into broad manner classes (Plosives, Fricatives,
      Affricates, Nasals, etc.) using only the most universal features.
+     Clicks are special-cased before generic ranking.
   2. Derived breakouts split subgroups (Sibilants, Lateral Fricatives,
-     Lateral Affricates) out of their parent class — only when the
-     inventory supports the relevant features and enough segments qualify.
-  3. Small-group merging collapses tiny groups into their explicit parent.
-  4. Relabeling combines related groups (Vibrants, Rhotics, Liquids).
-  5. Laryngeal rescue peels placeless spreadgl/constrgl segments into a
-     dedicated Laryngeals class.
+     Lateral Affricates) out of their parent — only when the feature is
+     active, enough segments qualify, AND the parent retains members.
+  3. Relational relabeling (Vibrants, Rhotics, Liquids) runs BEFORE
+     small-group merging so the combination categories get a chance to
+     form.
+  4. Small-group merging collapses remaining tiny groups into their
+     explicit parent.
+  5. Laryngeal rescue peels placeless spreadgl/constrgl segments into
+     a dedicated Laryngeals class.
 
 Heuristic notes:
 - Fallback assignment is order-sensitive on ties: when two classes have
@@ -17,6 +21,8 @@ Heuristic notes:
   PRIMARY_GROUPS wins as a final tie-break.
 - Minimum positive-match thresholds prevent underspecified segments
   from qualifying for classes they barely evidence.
+- Breakout threshold is at least as strict as merge threshold to
+  prevent create-then-immediately-destroy churn.
 """
 
 from collections import defaultdict
@@ -85,7 +91,6 @@ PRIMARY_GROUPS: List[Tuple[str, Dict[str, str]]] = [
 ]
 
 # Minimum positive feature matches required for membership.
-# Prevents underspecified segments from qualifying on one lucky match.
 _MIN_POSITIVE: Dict[str, int] = {
     "Plosives": 2,
     "Fricatives": 2,
@@ -97,8 +102,8 @@ _MIN_POSITIVE: Dict[str, int] = {
 
 # ---------------------------------------------------------------------------
 # Derived breakouts — split from a parent class after initial assignment.
-# Only surfaced when the feature is active and enough segments qualify.
-# (new_name, parent_name, extra_conditions)
+# Only surfaced when the feature is active, enough segments qualify,
+# AND the parent retains at least one member.
 # ---------------------------------------------------------------------------
 
 DERIVED_BREAKOUTS: List[Tuple[str, str, Dict[str, str]]] = [
@@ -109,7 +114,7 @@ DERIVED_BREAKOUTS: List[Tuple[str, str, Dict[str, str]]] = [
 
 # ---------------------------------------------------------------------------
 # Explicit parent map for upward merging of small groups.
-# When a group is too small, its members merge into this parent.
+# setdefault is used so the parent is recreated if it was deleted.
 # ---------------------------------------------------------------------------
 
 _MERGE_PARENT: Dict[str, str] = {
@@ -125,17 +130,17 @@ _MERGE_PARENT: Dict[str, str] = {
 _FROZEN_GROUPS: Set[str] = {"Plosives"}
 
 # ---------------------------------------------------------------------------
-# Display order: obstruents → sonorants → vowels
+# Display order: manner-first (plosives → fricatives → affricates)
 # ---------------------------------------------------------------------------
 
 DISPLAY_ORDER: List[str] = [
     "Clicks",
     "Plosives",
+    "Fricatives",
+    "Sibilants",
+    "Lateral Fricatives",
     "Affricates",
     "Lateral Affricates",
-    "Sibilants",
-    "Fricatives",
-    "Lateral Fricatives",
     "Nasals",
     "Vibrants",
     "Trills",
@@ -295,8 +300,11 @@ def _should_merge_up(group_size: int, inventory_size: int) -> bool:
 
 
 def _should_break_out(subgroup_size: int, inventory_size: int) -> bool:
-    """True if a derived subgroup is large enough to display separately."""
-    return subgroup_size >= max(3, int(inventory_size * 0.04))
+    """True if a derived subgroup is large enough to display separately.
+
+    At least as strict as _should_merge_up to prevent create-then-destroy churn.
+    """
+    return subgroup_size >= max(3, int(inventory_size * 0.05))
 
 
 def group_segments(
@@ -352,7 +360,14 @@ def group_segments(
         return matched >= _MIN_POSITIVE.get(group_name, 1)
 
     def best_primary(seg_feats: Dict[str, str]) -> str:
-        """Find the best primary group by positive evidence, then specificity."""
+        """Find the best primary group by positive evidence, then specificity.
+
+        Clicks are special-cased: click:+ always wins regardless of how
+        many other features match broader obstruent classes.
+        """
+        if seg_feats.get("click", "0") == "+":
+            return "Clicks"
+
         matches = [
             (
                 name,
@@ -416,7 +431,8 @@ def group_segments(
 
     # ==================================================================
     # Step 2: Derived breakouts — split subgroups from parent classes.
-    # Only when the feature is active and enough segments qualify.
+    # Only when the feature is active, enough segments qualify, AND
+    # the parent retains at least one member (no full replacement).
     # ==================================================================
     for new_name, parent_name, cond in DERIVED_BREAKOUTS:
         if parent_name not in assignment:
@@ -424,43 +440,31 @@ def group_segments(
         if not all(f in active_features for f in cond):
             continue
 
+        parent_members = list(assignment[parent_name])
         subgroup = [
             s
-            for s in assignment[parent_name]
+            for s in parent_members
             if all(norm[s].get(f, "0") == v for f, v in cond.items())
         ]
-        if not subgroup:
+        remainder = [s for s in parent_members if s not in subgroup]
+
+        # Only break out if it truly splits the parent — not if it
+        # would replace the parent entirely.
+        if not subgroup or not remainder:
             continue
         if not _should_break_out(len(subgroup), len(inventory)):
             continue
 
-        for s in subgroup:
-            assignment[parent_name].remove(s)
+        assignment[parent_name] = remainder
         assignment[new_name] = subgroup
-        if not assignment[parent_name]:
-            del assignment[parent_name]
 
     # ==================================================================
-    # Step 3: Merge small groups into their explicit parent.
-    # ==================================================================
-    changed = True
-    while changed:
-        changed = False
-        for gname in list(assignment.keys()):
-            if gname in _FROZEN_GROUPS:
-                continue
-            if not _should_merge_up(len(assignment[gname]), len(inventory)):
-                continue
-            parent = _MERGE_PARENT.get(gname)
-            if parent is not None and parent in assignment:
-                assignment[parent].extend(assignment.pop(gname))
-                changed = True
-
-    # ==================================================================
-    # Step 4: Relabel combined groups (Vibrants, Rhotics, Liquids).
+    # Step 3: Relational relabeling (Vibrants, Rhotics, Liquids).
+    # Runs BEFORE small-group merging so combination categories get a
+    # chance to form before their components are collapsed.
     # ==================================================================
 
-    # 4a: Merge small groups that match a relabel pattern.
+    # 3a: Merge small groups that match a relabel pattern.
     for origin_set, new_label in _RELABEL_PATTERNS.items():
         present = [g for g in origin_set if g in assignment]
         if len(present) < 2:
@@ -477,7 +481,7 @@ def group_segments(
             merged.extend(assignment.pop(g))
         assignment.setdefault(new_label, []).extend(merged)
 
-    # 4b: Relabel groups whose composition matches a known class.
+    # 3b: Relabel groups whose composition matches a known class.
     initial_group: Dict[str, str] = {}
     for gname, members in assignment.items():
         for sym in members:
@@ -494,7 +498,7 @@ def group_segments(
             members = assignment.pop(gname)
             assignment.setdefault(relabel, []).extend(members)
 
-    # 4c: Merge derived groups that belong together.
+    # 3c: Merge derived groups that belong together.
     for pair, label in _DERIVED_MERGES:
         present = [g for g in pair if g in assignment]
         if len(present) < 2:
@@ -510,6 +514,25 @@ def group_segments(
         for g in present:
             merged.extend(assignment.pop(g))
         assignment.setdefault(label, []).extend(merged)
+
+    # ==================================================================
+    # Step 4: Merge remaining small groups into their explicit parent.
+    # Uses setdefault so the parent is recreated if breakout deleted it.
+    # ==================================================================
+    changed = True
+    while changed:
+        changed = False
+        for gname in list(assignment.keys()):
+            if gname in _FROZEN_GROUPS:
+                continue
+            if not _should_merge_up(len(assignment[gname]), len(inventory)):
+                continue
+            parent = _MERGE_PARENT.get(gname)
+            if parent is not None:
+                assignment.setdefault(parent, []).extend(
+                    assignment.pop(gname)
+                )
+                changed = True
 
     # ==================================================================
     # Step 5: Laryngeal rescue — peel placeless consonantal segments
@@ -528,7 +551,9 @@ def group_segments(
         has_laryngeal = any(
             feats.get(f, "0") == "+" for f in _LARYNGEAL_FEATURES
         )
-        has_place = any(feats.get(f, "0") == "+" for f in _PLACE_FEATURES)
+        has_place = any(
+            feats.get(f, "0") == "+" for f in _PLACE_FEATURES
+        )
         is_vowel = feats.get("syllabic", "0") == "+"
         is_click = feats.get("click", "0") == "+"
         return (
