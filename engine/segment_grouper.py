@@ -286,6 +286,9 @@ def _ipa_place(feats: Dict[str, str]) -> int:
 # Main grouping function
 # ---------------------------------------------------------------------------
 
+# Groups exempt from Step 2 upward merging.  Step 3c (laryngeal rescue)
+# can still peel individual segments out — "frozen" means the group as a
+# whole won't be dissolved into a parent class when it's small.
 _FROZEN_GROUPS: Set[str] = {"Plosives"}
 
 
@@ -334,20 +337,30 @@ def group_segments(
     def specificity(spec: Dict[str, str]) -> int:
         return sum(1 for f in spec if f in active_features)
 
+    def _positive_matches(seg_feats: Dict[str, str], spec: Dict[str, str]) -> int:
+        """Count features where the segment has an explicit matching value."""
+        return sum(
+            1 for f in spec
+            if f in active_features
+            and seg_feats.get(f, "0") != "0"
+            and seg_feats.get(f, "0") == spec[f]
+        )
+
     def membership_chain(seg_feats: Dict[str, str]) -> List[str]:
         matches = [
-            (name, specificity(spec))
+            (name, _positive_matches(seg_feats, spec), specificity(spec))
             for name, spec in ALL_GROUPS
             if is_member(seg_feats, spec)
         ]
-        matches.sort(key=lambda x: -x[1])
-        return [name for name, _ in matches]
+        # Rank by most positive evidence first, then specificity as tiebreak
+        matches.sort(key=lambda x: (-x[1], -x[2]))
+        return [name for name, _, _ in matches]
 
     def fallback_assignment(seg_feats: Dict[str, str]) -> str:
         """Best-fit group by fewest contradictions, then most matches.
 
-        On ties, the earlier group in ALL_GROUPS wins — this is intentional
-        as taxonomy ordering encodes specificity priority.
+        On equal contradiction and match counts, the earlier group in
+        ALL_GROUPS wins as a final tie-break.
         """
         best_name = ""
         best_contras = float("inf")
@@ -467,26 +480,28 @@ def group_segments(
             merged.extend(assignment.pop(g))
         assignment.setdefault(label, []).extend(merged)
 
-    # Step 3c: Global laryngeal rescue — peel placeless segments with
-    # spreadgl:+ or constrgl:+ out of ANY group into Laryngeals.
-    # This catches h/ɦ/ʔ regardless of where they initially landed
-    # (Semivowels, Fricatives, etc.).
+    # Step 3c: Global laryngeal rescue — peel placeless consonantal
+    # segments with spreadgl:+ or constrgl:+ out of ANY group into
+    # Laryngeals.  Guards prevent misclassifying vowels, clicks, and
+    # pharyngeals.
     _LARYNGEAL_FEATURES = {"spreadgl", "constrgl"}
-    _PLACE_FEATURES = {"labial", "coronal", "dorsal", "pharyngeal"}
+    _PLACE_FEATURES = {"labial", "coronal", "dorsal", "pharyngeal", "constrpharynx"}
+
+    def _is_laryngeal_candidate(feats: Dict[str, str]) -> bool:
+        has_laryngeal = any(feats.get(f, "0") == "+" for f in _LARYNGEAL_FEATURES)
+        has_place = any(feats.get(f, "0") == "+" for f in _PLACE_FEATURES)
+        is_vowel = feats.get("syllabic", "0") == "+"
+        is_click = feats.get("click", "0") == "+"
+        return has_laryngeal and not has_place and not is_vowel and not is_click
+
     if _LARYNGEAL_FEATURES & active_features:
         laryngeal_segs: List[str] = []
         for gname in list(assignment.keys()):
             if gname == "Laryngeals":
                 continue
             peeled = [
-                sym
-                for sym in assignment[gname]
-                if any(
-                    norm[sym].get(f, "0") == "+" for f in _LARYNGEAL_FEATURES
-                )
-                and not any(
-                    norm[sym].get(f, "0") == "+" for f in _PLACE_FEATURES
-                )
+                sym for sym in assignment[gname]
+                if _is_laryngeal_candidate(norm[sym])
             ]
             if peeled:
                 for sym in peeled:
