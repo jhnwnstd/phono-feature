@@ -3,7 +3,6 @@ gui/main_window.py
 PyQt6 GUI for the Segment & Feature Engine.
 """
 
-import math
 import os
 from typing import Optional
 
@@ -13,7 +12,6 @@ from PyQt6.QtCore import (
     QSettings,
     Qt,
     QTimer,
-    pyqtSignal,
 )
 from PyQt6.QtGui import (
     QCursor,
@@ -27,16 +25,13 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QSplitter,
     QStatusBar,
-    QTextEdit,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -45,820 +40,29 @@ from PyQt6.QtWidgets import (
 from engine.feature_engine import FeatureEngine
 from engine.inventory_validator import validate_inventory
 from engine.segment_grouper import group_segments
+from gui.analysis import (
+    compute_contrastive,
+    render_feat_to_seg,
+    render_multi_segment,
+    render_single_segment,
+)
+from gui.constants import (
+    BTN_GAP,
+    BTN_W,
+    FEATURE_GROUPS,
+    SCROLLBAR_STYLE,
+    SETTINGS_APP,
+    SETTINGS_ORG,
+    sort_features,
+)
 from gui.palette import C
-
-# ---------------------------------------------------------------------------
-# Colour palette (defined in gui/palette.py, re-exported here)
-# ---------------------------------------------------------------------------
-
-
-_SETTINGS_ORG = "features"
-_SETTINGS_APP = "SegFeatureEngine"
-
-_TAG_PALETTES = {
-    "blue": (C["tag_blue"], C["tag_blue_text"]),
-    "green": (C["tag_green"], C["tag_green_text"]),
-    "red": (C["tag_red"], C["tag_red_text"]),
-    "gray": (C["tag_gray"], C["tag_gray_text"]),
-}
-
-# ---------------------------------------------------------------------------
-# Segment button geometry
-# ---------------------------------------------------------------------------
-
-_BTN_W = 33  # SegmentButton fixed width  (must match setFixedSize in __init__)
-_BTN_H = 26  # SegmentButton fixed height
-_BTN_GAP = 4  # QGridLayout spacing
-_VOWEL_LABEL_W = 72  # px — fits "Near-close" at 7pt with padding
-
-# ---------------------------------------------------------------------------
-# Canonical feature display order (linguistically motivated hierarchy)
-# Features absent from this list appear at the end in their original order.
-# ---------------------------------------------------------------------------
-
-_FEATURE_ORDER: list = [
-    # Major class
-    "Syllabic",
-    "Consonantal",
-    "Sonorant",
-    "Approximant",
-    # Laryngeal
-    "Voice",
-    "SpreadGl",
-    "ConstrGl",
-    # Manner
-    "Continuant",
-    "Strident",
-    "DelRel",
-    "Nasal",
-    "Lateral",
-    "Trill",
-    "Tap",
-    "Click",
-    # Place — LABIAL node + dependents
-    "LABIAL",
-    "Round",
-    "Labiodental",
-    # Place — CORONAL node + dependents
-    "CORONAL",
-    "Anterior",
-    "Distributed",
-    # Place — DORSAL node + dependents
-    "DORSAL",
-    "High",
-    "Low",
-    "Back",
-    "Front",
-    # Pharyngeal / advanced tongue root
-    "ConstrPharynx",
-    "Pharyngeal",
-    "ATR",
-    "Tense",
-    # Prosodic
-    "Long",
-    "Stress",
-    "Tone",
-    "UpperRegister",
-]
-
-_FEATURE_ORDER_INDEX: dict = {f: i for i, f in enumerate(_FEATURE_ORDER)}
-
-# Feature groups for the two-column panel layout.
-# First 3 groups → left column; last 3 → right column.
-_FEATURE_GROUPS: list = [
-    ("Major Class", ["Syllabic", "Consonantal", "Sonorant", "Approximant"]),
-    ("Laryngeal", ["Voice", "SpreadGl", "ConstrGl"]),
-    (
-        "Manner",
-        [
-            "Continuant",
-            "Strident",
-            "DelRel",
-            "Nasal",
-            "Lateral",
-            "Trill",
-            "Tap",
-            "Click",
-        ],
-    ),
-    (
-        "Place",
-        [
-            "LABIAL",
-            "Round",
-            "Labiodental",
-            "CORONAL",
-            "Anterior",
-            "Distributed",
-            "DORSAL",
-            "High",
-            "Low",
-            "Back",
-            "Front",
-        ],
-    ),
-    (
-        "Tongue-Root / Pharyngeal",
-        ["ConstrPharynx", "Pharyngeal", "ATR", "Tense"],
-    ),
-    ("Prosodic", ["Long", "Stress", "Tone", "UpperRegister"]),
-]
-
-
-def _sort_features(features: list) -> list:
-    """Return features in canonical phonological order; unknowns trail in original order."""
-    n = len(_FEATURE_ORDER)
-    return sorted(features, key=lambda f: _FEATURE_ORDER_INDEX.get(f, n))
-
-
-def _sort_spec(spec: dict) -> dict:
-    """Return a feature bundle dict with keys in canonical phonological order."""
-    return {f: spec[f] for f in _sort_features(list(spec.keys()))}
-
-
-# ---------------------------------------------------------------------------
-# Shared scrollbar style — thin, unobtrusive overlay track
-# ---------------------------------------------------------------------------
-
-_SCROLLBAR_STYLE = f"""
-    QScrollBar:vertical {{
-        background: transparent;
-        width: 6px;
-        margin: 0;
-        border: none;
-    }}
-    QScrollBar::handle:vertical {{
-        background: {C["border"]};
-        border-radius: 3px;
-        min-height: 24px;
-    }}
-    QScrollBar::handle:vertical:hover {{
-        background: {C["text_dim"]};
-    }}
-    QScrollBar::add-line:vertical,
-    QScrollBar::sub-line:vertical {{
-        height: 0;
-        background: none;
-        border: none;
-    }}
-    QScrollBar::add-page:vertical,
-    QScrollBar::sub-page:vertical {{
-        background: none;
-    }}
-    QScrollBar:horizontal {{
-        background: transparent;
-        height: 6px;
-        margin: 0;
-        border: none;
-    }}
-    QScrollBar::handle:horizontal {{
-        background: {C["border"]};
-        border-radius: 3px;
-        min-width: 24px;
-    }}
-    QScrollBar::handle:horizontal:hover {{
-        background: {C["text_dim"]};
-    }}
-    QScrollBar::add-line:horizontal,
-    QScrollBar::sub-line:horizontal {{
-        width: 0;
-        background: none;
-        border: none;
-    }}
-    QScrollBar::add-page:horizontal,
-    QScrollBar::sub-page:horizontal {{
-        background: none;
-    }}
-"""
-
-
-# ---------------------------------------------------------------------------
-# SegmentButton
-# ---------------------------------------------------------------------------
-
-
-class SegmentButton(QPushButton):
-    """Toggleable button for a single phonological segment."""
-
-    # Pre-computed stylesheets — avoids f-string interpolation on every state change
-    _STYLES: dict = {
-        "selected": f"""
-            QPushButton {{
-                background-color: {C["seg_selected"]};
-                color: #FFFFFF;
-                border: 2px solid #1D4ED8;
-                border-radius: 8px;
-                font-weight: bold;
-            }}
-        """,
-        "matched": f"""
-            QPushButton {{
-                background-color: {C["seg_matched"]};
-                color: #FFFFFF;
-                border: 2px solid #1D4ED8;
-                border-radius: 8px;
-                font-weight: bold;
-            }}
-        """,
-        "unmatched": f"""
-            QPushButton {{
-                background-color: {C["seg_unmatched"]};
-                color: {C["text_dim"]};
-                border: 1px solid {C["border"]};
-                border-radius: 8px;
-            }}
-        """,
-        "suggested": f"""
-            QPushButton {{
-                background-color: {C["accent_light"]};
-                color: {C["accent"]};
-                border: 1.5px dashed {C["accent"]};
-                border-radius: 8px;
-            }}
-        """,
-        "default": f"""
-            QPushButton {{
-                background-color: {C["seg_default"]};
-                color: {C["text"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 8px;
-            }}
-            QPushButton:hover {{
-                background-color: {C["accent_light"]};
-                border: 1.5px solid {C["accent"]};
-            }}
-            QPushButton:checked {{
-                background-color: {C["seg_selected"]};
-                color: white;
-                border: 2px solid #1D4ED8;
-                font-weight: bold;
-            }}
-        """,
-    }
-
-    def __init__(self, segment: str, parent=None):
-        super().__init__(segment, parent)
-        self.segment = segment
-        self.setCheckable(True)
-        self.setFixedSize(33, 26)
-        self.setFont(QFont("Noto Sans", 9))
-        self._state = "default"
-        self.setStyleSheet(self._STYLES["default"])
-
-    def set_state(self, state: str):
-        if self._state != state:
-            self._state = state
-            self.setStyleSheet(self._STYLES[state])
-
-
-# ---------------------------------------------------------------------------
-# FeatureRow
-# ---------------------------------------------------------------------------
-
-
-class FeatureRow(QWidget):
-    """
-    One feature row in the feature panel.
-
-    In INTERACTIVE mode (Feat → Seg): shows [+] [–] toggle buttons.
-    In DISPLAY mode (Seg → Feat): shows a coloured value badge.
-    """
-
-    value_changed = pyqtSignal(str, str)  # feature_name, value ('+'/'-'/'')
-
-    # Pre-computed stylesheets for set_display() — avoids f-string per call
-    _BADGE_CONTRASTIVE = (
-        f"background: {C['accent_light']}; color: {C['accent']};"
-        " border-radius: 4px; font-weight: bold;"
-    )
-    _NAME_CONTRASTIVE = f"color: {C['accent']}; font-weight: bold;"
-    _ROW_CONTRASTIVE = f"background: {C['accent_light']}; border-radius: 6px;"
-
-    _BADGE_NEUTRAL = (
-        f"background: {C['tag_gray']};"
-        f" color: {C['tag_gray_text']}; border-radius: 4px;"
-    )
-    _NAME_DIM = f"color: {C['text_dim']};"
-    _ROW_TRANSPARENT = "background: transparent; border-radius: 6px;"
-
-    _BADGE_PLUS = (
-        f"background: {C['plus_bg']}; color: {C['plus']};"
-        " border-radius: 4px; font-weight: bold;"
-    )
-    _ROW_PLUS = f"background: {C['shared_plus']}; border-radius: 6px;"
-
-    _BADGE_MINUS = (
-        f"background: {C['minus_bg']}; color: {C['minus']};"
-        " border-radius: 4px; font-weight: bold;"
-    )
-    _ROW_MINUS = f"background: {C['shared_minus']}; border-radius: 6px;"
-
-    _NAME_BOLD = f"color: {C['text']}; font-weight: bold;"
-
-    def __init__(self, feature_name: str, parent=None):
-        super().__init__(parent)
-        self.feature = feature_name
-        self._current_value = ""
-        self._interactive = True
-        self._panel_active = False
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 3, 8, 3)
-        layout.setSpacing(4)
-
-        self.name_label = QLabel(feature_name)
-        self.name_label.setFont(QFont("Noto Sans", 10))
-        self.name_label.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
-        )
-        self.name_label.setStyleSheet(f"color: {C['text']};")
-
-        self.plus_btn = QPushButton("+")
-        self.plus_btn.setFixedSize(28, 24)
-        self.plus_btn.setCheckable(True)
-        self.plus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
-        self._style_btn(self.plus_btn, "+")
-
-        self.minus_btn = QPushButton("\u2212")
-        self.minus_btn.setFixedSize(28, 24)
-        self.minus_btn.setCheckable(True)
-        self.minus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
-        self._style_btn(self.minus_btn, "-")
-
-        self.badge = QLabel("\u00b7")
-        self.badge.setFixedSize(30, 24)
-        self.badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.badge.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
-        self.badge.hide()
-
-        layout.addWidget(self.name_label)
-        layout.addWidget(self.badge)
-        layout.addWidget(self.plus_btn)
-        layout.addWidget(self.minus_btn)
-
-        self.plus_btn.clicked.connect(lambda: self._on_click("+"))
-        self.minus_btn.clicked.connect(lambda: self._on_click("-"))
-
-        self.setAutoFillBackground(True)
-        self.setStyleSheet("background: transparent; border-radius: 6px;")
-
-    def _style_btn(self, btn: QPushButton, polarity: str):
-        active_bg = C["plus_bg"] if polarity == "+" else C["minus_bg"]
-        active_text = C["plus"] if polarity == "+" else C["minus"]
-        border = C["plus"] if polarity == "+" else C["minus"]
-        btn.setStyleSheet(
-            f"""
-            QPushButton {{
-                background: {C["analysis_bg"]};
-                color: {C["text_dim"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background: {active_bg};
-                color: {active_text};
-                border: 1.5px solid {border};
-            }}
-            QPushButton:checked {{
-                background: {active_bg};
-                color: {active_text};
-                border: 2px solid {border};
-                font-weight: bold;
-            }}
-        """
-        )
-
-    def _on_click(self, polarity: str):
-        if self._current_value == polarity:
-            self._current_value = ""
-            self.plus_btn.setChecked(False)
-            self.minus_btn.setChecked(False)
-        else:
-            self._current_value = polarity
-            self.plus_btn.setChecked(polarity == "+")
-            self.minus_btn.setChecked(polarity == "-")
-        self.value_changed.emit(self.feature, self._current_value)
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
-    def set_interactive(self, yes: bool):
-        self._interactive = yes
-        self.plus_btn.setVisible(yes)
-        self.minus_btn.setVisible(yes)
-        self.badge.setVisible(not yes)
-
-    def set_display(self, value: str, shared: bool, contrastive: bool = False):
-        """
-        Display a feature value in Seg→Feat mode.
-        value: '+', '-', or '' (inapplicable / mixed across segments)
-        shared: whether this value is consistent across all selected segs
-        contrastive: True when segments split cleanly on + vs - for this feature
-        """
-        if contrastive:
-            self.badge.setText("\u00b1")
-            self.badge.setStyleSheet(self._BADGE_CONTRASTIVE)
-            self.name_label.setStyleSheet(self._NAME_CONTRASTIVE)
-            self.setStyleSheet(self._ROW_CONTRASTIVE)
-        elif not value or not shared:
-            self.badge.setText("\u00b7")
-            self.badge.setStyleSheet(self._BADGE_NEUTRAL)
-            self.name_label.setStyleSheet(self._NAME_DIM)
-            self.setStyleSheet(self._ROW_TRANSPARENT)
-        else:
-            self.badge.setText(value)
-            if value == "+":
-                self.badge.setStyleSheet(self._BADGE_PLUS)
-                self.setStyleSheet(self._ROW_PLUS)
-            else:
-                self.badge.setStyleSheet(self._BADGE_MINUS)
-                self.setStyleSheet(self._ROW_MINUS)
-            self.name_label.setStyleSheet(self._NAME_BOLD)
-
-    def restore_value(self, value: str):
-        """Silently restore a saved +/- value (no signal emitted)."""
-        self._current_value = value
-        self.plus_btn.setChecked(value == "+")
-        self.minus_btn.setChecked(value == "-")
-
-    def set_panel_active(self, active: bool):
-        self._panel_active = active
-
-    _BADGE_NEUTRAL = (
-        f"background: {C['tag_gray']};"
-        f" color: {C['tag_gray_text']}; border-radius: 4px;"
-    )
-    _ROW_NEUTRAL = "background: transparent; border-radius: 6px;"
-    _NAME_ACTIVE = f"color: {C['text']};"
-    _NAME_INACTIVE = f"color: {C['text_dim']};"
-
-    def reset(self):
-        self._current_value = ""
-        self.plus_btn.setChecked(False)
-        self.minus_btn.setChecked(False)
-        self.badge.setText("\u00b7")
-        self.badge.setStyleSheet(self._BADGE_NEUTRAL)
-        self.name_label.setStyleSheet(
-            self._NAME_ACTIVE if self._panel_active else self._NAME_INACTIVE
-        )
-        self.setStyleSheet(self._ROW_NEUTRAL)
-
-    @property
-    def current_value(self) -> str:
-        return self._current_value
-
-
-# ---------------------------------------------------------------------------
-# AnalysisPanel
-# ---------------------------------------------------------------------------
-
-
-class AnalysisPanel(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet(
-            f"background: {C['analysis_bg']}; border-top: 1px solid {C['border']};"
-        )
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(8)
-
-        self.title = QLabel("Analysis")
-        self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-        self.title.setStyleSheet(
-            f"color: {C['text_dim']}; letter-spacing: 1px;"
-        )
-
-        self.content = QTextEdit()
-        self.content.setReadOnly(True)
-        self.content.setFont(QFont("Noto Sans Mono", 10))
-        self.content.setStyleSheet(
-            f"""
-            QTextEdit {{
-                background: {C["panel"]};
-                color: {C["text"]};
-                border: 1px solid {C["border"]};
-                border-radius: 6px;
-                padding: 8px;
-            }}
-        """
-            + _SCROLLBAR_STYLE
-        )
-        self.content.setMinimumHeight(60)
-
-        layout.addWidget(self.title)
-        layout.addWidget(self.content)
-
-    def set_html(self, html: str):
-        self.content.setHtml(html)
-
-    def clear(self):
-        self.content.clear()
-
-
-# ---------------------------------------------------------------------------
-# SegmentGridWidget — fluid reflowing grid of segment buttons
-# ---------------------------------------------------------------------------
-
-
-class SegmentGridWidget(QWidget):
-    """
-    Lays out segment buttons in a QGridLayout whose column count is computed
-    from the widget's current width on every resize.
-
-    Column-count policy:
-      - Compute max_possible_cols from available pixel width.
-      - If the largest group fits in one row  → use exactly that many cols
-        (every group in a single row, no scroll needed).
-      - Otherwise → target ⌈max_N / 2⌉ cols so the largest group splits
-        into two even rows; cap at max_possible_cols when the panel is narrow.
-    """
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._groups: dict = {}  # manner → [seg, ...]
-        self._buttons: dict = (
-            {}
-        )  # seg    → SegmentButton  (owned by this widget)
-        self._headers: list = []  # QLabel per manner group
-        self._n_cols: int = 0  # column count currently in use
-
-        self._grid = QGridLayout(self)
-        self._grid.setSpacing(_BTN_GAP)
-        self._grid.setContentsMargins(0, 0, 0, 0)
-        self._grid.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
-        )
-
-        # Allow the widget to shrink freely — prevents feedback loop where
-        # grid content sets a minimum width that blocks resize.
-        self.setMinimumWidth(0)
-
-        # Debounce resize events so we don't thrash the layout during drags
-        self._resize_timer = QTimer(self)
-        self._resize_timer.setSingleShot(True)
-        self._resize_timer.setInterval(40)
-        self._resize_timer.timeout.connect(self._do_relayout)
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
-    def set_groups(self, groups: dict, buttons: dict):
-        """Replace all content.  Old buttons are deleted; new ones are shown."""
-        # Remove everything from layout (widgets stay alive until deleteLater)
-        while self._grid.count():
-            self._grid.takeAt(0)
-
-        # Delete previous buttons and headers
-        for btn in self._buttons.values():
-            btn.deleteLater()
-        for hdr in self._headers:
-            hdr.deleteLater()
-        self._headers.clear()
-
-        self._groups = groups
-        self._buttons = buttons
-
-        # Pre-create header labels (one per group); add to layout in _do_relayout
-        for manner in groups:
-            hdr = QLabel(manner.upper())
-            hdr.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
-            hdr.setStyleSheet(
-                f"color: {C['text_dim']}; letter-spacing: 1px;"
-                " padding: 4px 2px 1px 2px;"
-            )
-            hdr.setParent(self)
-            self._headers.append(hdr)
-
-        self._n_cols = 0  # force a full relayout
-        self._do_relayout()
-
-    def set_headers_active(self, active: bool):
-        color = C["text"] if active else C["text_dim"]
-        for hdr in self._headers:
-            hdr.setStyleSheet(
-                f"color: {color}; letter-spacing: 1px; padding: 4px 2px 1px 2px;"
-            )
-
-    # ------------------------------------------------------------------
-    # Resize / layout
-    # ------------------------------------------------------------------
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._resize_timer.start()
-
-    MAX_COLS = 12
-
-    def _compute_n_cols(self) -> int:
-        stride = _BTN_W + _BTN_GAP
-        max_possible = min(
-            max(1, (self.width() + _BTN_GAP) // stride), self.MAX_COLS
-        )
-        if not self._groups:
-            return max_possible
-        max_N = max(len(segs) for segs in self._groups.values())
-        if max_N <= max_possible:
-            return max_N
-        return max_possible
-
-    def _do_relayout(self):
-        n_cols = self._compute_n_cols()
-        if n_cols == self._n_cols:
-            return
-        self._n_cols = n_cols
-
-        # Remove all items from layout without deleting the widgets
-        while self._grid.count():
-            self._grid.takeAt(0)
-
-        grid_row = 0
-        hdr_iter = iter(self._headers)
-        for manner, segs in self._groups.items():
-            hdr = next(hdr_iter)
-            self._grid.addWidget(hdr, grid_row, 0, 1, n_cols)
-            hdr.show()
-            grid_row += 1
-
-            for col_i, seg in enumerate(segs):
-                btn = self._buttons[seg]
-                self._grid.addWidget(
-                    btn,
-                    grid_row + col_i // n_cols,
-                    col_i % n_cols,
-                )
-                btn.show()
-            grid_row += math.ceil(len(segs) / n_cols)
-
-
-# ---------------------------------------------------------------------------
-# VowelChartWidget — IPA-style vowel trapezoid
-# ---------------------------------------------------------------------------
-
-_VOWEL_HEIGHT: list = [
-    ("Close", "+", "-", "+"),
-    ("Near-close", "+", "-", "-"),
-    ("Close-mid", "-", "-", "+"),
-    ("Open-mid", "-", "-", "-"),
-    ("Near-open", "-", "+", "-"),
-    ("Open", "-", "+", None),
-]
-
-
-def _nonzero(val: str | None) -> str | None:
-    """Return *val* only if it carries real feature information ('+' or '-').
-
-    Treats None and "0" as absent so ``or``-chained fallbacks work correctly:
-    ``_nonzero(feats.get("tense")) or _nonzero(feats.get("atr")) or "0"``
-    """
-    return val if val and val != "0" else None
-
-
-def _vowel_grid_pos(feats: dict) -> tuple:
-    """Return (row, col) for a vowel in the IPA chart grid.
-
-    Columns: 0=front-unround, 1=front-round, 2=central-unround,
-             3=central-round, 4=back-unround, 5=back-round.
-    """
-    hi = feats.get("high", "0")
-    lo = feats.get("low", "0")
-    tn = _nonzero(feats.get("tense")) or _nonzero(feats.get("atr")) or "0"
-
-    # CORONAL as front-proxy: only when anterior is unset (true front vowels).
-    # Rhotics like ɚ have CORONAL:+ with anterior:- — that marks the rhotic
-    # gesture, not frontness.
-    coronal_val = _nonzero(feats.get("coronal"))
-    if coronal_val == "+" and feats.get("anterior") == "-":
-        coronal_val = None
-    fr = _nonzero(feats.get("front")) or coronal_val or "0"
-
-    bk = feats.get("back", "0")
-    rn = feats.get("round", "0")
-
-    # Default to Open-mid (row 3) for unspecified mid vowels (hi:-, lo:-, tn:0)
-    # like ə — conservative phonological assumption (unmarked mid = lax).
-    row = 3
-    for i, (_, h, l, t) in enumerate(_VOWEL_HEIGHT):
-        if hi == h and lo == l and (t is None or tn == t):
-            row = i
-            break
-
-    if fr == "+":
-        col = 0 if rn != "+" else 1
-    elif bk == "+":
-        col = 4 if rn != "+" else 5
-    else:
-        col = 2 if rn != "+" else 3
-
-    return row, col
-
-
-class VowelChartWidget(QWidget):
-    """Displays vowels in an IPA-style grid: height x backness x rounding."""
-
-    _COL_HEADERS = ["Front", "Central", "Back"]
-    _ROW_HEADERS = [label for label, *_ in _VOWEL_HEIGHT]
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._buttons: dict = {}
-        self._header_labels: list = []
-        self._grid = QGridLayout(self)
-        self._grid.setSpacing(_BTN_GAP)
-        self._grid.setContentsMargins(0, 0, 8, 0)
-
-    _HDR_ACTIVE = f"color: {C['text']};"
-    _HDR_INACTIVE = f"color: {C['text_dim']};"
-    _ROW_ACTIVE = f"color: {C['text']}; padding-right: 4px;"
-    _ROW_INACTIVE = f"color: {C['text_dim']}; padding-right: 4px;"
-
-    def set_headers_active(self, active: bool):
-        hdr = self._HDR_ACTIVE if active else self._HDR_INACTIVE
-        row = self._ROW_ACTIVE if active else self._ROW_INACTIVE
-        for lbl, is_row in self._header_labels:
-            lbl.setStyleSheet(row if is_row else hdr)
-
-    def clear(self):
-        """Remove all buttons and labels."""
-        while self._grid.count():
-            self._grid.takeAt(0)
-        for btn in self._buttons.values():
-            btn.deleteLater()
-        self._buttons.clear()
-        for lbl, _ in self._header_labels:
-            lbl.deleteLater()
-        self._header_labels.clear()
-
-    def set_vowels(self, segs: list, buttons: dict, norm_feats: dict):
-        """Lay out vowel buttons in the IPA chart grid."""
-        self.clear()
-        self._buttons = buttons
-
-        hdr_font = QFont("Noto Sans", 8, QFont.Weight.Bold)
-
-        title = QLabel("VOWELS")
-        title.setFont(hdr_font)
-        title.setStyleSheet(
-            f"color: {C['text_dim']}; letter-spacing: 1px;"
-            " padding: 2px 2px 0 2px;"
-        )
-        self._grid.addWidget(title, 0, 0, 1, 7)
-        self._header_labels.append((title, False))
-
-        for ci, label in enumerate(self._COL_HEADERS):
-            lbl = QLabel(label)
-            lbl.setFont(QFont("Noto Sans", 7))
-            lbl.setStyleSheet(f"color: {C['text_dim']};")
-            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._grid.addWidget(lbl, 1, 1 + ci * 2, 1, 2)
-            self._header_labels.append((lbl, False))
-
-        occupied: dict = {}
-        for seg in segs:
-            feats = norm_feats.get(seg, {})
-            r, c = _vowel_grid_pos(feats)
-            occupied.setdefault((r, c), []).append(seg)
-
-        grid_row = 2
-        for ri, label in enumerate(self._ROW_HEADERS):
-            if not any((ri, c) in occupied for c in range(6)):
-                continue
-            lbl = QLabel(label)
-            lbl.setFont(QFont("Noto Sans", 7))
-            lbl.setStyleSheet(f"color: {C['text_dim']}; padding-right: 4px;")
-            lbl.setAlignment(
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-            )
-            lbl.setMinimumWidth(_VOWEL_LABEL_W - 4)
-            self._grid.addWidget(lbl, grid_row, 0)
-            self._header_labels.append((lbl, True))
-
-            for ci in range(6):
-                cell_segs = occupied.get((ri, ci), [])
-                if not cell_segs:
-                    continue
-                if len(cell_segs) == 1:
-                    btn = self._buttons.get(cell_segs[0])
-                    if btn:
-                        btn.show()
-                        self._grid.addWidget(btn, grid_row, 1 + ci)
-                else:
-                    cell = QWidget()
-                    cell.setStyleSheet("background: transparent;")
-                    vbox = QVBoxLayout(cell)
-                    vbox.setContentsMargins(0, 0, 0, 0)
-                    vbox.setSpacing(1)
-                    for seg in cell_segs:
-                        btn = self._buttons.get(seg)
-                        if btn:
-                            btn.show()
-                            vbox.addWidget(btn)
-                    self._grid.addWidget(cell, grid_row, 1 + ci)
-
-            grid_row += 1
+from gui.vowel_chart import VOWEL_LABEL_W, VowelChartWidget
+from gui.widgets import (
+    AnalysisPanel,
+    FeatureRow,
+    SegmentButton,
+    SegmentGridWidget,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -883,7 +87,7 @@ class MainWindow(QMainWindow):
         self._did_first_show = False
 
         self.setWindowTitle("Language Doodad")
-        self.setMinimumSize(900, 680)
+        self.setMinimumSize(640, 480)
         self.setStyleSheet(f"background-color: {C['bg']};")
 
         # -- 150 ms debounce: batch rapid selection changes before analysis --
@@ -903,7 +107,7 @@ class MainWindow(QMainWindow):
         self._reload_timer.timeout.connect(self._do_auto_reload)
 
         # -- persistent settings --
-        self._settings = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+        self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
 
         self._build_ui()
         app = QApplication.instance()
@@ -1031,16 +235,7 @@ class MainWindow(QMainWindow):
         self.feat_panel = self._build_feature_panel()
         splitter.addWidget(self.feat_panel)
 
-        # Match segment and feature content widths (including margins)
-        _stride = _BTN_W + _BTN_GAP
-        _seg_w = (
-            SegmentGridWidget.MAX_COLS * _stride
-            + 12
-            + _VOWEL_LABEL_W
-            + 6 * _stride
-            + 28
-        )
-        splitter.setSizes([_seg_w + 30, 430])
+        self._hsplit = splitter
         splitter.setStretchFactor(0, 1)  # segments take extra space
         splitter.setStretchFactor(1, 0)  # features stay fixed width
 
@@ -1123,7 +318,7 @@ class MainWindow(QMainWindow):
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
         self._seg_scroll.setStyleSheet(
-            "QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE
+            "QScrollArea { background: transparent; }" + SCROLLBAR_STYLE
         )
 
         seg_content = QWidget()
@@ -1145,7 +340,7 @@ class MainWindow(QMainWindow):
         self.vowel_chart_widget = VowelChartWidget()
         self.vowel_chart_widget.hide()
         self.vowel_chart_widget.setFixedWidth(
-            _VOWEL_LABEL_W + 6 * (_BTN_W + _BTN_GAP)
+            VOWEL_LABEL_W + 6 * (BTN_W + BTN_GAP)
         )
 
         seg_content_layout.addWidget(left_wrap, stretch=1)
@@ -1215,7 +410,7 @@ class MainWindow(QMainWindow):
         self._feat_scroll.setWidgetResizable(True)
         self._feat_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._feat_scroll.setStyleSheet(
-            "QScrollArea { background: transparent; }" + _SCROLLBAR_STYLE
+            "QScrollArea { background: transparent; }" + SCROLLBAR_STYLE
         )
 
         self._feat_content = QWidget()
@@ -1251,37 +446,50 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _target_screen(self) -> Optional[QScreen]:
-        """Return the screen under the cursor, falling back to primaryScreen."""
+        """Return the primary screen.
+
+        On multi-monitor setups, we always target the primary screen for
+        initial placement.  The user can then drag the window wherever
+        they like, and that position is saved/restored on next launch.
+        """
         app = QApplication.instance()
         assert isinstance(app, QApplication)
-        return QGuiApplication.screenAt(QCursor.pos()) or app.primaryScreen()
+        return app.primaryScreen()
 
     def _ensure_visible_on_screen(self) -> None:
         """
         Run after the first show via QTimer so the WM has decorated the window.
-        Clamps the framed window onto a real screen if it landed off-screen or
-        was restored to a bad position.
+        Ensures the window is on the primary screen.  If the user had a saved
+        position that is still on *some* screen, we leave it alone; otherwise
+        we center on the primary screen.
         """
         app = QApplication.instance()
         assert isinstance(app, QApplication)
-
-        frame = self.frameGeometry()
-        on_screen = any(s.geometry().intersects(frame) for s in app.screens())
-
-        if on_screen and frame.width() >= 300 and frame.height() >= 200:
-            self.raise_()
-            self.activateWindow()
-            return
 
         screen = self._target_screen()
         if screen is None:
             return
 
-        avail = screen.availableGeometry()
-        w = min(max(self.width(), 900), avail.width() - 40)
-        h = min(max(self.height(), 680), avail.height() - 40)
-        self.resize(w, h)
+        frame = self.frameGeometry()
+        primary_geo = screen.geometry()
 
+        # If the window is already mostly on the primary screen, keep it.
+        if primary_geo.intersects(frame) and frame.width() >= 300 and frame.height() >= 200:
+            self.raise_()
+            self.activateWindow()
+            return
+
+        # If the window is on *some* other screen and has a saved position,
+        # leave it there — the user intentionally placed it.
+        if self._settings.value("window_pos") is not None:
+            on_any = any(s.geometry().intersects(frame) for s in app.screens())
+            if on_any and frame.width() >= 300 and frame.height() >= 200:
+                self.raise_()
+                self.activateWindow()
+                return
+
+        # Otherwise, center on the primary screen.
+        avail = screen.availableGeometry()
         frame = self.frameGeometry()
         frame.moveCenter(avail.center())
         self.move(frame.topLeft())
@@ -1301,6 +509,7 @@ class MainWindow(QMainWindow):
         # can place the window off-screen after a display config change.
         self._settings.remove("geometry")
 
+        self._has_saved_size = self._settings.value("window_size") is not None
         size = self._settings.value("window_size")
         pos = self._settings.value("window_pos")
         screen = self._target_screen()
@@ -1308,28 +517,15 @@ class MainWindow(QMainWindow):
         if size is not None:
             self.resize(size)
         else:
-            # Width: consonant grid at MAX_COLS + vowel chart + features
-            _stride = _BTN_W + _BTN_GAP
-            _seg_w = (
-                SegmentGridWidget.MAX_COLS * _stride
-                + 12  # HBox spacing
-                + _VOWEL_LABEL_W
-                + 6 * _stride
-                + 28
-            )  # panel margins
-            _feat_w = 430  # two feature columns + margins + buffer
-            _default_w = (
-                _seg_w + 30 + _feat_w + 1
-            )  # +30 seg breathing room, +1 splitter
-            _default_h = 950  # fits tallest feature set + analysis
+            # Reasonable pre-load default; _fit_to_content will refine after loading.
             if screen is not None:
                 avail = screen.availableGeometry()
                 self.resize(
-                    min(_default_w, max(900, avail.width() - 40)),
-                    min(_default_h, max(680, avail.height() - 40)),
+                    min(1200, avail.width() - 40),
+                    min(900, avail.height() - 40),
                 )
             else:
-                self.resize(_default_w, _default_h)
+                self.resize(1200, 900)
 
         if pos is not None:
             self.move(pos)
@@ -1678,14 +874,14 @@ class MainWindow(QMainWindow):
 
         # Collect features not in any known group
         grouped_features = set()
-        for _, feats in _FEATURE_GROUPS:
+        for _, feats in FEATURE_GROUPS:
             grouped_features.update(feats)
-        unknown_active = _sort_features(
+        unknown_active = sort_features(
             [f for f in active_feature_set if f not in grouped_features]
         )
 
         # Build cards and count active features per group
-        all_groups = list(_FEATURE_GROUPS)
+        all_groups = list(FEATURE_GROUPS)
         if unknown_active:
             all_groups.append(("Other", unknown_active))
 
@@ -1716,29 +912,71 @@ class MainWindow(QMainWindow):
     # Mode management
     # ------------------------------------------------------------------
 
+    def _fit_to_content(self) -> None:
+        """Measure actual content and size window + splitters to fit.
+
+        Called after each inventory load.  On first load (no saved size),
+        also resizes the window.  Always sets the horizontal splitter so
+        both panels get the width their content needs.
+        """
+        QApplication.processEvents()
+
+        # -- Measure segment panel content width --
+        seg_content = self._seg_scroll.widget()
+        seg_content_w = seg_content.sizeHint().width() if seg_content else 400
+        seg_chrome = 28 + 6  # panel margins (14*2) + scrollbar clearance
+        seg_padding = 30  # breathing room so content isn't flush to edges
+        seg_need_w = seg_content_w + seg_chrome + seg_padding
+
+        # -- Measure feature panel content --
+        feat_content = self._feat_scroll.widget()
+        feat_content_w = feat_content.sizeHint().width() if feat_content else 380
+        feat_chrome = 28 + 6
+        feat_padding = 24
+        feat_need_w = feat_content_w + feat_chrome + feat_padding
+        feat_content_h = feat_content.sizeHint().height() if feat_content else 400
+
+        # Top panel: header chrome (~80px) + content + vertical breathing room
+        feat_v_padding = 20
+        top_need_h = feat_content_h + 80 + feat_v_padding
+        analysis_h = self._min_analysis_h
+        toolbar_h = 50  # toolbar + status bar
+        total_need_h = top_need_h + analysis_h + toolbar_h + 30  # extra overall height
+
+        # -- Size window (only on first load without saved size) --
+        if not self._has_saved_size:
+            screen = self._target_screen()
+            if screen is not None:
+                avail = screen.availableGeometry()
+                w = min(seg_need_w + feat_need_w + 1, avail.width() - 40)
+                h = min(total_need_h, avail.height() - 40)
+                self.resize(max(w, 640), max(h, 480))
+
+                frame = self.frameGeometry()
+                frame.moveCenter(avail.center())
+                self.move(frame.topLeft())
+            self._has_saved_size = True  # only auto-size once
+
+        # -- Apply to horizontal splitter --
+        # Give both panels exactly what their content needs.
+        # The splitter stretch factors (seg=1, feat=0) handle any extra
+        # space — segments absorb it, features stay tight.
+        self._hsplit.setSizes([seg_need_w, feat_need_w])
+
+        # -- Rebalance vertical splitter --
+        total = self._vsplit.height()
+        if total > 0:
+            top_h = min(top_need_h, total - self._min_analysis_h)
+            top_h = max(top_h, 200)
+            self._vsplit.setSizes([top_h, total - top_h])
+
     def _rebalance_vsplit(self) -> None:
         """Size the top panel so segments/features don't need scrollbars.
 
-        Priority: avoid scrollbars in the content panels.  The analysis
-        panel gets whatever vertical space remains, down to a hard floor
-        of ``_min_analysis_h``.
+        On first call after loading, also fits the window to content.
+        Subsequent calls (e.g. after resize) only adjust the vertical split.
         """
-        QApplication.processEvents()
-        total = self._vsplit.height()
-        if total <= 0:
-            return
-
-        feat_content = self._feat_scroll.widget()
-        feat_h = feat_content.sizeHint().height() if feat_content else 0
-        chrome = 80
-        needed = feat_h + chrome
-
-        # Give the top panel what it needs; analysis gets the rest.
-        top_h = min(needed, total - self._min_analysis_h)
-        top_h = max(top_h, 200)
-        analysis_h = total - top_h
-
-        self._vsplit.setSizes([top_h, analysis_h])
+        self._fit_to_content()
 
     def _apply_mode_to_new_widgets(self):
         """After populating new widgets, apply the current mode's interactivity.
@@ -1939,39 +1177,6 @@ class MainWindow(QMainWindow):
     # Seg → Feat logic
     # ------------------------------------------------------------------
 
-    def _compute_contrastive(self, segs: list) -> dict:
-        """
-        Return {feature: {'+': [segs...], '-': [segs...], '0': [segs...]}}
-        for every feature where at least one segment is '+' and at least one
-        is '-'.  Segments with '0' (inapplicable / unspecified) are tracked
-        separately so the display can account for all selected segments.
-        """
-        if self.engine is None:
-            return {}
-        result = {}
-        for feat in self.engine.features:
-            plus_segs = [
-                s
-                for s in segs
-                if self.engine.segments[s].get(feat, "0") == "+"
-            ]
-            minus_segs = [
-                s
-                for s in segs
-                if self.engine.segments[s].get(feat, "0") == "-"
-            ]
-            if plus_segs and minus_segs:
-                zero_segs = [
-                    s
-                    for s in segs
-                    if self.engine.segments[s].get(feat, "0") == "0"
-                ]
-                entry: dict = {"+": plus_segs, "-": minus_segs}
-                if zero_segs:
-                    entry["0"] = zero_segs
-                result[feat] = entry
-        return result
-
     def _update_seg_to_feat(self):
         segs = self._selected_segments
         if not segs or not self.engine:
@@ -1991,10 +1196,10 @@ class MainWindow(QMainWindow):
             for seg, btn in self._seg_buttons.items():
                 if seg not in selected_set:
                     btn.set_state("default")
-            self._show_single_segment_analysis(segs[0], feats)
+            self.analysis.set_html(render_single_segment(self.engine, segs[0], feats))
         else:
             common = self.engine.common_features(segs)
-            contrastive = self._compute_contrastive(segs)
+            contrastive = compute_contrastive(self.engine, segs)
             for feat, row in self._feat_rows.items():
                 if feat in common:
                     row.set_display(common[feat], shared=True)
@@ -2020,159 +1225,9 @@ class MainWindow(QMainWindow):
                         "suggested" if seg in suggested_set else "default"
                     )
 
-            self._show_multi_segment_analysis(
-                segs, common, contrastive, suggested
+            self.analysis.set_html(
+                render_multi_segment(self.engine, segs, common, contrastive, suggested)
             )
-
-    def _show_single_segment_analysis(self, seg: str, feats: dict):
-        if self.engine is None:
-            return
-        plus_feats = _sort_features([f for f, v in feats.items() if v == "+"])
-        minus_feats = _sort_features([f for f, v in feats.items() if v == "-"])
-
-        plus_tags = " ".join(self._tag(f"+{f}", "green") for f in plus_feats)
-        minus_tags = " ".join(
-            self._tag(f"\u2212{f}", "red") for f in minus_feats
-        )
-
-        html = (
-            f"<p><b style='color:{C['text']}'>/{seg}/</b>"
-            f" &nbsp;\u2014&nbsp; full feature bundle:</p>"
-            f"<p>{plus_tags}</p>"
-            f"<p>{minus_tags}</p>"
-        )
-
-        is_nc, specs = self.engine.is_natural_class([seg])
-        if not is_nc:
-            # Expand to equivalence class: all segments identical except
-            # for underspecified features (e.g. ŋ → {ŋ, ŋ+, ŋ˗}).
-            non_zero = {f: v for f, v in feats.items() if v != "0"}
-            equiv = self.engine.find_segments(
-                non_zero, underspec_compatible=True
-            )
-            if len(equiv) > 1:
-                is_nc, specs = self.engine.is_natural_class(equiv)
-        if is_nc and specs:
-            html += self._render_spec_list(specs)
-        else:
-            html += (
-                f"<p style='color:{C['text_dim']}'><i>"
-                "Cannot be uniquely characterized in this inventory."
-                "</i></p>"
-            )
-
-        self.analysis.set_html(html)
-
-    def _show_multi_segment_analysis(
-        self, segs: list, common: dict, contrastive: dict, suggested: list
-    ):
-        if self.engine is None:
-            return
-        seg_tags = " ".join(self._tag(f"/{s}/", "blue") for s in segs)
-
-        if common:
-            c_tags = " ".join(
-                self._tag(f"{v}{f}", "green" if v == "+" else "red")
-                for f, v in _sort_spec(common).items()
-            )
-            common_html = f"<p><b>Shared features:</b><br>{c_tags}</p>"
-        else:
-            common_html = (
-                f"<p><b>Shared features:</b>"
-                f" <i style='color:{C['text_dim']}'>none</i></p>"
-            )
-
-        if contrastive:
-            rows = []
-            for feat in _sort_features(list(contrastive)):
-                groups = contrastive[feat]
-                plus_segs = " ".join(
-                    self._tag(f"/{s}/", "blue") for s in groups["+"]
-                )
-                minus_segs = " ".join(
-                    self._tag(f"/{s}/", "blue") for s in groups["-"]
-                )
-                minus_sign = chr(8722)
-                clr_plus = C["plus"]
-                clr_minus = C["minus"]
-                row_html = (
-                    f"{self._tag(feat, 'gray')}"
-                    f" <span style='color:{clr_plus};font-weight:bold'>+</span>"
-                    f" {plus_segs}"
-                    f" &nbsp;"
-                    f" <span style='color:{clr_minus};font-weight:bold'>{minus_sign}</span>"
-                    f" {minus_segs}"
-                )
-                if "0" in groups:
-                    zero_segs = " ".join(
-                        self._tag(f"/{s}/", "gray") for s in groups["0"]
-                    )
-                    row_html += (
-                        f" &nbsp;"
-                        f" <span style='color:{C['text_dim']}'>0</span>"
-                        f" {zero_segs}"
-                    )
-                rows.append(row_html)
-            contrast_html = (
-                "<p><b>Contrasting features:</b><br>"
-                + "<br>".join(rows)
-                + "</p>"
-            )
-        else:
-            # Check if segments differ only in underspecification (0 vs +/-)
-            has_underspec_diff = False
-            for feat in self.engine.features:
-                vals = {self.engine.segments[s].get(feat, "0") for s in segs}
-                if len(vals) > 1 and "0" in vals:
-                    has_underspec_diff = True
-                    break
-            if has_underspec_diff:
-                contrast_html = (
-                    f"<p><b>Contrasting features:</b>"
-                    f" <i style='color:{C['text_dim']}'>none \u2014 segments"
-                    " differ only in underspecification</i></p>"
-                )
-            else:
-                contrast_html = (
-                    f"<p><b>Contrasting features:</b>"
-                    f" <i style='color:{C['text_dim']}'>none \u2014 segments"
-                    " are featurally identical</i></p>"
-                )
-
-        is_nc, specs = self.engine.is_natural_class(segs)
-        spec_html = ""
-        if is_nc:
-            nc_html = f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
-            if not specs or not specs[0]:
-                _univ = "\u2205 (universal \u2014 all segments)"
-                spec_html = (
-                    f"<p><b>Minimal specification:</b>"
-                    f" {self._tag(_univ, 'gray')}</p>"
-                )
-            else:
-                spec_html = self._render_spec_list(specs)
-        else:
-            if suggested:
-                sug_tags = " ".join(
-                    self._tag(f"/{s}/", "gray") for s in suggested
-                )
-                nc_html = (
-                    "<p><b>Natural class:</b>"
-                    f" <span style='color:{C['minus']}'>No</span>"
-                    f" \u2014 add {len(suggested)} segment"
-                    f"{'s' if len(suggested) != 1 else ''}"
-                    f" to complete the smallest shared-feature class:<br>{sug_tags}</p>"
-                )
-            else:
-                nc_html = (
-                    "<p><b>Natural class:</b>"
-                    f" <span style='color:{C['minus']}'>No \u2014"
-                    " these segments cannot be uniquely picked out by any"
-                    " feature bundle in this inventory.</span></p>"
-                )
-
-        html = f"<p><b>Selected:</b> {seg_tags}</p>{nc_html}{common_html}{spec_html}{contrast_html}"
-        self.analysis.set_html(html)
 
     # ------------------------------------------------------------------
     # Feat → Seg logic
@@ -2195,76 +1250,11 @@ class MainWindow(QMainWindow):
         for seg, btn in self._seg_buttons.items():
             btn.set_state("matched" if seg in matching_set else "unmatched")
 
-        self._show_feat_to_seg_analysis(selected_feats, matching)
-
-    def _show_feat_to_seg_analysis(self, feature_dict: dict, matching: list):
-        if self.engine is None:
-            return
-        feat_tags = " ".join(
-            self._tag(f"{v}{f}", "green" if v == "+" else "red")
-            for f, v in _sort_spec(feature_dict).items()
-        )
-
-        if matching:
-            seg_tags = " ".join(self._tag(f"/{s}/", "blue") for s in matching)
-            segs_html = f"<p><b>Matching segments ({len(matching)}):</b><br>{seg_tags}</p>"
-        else:
-            segs_html = (
-                "<p><b>Matching segments:</b>"
-                f" <i style='color:{C['text_dim']}'>none \u2014 no segment"
-                " satisfies all selected features.</i></p>"
-            )
-
-        html = f"<p><b>Query:</b> {feat_tags}</p>{segs_html}"
-        self.analysis.set_html(html)
+        self.analysis.set_html(render_feat_to_seg(self.engine, selected_feats, matching))
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-
-    def _tag(self, text: str, colour: str) -> str:
-        """Render a coloured inline chip."""
-        bg, fg = _TAG_PALETTES.get(colour, (C["tag_gray"], C["tag_gray_text"]))
-        return (
-            f"<span style='"
-            f"background:{bg}; color:{fg}; border-radius:4px;"
-            f" padding:2px 7px; margin:2px; font-family:monospace;"
-            f" font-size:10pt;'>{text}</span>"
-        )
-
-    def _render_spec_list(self, specs: list) -> str:
-        """Render a deduplicated list of minimal specifications as HTML.
-
-        Underspecified features (value "0") are hidden from display;
-        specs that become identical after filtering are collapsed.
-        """
-        seen: set = set()
-        rows: list = []
-        for spec in specs:
-            filtered = {f: v for f, v in _sort_spec(spec).items() if v != "0"}
-            if not filtered:
-                continue
-            key = tuple(sorted(filtered.items()))
-            if key in seen:
-                continue
-            seen.add(key)
-            row_tags = " ".join(
-                self._tag(f"{v}{f}", "green" if v == "+" else "red")
-                for f, v in filtered.items()
-            )
-            rows.append(
-                f"<span style='color:{C['text_dim']}'>{len(rows) + 1}.</span> {row_tags}"
-            )
-        if not rows:
-            return ""
-        if len(rows) == 1:
-            content = rows[0].split("</span> ", 1)[1]
-            return f"<p><b>Minimal specification:</b><br>{content}</p>"
-        return (
-            f"<p><b>Minimal specifications ({len(rows)}):</b><br>"
-            + "<br>".join(rows)
-            + "</p>"
-        )
 
     def _reset_feature_display(self):
         for row in self._feat_rows.values():
