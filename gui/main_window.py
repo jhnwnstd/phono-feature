@@ -64,7 +64,6 @@ from gui.widgets import (
     SegmentGridWidget,
 )
 
-
 # ---------------------------------------------------------------------------
 # MainWindow
 # ---------------------------------------------------------------------------
@@ -474,7 +473,11 @@ class MainWindow(QMainWindow):
         primary_geo = screen.geometry()
 
         # If the window is already mostly on the primary screen, keep it.
-        if primary_geo.intersects(frame) and frame.width() >= 300 and frame.height() >= 200:
+        if (
+            primary_geo.intersects(frame)
+            and frame.width() >= 300
+            and frame.height() >= 200
+        ):
             self.raise_()
             self.activateWindow()
             return
@@ -635,7 +638,7 @@ class MainWindow(QMainWindow):
             self._builder.raise_()
             self._builder.activateWindow()
             return
-        from gui.inventory_builder import InventoryBuilder
+        from gui.builder import InventoryBuilder
 
         self._builder = InventoryBuilder(parent=self)
         self._builder.setWindowFlag(Qt.WindowType.Window)  # own taskbar entry
@@ -930,18 +933,24 @@ class MainWindow(QMainWindow):
 
         # -- Measure feature panel content --
         feat_content = self._feat_scroll.widget()
-        feat_content_w = feat_content.sizeHint().width() if feat_content else 380
+        feat_content_w = (
+            feat_content.sizeHint().width() if feat_content else 380
+        )
         feat_chrome = 28 + 6
         feat_padding = 24
         feat_need_w = feat_content_w + feat_chrome + feat_padding
-        feat_content_h = feat_content.sizeHint().height() if feat_content else 400
+        feat_content_h = (
+            feat_content.sizeHint().height() if feat_content else 400
+        )
 
         # Top panel: header chrome (~80px) + content + vertical breathing room
         feat_v_padding = 20
         top_need_h = feat_content_h + 80 + feat_v_padding
         analysis_h = self._min_analysis_h
         toolbar_h = 50  # toolbar + status bar
-        total_need_h = top_need_h + analysis_h + toolbar_h + 30  # extra overall height
+        total_need_h = (
+            top_need_h + analysis_h + toolbar_h + 30
+        )  # extra overall height
 
         # -- Size window (only on first load without saved size) --
         if not self._has_saved_size:
@@ -1196,7 +1205,9 @@ class MainWindow(QMainWindow):
             for seg, btn in self._seg_buttons.items():
                 if seg not in selected_set:
                     btn.set_state("default")
-            self.analysis.set_html(render_single_segment(self.engine, segs[0], feats))
+            self.analysis.set_html(
+                render_single_segment(self.engine, segs[0], feats)
+            )
         else:
             common = self.engine.common_features(segs)
             contrastive = compute_contrastive(self.engine, segs)
@@ -1226,7 +1237,9 @@ class MainWindow(QMainWindow):
                     )
 
             self.analysis.set_html(
-                render_multi_segment(self.engine, segs, common, contrastive, suggested)
+                render_multi_segment(
+                    self.engine, segs, common, contrastive, suggested
+                )
             )
 
     # ------------------------------------------------------------------
@@ -1250,7 +1263,9 @@ class MainWindow(QMainWindow):
         for seg, btn in self._seg_buttons.items():
             btn.set_state("matched" if seg in matching_set else "unmatched")
 
-        self.analysis.set_html(render_feat_to_seg(self.engine, selected_feats, matching))
+        self.analysis.set_html(
+            render_feat_to_seg(self.engine, selected_feats, matching)
+        )
 
     # ------------------------------------------------------------------
     # Helpers

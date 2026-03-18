@@ -21,7 +21,6 @@ from PyQt6.QtWidgets import (
 from gui.constants import BTN_GAP, BTN_W, SCROLLBAR_STYLE
 from gui.palette import C
 
-
 # ---------------------------------------------------------------------------
 # SegmentButton
 # ---------------------------------------------------------------------------

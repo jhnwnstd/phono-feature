@@ -242,7 +242,9 @@ def vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
     confidence = min(h_conf, p_conf, key=lambda c: _CONF_RANK[c])
     reason = f"{h_reason}; {p_reason}; {r_reason}"
 
-    return VowelPlacement(row=row, col=col, confidence=confidence, reason=reason)
+    return VowelPlacement(
+        row=row, col=col, confidence=confidence, reason=reason
+    )
 
 
 # ---------------------------------------------------------------------------
