@@ -21,7 +21,12 @@
         "tone",
         "upper_register"
       ],
-      "convention": "Values: '+' present, '-' absent, '0' inapplicable. Italic features (approximant, delayed_release, front, labiodental, tap, trill) should be used only when absolutely necessary per Blevins (2025). Table 2 features (long, stress, tone, upper_register) are prosodic/autosegmental and not strictly segmental."
+      "convention": "Values: '+' present, '-' absent, '0' inapplicable. Italic features (approximant, delayed_release, front, labiodental, tap, trill) should be used only when absolutely necessary per Blevins (2025). Table 2 features (long, stress, tone, upper_register) are stored outside the per-segment matrices because they are prosodic/autosegmental rather than strictly segmental.",
+      "revision_notes": [
+        "Removed Long, Stress, Tone, and UpperRegister from individual segment matrices and represented them separately as nonsegmental features.",
+        "Added segment_structure annotations for contour segments (affricates) and complex segments with simultaneous place specifications.",
+        "Changed Approximant to '+' for ʍ and ɦ to better match their glide/sonorant treatment."
+      ]
     }
   },
   "features": [
@@ -51,13 +56,49 @@
     "Low",
     "Back",
     "Front",
-    "Long",
-    "Stress",
-    "Tone",
-    "UpperRegister",
     "ConstrPharynx",
     "Tense"
   ],
+  "nonsegmental_features": {
+    "Long": {
+      "type": "autosegmental",
+      "domain": "timing / skeletal slots",
+      "values": [
+        "+",
+        "-"
+      ],
+      "note": "Removed from per-segment matrices; Blevins treats length as better represented outside the segmental feature matrix."
+    },
+    "Stress": {
+      "type": "metrical",
+      "domain": "syllables / metrical structure",
+      "values": [
+        "+",
+        "-"
+      ],
+      "note": "Removed from per-segment matrices; Blevins treats stress as a property of syllables, not individual segments."
+    },
+    "Tone": {
+      "type": "autosegmental",
+      "domain": "tone-bearing units",
+      "values": [
+        "+",
+        "-",
+        "0"
+      ],
+      "note": "Removed from per-segment matrices; Blevins says tonal features normally are not included in the segmental feature matrix."
+    },
+    "UpperRegister": {
+      "type": "autosegmental",
+      "domain": "tone / register tier",
+      "values": [
+        "+",
+        "-",
+        "0"
+      ],
+      "note": "Removed from per-segment matrices; Blevins treats register with tone as non-segmental."
+    }
+  },
   "segments": {
     "a": {
       "Click": "-",
@@ -86,10 +127,6 @@
       "Low": "+",
       "Back": "-",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -120,10 +157,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -154,10 +187,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -188,10 +217,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -222,10 +247,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -256,10 +277,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -290,10 +307,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -324,10 +337,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -358,10 +367,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -392,10 +397,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -426,10 +427,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -460,10 +457,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -494,10 +487,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -528,10 +517,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -562,10 +547,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -596,10 +577,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -630,10 +607,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -664,10 +637,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -698,10 +667,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -732,10 +697,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -766,10 +727,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -800,10 +757,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -834,10 +787,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -868,10 +817,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -902,10 +847,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -936,10 +877,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -970,10 +907,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1004,10 +937,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1038,10 +967,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1072,10 +997,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1106,10 +1027,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -1140,10 +1057,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1174,10 +1087,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1208,10 +1117,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1242,10 +1147,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1276,10 +1177,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1310,10 +1207,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1344,10 +1237,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1378,10 +1267,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1412,10 +1297,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1446,10 +1327,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1480,10 +1357,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1514,10 +1387,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1548,10 +1417,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1582,10 +1447,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1616,10 +1477,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1650,10 +1507,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1684,10 +1537,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1718,10 +1567,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -1752,10 +1597,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1786,10 +1627,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -1820,10 +1657,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1854,10 +1687,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1888,10 +1717,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -1922,10 +1747,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -1956,10 +1777,6 @@
       "Low": "+",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -1990,10 +1807,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2024,10 +1837,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2058,10 +1867,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -2092,10 +1897,6 @@
       "Low": "+",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "+",
       "Tense": "0"
     },
@@ -2126,10 +1927,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2160,10 +1957,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -2194,10 +1987,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2228,10 +2017,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2262,10 +2047,6 @@
       "Low": "+",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -2296,10 +2077,6 @@
       "Low": "+",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -2330,10 +2107,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -2364,10 +2137,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2398,10 +2167,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2432,10 +2197,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2466,10 +2227,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -2500,10 +2257,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -2534,10 +2287,6 @@
       "Low": "0",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2568,10 +2317,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -2602,10 +2347,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -2636,10 +2377,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2670,10 +2407,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2704,10 +2437,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2738,10 +2467,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2772,10 +2497,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2806,10 +2527,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2840,10 +2557,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2874,10 +2587,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -2908,10 +2617,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -2942,10 +2647,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -2954,7 +2655,7 @@
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
-      "Approximant": "-",
+      "Approximant": "+",
       "Continuant": "+",
       "Strident": "0",
       "DelRel": "-",
@@ -2976,10 +2677,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3010,10 +2707,6 @@
       "Low": "-",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3044,10 +2737,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -3078,10 +2767,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -3112,10 +2797,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3146,10 +2827,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3180,10 +2857,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3214,10 +2887,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3248,10 +2917,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -3282,10 +2947,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -3316,10 +2977,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -3350,10 +3007,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3384,10 +3037,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3418,10 +3067,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3452,10 +3097,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3486,10 +3127,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -3520,10 +3157,6 @@
       "Low": "+",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -3554,10 +3187,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3588,10 +3217,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3622,10 +3247,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3656,10 +3277,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3690,10 +3307,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3724,10 +3337,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3758,10 +3367,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3792,10 +3397,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3826,10 +3427,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3860,10 +3457,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3894,10 +3487,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3928,10 +3517,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -3962,10 +3547,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -3996,10 +3577,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -4030,10 +3607,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4064,10 +3637,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -4076,7 +3645,7 @@
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
-      "Approximant": "-",
+      "Approximant": "+",
       "Continuant": "+",
       "Strident": "0",
       "DelRel": "-",
@@ -4098,10 +3667,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "+"
     },
@@ -4132,10 +3697,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4166,10 +3727,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "-"
     },
@@ -4200,10 +3757,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4234,10 +3787,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4268,10 +3817,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4302,10 +3847,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4336,10 +3877,6 @@
       "Low": "+",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "+",
       "Tense": "0"
     },
@@ -4370,10 +3907,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4404,10 +3937,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4438,10 +3967,6 @@
       "Low": "-",
       "Back": "-",
       "Front": "+",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4472,10 +3997,6 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4506,10 +4027,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4540,10 +4057,6 @@
       "Low": "0",
       "Back": "0",
       "Front": "0",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
     },
@@ -4574,12 +4087,338 @@
       "Low": "-",
       "Back": "+",
       "Front": "-",
-      "Long": "-",
-      "Stress": "-",
-      "Tone": "0",
-      "UpperRegister": "0",
       "ConstrPharynx": "0",
       "Tense": "0"
+    }
+  },
+  "segment_structure": {
+    "b͡v": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "b͡β": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "c͡ç": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "d̠͡ɮ̠": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "d̪͡z̪": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "d̪͡ð": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "d̪͡ɮ̪": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "d͡z": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "d͡ɮ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "d͡ʑ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "d͡ʒ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "k̠͡x̠": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "k͡x": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "p͡f": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "p͡ɸ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "q͡χ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "t̠͡ɬ̠": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "t̪͡s̪": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "t̪͡ɬ̪": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "t̪͡θ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "t͡s": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "t͡ɕ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "t͡ɬ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "t͡ʃ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "ɉ͡ʝ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "ɖ͡ʐ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "ɡ̠̠͡ɣ̠": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "ɡ͡ɣ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "ɢ͡ʁ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "ʈ͡ʂ": {
+      "type": "contour_segment",
+      "ordered_feature_values": {
+        "Continuant": [
+          "-",
+          "+"
+        ]
+      },
+      "flat_proxy_feature": "DelRel"
+    },
+    "b͡d": {
+      "type": "complex_segment",
+      "simultaneous_place_features": [
+        "LABIAL",
+        "CORONAL"
+      ]
+    },
+    "g͡b": {
+      "type": "complex_segment",
+      "simultaneous_place_features": [
+        "LABIAL",
+        "DORSAL"
+      ]
+    },
+    "k͡p": {
+      "type": "complex_segment",
+      "simultaneous_place_features": [
+        "LABIAL",
+        "DORSAL"
+      ]
+    },
+    "p͡t": {
+      "type": "complex_segment",
+      "simultaneous_place_features": [
+        "LABIAL",
+        "CORONAL"
+      ]
     }
   }
 }
