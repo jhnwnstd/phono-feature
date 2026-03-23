@@ -60,7 +60,7 @@
   ],
   "segments": {
     "a": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -94,7 +94,7 @@
       "Tense": "-"
     },
     "b": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -128,13 +128,13 @@
       "Tense": "0"
     },
     "b͡d": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "+",
+      "Strident": "-",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -162,13 +162,13 @@
       "Tense": "0"
     },
     "b͡v": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "0",
+      "Strident": "+",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -196,13 +196,13 @@
       "Tense": "0"
     },
     "b͡β": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "0",
+      "Strident": "-",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -230,7 +230,7 @@
       "Tense": "0"
     },
     "c": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -264,7 +264,7 @@
       "Tense": "0"
     },
     "c͡ç": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -298,7 +298,7 @@
       "Tense": "0"
     },
     "d": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -332,13 +332,13 @@
       "Tense": "0"
     },
     "d̠͡ɮ̠": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "-",
+      "Strident": "+",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -366,7 +366,7 @@
       "Tense": "0"
     },
     "d̪͡z̪": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -400,7 +400,7 @@
       "Tense": "0"
     },
     "d̪͡ð": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -434,13 +434,13 @@
       "Tense": "0"
     },
     "d̪͡ɮ̪": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "-",
+      "Strident": "+",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -468,7 +468,7 @@
       "Tense": "0"
     },
     "d͡z": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -502,13 +502,13 @@
       "Tense": "0"
     },
     "d͡ɮ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "-",
+      "Strident": "+",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -536,7 +536,7 @@
       "Tense": "0"
     },
     "d͡ʑ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -555,7 +555,7 @@
       "Round": "-",
       "Labiodental": "-",
       "CORONAL": "+",
-      "Anterior": "+",
+      "Anterior": "-",
       "Distributed": "+",
       "DORSAL": "+",
       "High": "+",
@@ -570,7 +570,7 @@
       "Tense": "0"
     },
     "d͡ʒ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -604,7 +604,7 @@
       "Tense": "0"
     },
     "e": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -638,13 +638,13 @@
       "Tense": "+"
     },
     "f": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "+",
-      "Strident": "0",
+      "Strident": "+",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -672,7 +672,7 @@
       "Tense": "0"
     },
     "g͡b": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -696,7 +696,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -706,7 +706,7 @@
       "Tense": "0"
     },
     "h": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -740,7 +740,7 @@
       "Tense": "0"
     },
     "i": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -774,7 +774,7 @@
       "Tense": "+"
     },
     "j": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -808,7 +808,7 @@
       "Tense": "+"
     },
     "k": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -832,7 +832,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -842,7 +842,7 @@
       "Tense": "0"
     },
     "k̠": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -876,7 +876,7 @@
       "Tense": "0"
     },
     "k̠͡x̠": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -910,7 +910,7 @@
       "Tense": "0"
     },
     "k͡p": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -934,7 +934,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -944,13 +944,13 @@
       "Tense": "0"
     },
     "k͡x": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "0",
+      "Strident": "-",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -968,7 +968,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -978,7 +978,7 @@
       "Tense": "0"
     },
     "l": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -1012,7 +1012,7 @@
       "Tense": "0"
     },
     "m": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -1046,7 +1046,7 @@
       "Tense": "0"
     },
     "n": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -1080,7 +1080,7 @@
       "Tense": "0"
     },
     "o": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -1114,7 +1114,7 @@
       "Tense": "+"
     },
     "p": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1148,13 +1148,13 @@
       "Tense": "0"
     },
     "p͡f": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "0",
+      "Strident": "+",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -1182,13 +1182,13 @@
       "Tense": "0"
     },
     "p͡t": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "+",
+      "Strident": "-",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -1216,13 +1216,13 @@
       "Tense": "0"
     },
     "p͡ɸ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "0",
+      "Strident": "-",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -1250,7 +1250,7 @@
       "Tense": "0"
     },
     "q": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1284,13 +1284,13 @@
       "Tense": "0"
     },
     "q͡χ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "0",
+      "Strident": "+",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -1318,7 +1318,7 @@
       "Tense": "0"
     },
     "r": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -1352,7 +1352,7 @@
       "Tense": "0"
     },
     "s": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1386,7 +1386,7 @@
       "Tense": "0"
     },
     "t": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1420,13 +1420,13 @@
       "Tense": "0"
     },
     "t̠͡ɬ̠": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "-",
+      "Strident": "+",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -1454,7 +1454,7 @@
       "Tense": "0"
     },
     "t̪͡s̪": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1488,13 +1488,13 @@
       "Tense": "0"
     },
     "t̪͡ɬ̪": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "-",
+      "Strident": "+",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -1522,7 +1522,7 @@
       "Tense": "0"
     },
     "t̪͡θ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1556,7 +1556,7 @@
       "Tense": "0"
     },
     "t͡s": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1590,7 +1590,7 @@
       "Tense": "0"
     },
     "t͡ɕ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1609,7 +1609,7 @@
       "Round": "-",
       "Labiodental": "-",
       "CORONAL": "+",
-      "Anterior": "+",
+      "Anterior": "-",
       "Distributed": "+",
       "DORSAL": "+",
       "High": "+",
@@ -1624,13 +1624,13 @@
       "Tense": "0"
     },
     "t͡ɬ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "-",
+      "Strident": "+",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -1658,7 +1658,7 @@
       "Tense": "0"
     },
     "t͡ʃ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1692,7 +1692,7 @@
       "Tense": "0"
     },
     "u": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -1726,13 +1726,13 @@
       "Tense": "+"
     },
     "v": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "+",
-      "Strident": "0",
+      "Strident": "+",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -1760,7 +1760,7 @@
       "Tense": "0"
     },
     "w": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -1794,13 +1794,13 @@
       "Tense": "+"
     },
     "x": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "+",
-      "Strident": "0",
+      "Strident": "-",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -1818,7 +1818,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -1828,7 +1828,7 @@
       "Tense": "0"
     },
     "x̠": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1862,7 +1862,7 @@
       "Tense": "0"
     },
     "y": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -1896,7 +1896,7 @@
       "Tense": "+"
     },
     "z": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1930,7 +1930,7 @@
       "Tense": "0"
     },
     "æ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -1964,7 +1964,7 @@
       "Tense": "-"
     },
     "ç": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -1998,7 +1998,7 @@
       "Tense": "0"
     },
     "ð": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2032,7 +2032,7 @@
       "Tense": "0"
     },
     "ø": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2066,7 +2066,7 @@
       "Tense": "+"
     },
     "ħ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2090,8 +2090,8 @@
       "DORSAL": "-",
       "High": "-",
       "Low": "+",
-      "Back": "+",
-      "Front": "-",
+      "Back": "0",
+      "Front": "0",
       "Long": "-",
       "Stress": "-",
       "Tone": "0",
@@ -2100,7 +2100,7 @@
       "Tense": "0"
     },
     "ŋ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -2124,7 +2124,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -2134,7 +2134,7 @@
       "Tense": "0"
     },
     "œ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2168,7 +2168,7 @@
       "Tense": "-"
     },
     "ɉ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2202,7 +2202,7 @@
       "Tense": "0"
     },
     "ɉ͡ʝ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2236,7 +2236,7 @@
       "Tense": "0"
     },
     "ɑ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2270,7 +2270,7 @@
       "Tense": "+"
     },
     "ɒ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2304,7 +2304,7 @@
       "Tense": "+"
     },
     "ɔ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2338,7 +2338,7 @@
       "Tense": "-"
     },
     "ɕ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2357,7 +2357,7 @@
       "Round": "-",
       "Labiodental": "-",
       "CORONAL": "+",
-      "Anterior": "+",
+      "Anterior": "-",
       "Distributed": "+",
       "DORSAL": "+",
       "High": "+",
@@ -2372,7 +2372,7 @@
       "Tense": "0"
     },
     "ɖ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2406,7 +2406,7 @@
       "Tense": "0"
     },
     "ɖ͡ʐ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2440,7 +2440,7 @@
       "Tense": "0"
     },
     "ɘ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2464,7 +2464,7 @@
       "DORSAL": "+",
       "High": "-",
       "Low": "-",
-      "Back": "-",
+      "Back": "+",
       "Front": "-",
       "Long": "-",
       "Stress": "-",
@@ -2474,7 +2474,7 @@
       "Tense": "+"
     },
     "ə": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2498,7 +2498,7 @@
       "DORSAL": "+",
       "High": "-",
       "Low": "-",
-      "Back": "-",
+      "Back": "+",
       "Front": "-",
       "Long": "-",
       "Stress": "-",
@@ -2508,7 +2508,7 @@
       "Tense": "-"
     },
     "ɚ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2532,7 +2532,7 @@
       "DORSAL": "+",
       "High": "0",
       "Low": "0",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -2542,7 +2542,7 @@
       "Tense": "0"
     },
     "ɛ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2576,7 +2576,7 @@
       "Tense": "-"
     },
     "ɞ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2600,7 +2600,7 @@
       "DORSAL": "+",
       "High": "-",
       "Low": "-",
-      "Back": "-",
+      "Back": "+",
       "Front": "-",
       "Long": "-",
       "Stress": "-",
@@ -2610,7 +2610,7 @@
       "Tense": "-"
     },
     "ɡ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2634,7 +2634,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -2644,7 +2644,7 @@
       "Tense": "0"
     },
     "ɡ̠": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2678,7 +2678,7 @@
       "Tense": "0"
     },
     "ɡ̠̠͡ɣ̠": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2712,13 +2712,13 @@
       "Tense": "0"
     },
     "ɡ͡ɣ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "0",
+      "Strident": "-",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -2736,7 +2736,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -2746,7 +2746,7 @@
       "Tense": "0"
     },
     "ɢ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2780,13 +2780,13 @@
       "Tense": "0"
     },
     "ɢ͡ʁ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "-",
-      "Strident": "0",
+      "Strident": "+",
       "DelRel": "+",
       "Trill": "-",
       "Tap": "-",
@@ -2814,13 +2814,13 @@
       "Tense": "0"
     },
     "ɣ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "+",
-      "Strident": "0",
+      "Strident": "-",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -2838,7 +2838,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -2848,7 +2848,7 @@
       "Tense": "0"
     },
     "ɣ̠": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -2882,7 +2882,7 @@
       "Tense": "0"
     },
     "ɤ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2916,7 +2916,7 @@
       "Tense": "+"
     },
     "ɥ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2950,7 +2950,7 @@
       "Tense": "+"
     },
     "ɦ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -2984,7 +2984,7 @@
       "Tense": "0"
     },
     "ɧ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -3018,7 +3018,7 @@
       "Tense": "0"
     },
     "ɨ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3042,7 +3042,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "-",
+      "Back": "+",
       "Front": "-",
       "Long": "-",
       "Stress": "-",
@@ -3052,7 +3052,7 @@
       "Tense": "+"
     },
     "ɪ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3086,7 +3086,7 @@
       "Tense": "-"
     },
     "ɫ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3120,13 +3120,13 @@
       "Tense": "0"
     },
     "ɬ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "+",
-      "Strident": "-",
+      "Strident": "+",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -3154,7 +3154,7 @@
       "Tense": "0"
     },
     "ɭ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3188,13 +3188,13 @@
       "Tense": "0"
     },
     "ɮ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "+",
-      "Strident": "-",
+      "Strident": "+",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -3222,7 +3222,7 @@
       "Tense": "0"
     },
     "ɯ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3256,7 +3256,7 @@
       "Tense": "+"
     },
     "ɰ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3280,7 +3280,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "0",
+      "Back": "+",
       "Front": "0",
       "Long": "-",
       "Stress": "-",
@@ -3290,7 +3290,7 @@
       "Tense": "+"
     },
     "ɰ̠": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3324,7 +3324,7 @@
       "Tense": "+"
     },
     "ɱ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3358,7 +3358,7 @@
       "Tense": "0"
     },
     "ɲ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3392,7 +3392,7 @@
       "Tense": "0"
     },
     "ɳ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3426,7 +3426,7 @@
       "Tense": "0"
     },
     "ɴ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3460,7 +3460,7 @@
       "Tense": "0"
     },
     "ɵ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3484,7 +3484,7 @@
       "DORSAL": "+",
       "High": "-",
       "Low": "-",
-      "Back": "-",
+      "Back": "+",
       "Front": "-",
       "Long": "-",
       "Stress": "-",
@@ -3494,7 +3494,7 @@
       "Tense": "+"
     },
     "ɶ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3528,13 +3528,13 @@
       "Tense": "-"
     },
     "ɸ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "+",
-      "Strident": "0",
+      "Strident": "-",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -3562,7 +3562,7 @@
       "Tense": "0"
     },
     "ɹ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3596,7 +3596,7 @@
       "Tense": "0"
     },
     "ɺ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3630,7 +3630,7 @@
       "Tense": "0"
     },
     "ɻ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3664,7 +3664,7 @@
       "Tense": "0"
     },
     "ɽ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3698,7 +3698,7 @@
       "Tense": "0"
     },
     "ɾ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3732,7 +3732,7 @@
       "Tense": "0"
     },
     "ʀ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -3766,13 +3766,13 @@
       "Tense": "0"
     },
     "ʁ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "+",
-      "Strident": "0",
+      "Strident": "+",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -3800,7 +3800,7 @@
       "Tense": "0"
     },
     "ʂ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -3834,7 +3834,7 @@
       "Tense": "0"
     },
     "ʃ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -3868,7 +3868,7 @@
       "Tense": "0"
     },
     "ʈ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -3902,7 +3902,7 @@
       "Tense": "0"
     },
     "ʈ͡ʂ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -3936,7 +3936,7 @@
       "Tense": "0"
     },
     "ʉ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -3960,7 +3960,7 @@
       "DORSAL": "+",
       "High": "+",
       "Low": "-",
-      "Back": "-",
+      "Back": "+",
       "Front": "-",
       "Long": "-",
       "Stress": "-",
@@ -3970,7 +3970,7 @@
       "Tense": "+"
     },
     "ʊ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -4004,7 +4004,7 @@
       "Tense": "-"
     },
     "ʋ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -4038,7 +4038,7 @@
       "Tense": "0"
     },
     "ʌ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -4072,7 +4072,7 @@
       "Tense": "-"
     },
     "ʍ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -4106,7 +4106,7 @@
       "Tense": "+"
     },
     "ʎ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -4140,7 +4140,7 @@
       "Tense": "0"
     },
     "ʏ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "+",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -4174,7 +4174,7 @@
       "Tense": "-"
     },
     "ʐ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -4208,7 +4208,7 @@
       "Tense": "0"
     },
     "ʑ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -4227,7 +4227,7 @@
       "Round": "-",
       "Labiodental": "-",
       "CORONAL": "+",
-      "Anterior": "+",
+      "Anterior": "-",
       "Distributed": "+",
       "DORSAL": "+",
       "High": "+",
@@ -4242,7 +4242,7 @@
       "Tense": "0"
     },
     "ʒ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -4276,7 +4276,7 @@
       "Tense": "0"
     },
     "ʔ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "-",
       "Sonorant": "+",
@@ -4306,11 +4306,11 @@
       "Stress": "-",
       "Tone": "0",
       "UpperRegister": "0",
-      "ConstrPharynx": "+",
+      "ConstrPharynx": "0",
       "Tense": "0"
     },
     "ʕ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -4334,8 +4334,8 @@
       "DORSAL": "-",
       "High": "-",
       "Low": "+",
-      "Back": "+",
-      "Front": "-",
+      "Back": "0",
+      "Front": "0",
       "Long": "-",
       "Stress": "-",
       "Tone": "0",
@@ -4344,7 +4344,7 @@
       "Tense": "0"
     },
     "ʙ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -4378,7 +4378,7 @@
       "Tense": "0"
     },
     "ʝ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -4412,7 +4412,7 @@
       "Tense": "0"
     },
     "ʟ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -4446,7 +4446,7 @@
       "Tense": "0"
     },
     "ʟ̠": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
@@ -4480,13 +4480,13 @@
       "Tense": "0"
     },
     "β": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "+",
-      "Strident": "0",
+      "Strident": "-",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
@@ -4514,7 +4514,7 @@
       "Tense": "0"
     },
     "θ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
@@ -4548,13 +4548,13 @@
       "Tense": "0"
     },
     "χ": {
-      "Click": "0",
+      "Click": "-",
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "-",
       "Approximant": "-",
       "Continuant": "+",
-      "Strident": "0",
+      "Strident": "+",
       "DelRel": "-",
       "Trill": "-",
       "Tap": "-",
