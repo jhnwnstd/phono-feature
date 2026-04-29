@@ -1113,16 +1113,18 @@ class MainWindow(QMainWindow):
                 btn.set_state("default")
                 btn.setChecked(False)
 
+        # Single pass: restore_value for projected feats, reset for everything
+        # else. This is the sole authority on per-row visual state during a
+        # mode switch — no further row-level resets below.
         restore_feats = self._saved_feat_state if not is_s2f else {}
         self._selected_features.clear()
         for feat, row in self._feat_rows.items():
             if feat in restore_feats:
                 self._selected_features[feat] = restore_feats[feat]
                 row.restore_value(restore_feats[feat])
-            elif row._current_value:
+            else:
                 row.reset()
 
-        self._reset_feature_display()
         if is_s2f and self._selected_segments:
             self._update_seg_to_feat()
         elif not is_s2f and self._selected_features:
