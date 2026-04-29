@@ -163,7 +163,9 @@ _RELABEL_PATTERNS: dict[frozenset[str], str] = {
     frozenset({"Taps & Flaps", "Central Approximants"}): "Rhotics",
     frozenset({"Trills", "Taps & Flaps", "Central Approximants"}): "Rhotics",
     frozenset({"Lateral Approximants", "Central Approximants"}): "Liquids",
-    frozenset({"Lateral Approximants", "Central Approximants", "Trills"}): "Liquids",
+    frozenset(
+        {"Lateral Approximants", "Central Approximants", "Trills"}
+    ): "Liquids",
     frozenset(
         {"Lateral Approximants", "Central Approximants", "Taps & Flaps"}
     ): "Liquids",
@@ -246,7 +248,10 @@ def _ipa_place(feats: dict[str, str]) -> int:
     if feats.get("constrgl", "0") == "+":
         return 10  # glottal
 
-    if feats.get("constrpharynx", "0") == "+" or feats.get("pharyngeal", "0") == "+":
+    if (
+        feats.get("constrpharynx", "0") == "+"
+        or feats.get("pharyngeal", "0") == "+"
+    ):
         return 9  # pharyngeal
 
     dor = feats.get("dorsal", "0")
@@ -273,7 +278,10 @@ def _ipa_place(feats: dict[str, str]) -> int:
     if lab == "+":
         return 1 if feats.get("labiodental", "0") == "+" else 0
 
-    if feats.get("consonantal", "0") == "-" and feats.get("syllabic", "0") == "-":
+    if (
+        feats.get("consonantal", "0") == "-"
+        and feats.get("syllabic", "0") == "-"
+    ):
         return 10  # h, ɦ
 
     return 11  # vowels / unclassified
@@ -320,7 +328,9 @@ def group_segments(
 
     # -- Helpers --
 
-    def _positive_matches(seg_feats: dict[str, str], spec: dict[str, str]) -> int:
+    def _positive_matches(
+        seg_feats: dict[str, str], spec: dict[str, str]
+    ) -> int:
         """Count features where the segment has an explicit matching value."""
         return sum(
             1
@@ -458,7 +468,8 @@ def group_segments(
         if len(present) < 2:
             continue
         if any(
-            not _should_merge_up(len(assignment[g]), len(inventory)) for g in present
+            not _should_merge_up(len(assignment[g]), len(inventory))
+            for g in present
         ):
             continue
         if any(g in _FROZEN_GROUPS for g in present):
@@ -493,7 +504,8 @@ def group_segments(
         if any(g in _FROZEN_GROUPS for g in present):
             continue
         if not any(
-            _should_merge_up(len(assignment[g]), len(inventory)) for g in present
+            _should_merge_up(len(assignment[g]), len(inventory))
+            for g in present
         ):
             continue
         merged = []
@@ -532,11 +544,15 @@ def group_segments(
     }
 
     def _is_laryngeal_candidate(feats: dict[str, str]) -> bool:
-        has_laryngeal = any(feats.get(f, "0") == "+" for f in _LARYNGEAL_FEATURES)
+        has_laryngeal = any(
+            feats.get(f, "0") == "+" for f in _LARYNGEAL_FEATURES
+        )
         has_place = any(feats.get(f, "0") == "+" for f in _PLACE_FEATURES)
         is_vowel = feats.get("syllabic", "0") == "+"
         is_click = feats.get("click", "0") == "+"
-        return has_laryngeal and not has_place and not is_vowel and not is_click
+        return (
+            has_laryngeal and not has_place and not is_vowel and not is_click
+        )
 
     if _LARYNGEAL_FEATURES & active_features:
         laryngeal_segs: list[str] = []
@@ -544,7 +560,9 @@ def group_segments(
             if gname == "Laryngeals":
                 continue
             peeled = [
-                sym for sym in assignment[gname] if _is_laryngeal_candidate(norm[sym])
+                sym
+                for sym in assignment[gname]
+                if _is_laryngeal_candidate(norm[sym])
             ]
             if peeled:
                 for sym in peeled:

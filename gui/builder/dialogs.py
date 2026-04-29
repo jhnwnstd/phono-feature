@@ -46,7 +46,9 @@ def center_on_parent(dialog, parent):
 def ask_question(parent, title: str, text: str, buttons=None, default=None):
     """Show a question dialog centered on *parent*'s screen."""
     if buttons is None:
-        buttons = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        buttons = (
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
     if default is None:
         default = QMessageBox.StandardButton.No
     box = QMessageBox(QMessageBox.Icon.Question, title, text, buttons, parent)
@@ -99,7 +101,9 @@ class InputDialog(QDialog):
         layout.addWidget(seg_label)
 
         self.seg_edit = QTextEdit()
-        self.seg_edit.setPlaceholderText("p b t d k ɡ\nm n ŋ\nf v s z ʃ ʒ\n...")  # noqa: RUF001
+        self.seg_edit.setPlaceholderText(
+            "p b t d k ɡ\nm n ŋ\nf v s z ʃ ʒ\n..."
+        )  # noqa: RUF001
         self.seg_edit.setFont(QFont("Noto Sans", 12))
         layout.addWidget(self.seg_edit)
 
@@ -134,8 +138,7 @@ class InputDialog(QDialog):
         btn_lay.addWidget(cancel_btn)
 
         ok_btn = QPushButton("Create Grid")
-        ok_btn.setStyleSheet(
-            f"""
+        ok_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C["accent"]};
                 color: white;
@@ -147,8 +150,7 @@ class InputDialog(QDialog):
             QPushButton:hover {{
                 background: #1D4ED8;
             }}
-            """
-        )
+            """)
         ok_btn.clicked.connect(self.accept)
         btn_lay.addWidget(ok_btn)
 
@@ -162,13 +164,17 @@ class InputDialog(QDialog):
         else:
             self.feat_edit.clear()
             self.feat_edit.setReadOnly(False)
-            self.feat_edit.setPlaceholderText("Syllabic\nConsonantal\nSonorant\n...")
+            self.feat_edit.setPlaceholderText(
+                "Syllabic\nConsonantal\nSonorant\n..."
+            )
 
     def get_segments(self) -> list:
         text = self.seg_edit.toPlainText().strip()
         if not text:
             return []
-        return [s.strip() for s in text.replace("\n", " ").split() if s.strip()]
+        return [
+            s.strip() for s in text.replace("\n", " ").split() if s.strip()
+        ]
 
     def get_features(self) -> list:
         text = self.feat_edit.toPlainText().strip()

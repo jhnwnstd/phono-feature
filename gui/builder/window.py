@@ -74,16 +74,14 @@ class InventoryBuilder(QMainWindow):
     def _build_ui(self) -> None:
         toolbar = QToolBar()
         toolbar.setMovable(False)
-        toolbar.setStyleSheet(
-            f"""
+        toolbar.setStyleSheet(f"""
             QToolBar {{
                 background: {C["panel"]};
                 border-bottom: 1px solid {C["border"]};
                 padding: 4px 8px;
                 spacing: 6px;
             }}
-            """
-        )
+            """)
         self.addToolBar(toolbar)
 
         btn_style = f"""
@@ -118,8 +116,7 @@ class InventoryBuilder(QMainWindow):
         save_btn = QPushButton("Save")
         save_btn.setFont(QFont("Noto Sans", 10))
         save_btn.setFixedHeight(32)
-        save_btn.setStyleSheet(
-            f"""
+        save_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C["accent"]};
                 color: white;
@@ -131,8 +128,7 @@ class InventoryBuilder(QMainWindow):
             QPushButton:hover {{
                 background: #1D4ED8;
             }}
-            """
-        )
+            """)
         save_btn.clicked.connect(self._save)
         toolbar.addWidget(save_btn)
 
@@ -196,8 +192,7 @@ class InventoryBuilder(QMainWindow):
 
         self._table = QTableWidget()
         self._table.setFont(QFont("Noto Sans", 10))
-        self._table.setStyleSheet(
-            f"""
+        self._table.setStyleSheet(f"""
             QTableWidget {{
                 background: {C["panel"]};
                 gridline-color: {C["border"]};
@@ -213,8 +208,7 @@ class InventoryBuilder(QMainWindow):
                 padding: 4px;
                 font-weight: bold;
             }}
-            """
-        )
+            """)
         self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.installEventFilter(self)
 
@@ -232,7 +226,9 @@ class InventoryBuilder(QMainWindow):
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
         )
         self.setStatusBar(self._status)
-        self._status.showMessage("Create a new inventory or open an existing one.")
+        self._status.showMessage(
+            "Create a new inventory or open an existing one."
+        )
 
     # ------------------------------------------------------------------
     # Setup dialog
@@ -251,10 +247,14 @@ class InventoryBuilder(QMainWindow):
         name = dlg.get_name()
 
         if not segments:
-            show_warning(self, "No segments", "Please enter at least one segment.")
+            show_warning(
+                self, "No segments", "Please enter at least one segment."
+            )
             return
         if not features:
-            show_warning(self, "No features", "Please enter at least one feature.")
+            show_warning(
+                self, "No features", "Please enter at least one feature."
+            )
             return
 
         # Deduplicate segments and features (preserving order)
@@ -292,7 +292,9 @@ class InventoryBuilder(QMainWindow):
         v_header = self._table.verticalHeader()
         if v_header:
             v_header.setFont(QFont("Noto Sans", 9))
-            v_header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+            v_header.setSectionResizeMode(
+                QHeaderView.ResizeMode.ResizeToContents
+            )
             v_header.setMinimumSectionSize(24)
             v_header.sectionClicked.connect(self._on_row_header_clicked)
 
@@ -426,7 +428,9 @@ class InventoryBuilder(QMainWindow):
         if col is None or col < 0 or col >= len(self._segments):
             return
         seg = self._segments[col]
-        reply = ask_question(self, "Remove segment", f"Remove segment '{seg}'?")
+        reply = ask_question(
+            self, "Remove segment", f"Remove segment '{seg}'?"
+        )
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._segments.pop(col)
@@ -441,7 +445,9 @@ class InventoryBuilder(QMainWindow):
         if row is None or row < 0 or row >= len(self._features):
             return
         feat = self._features[row]
-        reply = ask_question(self, "Remove feature", f"Remove feature '{feat}'?")
+        reply = ask_question(
+            self, "Remove feature", f"Remove feature '{feat}'?"
+        )
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._features.pop(row)
@@ -489,7 +495,9 @@ class InventoryBuilder(QMainWindow):
         config_dir = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "config")
         )
-        dlg = QFileDialog(self, "Save Inventory", config_dir, "JSON Files (*.json)")
+        dlg = QFileDialog(
+            self, "Save Inventory", config_dir, "JSON Files (*.json)"
+        )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         center_on_parent(dlg, self)
         if not dlg.exec():
@@ -516,7 +524,9 @@ class InventoryBuilder(QMainWindow):
         config_dir = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "config")
         )
-        dlg = QFileDialog(self, "Open Inventory", config_dir, "JSON Files (*.json)")
+        dlg = QFileDialog(
+            self, "Open Inventory", config_dir, "JSON Files (*.json)"
+        )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
         dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
         center_on_parent(dlg, self)

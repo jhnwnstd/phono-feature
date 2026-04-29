@@ -71,10 +71,13 @@ class FeatureEngine:
         for segment, features in self.segments.items():
             if match is not None:
                 ok = all(
-                    match(features.get(f, "0"), v) for f, v in feature_spec.items()
+                    match(features.get(f, "0"), v)
+                    for f, v in feature_spec.items()
                 )
             else:
-                ok = all(features.get(f, "0") == v for f, v in feature_spec.items())
+                ok = all(
+                    features.get(f, "0") == v for f, v in feature_spec.items()
+                )
             if ok:
                 matching.append(segment)
         return matching
@@ -98,7 +101,9 @@ class FeatureEngine:
             data = json.load(f)
 
         if "features" not in data or "segments" not in data:
-            raise ValueError("Inventory must contain 'features' and 'segments' fields")
+            raise ValueError(
+                "Inventory must contain 'features' and 'segments' fields"
+            )
         if not isinstance(data["features"], list) or not all(
             isinstance(f, str) for f in data["features"]
         ):
@@ -188,14 +193,18 @@ class FeatureEngine:
         for feature, value in feature_spec.items():
             self._validate_feature(feature)
             if value not in _VALID_VALUES:
-                raise ValueError(f"Invalid feature value '{value}' for '{feature}'")
+                raise ValueError(
+                    f"Invalid feature value '{value}' for '{feature}'"
+                )
         return sorted(
             self._find_segments_unsorted(
                 feature_spec, underspec_compatible=underspec_compatible
             )
         )
 
-    def find_all_minimal_bundles(self, segments: list[str]) -> list[dict[str, str]]:
+    def find_all_minimal_bundles(
+        self, segments: list[str]
+    ) -> list[dict[str, str]]:
         """
         Find every minimal feature bundle that uniquely characterizes a segment set.
 
@@ -263,7 +272,9 @@ class FeatureEngine:
                 if not self._feat_match(self.segments[seg].get(feat, "0"), val)
             }
             if not exc:
-                return []  # This segment cannot be excluded → not a natural class
+                return (
+                    []
+                )  # This segment cannot be excluded → not a natural class
             excluders.append(exc)
 
         # Sort candidates by descending coverage (hits the most outside segments first)
@@ -277,7 +288,9 @@ class FeatureEngine:
         results: list[dict[str, str]] = []
         best_size: int | None = None
 
-        def backtrack(idx: int, chosen: list[str], chosen_set: set[str]) -> None:
+        def backtrack(
+            idx: int, chosen: list[str], chosen_set: set[str]
+        ) -> None:
             nonlocal best_size
 
             # All outside segments are excluded — record solution
@@ -299,7 +312,9 @@ class FeatureEngine:
 
             # Prune: remaining candidates cannot cover every uncovered outside segment
             remaining = set(candidate_list[idx:])
-            if not all((exc & chosen_set) or (exc & remaining) for exc in excluders):
+            if not all(
+                (exc & chosen_set) or (exc & remaining) for exc in excluders
+            ):
                 return
 
             f = candidate_list[idx]
@@ -310,7 +325,8 @@ class FeatureEngine:
             # Branch B: exclude f — only if remaining can still cover everything
             remaining_without = set(candidate_list[idx + 1 :])
             if all(
-                (exc & chosen_set) or (exc & remaining_without) for exc in excluders
+                (exc & chosen_set) or (exc & remaining_without)
+                for exc in excluders
             ):
                 backtrack(idx + 1, chosen, chosen_set)
 
@@ -440,7 +456,9 @@ class FeatureEngine:
         f2 = self.segments[seg2]
         return sum(f1.get(f, "0") != f2.get(f, "0") for f in self.features)
 
-    def find_nearest_segments(self, segment: str, n: int = 5) -> list[tuple[str, int]]:
+    def find_nearest_segments(
+        self, segment: str, n: int = 5
+    ) -> list[tuple[str, int]]:
         """
         Find the nearest segments to a given segment by feature distance.
 
@@ -510,7 +528,9 @@ class FeatureEngine:
                 fi = seg_feats[i]
                 for j in range(i + 1, len(seg_feats)):
                     fj = seg_feats[j]
-                    total += sum(fi.get(f, "0") != fj.get(f, "0") for f in features)
+                    total += sum(
+                        fi.get(f, "0") != fj.get(f, "0") for f in features
+                    )
                     count += 1
             stats["avg_feature_distance"] = total / count
         else:

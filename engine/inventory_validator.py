@@ -39,7 +39,9 @@ def validate_inventory(filepath: str) -> tuple[list[str], list[str]]:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        errors.append(f"Invalid JSON: {e.msg} (line {e.lineno}, col {e.colno})")
+        errors.append(
+            f"Invalid JSON: {e.msg} (line {e.lineno}, col {e.colno})"
+        )
         return errors, warnings
 
     if not isinstance(data, dict):
@@ -69,17 +71,23 @@ def validate_inventory(filepath: str) -> tuple[list[str], list[str]]:
         else:
             non_str = [f for f in features if not isinstance(f, str)]
             if non_str:
-                errors.append(f"'features' contains non-string entries: {non_str[:5]}")
+                errors.append(
+                    f"'features' contains non-string entries: {non_str[:5]}"
+                )
             seen: set = set()
             dupes = {f for f in features if f in seen or seen.add(f)}  # type: ignore[func-returns-value]
             if dupes:
-                errors.append(f"'features' contains duplicates: {sorted(dupes)}")
+                errors.append(
+                    f"'features' contains duplicates: {sorted(dupes)}"
+                )
 
     # -- Segments dict --
 
     segments = data.get("segments")
     if segments is not None and not isinstance(segments, dict):
-        errors.append(f"'segments' must be an object, got {type(segments).__name__}")
+        errors.append(
+            f"'segments' must be an object, got {type(segments).__name__}"
+        )
         return errors, warnings
 
     if not isinstance(segments, dict) or not segments:
@@ -223,6 +231,8 @@ def validate_inventory(filepath: str) -> tuple[list[str], list[str]]:
 
     name = data.get("name")
     if name is not None and not isinstance(name, str):
-        warnings.append(f"'name' should be a string, got {type(name).__name__}")
+        warnings.append(
+            f"'name' should be a string, got {type(name).__name__}"
+        )
 
     return errors, warnings

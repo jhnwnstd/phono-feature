@@ -130,16 +130,14 @@ class MainWindow(QMainWindow):
         # ── toolbar ──────────────────────────────────────────────────
         toolbar = QToolBar()
         toolbar.setMovable(False)
-        toolbar.setStyleSheet(
-            f"""
+        toolbar.setStyleSheet(f"""
             QToolBar {{
                 background: {C["panel"]};
                 border-bottom: 1px solid {C["border"]};
                 padding: 4px 8px;
                 spacing: 6px;
             }}
-        """
-        )
+        """)
         self.addToolBar(toolbar)
 
         # Config dropdown
@@ -147,8 +145,7 @@ class MainWindow(QMainWindow):
         self.config_combo.setFont(QFont("Noto Sans", 10))
         self.config_combo.setFixedHeight(32)
         self.config_combo.setMinimumWidth(220)
-        self.config_combo.setStyleSheet(
-            f"""
+        self.config_combo.setStyleSheet(f"""
             QComboBox {{
                 background: {C["panel"]};
                 color: {C["text"]};
@@ -171,8 +168,7 @@ class MainWindow(QMainWindow):
                 selection-color: {C["accent"]};
                 outline: none;
             }}
-        """
-        )
+        """)
         self._populate_config_dropdown()
         self.config_combo.activated.connect(self._on_config_selected)
         toolbar.addWidget(self.config_combo)
@@ -181,8 +177,7 @@ class MainWindow(QMainWindow):
         browse_btn = QPushButton("Browse\u2026")
         browse_btn.setFont(QFont("Noto Sans", 10))
         browse_btn.setFixedHeight(32)
-        browse_btn.setStyleSheet(
-            f"""
+        browse_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C["bg"]};
                 color: {C["text"]};
@@ -195,16 +190,14 @@ class MainWindow(QMainWindow):
                 border: 1.5px solid {C["accent"]};
                 color: {C["accent"]};
             }}
-        """
-        )
+        """)
         browse_btn.clicked.connect(self._browse_config)
         toolbar.addWidget(browse_btn)
 
         builder_btn = QPushButton("Builder")
         builder_btn.setFont(QFont("Noto Sans", 10))
         builder_btn.setFixedHeight(32)
-        builder_btn.setStyleSheet(
-            f"""
+        builder_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C["bg"]};
                 color: {C["text"]};
@@ -217,8 +210,7 @@ class MainWindow(QMainWindow):
                 border: 1.5px solid {C["accent"]};
                 color: {C["accent"]};
             }}
-        """
-        )
+        """)
         builder_btn.clicked.connect(self._open_builder)
         toolbar.addWidget(builder_btn)
 
@@ -231,7 +223,9 @@ class MainWindow(QMainWindow):
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setHandleWidth(1)
-        splitter.setStyleSheet(f"QSplitter::handle {{ background: {C['border']}; }}")
+        splitter.setStyleSheet(
+            f"QSplitter::handle {{ background: {C['border']}; }}"
+        )
 
         self.seg_panel = self._build_segment_panel()
         splitter.addWidget(self.seg_panel)
@@ -251,7 +245,9 @@ class MainWindow(QMainWindow):
 
         self._vsplit = QSplitter(Qt.Orientation.Vertical)
         self._vsplit.setHandleWidth(4)
-        self._vsplit.setStyleSheet("QSplitter::handle { background: transparent; }")
+        self._vsplit.setStyleSheet(
+            "QSplitter::handle { background: transparent; }"
+        )
         self._vsplit.addWidget(splitter)
         self._vsplit.addWidget(self.analysis)
         self._vsplit.setSizes([700, 220])
@@ -267,12 +263,16 @@ class MainWindow(QMainWindow):
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
         )
         self.setStatusBar(self.status)
-        self.status.showMessage("Select an inventory from the dropdown to begin.")
+        self.status.showMessage(
+            "Select an inventory from the dropdown to begin."
+        )
 
     def _build_segment_panel(self) -> QFrame:
         container = QFrame()
         container.setObjectName("seg_panel")
-        container.setStyleSheet(f"QFrame#seg_panel {{ background: {C['panel']}; }}")
+        container.setStyleSheet(
+            f"QFrame#seg_panel {{ background: {C['panel']}; }}"
+        )
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -280,13 +280,14 @@ class MainWindow(QMainWindow):
         header = QHBoxLayout()
         self._seg_title = QLabel("SEGMENTS")
         self._seg_title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
-        self._seg_title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1.5px;")
+        self._seg_title.setStyleSheet(
+            f"color: {C['text_dim']}; letter-spacing: 1.5px;"
+        )
 
         self.clear_seg_btn = QPushButton("Clear")
         self.clear_seg_btn.setFixedHeight(26)
         self.clear_seg_btn.setFont(QFont("Noto Sans", 9))
-        self.clear_seg_btn.setStyleSheet(
-            f"""
+        self.clear_seg_btn.setStyleSheet(f"""
             QPushButton {{
                 color: {C["text_dim"]};
                 background: transparent;
@@ -298,8 +299,7 @@ class MainWindow(QMainWindow):
                 color: {C["text"]};
                 background: {C["bg"]};
             }}
-        """
-        )
+        """)
         self.clear_seg_btn.clicked.connect(self._clear_segments)
 
         header.addWidget(self._seg_title)
@@ -338,7 +338,9 @@ class MainWindow(QMainWindow):
 
         self.vowel_chart_widget = VowelChartWidget()
         self.vowel_chart_widget.hide()
-        self.vowel_chart_widget.setFixedWidth(VOWEL_LABEL_W + 6 * (BTN_W + BTN_GAP))
+        self.vowel_chart_widget.setFixedWidth(
+            VOWEL_LABEL_W + 6 * (BTN_W + BTN_GAP)
+        )
 
         seg_content_layout.addWidget(left_wrap, stretch=1)
         seg_content_layout.addWidget(
@@ -364,7 +366,9 @@ class MainWindow(QMainWindow):
     def _build_feature_panel(self) -> QFrame:
         container = QFrame()
         container.setObjectName("feat_panel")
-        container.setStyleSheet(f"QFrame#feat_panel {{ background: {C['bg']}; }}")
+        container.setStyleSheet(
+            f"QFrame#feat_panel {{ background: {C['bg']}; }}"
+        )
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -379,8 +383,7 @@ class MainWindow(QMainWindow):
         self.clear_feat_btn = QPushButton("Clear")
         self.clear_feat_btn.setFixedHeight(26)
         self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
-        self.clear_feat_btn.setStyleSheet(
-            f"""
+        self.clear_feat_btn.setStyleSheet(f"""
             QPushButton {{
                 color: {C["text_dim"]};
                 background: transparent;
@@ -392,8 +395,7 @@ class MainWindow(QMainWindow):
                 color: {C["text"]};
                 background: {C["panel"]};
             }}
-        """
-        )
+        """)
         self.clear_feat_btn.clicked.connect(self._clear_features)
 
         header.addWidget(self._feat_title)
@@ -653,7 +655,8 @@ class MainWindow(QMainWindow):
                 f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"
                 + "".join(f"<p>{e}</p>" for e in errors)
                 + (
-                    "<p><b>Warnings:</b></p>" + "".join(f"<p>{w}</p>" for w in warnings)
+                    "<p><b>Warnings:</b></p>"
+                    + "".join(f"<p>{w}</p>" for w in warnings)
                     if warnings
                     else ""
                 )
@@ -802,22 +805,22 @@ class MainWindow(QMainWindow):
 
         self._seg_buttons = {**consonant_buttons, **vowel_buttons}
 
-    def _build_feature_group(self, title: str, features: list) -> QFrame | None:
+    def _build_feature_group(
+        self, title: str, features: list
+    ) -> QFrame | None:
         """Build a labelled group card. Returns None if no features are active."""
         active = [f for f in features if f in self._feat_rows]
         if not active:
             return None
 
         group_frame = QFrame()
-        group_frame.setStyleSheet(
-            f"""
+        group_frame.setStyleSheet(f"""
             QFrame {{
                 background: {C["panel"]};
                 border: 1px solid {C["border"]};
                 border-radius: 7px;
             }}
-        """
-        )
+        """)
         glay = QVBoxLayout(group_frame)
         glay.setContentsMargins(0, 6, 0, 6)
         glay.setSpacing(1)
@@ -889,7 +892,9 @@ class MainWindow(QMainWindow):
         for title, feats_list in all_groups:
             card = self._build_feature_group(title, feats_list)
             if card is not None:
-                active_count = sum(1 for f in feats_list if f in self._feat_rows)
+                active_count = sum(
+                    1 for f in feats_list if f in self._feat_rows
+                )
                 cards.append((card, active_count))
 
         # Distribute cards to balance total feature count per column
@@ -928,18 +933,24 @@ class MainWindow(QMainWindow):
 
         # -- Measure feature panel content --
         feat_content = self._feat_scroll.widget()
-        feat_content_w = feat_content.sizeHint().width() if feat_content else 380
+        feat_content_w = (
+            feat_content.sizeHint().width() if feat_content else 380
+        )
         feat_chrome = 28 + 6
         feat_padding = 40
         feat_need_w = feat_content_w + feat_chrome + feat_padding
-        feat_content_h = feat_content.sizeHint().height() if feat_content else 400
+        feat_content_h = (
+            feat_content.sizeHint().height() if feat_content else 400
+        )
 
         # Top panel: header chrome (~80px) + content + vertical breathing room
         feat_v_padding = 20
         top_need_h = feat_content_h + 80 + feat_v_padding
         analysis_h = self._min_analysis_h
         toolbar_h = 50  # toolbar + status bar
-        total_need_h = top_need_h + analysis_h + toolbar_h + 30  # extra overall height
+        total_need_h = (
+            top_need_h + analysis_h + toolbar_h + 30
+        )  # extra overall height
 
         # -- Size window to fit content on every inventory load --
         screen = self._target_screen()
@@ -1045,7 +1056,11 @@ class MainWindow(QMainWindow):
 
         self.seg_panel.setStyleSheet(
             f"QFrame#seg_panel {{ background: {seg_bg};"
-            + (f" border: 1.5px solid {C['accent']};" if is_s2f else " border: none;")
+            + (
+                f" border: 1.5px solid {C['accent']};"
+                if is_s2f
+                else " border: none;"
+            )
             + "}"
         )
         self.feat_panel.setStyleSheet(
@@ -1062,7 +1077,9 @@ class MainWindow(QMainWindow):
             f"color: {C['text'] if is_s2f else C['text_dim']}; letter-spacing: 1.5px;"
         )
         feat_color = C["text"] if not is_s2f else C["text_dim"]
-        self._feat_title.setStyleSheet(f"color: {feat_color}; letter-spacing: 1.5px;")
+        self._feat_title.setStyleSheet(
+            f"color: {feat_color}; letter-spacing: 1.5px;"
+        )
         self.seg_grid_widget.set_headers_active(is_s2f)
         self.vowel_chart_widget.set_headers_active(is_s2f)
 
@@ -1201,7 +1218,9 @@ class MainWindow(QMainWindow):
             for seg, btn in self._seg_buttons.items():
                 if seg not in selected_set:
                     btn.set_state("default")
-            self.analysis.set_html(render_single_segment(self.engine, segs[0], feats))
+            self.analysis.set_html(
+                render_single_segment(self.engine, segs[0], feats)
+            )
         else:
             common = self.engine.common_features(segs)
             contrastive = compute_contrastive(self.engine, segs)
@@ -1226,10 +1245,14 @@ class MainWindow(QMainWindow):
             suggested_set = set(suggested)
             for seg, btn in self._seg_buttons.items():
                 if seg not in selected_set:
-                    btn.set_state("suggested" if seg in suggested_set else "default")
+                    btn.set_state(
+                        "suggested" if seg in suggested_set else "default"
+                    )
 
             self.analysis.set_html(
-                render_multi_segment(self.engine, segs, common, contrastive, suggested)
+                render_multi_segment(
+                    self.engine, segs, common, contrastive, suggested
+                )
             )
 
     # ------------------------------------------------------------------
