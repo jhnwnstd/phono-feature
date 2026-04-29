@@ -918,10 +918,10 @@ class MainWindow(QMainWindow):
 
     def _init_feature_pool(self) -> None:
         """Pre-create FeatureRow widgets for all features in FEATURE_ORDER and
-        build the static FEATURE_GROUPS card layout. Called once on the first
-        inventory load. Subsequent loads just toggle row/card visibility,
-        avoiding the per-load cost of constructing 28+ FeatureRow widgets
-        (each of which does 4 setStyleSheet + signal connect + addWidget).
+        build the static FEATURE_GROUPS cards. Column placement happens
+        per-inventory in ``_redistribute_feature_cards`` because card heights
+        depend on the *active* feature count, which varies per inventory
+        (e.g. Hayes activates 1 of 4 features in Tongue-Root, Blevins 4 of 4).
 
         _feat_row_pool keeps a permanent reference to every row in the pool;
         _feat_rows below tracks which subset is active for the current
@@ -939,34 +939,19 @@ class MainWindow(QMainWindow):
         # can find them while constructing cards.
         self._feat_rows = dict(self._feat_row_pool)
 
-        cards: list[tuple[QFrame, list[str], int]] = []
         for title, feats_list in FEATURE_GROUPS:
             card = self._build_feature_group(title, feats_list)
             if card is not None:
+                # Hide and float — _redistribute_feature_cards will pick up
+                # and place these into columns once we know the active set.
+                card.hide()
                 self._feat_cards.append((card, list(feats_list)))
-                cards.append((card, list(feats_list), len(feats_list)))
-
-        # Distribute cards to balance row counts per column.
-        left_count = 0
-        right_count = 0
-        for card, _feats, count in cards:
-            if left_count <= right_count:
-                self._feat_left_layout.addWidget(card)
-                left_count += count
-            else:
-                self._feat_right_layout.addWidget(card)
-                right_count += count
-
-        self._feat_left_layout.addStretch()
-        self._feat_right_layout.addStretch()
 
         # Reset _feat_rows to the active-only contract; the next
         # _populate_features call will repopulate it for the loaded inventory.
         self._feat_rows = {}
         for row in self._feat_row_pool.values():
             row.setVisible(False)
-        for card, _feats in self._feat_cards:
-            card.setVisible(False)
 
         self._feature_pool_initialized = True
 
@@ -997,26 +982,24 @@ class MainWindow(QMainWindow):
             else:
                 row.setVisible(False)
 
-        # Show/hide each FEATURE_GROUPS card based on whether it has any
-        # active rows.
-        for card, feats in self._feat_cards:
-            card.setVisible(any(f in active_feature_set for f in feats))
-
-        # Handle features outside FEATURE_ORDER (rare). Builds a small
-        # dynamic "Other" card; loads without unknowns just clear it.
+        # Build / tear down the dynamic "Other" card BEFORE redistribute
+        # so it can be placed alongside the standard cards.
         unknown_active = sort_features(
             [f for f in active_feature_set if f not in set(FEATURE_ORDER)]
         )
         self._refresh_other_card(unknown_active)
 
+        # Lay out cards across the two columns based on the inventory's
+        # actual active feature counts (per-card visibility and ordering).
+        self._redistribute_feature_cards(active_feature_set)
+
     def _refresh_other_card(self, unknown_active: list[str]) -> None:
-        """Tear down and rebuild the dynamic 'Other' card for inventory-
-        specific features that don't appear in FEATURE_ORDER. Skip the
-        rebuild if the active inventory has none.
+        """Build/destroy the dynamic 'Other' card for inventory-specific
+        features that don't appear in FEATURE_ORDER. Doesn't place it in a
+        column — that happens in ``_redistribute_feature_cards`` so the
+        Other card participates in the same balancing pass as the standard
+        cards.
         """
-        # Drop the previous Other card and the rows it owned. Unknown rows
-        # are not part of the persistent pool; they're built fresh per
-        # inventory.
         if self._other_card is not None:
             for feat in list(self._feat_rows.keys()):
                 if feat not in self._feat_row_pool:
@@ -1034,19 +1017,137 @@ class MainWindow(QMainWindow):
             self._feat_rows[feat] = row
 
         self._other_card = self._build_feature_group("Other", unknown_active)
-        if self._other_card is None:
-            return
+        if self._other_card is not None:
+            self._other_card.hide()  # placed by _redistribute_feature_cards
 
-        # Insert before the trailing stretch in whichever column has fewer
-        # widgets right now.
-        left_n = self._feat_left_layout.count()
-        right_n = self._feat_right_layout.count()
-        target = (
-            self._feat_left_layout
-            if left_n <= right_n
-            else self._feat_right_layout
+    # -- Layout policy for feature-group cards ----------------------------
+    #
+    # "Soft pins" for the canonical groups (placed only if they have any
+    # active features for the current inventory):
+    #   - Major Class top of the LEFT column
+    #   - Place under Major Class in the LEFT column
+    #   - Manner top of the RIGHT column
+    #
+    # Everything else (other FEATURE_GROUPS entries plus the dynamic
+    # "Other" card if it exists) is sorted by active feature count
+    # descending, then dropped into whichever column is shorter at the
+    # moment of placement (LPT scheduling). This packs the columns as
+    # close to equal height as the active counts permit, which minimises
+    # the window height the GUI needs to fit them.
+
+    _LEFT_PINS: tuple[str, ...] = ("Major Class", "Place")
+    _RIGHT_PINS: tuple[str, ...] = ("Manner",)
+    # Each card in the column adds a roughly fixed-height header + padding
+    # on top of its rows (~32 px in practice). When balancing column heights
+    # we add this overhead per card so that a column with many small cards
+    # doesn't get under-counted relative to one with a few big cards.
+    # Expressed in row-equivalents.
+    _CARD_OVERHEAD: int = 1
+
+    def _redistribute_feature_cards(self, active: set[str]) -> None:
+        """Place feature-group cards into left/right columns based on the
+        current inventory's active feature counts. Re-runs on every
+        inventory load because the same card has different visible heights
+        across inventories (e.g. Tongue-Root has 1 active feature in Hayes
+        but 4 in Blevins).
+
+        Heuristic: Major Class top of the left column, Place under it,
+        Manner top of the right column (any of these soft pins are only
+        applied if the card has at least one active feature). Then every
+        remaining card is sorted by active feature count descending and
+        dropped into whichever column is shorter at the moment of
+        placement (LPT scheduling). Column "height" is measured in
+        row-equivalents and includes ``_CARD_OVERHEAD`` per card so that
+        per-card chrome (headers, padding) is reflected in the balance.
+        """
+        self._take_cards_out_of_columns()
+
+        # Build (title → (card, cost)) for every card we know about.
+        # cost = active row count + per-card overhead.
+        info: dict[str, tuple[QFrame, int]] = {}
+        for card, feats in self._feat_cards:
+            n_active = sum(1 for f in feats if f in active)
+            title = self._card_title(card)
+            if title:
+                info[title] = (
+                    card,
+                    n_active + self._CARD_OVERHEAD if n_active > 0 else 0,
+                )
+                card.setVisible(n_active > 0)
+
+        if self._other_card is not None:
+            other_title = self._card_title(self._other_card) or "Other"
+            n_active = sum(1 for f in active if f not in self._feat_row_pool)
+            info[other_title] = (
+                self._other_card,
+                n_active + self._CARD_OVERHEAD if n_active > 0 else 0,
+            )
+            self._other_card.setVisible(n_active > 0)
+
+        pinned: set[str] = set(self._LEFT_PINS) | set(self._RIGHT_PINS)
+        left_height = 0
+        right_height = 0
+
+        # Soft pins: only added if the card has any active rows.
+        for title in self._LEFT_PINS:
+            entry = info.get(title)
+            if entry is not None and entry[1] > 0:
+                self._feat_left_layout.addWidget(entry[0])
+                left_height += entry[1]
+        for title in self._RIGHT_PINS:
+            entry = info.get(title)
+            if entry is not None and entry[1] > 0:
+                self._feat_right_layout.addWidget(entry[0])
+                right_height += entry[1]
+
+        # Everything else: sort by cost desc, distribute LPT.
+        unpinned_titles: list[str] = [
+            t for t, _ in FEATURE_GROUPS if t not in pinned
+        ]
+        if self._other_card is not None:
+            other_title = self._card_title(self._other_card) or "Other"
+            if other_title not in pinned:
+                unpinned_titles.append(other_title)
+
+        remaining: list[tuple[QFrame, int]] = sorted(
+            (info[t] for t in unpinned_titles if t in info and info[t][1] > 0),
+            key=lambda pair: pair[1],
+            reverse=True,
         )
-        target.insertWidget(target.count() - 1, self._other_card)
+        for card, cost in remaining:
+            if left_height <= right_height:
+                self._feat_left_layout.addWidget(card)
+                left_height += cost
+            else:
+                self._feat_right_layout.addWidget(card)
+                right_height += cost
+
+        self._feat_left_layout.addStretch()
+        self._feat_right_layout.addStretch()
+
+    def _take_cards_out_of_columns(self) -> None:
+        """Remove every item from both column layouts. Card widgets stay
+        alive (we hold references in _feat_cards / _other_card); spacer
+        items are released."""
+        for layout in (self._feat_left_layout, self._feat_right_layout):
+            while layout.count():
+                layout.takeAt(0)
+
+    @staticmethod
+    def _card_title(card: QFrame) -> str:
+        """Read the title text from a feature-group card. Cards are built
+        by ``_build_feature_group``, which always puts a QLabel(title) as
+        the card's first child widget."""
+        layout = card.layout()
+        if layout is None or layout.count() == 0:
+            return ""
+        item = layout.itemAt(0)
+        if item is None:
+            return ""
+        first = item.widget()
+        if first is not None and hasattr(first, "text"):
+            return first.text()
+        return ""
 
     # ------------------------------------------------------------------
     # Mode management
