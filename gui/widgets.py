@@ -124,9 +124,7 @@ class FeatureRow(QWidget):
     _NAME_CONTRASTIVE = f"color: {C['accent']}; font-weight: bold;"
     _ROW_CONTRASTIVE = f"background: {C['accent_light']}; border-radius: 6px;"
 
-    _BADGE_NEUTRAL = (
-        f"background: {C['tag_gray']}; color: {C['tag_gray_text']}; border-radius: 4px;"
-    )
+    _BADGE_NEUTRAL = f"background: {C['tag_gray']}; color: {C['tag_gray_text']}; border-radius: 4px;"
     _NAME_DIM = f"color: {C['text_dim']};"
     _ROW_TRANSPARENT = "background: transparent; border-radius: 6px;"
 
@@ -195,8 +193,7 @@ class FeatureRow(QWidget):
         active_bg = C["plus_bg"] if polarity == "+" else C["minus_bg"]
         active_text = C["plus"] if polarity == "+" else C["minus"]
         border = C["plus"] if polarity == "+" else C["minus"]
-        btn.setStyleSheet(
-            f"""
+        btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C["analysis_bg"]};
                 color: {C["text_dim"]};
@@ -214,8 +211,7 @@ class FeatureRow(QWidget):
                 border: 2px solid {border};
                 font-weight: bold;
             }}
-        """
-        )
+        """)
 
     def _on_click(self, polarity: str):
         if self._current_value == polarity:
@@ -312,13 +308,14 @@ class AnalysisPanel(QWidget):
 
         self.title = QLabel("Analysis")
         self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-        self.title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1px;")
+        self.title.setStyleSheet(
+            f"color: {C['text_dim']}; letter-spacing: 1px;"
+        )
 
         self.content = QTextEdit()
         self.content.setReadOnly(True)
         self.content.setFont(QFont("Noto Sans Mono", 10))
-        self.content.setStyleSheet(
-            f"""
+        self.content.setStyleSheet(f"""
             QTextEdit {{
                 background: {C["panel"]};
                 color: {C["text"]};
@@ -326,9 +323,7 @@ class AnalysisPanel(QWidget):
                 border-radius: 6px;
                 padding: 8px;
             }}
-        """
-            + SCROLLBAR_STYLE
-        )
+        """ + SCROLLBAR_STYLE)
         self.content.setMinimumHeight(60)
 
         layout.addWidget(self.title)
@@ -364,14 +359,18 @@ class SegmentGridWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._groups: dict = {}  # manner -> [seg, ...]
-        self._buttons: dict = {}  # seg    -> SegmentButton  (owned by this widget)
+        self._buttons: dict = (
+            {}
+        )  # seg    -> SegmentButton  (owned by this widget)
         self._headers: list = []  # QLabel per manner group
         self._n_cols: int = 0  # column count currently in use
 
         self._grid = QGridLayout(self)
         self._grid.setSpacing(BTN_GAP)
         self._grid.setContentsMargins(0, 0, 0, 0)
-        self._grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self._grid.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
 
         # Allow the widget to shrink freely — prevents feedback loop where
         # grid content sets a minimum width that blocks resize.
@@ -434,7 +433,9 @@ class SegmentGridWidget(QWidget):
 
     def _compute_n_cols(self) -> int:
         stride = BTN_W + BTN_GAP
-        max_possible = min(max(1, (self.width() + BTN_GAP) // stride), self.MAX_COLS)
+        max_possible = min(
+            max(1, (self.width() + BTN_GAP) // stride), self.MAX_COLS
+        )
         if not self._groups:
             return max_possible
         max_N = max(len(segs) for segs in self._groups.values())

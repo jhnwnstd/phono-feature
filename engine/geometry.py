@@ -14,12 +14,32 @@ The analyzer uses statistical methods to identify:
 
 from __future__ import annotations
 
-import random
 from collections import defaultdict
+from math import comb
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from engine.feature_engine import FeatureEngine
+
+
+def _hypergeom_sf(k: int, n: int, big_k: int, m: int) -> float:
+    """Right-tail survival function: P(X >= k) for X ~ Hypergeometric(n, big_k, m).
+
+    n      -- population size
+    big_k  -- successes in population
+    m      -- sample size
+    k      -- threshold (return probability of meeting or exceeding it)
+    """
+    if k <= 0:
+        return 1.0
+    upper = min(m, big_k)
+    if k > upper:
+        return 0.0
+    total = comb(n, m)
+    tail = sum(
+        comb(big_k, x) * comb(n - big_k, m - x) for x in range(k, upper + 1)
+    )
+    return tail / total
 
 
 class GeometryNode:
@@ -79,7 +99,6 @@ class GeometryAnalyzer:
     # Thresholds for confidence levels
     HIGH_COVERAGE_THRESHOLD = 0.90
     MODERATE_COVERAGE_THRESHOLD = 0.75
-    PERMUTATION_ITERATIONS = 1000
     SIGNIFICANCE_LEVEL = 0.05
 
     def __init__(self, engine: FeatureEngine) -> None:
@@ -93,7 +112,6 @@ class GeometryAnalyzer:
         # feature -> {parent, coverage, p_value, confidence}
         self.dependencies: dict = {}
         self.geometry_tree: GeometryNode | None = None
-        self._rng = random.Random(42)
 
     def analyze(self) -> GeometryNode:
         """
@@ -129,7 +147,9 @@ class GeometryAnalyzer:
 
                 if coverage > best_coverage:
                     # Run permutation test (pass coverage to avoid recomputing it)
-                    p_value = self._permutation_test(parent_feat, child_feat, coverage)
+                    p_value = self._permutation_test(
+                        parent_feat, child_feat, coverage
+                    )
 
                     if p_value < self.SIGNIFICANCE_LEVEL:
                         best_parent = parent_feat
@@ -179,42 +199,51 @@ class GeometryAnalyzer:
         self, parent_feat: str, child_feat: str, observed_coverage: float
     ) -> float:
         """
-        Perform permutation test for dependency significance.
+        Compute dependency significance via the hypergeometric distribution.
 
-        Randomly permute the child feature values and recompute coverage.
-        P-value is the proportion of permutations with coverage >= observed.
+        Under the null (random reassignment of child labels across segments),
+        the count of segments where both parent and child are specified is
+        distributed Hypergeometric(N, K, M):
+
+            N: total segments
+            K: segments where the parent is specified
+            M: segments where the child is specified  (= "applicable")
+
+        The p-value is the right-tail probability that the count meets or
+        exceeds the observed value, computed in closed form. This replaces
+        the prior 1000-iteration Monte Carlo permutation test, eliminating
+        sampling noise while running ~3 orders of magnitude faster.
 
         Args:
             parent_feat: Proposed parent feature
             child_feat: Proposed child feature
+            observed_coverage: Coverage as returned by ``_compute_coverage``;
+                used only to handle the degenerate ``applicable == 0`` case.
 
         Returns:
-            P-value from permutation test
+            One-sided p-value in [0.0, 1.0].
         """
-        segments = list(self.engine.segments.keys())
-        child_values = [self.engine.segments[s].get(child_feat, "0") for s in segments]
-        parent_values = [
-            self.engine.segments[s].get(parent_feat, "0") for s in segments
+        seg_features = self.engine.segments
+        n = len(seg_features)
+
+        child_specified = [
+            f.get(child_feat, "0") != "0" for f in seg_features.values()
         ]
+        applicable = sum(child_specified)
+        if applicable == 0:
+            return 1.0 if observed_coverage <= 0.0 else 0.0
 
-        extreme_count = 0
-        for _ in range(self.PERMUTATION_ITERATIONS):
-            permuted = child_values.copy()
-            self._rng.shuffle(permuted)
-            applicable = sum(1 for v in permuted if v != "0")
-            if applicable == 0:
-                permuted_coverage = 0.0
-            else:
-                holds = sum(
-                    1
-                    for i in range(len(segments))
-                    if permuted[i] != "0" and parent_values[i] != "0"
-                )
-                permuted_coverage = holds / applicable
-            if permuted_coverage >= observed_coverage:
-                extreme_count += 1
+        parent_idx = [
+            i
+            for i, f in enumerate(seg_features.values())
+            if f.get(parent_feat, "0") != "0"
+        ]
+        k = len(parent_idx)
+        if k == 0:
+            return 1.0
 
-        return extreme_count / self.PERMUTATION_ITERATIONS
+        observed_holds = sum(1 for i in parent_idx if child_specified[i])
+        return _hypergeom_sf(observed_holds, n, k, applicable)
 
     def _build_tree(self) -> GeometryNode:
         """
@@ -311,7 +340,9 @@ class GeometryAnalyzer:
 
         # Sort by confidence, then coverage
         confidence_order = {"high": 0, "moderate": 1, "low": 2}
-        summary.sort(key=lambda x: (confidence_order[x["confidence"]], -x["coverage"]))
+        summary.sort(
+            key=lambda x: (confidence_order[x["confidence"]], -x["coverage"])
+        )
 
         return summary
 
@@ -322,7 +353,11 @@ class GeometryAnalyzer:
         Returns:
             Dictionary representation of the tree
         """
-        tree = self.geometry_tree if self.geometry_tree is not None else self.analyze()
+        tree = (
+            self.geometry_tree
+            if self.geometry_tree is not None
+            else self.analyze()
+        )
         return tree.to_dict()
 
     def get_path_to_root(self, feature: str) -> list[str]:
@@ -335,7 +370,11 @@ class GeometryAnalyzer:
         Returns:
             List of feature names from the given feature to root
         """
-        tree = self.geometry_tree if self.geometry_tree is not None else self.analyze()
+        tree = (
+            self.geometry_tree
+            if self.geometry_tree is not None
+            else self.analyze()
+        )
 
         # Find the node
         def find_node(node: GeometryNode, target: str) -> GeometryNode | None:

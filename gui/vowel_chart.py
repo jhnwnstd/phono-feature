@@ -180,7 +180,9 @@ def _infer_height(feats: dict, profile: VowelProfile) -> tuple[int, str, str]:
 # ---------------------------------------------------------------------------
 
 
-def _infer_backness(feats: dict, profile: VowelProfile) -> tuple[str, str, str]:
+def _infer_backness(
+    feats: dict, profile: VowelProfile
+) -> tuple[str, str, str]:
     """Return (place, confidence, reason).  place is 'front'|'central'|'back'."""
     fr = _nonzero(feats.get("front"))
     bk = _nonzero(feats.get("back"))
@@ -241,7 +243,9 @@ def vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
     confidence = min(h_conf, p_conf, key=lambda c: _CONF_RANK[c])
     reason = f"{h_reason}; {p_reason}; {r_reason}"
 
-    return VowelPlacement(row=row, col=col, confidence=confidence, reason=reason)
+    return VowelPlacement(
+        row=row, col=col, confidence=confidence, reason=reason
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -368,7 +372,9 @@ class VowelChartWidget(QWidget):
                         btn = self._buttons.get(seg)
                         if btn:
                             p = placements[seg]
-                            btn.setToolTip(f"/{seg}/  [{p.confidence}]  {p.reason}")
+                            btn.setToolTip(
+                                f"/{seg}/  [{p.confidence}]  {p.reason}"
+                            )
                             btn.show()
                             vbox.addWidget(btn)
                     self._grid.addWidget(cell, grid_row, 1 + ci)

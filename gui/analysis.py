@@ -42,7 +42,8 @@ def render_spec_list(specs: list) -> str:
             continue
         seen.add(key)
         row_tags = " ".join(
-            tag(f"{v}{f}", "green" if v == "+" else "red") for f, v in filtered.items()
+            tag(f"{v}{f}", "green" if v == "+" else "red")
+            for f, v in filtered.items()
         )
         rows.append(
             f"<span style='color:{C['text_dim']}'>{len(rows) + 1}.</span> {row_tags}"
@@ -73,10 +74,16 @@ def compute_contrastive(engine, segs: list) -> dict:
     """
     result = {}
     for feat in engine.features:
-        plus_segs = [s for s in segs if engine.segments[s].get(feat, "0") == "+"]
-        minus_segs = [s for s in segs if engine.segments[s].get(feat, "0") == "-"]
+        plus_segs = [
+            s for s in segs if engine.segments[s].get(feat, "0") == "+"
+        ]
+        minus_segs = [
+            s for s in segs if engine.segments[s].get(feat, "0") == "-"
+        ]
         if plus_segs and minus_segs:
-            zero_segs = [s for s in segs if engine.segments[s].get(feat, "0") == "0"]
+            zero_segs = [
+                s for s in segs if engine.segments[s].get(feat, "0") == "0"
+            ]
             entry: dict = {"+": plus_segs, "-": minus_segs}
             if zero_segs:
                 entry["0"] = zero_segs
@@ -142,9 +149,7 @@ def render_multi_segment(
         )
         common_html = f"<p><b>Shared features:</b><br>{c_tags}</p>"
     else:
-        common_html = (
-            f"<p><b>Shared features:</b> <i style='color:{C['text_dim']}'>none</i></p>"
-        )
+        common_html = f"<p><b>Shared features:</b> <i style='color:{C['text_dim']}'>none</i></p>"
 
     if contrastive:
         rows = []
@@ -164,10 +169,10 @@ def render_multi_segment(
                 f" {minus_segs}"
             )
             if "0" in groups:
-                zero_segs = " ".join(tag(f"/{s}/", "gray") for s in groups["0"])
-                row_html += (
-                    f" &nbsp; <span style='color:{C['text_dim']}'>0</span> {zero_segs}"
+                zero_segs = " ".join(
+                    tag(f"/{s}/", "gray") for s in groups["0"]
                 )
+                row_html += f" &nbsp; <span style='color:{C['text_dim']}'>0</span> {zero_segs}"
             rows.append(row_html)
         contrast_html = (
             "<p><b>Contrasting features:</b><br>" + "<br>".join(rows) + "</p>"
@@ -196,12 +201,12 @@ def render_multi_segment(
     is_nc, specs = engine.is_natural_class(segs)
     spec_html = ""
     if is_nc:
-        nc_html = (
-            f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
-        )
+        nc_html = f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
         if not specs or not specs[0]:
             _univ = "\u2205 (universal \u2014 all segments)"
-            spec_html = f"<p><b>Minimal specification:</b> {tag(_univ, 'gray')}</p>"
+            spec_html = (
+                f"<p><b>Minimal specification:</b> {tag(_univ, 'gray')}</p>"
+            )
         else:
             spec_html = render_spec_list(specs)
     else:
@@ -242,7 +247,9 @@ def render_feat_to_seg(engine, feature_dict: dict, matching: list) -> str:
 
     if matching:
         seg_tags = " ".join(tag(f"/{s}/", "blue") for s in matching)
-        segs_html = f"<p><b>Matching segments ({len(matching)}):</b><br>{seg_tags}</p>"
+        segs_html = (
+            f"<p><b>Matching segments ({len(matching)}):</b><br>{seg_tags}</p>"
+        )
     else:
         segs_html = (
             "<p><b>Matching segments:</b>"

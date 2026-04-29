@@ -44,7 +44,9 @@ def test_basic_operations() -> FeatureEngine:
     print(f"   Found: {', '.join(voiced_stops)}")
 
     # Compute natural class
-    print("\n3. Natural class for [b, d, ɡ]:")  # noqa: RUF001 — IPA voiced velar
+    print(
+        "\n3. Natural class for [b, d, ɡ]:"
+    )  # noqa: RUF001 — IPA voiced velar
     bundle = engine.compute_natural_class(["b", "d", "ɡ"])  # noqa: RUF001
     if bundle:
         print("   Characterizing features:")
@@ -114,7 +116,9 @@ def test_geometry_analysis(engine: FeatureEngine) -> None:
         print(f"\n\nHigh-confidence dependencies ({len(high_conf)}):")
         for dep in high_conf:
             print(f"  • [{dep['child']}] depends on [{dep['parent']}]")
-            print(f"    Coverage: {dep['coverage']:.2%}, p-value: {dep['p_value']:.4f}")
+            print(
+                f"    Coverage: {dep['coverage']:.2%}, p-value: {dep['p_value']:.4f}"
+            )
 
 
 def test_natural_class_examples() -> None:
@@ -137,7 +141,9 @@ def test_natural_class_examples() -> None:
         bundle = engine.compute_natural_class(segments)
 
         if bundle:
-            features_str = ", ".join(f"{k}:{v}" for k, v in sorted(bundle.items()))
+            features_str = ", ".join(
+                f"{k}:{v}" for k, v in sorted(bundle.items())
+            )
             print(f"  Features: {features_str}")
         else:
             print("  Features: (none required)")
