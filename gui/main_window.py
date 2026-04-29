@@ -6,6 +6,7 @@ PyQt6 GUI for the Segment & Feature Engine.
 from __future__ import annotations
 
 import os
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import (
@@ -62,10 +63,20 @@ from gui.widgets import (
     FeatureRow,
     SegmentButton,
     SegmentGridWidget,
+    SegmentState,
 )
 
 if TYPE_CHECKING:
     from gui.builder import InventoryBuilder
+
+
+class Mode(StrEnum):
+    """Top-level UI mode. StrEnum members compare equal to their string
+    values, so existing comparisons against bare strings keep working."""
+
+    SEG_TO_FEAT = "seg_to_feat"
+    FEAT_TO_SEG = "feat_to_seg"
+
 
 # ---------------------------------------------------------------------------
 # MainWindow
@@ -76,7 +87,7 @@ class MainWindow(QMainWindow):
     def __init__(self, startup_path: str | None = None):
         super().__init__()
         self.engine: FeatureEngine | None = None
-        self._mode = "seg_to_feat"  # 'seg_to_feat' | 'feat_to_seg'
+        self._mode: Mode = Mode.SEG_TO_FEAT
         self._seg_buttons: dict = {}  # segment → SegmentButton
         self._feat_rows: dict = {}  # feature  → FeatureRow
         self._selected_segments: list = []
@@ -119,7 +130,7 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         assert isinstance(app, QApplication)
         app.installEventFilter(self)
-        self._set_mode("seg_to_feat")
+        self._set_mode(Mode.SEG_TO_FEAT)
         self._restore_settings(startup_path)
 
     # ------------------------------------------------------------------
@@ -544,8 +555,8 @@ class MainWindow(QMainWindow):
             self._load_path(path)
 
         # Restore mode after loading (overrides _load_path's default mode)
-        saved_mode = self._settings.value("mode", "seg_to_feat")
-        if saved_mode in ("seg_to_feat", "feat_to_seg"):
+        saved_mode = self._settings.value("mode", Mode.SEG_TO_FEAT)
+        if saved_mode in (Mode.SEG_TO_FEAT, Mode.FEAT_TO_SEG):
             self._set_mode(saved_mode)
 
     def closeEvent(self, event):  # type: ignore[override]
@@ -1005,7 +1016,7 @@ class MainWindow(QMainWindow):
         Skips expensive panel-level stylesheet changes since those haven't
         changed — only the newly created feature rows and buttons need updating.
         """
-        is_s2f = self._mode == "seg_to_feat"
+        is_s2f = self._mode == Mode.SEG_TO_FEAT
         self.seg_grid_widget.set_headers_active(is_s2f)
         self.vowel_chart_widget.set_headers_active(is_s2f)
         for row in self._feat_rows.values():
@@ -1014,35 +1025,63 @@ class MainWindow(QMainWindow):
         self._clear_segments(silent=True)
         self._clear_features(silent=True)
 
-    def _set_mode(self, mode: str):
-        if mode != self._mode:
-            if self._mode == "seg_to_feat":
-                # Preserve exact seg selection so toggling back restores it
-                self._saved_seg_state = list(self._selected_segments)
-                # Project into feat mode: shared (non-contradictory) features only
-                if self._selected_segments and self.engine:
-                    self._saved_feat_state = {
-                        f: v
-                        for f, v in self.engine.common_features(
-                            self._selected_segments
-                        ).items()
-                        if v in ("+", "-")
-                    }
-                else:
-                    self._saved_feat_state = {}
-            else:
-                # Preserve exact feat query so toggling back restores it
-                self._saved_feat_state = dict(self._selected_features)
-                # Project into seg mode: segments matched by current feature query
-                if self._selected_features and self.engine:
-                    self._saved_seg_state = list(
-                        self.engine.find_segments(self._selected_features)
-                    )
-                else:
-                    self._saved_seg_state = []
-        self._mode = mode
-        is_s2f = mode == "seg_to_feat"
+    def _set_mode(self, mode: Mode | str) -> None:
+        """Switch top-level UI mode. Pure orchestration — every step is in a
+        named helper below so individual phases stay easy to inspect and diff.
 
+        Accepts bare strings (from QSettings / tests) and coerces to Mode.
+        """
+        mode = Mode(mode)
+        if mode != self._mode:
+            self._save_outgoing_mode_state()
+        self._mode = mode
+        self._apply_panel_chrome()
+        self._apply_row_interactivity()
+        self._restore_segment_selection()
+        self._restore_feature_selection()
+        self._refresh_analysis_for_mode()
+        self._update_status_message()
+
+    # -- _set_mode phases -------------------------------------------------
+    #
+    # Each phase reads self._mode directly. _save_outgoing_mode_state runs
+    # BEFORE self._mode is updated (it captures the state of the mode being
+    # left); every other phase runs after.
+
+    def _save_outgoing_mode_state(self) -> None:
+        """Snapshot the current mode's exact state and project it into the
+        opposite mode's saved state. Called only when the mode is actually
+        changing.
+        """
+        if self._mode == Mode.SEG_TO_FEAT:
+            # Preserve exact seg selection so toggling back restores it.
+            self._saved_seg_state = list(self._selected_segments)
+            # Project into feat mode: shared (non-contradictory) features only.
+            if self._selected_segments and self.engine:
+                self._saved_feat_state = {
+                    f: v
+                    for f, v in self.engine.common_features(
+                        self._selected_segments
+                    ).items()
+                    if v in ("+", "-")
+                }
+            else:
+                self._saved_feat_state = {}
+        else:
+            # Preserve exact feat query so toggling back restores it.
+            self._saved_feat_state = dict(self._selected_features)
+            # Project into seg mode: segments matched by current feature query.
+            if self._selected_features and self.engine:
+                self._saved_seg_state = list(
+                    self.engine.find_segments(self._selected_features)
+                )
+            else:
+                self._saved_seg_state = []
+
+    def _apply_panel_chrome(self) -> None:
+        """Update panel backgrounds, borders, titles, and clear-button styling
+        to reflect which side of the UI is active."""
+        is_s2f = self._mode == Mode.SEG_TO_FEAT
         seg_bg = C["panel"] if is_s2f else C["bg"]
         feat_bg = C["panel"] if not is_s2f else C["bg"]
 
@@ -1083,10 +1122,6 @@ class MainWindow(QMainWindow):
         self.seg_grid_widget.set_headers_active(is_s2f)
         self.vowel_chart_widget.set_headers_active(is_s2f)
 
-        for row in self._feat_rows.values():
-            row.set_panel_active(not is_s2f)
-            row.set_interactive(not is_s2f)
-
         _clear_style = (
             f"color: {C['text']}; background: transparent;"
             f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;"
@@ -1097,25 +1132,42 @@ class MainWindow(QMainWindow):
                 f" QPushButton:hover {{ color: {C['text']}; background: {C['bg']}; }}"
             )
 
-        self.analysis.clear()
+    def _apply_row_interactivity(self) -> None:
+        """Toggle each FeatureRow's interactivity to match the active mode."""
+        is_s2f = self._mode == Mode.SEG_TO_FEAT
+        for row in self._feat_rows.values():
+            row.set_panel_active(not is_s2f)
+            row.set_interactive(not is_s2f)
 
-        # Single-pass: set each button/row to its final state directly,
-        # avoiding a clear-all then restore-some two-pass sequence.
+    def _restore_segment_selection(self) -> None:
+        """Single-pass: set each segment button to its final state directly.
+
+        In seg-mode, segments listed in _saved_seg_state become "selected";
+        all others become "default". In feat-mode this clears the visual
+        selection — segment matched/unmatched styling is then applied by
+        _refresh_analysis_for_mode below.
+        """
+        is_s2f = self._mode == Mode.SEG_TO_FEAT
         restore_segs = set(self._saved_seg_state) if is_s2f else set()
         self._selected_segments.clear()
         for seg, btn in self._seg_buttons.items():
             if seg in restore_segs:
                 self._selected_segments.append(seg)
-                if btn._state != "selected":
-                    btn.set_state("selected")
+                if btn._state != SegmentState.SELECTED:
+                    btn.set_state(SegmentState.SELECTED)
                     btn.setChecked(True)
-            elif btn._state != "default":
-                btn.set_state("default")
+            elif btn._state != SegmentState.DEFAULT:
+                btn.set_state(SegmentState.DEFAULT)
                 btn.setChecked(False)
 
-        # Single pass: restore_value for projected feats, reset for everything
-        # else. This is the sole authority on per-row visual state during a
-        # mode switch — no further row-level resets below.
+    def _restore_feature_selection(self) -> None:
+        """Single-pass: set each feature row to its final state directly.
+
+        This is the sole authority on per-row visual state during a mode
+        switch — no later phase touches feature rows. Rows in restore_feats
+        get restore_value (button checked + tinted); the rest get reset.
+        """
+        is_s2f = self._mode == Mode.SEG_TO_FEAT
         restore_feats = self._saved_feat_state if not is_s2f else {}
         self._selected_features.clear()
         for feat, row in self._feat_rows.items():
@@ -1125,22 +1177,28 @@ class MainWindow(QMainWindow):
             else:
                 row.reset()
 
+    def _refresh_analysis_for_mode(self) -> None:
+        """Clear the analysis panel and re-run the active mode's analysis if
+        there's something to analyze."""
+        is_s2f = self._mode == Mode.SEG_TO_FEAT
+        self.analysis.clear()
         if is_s2f and self._selected_segments:
             self._update_seg_to_feat()
         elif not is_s2f and self._selected_features:
             self._update_feat_to_seg()
 
-        if is_s2f:
+    def _update_status_message(self) -> None:
+        """Show the per-mode helper text in the status bar."""
+        is_s2f = self._mode == Mode.SEG_TO_FEAT
+        if not self.engine:
             self.status.showMessage(
-                "Click a segment to inspect its features."
-                if self.engine
-                else "Select an inventory from the dropdown to begin."
+                "Select an inventory from the dropdown to begin."
             )
+        elif is_s2f:
+            self.status.showMessage("Click a segment to inspect its features.")
         else:
             self.status.showMessage(
-                "Toggle feature values (+/\u2212) to find matching segments."
-                if self.engine
-                else "Select an inventory from the dropdown to begin."
+                "Toggle feature values (+/−) to find matching segments."
             )
 
     def eventFilter(self, a0, a1):
@@ -1151,12 +1209,12 @@ class MainWindow(QMainWindow):
             w = a0
             while w is not None:
                 if w is self.seg_panel:
-                    if self._mode != "seg_to_feat":
-                        self._set_mode("seg_to_feat")
+                    if self._mode != Mode.SEG_TO_FEAT:
+                        self._set_mode(Mode.SEG_TO_FEAT)
                     break
                 if w is self.feat_panel:
-                    if self._mode != "feat_to_seg":
-                        self._set_mode("feat_to_seg")
+                    if self._mode != Mode.FEAT_TO_SEG:
+                        self._set_mode(Mode.FEAT_TO_SEG)
                     break
                 w = w.parent()
         return False
@@ -1166,23 +1224,23 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_segment_clicked(self, segment: str, checked: bool):
-        if self._mode != "seg_to_feat":
+        if self._mode != Mode.SEG_TO_FEAT:
             # Prevent visual toggle in feat_to_seg mode
             self._seg_buttons[segment].setChecked(False)
             return
         btn = self._seg_buttons[segment]
         if checked:
-            btn.set_state("selected")
+            btn.set_state(SegmentState.SELECTED)
             if segment not in self._selected_segments:
                 self._selected_segments.append(segment)
         else:
-            btn.set_state("default")
+            btn.set_state(SegmentState.DEFAULT)
             if segment in self._selected_segments:
                 self._selected_segments.remove(segment)
         self._debounce.start()
 
     def _on_feature_changed(self, feature: str, value: str):
-        if self._mode != "feat_to_seg":
+        if self._mode != Mode.FEAT_TO_SEG:
             return
         if value:
             self._selected_features[feature] = value
@@ -1192,7 +1250,7 @@ class MainWindow(QMainWindow):
 
     def _run_pending_update(self) -> None:
         """Fired by the debounce timer; dispatches to the active mode."""
-        if self._mode == "seg_to_feat":
+        if self._mode == Mode.SEG_TO_FEAT:
             self._update_seg_to_feat()
         else:
             self._update_feat_to_seg()
@@ -1206,7 +1264,7 @@ class MainWindow(QMainWindow):
         if not segs or not self.engine:
             self._reset_feature_display()
             for btn in self._seg_buttons.values():
-                btn.set_state("default")
+                btn.set_state(SegmentState.DEFAULT)
             self.analysis.clear()
             return
 
@@ -1219,7 +1277,7 @@ class MainWindow(QMainWindow):
                 row.set_display("" if v == "0" else v, shared=True)
             for seg, btn in self._seg_buttons.items():
                 if seg not in selected_set:
-                    btn.set_state("default")
+                    btn.set_state(SegmentState.DEFAULT)
             self.analysis.set_html(
                 render_single_segment(self.engine, segs[0], feats)
             )
@@ -1248,7 +1306,9 @@ class MainWindow(QMainWindow):
             for seg, btn in self._seg_buttons.items():
                 if seg not in selected_set:
                     btn.set_state(
-                        "suggested" if seg in suggested_set else "default"
+                        SegmentState.SUGGESTED
+                        if seg in suggested_set
+                        else SegmentState.DEFAULT
                     )
 
             self.analysis.set_html(
@@ -1268,7 +1328,7 @@ class MainWindow(QMainWindow):
         selected_feats = self._selected_features
         if not selected_feats:
             for btn in self._seg_buttons.values():
-                btn.set_state("default")
+                btn.set_state(SegmentState.DEFAULT)
             self.analysis.clear()
             return
 
@@ -1276,7 +1336,11 @@ class MainWindow(QMainWindow):
         matching_set = set(matching)
 
         for seg, btn in self._seg_buttons.items():
-            btn.set_state("matched" if seg in matching_set else "unmatched")
+            btn.set_state(
+                SegmentState.MATCHED
+                if seg in matching_set
+                else SegmentState.UNMATCHED
+            )
 
         self.analysis.set_html(
             render_feat_to_seg(self.engine, selected_feats, matching)
@@ -1293,8 +1357,8 @@ class MainWindow(QMainWindow):
     def _clear_segments(self, silent=False):
         self._selected_segments.clear()
         for btn in self._seg_buttons.values():
-            if btn._state != "default":
-                btn.set_state("default")
+            if btn._state != SegmentState.DEFAULT:
+                btn.set_state(SegmentState.DEFAULT)
                 btn.setChecked(False)
         if not silent:
             self._saved_seg_state = []
@@ -1307,8 +1371,8 @@ class MainWindow(QMainWindow):
             if row._current_value:
                 row.reset()
         for btn in self._seg_buttons.values():
-            if btn._state != "default":
-                btn.set_state("default")
+            if btn._state != SegmentState.DEFAULT:
+                btn.set_state(SegmentState.DEFAULT)
         if not silent:
             self._saved_seg_state = []
             self._saved_feat_state = {}

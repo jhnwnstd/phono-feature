@@ -4,6 +4,7 @@ Reusable UI widgets: SegmentButton, FeatureRow, AnalysisPanel, SegmentGridWidget
 """
 
 import math
+from enum import StrEnum
 from typing import ClassVar
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
@@ -27,12 +28,24 @@ from gui.palette import C
 # ---------------------------------------------------------------------------
 
 
+class SegmentState(StrEnum):
+    """Visual state of a SegmentButton. StrEnum members compare equal to
+    their string values, so existing comparisons against bare strings keep
+    working transparently."""
+
+    SELECTED = "selected"
+    MATCHED = "matched"
+    UNMATCHED = "unmatched"
+    SUGGESTED = "suggested"
+    DEFAULT = "default"
+
+
 class SegmentButton(QPushButton):
     """Toggleable button for a single phonological segment."""
 
     # Pre-computed stylesheets — avoids f-string interpolation on every state change
-    _STYLES: ClassVar[dict[str, str]] = {
-        "selected": f"""
+    _STYLES: ClassVar[dict[SegmentState, str]] = {
+        SegmentState.SELECTED: f"""
             QPushButton {{
                 background-color: {C["seg_selected"]};
                 color: #FFFFFF;
@@ -41,7 +54,7 @@ class SegmentButton(QPushButton):
                 font-weight: bold;
             }}
         """,
-        "matched": f"""
+        SegmentState.MATCHED: f"""
             QPushButton {{
                 background-color: {C["seg_matched"]};
                 color: #FFFFFF;
@@ -50,7 +63,7 @@ class SegmentButton(QPushButton):
                 font-weight: bold;
             }}
         """,
-        "unmatched": f"""
+        SegmentState.UNMATCHED: f"""
             QPushButton {{
                 background-color: {C["seg_unmatched"]};
                 color: {C["text_dim"]};
@@ -58,7 +71,7 @@ class SegmentButton(QPushButton):
                 border-radius: 8px;
             }}
         """,
-        "suggested": f"""
+        SegmentState.SUGGESTED: f"""
             QPushButton {{
                 background-color: {C["accent_light"]};
                 color: {C["accent"]};
@@ -66,7 +79,7 @@ class SegmentButton(QPushButton):
                 border-radius: 8px;
             }}
         """,
-        "default": f"""
+        SegmentState.DEFAULT: f"""
             QPushButton {{
                 background-color: {C["seg_default"]};
                 color: {C["text"]};
@@ -92,10 +105,11 @@ class SegmentButton(QPushButton):
         self.setCheckable(True)
         self.setFixedSize(33, 26)
         self.setFont(QFont("Noto Sans", 9))
-        self._state = "default"
-        self.setStyleSheet(self._STYLES["default"])
+        self._state: SegmentState = SegmentState.DEFAULT
+        self.setStyleSheet(self._STYLES[SegmentState.DEFAULT])
 
-    def set_state(self, state: str):
+    def set_state(self, state: SegmentState | str) -> None:
+        state = SegmentState(state)
         if self._state != state:
             self._state = state
             self.setStyleSheet(self._STYLES[state])

@@ -1,15 +1,16 @@
 """
 gui/vowel_chart.py
+
 IPA-style vowel trapezoid chart widget.
 
 Maps vowel segments onto a height x backness x rounding grid using
-normalised phonological features.  Placement is inventory-sensitive:
-a VowelProfile is computed once per inventory to determine which
-features are active, so fallback logic (e.g. coronal→front, ATR→height)
-only fires when the inventory actually lacks the direct feature.
+normalised phonological features. Placement is inventory-sensitive.
+A VowelProfile is computed once per inventory to determine which
+features are active, so fallback logic only fires when the inventory
+actually lacks the direct feature.
 
-Each placement carries a confidence level ("high", "medium", "low") and
-a human-readable reason string, surfaced as tooltips on the buttons.
+Each placement carries a confidence level and a human-readable reason
+string, surfaced as tooltips on the buttons.
 """
 
 from __future__ import annotations
@@ -28,16 +29,8 @@ from PyQt6.QtWidgets import (
 
 from gui.palette import C
 
-# ---------------------------------------------------------------------------
-# Layout constants
-# ---------------------------------------------------------------------------
+VOWEL_LABEL_W = 72
 
-VOWEL_LABEL_W = 72  # px — fits "Near-close" at 7pt with padding
-
-# ---------------------------------------------------------------------------
-# Height classification: (label, High, Low, Tense/ATR)
-#   None in the Tense slot means "don't care" (Open vowels).
-# ---------------------------------------------------------------------------
 
 _VOWEL_HEIGHT: list = [
     ("Close", "+", "-", "+"),
@@ -49,10 +42,6 @@ _VOWEL_HEIGHT: list = [
 ]
 
 _ROW_LABELS = [label for label, *_ in _VOWEL_HEIGHT]
-
-# ---------------------------------------------------------------------------
-# Inventory profile — computed once per vowel set
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -73,7 +62,10 @@ class VowelProfile:
     @property
     def use_coronal_front_fallback(self) -> bool:
         """Use CORONAL as a proxy for frontness only when Front is absent."""
-        return self.has_coronal and not self.has_front
+        has_coronal_feature = self.has_coronal
+        lacks_front_feature = not self.has_front
+
+        return has_coronal_feature and lacks_front_feature
 
     @property
     def has_height_sub_distinction(self) -> bool:
@@ -83,15 +75,23 @@ class VowelProfile:
     @property
     def use_labial_round_fallback(self) -> bool:
         """Use LABIAL as a rounding proxy only when Round is absent."""
-        return self.has_labial and not self.has_round
+        has_labial_feature = self.has_labial
+        lacks_round_feature = not self.has_round
+
+        return has_labial_feature and lacks_round_feature
 
 
 def detect_vowel_profile(segs: list, norm_feats: dict) -> VowelProfile:
     """Scan the vowel segments to determine which features are in play."""
     active: set[str] = set()
+
     for seg in segs:
-        for feat, val in norm_feats.get(seg, {}).items():
-            if val != "0":
+        seg_features = norm_feats.get(seg, {})
+
+        for feat, val in seg_features.items():
+            feature_is_active = val != "0"
+
+            if feature_is_active:
                 active.add(feat)
 
     return VowelProfile(
@@ -108,22 +108,12 @@ def detect_vowel_profile(segs: list, norm_feats: dict) -> VowelProfile:
     )
 
 
-# ---------------------------------------------------------------------------
-# Placement result
-# ---------------------------------------------------------------------------
-
-
 @dataclass(frozen=True)
 class VowelPlacement:
     row: int
     col: int
-    confidence: str  # "high" | "medium" | "low"
+    confidence: str
     reason: str
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _fv(feats: dict, key: str) -> str:
@@ -132,103 +122,119 @@ def _fv(feats: dict, key: str) -> str:
 
 
 def _nonzero(val: str | None) -> str | None:
-    """Return *val* only if it carries real feature information ('+' or '-')."""
-    return val if val and val != "0" else None
+    """Return val only if it carries real feature information."""
+    has_value = bool(val)
+    is_unspecified = val == "0"
 
+    if has_value and not is_unspecified:
+        return val
 
-# ---------------------------------------------------------------------------
-# Inference: height
-# ---------------------------------------------------------------------------
+    return None
 
 
 def _infer_height(feats: dict, profile: VowelProfile) -> tuple[int, str, str]:
-    """Return (row, confidence, reason).
-
-    Conservative policy for low vowels: [-high, +low] defaults to Open.
-    Near-open is only used when ATR/Tense is active in the inventory AND
-    the vowel is explicitly [-ATR/-tense], giving real evidence for a
-    split.  Same conservatism for Near-close vs Close.
-    """
+    """Return row, confidence, and reason."""
     hi = _fv(feats, "high")
     lo = _fv(feats, "low")
-    atr_tn = _nonzero(feats.get("tense")) or _nonzero(feats.get("atr"))
 
-    if hi == "+" and lo == "-":
-        if profile.has_height_sub_distinction and atr_tn == "-":
+    tense_value = _nonzero(feats.get("tense"))
+    atr_value = _nonzero(feats.get("atr"))
+    atr_tn = tense_value or atr_value
+
+    is_high_vowel = hi == "+" and lo == "-"
+    is_low_vowel = hi == "-" and lo == "+"
+    is_mid_vowel = hi == "-" and lo == "-"
+
+    if is_high_vowel:
+        is_near_close = profile.has_height_sub_distinction and atr_tn == "-"
+
+        if is_near_close:
             return 1, "medium", "Near-close: [+high, -low, -tense/ATR]"
+
         if atr_tn == "+":
             return 0, "high", "Close: [+high, -low, +tense/ATR]"
+
         return 0, "high", "Close: [+high, -low]"
 
-    if hi == "-" and lo == "+":
-        if profile.has_height_sub_distinction and atr_tn == "-":
+    if is_low_vowel:
+        is_near_open = profile.has_height_sub_distinction and atr_tn == "-"
+
+        if is_near_open:
             return 4, "medium", "Near-open: [-high, +low, -tense/ATR]"
+
         return 5, "high", "Open: [-high, +low]"
 
-    if hi == "-" and lo == "-":
+    if is_mid_vowel:
         if atr_tn == "+":
             return 2, "medium", "Close-mid: [-high, -low, +tense/ATR]"
+
         if atr_tn == "-":
             return 3, "medium", "Open-mid: [-high, -low, -tense/ATR]"
+
         return 3, "low", "Open-mid (default): [-high, -low], no tense/ATR"
 
     return 3, "low", "Open-mid (default): underspecified height"
 
 
-# ---------------------------------------------------------------------------
-# Inference: backness
-# ---------------------------------------------------------------------------
-
-
 def _infer_backness(
-    feats: dict, profile: VowelProfile
+    feats: dict,
+    profile: VowelProfile,
 ) -> tuple[str, str, str]:
-    """Return (place, confidence, reason).  place is 'front'|'central'|'back'."""
+    """Return place, confidence, and reason."""
     fr = _nonzero(feats.get("front"))
     bk = _nonzero(feats.get("back"))
 
-    # Explicit front/back
-    if fr == "+" and bk != "+":
+    has_positive_front = fr == "+"
+    has_positive_back = bk == "+"
+
+    if has_positive_front and not has_positive_back:
         return "front", "high", "Front: [+front]"
-    if bk == "+" and fr != "+":
+
+    if has_positive_back and not has_positive_front:
         return "back", "high", "Back: [+back]"
-    if fr == "+" and bk == "+":
+
+    if has_positive_front and has_positive_back:
         return "central", "low", "Central (conflict): [+front, +back]"
 
-    # [-back] as front inference — many systems encode frontness this way
-    if fr is None and bk == "-":
+    has_no_front_value = fr is None
+    has_negative_back = bk == "-"
+
+    if has_no_front_value and has_negative_back:
         return "front", "medium", "Front (inferred): [-back]"
 
-    # Coronal fallback — only when the inventory lacks an explicit Front feature
     if profile.use_coronal_front_fallback:
         cor = _nonzero(feats.get("coronal"))
         ant = feats.get("anterior", "0")
-        # Retroflex/rhotic coronals (anterior:-) do not imply frontness
-        if cor == "+" and ant != "-":
+
+        is_coronal = cor == "+"
+        is_retroflex_or_rhotic = ant == "-"
+
+        if is_coronal and not is_retroflex_or_rhotic:
             return "front", "low", "Front (inferred): CORONAL fallback"
 
     return "central", "low", "Central (default): no front/back specified"
 
 
-# ---------------------------------------------------------------------------
-# Inference: rounding
-# ---------------------------------------------------------------------------
-
-
 def _infer_rounding(feats: dict, profile: VowelProfile) -> tuple[bool, str]:
-    if _fv(feats, "round") == "+":
+    has_rounding = _fv(feats, "round") == "+"
+
+    if has_rounding:
         return True, "Rounded: [+round]"
-    # Labial fallback — some systems mark rounding under LABIAL
-    if profile.use_labial_round_fallback and _fv(feats, "labial") == "+":
+
+    can_use_labial_fallback = profile.use_labial_round_fallback
+    has_labial = _fv(feats, "labial") == "+"
+
+    if can_use_labial_fallback and has_labial:
         return True, "Rounded (inferred): LABIAL fallback"
+
     return False, "Unrounded"
 
 
-# ---------------------------------------------------------------------------
-# Composed placement
-# ---------------------------------------------------------------------------
-
-_CONF_RANK = {"high": 3, "medium": 2, "low": 1}
+_CONF_RANK = {
+    "high": 3,
+    "medium": 2,
+    "low": 1,
+}
 
 
 def vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
@@ -237,60 +243,94 @@ def vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
     place, p_conf, p_reason = _infer_backness(feats, profile)
     rounded, r_reason = _infer_rounding(feats, profile)
 
-    base_col = {"front": 0, "central": 2, "back": 4}[place]
-    col = base_col + (1 if rounded else 0)
+    place_to_column = {
+        "front": 0,
+        "central": 2,
+        "back": 4,
+    }
 
-    confidence = min(h_conf, p_conf, key=lambda c: _CONF_RANK[c])
+    base_col = place_to_column[place]
+
+    if rounded:
+        col = base_col + 1
+    else:
+        col = base_col
+
+    confidence = min(
+        h_conf,
+        p_conf,
+        key=lambda confidence_name: _CONF_RANK[confidence_name],
+    )
+
     reason = f"{h_reason}; {p_reason}; {r_reason}"
 
     return VowelPlacement(
-        row=row, col=col, confidence=confidence, reason=reason
+        row=row,
+        col=col,
+        confidence=confidence,
+        reason=reason,
     )
-
-
-# ---------------------------------------------------------------------------
-# VowelChartWidget
-# ---------------------------------------------------------------------------
 
 
 class VowelChartWidget(QWidget):
     """Displays vowels in an IPA-style grid: height x backness x rounding."""
 
-    _COL_HEADERS: ClassVar[list[str]] = ["Front", "Central", "Back"]
-    _ROW_HEADERS: ClassVar[list[str]] = _ROW_LABELS
+    _COL_HEADERS: ClassVar[list[str]] = [
+        "Front",
+        "Central",
+        "Back",
+    ]
 
-    def __init__(self, parent=None, *, btn_gap: int = 4):
-        super().__init__(parent)
-        self._buttons: dict = {}
-        self._header_labels: list = []
-        self._cell_containers: list = []
-        self._grid = QGridLayout(self)
-        self._grid.setSpacing(btn_gap)
-        self._grid.setContentsMargins(0, 0, 8, 0)
+    _ROW_HEADERS: ClassVar[list[str]] = _ROW_LABELS
 
     _HDR_ACTIVE = f"color: {C['text']};"
     _HDR_INACTIVE = f"color: {C['text_dim']};"
     _ROW_ACTIVE = f"color: {C['text']}; padding-right: 4px;"
     _ROW_INACTIVE = f"color: {C['text_dim']}; padding-right: 4px;"
 
+    def __init__(self, parent=None, *, btn_gap: int = 4):
+        super().__init__(parent)
+
+        self._buttons: dict = {}
+        self._header_labels: list = []
+        self._cell_containers: list = []
+
+        self._grid = QGridLayout(self)
+        self._grid.setSpacing(btn_gap)
+        self._grid.setContentsMargins(0, 0, 8, 0)
+
     def set_headers_active(self, active: bool):
-        hdr = self._HDR_ACTIVE if active else self._HDR_INACTIVE
-        row = self._ROW_ACTIVE if active else self._ROW_INACTIVE
+        if active:
+            header_style = self._HDR_ACTIVE
+            row_style = self._ROW_ACTIVE
+        else:
+            header_style = self._HDR_INACTIVE
+            row_style = self._ROW_INACTIVE
+
         for lbl, is_row in self._header_labels:
-            lbl.setStyleSheet(row if is_row else hdr)
+            if is_row:
+                lbl.setStyleSheet(row_style)
+            else:
+                lbl.setStyleSheet(header_style)
 
     def clear(self) -> None:
         """Remove all buttons, labels, and collision containers."""
         while self._grid.count():
             self._grid.takeAt(0)
+
         for btn in self._buttons.values():
             btn.deleteLater()
+
         self._buttons.clear()
+
         for lbl, _ in self._header_labels:
             lbl.deleteLater()
+
         self._header_labels.clear()
+
         for container in self._cell_containers:
             container.deleteLater()
+
         self._cell_containers.clear()
 
     def set_vowels(self, segs: list, buttons: dict, norm_feats: dict):
@@ -298,7 +338,6 @@ class VowelChartWidget(QWidget):
         self.clear()
         self._buttons = buttons
 
-        # Detect which features this inventory actually uses for vowels
         profile = detect_vowel_profile(segs, norm_feats)
 
         hdr_font = QFont("Noto Sans", 8, QFont.Weight.Bold)
@@ -306,7 +345,9 @@ class VowelChartWidget(QWidget):
         title = QLabel("VOWELS")
         title.setFont(hdr_font)
         title.setStyleSheet(
-            f"color: {C['text_dim']}; letter-spacing: 1px; padding: 2px 2px 0 2px;"
+            f"color: {C['text_dim']}; "
+            "letter-spacing: 1px; "
+            "padding: 2px 2px 0 2px;"
         )
         self._grid.addWidget(title, 0, 0, 1, 7)
         self._header_labels.append((title, False))
@@ -316,28 +357,40 @@ class VowelChartWidget(QWidget):
             lbl.setFont(QFont("Noto Sans", 7))
             lbl.setStyleSheet(f"color: {C['text_dim']};")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._grid.addWidget(lbl, 1, 1 + ci * 2, 1, 2)
+
+            grid_col = 1 + ci * 2
+
+            self._grid.addWidget(lbl, 1, grid_col, 1, 2)
             self._header_labels.append((lbl, False))
 
         occupied: dict = {}
         placements: dict = {}
+
         for seg in segs:
             feats = norm_feats.get(seg, {})
             placement = vowel_grid_pos(feats, profile)
-            placements[seg] = placement
-            occupied.setdefault((placement.row, placement.col), []).append(seg)
+            cell_key = (placement.row, placement.col)
 
-        # Sort collision cells by confidence then symbol for stable display
+            placements[seg] = placement
+            occupied.setdefault(cell_key, []).append(seg)
+
         for key in occupied:
             occupied[key].sort(
-                key=lambda s: (_CONF_RANK.get(placements[s].confidence, 0), s),
+                key=lambda seg: (
+                    _CONF_RANK.get(placements[seg].confidence, 0),
+                    seg,
+                ),
                 reverse=True,
             )
 
         grid_row = 2
+
         for ri, label in enumerate(self._ROW_HEADERS):
-            if not any((ri, c) in occupied for c in range(6)):
+            row_has_vowels = any((ri, col) in occupied for col in range(6))
+
+            if not row_has_vowels:
                 continue
+
             lbl = QLabel(label)
             lbl.setFont(QFont("Noto Sans", 7))
             lbl.setStyleSheet(f"color: {C['text_dim']}; padding-right: 4px;")
@@ -345,38 +398,54 @@ class VowelChartWidget(QWidget):
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
             lbl.setMinimumWidth(VOWEL_LABEL_W - 4)
+
             self._grid.addWidget(lbl, grid_row, 0)
             self._header_labels.append((lbl, True))
 
             for ci in range(6):
-                cell_segs = occupied.get((ri, ci), [])
+                cell_key = (ri, ci)
+                cell_segs = occupied.get(cell_key, [])
+
                 if not cell_segs:
                     continue
+
                 if len(cell_segs) == 1:
-                    btn = self._buttons.get(cell_segs[0])
+                    seg = cell_segs[0]
+                    btn = self._buttons.get(seg)
+
                     if btn:
-                        p = placements[cell_segs[0]]
+                        placement = placements[seg]
                         btn.setToolTip(
-                            f"/{cell_segs[0]}/  [{p.confidence}]  {p.reason}"
+                            f"/{seg}/  "
+                            f"[{placement.confidence}]  "
+                            f"{placement.reason}"
                         )
                         btn.show()
                         self._grid.addWidget(btn, grid_row, 1 + ci)
-                else:
-                    cell = QWidget()
-                    cell.setStyleSheet("background: transparent;")
-                    self._cell_containers.append(cell)
-                    vbox = QVBoxLayout(cell)
-                    vbox.setContentsMargins(0, 0, 0, 0)
-                    vbox.setSpacing(1)
-                    for seg in cell_segs:
-                        btn = self._buttons.get(seg)
-                        if btn:
-                            p = placements[seg]
-                            btn.setToolTip(
-                                f"/{seg}/  [{p.confidence}]  {p.reason}"
-                            )
-                            btn.show()
-                            vbox.addWidget(btn)
-                    self._grid.addWidget(cell, grid_row, 1 + ci)
+
+                    continue
+
+                cell = QWidget()
+                cell.setStyleSheet("background: transparent;")
+                self._cell_containers.append(cell)
+
+                vbox = QVBoxLayout(cell)
+                vbox.setContentsMargins(0, 0, 0, 0)
+                vbox.setSpacing(1)
+
+                for seg in cell_segs:
+                    btn = self._buttons.get(seg)
+
+                    if btn:
+                        placement = placements[seg]
+                        btn.setToolTip(
+                            f"/{seg}/  "
+                            f"[{placement.confidence}]  "
+                            f"{placement.reason}"
+                        )
+                        btn.show()
+                        vbox.addWidget(btn)
+
+                self._grid.addWidget(cell, grid_row, 1 + ci)
 
             grid_row += 1

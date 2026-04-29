@@ -26,28 +26,39 @@ from PyQt6.QtWidgets import QApplication
 
 
 def _argv_requests_qt_platform(argv: list[str]) -> bool:
-    return any(
-        arg == "-platform" or arg.startswith("-platform=") for arg in argv
-    )
+    """Return True if the user already supplied a Qt platform argument."""
+    for arg in argv:
+        if arg == "-platform":
+            return True
+
+        if arg.startswith("-platform="):
+            return True
+
+    return False
 
 
 def _auto_qt_platform() -> str | None:
     """Pick a Qt platform plugin for Linux, or None to let Qt decide."""
-    if not sys.platform.startswith("linux"):
+    is_linux = sys.platform.startswith("linux")
+    if not is_linux:
         return None
 
     wayland_display = os.environ.get("WAYLAND_DISPLAY")
+
     if wayland_display:
         runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "")
-        socket_path = (
-            wayland_display
-            if os.path.isabs(wayland_display)
-            else os.path.join(runtime_dir, wayland_display)
-        )
-        if os.path.exists(socket_path):
+
+        if os.path.isabs(wayland_display):
+            socket_path = wayland_display
+        else:
+            socket_path = os.path.join(runtime_dir, wayland_display)
+
+        wayland_socket_exists = os.path.exists(socket_path)
+        if wayland_socket_exists:
             return "wayland"
 
-    if os.environ.get("DISPLAY"):
+    x11_display = os.environ.get("DISPLAY")
+    if x11_display:
         return "xcb"
 
     return None
@@ -56,10 +67,15 @@ def _auto_qt_platform() -> str | None:
 def main() -> int:
     argv = sys.argv[:]
 
-    if not os.environ.get(
-        "QT_QPA_PLATFORM"
-    ) and not _argv_requests_qt_platform(argv):
+    qt_platform_from_environment = os.environ.get("QT_QPA_PLATFORM")
+    qt_platform_from_argv = _argv_requests_qt_platform(argv)
+    should_choose_platform = (
+        not qt_platform_from_environment and not qt_platform_from_argv
+    )
+
+    if should_choose_platform:
         platform = _auto_qt_platform()
+
         if platform is not None:
             argv[1:1] = ["-platform", platform]
 
@@ -79,9 +95,13 @@ def main() -> int:
     parser.process(app)
 
     positional = parser.positionalArguments()
-    startup_path = positional[0] if positional else None
 
-    # Lazy import: avoid loading the full GUI module tree when --help exits early
+    if positional:
+        startup_path = positional[0]
+    else:
+        startup_path = None
+
+    # Lazy import. Avoid loading the full GUI module tree when --help exits early.
     from gui.main_window import MainWindow
 
     window = MainWindow(startup_path=startup_path)
