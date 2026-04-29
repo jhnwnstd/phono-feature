@@ -52,6 +52,7 @@ from gui.constants import (
     BTN_GAP,
     BTN_W,
     FEATURE_GROUPS,
+    FEATURE_ORDER,
     SCROLLBAR_STYLE,
     SETTINGS_APP,
     SETTINGS_ORG,
@@ -115,6 +116,16 @@ class MainWindow(QMainWindow):
         self._cached_groups: dict | None = None
         self._cached_norm_feats: dict | None = None
         self._builder: InventoryBuilder | None = None
+        # Row pool: built once on first inventory load, then show/hide per
+        # subsequent load instead of destroying and recreating widgets.
+        # _feat_row_pool holds every row created (full FEATURE_ORDER plus any
+        # inventory-specific extras). _feat_rows above keeps its existing
+        # contract — only active-this-inventory rows — so external code that
+        # iterates _feat_rows is unaffected.
+        self._feat_row_pool: dict[str, FeatureRow] = {}
+        self._feat_cards: list[tuple[QFrame, list[str]]] = []
+        self._other_card: QFrame | None = None
+        self._feature_pool_initialized: bool = False
 
         self.setWindowTitle("Language Doodad")
         self.setMinimumSize(640, 480)
@@ -840,6 +851,60 @@ class MainWindow(QMainWindow):
 
         return group_frame
 
+    def _init_feature_pool(self) -> None:
+        """Pre-create FeatureRow widgets for all features in FEATURE_ORDER and
+        build the static FEATURE_GROUPS card layout. Called once on the first
+        inventory load. Subsequent loads just toggle row/card visibility,
+        avoiding the per-load cost of constructing 28+ FeatureRow widgets
+        (each of which does 4 setStyleSheet + signal connect + addWidget).
+
+        _feat_row_pool keeps a permanent reference to every row in the pool;
+        _feat_rows below tracks which subset is active for the current
+        inventory and is the dict external code reads from.
+        """
+        if self._feature_pool_initialized:
+            return
+
+        for feat in FEATURE_ORDER:
+            row = FeatureRow(feat)
+            row.value_changed.connect(self._on_feature_changed)
+            self._feat_row_pool[feat] = row
+
+        # Temporarily expose pool rows via _feat_rows so _build_feature_group
+        # can find them while constructing cards.
+        self._feat_rows = dict(self._feat_row_pool)
+
+        cards: list[tuple[QFrame, list[str], int]] = []
+        for title, feats_list in FEATURE_GROUPS:
+            card = self._build_feature_group(title, feats_list)
+            if card is not None:
+                self._feat_cards.append((card, list(feats_list)))
+                cards.append((card, list(feats_list), len(feats_list)))
+
+        # Distribute cards to balance row counts per column.
+        left_count = 0
+        right_count = 0
+        for card, _feats, count in cards:
+            if left_count <= right_count:
+                self._feat_left_layout.addWidget(card)
+                left_count += count
+            else:
+                self._feat_right_layout.addWidget(card)
+                right_count += count
+
+        self._feat_left_layout.addStretch()
+        self._feat_right_layout.addStretch()
+
+        # Reset _feat_rows to the active-only contract; the next
+        # _populate_features call will repopulate it for the loaded inventory.
+        self._feat_rows = {}
+        for row in self._feat_row_pool.values():
+            row.setVisible(False)
+        for card, _feats in self._feat_cards:
+            card.setVisible(False)
+
+        self._feature_pool_initialized = True
+
     def _populate_features(self) -> None:
         if self.engine is None:
             return
@@ -851,66 +916,72 @@ class MainWindow(QMainWindow):
                     active_feature_set.add(f)
         active_feature_set &= set(self.engine.features)
 
-        # Skip full rebuild if the feature set hasn't changed
-        if active_feature_set == set(self._feat_rows.keys()):
-            self._selected_features.clear()
-            for row in self._feat_rows.values():
+        self._init_feature_pool()
+
+        self._selected_features.clear()
+        # Rebuild _feat_rows from the active subset so external code keeps
+        # seeing only "rows present in the current inventory."
+        self._feat_rows = {}
+
+        # Show/hide pool rows based on the active set; reset the visible ones.
+        for feat, row in self._feat_row_pool.items():
+            if feat in active_feature_set:
+                row.setVisible(True)
                 row.reset()
+                self._feat_rows[feat] = row
+            else:
+                row.setVisible(False)
+
+        # Show/hide each FEATURE_GROUPS card based on whether it has any
+        # active rows.
+        for card, feats in self._feat_cards:
+            card.setVisible(any(f in active_feature_set for f in feats))
+
+        # Handle features outside FEATURE_ORDER (rare). Builds a small
+        # dynamic "Other" card; loads without unknowns just clear it.
+        unknown_active = sort_features(
+            [f for f in active_feature_set if f not in set(FEATURE_ORDER)]
+        )
+        self._refresh_other_card(unknown_active)
+
+    def _refresh_other_card(self, unknown_active: list[str]) -> None:
+        """Tear down and rebuild the dynamic 'Other' card for inventory-
+        specific features that don't appear in FEATURE_ORDER. Skip the
+        rebuild if the active inventory has none.
+        """
+        # Drop the previous Other card and the rows it owned. Unknown rows
+        # are not part of the persistent pool; they're built fresh per
+        # inventory.
+        if self._other_card is not None:
+            for feat in list(self._feat_rows.keys()):
+                if feat not in self._feat_row_pool:
+                    self._feat_rows.pop(feat).setParent(None)
+            self._other_card.setParent(None)
+            self._other_card.deleteLater()
+            self._other_card = None
+
+        if not unknown_active:
             return
 
-        # Clear both columns
-        for layout in (self._feat_left_layout, self._feat_right_layout):
-            while layout.count():
-                item = layout.takeAt(0)
-                if item is not None:
-                    w = item.widget()
-                    if w is not None:
-                        w.deleteLater()
-
-        self._feat_rows.clear()
-        self._selected_features.clear()
-
-        # Build all FeatureRow widgets first so _build_feature_group can find them
-        for feat in active_feature_set:
+        for feat in unknown_active:
             row = FeatureRow(feat)
             row.value_changed.connect(self._on_feature_changed)
             self._feat_rows[feat] = row
 
-        # Collect features not in any known group
-        grouped_features = set()
-        for _, feats in FEATURE_GROUPS:
-            grouped_features.update(feats)
-        unknown_active = sort_features(
-            [f for f in active_feature_set if f not in grouped_features]
+        self._other_card = self._build_feature_group("Other", unknown_active)
+        if self._other_card is None:
+            return
+
+        # Insert before the trailing stretch in whichever column has fewer
+        # widgets right now.
+        left_n = self._feat_left_layout.count()
+        right_n = self._feat_right_layout.count()
+        target = (
+            self._feat_left_layout
+            if left_n <= right_n
+            else self._feat_right_layout
         )
-
-        # Build cards and count active features per group
-        all_groups = list(FEATURE_GROUPS)
-        if unknown_active:
-            all_groups.append(("Other", unknown_active))
-
-        cards: list = []
-        for title, feats_list in all_groups:
-            card = self._build_feature_group(title, feats_list)
-            if card is not None:
-                active_count = sum(
-                    1 for f in feats_list if f in self._feat_rows
-                )
-                cards.append((card, active_count))
-
-        # Distribute cards to balance total feature count per column
-        left_count = 0
-        right_count = 0
-        for card, count in cards:
-            if left_count <= right_count:
-                self._feat_left_layout.addWidget(card)
-                left_count += count
-            else:
-                self._feat_right_layout.addWidget(card)
-                right_count += count
-
-        self._feat_left_layout.addStretch()
-        self._feat_right_layout.addStretch()
+        target.insertWidget(target.count() - 1, self._other_card)
 
     # ------------------------------------------------------------------
     # Mode management
