@@ -463,14 +463,15 @@ class SegmentGridWidget(QWidget):
         self._do_relayout()
 
     def set_headers_active(self, active: bool):
-        # Dedup: skip re-styling N headers if state hasn't changed.
-        if getattr(self, "_headers_active_state", None) == active:
-            return
-        self._headers_active_state = active
+        # No dedup: every call must re-style. ``set_groups`` recreates the
+        # header labels on each inventory load, and a stale cache here
+        # would leave fresh headers stuck at their initial muted color
+        # when the active state hadn't changed across the reload.
         color = C["text"] if active else C["text_dim"]
         for hdr in self._headers:
             hdr.setStyleSheet(
-                f"color: {color}; letter-spacing: 1px; padding: 4px 2px 1px 2px;"
+                f"color: {color}; letter-spacing: 1px;"
+                " padding: 4px 2px 1px 2px;"
             )
 
     def resizeEvent(self, a0):
