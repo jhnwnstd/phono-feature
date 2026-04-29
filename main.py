@@ -26,9 +26,7 @@ from PyQt6.QtWidgets import QApplication
 
 
 def _argv_requests_qt_platform(argv: list[str]) -> bool:
-    return any(
-        arg == "-platform" or arg.startswith("-platform=") for arg in argv
-    )
+    return any(arg == "-platform" or arg.startswith("-platform=") for arg in argv)
 
 
 def _auto_qt_platform() -> str | None:
@@ -56,9 +54,7 @@ def _auto_qt_platform() -> str | None:
 def main() -> int:
     argv = sys.argv[:]
 
-    if not os.environ.get(
-        "QT_QPA_PLATFORM"
-    ) and not _argv_requests_qt_platform(argv):
+    if not os.environ.get("QT_QPA_PLATFORM") and not _argv_requests_qt_platform(argv):
         platform = _auto_qt_platform()
         if platform is not None:
             argv[1:1] = ["-platform", platform]

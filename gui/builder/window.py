@@ -5,7 +5,6 @@ InventoryBuilder — main grid editor window for creating/editing inventories.
 
 import json
 import os
-from typing import Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -38,17 +37,17 @@ from gui.palette import C
 class InventoryBuilder(QMainWindow):
     """Grid editor for creating phonological feature inventories."""
 
-    def __init__(self, parent=None, load_path: Optional[str] = None):
+    def __init__(self, parent=None, load_path: str | None = None):
         super().__init__(parent)
         self.setWindowTitle("Inventory Builder — A Language Doodad")
         self.setMinimumSize(800, 500)
         self._segments: list = []
         self._features: list = []
         self._inv_name: str = "Untitled Inventory"
-        self._current_path: Optional[str] = None
+        self._current_path: str | None = None
         self._dirty: bool = False
-        self._selected_remove_col: Optional[int] = None
-        self._selected_remove_row: Optional[int] = None
+        self._selected_remove_col: int | None = None
+        self._selected_remove_row: int | None = None
 
         self._build_ui()
 
@@ -72,7 +71,7 @@ class InventoryBuilder(QMainWindow):
     # UI construction
     # ------------------------------------------------------------------
 
-    def _build_ui(self):
+    def _build_ui(self) -> None:
         toolbar = QToolBar()
         toolbar.setMovable(False)
         toolbar.setStyleSheet(
@@ -233,15 +232,13 @@ class InventoryBuilder(QMainWindow):
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
         )
         self.setStatusBar(self._status)
-        self._status.showMessage(
-            "Create a new inventory or open an existing one."
-        )
+        self._status.showMessage("Create a new inventory or open an existing one.")
 
     # ------------------------------------------------------------------
     # Setup dialog
     # ------------------------------------------------------------------
 
-    def _show_setup_dialog(self):
+    def _show_setup_dialog(self) -> None:
         if not self._check_unsaved():
             return
         dlg = InputDialog(self)
@@ -254,14 +251,10 @@ class InventoryBuilder(QMainWindow):
         name = dlg.get_name()
 
         if not segments:
-            show_warning(
-                self, "No segments", "Please enter at least one segment."
-            )
+            show_warning(self, "No segments", "Please enter at least one segment.")
             return
         if not features:
-            show_warning(
-                self, "No features", "Please enter at least one feature."
-            )
+            show_warning(self, "No features", "Please enter at least one feature.")
             return
 
         # Deduplicate segments and features (preserving order)
@@ -286,7 +279,7 @@ class InventoryBuilder(QMainWindow):
     # Table management
     # ------------------------------------------------------------------
 
-    def _rebuild_table(self):
+    def _rebuild_table(self) -> None:
         """Build the table: rows=features, cols=segments."""
         self._table.clear()
         self._table.setRowCount(len(self._features))
@@ -299,9 +292,7 @@ class InventoryBuilder(QMainWindow):
         v_header = self._table.verticalHeader()
         if v_header:
             v_header.setFont(QFont("Noto Sans", 9))
-            v_header.setSectionResizeMode(
-                QHeaderView.ResizeMode.ResizeToContents
-            )
+            v_header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
             v_header.setMinimumSectionSize(24)
             v_header.sectionClicked.connect(self._on_row_header_clicked)
 
@@ -318,13 +309,16 @@ class InventoryBuilder(QMainWindow):
                 self._table.setItem(r, c, make_cell("0"))
 
     def eventFilter(self, obj, event):
-        if obj is self._table and event.type() == event.Type.KeyPress:
-            if event.key() == Qt.Key.Key_Space:
-                row = self._table.currentRow()
-                col = self._table.currentColumn()
-                if row >= 0 and col >= 0:
-                    self._on_cell_clicked(row, col)
-                    return True
+        if (
+            obj is self._table
+            and event.type() == event.Type.KeyPress
+            and event.key() == Qt.Key.Key_Space
+        ):
+            row = self._table.currentRow()
+            col = self._table.currentColumn()
+            if row >= 0 and col >= 0:
+                self._on_cell_clicked(row, col)
+                return True
         return super().eventFilter(obj, event)
 
     # ------------------------------------------------------------------
@@ -351,7 +345,7 @@ class InventoryBuilder(QMainWindow):
         self._rm_seg_btn.setEnabled(False)
         self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
 
-    def _disable_remove_btns(self):
+    def _disable_remove_btns(self) -> None:
         self._selected_remove_col = None
         self._selected_remove_row = None
         self._rm_seg_btn.setEnabled(False)
@@ -374,7 +368,7 @@ class InventoryBuilder(QMainWindow):
     # Add / remove segments and features
     # ------------------------------------------------------------------
 
-    def _add_segment(self):
+    def _add_segment(self) -> None:
         """Prompt for a new segment and add a column."""
         from PyQt6.QtWidgets import QInputDialog
 
@@ -400,7 +394,7 @@ class InventoryBuilder(QMainWindow):
         self._dirty = True
         self._status.showMessage(f"Added segment '{seg}'.")
 
-    def _add_feature(self):
+    def _add_feature(self) -> None:
         """Prompt for a new feature and add a row."""
         from PyQt6.QtWidgets import QInputDialog
 
@@ -426,15 +420,13 @@ class InventoryBuilder(QMainWindow):
         self._dirty = True
         self._status.showMessage(f"Added feature '{feat}'.")
 
-    def _remove_segment(self):
+    def _remove_segment(self) -> None:
         """Remove the header-selected column (segment)."""
         col = self._selected_remove_col
         if col is None or col < 0 or col >= len(self._segments):
             return
         seg = self._segments[col]
-        reply = ask_question(
-            self, "Remove segment", f"Remove segment '{seg}'?"
-        )
+        reply = ask_question(self, "Remove segment", f"Remove segment '{seg}'?")
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._segments.pop(col)
@@ -443,15 +435,13 @@ class InventoryBuilder(QMainWindow):
         self._disable_remove_btns()
         self._status.showMessage(f"Removed segment '{seg}'.")
 
-    def _remove_feature(self):
+    def _remove_feature(self) -> None:
         """Remove the header-selected row (feature)."""
         row = self._selected_remove_row
         if row is None or row < 0 or row >= len(self._features):
             return
         feat = self._features[row]
-        reply = ask_question(
-            self, "Remove feature", f"Remove feature '{feat}'?"
-        )
+        reply = ask_question(self, "Remove feature", f"Remove feature '{feat}'?")
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._features.pop(row)
@@ -489,19 +479,17 @@ class InventoryBuilder(QMainWindow):
             "segments": segments,
         }
 
-    def _save(self):
+    def _save(self) -> None:
         if self._current_path:
             self._write_json(self._current_path)
         else:
             self._save_as()
 
-    def _save_as(self):
+    def _save_as(self) -> None:
         config_dir = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "config")
         )
-        dlg = QFileDialog(
-            self, "Save Inventory", config_dir, "JSON Files (*.json)"
-        )
+        dlg = QFileDialog(self, "Save Inventory", config_dir, "JSON Files (*.json)")
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         center_on_parent(dlg, self)
         if not dlg.exec():
@@ -522,15 +510,13 @@ class InventoryBuilder(QMainWindow):
         self._dirty = False
         self._status.showMessage(f"Saved to {os.path.basename(path)}")
 
-    def _open_file(self):
+    def _open_file(self) -> None:
         if not self._check_unsaved():
             return
         config_dir = os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "config")
         )
-        dlg = QFileDialog(
-            self, "Open Inventory", config_dir, "JSON Files (*.json)"
-        )
+        dlg = QFileDialog(self, "Open Inventory", config_dir, "JSON Files (*.json)")
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
         dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
         center_on_parent(dlg, self)
@@ -543,7 +529,7 @@ class InventoryBuilder(QMainWindow):
     def _load_existing(self, path: str):
         """Load an existing JSON inventory into the grid for editing."""
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             show_warning(self, "Load error", str(e))
@@ -569,10 +555,8 @@ class InventoryBuilder(QMainWindow):
         self._segments = list(segments_dict.keys())
 
         # Dedup (preserving order)
-        seen_s: set = set()
-        self._segments = [s for s in self._segments if not (s in seen_s or seen_s.add(s))]  # type: ignore[func-returns-value]
-        seen_f: set = set()
-        self._features = [f for f in self._features if not (f in seen_f or seen_f.add(f))]  # type: ignore[func-returns-value]
+        self._segments = list(dict.fromkeys(self._segments))
+        self._features = list(dict.fromkeys(self._features))
         self._current_path = path
 
         self._rebuild_table()
@@ -620,7 +604,7 @@ class InventoryBuilder(QMainWindow):
         else:
             event.ignore()
 
-    def _update_title(self):
+    def _update_title(self) -> None:
         name = self._inv_name or "Untitled"
         if self._current_path:
             fname = os.path.basename(self._current_path)

@@ -13,21 +13,21 @@ from engine.feature_engine import FeatureEngine
 from engine.geometry import GeometryAnalyzer
 
 
-def print_section(title):
+def print_section(title: str) -> None:
     """Print a formatted section header."""
     print(f"\n{'=' * 60}")
     print(f"  {title}")
     print("=" * 60)
 
 
-def test_basic_operations():
+def test_basic_operations() -> FeatureEngine:
     """Test basic engine operations."""
     print_section("Basic Engine Operations")
 
     # Load inventory
     engine = FeatureEngine()
-    print("\nLoading Hayes English inventory...")
-    engine.load_inventory("config/hayes_english.json")
+    print("\nLoading Hayes inventory...")
+    engine.load_inventory("config/hayes_features.json")
     print(f"✓ Loaded: {engine.metadata['name']}")
     print(f"  Segments: {len(engine.segments)}")
     print(f"  Features: {len(engine.features)}")
@@ -44,12 +44,14 @@ def test_basic_operations():
     print(f"   Found: {', '.join(voiced_stops)}")
 
     # Compute natural class
-    print("\n3. Natural class for [b, d, ɡ]:")
-    bundle, is_minimal = engine.compute_natural_class(["b", "d", "ɡ"])
-    print("   Characterizing features:")
-    for feat, val in sorted(bundle.items()):
-        print(f"     {feat:15s} = {val}")
-    print(f"   Minimal bundle: {'Yes' if is_minimal else 'No'}")
+    print("\n3. Natural class for [b, d, ɡ]:")  # noqa: RUF001 — IPA voiced velar
+    bundle = engine.compute_natural_class(["b", "d", "ɡ"])  # noqa: RUF001
+    if bundle:
+        print("   Characterizing features:")
+        for feat, val in sorted(bundle.items()):
+            print(f"     {feat:15s} = {val}")
+    else:
+        print("   (no minimal bundle found)")
 
     # Calculate distances
     print("\n4. Phonological distances:")
@@ -75,7 +77,7 @@ def test_basic_operations():
     return engine
 
 
-def test_geometry_analysis(engine):
+def test_geometry_analysis(engine: FeatureEngine) -> None:
     """Test feature geometry inference."""
     print_section("Feature Geometry Analysis")
 
@@ -91,7 +93,8 @@ def test_geometry_analysis(engine):
 
     print(f"\nFound {len(dependencies)} feature dependencies:")
     print(
-        f"\n{'Child Feature':<20} {'Parent Feature':<20} {'Coverage':<10} {'Confidence':<12}"
+        f"\n{'Child Feature':<20} {'Parent Feature':<20} "
+        f"{'Coverage':<10} {'Confidence':<12}"
     )
     print("-" * 70)
 
@@ -111,20 +114,18 @@ def test_geometry_analysis(engine):
         print(f"\n\nHigh-confidence dependencies ({len(high_conf)}):")
         for dep in high_conf:
             print(f"  • [{dep['child']}] depends on [{dep['parent']}]")
-            print(
-                f"    Coverage: {dep['coverage']:.2%}, p-value: {dep['p_value']:.4f}"
-            )
+            print(f"    Coverage: {dep['coverage']:.2%}, p-value: {dep['p_value']:.4f}")
 
 
-def test_natural_class_examples():
+def test_natural_class_examples() -> None:
     """Test various natural class computations."""
     print_section("Natural Class Examples")
 
     engine = FeatureEngine()
-    engine.load_inventory("config/hayes_english.json")
+    engine.load_inventory("config/hayes_features.json")
 
-    examples = [
-        (["b", "d", "ɡ"], "Voiced stops"),
+    examples: list[tuple[list[str], str]] = [
+        (["b", "d", "ɡ"], "Voiced stops"),  # noqa: RUF001 — IPA voiced velar
         (["p", "t", "k"], "Voiceless stops"),
         (["m", "n", "ŋ"], "Nasals"),
         (["f", "v", "s", "z"], "Fricatives (subset)"),
@@ -133,12 +134,10 @@ def test_natural_class_examples():
 
     for segments, description in examples:
         print(f"\n{description}: {', '.join(segments)}")
-        bundle, is_minimal = engine.compute_natural_class(segments)
+        bundle = engine.compute_natural_class(segments)
 
         if bundle:
-            features_str = ", ".join(
-                f"{k}:{v}" for k, v in sorted(bundle.items())
-            )
+            features_str = ", ".join(f"{k}:{v}" for k, v in sorted(bundle.items()))
             print(f"  Features: {features_str}")
         else:
             print("  Features: (none required)")
@@ -153,7 +152,7 @@ def test_natural_class_examples():
                 print(f"  ⚠ Also includes: {', '.join(extra)}")
 
 
-def main():
+def main() -> int:
     """Run all tests."""
     print("\n" + "=" * 60)
     print("  PHONOLOGY ENGINE TEST SUITE")
@@ -185,4 +184,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    raise SystemExit(main())

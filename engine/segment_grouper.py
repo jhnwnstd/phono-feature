@@ -26,14 +26,13 @@ Heuristic notes:
 """
 
 from collections import defaultdict
-from typing import Dict, FrozenSet, List, Set, Tuple
 
 # ---------------------------------------------------------------------------
 # Primary groups — broad manner classes for initial assignment.
 # Only uses the most universal, stable features.
 # ---------------------------------------------------------------------------
 
-PRIMARY_GROUPS: List[Tuple[str, Dict[str, str]]] = [
+PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
     ("Clicks", {"click": "+"}),
     (
         "Affricates",
@@ -91,7 +90,7 @@ PRIMARY_GROUPS: List[Tuple[str, Dict[str, str]]] = [
 ]
 
 # Minimum positive feature matches required for membership.
-_MIN_POSITIVE: Dict[str, int] = {
+_MIN_POSITIVE: dict[str, int] = {
     "Plosives": 2,
     "Fricatives": 2,
     "Affricates": 2,
@@ -106,7 +105,7 @@ _MIN_POSITIVE: Dict[str, int] = {
 # AND the parent retains at least one member.
 # ---------------------------------------------------------------------------
 
-DERIVED_BREAKOUTS: List[Tuple[str, str, Dict[str, str]]] = [
+DERIVED_BREAKOUTS: list[tuple[str, str, dict[str, str]]] = [
     ("Sibilants", "Fricatives", {"strident": "+", "coronal": "+"}),
     ("Lateral Fricatives", "Fricatives", {"lateral": "+"}),
     ("Lateral Affricates", "Affricates", {"lateral": "+"}),
@@ -117,7 +116,7 @@ DERIVED_BREAKOUTS: List[Tuple[str, str, Dict[str, str]]] = [
 # setdefault is used so the parent is recreated if it was deleted.
 # ---------------------------------------------------------------------------
 
-_MERGE_PARENT: Dict[str, str] = {
+_MERGE_PARENT: dict[str, str] = {
     "Lateral Affricates": "Affricates",
     "Sibilants": "Fricatives",
     "Lateral Fricatives": "Fricatives",
@@ -127,13 +126,13 @@ _MERGE_PARENT: Dict[str, str] = {
 
 # Groups exempt from upward merging.  Laryngeal rescue (Step 5) can still
 # peel individual segments out.
-_FROZEN_GROUPS: Set[str] = {"Plosives"}
+_FROZEN_GROUPS: set[str] = {"Plosives"}
 
 # ---------------------------------------------------------------------------
 # Display order: manner-first (plosives → fricatives → affricates)
 # ---------------------------------------------------------------------------
 
-DISPLAY_ORDER: List[str] = [
+DISPLAY_ORDER: list[str] = [
     "Clicks",
     "Plosives",
     "Fricatives",
@@ -158,15 +157,13 @@ DISPLAY_ORDER: List[str] = [
 # Relabeling: frozenset of origin names → derived display label
 # ---------------------------------------------------------------------------
 
-_RELABEL_PATTERNS: Dict[FrozenSet[str], str] = {
+_RELABEL_PATTERNS: dict[frozenset[str], str] = {
     frozenset({"Trills", "Taps & Flaps"}): "Vibrants",
     frozenset({"Trills", "Central Approximants"}): "Rhotics",
     frozenset({"Taps & Flaps", "Central Approximants"}): "Rhotics",
     frozenset({"Trills", "Taps & Flaps", "Central Approximants"}): "Rhotics",
     frozenset({"Lateral Approximants", "Central Approximants"}): "Liquids",
-    frozenset(
-        {"Lateral Approximants", "Central Approximants", "Trills"}
-    ): "Liquids",
+    frozenset({"Lateral Approximants", "Central Approximants", "Trills"}): "Liquids",
     frozenset(
         {"Lateral Approximants", "Central Approximants", "Taps & Flaps"}
     ): "Liquids",
@@ -183,7 +180,7 @@ _RELABEL_PATTERNS: Dict[FrozenSet[str], str] = {
     frozenset({"Lateral Approximants", "Trills"}): "Liquids",
 }
 
-_DERIVED_MERGES: List[Tuple[FrozenSet[str], str]] = [
+_DERIVED_MERGES: list[tuple[frozenset[str], str]] = [
     (frozenset({"Vibrants", "Liquids"}), "Liquids"),
     (frozenset({"Vibrants", "Lateral Approximants"}), "Liquids"),
     (frozenset({"Rhotics", "Lateral Approximants"}), "Liquids"),
@@ -202,11 +199,10 @@ def _normalize_key(key: str) -> str:
     k = k.replace("delayed_release", "delrel")
     k = k.replace("s.g.", "spreadgl")
     k = k.replace("c.g.", "constrgl")
-    k = k.replace(".", "").replace("_", "").replace(" ", "")
-    return k
+    return k.replace(".", "").replace("_", "").replace(" ", "")
 
 
-def _normalize_feats(feat_dict: Dict[str, str]) -> Dict[str, str]:
+def _normalize_feats(feat_dict: dict[str, str]) -> dict[str, str]:
     return {_normalize_key(k): v for k, v in feat_dict.items()}
 
 
@@ -214,9 +210,9 @@ def _normalize_feats(feat_dict: Dict[str, str]) -> Dict[str, str]:
 # IPA place ordering (left → right on the IPA chart)
 # ---------------------------------------------------------------------------
 
-_VAL_ORD: Dict[str, int] = {"-": 0, "+": 1, "0": 2}
+_VAL_ORD: dict[str, int] = {"-": 0, "+": 1, "0": 2}
 
-_SORT_KEYS: List[Tuple[str, Dict[str, int]]] = [
+_SORT_KEYS: list[tuple[str, dict[str, int]]] = [
     ("sonorant", _VAL_ORD),
     ("lateral", _VAL_ORD),
     ("strident", _VAL_ORD),
@@ -237,7 +233,7 @@ _SORT_KEYS: List[Tuple[str, Dict[str, int]]] = [
 ]
 
 
-def _segment_sort_key(feats: Dict[str, str]) -> tuple:
+def _segment_sort_key(feats: dict[str, str]) -> tuple:
     """Full feature-based sort key for a segment."""
     key: list = [_ipa_place(feats)]
     for feat, ordering in _SORT_KEYS:
@@ -245,15 +241,12 @@ def _segment_sort_key(feats: Dict[str, str]) -> tuple:
     return tuple(key)
 
 
-def _ipa_place(feats: Dict[str, str]) -> int:
+def _ipa_place(feats: dict[str, str]) -> int:
     """Return 0-11 index for IPA place of articulation."""
     if feats.get("constrgl", "0") == "+":
         return 10  # glottal
 
-    if (
-        feats.get("constrpharynx", "0") == "+"
-        or feats.get("pharyngeal", "0") == "+"
-    ):
+    if feats.get("constrpharynx", "0") == "+" or feats.get("pharyngeal", "0") == "+":
         return 9  # pharyngeal
 
     dor = feats.get("dorsal", "0")
@@ -280,10 +273,7 @@ def _ipa_place(feats: Dict[str, str]) -> int:
     if lab == "+":
         return 1 if feats.get("labiodental", "0") == "+" else 0
 
-    if (
-        feats.get("consonantal", "0") == "-"
-        and feats.get("syllabic", "0") == "-"
-    ):
+    if feats.get("consonantal", "0") == "-" and feats.get("syllabic", "0") == "-":
         return 10  # h, ɦ
 
     return 11  # vowels / unclassified
@@ -308,8 +298,8 @@ def _should_break_out(subgroup_size: int, inventory_size: int) -> bool:
 
 
 def group_segments(
-    inventory: Dict[str, Dict[str, str]],
-) -> Dict[str, List[str]]:
+    inventory: dict[str, dict[str, str]],
+) -> dict[str, list[str]]:
     """Assign every segment to a phonological display group.
 
     Returns {group_label: [symbol, ...]} in display order.
@@ -317,12 +307,12 @@ def group_segments(
     if not inventory:
         return {}
 
-    norm: Dict[str, Dict[str, str]] = {
+    norm: dict[str, dict[str, str]] = {
         sym: _normalize_feats(feats) for sym, feats in inventory.items()
     }
 
     # Step 0: Detect features active in this inventory.
-    active_features: Set[str] = set()
+    active_features: set[str] = set()
     for feats in norm.values():
         for k, v in feats.items():
             if v != "0":
@@ -330,9 +320,7 @@ def group_segments(
 
     # -- Helpers --
 
-    def _positive_matches(
-        seg_feats: Dict[str, str], spec: Dict[str, str]
-    ) -> int:
+    def _positive_matches(seg_feats: dict[str, str], spec: dict[str, str]) -> int:
         """Count features where the segment has an explicit matching value."""
         return sum(
             1
@@ -343,7 +331,7 @@ def group_segments(
         )
 
     def is_member(
-        group_name: str, seg_feats: Dict[str, str], spec: Dict[str, str]
+        group_name: str, seg_feats: dict[str, str], spec: dict[str, str]
     ) -> bool:
         """Test membership with minimum-evidence threshold."""
         relevant = [f for f in spec if f in active_features]
@@ -359,7 +347,7 @@ def group_segments(
             matched += 1
         return matched >= _MIN_POSITIVE.get(group_name, 1)
 
-    def best_primary(seg_feats: Dict[str, str]) -> str:
+    def best_primary(seg_feats: dict[str, str]) -> str:
         """Find the best primary group by positive evidence, then specificity.
 
         Clicks are special-cased: click:+ always wins regardless of how
@@ -382,7 +370,7 @@ def group_segments(
         matches.sort(key=lambda x: (-x[1], -x[2]))
         return matches[0][0]
 
-    def fallback_assignment(seg_feats: Dict[str, str]) -> str:
+    def fallback_assignment(seg_feats: dict[str, str]) -> str:
         """Best-fit group by fewest contradictions, then most matches.
 
         On equal contradiction and match counts, the earlier group in
@@ -420,7 +408,7 @@ def group_segments(
     # ==================================================================
     # Step 1: Assign to broad manner classes only.
     # ==================================================================
-    assignment: Dict[str, List[str]] = defaultdict(list)
+    assignment: dict[str, list[str]] = defaultdict(list)
 
     for sym, feats in norm.items():
         group = best_primary(feats)
@@ -470,19 +458,18 @@ def group_segments(
         if len(present) < 2:
             continue
         if any(
-            not _should_merge_up(len(assignment[g]), len(inventory))
-            for g in present
+            not _should_merge_up(len(assignment[g]), len(inventory)) for g in present
         ):
             continue
         if any(g in _FROZEN_GROUPS for g in present):
             continue
-        merged: List[str] = []
+        merged: list[str] = []
         for g in present:
             merged.extend(assignment.pop(g))
         assignment.setdefault(new_label, []).extend(merged)
 
     # 3b: Relabel groups whose composition matches a known class.
-    initial_group: Dict[str, str] = {}
+    initial_group: dict[str, str] = {}
     for gname, members in assignment.items():
         for sym in members:
             initial_group[sym] = gname
@@ -506,8 +493,7 @@ def group_segments(
         if any(g in _FROZEN_GROUPS for g in present):
             continue
         if not any(
-            _should_merge_up(len(assignment[g]), len(inventory))
-            for g in present
+            _should_merge_up(len(assignment[g]), len(inventory)) for g in present
         ):
             continue
         merged = []
@@ -529,9 +515,7 @@ def group_segments(
                 continue
             parent = _MERGE_PARENT.get(gname)
             if parent is not None:
-                assignment.setdefault(parent, []).extend(
-                    assignment.pop(gname)
-                )
+                assignment.setdefault(parent, []).extend(assignment.pop(gname))
                 changed = True
 
     # ==================================================================
@@ -547,28 +531,20 @@ def group_segments(
         "constrpharynx",
     }
 
-    def _is_laryngeal_candidate(feats: Dict[str, str]) -> bool:
-        has_laryngeal = any(
-            feats.get(f, "0") == "+" for f in _LARYNGEAL_FEATURES
-        )
-        has_place = any(
-            feats.get(f, "0") == "+" for f in _PLACE_FEATURES
-        )
+    def _is_laryngeal_candidate(feats: dict[str, str]) -> bool:
+        has_laryngeal = any(feats.get(f, "0") == "+" for f in _LARYNGEAL_FEATURES)
+        has_place = any(feats.get(f, "0") == "+" for f in _PLACE_FEATURES)
         is_vowel = feats.get("syllabic", "0") == "+"
         is_click = feats.get("click", "0") == "+"
-        return (
-            has_laryngeal and not has_place and not is_vowel and not is_click
-        )
+        return has_laryngeal and not has_place and not is_vowel and not is_click
 
     if _LARYNGEAL_FEATURES & active_features:
-        laryngeal_segs: List[str] = []
+        laryngeal_segs: list[str] = []
         for gname in list(assignment.keys()):
             if gname == "Laryngeals":
                 continue
             peeled = [
-                sym
-                for sym in assignment[gname]
-                if _is_laryngeal_candidate(norm[sym])
+                sym for sym in assignment[gname] if _is_laryngeal_candidate(norm[sym])
             ]
             if peeled:
                 for sym in peeled:

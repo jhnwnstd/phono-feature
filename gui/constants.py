@@ -125,7 +125,7 @@ FEATURE_GROUPS: list = [
 
 
 def sort_features(features: list) -> list:
-    """Return features in canonical phonological order; unknowns trail in original order."""
+    """Return features in canonical order; unknowns trail in original order."""
     n = len(FEATURE_ORDER)
     return sorted(features, key=lambda f: _FEATURE_ORDER_INDEX.get(f, n))
 

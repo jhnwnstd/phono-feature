@@ -12,7 +12,6 @@ All phonological logic is independent of the GUI and can be used in scripts.
 """
 
 import json
-from typing import Dict, List, Optional, Set, Tuple, Union
 
 _VALID_VALUES = {"+", "-", "0"}
 
@@ -29,11 +28,11 @@ class FeatureEngine:
     - Calculating phonological distances
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize an empty feature engine."""
-        self.metadata = {}
-        self.features = []
-        self.segments = {}
+        self.metadata: dict = {}
+        self.features: list[str] = []
+        self.segments: dict[str, dict[str, str]] = {}
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -57,10 +56,10 @@ class FeatureEngine:
 
     def _find_segments_unsorted(
         self,
-        feature_spec: Dict[str, str],
+        feature_spec: dict[str, str],
         *,
         underspec_compatible: bool = False,
-    ) -> List[str]:
+    ) -> list[str]:
         """Match segments against a feature spec without sorting.
 
         If underspec_compatible is True, underspecified ("0") in a segment
@@ -72,13 +71,10 @@ class FeatureEngine:
         for segment, features in self.segments.items():
             if match is not None:
                 ok = all(
-                    match(features.get(f, "0"), v)
-                    for f, v in feature_spec.items()
+                    match(features.get(f, "0"), v) for f, v in feature_spec.items()
                 )
             else:
-                ok = all(
-                    features.get(f, "0") == v for f, v in feature_spec.items()
-                )
+                ok = all(features.get(f, "0") == v for f, v in feature_spec.items())
             if ok:
                 matching.append(segment)
         return matching
@@ -98,13 +94,11 @@ class FeatureEngine:
             FileNotFoundError: If file doesn't exist
             ValueError: If JSON structure or values are invalid
         """
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
 
         if "features" not in data or "segments" not in data:
-            raise ValueError(
-                "Inventory must contain 'features' and 'segments' fields"
-            )
+            raise ValueError("Inventory must contain 'features' and 'segments' fields")
         if not isinstance(data["features"], list) or not all(
             isinstance(f, str) for f in data["features"]
         ):
@@ -131,7 +125,7 @@ class FeatureEngine:
         self.features = data["features"]
         self.segments = data["segments"]
 
-    def get_segment_features(self, segment: str) -> Dict[str, str]:
+    def get_segment_features(self, segment: str) -> dict[str, str]:
         """
         Get the complete feature specification for a segment.
 
@@ -168,10 +162,10 @@ class FeatureEngine:
 
     def find_segments(
         self,
-        feature_spec: Dict[str, str],
+        feature_spec: dict[str, str],
         *,
         underspec_compatible: bool = False,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Find all segments matching a feature specification.
 
@@ -194,22 +188,19 @@ class FeatureEngine:
         for feature, value in feature_spec.items():
             self._validate_feature(feature)
             if value not in _VALID_VALUES:
-                raise ValueError(
-                    f"Invalid feature value '{value}' for '{feature}'"
-                )
+                raise ValueError(f"Invalid feature value '{value}' for '{feature}'")
         return sorted(
             self._find_segments_unsorted(
                 feature_spec, underspec_compatible=underspec_compatible
             )
         )
 
-    def find_all_minimal_bundles(
-        self, segments: List[str]
-    ) -> List[Dict[str, str]]:
+    def find_all_minimal_bundles(self, segments: list[str]) -> list[dict[str, str]]:
         """
         Find every minimal feature bundle that uniquely characterizes a segment set.
 
-        A bundle B characterizes S when find_segments(B, underspec_compatible=True) == S.
+        A bundle B characterizes S when
+        ``find_segments(B, underspec_compatible=True) == S``.
         This method returns ALL bundles of the smallest possible size,
         not just one greedy solution.
 
@@ -244,7 +235,7 @@ class FeatureEngine:
 
         # Features whose non-zero values agree across every target segment.
         # Underspecified ("0") is compatible with any value.
-        candidates: Dict[str, str] = {}
+        candidates: dict[str, str] = {}
         for feature in self.features:
             values = {self.segments[seg].get(feature, "0") for seg in segments}
             specified = values - {"0"}
@@ -264,17 +255,15 @@ class FeatureEngine:
         # A candidate excludes an outside segment when the segment has a
         # non-zero value that differs from the candidate value.
         # If the outside segment is underspecified (0), it's compatible.
-        excluders: List[Set[str]] = []
+        excluders: list[set[str]] = []
         for seg in outside:
-            exc: Set[str] = {
+            exc: set[str] = {
                 feat
                 for feat, val in candidates.items()
                 if not self._feat_match(self.segments[seg].get(feat, "0"), val)
             }
             if not exc:
-                return (
-                    []
-                )  # This segment cannot be excluded → not a natural class
+                return []  # This segment cannot be excluded → not a natural class
             excluders.append(exc)
 
         # Sort candidates by descending coverage (hits the most outside segments first)
@@ -285,12 +274,10 @@ class FeatureEngine:
         )
         n = len(candidate_list)
 
-        results: List[Dict[str, str]] = []
-        best_size: Optional[int] = None
+        results: list[dict[str, str]] = []
+        best_size: int | None = None
 
-        def backtrack(
-            idx: int, chosen: List[str], chosen_set: Set[str]
-        ) -> None:
+        def backtrack(idx: int, chosen: list[str], chosen_set: set[str]) -> None:
             nonlocal best_size
 
             # All outside segments are excluded — record solution
@@ -312,28 +299,25 @@ class FeatureEngine:
 
             # Prune: remaining candidates cannot cover every uncovered outside segment
             remaining = set(candidate_list[idx:])
-            if not all(
-                (exc & chosen_set) or (exc & remaining) for exc in excluders
-            ):
+            if not all((exc & chosen_set) or (exc & remaining) for exc in excluders):
                 return
 
             f = candidate_list[idx]
 
             # Branch A: include f
-            backtrack(idx + 1, chosen + [f], chosen_set | {f})
+            backtrack(idx + 1, [*chosen, f], chosen_set | {f})
 
             # Branch B: exclude f — only if remaining can still cover everything
             remaining_without = set(candidate_list[idx + 1 :])
             if all(
-                (exc & chosen_set) or (exc & remaining_without)
-                for exc in excluders
+                (exc & chosen_set) or (exc & remaining_without) for exc in excluders
             ):
                 backtrack(idx + 1, chosen, chosen_set)
 
         backtrack(0, [], set())
         return results
 
-    def compute_natural_class(self, segments: List[str]) -> Dict[str, str]:
+    def compute_natural_class(self, segments: list[str]) -> dict[str, str]:
         """
         Return one minimal feature bundle characterising the segment set.
 
@@ -378,7 +362,7 @@ class FeatureEngine:
                     return True
         return False
 
-    def get_contrastive_features(self) -> List[str]:
+    def get_contrastive_features(self) -> list[str]:
         """
         Get list of all contrastive features in the inventory.
 
@@ -387,7 +371,7 @@ class FeatureEngine:
         """
         return [f for f in self.features if self.is_contrastive(f)]
 
-    def common_features(self, segments: List[str]) -> Dict[str, str]:
+    def common_features(self, segments: list[str]) -> dict[str, str]:
         """
         Get features with a shared +/- value across all given segments.
 
@@ -414,8 +398,8 @@ class FeatureEngine:
         return result
 
     def is_natural_class(
-        self, segments: List[str]
-    ) -> Tuple[bool, List[Dict[str, str]]]:
+        self, segments: list[str]
+    ) -> tuple[bool, list[dict[str, str]]]:
         """
         Check whether a set of segments forms a natural class in this inventory.
 
@@ -456,9 +440,7 @@ class FeatureEngine:
         f2 = self.segments[seg2]
         return sum(f1.get(f, "0") != f2.get(f, "0") for f in self.features)
 
-    def find_nearest_segments(
-        self, segment: str, n: int = 5
-    ) -> List[Tuple[str, int]]:
+    def find_nearest_segments(self, segment: str, n: int = 5) -> list[tuple[str, int]]:
         """
         Find the nearest segments to a given segment by feature distance.
 
@@ -481,7 +463,7 @@ class FeatureEngine:
         distances.sort(key=lambda x: (x[1], x[0]))
         return distances[:n]
 
-    def get_feature_distribution(self, feature: str) -> Dict[str, int]:
+    def get_feature_distribution(self, feature: str) -> dict[str, int]:
         """
         Get the distribution of values for a feature across the inventory.
 
@@ -495,12 +477,12 @@ class FeatureEngine:
             KeyError: If feature not in inventory
         """
         self._validate_feature(feature)
-        distribution: Dict[str, int] = {"+": 0, "-": 0, "0": 0}
+        distribution: dict[str, int] = {"+": 0, "-": 0, "0": 0}
         for segment in self.segments.values():
             distribution[segment.get(feature, "0")] += 1
         return distribution
 
-    def get_inventory_stats(self) -> Dict[str, Union[int, float, str]]:
+    def get_inventory_stats(self) -> dict[str, int | float | str]:
         """
         Get summary statistics about the loaded inventory.
 
@@ -512,7 +494,7 @@ class FeatureEngine:
             - contrastive_features: Number of contrastive features
             - avg_feature_distance: Average pairwise distance
         """
-        stats: Dict[str, Union[int, float, str]] = {
+        stats: dict[str, int | float | str] = {
             "name": self.metadata.get("name", "Unknown"),
             "segment_count": len(self.segments),
             "feature_count": len(self.features),
@@ -528,9 +510,7 @@ class FeatureEngine:
                 fi = seg_feats[i]
                 for j in range(i + 1, len(seg_feats)):
                     fj = seg_feats[j]
-                    total += sum(
-                        fi.get(f, "0") != fj.get(f, "0") for f in features
-                    )
+                    total += sum(fi.get(f, "0") != fj.get(f, "0") for f in features)
                     count += 1
             stats["avg_feature_distance"] = total / count
         else:

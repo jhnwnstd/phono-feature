@@ -4,6 +4,7 @@ Reusable UI widgets: SegmentButton, FeatureRow, AnalysisPanel, SegmentGridWidget
 """
 
 import math
+from typing import ClassVar
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -30,7 +31,7 @@ class SegmentButton(QPushButton):
     """Toggleable button for a single phonological segment."""
 
     # Pre-computed stylesheets — avoids f-string interpolation on every state change
-    _STYLES: dict = {
+    _STYLES: ClassVar[dict[str, str]] = {
         "selected": f"""
             QPushButton {{
                 background-color: {C["seg_selected"]};
@@ -124,8 +125,7 @@ class FeatureRow(QWidget):
     _ROW_CONTRASTIVE = f"background: {C['accent_light']}; border-radius: 6px;"
 
     _BADGE_NEUTRAL = (
-        f"background: {C['tag_gray']};"
-        f" color: {C['tag_gray_text']}; border-radius: 4px;"
+        f"background: {C['tag_gray']}; color: {C['tag_gray_text']}; border-radius: 4px;"
     )
     _NAME_DIM = f"color: {C['text_dim']};"
     _ROW_TRANSPARENT = "background: transparent; border-radius: 6px;"
@@ -278,7 +278,7 @@ class FeatureRow(QWidget):
     _NAME_ACTIVE = f"color: {C['text']};"
     _NAME_INACTIVE = f"color: {C['text_dim']};"
 
-    def reset(self):
+    def reset(self) -> None:
         self._current_value = ""
         self.plus_btn.setChecked(False)
         self.minus_btn.setChecked(False)
@@ -312,9 +312,7 @@ class AnalysisPanel(QWidget):
 
         self.title = QLabel("Analysis")
         self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-        self.title.setStyleSheet(
-            f"color: {C['text_dim']}; letter-spacing: 1px;"
-        )
+        self.title.setStyleSheet(f"color: {C['text_dim']}; letter-spacing: 1px;")
 
         self.content = QTextEdit()
         self.content.setReadOnly(True)
@@ -339,7 +337,7 @@ class AnalysisPanel(QWidget):
     def set_html(self, html: str):
         self.content.setHtml(html)
 
-    def clear(self):
+    def clear(self) -> None:
         self.content.clear()
 
 
@@ -366,18 +364,14 @@ class SegmentGridWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._groups: dict = {}  # manner -> [seg, ...]
-        self._buttons: dict = (
-            {}
-        )  # seg    -> SegmentButton  (owned by this widget)
+        self._buttons: dict = {}  # seg    -> SegmentButton  (owned by this widget)
         self._headers: list = []  # QLabel per manner group
         self._n_cols: int = 0  # column count currently in use
 
         self._grid = QGridLayout(self)
         self._grid.setSpacing(BTN_GAP)
         self._grid.setContentsMargins(0, 0, 0, 0)
-        self._grid.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
-        )
+        self._grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
         # Allow the widget to shrink freely — prevents feedback loop where
         # grid content sets a minimum width that blocks resize.
@@ -440,9 +434,7 @@ class SegmentGridWidget(QWidget):
 
     def _compute_n_cols(self) -> int:
         stride = BTN_W + BTN_GAP
-        max_possible = min(
-            max(1, (self.width() + BTN_GAP) // stride), self.MAX_COLS
-        )
+        max_possible = min(max(1, (self.width() + BTN_GAP) // stride), self.MAX_COLS)
         if not self._groups:
             return max_possible
         max_N = max(len(segs) for segs in self._groups.values())
@@ -450,7 +442,7 @@ class SegmentGridWidget(QWidget):
             return max_N
         return max_possible
 
-    def _do_relayout(self):
+    def _do_relayout(self) -> None:
         n_cols = self._compute_n_cols()
         if n_cols == self._n_cols:
             return
@@ -462,7 +454,7 @@ class SegmentGridWidget(QWidget):
 
         grid_row = 0
         hdr_iter = iter(self._headers)
-        for manner, segs in self._groups.items():
+        for segs in self._groups.values():
             hdr = next(hdr_iter)
             self._grid.addWidget(hdr, grid_row, 0, 1, n_cols)
             hdr.show()

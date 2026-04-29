@@ -15,6 +15,7 @@ a human-readable reason string, surfaced as tooltips on the buttons.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -179,9 +180,7 @@ def _infer_height(feats: dict, profile: VowelProfile) -> tuple[int, str, str]:
 # ---------------------------------------------------------------------------
 
 
-def _infer_backness(
-    feats: dict, profile: VowelProfile
-) -> tuple[str, str, str]:
+def _infer_backness(feats: dict, profile: VowelProfile) -> tuple[str, str, str]:
     """Return (place, confidence, reason).  place is 'front'|'central'|'back'."""
     fr = _nonzero(feats.get("front"))
     bk = _nonzero(feats.get("back"))
@@ -242,9 +241,7 @@ def vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
     confidence = min(h_conf, p_conf, key=lambda c: _CONF_RANK[c])
     reason = f"{h_reason}; {p_reason}; {r_reason}"
 
-    return VowelPlacement(
-        row=row, col=col, confidence=confidence, reason=reason
-    )
+    return VowelPlacement(row=row, col=col, confidence=confidence, reason=reason)
 
 
 # ---------------------------------------------------------------------------
@@ -255,8 +252,8 @@ def vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
 class VowelChartWidget(QWidget):
     """Displays vowels in an IPA-style grid: height x backness x rounding."""
 
-    _COL_HEADERS = ["Front", "Central", "Back"]
-    _ROW_HEADERS = _ROW_LABELS
+    _COL_HEADERS: ClassVar[list[str]] = ["Front", "Central", "Back"]
+    _ROW_HEADERS: ClassVar[list[str]] = _ROW_LABELS
 
     def __init__(self, parent=None, *, btn_gap: int = 4):
         super().__init__(parent)
@@ -278,7 +275,7 @@ class VowelChartWidget(QWidget):
         for lbl, is_row in self._header_labels:
             lbl.setStyleSheet(row if is_row else hdr)
 
-    def clear(self):
+    def clear(self) -> None:
         """Remove all buttons, labels, and collision containers."""
         while self._grid.count():
             self._grid.takeAt(0)
@@ -305,8 +302,7 @@ class VowelChartWidget(QWidget):
         title = QLabel("VOWELS")
         title.setFont(hdr_font)
         title.setStyleSheet(
-            f"color: {C['text_dim']}; letter-spacing: 1px;"
-            " padding: 2px 2px 0 2px;"
+            f"color: {C['text_dim']}; letter-spacing: 1px; padding: 2px 2px 0 2px;"
         )
         self._grid.addWidget(title, 0, 0, 1, 7)
         self._header_labels.append((title, False))
@@ -372,9 +368,7 @@ class VowelChartWidget(QWidget):
                         btn = self._buttons.get(seg)
                         if btn:
                             p = placements[seg]
-                            btn.setToolTip(
-                                f"/{seg}/  [{p.confidence}]  {p.reason}"
-                            )
+                            btn.setToolTip(f"/{seg}/  [{p.confidence}]  {p.reason}")
                             btn.show()
                             vbox.addWidget(btn)
                     self._grid.addWidget(cell, grid_row, 1 + ci)
