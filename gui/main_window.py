@@ -330,8 +330,13 @@ class MainWindow(QMainWindow):
         # Pre-load default: balanced split. _fit_to_content overrides
         # these once an inventory is loaded.
         splitter.setSizes([500, 400])
-        splitter.setStretchFactor(0, 1)  # segments take extra space
-        splitter.setStretchFactor(1, 0)  # features stay fixed width
+        # The segment panel sticks to the natural width of its content
+        # (consonant grid + vowel chart). The feature panel hugs the
+        # vowels' right edge and absorbs any extra horizontal room as
+        # the window grows. Inverting these stretch factors used to
+        # leave dead space after the vowels inside the segment panel.
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
 
         # ── bottom: analysis ──────────────────────────────────────────
         self.analysis = AnalysisPanel()
@@ -425,16 +430,15 @@ class MainWindow(QMainWindow):
 
         # stretch=0 on both: consonants and vowels sit at their natural
         # widths next to each other (separated only by the layout's
-        # 12 px spacing). The trailing addStretch absorbs any leftover
-        # horizontal room on the right rather than letting it pad the
-        # gap between the two panels.
+        # 12 px spacing). Any leftover horizontal room is absorbed by
+        # the *outer* splitter (feat_panel has the splitter stretch),
+        # not by inflating the gap inside the segment panel.
         seg_content_layout.addWidget(left_wrap, stretch=0)
         seg_content_layout.addWidget(
             self.vowel_chart_widget,
             stretch=0,
             alignment=Qt.AlignmentFlag.AlignTop,
         )
-        seg_content_layout.addStretch(1)
 
         self._seg_scroll.setWidget(seg_content)
         vp = self._seg_scroll.viewport()
@@ -1169,11 +1173,15 @@ class MainWindow(QMainWindow):
         QApplication.processEvents()
 
         # -- Measure segment panel content width --
+        # The seg panel sticks to exactly its natural content width so
+        # the feature pane (with stretch=1 in the splitter) can hug the
+        # vowels' right edge. No extra padding here — leftover room
+        # belongs to the feature pane, not to dead space after the
+        # vowels.
         seg_content = self._seg_scroll.widget()
         seg_content_w = seg_content.sizeHint().width() if seg_content else 400
         seg_chrome = 28 + 6  # panel margins (14*2) + scrollbar clearance
-        seg_padding = 50  # breathing room so content isn't flush to edges
-        seg_need_w = seg_content_w + seg_chrome + seg_padding
+        seg_need_w = seg_content_w + seg_chrome
 
         # -- Measure feature panel content --
         feat_content = self._feat_scroll.widget()
@@ -1203,14 +1211,14 @@ class MainWindow(QMainWindow):
             need_w = seg_need_w + feat_need_w + 1
             need_h = total_need_h
 
-            # Grow to fit content, but never shrink below current size
-            # (respects the user if they manually enlarged the window).
+            # Always resize to the new inventory's needs. Each inventory
+            # gets its own layout — sizes from a previously-loaded
+            # inventory don't bleed into this one. Clamped to the
+            # screen's available area and the absolute window minimum.
             cur_w = self.width()
             cur_h = self.height()
-            new_w = min(max(need_w, cur_w), avail.width() - 40)
-            new_h = min(max(need_h, cur_h), avail.height() - 40)
-            new_w = max(new_w, 640)
-            new_h = max(new_h, 480)
+            new_w = max(640, min(need_w, avail.width() - 40))
+            new_h = max(480, min(need_h, avail.height() - 40))
 
             if new_w != cur_w or new_h != cur_h:
                 self.resize(new_w, new_h)
@@ -1223,10 +1231,13 @@ class MainWindow(QMainWindow):
                 self._has_saved_size = True
 
         # -- Apply to horizontal splitter --
-        # Give both panels exactly what their content needs.
-        # The splitter stretch factors (seg=1, feat=0) handle any extra
-        # space — segments absorb it, features stay tight.
-        self._hsplit.setSizes([seg_need_w, feat_need_w])
+        # Seg panel: exactly its content width (no padding).
+        # Feat panel: at least its content width, but takes whatever is
+        # left of the available width — that's what makes it hug the
+        # vowels and absorb extra room as the user enlarges the window.
+        available = self._hsplit.width() or (seg_need_w + feat_need_w)
+        feat_w = max(feat_need_w, available - seg_need_w)
+        self._hsplit.setSizes([seg_need_w, feat_w])
 
         # -- Rebalance vertical splitter --
         total = self._vsplit.height()

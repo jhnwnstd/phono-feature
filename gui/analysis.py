@@ -159,7 +159,7 @@ def render_single_segment(engine, seg: str, feats: dict) -> str:
     else:
         html += (
             f"<p style='color:{C['text_dim']}'><i>"
-            "Cannot be uniquely characterized in this inventory."
+            "Not uniquely characterizable."
             "</i></p>"
         )
 
@@ -245,14 +245,14 @@ def render_multi_segment(
         if has_underspec_diff:
             contrast_html = (
                 f"<p><b>Contrasting features:</b>"
-                f" <i style='color:{C['text_dim']}'>none \u2014 segments"
-                " differ only in underspecification</i></p>"
+                f" <i style='color:{C['text_dim']}'>none"
+                " (only unspecified features differ)</i></p>"
             )
         else:
             contrast_html = (
                 f"<p><b>Contrasting features:</b>"
-                f" <i style='color:{C['text_dim']}'>none \u2014 segments"
-                " are featurally identical</i></p>"
+                f" <i style='color:{C['text_dim']}'>none"
+                " (featurally identical)</i></p>"
             )
 
     is_nc, specs = engine.is_natural_class(segs)
@@ -280,17 +280,15 @@ def render_multi_segment(
             nc_html = (
                 "<p><b>Natural class:</b>"
                 f" <span style='color:{C['minus']}'>No</span>"
-                f" \u2014 add {len(suggested)} segment"
-                f"{plural_suffix}"
-                f" to complete the smallest shared-feature class:"
+                f" \u2014 add {len(suggested)} segment{plural_suffix} to complete:"
                 f"<br>{suggested_tags}</p>"
             )
         else:
             nc_html = (
                 "<p><b>Natural class:</b>"
-                f" <span style='color:{C['minus']}'>No \u2014"
-                " these segments cannot be uniquely picked out by any"
-                " feature bundle in this inventory.</span></p>"
+                f" <span style='color:{C['minus']}'>No</span>"
+                " \u2014 no feature bundle picks them out."
+                "</p>"
             )
 
     return (
@@ -317,8 +315,7 @@ def render_feat_to_seg(engine, feature_dict: dict, matching: list) -> str:
     else:
         segs_html = (
             "<p><b>Matching segments:</b>"
-            f" <i style='color:{C['text_dim']}'>none \u2014 no segment"
-            " satisfies all selected features.</i></p>"
+            f" <i style='color:{C['text_dim']}'>none</i></p>"
         )
 
     return f"<p><b>Query:</b> {feat_tags}</p>{segs_html}"
