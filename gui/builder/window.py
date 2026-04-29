@@ -234,38 +234,29 @@ class InventoryBuilder(QMainWindow):
     # Setup dialog
     # ------------------------------------------------------------------
 
-    def _show_setup_dialog(self) -> None:
+    def _show_setup_dialog(self) -> bool:
+        """Show the new-inventory setup dialog. Returns True if the user
+        committed and a fresh grid was built; False if they cancelled or
+        the unsaved-changes check refused.
+
+        The dialog validates its own input (see InputDialog.accept), so on
+        a True return the segments/features lists are guaranteed non-empty.
+        """
         if not self._check_unsaved():
-            return
+            return False
         dlg = InputDialog(self)
         center_on_parent(dlg, self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
+            return False
 
-        segments = dlg.get_segments()
-        features = dlg.get_features()
-        name = dlg.get_name()
-
-        if not segments:
-            show_warning(
-                self, "No segments", "Please enter at least one segment."
-            )
-            return
-        if not features:
-            show_warning(
-                self, "No features", "Please enter at least one feature."
-            )
-            return
-
-        # Deduplicate segments and features (preserving order)
-        seen_s: set = set()
-        segments = [s for s in segments if not (s in seen_s or seen_s.add(s))]  # type: ignore[func-returns-value]
-        seen_f: set = set()
-        features = [f for f in features if not (f in seen_f or seen_f.add(f))]  # type: ignore[func-returns-value]
+        # Dedupe (preserving order). InputDialog.accept already guaranteed
+        # both lists are non-empty.
+        segments = list(dict.fromkeys(dlg.get_segments()))
+        features = list(dict.fromkeys(dlg.get_features()))
 
         self._segments = segments
         self._features = features
-        self._inv_name = name
+        self._inv_name = dlg.get_name()
         self._current_path = None
         self._dirty = True
         self._rebuild_table()
@@ -274,6 +265,7 @@ class InventoryBuilder(QMainWindow):
             f"Created grid: {len(segments)} segments \u00d7 {len(features)} features. "
             "Click cells to cycle through +/\u2212/0."
         )
+        return True
 
     # ------------------------------------------------------------------
     # Table management

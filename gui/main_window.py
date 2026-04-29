@@ -92,6 +92,64 @@ class Mode(StrEnum):
     FEAT_TO_SEG = "feat_to_seg"
 
 
+class BrandedStatusBar(QStatusBar):
+    """Status bar with a 'Language Doodad' brand pinned at the lower-right.
+
+    Default QStatusBar.showMessage() hides any addWidget() items while a
+    message is shown — that would blink the message label on every
+    status update. This subclass instead routes messages to a managed
+    QLabel on the left, so both message and brand stay visible at all
+    times. The brand uses addPermanentWidget() to anchor it on the right.
+
+    Both labels share an explicit font, height policy, and vertical
+    centering so the bar's row height accommodates them consistently and
+    they sit on the same baseline regardless of italic vs regular metrics.
+    """
+
+    _FONT = QFont("Noto Sans", 9)
+    # Picked so italic ascenders/descenders don't push the bar taller
+    # than non-italic text would. ~22 px matches the toolbar baseline.
+    _BAR_HEIGHT = 22
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSizeGripEnabled(False)
+        self.setFixedHeight(self._BAR_HEIGHT)
+
+        self._message_label = QLabel("")
+        self._message_label.setFont(self._FONT)
+        self._message_label.setStyleSheet(f"color: {C['text']};")
+        self._message_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        self._brand = QLabel("Language Doodad")
+        self._brand.setFont(self._FONT)
+        self._brand.setStyleSheet(
+            f"color: {C['text_dim']}; font-style: italic; padding: 0 4px;"
+        )
+        self._brand.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        # Left section: message label fills remaining width.
+        self.addWidget(self._message_label, 1)
+        # Right section: brand sits permanently in the lower-right corner.
+        self.addPermanentWidget(self._brand, 0)
+
+    def showMessage(self, text: str, timeout: int = 0) -> None:  # type: ignore[override]
+        # Don't call super(); that would hide left-section widgets.
+        # timeout=0 (no auto-clear) is the only mode the app uses, so we
+        # ignore the parameter.
+        self._message_label.setText(text)
+
+    def clearMessage(self) -> None:  # type: ignore[override]
+        self._message_label.setText("")
+
+    def currentMessage(self) -> str:  # type: ignore[override]
+        return self._message_label.text()
+
+
 # ---------------------------------------------------------------------------
 # MainWindow
 # ---------------------------------------------------------------------------
@@ -127,7 +185,7 @@ class MainWindow(QMainWindow):
         self._other_card: QFrame | None = None
         self._feature_pool_initialized: bool = False
 
-        self.setWindowTitle("Language Doodad")
+        self.setWindowTitle("Feature visualizer")
         self.setMinimumSize(640, 480)
         self.setStyleSheet(f"background-color: {C['bg']};")
 
@@ -293,7 +351,7 @@ class MainWindow(QMainWindow):
         root.addWidget(self._vsplit)
 
         # ── status bar ────────────────────────────────────────────────
-        self.status = QStatusBar()
+        self.status = BrandedStatusBar()
         self.status.setStyleSheet(
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
         )
@@ -649,10 +707,17 @@ class MainWindow(QMainWindow):
             return
         from gui.builder import InventoryBuilder
 
-        self._builder = InventoryBuilder(parent=self)
-        self._builder.setWindowFlag(Qt.WindowType.Window)  # own taskbar entry
+        builder = InventoryBuilder(parent=self)
+        builder.setWindowFlag(Qt.WindowType.Window)  # own taskbar entry
+        # Run the initial setup dialog BEFORE showing the builder window.
+        # If the user cancels we never flash an empty builder onto the
+        # screen. The dialog uses the main window for screen centering,
+        # so the builder doesn't need to be visible yet.
+        if not builder._show_setup_dialog():
+            builder.deleteLater()
+            return
+        self._builder = builder
         self._builder.show()
-        self._builder._show_setup_dialog()
 
     def _load_path(self, path: str):
         """Core loading logic shared by dropdown, browse, and auto-reload."""
