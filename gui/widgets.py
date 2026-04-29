@@ -222,7 +222,27 @@ class FeatureRow(QWidget):
             self._current_value = polarity
             self.plus_btn.setChecked(polarity == "+")
             self.minus_btn.setChecked(polarity == "-")
+        self._apply_query_style(self._current_value)
         self.value_changed.emit(self.feature, self._current_value)
+
+    def _apply_query_style(self, value: str) -> None:
+        """Mirror the +/-/neutral row tinting used in seg-mode so the feat-mode
+        query state is visually consistent with the seg-mode informational state.
+        Badge styling is unchanged here; the badge is hidden while interactive.
+        """
+        if value == "+":
+            self.setStyleSheet(self._ROW_PLUS)
+            self.name_label.setStyleSheet(self._NAME_BOLD)
+        elif value == "-":
+            self.setStyleSheet(self._ROW_MINUS)
+            self.name_label.setStyleSheet(self._NAME_BOLD)
+        else:
+            self.setStyleSheet(self._ROW_NEUTRAL)
+            self.name_label.setStyleSheet(
+                self._NAME_ACTIVE
+                if self._panel_active
+                else self._NAME_INACTIVE
+            )
 
     # ------------------------------------------------------------------
     # Public API
@@ -266,6 +286,7 @@ class FeatureRow(QWidget):
         self._current_value = value
         self.plus_btn.setChecked(value == "+")
         self.minus_btn.setChecked(value == "-")
+        self._apply_query_style(value)
 
     def set_panel_active(self, active: bool):
         self._panel_active = active
