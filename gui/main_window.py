@@ -1296,7 +1296,6 @@ class MainWindow(QMainWindow):
             if btn._state != "default":
                 btn.set_state("default")
                 btn.setChecked(False)
-        self._reset_feature_display()
         if not silent:
             self._saved_seg_state = []
             self._saved_feat_state = {}
