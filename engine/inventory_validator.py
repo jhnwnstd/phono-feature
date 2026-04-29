@@ -9,20 +9,19 @@ from __future__ import annotations
 
 import json
 import os
-from typing import List, Tuple
 
 _VALID_VALUES = {"+", "-", "0"}
 
 
-def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
+def validate_inventory(filepath: str) -> tuple[list[str], list[str]]:
     """Validate an inventory JSON file.
 
     Returns:
         (errors, warnings) — both are lists of human-readable strings.
         If errors is non-empty the file should not be loaded.
     """
-    errors: List[str] = []
-    warnings: List[str] = []
+    errors: list[str] = []
+    warnings: list[str] = []
 
     # -- File-level checks --
 
@@ -31,7 +30,7 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
         return errors, warnings
 
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             raw = f.read()
     except OSError as e:
         errors.append(f"Cannot read file: {e}")
@@ -40,15 +39,12 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        errors.append(
-            f"Invalid JSON: {e.msg} (line {e.lineno}, col {e.colno})"
-        )
+        errors.append(f"Invalid JSON: {e.msg} (line {e.lineno}, col {e.colno})")
         return errors, warnings
 
     if not isinstance(data, dict):
         errors.append(
-            "Top-level JSON value must be an object, not "
-            f"{type(data).__name__}"
+            f"Top-level JSON value must be an object, not {type(data).__name__}"
         )
         return errors, warnings
 
@@ -73,23 +69,17 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
         else:
             non_str = [f for f in features if not isinstance(f, str)]
             if non_str:
-                errors.append(
-                    f"'features' contains non-string entries: {non_str[:5]}"
-                )
+                errors.append(f"'features' contains non-string entries: {non_str[:5]}")
             seen: set = set()
             dupes = {f for f in features if f in seen or seen.add(f)}  # type: ignore[func-returns-value]
             if dupes:
-                errors.append(
-                    f"'features' contains duplicates: {sorted(dupes)}"
-                )
+                errors.append(f"'features' contains duplicates: {sorted(dupes)}")
 
     # -- Segments dict --
 
     segments = data.get("segments")
     if segments is not None and not isinstance(segments, dict):
-        errors.append(
-            f"'segments' must be an object, got {type(segments).__name__}"
-        )
+        errors.append(f"'segments' must be an object, got {type(segments).__name__}")
         return errors, warnings
 
     if not isinstance(segments, dict) or not segments:
@@ -148,8 +138,7 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
         unused = declared_features - all_seg_features
         if unused:
             warnings.append(
-                f"Features declared but unused by any segment: "
-                f"{sorted(unused)}"
+                f"Features declared but unused by any segment: {sorted(unused)}"
             )
 
         # Features used by segments but not declared
@@ -205,19 +194,18 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
         sig = tuple(sorted((f, v) for f, v in seg_feats.items() if v != "0"))
         sig_to_segs.setdefault(sig, []).append(seg_name)
 
-    for names in sig_to_segs.values():
-        if len(names) > 1:
-            warnings.append(
-                f"Featurally identical segments (same specified features): "
-                f"{', '.join(names)}"
-            )
+    warnings.extend(
+        f"Featurally identical segments (same specified features): {', '.join(names)}"
+        for names in sig_to_segs.values()
+        if len(names) > 1
+    )
 
     # -- Feature naming convention --
     # Only place nodes (CORONAL, LABIAL, DORSAL) should be all-caps.
     # All other features should start with a capital letter (title case).
 
     _ALLCAPS_ALLOWED = {"CORONAL", "LABIAL", "DORSAL", "ATR"}
-    check_feats = declared_features if declared_features else all_seg_features
+    check_feats = declared_features or all_seg_features
     for feat in sorted(check_feats):
         if feat.isupper() and feat not in _ALLCAPS_ALLOWED:
             warnings.append(
@@ -235,8 +223,6 @@ def validate_inventory(filepath: str) -> Tuple[List[str], List[str]]:
 
     name = data.get("name")
     if name is not None and not isinstance(name, str):
-        warnings.append(
-            f"'name' should be a string, got {type(name).__name__}"
-        )
+        warnings.append(f"'name' should be a string, got {type(name).__name__}")
 
     return errors, warnings

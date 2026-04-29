@@ -12,9 +12,14 @@ The analyzer uses statistical methods to identify:
 - Confidence levels based on coverage and permutation testing
 """
 
+from __future__ import annotations
+
 import random
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from engine.feature_engine import FeatureEngine
 
 
 class GeometryNode:
@@ -30,8 +35,8 @@ class GeometryNode:
         """
         self.feature = feature
         self.parent = parent
-        self.children: List["GeometryNode"] = []
-        self.siblings: List["GeometryNode"] = []  # Features at the same level
+        self.children: list[GeometryNode] = []
+        self.siblings: list[GeometryNode] = []  # Features at the same level
         self.confidence = "low"  # "high", "moderate", or "low"
         self.coverage = 0.0  # Proportion of segments where dependency holds
         self.p_value = 1.0  # Permutation test p-value
@@ -48,7 +53,7 @@ class GeometryNode:
         if self not in sibling.siblings:
             sibling.siblings.append(self)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert node to dictionary representation."""
         return {
             "feature": self.feature,
@@ -77,7 +82,7 @@ class GeometryAnalyzer:
     PERMUTATION_ITERATIONS = 1000
     SIGNIFICANCE_LEVEL = 0.05
 
-    def __init__(self, engine):
+    def __init__(self, engine: FeatureEngine) -> None:
         """
         Initialize the geometry analyzer.
 
@@ -85,10 +90,9 @@ class GeometryAnalyzer:
             engine: FeatureEngine instance with loaded inventory
         """
         self.engine = engine
-        self.dependencies: Dict = (
-            {}
-        )  # feature -> {parent, coverage, p_value, confidence}
-        self.geometry_tree = None
+        # feature -> {parent, coverage, p_value, confidence}
+        self.dependencies: dict = {}
+        self.geometry_tree: GeometryNode | None = None
         self._rng = random.Random(42)
 
     def analyze(self) -> GeometryNode:
@@ -119,15 +123,13 @@ class GeometryAnalyzer:
                 if i == j:
                     continue
 
-                # Test if child_feat depends on parent_feat
-                # Dependency means: if child is specified (+/-), parent must be specified
+                # Test if child_feat depends on parent_feat: if child is
+                # specified (+/-), parent must also be specified
                 coverage = self._compute_coverage(parent_feat, child_feat)
 
                 if coverage > best_coverage:
                     # Run permutation test (pass coverage to avoid recomputing it)
-                    p_value = self._permutation_test(
-                        parent_feat, child_feat, coverage
-                    )
+                    p_value = self._permutation_test(parent_feat, child_feat, coverage)
 
                     if p_value < self.SIGNIFICANCE_LEVEL:
                         best_parent = parent_feat
@@ -159,7 +161,7 @@ class GeometryAnalyzer:
         applicable_count = 0  # Segments where child is specified
         holds_count = 0  # Segments where dependency holds
 
-        for segment, features in segments.items():
+        for features in segments.values():
             child_val = features.get(child_feat, "0")
             parent_val = features.get(parent_feat, "0")
 
@@ -190,9 +192,7 @@ class GeometryAnalyzer:
             P-value from permutation test
         """
         segments = list(self.engine.segments.keys())
-        child_values = [
-            self.engine.segments[s].get(child_feat, "0") for s in segments
-        ]
+        child_values = [self.engine.segments[s].get(child_feat, "0") for s in segments]
         parent_values = [
             self.engine.segments[s].get(parent_feat, "0") for s in segments
         ]
@@ -258,8 +258,7 @@ class GeometryAnalyzer:
             self.dependencies[child_feat]["confidence"] = child_node.confidence
 
             # Remove from root candidates
-            if child_feat in root_candidates:
-                root_candidates.remove(child_feat)
+            root_candidates.discard(child_feat)
 
         # Identify sibling groups (features with same parent)
         parent_to_children = defaultdict(list)
@@ -267,7 +266,7 @@ class GeometryAnalyzer:
             parent_feat = dep_info["parent"]
             parent_to_children[parent_feat].append(child_feat)
 
-        for parent_feat, children in parent_to_children.items():
+        for children in parent_to_children.values():
             if len(children) > 1:
                 for i, child1 in enumerate(children):
                     for child2 in children[i + 1 :]:
@@ -281,7 +280,7 @@ class GeometryAnalyzer:
                 if node.parent is None:
                     root.add_child(node)
         elif len(root_candidates) == 1:
-            root = nodes[list(root_candidates)[0]]
+            root = nodes[next(iter(root_candidates))]
         else:
             root = GeometryNode("ROOT")
             for feat in root_candidates:
@@ -289,12 +288,13 @@ class GeometryAnalyzer:
 
         return root
 
-    def get_dependency_summary(self) -> List[Dict]:
+    def get_dependency_summary(self) -> list[dict]:
         """
         Get a summary of all discovered dependencies.
 
         Returns:
-            List of dependency dictionaries with child, parent, coverage, p_value, confidence
+            List of dependency dicts with child, parent, coverage,
+            p_value, confidence keys.
         """
         summary = []
 
@@ -311,25 +311,21 @@ class GeometryAnalyzer:
 
         # Sort by confidence, then coverage
         confidence_order = {"high": 0, "moderate": 1, "low": 2}
-        summary.sort(
-            key=lambda x: (confidence_order[x["confidence"]], -x["coverage"])
-        )
+        summary.sort(key=lambda x: (confidence_order[x["confidence"]], -x["coverage"]))
 
         return summary
 
-    def export_tree(self) -> Dict:
+    def export_tree(self) -> dict:
         """
         Export the geometry tree as a nested dictionary.
 
         Returns:
             Dictionary representation of the tree
         """
-        if self.geometry_tree is None:
-            self.analyze()
+        tree = self.geometry_tree if self.geometry_tree is not None else self.analyze()
+        return tree.to_dict()
 
-        return self.geometry_tree.to_dict()
-
-    def get_path_to_root(self, feature: str) -> List[str]:
+    def get_path_to_root(self, feature: str) -> list[str]:
         """
         Get the path from a feature to the root of the tree.
 
@@ -339,13 +335,10 @@ class GeometryAnalyzer:
         Returns:
             List of feature names from the given feature to root
         """
-        if self.geometry_tree is None:
-            self.analyze()
+        tree = self.geometry_tree if self.geometry_tree is not None else self.analyze()
 
         # Find the node
-        def find_node(
-            node: GeometryNode, target: str
-        ) -> Optional[GeometryNode]:
+        def find_node(node: GeometryNode, target: str) -> GeometryNode | None:
             if node.feature == target:
                 return node
             for child in node.children:
@@ -354,12 +347,12 @@ class GeometryAnalyzer:
                     return result
             return None
 
-        node = find_node(self.geometry_tree, feature)
+        node = find_node(tree, feature)
         if node is None:
             return []
 
         path = []
-        current: Optional[GeometryNode] = node
+        current: GeometryNode | None = node
         while current is not None:
             path.append(current.feature)
             current = current.parent
