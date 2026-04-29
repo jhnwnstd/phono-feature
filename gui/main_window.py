@@ -1355,24 +1355,45 @@ class MainWindow(QMainWindow):
             row.reset()
 
     def _clear_segments(self, silent=False):
+        """Clear seg-side state and any seg-derived feat display.
+
+        Always resets _selected_segments and the seg buttons. Also resets the
+        feat rows IFF we are in seg mode — there they mirror the segment
+        selection via set_display(), so without this they'd show stale data.
+        In feat mode the feat rows hold the user's actual query, so they
+        are left alone (clearing segments shouldn't wipe the feat query).
+        """
         self._selected_segments.clear()
         for btn in self._seg_buttons.values():
             if btn._state != SegmentState.DEFAULT:
                 btn.set_state(SegmentState.DEFAULT)
                 btn.setChecked(False)
+        if self._mode == Mode.SEG_TO_FEAT:
+            for row in self._feat_rows.values():
+                row.reset()
         if not silent:
             self._saved_seg_state = []
             self._saved_feat_state = {}
             self.analysis.clear()
 
     def _clear_features(self, silent=False):
+        """Clear feat-side state and any feat-derived seg display.
+
+        Always resets _selected_features and the feat rows. Also resets the
+        seg buttons IFF we are in feat mode — there they mirror the feature
+        query via matched/unmatched. In seg mode the seg buttons hold the
+        user's actual selection, so they are left alone (clearing features
+        shouldn't wipe the segment selection).
+        """
         self._selected_features.clear()
         for row in self._feat_rows.values():
             if row._current_value:
                 row.reset()
-        for btn in self._seg_buttons.values():
-            if btn._state != SegmentState.DEFAULT:
-                btn.set_state(SegmentState.DEFAULT)
+        if self._mode == Mode.FEAT_TO_SEG:
+            for btn in self._seg_buttons.values():
+                if btn._state != SegmentState.DEFAULT:
+                    btn.set_state(SegmentState.DEFAULT)
+                    btn.setChecked(False)
         if not silent:
             self._saved_seg_state = []
             self._saved_feat_state = {}

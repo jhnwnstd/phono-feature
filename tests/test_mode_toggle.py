@@ -50,9 +50,7 @@ def test_select_segment_in_seg_mode_updates_state(window):
 def test_select_segment_only_works_in_seg_mode(window):
     window._set_mode("feat_to_seg")
     window._on_segment_clicked("b", True)
-    assert (
-        window._selected_segments == []
-    ), "segment clicks must be no-ops in feat mode"
+    assert window._selected_segments == [], "segment clicks must be no-ops in feat mode"
 
 
 def test_deselect_segment_removes_from_selection(window):
