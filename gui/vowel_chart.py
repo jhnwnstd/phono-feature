@@ -300,10 +300,10 @@ class VowelChartWidget(QWidget):
         self._grid.setContentsMargins(0, 0, 8, 0)
 
     def set_headers_active(self, active: bool):
-        # Dedup: skip re-styling all header labels when state hasn't changed.
-        if getattr(self, "_headers_active_state", None) == active:
-            return
-        self._headers_active_state = active
+        # No dedup: ``set_vowels`` recreates the header labels on each
+        # inventory load, so a stale cache would leave fresh labels
+        # stuck at their initial muted style when the active state
+        # happened to match across the reload.
         if active:
             header_style = self._HDR_ACTIVE
             row_style = self._ROW_ACTIVE
