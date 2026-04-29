@@ -21,7 +21,9 @@ def _selected_feat_rows(window) -> set[str]:
 
 def _non_default_seg_buttons(window) -> int:
     return sum(
-        1 for b in window._seg_buttons.values() if b._state != SegmentState.DEFAULT
+        1
+        for b in window._seg_buttons.values()
+        if b._state != SegmentState.DEFAULT
     )
 
 

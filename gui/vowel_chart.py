@@ -300,6 +300,10 @@ class VowelChartWidget(QWidget):
         self._grid.setContentsMargins(0, 0, 8, 0)
 
     def set_headers_active(self, active: bool):
+        # Dedup: skip re-styling all header labels when state hasn't changed.
+        if getattr(self, "_headers_active_state", None) == active:
+            return
+        self._headers_active_state = active
         if active:
             header_style = self._HDR_ACTIVE
             row_style = self._ROW_ACTIVE
@@ -345,9 +349,7 @@ class VowelChartWidget(QWidget):
         title = QLabel("VOWELS")
         title.setFont(hdr_font)
         title.setStyleSheet(
-            f"color: {C['text_dim']}; "
-            "letter-spacing: 1px; "
-            "padding: 2px 2px 0 2px;"
+            f"color: {C['text_dim']}; letter-spacing: 1px; padding: 2px 2px 0 2px;"
         )
         self._grid.addWidget(title, 0, 0, 1, 7)
         self._header_labels.append((title, False))
@@ -416,9 +418,7 @@ class VowelChartWidget(QWidget):
                     if btn:
                         placement = placements[seg]
                         btn.setToolTip(
-                            f"/{seg}/  "
-                            f"[{placement.confidence}]  "
-                            f"{placement.reason}"
+                            f"/{seg}/  [{placement.confidence}]  {placement.reason}"
                         )
                         btn.show()
                         self._grid.addWidget(btn, grid_row, 1 + ci)
@@ -439,9 +439,7 @@ class VowelChartWidget(QWidget):
                     if btn:
                         placement = placements[seg]
                         btn.setToolTip(
-                            f"/{seg}/  "
-                            f"[{placement.confidence}]  "
-                            f"{placement.reason}"
+                            f"/{seg}/  [{placement.confidence}]  {placement.reason}"
                         )
                         btn.show()
                         vbox.addWidget(btn)

@@ -26,6 +26,7 @@ Heuristic notes:
 """
 
 from collections import defaultdict
+from functools import lru_cache
 
 # ---------------------------------------------------------------------------
 # Primary groups — broad manner classes for initial assignment.
@@ -194,8 +195,15 @@ _DERIVED_MERGES: list[tuple[frozenset[str], str]] = [
 # ---------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=512)
 def _normalize_key(key: str) -> str:
-    """Normalise a feature name to a canonical lowercase token."""
+    """Normalise a feature name to a canonical lowercase token.
+
+    Memoized: feature names are reused across all segments and across
+    inventory reloads, so the same handful of strings get normalized
+    thousands of times. The cache keeps a hot working set in RAM and
+    turns 4000+ calls per load into ~30 (one per unique feature name).
+    """
     k = key.lower()
     k = k.replace("del.rel.", "delrel")
     k = k.replace("delayed_release", "delrel")

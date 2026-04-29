@@ -6,6 +6,7 @@ PyQt6 GUI for the Segment & Feature Engine.
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -68,6 +69,18 @@ from gui.widgets import (
 
 if TYPE_CHECKING:
     from gui.builder import InventoryBuilder
+
+
+# Mode-independent: same style applied at construction, never changed.
+# Previously the panel-chrome reapplied this every mode toggle (no-op
+# restyle) — that's now done once and skipped on toggles.
+_CLEAR_BTN_STYLE = (
+    f"QPushButton {{"
+    f" color: {C['text']}; background: transparent;"
+    f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;"
+    f" }}"
+    f" QPushButton:hover {{ color: {C['text']}; background: {C['bg']}; }}"
+)
 
 
 class Mode(StrEnum):
@@ -298,19 +311,7 @@ class MainWindow(QMainWindow):
         self.clear_seg_btn = QPushButton("Clear")
         self.clear_seg_btn.setFixedHeight(26)
         self.clear_seg_btn.setFont(QFont("Noto Sans", 9))
-        self.clear_seg_btn.setStyleSheet(f"""
-            QPushButton {{
-                color: {C["text_dim"]};
-                background: transparent;
-                border: 1px solid {C["border"]};
-                border-radius: 5px;
-                padding: 0 10px;
-            }}
-            QPushButton:hover {{
-                color: {C["text"]};
-                background: {C["bg"]};
-            }}
-        """)
+        self.clear_seg_btn.setStyleSheet(_CLEAR_BTN_STYLE)
         self.clear_seg_btn.clicked.connect(self._clear_segments)
 
         header.addWidget(self._seg_title)
@@ -394,19 +395,7 @@ class MainWindow(QMainWindow):
         self.clear_feat_btn = QPushButton("Clear")
         self.clear_feat_btn.setFixedHeight(26)
         self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
-        self.clear_feat_btn.setStyleSheet(f"""
-            QPushButton {{
-                color: {C["text_dim"]};
-                background: transparent;
-                border: 1px solid {C["border"]};
-                border-radius: 5px;
-                padding: 0 10px;
-            }}
-            QPushButton:hover {{
-                color: {C["text"]};
-                background: {C["panel"]};
-            }}
-        """)
+        self.clear_feat_btn.setStyleSheet(_CLEAR_BTN_STYLE)
         self.clear_feat_btn.clicked.connect(self._clear_features)
 
         header.addWidget(self._feat_title)
@@ -714,10 +703,11 @@ class MainWindow(QMainWindow):
 
             self._saved_seg_state = []
             self._saved_feat_state = {}
-            self._populate_segments()
-            self._populate_features()
-            self._apply_mode_to_new_widgets()
-            self.analysis.clear()
+            with self._batched_updates():
+                self._populate_segments()
+                self._populate_features()
+                self._apply_mode_to_new_widgets()
+                self.analysis.clear()
             QTimer.singleShot(0, self._rebalance_vsplit)
         except Exception as e:
             self.status.showMessage(f"Error: {e}")
@@ -1025,6 +1015,20 @@ class MainWindow(QMainWindow):
         self._clear_segments(silent=True)
         self._clear_features(silent=True)
 
+    @contextmanager
+    def _batched_updates(self):
+        """Suspend Qt paint events for the duration. Used around any block
+        that issues many setStyleSheet/set_state calls in sequence so the
+        result paints once with the final state instead of flickering
+        through intermediate frames. Cuts both wall-clock latency and
+        visible blink during mode toggles + inventory loads.
+        """
+        self.setUpdatesEnabled(False)
+        try:
+            yield
+        finally:
+            self.setUpdatesEnabled(True)
+
     def _set_mode(self, mode: Mode | str) -> None:
         """Switch top-level UI mode. Pure orchestration — every step is in a
         named helper below so individual phases stay easy to inspect and diff.
@@ -1035,12 +1039,13 @@ class MainWindow(QMainWindow):
         if mode != self._mode:
             self._save_outgoing_mode_state()
         self._mode = mode
-        self._apply_panel_chrome()
-        self._apply_row_interactivity()
-        self._restore_segment_selection()
-        self._restore_feature_selection()
-        self._refresh_analysis_for_mode()
-        self._update_status_message()
+        with self._batched_updates():
+            self._apply_panel_chrome()
+            self._apply_row_interactivity()
+            self._restore_segment_selection()
+            self._restore_feature_selection()
+            self._refresh_analysis_for_mode()
+            self._update_status_message()
 
     # -- _set_mode phases -------------------------------------------------
     #
@@ -1122,16 +1127,6 @@ class MainWindow(QMainWindow):
         self.seg_grid_widget.set_headers_active(is_s2f)
         self.vowel_chart_widget.set_headers_active(is_s2f)
 
-        _clear_style = (
-            f"color: {C['text']}; background: transparent;"
-            f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;"
-        )
-        for btn in (self.clear_seg_btn, self.clear_feat_btn):
-            btn.setStyleSheet(
-                f"QPushButton {{ {_clear_style} }}"
-                f" QPushButton:hover {{ color: {C['text']}; background: {C['bg']}; }}"
-            )
-
     def _apply_row_interactivity(self) -> None:
         """Toggle each FeatureRow's interactivity to match the active mode."""
         is_s2f = self._mode == Mode.SEG_TO_FEAT
@@ -1202,21 +1197,29 @@ class MainWindow(QMainWindow):
             )
 
     def eventFilter(self, a0, a1):
-        """Activate a panel on any mouse press anywhere inside it."""
+        """Activate a panel on any mouse press anywhere inside it.
+
+        This is installed on the QApplication, so EVERY Qt event in the
+        process flows through here — paint, layout, mouse-move, focus, etc.
+        Volume can hit 10k+ events per mode-toggle. Check the cheap event
+        type first and bail; only do the isinstance + parent walk on the
+        rare MouseButtonPress.
+        """
+        if a1 is None or a1.type() != QEvent.Type.MouseButtonPress:
+            return False
         if not isinstance(a0, QWidget):
             return False
-        if a1 is not None and a1.type() == QEvent.Type.MouseButtonPress:
-            w = a0
-            while w is not None:
-                if w is self.seg_panel:
-                    if self._mode != Mode.SEG_TO_FEAT:
-                        self._set_mode(Mode.SEG_TO_FEAT)
-                    break
-                if w is self.feat_panel:
-                    if self._mode != Mode.FEAT_TO_SEG:
-                        self._set_mode(Mode.FEAT_TO_SEG)
-                    break
-                w = w.parent()
+        w = a0
+        while w is not None:
+            if w is self.seg_panel:
+                if self._mode != Mode.SEG_TO_FEAT:
+                    self._set_mode(Mode.SEG_TO_FEAT)
+                break
+            if w is self.feat_panel:
+                if self._mode != Mode.FEAT_TO_SEG:
+                    self._set_mode(Mode.FEAT_TO_SEG)
+                break
+            w = w.parent()
         return False
 
     # ------------------------------------------------------------------
@@ -1250,10 +1253,11 @@ class MainWindow(QMainWindow):
 
     def _run_pending_update(self) -> None:
         """Fired by the debounce timer; dispatches to the active mode."""
-        if self._mode == Mode.SEG_TO_FEAT:
-            self._update_seg_to_feat()
-        else:
-            self._update_feat_to_seg()
+        with self._batched_updates():
+            if self._mode == Mode.SEG_TO_FEAT:
+                self._update_seg_to_feat()
+            else:
+                self._update_feat_to_seg()
 
     # ------------------------------------------------------------------
     # Seg → Feat logic

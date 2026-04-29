@@ -137,10 +137,7 @@ class FeatureRow(QWidget):
     _NAME_CONTRASTIVE = f"color: {C['accent']}; font-weight: bold;"
     _ROW_CONTRASTIVE = f"background: {C['accent_light']}; border-radius: 6px;"
 
-    _BADGE_NEUTRAL = (
-        f"background: {C['tag_gray']}; color: {C['tag_gray_text']};"
-        " border-radius: 4px;"
-    )
+    _BADGE_NEUTRAL = f"background: {C['tag_gray']}; color: {C['tag_gray_text']}; border-radius: 4px;"
     _NAME_DIM = f"color: {C['text_dim']};"
     _ROW_TRANSPARENT = "background: transparent; border-radius: 6px;"
 
@@ -169,6 +166,9 @@ class FeatureRow(QWidget):
         self._current_value = ""
         self._interactive = True
         self._panel_active = False
+        # Cache for set_display dedup; cleared by reset/_apply_query_style
+        # because they bypass set_display but rewrite the same stylesheets.
+        self._last_display_state: tuple[str, bool, bool] | None = None
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 3, 8, 3)
@@ -255,6 +255,9 @@ class FeatureRow(QWidget):
 
     def _apply_query_style(self, value: str) -> None:
         """Apply row tinting that matches the current query value."""
+        # _on_click and restore_value bypass set_display, so its dedup cache
+        # would falsely report "no change" next time. Invalidate it here.
+        self._last_display_state = None
         if value == "+":
             self.setStyleSheet(self._ROW_PLUS)
             self.name_label.setStyleSheet(self._NAME_BOLD)
@@ -288,6 +291,13 @@ class FeatureRow(QWidget):
         shared means all selected segments share the value.
         contrastive means selected segments split cleanly on this feature.
         """
+        # Dedup: every seg-mode update re-runs through every row even when
+        # the displayed state didn't change. Skip the 3 setStyleSheet +
+        # 1 setText calls below if nothing's different.
+        state = (value, shared, contrastive)
+        if getattr(self, "_last_display_state", None) == state:
+            return
+        self._last_display_state = state
         if contrastive:
             self.badge.setText("\u00b1")
             self.badge.setStyleSheet(self._BADGE_CONTRASTIVE)
@@ -326,6 +336,9 @@ class FeatureRow(QWidget):
 
     def reset(self) -> None:
         self._current_value = ""
+        # set_display's dedup cache must be invalidated since reset() bypasses
+        # it but rewrites all the stylesheets it tracks.
+        self._last_display_state = None
 
         self.plus_btn.setChecked(False)
         self.minus_btn.setChecked(False)
@@ -351,8 +364,7 @@ class AnalysisPanel(QWidget):
         super().__init__(parent)
 
         self.setStyleSheet(
-            f"background: {C['analysis_bg']};"
-            f" border-top: 1px solid {C['border']};"
+            f"background: {C['analysis_bg']}; border-top: 1px solid {C['border']};"
         )
 
         layout = QVBoxLayout(self)
@@ -451,16 +463,14 @@ class SegmentGridWidget(QWidget):
         self._do_relayout()
 
     def set_headers_active(self, active: bool):
-        if active:
-            color = C["text"]
-        else:
-            color = C["text_dim"]
-
+        # Dedup: skip re-styling N headers if state hasn't changed.
+        if getattr(self, "_headers_active_state", None) == active:
+            return
+        self._headers_active_state = active
+        color = C["text"] if active else C["text_dim"]
         for hdr in self._headers:
             hdr.setStyleSheet(
-                f"color: {color};"
-                " letter-spacing: 1px;"
-                " padding: 4px 2px 1px 2px;"
+                f"color: {color}; letter-spacing: 1px; padding: 4px 2px 1px 2px;"
             )
 
     def resizeEvent(self, a0):

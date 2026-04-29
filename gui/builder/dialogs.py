@@ -105,7 +105,7 @@ class InputDialog(QDialog):
 
         self.seg_edit = QTextEdit()
         self.seg_edit.setPlaceholderText(
-            "p b t d k ɡ\n" "m n ŋ\n" "f v s z ʃ ʒ\n" "..."
+            "p b t d k ɡ\nm n ŋ\nf v s z ʃ ʒ\n..."
         )
         self.seg_edit.setFont(QFont("Noto Sans", 12))
         layout.addWidget(self.seg_edit)
@@ -173,7 +173,7 @@ class InputDialog(QDialog):
         self.feat_edit.clear()
         self.feat_edit.setReadOnly(False)
         self.feat_edit.setPlaceholderText(
-            "Syllabic\n" "Consonantal\n" "Sonorant\n" "..."
+            "Syllabic\nConsonantal\nSonorant\n..."
         )
 
     def get_segments(self) -> list:
