@@ -423,12 +423,18 @@ class MainWindow(QMainWindow):
             VOWEL_LABEL_W + 6 * (BTN_W + BTN_GAP)
         )
 
-        seg_content_layout.addWidget(left_wrap, stretch=1)
+        # stretch=0 on both: consonants and vowels sit at their natural
+        # widths next to each other (separated only by the layout's
+        # 12 px spacing). The trailing addStretch absorbs any leftover
+        # horizontal room on the right rather than letting it pad the
+        # gap between the two panels.
+        seg_content_layout.addWidget(left_wrap, stretch=0)
         seg_content_layout.addWidget(
             self.vowel_chart_widget,
             stretch=0,
             alignment=Qt.AlignmentFlag.AlignTop,
         )
+        seg_content_layout.addStretch(1)
 
         self._seg_scroll.setWidget(seg_content)
         vp = self._seg_scroll.viewport()
