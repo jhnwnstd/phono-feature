@@ -14,7 +14,7 @@ import math
 from enum import StrEnum
 from typing import ClassVar
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QGridLayout,
@@ -473,6 +473,24 @@ class SegmentGridWidget(QWidget):
                 f"color: {color}; letter-spacing: 1px;"
                 " padding: 4px 2px 1px 2px;"
             )
+
+    def sizeHint(self) -> QSize:  # type: ignore[override]
+        """Report the *natural* width — width needed to fit the widest
+        manner-class group in a single row — instead of the layout's
+        currently-rendered width.
+
+        Why: QGridLayout.sizeHint reflects the columns currently in use
+        (which depends on this widget's current width), so during
+        inventory load the parent splitter is computing layout from a
+        stale/squeezed value and never lets the grid open up. Reporting
+        the natural width breaks that chicken-and-egg.
+        """
+        if not self._groups:
+            return super().sizeHint()
+        max_n = max(len(segs) for segs in self._groups.values())
+        cols = min(max_n, self.MAX_COLS)
+        natural_w = cols * BTN_W + (cols - 1) * BTN_GAP if cols > 0 else 0
+        return QSize(natural_w, super().sizeHint().height())
 
     def resizeEvent(self, a0):
         super().resizeEvent(a0)
