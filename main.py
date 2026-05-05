@@ -19,10 +19,14 @@ Usage:
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
+import threading
 
 from PyQt6.QtCore import QCommandLineParser
 from PyQt6.QtWidgets import QApplication
+
+_FALLBACK_GUARD_ENV = "FEATURES_QT_PLATFORM_FALLBACK"
 
 
 def _argv_requests_qt_platform(argv: list[str]) -> bool:
@@ -64,21 +68,59 @@ def _auto_qt_platform() -> str | None:
     return None
 
 
-def main() -> int:
-    argv = sys.argv[:]
+def _is_wayland_disconnect_message(message: str | None) -> bool:
+    """True if a line of Qt output reports a fatal wayland connection drop.
 
-    qt_platform_from_environment = os.environ.get("QT_QPA_PLATFORM")
-    qt_platform_from_argv = _argv_requests_qt_platform(argv)
-    should_choose_platform = (
-        not qt_platform_from_environment and not qt_platform_from_argv
+    Some compositors (XWayland bridges, nested sessions, sandboxed/Linux-on-X
+    desktops, flaky VNC) accept the initial wl_display connection but tear it
+    down once the client starts painting. The Qt wayland plugin logs this
+    message and then terminates the process directly — `app.exec()` does not
+    return — so we can only catch it from outside, in a supervisor parent.
+    The wording has been stable across Qt 5 and 6.
+    """
+    if message is None:
+        return False
+    return "wayland connection broke" in message.lower()
+
+
+def _spawn_gui_child(platform: str) -> tuple[int, bool]:
+    """Run the GUI as a child process pinned to `platform`.
+
+    Returns (exit_code, wayland_disconnect_seen). The child's stderr is
+    streamed to our stderr in real time so the user sees output as normal.
+    """
+    child_env = dict(os.environ)
+    child_env[_FALLBACK_GUARD_ENV] = "1"
+    child_env["QT_QPA_PLATFORM"] = platform
+
+    proc = subprocess.Popen(
+        [sys.executable, *sys.argv],
+        env=child_env,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
     )
 
-    if should_choose_platform:
-        platform = _auto_qt_platform()
+    disconnect_seen = [False]
 
-        if platform is not None:
-            argv[1:1] = ["-platform", platform]
+    def pump_stderr() -> None:
+        assert proc.stderr is not None
+        for line in proc.stderr:
+            sys.stderr.write(line)
+            sys.stderr.flush()
+            if _is_wayland_disconnect_message(line):
+                disconnect_seen[0] = True
 
+    pump = threading.Thread(target=pump_stderr, daemon=True)
+    pump.start()
+    exit_code = proc.wait()
+    pump.join(timeout=1.0)
+
+    return exit_code, disconnect_seen[0]
+
+
+def _run_gui(argv: list[str]) -> int:
+    """Run the Qt GUI in this process. Never returns on wayland disconnect."""
     app = QApplication(argv)
     app.setApplicationName("Phonology Segment & Feature Engine")
     app.setOrganizationName("Phonology Research Tools")
@@ -108,6 +150,37 @@ def main() -> int:
     window.show()
 
     return app.exec()
+
+
+def main() -> int:
+    argv = sys.argv[:]
+
+    # If we are the supervised child, just run — no recursive supervision.
+    if os.environ.get(_FALLBACK_GUARD_ENV):
+        return _run_gui(argv)
+
+    user_set_platform = bool(os.environ.get("QT_QPA_PLATFORM")) or _argv_requests_qt_platform(argv)
+
+    if user_set_platform:
+        # User picked the platform explicitly. Run direct, no fallback dance.
+        return _run_gui(argv)
+
+    auto_platform = _auto_qt_platform()
+    have_x11_fallback = bool(os.environ.get("DISPLAY"))
+    needs_supervision = auto_platform == "wayland" and have_x11_fallback
+
+    if not needs_supervision:
+        # Either no fallback exists, or wayland wasn't picked — run direct.
+        if auto_platform is not None:
+            argv[1:1] = ["-platform", auto_platform]
+        return _run_gui(argv)
+
+    # Try wayland under supervision; if the compositor drops the connection,
+    # silently relaunch on xcb.
+    rc, disconnect_seen = _spawn_gui_child("wayland")
+    if disconnect_seen:
+        rc, _ = _spawn_gui_child("xcb")
+    return rc
 
 
 if __name__ == "__main__":
