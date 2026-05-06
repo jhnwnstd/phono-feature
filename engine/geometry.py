@@ -177,23 +177,11 @@ class GeometryAnalyzer:
         Returns:
             Coverage ratio (0.0 to 1.0)
         """
-        segments = self.engine.segments
-        applicable_count = 0  # Segments where child is specified
-        holds_count = 0  # Segments where dependency holds
-
-        for features in segments.values():
-            child_val = features.get(child_feat, "0")
-            parent_val = features.get(parent_feat, "0")
-
-            if child_val != "0":
-                applicable_count += 1
-                if parent_val != "0":
-                    holds_count += 1
-
-        if applicable_count == 0:
+        spec = self.engine._spec_segs
+        spec_child = spec[child_feat]
+        if not spec_child:
             return 0.0
-
-        return holds_count / applicable_count
+        return len(spec_child & spec[parent_feat]) / len(spec_child)
 
     def _permutation_test(
         self, parent_feat: str, child_feat: str, observed_coverage: float
@@ -223,26 +211,20 @@ class GeometryAnalyzer:
         Returns:
             One-sided p-value in [0.0, 1.0].
         """
-        seg_features = self.engine.segments
-        n = len(seg_features)
+        spec = self.engine._spec_segs
+        n = len(self.engine.segments)
 
-        child_specified = [
-            f.get(child_feat, "0") != "0" for f in seg_features.values()
-        ]
-        applicable = sum(child_specified)
+        spec_child = spec[child_feat]
+        applicable = len(spec_child)
         if applicable == 0:
             return 1.0 if observed_coverage <= 0.0 else 0.0
 
-        parent_idx = [
-            i
-            for i, f in enumerate(seg_features.values())
-            if f.get(parent_feat, "0") != "0"
-        ]
-        k = len(parent_idx)
+        spec_parent = spec[parent_feat]
+        k = len(spec_parent)
         if k == 0:
             return 1.0
 
-        observed_holds = sum(1 for i in parent_idx if child_specified[i])
+        observed_holds = len(spec_child & spec_parent)
         return _hypergeom_sf(observed_holds, n, k, applicable)
 
     def _build_tree(self) -> GeometryNode:
