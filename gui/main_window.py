@@ -760,7 +760,7 @@ class MainWindow(QMainWindow):
             self._cached_norm_feats = None
             name = engine.metadata.get("name", os.path.basename(path))
             self.status.showMessage(
-                f"{name}  \u2014  "
+                f"{name}: "
                 f"{len(engine.segments)} segments, "
                 f"{len(engine.features)} features."
             )

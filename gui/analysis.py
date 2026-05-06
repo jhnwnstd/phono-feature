@@ -134,7 +134,7 @@ def render_single_segment(engine, seg: str, feats: dict) -> str:
 
     html = (
         f"<p><b style='color:{C['text']}'>/{seg}/</b>"
-        f" &nbsp;\u2014&nbsp; full feature bundle:</p>"
+        " feature bundle:</p>"
         f"<p>{plus_tags}</p>"
         f"<p>{minus_tags}</p>"
     )
@@ -264,7 +264,7 @@ def render_multi_segment(
         is_universal_class = not specs or not specs[0]
 
         if is_universal_class:
-            universal_label = "\u2205 (universal \u2014 all segments)"
+            universal_label = "\u2205 (universal)"
             spec_html = f"<p><b>Minimal specification:</b> {tag(universal_label, 'gray')}</p>"
         else:
             spec_html = render_spec_list(specs)
@@ -280,14 +280,15 @@ def render_multi_segment(
             nc_html = (
                 "<p><b>Natural class:</b>"
                 f" <span style='color:{C['minus']}'>No</span>"
-                f" \u2014 add {len(suggested)} segment{plural_suffix} to complete:"
+                f", add {len(suggested)} segment{plural_suffix} to complete:"
                 f"<br>{suggested_tags}</p>"
             )
         else:
+            # No suggestion available — match the terse "Yes" branch
+            # rather than restating what "not a natural class" means.
             nc_html = (
                 "<p><b>Natural class:</b>"
                 f" <span style='color:{C['minus']}'>No</span>"
-                " \u2014 no feature bundle picks them out."
                 "</p>"
             )
 

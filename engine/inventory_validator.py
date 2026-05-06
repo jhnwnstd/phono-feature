@@ -92,7 +92,7 @@ def validate_inventory(filepath: str) -> tuple[list[str], list[str]]:
 
     if not isinstance(segments, dict) or not segments:
         if isinstance(segments, dict) and not segments:
-            errors.append("'segments' is empty — no segments defined")
+            errors.append("'segments' is empty")
         return errors, warnings
 
     # -- Per-segment checks --
