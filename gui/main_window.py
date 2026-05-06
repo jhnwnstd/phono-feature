@@ -5,6 +5,7 @@ PyQt6 GUI for the Segment & Feature Engine.
 
 from __future__ import annotations
 
+import json
 import os
 from contextlib import contextmanager
 from enum import StrEnum
@@ -40,7 +41,7 @@ from PyQt6.QtWidgets import (
 )
 
 from engine.feature_engine import FeatureEngine
-from engine.inventory_validator import validate_inventory
+from engine.inventory_validator import validate_inventory_data
 from engine.segment_grouper import group_segments
 from gui.analysis import (
     compute_contrastive,
@@ -153,7 +154,14 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.engine: FeatureEngine | None = None
         self._mode: Mode = Mode.SEG_TO_FEAT
-        self._seg_buttons: dict = {}  # segment → SegmentButton
+        # segment → SegmentButton for the active inventory
+        self._seg_buttons: dict = {}
+        # Cross-inventory pool: keyed by segment symbol. Created once and
+        # reused on subsequent loads where the symbol reappears (most do —
+        # /p t k m n s/ etc. are nearly universal). The grid and chart
+        # layouts are still recomputed every swap; this only avoids the
+        # QPushButton.__init__ + setStyleSheet costs for known symbols.
+        self._seg_button_pool: dict[str, SegmentButton] = {}
         self._feat_rows: dict = {}  # feature  → FeatureRow
         self._selected_segments: list = []
         self._selected_features: dict = {}  # feature → '+'/'-'
@@ -672,8 +680,29 @@ class MainWindow(QMainWindow):
     def _load_path(self, path: str):
         """Core loading logic shared by dropdown, browse, and auto-reload."""
         path = os.path.abspath(path)
-        # Validate before loading — catches malformed JSON, bad values, etc.
-        errors, warnings = validate_inventory(path)
+        # Read + parse the JSON exactly once. The validator and the engine
+        # both work off the parsed dict so the file is opened once per
+        # swap instead of three times.
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            self.status.showMessage(
+                f"Cannot load {os.path.basename(path)}: file not found"
+            )
+            return
+        except OSError as e:
+            self.status.showMessage(
+                f"Cannot load {os.path.basename(path)}: {e}"
+            )
+            return
+        except json.JSONDecodeError as e:
+            self.status.showMessage(
+                f"Cannot load {os.path.basename(path)}: invalid JSON "
+                f"({e.msg} on line {e.lineno})"
+            )
+            return
+        errors, warnings = validate_inventory_data(data)
         if errors:
             msg = f"Cannot load {os.path.basename(path)}: {errors[0]}"
             self.status.showMessage(msg)
@@ -693,7 +722,7 @@ class MainWindow(QMainWindow):
                 self.status.showMessage(f"Warning: {w}")
         try:
             engine = FeatureEngine()
-            engine.load_inventory(path)
+            engine.load_inventory_data(data)
             self.engine = engine
             self._cached_groups = None
             self._cached_norm_feats = None
@@ -797,25 +826,15 @@ class MainWindow(QMainWindow):
         groups = dict(self._cached_groups)  # shallow copy — pop mutates
         norm_feats = self._cached_norm_feats
         vowel_segs = groups.pop("Vowels", [])
-        # Build consonant buttons
         consonant_buttons: dict = {}
         for segs in groups.values():
             for seg in segs:
-                btn = SegmentButton(seg)
-                btn.clicked.connect(
-                    lambda checked, s=seg: self._on_segment_clicked(s, checked)
-                )
-                consonant_buttons[seg] = btn
+                consonant_buttons[seg] = self._get_or_create_seg_button(seg)
         self.seg_grid_widget.set_groups(groups, consonant_buttons)
-        # Build vowel buttons separately (vowel chart owns these)
         vowel_buttons: dict = {}
         if vowel_segs:
             for seg in vowel_segs:
-                btn = SegmentButton(seg)
-                btn.clicked.connect(
-                    lambda checked, s=seg: self._on_segment_clicked(s, checked)
-                )
-                vowel_buttons[seg] = btn
+                vowel_buttons[seg] = self._get_or_create_seg_button(seg)
             if norm_feats is not None:
                 self.vowel_chart_widget.set_vowels(
                     vowel_segs, vowel_buttons, norm_feats
@@ -825,6 +844,33 @@ class MainWindow(QMainWindow):
             self.vowel_chart_widget.clear()
             self.vowel_chart_widget.hide()
         self._seg_buttons = {**consonant_buttons, **vowel_buttons}
+        # Detach pool entries not used by the active inventory so they
+        # don't linger in old layouts. They stay in the pool, ready for
+        # reuse if a later inventory brings them back.
+        active = set(self._seg_buttons)
+        for sym, btn in self._seg_button_pool.items():
+            if sym not in active and btn.parent() is not None:
+                btn.setParent(None)
+                btn.hide()
+
+    def _get_or_create_seg_button(self, seg: str):
+        """Return a SegmentButton for ``seg``, creating it on first use.
+
+        Reused buttons are reset to the default visual state — the
+        previous inventory may have left them checked or styled.
+        """
+        btn = self._seg_button_pool.get(seg)
+        if btn is None:
+            btn = SegmentButton(seg)
+            btn.clicked.connect(
+                lambda checked, s=seg: self._on_segment_clicked(s, checked)
+            )
+            self._seg_button_pool[seg] = btn
+            return btn
+        btn.setChecked(False)
+        btn.set_state(SegmentState.DEFAULT)
+        btn.setToolTip("")
+        return btn
 
     def _build_feature_group(
         self, title: str, features: list

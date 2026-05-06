@@ -14,7 +14,7 @@ _VALID_VALUES = {"+", "-", "0"}
 
 
 def validate_inventory(filepath: str) -> tuple[list[str], list[str]]:
-    """Validate an inventory JSON file.
+    """Validate an inventory JSON file (file I/O + structure).
 
     Returns:
         (errors, warnings) — both are lists of human-readable strings.
@@ -22,7 +22,6 @@ def validate_inventory(filepath: str) -> tuple[list[str], list[str]]:
     """
     errors: list[str] = []
     warnings: list[str] = []
-    # -- File-level checks --
     if not os.path.isfile(filepath):
         errors.append(f"File not found: {filepath}")
         return errors, warnings
@@ -39,6 +38,17 @@ def validate_inventory(filepath: str) -> tuple[list[str], list[str]]:
             f"Invalid JSON: {e.msg} (line {e.lineno}, col {e.colno})"
         )
         return errors, warnings
+    return validate_inventory_data(data)
+
+
+def validate_inventory_data(data) -> tuple[list[str], list[str]]:
+    """Validate an already-parsed inventory dict.
+
+    Use this when the caller has already opened and parsed the file —
+    avoids reading the file twice when the engine will parse it again.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
     if not isinstance(data, dict):
         errors.append(
             f"Top-level JSON value must be an object, not {type(data).__name__}"

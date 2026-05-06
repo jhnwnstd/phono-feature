@@ -107,6 +107,15 @@ class FeatureEngine:
         """
         with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
+        self.load_inventory_data(data)
+
+    def load_inventory_data(self, data: dict) -> None:
+        """Load from an already-parsed inventory dict.
+
+        Use this when the caller already parsed the JSON (e.g. so the
+        validator and the engine can share one parse). Same validation
+        and ``_rebuild_caches`` behavior as ``load_inventory``.
+        """
         if "features" not in data or "segments" not in data:
             raise ValueError(
                 "Inventory must contain 'features' and 'segments' fields"
