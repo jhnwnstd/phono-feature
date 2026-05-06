@@ -11,7 +11,10 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QDialog,
     QFileDialog,
+    QHBoxLayout,
     QHeaderView,
+    QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -189,6 +192,51 @@ class InventoryBuilder(QMainWindow):
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Metadata strip: editable inventory name + current-file indicator.
+        # Sitting above the grid so it's clear what you'll be saving and
+        # where, before any cell edit. Editing the name marks the inventory
+        # dirty; Save / Save As pick up the new name on write.
+        meta_strip = QWidget()
+        meta_strip.setStyleSheet(
+            f"background: {C['bg']};"
+            f" border-bottom: 1px solid {C['border']};"
+        )
+        meta_lay = QHBoxLayout(meta_strip)
+        meta_lay.setContentsMargins(12, 6, 12, 6)
+        meta_lay.setSpacing(8)
+
+        name_label = QLabel("Name:")
+        name_label.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
+        name_label.setStyleSheet(f"color: {C['text_dim']};")
+        meta_lay.addWidget(name_label)
+
+        self._name_edit = QLineEdit(self._inv_name)
+        self._name_edit.setFont(QFont("Noto Sans", 10))
+        self._name_edit.setStyleSheet(f"""
+            QLineEdit {{
+                background: {C["panel"]};
+                color: {C["text"]};
+                border: 1px solid {C["border"]};
+                border-radius: 4px;
+                padding: 2px 8px;
+            }}
+            QLineEdit:focus {{
+                border: 1.5px solid {C["accent"]};
+            }}
+        """)
+        self._name_edit.editingFinished.connect(self._on_name_edited)
+        meta_lay.addWidget(self._name_edit, stretch=1)
+
+        self._file_label = QLabel("(unsaved)")
+        self._file_label.setFont(QFont("Noto Sans", 9))
+        self._file_label.setStyleSheet(
+            f"color: {C['text_dim']}; padding: 0 4px;"
+        )
+        meta_lay.addWidget(self._file_label)
+
+        layout.addWidget(meta_strip)
 
         self._table = QTableWidget()
         self._table.setFont(QFont("Noto Sans", 10))
@@ -613,3 +661,26 @@ class InventoryBuilder(QMainWindow):
             self.setWindowTitle(f"Inventory Builder: {name} ({fname})")
         else:
             self.setWindowTitle(f"Inventory Builder: {name}")
+        self._refresh_meta_strip()
+
+    def _refresh_meta_strip(self) -> None:
+        """Sync the name field and file-indicator label with the current
+        ``_inv_name`` / ``_current_path``. Used after every load, save,
+        or programmatic rename so the visible UI matches the data."""
+        if self._name_edit.text() != self._inv_name:
+            self._name_edit.setText(self._inv_name)
+        if self._current_path:
+            self._file_label.setText(os.path.basename(self._current_path))
+        else:
+            self._file_label.setText("(unsaved)")
+
+    def _on_name_edited(self) -> None:
+        """Commit the name field's text to ``_inv_name`` once the user
+        finishes editing (focus lost or Enter). Marks dirty if the name
+        actually changed; refreshes the title bar."""
+        new_name = self._name_edit.text().strip() or "Untitled Inventory"
+        if new_name == self._inv_name:
+            return
+        self._inv_name = new_name
+        self._dirty = True
+        self._update_title()

@@ -85,32 +85,25 @@ def compute_contrastive(engine, segs: list) -> dict:
     all selected segments.
     """
     result = {}
+    seg_set = set(segs)
 
     for feat in engine.features:
-        plus_segs = [
-            seg for seg in segs if engine.segments[seg].get(feat, "0") == "+"
-        ]
+        plus_in = engine._plus_segs[feat] & seg_set
+        minus_in = engine._minus_segs[feat] & seg_set
 
-        minus_segs = [
-            seg for seg in segs if engine.segments[seg].get(feat, "0") == "-"
-        ]
-
-        feature_is_contrastive = plus_segs and minus_segs
-
-        if not feature_is_contrastive:
+        if not (plus_in and minus_in):
             continue
 
-        zero_segs = [
-            seg for seg in segs if engine.segments[seg].get(feat, "0") == "0"
-        ]
-
+        spec_in = engine._spec_segs[feat] & seg_set
+        # Preserve the order of the caller's segs list in each bucket so
+        # the rendered chips line up with how the user selected them.
         entry: dict = {
-            "+": plus_segs,
-            "-": minus_segs,
+            "+": [s for s in segs if s in plus_in],
+            "-": [s for s in segs if s in minus_in],
         }
 
-        if zero_segs:
-            entry["0"] = zero_segs
+        if len(spec_in) < len(seg_set):
+            entry["0"] = [s for s in segs if s not in spec_in]
 
         result[feat] = entry
 

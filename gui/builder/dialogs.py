@@ -123,14 +123,22 @@ def show_warning(parent, title: str, text: str):
 
 
 class InputDialog(QDialog):
-    """Dialog for entering segments and features before opening the grid."""
+    """Dialog for entering segments and features before opening the grid.
 
-    def __init__(self, parent=None):
+    When ``current_path`` is given, an extra "Edit current inventory" button
+    is shown so the user can pivot to editing the inventory already loaded in
+    the main window instead of creating a fresh one. The caller checks
+    ``edit_existing_chosen`` after ``exec()`` to know which path to take.
+    """
+
+    def __init__(self, parent=None, current_path: str | None = None):
         super().__init__(parent)
 
         self.setWindowTitle("New Inventory Setup")
         self.setMinimumSize(500, 500)
         self.setWindowModality(Qt.WindowModality.WindowModal)
+        self._current_path = current_path
+        self.edit_existing_chosen = False
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)

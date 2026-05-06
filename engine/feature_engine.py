@@ -33,6 +33,16 @@ class FeatureEngine:
         self.metadata: dict = {}
         self.features: list[str] = []
         self.segments: dict[str, dict[str, str]] = {}
+        # Per-feature segment-set caches, populated by ``_rebuild_caches``
+        # after every ``load_inventory``. Treat as read-only: mutating
+        # ``segments`` directly without a reload will desync these.
+        self._spec_segs: dict[str, frozenset[str]] = {}
+        self._plus_segs: dict[str, frozenset[str]] = {}
+        self._minus_segs: dict[str, frozenset[str]] = {}
+        # seg → tuple of feature values in ``self.features`` order. Used
+        # for fast pairwise comparisons (avg distance, neighbor search).
+        self._seg_value_tuples: dict[str, tuple[str, ...]] = {}
+        self._contrastive_features: list[str] | None = None
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -129,6 +139,37 @@ class FeatureEngine:
         self.metadata = data.get("metadata", {})
         self.features = data["features"]
         self.segments = data["segments"]
+        self._rebuild_caches()
+
+    def _rebuild_caches(self) -> None:
+        """Rebuild derived per-feature segment-set caches and segment value
+        tuples. Called after ``load_inventory``. Anything that mutates
+        ``self.segments`` outside ``load_inventory`` must call this too —
+        the engine has no setter API today, so reload is the only path.
+        """
+        spec: dict[str, set[str]] = {f: set() for f in self.features}
+        plus: dict[str, set[str]] = {f: set() for f in self.features}
+        minus: dict[str, set[str]] = {f: set() for f in self.features}
+
+        for seg, feats in self.segments.items():
+            for f in self.features:
+                v = feats.get(f, "0")
+                if v == "+":
+                    spec[f].add(seg)
+                    plus[f].add(seg)
+                elif v == "-":
+                    spec[f].add(seg)
+                    minus[f].add(seg)
+
+        self._spec_segs = {f: frozenset(s) for f, s in spec.items()}
+        self._plus_segs = {f: frozenset(s) for f, s in plus.items()}
+        self._minus_segs = {f: frozenset(s) for f, s in minus.items()}
+
+        self._seg_value_tuples = {
+            seg: tuple(feats.get(f, "0") for f in self.features)
+            for seg, feats in self.segments.items()
+        }
+        self._contrastive_features = None
 
     def get_segment_features(self, segment: str) -> dict[str, str]:
         """
@@ -369,14 +410,9 @@ class FeatureEngine:
             KeyError: If feature not in inventory
         """
         self._validate_feature(feature)
-        values = set()
-        for seg in self.segments.values():
-            v = seg.get(feature, "0")
-            if v != "0":
-                values.add(v)
-                if len(values) > 1:
-                    return True
-        return False
+        return bool(self._plus_segs[feature]) and bool(
+            self._minus_segs[feature]
+        )
 
     def get_contrastive_features(self) -> list[str]:
         """
@@ -385,7 +421,13 @@ class FeatureEngine:
         Returns:
             List of feature names that are contrastive
         """
-        return [f for f in self.features if self.is_contrastive(f)]
+        if self._contrastive_features is None:
+            self._contrastive_features = [
+                f
+                for f in self.features
+                if self._plus_segs[f] and self._minus_segs[f]
+            ]
+        return self._contrastive_features
 
     def common_features(self, segments: list[str]) -> dict[str, str]:
         """
@@ -452,9 +494,9 @@ class FeatureEngine:
         """
         self._validate_segment(seg1)
         self._validate_segment(seg2)
-        f1 = self.segments[seg1]
-        f2 = self.segments[seg2]
-        return sum(f1.get(f, "0") != f2.get(f, "0") for f in self.features)
+        t1 = self._seg_value_tuples[seg1]
+        t2 = self._seg_value_tuples[seg2]
+        return sum(1 for a, b in zip(t1, t2) if a != b)
 
     def find_nearest_segments(
         self, segment: str, n: int = 5
@@ -520,18 +562,15 @@ class FeatureEngine:
         }
 
         if len(self.segments) > 1:
-            seg_feats = list(self.segments.values())
-            features = self.features
+            tuples = list(self._seg_value_tuples.values())
+            n = len(tuples)
             total = 0
-            count = 0
-            for i in range(len(seg_feats)):
-                fi = seg_feats[i]
-                for j in range(i + 1, len(seg_feats)):
-                    fj = seg_feats[j]
-                    total += sum(
-                        fi.get(f, "0") != fj.get(f, "0") for f in features
-                    )
-                    count += 1
+            for i in range(n):
+                ti = tuples[i]
+                for j in range(i + 1, n):
+                    tj = tuples[j]
+                    total += sum(1 for a, b in zip(ti, tj) if a != b)
+            count = n * (n - 1) // 2
             stats["avg_feature_distance"] = total / count
         else:
             stats["avg_feature_distance"] = 0.0
