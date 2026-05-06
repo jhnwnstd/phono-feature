@@ -35,20 +35,15 @@ def _feat_rows_with_styling(window) -> int:
 # ---------------------------------------------------------------------------
 # Same-panel Clear: should fully reset the active panel + downstream display
 # ---------------------------------------------------------------------------
-
-
 def test_clear_segments_in_seg_mode_resets_everything(window):
     """In seg mode, clicking Clear on seg panel must wipe segs AND any
     feat-row informational tinting that was derived from those segs."""
     window._on_segment_clicked("b", True)
     window._on_segment_clicked("d", True)
     window._run_pending_update()
-
     # Sanity: seg-mode update populated feat-row visual styling
     assert _feat_rows_with_styling(window) > 0
-
     window._clear_segments()
-
     assert window._selected_segments == []
     assert _non_default_seg_buttons(window) == 0
     assert _selected_feat_rows(window) == set()
@@ -65,12 +60,9 @@ def test_clear_features_in_feat_mode_resets_everything(window):
     window._feat_rows["Voice"]._on_click("+")
     window._feat_rows["Continuant"]._on_click("-")
     window._run_pending_update()
-
     # Sanity: every seg button got matched/unmatched styling
     assert _non_default_seg_buttons(window) == len(window._seg_buttons)
-
     window._clear_features()
-
     assert window._selected_features == {}
     assert _selected_feat_rows(window) == set()
     assert _non_default_seg_buttons(window) == 0
@@ -79,8 +71,6 @@ def test_clear_features_in_feat_mode_resets_everything(window):
 # ---------------------------------------------------------------------------
 # Cross-panel Clear: must not corrupt the active panel's primary state
 # ---------------------------------------------------------------------------
-
-
 def test_clear_features_in_seg_mode_preserves_segment_selection(window):
     """REGRESSION: clicking the feat-side Clear in seg mode must NOT silently
     wipe the user's segment selection. Previously this method reset every
@@ -90,12 +80,9 @@ def test_clear_features_in_seg_mode_preserves_segment_selection(window):
     window._on_segment_clicked("b", True)
     window._on_segment_clicked("d", True)
     window._run_pending_update()
-
     selected_before = list(window._selected_segments)
     selected_button_count = _non_default_seg_buttons(window)
-
     window._clear_features()
-
     # _selected_features was already empty in seg mode; clearing is a no-op
     # for that. CRITICAL: the seg-side state must be untouched.
     assert window._selected_segments == selected_before
@@ -110,12 +97,9 @@ def test_clear_segments_in_feat_mode_preserves_feature_query(window):
     window._feat_rows["Voice"]._on_click("+")
     window._feat_rows["Continuant"]._on_click("-")
     window._run_pending_update()
-
     feats_before = dict(window._selected_features)
     feat_rows_before = _selected_feat_rows(window)
-
     window._clear_segments()
-
     assert window._selected_features == feats_before
     assert _selected_feat_rows(window) == feat_rows_before
 
@@ -123,8 +107,6 @@ def test_clear_segments_in_feat_mode_preserves_feature_query(window):
 # ---------------------------------------------------------------------------
 # Symmetry: the two clear methods are structurally mirror-images
 # ---------------------------------------------------------------------------
-
-
 def test_clear_buttons_are_symmetric(window):
     """Behavioral symmetry: clearing in active mode produces equivalent
     fully-reset state regardless of which panel was active."""
@@ -139,7 +121,6 @@ def test_clear_buttons_are_symmetric(window):
         _non_default_seg_buttons(window),
         _selected_feat_rows(window),
     )
-
     # Feat mode flow: select, clear-feats
     window._set_mode(Mode.FEAT_TO_SEG)
     window._feat_rows["Voice"]._on_click("+")
@@ -152,7 +133,6 @@ def test_clear_buttons_are_symmetric(window):
         _non_default_seg_buttons(window),
         _selected_feat_rows(window),
     )
-
     # Both flows should land in the same fully-empty state.
     assert (
         seg_state_after
@@ -174,11 +154,9 @@ def test_silent_clear_in_inventory_reload_resets_both_sides(window):
     window._on_segment_clicked("b", True)
     window._on_segment_clicked("d", True)
     window._run_pending_update()
-
     # Simulate the reload path
     window._clear_segments(silent=True)
     window._clear_features(silent=True)
-
     assert window._selected_segments == []
     assert window._selected_features == {}
     assert _non_default_seg_buttons(window) == 0

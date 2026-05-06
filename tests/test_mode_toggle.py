@@ -22,8 +22,6 @@ def _selected_feat_rows(window) -> set[str]:
 # ---------------------------------------------------------------------------
 # Initial state
 # ---------------------------------------------------------------------------
-
-
 def test_fresh_window_has_no_selections(window):
     assert window._mode == "seg_to_feat"
     assert window._selected_segments == []
@@ -40,8 +38,6 @@ def test_inventory_loaded(window):
 # ---------------------------------------------------------------------------
 # Seg-mode behavior
 # ---------------------------------------------------------------------------
-
-
 def test_select_segment_in_seg_mode_updates_state(window):
     window._on_segment_clicked("b", True)
     assert window._selected_segments == ["b"]
@@ -65,8 +61,6 @@ def test_deselect_segment_removes_from_selection(window):
 # ---------------------------------------------------------------------------
 # Seg → Feat toggle: projection + visual state invariant
 # ---------------------------------------------------------------------------
-
-
 def test_toggle_seg_to_feat_projects_common_features(window):
     """When toggling with segments selected, common_features get projected
     into _selected_features."""
@@ -74,7 +68,6 @@ def test_toggle_seg_to_feat_projects_common_features(window):
     window._on_segment_clicked("d", True)
     window._on_segment_clicked("ɡ", True)  # voiced velar (script g)
     window._set_mode("feat_to_seg")
-
     assert window._mode == "feat_to_seg"
     # Voiced stops share many features in Hayes — projection must be non-empty
     assert len(window._selected_features) > 0
@@ -90,7 +83,6 @@ def test_toggle_seg_to_feat_visual_state_matches_selected_features(window):
     window._on_segment_clicked("b", True)
     window._on_segment_clicked("d", True)
     window._set_mode("feat_to_seg")
-
     assert _selected_feat_rows(window) == set(window._selected_features), (
         f"row visual state {_selected_feat_rows(window)} must match "
         f"selected_features {set(window._selected_features)}"
@@ -102,7 +94,6 @@ def test_toggle_seg_to_feat_row_values_match_projection(window):
     window._on_segment_clicked("b", True)
     window._on_segment_clicked("d", True)
     window._set_mode("feat_to_seg")
-
     for feat, val in window._selected_features.items():
         row = window._feat_rows[feat]
         assert row._current_value == val, (
@@ -114,7 +105,6 @@ def test_toggle_seg_to_feat_row_values_match_projection(window):
 def test_toggle_seg_to_feat_with_no_segments_yields_empty_state(window):
     """Toggle with nothing selected must produce empty feat state."""
     window._set_mode("feat_to_seg")
-
     assert window._selected_features == {}
     assert _selected_feat_rows(window) == set()
 
@@ -122,8 +112,6 @@ def test_toggle_seg_to_feat_with_no_segments_yields_empty_state(window):
 # ---------------------------------------------------------------------------
 # Feat-mode click + visual state
 # ---------------------------------------------------------------------------
-
-
 def test_click_feature_in_feat_mode_tints_row(window):
     """Clicking a +/- button updates row visual state AND _selected_features.
 
@@ -134,9 +122,7 @@ def test_click_feature_in_feat_mode_tints_row(window):
     window._set_mode("feat_to_seg")
     feature = next(iter(window._feat_rows))
     row = window._feat_rows[feature]
-
     row._on_click("+")
-
     assert row._current_value == "+"
     assert window._selected_features[feature] == "+"
 
@@ -145,10 +131,8 @@ def test_click_feature_to_deselect_clears_row(window):
     window._set_mode("feat_to_seg")
     feature = next(iter(window._feat_rows))
     row = window._feat_rows[feature]
-
     row._on_click("+")
     row._on_click("+")  # second click toggles off
-
     assert row._current_value == ""
     assert feature not in window._selected_features
 
@@ -169,8 +153,6 @@ def test_click_feature_to_deselect_clears_row(window):
 # These tests lock in the current behavior so accidental changes get caught.
 # They also document the asymmetry for whoever reads them next.
 # ---------------------------------------------------------------------------
-
-
 def test_seg_feat_seg_roundtrip_includes_original_segments(window):
     """seg→feat→seg always re-selects the original segments (subset guarantee).
 
@@ -181,10 +163,8 @@ def test_seg_feat_seg_roundtrip_includes_original_segments(window):
     original = ["b", "d", "ɡ"]
     for s in original:
         window._on_segment_clicked(s, True)
-
     window._set_mode("feat_to_seg")
     window._set_mode("seg_to_feat")
-
     assert set(original).issubset(set(window._selected_segments))
 
 
@@ -200,10 +180,8 @@ def test_feat_seg_feat_roundtrip_includes_original_features(window):
     row = window._feat_rows[feature]
     row._on_click("+")
     original = dict(window._selected_features)
-
     window._set_mode("seg_to_feat")
     window._set_mode("feat_to_seg")
-
     # Original key/value must survive the roundtrip; extras may appear.
     for f, v in original.items():
         assert window._selected_features.get(f) == v
@@ -212,8 +190,6 @@ def test_feat_seg_feat_roundtrip_includes_original_features(window):
 # ---------------------------------------------------------------------------
 # Cross-pane consistency
 # ---------------------------------------------------------------------------
-
-
 def test_no_orphan_row_values_after_clear_segments(window):
     """Clearing segments must also clear feature rows so no row is left
     showing a value that doesn't correspond to a selection."""
@@ -221,7 +197,6 @@ def test_no_orphan_row_values_after_clear_segments(window):
     window._set_mode("feat_to_seg")
     window._set_mode("seg_to_feat")
     window._clear_segments()
-
     assert window._selected_segments == []
     assert _selected_feat_rows(window) == set()
 
@@ -235,5 +210,4 @@ def test_selected_features_keys_match_row_state_in_feat_mode(window):
     window._on_segment_clicked("ʃ", True)
     window._on_segment_clicked("i", True)
     window._set_mode("feat_to_seg")
-
     assert set(window._selected_features) == _selected_feat_rows(window)

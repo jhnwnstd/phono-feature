@@ -23,7 +23,6 @@ def print_section(title: str) -> None:
 def test_basic_operations() -> FeatureEngine:
     """Test basic engine operations."""
     print_section("Basic Engine Operations")
-
     # Load inventory
     engine = FeatureEngine()
     print("\nLoading Hayes inventory...")
@@ -31,18 +30,15 @@ def test_basic_operations() -> FeatureEngine:
     print(f"✓ Loaded: {engine.metadata['name']}")
     print(f"  Segments: {len(engine.segments)}")
     print(f"  Features: {len(engine.features)}")
-
     # Get segment features
     print("\n1. Get features for segment 'b':")
     features = engine.get_segment_features("b")
     for feat, val in sorted(features.items()):
         print(f"   {feat:15s} = {val}")
-
     # Find segments by features
     print("\n2. Find voiced stops (Voice:+, Continuant:-):")
     voiced_stops = engine.find_segments({"Voice": "+", "Continuant": "-"})
     print(f"   Found: {', '.join(voiced_stops)}")
-
     # Compute natural class
     print(
         "\n3. Natural class for [b, d, ɡ]:"
@@ -54,20 +50,17 @@ def test_basic_operations() -> FeatureEngine:
             print(f"     {feat:15s} = {val}")
     else:
         print("   (no minimal bundle found)")
-
     # Calculate distances
     print("\n4. Phonological distances:")
     pairs = [("b", "d"), ("b", "p"), ("b", "m"), ("b", "v")]
     for seg1, seg2 in pairs:
         dist = engine.segment_distance(seg1, seg2)
         print(f"   {seg1} ↔ {seg2}: {dist} features")
-
     # Find nearest neighbors
     print("\n5. Nearest neighbors to 'b':")
     neighbors = engine.find_nearest_segments("b", n=5)
     for neighbor, distance in neighbors:
         print(f"   {neighbor} (distance: {distance})")
-
     # Inventory statistics
     print("\n6. Inventory statistics:")
     stats = engine.get_inventory_stats()
@@ -75,41 +68,32 @@ def test_basic_operations() -> FeatureEngine:
     print(f"   Total features: {stats['feature_count']}")
     print(f"   Contrastive features: {stats['contrastive_features']}")
     print(f"   Avg pairwise distance: {stats['avg_feature_distance']:.2f}")
-
     return engine
 
 
 def test_geometry_analysis(engine: FeatureEngine) -> None:
     """Test feature geometry inference."""
     print_section("Feature Geometry Analysis")
-
     print("\nInferring feature geometry...")
     print("(This may take a moment - running permutation tests...)")
-
     analyzer = GeometryAnalyzer(engine)
     analyzer.analyze()
-
     print("\n✓ Geometry analysis complete!")
-
     dependencies = analyzer.get_dependency_summary()
-
     print(f"\nFound {len(dependencies)} feature dependencies:")
     print(
         f"\n{'Child Feature':<20} {'Parent Feature':<20} "
         f"{'Coverage':<10} {'Confidence':<12}"
     )
     print("-" * 70)
-
     for dep in dependencies[:10]:  # Show top 10
         child = dep["child"]
         parent = dep["parent"]
         coverage = f"{dep['coverage']:.2%}"
         confidence = dep["confidence"].upper()
         print(f"{child:<20} {parent:<20} {coverage:<10} {confidence:<12}")
-
     if len(dependencies) > 10:
         print(f"\n... and {len(dependencies) - 10} more dependencies")
-
     # Show high-confidence dependencies
     high_conf = [d for d in dependencies if d["confidence"] == "high"]
     if high_conf:
@@ -124,10 +108,8 @@ def test_geometry_analysis(engine: FeatureEngine) -> None:
 def test_natural_class_examples() -> None:
     """Test various natural class computations."""
     print_section("Natural Class Examples")
-
     engine = FeatureEngine()
     engine.load_inventory("config/hayes_features.json")
-
     examples: list[tuple[list[str], str]] = [
         (["b", "d", "ɡ"], "Voiced stops"),  # noqa: RUF001 — IPA voiced velar
         (["p", "t", "k"], "Voiceless stops"),
@@ -135,11 +117,9 @@ def test_natural_class_examples() -> None:
         (["f", "v", "s", "z"], "Fricatives (subset)"),
         (["l"], "Lateral"),
     ]
-
     for segments, description in examples:
         print(f"\n{description}: {', '.join(segments)}")
         bundle = engine.compute_natural_class(segments)
-
         if bundle:
             features_str = ", ".join(
                 f"{k}:{v}" for k, v in sorted(bundle.items())
@@ -147,7 +127,6 @@ def test_natural_class_examples() -> None:
             print(f"  Features: {features_str}")
         else:
             print("  Features: (none required)")
-
         # Verify the bundle picks out exactly these segments
         found = engine.find_segments(bundle)
         if set(found) == set(segments):
@@ -163,29 +142,23 @@ def main() -> int:
     print("\n" + "=" * 60)
     print("  PHONOLOGY ENGINE TEST SUITE")
     print("=" * 60)
-
     try:
         # Test basic operations
         engine = test_basic_operations()
-
         # Test natural class examples
         test_natural_class_examples()
-
         # Test geometry analysis
         test_geometry_analysis(engine)
-
         print_section("All Tests Complete")
         print("\n✓ Engine is working correctly!")
         print("\nTo launch the GUI, run:")
         print("  python main.py")
-
     except Exception as e:
         print(f"\n✗ Error during testing: {e}")
         import traceback
 
         traceback.print_exc()
         return 1
-
     return 0
 
 

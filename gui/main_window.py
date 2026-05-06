@@ -70,8 +70,6 @@ from gui.widgets import (
 
 if TYPE_CHECKING:
     from gui.builder import InventoryBuilder
-
-
 # Mode-independent: same style applied at construction, never changed.
 # Previously the panel-chrome reapplied this every mode toggle (no-op
 # restyle) — that's now done once and skipped on toggles.
@@ -115,14 +113,12 @@ class BrandedStatusBar(QStatusBar):
         super().__init__(parent)
         self.setSizeGripEnabled(False)
         self.setFixedHeight(self._BAR_HEIGHT)
-
         self._message_label = QLabel("")
         self._message_label.setFont(self._FONT)
         self._message_label.setStyleSheet(f"color: {C['text']};")
         self._message_label.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-
         self._brand = QLabel("Language Doodad")
         self._brand.setFont(self._FONT)
         self._brand.setStyleSheet(
@@ -131,7 +127,6 @@ class BrandedStatusBar(QStatusBar):
         self._brand.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
-
         # Left section: message label fills remaining width.
         self.addWidget(self._message_label, 1)
         # Right section: brand sits permanently in the lower-right corner.
@@ -153,8 +148,6 @@ class BrandedStatusBar(QStatusBar):
 # ---------------------------------------------------------------------------
 # MainWindow
 # ---------------------------------------------------------------------------
-
-
 class MainWindow(QMainWindow):
     def __init__(self, startup_path: str | None = None):
         super().__init__()
@@ -184,17 +177,14 @@ class MainWindow(QMainWindow):
         self._feat_cards: list[tuple[QFrame, list[str]]] = []
         self._other_card: QFrame | None = None
         self._feature_pool_initialized: bool = False
-
         self.setWindowTitle("Feature visualizer")
         self.setMinimumSize(640, 480)
         self.setStyleSheet(f"background-color: {C['bg']};")
-
         # -- 150 ms debounce: batch rapid selection changes before analysis --
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(150)
         self._debounce.timeout.connect(self._run_pending_update)
-
         # -- file-system watcher: auto-reload when config JSON changes --
         self._watcher = QFileSystemWatcher(self)
         self._watcher.fileChanged.connect(self._on_file_changed)
@@ -204,10 +194,8 @@ class MainWindow(QMainWindow):
         self._reload_timer.setSingleShot(True)
         self._reload_timer.setInterval(600)
         self._reload_timer.timeout.connect(self._do_auto_reload)
-
         # -- persistent settings --
         self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-
         self._build_ui()
         app = QApplication.instance()
         assert isinstance(app, QApplication)
@@ -218,7 +206,6 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # UI construction
     # ------------------------------------------------------------------
-
     def _build_ui(self) -> None:
         # ── toolbar ──────────────────────────────────────────────────
         toolbar = QToolBar()
@@ -232,7 +219,6 @@ class MainWindow(QMainWindow):
             }}
         """)
         self.addToolBar(toolbar)
-
         # Config dropdown
         self.config_combo = QComboBox()
         self.config_combo.setFont(QFont("Noto Sans", 10))
@@ -265,7 +251,6 @@ class MainWindow(QMainWindow):
         self._populate_config_dropdown()
         self.config_combo.activated.connect(self._on_config_selected)
         toolbar.addWidget(self.config_combo)
-
         # Browse button
         browse_btn = QPushButton("Browse\u2026")
         browse_btn.setFont(QFont("Noto Sans", 10))
@@ -286,7 +271,6 @@ class MainWindow(QMainWindow):
         """)
         browse_btn.clicked.connect(self._browse_config)
         toolbar.addWidget(browse_btn)
-
         builder_btn = QPushButton("Builder")
         builder_btn.setFont(QFont("Noto Sans", 10))
         builder_btn.setFixedHeight(32)
@@ -306,26 +290,21 @@ class MainWindow(QMainWindow):
         """)
         builder_btn.clicked.connect(self._open_builder)
         toolbar.addWidget(builder_btn)
-
         # ── central widget ────────────────────────────────────────────
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setHandleWidth(1)
         splitter.setStyleSheet(
             f"QSplitter::handle {{ background: {C['border']}; }}"
         )
-
         self.seg_panel = self._build_segment_panel()
         splitter.addWidget(self.seg_panel)
-
         self.feat_panel = self._build_feature_panel()
         splitter.addWidget(self.feat_panel)
-
         self._hsplit = splitter
         # Pre-load default: balanced split. _fit_to_content overrides
         # these once an inventory is loaded.
@@ -337,10 +316,8 @@ class MainWindow(QMainWindow):
         # leave dead space after the vowels inside the segment panel.
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-
         # ── bottom: analysis ──────────────────────────────────────────
         self.analysis = AnalysisPanel()
-
         self._vsplit = QSplitter(Qt.Orientation.Vertical)
         self._vsplit.setHandleWidth(4)
         self._vsplit.setStyleSheet(
@@ -352,9 +329,7 @@ class MainWindow(QMainWindow):
         self._vsplit.setStretchFactor(0, 1)
         self._vsplit.setStretchFactor(1, 0)
         self._min_analysis_h = 220
-
         root.addWidget(self._vsplit)
-
         # ── status bar ────────────────────────────────────────────────
         self.status = BrandedStatusBar()
         self.status.setStyleSheet(
@@ -374,25 +349,21 @@ class MainWindow(QMainWindow):
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
-
         header = QHBoxLayout()
         self._seg_title = QLabel("SEGMENTS")
         self._seg_title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
         self._seg_title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1.5px;"
         )
-
         self.clear_seg_btn = QPushButton("Clear")
         self.clear_seg_btn.setFixedHeight(26)
         self.clear_seg_btn.setFont(QFont("Noto Sans", 9))
         self.clear_seg_btn.setStyleSheet(_CLEAR_BTN_STYLE)
         self.clear_seg_btn.clicked.connect(self._clear_segments)
-
         header.addWidget(self._seg_title)
         header.addStretch()
         header.addWidget(self.clear_seg_btn)
         vlay.addLayout(header)
-
         self._seg_scroll = QScrollArea()
         self._seg_scroll.setWidgetResizable(True)
         self._seg_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -405,14 +376,11 @@ class MainWindow(QMainWindow):
         self._seg_scroll.setStyleSheet(
             "QScrollArea { background: transparent; }" + SCROLLBAR_STYLE
         )
-
         seg_content = QWidget()
         seg_content.setStyleSheet("background: transparent;")
-
         seg_content_layout = QHBoxLayout(seg_content)
         seg_content_layout.setContentsMargins(0, 0, 0, 0)
         seg_content_layout.setSpacing(12)
-
         left_wrap = QWidget()
         left_wrap.setStyleSheet("background: transparent;")
         left_lay = QVBoxLayout(left_wrap)
@@ -421,13 +389,11 @@ class MainWindow(QMainWindow):
         self.seg_grid_widget = SegmentGridWidget()
         left_lay.addWidget(self.seg_grid_widget)
         left_lay.addStretch()
-
         self.vowel_chart_widget = VowelChartWidget()
         self.vowel_chart_widget.hide()
         self.vowel_chart_widget.setFixedWidth(
             VOWEL_LABEL_W + 6 * (BTN_W + BTN_GAP)
         )
-
         # stretch=0 on both: consonants and vowels sit at their natural
         # widths next to each other (separated only by the layout's
         # 12 px spacing). Any leftover horizontal room is absorbed by
@@ -439,19 +405,16 @@ class MainWindow(QMainWindow):
             stretch=0,
             alignment=Qt.AlignmentFlag.AlignTop,
         )
-
         self._seg_scroll.setWidget(seg_content)
         vp = self._seg_scroll.viewport()
         assert vp is not None
         vp.setStyleSheet("background: transparent;")
         vlay.addWidget(self._seg_scroll, stretch=1)
-
         self.seg_hint = QLabel("\u2190 Select an inventory to see segments")
         self.seg_hint.setFont(QFont("Noto Sans", 9))
         self.seg_hint.setStyleSheet(f"color: {C['text_dim']};")
         self.seg_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         vlay.addWidget(self.seg_hint)
-
         return container
 
     def _build_feature_panel(self) -> QFrame:
@@ -463,64 +426,53 @@ class MainWindow(QMainWindow):
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
-
         header = QHBoxLayout()
         self._feat_title = QLabel("FEATURES")
         self._feat_title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
         self._feat_title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1.5px;"
         )
-
         self.clear_feat_btn = QPushButton("Clear")
         self.clear_feat_btn.setFixedHeight(26)
         self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
         self.clear_feat_btn.setStyleSheet(_CLEAR_BTN_STYLE)
         self.clear_feat_btn.clicked.connect(self._clear_features)
-
         header.addWidget(self._feat_title)
         header.addStretch()
         header.addWidget(self.clear_feat_btn)
         vlay.addLayout(header)
-
         self._feat_scroll = QScrollArea()
         self._feat_scroll.setWidgetResizable(True)
         self._feat_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._feat_scroll.setStyleSheet(
             "QScrollArea { background: transparent; }" + SCROLLBAR_STYLE
         )
-
         self._feat_content = QWidget()
         self._feat_content.setStyleSheet("background: transparent;")
         feat_main_layout = QHBoxLayout(self._feat_content)
         feat_main_layout.setContentsMargins(0, 0, 0, 0)
         feat_main_layout.setSpacing(8)
-
         self._feat_left_col = QWidget()
         self._feat_left_col.setStyleSheet("background: transparent;")
         self._feat_left_layout = QVBoxLayout(self._feat_left_col)
         self._feat_left_layout.setContentsMargins(0, 0, 0, 0)
         self._feat_left_layout.setSpacing(8)
         self._feat_left_layout.addStretch()
-
         self._feat_right_col = QWidget()
         self._feat_right_col.setStyleSheet("background: transparent;")
         self._feat_right_layout = QVBoxLayout(self._feat_right_col)
         self._feat_right_layout.setContentsMargins(0, 0, 0, 0)
         self._feat_right_layout.setSpacing(8)
         self._feat_right_layout.addStretch()
-
         feat_main_layout.addWidget(self._feat_left_col, stretch=1)
         feat_main_layout.addWidget(self._feat_right_col, stretch=1)
-
         self._feat_scroll.setWidget(self._feat_content)
         vlay.addWidget(self._feat_scroll, stretch=1)
-
         return container
 
     # ------------------------------------------------------------------
     # Settings persistence
     # ------------------------------------------------------------------
-
     def _target_screen(self) -> QScreen | None:
         """Return the primary screen.
 
@@ -541,14 +493,11 @@ class MainWindow(QMainWindow):
         """
         app = QApplication.instance()
         assert isinstance(app, QApplication)
-
         screen = self._target_screen()
         if screen is None:
             return
-
         frame = self.frameGeometry()
         primary_geo = screen.geometry()
-
         # If the window is already mostly on the primary screen, keep it.
         if (
             primary_geo.intersects(frame)
@@ -558,7 +507,6 @@ class MainWindow(QMainWindow):
             self.raise_()
             self.activateWindow()
             return
-
         # If the window is on *some* other screen and has a saved position,
         # leave it there — the user intentionally placed it.
         if self._settings.value("window_pos") is not None:
@@ -567,13 +515,11 @@ class MainWindow(QMainWindow):
                 self.raise_()
                 self.activateWindow()
                 return
-
         # Otherwise, center on the primary screen.
         avail = screen.availableGeometry()
         frame = self.frameGeometry()
         frame.moveCenter(avail.center())
         self.move(frame.topLeft())
-
         self.raise_()
         self.activateWindow()
 
@@ -588,12 +534,10 @@ class MainWindow(QMainWindow):
         # Drop the old binary geometry blob — it encodes absolute positions that
         # can place the window off-screen after a display config change.
         self._settings.remove("geometry")
-
         self._has_saved_size = self._settings.value("window_size") is not None
         size = self._settings.value("window_size")
         pos = self._settings.value("window_pos")
         screen = self._target_screen()
-
         if size is not None:
             self.resize(size)
         else:
@@ -606,14 +550,12 @@ class MainWindow(QMainWindow):
                 )
             else:
                 self.resize(1200, 900)
-
         if pos is not None:
             self.move(pos)
         elif screen is not None:
             frame = self.frameGeometry()
             frame.moveCenter(screen.availableGeometry().center())
             self.move(frame.topLeft())
-
         # Determine which inventory to open
         path = startup_path or self._settings.value("last_inventory")
         if path and isinstance(path, str) and os.path.isfile(path):
@@ -621,7 +563,6 @@ class MainWindow(QMainWindow):
             if idx >= 0:
                 self.config_combo.setCurrentIndex(idx)
             self._load_path(path)
-
         # Restore mode after loading (overrides _load_path's default mode)
         saved_mode = self._settings.value("mode", Mode.SEG_TO_FEAT)
         if saved_mode in (Mode.SEG_TO_FEAT, Mode.FEAT_TO_SEG):
@@ -647,7 +588,6 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Config loading
     # ------------------------------------------------------------------
-
     def _populate_config_dropdown(self) -> None:
         """Scan config/ directory and fill the dropdown."""
         config_dir = os.path.normpath(
@@ -655,7 +595,6 @@ class MainWindow(QMainWindow):
         )
         self.config_combo.clear()
         self.config_combo.addItem("Select inventory\u2026", userData=None)
-
         # Disable the placeholder row so it cannot be picked.
         # QStandardItemModel is the default; the guard is defensive against
         # style plugins that substitute a different model type.  If it fails,
@@ -665,14 +604,12 @@ class MainWindow(QMainWindow):
             item = model.item(0)
             if item is not None:
                 item.setEnabled(False)
-
         if os.path.isdir(config_dir):
             for fname in sorted(os.listdir(config_dir)):
                 if fname.endswith(".json"):
                     path = os.path.join(config_dir, fname)
                     pretty = fname[:-5].replace("_", " ").title()
                     self.config_combo.addItem(pretty, userData=path)
-
         self.config_combo.setCurrentIndex(0)
 
     def _on_config_selected(self, index: int):
@@ -726,7 +663,7 @@ class MainWindow(QMainWindow):
         # window has an inventory loaded, pass its path so the dialog can
         # offer "Edit current inventory" as an alternative to creating
         # one from scratch.
-        if not builder._show_setup_dialog(offer_edit_path=self._current_path):
+        if not builder.show_setup_dialog(offer_edit_path=self._current_path):
             builder.deleteLater()
             return
         self._builder = builder
@@ -754,7 +691,6 @@ class MainWindow(QMainWindow):
         if warnings:
             for w in warnings:
                 self.status.showMessage(f"Warning: {w}")
-
         try:
             engine = FeatureEngine()
             engine.load_inventory(path)
@@ -767,7 +703,6 @@ class MainWindow(QMainWindow):
                 f"{len(engine.segments)} segments, "
                 f"{len(engine.features)} features."
             )
-
             # Update file-system watcher (file + containing directory)
             if self._current_path and self._current_path != path:
                 self._watcher.removePath(self._current_path)
@@ -781,15 +716,12 @@ class MainWindow(QMainWindow):
             parent_dir = os.path.dirname(os.path.abspath(path))
             if parent_dir not in self._watcher.directories():
                 self._watcher.addPath(parent_dir)
-
             # Sync the dropdown to reflect the loaded inventory
             idx = self.config_combo.findData(path)
             if idx >= 0:
                 self.config_combo.setCurrentIndex(idx)
-
             # Persist for next launch
             self._settings.setValue("last_inventory", path)
-
             self._saved_seg_state = []
             self._saved_feat_state = {}
             with self._batched_updates():
@@ -804,7 +736,6 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # File-system watcher: auto-reload on disk change
     # ------------------------------------------------------------------
-
     def _on_file_changed(self, path: str):
         """Called by QFileSystemWatcher when the watched file changes."""
         # Some editors remove and recreate the file; re-add if needed.
@@ -840,13 +771,11 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Populate panels
     # ------------------------------------------------------------------
-
     def _populate_segments(self):
         if self.engine is None:
             return
         self._selected_segments.clear()
         self.seg_hint.hide()
-
         # Cache grouping for the current engine. Cleared in _load_path
         # whenever a new engine is created, so a stale cache is impossible.
         if self._cached_groups is None:
@@ -857,11 +786,9 @@ class MainWindow(QMainWindow):
                 seg: _normalize_feats(self.engine.segments[seg])
                 for seg in self.engine.segments
             }
-
         groups = dict(self._cached_groups)  # shallow copy — pop mutates
         norm_feats = self._cached_norm_feats
         vowel_segs = groups.pop("Vowels", [])
-
         # Build consonant buttons
         consonant_buttons: dict = {}
         for segs in groups.values():
@@ -871,9 +798,7 @@ class MainWindow(QMainWindow):
                     lambda checked, s=seg: self._on_segment_clicked(s, checked)
                 )
                 consonant_buttons[seg] = btn
-
         self.seg_grid_widget.set_groups(groups, consonant_buttons)
-
         # Build vowel buttons separately (vowel chart owns these)
         vowel_buttons: dict = {}
         if vowel_segs:
@@ -883,7 +808,6 @@ class MainWindow(QMainWindow):
                     lambda checked, s=seg: self._on_segment_clicked(s, checked)
                 )
                 vowel_buttons[seg] = btn
-
             if norm_feats is not None:
                 self.vowel_chart_widget.set_vowels(
                     vowel_segs, vowel_buttons, norm_feats
@@ -892,7 +816,6 @@ class MainWindow(QMainWindow):
         else:
             self.vowel_chart_widget.clear()
             self.vowel_chart_widget.hide()
-
         self._seg_buttons = {**consonant_buttons, **vowel_buttons}
 
     def _build_feature_group(
@@ -902,7 +825,6 @@ class MainWindow(QMainWindow):
         active = [f for f in features if f in self._feat_rows]
         if not active:
             return None
-
         group_frame = QFrame()
         group_frame.setStyleSheet(f"""
             QFrame {{
@@ -914,7 +836,6 @@ class MainWindow(QMainWindow):
         glay = QVBoxLayout(group_frame)
         glay.setContentsMargins(0, 6, 0, 6)
         glay.setSpacing(1)
-
         title_label = QLabel(title)
         title_label.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
         title_label.setStyleSheet(
@@ -923,10 +844,8 @@ class MainWindow(QMainWindow):
             "padding: 0 8px 2px 8px;"
         )
         glay.addWidget(title_label)
-
         for feat in active:
             glay.addWidget(self._feat_rows[feat])
-
         return group_frame
 
     def _init_feature_pool(self) -> None:
@@ -942,16 +861,13 @@ class MainWindow(QMainWindow):
         """
         if self._feature_pool_initialized:
             return
-
         for feat in FEATURE_ORDER:
             row = FeatureRow(feat)
             row.value_changed.connect(self._on_feature_changed)
             self._feat_row_pool[feat] = row
-
         # Temporarily expose pool rows via _feat_rows so _build_feature_group
         # can find them while constructing cards.
         self._feat_rows = dict(self._feat_row_pool)
-
         for title, feats_list in FEATURE_GROUPS:
             card = self._build_feature_group(title, feats_list)
             if card is not None:
@@ -959,33 +875,27 @@ class MainWindow(QMainWindow):
                 # and place these into columns once we know the active set.
                 card.hide()
                 self._feat_cards.append((card, list(feats_list)))
-
         # Reset _feat_rows to the active-only contract; the next
         # _populate_features call will repopulate it for the loaded inventory.
         self._feat_rows = {}
         for row in self._feat_row_pool.values():
             row.setVisible(False)
-
         self._feature_pool_initialized = True
 
     def _populate_features(self) -> None:
         if self.engine is None:
             return
-
         active_feature_set: set = set()
         for seg_feats in self.engine.segments.values():
             for f, v in seg_feats.items():
                 if v != "0":
                     active_feature_set.add(f)
         active_feature_set &= set(self.engine.features)
-
         self._init_feature_pool()
-
         self._selected_features.clear()
         # Rebuild _feat_rows from the active subset so external code keeps
         # seeing only "rows present in the current inventory."
         self._feat_rows = {}
-
         # Show/hide pool rows based on the active set; reset the visible ones.
         for feat, row in self._feat_row_pool.items():
             if feat in active_feature_set:
@@ -994,14 +904,12 @@ class MainWindow(QMainWindow):
                 self._feat_rows[feat] = row
             else:
                 row.setVisible(False)
-
         # Build / tear down the dynamic "Other" card BEFORE redistribute
         # so it can be placed alongside the standard cards.
         unknown_active = sort_features(
             [f for f in active_feature_set if f not in set(FEATURE_ORDER)]
         )
         self._refresh_other_card(unknown_active)
-
         # Lay out cards across the two columns based on the inventory's
         # actual active feature counts (per-card visibility and ordering).
         self._redistribute_feature_cards(active_feature_set)
@@ -1020,15 +928,12 @@ class MainWindow(QMainWindow):
             self._other_card.setParent(None)
             self._other_card.deleteLater()
             self._other_card = None
-
         if not unknown_active:
             return
-
         for feat in unknown_active:
             row = FeatureRow(feat)
             row.value_changed.connect(self._on_feature_changed)
             self._feat_rows[feat] = row
-
         self._other_card = self._build_feature_group("Other", unknown_active)
         if self._other_card is not None:
             self._other_card.hide()  # placed by _redistribute_feature_cards
@@ -1047,7 +952,6 @@ class MainWindow(QMainWindow):
     # moment of placement (LPT scheduling). This packs the columns as
     # close to equal height as the active counts permit, which minimises
     # the window height the GUI needs to fit them.
-
     _LEFT_PINS: tuple[str, ...] = ("Major Class", "Place")
     _RIGHT_PINS: tuple[str, ...] = ("Manner",)
     # Each card in the column adds a roughly fixed-height header + padding
@@ -1074,7 +978,6 @@ class MainWindow(QMainWindow):
         per-card chrome (headers, padding) is reflected in the balance.
         """
         self._take_cards_out_of_columns()
-
         # Build (title → (card, cost)) for every card we know about.
         # cost = active row count + per-card overhead.
         info: dict[str, tuple[QFrame, int]] = {}
@@ -1087,7 +990,6 @@ class MainWindow(QMainWindow):
                     n_active + self._CARD_OVERHEAD if n_active > 0 else 0,
                 )
                 card.setVisible(n_active > 0)
-
         if self._other_card is not None:
             other_title = self._card_title(self._other_card) or "Other"
             n_active = sum(1 for f in active if f not in self._feat_row_pool)
@@ -1096,11 +998,9 @@ class MainWindow(QMainWindow):
                 n_active + self._CARD_OVERHEAD if n_active > 0 else 0,
             )
             self._other_card.setVisible(n_active > 0)
-
         pinned: set[str] = set(self._LEFT_PINS) | set(self._RIGHT_PINS)
         left_height = 0
         right_height = 0
-
         # Soft pins: only added if the card has any active rows.
         for title in self._LEFT_PINS:
             entry = info.get(title)
@@ -1112,7 +1012,6 @@ class MainWindow(QMainWindow):
             if entry is not None and entry[1] > 0:
                 self._feat_right_layout.addWidget(entry[0])
                 right_height += entry[1]
-
         # Everything else: sort by cost desc, distribute LPT.
         unpinned_titles: list[str] = [
             t for t, _ in FEATURE_GROUPS if t not in pinned
@@ -1121,7 +1020,6 @@ class MainWindow(QMainWindow):
             other_title = self._card_title(self._other_card) or "Other"
             if other_title not in pinned:
                 unpinned_titles.append(other_title)
-
         remaining: list[tuple[QFrame, int]] = sorted(
             (info[t] for t in unpinned_titles if t in info and info[t][1] > 0),
             key=lambda pair: pair[1],
@@ -1134,7 +1032,6 @@ class MainWindow(QMainWindow):
             else:
                 self._feat_right_layout.addWidget(card)
                 right_height += cost
-
         self._feat_left_layout.addStretch()
         self._feat_right_layout.addStretch()
 
@@ -1165,7 +1062,6 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Mode management
     # ------------------------------------------------------------------
-
     def _fit_to_content(self) -> None:
         """Measure actual content and size window + splitters to fit.
 
@@ -1174,7 +1070,6 @@ class MainWindow(QMainWindow):
         both panels get the width their content needs.
         """
         QApplication.processEvents()
-
         # -- Measure segment panel content width --
         # The seg panel sticks to exactly its natural content width so
         # the feature pane (with stretch=1 in the splitter) can hug the
@@ -1185,7 +1080,6 @@ class MainWindow(QMainWindow):
         seg_content_w = seg_content.sizeHint().width() if seg_content else 400
         seg_chrome = 28 + 6  # panel margins (14*2) + scrollbar clearance
         seg_need_w = seg_content_w + seg_chrome
-
         # -- Measure feature panel content --
         feat_content = self._feat_scroll.widget()
         feat_content_w = (
@@ -1197,7 +1091,6 @@ class MainWindow(QMainWindow):
         feat_content_h = (
             feat_content.sizeHint().height() if feat_content else 400
         )
-
         # Top panel: header chrome (~80px) + content + vertical breathing room
         feat_v_padding = 20
         top_need_h = feat_content_h + 80 + feat_v_padding
@@ -1206,14 +1099,12 @@ class MainWindow(QMainWindow):
         total_need_h = (
             top_need_h + analysis_h + toolbar_h + 30
         )  # extra overall height
-
         # -- Size window to fit content on every inventory load --
         screen = self._target_screen()
         if screen is not None:
             avail = screen.availableGeometry()
             need_w = seg_need_w + feat_need_w + 1
             need_h = total_need_h
-
             # Always resize to the new inventory's needs. Each inventory
             # gets its own layout — sizes from a previously-loaded
             # inventory don't bleed into this one. Clamped to the
@@ -1222,17 +1113,14 @@ class MainWindow(QMainWindow):
             cur_h = self.height()
             new_w = max(640, min(need_w, avail.width() - 40))
             new_h = max(480, min(need_h, avail.height() - 40))
-
             if new_w != cur_w or new_h != cur_h:
                 self.resize(new_w, new_h)
-
             # Center on first load only
             if not self._has_saved_size:
                 frame = self.frameGeometry()
                 frame.moveCenter(avail.center())
                 self.move(frame.topLeft())
                 self._has_saved_size = True
-
         # -- Apply to horizontal splitter --
         # Seg panel: exactly its content width (no padding).
         # Feat panel: at least its content width, but takes whatever is
@@ -1241,7 +1129,6 @@ class MainWindow(QMainWindow):
         available = self._hsplit.width() or (seg_need_w + feat_need_w)
         feat_w = max(feat_need_w, available - seg_need_w)
         self._hsplit.setSizes([seg_need_w, feat_w])
-
         # -- Rebalance vertical splitter --
         total = self._vsplit.height()
         if total > 0:
@@ -1309,7 +1196,6 @@ class MainWindow(QMainWindow):
     # Each phase reads self._mode directly. _save_outgoing_mode_state runs
     # BEFORE self._mode is updated (it captures the state of the mode being
     # left); every other phase runs after.
-
     def _save_outgoing_mode_state(self) -> None:
         """Snapshot the current mode's exact state and project it into the
         opposite mode's saved state. Called only when the mode is actually
@@ -1346,7 +1232,6 @@ class MainWindow(QMainWindow):
         is_s2f = self._mode == Mode.SEG_TO_FEAT
         seg_bg = C["panel"] if is_s2f else C["bg"]
         feat_bg = C["panel"] if not is_s2f else C["bg"]
-
         seg_vp = self._seg_scroll.viewport()
         feat_vp = self._feat_scroll.viewport()
         assert seg_vp is not None and feat_vp is not None
@@ -1354,7 +1239,6 @@ class MainWindow(QMainWindow):
         self.seg_grid_widget.setStyleSheet(f"background: {seg_bg};")
         feat_vp.setStyleSheet(f"background: {feat_bg};")
         self._feat_content.setStyleSheet(f"background: {feat_bg};")
-
         self.seg_panel.setStyleSheet(
             f"QFrame#seg_panel {{ background: {seg_bg};"
             + (
@@ -1373,7 +1257,6 @@ class MainWindow(QMainWindow):
             )
             + "}"
         )
-
         self._seg_title.setStyleSheet(
             f"color: {C['text'] if is_s2f else C['text_dim']}; letter-spacing: 1.5px;"
         )
@@ -1482,7 +1365,6 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Event handlers  (state changes are immediate; analysis is debounced)
     # ------------------------------------------------------------------
-
     def _on_segment_clicked(self, segment: str, checked: bool):
         if self._mode != Mode.SEG_TO_FEAT:
             # Prevent visual toggle in feat_to_seg mode
@@ -1519,7 +1401,6 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Seg → Feat logic
     # ------------------------------------------------------------------
-
     def _update_seg_to_feat(self) -> None:
         segs = self._selected_segments
         if not segs or not self.engine:
@@ -1528,9 +1409,7 @@ class MainWindow(QMainWindow):
                 btn.set_state(SegmentState.DEFAULT)
             self.analysis.clear()
             return
-
         selected_set = set(segs)
-
         if len(segs) == 1:
             feats = self.engine.get_segment_features(segs[0])
             for feat, row in self._feat_rows.items():
@@ -1552,7 +1431,6 @@ class MainWindow(QMainWindow):
                     row.set_display("", shared=False, contrastive=True)
                 else:
                     row.set_display("", shared=False)
-
             # Natural class completion: find segments that would extend the
             # current selection to the smallest valid natural class.
             is_nc, _ = self.engine.is_natural_class(segs)
@@ -1562,7 +1440,6 @@ class MainWindow(QMainWindow):
                     common, underspec_compatible=True
                 )
                 suggested = [s for s in nc_extension if s not in selected_set]
-
             suggested_set = set(suggested)
             for seg, btn in self._seg_buttons.items():
                 if seg not in selected_set:
@@ -1571,7 +1448,6 @@ class MainWindow(QMainWindow):
                         if seg in suggested_set
                         else SegmentState.DEFAULT
                     )
-
             self.analysis.set_html(
                 render_multi_segment(
                     self.engine, segs, common, contrastive, suggested
@@ -1581,28 +1457,23 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Feat → Seg logic
     # ------------------------------------------------------------------
-
     def _update_feat_to_seg(self) -> None:
         if not self.engine:
             return
-
         selected_feats = self._selected_features
         if not selected_feats:
             for btn in self._seg_buttons.values():
                 btn.set_state(SegmentState.DEFAULT)
             self.analysis.clear()
             return
-
         matching = self.engine.find_segments(selected_feats)
         matching_set = set(matching)
-
         for seg, btn in self._seg_buttons.items():
             btn.set_state(
                 SegmentState.MATCHED
                 if seg in matching_set
                 else SegmentState.UNMATCHED
             )
-
         self.analysis.set_html(
             render_feat_to_seg(self.engine, selected_feats, matching)
         )
@@ -1610,7 +1481,6 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-
     def _reset_feature_display(self) -> None:
         for row in self._feat_rows.values():
             row.reset()

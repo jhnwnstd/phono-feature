@@ -21,11 +21,10 @@ from PyQt6.QtWidgets import QDialog, QMessageBox
 
 from gui.builder.dialogs import FeatureTextEdit, InputDialog, SegmentTextEdit
 
+
 # ---------------------------------------------------------------------------
 # SegmentTextEdit: Tab autofill behavior
 # ---------------------------------------------------------------------------
-
-
 @pytest.fixture
 def seg_edit(qapp):
     return SegmentTextEdit()
@@ -86,13 +85,11 @@ def test_tab_on_empty_fills_and_moves_focus(qapp):
     seg.setFocus()
     qapp.processEvents()
     assert seg.hasFocus()
-
     # QTest.keyClick goes through QApplication's full event dispatch so
     # focusNextChild() actually fires — directly calling keyPressEvent
     # would bypass that.
     QTest.keyClick(seg, Qt.Key.Key_Tab)
     qapp.processEvents()
-
     assert seg.toPlainText() == SegmentTextEdit.DEFAULT_FILL
     assert sibling.hasFocus(), (
         "Tab on empty must move focus to the next widget after filling "
@@ -115,10 +112,8 @@ def test_tab_on_filled_just_moves_focus(qapp):
     container.show()
     seg.setFocus()
     qapp.processEvents()
-
     QTest.keyClick(seg, Qt.Key.Key_Tab)
     qapp.processEvents()
-
     assert seg.toPlainText() == "m n ŋ"
     assert sibling.hasFocus()
     container.deleteLater()
@@ -127,8 +122,6 @@ def test_tab_on_filled_just_moves_focus(qapp):
 # ---------------------------------------------------------------------------
 # FeatureTextEdit shares the same Tab-autofill behavior with a different fill
 # ---------------------------------------------------------------------------
-
-
 @pytest.fixture
 def feat_edit(qapp):
     return FeatureTextEdit()
@@ -158,8 +151,6 @@ def test_feature_text_edit_changes_focus_on_tab(feat_edit):
 # ---------------------------------------------------------------------------
 # InputDialog wires up FeatureTextEdit (so the feat box gets autofill too)
 # ---------------------------------------------------------------------------
-
-
 def test_dialog_feat_edit_is_feature_text_edit(dialog):
     assert isinstance(dialog.feat_edit, FeatureTextEdit)
 
@@ -171,8 +162,6 @@ def test_dialog_seg_edit_is_segment_text_edit(dialog):
 # ---------------------------------------------------------------------------
 # InputDialog: accept() validates before dismissing
 # ---------------------------------------------------------------------------
-
-
 @pytest.fixture
 def dialog(qapp):
     dlg = InputDialog()
@@ -188,9 +177,7 @@ def test_accept_with_empty_segments_does_not_dismiss(dialog, mocker):
     # Default state: seg edit is empty; features auto-fill from preset.
     assert dialog.get_segments() == []
     assert dialog.get_features()  # preset filled it
-
     dialog.accept()
-
     warn.assert_called_once()
     args = warn.call_args.args
     assert args[1] == "No segments"
@@ -204,9 +191,7 @@ def test_accept_with_empty_features_does_not_dismiss(dialog, mocker):
     dialog.feat_edit.clear()
     assert dialog.get_segments() == ["p", "b", "t"]
     assert dialog.get_features() == []
-
     dialog.accept()
-
     warn.assert_called_once()
     assert warn.call_args.args[1] == "No features"
     assert dialog.result() != QDialog.DialogCode.Accepted
@@ -219,8 +204,6 @@ def test_accept_with_valid_inputs_dismisses(dialog, mocker):
     dialog.seg_edit.setPlainText("p b t")
     # feat_edit was preset-filled in __init__; leave it.
     assert dialog.get_features()
-
     dialog.accept()
-
     warn.assert_not_called()
     assert dialog.result() == QDialog.DialogCode.Accepted

@@ -49,5 +49,4 @@ FEATURE_PRESETS = {
     ],
     "Custom": [],
 }
-
 VALID_VALUES = {"+", "-", "0"}

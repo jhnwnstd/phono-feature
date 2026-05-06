@@ -101,10 +101,8 @@ class SegmentButton(QPushButton):
 
     def __init__(self, segment: str, parent=None):
         super().__init__(segment, parent)
-
         self.segment = segment
         self._state: SegmentState = SegmentState.DEFAULT
-
         self.setCheckable(True)
         self.setFixedSize(33, 26)
         self.setFont(QFont("Noto Sans", 9))
@@ -112,10 +110,8 @@ class SegmentButton(QPushButton):
 
     def set_state(self, state: SegmentState | str) -> None:
         new_state = SegmentState(state)
-
         if self._state == new_state:
             return
-
         self._state = new_state
         self.setStyleSheet(self._STYLES[new_state])
 
@@ -129,39 +125,32 @@ class FeatureRow(QWidget):
     """
 
     value_changed = pyqtSignal(str, str)
-
     _BADGE_CONTRASTIVE = (
         f"background: {C['accent_light']}; color: {C['accent']};"
         " border-radius: 4px; font-weight: bold;"
     )
     _NAME_CONTRASTIVE = f"color: {C['accent']}; font-weight: bold;"
     _ROW_CONTRASTIVE = f"background: {C['accent_light']}; border-radius: 6px;"
-
     _BADGE_NEUTRAL = f"background: {C['tag_gray']}; color: {C['tag_gray_text']}; border-radius: 4px;"
     _NAME_DIM = f"color: {C['text_dim']};"
     _ROW_TRANSPARENT = "background: transparent; border-radius: 6px;"
-
     _BADGE_PLUS = (
         f"background: {C['plus_bg']}; color: {C['plus']};"
         " border-radius: 4px; font-weight: bold;"
     )
     _ROW_PLUS = f"background: {C['shared_plus']}; border-radius: 6px;"
-
     _BADGE_MINUS = (
         f"background: {C['minus_bg']}; color: {C['minus']};"
         " border-radius: 4px; font-weight: bold;"
     )
     _ROW_MINUS = f"background: {C['shared_minus']}; border-radius: 6px;"
-
     _NAME_BOLD = f"color: {C['text']}; font-weight: bold;"
-
     _ROW_NEUTRAL = "background: transparent; border-radius: 6px;"
     _NAME_ACTIVE = f"color: {C['text']};"
     _NAME_INACTIVE = f"color: {C['text_dim']};"
 
     def __init__(self, feature_name: str, parent=None):
         super().__init__(parent)
-
         self.feature = feature_name
         self._current_value = ""
         self._interactive = True
@@ -169,11 +158,9 @@ class FeatureRow(QWidget):
         # Cache for set_display dedup; cleared by reset/_apply_query_style
         # because they bypass set_display but rewrite the same stylesheets.
         self._last_display_state: tuple[str, bool, bool] | None = None
-
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 3, 8, 3)
         layout.setSpacing(4)
-
         self.name_label = QLabel(feature_name)
         self.name_label.setFont(QFont("Noto Sans", 10))
         self.name_label.setSizePolicy(
@@ -181,43 +168,35 @@ class FeatureRow(QWidget):
             QSizePolicy.Policy.Preferred,
         )
         self.name_label.setStyleSheet(f"color: {C['text']};")
-
         self.plus_btn = QPushButton("+")
         self.plus_btn.setFixedSize(28, 24)
         self.plus_btn.setCheckable(True)
         self.plus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self._style_btn(self.plus_btn, "+")
-
         self.minus_btn = QPushButton("\u2212")
         self.minus_btn.setFixedSize(28, 24)
         self.minus_btn.setCheckable(True)
         self.minus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self._style_btn(self.minus_btn, "-")
-
         self.badge = QLabel("\u00b7")
         self.badge.setFixedSize(30, 24)
         self.badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.badge.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self.badge.hide()
-
         layout.addWidget(self.name_label)
         layout.addWidget(self.badge)
         layout.addWidget(self.plus_btn)
         layout.addWidget(self.minus_btn)
-
         self.plus_btn.clicked.connect(lambda: self._on_click("+"))
         self.minus_btn.clicked.connect(lambda: self._on_click("-"))
-
         self.setAutoFillBackground(True)
         self.setStyleSheet(self._ROW_NEUTRAL)
 
     def _style_btn(self, btn: QPushButton, polarity: str):
         is_plus = polarity == "+"
-
         active_bg = C["plus_bg"] if is_plus else C["minus_bg"]
         active_text = C["plus"] if is_plus else C["minus"]
         border = C["plus"] if is_plus else C["minus"]
-
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C["analysis_bg"]};
@@ -240,7 +219,6 @@ class FeatureRow(QWidget):
 
     def _on_click(self, polarity: str):
         clicked_current_value = self._current_value == polarity
-
         if clicked_current_value:
             self._current_value = ""
             self.plus_btn.setChecked(False)
@@ -249,7 +227,6 @@ class FeatureRow(QWidget):
             self._current_value = polarity
             self.plus_btn.setChecked(polarity == "+")
             self.minus_btn.setChecked(polarity == "-")
-
         self._apply_query_style(self._current_value)
         self.value_changed.emit(self.feature, self._current_value)
 
@@ -262,23 +239,19 @@ class FeatureRow(QWidget):
             self.setStyleSheet(self._ROW_PLUS)
             self.name_label.setStyleSheet(self._NAME_BOLD)
             return
-
         if value == "-":
             self.setStyleSheet(self._ROW_MINUS)
             self.name_label.setStyleSheet(self._NAME_BOLD)
             return
-
         if self._panel_active:
             name_style = self._NAME_ACTIVE
         else:
             name_style = self._NAME_INACTIVE
-
         self.setStyleSheet(self._ROW_NEUTRAL)
         self.name_label.setStyleSheet(name_style)
 
     def set_interactive(self, yes: bool):
         self._interactive = yes
-
         self.plus_btn.setVisible(yes)
         self.minus_btn.setVisible(yes)
         self.badge.setVisible(not yes)
@@ -304,19 +277,15 @@ class FeatureRow(QWidget):
             self.name_label.setStyleSheet(self._NAME_CONTRASTIVE)
             self.setStyleSheet(self._ROW_CONTRASTIVE)
             return
-
         has_display_value = bool(value)
-
         if not has_display_value or not shared:
             self.badge.setText("\u00b7")
             self.badge.setStyleSheet(self._BADGE_NEUTRAL)
             self.name_label.setStyleSheet(self._NAME_DIM)
             self.setStyleSheet(self._ROW_TRANSPARENT)
             return
-
         self.badge.setText(value)
         self.name_label.setStyleSheet(self._NAME_BOLD)
-
         if value == "+":
             self.badge.setStyleSheet(self._BADGE_PLUS)
             self.setStyleSheet(self._ROW_PLUS)
@@ -339,18 +308,14 @@ class FeatureRow(QWidget):
         # set_display's dedup cache must be invalidated since reset() bypasses
         # it but rewrites all the stylesheets it tracks.
         self._last_display_state = None
-
         self.plus_btn.setChecked(False)
         self.minus_btn.setChecked(False)
-
         self.badge.setText("\u00b7")
         self.badge.setStyleSheet(self._BADGE_NEUTRAL)
-
         if self._panel_active:
             name_style = self._NAME_ACTIVE
         else:
             name_style = self._NAME_INACTIVE
-
         self.name_label.setStyleSheet(name_style)
         self.setStyleSheet(self._ROW_NEUTRAL)
 
@@ -362,21 +327,17 @@ class FeatureRow(QWidget):
 class AnalysisPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-
         self.setStyleSheet(
             f"background: {C['analysis_bg']}; border-top: 1px solid {C['border']};"
         )
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(8)
-
         self.title = QLabel("Analysis")
         self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
         self.title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1px;"
         )
-
         self.content = QTextEdit()
         self.content.setReadOnly(True)
         self.content.setFont(QFont("Noto Sans Mono", 10))
@@ -390,7 +351,6 @@ class AnalysisPanel(QWidget):
                 padding: 8px;
             }}
         """ + SCROLLBAR_STYLE)
-
         layout.addWidget(self.title)
         layout.addWidget(self.content)
 
@@ -412,21 +372,17 @@ class SegmentGridWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-
         self._groups: dict = {}
         self._buttons: dict = {}
         self._headers: list = []
         self._n_cols: int = 0
-
         self._grid = QGridLayout(self)
         self._grid.setSpacing(BTN_GAP)
         self._grid.setContentsMargins(0, 0, 0, 0)
         self._grid.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
         )
-
         self.setMinimumWidth(0)
-
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
         self._resize_timer.setInterval(40)
@@ -436,18 +392,13 @@ class SegmentGridWidget(QWidget):
         """Replace all content. Old buttons are deleted. New ones are shown."""
         while self._grid.count():
             self._grid.takeAt(0)
-
         for btn in self._buttons.values():
             btn.deleteLater()
-
         for hdr in self._headers:
             hdr.deleteLater()
-
         self._headers.clear()
-
         self._groups = groups
         self._buttons = buttons
-
         for manner in groups:
             hdr = QLabel(manner.upper())
             hdr.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
@@ -458,7 +409,6 @@ class SegmentGridWidget(QWidget):
             )
             hdr.setParent(self)
             self._headers.append(hdr)
-
         self._n_cols = 0
         self._do_relayout()
 
@@ -498,52 +448,35 @@ class SegmentGridWidget(QWidget):
 
     def _compute_n_cols(self) -> int:
         stride = BTN_W + BTN_GAP
-
         width_slots = (self.width() + BTN_GAP) // stride
         width_slots = max(1, width_slots)
-
         max_possible = min(width_slots, self.MAX_COLS)
-
         if not self._groups:
             return max_possible
-
         max_N = max(len(segs) for segs in self._groups.values())
-
         if max_N <= max_possible:
             return max_N
-
         return max_possible
 
     def _do_relayout(self) -> None:
         n_cols = self._compute_n_cols()
-
         if n_cols == self._n_cols:
             return
-
         self._n_cols = n_cols
-
         while self._grid.count():
             self._grid.takeAt(0)
-
         grid_row = 0
         hdr_iter = iter(self._headers)
-
         for segs in self._groups.values():
             hdr = next(hdr_iter)
-
             self._grid.addWidget(hdr, grid_row, 0, 1, n_cols)
             hdr.show()
-
             grid_row += 1
-
             for col_i, seg in enumerate(segs):
                 btn = self._buttons[seg]
-
                 button_row = grid_row + col_i // n_cols
                 button_col = col_i % n_cols
-
                 self._grid.addWidget(btn, button_row, button_col)
                 btn.show()
-
             group_rows = math.ceil(len(segs) / n_cols)
             grid_row += group_rows

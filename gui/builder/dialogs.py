@@ -72,14 +72,11 @@ def center_on_parent(dialog, parent):
     """Move dialog to the center of parent's screen."""
     if parent is None:
         return
-
     screen = parent.screen()
     if screen is None:
         return
-
     screen_geometry = screen.availableGeometry()
     dialog_frame = dialog.frameGeometry()
-
     dialog_frame.moveCenter(screen_geometry.center())
     dialog.move(dialog_frame.topLeft())
 
@@ -90,10 +87,8 @@ def ask_question(parent, title: str, text: str, buttons=None, default=None):
         buttons = (
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-
     if default is None:
         default = QMessageBox.StandardButton.No
-
     box = QMessageBox(
         QMessageBox.Icon.Question,
         title,
@@ -101,10 +96,8 @@ def ask_question(parent, title: str, text: str, buttons=None, default=None):
         buttons,
         parent,
     )
-
     box.setDefaultButton(default)
     center_on_parent(box, parent)
-
     return box.exec()
 
 
@@ -117,7 +110,6 @@ def show_warning(parent, title: str, text: str):
         QMessageBox.StandardButton.Ok,
         parent,
     )
-
     center_on_parent(box, parent)
     box.exec()
 
@@ -133,30 +125,23 @@ class InputDialog(QDialog):
 
     def __init__(self, parent=None, current_path: str | None = None):
         super().__init__(parent)
-
         self.setWindowTitle("New Inventory Setup")
         self.setMinimumSize(500, 500)
         self.setWindowModality(Qt.WindowModality.WindowModal)
         self._current_path = current_path
         self.edit_existing_chosen = False
-
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
-
         name_lay = QHBoxLayout()
         name_label = QLabel("Inventory name:")
-
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("e.g. My Language Inventory")
-
         name_lay.addWidget(name_label)
         name_lay.addWidget(self.name_edit)
         layout.addLayout(name_lay)
-
         seg_label = QLabel("Segments (one per line, or space-separated):")
         seg_label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
         layout.addWidget(seg_label)
-
         self.seg_edit = SegmentTextEdit()
         self.seg_edit.setPlaceholderText(
             "p b t d k ɡ\nm n ŋ\nf v s z ʃ ʒ\n…\n"
@@ -164,10 +149,8 @@ class InputDialog(QDialog):
         )  # noqa: RUF001
         self.seg_edit.setFont(QFont("Noto Sans", 12))
         layout.addWidget(self.seg_edit)
-
         feat_preset_lay = QHBoxLayout()
         feat_preset_label = QLabel("Feature set:")
-
         self.preset_combo = QComboBox()
         # Native combo highlight is white-on-white in some OS themes,
         # making the focused/selected item invisible. Use the same accent-
@@ -193,20 +176,15 @@ class InputDialog(QDialog):
                 outline: none;
             }}
         """)
-
         for name in FEATURE_PRESETS:
             self.preset_combo.addItem(name)
-
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
-
         feat_preset_lay.addWidget(feat_preset_label)
         feat_preset_lay.addWidget(self.preset_combo)
         layout.addLayout(feat_preset_lay)
-
         feat_label = QLabel("Features (one per line, or comma-separated):")
         feat_label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
         layout.addWidget(feat_label)
-
         self.feat_edit = FeatureTextEdit()
         self.feat_edit.setFont(QFont("Noto Sans", 10))
         # Mirror the segment-box hint so the Tab-autofill is discoverable.
@@ -215,17 +193,20 @@ class InputDialog(QDialog):
             "(Tab on an empty box fills the Default (33) preset)"
         )
         layout.addWidget(self.feat_edit)
-
         selected_preset = self.preset_combo.currentText()
         self._on_preset_changed(selected_preset)
-
         btn_lay = QHBoxLayout()
+        # When the main window already has an inventory loaded, offer to
+        # edit it instead of starting from scratch. Sits on the left so it
+        # doesn't compete for end-of-row attention with Cancel / Create.
+        if current_path:
+            edit_btn = QPushButton("Edit current inventory…")
+            edit_btn.clicked.connect(self._on_edit_existing)
+            btn_lay.addWidget(edit_btn)
         btn_lay.addStretch()
-
         cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self.reject)
         btn_lay.addWidget(cancel_btn)
-
         ok_btn = QPushButton("Create Grid")
         ok_btn.setStyleSheet(f"""
             QPushButton {{
@@ -242,50 +223,48 @@ class InputDialog(QDialog):
             """)
         ok_btn.clicked.connect(self.accept)
         btn_lay.addWidget(ok_btn)
-
         layout.addLayout(btn_lay)
+
+    def _on_edit_existing(self) -> None:
+        """User chose to edit the inventory already loaded in the main
+        window. Skip input validation (no segments/features were typed)
+        and signal the choice via ``edit_existing_chosen`` so the caller
+        can route to ``_load_existing`` instead of building a fresh grid.
+        """
+        self.edit_existing_chosen = True
+        QDialog.accept(self)
 
     def _on_preset_changed(self, name: str):
         features = FEATURE_PRESETS.get(name, [])
-
         if features:
             feature_text = "\n".join(features)
             self.feat_edit.setPlainText(feature_text)
             self.feat_edit.setReadOnly(False)
             return
-
         self.feat_edit.clear()
         self.feat_edit.setReadOnly(False)
         # Placeholder set once at construction; no need to overwrite it.
 
     def get_segments(self) -> list:
         text = self.seg_edit.toPlainText().strip()
-
         if not text:
             return []
-
         text = text.replace("\n", " ")
         raw_segments = text.split()
-
         return [segment.strip() for segment in raw_segments if segment.strip()]
 
     def get_features(self) -> list:
         text = self.feat_edit.toPlainText().strip()
-
         if not text:
             return []
-
         text = text.replace(",", "\n")
         raw_features = text.split("\n")
-
         return [feature.strip() for feature in raw_features if feature.strip()]
 
     def get_name(self) -> str:
         name = self.name_edit.text().strip()
-
         if name:
             return name
-
         return "Untitled Inventory"
 
     def accept(self) -> None:  # type: ignore[override]

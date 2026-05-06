@@ -7,13 +7,9 @@ Shared constants, layout geometry, and helper functions for the GUI.
 from gui.palette import C
 
 # Settings keys
-
 SETTINGS_ORG = "features"
 SETTINGS_APP = "SegFeatureEngine"
-
-
 # Tag palettes for inline HTML chips
-
 TAG_PALETTES = {
     "blue": (
         C["tag_blue"],
@@ -32,19 +28,13 @@ TAG_PALETTES = {
         C["tag_gray_text"],
     ),
 }
-
-
 # Segment button geometry
-
 BTN_W = 33
 BTN_H = 26
 BTN_GAP = 4
-
-
 # Canonical feature display order
 #
 # Features absent from this list appear at the end in their original order.
-
 FEATURE_ORDER: list = [
     # Major class
     "Syllabic",
@@ -87,14 +77,10 @@ FEATURE_ORDER: list = [
     "Tone",
     "UpperRegister",
 ]
-
 _FEATURE_ORDER_INDEX: dict = {
     feature: index for index, feature in enumerate(FEATURE_ORDER)
 }
-
-
 # Feature groups for the two column panel layout.
-
 FEATURE_GROUPS: list = [
     (
         "Major Class",
@@ -176,14 +162,12 @@ def sort_features(features: list) -> list:
 def sort_spec(spec: dict) -> dict:
     """Return a feature bundle dict with keys in canonical phonological order."""
     sorted_keys = sort_features(list(spec.keys()))
-
     return {feature: spec[feature] for feature in sorted_keys}
 
 
 # Shared scrollbar style
 #
 # Thin, unobtrusive overlay track.
-
 SCROLLBAR_STYLE = f"""
     QScrollBar:vertical {{
         background: transparent;
