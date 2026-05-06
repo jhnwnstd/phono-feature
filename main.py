@@ -133,6 +133,10 @@ def _run_gui(argv: list[str]) -> int:
 
     window = MainWindow(startup_path=startup_path)
     window.show()
+    # Flush the first paint before handing control to ``app.exec``. Without
+    # this, the WM can map the window for a frame with default content
+    # before Qt renders, producing a brief blank flash on X11/XWayland.
+    app.processEvents()
     return app.exec()
 
 
