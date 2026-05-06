@@ -128,7 +128,7 @@ class InputDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.setWindowTitle("New Inventory — Setup")
+        self.setWindowTitle("New Inventory Setup")
         self.setMinimumSize(500, 500)
         self.setWindowModality(Qt.WindowModality.WindowModal)
 

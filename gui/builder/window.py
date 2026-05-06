@@ -39,7 +39,7 @@ class InventoryBuilder(QMainWindow):
 
     def __init__(self, parent=None, load_path: str | None = None):
         super().__init__(parent)
-        self.setWindowTitle("Inventory Builder — A Language Doodad")
+        self.setWindowTitle("Inventory Builder")
         self.setMinimumSize(800, 500)
         self._segments: list = []
         self._features: list = []
@@ -610,6 +610,6 @@ class InventoryBuilder(QMainWindow):
         name = self._inv_name or "Untitled"
         if self._current_path:
             fname = os.path.basename(self._current_path)
-            self.setWindowTitle(f"{name} ({fname}) \u2014 Inventory Builder")
+            self.setWindowTitle(f"Inventory Builder: {name} ({fname})")
         else:
-            self.setWindowTitle(f"{name} \u2014 Inventory Builder")
+            self.setWindowTitle(f"Inventory Builder: {name}")

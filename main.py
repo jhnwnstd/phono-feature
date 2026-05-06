@@ -159,7 +159,9 @@ def main() -> int:
     if os.environ.get(_FALLBACK_GUARD_ENV):
         return _run_gui(argv)
 
-    user_set_platform = bool(os.environ.get("QT_QPA_PLATFORM")) or _argv_requests_qt_platform(argv)
+    user_set_platform = bool(
+        os.environ.get("QT_QPA_PLATFORM")
+    ) or _argv_requests_qt_platform(argv)
 
     if user_set_platform:
         # User picked the platform explicitly. Run direct, no fallback dance.
