@@ -498,6 +498,12 @@ class MainWindow(QMainWindow):
         Ensures the window is on the primary screen.  If the user had a saved
         position that is still on *some* screen, we leave it alone; otherwise
         we center on the primary screen.
+
+        Note: ``raise_`` and ``activateWindow`` are only called when we
+        actually move the window. On the happy path (window already on
+        a sane screen) they cause a visible title-bar focus blink and a
+        brief restack on some Linux WMs — and they're redundant since
+        the WM gives the only freshly-shown window focus by default.
         """
         app = QApplication.instance()
         assert isinstance(app, QApplication)
@@ -506,24 +512,22 @@ class MainWindow(QMainWindow):
             return
         frame = self.frameGeometry()
         primary_geo = screen.geometry()
-        # If the window is already mostly on the primary screen, keep it.
+        # If the window is already mostly on the primary screen, leave it
+        # alone — no raise/activate, no flicker.
         if (
             primary_geo.intersects(frame)
             and frame.width() >= 300
             and frame.height() >= 200
         ):
-            self.raise_()
-            self.activateWindow()
             return
         # If the window is on *some* other screen and has a saved position,
         # leave it there — the user intentionally placed it.
         if self._settings.value("window_pos") is not None:
             on_any = any(s.geometry().intersects(frame) for s in app.screens())
             if on_any and frame.width() >= 300 and frame.height() >= 200:
-                self.raise_()
-                self.activateWindow()
                 return
-        # Otherwise, center on the primary screen.
+        # Off-screen recovery: center on the primary screen and bring the
+        # window forward so the user can find it.
         avail = screen.availableGeometry()
         frame = self.frameGeometry()
         frame.moveCenter(avail.center())
