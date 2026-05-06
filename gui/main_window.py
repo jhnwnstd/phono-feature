@@ -729,7 +729,15 @@ class MainWindow(QMainWindow):
                 self._populate_features()
                 self._apply_mode_to_new_widgets()
                 self.analysis.clear()
-            QTimer.singleShot(0, self._rebalance_vsplit)
+            # During startup the window hasn't been shown yet — fit the
+            # layout synchronously so the first paint is already at the
+            # correct size and splitter positions. For runtime inventory
+            # swaps the window is visible, so defer one event-loop tick
+            # to let pending paints drain before we resize again.
+            if self.isVisible():
+                QTimer.singleShot(0, self._rebalance_vsplit)
+            else:
+                self._rebalance_vsplit()
         except Exception as e:
             self.status.showMessage(f"Error: {e}")
 
