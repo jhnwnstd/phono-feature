@@ -34,10 +34,8 @@ def _argv_requests_qt_platform(argv: list[str]) -> bool:
     for arg in argv:
         if arg == "-platform":
             return True
-
         if arg.startswith("-platform="):
             return True
-
     return False
 
 
@@ -46,25 +44,19 @@ def _auto_qt_platform() -> str | None:
     is_linux = sys.platform.startswith("linux")
     if not is_linux:
         return None
-
     wayland_display = os.environ.get("WAYLAND_DISPLAY")
-
     if wayland_display:
         runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "")
-
         if os.path.isabs(wayland_display):
             socket_path = wayland_display
         else:
             socket_path = os.path.join(runtime_dir, wayland_display)
-
         wayland_socket_exists = os.path.exists(socket_path)
         if wayland_socket_exists:
             return "wayland"
-
     x11_display = os.environ.get("DISPLAY")
     if x11_display:
         return "xcb"
-
     return None
 
 
@@ -92,7 +84,6 @@ def _spawn_gui_child(platform: str) -> tuple[int, bool]:
     child_env = dict(os.environ)
     child_env[_FALLBACK_GUARD_ENV] = "1"
     child_env["QT_QPA_PLATFORM"] = platform
-
     proc = subprocess.Popen(
         [sys.executable, *sys.argv],
         env=child_env,
@@ -100,7 +91,6 @@ def _spawn_gui_child(platform: str) -> tuple[int, bool]:
         text=True,
         bufsize=1,
     )
-
     disconnect_seen = [False]
 
     def pump_stderr() -> None:
@@ -115,7 +105,6 @@ def _spawn_gui_child(platform: str) -> tuple[int, bool]:
     pump.start()
     exit_code = proc.wait()
     pump.join(timeout=1.0)
-
     return exit_code, disconnect_seen[0]
 
 
@@ -125,7 +114,6 @@ def _run_gui(argv: list[str]) -> int:
     app.setApplicationName("Phonology Segment & Feature Engine")
     app.setOrganizationName("Phonology Research Tools")
     app.setStyle("Fusion")
-
     parser = QCommandLineParser()
     parser.setApplicationDescription("Phonology Segment & Feature Engine")
     parser.addHelpOption()
@@ -135,48 +123,38 @@ def _run_gui(argv: list[str]) -> int:
         "[inventory]",
     )
     parser.process(app)
-
     positional = parser.positionalArguments()
-
     if positional:
         startup_path = positional[0]
     else:
         startup_path = None
-
     # Lazy import. Avoid loading the full GUI module tree when --help exits early.
     from gui.main_window import MainWindow
 
     window = MainWindow(startup_path=startup_path)
     window.show()
-
     return app.exec()
 
 
 def main() -> int:
     argv = sys.argv[:]
-
     # If we are the supervised child, just run — no recursive supervision.
     if os.environ.get(_FALLBACK_GUARD_ENV):
         return _run_gui(argv)
-
     user_set_platform = bool(
         os.environ.get("QT_QPA_PLATFORM")
     ) or _argv_requests_qt_platform(argv)
-
     if user_set_platform:
         # User picked the platform explicitly. Run direct, no fallback dance.
         return _run_gui(argv)
-
     auto_platform = _auto_qt_platform()
     have_x11_fallback = bool(os.environ.get("DISPLAY"))
     needs_supervision = auto_platform == "wayland" and have_x11_fallback
-
     if not needs_supervision:
         # Either no fallback exists, or wayland wasn't picked — run direct.
         if auto_platform is not None:
             argv[1:1] = ["-platform", auto_platform]
         return _run_gui(argv)
-
     # Try wayland under supervision; if the compositor drops the connection,
     # silently relaunch on xcb.
     rc, disconnect_seen = _spawn_gui_child("wayland")

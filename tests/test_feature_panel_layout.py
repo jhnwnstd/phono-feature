@@ -96,13 +96,10 @@ def test_columns_rebalance_per_inventory(window):
     window.show()
     window.resize(1200, 900)
     window.repaint()
-
     titles_left = _card_titles(window._feat_left_layout)
     titles_right = _card_titles(window._feat_right_layout)
-
     assert titles_left[:2] == ["Major Class", "Place"]
     assert titles_right[0] == "Manner"
-
     # Allow up to 2 card overheads of slop. Blevins doesn't have all
     # groups so a wider gap is sometimes unavoidable.
     diff = abs(

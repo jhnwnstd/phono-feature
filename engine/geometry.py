@@ -61,12 +61,12 @@ class GeometryNode:
         self.coverage = 0.0  # Proportion of segments where dependency holds
         self.p_value = 1.0  # Permutation test p-value
 
-    def add_child(self, child: "GeometryNode") -> None:
+    def _add_child(self, child: "GeometryNode") -> None:
         """Add a child node."""
         child.parent = self
         self.children.append(child)
 
-    def add_sibling(self, sibling: "GeometryNode") -> None:
+    def _add_sibling(self, sibling: "GeometryNode") -> None:
         """Add a sibling node (mutual relationship)."""
         if sibling not in self.siblings:
             self.siblings.append(sibling)
@@ -122,40 +122,32 @@ class GeometryAnalyzer:
         """
         # Build dependency matrix
         self._compute_dependencies()
-
         # Construct tree from dependencies
         self.geometry_tree = self._build_tree()
-
         return self.geometry_tree
 
     def _compute_dependencies(self) -> None:
         """Compute all pairwise feature dependencies."""
         features = self.engine.get_contrastive_features()
-
         for i, child_feat in enumerate(features):
             best_parent = None
             best_coverage = 0.0
             best_p_value = 1.0
-
             for j, parent_feat in enumerate(features):
                 if i == j:
                     continue
-
                 # Test if child_feat depends on parent_feat: if child is
                 # specified (+/-), parent must also be specified
                 coverage = self._compute_coverage(parent_feat, child_feat)
-
                 if coverage > best_coverage:
                     # Run permutation test (pass coverage to avoid recomputing it)
                     p_value = self._permutation_test(
                         parent_feat, child_feat, coverage
                     )
-
                     if p_value < self.SIGNIFICANCE_LEVEL:
                         best_parent = parent_feat
                         best_coverage = coverage
                         best_p_value = p_value
-
             if best_parent is not None:
                 self.dependencies[child_feat] = {
                     "parent": best_parent,
@@ -177,7 +169,7 @@ class GeometryAnalyzer:
         Returns:
             Coverage ratio (0.0 to 1.0)
         """
-        spec = self.engine._spec_segs
+        spec = self.engine.spec_segs
         spec_child = spec[child_feat]
         if not spec_child:
             return 0.0
@@ -211,19 +203,16 @@ class GeometryAnalyzer:
         Returns:
             One-sided p-value in [0.0, 1.0].
         """
-        spec = self.engine._spec_segs
+        spec = self.engine.spec_segs
         n = len(self.engine.segments)
-
         spec_child = spec[child_feat]
         applicable = len(spec_child)
         if applicable == 0:
             return 1.0 if observed_coverage <= 0.0 else 0.0
-
         spec_parent = spec[parent_feat]
         k = len(spec_parent)
         if k == 0:
             return 1.0
-
         observed_holds = len(spec_child & spec_parent)
         return _hypergeom_sf(observed_holds, n, k, applicable)
 
@@ -238,24 +227,18 @@ class GeometryAnalyzer:
         nodes = {}
         for feature in self.engine.features:
             nodes[feature] = GeometryNode(feature)
-
         # Establish parent-child relationships
         root_candidates = set(self.engine.features)
-
         for child_feat, dep_info in self.dependencies.items():
             parent_feat = dep_info["parent"]
             coverage = dep_info["coverage"]
             p_value = dep_info["p_value"]
-
             child_node = nodes[child_feat]
             parent_node = nodes[parent_feat]
-
-            parent_node.add_child(child_node)
-
+            parent_node._add_child(child_node)
             # Set confidence level once; store in dep_info to avoid recomputing.
             child_node.coverage = coverage
             child_node.p_value = p_value
-
             if (
                 coverage >= self.HIGH_COVERAGE_THRESHOLD
                 and p_value < self.SIGNIFICANCE_LEVEL
@@ -265,38 +248,32 @@ class GeometryAnalyzer:
                 child_node.confidence = "moderate"
             else:
                 child_node.confidence = "low"
-
             self.dependencies[child_feat]["confidence"] = child_node.confidence
-
             # Remove from root candidates
             root_candidates.discard(child_feat)
-
         # Identify sibling groups (features with same parent)
         parent_to_children = defaultdict(list)
         for child_feat, dep_info in self.dependencies.items():
             parent_feat = dep_info["parent"]
             parent_to_children[parent_feat].append(child_feat)
-
         for children in parent_to_children.values():
             if len(children) > 1:
                 for i, child1 in enumerate(children):
                     for child2 in children[i + 1 :]:
-                        nodes[child1].add_sibling(nodes[child2])
-
+                        nodes[child1]._add_sibling(nodes[child2])
         # Create artificial root if multiple roots exist
         if len(root_candidates) == 0:
             # Shouldn't happen, but handle gracefully
             root = GeometryNode("ROOT")
             for node in nodes.values():
                 if node.parent is None:
-                    root.add_child(node)
+                    root._add_child(node)
         elif len(root_candidates) == 1:
             root = nodes[next(iter(root_candidates))]
         else:
             root = GeometryNode("ROOT")
             for feat in root_candidates:
-                root.add_child(nodes[feat])
-
+                root._add_child(nodes[feat])
         return root
 
     def get_dependency_summary(self) -> list[dict]:
@@ -308,7 +285,6 @@ class GeometryAnalyzer:
             p_value, confidence keys.
         """
         summary = []
-
         for child_feat, dep_info in self.dependencies.items():
             summary.append(
                 {
@@ -319,13 +295,11 @@ class GeometryAnalyzer:
                     "confidence": dep_info["confidence"],
                 }
             )
-
         # Sort by confidence, then coverage
         confidence_order = {"high": 0, "moderate": 1, "low": 2}
         summary.sort(
             key=lambda x: (confidence_order[x["confidence"]], -x["coverage"])
         )
-
         return summary
 
     def export_tree(self) -> dict:
@@ -371,11 +345,9 @@ class GeometryAnalyzer:
         node = find_node(tree, feature)
         if node is None:
             return []
-
         path = []
         current: GeometryNode | None = node
         while current is not None:
             path.append(current.feature)
             current = current.parent
-
         return path

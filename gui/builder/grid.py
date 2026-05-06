@@ -12,7 +12,6 @@ from gui.palette import C
 # ---------------------------------------------------------------------------
 # Cell brushes and fonts (created once at import time)
 # ---------------------------------------------------------------------------
-
 _CELL_BRUSH = {
     "+": (QBrush(QColor(C["plus"])), QBrush(QColor(C["plus_bg"]))),
     "-": (QBrush(QColor(C["minus"])), QBrush(QColor(C["minus_bg"]))),
@@ -26,8 +25,6 @@ _CELL_FONT_NORMAL = QFont("Noto Sans", 10)
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-
-
 def make_cell(value: str = "0") -> QTableWidgetItem:
     """Create a styled table cell with the given feature value."""
     item = QTableWidgetItem(value)

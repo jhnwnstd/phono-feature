@@ -13,7 +13,6 @@ import os
 
 # Must be set before any PyQt6 import so the QApplication picks the right plugin.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 from pathlib import Path  # noqa: E402
 
 import pytest  # noqa: E402
@@ -54,7 +53,6 @@ def window(qapp: QApplication):
 
     repo_root = Path(__file__).resolve().parent.parent
     inventory = str(repo_root / "config" / "hayes_features.json")
-
     w = MainWindow()
     w._load_path(inventory)
     w._set_mode("seg_to_feat")

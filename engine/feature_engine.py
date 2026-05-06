@@ -36,9 +36,9 @@ class FeatureEngine:
         # Per-feature segment-set caches, populated by ``_rebuild_caches``
         # after every ``load_inventory``. Treat as read-only: mutating
         # ``segments`` directly without a reload will desync these.
-        self._spec_segs: dict[str, frozenset[str]] = {}
-        self._plus_segs: dict[str, frozenset[str]] = {}
-        self._minus_segs: dict[str, frozenset[str]] = {}
+        self.spec_segs: dict[str, frozenset[str]] = {}
+        self.plus_segs: dict[str, frozenset[str]] = {}
+        self.minus_segs: dict[str, frozenset[str]] = {}
         # seg → tuple of feature values in ``self.features`` order. Used
         # for fast pairwise comparisons (avg distance, neighbor search).
         self._seg_value_tuples: dict[str, tuple[str, ...]] = {}
@@ -47,7 +47,6 @@ class FeatureEngine:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
-
     def _validate_segment(self, segment: str) -> None:
         if segment not in self.segments:
             raise KeyError(f"Segment '{segment}' not found in inventory")
@@ -95,7 +94,6 @@ class FeatureEngine:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-
     def load_inventory(self, filepath: str) -> None:
         """
         Load a phonological inventory from JSON file.
@@ -109,7 +107,6 @@ class FeatureEngine:
         """
         with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
-
         if "features" not in data or "segments" not in data:
             raise ValueError(
                 "Inventory must contain 'features' and 'segments' fields"
@@ -122,7 +119,6 @@ class FeatureEngine:
             raise ValueError("'features' list contains duplicate names")
         if not isinstance(data["segments"], dict):
             raise ValueError("'segments' must be a dictionary")
-
         for seg_name, seg_feats in data["segments"].items():
             if not isinstance(seg_feats, dict):
                 raise ValueError(
@@ -135,7 +131,6 @@ class FeatureEngine:
                         f" has invalid value '{feat_val}'"
                         f" (expected one of {sorted(_VALID_VALUES)})"
                     )
-
         self.metadata = data.get("metadata", {})
         self.features = data["features"]
         self.segments = data["segments"]
@@ -150,7 +145,6 @@ class FeatureEngine:
         spec: dict[str, set[str]] = {f: set() for f in self.features}
         plus: dict[str, set[str]] = {f: set() for f in self.features}
         minus: dict[str, set[str]] = {f: set() for f in self.features}
-
         for seg, feats in self.segments.items():
             for f in self.features:
                 v = feats.get(f, "0")
@@ -160,11 +154,9 @@ class FeatureEngine:
                 elif v == "-":
                     spec[f].add(seg)
                     minus[f].add(seg)
-
-        self._spec_segs = {f: frozenset(s) for f, s in spec.items()}
-        self._plus_segs = {f: frozenset(s) for f, s in plus.items()}
-        self._minus_segs = {f: frozenset(s) for f, s in minus.items()}
-
+        self.spec_segs = {f: frozenset(s) for f, s in spec.items()}
+        self.plus_segs = {f: frozenset(s) for f, s in plus.items()}
+        self.minus_segs = {f: frozenset(s) for f, s in minus.items()}
         self._seg_value_tuples = {
             seg: tuple(feats.get(f, "0") for f in self.features)
             for seg, feats in self.segments.items()
@@ -276,13 +268,10 @@ class FeatureEngine:
         """
         if not segments:
             return [{}]
-
         for seg in segments:
             if seg not in self.segments:
                 raise ValueError(f"Segment '{seg}' not in inventory")
-
         segment_set = set(segments)
-
         # Features whose non-zero values agree across every target segment.
         # Underspecified ("0") is compatible with any value.
         candidates: dict[str, str] = {}
@@ -293,14 +282,11 @@ class FeatureEngine:
                 candidates[feature] = specified.pop()
             elif len(specified) == 0 and "0" in values:
                 pass  # all underspecified — not a useful candidate
-
         # Segments outside the target set that must be excluded
         outside = [s for s in self.segments if s not in segment_set]
-
         # Universal class — S is the entire inventory
         if not outside:
             return [{}]
-
         # For each outside segment, which candidates exclude it?
         # A candidate excludes an outside segment when the segment has a
         # non-zero value that differs from the candidate value.
@@ -317,7 +303,6 @@ class FeatureEngine:
                     []
                 )  # This segment cannot be excluded → not a natural class
             excluders.append(exc)
-
         # Sort candidates by descending coverage (hits the most outside segments first)
         candidate_list = sorted(
             candidates.keys(),
@@ -325,7 +310,6 @@ class FeatureEngine:
             reverse=True,
         )
         n = len(candidate_list)
-
         results: list[dict[str, str]] = []
         best_size: int | None = None
 
@@ -333,7 +317,6 @@ class FeatureEngine:
             idx: int, chosen: list[str], chosen_set: set[str]
         ) -> None:
             nonlocal best_size
-
             # All outside segments are excluded — record solution
             if all(exc & chosen_set for exc in excluders):
                 k = len(chosen)
@@ -344,25 +327,20 @@ class FeatureEngine:
                 elif k == best_size:
                     results.append({f: candidates[f] for f in chosen})
                 return
-
             # Prune: already at or past the best depth
             if best_size is not None and len(chosen) >= best_size:
                 return
             if idx >= n:
                 return
-
             # Prune: remaining candidates cannot cover every uncovered outside segment
             remaining = set(candidate_list[idx:])
             if not all(
                 (exc & chosen_set) or (exc & remaining) for exc in excluders
             ):
                 return
-
             f = candidate_list[idx]
-
             # Branch A: include f
             backtrack(idx + 1, [*chosen, f], chosen_set | {f})
-
             # Branch B: exclude f — only if remaining can still cover everything
             remaining_without = set(candidate_list[idx + 1 :])
             if all(
@@ -410,9 +388,7 @@ class FeatureEngine:
             KeyError: If feature not in inventory
         """
         self._validate_feature(feature)
-        return bool(self._plus_segs[feature]) and bool(
-            self._minus_segs[feature]
-        )
+        return bool(self.plus_segs[feature]) and bool(self.minus_segs[feature])
 
     def get_contrastive_features(self) -> list[str]:
         """
@@ -425,7 +401,7 @@ class FeatureEngine:
             self._contrastive_features = [
                 f
                 for f in self.features
-                if self._plus_segs[f] and self._minus_segs[f]
+                if self.plus_segs[f] and self.minus_segs[f]
             ]
         return self._contrastive_features
 
@@ -560,7 +536,6 @@ class FeatureEngine:
             "feature_count": len(self.features),
             "contrastive_features": len(self.get_contrastive_features()),
         }
-
         if len(self.segments) > 1:
             tuples = list(self._seg_value_tuples.values())
             n = len(tuples)
@@ -574,7 +549,6 @@ class FeatureEngine:
             stats["avg_feature_distance"] = total / count
         else:
             stats["avg_feature_distance"] = 0.0
-
         return stats
 
     def export_inventory(self, filepath: str) -> None:
