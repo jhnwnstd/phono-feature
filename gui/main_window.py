@@ -81,6 +81,12 @@ _CLEAR_BTN_STYLE = (
     f" }}"
     f" QPushButton:hover {{ color: {C['text']}; background: {C['bg']}; }}"
 )
+# Minimum decoration assumed when the WM doesn't report frame extents
+# (Wayland CSD, some X11 themes). Used to guarantee the window's frame
+# stays inside the screen during inventory swaps even when Qt thinks
+# the frame equals the widget.
+_MIN_DECO_W = 8
+_MIN_DECO_H = 32
 
 
 class Mode(StrEnum):
@@ -1204,12 +1210,25 @@ class MainWindow(QMainWindow):
             old_pos = self.pos()
             old_frame = self.frameGeometry()
             if self.isVisible():
-                deco_w = max(0, old_frame.width() - cur_w)
-                deco_h = max(0, old_frame.height() - cur_h)
-                # Padding from frame top-left to widget pos. left_pad is
-                # almost always 0; top_pad is the title bar height.
-                left_pad = max(0, old_pos.x() - old_frame.x())
-                top_pad = max(0, old_pos.y() - old_frame.y())
+                deco_w_reported = max(0, old_frame.width() - cur_w)
+                deco_h_reported = max(0, old_frame.height() - cur_h)
+                # If the WM reports zero decoration (Wayland CSD, some
+                # freshly-shown windows), assume a typical title bar
+                # exists. If it reports any positive value, trust it —
+                # don't apply a floor that would shift the user's
+                # chosen window position unnecessarily.
+                if deco_h_reported == 0:
+                    deco_h = _MIN_DECO_H
+                    top_pad = _MIN_DECO_H
+                else:
+                    deco_h = deco_h_reported
+                    top_pad = max(0, old_pos.y() - old_frame.y())
+                if deco_w_reported == 0:
+                    deco_w = _MIN_DECO_W
+                    left_pad = 0
+                else:
+                    deco_w = deco_w_reported
+                    left_pad = max(0, old_pos.x() - old_frame.x())
                 new_w, new_h = self._clamp_size_to_screen(
                     need_w, need_h, deco_w, deco_h
                 )
@@ -1245,18 +1264,8 @@ class MainWindow(QMainWindow):
                 # widget pos and the captured padding deltas.
                 min_x = avail.x() + left_pad
                 min_y = avail.y() + top_pad
-                max_x = (
-                    avail.x()
-                    + avail.width()
-                    - new_w
-                    - (deco_w - left_pad)
-                )
-                max_y = (
-                    avail.y()
-                    + avail.height()
-                    - new_h
-                    - (deco_h - top_pad)
-                )
+                max_x = avail.x() + avail.width() - new_w - (deco_w - left_pad)
+                max_y = avail.y() + avail.height() - new_h - (deco_h - top_pad)
                 new_x = max(min_x, min(new_x, max_x))
                 new_y = max(min_y, min(new_y, max_y))
                 self.move(new_x, new_y)
@@ -1274,6 +1283,71 @@ class MainWindow(QMainWindow):
             top_h = min(top_need_h, total - self._min_analysis_h)
             top_h = max(top_h, 200)
             self._vsplit.setSizes([top_h, total - top_h])
+        # Defensive follow-up: by the next event-loop tick the resize
+        # and move events have actually been processed by the WM, so
+        # ``frameGeometry()`` reflects reality. If our prediction was
+        # off (decoration deltas misreported on some compositors), this
+        # final pass catches it and pulls the window back on-screen.
+        QTimer.singleShot(0, self._clamp_to_screen)
+
+    def _clamp_to_screen(self) -> None:
+        """Ensure the window's frame fits the screen's available area.
+
+        Uses the actual reported decoration if any, but floors to a
+        typical title-bar size — many WMs report no decoration even
+        when one is rendered, and we still want the window pulled
+        back if it's poking out.
+        """
+        screen = self._target_screen()
+        if screen is None:
+            return
+        avail = screen.availableGeometry()
+        frame = self.frameGeometry()
+        pos = self.pos()
+        cur_w = self.width()
+        cur_h = self.height()
+        # Effective frame dimensions: trust the reported values when
+        # they're nonzero; only fall back to the floor when the WM
+        # reports zero decoration. Same policy as _fit_to_content so
+        # the two stay consistent and we don't unnecessarily shift the
+        # window when reported values are correct.
+        deco_w_reported = max(0, frame.width() - cur_w)
+        deco_h_reported = max(0, frame.height() - cur_h)
+        if deco_h_reported == 0:
+            deco_h = _MIN_DECO_H
+            top_pad = _MIN_DECO_H
+        else:
+            deco_h = deco_h_reported
+            top_pad = max(0, pos.y() - frame.y())
+        if deco_w_reported == 0:
+            deco_w = _MIN_DECO_W
+            left_pad = 0
+        else:
+            deco_w = deco_w_reported
+            left_pad = max(0, pos.x() - frame.x())
+        eff_fw = cur_w + deco_w
+        eff_fh = cur_h + deco_h
+        eff_fx = pos.x() - left_pad
+        eff_fy = pos.y() - top_pad
+        # Already inside avail? Done.
+        inside = (
+            eff_fx >= avail.x()
+            and eff_fy >= avail.y()
+            and eff_fx + eff_fw <= avail.x() + avail.width()
+            and eff_fy + eff_fh <= avail.y() + avail.height()
+        )
+        if inside:
+            return
+        # Clamp the effective frame to fit avail.
+        target_fx = max(
+            avail.x(), min(eff_fx, avail.x() + avail.width() - eff_fw)
+        )
+        target_fy = max(
+            avail.y(), min(eff_fy, avail.y() + avail.height() - eff_fh)
+        )
+        if target_fx == eff_fx and target_fy == eff_fy:
+            return
+        self.move(target_fx + left_pad, target_fy + top_pad)
 
     def _rebalance_vsplit(self) -> None:
         """Size the top panel so segments/features don't need scrollbars.
