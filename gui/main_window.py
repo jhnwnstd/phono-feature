@@ -492,6 +492,33 @@ class MainWindow(QMainWindow):
         assert isinstance(app, QApplication)
         return app.primaryScreen()
 
+    def _clamp_size_to_screen(
+        self,
+        w: int,
+        h: int,
+        deco_w: int | None = None,
+        deco_h: int | None = None,
+    ) -> tuple[int, int]:
+        """Clamp ``(w, h)`` to the target screen's available area.
+
+        ``deco_w`` / ``deco_h`` are the WM decoration size (title bar +
+        borders). When known — i.e. once the window has been shown and
+        decorated — they let us size the widget so the *frame* fits
+        exactly inside ``availableGeometry``. When unknown (pre-show)
+        we fall back to a 40-pixel heuristic margin.
+        """
+        screen = self._target_screen()
+        if screen is None:
+            return w, h
+        avail = screen.availableGeometry()
+        if deco_w is not None and deco_h is not None:
+            max_w = max(640, avail.width() - deco_w)
+            max_h = max(480, avail.height() - deco_h)
+        else:
+            max_w = max(640, avail.width() - 40)
+            max_h = max(480, avail.height() - 40)
+        return min(w, max_w), min(h, max_h)
+
     def _ensure_visible_on_screen(self) -> None:
         """
         Run after the first show via QTimer so the WM has decorated the window.
@@ -551,17 +578,14 @@ class MainWindow(QMainWindow):
         pos = self._settings.value("window_pos")
         screen = self._target_screen()
         if size is not None:
-            self.resize(size)
+            # Saved size may come from a larger display than the current
+            # one — clamp before applying so the window can't overflow.
+            self.resize(
+                *self._clamp_size_to_screen(size.width(), size.height())
+            )
         else:
             # Reasonable pre-load default; _fit_to_content will refine after loading.
-            if screen is not None:
-                avail = screen.availableGeometry()
-                self.resize(
-                    min(1200, avail.width() - 40),
-                    min(900, avail.height() - 40),
-                )
-            else:
-                self.resize(1200, 900)
+            self.resize(*self._clamp_size_to_screen(1200, 900))
         if pos is not None:
             self.move(pos)
         elif screen is not None:
@@ -1169,16 +1193,73 @@ class MainWindow(QMainWindow):
             # screen's available area and the absolute window minimum.
             cur_w = self.width()
             cur_h = self.height()
-            new_w = max(640, min(need_w, avail.width() - 40))
-            new_h = max(480, min(need_h, avail.height() - 40))
-            if new_w != cur_w or new_h != cur_h:
+            # Capture decoration deltas and the offsets between widget
+            # pos() and frameGeometry() before resizing. We work in
+            # widget coordinates throughout — pos() and move() agree on
+            # those, while frameGeometry() is offset by the title bar.
+            # Mixing the two would consistently drift the window down
+            # (or up) by the title bar height each load, which is
+            # exactly the asymmetry you'd see in Y but not X (the left
+            # border is usually 0 px on most WMs).
+            old_pos = self.pos()
+            old_frame = self.frameGeometry()
+            if self.isVisible():
+                deco_w = max(0, old_frame.width() - cur_w)
+                deco_h = max(0, old_frame.height() - cur_h)
+                # Padding from frame top-left to widget pos. left_pad is
+                # almost always 0; top_pad is the title bar height.
+                left_pad = max(0, old_pos.x() - old_frame.x())
+                top_pad = max(0, old_pos.y() - old_frame.y())
+                new_w, new_h = self._clamp_size_to_screen(
+                    need_w, need_h, deco_w, deco_h
+                )
+            else:
+                deco_w = 0
+                deco_h = 0
+                left_pad = 0
+                top_pad = 0
+                new_w, new_h = self._clamp_size_to_screen(need_w, need_h)
+            size_changed = new_w != cur_w or new_h != cur_h
+            if size_changed:
                 self.resize(new_w, new_h)
-            # Center on first load only
             if not self._has_saved_size:
+                # First load: no prior position to preserve. Center on
+                # screen so the window appears in a sensible spot.
                 frame = self.frameGeometry()
                 frame.moveCenter(avail.center())
                 self.move(frame.topLeft())
                 self._has_saved_size = True
+            elif size_changed:
+                # Subsequent loads: keep the window's center anchored.
+                # Translate the widget top-left by half the size delta
+                # using truncation toward zero — Python's // is floor,
+                # which biases negative-delta swaps in one direction
+                # and accumulates drift over repeated loads. ``int(x/2)``
+                # truncates symmetrically so a round-trip cancels.
+                dx = int((new_w - cur_w) / 2)
+                dy = int((new_h - cur_h) / 2)
+                new_x = old_pos.x() - dx
+                new_y = old_pos.y() - dy
+                # Clamp so the *frame* (widget + decoration) stays
+                # inside ``avail``. Frame edges are computed from the
+                # widget pos and the captured padding deltas.
+                min_x = avail.x() + left_pad
+                min_y = avail.y() + top_pad
+                max_x = (
+                    avail.x()
+                    + avail.width()
+                    - new_w
+                    - (deco_w - left_pad)
+                )
+                max_y = (
+                    avail.y()
+                    + avail.height()
+                    - new_h
+                    - (deco_h - top_pad)
+                )
+                new_x = max(min_x, min(new_x, max_x))
+                new_y = max(min_y, min(new_y, max_y))
+                self.move(new_x, new_y)
         # -- Apply to horizontal splitter --
         # Seg panel: exactly its content width (no padding).
         # Feat panel: at least its content width, but takes whatever is
