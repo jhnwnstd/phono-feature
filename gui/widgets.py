@@ -109,7 +109,13 @@ class SegmentButton(QPushButton):
         self.setStyleSheet(self._STYLES[SegmentState.DEFAULT])
 
     def set_state(self, state: SegmentState | str) -> None:
-        new_state = SegmentState(state)
+        # Most callers already pass a SegmentState; only re-instantiate
+        # for the str-literal path. Saves an enum lookup per call on the
+        # hot mode-toggle path.
+        if isinstance(state, SegmentState):
+            new_state = state
+        else:
+            new_state = SegmentState(state)
         if self._state == new_state:
             return
         self._state = new_state
@@ -389,11 +395,17 @@ class SegmentGridWidget(QWidget):
         self._resize_timer.timeout.connect(self._do_relayout)
 
     def set_groups(self, groups: dict, buttons: dict):
-        """Replace all content. Old buttons are deleted. New ones are shown."""
+        """Replace all content.
+
+        Old buttons are detached (NOT destroyed) — they belong to the
+        caller's segment-button pool and may reappear in the next
+        inventory. Headers are recreated each swap so destroying them
+        is fine.
+        """
         while self._grid.count():
             self._grid.takeAt(0)
         for btn in self._buttons.values():
-            btn.deleteLater()
+            btn.setParent(None)
         for hdr in self._headers:
             hdr.deleteLater()
         self._headers.clear()

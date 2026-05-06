@@ -5,7 +5,7 @@ Reusable dialog helpers and the InputDialog for inventory setup.
 """
 
 from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QColor, QFont, QPainter
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -30,6 +30,12 @@ class _AutofillTextEdit(QTextEdit):
     Tab through ``event()`` to ``focusNextPrevChild`` BEFORE
     ``keyPressEvent`` is called. The autofill branch lives in
     ``event()`` so it can run *before* that focus routing kicks in.
+
+    Also overrides ``paintEvent`` to render multi-line placeholder text:
+    QTextEdit's built-in placeholder paints only the first line, which
+    hides the rest of the hint. We bypass it by painting the lines
+    ourselves; callers should set the multi-line text via
+    ``setPlaceholderText`` as usual.
     """
 
     DEFAULT_FILL: str = ""  # subclasses override
@@ -51,6 +57,33 @@ class _AutofillTextEdit(QTextEdit):
             self.setPlainText(self.DEFAULT_FILL)
         return super().event(e)
 
+    def paintEvent(self, e):  # type: ignore[override]
+        super().paintEvent(e)
+        # Qt only renders the first line of placeholderText. When the box
+        # is empty, draw the remaining lines ourselves so multi-line
+        # hints (e.g. "Syllabic / Consonantal / (Tab fills these two)")
+        # are fully visible.
+        if self.toPlainText() or not self.placeholderText():
+            return
+        lines = self.placeholderText().splitlines()
+        if len(lines) <= 1:
+            return
+        painter = QPainter(self.viewport())
+        painter.setPen(QColor(C["text_dim"]))
+        painter.setFont(self.font())
+        metrics = painter.fontMetrics()
+        # Match Qt's first-line origin: top-left of the document margin.
+        # ``documentMargin`` is the inset Qt uses when laying out text.
+        margin = int(self.document().documentMargin())
+        x = margin
+        y = margin + metrics.ascent()
+        # Skip the first line — Qt already painted it.
+        y += metrics.lineSpacing()
+        for line in lines[1:]:
+            painter.drawText(x, y, line)
+            y += metrics.lineSpacing()
+        painter.end()
+
 
 class SegmentTextEdit(_AutofillTextEdit):
     """Tab on empty fills a quick-start segment list (IPA voiceless and
@@ -60,12 +93,12 @@ class SegmentTextEdit(_AutofillTextEdit):
 
 
 class FeatureTextEdit(_AutofillTextEdit):
-    """Tab on empty fills the Default (33) feature preset, mirroring the
-    quick-start behavior of SegmentTextEdit. Useful when the user picks
-    'Custom' from the preset combo (which clears the box) and then
-    decides they actually want the standard set after all."""
+    """Tab on empty seeds just the two major-class features (Syllabic and
+    Consonantal) so the user has a starting point to build a custom set
+    from. The full Default (33) preset is available directly from the
+    dropdown — no point dumping it here too."""
 
-    DEFAULT_FILL = "\n".join(FEATURE_PRESETS["Default (33)"])
+    DEFAULT_FILL = "Syllabic\nConsonantal"
 
 
 def center_on_parent(dialog, parent):
@@ -188,9 +221,11 @@ class InputDialog(QDialog):
         self.feat_edit = FeatureTextEdit()
         self.feat_edit.setFont(QFont("Noto Sans", 10))
         # Mirror the segment-box hint so the Tab-autofill is discoverable.
+        # The placeholder shows exactly what Tab seeds — the two major-
+        # class features. Anything beyond that is the user's call.
         self.feat_edit.setPlaceholderText(
-            "Syllabic\nConsonantal\nSonorant\n…\n"
-            "(Tab on an empty box fills the Default (33) preset)"
+            "Syllabic\nConsonantal\n"
+            "(Tab on an empty box fills these two to start)"
         )
         layout.addWidget(self.feat_edit)
         selected_preset = self.preset_combo.currentText()

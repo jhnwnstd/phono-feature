@@ -269,12 +269,18 @@ class VowelChartWidget(QWidget):
                 lbl.setStyleSheet(header_style)
 
     def clear(self) -> None:
-        """Remove all buttons, labels, and collision containers."""
+        """Remove all buttons, labels, and collision containers.
+
+        Buttons are detached (NOT destroyed) — they belong to the
+        caller's segment-button pool. Detaching them BEFORE deleting
+        their parent cell containers is essential, otherwise destroying
+        the container would take the children with it.
+        """
+        for btn in self._buttons.values():
+            btn.setParent(None)
+        self._buttons.clear()
         while self._grid.count():
             self._grid.takeAt(0)
-        for btn in self._buttons.values():
-            btn.deleteLater()
-        self._buttons.clear()
         for lbl, _ in self._header_labels:
             lbl.deleteLater()
         self._header_labels.clear()

@@ -127,15 +127,13 @@ def feat_edit(qapp):
     return FeatureTextEdit()
 
 
-def test_feature_tab_on_empty_fills_default_preset(feat_edit):
+def test_feature_tab_on_empty_fills_two_major_class_seeds(feat_edit):
     assert feat_edit.toPlainText() == ""
     _tab(feat_edit)
     text = feat_edit.toPlainText()
-    # Default preset has 33 features, one per line; spot-check a few canonical ones.
-    assert "Syllabic" in text
-    assert "Consonantal" in text
-    assert "CORONAL" in text
-    assert text.count("\n") >= 30  # substantial number of features
+    # Tab seeds only the two major-class features; the user fills in the
+    # rest. The full Default (33) preset is reachable via the dropdown.
+    assert text.splitlines() == ["Syllabic", "Consonantal"]
 
 
 def test_feature_tab_on_existing_content_leaves_it_alone(feat_edit):
