@@ -43,11 +43,26 @@ class SegmentState(StrEnum):
 class SegmentButton(QPushButton):
     """Toggleable button for a single phonological segment.
 
-    Stylesheets are built per-instance (not at class-definition time)
-    so each fresh widget picks up the active palette. Live theme swaps
-    drop and rebuild the central widget, which discards old buttons
-    and creates new ones with the new colors.
+    Stylesheet dicts are cached per theme at class level, so a live
+    theme swap on a 140-segment inventory only does the f-string work
+    once per theme — subsequent swaps back are a cache hit. Each
+    instance keeps a reference to the dict for its current theme;
+    ``apply_theme`` swaps the reference on toggle.
     """
+
+    # theme name → styles dict. Survives across instances.
+    _styles_cache: dict[str, dict] = {}
+
+    @classmethod
+    def _styles_for_active_theme(cls) -> dict:
+        from gui.palette import get_theme_name
+
+        theme = get_theme_name()
+        cached = cls._styles_cache.get(theme)
+        if cached is None:
+            cached = cls._build_styles()
+            cls._styles_cache[theme] = cached
+        return cached
 
     def __init__(self, segment: str, parent=None):
         super().__init__(segment, parent)
@@ -56,8 +71,17 @@ class SegmentButton(QPushButton):
         self.setCheckable(True)
         self.setFixedSize(33, 26)
         self.setFont(QFont("Noto Sans", 9))
-        self._styles = self._build_styles()
+        self._styles = self._styles_for_active_theme()
         self.setStyleSheet(self._styles[SegmentState.DEFAULT])
+
+    def apply_theme(self) -> None:
+        """Re-style against the active palette in place.
+
+        Used by MainWindow on a theme toggle so pooled buttons don't
+        have to be destroyed and recreated.
+        """
+        self._styles = self._styles_for_active_theme()
+        self.setStyleSheet(self._styles[self._state])
 
     @staticmethod
     def _build_styles() -> dict[SegmentState, str]:
@@ -136,9 +160,26 @@ class FeatureRow(QWidget):
 
     Interactive mode shows plus and minus toggle buttons.
     Display mode shows a coloured value badge.
+
+    Style strings are cached per theme at class level (see
+    SegmentButton for the same pattern); ``apply_theme`` re-binds
+    instance-level attrs on a live theme swap.
     """
 
     value_changed = pyqtSignal(str, str)
+    # theme name → styles dict (BADGE_*, ROW_*, NAME_*).
+    _styles_cache: dict[str, dict[str, str]] = {}
+
+    @classmethod
+    def _styles_for_active_theme(cls) -> dict[str, str]:
+        from gui.palette import get_theme_name
+
+        theme = get_theme_name()
+        cached = cls._styles_cache.get(theme)
+        if cached is None:
+            cached = cls._compute_styles()
+            cls._styles_cache[theme] = cached
+        return cached
 
     def __init__(self, feature_name: str, parent=None):
         super().__init__(parent)
@@ -185,48 +226,64 @@ class FeatureRow(QWidget):
         self.setStyleSheet(self._ROW_NEUTRAL)
 
     def _build_styles(self) -> None:
-        """Compute all stylesheet strings against the *current* palette.
-        Per-instance (not class-level) so each fresh FeatureRow created
-        after a theme swap reflects the new colors. Same attribute
-        names as before so the rest of the class is untouched.
+        """Bind the active theme's style strings as instance attrs."""
+        for k, v in self._styles_for_active_theme().items():
+            setattr(self, f"_{k}", v)
+
+    @staticmethod
+    def _compute_styles() -> dict[str, str]:
+        """Build all stylesheet strings against the *current* palette.
+
+        Called once per theme; results are cached at class level
+        (``_styles_cache``). ``text_dim`` for the neutral badge text
+        (not ``tag_gray_text``) so the badge matches the dim feature
+        name and the inactive +/- button text on the same row.
         """
-        self._BADGE_CONTRASTIVE = (
-            f"background: {C['accent_light']}; color: {C['accent']};"
-            " border-radius: 4px; font-weight: bold;"
-        )
-        self._NAME_CONTRASTIVE = (
-            f"color: {C['accent']}; font-weight: bold;"
-        )
-        self._ROW_CONTRASTIVE = (
-            f"background: {C['accent_light']}; border-radius: 6px;"
-        )
-        # ``text_dim`` for badge text (not ``tag_gray_text``) so the
-        # neutral badge matches the dim feature name and the inactive
-        # +/- button text on the same row.
-        self._BADGE_NEUTRAL = (
-            f"background: {C['tag_gray']}; color: {C['text_dim']};"
-            " border-radius: 4px;"
-        )
-        self._NAME_DIM = f"color: {C['text_dim']};"
-        self._ROW_TRANSPARENT = "background: transparent; border-radius: 6px;"
-        self._BADGE_PLUS = (
-            f"background: {C['plus_bg']}; color: {C['plus']};"
-            " border-radius: 4px; font-weight: bold;"
-        )
-        self._ROW_PLUS = (
-            f"background: {C['shared_plus']}; border-radius: 6px;"
-        )
-        self._BADGE_MINUS = (
-            f"background: {C['minus_bg']}; color: {C['minus']};"
-            " border-radius: 4px; font-weight: bold;"
-        )
-        self._ROW_MINUS = (
-            f"background: {C['shared_minus']}; border-radius: 6px;"
-        )
-        self._NAME_BOLD = f"color: {C['text']}; font-weight: bold;"
-        self._ROW_NEUTRAL = "background: transparent; border-radius: 6px;"
-        self._NAME_ACTIVE = f"color: {C['text']};"
-        self._NAME_INACTIVE = f"color: {C['text_dim']};"
+        return {
+            "BADGE_CONTRASTIVE": (
+                f"background: {C['accent_light']}; color: {C['accent']};"
+                " border-radius: 4px; font-weight: bold;"
+            ),
+            "NAME_CONTRASTIVE": f"color: {C['accent']}; font-weight: bold;",
+            "ROW_CONTRASTIVE": (
+                f"background: {C['accent_light']}; border-radius: 6px;"
+            ),
+            "BADGE_NEUTRAL": (
+                f"background: {C['tag_gray']}; color: {C['text_dim']};"
+                " border-radius: 4px;"
+            ),
+            "NAME_DIM": f"color: {C['text_dim']};",
+            "ROW_TRANSPARENT": "background: transparent; border-radius: 6px;",
+            "BADGE_PLUS": (
+                f"background: {C['plus_bg']}; color: {C['plus']};"
+                " border-radius: 4px; font-weight: bold;"
+            ),
+            "ROW_PLUS": f"background: {C['shared_plus']}; border-radius: 6px;",
+            "BADGE_MINUS": (
+                f"background: {C['minus_bg']}; color: {C['minus']};"
+                " border-radius: 4px; font-weight: bold;"
+            ),
+            "ROW_MINUS": (
+                f"background: {C['shared_minus']}; border-radius: 6px;"
+            ),
+            "NAME_BOLD": f"color: {C['text']}; font-weight: bold;",
+            "ROW_NEUTRAL": "background: transparent; border-radius: 6px;",
+            "NAME_ACTIVE": f"color: {C['text']};",
+            "NAME_INACTIVE": f"color: {C['text_dim']};",
+        }
+
+    def apply_theme(self) -> None:
+        """Re-style this row against the active palette in place.
+
+        Re-binds the cached strings, then re-applies whatever visual
+        state the row was last in (display value or query value) and
+        the +/- button styles.
+        """
+        self._build_styles()
+        self._last_display_state = None
+        self._apply_query_style(self._current_value)
+        self._style_btn(self.plus_btn, "+")
+        self._style_btn(self.minus_btn, "-")
 
     def _style_btn(self, btn: QPushButton, polarity: str):
         is_plus = polarity == "+"

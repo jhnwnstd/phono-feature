@@ -785,40 +785,74 @@ class MainWindow(QMainWindow):
         self._apply_theme()
 
     def _apply_theme(self) -> None:
-        """Tear down central + toolbar and rebuild against the active
-        palette. Mode and current inventory are preserved; per-mode
-        selections are reset (acceptable for an explicit theme change).
+        """Live theme swap with widget pools and engine preserved.
+
+        Re-styles every pooled SegmentButton and FeatureRow in place
+        (cheap — uses the per-class theme cache so the f-string work
+        runs once per theme), tears down only the chrome (toolbar +
+        central widget), rebuilds it, then re-parents the pool widgets
+        to the new chrome via the populate helpers. The engine and
+        cached inventory data are NOT reloaded — there's no JSON
+        re-parse and no validation pass on a theme change.
+
+        Window position and size are explicitly preserved so the
+        toggle never visually moves the window: a tear-down + rebuild
+        otherwise lets the WM re-place us, and ``_fit_to_content``
+        re-centers on a recomputed frame which can drift a few px due
+        to layout-time measurement differences.
+
+        Mode and current inventory are preserved; per-mode selections
+        are reset (acceptable for an explicit theme-change action).
         """
         saved_mode = self._mode
-        saved_path = self._current_path
-        # Drop both widget pools — their stylesheets were captured with
-        # the old palette. Without this, swapping back later would
-        # resurface stale colors.
+        saved_pos = self.pos()
+        saved_size = self.size()
+        # Re-style pooled widgets and detach them so the upcoming
+        # central-widget destruction doesn't take them with it.
         for btn in self._seg_button_pool.values():
-            btn.deleteLater()
-        self._seg_button_pool.clear()
-        self._seg_buttons = {}
+            btn.apply_theme()
+            btn.setParent(None)
         for row in self._feat_row_pool.values():
-            row.deleteLater()
-        self._feat_row_pool.clear()
-        self._feat_rows = {}
+            row.apply_theme()
+            row.setParent(None)
+        # Cards live as children of the old central widget — drop our
+        # references so _init_feature_pool rebuilds them (it sees the
+        # populated row pool and skips re-creating rows).
         self._feat_cards.clear()
         self._other_card = None
-        self._feature_pool_initialized = False
+        self._feat_rows = {}
         # Tear down central + toolbars; the QMainWindow itself stays so
         # window pos/size and any child windows (Builder) are unaffected.
         self.setCentralWidget(QWidget())
         for tb in self.findChildren(QToolBar):
             self.removeToolBar(tb)
-        # Re-style the QMainWindow background (the only stylesheet on
-        # the window itself, set in __init__).
         self.setStyleSheet(f"background-color: {C['bg']};")
-        # Rebuild — same path used at startup, evaluates every f-string
-        # stylesheet against the active palette.
+        # Rebuild chrome — every f-string stylesheet inside _build_ui
+        # re-evaluates against the active palette.
         self._build_ui()
         self._set_mode(saved_mode)
-        if saved_path:
-            self._load_path(saved_path)
+        # Re-place pooled widgets in the new chrome WITHOUT going
+        # through _load_path (no engine reload, no JSON parse, no
+        # validator). The cached engine data is unchanged — we only
+        # need the populate helpers to wire pool widgets to the
+        # freshly-built panels.
+        if self.engine is not None:
+            self._saved_seg_state = []
+            self._saved_feat_state = {}
+            with self._batched_updates():
+                self._populate_segments()
+                self._populate_features()
+                self._apply_mode_to_new_widgets()
+                self.analysis.clear()
+        # Restore exact window pos/size. ``_fit_to_content`` runs as
+        # part of the populate path and may try to recenter, so do
+        # this synchronously AND defer one more pass to win against
+        # any singleShot-deferred resize.
+        self.resize(saved_size)
+        self.move(saved_pos)
+        if self.isVisible():
+            QTimer.singleShot(0, lambda: (self.resize(saved_size),
+                                          self.move(saved_pos)))
 
     def _open_builder(self) -> None:
         if self._builder is not None and self._builder.isVisible():
@@ -1084,12 +1118,17 @@ class MainWindow(QMainWindow):
         _feat_rows below tracks which subset is active for the current
         inventory and is the dict external code reads from.
         """
-        if self._feature_pool_initialized:
-            return
+        # Create any rows missing from the pool. After a theme swap the
+        # pool is preserved (so we don't re-init 30+ widgets) but the
+        # cards — which are children of the central widget — were torn
+        # down. The cards-only rebuild path below handles that.
         for feat in FEATURE_ORDER:
-            row = FeatureRow(feat)
-            row.value_changed.connect(self._on_feature_changed)
-            self._feat_row_pool[feat] = row
+            if feat not in self._feat_row_pool:
+                row = FeatureRow(feat)
+                row.value_changed.connect(self._on_feature_changed)
+                self._feat_row_pool[feat] = row
+        if self._feature_pool_initialized and self._feat_cards:
+            return
         # Temporarily expose pool rows via _feat_rows so _build_feature_group
         # can find them while constructing cards.
         self._feat_rows = dict(self._feat_row_pool)
