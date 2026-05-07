@@ -27,6 +27,8 @@ _CELL_FONT_NORMAL = QFont("Noto Sans", 10)
 # ---------------------------------------------------------------------------
 def make_cell(value: str = "0") -> QTableWidgetItem:
     """Create a styled table cell with the given feature value."""
+    if value == "-":
+        value = "\u2212"
     item = QTableWidgetItem(value)
     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
     item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
