@@ -72,16 +72,24 @@ from gui.widgets import (
 
 if TYPE_CHECKING:
     from gui.builder import InventoryBuilder
-# Mode-independent: same style applied at construction, never changed.
-# Previously the panel-chrome reapplied this every mode toggle (no-op
-# restyle) — that's now done once and skipped on toggles.
-_CLEAR_BTN_STYLE = (
-    f"QPushButton {{"
-    f" color: {C['text']}; background: transparent;"
-    f" border: 1px solid {C['border']}; border-radius: 5px; padding: 0 10px;"
-    f" }}"
-    f" QPushButton:hover {{ color: {C['text']}; background: {C['bg']}; }}"
-)
+# Mode-independent: same style applied at construction, never changed
+# (within one theme). Function rather than module-level constant so it
+# evaluates against the current palette — important after a live
+# theme swap, where the constant would have been baked at import time.
+
+
+def _clear_btn_style() -> str:
+    return (
+        f"QPushButton {{"
+        f" color: {C['text']}; background: transparent;"
+        f" border: 1px solid {C['border']};"
+        f" border-radius: 5px; padding: 0 10px;"
+        f" }}"
+        f" QPushButton:hover {{ color: {C['text']};"
+        f" background: {C['bg']}; }}"
+    )
+
+
 # Minimum decoration assumed when the WM doesn't report frame extents
 # (Wayland CSD, some X11 themes). Used to guarantee the window's frame
 # stays inside the screen during inventory swaps even when Qt thinks
@@ -420,7 +428,7 @@ class MainWindow(QMainWindow):
         self.clear_seg_btn = QPushButton("Clear")
         self.clear_seg_btn.setFixedHeight(26)
         self.clear_seg_btn.setFont(QFont("Noto Sans", 9))
-        self.clear_seg_btn.setStyleSheet(_CLEAR_BTN_STYLE)
+        self.clear_seg_btn.setStyleSheet(_clear_btn_style())
         self.clear_seg_btn.clicked.connect(self._clear_segments)
         header.addWidget(self._seg_title)
         header.addStretch()
@@ -497,7 +505,7 @@ class MainWindow(QMainWindow):
         self.clear_feat_btn = QPushButton("Clear")
         self.clear_feat_btn.setFixedHeight(26)
         self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
-        self.clear_feat_btn.setStyleSheet(_CLEAR_BTN_STYLE)
+        self.clear_feat_btn.setStyleSheet(_clear_btn_style())
         self.clear_feat_btn.clicked.connect(self._clear_features)
         header.addWidget(self._feat_title)
         header.addStretch()
@@ -763,20 +771,54 @@ class MainWindow(QMainWindow):
         self._load_path(path)
 
     def _toggle_theme(self) -> None:
-        """Switch between light and dark theme.
+        """Switch between light and dark theme — live, no restart.
 
-        Persists the choice to QSettings. Most stylesheets are baked at
-        widget construction time, so the swap takes effect after a
-        restart — the status message tells the user. Implementing live
-        swap would require refactoring ~30 inline f-string stylesheets
-        across widgets.py, vowel_chart.py, and main_window.py.
+        Mutates the active palette in place and rebuilds the central
+        widget + toolbar so all freshly-constructed widgets pick up
+        the new colors. Pooled SegmentButtons / FeatureRows are
+        discarded (their styles were baked against the old palette)
+        and recreated on the inventory reload.
         """
         new_theme = "dark" if get_theme_name() == "light" else "light"
         set_theme(new_theme)
         self._settings.setValue("theme", new_theme)
-        self.status.showMessage(
-            f"{new_theme.title()} mode saved — restart the app to apply."
-        )
+        self._apply_theme()
+
+    def _apply_theme(self) -> None:
+        """Tear down central + toolbar and rebuild against the active
+        palette. Mode and current inventory are preserved; per-mode
+        selections are reset (acceptable for an explicit theme change).
+        """
+        saved_mode = self._mode
+        saved_path = self._current_path
+        # Drop both widget pools — their stylesheets were captured with
+        # the old palette. Without this, swapping back later would
+        # resurface stale colors.
+        for btn in self._seg_button_pool.values():
+            btn.deleteLater()
+        self._seg_button_pool.clear()
+        self._seg_buttons = {}
+        for row in self._feat_row_pool.values():
+            row.deleteLater()
+        self._feat_row_pool.clear()
+        self._feat_rows = {}
+        self._feat_cards.clear()
+        self._other_card = None
+        self._feature_pool_initialized = False
+        # Tear down central + toolbars; the QMainWindow itself stays so
+        # window pos/size and any child windows (Builder) are unaffected.
+        self.setCentralWidget(QWidget())
+        for tb in self.findChildren(QToolBar):
+            self.removeToolBar(tb)
+        # Re-style the QMainWindow background (the only stylesheet on
+        # the window itself, set in __init__).
+        self.setStyleSheet(f"background-color: {C['bg']};")
+        # Rebuild — same path used at startup, evaluates every f-string
+        # stylesheet against the active palette.
+        self._build_ui()
+        self._set_mode(saved_mode)
+        if saved_path:
+            self._load_path(saved_path)
 
     def _open_builder(self) -> None:
         if self._builder is not None and self._builder.isVisible():

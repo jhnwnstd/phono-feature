@@ -237,10 +237,6 @@ class VowelChartWidget(QWidget):
         "Back",
     ]
     _ROW_HEADERS: ClassVar[list[str]] = _ROW_LABELS
-    _HDR_ACTIVE = f"color: {C['text']};"
-    _HDR_INACTIVE = f"color: {C['text_dim']};"
-    _ROW_ACTIVE = f"color: {C['text']}; padding-right: 4px;"
-    _ROW_INACTIVE = f"color: {C['text_dim']}; padding-right: 4px;"
 
     def __init__(self, parent=None, *, btn_gap: int = 4):
         super().__init__(parent)
@@ -250,6 +246,13 @@ class VowelChartWidget(QWidget):
         self._grid = QGridLayout(self)
         self._grid.setSpacing(btn_gap)
         self._grid.setContentsMargins(0, 0, 8, 0)
+        # Per-instance so a fresh widget (post-theme-swap rebuild) sees
+        # the active palette. See SegmentButton/FeatureRow for the same
+        # pattern.
+        self._HDR_ACTIVE = f"color: {C['text']};"
+        self._HDR_INACTIVE = f"color: {C['text_dim']};"
+        self._ROW_ACTIVE = f"color: {C['text']}; padding-right: 4px;"
+        self._ROW_INACTIVE = f"color: {C['text_dim']}; padding-right: 4px;"
 
     def set_headers_active(self, active: bool):
         # No dedup: ``set_vowels`` recreates the header labels on each

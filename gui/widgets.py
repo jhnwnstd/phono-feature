@@ -12,7 +12,6 @@ SegmentGridWidget
 
 import math
 from enum import StrEnum
-from typing import ClassVar
 
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -42,62 +41,13 @@ class SegmentState(StrEnum):
 
 
 class SegmentButton(QPushButton):
-    """Toggleable button for a single phonological segment."""
+    """Toggleable button for a single phonological segment.
 
-    _STYLES: ClassVar[dict[SegmentState, str]] = {
-        SegmentState.SELECTED: f"""
-            QPushButton {{
-                background-color: {C["seg_selected"]};
-                color: #FFFFFF;
-                border: 2px solid #1D4ED8;
-                border-radius: 8px;
-                font-weight: bold;
-            }}
-        """,
-        SegmentState.MATCHED: f"""
-            QPushButton {{
-                background-color: {C["seg_matched"]};
-                color: #FFFFFF;
-                border: 2px solid #1D4ED8;
-                border-radius: 8px;
-                font-weight: bold;
-            }}
-        """,
-        SegmentState.UNMATCHED: f"""
-            QPushButton {{
-                background-color: {C["seg_unmatched"]};
-                color: {C["text_dim"]};
-                border: 1px solid {C["border"]};
-                border-radius: 8px;
-            }}
-        """,
-        SegmentState.SUGGESTED: f"""
-            QPushButton {{
-                background-color: {C["accent_light"]};
-                color: {C["accent"]};
-                border: 1.5px dashed {C["accent"]};
-                border-radius: 8px;
-            }}
-        """,
-        SegmentState.DEFAULT: f"""
-            QPushButton {{
-                background-color: {C["seg_default"]};
-                color: {C["text"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 8px;
-            }}
-            QPushButton:hover {{
-                background-color: {C["accent_light"]};
-                border: 1.5px solid {C["accent"]};
-            }}
-            QPushButton:checked {{
-                background-color: {C["seg_selected"]};
-                color: white;
-                border: 2px solid #1D4ED8;
-                font-weight: bold;
-            }}
-        """,
-    }
+    Stylesheets are built per-instance (not at class-definition time)
+    so each fresh widget picks up the active palette. Live theme swaps
+    drop and rebuild the central widget, which discards old buttons
+    and creates new ones with the new colors.
+    """
 
     def __init__(self, segment: str, parent=None):
         super().__init__(segment, parent)
@@ -106,7 +56,65 @@ class SegmentButton(QPushButton):
         self.setCheckable(True)
         self.setFixedSize(33, 26)
         self.setFont(QFont("Noto Sans", 9))
-        self.setStyleSheet(self._STYLES[SegmentState.DEFAULT])
+        self._styles = self._build_styles()
+        self.setStyleSheet(self._styles[SegmentState.DEFAULT])
+
+    @staticmethod
+    def _build_styles() -> dict[SegmentState, str]:
+        return {
+            SegmentState.SELECTED: f"""
+                QPushButton {{
+                    background-color: {C["seg_selected"]};
+                    color: #FFFFFF;
+                    border: 2px solid {C["accent"]};
+                    border-radius: 8px;
+                    font-weight: bold;
+                }}
+            """,
+            SegmentState.MATCHED: f"""
+                QPushButton {{
+                    background-color: {C["seg_matched"]};
+                    color: #FFFFFF;
+                    border: 2px solid {C["accent"]};
+                    border-radius: 8px;
+                    font-weight: bold;
+                }}
+            """,
+            SegmentState.UNMATCHED: f"""
+                QPushButton {{
+                    background-color: {C["seg_unmatched"]};
+                    color: {C["text_dim"]};
+                    border: 1px solid {C["border"]};
+                    border-radius: 8px;
+                }}
+            """,
+            SegmentState.SUGGESTED: f"""
+                QPushButton {{
+                    background-color: {C["accent_light"]};
+                    color: {C["accent"]};
+                    border: 1.5px dashed {C["accent"]};
+                    border-radius: 8px;
+                }}
+            """,
+            SegmentState.DEFAULT: f"""
+                QPushButton {{
+                    background-color: {C["seg_default"]};
+                    color: {C["text"]};
+                    border: 1.5px solid {C["border"]};
+                    border-radius: 8px;
+                }}
+                QPushButton:hover {{
+                    background-color: {C["accent_light"]};
+                    border: 1.5px solid {C["accent"]};
+                }}
+                QPushButton:checked {{
+                    background-color: {C["seg_selected"]};
+                    color: #FFFFFF;
+                    border: 2px solid {C["accent"]};
+                    font-weight: bold;
+                }}
+            """,
+        }
 
     def set_state(self, state: SegmentState | str) -> None:
         # Most callers already pass a SegmentState; only re-instantiate
@@ -119,7 +127,7 @@ class SegmentButton(QPushButton):
         if self._state == new_state:
             return
         self._state = new_state
-        self.setStyleSheet(self._STYLES[new_state])
+        self.setStyleSheet(self._styles[new_state])
 
 
 class FeatureRow(QWidget):
@@ -131,32 +139,6 @@ class FeatureRow(QWidget):
     """
 
     value_changed = pyqtSignal(str, str)
-    _BADGE_CONTRASTIVE = (
-        f"background: {C['accent_light']}; color: {C['accent']};"
-        " border-radius: 4px; font-weight: bold;"
-    )
-    _NAME_CONTRASTIVE = f"color: {C['accent']}; font-weight: bold;"
-    _ROW_CONTRASTIVE = f"background: {C['accent_light']}; border-radius: 6px;"
-    # Use ``text_dim`` (not ``tag_gray_text``) so the neutral badge matches
-    # the dim feature name and the inactive +/- button text on the same
-    # row — two different grays look like a bug.
-    _BADGE_NEUTRAL = f"background: {C['tag_gray']}; color: {C['text_dim']}; border-radius: 4px;"
-    _NAME_DIM = f"color: {C['text_dim']};"
-    _ROW_TRANSPARENT = "background: transparent; border-radius: 6px;"
-    _BADGE_PLUS = (
-        f"background: {C['plus_bg']}; color: {C['plus']};"
-        " border-radius: 4px; font-weight: bold;"
-    )
-    _ROW_PLUS = f"background: {C['shared_plus']}; border-radius: 6px;"
-    _BADGE_MINUS = (
-        f"background: {C['minus_bg']}; color: {C['minus']};"
-        " border-radius: 4px; font-weight: bold;"
-    )
-    _ROW_MINUS = f"background: {C['shared_minus']}; border-radius: 6px;"
-    _NAME_BOLD = f"color: {C['text']}; font-weight: bold;"
-    _ROW_NEUTRAL = "background: transparent; border-radius: 6px;"
-    _NAME_ACTIVE = f"color: {C['text']};"
-    _NAME_INACTIVE = f"color: {C['text_dim']};"
 
     def __init__(self, feature_name: str, parent=None):
         super().__init__(parent)
@@ -164,6 +146,7 @@ class FeatureRow(QWidget):
         self._current_value = ""
         self._interactive = True
         self._panel_active = False
+        self._build_styles()
         # Cache for set_display dedup; cleared by reset/_apply_query_style
         # because they bypass set_display but rewrite the same stylesheets.
         self._last_display_state: tuple[str, bool, bool] | None = None
@@ -200,6 +183,50 @@ class FeatureRow(QWidget):
         self.minus_btn.clicked.connect(lambda: self._on_click("-"))
         self.setAutoFillBackground(True)
         self.setStyleSheet(self._ROW_NEUTRAL)
+
+    def _build_styles(self) -> None:
+        """Compute all stylesheet strings against the *current* palette.
+        Per-instance (not class-level) so each fresh FeatureRow created
+        after a theme swap reflects the new colors. Same attribute
+        names as before so the rest of the class is untouched.
+        """
+        self._BADGE_CONTRASTIVE = (
+            f"background: {C['accent_light']}; color: {C['accent']};"
+            " border-radius: 4px; font-weight: bold;"
+        )
+        self._NAME_CONTRASTIVE = (
+            f"color: {C['accent']}; font-weight: bold;"
+        )
+        self._ROW_CONTRASTIVE = (
+            f"background: {C['accent_light']}; border-radius: 6px;"
+        )
+        # ``text_dim`` for badge text (not ``tag_gray_text``) so the
+        # neutral badge matches the dim feature name and the inactive
+        # +/- button text on the same row.
+        self._BADGE_NEUTRAL = (
+            f"background: {C['tag_gray']}; color: {C['text_dim']};"
+            " border-radius: 4px;"
+        )
+        self._NAME_DIM = f"color: {C['text_dim']};"
+        self._ROW_TRANSPARENT = "background: transparent; border-radius: 6px;"
+        self._BADGE_PLUS = (
+            f"background: {C['plus_bg']}; color: {C['plus']};"
+            " border-radius: 4px; font-weight: bold;"
+        )
+        self._ROW_PLUS = (
+            f"background: {C['shared_plus']}; border-radius: 6px;"
+        )
+        self._BADGE_MINUS = (
+            f"background: {C['minus_bg']}; color: {C['minus']};"
+            " border-radius: 4px; font-weight: bold;"
+        )
+        self._ROW_MINUS = (
+            f"background: {C['shared_minus']}; border-radius: 6px;"
+        )
+        self._NAME_BOLD = f"color: {C['text']}; font-weight: bold;"
+        self._ROW_NEUTRAL = "background: transparent; border-radius: 6px;"
+        self._NAME_ACTIVE = f"color: {C['text']};"
+        self._NAME_INACTIVE = f"color: {C['text_dim']};"
 
     def _style_btn(self, btn: QPushButton, polarity: str):
         is_plus = polarity == "+"
