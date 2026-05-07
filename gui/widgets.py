@@ -137,7 +137,10 @@ class FeatureRow(QWidget):
     )
     _NAME_CONTRASTIVE = f"color: {C['accent']}; font-weight: bold;"
     _ROW_CONTRASTIVE = f"background: {C['accent_light']}; border-radius: 6px;"
-    _BADGE_NEUTRAL = f"background: {C['tag_gray']}; color: {C['tag_gray_text']}; border-radius: 4px;"
+    # Use ``text_dim`` (not ``tag_gray_text``) so the neutral badge matches
+    # the dim feature name and the inactive +/- button text on the same
+    # row — two different grays look like a bug.
+    _BADGE_NEUTRAL = f"background: {C['tag_gray']}; color: {C['text_dim']}; border-radius: 4px;"
     _NAME_DIM = f"color: {C['text_dim']};"
     _ROW_TRANSPARENT = "background: transparent; border-radius: 6px;"
     _BADGE_PLUS = (

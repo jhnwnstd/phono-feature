@@ -211,6 +211,15 @@ class MainWindow(QMainWindow):
         # -- persistent settings --
         self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
         self._build_ui()
+        # Always watch the project's ``config/`` dir so newly-saved
+        # inventories (from the Builder, or from external edits) appear
+        # in the dropdown without restarting the app.
+        config_dir = self._get_config_dir()
+        if (
+            os.path.isdir(config_dir)
+            and config_dir not in self._watcher.directories()
+        ):
+            self._watcher.addPath(config_dir)
         app = QApplication.instance()
         assert isinstance(app, QApplication)
         app.installEventFilter(self)
@@ -630,29 +639,54 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Config loading
     # ------------------------------------------------------------------
-    def _populate_config_dropdown(self) -> None:
-        """Scan config/ directory and fill the dropdown."""
-        config_dir = os.path.normpath(
+    def _get_config_dir(self) -> str:
+        """Return the absolute path to the project's ``config/`` directory."""
+        return os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "config")
         )
-        self.config_combo.clear()
-        self.config_combo.addItem("Select inventory\u2026", userData=None)
-        # Disable the placeholder row so it cannot be picked.
-        # QStandardItemModel is the default; the guard is defensive against
-        # style plugins that substitute a different model type.  If it fails,
-        # _on_config_selected's `if path:` guard still prevents any action.
-        model = self.config_combo.model()
-        if isinstance(model, QStandardItemModel):
-            item = model.item(0)
-            if item is not None:
-                item.setEnabled(False)
-        if os.path.isdir(config_dir):
-            for fname in sorted(os.listdir(config_dir)):
-                if fname.endswith(".json"):
-                    path = os.path.join(config_dir, fname)
-                    pretty = fname[:-5].replace("_", " ").title()
-                    self.config_combo.addItem(pretty, userData=path)
-        self.config_combo.setCurrentIndex(0)
+
+    def _populate_config_dropdown(self) -> None:
+        """Scan config/ and fill the dropdown.
+
+        Preserves the current selection if the previously-selected path
+        is still present after the rescan \u2014 this matters when the
+        Builder saves a new inventory and the directory watcher
+        triggers a refresh; we don't want to drop whatever the user
+        had loaded out from under them. ``blockSignals`` keeps the
+        clear/repopulate from emitting a spurious ``activated``.
+        """
+        config_dir = self._get_config_dir()
+        previous_path = self.config_combo.currentData()
+        self.config_combo.blockSignals(True)
+        try:
+            self.config_combo.clear()
+            self.config_combo.addItem("Select inventory\u2026", userData=None)
+            # Disable the placeholder row so it cannot be picked.
+            # QStandardItemModel is the default; the guard is defensive
+            # against style plugins that substitute a different model type.
+            # If it fails, _on_config_selected's `if path:` guard still
+            # prevents any action.
+            model = self.config_combo.model()
+            if isinstance(model, QStandardItemModel):
+                item = model.item(0)
+                if item is not None:
+                    item.setEnabled(False)
+            if os.path.isdir(config_dir):
+                for fname in sorted(os.listdir(config_dir)):
+                    if fname.endswith(".json"):
+                        path = os.path.join(config_dir, fname)
+                        pretty = fname[:-5].replace("_", " ").title()
+                        self.config_combo.addItem(pretty, userData=path)
+            if previous_path:
+                idx = self.config_combo.findData(previous_path)
+                if idx >= 0:
+                    self.config_combo.setCurrentIndex(idx)
+                else:
+                    self.config_combo.setCurrentIndex(0)
+            else:
+                self.config_combo.setCurrentIndex(0)
+        finally:
+            self.config_combo.blockSignals(False)
 
     def _on_config_selected(self, index: int):
         """Load the config chosen from the dropdown."""
@@ -820,11 +854,17 @@ class MainWindow(QMainWindow):
         )
         self._reload_timer.start()
 
-    def _on_directory_changed(self, _directory: str):
-        """Called when the watched directory changes (file created/renamed/deleted)."""
+    def _on_directory_changed(self, directory: str):
+        """Called when a watched directory changes (file created/renamed/deleted)."""
+        # When the project's config/ directory changes — e.g. the Builder
+        # just saved a new inventory — rescan and refresh the dropdown
+        # so the new file shows up without restarting the app.
+        if os.path.normpath(directory) == self._get_config_dir():
+            self._populate_config_dropdown()
+        # Existing: if the target file reappeared but fell out of the
+        # file watcher (delete-then-write editors), re-arm it.
         if not self._current_path:
             return
-        # If the target file has reappeared but fell out of the file watcher, re-arm it.
         if (
             os.path.isfile(self._current_path)
             and self._current_path not in self._watcher.files()

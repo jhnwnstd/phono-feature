@@ -5,6 +5,7 @@ InventoryBuilder — main grid editor window for creating/editing inventories.
 
 import json
 import os
+import re
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -35,6 +36,22 @@ from gui.builder.dialogs import (
 from gui.builder.grid import cycle_value, make_cell, style_cell
 from gui.builder.presets import VALID_VALUES
 from gui.palette import C
+
+
+def _suggest_filename(inv_name: str) -> str:
+    """Slugify an inventory name into a config-style filename.
+
+    Mirrors the convention used by the bundled inventories
+    (``hayes_features.json``, ``english_features.json``, …): lowercase,
+    runs of non-alphanumeric replaced with ``_``, suffix ``_features``
+    appended unless the name already ends with it.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "_", inv_name.lower()).strip("_")
+    if not slug:
+        slug = "untitled"
+    if not slug.endswith("_features"):
+        slug = f"{slug}_features"
+    return f"{slug}.json"
 
 
 class InventoryBuilder(QMainWindow):
@@ -132,6 +149,15 @@ class InventoryBuilder(QMainWindow):
         saveas_btn.setStyleSheet(btn_style)
         saveas_btn.clicked.connect(self._save_as)
         toolbar.addWidget(saveas_btn)
+        # Delete: only meaningful when an existing file is loaded; the
+        # enable state is updated from ``_update_title`` whenever
+        # ``_current_path`` changes.
+        self._delete_btn = QPushButton("Delete\u2026")
+        self._delete_btn.setFont(QFont("Noto Sans", 10))
+        self._delete_btn.setFixedHeight(32)
+        self._delete_btn.setEnabled(False)
+        self._delete_btn.clicked.connect(self._delete_inventory)
+        toolbar.addWidget(self._delete_btn)
         # Add segment button
         toolbar.addSeparator()
         add_seg_btn = QPushButton("+ Segment")
@@ -171,6 +197,7 @@ class InventoryBuilder(QMainWindow):
         """
         self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
         self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
+        self._delete_btn.setStyleSheet(self._btn_style_disabled)
         # Central table
         central = QWidget()
         self.setCentralWidget(central)
@@ -237,6 +264,12 @@ class InventoryBuilder(QMainWindow):
             """)
         self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.installEventFilter(self)
+        # Filter mouse events on the viewport too so we can detect a
+        # plain-click inside a multi-cell selection BEFORE Qt collapses
+        # that selection back to the single clicked cell.
+        viewport = self._table.viewport()
+        if viewport is not None:
+            viewport.installEventFilter(self)
         h_header = self._table.horizontalHeader()
         v_header = self._table.verticalHeader()
         if h_header:
@@ -326,18 +359,140 @@ class InventoryBuilder(QMainWindow):
             for c in range(len(self._segments)):
                 self._table.setItem(r, c, make_cell("0"))
 
+    # Number / numpad keys set the cell directly to a specific value.
+    # 0 is also accepted alongside 3 because that's where "zero" sits on
+    # most keyboards (and it's the most natural press for "underspecified").
+    _VALUE_KEYS = {
+        Qt.Key.Key_1: "+",
+        Qt.Key.Key_2: "−",  # Unicode minus, matches cycle_value()
+        Qt.Key.Key_3: "0",
+        Qt.Key.Key_0: "0",
+    }
+    # Numpad-style + Vim-style cell navigation. dr, dc as relative steps.
+    _MOVE_KEYS = {
+        Qt.Key.Key_8: (-1, 0),
+        Qt.Key.Key_K: (-1, 0),
+        Qt.Key.Key_5: (1, 0),
+        Qt.Key.Key_J: (1, 0),
+        Qt.Key.Key_4: (0, -1),
+        Qt.Key.Key_H: (0, -1),
+        Qt.Key.Key_6: (0, 1),
+        Qt.Key.Key_L: (0, 1),
+    }
+
     def eventFilter(self, obj, event):
-        if (
-            obj is self._table
-            and event.type() == event.Type.KeyPress
-            and event.key() == Qt.Key.Key_Space
-        ):
+        # Bulk cycle on plain-click inside an existing multi-selection
+        # (header-click row/col, shift-click range, or ctrl-click set).
+        # Capturing on viewport mouse PRESS lets us see the selection
+        # before Qt collapses it.
+        if obj is self._table.viewport():
+            if (
+                event.type() == event.Type.MouseButtonPress
+                and event.button() == Qt.MouseButton.LeftButton
+            ):
+                modifiers = event.modifiers()
+                # Shift / Ctrl clicks are the user EXTENDING the
+                # selection — let Qt handle those normally.
+                bare_click = not (
+                    modifiers
+                    & (
+                        Qt.KeyboardModifier.ShiftModifier
+                        | Qt.KeyboardModifier.ControlModifier
+                    )
+                )
+                if bare_click:
+                    items = self._table.selectedItems()
+                    if len(items) > 1:
+                        pos = event.position().toPoint()
+                        idx = self._table.indexAt(pos)
+                        if idx.isValid():
+                            clicked_item = self._table.item(
+                                idx.row(), idx.column()
+                            )
+                            if clicked_item in items:
+                                self._cycle_selection_from(clicked_item)
+                                return True
+        if obj is self._table and event.type() == event.Type.KeyPress:
             row = self._table.currentRow()
             col = self._table.currentColumn()
+            key = event.key()
+            # Cell mutation keys — only when a cell is actually selected.
             if row >= 0 and col >= 0:
-                self._on_cell_clicked(row, col)
+                if key == Qt.Key.Key_Space:
+                    cur_item = self._table.item(row, col)
+                    if cur_item is not None:
+                        self._cycle_selection_from(cur_item)
+                    return True
+                value = self._VALUE_KEYS.get(key)
+                if value is not None:
+                    self._apply_value_to_selection(value, row, col)
+                    return True
+            # Movement keys — move the selection. If nothing is selected
+            # yet, anchor at (0, 0) so the first arrow press lands somewhere.
+            move = self._MOVE_KEYS.get(key)
+            if move is not None and self._table.rowCount() > 0:
+                dr, dc = move
+                start_row = row if row >= 0 else 0
+                start_col = col if col >= 0 else 0
+                new_row = max(
+                    0, min(start_row + dr, self._table.rowCount() - 1)
+                )
+                new_col = max(
+                    0, min(start_col + dc, self._table.columnCount() - 1)
+                )
+                self._table.setCurrentCell(new_row, new_col)
                 return True
         return super().eventFilter(obj, event)
+
+    def _set_cell_value(self, row: int, col: int, value: str) -> None:
+        """Write ``value`` to the cell and update its style + dirty flag."""
+        item = self._table.item(row, col)
+        if item is None:
+            return
+        if item.text() == value:
+            return
+        item.setText(value)
+        style_cell(item, value)
+        self._dirty = True
+        self._disable_remove_btns()
+
+    def _cycle_selection_from(self, anchor_item: QTableWidgetItem) -> None:
+        """Cycle every selected cell to the value ``anchor_item`` would
+        cycle to. The anchor is whichever cell the user clicked or is
+        currently focused on; its current value picks the destination
+        for the whole batch so the selection stays uniform."""
+        items = self._table.selectedItems()
+        if not items:
+            items = [anchor_item]
+        new_val = cycle_value(anchor_item.text())
+        self._apply_value_to_items(items, new_val)
+
+    def _apply_value_to_selection(
+        self, value: str, fallback_row: int, fallback_col: int
+    ) -> None:
+        """Set ``value`` on every selected cell. Falls back to the cell
+        at ``(fallback_row, fallback_col)`` when there is no multi-cell
+        selection — typical case where the user has just navigated to a
+        single cell with the keyboard."""
+        items = self._table.selectedItems()
+        if len(items) > 1:
+            self._apply_value_to_items(items, value)
+            return
+        self._set_cell_value(fallback_row, fallback_col, value)
+
+    def _apply_value_to_items(self, items: list, value: str) -> None:
+        """Bulk-write ``value`` to ``items``, skipping any that already
+        match. Marks dirty exactly once if anything actually changed."""
+        changed = False
+        for item in items:
+            if item is None or item.text() == value:
+                continue
+            item.setText(value)
+            style_cell(item, value)
+            changed = True
+        if changed:
+            self._dirty = True
+            self._disable_remove_btns()
 
     # ------------------------------------------------------------------
     # Header selection / remove button state
@@ -374,8 +529,10 @@ class InventoryBuilder(QMainWindow):
         item = self._table.item(row, col)
         if item is None:
             return
-        current = item.text()
-        new_val = cycle_value(current)
+        # Cycle: 0 → + → − → 0. Bypass the no-op guard in
+        # _set_cell_value because cycle_value always produces a different
+        # value than the current one (or "0" if state is bad).
+        new_val = cycle_value(item.text())
         item.setText(new_val)
         style_cell(item, new_val)
         self._dirty = True
@@ -508,6 +665,10 @@ class InventoryBuilder(QMainWindow):
             self, "Save Inventory", config_dir, "JSON Files (*.json)"
         )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        # Pre-fill the filename from the inventory name, slugified to
+        # match the existing config/ naming convention. The user can
+        # still override it in the dialog.
+        dlg.selectFile(_suggest_filename(self._inv_name))
         center_on_parent(dlg, self)
         if not dlg.exec():
             return
@@ -526,6 +687,46 @@ class InventoryBuilder(QMainWindow):
             json.dump(data, f, indent=2, ensure_ascii=False)
         self._dirty = False
         self._status.showMessage(f"Saved to {os.path.basename(path)}")
+
+    def _delete_inventory(self) -> None:
+        """Delete the on-disk file for the currently-loaded inventory.
+
+        The grid contents stay in memory and are marked dirty so the
+        user can immediately Save As to a new name if the deletion was
+        a refactor rather than a discard. The main window's directory
+        watcher picks up the removal and refreshes its dropdown.
+        """
+        path = self._current_path
+        if not path:
+            return
+        fname = os.path.basename(path)
+        reply = ask_question(
+            self,
+            "Delete inventory",
+            f"Permanently delete '{fname}' from disk?\n\n"
+            "The current grid stays open — Save As to keep a copy.",
+            buttons=(
+                QMessageBox.StandardButton.Yes
+                | QMessageBox.StandardButton.Cancel
+            ),
+            default=QMessageBox.StandardButton.Cancel,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            os.remove(path)
+        except OSError as e:
+            show_warning(
+                self, "Delete failed", f"Could not delete '{fname}':\n{e}"
+            )
+            return
+        self._current_path = None
+        # In-memory grid is now unsaved (no file backs it).
+        self._dirty = True
+        self._update_title()
+        self._status.showMessage(
+            f"Deleted '{fname}'. The grid is unsaved — Save As to keep it."
+        )
 
     def _open_file(self) -> None:
         if not self._check_unsaved():
@@ -617,11 +818,19 @@ class InventoryBuilder(QMainWindow):
 
     def _update_title(self) -> None:
         name = self._inv_name or "Untitled"
-        if self._current_path:
-            fname = os.path.basename(self._current_path)
+        path = self._current_path
+        has_file = bool(path)
+        if path:
+            fname = os.path.basename(path)
             self.setWindowTitle(f"Inventory Builder: {name} ({fname})")
         else:
             self.setWindowTitle(f"Inventory Builder: {name}")
+        # Delete only makes sense when there's an on-disk file backing
+        # the current grid; toggle the visual + interactive state.
+        self._delete_btn.setEnabled(has_file)
+        self._delete_btn.setStyleSheet(
+            self._btn_style_enabled if has_file else self._btn_style_disabled
+        )
         self._refresh_meta_strip()
 
     def _refresh_meta_strip(self) -> None:

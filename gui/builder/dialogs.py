@@ -24,12 +24,15 @@ from gui.palette import C
 
 class _AutofillTextEdit(QTextEdit):
     """QTextEdit shared base: on Tab while empty, fill a class-defined
-    DEFAULT_FILL value, then move focus to the next dialog widget.
+    DEFAULT_FILL value. Subsequent Tab presses (with the box non-empty)
+    advance focus normally via ``setTabChangesFocus``.
 
-    Implementation note: when ``setTabChangesFocus`` is True, Qt routes
+    Implementation note: ``setTabChangesFocus(True)`` makes Qt route
     Tab through ``event()`` to ``focusNextPrevChild`` BEFORE
-    ``keyPressEvent`` is called. The autofill branch lives in
-    ``event()`` so it can run *before* that focus routing kicks in.
+    ``keyPressEvent`` is called. The autofill branch returns ``True``
+    to consume the event so the very same press doesn't also advance
+    focus to the next widget — that's separately reachable with a
+    second Tab press once the box has content.
 
     Also overrides ``paintEvent`` to render multi-line placeholder text:
     QTextEdit's built-in placeholder paints only the first line, which
@@ -52,9 +55,12 @@ class _AutofillTextEdit(QTextEdit):
             and self.DEFAULT_FILL
             and not self.toPlainText().strip()
         ):
-            # Empty + Tab: fill quick-start, then fall through so Qt's
-            # tabChangesFocus handler does the focus advance.
+            # Empty + Tab: fill the seed text and consume the event so
+            # focus stays here. The user can hit Tab a second time to
+            # advance to the next widget once they're satisfied with
+            # what got filled.
             self.setPlainText(self.DEFAULT_FILL)
+            return True
         return super().event(e)
 
     def paintEvent(self, e):  # type: ignore[override]
@@ -176,10 +182,8 @@ class InputDialog(QDialog):
         seg_label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
         layout.addWidget(seg_label)
         self.seg_edit = SegmentTextEdit()
-        self.seg_edit.setPlaceholderText(
-            "p b t d k ɡ\nm n ŋ\nf v s z ʃ ʒ\n…\n"
-            "(Tab on an empty box fills in a quick-start set)"
-        )  # noqa: RUF001
+        # Placeholder = exactly what Tab fills. The grayed text IS the hint.
+        self.seg_edit.setPlaceholderText(SegmentTextEdit.DEFAULT_FILL)
         self.seg_edit.setFont(QFont("Noto Sans", 12))
         layout.addWidget(self.seg_edit)
         feat_preset_lay = QHBoxLayout()
@@ -220,13 +224,8 @@ class InputDialog(QDialog):
         layout.addWidget(feat_label)
         self.feat_edit = FeatureTextEdit()
         self.feat_edit.setFont(QFont("Noto Sans", 10))
-        # Mirror the segment-box hint so the Tab-autofill is discoverable.
-        # The placeholder shows exactly what Tab seeds — the two major-
-        # class features. Anything beyond that is the user's call.
-        self.feat_edit.setPlaceholderText(
-            "Syllabic\nConsonantal\n"
-            "(Tab on an empty box fills these two to start)"
-        )
+        # Placeholder = exactly what Tab fills. The grayed text IS the hint.
+        self.feat_edit.setPlaceholderText(FeatureTextEdit.DEFAULT_FILL)
         layout.addWidget(self.feat_edit)
         selected_preset = self.preset_combo.currentText()
         self._on_preset_changed(selected_preset)

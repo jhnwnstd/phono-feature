@@ -69,9 +69,11 @@ def test_tab_changes_focus_when_content_is_present(seg_edit):
     assert seg_edit.tabChangesFocus()
 
 
-def test_tab_on_empty_fills_and_moves_focus(qapp):
-    """Tab on an empty editor should both autofill the default segments
-    AND move focus to the next widget — one keypress, two effects."""
+def test_tab_on_empty_fills_but_keeps_focus(qapp):
+    """Tab on an empty editor should autofill and KEEP focus in the
+    editor — the user shouldn't have a single Tab press both fill the
+    seed text and jump to the next widget. A second Tab (now non-empty)
+    advances focus."""
     from PyQt6.QtTest import QTest
     from PyQt6.QtWidgets import QLineEdit, QVBoxLayout, QWidget
 
@@ -85,16 +87,20 @@ def test_tab_on_empty_fills_and_moves_focus(qapp):
     seg.setFocus()
     qapp.processEvents()
     assert seg.hasFocus()
-    # QTest.keyClick goes through QApplication's full event dispatch so
-    # focusNextChild() actually fires — directly calling keyPressEvent
-    # would bypass that.
+    # First Tab on empty — fills, keeps focus.
     QTest.keyClick(seg, Qt.Key.Key_Tab)
     qapp.processEvents()
     assert seg.toPlainText() == SegmentTextEdit.DEFAULT_FILL
-    assert sibling.hasFocus(), (
-        "Tab on empty must move focus to the next widget after filling "
-        "(setTabChangesFocus + super().keyPressEvent)"
+    assert seg.hasFocus(), (
+        "Tab on empty must NOT advance focus — it only fills. "
+        "Pressing Tab again advances normally."
     )
+    # Second Tab — now non-empty, should advance focus normally.
+    QTest.keyClick(seg, Qt.Key.Key_Tab)
+    qapp.processEvents()
+    assert (
+        sibling.hasFocus()
+    ), "Tab on a filled editor should advance focus to the next widget."
     container.deleteLater()
 
 

@@ -368,11 +368,20 @@ class FeatureEngine:
         Delegates to find_all_minimal_bundles and returns the first result.
         Use find_all_minimal_bundles directly when all solutions are needed.
 
+        Note on ambiguous return: an empty dict ``{}`` is returned in two
+        distinct situations:
+          1. ``segments`` is empty OR equals the entire inventory (the
+             "universal class"). The empty bundle correctly characterises
+             every segment.
+          2. The set is NOT a natural class. No bundle exists.
+        Callers that need to distinguish these should use
+        ``is_natural_class`` (returns ``(bool, [bundles])``) instead.
+
         Args:
             segments: List of segment symbols
 
         Returns:
-            One minimal feature bundle, or {} if the set cannot be characterised.
+            One minimal feature bundle, or {} (see ambiguity note above).
 
         Raises:
             ValueError: If any segment is not in the inventory

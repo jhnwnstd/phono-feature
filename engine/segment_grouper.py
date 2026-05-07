@@ -436,8 +436,13 @@ def group_segments(
     # chance to form before their components are collapsed.
     # ==================================================================
     # 3a: Merge small groups that match a relabel pattern.
+    # Iterate ``origin_set`` in sorted order rather than frozenset order
+    # so the intermediate ``assignment[label]`` list is built in a
+    # deterministic sequence across runs (sets/frozensets randomize on
+    # PYTHONHASHSEED). Step 6 sorts the final values, so this doesn't
+    # change user-visible output, but it keeps internal state stable.
     for origin_set, new_label in _RELABEL_PATTERNS.items():
-        present = [g for g in origin_set if g in assignment]
+        present = [g for g in sorted(origin_set) if g in assignment]
         if len(present) < 2:
             continue
         if any(
@@ -466,9 +471,10 @@ def group_segments(
         if relabel is not None and relabel != gname:
             members = assignment.pop(gname)
             assignment.setdefault(relabel, []).extend(members)
-    # 3c: Merge derived groups that belong together.
+    # 3c: Merge derived groups that belong together. Sorted iteration
+    # for the same reason as 3a — keeps internal merge order stable.
     for pair, label in _DERIVED_MERGES:
-        present = [g for g in pair if g in assignment]
+        present = [g for g in sorted(pair) if g in assignment]
         if len(present) < 2:
             continue
         if any(g in _FROZEN_GROUPS for g in present):

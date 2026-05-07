@@ -261,7 +261,10 @@ class GeometryAnalyzer:
                 for i, child1 in enumerate(children):
                     for child2 in children[i + 1 :]:
                         nodes[child1]._add_sibling(nodes[child2])
-        # Create artificial root if multiple roots exist
+        # Create artificial root if multiple roots exist. ``root_candidates``
+        # is a set, so its iteration order would otherwise vary across
+        # runs (Python's hash randomization). Sort before adding so the
+        # tree's child order is deterministic.
         if len(root_candidates) == 0:
             # Shouldn't happen, but handle gracefully
             root = GeometryNode("ROOT")
@@ -272,7 +275,7 @@ class GeometryAnalyzer:
             root = nodes[next(iter(root_candidates))]
         else:
             root = GeometryNode("ROOT")
-            for feat in root_candidates:
+            for feat in sorted(root_candidates):
                 root._add_child(nodes[feat])
         return root
 
