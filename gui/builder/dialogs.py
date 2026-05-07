@@ -154,21 +154,13 @@ def show_warning(parent, title: str, text: str):
 
 
 class InputDialog(QDialog):
-    """Dialog for entering segments and features before opening the grid.
+    """Dialog for entering segments and features before opening the grid."""
 
-    When ``current_path`` is given, an extra "Edit current inventory" button
-    is shown so the user can pivot to editing the inventory already loaded in
-    the main window instead of creating a fresh one. The caller checks
-    ``edit_existing_chosen`` after ``exec()`` to know which path to take.
-    """
-
-    def __init__(self, parent=None, current_path: str | None = None):
+    def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("New Inventory Setup")
         self.setMinimumSize(500, 500)
         self.setWindowModality(Qt.WindowModality.WindowModal)
-        self._current_path = current_path
-        self.edit_existing_chosen = False
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
         name_lay = QHBoxLayout()
@@ -230,13 +222,6 @@ class InputDialog(QDialog):
         selected_preset = self.preset_combo.currentText()
         self._on_preset_changed(selected_preset)
         btn_lay = QHBoxLayout()
-        # When the main window already has an inventory loaded, offer to
-        # edit it instead of starting from scratch. Sits on the left so it
-        # doesn't compete for end-of-row attention with Cancel / Create.
-        if current_path:
-            edit_btn = QPushButton("Edit current inventory…")
-            edit_btn.clicked.connect(self._on_edit_existing)
-            btn_lay.addWidget(edit_btn)
         btn_lay.addStretch()
         cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self.reject)
@@ -258,15 +243,6 @@ class InputDialog(QDialog):
         ok_btn.clicked.connect(self.accept)
         btn_lay.addWidget(ok_btn)
         layout.addLayout(btn_lay)
-
-    def _on_edit_existing(self) -> None:
-        """User chose to edit the inventory already loaded in the main
-        window. Skip input validation (no segments/features were typed)
-        and signal the choice via ``edit_existing_chosen`` so the caller
-        can route to ``_load_existing`` instead of building a fresh grid.
-        """
-        self.edit_existing_chosen = True
-        QDialog.accept(self)
 
     def _on_preset_changed(self, name: str):
         features = FEATURE_PRESETS.get(name, [])

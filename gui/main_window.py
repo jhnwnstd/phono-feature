@@ -902,16 +902,22 @@ class MainWindow(QMainWindow):
             return
         from gui.builder import InventoryBuilder
 
+        # Default behavior: if the main window has an inventory loaded,
+        # the builder opens editing it directly — no intermediate dialog.
+        # The builder's own "New" toolbar button is the way to start
+        # from scratch instead.
+        if self._current_path:
+            self._builder = InventoryBuilder(
+                parent=self, load_path=self._current_path
+            )
+            self._builder.setWindowFlag(Qt.WindowType.Window)
+            self._builder.show()
+            return
+        # Nothing loaded — show the setup dialog so the user can pick
+        # what to build. Cancel here means no builder window appears.
         builder = InventoryBuilder(parent=self)
         builder.setWindowFlag(Qt.WindowType.Window)
-        # Run the initial setup dialog BEFORE showing the builder window.
-        # If the user cancels we never flash an empty builder onto the
-        # screen. The dialog uses the main window for screen centering,
-        # so the builder doesn't need to be visible yet. When the main
-        # window has an inventory loaded, pass its path so the dialog can
-        # offer "Edit current inventory" as an alternative to creating
-        # one from scratch.
-        if not builder.show_setup_dialog(offer_edit_path=self._current_path):
+        if not builder.show_setup_dialog():
             builder.deleteLater()
             return
         self._builder = builder

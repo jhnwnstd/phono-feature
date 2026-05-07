@@ -311,28 +311,20 @@ class InventoryBuilder(QMainWindow):
     # ------------------------------------------------------------------
     # Setup dialog
     # ------------------------------------------------------------------
-    def show_setup_dialog(self, offer_edit_path: str | None = None) -> bool:
+    def show_setup_dialog(self) -> bool:
         """Show the new-inventory setup dialog. Returns True if the user
         committed and a grid was built; False if they cancelled or the
         unsaved-changes check refused.
 
-        When ``offer_edit_path`` is given, the dialog adds an "Edit current
-        inventory" button. If the user picks it, this method loads that
-        path instead of building a fresh grid and still returns True.
-
         The dialog validates its own input (see InputDialog.accept), so on
-        a True new-grid return the segments/features lists are guaranteed
-        non-empty.
+        a True return the segments/features lists are guaranteed non-empty.
         """
         if not self._check_unsaved():
             return False
-        dlg = InputDialog(self, current_path=offer_edit_path)
+        dlg = InputDialog(self)
         center_on_parent(dlg, self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return False
-        if dlg.edit_existing_chosen and offer_edit_path:
-            self._load_existing(offer_edit_path)
-            return True
         # Dedupe (preserving order). InputDialog.accept already guaranteed
         # both lists are non-empty.
         segments = list(dict.fromkeys(dlg.get_segments()))
