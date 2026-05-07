@@ -238,7 +238,10 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         assert isinstance(app, QApplication)
         app.installEventFilter(self)
-        self._set_mode(Mode.SEG_TO_FEAT)
+        # Initial mode is already SEG_TO_FEAT (set above), so _set_mode
+        # would no-op; call _apply_mode_phases directly to wire up the
+        # freshly-built chrome.
+        self._apply_mode_phases()
         self._restore_settings(startup_path)
 
     # ------------------------------------------------------------------
@@ -856,7 +859,12 @@ class MainWindow(QMainWindow):
         # Rebuild chrome — every f-string stylesheet inside _build_ui
         # re-evaluates against the active palette.
         self._build_ui()
-        self._set_mode(saved_mode)
+        # _set_mode would bail (mode unchanged); apply chrome directly
+        # to wire up the freshly-built widgets.
+        if saved_mode != self._mode:
+            self._set_mode(saved_mode)
+        else:
+            self._apply_mode_phases()
         # Re-place pooled widgets in the new chrome WITHOUT going
         # through _load_path (no engine reload, no JSON parse, no
         # validator). The cached engine data is unchanged — we only
@@ -1614,11 +1622,24 @@ class MainWindow(QMainWindow):
         named helper below so individual phases stay easy to inspect and diff.
 
         Accepts bare strings (from QSettings / tests) and coerces to Mode.
+        Bails immediately when the requested mode equals the current one;
+        callers that need to re-apply chrome (e.g. after a theme swap
+        rebuilds the central widget) call ``_apply_mode_phases`` directly.
         """
         mode = Mode(mode)
-        if mode != self._mode:
-            self._save_outgoing_mode_state()
+        if mode == self._mode:
+            return
+        self._save_outgoing_mode_state()
         self._mode = mode
+        self._apply_mode_phases()
+
+    def _apply_mode_phases(self) -> None:
+        """Run all mode-aware UI updates against the current ``self._mode``.
+
+        Used as the body of ``_set_mode`` and called directly from
+        ``_apply_theme`` to wire up freshly-built chrome without the
+        no-op gate on _set_mode.
+        """
         with self._batched_updates():
             self._apply_panel_chrome()
             self._apply_row_interactivity()
@@ -1663,18 +1684,20 @@ class MainWindow(QMainWindow):
                 self._saved_seg_state = []
 
     def _apply_panel_chrome(self) -> None:
-        """Update panel backgrounds, borders, titles, and clear-button styling
-        to reflect which side of the UI is active."""
+        """Update panel backgrounds, borders, titles, and clear-button
+        styling to reflect which side of the UI is active.
+
+        Only the outer ``seg_panel`` and ``feat_panel`` frames get their
+        bg/border restyled. The inner viewports, scroll content, and
+        grid widgets are set ``background: transparent`` at construction
+        — they show through to the parent frame's bg, so we don't need
+        to restyle them per toggle. Skipping that cascade saved ~80 ms
+        per mode toggle (each setStyleSheet on a parent invalidates
+        every descendant's style; the seg side has 140+).
+        """
         is_s2f = self._mode == Mode.SEG_TO_FEAT
         seg_bg = C["panel"] if is_s2f else C["bg"]
         feat_bg = C["panel"] if not is_s2f else C["bg"]
-        seg_vp = self._seg_scroll.viewport()
-        feat_vp = self._feat_scroll.viewport()
-        assert seg_vp is not None and feat_vp is not None
-        seg_vp.setStyleSheet(f"background: {seg_bg};")
-        self.seg_grid_widget.setStyleSheet(f"background: {seg_bg};")
-        feat_vp.setStyleSheet(f"background: {feat_bg};")
-        self._feat_content.setStyleSheet(f"background: {feat_bg};")
         self.seg_panel.setStyleSheet(
             f"QFrame#seg_panel {{ background: {seg_bg};"
             + (
@@ -1694,7 +1717,8 @@ class MainWindow(QMainWindow):
             + "}"
         )
         self._seg_title.setStyleSheet(
-            f"color: {C['text'] if is_s2f else C['text_dim']}; letter-spacing: 1.5px;"
+            f"color: {C['text'] if is_s2f else C['text_dim']};"
+            " letter-spacing: 1.5px;"
         )
         feat_color = C["text"] if not is_s2f else C["text_dim"]
         self._feat_title.setStyleSheet(
