@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSplitter,
     QStatusBar,
     QToolBar,
@@ -59,7 +60,7 @@ from gui.constants import (
     SETTINGS_ORG,
     sort_features,
 )
-from gui.palette import C
+from gui.palette import C, get_theme_name, set_theme
 from gui.vowel_chart import VOWEL_LABEL_W, VowelChartWidget
 from gui.widgets import (
     AnalysisPanel,
@@ -210,6 +211,12 @@ class MainWindow(QMainWindow):
         self._reload_timer.timeout.connect(self._do_auto_reload)
         # -- persistent settings --
         self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        # Apply the saved theme BEFORE _build_ui so every f-string
+        # baked into a stylesheet during construction picks up the
+        # right palette.
+        saved_theme = self._settings.value("theme", "light")
+        if isinstance(saved_theme, str):
+            set_theme(saved_theme)
         self._build_ui()
         # Always watch the project's ``config/`` dir so newly-saved
         # inventories (from the Builder, or from external edits) appear
@@ -313,6 +320,38 @@ class MainWindow(QMainWindow):
         """)
         builder_btn.clicked.connect(self._open_builder)
         toolbar.addWidget(builder_btn)
+        # Push the theme toggle to the far right of the toolbar so it
+        # doesn't crowd the primary actions but stays visible.
+        spacer = QWidget()
+        spacer.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        spacer.setStyleSheet("background: transparent;")
+        toolbar.addWidget(spacer)
+        # Toggle shows the OPPOSITE of the active theme — i.e. what
+        # clicking will switch you to. Sun = "switch to light",
+        # moon = "switch to dark".
+        is_dark_now = get_theme_name() == "dark"
+        self._theme_btn = QPushButton("☼" if is_dark_now else "☾")
+        self._theme_btn.setFont(QFont("Noto Sans", 12))
+        self._theme_btn.setFixedSize(32, 32)
+        self._theme_btn.setToolTip(
+            "Switch to light mode" if is_dark_now else "Switch to dark mode"
+        )
+        self._theme_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {C["text_dim"]};
+                border: 1.5px solid {C["border"]};
+                border-radius: 6px;
+            }}
+            QPushButton:hover {{
+                color: {C["accent"]};
+                border: 1.5px solid {C["accent"]};
+            }}
+        """)
+        self._theme_btn.clicked.connect(self._toggle_theme)
+        toolbar.addWidget(self._theme_btn)
         # ── central widget ────────────────────────────────────────────
         central = QWidget()
         self.setCentralWidget(central)
@@ -722,6 +761,22 @@ class MainWindow(QMainWindow):
             idx = self.config_combo.count() - 1
         self.config_combo.setCurrentIndex(idx)
         self._load_path(path)
+
+    def _toggle_theme(self) -> None:
+        """Switch between light and dark theme.
+
+        Persists the choice to QSettings. Most stylesheets are baked at
+        widget construction time, so the swap takes effect after a
+        restart — the status message tells the user. Implementing live
+        swap would require refactoring ~30 inline f-string stylesheets
+        across widgets.py, vowel_chart.py, and main_window.py.
+        """
+        new_theme = "dark" if get_theme_name() == "light" else "light"
+        set_theme(new_theme)
+        self._settings.setValue("theme", new_theme)
+        self.status.showMessage(
+            f"{new_theme.title()} mode saved — restart the app to apply."
+        )
 
     def _open_builder(self) -> None:
         if self._builder is not None and self._builder.isVisible():

@@ -6,6 +6,7 @@ InventoryBuilder — main grid editor window for creating/editing inventories.
 import json
 import os
 import re
+from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -38,6 +39,21 @@ from gui.builder.presets import VALID_VALUES
 from gui.palette import C
 
 
+@dataclass(frozen=True)
+class _CellEdit:
+    """One cell mutation, captured for undo/redo."""
+
+    row: int
+    col: int
+    old: str
+    new: str
+
+
+# Cap on the undo history depth. ~200 batches × at-most all cells per
+# batch easily covers a normal editing session without unbounded growth.
+_MAX_UNDO_DEPTH = 200
+
+
 def _suggest_filename(inv_name: str) -> str:
     """Slugify an inventory name into a config-style filename.
 
@@ -68,6 +84,11 @@ class InventoryBuilder(QMainWindow):
         self._dirty: bool = False
         self._selected_remove_col: int | None = None
         self._selected_remove_row: int | None = None
+        # Undo / redo: each entry is a batch — the list of cell edits
+        # produced by one user action (cycle, set, bulk apply). Cleared
+        # whenever the table is rebuilt (new inventory or load).
+        self._undo_stack: list[list[_CellEdit]] = []
+        self._redo_stack: list[list[_CellEdit]] = []
         self._build_ui()
         # Position on the same screen as the parent window
         if parent is not None:
@@ -334,6 +355,10 @@ class InventoryBuilder(QMainWindow):
     # ------------------------------------------------------------------
     def _rebuild_table(self) -> None:
         """Build the table: rows=features, cols=segments."""
+        # Edits captured against the previous table refer to row/col
+        # indices that may no longer match the new table — drop them.
+        self._undo_stack.clear()
+        self._redo_stack.clear()
         self._table.clear()
         self._table.setRowCount(len(self._features))
         self._table.setColumnCount(len(self._segments))
@@ -416,6 +441,20 @@ class InventoryBuilder(QMainWindow):
             row = self._table.currentRow()
             col = self._table.currentColumn()
             key = event.key()
+            mods = event.modifiers()
+            # Ctrl+Z / Ctrl+Shift+Z (undo) and Ctrl+Y (redo). Scoped to
+            # the table widget so the metadata-strip name field's own
+            # Qt-built-in text-undo is left alone when it has focus.
+            if mods & Qt.KeyboardModifier.ControlModifier:
+                if key == Qt.Key.Key_Z:
+                    if mods & Qt.KeyboardModifier.ShiftModifier:
+                        self._redo()
+                    else:
+                        self._undo()
+                    return True
+                if key == Qt.Key.Key_Y:
+                    self._redo()
+                    return True
             # Cell mutation keys — only when a cell is actually selected.
             if row >= 0 and col >= 0:
                 if key == Qt.Key.Key_Space:
@@ -445,16 +484,14 @@ class InventoryBuilder(QMainWindow):
         return super().eventFilter(obj, event)
 
     def _set_cell_value(self, row: int, col: int, value: str) -> None:
-        """Write ``value`` to the cell and update its style + dirty flag."""
+        """Write ``value`` to the cell and record the change for undo."""
         item = self._table.item(row, col)
-        if item is None:
+        if item is None or item.text() == value:
             return
-        if item.text() == value:
-            return
+        edits = [_CellEdit(row, col, item.text(), value)]
         item.setText(value)
         style_cell(item, value)
-        self._dirty = True
-        self._disable_remove_btns()
+        self._commit_edits(edits)
 
     def _cycle_selection_from(self, anchor_item: QTableWidgetItem) -> None:
         """Cycle every selected cell to the value ``anchor_item`` would
@@ -482,17 +519,68 @@ class InventoryBuilder(QMainWindow):
 
     def _apply_value_to_items(self, items: list, value: str) -> None:
         """Bulk-write ``value`` to ``items``, skipping any that already
-        match. Marks dirty exactly once if anything actually changed."""
-        changed = False
+        match. Records the whole batch as one undoable edit."""
+        edits: list[_CellEdit] = []
         for item in items:
             if item is None or item.text() == value:
                 continue
+            edits.append(
+                _CellEdit(item.row(), item.column(), item.text(), value)
+            )
             item.setText(value)
             style_cell(item, value)
-            changed = True
-        if changed:
-            self._dirty = True
-            self._disable_remove_btns()
+        self._commit_edits(edits)
+
+    def _commit_edits(self, edits: list[_CellEdit]) -> None:
+        """Push a non-empty edit batch onto the undo stack and update
+        dirty + remove-button state. Empty batches are ignored so
+        no-op operations don't pollute the history."""
+        if not edits:
+            return
+        self._undo_stack.append(edits)
+        # A new edit invalidates any redo history — same convention as
+        # most editors (you can't redo into a divergent timeline).
+        self._redo_stack.clear()
+        if len(self._undo_stack) > _MAX_UNDO_DEPTH:
+            self._undo_stack.pop(0)
+        self._dirty = True
+        self._disable_remove_btns()
+
+    def _undo(self) -> None:
+        """Reverse the most recent batch and move it to the redo stack."""
+        if not self._undo_stack:
+            self._status.showMessage("Nothing to undo.")
+            return
+        edits = self._undo_stack.pop()
+        for e in edits:
+            item = self._table.item(e.row, e.col)
+            if item is not None:
+                item.setText(e.old)
+                style_cell(item, e.old)
+        self._redo_stack.append(edits)
+        self._dirty = True
+        self._disable_remove_btns()
+        self._status.showMessage(
+            f"Undid {len(edits)} cell change{'s' if len(edits) != 1 else ''}."
+        )
+
+    def _redo(self) -> None:
+        """Re-apply the most recently undone batch."""
+        if not self._redo_stack:
+            self._status.showMessage("Nothing to redo.")
+            return
+        edits = self._redo_stack.pop()
+        for e in edits:
+            item = self._table.item(e.row, e.col)
+            if item is not None:
+                item.setText(e.new)
+                style_cell(item, e.new)
+        self._undo_stack.append(edits)
+        self._dirty = True
+        self._disable_remove_btns()
+        self._status.showMessage(
+            f"Redid {len(edits)} cell change{'s' if len(edits) != 1 else ''}."
+        )
 
     # ------------------------------------------------------------------
     # Header selection / remove button state
@@ -529,14 +617,14 @@ class InventoryBuilder(QMainWindow):
         item = self._table.item(row, col)
         if item is None:
             return
-        # Cycle: 0 → + → − → 0. Bypass the no-op guard in
-        # _set_cell_value because cycle_value always produces a different
-        # value than the current one (or "0" if state is bad).
+        # Cycle: 0 → + → − → 0. cycle_value always produces a different
+        # value (or resets to "0" from a bad state), so this always
+        # records an edit.
         new_val = cycle_value(item.text())
+        edits = [_CellEdit(row, col, item.text(), new_val)]
         item.setText(new_val)
         style_cell(item, new_val)
-        self._dirty = True
-        self._disable_remove_btns()
+        self._commit_edits(edits)
 
     # ------------------------------------------------------------------
     # Add / remove segments and features
