@@ -55,9 +55,9 @@ from gui.constants import (
     BTN_W,
     FEATURE_GROUPS,
     FEATURE_ORDER,
-    SCROLLBAR_STYLE,
     SETTINGS_APP,
     SETTINGS_ORG,
+    scrollbar_style,
     sort_features,
 )
 from gui.palette import C, get_theme_name, set_theme
@@ -444,7 +444,7 @@ class MainWindow(QMainWindow):
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
         self._seg_scroll.setStyleSheet(
-            "QScrollArea { background: transparent; }" + SCROLLBAR_STYLE
+            "QScrollArea { background: transparent; }" + scrollbar_style()
         )
         seg_content = QWidget()
         seg_content.setStyleSheet("background: transparent;")
@@ -515,7 +515,7 @@ class MainWindow(QMainWindow):
         self._feat_scroll.setWidgetResizable(True)
         self._feat_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._feat_scroll.setStyleSheet(
-            "QScrollArea { background: transparent; }" + SCROLLBAR_STYLE
+            "QScrollArea { background: transparent; }" + scrollbar_style()
         )
         self._feat_content = QWidget()
         self._feat_content.setStyleSheet("background: transparent;")
@@ -807,6 +807,15 @@ class MainWindow(QMainWindow):
         saved_mode = self._mode
         saved_pos = self.pos()
         saved_size = self.size()
+        # Capture splitter sizes too — _build_ui re-creates the
+        # splitters with default sizes (500/400 + 700/220), so without
+        # this the panes visibly jump on every theme toggle.
+        saved_hsplit = (
+            list(self._hsplit.sizes()) if hasattr(self, "_hsplit") else None
+        )
+        saved_vsplit = (
+            list(self._vsplit.sizes()) if hasattr(self, "_vsplit") else None
+        )
         # Re-style pooled widgets and detach them so the upcoming
         # central-widget destruction doesn't take them with it.
         for btn in self._seg_button_pool.values():
@@ -821,11 +830,28 @@ class MainWindow(QMainWindow):
         self._feat_cards.clear()
         self._other_card = None
         self._feat_rows = {}
-        # Tear down central + toolbars; the QMainWindow itself stays so
-        # window pos/size and any child windows (Builder) are unaffected.
+        # Tear down central + toolbars + status bar; the QMainWindow
+        # itself stays so window pos/size and any child windows (Builder)
+        # are unaffected.
+        # Each of these would otherwise leak a chrome subtree per
+        # toggle (~90 widgets), and Qt would have to walk all of them
+        # on every subsequent re-style — that was the linear slowdown.
         self.setCentralWidget(QWidget())
         for tb in self.findChildren(QToolBar):
             self.removeToolBar(tb)
+            tb.deleteLater()
+        # setStatusBar transfers ownership of the new bar but does NOT
+        # delete the old one — same accumulator pattern.
+        old_status = self.statusBar()
+        self.setStatusBar(QStatusBar())
+        if old_status is not None:
+            old_status.deleteLater()
+        # Drain DeferredDelete events now so the orphan trees are gone
+        # before we rebuild — otherwise findChildren and the style
+        # engine still see them on the next pass.
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
         self.setStyleSheet(f"background-color: {C['bg']};")
         # Rebuild chrome — every f-string stylesheet inside _build_ui
         # re-evaluates against the active palette.
@@ -844,6 +870,13 @@ class MainWindow(QMainWindow):
                 self._populate_features()
                 self._apply_mode_to_new_widgets()
                 self.analysis.clear()
+        # Restore splitter positions BEFORE the deferred resize so the
+        # final layout pass sees the right pane proportions instead of
+        # _build_ui's defaults (500/400 + 700/220).
+        if saved_hsplit and len(saved_hsplit) == self._hsplit.count():
+            self._hsplit.setSizes(saved_hsplit)
+        if saved_vsplit and len(saved_vsplit) == self._vsplit.count():
+            self._vsplit.setSizes(saved_vsplit)
         # Restore exact window pos/size. ``_fit_to_content`` runs as
         # part of the populate path and may try to recenter, so do
         # this synchronously AND defer one more pass to win against
@@ -851,8 +884,16 @@ class MainWindow(QMainWindow):
         self.resize(saved_size)
         self.move(saved_pos)
         if self.isVisible():
-            QTimer.singleShot(0, lambda: (self.resize(saved_size),
-                                          self.move(saved_pos)))
+
+            def _restore_geom():
+                self.resize(saved_size)
+                self.move(saved_pos)
+                if saved_hsplit and len(saved_hsplit) == self._hsplit.count():
+                    self._hsplit.setSizes(saved_hsplit)
+                if saved_vsplit and len(saved_vsplit) == self._vsplit.count():
+                    self._vsplit.setSizes(saved_vsplit)
+
+            QTimer.singleShot(0, _restore_geom)
 
     def _open_builder(self) -> None:
         if self._builder is not None and self._builder.isVisible():

@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from gui.constants import BTN_GAP, BTN_W, SCROLLBAR_STYLE
+from gui.constants import BTN_GAP, BTN_W, scrollbar_style
 from gui.palette import C
 
 
@@ -169,6 +169,24 @@ class FeatureRow(QWidget):
     value_changed = pyqtSignal(str, str)
     # theme name → styles dict (BADGE_*, ROW_*, NAME_*).
     _styles_cache: dict[str, dict[str, str]] = {}
+    # Instance-level style strings. Declared here so mypy can see them
+    # — actually populated by ``_build_styles`` via setattr from the
+    # cached theme dict. Default values are placeholders; overwritten
+    # before first use.
+    _BADGE_CONTRASTIVE: str = ""
+    _NAME_CONTRASTIVE: str = ""
+    _ROW_CONTRASTIVE: str = ""
+    _BADGE_NEUTRAL: str = ""
+    _NAME_DIM: str = ""
+    _ROW_TRANSPARENT: str = ""
+    _BADGE_PLUS: str = ""
+    _ROW_PLUS: str = ""
+    _BADGE_MINUS: str = ""
+    _ROW_MINUS: str = ""
+    _NAME_BOLD: str = ""
+    _ROW_NEUTRAL: str = ""
+    _NAME_ACTIVE: str = ""
+    _NAME_INACTIVE: str = ""
 
     @classmethod
     def _styles_for_active_theme(cls) -> dict[str, str]:
@@ -443,7 +461,7 @@ class AnalysisPanel(QWidget):
                 border-radius: 6px;
                 padding: 8px;
             }}
-        """ + SCROLLBAR_STYLE)
+        """ + scrollbar_style())
         layout.addWidget(self.title)
         layout.addWidget(self.content)
 

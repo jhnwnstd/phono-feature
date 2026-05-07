@@ -7,13 +7,13 @@ All functions return HTML strings. They are pure of GUI state. They take
 engine data, segments, features, and specs, then produce markup.
 """
 
-from gui.constants import TAG_PALETTES, sort_features, sort_spec
+from gui.constants import sort_features, sort_spec, tag_palettes
 from gui.palette import C
 
 
 def _tag(text: str, colour: str) -> str:
     """Render a coloured inline chip."""
-    bg, fg = TAG_PALETTES.get(colour, (C["tag_gray"], C["tag_gray_text"]))
+    bg, fg = tag_palettes().get(colour, (C["tag_gray"], C["tag_gray_text"]))
     return (
         f"<span style='"
         f"background:{bg}; color:{fg}; border-radius:4px;"

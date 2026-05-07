@@ -80,3 +80,58 @@ def set_theme(name: str) -> None:
 def get_theme_name() -> str:
     """Return ``'light'`` or ``'dark'`` for the currently-active palette."""
     return "dark" if C.get("bg") == DARK["bg"] else "light"
+
+
+def build_app_qss() -> str:
+    """Return the application-wide stylesheet for property-styled widgets.
+
+    Setting this on QApplication means Qt parses the CSS *once* and
+    re-evaluates per widget when properties change — much cheaper than
+    a setStyleSheet per widget per theme swap. Currently covers
+    SegmentButton (the highest-volume widget at ~140 per inventory).
+    Other widgets keep their inline stylesheets for now.
+
+    State changes use property selectors (``[seg_state="…"]``); the
+    widget calls ``style().unpolish(self) + polish(self)`` after a
+    setProperty to force Qt to re-evaluate.
+    """
+    return f"""
+SegmentButton {{
+    background-color: {C['seg_default']};
+    color: {C['text']};
+    border: 1.5px solid {C['border']};
+    border-radius: 8px;
+}}
+SegmentButton:hover {{
+    background-color: {C['accent_light']};
+    border: 1.5px solid {C['accent']};
+}}
+SegmentButton:checked {{
+    background-color: {C['seg_selected']};
+    color: #FFFFFF;
+    border: 2px solid {C['accent']};
+    font-weight: bold;
+}}
+SegmentButton[seg_state="selected"] {{
+    background-color: {C['seg_selected']};
+    color: #FFFFFF;
+    border: 2px solid {C['accent']};
+    font-weight: bold;
+}}
+SegmentButton[seg_state="matched"] {{
+    background-color: {C['seg_matched']};
+    color: #FFFFFF;
+    border: 2px solid {C['accent']};
+    font-weight: bold;
+}}
+SegmentButton[seg_state="unmatched"] {{
+    background-color: {C['seg_unmatched']};
+    color: {C['text_dim']};
+    border: 1px solid {C['border']};
+}}
+SegmentButton[seg_state="suggested"] {{
+    background-color: {C['accent_light']};
+    color: {C['accent']};
+    border: 1.5px dashed {C['accent']};
+}}
+"""

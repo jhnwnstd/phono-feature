@@ -9,25 +9,21 @@ from gui.palette import C
 # Settings keys
 SETTINGS_ORG = "features"
 SETTINGS_APP = "SegFeatureEngine"
-# Tag palettes for inline HTML chips
-TAG_PALETTES = {
-    "blue": (
-        C["tag_blue"],
-        C["tag_blue_text"],
-    ),
-    "green": (
-        C["tag_green"],
-        C["tag_green_text"],
-    ),
-    "red": (
-        C["tag_red"],
-        C["tag_red_text"],
-    ),
-    "gray": (
-        C["tag_gray"],
-        C["tag_gray_text"],
-    ),
-}
+
+
+# Tag palettes for inline HTML chips. Function rather than module-level
+# dict so it evaluates against the *current* palette — important for
+# live theme swaps where a constant would have been baked at import
+# time using whatever theme was active then. Caller: gui/analysis.py.
+def tag_palettes() -> dict:
+    return {
+        "blue": (C["tag_blue"], C["tag_blue_text"]),
+        "green": (C["tag_green"], C["tag_green_text"]),
+        "red": (C["tag_red"], C["tag_red_text"]),
+        "gray": (C["tag_gray"], C["tag_gray_text"]),
+    }
+
+
 # Segment button geometry
 BTN_W = 33
 BTN_H = 26
@@ -165,10 +161,12 @@ def sort_spec(spec: dict) -> dict:
     return {feature: spec[feature] for feature in sorted_keys}
 
 
-# Shared scrollbar style
-#
-# Thin, unobtrusive overlay track.
-SCROLLBAR_STYLE = f"""
+# Thin, unobtrusive overlay scrollbar track. Function rather than
+# module-level constant so it evaluates against the *current* palette
+# — module-level f-strings get baked at import time, which made the
+# scrollbars stick on the original theme even after a live swap.
+def scrollbar_style() -> str:
+    return f"""
     QScrollBar:vertical {{
         background: transparent;
         width: 6px;
