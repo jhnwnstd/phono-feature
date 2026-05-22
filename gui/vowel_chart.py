@@ -296,11 +296,19 @@ class VowelChartWidget(QWidget):
         self.clear()
         self._buttons = buttons
         profile = _detect_vowel_profile(segs, norm_feats)
-        hdr_font = QFont("Noto Sans", 8, QFont.Weight.Bold)
+        self._add_top_headers()
+        occupied, placements = self._compute_placements(
+            segs, profile, norm_feats
+        )
+        self._lay_out_rows(occupied, placements)
+
+    def _add_top_headers(self) -> None:
+        """VOWELS title (spanning all columns) + Front/Central/Back labels."""
         title = QLabel("VOWELS")
-        title.setFont(hdr_font)
+        title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
         title.setStyleSheet(
-            f"color: {C['text_dim']}; letter-spacing: 1px; padding: 2px 2px 0 2px;"
+            f"color: {C['text_dim']}; letter-spacing: 1px;"
+            " padding: 2px 2px 0 2px;"
         )
         self._grid.addWidget(title, 0, 0, 1, 7)
         self._header_labels.append((title, False))
@@ -309,69 +317,89 @@ class VowelChartWidget(QWidget):
             lbl.setFont(QFont("Noto Sans", 7))
             lbl.setStyleSheet(f"color: {C['text_dim']};")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            grid_col = 1 + ci * 2
-            self._grid.addWidget(lbl, 1, grid_col, 1, 2)
+            self._grid.addWidget(lbl, 1, 1 + ci * 2, 1, 2)
             self._header_labels.append((lbl, False))
+
+    @staticmethod
+    def _compute_placements(
+        segs: list, profile: VowelProfile, norm_feats: dict
+    ) -> tuple[dict, dict]:
+        """Return (occupied, placements). ``occupied[(row, col)]`` is the
+        list of segments mapping to that cell, sorted by descending
+        placement confidence (so the higher-confidence vowel ends up
+        on top when a cell collides).
+        """
         occupied: dict = {}
         placements: dict = {}
         for seg in segs:
-            feats = norm_feats.get(seg, {})
-            placement = _vowel_grid_pos(feats, profile)
-            cell_key = (placement.row, placement.col)
+            placement = _vowel_grid_pos(norm_feats.get(seg, {}), profile)
             placements[seg] = placement
-            occupied.setdefault(cell_key, []).append(seg)
+            occupied.setdefault((placement.row, placement.col), []).append(seg)
         for key in occupied:
             occupied[key].sort(
-                key=lambda seg: (
-                    _CONF_RANK.get(placements[seg].confidence, 0),
-                    seg,
+                key=lambda s: (
+                    _CONF_RANK.get(placements[s].confidence, 0),
+                    s,
                 ),
                 reverse=True,
             )
+        return occupied, placements
+
+    def _lay_out_rows(self, occupied: dict, placements: dict) -> None:
+        """For each height tier that has at least one vowel, add a row
+        header on the left and place each cell's buttons in the grid."""
         grid_row = 2
         for ri, label in enumerate(self._ROW_HEADERS):
-            row_has_vowels = any((ri, col) in occupied for col in range(6))
-            if not row_has_vowels:
+            if not any((ri, col) in occupied for col in range(6)):
                 continue
-            lbl = QLabel(label)
-            lbl.setFont(QFont("Noto Sans", 7))
-            lbl.setStyleSheet(f"color: {C['text_dim']}; padding-right: 4px;")
-            lbl.setAlignment(
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-            )
-            lbl.setMinimumWidth(VOWEL_LABEL_W - 4)
-            self._grid.addWidget(lbl, grid_row, 0)
-            self._header_labels.append((lbl, True))
+            self._add_row_header(label, grid_row)
             for ci in range(6):
-                cell_key = (ri, ci)
-                cell_segs = occupied.get(cell_key, [])
-                if not cell_segs:
-                    continue
-                if len(cell_segs) == 1:
-                    seg = cell_segs[0]
-                    btn = self._buttons.get(seg)
-                    if btn:
-                        placement = placements[seg]
-                        btn.setToolTip(
-                            f"/{seg}/  [{placement.confidence}]  {placement.reason}"
-                        )
-                        btn.show()
-                        self._grid.addWidget(btn, grid_row, 1 + ci)
-                    continue
-                cell = QWidget()
-                cell.setStyleSheet("background: transparent;")
-                self._cell_containers.append(cell)
-                vbox = QVBoxLayout(cell)
-                vbox.setContentsMargins(0, 0, 0, 0)
-                vbox.setSpacing(1)
-                for seg in cell_segs:
-                    btn = self._buttons.get(seg)
-                    if btn:
-                        placement = placements[seg]
-                        btn.setToolTip(
-                            f"/{seg}/  [{placement.confidence}]  {placement.reason}"
-                        )
-                        btn.show()
-                        vbox.addWidget(btn)
-                self._grid.addWidget(cell, grid_row, 1 + ci)
+                cell_segs = occupied.get((ri, ci), [])
+                if cell_segs:
+                    self._place_cell(cell_segs, placements, grid_row, ci)
             grid_row += 1
+
+    def _add_row_header(self, label: str, grid_row: int) -> None:
+        lbl = QLabel(label)
+        lbl.setFont(QFont("Noto Sans", 7))
+        lbl.setStyleSheet(f"color: {C['text_dim']}; padding-right: 4px;")
+        lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        lbl.setMinimumWidth(VOWEL_LABEL_W - 4)
+        self._grid.addWidget(lbl, grid_row, 0)
+        self._header_labels.append((lbl, True))
+
+    def _place_cell(
+        self, cell_segs: list, placements: dict, grid_row: int, ci: int
+    ) -> None:
+        """Single vowel: drop the button straight into the grid cell.
+        Multiple vowels at the same (row, col): stack them in a
+        transparent vbox container that we own."""
+        if len(cell_segs) == 1:
+            seg = cell_segs[0]
+            btn = self._buttons.get(seg)
+            if btn:
+                self._prep_button(btn, seg, placements[seg])
+                self._grid.addWidget(btn, grid_row, 1 + ci)
+            return
+        cell = QWidget()
+        cell.setStyleSheet("background: transparent;")
+        self._cell_containers.append(cell)
+        vbox = QVBoxLayout(cell)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(1)
+        for seg in cell_segs:
+            btn = self._buttons.get(seg)
+            if btn:
+                self._prep_button(btn, seg, placements[seg])
+                vbox.addWidget(btn)
+        self._grid.addWidget(cell, grid_row, 1 + ci)
+
+    @staticmethod
+    def _prep_button(btn, seg: str, placement: VowelPlacement) -> None:
+        """Set the tooltip + show. Shared by single + collision cells."""
+        btn.setToolTip(
+            f"/{seg}/  [{placement.confidence}]  {placement.reason}"
+        )
+        btn.show()

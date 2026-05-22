@@ -385,82 +385,89 @@ class InventoryBuilder(QMainWindow):
     }
 
     def eventFilter(self, obj, event):
-        # Bulk cycle on plain-click inside an existing multi-selection
-        # (header-click row/col, shift-click range, or ctrl-click set).
-        # Capturing on viewport mouse PRESS lets us see the selection
-        # before Qt collapses it.
         if obj is self._table.viewport():
-            if (
-                event.type() == event.Type.MouseButtonPress
-                and event.button() == Qt.MouseButton.LeftButton
-            ):
-                modifiers = event.modifiers()
-                # Shift / Ctrl clicks are the user EXTENDING the
-                # selection; let Qt handle those normally.
-                bare_click = not (
-                    modifiers
-                    & (
-                        Qt.KeyboardModifier.ShiftModifier
-                        | Qt.KeyboardModifier.ControlModifier
-                    )
-                )
-                if bare_click:
-                    items = self._table.selectedItems()
-                    if len(items) > 1:
-                        pos = event.position().toPoint()
-                        idx = self._table.indexAt(pos)
-                        if idx.isValid():
-                            clicked_item = self._table.item(
-                                idx.row(), idx.column()
-                            )
-                            if clicked_item in items:
-                                self._cycle_selection_from(clicked_item)
-                                return True
-        if obj is self._table and event.type() == event.Type.KeyPress:
-            row = self._table.currentRow()
-            col = self._table.currentColumn()
-            key = event.key()
-            mods = event.modifiers()
-            # Ctrl+Z / Ctrl+Shift+Z (undo) and Ctrl+Y (redo). Scoped to
-            # the table widget so the metadata-strip name field's own
-            # Qt-built-in text-undo is left alone when it has focus.
-            if mods & Qt.KeyboardModifier.ControlModifier:
-                if key == Qt.Key.Key_Z:
-                    if mods & Qt.KeyboardModifier.ShiftModifier:
-                        self._redo()
-                    else:
-                        self._undo()
-                    return True
-                if key == Qt.Key.Key_Y:
-                    self._redo()
-                    return True
-            # Cell mutation keys; only when a cell is actually selected.
-            if row >= 0 and col >= 0:
-                if key == Qt.Key.Key_Space:
-                    cur_item = self._table.item(row, col)
-                    if cur_item is not None:
-                        self._cycle_selection_from(cur_item)
-                    return True
-                value = self._VALUE_KEYS.get(key)
-                if value is not None:
-                    self._apply_value_to_selection(value, row, col)
-                    return True
-            # Movement keys; move the selection. If nothing is selected
-            # yet, anchor at (0, 0) so the first arrow press lands somewhere.
-            move = self._MOVE_KEYS.get(key)
-            if move is not None and self._table.rowCount() > 0:
-                dr, dc = move
-                start_row = row if row >= 0 else 0
-                start_col = col if col >= 0 else 0
-                new_row = max(
-                    0, min(start_row + dr, self._table.rowCount() - 1)
-                )
-                new_col = max(
-                    0, min(start_col + dc, self._table.columnCount() - 1)
-                )
-                self._table.setCurrentCell(new_row, new_col)
+            if self._handle_viewport_press(event):
+                return True
+        elif obj is self._table and event.type() == event.Type.KeyPress:
+            if self._handle_table_key(event):
                 return True
         return super().eventFilter(obj, event)
+
+    def _handle_viewport_press(self, event) -> bool:
+        """Bulk-cycle every selected cell when the user plain-clicks
+        inside an existing multi-cell selection (header-click row/col,
+        shift-click range, or ctrl-click set). Catching the mouse
+        PRESS on the viewport lets us see the selection before Qt
+        collapses it to the clicked cell. Shift / Ctrl clicks are the
+        user EXTENDING the selection; let Qt handle those normally.
+        """
+        if event.type() != event.Type.MouseButtonPress:
+            return False
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+        modifiers = event.modifiers()
+        if modifiers & (
+            Qt.KeyboardModifier.ShiftModifier
+            | Qt.KeyboardModifier.ControlModifier
+        ):
+            return False
+        items = self._table.selectedItems()
+        if len(items) <= 1:
+            return False
+        idx = self._table.indexAt(event.position().toPoint())
+        if not idx.isValid():
+            return False
+        clicked_item = self._table.item(idx.row(), idx.column())
+        if clicked_item not in items:
+            return False
+        self._cycle_selection_from(clicked_item)
+        return True
+
+    def _handle_table_key(self, event) -> bool:
+        """Keyboard shortcuts on the table. Returns True if consumed.
+
+        Ctrl+Z / Ctrl+Shift+Z = undo, Ctrl+Y = redo. Scoped to the
+        table so the metadata-strip name field's Qt-built-in text-undo
+        is left alone when it has focus. Space cycles the current cell
+        (multi-cell when there's a selection); 1/2/3/0 set the value;
+        h/j/k/l + 4/5/6/8 move the cursor.
+        """
+        row = self._table.currentRow()
+        col = self._table.currentColumn()
+        key = event.key()
+        mods = event.modifiers()
+        if mods & Qt.KeyboardModifier.ControlModifier:
+            if key == Qt.Key.Key_Z:
+                if mods & Qt.KeyboardModifier.ShiftModifier:
+                    self._redo()
+                else:
+                    self._undo()
+                return True
+            if key == Qt.Key.Key_Y:
+                self._redo()
+                return True
+        if row >= 0 and col >= 0:
+            if key == Qt.Key.Key_Space:
+                cur_item = self._table.item(row, col)
+                if cur_item is not None:
+                    self._cycle_selection_from(cur_item)
+                return True
+            value = self._VALUE_KEYS.get(key)
+            if value is not None:
+                self._apply_value_to_selection(value, row, col)
+                return True
+        move = self._MOVE_KEYS.get(key)
+        if move is not None and self._table.rowCount() > 0:
+            dr, dc = move
+            start_row = row if row >= 0 else 0
+            start_col = col if col >= 0 else 0
+            new_row = max(0, min(start_row + dr, self._table.rowCount() - 1))
+            new_col = max(
+                0, min(start_col + dc, self._table.columnCount() - 1)
+            )
+            self._table.setCurrentCell(new_row, new_col)
+            return True
+        return False
 
     def _set_cell_value(self, row: int, col: int, value: str) -> None:
         """Write ``value`` to the cell and record the change for undo."""

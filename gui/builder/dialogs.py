@@ -165,28 +165,38 @@ class InputDialog(QDialog):
         self.setWindowModality(Qt.WindowModality.WindowModal)
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
-        name_lay = QHBoxLayout()
-        name_label = QLabel("Inventory name:")
+        layout.addLayout(self._build_name_row())
+        self._add_segments_section(layout)
+        self._add_features_section(layout)
+        layout.addLayout(self._build_button_row())
+
+    def _build_name_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Inventory name:"))
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("e.g. My Language Inventory")
-        name_lay.addWidget(name_label)
-        name_lay.addWidget(self.name_edit)
-        layout.addLayout(name_lay)
-        seg_label = QLabel("Segments (one per line, or space-separated):")
-        seg_label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-        layout.addWidget(seg_label)
+        row.addWidget(self.name_edit)
+        return row
+
+    def _add_segments_section(self, parent: QVBoxLayout) -> None:
+        label = QLabel("Segments (one per line, or space-separated):")
+        label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
+        parent.addWidget(label)
         self.seg_edit = SegmentTextEdit()
         # Placeholder = exactly what Tab fills. The grayed text IS the hint.
         self.seg_edit.setPlaceholderText(SegmentTextEdit.DEFAULT_FILL)
         self.seg_edit.setFont(QFont("Noto Sans", 12))
-        layout.addWidget(self.seg_edit)
-        feat_preset_lay = QHBoxLayout()
-        feat_preset_label = QLabel("Feature set:")
+        parent.addWidget(self.seg_edit)
+
+    def _add_features_section(self, parent: QVBoxLayout) -> None:
+        preset_row = QHBoxLayout()
+        preset_row.addWidget(QLabel("Feature set:"))
         self.preset_combo = QComboBox()
         # Native combo highlight is white-on-white in some OS themes,
-        # making the focused/selected item invisible. Use the same accent-
-        # light + accent-text scheme MainWindow's config dropdown uses so
-        # both "Default (33)" and "Custom" stay legible when highlighted.
+        # making the focused/selected item invisible. Use the same
+        # accent-light + accent-text scheme MainWindow's config dropdown
+        # uses so both "Default (33)" and "Custom" stay legible when
+        # highlighted.
         self.preset_combo.setStyleSheet(f"""
             QComboBox {{
                 background: {C["panel"]};
@@ -210,24 +220,23 @@ class InputDialog(QDialog):
         for name in FEATURE_PRESETS:
             self.preset_combo.addItem(name)
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
-        feat_preset_lay.addWidget(feat_preset_label)
-        feat_preset_lay.addWidget(self.preset_combo)
-        layout.addLayout(feat_preset_lay)
+        preset_row.addWidget(self.preset_combo)
+        parent.addLayout(preset_row)
         feat_label = QLabel("Features (one per line, or comma-separated):")
         feat_label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-        layout.addWidget(feat_label)
+        parent.addWidget(feat_label)
         self.feat_edit = FeatureTextEdit()
         self.feat_edit.setFont(QFont("Noto Sans", 10))
-        # Placeholder = exactly what Tab fills. The grayed text IS the hint.
         self.feat_edit.setPlaceholderText(FeatureTextEdit.DEFAULT_FILL)
-        layout.addWidget(self.feat_edit)
-        selected_preset = self.preset_combo.currentText()
-        self._on_preset_changed(selected_preset)
-        btn_lay = QHBoxLayout()
-        btn_lay.addStretch()
+        parent.addWidget(self.feat_edit)
+        self._on_preset_changed(self.preset_combo.currentText())
+
+    def _build_button_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.addStretch()
         cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self.reject)
-        btn_lay.addWidget(cancel_btn)
+        row.addWidget(cancel_btn)
         ok_btn = QPushButton("Create Grid")
         ok_btn.setStyleSheet(f"""
             QPushButton {{
@@ -243,8 +252,8 @@ class InputDialog(QDialog):
             }}
             """)
         ok_btn.clicked.connect(self.accept)
-        btn_lay.addWidget(ok_btn)
-        layout.addLayout(btn_lay)
+        row.addWidget(ok_btn)
+        return row
 
     def _on_preset_changed(self, name: str):
         features = FEATURE_PRESETS.get(name, [])
