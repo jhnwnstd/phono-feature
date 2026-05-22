@@ -209,6 +209,11 @@ class FeatureRow(QWidget):
         # Cache for set_display dedup; cleared by reset/_apply_query_style
         # because they bypass set_display but rewrite the same stylesheets.
         self._last_display_state: tuple[str, bool, bool] | None = None
+        # Tracks whether the row is currently in the visual "reset"
+        # state for a given ``_panel_active`` value. Lets ``reset()``
+        # short-circuit on repeat calls (common during populate +
+        # mode-switch sequences) and skip 3 setStyleSheet calls.
+        self._reset_for_panel: bool | None = None
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 3, 8, 3)
         layout.setSpacing(4)
@@ -344,8 +349,10 @@ class FeatureRow(QWidget):
     def _apply_query_style(self, value: str) -> None:
         """Apply row tinting that matches the current query value."""
         # _on_click and restore_value bypass set_display, so its dedup cache
-        # would falsely report "no change" next time. Invalidate it here.
+        # would falsely report "no change" next time. Same for reset()'s
+        # short-circuit cache. Invalidate both.
         self._last_display_state = None
+        self._reset_for_panel = None
         if value == "+":
             self.setStyleSheet(self._ROW_PLUS)
             self.name_label.setStyleSheet(self._NAME_BOLD)
@@ -382,6 +389,7 @@ class FeatureRow(QWidget):
         if getattr(self, "_last_display_state", None) == state:
             return
         self._last_display_state = state
+        self._reset_for_panel = None  # row no longer in "reset" state
         if contrastive:
             self.badge.setText("\u00b1")
             self.badge.setStyleSheet(self._BADGE_CONTRASTIVE)
@@ -415,6 +423,15 @@ class FeatureRow(QWidget):
         self._panel_active = active
 
     def reset(self) -> None:
+        # Short-circuit when the row is already in the reset visual
+        # state for the current panel-active mode. Saves 3 setStyleSheet
+        # calls on every redundant invocation (populate + mode-switch
+        # sequences call this on rows that are already cleared).
+        if (
+            self._current_value == ""
+            and self._reset_for_panel == self._panel_active
+        ):
+            return
         self._current_value = ""
         # set_display's dedup cache must be invalidated since reset() bypasses
         # it but rewrites all the stylesheets it tracks.
@@ -429,6 +446,7 @@ class FeatureRow(QWidget):
             name_style = self._NAME_INACTIVE
         self.name_label.setStyleSheet(name_style)
         self.setStyleSheet(self._ROW_NEUTRAL)
+        self._reset_for_panel = self._panel_active
 
     @property
     def current_value(self) -> str:

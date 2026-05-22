@@ -106,7 +106,7 @@ class Mode(StrEnum):
     FEAT_TO_SEG = "feat_to_seg"
 
 
-class BrandedStatusBar(QStatusBar):
+class _BrandedStatusBar(QStatusBar):
     """Status bar with a 'Language Doodad' brand pinned at the lower-right.
 
     Default QStatusBar.showMessage() hides any addWidget() items while a
@@ -404,7 +404,7 @@ class MainWindow(QMainWindow):
         self._min_analysis_h = 220
         root.addWidget(self._vsplit)
         # ---- status bar ----
-        self.status = BrandedStatusBar()
+        self.status = _BrandedStatusBar()
         self.status.setStyleSheet(
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
         )
