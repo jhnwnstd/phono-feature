@@ -4,7 +4,7 @@ Covers the recently-fixed UX bugs:
 
   1. Tab on an empty segment box fills in a quick-start segment list
      (and Tab on a populated box doesn't clobber the user's content).
-  2. The dialog validates inputs BEFORE dismissing — empty segments
+  2. The dialog validates inputs BEFORE dismissing; empty segments
      or empty features no longer close the dialog and then surface
      a warning over an already-gone editor.
   3. The unsaved-changes / cancel paths return False from
@@ -58,9 +58,9 @@ def test_tab_on_whitespace_only_still_fills(seg_edit):
 
 
 def test_tab_on_existing_content_leaves_it_alone(seg_edit):
-    seg_edit.setPlainText("m n ŋ")
+    seg_edit.setPlainText("m n \u014b")
     _tab(seg_edit)
-    assert seg_edit.toPlainText() == "m n ŋ"
+    assert seg_edit.toPlainText() == "m n \u014b"
 
 
 def test_tab_changes_focus_when_content_is_present(seg_edit):
@@ -71,7 +71,7 @@ def test_tab_changes_focus_when_content_is_present(seg_edit):
 
 def test_tab_on_empty_fills_but_keeps_focus(qapp):
     """Tab on an empty editor should autofill and KEEP focus in the
-    editor — the user shouldn't have a single Tab press both fill the
+    editor; the user shouldn't have a single Tab press both fill the
     seed text and jump to the next widget. A second Tab (now non-empty)
     advances focus."""
     from PyQt6.QtTest import QTest
@@ -87,15 +87,15 @@ def test_tab_on_empty_fills_but_keeps_focus(qapp):
     seg.setFocus()
     qapp.processEvents()
     assert seg.hasFocus()
-    # First Tab on empty — fills, keeps focus.
+    # First Tab on empty; fills, keeps focus.
     QTest.keyClick(seg, Qt.Key.Key_Tab)
     qapp.processEvents()
     assert seg.toPlainText() == SegmentTextEdit.DEFAULT_FILL
     assert seg.hasFocus(), (
-        "Tab on empty must NOT advance focus — it only fills. "
+        "Tab on empty must NOT advance focus; it only fills. "
         "Pressing Tab again advances normally."
     )
-    # Second Tab — now non-empty, should advance focus normally.
+    # Second Tab; now non-empty, should advance focus normally.
     QTest.keyClick(seg, Qt.Key.Key_Tab)
     qapp.processEvents()
     assert (
@@ -111,7 +111,7 @@ def test_tab_on_filled_just_moves_focus(qapp):
     container = QWidget()
     layout = QVBoxLayout(container)
     seg = SegmentTextEdit()
-    seg.setPlainText("m n ŋ")
+    seg.setPlainText("m n \u014b")
     sibling = QLineEdit()
     layout.addWidget(seg)
     layout.addWidget(sibling)
@@ -120,7 +120,7 @@ def test_tab_on_filled_just_moves_focus(qapp):
     qapp.processEvents()
     QTest.keyClick(seg, Qt.Key.Key_Tab)
     qapp.processEvents()
-    assert seg.toPlainText() == "m n ŋ"
+    assert seg.toPlainText() == "m n \u014b"
     assert sibling.hasFocus()
     container.deleteLater()
 
@@ -185,7 +185,7 @@ def test_accept_with_empty_segments_does_not_dismiss(dialog, mocker):
     warn.assert_called_once()
     args = warn.call_args.args
     assert args[1] == "No segments"
-    # Dialog must remain in its pre-accept state — Accepted is QDialog.DialogCode.Accepted == 1
+    # Dialog must remain in its pre-accept state; Accepted is QDialog.DialogCode.Accepted == 1
     assert dialog.result() != QDialog.DialogCode.Accepted
 
 

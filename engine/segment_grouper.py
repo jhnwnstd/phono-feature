@@ -5,7 +5,7 @@ Architecture:
      Affricates, Nasals, etc.) using only the most universal features.
      Clicks are special-cased before generic ranking.
   2. Derived breakouts split subgroups (Sibilants, Lateral Fricatives,
-     Lateral Affricates) out of their parent — only when the feature is
+     Lateral Affricates) out of their parent; only when the feature is
      active, enough segments qualify, AND the parent retains members.
   3. Relational relabeling (Vibrants, Rhotics, Liquids) runs BEFORE
      small-group merging so the combination categories get a chance to
@@ -29,7 +29,7 @@ from collections import defaultdict
 from functools import lru_cache
 
 # ---------------------------------------------------------------------------
-# Primary groups — broad manner classes for initial assignment.
+# Primary groups; broad manner classes for initial assignment.
 # Only uses the most universal, stable features.
 # ---------------------------------------------------------------------------
 PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
@@ -98,7 +98,7 @@ _MIN_POSITIVE: dict[str, int] = {
     "Semivowels": 2,
 }
 # ---------------------------------------------------------------------------
-# Derived breakouts — split from a parent class after initial assignment.
+# Derived breakouts; split from a parent class after initial assignment.
 # Only surfaced when the feature is active, enough segments qualify,
 # AND the parent retains at least one member.
 # ---------------------------------------------------------------------------
@@ -122,7 +122,7 @@ _MERGE_PARENT: dict[str, str] = {
 # peel individual segments out.
 _FROZEN_GROUPS: set[str] = {"Plosives"}
 # ---------------------------------------------------------------------------
-# Display order: manner-first (plosives → fricatives → affricates)
+# Display order: manner-first (plosives -> fricatives -> affricates)
 # ---------------------------------------------------------------------------
 DISPLAY_ORDER: list[str] = [
     "Clicks",
@@ -145,7 +145,7 @@ DISPLAY_ORDER: list[str] = [
     "Vowels",
 ]
 # ---------------------------------------------------------------------------
-# Relabeling: frozenset of origin names → derived display label
+# Relabeling: frozenset of origin names -> derived display label
 # ---------------------------------------------------------------------------
 _RELABEL_PATTERNS: dict[frozenset[str], str] = {
     frozenset({"Trills", "Taps & Flaps"}): "Vibrants",
@@ -203,7 +203,7 @@ def _normalize_feats(feat_dict: dict[str, str]) -> dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# IPA place ordering (left → right on the IPA chart)
+# IPA place ordering (left -> right on the IPA chart)
 # ---------------------------------------------------------------------------
 _VAL_ORD: dict[str, int] = {"-": 0, "+": 1, "0": 2}
 _SORT_KEYS: list[tuple[str, dict[str, int]]] = [
@@ -269,7 +269,7 @@ def _ipa_place(feats: dict[str, str]) -> int:
         feats.get("consonantal", "0") == "-"
         and feats.get("syllabic", "0") == "-"
     ):
-        return 10  # h, ɦ
+        return 10  # h, ɦ (voiced glottal fricative)
     return 11  # vowels / unclassified
 
 
@@ -406,7 +406,7 @@ def group_segments(
         if group:
             assignment[group].append(sym)
     # ==================================================================
-    # Step 2: Derived breakouts — split subgroups from parent classes.
+    # Step 2: Derived breakouts; split subgroups from parent classes.
     # Only when the feature is active, enough segments qualify, AND
     # the parent retains at least one member (no full replacement).
     # ==================================================================
@@ -422,7 +422,7 @@ def group_segments(
             if all(norm[s].get(f, "0") == v for f, v in cond.items())
         ]
         remainder = [s for s in parent_members if s not in subgroup]
-        # Only break out if it truly splits the parent — not if it
+        # Only break out if it truly splits the parent; not if it
         # would replace the parent entirely.
         if not subgroup or not remainder:
             continue
@@ -472,7 +472,7 @@ def group_segments(
             members = assignment.pop(gname)
             assignment.setdefault(relabel, []).extend(members)
     # 3c: Merge derived groups that belong together. Sorted iteration
-    # for the same reason as 3a — keeps internal merge order stable.
+    # for the same reason as 3a; keeps internal merge order stable.
     for pair, label in _DERIVED_MERGES:
         present = [g for g in sorted(pair) if g in assignment]
         if len(present) < 2:
@@ -505,7 +505,7 @@ def group_segments(
                 assignment.setdefault(parent, []).extend(assignment.pop(gname))
                 changed = True
     # ==================================================================
-    # Step 5: Laryngeal rescue — peel placeless consonantal segments
+    # Step 5: Laryngeal rescue; peel placeless consonantal segments
     # with spreadgl:+ or constrgl:+ into Laryngeals.
     # ==================================================================
     _LARYNGEAL_FEATURES = {"spreadgl", "constrgl"}

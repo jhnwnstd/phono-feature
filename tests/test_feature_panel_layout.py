@@ -2,8 +2,8 @@
 
 The two-column feature pane uses *soft pins* for the canonical blocks:
 
-  Left column:  Major Class (top) → Place → balanced fill
-  Right column: Manner (top)      → balanced fill
+  Left column:  Major Class (top) -> Place -> balanced fill
+  Right column: Manner (top)      -> balanced fill
 
 If any of those three groups has no active features for the current
 inventory, the soft pin is skipped (nothing is hardcoded into a slot).

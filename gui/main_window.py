@@ -74,7 +74,7 @@ if TYPE_CHECKING:
     from gui.builder import InventoryBuilder
 # Mode-independent: same style applied at construction, never changed
 # (within one theme). Function rather than module-level constant so it
-# evaluates against the current palette — important after a live
+# evaluates against the current palette; important after a live
 # theme swap, where the constant would have been baked at import time.
 
 
@@ -110,7 +110,7 @@ class BrandedStatusBar(QStatusBar):
     """Status bar with a 'Language Doodad' brand pinned at the lower-right.
 
     Default QStatusBar.showMessage() hides any addWidget() items while a
-    message is shown — that would blink the message label on every
+    message is shown; that would blink the message label on every
     status update. This subclass instead routes messages to a managed
     QLabel on the left, so both message and brand stay visible at all
     times. The brand uses addPermanentWidget() to anchor it on the right.
@@ -169,17 +169,17 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.engine: FeatureEngine | None = None
         self._mode: Mode = Mode.SEG_TO_FEAT
-        # segment → SegmentButton for the active inventory
+        # segment -> SegmentButton for the active inventory
         self._seg_buttons: dict = {}
         # Cross-inventory pool: keyed by segment symbol. Created once and
-        # reused on subsequent loads where the symbol reappears (most do —
+        # reused on subsequent loads where the symbol reappears (most do ;
         # /p t k m n s/ etc. are nearly universal). The grid and chart
         # layouts are still recomputed every swap; this only avoids the
         # QPushButton.__init__ + setStyleSheet costs for known symbols.
         self._seg_button_pool: dict[str, SegmentButton] = {}
-        self._feat_rows: dict = {}  # feature  → FeatureRow
+        self._feat_rows: dict = {}  # feature  -> FeatureRow
         self._selected_segments: list = []
-        self._selected_features: dict = {}  # feature → '+'/'-'
+        self._selected_features: dict = {}  # feature -> '+'/'-'
         # Exact state of each mode when leaving it; projected into the other
         # mode as a convenience pre-fill on switch.
         self._saved_seg_state: list = []
@@ -194,7 +194,7 @@ class MainWindow(QMainWindow):
         # subsequent load instead of destroying and recreating widgets.
         # _feat_row_pool holds every row created (full FEATURE_ORDER plus any
         # inventory-specific extras). _feat_rows above keeps its existing
-        # contract — only active-this-inventory rows — so external code that
+        # contract; only active-this-inventory rows; so external code that
         # iterates _feat_rows is unaffected.
         self._feat_row_pool: dict[str, FeatureRow] = {}
         self._feat_cards: list[tuple[QFrame, list[str]]] = []
@@ -248,7 +248,7 @@ class MainWindow(QMainWindow):
     # UI construction
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        # ── toolbar ──────────────────────────────────────────────────
+        # ---- toolbar ----
         toolbar = QToolBar()
         toolbar.setMovable(False)
         toolbar.setStyleSheet(f"""
@@ -339,11 +339,11 @@ class MainWindow(QMainWindow):
         )
         spacer.setStyleSheet("background: transparent;")
         toolbar.addWidget(spacer)
-        # Toggle shows the OPPOSITE of the active theme — i.e. what
+        # Toggle shows the OPPOSITE of the active theme; i.e. what
         # clicking will switch you to. Sun = "switch to light",
         # moon = "switch to dark".
         is_dark_now = get_theme_name() == "dark"
-        self._theme_btn = QPushButton("☼" if is_dark_now else "☾")
+        self._theme_btn = QPushButton("\u263c" if is_dark_now else "\u263e")
         self._theme_btn.setFont(QFont("Noto Sans", 12))
         self._theme_btn.setFixedSize(32, 32)
         self._theme_btn.setToolTip(
@@ -363,7 +363,7 @@ class MainWindow(QMainWindow):
         """)
         self._theme_btn.clicked.connect(self._toggle_theme)
         toolbar.addWidget(self._theme_btn)
-        # ── central widget ────────────────────────────────────────────
+        # ---- central widget ----
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
@@ -389,7 +389,7 @@ class MainWindow(QMainWindow):
         # leave dead space after the vowels inside the segment panel.
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        # ── bottom: analysis ──────────────────────────────────────────
+        # ---- bottom: analysis ----
         self.analysis = AnalysisPanel()
         self._vsplit = QSplitter(Qt.Orientation.Vertical)
         self._vsplit.setHandleWidth(4)
@@ -403,7 +403,7 @@ class MainWindow(QMainWindow):
         self._vsplit.setStretchFactor(1, 0)
         self._min_analysis_h = 220
         root.addWidget(self._vsplit)
-        # ── status bar ────────────────────────────────────────────────
+        # ---- status bar ----
         self.status = BrandedStatusBar()
         self.status.setStyleSheet(
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
@@ -567,8 +567,8 @@ class MainWindow(QMainWindow):
         """Clamp ``(w, h)`` to the target screen's available area.
 
         ``deco_w`` / ``deco_h`` are the WM decoration size (title bar +
-        borders). When known — i.e. once the window has been shown and
-        decorated — they let us size the widget so the *frame* fits
+        borders). When known; i.e. once the window has been shown and
+        decorated; they let us size the widget so the *frame* fits
         exactly inside ``availableGeometry``. When unknown (pre-show)
         we fall back to a 40-pixel heuristic margin.
         """
@@ -594,7 +594,7 @@ class MainWindow(QMainWindow):
         Note: ``raise_`` and ``activateWindow`` are only called when we
         actually move the window. On the happy path (window already on
         a sane screen) they cause a visible title-bar focus blink and a
-        brief restack on some Linux WMs — and they're redundant since
+        brief restack on some Linux WMs; and they're redundant since
         the WM gives the only freshly-shown window focus by default.
         """
         app = QApplication.instance()
@@ -605,7 +605,7 @@ class MainWindow(QMainWindow):
         frame = self.frameGeometry()
         primary_geo = screen.geometry()
         # If the window is already mostly on the primary screen, leave it
-        # alone — no raise/activate, no flicker.
+        # alone; no raise/activate, no flicker.
         if (
             primary_geo.intersects(frame)
             and frame.width() >= 300
@@ -613,7 +613,7 @@ class MainWindow(QMainWindow):
         ):
             return
         # If the window is on *some* other screen and has a saved position,
-        # leave it there — the user intentionally placed it.
+        # leave it there; the user intentionally placed it.
         if self._settings.value("window_pos") is not None:
             on_any = any(s.geometry().intersects(frame) for s in app.screens())
             if on_any and frame.width() >= 300 and frame.height() >= 200:
@@ -635,7 +635,7 @@ class MainWindow(QMainWindow):
 
     def _restore_settings(self, startup_path: str | None) -> None:
         """Restore window size/position, mode, and last inventory on launch."""
-        # Drop the old binary geometry blob — it encodes absolute positions that
+        # Drop the old binary geometry blob; it encodes absolute positions that
         # can place the window off-screen after a display config change.
         self._settings.remove("geometry")
         self._has_saved_size = self._settings.value("window_size") is not None
@@ -644,7 +644,7 @@ class MainWindow(QMainWindow):
         screen = self._target_screen()
         if size is not None:
             # Saved size may come from a larger display than the current
-            # one — clamp before applying so the window can't overflow.
+            # one; clamp before applying so the window can't overflow.
             self.resize(
                 *self._clamp_size_to_screen(size.width(), size.height())
             )
@@ -774,7 +774,7 @@ class MainWindow(QMainWindow):
         self._load_path(path)
 
     def _toggle_theme(self) -> None:
-        """Switch between light and dark theme — live, no restart.
+        """Switch between light and dark theme; live, no restart.
 
         Mutates the active palette in place and rebuilds the central
         widget + toolbar so all freshly-constructed widgets pick up
@@ -791,11 +791,11 @@ class MainWindow(QMainWindow):
         """Live theme swap with widget pools and engine preserved.
 
         Re-styles every pooled SegmentButton and FeatureRow in place
-        (cheap — uses the per-class theme cache so the f-string work
+        (cheap; uses the per-class theme cache so the f-string work
         runs once per theme), tears down only the chrome (toolbar +
         central widget), rebuilds it, then re-parents the pool widgets
         to the new chrome via the populate helpers. The engine and
-        cached inventory data are NOT reloaded — there's no JSON
+        cached inventory data are NOT reloaded; there's no JSON
         re-parse and no validation pass on a theme change.
 
         Window position and size are explicitly preserved so the
@@ -810,7 +810,7 @@ class MainWindow(QMainWindow):
         saved_mode = self._mode
         saved_pos = self.pos()
         saved_size = self.size()
-        # Capture splitter sizes too — _build_ui re-creates the
+        # Capture splitter sizes too; _build_ui re-creates the
         # splitters with default sizes (500/400 + 700/220), so without
         # this the panes visibly jump on every theme toggle.
         saved_hsplit = (
@@ -827,7 +827,7 @@ class MainWindow(QMainWindow):
         for row in self._feat_row_pool.values():
             row.apply_theme()
             row.setParent(None)
-        # Cards live as children of the old central widget — drop our
+        # Cards live as children of the old central widget; drop our
         # references so _init_feature_pool rebuilds them (it sees the
         # populated row pool and skips re-creating rows).
         self._feat_cards.clear()
@@ -838,25 +838,25 @@ class MainWindow(QMainWindow):
         # are unaffected.
         # Each of these would otherwise leak a chrome subtree per
         # toggle (~90 widgets), and Qt would have to walk all of them
-        # on every subsequent re-style — that was the linear slowdown.
+        # on every subsequent re-style; that was the linear slowdown.
         self.setCentralWidget(QWidget())
         for tb in self.findChildren(QToolBar):
             self.removeToolBar(tb)
             tb.deleteLater()
         # setStatusBar transfers ownership of the new bar but does NOT
-        # delete the old one — same accumulator pattern.
+        # delete the old one; same accumulator pattern.
         old_status = self.statusBar()
         self.setStatusBar(QStatusBar())
         if old_status is not None:
             old_status.deleteLater()
         # Drain DeferredDelete events now so the orphan trees are gone
-        # before we rebuild — otherwise findChildren and the style
+        # before we rebuild; otherwise findChildren and the style
         # engine still see them on the next pass.
         app = QApplication.instance()
         if isinstance(app, QApplication):
             app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
         self.setStyleSheet(f"background-color: {C['bg']};")
-        # Rebuild chrome — every f-string stylesheet inside _build_ui
+        # Rebuild chrome; every f-string stylesheet inside _build_ui
         # re-evaluates against the active palette.
         self._build_ui()
         # _set_mode would bail (mode unchanged); apply chrome directly
@@ -867,7 +867,7 @@ class MainWindow(QMainWindow):
             self._apply_mode_phases()
         # Re-place pooled widgets in the new chrome WITHOUT going
         # through _load_path (no engine reload, no JSON parse, no
-        # validator). The cached engine data is unchanged — we only
+        # validator). The cached engine data is unchanged; we only
         # need the populate helpers to wire pool widgets to the
         # freshly-built panels.
         if self.engine is not None:
@@ -911,7 +911,7 @@ class MainWindow(QMainWindow):
         from gui.builder import InventoryBuilder
 
         # Default behavior: if the main window has an inventory loaded,
-        # the builder opens editing it directly — no intermediate dialog.
+        # the builder opens editing it directly; no intermediate dialog.
         # The builder's own "New" toolbar button is the way to start
         # from scratch instead.
         if self._current_path:
@@ -921,7 +921,7 @@ class MainWindow(QMainWindow):
             self._builder.setWindowFlag(Qt.WindowType.Window)
             self._builder.show()
             return
-        # Nothing loaded — show the setup dialog so the user can pick
+        # Nothing loaded; show the setup dialog so the user can pick
         # what to build. Cancel here means no builder window appears.
         builder = InventoryBuilder(parent=self)
         builder.setWindowFlag(Qt.WindowType.Window)
@@ -1012,7 +1012,7 @@ class MainWindow(QMainWindow):
                 self._populate_features()
                 self._apply_mode_to_new_widgets()
                 self.analysis.clear()
-            # During startup the window hasn't been shown yet — fit the
+            # During startup the window hasn't been shown yet; fit the
             # layout synchronously so the first paint is already at the
             # correct size and splitter positions. For runtime inventory
             # swaps the window is visible, so defer one event-loop tick
@@ -1042,8 +1042,8 @@ class MainWindow(QMainWindow):
 
     def _on_directory_changed(self, directory: str):
         """Called when a watched directory changes (file created/renamed/deleted)."""
-        # When the project's config/ directory changes — e.g. the Builder
-        # just saved a new inventory — rescan and refresh the dropdown
+        # When the project's config/ directory changes; e.g. the Builder
+        # just saved a new inventory; rescan and refresh the dropdown
         # so the new file shows up without restarting the app.
         if os.path.normpath(directory) == self._get_config_dir():
             self._populate_config_dropdown()
@@ -1083,7 +1083,7 @@ class MainWindow(QMainWindow):
                 seg: _normalize_feats(self.engine.segments[seg])
                 for seg in self.engine.segments
             }
-        groups = dict(self._cached_groups)  # shallow copy — pop mutates
+        groups = dict(self._cached_groups)  # shallow copy; pop mutates
         norm_feats = self._cached_norm_feats
         vowel_segs = groups.pop("Vowels", [])
         consonant_buttons: dict = {}
@@ -1116,7 +1116,7 @@ class MainWindow(QMainWindow):
     def _get_or_create_seg_button(self, seg: str):
         """Return a SegmentButton for ``seg``, creating it on first use.
 
-        Reused buttons are reset to the default visual state — the
+        Reused buttons are reset to the default visual state; the
         previous inventory may have left them checked or styled.
         """
         btn = self._seg_button_pool.get(seg)
@@ -1175,7 +1175,7 @@ class MainWindow(QMainWindow):
         """
         # Create any rows missing from the pool. After a theme swap the
         # pool is preserved (so we don't re-init 30+ widgets) but the
-        # cards — which are children of the central widget — were torn
+        # cards; which are children of the central widget; were torn
         # down. The cards-only rebuild path below handles that.
         for feat in FEATURE_ORDER:
             if feat not in self._feat_row_pool:
@@ -1190,7 +1190,7 @@ class MainWindow(QMainWindow):
         for title, feats_list in FEATURE_GROUPS:
             card = self._build_feature_group(title, feats_list)
             if card is not None:
-                # Hide and float — _redistribute_feature_cards will pick up
+                # Hide and float; _redistribute_feature_cards will pick up
                 # and place these into columns once we know the active set.
                 card.hide()
                 self._feat_cards.append((card, list(feats_list)))
@@ -1236,7 +1236,7 @@ class MainWindow(QMainWindow):
     def _refresh_other_card(self, unknown_active: list[str]) -> None:
         """Build/destroy the dynamic 'Other' card for inventory-specific
         features that don't appear in FEATURE_ORDER. Doesn't place it in a
-        column — that happens in ``_redistribute_feature_cards`` so the
+        column; that happens in ``_redistribute_feature_cards`` so the
         Other card participates in the same balancing pass as the standard
         cards.
         """
@@ -1297,7 +1297,7 @@ class MainWindow(QMainWindow):
         per-card chrome (headers, padding) is reflected in the balance.
         """
         self._take_cards_out_of_columns()
-        # Build (title → (card, cost)) for every card we know about.
+        # Build (title -> (card, cost)) for every card we know about.
         # cost = active row count + per-card overhead.
         info: dict[str, tuple[QFrame, int]] = {}
         for card, feats in self._feat_cards:
@@ -1392,7 +1392,7 @@ class MainWindow(QMainWindow):
         # -- Measure segment panel content width --
         # The seg panel sticks to exactly its natural content width so
         # the feature pane (with stretch=1 in the splitter) can hug the
-        # vowels' right edge. No extra padding here — leftover room
+        # vowels' right edge. No extra padding here; leftover room
         # belongs to the feature pane, not to dead space after the
         # vowels.
         seg_content = self._seg_scroll.widget()
@@ -1425,14 +1425,14 @@ class MainWindow(QMainWindow):
             need_w = seg_need_w + feat_need_w + 1
             need_h = total_need_h
             # Always resize to the new inventory's needs. Each inventory
-            # gets its own layout — sizes from a previously-loaded
+            # gets its own layout; sizes from a previously-loaded
             # inventory don't bleed into this one. Clamped to the
             # screen's available area and the absolute window minimum.
             cur_w = self.width()
             cur_h = self.height()
             # Capture decoration deltas and the offsets between widget
             # pos() and frameGeometry() before resizing. We work in
-            # widget coordinates throughout — pos() and move() agree on
+            # widget coordinates throughout; pos() and move() agree on
             # those, while frameGeometry() is offset by the title bar.
             # Mixing the two would consistently drift the window down
             # (or up) by the title bar height each load, which is
@@ -1445,7 +1445,7 @@ class MainWindow(QMainWindow):
                 deco_h_reported = max(0, old_frame.height() - cur_h)
                 # If the WM reports zero decoration (Wayland CSD, some
                 # freshly-shown windows), assume a typical title bar
-                # exists. If it reports any positive value, trust it —
+                # exists. If it reports any positive value, trust it ;
                 # don't apply a floor that would shift the user's
                 # chosen window position unnecessarily.
                 if deco_h_reported == 0:
@@ -1482,7 +1482,7 @@ class MainWindow(QMainWindow):
             elif size_changed:
                 # Subsequent loads: keep the window's center anchored.
                 # Translate the widget top-left by half the size delta
-                # using truncation toward zero — Python's // is floor,
+                # using truncation toward zero; Python's // is floor,
                 # which biases negative-delta swaps in one direction
                 # and accumulates drift over repeated loads. ``int(x/2)``
                 # truncates symmetrically so a round-trip cancels.
@@ -1503,7 +1503,7 @@ class MainWindow(QMainWindow):
         # -- Apply to horizontal splitter --
         # Seg panel: exactly its content width (no padding).
         # Feat panel: at least its content width, but takes whatever is
-        # left of the available width — that's what makes it hug the
+        # left of the available width; that's what makes it hug the
         # vowels and absorb extra room as the user enlarges the window.
         available = self._hsplit.width() or (seg_need_w + feat_need_w)
         feat_w = max(feat_need_w, available - seg_need_w)
@@ -1525,7 +1525,7 @@ class MainWindow(QMainWindow):
         """Ensure the window's frame fits the screen's available area.
 
         Uses the actual reported decoration if any, but floors to a
-        typical title-bar size — many WMs report no decoration even
+        typical title-bar size; many WMs report no decoration even
         when one is rendered, and we still want the window pulled
         back if it's poking out.
         """
@@ -1592,7 +1592,7 @@ class MainWindow(QMainWindow):
         """After populating new widgets, apply the current mode's interactivity.
 
         Skips expensive panel-level stylesheet changes since those haven't
-        changed — only the newly created feature rows and buttons need updating.
+        changed; only the newly created feature rows and buttons need updating.
         """
         is_s2f = self._mode == Mode.SEG_TO_FEAT
         self.seg_grid_widget.set_headers_active(is_s2f)
@@ -1618,7 +1618,7 @@ class MainWindow(QMainWindow):
             self.setUpdatesEnabled(True)
 
     def _set_mode(self, mode: Mode | str) -> None:
-        """Switch top-level UI mode. Pure orchestration — every step is in a
+        """Switch top-level UI mode. Pure orchestration; every step is in a
         named helper below so individual phases stay easy to inspect and diff.
 
         Accepts bare strings (from QSettings / tests) and coerces to Mode.
@@ -1690,7 +1690,7 @@ class MainWindow(QMainWindow):
         Only the outer ``seg_panel`` and ``feat_panel`` frames get their
         bg/border restyled. The inner viewports, scroll content, and
         grid widgets are set ``background: transparent`` at construction
-        — they show through to the parent frame's bg, so we don't need
+       ; they show through to the parent frame's bg, so we don't need
         to restyle them per toggle. Skipping that cascade saved ~80 ms
         per mode toggle (each setStyleSheet on a parent invalidates
         every descendant's style; the seg side has 140+).
@@ -1739,7 +1739,7 @@ class MainWindow(QMainWindow):
 
         In seg-mode, segments listed in _saved_seg_state become "selected";
         all others become "default". In feat-mode this clears the visual
-        selection — segment matched/unmatched styling is then applied by
+        selection; segment matched/unmatched styling is then applied by
         _refresh_analysis_for_mode below.
         """
         is_s2f = self._mode == Mode.SEG_TO_FEAT
@@ -1759,7 +1759,7 @@ class MainWindow(QMainWindow):
         """Single-pass: set each feature row to its final state directly.
 
         This is the sole authority on per-row visual state during a mode
-        switch — no later phase touches feature rows. Rows in restore_feats
+        switch; no later phase touches feature rows. Rows in restore_feats
         get restore_value (button checked + tinted); the rest get reset.
         """
         is_s2f = self._mode == Mode.SEG_TO_FEAT
@@ -1793,14 +1793,14 @@ class MainWindow(QMainWindow):
             self.status.showMessage("Click a segment to inspect its features.")
         else:
             self.status.showMessage(
-                "Toggle feature values (+/−) to find matching segments."
+                "Toggle feature values (+/\u2212) to find matching segments."
             )
 
     def eventFilter(self, a0, a1):
         """Activate a panel on any mouse press anywhere inside it.
 
         This is installed on the QApplication, so EVERY Qt event in the
-        process flows through here — paint, layout, mouse-move, focus, etc.
+        process flows through here; paint, layout, mouse-move, focus, etc.
         Volume can hit 10k+ events per mode-toggle. Check the cheap event
         type first and bail; only do the isinstance + parent walk on the
         rare MouseButtonPress.
@@ -1859,7 +1859,7 @@ class MainWindow(QMainWindow):
                 self._update_feat_to_seg()
 
     # ------------------------------------------------------------------
-    # Seg → Feat logic
+    # Seg -> Feat logic
     # ------------------------------------------------------------------
     def _update_seg_to_feat(self) -> None:
         segs = self._selected_segments
@@ -1915,7 +1915,7 @@ class MainWindow(QMainWindow):
             )
 
     # ------------------------------------------------------------------
-    # Feat → Seg logic
+    # Feat -> Seg logic
     # ------------------------------------------------------------------
     def _update_feat_to_seg(self) -> None:
         if not self.engine:
@@ -1949,7 +1949,7 @@ class MainWindow(QMainWindow):
         """Clear seg-side state and any seg-derived feat display.
 
         Always resets _selected_segments and the seg buttons. Also resets the
-        feat rows IFF we are in seg mode — there they mirror the segment
+        feat rows IFF we are in seg mode; there they mirror the segment
         selection via set_display(), so without this they'd show stale data.
         In feat mode the feat rows hold the user's actual query, so they
         are left alone (clearing segments shouldn't wipe the feat query).
@@ -1971,7 +1971,7 @@ class MainWindow(QMainWindow):
         """Clear feat-side state and any feat-derived seg display.
 
         Always resets _selected_features and the feat rows. Also resets the
-        seg buttons IFF we are in feat mode — there they mirror the feature
+        seg buttons IFF we are in feat mode; there they mirror the feature
         query via matched/unmatched. In seg mode the seg buttons hold the
         user's actual selection, so they are left alone (clearing features
         shouldn't wipe the segment selection).

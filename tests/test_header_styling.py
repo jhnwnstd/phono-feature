@@ -5,7 +5,7 @@ redundant restyling. But ``set_groups`` (segment grid) and ``set_vowels``
 (vowel chart) recreate the underlying header QLabel widgets on every
 inventory load, initialised with their muted (``text_dim``) color. If
 the cached active-state matched the requested active-state across that
-reload, the dedup early-returned and the fresh labels stayed muted —
+reload, the dedup early-returned and the fresh labels stayed muted ;
 visible to the user as a panel that "stayed in muted form until clicked."
 
 These tests load an inventory in seg-mode (where seg-grid headers should

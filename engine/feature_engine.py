@@ -39,7 +39,7 @@ class FeatureEngine:
         self.spec_segs: dict[str, frozenset[str]] = {}
         self.plus_segs: dict[str, frozenset[str]] = {}
         self.minus_segs: dict[str, frozenset[str]] = {}
-        # seg → tuple of feature values in ``self.features`` order. Used
+        # seg -> tuple of feature values in ``self.features`` order. Used
         # for fast pairwise comparisons (avg distance, neighbor search).
         self._seg_value_tuples: dict[str, tuple[str, ...]] = {}
         self._contrastive_features: list[str] | None = None
@@ -147,9 +147,10 @@ class FeatureEngine:
 
     def _rebuild_caches(self) -> None:
         """Rebuild derived per-feature segment-set caches and segment value
-        tuples. Called after ``load_inventory``. Anything that mutates
-        ``self.segments`` outside ``load_inventory`` must call this too —
-        the engine has no setter API today, so reload is the only path.
+        tuples. Called from ``load_inventory_data`` (and its file-IO
+        wrapper ``load_inventory``). The engine has no public setter
+        API; reloading is the only path to mutate ``self.segments``,
+        and both entry points call this on completion.
         """
         spec: dict[str, set[str]] = {f: set() for f in self.features}
         plus: dict[str, set[str]] = {f: set() for f in self.features}
@@ -216,7 +217,7 @@ class FeatureEngine:
         """
         Find all segments matching a feature specification.
 
-        Partial specifications are supported — only the specified features
+        Partial specifications are supported; only the specified features
         need to match.
 
         Args:
@@ -256,11 +257,11 @@ class FeatureEngine:
         not just one greedy solution.
 
         Algorithm (hitting-set backtracking):
-          1. Collect candidate features — those with a constant value across S.
+          1. Collect candidate features; those with a constant value across S.
           2. For each segment outside S, record which candidates can exclude it
              (i.e., have a different value than S's value for that feature).
           3. Backtrack over subsets of candidates, pruning aggressively:
-             - depth ≥ best size found so far
+             - depth >= best size found so far
              - remaining candidates cannot cover an uncovered outside segment
           4. Return all subsets that hit every outside segment.
 
@@ -290,10 +291,10 @@ class FeatureEngine:
             if len(specified) == 1:
                 candidates[feature] = specified.pop()
             elif len(specified) == 0 and "0" in values:
-                pass  # all underspecified — not a useful candidate
+                pass  # all underspecified; not a useful candidate
         # Segments outside the target set that must be excluded
         outside = [s for s in self.segments if s not in segment_set]
-        # Universal class — S is the entire inventory
+        # Universal class; S is the entire inventory
         if not outside:
             return [{}]
         # For each outside segment, which candidates exclude it?
@@ -310,7 +311,7 @@ class FeatureEngine:
             if not exc:
                 return (
                     []
-                )  # This segment cannot be excluded → not a natural class
+                )  # This segment cannot be excluded -> not a natural class
             excluders.append(exc)
         # Sort candidates by descending coverage (hits the most outside segments first)
         candidate_list = sorted(
@@ -326,7 +327,7 @@ class FeatureEngine:
             idx: int, chosen: list[str], chosen_set: set[str]
         ) -> None:
             nonlocal best_size
-            # All outside segments are excluded — record solution
+            # All outside segments are excluded; record solution
             if all(exc & chosen_set for exc in excluders):
                 k = len(chosen)
                 if best_size is None or k < best_size:
@@ -350,7 +351,7 @@ class FeatureEngine:
             f = candidate_list[idx]
             # Branch A: include f
             backtrack(idx + 1, [*chosen, f], chosen_set | {f})
-            # Branch B: exclude f — only if remaining can still cover everything
+            # Branch B: exclude f; only if remaining can still cover everything
             remaining_without = set(candidate_list[idx + 1 :])
             if all(
                 (exc & chosen_set) or (exc & remaining_without)

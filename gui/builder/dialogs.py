@@ -31,7 +31,7 @@ class _AutofillTextEdit(QTextEdit):
     Tab through ``event()`` to ``focusNextPrevChild`` BEFORE
     ``keyPressEvent`` is called. The autofill branch returns ``True``
     to consume the event so the very same press doesn't also advance
-    focus to the next widget — that's separately reachable with a
+    focus to the next widget; that's separately reachable with a
     second Tab press once the box has content.
 
     Also overrides ``paintEvent`` to render multi-line placeholder text:
@@ -83,7 +83,7 @@ class _AutofillTextEdit(QTextEdit):
         margin = int(self.document().documentMargin())
         x = margin
         y = margin + metrics.ascent()
-        # Skip the first line — Qt already painted it.
+        # Skip the first line; Qt already painted it.
         y += metrics.lineSpacing()
         for line in lines[1:]:
             painter.drawText(x, y, line)
@@ -95,14 +95,14 @@ class SegmentTextEdit(_AutofillTextEdit):
     """Tab on empty fills a quick-start segment list (IPA voiceless and
     voiced stops)."""
 
-    DEFAULT_FILL = "p b t d k ɡ"  # noqa: RUF001 — IPA voiced velar (script g)
+    DEFAULT_FILL = "p b t d k \u0261"  # noqa: RUF001; IPA voiced velar (script g)
 
 
 class FeatureTextEdit(_AutofillTextEdit):
     """Tab on empty seeds just the two major-class features (Syllabic and
     Consonantal) so the user has a starting point to build a custom set
     from. The full Default (33) preset is available directly from the
-    dropdown — no point dumping it here too."""
+    dropdown; no point dumping it here too."""
 
     DEFAULT_FILL = "Syllabic\nConsonantal"
 

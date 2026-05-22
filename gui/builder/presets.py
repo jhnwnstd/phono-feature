@@ -23,15 +23,15 @@ FEATURE_PRESETS = {
         "Trill",
         "Tap",
         "Click",
-        # Place — LABIAL node + dependents
+        # Place; LABIAL node + dependents
         "LABIAL",
         "Round",
         "Labiodental",
-        # Place — CORONAL node + dependents
+        # Place; CORONAL node + dependents
         "CORONAL",
         "Anterior",
         "Distributed",
-        # Place — DORSAL node + dependents
+        # Place; DORSAL node + dependents
         "DORSAL",
         "High",
         "Low",

@@ -225,7 +225,7 @@ def render_multi_segment(
                 f"<br>{suggested_tags}</p>"
             )
         else:
-            # No suggestion available — match the terse "Yes" branch
+            # No suggestion available; match the terse "Yes" branch
             # rather than restating what "not a natural class" means.
             nc_html = (
                 "<p><b>Natural class:</b>"

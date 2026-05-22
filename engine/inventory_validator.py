@@ -1,51 +1,21 @@
-"""Validate phonological inventory JSON files before loading.
+"""Validate phonological inventory data before loading.
 
 Returns a list of human-readable error/warning strings so the GUI can
-display them without crashing.  A file that passes with no errors is
-safe to hand to FeatureEngine.load_inventory().
+display them without crashing. A dict that passes with no errors is
+safe to hand to ``FeatureEngine.load_inventory_data``.
 """
 
 from __future__ import annotations
 
-import json
-import os
-
 _VALID_VALUES = {"+", "-", "0"}
-
-
-def validate_inventory(filepath: str) -> tuple[list[str], list[str]]:
-    """Validate an inventory JSON file (file I/O + structure).
-
-    Returns:
-        (errors, warnings) — both are lists of human-readable strings.
-        If errors is non-empty the file should not be loaded.
-    """
-    errors: list[str] = []
-    warnings: list[str] = []
-    if not os.path.isfile(filepath):
-        errors.append(f"File not found: {filepath}")
-        return errors, warnings
-    try:
-        with open(filepath, encoding="utf-8") as f:
-            raw = f.read()
-    except OSError as e:
-        errors.append(f"Cannot read file: {e}")
-        return errors, warnings
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as e:
-        errors.append(
-            f"Invalid JSON: {e.msg} (line {e.lineno}, col {e.colno})"
-        )
-        return errors, warnings
-    return validate_inventory_data(data)
 
 
 def validate_inventory_data(data) -> tuple[list[str], list[str]]:
     """Validate an already-parsed inventory dict.
 
-    Use this when the caller has already opened and parsed the file —
-    avoids reading the file twice when the engine will parse it again.
+    The caller is responsible for opening + parsing the JSON; sharing
+    that parse with the engine (which also parses) avoids reading the
+    file twice on every inventory load.
     """
     errors: list[str] = []
     warnings: list[str] = []
@@ -58,7 +28,7 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
     if "segments" not in data:
         errors.append("Missing required key 'segments'")
     if "features" not in data and "segments" in data:
-        # Features list is optional — can be inferred from segments
+        # Features list is optional; can be inferred from segments
         warnings.append(
             "No 'features' key; feature list will be inferred from segments"
         )

@@ -25,7 +25,7 @@ def qapp(tmp_path_factory: pytest.TempPathFactory) -> QApplication:
     """Single QApplication for the whole session.
 
     Qt only allows one QApplication per process, so this is session-scoped.
-    QSettings is redirected to a temp dir for the same reason — and because
+    QSettings is redirected to a temp dir for the same reason; and because
     we don't want tests reading/writing the developer's real config.
     """
     settings_dir = tmp_path_factory.mktemp("qsettings")
@@ -45,7 +45,7 @@ def window(qapp: QApplication):
 
     Each test gets its own window so state can't leak between tests. We force
     seg_to_feat after load because _load_path may otherwise honor a persisted
-    mode from settings — tests want a deterministic starting state.
+    mode from settings; tests want a deterministic starting state.
     """
     # Late import: keeps QT_QPA_PLATFORM env var setup before the first PyQt
     # import in conftest module-load order.

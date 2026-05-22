@@ -50,7 +50,7 @@ def test_clear_segments_in_seg_mode_resets_everything(window):
     # Feat rows should no longer show seg-derived tinting (badge text reset
     # plus row stylesheet at neutral)
     for row in window._feat_rows.values():
-        assert row.badge.text() == "·"  # neutral middle-dot
+        assert row.badge.text() == "\u00b7"  # neutral middle-dot
 
 
 def test_clear_features_in_feat_mode_resets_everything(window):
@@ -75,7 +75,7 @@ def test_clear_features_in_seg_mode_preserves_segment_selection(window):
     """REGRESSION: clicking the feat-side Clear in seg mode must NOT silently
     wipe the user's segment selection. Previously this method reset every
     seg button to default, leaving _selected_segments populated but the
-    buttons all visually unselected — data and visual state diverged.
+    buttons all visually unselected; data and visual state diverged.
     """
     window._on_segment_clicked("b", True)
     window._on_segment_clicked("d", True)
@@ -92,7 +92,7 @@ def test_clear_features_in_seg_mode_preserves_segment_selection(window):
 def test_clear_segments_in_feat_mode_preserves_feature_query(window):
     """Clicking the seg-side Clear in feat mode must NOT wipe the user's
     feature query. The query lives in _selected_features and the feat row
-    visuals — both must survive."""
+    visuals; both must survive."""
     window._set_mode(Mode.FEAT_TO_SEG)
     window._feat_rows["Voice"]._on_click("+")
     window._feat_rows["Continuant"]._on_click("-")

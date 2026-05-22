@@ -27,7 +27,7 @@ def test_basic_operations() -> FeatureEngine:
     engine = FeatureEngine()
     print("\nLoading Hayes inventory...")
     engine.load_inventory("config/hayes_features.json")
-    print(f"✓ Loaded: {engine.metadata['name']}")
+    print(f"[ok] Loaded: {engine.metadata['name']}")
     print(f"  Segments: {len(engine.segments)}")
     print(f"  Features: {len(engine.features)}")
     # Get segment features
@@ -41,9 +41,9 @@ def test_basic_operations() -> FeatureEngine:
     print(f"   Found: {', '.join(voiced_stops)}")
     # Compute natural class
     print(
-        "\n3. Natural class for [b, d, ɡ]:"
-    )  # noqa: RUF001 — IPA voiced velar
-    bundle = engine.compute_natural_class(["b", "d", "ɡ"])  # noqa: RUF001
+        "\n3. Natural class for [b, d, \u0261]:"
+    )  # noqa: RUF001; IPA voiced velar
+    bundle = engine.compute_natural_class(["b", "d", "\u0261"])  # noqa: RUF001
     if bundle:
         print("   Characterizing features:")
         for feat, val in sorted(bundle.items()):
@@ -55,7 +55,7 @@ def test_basic_operations() -> FeatureEngine:
     pairs = [("b", "d"), ("b", "p"), ("b", "m"), ("b", "v")]
     for seg1, seg2 in pairs:
         dist = engine.segment_distance(seg1, seg2)
-        print(f"   {seg1} ↔ {seg2}: {dist} features")
+        print(f"   {seg1} <-> {seg2}: {dist} features")
     # Find nearest neighbors
     print("\n5. Nearest neighbors to 'b':")
     neighbors = engine.find_nearest_segments("b", n=5)
@@ -78,7 +78,7 @@ def test_geometry_analysis(engine: FeatureEngine) -> None:
     print("(This may take a moment - running permutation tests...)")
     analyzer = GeometryAnalyzer(engine)
     analyzer.analyze()
-    print("\n✓ Geometry analysis complete!")
+    print("\n[ok] Geometry analysis complete!")
     dependencies = analyzer.get_dependency_summary()
     print(f"\nFound {len(dependencies)} feature dependencies:")
     print(
@@ -99,7 +99,7 @@ def test_geometry_analysis(engine: FeatureEngine) -> None:
     if high_conf:
         print(f"\n\nHigh-confidence dependencies ({len(high_conf)}):")
         for dep in high_conf:
-            print(f"  • [{dep['child']}] depends on [{dep['parent']}]")
+            print(f"  - [{dep['child']}] depends on [{dep['parent']}]")
             print(
                 f"    Coverage: {dep['coverage']:.2%}, p-value: {dep['p_value']:.4f}"
             )
@@ -111,9 +111,9 @@ def test_natural_class_examples() -> None:
     engine = FeatureEngine()
     engine.load_inventory("config/hayes_features.json")
     examples: list[tuple[list[str], str]] = [
-        (["b", "d", "ɡ"], "Voiced stops"),  # noqa: RUF001 — IPA voiced velar
+        (["b", "d", "\u0261"], "Voiced stops"),  # noqa: RUF001; IPA voiced velar
         (["p", "t", "k"], "Voiceless stops"),
-        (["m", "n", "ŋ"], "Nasals"),
+        (["m", "n", "\u014b"], "Nasals"),
         (["f", "v", "s", "z"], "Fricatives (subset)"),
         (["l"], "Lateral"),
     ]
@@ -130,11 +130,11 @@ def test_natural_class_examples() -> None:
         # Verify the bundle picks out exactly these segments
         found = engine.find_segments(bundle)
         if set(found) == set(segments):
-            print("  ✓ Exact match")
+            print("  [ok] Exact match")
         else:
             extra = set(found) - set(segments)
             if extra:
-                print(f"  ⚠ Also includes: {', '.join(extra)}")
+                print(f"  [warn] Also includes: {', '.join(extra)}")
 
 
 def main() -> int:
@@ -150,11 +150,11 @@ def main() -> int:
         # Test geometry analysis
         test_geometry_analysis(engine)
         print_section("All Tests Complete")
-        print("\n✓ Engine is working correctly!")
+        print("\n[ok] Engine is working correctly!")
         print("\nTo launch the GUI, run:")
         print("  python main.py")
     except Exception as e:
-        print(f"\n✗ Error during testing: {e}")
+        print(f"\n[err] Error during testing: {e}")
         import traceback
 
         traceback.print_exc()

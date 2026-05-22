@@ -45,12 +45,12 @@ class SegmentButton(QPushButton):
 
     Stylesheet dicts are cached per theme at class level, so a live
     theme swap on a 140-segment inventory only does the f-string work
-    once per theme — subsequent swaps back are a cache hit. Each
+    once per theme; subsequent swaps back are a cache hit. Each
     instance keeps a reference to the dict for its current theme;
     ``apply_theme`` swaps the reference on toggle.
     """
 
-    # theme name → styles dict. Survives across instances.
+    # theme name -> styles dict. Survives across instances.
     _styles_cache: dict[str, dict] = {}
 
     @classmethod
@@ -167,12 +167,12 @@ class FeatureRow(QWidget):
     """
 
     value_changed = pyqtSignal(str, str)
-    # theme name → styles dict (BADGE_*, ROW_*, NAME_*).
+    # theme name -> styles dict (BADGE_*, ROW_*, NAME_*).
     _styles_cache: dict[str, dict[str, str]] = {}
-    # Instance-level style strings. Declared here so mypy can see them
-    # — actually populated by ``_build_styles`` via setattr from the
-    # cached theme dict. Default values are placeholders; overwritten
-    # before first use.
+    # Instance-level style strings. Declared here so mypy can see them.
+    # Actually populated by ``_build_styles`` via setattr from the cached
+    # theme dict. Default values are placeholders; overwritten before
+    # first use.
     _BADGE_CONTRASTIVE: str = ""
     _NAME_CONTRASTIVE: str = ""
     _ROW_CONTRASTIVE: str = ""
@@ -502,7 +502,7 @@ class SegmentGridWidget(QWidget):
     def set_groups(self, groups: dict, buttons: dict):
         """Replace all content.
 
-        Old buttons are detached (NOT destroyed) — they belong to the
+        Old buttons are detached (NOT destroyed); they belong to the
         caller's segment-button pool and may reappear in the next
         inventory. Headers are recreated each swap so destroying them
         is fine.
@@ -542,8 +542,8 @@ class SegmentGridWidget(QWidget):
             )
 
     def sizeHint(self) -> QSize:  # type: ignore[override]
-        """Report the *natural* width — width needed to fit the widest
-        manner-class group in a single row — instead of the layout's
+        """Report the *natural* width; width needed to fit the widest
+        manner-class group in a single row; instead of the layout's
         currently-rendered width.
 
         Why: QGridLayout.sizeHint reflects the columns currently in use

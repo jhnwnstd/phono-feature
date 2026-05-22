@@ -4,7 +4,7 @@ State-machine tests for the seg/feat mode toggle in MainWindow.
 These tests exercise the public-ish click handlers (_on_segment_clicked,
 _on_feature_changed) and _set_mode, then assert on the resulting widget +
 selection state. The goal is to catch regressions in the mode-switch
-projection logic — the area the user has flagged as delicate — without
+projection logic; the area the user has flagged as delicate; without
 needing to launch the GUI.
 
 Naming convention: each test name describes the property it guards. If a
@@ -59,17 +59,17 @@ def test_deselect_segment_removes_from_selection(window):
 
 
 # ---------------------------------------------------------------------------
-# Seg → Feat toggle: projection + visual state invariant
+# Seg -> Feat toggle: projection + visual state invariant
 # ---------------------------------------------------------------------------
 def test_toggle_seg_to_feat_projects_common_features(window):
     """When toggling with segments selected, common_features get projected
     into _selected_features."""
     window._on_segment_clicked("b", True)
     window._on_segment_clicked("d", True)
-    window._on_segment_clicked("ɡ", True)  # voiced velar (script g)
+    window._on_segment_clicked("\u0261", True)  # voiced velar (script g)
     window._set_mode("feat_to_seg")
     assert window._mode == "feat_to_seg"
-    # Voiced stops share many features in Hayes — projection must be non-empty
+    # Voiced stops share many features in Hayes; projection must be non-empty
     assert len(window._selected_features) > 0
     # Every projected value is +/-, never "0"
     assert all(v in ("+", "-") for v in window._selected_features.values())
@@ -115,7 +115,7 @@ def test_toggle_seg_to_feat_with_no_segments_yields_empty_state(window):
 def test_click_feature_in_feat_mode_tints_row(window):
     """Clicking a +/- button updates row visual state AND _selected_features.
 
-    Drives FeatureRow._on_click — the same path the GUI uses. That handler
+    Drives FeatureRow._on_click; the same path the GUI uses. That handler
     sets _current_value, applies the row tint, and emits value_changed,
     which is wired to MainWindow._on_feature_changed.
     """
@@ -145,22 +145,22 @@ def test_click_feature_to_deselect_clears_row(window):
 # The projection overwrites whatever was previously saved for that other
 # mode. Net effect:
 #
-#   seg → feat → seg : final segs = find_segments(common_features(orig_segs))
-#                      → original ⊆ final, may include over-match extras.
-#   feat → seg → feat: final feats = common_features(find_segments(orig_feats))
-#                      → may be a SUPERSET of original (extra shared feats).
+#   seg -> feat -> seg : final segs = find_segments(common_features(orig_segs))
+#                      -> original subset of final, may include over-match extras.
+#   feat -> seg -> feat: final feats = common_features(find_segments(orig_feats))
+#                      -> may be a SUPERSET of original (extra shared feats).
 #
 # These tests lock in the current behavior so accidental changes get caught.
 # They also document the asymmetry for whoever reads them next.
 # ---------------------------------------------------------------------------
 def test_seg_feat_seg_roundtrip_includes_original_segments(window):
-    """seg→feat→seg always re-selects the original segments (subset guarantee).
+    """seg->feat->seg always re-selects the original segments (subset guarantee).
 
     Extras may appear when the original set is not a clean natural class,
     because the second transition re-derives segments from the projected
     feature query via find_segments. See the doc-block above.
     """
-    original = ["b", "d", "ɡ"]
+    original = ["b", "d", "\u0261"]
     for s in original:
         window._on_segment_clicked(s, True)
     window._set_mode("feat_to_seg")
@@ -169,7 +169,7 @@ def test_seg_feat_seg_roundtrip_includes_original_segments(window):
 
 
 def test_feat_seg_feat_roundtrip_includes_original_features(window):
-    """feat→seg→feat always re-selects the original features (subset guarantee).
+    """feat->seg->feat always re-selects the original features (subset guarantee).
 
     Extras may appear because the second transition re-derives features
     from the segs that matched the original query, picking up any
@@ -207,7 +207,7 @@ def test_selected_features_keys_match_row_state_in_feat_mode(window):
     state is lying about the selection.
     """
     window._on_segment_clicked("b", True)
-    window._on_segment_clicked("ʃ", True)
+    window._on_segment_clicked("\u0283", True)
     window._on_segment_clicked("i", True)
     window._set_mode("feat_to_seg")
     assert set(window._selected_features) == _selected_feat_rows(window)

@@ -12,7 +12,7 @@ SETTINGS_APP = "SegFeatureEngine"
 
 
 # Tag palettes for inline HTML chips. Function rather than module-level
-# dict so it evaluates against the *current* palette — important for
+# dict so it evaluates against the *current* palette; important for
 # live theme swaps where a constant would have been baked at import
 # time using whatever theme was active then. Caller: gui/analysis.py.
 def tag_palettes() -> dict:
@@ -161,9 +161,9 @@ def sort_spec(spec: dict) -> dict:
     return {feature: spec[feature] for feature in sorted_keys}
 
 
-# Thin, unobtrusive overlay scrollbar track. Function rather than
-# module-level constant so it evaluates against the *current* palette
-# — module-level f-strings get baked at import time, which made the
+# Thin, unobtrusive overlay scrollbar track. Function rather than a
+# module-level constant so it evaluates against the *current* palette.
+# Module-level f-strings get baked at import time, which made the
 # scrollbars stick on the original theme even after a live swap.
 def scrollbar_style() -> str:
     return f"""

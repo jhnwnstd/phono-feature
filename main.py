@@ -66,8 +66,8 @@ def _is_wayland_disconnect_message(message: str | None) -> bool:
     Some compositors (XWayland bridges, nested sessions, sandboxed/Linux-on-X
     desktops, flaky VNC) accept the initial wl_display connection but tear it
     down once the client starts painting. The Qt wayland plugin logs this
-    message and then terminates the process directly — `app.exec()` does not
-    return — so we can only catch it from outside, in a supervisor parent.
+    message and then terminates the process directly; `app.exec()` does not
+    return; so we can only catch it from outside, in a supervisor parent.
     The wording has been stable across Qt 5 and 6.
     """
     if message is None:
@@ -142,7 +142,7 @@ def _run_gui(argv: list[str]) -> int:
 
 def main() -> int:
     argv = sys.argv[:]
-    # If we are the supervised child, just run — no recursive supervision.
+    # If we are the supervised child, just run; no recursive supervision.
     if os.environ.get(_FALLBACK_GUARD_ENV):
         return _run_gui(argv)
     user_set_platform = bool(
@@ -155,7 +155,7 @@ def main() -> int:
     have_x11_fallback = bool(os.environ.get("DISPLAY"))
     needs_supervision = auto_platform == "wayland" and have_x11_fallback
     if not needs_supervision:
-        # Either no fallback exists, or wayland wasn't picked — run direct.
+        # Either no fallback exists, or wayland wasn't picked; run direct.
         if auto_platform is not None:
             argv[1:1] = ["-platform", auto_platform]
         return _run_gui(argv)

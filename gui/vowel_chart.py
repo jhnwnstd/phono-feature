@@ -274,7 +274,7 @@ class VowelChartWidget(QWidget):
     def clear(self) -> None:
         """Remove all buttons, labels, and collision containers.
 
-        Buttons are detached (NOT destroyed) — they belong to the
+        Buttons are detached (NOT destroyed); they belong to the
         caller's segment-button pool. Detaching them BEFORE deleting
         their parent cell containers is essential, otherwise destroying
         the container would take the children with it.

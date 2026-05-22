@@ -1,6 +1,6 @@
 """
 gui/builder/window.py
-InventoryBuilder — main grid editor window for creating/editing inventories.
+InventoryBuilder; main grid editor window for creating/editing inventories.
 """
 
 import json
@@ -49,7 +49,7 @@ class _CellEdit:
     new: str
 
 
-# Cap on the undo history depth. ~200 batches × at-most all cells per
+# Cap on the undo history depth. ~200 batches x at-most all cells per
 # batch easily covers a normal editing session without unbounded growth.
 _MAX_UNDO_DEPTH = 200
 
@@ -58,7 +58,7 @@ def _suggest_filename(inv_name: str) -> str:
     """Slugify an inventory name into a config-style filename.
 
     Mirrors the convention used by the bundled inventories
-    (``hayes_features.json``, ``english_features.json``, …): lowercase,
+    (``hayes_features.json``, ``english_features.json``, ...): lowercase,
     runs of non-alphanumeric replaced with ``_``, suffix ``_features``
     appended unless the name already ends with it.
     """
@@ -84,7 +84,7 @@ class InventoryBuilder(QMainWindow):
         self._dirty: bool = False
         self._selected_remove_col: int | None = None
         self._selected_remove_row: int | None = None
-        # Undo / redo: each entry is a batch — the list of cell edits
+        # Undo / redo: each entry is a batch; the list of cell edits
         # produced by one user action (cycle, set, bulk apply). Cleared
         # whenever the table is rebuilt (new inventory or load).
         self._undo_stack: list[list[_CellEdit]] = []
@@ -348,7 +348,7 @@ class InventoryBuilder(QMainWindow):
     def _rebuild_table(self) -> None:
         """Build the table: rows=features, cols=segments."""
         # Edits captured against the previous table refer to row/col
-        # indices that may no longer match the new table — drop them.
+        # indices that may no longer match the new table; drop them.
         self._undo_stack.clear()
         self._redo_stack.clear()
         self._table.clear()
@@ -381,7 +381,7 @@ class InventoryBuilder(QMainWindow):
     # most keyboards (and it's the most natural press for "underspecified").
     _VALUE_KEYS = {
         Qt.Key.Key_1: "+",
-        Qt.Key.Key_2: "−",  # Unicode minus, matches cycle_value()
+        Qt.Key.Key_2: "\u2212",  # Unicode minus, matches cycle_value()
         Qt.Key.Key_3: "0",
         Qt.Key.Key_0: "0",
     }
@@ -409,7 +409,7 @@ class InventoryBuilder(QMainWindow):
             ):
                 modifiers = event.modifiers()
                 # Shift / Ctrl clicks are the user EXTENDING the
-                # selection — let Qt handle those normally.
+                # selection; let Qt handle those normally.
                 bare_click = not (
                     modifiers
                     & (
@@ -447,7 +447,7 @@ class InventoryBuilder(QMainWindow):
                 if key == Qt.Key.Key_Y:
                     self._redo()
                     return True
-            # Cell mutation keys — only when a cell is actually selected.
+            # Cell mutation keys; only when a cell is actually selected.
             if row >= 0 and col >= 0:
                 if key == Qt.Key.Key_Space:
                     cur_item = self._table.item(row, col)
@@ -458,7 +458,7 @@ class InventoryBuilder(QMainWindow):
                 if value is not None:
                     self._apply_value_to_selection(value, row, col)
                     return True
-            # Movement keys — move the selection. If nothing is selected
+            # Movement keys; move the selection. If nothing is selected
             # yet, anchor at (0, 0) so the first arrow press lands somewhere.
             move = self._MOVE_KEYS.get(key)
             if move is not None and self._table.rowCount() > 0:
@@ -501,7 +501,7 @@ class InventoryBuilder(QMainWindow):
     ) -> None:
         """Set ``value`` on every selected cell. Falls back to the cell
         at ``(fallback_row, fallback_col)`` when there is no multi-cell
-        selection — typical case where the user has just navigated to a
+        selection; typical case where the user has just navigated to a
         single cell with the keyboard."""
         items = self._table.selectedItems()
         if len(items) > 1:
@@ -530,7 +530,7 @@ class InventoryBuilder(QMainWindow):
         if not edits:
             return
         self._undo_stack.append(edits)
-        # A new edit invalidates any redo history — same convention as
+        # A new edit invalidates any redo history; same convention as
         # most editors (you can't redo into a divergent timeline).
         self._redo_stack.clear()
         if len(self._undo_stack) > _MAX_UNDO_DEPTH:
@@ -578,7 +578,7 @@ class InventoryBuilder(QMainWindow):
     # Header selection / remove button state
     # ------------------------------------------------------------------
     def _on_col_header_clicked(self, col: int):
-        """A segment column header was clicked — enable segment removal only."""
+        """A segment column header was clicked; enable segment removal only."""
         self._selected_remove_col = col
         self._selected_remove_row = None
         self._table.selectColumn(col)
@@ -588,7 +588,7 @@ class InventoryBuilder(QMainWindow):
         self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
 
     def _on_row_header_clicked(self, row: int):
-        """A feature row header was clicked — enable feature removal only."""
+        """A feature row header was clicked; enable feature removal only."""
         self._selected_remove_row = row
         self._selected_remove_col = None
         self._table.selectRow(row)
@@ -609,7 +609,7 @@ class InventoryBuilder(QMainWindow):
         item = self._table.item(row, col)
         if item is None:
             return
-        # Cycle: 0 → + → − → 0. cycle_value always produces a different
+        # Cycle: 0 -> + -> minus -> 0. cycle_value always produces a different
         # value (or resets to "0" from a bad state), so this always
         # records an edit.
         new_val = cycle_value(item.text())
@@ -784,7 +784,7 @@ class InventoryBuilder(QMainWindow):
             self,
             "Delete inventory",
             f"Permanently delete '{fname}' from disk?\n\n"
-            "The current grid stays open — Save As to keep a copy.",
+            "The current grid stays open; Save As to keep a copy.",
             buttons=(
                 QMessageBox.StandardButton.Yes
                 | QMessageBox.StandardButton.Cancel
@@ -805,7 +805,7 @@ class InventoryBuilder(QMainWindow):
         self._dirty = True
         self._update_title()
         self._status.showMessage(
-            f"Deleted '{fname}'. The grid is unsaved — Save As to keep it."
+            f"Deleted '{fname}'. The grid is unsaved; Save As to keep it."
         )
 
     def _open_file(self) -> None:
