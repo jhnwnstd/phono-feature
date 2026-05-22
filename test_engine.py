@@ -111,7 +111,10 @@ def test_natural_class_examples() -> None:
     engine = FeatureEngine()
     engine.load_inventory("config/hayes_features.json")
     examples: list[tuple[list[str], str]] = [
-        (["b", "d", "\u0261"], "Voiced stops"),  # noqa: RUF001; IPA voiced velar
+        (
+            ["b", "d", "\u0261"],
+            "Voiced stops",
+        ),  # noqa: RUF001; IPA voiced velar
         (["p", "t", "k"], "Voiceless stops"),
         (["m", "n", "\u014b"], "Nasals"),
         (["f", "v", "s", "z"], "Fricatives (subset)"),

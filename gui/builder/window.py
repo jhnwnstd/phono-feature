@@ -134,22 +134,7 @@ class InventoryBuilder(QMainWindow):
                 color: {C["accent"]};
             }}
         """
-        new_btn = QPushButton("New")
-        new_btn.setFont(QFont("Noto Sans", 10))
-        new_btn.setFixedHeight(32)
-        new_btn.setStyleSheet(btn_style)
-        new_btn.clicked.connect(self.show_setup_dialog)
-        toolbar.addWidget(new_btn)
-        open_btn = QPushButton("Open\u2026")
-        open_btn.setFont(QFont("Noto Sans", 10))
-        open_btn.setFixedHeight(32)
-        open_btn.setStyleSheet(btn_style)
-        open_btn.clicked.connect(self._open_file)
-        toolbar.addWidget(open_btn)
-        save_btn = QPushButton("Save")
-        save_btn.setFont(QFont("Noto Sans", 10))
-        save_btn.setFixedHeight(32)
-        save_btn.setStyleSheet(f"""
+        save_style = f"""
             QPushButton {{
                 background: {C["accent"]};
                 color: white;
@@ -161,51 +146,38 @@ class InventoryBuilder(QMainWindow):
             QPushButton:hover {{
                 background: #1D4ED8;
             }}
-            """)
-        save_btn.clicked.connect(self._save)
-        toolbar.addWidget(save_btn)
-        saveas_btn = QPushButton("Save As\u2026")
-        saveas_btn.setFont(QFont("Noto Sans", 10))
-        saveas_btn.setFixedHeight(32)
-        saveas_btn.setStyleSheet(btn_style)
-        saveas_btn.clicked.connect(self._save_as)
-        toolbar.addWidget(saveas_btn)
+            """
+
+        def make_btn(label: str, slot, *, style: str = btn_style):
+            """Add a fixed-height 32px Noto Sans 10 button to the toolbar.
+            Centralizes the create+font+style+connect+addWidget pattern
+            that was duplicated nine times before this refactor.
+            """
+            btn = QPushButton(label)
+            btn.setFont(QFont("Noto Sans", 10))
+            btn.setFixedHeight(32)
+            btn.setStyleSheet(style)
+            btn.clicked.connect(slot)
+            toolbar.addWidget(btn)
+            return btn
+
+        make_btn("New", self.show_setup_dialog)
+        make_btn("Open\u2026", self._open_file)
+        make_btn("Save", self._save, style=save_style)
+        make_btn("Save As\u2026", self._save_as)
         # Delete: only meaningful when an existing file is loaded; the
         # enable state is updated from ``_update_title`` whenever
         # ``_current_path`` changes.
-        self._delete_btn = QPushButton("Delete\u2026")
-        self._delete_btn.setFont(QFont("Noto Sans", 10))
-        self._delete_btn.setFixedHeight(32)
+        self._delete_btn = make_btn("Delete\u2026", self._delete_inventory)
         self._delete_btn.setEnabled(False)
-        self._delete_btn.clicked.connect(self._delete_inventory)
-        toolbar.addWidget(self._delete_btn)
-        # Add segment button
         toolbar.addSeparator()
-        add_seg_btn = QPushButton("+ Segment")
-        add_seg_btn.setFont(QFont("Noto Sans", 10))
-        add_seg_btn.setFixedHeight(32)
-        add_seg_btn.setStyleSheet(btn_style)
-        add_seg_btn.clicked.connect(self._add_segment)
-        toolbar.addWidget(add_seg_btn)
-        add_feat_btn = QPushButton("+ Feature")
-        add_feat_btn.setFont(QFont("Noto Sans", 10))
-        add_feat_btn.setFixedHeight(32)
-        add_feat_btn.setStyleSheet(btn_style)
-        add_feat_btn.clicked.connect(self._add_feature)
-        toolbar.addWidget(add_feat_btn)
+        make_btn("+ Segment", self._add_segment)
+        make_btn("+ Feature", self._add_feature)
         toolbar.addSeparator()
-        self._rm_seg_btn = QPushButton("\u2212 Segment")
-        self._rm_seg_btn.setFont(QFont("Noto Sans", 10))
-        self._rm_seg_btn.setFixedHeight(32)
+        self._rm_seg_btn = make_btn("\u2212 Segment", self._remove_segment)
         self._rm_seg_btn.setEnabled(False)
-        self._rm_seg_btn.clicked.connect(self._remove_segment)
-        toolbar.addWidget(self._rm_seg_btn)
-        self._rm_feat_btn = QPushButton("\u2212 Feature")
-        self._rm_feat_btn.setFont(QFont("Noto Sans", 10))
-        self._rm_feat_btn.setFixedHeight(32)
+        self._rm_feat_btn = make_btn("\u2212 Feature", self._remove_feature)
         self._rm_feat_btn.setEnabled(False)
-        self._rm_feat_btn.clicked.connect(self._remove_feature)
-        toolbar.addWidget(self._rm_feat_btn)
         self._btn_style_enabled = btn_style
         self._btn_style_disabled = f"""
             QPushButton {{

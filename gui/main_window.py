@@ -878,30 +878,24 @@ class MainWindow(QMainWindow):
                 self._populate_features()
                 self._apply_mode_to_new_widgets()
                 self.analysis.clear()
-        # Restore splitter positions BEFORE the deferred resize so the
-        # final layout pass sees the right pane proportions instead of
-        # _build_ui's defaults (500/400 + 700/220).
-        if saved_hsplit and len(saved_hsplit) == self._hsplit.count():
-            self._hsplit.setSizes(saved_hsplit)
-        if saved_vsplit and len(saved_vsplit) == self._vsplit.count():
-            self._vsplit.setSizes(saved_vsplit)
-        # Restore exact window pos/size. ``_fit_to_content`` runs as
-        # part of the populate path and may try to recenter, so do
-        # this synchronously AND defer one more pass to win against
-        # any singleShot-deferred resize.
-        self.resize(saved_size)
-        self.move(saved_pos)
+        # Restore window pos/size + splitter positions. The synchronous
+        # pass sets the right pane proportions before ``_fit_to_content``
+        # runs as part of the populate path; the deferred pass wins
+        # against any ``singleShot`` resize that _fit_to_content has
+        # queued (it would otherwise recenter the window on a
+        # freshly-measured frame).
+
+        def restore_geometry() -> None:
+            self.resize(saved_size)
+            self.move(saved_pos)
+            if saved_hsplit and len(saved_hsplit) == self._hsplit.count():
+                self._hsplit.setSizes(saved_hsplit)
+            if saved_vsplit and len(saved_vsplit) == self._vsplit.count():
+                self._vsplit.setSizes(saved_vsplit)
+
+        restore_geometry()
         if self.isVisible():
-
-            def _restore_geom():
-                self.resize(saved_size)
-                self.move(saved_pos)
-                if saved_hsplit and len(saved_hsplit) == self._hsplit.count():
-                    self._hsplit.setSizes(saved_hsplit)
-                if saved_vsplit and len(saved_vsplit) == self._vsplit.count():
-                    self._vsplit.setSizes(saved_vsplit)
-
-            QTimer.singleShot(0, _restore_geom)
+            QTimer.singleShot(0, restore_geometry)
 
     def _open_builder(self) -> None:
         if self._builder is not None and self._builder.isVisible():
@@ -1685,15 +1679,15 @@ class MainWindow(QMainWindow):
 
     def _apply_panel_chrome(self) -> None:
         """Update panel backgrounds, borders, titles, and clear-button
-        styling to reflect which side of the UI is active.
+         styling to reflect which side of the UI is active.
 
-        Only the outer ``seg_panel`` and ``feat_panel`` frames get their
-        bg/border restyled. The inner viewports, scroll content, and
-        grid widgets are set ``background: transparent`` at construction
-       ; they show through to the parent frame's bg, so we don't need
-        to restyle them per toggle. Skipping that cascade saved ~80 ms
-        per mode toggle (each setStyleSheet on a parent invalidates
-        every descendant's style; the seg side has 140+).
+         Only the outer ``seg_panel`` and ``feat_panel`` frames get their
+         bg/border restyled. The inner viewports, scroll content, and
+         grid widgets are set ``background: transparent`` at construction
+        ; they show through to the parent frame's bg, so we don't need
+         to restyle them per toggle. Skipping that cascade saved ~80 ms
+         per mode toggle (each setStyleSheet on a parent invalidates
+         every descendant's style; the seg side has 140+).
         """
         is_s2f = self._mode == Mode.SEG_TO_FEAT
         seg_bg = C["panel"] if is_s2f else C["bg"]

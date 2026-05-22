@@ -95,7 +95,9 @@ class SegmentTextEdit(_AutofillTextEdit):
     """Tab on empty fills a quick-start segment list (IPA voiceless and
     voiced stops)."""
 
-    DEFAULT_FILL = "p b t d k \u0261"  # noqa: RUF001; IPA voiced velar (script g)
+    DEFAULT_FILL = (
+        "p b t d k \u0261"  # noqa: RUF001; IPA voiced velar (script g)
+    )
 
 
 class FeatureTextEdit(_AutofillTextEdit):
