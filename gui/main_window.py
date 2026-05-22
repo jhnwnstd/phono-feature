@@ -247,8 +247,30 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # UI construction
     # ------------------------------------------------------------------
+    # ---- toolbar button style (also used by _build_toolbar's factory) ----
+    @staticmethod
+    def _nav_btn_style() -> str:
+        return f"""
+            QPushButton {{
+                background: {C["bg"]};
+                color: {C["text"]};
+                border: 1.5px solid {C["border"]};
+                border-radius: 6px;
+                padding: 0 12px;
+            }}
+            QPushButton:hover {{
+                background: {C["accent_light"]};
+                border: 1.5px solid {C["accent"]};
+                color: {C["accent"]};
+            }}
+        """
+
     def _build_ui(self) -> None:
-        # ---- toolbar ----
+        self._build_toolbar()
+        self._build_central()
+        self._build_status_bar()
+
+    def _build_toolbar(self) -> None:
         toolbar = QToolBar()
         toolbar.setMovable(False)
         toolbar.setStyleSheet(f"""
@@ -292,45 +314,20 @@ class MainWindow(QMainWindow):
         self._populate_config_dropdown()
         self.config_combo.activated.connect(self._on_config_selected)
         toolbar.addWidget(self.config_combo)
-        # Browse button
-        browse_btn = QPushButton("Browse\u2026")
-        browse_btn.setFont(QFont("Noto Sans", 10))
-        browse_btn.setFixedHeight(32)
-        browse_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C["bg"]};
-                color: {C["text"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-                padding: 0 12px;
-            }}
-            QPushButton:hover {{
-                background: {C["accent_light"]};
-                border: 1.5px solid {C["accent"]};
-                color: {C["accent"]};
-            }}
-        """)
-        browse_btn.clicked.connect(self._browse_config)
-        toolbar.addWidget(browse_btn)
-        builder_btn = QPushButton("Builder")
-        builder_btn.setFont(QFont("Noto Sans", 10))
-        builder_btn.setFixedHeight(32)
-        builder_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C["bg"]};
-                color: {C["text"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-                padding: 0 12px;
-            }}
-            QPushButton:hover {{
-                background: {C["accent_light"]};
-                border: 1.5px solid {C["accent"]};
-                color: {C["accent"]};
-            }}
-        """)
-        builder_btn.clicked.connect(self._open_builder)
-        toolbar.addWidget(builder_btn)
+        # Nav buttons share the same height/font/style.
+        nav_style = self._nav_btn_style()
+
+        def add_nav(label: str, slot) -> QPushButton:
+            btn = QPushButton(label)
+            btn.setFont(QFont("Noto Sans", 10))
+            btn.setFixedHeight(32)
+            btn.setStyleSheet(nav_style)
+            btn.clicked.connect(slot)
+            toolbar.addWidget(btn)
+            return btn
+
+        add_nav("Browse\u2026", self._browse_config)
+        add_nav("Builder", self._open_builder)
         # Push the theme toggle to the far right of the toolbar so it
         # doesn't crowd the primary actions but stays visible.
         spacer = QWidget()
@@ -363,7 +360,8 @@ class MainWindow(QMainWindow):
         """)
         self._theme_btn.clicked.connect(self._toggle_theme)
         toolbar.addWidget(self._theme_btn)
-        # ---- central widget ----
+
+    def _build_central(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
@@ -389,7 +387,7 @@ class MainWindow(QMainWindow):
         # leave dead space after the vowels inside the segment panel.
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        # ---- bottom: analysis ----
+        # Analysis panel below the split panes.
         self.analysis = AnalysisPanel()
         self._vsplit = QSplitter(Qt.Orientation.Vertical)
         self._vsplit.setHandleWidth(4)
@@ -403,7 +401,8 @@ class MainWindow(QMainWindow):
         self._vsplit.setStretchFactor(1, 0)
         self._min_analysis_h = 220
         root.addWidget(self._vsplit)
-        # ---- status bar ----
+
+    def _build_status_bar(self) -> None:
         self.status = _BrandedStatusBar()
         self.status.setStyleSheet(
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
@@ -926,11 +925,27 @@ class MainWindow(QMainWindow):
         self._builder.show()
 
     def _load_path(self, path: str):
-        """Core loading logic shared by dropdown, browse, and auto-reload."""
+        """Core loading logic shared by dropdown, browse, and auto-reload.
+
+        Each phase has its own helper so failures short-circuit cleanly
+        and the responsibilities (parse / validate / install / register /
+        populate) are obvious.
+        """
         path = os.path.abspath(path)
-        # Read + parse the JSON exactly once. The validator and the engine
-        # both work off the parsed dict so the file is opened once per
-        # swap instead of three times.
+        data = self._parse_and_validate(path)
+        if data is None:
+            return
+        if not self._install_engine(path, data):
+            return
+        self._register_loaded_path(path)
+        self._populate_after_load()
+
+    def _parse_and_validate(self, path: str) -> dict | None:
+        """Read the JSON file and run the shared-with-engine validator.
+
+        Returns the parsed dict on success, or None after surfacing a
+        human-readable error in the status bar / analysis panel.
+        """
         try:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -938,22 +953,23 @@ class MainWindow(QMainWindow):
             self.status.showMessage(
                 f"Cannot load {os.path.basename(path)}: file not found"
             )
-            return
+            return None
         except OSError as e:
             self.status.showMessage(
                 f"Cannot load {os.path.basename(path)}: {e}"
             )
-            return
+            return None
         except json.JSONDecodeError as e:
             self.status.showMessage(
                 f"Cannot load {os.path.basename(path)}: invalid JSON "
                 f"({e.msg} on line {e.lineno})"
             )
-            return
+            return None
         errors, warnings = validate_inventory_data(data)
         if errors:
-            msg = f"Cannot load {os.path.basename(path)}: {errors[0]}"
-            self.status.showMessage(msg)
+            self.status.showMessage(
+                f"Cannot load {os.path.basename(path)}: {errors[0]}"
+            )
             self.analysis.set_html(
                 f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"
                 + "".join(f"<p>{e}</p>" for e in errors)
@@ -964,59 +980,79 @@ class MainWindow(QMainWindow):
                     else ""
                 )
             )
-            return
-        if warnings:
-            for w in warnings:
-                self.status.showMessage(f"Warning: {w}")
+            return None
+        for w in warnings:
+            self.status.showMessage(f"Warning: {w}")
+        return data
+
+    def _install_engine(self, path: str, data: dict) -> bool:
+        """Build a fresh FeatureEngine for ``data`` and adopt it.
+
+        Returns True on success. ``load_inventory_data`` raises
+        ``ValueError`` for shapes the data-validator didn't catch
+        (defensive) and the engine itself can raise ``KeyError`` on
+        missing keys; surface both as a status message instead of
+        crashing the GUI.
+        """
         try:
             engine = FeatureEngine()
             engine.load_inventory_data(data)
-            self.engine = engine
-            self._cached_groups = None
-            self._cached_norm_feats = None
-            name = engine.metadata.get("name", os.path.basename(path))
+        except (ValueError, KeyError) as e:
             self.status.showMessage(
-                f"{name}: "
-                f"{len(engine.segments)} segments, "
-                f"{len(engine.features)} features."
+                f"Cannot load {os.path.basename(path)}: {e}"
             )
-            # Update file-system watcher (file + containing directory)
-            if self._current_path and self._current_path != path:
-                self._watcher.removePath(self._current_path)
-                old_dir = os.path.dirname(os.path.abspath(self._current_path))
-                new_dir = os.path.dirname(os.path.abspath(path))
-                if old_dir != new_dir:
-                    self._watcher.removePath(old_dir)
-            self._current_path = path
-            if path not in self._watcher.files():
-                self._watcher.addPath(path)
-            parent_dir = os.path.dirname(os.path.abspath(path))
-            if parent_dir not in self._watcher.directories():
-                self._watcher.addPath(parent_dir)
-            # Sync the dropdown to reflect the loaded inventory
-            idx = self.config_combo.findData(path)
-            if idx >= 0:
-                self.config_combo.setCurrentIndex(idx)
-            # Persist for next launch
-            self._settings.setValue("last_inventory", path)
-            self._saved_seg_state = []
-            self._saved_feat_state = {}
-            with self._batched_updates():
-                self._populate_segments()
-                self._populate_features()
-                self._apply_mode_to_new_widgets()
-                self.analysis.clear()
-            # During startup the window hasn't been shown yet; fit the
-            # layout synchronously so the first paint is already at the
-            # correct size and splitter positions. For runtime inventory
-            # swaps the window is visible, so defer one event-loop tick
-            # to let pending paints drain before we resize again.
-            if self.isVisible():
-                QTimer.singleShot(0, self._rebalance_vsplit)
-            else:
-                self._rebalance_vsplit()
-        except Exception as e:
-            self.status.showMessage(f"Error: {e}")
+            return False
+        self.engine = engine
+        self._cached_groups = None
+        self._cached_norm_feats = None
+        name = engine.metadata.get("name", os.path.basename(path))
+        self.status.showMessage(
+            f"{name}: "
+            f"{len(engine.segments)} segments, "
+            f"{len(engine.features)} features."
+        )
+        return True
+
+    def _register_loaded_path(self, path: str) -> None:
+        """Wire watcher + dropdown + settings for a freshly-loaded path."""
+        # Update file-system watcher (file + containing directory).
+        if self._current_path and self._current_path != path:
+            self._watcher.removePath(self._current_path)
+            old_dir = os.path.dirname(os.path.abspath(self._current_path))
+            new_dir = os.path.dirname(os.path.abspath(path))
+            if old_dir != new_dir:
+                self._watcher.removePath(old_dir)
+        self._current_path = path
+        if path not in self._watcher.files():
+            self._watcher.addPath(path)
+        parent_dir = os.path.dirname(os.path.abspath(path))
+        if parent_dir not in self._watcher.directories():
+            self._watcher.addPath(parent_dir)
+        # Sync the dropdown to reflect the loaded inventory.
+        idx = self.config_combo.findData(path)
+        if idx >= 0:
+            self.config_combo.setCurrentIndex(idx)
+        # Persist for next launch.
+        self._settings.setValue("last_inventory", path)
+
+    def _populate_after_load(self) -> None:
+        """Rebuild segment + feature widgets for the freshly-loaded engine.
+
+        Startup runs ``_rebalance_vsplit`` synchronously so the first
+        paint is already at the right size. Runtime swaps defer one
+        event-loop tick so pending paints drain before we resize again.
+        """
+        self._saved_seg_state = []
+        self._saved_feat_state = {}
+        with self._batched_updates():
+            self._populate_segments()
+            self._populate_features()
+            self._apply_mode_to_new_widgets()
+            self.analysis.clear()
+        if self.isVisible():
+            QTimer.singleShot(0, self._rebalance_vsplit)
+        else:
+            self._rebalance_vsplit()
 
     # ------------------------------------------------------------------
     # File-system watcher: auto-reload on disk change

@@ -386,7 +386,7 @@ class FeatureRow(QWidget):
         # the displayed state didn't change. Skip the 3 setStyleSheet +
         # 1 setText calls below if nothing's different.
         state = (value, shared, contrastive)
-        if getattr(self, "_last_display_state", None) == state:
+        if self._last_display_state == state:
             return
         self._last_display_state = state
         self._reset_for_panel = None  # row no longer in "reset" state

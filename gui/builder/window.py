@@ -109,6 +109,11 @@ class InventoryBuilder(QMainWindow):
     # UI construction
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
+        self._build_toolbar()
+        self._build_central()
+        self._build_status_bar()
+
+    def _build_toolbar(self) -> None:
         toolbar = QToolBar()
         toolbar.setMovable(False)
         toolbar.setStyleSheet(f"""
@@ -147,11 +152,21 @@ class InventoryBuilder(QMainWindow):
                 background: #1D4ED8;
             }}
             """
+        self._btn_style_enabled = btn_style
+        self._btn_style_disabled = f"""
+            QPushButton {{
+                background: {C["bg"]};
+                color: {C["text_dim"]};
+                border: 1.5px solid {C["border"]};
+                border-radius: 6px;
+                padding: 0 12px;
+            }}
+        """
 
         def make_btn(label: str, slot, *, style: str = btn_style):
-            """Add a fixed-height 32px Noto Sans 10 button to the toolbar.
-            Centralizes the create+font+style+connect+addWidget pattern
-            that was duplicated nine times before this refactor.
+            """Add a fixed-height 32 px Noto Sans 10 button to the toolbar.
+            Centralizes the create + font + style + connect + addWidget
+            pattern that was duplicated nine times before this refactor.
             """
             btn = QPushButton(label)
             btn.setFont(QFont("Noto Sans", 10))
@@ -170,49 +185,46 @@ class InventoryBuilder(QMainWindow):
         # ``_current_path`` changes.
         self._delete_btn = make_btn("Delete\u2026", self._delete_inventory)
         self._delete_btn.setEnabled(False)
+        self._delete_btn.setStyleSheet(self._btn_style_disabled)
         toolbar.addSeparator()
         make_btn("+ Segment", self._add_segment)
         make_btn("+ Feature", self._add_feature)
         toolbar.addSeparator()
         self._rm_seg_btn = make_btn("\u2212 Segment", self._remove_segment)
         self._rm_seg_btn.setEnabled(False)
+        self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
         self._rm_feat_btn = make_btn("\u2212 Feature", self._remove_feature)
         self._rm_feat_btn.setEnabled(False)
-        self._btn_style_enabled = btn_style
-        self._btn_style_disabled = f"""
-            QPushButton {{
-                background: {C["bg"]};
-                color: {C["text_dim"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-                padding: 0 12px;
-            }}
-        """
-        self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
         self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
-        self._delete_btn.setStyleSheet(self._btn_style_disabled)
-        # Central table
+
+    def _build_central(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        # Metadata strip: editable inventory name + current-file indicator.
-        # Sitting above the grid so it's clear what you'll be saving and
-        # where, before any cell edit. Editing the name marks the inventory
-        # dirty; Save / Save As pick up the new name on write.
-        meta_strip = QWidget()
-        meta_strip.setStyleSheet(
+        layout.addWidget(self._build_meta_strip())
+        layout.addWidget(self._build_table())
+
+    def _build_meta_strip(self) -> QWidget:
+        """Editable inventory-name field + current-file indicator.
+
+        Sits above the grid so it's clear what you'll be saving and
+        where, before any cell edit. Editing the name marks the
+        inventory dirty; Save / Save As pick up the new name on write.
+        """
+        strip = QWidget()
+        strip.setStyleSheet(
             f"background: {C['bg']};"
             f" border-bottom: 1px solid {C['border']};"
         )
-        meta_lay = QHBoxLayout(meta_strip)
-        meta_lay.setContentsMargins(12, 6, 12, 6)
-        meta_lay.setSpacing(8)
+        lay = QHBoxLayout(strip)
+        lay.setContentsMargins(12, 6, 12, 6)
+        lay.setSpacing(8)
         name_label = QLabel("Name:")
         name_label.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
         name_label.setStyleSheet(f"color: {C['text_dim']};")
-        meta_lay.addWidget(name_label)
+        lay.addWidget(name_label)
         self._name_edit = QLineEdit(self._inv_name)
         self._name_edit.setFont(QFont("Noto Sans", 10))
         self._name_edit.setStyleSheet(f"""
@@ -228,14 +240,16 @@ class InventoryBuilder(QMainWindow):
             }}
         """)
         self._name_edit.editingFinished.connect(self._on_name_edited)
-        meta_lay.addWidget(self._name_edit, stretch=1)
+        lay.addWidget(self._name_edit, stretch=1)
         self._file_label = QLabel("(unsaved)")
         self._file_label.setFont(QFont("Noto Sans", 9))
         self._file_label.setStyleSheet(
             f"color: {C['text_dim']}; padding: 0 4px;"
         )
-        meta_lay.addWidget(self._file_label)
-        layout.addWidget(meta_strip)
+        lay.addWidget(self._file_label)
+        return strip
+
+    def _build_table(self) -> QTableWidget:
         self._table = QTableWidget()
         self._table.setFont(QFont("Noto Sans", 10))
         self._table.setStyleSheet(f"""
@@ -269,8 +283,9 @@ class InventoryBuilder(QMainWindow):
             h_header.sectionClicked.connect(self._on_col_header_clicked)
         if v_header:
             v_header.sectionClicked.connect(self._on_row_header_clicked)
-        layout.addWidget(self._table)
-        # Status bar
+        return self._table
+
+    def _build_status_bar(self) -> None:
         self._status = QStatusBar()
         self._status.setStyleSheet(
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
