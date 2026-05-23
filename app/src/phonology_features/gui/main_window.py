@@ -55,7 +55,9 @@ from PyQt6.QtCore import (
     QTimer,
 )
 from PyQt6.QtGui import (
+    QColor,
     QFont,
+    QPainter,
     QScreen,
     QStandardItemModel,
 )
@@ -71,6 +73,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSplitter,
+    QSplitterHandle,
     QStatusBar,
     QToolBar,
     QToolTip,
@@ -173,6 +176,46 @@ class _BrandedStatusBar(QStatusBar):
 
     def currentMessage(self) -> str:  # type: ignore[override]
         return self._message_label.text()
+
+
+class _ThemedHandle(QSplitterHandle):
+    """Splitter handle that paints itself from the live palette.
+
+    Avoids the prior ``QSplitter::handle`` subcontrol stylesheet,
+    which forced a polish cascade through every descendant of the
+    splitter on each theme toggle (the biggest cost in _apply_theme).
+    Reading ``C`` per paintEvent costs microseconds; the polish
+    cascade cost ~65 ms.
+    """
+
+    def __init__(self, orientation, parent):
+        super().__init__(orientation, parent)
+        self._hover = False
+
+    def enterEvent(self, event):  # type: ignore[override]
+        self._hover = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):  # type: ignore[override]
+        self._hover = False
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):  # type: ignore[override]
+        painter = QPainter(self)
+        painter.fillRect(
+            self.rect(),
+            QColor(C["accent"] if self._hover else C["border"]),
+        )
+
+
+class _ThemedSplitter(QSplitter):
+    """``QSplitter`` whose handles are ``_ThemedHandle`` (live palette,
+    no stylesheet). Cursor is still set automatically by the base."""
+
+    def createHandle(self):  # type: ignore[override]
+        return _ThemedHandle(self.orientation(), self)
 
 
 class MainWindow(QMainWindow):
@@ -334,7 +377,7 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        splitter = QSplitter(Qt.Orientation.Horizontal, central)
+        splitter = _ThemedSplitter(Qt.Orientation.Horizontal, central)
         splitter.setHandleWidth(4)
         self.seg_panel = self._build_segment_panel(splitter)
         splitter.addWidget(self.seg_panel)
@@ -353,7 +396,7 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         self.analysis = AnalysisPanel(central)
-        self._vsplit = QSplitter(Qt.Orientation.Vertical, central)
+        self._vsplit = _ThemedSplitter(Qt.Orientation.Vertical, central)
         self._vsplit.setHandleWidth(4)
         self._vsplit.addWidget(splitter)
         self._vsplit.addWidget(self.analysis)
@@ -367,7 +410,6 @@ class MainWindow(QMainWindow):
         self.analysis.setMinimumHeight(self._min_analysis_h)
         self._vsplit.setCollapsible(1, False)
         root.addWidget(self._vsplit)
-        self._restyle_splitters()
 
     def _build_status_bar(self) -> None:
         self.status = _BrandedStatusBar(self)
@@ -778,7 +820,7 @@ class MainWindow(QMainWindow):
         """
         self.setStyleSheet(f"background-color: {C['bg']};")
         self._restyle_toolbar()
-        self._restyle_splitters()
+        self._repaint_splitter_handles()
         self._restyle_panel_chrome_widgets()
         self._restyle_feature_cards()
         self.seg_grid_widget.apply_theme()
@@ -846,23 +888,19 @@ class MainWindow(QMainWindow):
             }}
         """)
 
-    def _restyle_splitters(self) -> None:
-        """Apply the ``QSplitter::handle`` subcontrol stylesheet on each
-        splitter.
+    def _repaint_splitter_handles(self) -> None:
+        """Force splitter handles to repaint with the live palette.
 
-        Setting on the handle widget directly does nothing: QSplitterHandle
-        paints itself via QStyle::drawControl(CE_Splitter), which paints
-        over any QWidget background the handle stylesheet sets. Going
-        through the ::handle subcontrol on the parent splitter is the
-        documented way to override that draw. It re-polishes descendants
-        as a side effect, but we only run this on init and theme toggle.
+        ``_ThemedHandle.paintEvent`` reads ``C`` on each paint, but
+        the handles don't automatically know the palette changed.
+        One ``update()`` per handle is essentially free (no polish
+        cascade, just queues a single paint).
         """
-        qss = (
-            f"QSplitter::handle {{ background-color: {C['border']}; }}"
-            f"QSplitter::handle:hover {{ background-color: {C['accent']}; }}"
-        )
-        self._hsplit.setStyleSheet(qss)
-        self._vsplit.setStyleSheet(qss)
+        for splitter in (self._hsplit, self._vsplit):
+            for i in range(splitter.count()):
+                handle = splitter.handle(i)
+                if handle is not None:
+                    handle.update()
 
     def _restyle_panel_chrome_widgets(self) -> None:
         """Re-style panel-child widgets with palette-dependent stylesheets:
