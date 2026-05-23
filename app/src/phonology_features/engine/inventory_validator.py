@@ -24,7 +24,7 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
             f"Top-level JSON value must be an object, not {type(data).__name__}"
         )
         return errors, warnings
-    # -- Required keys --
+    # Required keys
     if "segments" not in data:
         errors.append("Missing required key 'segments'")
     if "features" not in data and "segments" in data:
@@ -32,7 +32,7 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
         warnings.append(
             "No 'features' key; feature list will be inferred from segments"
         )
-    # -- Features list --
+    # Features list
     features = data.get("features")
     if features is not None:
         if not isinstance(features, list):
@@ -51,7 +51,7 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
                 errors.append(
                     f"'features' contains duplicates: {sorted(dupes)}"
                 )
-    # -- Segments dict --
+    # Segments dict
     segments = data.get("segments")
     if segments is not None and not isinstance(segments, dict):
         errors.append(
@@ -62,7 +62,7 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
         if isinstance(segments, dict) and not segments:
             errors.append("'segments' is empty")
         return errors, warnings
-    # -- Per-segment checks --
+    # Per-segment checks
     declared_features = set(features) if isinstance(features, list) else None
     all_seg_features: set = set()
     bad_value_count = 0
@@ -98,7 +98,7 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
         errors.append(
             f"... and {bad_value_count - max_bad_examples} more invalid values"
         )
-    # -- Cross-checks between features list and segment data --
+    # Cross-checks between features list and segment data
     if declared_features is not None:
         # Features declared but never used by any segment
         unused = declared_features - all_seg_features
@@ -113,7 +113,7 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
                 f"Features used by segments but not in 'features' list: "
                 f"{sorted(undeclared)}"
             )
-    # -- Consistency: do all segments specify the same features? --
+    # Consistency: do all segments specify the same features?
     seg_names = list(segments.keys())
     if seg_names:
         first_feats = (
@@ -145,7 +145,7 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
                 warnings.append(
                     f"... and {len(inconsistent) - 3} more inconsistent segments"
                 )
-    # -- Duplicate segments: same specified (non-0) features and values --
+    # Duplicate segments: same specified (non-0) features and values
     sig_to_segs: dict = {}
     for seg_name, seg_feats in segments.items():
         if not isinstance(seg_feats, dict):
@@ -158,7 +158,7 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
         for names in sig_to_segs.values()
         if len(names) > 1
     )
-    # -- Feature naming convention --
+    # Feature naming convention
     # Only place nodes (CORONAL, LABIAL, DORSAL) should be all-caps.
     # All other features should start with a capital letter (title case).
     _ALLCAPS_ALLOWED = {"CORONAL", "LABIAL", "DORSAL", "ATR"}
@@ -175,7 +175,7 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
                 f"Feature '{feat}' starts with a lowercase letter. "
                 f"Consider renaming to '{feat[0].upper() + feat[1:]}'"
             )
-    # -- Optional metadata checks --
+    # Optional metadata checks
     name = data.get("name")
     if name is not None and not isinstance(name, str):
         warnings.append(

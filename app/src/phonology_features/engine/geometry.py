@@ -1,34 +1,30 @@
-"""
-Feature geometry inference for phonological hierarchies.
+"""Feature geometry inference for phonological hierarchies.
 
-This module analyzes feature dependencies and implicational relationships
-to infer hierarchical feature geometry structures. Feature geometry is
-the theory that phonological features are organized in a hierarchical
-tree structure, where some features depend on or are licensed by others.
-
-The analyzer uses statistical methods to identify:
-- Parent-child dependencies (e.g., [nasal] requires [+consonantal])
-- Sibling groupings (features that co-occur at the same level)
-- Confidence levels based on coverage and permutation testing
+Identifies parent-child dependencies (e.g., [nasal] requires
+[+consonantal]) and sibling groupings (features that co-occur at the
+same level), with confidence levels based on coverage and permutation
+testing.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
 from math import comb
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from phonology_features.engine.feature_engine import FeatureEngine
 
 
 def _hypergeom_sf(k: int, n: int, big_k: int, m: int) -> float:
-    """Right-tail survival function: P(X >= k) for X ~ Hypergeometric(n, big_k, m).
+    """Right-tail survival function: P(X >= k) for
+    X ~ Hypergeometric(n, big_k, m).
 
-    n      -- population size
-    big_k  -- successes in population
-    m      -- sample size
-    k      -- threshold (return probability of meeting or exceeding it)
+    Args:
+        n: population size.
+        big_k: successes in the population.
+        m: sample size.
+        k: threshold (return probability of meeting or exceeding it).
     """
     if k <= 0:
         return 1.0
@@ -45,7 +41,7 @@ def _hypergeom_sf(k: int, n: int, big_k: int, m: int) -> float:
 class GeometryNode:
     """Represents a node in a feature geometry tree."""
 
-    def __init__(self, feature: str, parent: Optional["GeometryNode"] = None):
+    def __init__(self, feature: str, parent: GeometryNode | None = None):
         """
         Initialize a geometry node.
 
@@ -61,12 +57,12 @@ class GeometryNode:
         self.coverage = 0.0  # Proportion of segments where dependency holds
         self.p_value = 1.0  # Permutation test p-value
 
-    def _add_child(self, child: "GeometryNode") -> None:
+    def _add_child(self, child: GeometryNode) -> None:
         """Add a child node."""
         child.parent = self
         self.children.append(child)
 
-    def _add_sibling(self, sibling: "GeometryNode") -> None:
+    def _add_sibling(self, sibling: GeometryNode) -> None:
         """Add a sibling node (mutual relationship)."""
         if sibling not in self.siblings:
             self.siblings.append(sibling)

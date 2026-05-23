@@ -1,22 +1,15 @@
 #!/usr/bin/env python3
-"""
-Phonology Segment & Feature Engine
-
-A desktop application for phonological analysis of segment inventories.
-Provides tools for:
-- Loading and browsing phonological inventories
-- Inspecting segments and their distinctive features
-- Computing natural classes
-- Finding minimal distinguishing feature sets
-- Inferring hierarchical feature dependencies (geometry)
+"""Phonology Segment & Feature Engine. Desktop app for browsing
+inventories, inspecting features, computing natural classes, finding
+minimal distinguishing feature sets, and inferring feature geometry.
 
 Usage:
     python -m phonology_features [inventory.json]
     python -m phonology_features -platform xcb
     python -m phonology_features -platform wayland
 
-After ``pip install`` the ``phonology-features`` console script is also
-installed; the same arguments apply.
+After ``pip install`` the ``phonology-features`` console script is
+also installed with the same arguments.
 """
 
 from __future__ import annotations
@@ -64,14 +57,13 @@ def _auto_qt_platform() -> str | None:
 
 
 def _is_wayland_disconnect_message(message: str | None) -> bool:
-    """True if a line of Qt output reports a fatal wayland connection drop.
+    """True if a line of Qt output reports a fatal Wayland connection drop.
 
-    Some compositors (XWayland bridges, nested sessions, sandboxed/Linux-on-X
-    desktops, flaky VNC) accept the initial wl_display connection but tear it
-    down once the client starts painting. The Qt wayland plugin logs this
-    message and then terminates the process directly; `app.exec()` does not
-    return; so we can only catch it from outside, in a supervisor parent.
-    The wording has been stable across Qt 5 and 6.
+    Some compositors (XWayland bridges, nested sessions, flaky VNC) accept
+    the initial wl_display connection but tear it down once the client
+    starts painting. The Qt wayland plugin logs this message and then
+    terminates the process directly, so ``app.exec()`` never returns. We
+    can only catch the death from a supervisor parent.
     """
     if message is None:
         return False
@@ -79,10 +71,9 @@ def _is_wayland_disconnect_message(message: str | None) -> bool:
 
 
 def _spawn_gui_child(platform: str) -> tuple[int, bool]:
-    """Run the GUI as a child process pinned to `platform`.
-
-    Returns (exit_code, wayland_disconnect_seen). The child's stderr is
-    streamed to our stderr in real time so the user sees output as normal.
+    """Run the GUI as a child process pinned to ``platform``. Returns
+    (exit_code, wayland_disconnect_seen). The child's stderr is streamed
+    to ours in real time.
     """
     child_env = dict(os.environ)
     child_env[_FALLBACK_GUARD_ENV] = "1"
@@ -112,19 +103,13 @@ def _spawn_gui_child(platform: str) -> tuple[int, bool]:
 
 
 def _run_gui(argv: list[str]) -> int:
-    """Run the Qt GUI in this process. Never returns on wayland disconnect."""
+    """Run the Qt GUI in this process. Doesn't return on Wayland disconnect."""
     app = QApplication(argv)
     app.setApplicationName("Phonology Segment & Feature Engine")
     app.setOrganizationName("Phonology Research Tools")
-    # Wayland uses this to map the running process to a .desktop file.
-    # Without it, WSLg / GNOME / KDE fall back to a generic placeholder
-    # icon for our windows (the red circle with stacked arrows you may
-    # have seen flash in the taskbar during theme toggles).
+    # Wayland uses this to map the process to a .desktop file; without
+    # it, WSLg / GNOME / KDE show a generic fallback icon.
     app.setDesktopFileName("phonology-features")
-    # Explicit application icon. A solid accent-colored square is enough
-    # to displace WSLg's default fallback icon for unset Qt windows.
-    # Any transient inherited window (during the theme rebuild) picks
-    # this up too via QGuiApplication's window-icon default.
     from PyQt6.QtGui import QColor, QIcon, QPixmap
 
     icon_pix = QPixmap(64, 64)
@@ -141,43 +126,37 @@ def _run_gui(argv: list[str]) -> int:
     )
     parser.process(app)
     positional = parser.positionalArguments()
-    if positional:
-        startup_path = positional[0]
-    else:
-        startup_path = None
-    # Lazy import. Avoid loading the full GUI module tree when --help exits early.
+    startup_path = positional[0] if positional else None
+    # Lazy import: skip loading the GUI tree when --help exits early.
     from phonology_features.gui.main_window import MainWindow
 
     window = MainWindow(startup_path=startup_path)
     window.show()
-    # Flush the first paint before handing control to ``app.exec``. Without
-    # this, the WM can map the window for a frame with default content
-    # before Qt renders, producing a brief blank flash on X11/XWayland.
+    # Flush the first paint before app.exec so the WM doesn't map the
+    # window with default content for a frame before Qt renders.
     app.processEvents()
     return app.exec()
 
 
 def main() -> int:
     argv = sys.argv[:]
-    # If we are the supervised child, just run; no recursive supervision.
+    # Supervised child: just run, no recursive supervision.
     if os.environ.get(_FALLBACK_GUARD_ENV):
         return _run_gui(argv)
     user_set_platform = bool(
         os.environ.get("QT_QPA_PLATFORM")
     ) or _argv_requests_qt_platform(argv)
     if user_set_platform:
-        # User picked the platform explicitly. Run direct, no fallback dance.
         return _run_gui(argv)
     auto_platform = _auto_qt_platform()
     have_x11_fallback = bool(os.environ.get("DISPLAY"))
     needs_supervision = auto_platform == "wayland" and have_x11_fallback
     if not needs_supervision:
-        # Either no fallback exists, or wayland wasn't picked; run direct.
         if auto_platform is not None:
             argv[1:1] = ["-platform", auto_platform]
         return _run_gui(argv)
-    # Try wayland under supervision; if the compositor drops the connection,
-    # silently relaunch on xcb.
+    # Try Wayland under supervision; silently relaunch on xcb if the
+    # compositor drops the connection.
     rc, disconnect_seen = _spawn_gui_child("wayland")
     if disconnect_seen:
         rc, _ = _spawn_gui_child("xcb")

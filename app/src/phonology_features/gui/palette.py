@@ -1,16 +1,11 @@
-"""Shared colour palette for the GUI.
+"""Shared color palettes for the GUI.
 
-Two themes are defined: ``LIGHT`` and ``DARK``. ``C`` is the active
-palette - mutated in place by ``set_theme`` so existing
-``from gui.palette import C`` imports keep working after a swap.
-Per-theme style caches on SegmentButton / FeatureRow + MainWindow's
-``_apply_theme`` central-widget rebuild make swaps live (no restart).
+``C`` is the active palette, mutated in place by ``set_theme`` so
+existing imports keep observing the current theme. Per-widget
+``apply_theme`` methods do the rest of the live swap.
 
-Neutral values (bg/panel/text/border) intentionally avoid pure black
-or pure white and lean on Google's Material defaults: comfortable
-contrast (WCAG AA on body text) without the glare of #000 / #FFF.
-The accent + status colors (plus/minus, tags) are tuned per theme to
-stay readable against those neutrals.
+Neutrals avoid pure black and pure white (less glare, contrast above
+WCAG AA on body text); accent and status colors are tuned per theme.
 """
 
 LIGHT = {
@@ -48,8 +43,7 @@ LIGHT = {
 }
 
 DARK = {
-    # Neutrals (true dark gray instead of deep navy; reduces glare while
-    # keeping body-text contrast comfortably above WCAG AA)
+    # Neutrals (true dark gray, not deep navy)
     "bg": "#181818",
     "panel": "#202020",
     "border": "#3A3A3A",
@@ -82,29 +76,27 @@ DARK = {
     "tag_gray_text": "#B8B8B8",
 }
 
-# Active palette. Mutated in place by ``set_theme`` so existing imports
-# keep observing the current theme.
+# Active palette, mutated in place by set_theme.
 C: dict = dict(LIGHT)
 
 
 def set_theme(name: str) -> None:
-    """Switch the active palette to ``light`` or ``dark``."""
+    """Switch the active palette to "light" or "dark"."""
     target = DARK if name == "dark" else LIGHT
     C.clear()
     C.update(target)
 
 
 def get_theme_name() -> str:
-    """Return ``'light'`` or ``'dark'`` for the currently-active palette."""
+    """Return "light" or "dark" for the currently active palette."""
     return "dark" if C.get("bg") == DARK["bg"] else "light"
 
 
 def detect_system_theme(default: str = "light") -> str:
-    """Return ``'dark'`` if the OS is in dark mode, else ``'light'``.
-
-    Uses Qt's ``styleHints().colorScheme()`` (added in Qt 6.5). Falls
-    back to ``default`` when no QApplication exists yet, when Qt
-    reports ColorScheme.Unknown, or when the running Qt is too old.
+    """Return "dark" if the OS reports dark mode, else "light".
+    Uses Qt's ``styleHints().colorScheme()`` (Qt 6.5+); falls back to
+    ``default`` when no QApplication exists, Qt reports Unknown, or
+    the running Qt is too old.
     """
     try:
         from PyQt6.QtCore import Qt
