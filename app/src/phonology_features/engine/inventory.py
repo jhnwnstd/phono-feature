@@ -122,20 +122,28 @@ class Inventory:
         if issues:
             raise ValidationError(tuple(issues))
 
-        metadata = raw.get("metadata") or {}
-        if not isinstance(metadata, dict):
-            metadata = {}
-        name = (
-            (metadata.get("name") if isinstance(metadata, dict) else None)
-            or raw.get("name")
-            or "Untitled Inventory"
-        )
+        # Collect metadata from BOTH conventions: an explicit
+        # ``metadata`` object (Hayes shape) AND any top-level extras
+        # like ``name``/``version``/``notes`` that bundled files store
+        # at the root (general_features shape). The explicit metadata
+        # object wins on key collision so callers can override.
+        metadata: dict[str, Any] = {}
+        for key, value in raw.items():
+            if key in ("features", "segments", "metadata"):
+                continue
+            metadata[key] = value
+        explicit_metadata = raw.get("metadata")
+        if isinstance(explicit_metadata, dict):
+            metadata.update(explicit_metadata)
+        name = metadata.get("name")
         if not isinstance(name, str) or not name.strip():
             name = "Untitled Inventory"
+        # Ensure name round-trips even when the input had none.
+        metadata.setdefault("name", name)
 
         return cls(
             name=name,
-            metadata=MappingProxyType(dict(metadata)),
+            metadata=MappingProxyType(metadata),
             features=features_tuple,
             segments=segments_view,
         )

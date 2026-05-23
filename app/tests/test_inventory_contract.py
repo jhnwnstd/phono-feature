@@ -318,6 +318,43 @@ def test_inventory_write_atomic_round_trip(tmp_path: Path) -> None:
     assert loaded.feature_value("b", "Voice") == "+"
 
 
+def test_round_trip_preserves_top_level_metadata(tmp_path: Path) -> None:
+    """Some bundled inventories (e.g. ``general_features.json``) store
+    ``name``/``version``/``notes`` at the top level rather than under
+    a ``metadata`` object. ``to_json_dict`` must not silently drop
+    them on round-trip -- the parser harvests both conventions into
+    ``Inventory.metadata`` and ``to_json_dict`` writes them all back
+    under the canonical ``metadata`` key."""
+    raw = {
+        "name": "X",
+        "version": "3.0",
+        "notes": "important",
+        "features": ["Voice"],
+        "segments": {"p": {"Voice": "-"}},
+    }
+    inv = Inventory.parse(raw)
+    target = tmp_path / "round.json"
+    inv.write_atomic(str(target))
+    reloaded = Inventory.load(str(target))
+    assert reloaded.name == "X"
+    assert reloaded.metadata.get("version") == "3.0"
+    assert reloaded.metadata.get("notes") == "important"
+
+
+def test_explicit_metadata_wins_over_top_level_collision() -> None:
+    """If both shapes set ``name``, the explicit metadata object wins
+    -- it's the more deliberate, structured location."""
+    inv = Inventory.parse(
+        {
+            "name": "top-level",
+            "metadata": {"name": "metadata-name"},
+            "features": [],
+            "segments": {},
+        }
+    )
+    assert inv.name == "metadata-name"
+
+
 # ---------------------------------------------------------------------------
 # from_grid normalizes Unicode minus to ASCII before validation
 # ---------------------------------------------------------------------------
