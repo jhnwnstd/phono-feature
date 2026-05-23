@@ -297,30 +297,51 @@ class FeatureRow(QWidget):
     def apply_theme(self) -> None:
         """Re-style this row against the active palette in place.
 
-        Re-binds the cached strings, then re-applies every visible
-        component with the new palette:
-        - The +/- button styles via ``_style_btn``.
-        - The query-mode background (active if ``_current_value`` is
-          set) via ``_apply_query_style``.
-        - The display-mode badge: if ``set_display`` had been called
-          (badge currently visible in seg mode), we replay that exact
-          state against the new palette so the dot / +/- badge gets
-          recolored. Without the replay, ``_last_display_state`` would
-          be cleared and the badge would keep its old palette colors
-          until the next selection change.
-        Also invalidates ``_reset_for_panel`` (forced to None) so any
-        subsequent ``reset()`` call takes the full path.
+        A FeatureRow can be in one of three visual states:
+        1. **Query mode** -- the user clicked + or - on this row.
+           ``_current_value`` is "+"/"-". The row background is tinted.
+        2. **Display mode** -- ``set_display`` painted the badge with
+           a value derived from seg-mode analysis. ``_last_display_state``
+           holds the args.
+        3. **Neutral** -- neither of the above. Badge shows "·" with
+           the neutral palette colors. ``_last_display_state`` is None.
+
+        Each state's visible styling was baked against the OLD palette
+        and has to be re-applied. We handle the three cases explicitly
+        rather than relying on a downstream caller (like the analysis
+        update path) to refresh; that caller doesn't run when there
+        are no selections, leaving neutral-state badges stale.
+
+        Always re-styles the +/- buttons since they're visible in
+        feat mode regardless of state.
         """
         saved_display = self._last_display_state
+        saved_current_value = self._current_value
         self._build_styles()
         self._last_display_state = None
         self._reset_for_panel = None
-        self._apply_query_style(self._current_value)
         self._style_btn(self.plus_btn, "+")
         self._style_btn(self.minus_btn, "-")
-        if saved_display is not None:
+        if saved_current_value:
+            # State 1: query mode. Re-apply the +/- tint.
+            self._apply_query_style(saved_current_value)
+        elif saved_display is not None:
+            # State 2: display mode. Replay the last set_display args
+            # so the badge picks up the new palette.
             value, shared, contrastive = saved_display
             self.set_display(value, shared, contrastive=contrastive)
+        else:
+            # State 3: neutral. Directly re-apply the neutral styles
+            # since neither of the above paths runs.
+            self.badge.setStyleSheet(self._BADGE_NEUTRAL)
+            self.badge.setText("·")
+            self.name_label.setStyleSheet(
+                self._NAME_ACTIVE
+                if self._panel_active
+                else self._NAME_INACTIVE
+            )
+            self.setStyleSheet(self._ROW_NEUTRAL)
+            self._reset_for_panel = self._panel_active
 
     def _style_btn(self, btn: QPushButton, polarity: str):
         is_plus = polarity == "+"
