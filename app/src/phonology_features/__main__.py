@@ -116,6 +116,20 @@ def _run_gui(argv: list[str]) -> int:
     app = QApplication(argv)
     app.setApplicationName("Phonology Segment & Feature Engine")
     app.setOrganizationName("Phonology Research Tools")
+    # Wayland uses this to map the running process to a .desktop file.
+    # Without it, WSLg / GNOME / KDE fall back to a generic placeholder
+    # icon for our windows (the red circle with stacked arrows you may
+    # have seen flash in the taskbar during theme toggles).
+    app.setDesktopFileName("phonology-features")
+    # Explicit application icon. A solid accent-colored square is enough
+    # to displace WSLg's default fallback icon for unset Qt windows.
+    # Any transient inherited window (during the theme rebuild) picks
+    # this up too via QGuiApplication's window-icon default.
+    from PyQt6.QtGui import QColor, QIcon, QPixmap
+
+    icon_pix = QPixmap(64, 64)
+    icon_pix.fill(QColor("#2563EB"))
+    app.setWindowIcon(QIcon(icon_pix))
     app.setStyle("Fusion")
     parser = QCommandLineParser()
     parser.setApplicationDescription("Phonology Segment & Feature Engine")

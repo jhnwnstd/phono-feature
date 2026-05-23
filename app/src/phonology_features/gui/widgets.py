@@ -300,9 +300,20 @@ class FeatureRow(QWidget):
         Re-binds the cached strings, then re-applies whatever visual
         state the row was last in (display value or query value) and
         the +/- button styles.
+
+        Also invalidates BOTH dedup caches:
+        - ``_last_display_state`` so the next ``set_display`` call
+          doesn't no-op against a stale theme-A state tuple.
+        - ``_reset_for_panel`` (forced to None) so the next ``reset()``
+          call takes the FULL reset path. Without this, rows that were
+          in the neutral state pre-toggle short-circuit, leaving the
+          badge / row background with the old palette's colors. The
+          badge is visible in non-interactive (seg) mode, so the
+          stale colors are user-visible there.
         """
         self._build_styles()
         self._last_display_state = None
+        self._reset_for_panel = None
         self._apply_query_style(self._current_value)
         self._style_btn(self.plus_btn, "+")
         self._style_btn(self.minus_btn, "-")
@@ -429,9 +440,12 @@ class FeatureRow(QWidget):
         #    depends on panel_active when value is "" and the visual
         #    state is neutral. Rewrite just that. The badge/row styles
         #    are panel-active-invariant in the reset state.
-        # 3. Visual-dirty or value-non-empty: full reset.
+        # 3. Visual-dirty, value-non-empty, OR ``_reset_for_panel`` is
+        #    None (the apply_theme sentinel that says "old palette is
+        #    baked into your visible styles; rebuild them"): full reset.
         visual_dirty = self._last_display_state is not None
-        if self._current_value == "" and not visual_dirty:
+        force_full = self._reset_for_panel is None
+        if self._current_value == "" and not visual_dirty and not force_full:
             if self._reset_for_panel == self._panel_active:
                 return
             name_style = (
