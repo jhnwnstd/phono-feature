@@ -410,9 +410,9 @@ class MainWindow(QMainWindow):
         splitter.setStyleSheet(
             f"QSplitter::handle {{ background: {C['border']}; }}"
         )
-        self.seg_panel = self._build_segment_panel()
+        self.seg_panel = self._build_segment_panel(splitter)
         splitter.addWidget(self.seg_panel)
-        self.feat_panel = self._build_feature_panel()
+        self.feat_panel = self._build_feature_panel(splitter)
         splitter.addWidget(self.feat_panel)
         # Install the event filter on each panel directly instead of
         # on the QApplication. The filter only needs to fire when the
@@ -460,8 +460,12 @@ class MainWindow(QMainWindow):
             "Select an inventory from the dropdown to begin."
         )
 
-    def _build_segment_panel(self) -> QFrame:
-        container = QFrame()
+    def _build_segment_panel(self, parent=None) -> QFrame:
+        # Parent the container at construction. Even a hidden top-level
+        # widget can briefly appear in WSLg/Wayland's taskbar with a
+        # generic "missing icon" if Qt realizes its native handle before
+        # ``splitter.addWidget`` re-parents it.
+        container = QFrame(parent)
         container.setObjectName("seg_panel")
         # Both visual states baked into one stylesheet. Mode toggles flip
         # the ``active`` property and call ``style().polish()`` on the
@@ -486,7 +490,7 @@ class MainWindow(QMainWindow):
         header.addStretch()
         header.addWidget(self.clear_seg_btn)
         vlay.addLayout(header)
-        self._seg_scroll = QScrollArea()
+        self._seg_scroll = QScrollArea(container)
         self._seg_scroll.setWidgetResizable(True)
         self._seg_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._seg_scroll.setHorizontalScrollBarPolicy(
@@ -498,20 +502,20 @@ class MainWindow(QMainWindow):
         self._seg_scroll.setStyleSheet(
             "QScrollArea { background: transparent; }" + scrollbar_style()
         )
-        seg_content = QWidget()
+        seg_content = QWidget(self._seg_scroll)
         seg_content.setStyleSheet("background: transparent;")
         seg_content_layout = QHBoxLayout(seg_content)
         seg_content_layout.setContentsMargins(0, 0, 0, 0)
         seg_content_layout.setSpacing(12)
-        left_wrap = QWidget()
+        left_wrap = QWidget(seg_content)
         left_wrap.setStyleSheet("background: transparent;")
         left_lay = QVBoxLayout(left_wrap)
         left_lay.setContentsMargins(0, 0, 0, 0)
         left_lay.setSpacing(0)
-        self.seg_grid_widget = SegmentGridWidget()
+        self.seg_grid_widget = SegmentGridWidget(left_wrap)
         left_lay.addWidget(self.seg_grid_widget)
         left_lay.addStretch()
-        self.vowel_chart_widget = VowelChartWidget()
+        self.vowel_chart_widget = VowelChartWidget(seg_content)
         self.vowel_chart_widget.hide()
         self.vowel_chart_widget.setFixedWidth(
             VOWEL_LABEL_W + 6 * (BTN_W + BTN_GAP)
@@ -539,8 +543,8 @@ class MainWindow(QMainWindow):
         vlay.addWidget(self.seg_hint)
         return container
 
-    def _build_feature_panel(self) -> QFrame:
-        container = QFrame()
+    def _build_feature_panel(self, parent=None) -> QFrame:
+        container = QFrame(parent)
         container.setObjectName("feat_panel")
         container.setStyleSheet(self._panel_chrome_qss("feat_panel"))
         vlay = QVBoxLayout(container)
@@ -561,24 +565,24 @@ class MainWindow(QMainWindow):
         header.addStretch()
         header.addWidget(self.clear_feat_btn)
         vlay.addLayout(header)
-        self._feat_scroll = QScrollArea()
+        self._feat_scroll = QScrollArea(container)
         self._feat_scroll.setWidgetResizable(True)
         self._feat_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._feat_scroll.setStyleSheet(
             "QScrollArea { background: transparent; }" + scrollbar_style()
         )
-        self._feat_content = QWidget()
+        self._feat_content = QWidget(self._feat_scroll)
         self._feat_content.setStyleSheet("background: transparent;")
         feat_main_layout = QHBoxLayout(self._feat_content)
         feat_main_layout.setContentsMargins(0, 0, 0, 0)
         feat_main_layout.setSpacing(8)
-        self._feat_left_col = QWidget()
+        self._feat_left_col = QWidget(self._feat_content)
         self._feat_left_col.setStyleSheet("background: transparent;")
         self._feat_left_layout = QVBoxLayout(self._feat_left_col)
         self._feat_left_layout.setContentsMargins(0, 0, 0, 0)
         self._feat_left_layout.setSpacing(8)
         self._feat_left_layout.addStretch()
-        self._feat_right_col = QWidget()
+        self._feat_right_col = QWidget(self._feat_content)
         self._feat_right_col.setStyleSheet("background: transparent;")
         self._feat_right_layout = QVBoxLayout(self._feat_right_col)
         self._feat_right_layout.setContentsMargins(0, 0, 0, 0)
@@ -1269,11 +1273,17 @@ class MainWindow(QMainWindow):
     def _build_feature_group(
         self, title: str, features: list
     ) -> QFrame | None:
-        """Build a labelled group card. Returns None if no features are active."""
+        """Build a labelled group card. Returns None if no features are active.
+
+        Parented to the feature panel's left-column container so the card
+        is never a parent-less top-level widget, even briefly. The
+        ``_redistribute_feature_cards`` pass re-parents it to whichever
+        column the LPT balancer assigns.
+        """
         active = [f for f in features if f in self._feat_rows]
         if not active:
             return None
-        group_frame = QFrame()
+        group_frame = QFrame(self._feat_left_col)
         group_frame.setStyleSheet(f"""
             QFrame {{
                 background: {C["panel"]};
