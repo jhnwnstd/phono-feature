@@ -1455,10 +1455,6 @@ class MainWindow(QMainWindow):
         avail = screen.availableGeometry()
         cur_w = self.width()
         cur_h = self.height()
-        # Anchor: stored intended position (updated only on user moves)
-        # falls back to current self.pos() the first time through. Reading
-        # self.pos() each call lets compositor nudges accumulate into
-        # leftward drift across repeated inventory switches.
         if self._anchor_pos is None:
             self._anchor_pos = self.pos()
         anchor = self._anchor_pos
@@ -1469,29 +1465,39 @@ class MainWindow(QMainWindow):
         self._programmatic_geom = True
         try:
             if not self._has_saved_size:
-                frame_x = avail.x() + (avail.width() - (new_w + deco_w)) // 2
-                frame_y = avail.y() + (avail.height() - (new_h + deco_h)) // 2
-                target_x = frame_x + left_pad
-                target_y = frame_y + top_pad
-                self.setGeometry(target_x, target_y, new_w, new_h)
+                # First load: center.
+                self.resize(new_w, new_h)
+                frame = self.frameGeometry()
+                frame.moveCenter(avail.center())
+                self.move(frame.topLeft())
                 self._anchor_pos = self.pos()
                 self._has_saved_size = True
                 return
             if new_w == cur_w and new_h == cur_h:
                 return
-            # Always re-set the anchor explicitly on resize. Only shift
-            # off-anchor when the title bar would otherwise go off the
-            # left/top edge.
+            # Resize first; the compositor will preserve center, which
+            # shifts top-left by half the size delta in either direction.
+            self.resize(new_w, new_h)
+            # Decide the target top-left, defaulting to the anchor.
+            # Only override when the title bar would otherwise be
+            # unreachable off the left/top edge.
             target_x = anchor.x()
             target_y = anchor.y()
             if target_x - left_pad < avail.x():
                 target_x = avail.x() + left_pad
             if target_y - top_pad < avail.y():
                 target_y = avail.y() + top_pad
-            self.setGeometry(target_x, target_y, new_w, new_h)
+            pos = self.pos()
+            if pos.x() != target_x or pos.y() != target_y:
+                # Counter the compositor's center-preserve by moving
+                # back to the anchor. One move per resize is bounded;
+                # the per-call drift can't accumulate because the next
+                # resize anchors against the same _anchor_pos, not the
+                # post-move actual pos.
+                self.move(target_x, target_y)
             if target_x != anchor.x() or target_y != anchor.y():
-                # Off-screen recovery: persist the new corner as the anchor.
-                self._anchor_pos = self.pos()
+                # Off-screen recovery promoted to the new anchor.
+                self._anchor_pos = QPoint(target_x, target_y)
         finally:
             self._programmatic_geom = False
 
