@@ -30,11 +30,11 @@ def qapp(tmp_path_factory: pytest.TempPathFactory) -> QApplication:
     """
     settings_dir = tmp_path_factory.mktemp("qsettings")
     QSettings.setDefaultFormat(QSettings.Format.IniFormat)
-    QSettings.setPath(
-        QSettings.Format.IniFormat,
-        QSettings.Scope.UserScope,
-        str(settings_dir),
-    )
+    # MainWindow constructs QSettings(org, app) which uses NativeFormat on
+    # all platforms; redirecting only IniFormat would leak the developer's
+    # real config into the test run. Redirect both formats to be safe.
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, str(settings_dir))
     app = QApplication.instance() or QApplication([])
     return app  # type: ignore[return-value]
 
@@ -49,10 +49,10 @@ def window(qapp: QApplication):
     """
     # Late import: keeps QT_QPA_PLATFORM env var setup before the first PyQt
     # import in conftest module-load order.
-    from gui.main_window import MainWindow
+    from phonology_features.gui.main_window import MainWindow
 
     repo_root = Path(__file__).resolve().parent.parent
-    inventory = str(repo_root / "config" / "hayes_features.json")
+    inventory = str(repo_root / "inventories" / "hayes_features.json")
     w = MainWindow()
     w._load_path(inventory)
     w._set_mode("seg_to_feat")

@@ -92,7 +92,7 @@ def test_columns_rebalance_per_inventory(window):
     """Switching inventories must trigger a fresh redistribute. Soft
     pins still apply, and the heights stay close to balanced even when
     active counts shift."""
-    window._load_path("config/blevins_features.json")
+    window._load_path("inventories/blevins_features.json")
     window.show()
     window.resize(1200, 900)
     window.repaint()

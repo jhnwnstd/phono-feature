@@ -8,6 +8,19 @@ import os
 import re
 from dataclasses import dataclass
 
+from phonology_features.gui.builder.dialogs import (
+    InputDialog,
+    ask_question,
+    center_on_parent,
+    show_warning,
+)
+from phonology_features.gui.builder.grid import (
+    cycle_value,
+    make_cell,
+    style_cell,
+)
+from phonology_features.gui.builder.presets import VALID_VALUES
+from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -27,20 +40,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from phonology_features.gui.builder.dialogs import (
-    InputDialog,
-    ask_question,
-    center_on_parent,
-    show_warning,
-)
-from phonology_features.gui.builder.grid import (
-    cycle_value,
-    make_cell,
-    style_cell,
-)
-from phonology_features.gui.builder.presets import VALID_VALUES
-from phonology_features.gui.palette import C
 
 
 @dataclass(frozen=True)

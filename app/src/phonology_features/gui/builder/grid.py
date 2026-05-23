@@ -3,11 +3,10 @@ gui/builder/grid.py
 Grid cell logic: creation, styling, and value cycling for the feature table.
 """
 
+from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import QTableWidgetItem
-
-from phonology_features.gui.palette import C
 
 # ---------------------------------------------------------------------------
 # Cell brushes and fonts (created once at import time)

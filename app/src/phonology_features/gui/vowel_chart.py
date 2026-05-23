@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
+from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -26,8 +27,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from phonology_features.gui.palette import C
 
 VOWEL_LABEL_W = 72
 _VOWEL_HEIGHT: list = [

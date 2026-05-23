@@ -11,8 +11,8 @@
 
 from __future__ import annotations
 
-from gui.main_window import Mode
-from gui.widgets import SegmentState
+from phonology_features.gui.main_window import Mode
+from phonology_features.gui.widgets import SegmentState
 
 
 def _selected_feat_rows(window) -> set[str]:

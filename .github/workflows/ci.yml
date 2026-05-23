@@ -1,0 +1,96 @@
+name: CI
+
+# Verifies that the RUN-* launchers can bootstrap a fresh checkout into a
+# working venv on each supported OS, and that the test suite passes inside
+# that venv. The launcher is the user-facing install path, so testing it
+# end-to-end here is what proves "double-click and go" still works.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  launcher:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    env:
+      # Qt has no display on the runner; offscreen is the standard headless plugin.
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Minimum supported. The launcher's pick_python prefers higher
+          # versions if available on the runner, so this is the floor.
+          python-version: '3.11'
+
+      - name: Install Qt runtime dependencies (Linux)
+        if: runner.os == 'Linux'
+        # PyQt6 wheels link against these system libraries; the ubuntu-latest
+        # image doesn't ship them by default. macOS and Windows wheels are
+        # self-contained.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              libgl1 libegl1 libxkbcommon0 libdbus-1-3 libfontconfig1
+
+      - name: Smoke-test launcher (Linux)
+        if: runner.os == 'Linux'
+        run: ./RUN-Linux.sh --help
+
+      - name: Smoke-test launcher (macOS)
+        if: runner.os == 'macOS'
+        run: ./RUN-Mac.command --help
+
+      - name: Smoke-test launcher (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: RUN-Windows.bat --help
+
+      - name: Re-run launcher to confirm cached-install path
+        # First run installs; second run must short-circuit on the .installed
+        # stamp. Catches regressions where the stamp logic stops working.
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+              cmd //c "RUN-Windows.bat --help"
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+              ./RUN-Mac.command --help
+          else
+              ./RUN-Linux.sh --help
+          fi
+
+      - name: Install dev dependencies into the launcher's venv
+        working-directory: app
+        shell: bash
+        run: |
+          # POSIX shells use bin/, Windows uses Scripts/.
+          if [[ -f .venv/bin/activate ]]; then
+              source .venv/bin/activate
+          else
+              source .venv/Scripts/activate
+          fi
+          python -m pip install --quiet -e ".[dev]"
+
+      - name: Run pytest in the launcher's venv
+        working-directory: app
+        shell: bash
+        run: |
+          if [[ -f .venv/bin/activate ]]; then
+              source .venv/bin/activate
+          else
+              source .venv/Scripts/activate
+          fi
+          pytest -v
+

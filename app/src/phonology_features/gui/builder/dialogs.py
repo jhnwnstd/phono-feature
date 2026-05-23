@@ -4,6 +4,8 @@ gui/builder/dialogs.py
 Reusable dialog helpers and the InputDialog for inventory setup.
 """
 
+from phonology_features.gui.builder.presets import FEATURE_PRESETS
+from phonology_features.gui.palette import C
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QColor, QFont, QPainter
 from PyQt6.QtWidgets import (
@@ -17,9 +19,6 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
 )
-
-from phonology_features.gui.builder.presets import FEATURE_PRESETS
-from phonology_features.gui.palette import C
 
 
 class _AutofillTextEdit(QTextEdit):

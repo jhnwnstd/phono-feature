@@ -14,7 +14,7 @@ be bright), reload it, and assert the headers are still bright.
 
 from __future__ import annotations
 
-from gui.palette import C
+from phonology_features.gui.palette import C
 
 
 def _is_bright_color(stylesheet: str) -> bool:
@@ -29,7 +29,7 @@ def test_seg_grid_headers_bright_after_inventory_reload(window):
     """Loading an inventory in seg-mode and then reloading the same one
     must leave the seg-grid headers bright. The fixture loads Hayes in
     seg mode; we then reload to trigger the bug path."""
-    window._load_path("config/hayes_features.json")
+    window._load_path("inventories/hayes_features.json")
     headers = window.seg_grid_widget._headers
     assert headers, "expected seg-grid headers to be present after load"
     for hdr in headers:
@@ -42,7 +42,7 @@ def test_seg_grid_headers_bright_after_inventory_reload(window):
 def test_seg_grid_headers_bright_after_inventory_switch(window):
     """Switching between two different inventories while in seg-mode
     must keep the seg-grid headers bright."""
-    window._load_path("config/blevins_features.json")
+    window._load_path("inventories/blevins_features.json")
     headers = window.seg_grid_widget._headers
     assert headers
     for hdr in headers:
@@ -54,7 +54,7 @@ def test_seg_grid_headers_bright_after_inventory_switch(window):
 
 def test_vowel_chart_headers_bright_after_reload(window):
     """Same regression for the vowel-chart row+column headers."""
-    window._load_path("config/hayes_features.json")
+    window._load_path("inventories/hayes_features.json")
     labels = window.vowel_chart_widget._header_labels
     assert labels, "expected vowel-chart headers"
     for lbl, _is_row in labels:
@@ -66,7 +66,7 @@ def test_vowel_chart_headers_bright_after_reload(window):
 
 def test_seg_grid_headers_dim_when_in_feat_mode(window):
     """Sanity: in feat mode the seg-grid headers should be muted."""
-    from gui.main_window import Mode
+    from phonology_features.gui.main_window import Mode
 
     window._set_mode(Mode.FEAT_TO_SEG)
     headers = window.seg_grid_widget._headers

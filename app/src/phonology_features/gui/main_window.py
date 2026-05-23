@@ -11,36 +11,6 @@ from contextlib import contextmanager
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import (
-    QEvent,
-    QFileSystemWatcher,
-    QSettings,
-    Qt,
-    QTimer,
-)
-from PyQt6.QtGui import (
-    QFont,
-    QScreen,
-    QStandardItemModel,
-)
-from PyQt6.QtWidgets import (
-    QApplication,
-    QComboBox,
-    QFileDialog,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QSplitter,
-    QStatusBar,
-    QToolBar,
-    QVBoxLayout,
-    QWidget,
-)
-
 from phonology_features.engine.feature_engine import FeatureEngine
 from phonology_features.engine.inventory_validator import (
     validate_inventory_data,
@@ -70,6 +40,35 @@ from phonology_features.gui.widgets import (
     SegmentButton,
     SegmentGridWidget,
     SegmentState,
+)
+from PyQt6.QtCore import (
+    QEvent,
+    QFileSystemWatcher,
+    QSettings,
+    Qt,
+    QTimer,
+)
+from PyQt6.QtGui import (
+    QFont,
+    QScreen,
+    QStandardItemModel,
+)
+from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
+    QStatusBar,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
 if TYPE_CHECKING:
@@ -224,9 +223,8 @@ class MainWindow(QMainWindow):
         # Apply the saved theme BEFORE _build_ui so every f-string
         # baked into a stylesheet during construction picks up the
         # right palette.
-        saved_theme = self._settings.value("theme", "light")
-        if isinstance(saved_theme, str):
-            set_theme(saved_theme)
+        saved_theme = self._read_setting_str("theme", "light")
+        set_theme(saved_theme)
         self._build_ui()
         # Always watch the project's ``inventories/`` dir so newly-saved
         # inventories (from the Builder, or from external edits) appear
@@ -615,7 +613,7 @@ class MainWindow(QMainWindow):
             return
         # If the window is on *some* other screen and has a saved position,
         # leave it there; the user intentionally placed it.
-        if self._settings.value("window_pos") is not None:
+        if self._read_setting("window_pos") is not None:
             on_any = any(s.geometry().intersects(frame) for s in app.screens())
             if on_any and frame.width() >= 300 and frame.height() >= 200:
                 return
@@ -634,14 +632,34 @@ class MainWindow(QMainWindow):
             self._did_first_show = True
             QTimer.singleShot(0, self._ensure_visible_on_screen)
 
+    def _read_setting(self, key: str, default=None):
+        """Read a QSettings key, returning ``default`` if the stored value
+        can't be deserialized.
+
+        Older builds wrote pickled Python objects (e.g. enum members) under
+        ``mode``; renaming the package invalidates those pickles and
+        ``QSettings.value`` raises ``SystemError``. Catching here lets a
+        fresh default replace the bad blob on the next ``setValue``.
+        """
+        try:
+            value = self._settings.value(key, default)
+        except (SystemError, ModuleNotFoundError, TypeError):
+            self._settings.remove(key)
+            return default
+        return value
+
+    def _read_setting_str(self, key: str, default: str) -> str:
+        value = self._read_setting(key, default)
+        return value if isinstance(value, str) else default
+
     def _restore_settings(self, startup_path: str | None) -> None:
         """Restore window size/position, mode, and last inventory on launch."""
         # Drop the old binary geometry blob; it encodes absolute positions that
         # can place the window off-screen after a display config change.
         self._settings.remove("geometry")
-        self._has_saved_size = self._settings.value("window_size") is not None
-        size = self._settings.value("window_size")
-        pos = self._settings.value("window_pos")
+        size = self._read_setting("window_size")
+        pos = self._read_setting("window_pos")
+        self._has_saved_size = size is not None
         screen = self._target_screen()
         if size is not None:
             # Saved size may come from a larger display than the current
@@ -659,16 +677,18 @@ class MainWindow(QMainWindow):
             frame.moveCenter(screen.availableGeometry().center())
             self.move(frame.topLeft())
         # Determine which inventory to open
-        path = startup_path or self._settings.value("last_inventory")
+        path = startup_path or self._read_setting("last_inventory")
         if path and isinstance(path, str) and os.path.isfile(path):
             idx = self.inventory_combo.findData(path)
             if idx >= 0:
                 self.inventory_combo.setCurrentIndex(idx)
             self._load_path(path)
-        # Restore mode after loading (overrides _load_path's default mode)
-        saved_mode = self._settings.value("mode", Mode.SEG_TO_FEAT)
-        if saved_mode in (Mode.SEG_TO_FEAT, Mode.FEAT_TO_SEG):
-            self._set_mode(saved_mode)
+        # Restore mode after loading (overrides _load_path's default mode).
+        # Stored as a plain string so the value survives module renames and
+        # other refactors that would otherwise invalidate a pickled enum.
+        saved_mode = self._read_setting_str("mode", Mode.SEG_TO_FEAT.value)
+        if saved_mode in (Mode.SEG_TO_FEAT.value, Mode.FEAT_TO_SEG.value):
+            self._set_mode(Mode(saved_mode))
 
     def closeEvent(self, event):  # type: ignore[override]
         app = QApplication.instance()
@@ -682,7 +702,7 @@ class MainWindow(QMainWindow):
         else:
             self._settings.setValue("window_pos", self.pos())
             self._settings.setValue("window_size", self.size())
-        self._settings.setValue("mode", self._mode)
+        self._settings.setValue("mode", self._mode.value)
         if self._current_path:
             self._settings.setValue("last_inventory", self._current_path)
         super().closeEvent(event)
