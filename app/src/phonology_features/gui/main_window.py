@@ -209,6 +209,19 @@ class MainWindow(QMainWindow):
         self._feature_pool_initialized: bool = False
         self.setWindowTitle("Feature visualizer")
         self.setMinimumSize(640, 480)
+        # -- persistent settings (read theme before ANY palette-using
+        # stylesheet evaluates) --
+        self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        # Apply the saved theme BEFORE the QMainWindow background and
+        # _build_ui so every f-string baked into a stylesheet during
+        # construction picks up the right palette. Was previously
+        # ordered after the setStyleSheet below; on a dark-mode cold
+        # start the main window's own background was baked light while
+        # children built by _build_ui were dark, leaving light streaks
+        # around toolbar margins and splitter handles until the user
+        # toggled the theme twice.
+        saved_theme = self._read_setting_str("theme", "light")
+        set_theme(saved_theme)
         self.setStyleSheet(f"background-color: {C['bg']};")
         # -- 150 ms debounce: batch rapid selection changes before analysis --
         self._debounce = QTimer(self)
@@ -224,13 +237,6 @@ class MainWindow(QMainWindow):
         self._reload_timer.setSingleShot(True)
         self._reload_timer.setInterval(600)
         self._reload_timer.timeout.connect(self._do_auto_reload)
-        # -- persistent settings --
-        self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        # Apply the saved theme BEFORE _build_ui so every f-string
-        # baked into a stylesheet during construction picks up the
-        # right palette.
-        saved_theme = self._read_setting_str("theme", "light")
-        set_theme(saved_theme)
         self._build_ui()
         # Always watch the project's ``inventories/`` dir so newly-saved
         # inventories (from the Builder, or from external edits) appear
