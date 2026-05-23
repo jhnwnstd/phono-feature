@@ -163,7 +163,7 @@ class GeometryAnalyzer:
             ):
                 child_node.confidence = "high"
             elif coverage >= self.MODERATE_COVERAGE_THRESHOLD:
-                child_node.confidence = "moderate"
+                child_node.confidence = "medium"
             else:
                 child_node.confidence = "low"
             self.dependencies[child_feat]["confidence"] = child_node.confidence
@@ -203,7 +203,7 @@ class GeometryAnalyzer:
             }
             for child_feat, dep_info in self.dependencies.items()
         ]
-        confidence_order = {"high": 0, "moderate": 1, "low": 2}
+        confidence_order = {"high": 0, "medium": 1, "low": 2}
         summary.sort(
             key=lambda x: (confidence_order[x["confidence"]], -x["coverage"])
         )

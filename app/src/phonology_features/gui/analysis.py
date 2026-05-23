@@ -1,7 +1,13 @@
 """Build the HTML shown in the AnalysisPanel.
 
-All functions return HTML strings and hold no GUI state.
+All functions return HTML strings and hold no GUI state. Every
+interpolation of inventory-provided text (segment symbols, feature
+names) goes through ``html.escape`` -- nothing else in the project
+sanitizes them, so a feature named ``"<b>oops</b>"`` would otherwise
+break the rendered layout.
 """
+
+import html
 
 from phonology_features.gui.constants import (
     sort_features,
@@ -12,13 +18,15 @@ from phonology_features.gui.palette import C
 
 
 def _tag(text: str, colour: str) -> str:
-    """Render a coloured inline chip."""
+    """Render a coloured inline chip. ``text`` is escaped here so
+    every caller can pass raw inventory strings without thinking
+    about it."""
     bg, fg = tag_palettes().get(colour, (C["tag_gray"], C["tag_gray_text"]))
     return (
         f"<span style='"
         f"background:{bg}; color:{fg}; border-radius:4px;"
         f" padding:2px 7px; margin:2px; font-family:monospace;"
-        f" font-size:10pt;'>{text}</span>"
+        f" font-size:10pt;'>{html.escape(text)}</span>"
     )
 
 
@@ -101,8 +109,9 @@ def render_single_segment(engine, seg: str, feats: dict) -> str:
     minus_tags = " ".join(
         _tag(f"\u2212{feature}", "red") for feature in minus_feats
     )
-    html = (
-        f"<p><b style='color:{C['text']}'>/{seg}/</b>"
+    seg_safe = html.escape(seg)
+    out = (
+        f"<p><b style='color:{C['text']}'>/{seg_safe}/</b>"
         " feature bundle:</p>"
         f"<p>{plus_tags}</p>"
         f"<p>{minus_tags}</p>"
@@ -119,14 +128,14 @@ def render_single_segment(engine, seg: str, feats: dict) -> str:
         if len(equiv) > 1:
             is_nc, specs = engine.is_natural_class(equiv)
     if is_nc and specs:
-        html += _render_spec_list(specs)
+        out += _render_spec_list(specs)
     else:
-        html += (
+        out += (
             f"<p style='color:{C['text_dim']}'><i>"
             "Not uniquely characterizable."
             "</i></p>"
         )
-    return html
+    return out
 
 
 def render_multi_segment(

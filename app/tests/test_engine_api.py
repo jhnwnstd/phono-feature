@@ -22,7 +22,7 @@ HAYES_INVENTORY = str(REPO_ROOT / "inventories" / "hayes_features.json")
 def engine() -> FeatureEngine:
     """One Hayes-loaded engine shared across the module."""
     eng = FeatureEngine()
-    eng.load_inventory(HAYES_INVENTORY)
+    eng.load_path(HAYES_INVENTORY)
     return eng
 
 

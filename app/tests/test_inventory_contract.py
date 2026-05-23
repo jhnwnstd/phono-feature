@@ -1,0 +1,448 @@
+"""Tests for the shared ``Inventory`` contract.
+
+This is the file the reviewer flagged as missing: validator behaviour,
+malformed-input handling, engine/validator agreement, atomic-write
+durability, and the alias-collision check in segment_grouper.
+
+Every test here exercises the SINGLE entry point ``Inventory.parse``
+(or a thin wrapper). The engine cannot accept anything the parser
+rejects, and the builder cannot save anything the parser rejects --
+the parser is the contract.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+import pytest
+from phonology_features.engine.feature_engine import FeatureEngine
+from phonology_features.engine.geometry import GeometryAnalyzer
+from phonology_features.engine.inventory import (
+    Inventory,
+    ValidationError,
+    atomic_write_json,
+)
+from phonology_features.engine.inventory_validator import (
+    validate_inventory_data,
+)
+from phonology_features.engine.segment_grouper import (
+    AliasCollisionError,
+    _normalize_feats,
+)
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+HAYES = str(REPO_ROOT / "inventories" / "hayes_features.json")
+
+
+# ---------------------------------------------------------------------------
+# parse(): structural shape errors
+# ---------------------------------------------------------------------------
+def test_parse_rejects_non_dict_top_level() -> None:
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(["features", "segments"])
+    assert any("top-level" in i for i in ex.value.issues)
+
+
+def test_parse_rejects_missing_features_key() -> None:
+    """The old validator only warned on missing 'features'; the engine
+    rejected the same data with ValueError. The new contract is
+    strict so the two cannot disagree."""
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse({"segments": {"p": {}}})
+    assert any("'features'" in i for i in ex.value.issues)
+
+
+def test_parse_rejects_missing_segments_key() -> None:
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse({"features": ["Voice"]})
+    assert any("'segments'" in i for i in ex.value.issues)
+
+
+# ---------------------------------------------------------------------------
+# parse(): features validation
+# ---------------------------------------------------------------------------
+def test_parse_rejects_non_list_features() -> None:
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse({"features": "Voice", "segments": {}})
+    assert any("'features'" in i and "list" in i for i in ex.value.issues)
+
+
+def test_parse_rejects_empty_feature_name_without_crashing() -> None:
+    """The old validator's lowercase-name warning path did ``feat[0]``
+    on an empty string and raised ``IndexError``. The new parser
+    surfaces it as a structured issue."""
+    inv = {"features": ["Voice", ""], "segments": {}}
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(inv)
+    assert any("empty" in i.lower() for i in ex.value.issues)
+
+
+def test_parse_rejects_duplicate_feature_names() -> None:
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse({"features": ["Voice", "Voice"], "segments": {}})
+    assert any("duplicate" in i.lower() for i in ex.value.issues)
+
+
+def test_parse_rejects_non_string_feature_entries() -> None:
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse({"features": ["Voice", 42], "segments": {}})
+    assert any("'features[1]'" in i for i in ex.value.issues)
+
+
+# ---------------------------------------------------------------------------
+# parse(): segments validation
+# ---------------------------------------------------------------------------
+def test_parse_rejects_non_dict_segments() -> None:
+    with pytest.raises(ValidationError):
+        Inventory.parse({"features": ["Voice"], "segments": []})
+
+
+def test_parse_rejects_undeclared_feature_in_segment() -> None:
+    """The old validator only warned on undeclared features and the
+    engine then silently dropped them from queries. New contract:
+    undeclared features are an error so the two cannot disagree."""
+    inv = {
+        "features": ["Voice"],
+        "segments": {"p": {"Voice": "-", "Nasal": "-"}},
+    }
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(inv)
+    assert any("'Nasal'" in i and "not declared" in i for i in ex.value.issues)
+
+
+def test_parse_rejects_invalid_feature_value() -> None:
+    inv = {
+        "features": ["Voice"],
+        "segments": {"p": {"Voice": "yes"}},
+    }
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(inv)
+    assert any("invalid" in i.lower() and "yes" in i for i in ex.value.issues)
+
+
+def test_parse_rejects_non_string_segment_key() -> None:
+    inv = {"features": ["Voice"], "segments": {42: {"Voice": "+"}}}
+    with pytest.raises(ValidationError):
+        Inventory.parse(inv)
+
+
+def test_parse_collects_all_issues_not_just_first() -> None:
+    """Reviewer asked for structured validation results that report
+    every problem at once, not crash on the first."""
+    inv = {
+        "features": ["", "Voice", "Voice"],
+        "segments": {
+            "p": {"Voice": "yes"},
+            "x": {"Undeclared": "+"},
+        },
+    }
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(inv)
+    assert len(ex.value.issues) >= 3
+
+
+# ---------------------------------------------------------------------------
+# parse(): happy path produces a usable immutable Inventory
+# ---------------------------------------------------------------------------
+def test_parse_returns_immutable_inventory() -> None:
+    inv = Inventory.parse(
+        {
+            "features": ["Voice", "Nasal"],
+            "segments": {"p": {"Voice": "-"}, "m": {"Nasal": "+"}},
+        }
+    )
+    assert isinstance(inv.features, tuple)
+    with pytest.raises(TypeError):
+        inv.segments["p"] = {}  # type: ignore[index]
+    with pytest.raises(TypeError):
+        inv.segments["p"]["Voice"] = "+"  # type: ignore[index]
+
+
+def test_parse_missing_feature_in_bundle_defaults_to_zero() -> None:
+    """Segments may omit features; the parser does NOT auto-fill the
+    on-disk representation. Readers default to '0' via
+    ``Inventory.feature_value``."""
+    inv = Inventory.parse(
+        {
+            "features": ["Voice", "Nasal"],
+            "segments": {"p": {"Voice": "-"}},
+        }
+    )
+    assert inv.feature_value("p", "Voice") == "-"
+    assert inv.feature_value("p", "Nasal") == "0"
+    # On-disk shape unchanged: Nasal is NOT auto-inserted.
+    assert "Nasal" not in inv.segments["p"]
+
+
+def test_parse_uses_metadata_name_then_top_level_name() -> None:
+    inv = Inventory.parse(
+        {
+            "metadata": {"name": "Pretty Name"},
+            "name": "Fallback Name",
+            "features": [],
+            "segments": {},
+        }
+    )
+    assert inv.name == "Pretty Name"
+    inv2 = Inventory.parse(
+        {"name": "Fallback Name", "features": [], "segments": {}}
+    )
+    assert inv2.name == "Fallback Name"
+    inv3 = Inventory.parse({"features": [], "segments": {}})
+    assert inv3.name == "Untitled Inventory"
+
+
+def test_hayes_parses_without_issues() -> None:
+    inv = Inventory.load(HAYES)
+    assert len(inv.features) > 0
+    assert len(inv.segments) > 0
+
+
+# ---------------------------------------------------------------------------
+# load(): file-level errors come through ValidationError too
+# ---------------------------------------------------------------------------
+def test_load_missing_file_raises_validation_error(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError) as ex:
+        Inventory.load(str(tmp_path / "does_not_exist.json"))
+    assert any("not found" in i for i in ex.value.issues)
+
+
+def test_load_invalid_json_raises_validation_error(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_text("{ not valid json", encoding="utf-8")
+    with pytest.raises(ValidationError) as ex:
+        Inventory.load(str(bad))
+    assert any("invalid JSON" in i for i in ex.value.issues)
+
+
+# ---------------------------------------------------------------------------
+# Engine / validator agreement
+# ---------------------------------------------------------------------------
+def test_engine_rejects_what_validator_rejects() -> None:
+    """Reviewer's #1: the engine and validator must not disagree on
+    'is this valid'. With one parse path they cannot."""
+    bad = {"segments": {"p": {"Voice": "+"}}}  # missing features
+    errors, _ = validate_inventory_data(bad)
+    assert errors
+    with pytest.raises(ValidationError):
+        Inventory.parse(bad)
+
+
+def test_engine_requires_inventory_not_raw_dict() -> None:
+    """The engine's old load_inventory_data accepted raw dicts and
+    could be more lenient than the validator. New engine refuses raw
+    input."""
+    eng = FeatureEngine()
+    with pytest.raises(TypeError):
+        eng.load({"features": [], "segments": {}})  # type: ignore[arg-type]
+
+
+def test_engine_caches_cannot_desync_from_mutation() -> None:
+    """Reviewer's #3: previously the engine stored caller's data by
+    reference and the caches went stale on caller mutation. With a
+    frozen Inventory this can't happen."""
+    inv_raw: dict[str, object] = {
+        "features": ["Voice"],
+        "segments": {"p": {"Voice": "-"}, "b": {"Voice": "+"}},
+    }
+    inv = Inventory.parse(inv_raw)
+    eng = FeatureEngine()
+    eng.load(inv)
+    # Mutating the original raw dict must not affect the engine.
+    inv_raw["segments"]["p"]["Voice"] = "+"  # type: ignore[index]
+    assert eng.get_feature_value("p", "Voice") == "-"
+    assert "p" not in eng.plus_segs["Voice"]
+    assert "p" in eng.minus_segs["Voice"]
+
+
+def test_engine_features_are_immutable_view() -> None:
+    eng = FeatureEngine()
+    eng.load_path(HAYES)
+    assert isinstance(eng.features, tuple)
+
+
+# ---------------------------------------------------------------------------
+# Atomic writes: a crash mid-write must not corrupt the destination
+# ---------------------------------------------------------------------------
+def test_atomic_write_replaces_atomically(tmp_path: Path) -> None:
+    target = tmp_path / "out.json"
+    target.write_text('{"old": true}', encoding="utf-8")
+    atomic_write_json(str(target), {"new": True})
+    assert json.loads(target.read_text(encoding="utf-8")) == {"new": True}
+
+
+def test_atomic_write_does_not_leave_tmp_file_on_success(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "out.json"
+    atomic_write_json(str(target), {"x": 1})
+    leftover = [p for p in tmp_path.iterdir() if p.name != "out.json"]
+    assert leftover == []
+
+
+def test_atomic_write_cleans_up_tmp_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Force ``os.replace`` to fail and confirm we don't leave debris."""
+    target = tmp_path / "out.json"
+    real_replace = os.replace
+
+    def fail_replace(src: str, dst: str) -> None:
+        # Remove the tmp file to simulate a crash partway through;
+        # the cleanup branch should swallow the missing-tmp gracefully.
+        raise OSError("simulated rename failure")
+
+    monkeypatch.setattr(os, "replace", fail_replace)
+    with pytest.raises(OSError):
+        atomic_write_json(str(target), {"x": 1})
+    monkeypatch.setattr(os, "replace", real_replace)
+    leftover = list(tmp_path.iterdir())
+    assert leftover == [], f"tmp files leaked: {leftover}"
+
+
+def test_inventory_write_atomic_round_trip(tmp_path: Path) -> None:
+    inv = Inventory.parse(
+        {
+            "metadata": {"name": "Test"},
+            "features": ["Voice"],
+            "segments": {"p": {"Voice": "-"}, "b": {"Voice": "+"}},
+        }
+    )
+    target = tmp_path / "round.json"
+    inv.write_atomic(str(target))
+    loaded = Inventory.load(str(target))
+    assert loaded.name == "Test"
+    assert loaded.features == ("Voice",)
+    assert loaded.feature_value("b", "Voice") == "+"
+
+
+# ---------------------------------------------------------------------------
+# from_grid normalizes Unicode minus to ASCII before validation
+# ---------------------------------------------------------------------------
+def test_from_grid_accepts_unicode_minus() -> None:
+    inv = Inventory.from_grid(
+        name="X",
+        features=["Voice"],
+        segments={"p": {"Voice": "−"}},  # U+2212 MINUS SIGN
+    )
+    assert inv.feature_value("p", "Voice") == "-"
+
+
+def test_from_grid_rejects_unknown_cell_value() -> None:
+    """The old builder silently rewrote unknown values to '0'. New
+    contract: unknown values are an error -- they shouldn't reach the
+    save path in the first place, so surfacing them is the bug-hunting
+    behaviour."""
+    with pytest.raises(ValidationError):
+        Inventory.from_grid(
+            name="X",
+            features=["Voice"],
+            segments={"p": {"Voice": "weird"}},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Alias collision detection in segment_grouper
+# ---------------------------------------------------------------------------
+def test_normalize_feats_raises_on_alias_collision() -> None:
+    """Reviewer's #7: previously a dict-comprehension rebuild would
+    silently keep whichever alias came last. Now the collision is
+    surfaced."""
+    with pytest.raises(AliasCollisionError) as ex:
+        _normalize_feats({"DelRel": "+", "delayed_release": "-"})
+    assert "delrel" in ex.value.collisions
+
+
+def test_normalize_feats_passes_when_no_collision() -> None:
+    out = _normalize_feats({"DelRel": "+", "Voice": "-"})
+    assert out["delrel"] == "+"
+    assert out["voice"] == "-"
+
+
+# ---------------------------------------------------------------------------
+# Geometry: confidence vocabulary and acyclicity
+# ---------------------------------------------------------------------------
+def test_geometry_confidence_uses_medium_not_moderate() -> None:
+    """Reviewer's #9: implementation drifted to 'moderate' while
+    tests / public docs say 'medium'. Standardize on 'medium'."""
+    eng = FeatureEngine()
+    eng.load_path(HAYES)
+    analyzer = GeometryAnalyzer(eng)
+    analyzer.analyze()
+    for dep in analyzer.get_dependency_summary():
+        assert dep["confidence"] in {
+            "high",
+            "medium",
+            "low",
+        }, f"unexpected confidence label: {dep['confidence']!r}"
+
+
+def test_geometry_tree_is_acyclic() -> None:
+    """The reviewer flagged that geometry acyclicity isn't tested.
+    Walk every node from the root and confirm no node is visited
+    twice (DFS with a visited set)."""
+    eng = FeatureEngine()
+    eng.load_path(HAYES)
+    analyzer = GeometryAnalyzer(eng)
+    root = analyzer.analyze()
+    visited: set[str] = set()
+
+    def walk(node) -> None:
+        assert node.feature not in visited, f"cycle detected at {node.feature}"
+        visited.add(node.feature)
+        for child in node.children:
+            walk(child)
+
+    walk(root)
+
+
+# ---------------------------------------------------------------------------
+# HTML escaping in the analysis pane
+# ---------------------------------------------------------------------------
+def test_analysis_tag_escapes_html_in_text() -> None:
+    """A feature named ``"<b>X"`` must not break the rendered
+    layout. The ``_tag`` chip is the only path through which
+    inventory text reaches the HTML output, so escaping there is
+    sufficient."""
+    from phonology_features.gui.analysis import _tag
+
+    out = _tag("<b>oops</b>", "green")
+    assert "<b>oops</b>" not in out
+    assert "&lt;b&gt;oops&lt;/b&gt;" in out
+
+
+def test_analysis_render_single_segment_escapes_symbol() -> None:
+    """The segment symbol is interpolated into the bold header
+    outside the tag chip, so it has its own escape call."""
+    from phonology_features.gui.analysis import render_single_segment
+
+    class _FakeEngine:
+        features: tuple[str, ...] = ("Voice",)
+        segments = {"<x>": {"Voice": "+"}}
+
+        def is_natural_class(self, segs):
+            return False, []
+
+        def find_segments(self, *args, **kwargs):
+            return []
+
+    out = render_single_segment(_FakeEngine(), "<x>", {"Voice": "+"})
+    assert "/<x>/" not in out
+    assert "/&lt;x&gt;/" in out
+
+
+def test_validation_report_html_escapes_issue_text() -> None:
+    """The validation-report HTML interpolates raw issue strings; if
+    one of those quotes back inventory data containing tag characters
+    we must not let it break out of the <p>."""
+    from phonology_features.gui.main_window import MainWindow
+
+    issues = (
+        "segment '<script>': bad",
+        "feature '\"oops\"': bad",
+    )
+    out = MainWindow._validation_report_html(issues)
+    assert "<script>" not in out
+    assert "&lt;script&gt;" in out

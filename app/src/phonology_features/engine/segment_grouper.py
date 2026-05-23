@@ -160,8 +160,61 @@ def _normalize_key(key: str) -> str:
     return k.replace(".", "").replace("_", "").replace(" ", "")
 
 
+class AliasCollisionError(ValueError):
+    """Raised when two feature names in the same bundle collapse to
+    the same normalized key (e.g. ``"DelRel"`` and ``"delayed_release"``).
+    A plain dict-comprehension rebuild would have silently kept whichever
+    came last; instead we surface the collision so the caller can rename
+    the duplicate or remove one. The blocked features are on
+    ``.collisions`` as ``{canonical_key: [original_names]}``."""
+
+    def __init__(self, collisions: dict[str, list[str]]):
+        self.collisions = collisions
+        sample = "; ".join(
+            f"{canonical!r} <- {sorted(originals)}"
+            for canonical, originals in sorted(collisions.items())
+        )
+        super().__init__(
+            f"Feature name aliases collide after normalization: {sample}"
+        )
+
+
 def _normalize_feats(feat_dict: dict[str, str]) -> dict[str, str]:
-    return {_normalize_key(k): v for k, v in feat_dict.items()}
+    """Normalize feature names. Raises ``AliasCollisionError`` when
+    two distinct input keys collapse to the same canonical key --
+    silently dropping one would be data loss."""
+    result: dict[str, str] = {}
+    collisions: dict[str, list[str]] = {}
+    for k, v in feat_dict.items():
+        canonical = _normalize_key(k)
+        if canonical in result and k not in collisions.get(canonical, ()):
+            collisions.setdefault(canonical, []).append(
+                _find_existing_key(feat_dict, result, canonical, exclude=k)
+            )
+            collisions[canonical].append(k)
+        result[canonical] = v
+    if collisions:
+        raise AliasCollisionError(collisions)
+    return result
+
+
+def _find_existing_key(
+    feat_dict: dict[str, str],
+    result: dict[str, str],
+    canonical: str,
+    *,
+    exclude: str,
+) -> str:
+    """Recover the original key that produced ``canonical`` (other
+    than ``exclude``). Used to build a helpful collision report."""
+    for k in feat_dict:
+        if k == exclude:
+            continue
+        if _normalize_key(k) == canonical:
+            return k
+    return (
+        canonical  # should be unreachable when called from the collision path
+    )
 
 
 _VAL_ORD: dict[str, int] = {"-": 0, "+": 1, "0": 2}

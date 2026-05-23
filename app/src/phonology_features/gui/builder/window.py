@@ -1,10 +1,10 @@
 """InventoryBuilder: grid editor for creating or editing inventories."""
 
-import json
 import os
 import re
 from dataclasses import dataclass
 
+from phonology_features.engine.inventory import Inventory, ValidationError
 from phonology_features.gui.builder.dialogs import (
     InputDialog,
     ask_question,
@@ -16,7 +16,6 @@ from phonology_features.gui.builder.grid import (
     make_cell,
     style_cell,
 )
-from phonology_features.gui.builder.presets import VALID_VALUES
 from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QPalette, QPen
@@ -974,28 +973,32 @@ class InventoryBuilder(QMainWindow):
         self._status.showMessage(f"Removed feature '{feat}'.")
 
     # Serialization (save / load)
-    def _to_dict(self) -> dict:
-        """Convert the current grid to the JSON-compatible dict format."""
+    def _to_inventory(self) -> Inventory:
+        """Snapshot the current grid as a validated ``Inventory``.
+
+        Routes through ``Inventory.from_grid`` which funnels into
+        ``Inventory.parse`` -- so save uses the same contract as load.
+        Raises ``ValidationError`` if the grid is somehow inconsistent
+        (which would be a bug in the builder, not user input). No
+        silent normalization of unknown cell values: the cycle ladder
+        only produces '+'/'-'/'0'/'\u2212', so anything else is a
+        contract violation worth surfacing.
+        """
         assert self._table.columnCount() == len(self._segments)
         assert self._table.rowCount() == len(self._features)
-        segments = {}
+        segments: dict[str, dict[str, str]] = {}
         for c, seg in enumerate(self._segments):
-            feats = {}
+            feats: dict[str, str] = {}
             for r, feat in enumerate(self._features):
                 item = self._table.item(r, c)
                 val = item.text() if item else "0"
-                if val == "\u2212":
-                    val = "-"
-                if val not in VALID_VALUES:
-                    val = "0"
                 feats[feat] = val
             segments[seg] = feats
-        return {
-            "name": self._inv_name,
-            "metadata": {"name": self._inv_name},
-            "features": list(self._features),
-            "segments": segments,
-        }
+        return Inventory.from_grid(
+            name=self._inv_name,
+            features=list(self._features),
+            segments=segments,
+        )
 
     def _save(self) -> None:
         if self._current_path:
@@ -1035,9 +1038,26 @@ class InventoryBuilder(QMainWindow):
         self._update_title()
 
     def _write_json(self, path: str):
-        data = self._to_dict()
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        """Save the grid via the shared Inventory contract: validate
+        first, then atomic write. Surfaces a warning dialog on
+        validation failure instead of corrupting the file."""
+        try:
+            inventory = self._to_inventory()
+        except ValidationError as e:
+            show_warning(
+                self,
+                "Cannot save inventory",
+                "The grid does not satisfy the inventory contract:\n\n"
+                + "\n".join(f"• {issue}" for issue in e.issues),
+            )
+            return
+        try:
+            inventory.write_atomic(path)
+        except OSError as e:
+            show_warning(
+                self, "Save failed", f"Could not write '{path}':\n{e}"
+            )
+            return
         self._dirty = False
         self._status.showMessage(f"Saved to {os.path.basename(path)}")
 
@@ -1107,36 +1127,30 @@ class InventoryBuilder(QMainWindow):
             self._load_existing(path)
 
     def _load_existing(self, path: str):
-        """Load an existing JSON inventory into the grid for editing."""
+        """Load an existing JSON inventory into the grid for editing.
+
+        Routes through ``Inventory.load`` so the builder enforces the
+        same contract as the engine: invalid files refuse to load with
+        a human-readable error rather than producing a partially-
+        normalized grid that gets silently rewritten on save.
+        """
         try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, OSError) as e:
-            show_warning(self, "Load error", str(e))
+            inventory = Inventory.load(path)
+        except ValidationError as e:
+            show_warning(
+                self,
+                "Cannot load inventory",
+                "This file does not satisfy the inventory contract:\n\n"
+                + "\n".join(f"• {issue}" for issue in e.issues),
+            )
             return
-        self._inv_name = (
-            data.get("metadata", {}).get("name")
-            or data.get("name")
-            or os.path.basename(path)
-        )
-        segments_dict = data.get("segments", {})
-        declared = data.get("features", [])
-        if declared:
-            self._features = list(declared)
-        else:
-            all_feats: set = set()
-            for feats in segments_dict.values():
-                if isinstance(feats, dict):
-                    all_feats.update(feats.keys())
-            self._features = sorted(all_feats)
-        self._segments = list(segments_dict.keys())
-        # Dedup (preserving order)
-        self._segments = list(dict.fromkeys(self._segments))
-        self._features = list(dict.fromkeys(self._features))
+        self._inv_name = inventory.name
+        self._features = list(inventory.features)
+        self._segments = list(inventory.segments.keys())
         self._current_path = path
         self._rebuild_table()
         for c, seg in enumerate(self._segments):
-            seg_feats = segments_dict.get(seg, {})
+            seg_feats = inventory.segments[seg]
             for r, feat in enumerate(self._features):
                 val = seg_feats.get(feat, "0")
                 self._table.setItem(r, c, make_cell(val))

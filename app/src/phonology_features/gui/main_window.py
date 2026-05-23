@@ -5,16 +5,14 @@ PyQt6 GUI for the Segment & Feature Engine.
 
 from __future__ import annotations
 
-import json
+import html
 import os
 from contextlib import contextmanager
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from phonology_features.engine.feature_engine import FeatureEngine
-from phonology_features.engine.inventory_validator import (
-    validate_inventory_data,
-)
+from phonology_features.engine.inventory import Inventory, ValidationError
 from phonology_features.engine.segment_grouper import group_segments
 from phonology_features.gui.analysis import (
     compute_contrastive,
@@ -1054,85 +1052,41 @@ class MainWindow(QMainWindow):
 
     def _load_path(self, path: str):
         """Load an inventory JSON. Shared by the dropdown, Browse, and
-        the file-system watcher's auto-reload path. Phases (parse,
-        install engine, register, populate) live in named helpers below
-        so a failure short-circuits cleanly.
-        """
+        the file-system watcher's auto-reload path. One try/except
+        handles every failure mode because ``Inventory.load`` wraps
+        ``OSError`` and ``JSONDecodeError`` as ``ValidationError``."""
         path = os.path.abspath(path)
-        data = self._parse_and_validate(path)
-        if data is None:
-            return
-        if not self._install_engine(path, data):
-            return
-        self._register_loaded_path(path)
-        self._populate_after_load()
-
-    def _parse_and_validate(self, path: str) -> dict | None:
-        """Read the JSON file and run the shared validator. Returns the
-        parsed dict on success, or None after surfacing a human-readable
-        error in the status bar and analysis panel.
-        """
         fname = os.path.basename(path)
         try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-        except FileNotFoundError:
-            self.status.showMessage(f"Cannot load {fname}: file not found")
-            return None
-        except json.JSONDecodeError as e:
-            self.status.showMessage(
-                f"Cannot load {fname}: invalid JSON "
-                f"({e.msg} on line {e.lineno})"
-            )
-            return None
-        except OSError as e:
-            self.status.showMessage(f"Cannot load {fname}: {e}")
-            return None
-        errors, warnings = validate_inventory_data(data)
-        if errors:
-            self.status.showMessage(f"Cannot load {fname}: {errors[0]}")
-            self.analysis.set_html(
-                self._validation_report_html(errors, warnings)
-            )
-            return None
-        for w in warnings:
-            self.status.showMessage(f"Warning: {w}")
-        return data
-
-    @staticmethod
-    def _validation_report_html(errors: list[str], warnings: list[str]) -> str:
-        parts = [
-            f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"
-        ]
-        parts.extend(f"<p>{e}</p>" for e in errors)
-        if warnings:
-            parts.append("<p><b>Warnings:</b></p>")
-            parts.extend(f"<p>{w}</p>" for w in warnings)
-        return "".join(parts)
-
-    def _install_engine(self, path: str, data: dict) -> bool:
-        """Build a fresh FeatureEngine for ``data`` and adopt it.
-        Returns True on success. Surface engine errors as status
-        messages rather than crashing the GUI.
-        """
-        try:
-            engine = FeatureEngine()
-            engine.load_inventory_data(data)
-        except (ValueError, KeyError) as e:
-            self.status.showMessage(
-                f"Cannot load {os.path.basename(path)}: {e}"
-            )
-            return False
+            inventory = Inventory.load(path)
+        except ValidationError as e:
+            self.status.showMessage(f"Cannot load {fname}: {e.issues[0]}")
+            self.analysis.set_html(self._validation_report_html(e.issues))
+            return
+        engine = FeatureEngine()
+        engine.load(inventory)
         self.engine = engine
         self._cached_groups = None
         self._cached_norm_feats = None
-        name = engine.metadata.get("name", os.path.basename(path))
+        name = inventory.name
         self.status.showMessage(
             f"{name}: "
             f"{len(engine.segments)} segments, "
             f"{len(engine.features)} features."
         )
-        return True
+        self._register_loaded_path(path)
+        self._populate_after_load()
+
+    @staticmethod
+    def _validation_report_html(issues: tuple[str, ...]) -> str:
+        """Render validation issues as HTML. Every issue is escaped:
+        inventory data is interpolated into messages and we don't want
+        a malformed feature name like ``"<b>oops"`` to break layout."""
+        parts = [
+            f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"
+        ]
+        parts.extend(f"<p>{html.escape(issue)}</p>" for issue in issues)
+        return "".join(parts)
 
     def _register_loaded_path(self, path: str) -> None:
         """Wire watcher, dropdown, and settings for a newly-loaded path."""

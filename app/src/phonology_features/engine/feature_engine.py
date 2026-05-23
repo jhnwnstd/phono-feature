@@ -1,32 +1,89 @@
 """Phonological segment and feature engine.
 
-Loads an inventory and answers queries about it: feature lookups,
-natural classes, contrast checks, and segment distances. GUI-free.
+Holds one validated ``Inventory`` and answers analytical queries on it:
+feature lookups, natural classes, contrast checks, segment distances.
+GUI-free.
+
+The engine never accepts a raw dict. Callers parse first
+(``Inventory.parse``, ``Inventory.load``) so validation and engine
+construction share one contract -- the engine doesn't get to be more
+lenient (or stricter) than the validator. Mutations require building
+a new ``Inventory`` and calling ``load`` again; this is what keeps the
+per-feature caches in sync with the active inventory.
 """
 
-import json
+from __future__ import annotations
 
-_VALID_VALUES = {"+", "-", "0"}
+from types import MappingProxyType
+from typing import Any, Mapping
+
+from phonology_features.engine.inventory import (
+    VALID_VALUES,
+    Inventory,
+)
 
 
 class FeatureEngine:
     """Holds one inventory and supports analytical queries on it."""
 
     def __init__(self) -> None:
-        self.metadata: dict = {}
-        self.features: list[str] = []
-        self.segments: dict[str, dict[str, str]] = {}
-        # Per-feature segment-set caches built by _rebuild_caches after
-        # every load. Read-only; mutating self.segments without a reload
-        # desyncs them.
+        # Pre-load state: an empty inventory so attribute access never
+        # explodes. Real inventory arrives via ``load`` / ``load_path``.
+        self._inventory: Inventory = Inventory(
+            name="",
+            metadata=MappingProxyType({}),
+            features=(),
+            segments=MappingProxyType({}),
+        )
+        # Per-feature segment-set caches built by _rebuild_caches.
+        # Read-only. Rebuilt on every ``load``; cannot desynchronize
+        # because the underlying Inventory is frozen.
         self.spec_segs: dict[str, frozenset[str]] = {}
         self.plus_segs: dict[str, frozenset[str]] = {}
         self.minus_segs: dict[str, frozenset[str]] = {}
-        # seg -> tuple of feature values in self.features order. Used for
-        # fast pairwise comparisons (avg distance, neighbor search).
         self._seg_value_tuples: dict[str, tuple[str, ...]] = {}
         self._contrastive_features: list[str] | None = None
 
+    # ----- inventory loading -----
+    def load(self, inventory: Inventory) -> None:
+        """Adopt an already-validated ``Inventory`` and rebuild caches.
+
+        The Inventory is frozen so there is no risk of caller mutation
+        desynchronizing engine caches. To change the inventory, build a
+        new ``Inventory`` and call ``load`` again.
+        """
+        if not isinstance(inventory, Inventory):
+            raise TypeError(
+                f"FeatureEngine.load requires an Inventory, "
+                f"got {type(inventory).__name__}. "
+                f"Use Inventory.parse(raw_dict) or Inventory.load(path) first."
+            )
+        self._inventory = inventory
+        self._rebuild_caches()
+
+    def load_path(self, path: str) -> None:
+        """Convenience: parse a JSON file into an Inventory and load it."""
+        self.load(Inventory.load(path))
+
+    # ----- properties exposing the inventory as read-only views -----
+    @property
+    def inventory(self) -> Inventory:
+        """The currently-loaded validated Inventory."""
+        return self._inventory
+
+    @property
+    def metadata(self) -> Mapping[str, Any]:
+        return self._inventory.metadata
+
+    @property
+    def features(self) -> tuple[str, ...]:
+        return self._inventory.features
+
+    @property
+    def segments(self) -> Mapping[str, Mapping[str, str]]:
+        return self._inventory.segments
+
+    # ----- validation helpers -----
     def _validate_segment(self, segment: str) -> None:
         if segment not in self.segments:
             raise KeyError(f"Segment '{segment}' not found in inventory")
@@ -67,58 +124,19 @@ class FeatureEngine:
                 matching.append(segment)
         return matching
 
-    def load_inventory(self, filepath: str) -> None:
-        """Load an inventory from a JSON file."""
-        with open(filepath, encoding="utf-8") as f:
-            data = json.load(f)
-        self.load_inventory_data(data)
-
-    def load_inventory_data(self, data: dict) -> None:
-        """Load from an already-parsed dict.
-
-        Used when the caller already parsed the JSON (e.g. so the
-        validator and engine can share one parse).
-        """
-        if "features" not in data or "segments" not in data:
-            raise ValueError(
-                "Inventory must contain 'features' and 'segments' fields"
-            )
-        if not isinstance(data["features"], list) or not all(
-            isinstance(f, str) for f in data["features"]
-        ):
-            raise ValueError("'features' must be a list of strings")
-        if len(data["features"]) != len(set(data["features"])):
-            raise ValueError("'features' list contains duplicate names")
-        if not isinstance(data["segments"], dict):
-            raise ValueError("'segments' must be a dictionary")
-        for seg_name, seg_feats in data["segments"].items():
-            if not isinstance(seg_feats, dict):
-                raise ValueError(
-                    f"Segment '{seg_name}' feature bundle must be a dictionary"
-                )
-            for feat_name, feat_val in seg_feats.items():
-                if feat_val not in _VALID_VALUES:
-                    raise ValueError(
-                        f"Segment '{seg_name}' feature '{feat_name}'"
-                        f" has invalid value '{feat_val}'"
-                        f" (expected one of {sorted(_VALID_VALUES)})"
-                    )
-        self.metadata = data.get("metadata", {})
-        self.features = data["features"]
-        self.segments = data["segments"]
-        self._rebuild_caches()
-
     def _rebuild_caches(self) -> None:
         """Rebuild derived per-feature segment-sets and value tuples.
 
-        Called by every load path. The engine exposes no public mutators;
-        reload is the only way to change ``self.segments``.
+        Called by every load path. The engine exposes no public
+        mutators; rebuilding only happens via ``load``.
         """
-        spec: dict[str, set[str]] = {f: set() for f in self.features}
-        plus: dict[str, set[str]] = {f: set() for f in self.features}
-        minus: dict[str, set[str]] = {f: set() for f in self.features}
-        for seg, feats in self.segments.items():
-            for f in self.features:
+        features = self._inventory.features
+        segments = self._inventory.segments
+        spec: dict[str, set[str]] = {f: set() for f in features}
+        plus: dict[str, set[str]] = {f: set() for f in features}
+        minus: dict[str, set[str]] = {f: set() for f in features}
+        for seg, feats in segments.items():
+            for f in features:
                 v = feats.get(f, "0")
                 if v == "+":
                     spec[f].add(seg)
@@ -130,11 +148,12 @@ class FeatureEngine:
         self.plus_segs = {f: frozenset(s) for f, s in plus.items()}
         self.minus_segs = {f: frozenset(s) for f, s in minus.items()}
         self._seg_value_tuples = {
-            seg: tuple(feats.get(f, "0") for f in self.features)
-            for seg, feats in self.segments.items()
+            seg: tuple(feats.get(f, "0") for f in features)
+            for seg, feats in segments.items()
         }
         self._contrastive_features = None
 
+    # ----- public query API -----
     def get_segment_features(self, segment: str) -> dict[str, str]:
         """Full feature bundle for ``segment``; missing features default to '0'."""
         self._validate_segment(segment)
@@ -159,7 +178,7 @@ class FeatureEngine:
         """
         for feature, value in feature_spec.items():
             self._validate_feature(feature)
-            if value not in _VALID_VALUES:
+            if value not in VALID_VALUES:
                 raise ValueError(
                     f"Invalid feature value '{value}' for '{feature}'"
                 )
@@ -170,7 +189,10 @@ class FeatureEngine:
         )
 
     def find_all_minimal_bundles(
-        self, segments: list[str]
+        self,
+        segments: list[str],
+        *,
+        max_bundles: int = 10_000,
     ) -> list[dict[str, str]]:
         """Every minimal feature bundle that characterises the segment set.
 
@@ -180,9 +202,18 @@ class FeatureEngine:
         Returns ``[{}]`` for the universal class, ``[]`` if S is not a
         natural class.
 
-        Implemented as hitting-set backtracking: for each segment outside
-        S, find the candidate features that can exclude it, then search
-        for the smallest set of candidates that hits every outside segment.
+        Implementation: hitting-set backtracking. For each segment
+        outside S, find the candidate features that can exclude it,
+        then search for the smallest set of candidates that hits every
+        outside segment.
+
+        Complexity: worst case ``O(C^k)`` where ``C`` is the number of
+        candidate features and ``k`` the best-size bound. Branch-and-
+        bound pruning typically keeps it well below the worst case.
+        ``max_bundles`` is a hard ceiling on result size; if hit, the
+        search terminates early -- the caller gets up to that many
+        bundles rather than a hang. ``10_000`` is large enough that
+        no realistic inventory hits it.
         """
         if not segments:
             return [{}]
@@ -220,7 +251,9 @@ class FeatureEngine:
 
         def backtrack(
             idx: int, chosen: list[str], chosen_set: set[str]
-        ) -> None:
+        ) -> bool:
+            """Returns False once ``max_bundles`` is reached; the
+            caller stops descending so the search terminates."""
             nonlocal best_size
             if all(exc & chosen_set for exc in excluders):
                 k = len(chosen)
@@ -230,24 +263,27 @@ class FeatureEngine:
                     results.append({f: candidates[f] for f in chosen})
                 elif k == best_size:
                     results.append({f: candidates[f] for f in chosen})
-                return
+                return len(results) < max_bundles
             if best_size is not None and len(chosen) >= best_size:
-                return
+                return True
             if idx >= n:
-                return
+                return True
             remaining = set(candidate_list[idx:])
             if not all(
                 (exc & chosen_set) or (exc & remaining) for exc in excluders
             ):
-                return
+                return True
             f = candidate_list[idx]
-            backtrack(idx + 1, [*chosen, f], chosen_set | {f})
+            if not backtrack(idx + 1, [*chosen, f], chosen_set | {f}):
+                return False
             remaining_without = set(candidate_list[idx + 1 :])
             if all(
                 (exc & chosen_set) or (exc & remaining_without)
                 for exc in excluders
             ):
-                backtrack(idx + 1, chosen, chosen_set)
+                if not backtrack(idx + 1, chosen, chosen_set):
+                    return False
+            return True
 
         backtrack(0, [], set())
         return results
@@ -331,9 +367,15 @@ class FeatureEngine:
         return distribution
 
     def get_inventory_stats(self) -> dict[str, int | float | str]:
-        """Summary stats: name, segment/feature counts, contrastive count, avg distance."""
+        """Summary stats: name, segment/feature counts, contrastive count, avg distance.
+
+        ``avg_feature_distance`` is ``O(n^2 * |features|)`` over the
+        inventory and is recomputed on every call. Callers that hit
+        this on a hot path should cache the result themselves.
+        """
+        name = self.metadata.get("name", "Unknown")
         stats: dict[str, int | float | str] = {
-            "name": self.metadata.get("name", "Unknown"),
+            "name": str(name),
             "segment_count": len(self.segments),
             "feature_count": len(self.features),
             "contrastive_features": len(self.get_contrastive_features()),
@@ -354,11 +396,7 @@ class FeatureEngine:
         return stats
 
     def export_inventory(self, filepath: str) -> None:
-        """Write the current inventory to JSON."""
-        data = {
-            "metadata": self.metadata,
-            "features": self.features,
-            "segments": self.segments,
-        }
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        """Atomically write the current inventory to ``filepath`` as
+        JSON. See ``Inventory.write_atomic`` for the durability
+        guarantee."""
+        self._inventory.write_atomic(filepath)
