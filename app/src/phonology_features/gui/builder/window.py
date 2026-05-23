@@ -110,32 +110,51 @@ class _BulkCycleTable(QTableWidget):
             return
         sel_cols = sel_model.selectedColumns()
         sel_rows = sel_model.selectedRows()
-        rect = None
+        n_rows = self.rowCount()
+        n_cols = self.columnCount()
+        if n_rows == 0 or n_cols == 0:
+            return
+        # Fast path 1: exactly one full column.
         if len(sel_cols) == 1 and len(sel_rows) == 0:
             col = sel_cols[0].column()
             top_rect = self.visualRect(self.model().index(0, col))
-            bot_rect = self.visualRect(
-                self.model().index(self.rowCount() - 1, col)
-            )
-            rect = top_rect.united(bot_rect)
-        elif len(sel_rows) == 1 and len(sel_cols) == 0:
+            bot_rect = self.visualRect(self.model().index(n_rows - 1, col))
+            self._draw_outline_rect(top_rect.united(bot_rect))
+            return
+        # Fast path 2: exactly one full row.
+        if len(sel_rows) == 1 and len(sel_cols) == 0:
             row = sel_rows[0].row()
             left_rect = self.visualRect(self.model().index(row, 0))
             right_rect = self.visualRect(
-                self.model().index(row, self.columnCount() - 1)
+                self.model().index(row, n_cols - 1)
             )
-            rect = left_rect.united(right_rect)
-        elif (
-            len(sel_rows) == self.rowCount()
-            and len(sel_cols) == self.columnCount()
-            and self.rowCount() > 0
-        ):
+            self._draw_outline_rect(left_rect.united(right_rect))
+            return
+        # Fast path 3: whole table.
+        if len(sel_rows) == n_rows and len(sel_cols) == n_cols:
             tl_rect = self.visualRect(self.model().index(0, 0))
             br_rect = self.visualRect(
-                self.model().index(self.rowCount() - 1, self.columnCount() - 1)
+                self.model().index(n_rows - 1, n_cols - 1)
             )
-            rect = tl_rect.united(br_rect)
-        if rect is None or not rect.isValid():
+            self._draw_outline_rect(tl_rect.united(br_rect))
+            return
+        # General case: arbitrary selection shape (cross, multi-col,
+        # rectangle, ctrl+click set). Build a {(row, col)} membership
+        # set, then for each selected cell draw its edges on sides
+        # whose neighbour isn't also selected. Drawing happens AFTER
+        # super().paintEvent so the border lands above Qt's gridlines.
+        cells: set[tuple[int, int]] = set()
+        for col_idx in sel_cols:
+            c = col_idx.column()
+            for r in range(n_rows):
+                cells.add((r, c))
+        for row_idx in sel_rows:
+            r = row_idx.row()
+            for c in range(n_cols):
+                cells.add((r, c))
+        for idx in sel_model.selectedIndexes():
+            cells.add((idx.row(), idx.column()))
+        if not cells:
             return
         from PyQt6.QtGui import QPainter
 
@@ -143,9 +162,33 @@ class _BulkCycleTable(QTableWidget):
         pen = QPen(QColor(C["accent"]))
         pen.setWidth(2)
         painter.setPen(pen)
-        # drawRect with width-2 pen paints the border AROUND the rect;
-        # offset inwards by 1 so the border falls fully inside the
-        # selection bounds instead of half outside.
+        for row, col in cells:
+            r = self.visualRect(self.model().index(row, col))
+            if not r.isValid():
+                continue
+            if (row - 1, col) not in cells:
+                painter.drawLine(r.left(), r.top(), r.right(), r.top())
+            if (row + 1, col) not in cells:
+                painter.drawLine(r.left(), r.bottom(), r.right(), r.bottom())
+            if (row, col - 1) not in cells:
+                painter.drawLine(r.left(), r.top(), r.left(), r.bottom())
+            if (row, col + 1) not in cells:
+                painter.drawLine(r.right(), r.top(), r.right(), r.bottom())
+        painter.end()
+
+    def _draw_outline_rect(self, rect):
+        """Draw a 2 px outline around ``rect`` on the viewport. Used
+        by the full-row / full-column / full-table fast paths."""
+        if not rect.isValid():
+            return
+        from PyQt6.QtGui import QPainter
+
+        painter = QPainter(self.viewport())
+        pen = QPen(QColor(C["accent"]))
+        pen.setWidth(2)
+        painter.setPen(pen)
+        # Inset by 1 so the 2-px border lands inside the selection
+        # bounds rather than half outside.
         painter.drawRect(rect.adjusted(1, 1, -1, -1))
         painter.end()
 
