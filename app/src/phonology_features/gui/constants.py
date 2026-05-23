@@ -1,21 +1,17 @@
-"""
-gui/constants.py
-
-Shared constants, layout geometry, and helper functions for the GUI.
-"""
+"""Shared GUI constants, geometry, and tiny helpers."""
 
 from phonology_features.gui.palette import C
 
-# Settings keys
 SETTINGS_ORG = "features"
 SETTINGS_APP = "SegFeatureEngine"
 
 
-# Tag palettes for inline HTML chips. Function rather than module-level
-# dict so it evaluates against the *current* palette; important for
-# live theme swaps where a constant would have been baked at import
-# time using whatever theme was active then. Caller: gui/analysis.py.
 def tag_palettes() -> dict:
+    """Inline-chip palette keyed by colour name.
+
+    A function (not a module constant) so it re-reads ``C`` on every
+    call; theme swaps would otherwise bake in the import-time palette.
+    """
     return {
         "blue": (C["tag_blue"], C["tag_blue_text"]),
         "green": (C["tag_green"], C["tag_green_text"]),
@@ -24,13 +20,11 @@ def tag_palettes() -> dict:
     }
 
 
-# Segment button geometry
 BTN_W = 33
 BTN_H = 26
 BTN_GAP = 4
-# Canonical feature display order
-#
-# Features absent from this list appear at the end in their original order.
+# Canonical feature display order. Features absent from this list trail
+# at the end in their original order.
 FEATURE_ORDER: list = [
     # Major class
     "Syllabic",
@@ -76,7 +70,7 @@ FEATURE_ORDER: list = [
 _FEATURE_ORDER_INDEX: dict = {
     feature: index for index, feature in enumerate(FEATURE_ORDER)
 }
-# Feature groups for the two column panel layout.
+# Two-column feature panel layout.
 FEATURE_GROUPS: list = [
     (
         "Major Class",
@@ -146,26 +140,26 @@ FEATURE_GROUPS: list = [
 
 
 def sort_features(features: list) -> list:
-    """Return features in canonical order. Unknowns trail in original order."""
-    unknown_feature_index = len(FEATURE_ORDER)
-
-    def feature_sort_key(feature: str) -> int:
-        return _FEATURE_ORDER_INDEX.get(feature, unknown_feature_index)
-
-    return sorted(features, key=feature_sort_key)
+    """Sort features by ``FEATURE_ORDER``; unknowns trail in original order."""
+    unknown_index = len(FEATURE_ORDER)
+    return sorted(
+        features, key=lambda f: _FEATURE_ORDER_INDEX.get(f, unknown_index)
+    )
 
 
 def sort_spec(spec: dict) -> dict:
-    """Return a feature bundle dict with keys in canonical phonological order."""
-    sorted_keys = sort_features(list(spec.keys()))
-    return {feature: spec[feature] for feature in sorted_keys}
+    """Reorder a feature-bundle dict into canonical key order."""
+    return {
+        feature: spec[feature] for feature in sort_features(list(spec.keys()))
+    }
 
 
-# Thin, unobtrusive overlay scrollbar track. Function rather than a
-# module-level constant so it evaluates against the *current* palette.
-# Module-level f-strings get baked at import time, which made the
-# scrollbars stick on the original theme even after a live swap.
 def scrollbar_style() -> str:
+    """Thin overlay-style scrollbar QSS.
+
+    A function (not a module constant) so theme swaps pick up the new
+    palette; an f-string at import time would bake in the old colors.
+    """
     return f"""
     QScrollBar:vertical {{
         background: transparent;

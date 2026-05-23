@@ -1,35 +1,17 @@
-"""Segment grouper: assigns inventory segments to phonological display groups.
+"""Assign inventory segments to phonological display groups.
 
-Architecture:
-  1. Primary assignment into broad manner classes (Plosives, Fricatives,
-     Affricates, Nasals, etc.) using only the most universal features.
-     Clicks are special-cased before generic ranking.
-  2. Derived breakouts split subgroups (Sibilants, Lateral Fricatives,
-     Lateral Affricates) out of their parent; only when the feature is
-     active, enough segments qualify, AND the parent retains members.
-  3. Relational relabeling (Vibrants, Rhotics, Liquids) runs BEFORE
-     small-group merging so the combination categories get a chance to
-     form.
-  4. Small-group merging collapses remaining tiny groups into their
-     explicit parent.
-  5. Laryngeal rescue peels placeless spreadgl/constrgl segments into
-     a dedicated Laryngeals class.
-
-Heuristic notes:
-- Fallback assignment is order-sensitive on ties: when two classes have
-  the same contradiction and match counts, the earlier class in
-  PRIMARY_GROUPS wins as a final tie-break.
-- Minimum positive-match thresholds prevent underspecified segments
-  from qualifying for classes they barely evidence.
-- Breakout threshold is at least as strict as merge threshold to
-  prevent create-then-immediately-destroy churn.
+Pipeline: primary manner-class assignment, derived breakouts (e.g.
+Sibilants from Fricatives), relational relabeling (Rhotics, Liquids),
+small-group merging, laryngeal rescue, then sort. Each step is keyed to
+the active feature set so inventories that lack a feature skip the
+related step.
 """
 
 from collections import defaultdict
 from functools import lru_cache
 
-# Primary groups; broad manner classes for initial assignment.
-# Only uses the most universal, stable features.
+# Broad manner classes for the initial assignment pass. Specs use only
+# universal features so they apply across diverse inventories.
 PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
     ("Clicks", {"click": "+"}),
     (
@@ -86,7 +68,8 @@ PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
     ),
     ("Vowels", {"syllabic": "+"}),
 ]
-# Minimum positive feature matches required for membership.
+# Minimum positive matches required for membership; prevents barely
+# specified segments from qualifying for classes by default.
 _MIN_POSITIVE: dict[str, int] = {
     "Plosives": 2,
     "Fricatives": 2,
@@ -95,16 +78,11 @@ _MIN_POSITIVE: dict[str, int] = {
     "Central Approximants": 2,
     "Semivowels": 2,
 }
-# Derived breakouts; split from a parent class after initial assignment.
-# Only surfaced when the feature is active, enough segments qualify,
-# AND the parent retains at least one member.
 DERIVED_BREAKOUTS: list[tuple[str, str, dict[str, str]]] = [
     ("Sibilants", "Fricatives", {"strident": "+", "coronal": "+"}),
     ("Lateral Fricatives", "Fricatives", {"lateral": "+"}),
     ("Lateral Affricates", "Affricates", {"lateral": "+"}),
 ]
-# Explicit parent map for upward merging of small groups.
-# setdefault is used so the parent is recreated if it was deleted.
 _MERGE_PARENT: dict[str, str] = {
     "Lateral Affricates": "Affricates",
     "Sibilants": "Fricatives",
@@ -112,10 +90,8 @@ _MERGE_PARENT: dict[str, str] = {
     "Trills": "Central Approximants",
     "Taps & Flaps": "Central Approximants",
 }
-# Groups exempt from upward merging.  Laryngeal rescue (Step 5) can still
-# peel individual segments out.
+# Exempt from upward merging; laryngeal rescue can still peel members.
 _FROZEN_GROUPS: set[str] = {"Plosives"}
-# Display order: manner-first (plosives -> fricatives -> affricates)
 DISPLAY_ORDER: list[str] = [
     "Clicks",
     "Plosives",
@@ -136,7 +112,7 @@ DISPLAY_ORDER: list[str] = [
     "Laryngeals",
     "Vowels",
 ]
-# Relabeling: frozenset of origin names -> derived display label
+# Origin-set -> display label for relational relabeling.
 _RELABEL_PATTERNS: dict[frozenset[str], str] = {
     frozenset({"Trills", "Taps & Flaps"}): "Vibrants",
     frozenset({"Trills", "Central Approximants"}): "Rhotics",
@@ -168,15 +144,13 @@ _DERIVED_MERGES: list[tuple[frozenset[str], str]] = [
 ]
 
 
-# Key normalisation
 @lru_cache(maxsize=512)
 def _normalize_key(key: str) -> str:
     """Normalise a feature name to a canonical lowercase token.
 
-    Memoized: feature names are reused across all segments and across
-    inventory reloads, so the same handful of strings get normalized
-    thousands of times. The cache keeps a hot working set in RAM and
-    turns 4000+ calls per load into ~30 (one per unique feature name).
+    Memoized because the same handful of feature names are reused
+    across all segments and inventory reloads; the cache turns
+    thousands of calls per load into one per unique name.
     """
     k = key.lower()
     k = k.replace("del.rel.", "delrel")
@@ -190,7 +164,6 @@ def _normalize_feats(feat_dict: dict[str, str]) -> dict[str, str]:
     return {_normalize_key(k): v for k, v in feat_dict.items()}
 
 
-# IPA place ordering (left -> right on the IPA chart)
 _VAL_ORD: dict[str, int] = {"-": 0, "+": 1, "0": 2}
 _SORT_KEYS: list[tuple[str, dict[str, int]]] = [
     ("sonorant", _VAL_ORD),
@@ -259,18 +232,36 @@ def _ipa_place(feats: dict[str, str]) -> int:
     return 11  # vowels / unclassified
 
 
-# Main grouping function
 def _should_merge_up(group_size: int, inventory_size: int) -> bool:
-    """True if a group is too small to display on its own."""
+    """True if a group is too small to stand alone in the display."""
     return group_size < max(3, int(inventory_size * 0.05))
 
 
 def _should_break_out(subgroup_size: int, inventory_size: int) -> bool:
     """True if a derived subgroup is large enough to display separately.
 
-    At least as strict as _should_merge_up to prevent create-then-destroy churn.
+    At least as strict as ``_should_merge_up`` to prevent
+    create-then-destroy churn.
     """
     return subgroup_size >= max(3, int(inventory_size * 0.05))
+
+
+_LARYNGEAL_FEATURES: set[str] = {"spreadgl", "constrgl"}
+_PLACE_FEATURES: set[str] = {
+    "labial",
+    "coronal",
+    "dorsal",
+    "pharyngeal",
+    "constrpharynx",
+}
+
+
+def _is_laryngeal_candidate(feats: dict[str, str]) -> bool:
+    has_laryngeal = any(feats.get(f, "0") == "+" for f in _LARYNGEAL_FEATURES)
+    has_place = any(feats.get(f, "0") == "+" for f in _PLACE_FEATURES)
+    is_vowel = feats.get("syllabic", "0") == "+"
+    is_click = feats.get("click", "0") == "+"
+    return has_laryngeal and not has_place and not is_vowel and not is_click
 
 
 def group_segments(
@@ -278,25 +269,22 @@ def group_segments(
 ) -> dict[str, list[str]]:
     """Assign every segment to a phonological display group.
 
-    Returns {group_label: [symbol, ...]} in display order.
+    Returns ``{group_label: [symbol, ...]}`` in ``DISPLAY_ORDER``.
     """
     if not inventory:
         return {}
     norm: dict[str, dict[str, str]] = {
         sym: _normalize_feats(feats) for sym, feats in inventory.items()
     }
-    # Step 0: Detect features active in this inventory.
     active_features: set[str] = set()
     for feats in norm.values():
         for k, v in feats.items():
             if v != "0":
                 active_features.add(k)
 
-    # -- Helpers --
     def positive_matches(
         seg_feats: dict[str, str], spec: dict[str, str]
     ) -> int:
-        """Count features where the segment has an explicit matching value."""
         return sum(
             1
             for f in spec
@@ -308,7 +296,6 @@ def group_segments(
     def is_member(
         group_name: str, seg_feats: dict[str, str], spec: dict[str, str]
     ) -> bool:
-        """Test membership with minimum-evidence threshold."""
         relevant = [f for f in spec if f in active_features]
         if not relevant:
             return False
@@ -323,10 +310,10 @@ def group_segments(
         return matched >= _MIN_POSITIVE.get(group_name, 1)
 
     def best_primary(seg_feats: dict[str, str]) -> str:
-        """Find the best primary group by positive evidence, then specificity.
+        """Best primary group by positive evidence, then specificity.
 
-        Clicks are special-cased: click:+ always wins regardless of how
-        many other features match broader obstruent classes.
+        ``click:+`` always wins regardless of how many other features
+        match broader obstruent classes.
         """
         if seg_feats.get("click", "0") == "+":
             return "Clicks"
@@ -347,8 +334,7 @@ def group_segments(
     def fallback_assignment(seg_feats: dict[str, str]) -> str:
         """Best-fit group by fewest contradictions, then most matches.
 
-        On equal contradiction and match counts, the earlier group in
-        PRIMARY_GROUPS wins as a final tie-break.
+        On ties the earlier group in ``PRIMARY_GROUPS`` wins.
         """
         best_name = ""
         best_contras = float("inf")
@@ -372,28 +358,14 @@ def group_segments(
             if contras < best_contras or (
                 contras == best_contras and matched > best_matches
             ):
-                best_name, best_contras, best_matches = (
-                    name,
-                    contras,
-                    matched,
-                )
+                best_name, best_contras, best_matches = name, contras, matched
         return best_name
 
-    # ==================================================================
-    # Step 1: Assign to broad manner classes only.
-    # ==================================================================
     assignment: dict[str, list[str]] = defaultdict(list)
     for sym, feats in norm.items():
-        group = best_primary(feats)
-        if not group:
-            group = fallback_assignment(feats)
+        group = best_primary(feats) or fallback_assignment(feats)
         if group:
             assignment[group].append(sym)
-    # ==================================================================
-    # Step 2: Derived breakouts; split subgroups from parent classes.
-    # Only when the feature is active, enough segments qualify, AND
-    # the parent retains at least one member (no full replacement).
-    # ==================================================================
     for new_name, parent_name, cond in DERIVED_BREAKOUTS:
         if parent_name not in assignment:
             continue
@@ -406,25 +378,15 @@ def group_segments(
             if all(norm[s].get(f, "0") == v for f, v in cond.items())
         ]
         remainder = [s for s in parent_members if s not in subgroup]
-        # Only break out if it truly splits the parent; not if it
-        # would replace the parent entirely.
         if not subgroup or not remainder:
             continue
         if not _should_break_out(len(subgroup), len(inventory)):
             continue
         assignment[parent_name] = remainder
         assignment[new_name] = subgroup
-    # ==================================================================
-    # Step 3: Relational relabeling (Vibrants, Rhotics, Liquids).
-    # Runs BEFORE small-group merging so combination categories get a
-    # chance to form before their components are collapsed.
-    # ==================================================================
-    # 3a: Merge small groups that match a relabel pattern.
-    # Iterate ``origin_set`` in sorted order rather than frozenset order
-    # so the intermediate ``assignment[label]`` list is built in a
-    # deterministic sequence across runs (sets/frozensets randomize on
-    # PYTHONHASHSEED). Step 6 sorts the final values, so this doesn't
-    # change user-visible output, but it keeps internal state stable.
+    # Relabel pattern iteration uses sorted(origin_set); frozensets
+    # randomize order under PYTHONHASHSEED and we want deterministic
+    # internal merge order across runs.
     for origin_set, new_label in _RELABEL_PATTERNS.items():
         present = [g for g in sorted(origin_set) if g in assignment]
         if len(present) < 2:
@@ -440,7 +402,6 @@ def group_segments(
         for g in present:
             merged.extend(assignment.pop(g))
         assignment.setdefault(new_label, []).extend(merged)
-    # 3b: Relabel groups whose composition matches a known class.
     initial_group: dict[str, str] = {}
     for gname, members in assignment.items():
         for sym in members:
@@ -455,8 +416,6 @@ def group_segments(
         if relabel is not None and relabel != gname:
             members = assignment.pop(gname)
             assignment.setdefault(relabel, []).extend(members)
-    # 3c: Merge derived groups that belong together. Sorted iteration
-    # for the same reason as 3a; keeps internal merge order stable.
     for pair, label in _DERIVED_MERGES:
         present = [g for g in sorted(pair) if g in assignment]
         if len(present) < 2:
@@ -472,10 +431,6 @@ def group_segments(
         for g in present:
             merged.extend(assignment.pop(g))
         assignment.setdefault(label, []).extend(merged)
-    # ==================================================================
-    # Step 4: Merge remaining small groups into their explicit parent.
-    # Uses setdefault so the parent is recreated if breakout deleted it.
-    # ==================================================================
     changed = True
     while changed:
         changed = False
@@ -488,30 +443,6 @@ def group_segments(
             if parent is not None:
                 assignment.setdefault(parent, []).extend(assignment.pop(gname))
                 changed = True
-    # ==================================================================
-    # Step 5: Laryngeal rescue; peel placeless consonantal segments
-    # with spreadgl:+ or constrgl:+ into Laryngeals.
-    # ==================================================================
-    _LARYNGEAL_FEATURES = {"spreadgl", "constrgl"}
-    _PLACE_FEATURES = {
-        "labial",
-        "coronal",
-        "dorsal",
-        "pharyngeal",
-        "constrpharynx",
-    }
-
-    def is_laryngeal_candidate(feats: dict[str, str]) -> bool:
-        has_laryngeal = any(
-            feats.get(f, "0") == "+" for f in _LARYNGEAL_FEATURES
-        )
-        has_place = any(feats.get(f, "0") == "+" for f in _PLACE_FEATURES)
-        is_vowel = feats.get("syllabic", "0") == "+"
-        is_click = feats.get("click", "0") == "+"
-        return (
-            has_laryngeal and not has_place and not is_vowel and not is_click
-        )
-
     if _LARYNGEAL_FEATURES & active_features:
         laryngeal_segs: list[str] = []
         for gname in list(assignment.keys()):
@@ -520,7 +451,7 @@ def group_segments(
             peeled = [
                 sym
                 for sym in assignment[gname]
-                if is_laryngeal_candidate(norm[sym])
+                if _is_laryngeal_candidate(norm[sym])
             ]
             if peeled:
                 for sym in peeled:
@@ -530,13 +461,9 @@ def group_segments(
                     del assignment[gname]
         if laryngeal_segs:
             assignment.setdefault("Laryngeals", []).extend(laryngeal_segs)
-    # ==================================================================
-    # Step 6: Sort by display order and feature-based key.
-    # ==================================================================
     return {
         name: sorted(
-            assignment[name],
-            key=lambda s: _segment_sort_key(norm[s]),
+            assignment[name], key=lambda s: _segment_sort_key(norm[s])
         )
         for name in DISPLAY_ORDER
         if assignment.get(name)

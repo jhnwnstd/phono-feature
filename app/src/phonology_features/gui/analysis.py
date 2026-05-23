@@ -1,10 +1,6 @@
-"""
-gui/analysis.py
+"""Build the HTML shown in the AnalysisPanel.
 
-Analysis HTML rendering. Builds the HTML shown in the AnalysisPanel.
-
-All functions return HTML strings. They are pure of GUI state. They take
-engine data, segments, features, and specs, then produce markup.
+All functions return HTML strings and hold no GUI state.
 """
 
 from phonology_features.gui.constants import (
@@ -68,13 +64,12 @@ def _render_spec_list(specs: list) -> str:
 
 
 def compute_contrastive(engine, segs: list) -> dict:
-    """
-    Return {feature: {'+': [segs...], '-': [segs...], '0': [segs...]}}
-    for every feature where at least one segment is '+' and at least one
-    segment is '-'.
+    """For each feature with both '+' and '-' among ``segs``, bucket the segments.
 
-    Segments with '0' are tracked separately so the display can account for
-    all selected segments.
+    Returns ``{feat: {'+': [...], '-': [...], '0': [...]}}``. The '0'
+    bucket is only present when some segments are underspecified.
+    Bucket order follows the caller's ``segs`` list so rendered chips
+    align with selection order.
     """
     result = {}
     seg_set = set(segs)
@@ -84,8 +79,6 @@ def compute_contrastive(engine, segs: list) -> dict:
         if not (plus_in and minus_in):
             continue
         spec_in = engine.spec_segs[feat] & seg_set
-        # Preserve the order of the caller's segs list in each bucket so
-        # the rendered chips line up with how the user selected them.
         entry: dict = {
             "+": [s for s in segs if s in plus_in],
             "-": [s for s in segs if s in minus_in],
@@ -229,8 +222,6 @@ def render_multi_segment(
                 f"<br>{suggested_tags}</p>"
             )
         else:
-            # No suggestion available; match the terse "Yes" branch
-            # rather than restating what "not a natural class" means.
             nc_html = (
                 "<p><b>Natural class:</b>"
                 f" <span style='color:{C['minus']}'>No</span>"

@@ -209,21 +209,18 @@ class MainWindow(QMainWindow):
         # Depth counter so nested ``_batched_updates`` scopes share one
         # setUpdatesEnabled(False/True) pair.
         self._batched_depth: int = 0
-        # Anchor for programmatic resizes. Updated only by user-initiated
-        # moveEvents (mouse drag of the title bar); programmatic
-        # setGeometry / resize calls don't touch it. Reading the live
-        # ``self.pos()`` each resize caused leftward drift on Wayland
-        # compositors that nudge the reported position by 1-2 px in
-        # response to geometry requests.
+        # Anchor for programmatic resizes; updated only by user moves
+        # (mouse drag). Reading live self.pos() each resize caused
+        # leftward drift on Wayland compositors that nudge the reported
+        # position by 1-2 px in response to geometry requests.
         self._anchor_pos: QPoint | None = None
         self._programmatic_geom: bool = False
         self.setWindowTitle("Feature visualizer")
         self.setMinimumSize(640, 480)
         self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-        # Read + apply the theme BEFORE the QMainWindow background so the
-        # window's own bg uses the right palette. First-launch default
-        # follows the OS color scheme; subsequent launches honor the
-        # user's last manual toggle.
+        # Apply theme BEFORE the window background so its own bg picks
+        # up the right palette. First launch follows the OS scheme;
+        # subsequent launches honour the user's last manual toggle.
         saved_theme = self._read_setting_str("theme", detect_system_theme())
         set_theme(saved_theme)
         self.setStyleSheet(f"background-color: {C['bg']};")
@@ -370,10 +367,9 @@ class MainWindow(QMainWindow):
         self._vsplit.setStretchFactor(0, 1)
         self._vsplit.setStretchFactor(1, 0)
         self._min_analysis_h = 220
-        # Hard floor on the analysis pane. Without these guards the
-        # splitter can collapse it to 0 when _apply_splitter_sizes runs
-        # before the window is shown (vsplit.height() == 0 path), as on
-        # startup with a large inventory like Blevins.
+        # Hard floor; without these the splitter can collapse the
+        # analysis pane to 0 when _apply_splitter_sizes runs before
+        # the window is shown.
         self.analysis.setMinimumHeight(self._min_analysis_h)
         self._vsplit.setCollapsible(1, False)
         root.addWidget(self._vsplit)
@@ -574,9 +570,9 @@ class MainWindow(QMainWindow):
 
     def moveEvent(self, event) -> None:  # type: ignore[override]
         """Update the resize anchor only on user-initiated moves.
-        Programmatic moves (setGeometry / resize from our own code)
-        guard with ``_programmatic_geom`` so the anchor isn't drifted
-        by the compositor's response to our requests.
+
+        Programmatic geometry changes guard with ``_programmatic_geom``
+        so the anchor isn't drifted by the compositor's response.
         """
         super().moveEvent(event)
         if not self._programmatic_geom:
@@ -1443,18 +1439,10 @@ class MainWindow(QMainWindow):
             self._apply_splitter_sizes(seg_need_w, feat_need_w, top_need_h)
 
     def _fit_window_to_size(self, screen, need_w: int, need_h: int) -> None:
-        """Resize the window to fit ``(need_w, need_h)`` and keep the user's
-        chosen corner.
+        """Resize the window to ``(need_w, need_h)`` and anchor it in place.
 
-        Behavior, in one sentence: anchor to wherever the title bar is
-        right now, change the size, and only shift the window if doing
-        so would put the title bar itself off the screen (the only
-        scenario where the window would become unreachable).
-
-        First load is the one exception; the saved-pos check (``_has_
-        ``_has_saved_size`` is False on a fresh launch, so the first
-        load centers; every load after that anchors to ``self.pos()``,
-        the live position including any manual drag the user just did.
+        Anchors to the user's last position; only shifts when the title
+        bar would otherwise be off-screen. First load centers instead.
         """
         if screen is None:
             return
@@ -1471,7 +1459,6 @@ class MainWindow(QMainWindow):
         self._programmatic_geom = True
         try:
             if not self._has_saved_size:
-                # First load: center.
                 self.resize(new_w, new_h)
                 frame = self.frameGeometry()
                 frame.moveCenter(avail.center())
@@ -1481,19 +1468,15 @@ class MainWindow(QMainWindow):
                 return
             if new_w == cur_w and new_h == cur_h:
                 return
-            # Decide the target top-left, defaulting to the anchor.
-            # Only override when the title bar would otherwise be
-            # unreachable off the left/top edge.
             target_x = anchor.x()
             target_y = anchor.y()
             if target_x - left_pad < avail.x():
                 target_x = avail.x() + left_pad
             if target_y - top_pad < avail.y():
                 target_y = avail.y() + top_pad
-            # Atomic geometry change: one xdg_toplevel configure carries
-            # both size and position, so the compositor places once
-            # instead of twice (resize then move-back), which was where
-            # the per-call drift came from.
+            # Atomic setGeometry: one xdg_toplevel configure carries
+            # both size and position so the compositor places once,
+            # not twice (resize then move-back drifted on Wayland).
             self.setGeometry(target_x, target_y, new_w, new_h)
             if target_x != anchor.x() or target_y != anchor.y():
                 # Off-screen recovery promoted to the new anchor.
@@ -1502,11 +1485,12 @@ class MainWindow(QMainWindow):
             self._programmatic_geom = False
 
     def _decoration_padding(self, old_pos) -> tuple[int, int, int, int]:
-        """Return (deco_w, deco_h, left_pad, top_pad) for the current
-        frame. Trusts the WM-reported decoration when nonzero; falls back
-        to ``_MIN_DECO_*`` only when the WM reports zero (Wayland CSD,
-        pre-show callers). Inflating thin-border-WM values past their
-        true size used to shift the anchor left a few pixels per resize.
+        """Return ``(deco_w, deco_h, left_pad, top_pad)`` for the current frame.
+
+        Trusts the WM-reported decoration when nonzero; falls back to
+        ``_MIN_DECO_*`` only when the WM reports zero (Wayland CSD,
+        pre-show callers). Inflating real values past their true size
+        used to shift the anchor a few pixels per resize.
         """
         if not self.isVisible():
             return _MIN_DECO_W, _MIN_DECO_H, 0, 0
@@ -1522,9 +1506,10 @@ class MainWindow(QMainWindow):
     def _apply_splitter_sizes(
         self, seg_need_w: int, feat_need_w: int, top_need_h: int
     ) -> None:
-        """Size the seg pane to its content width and let the feature
-        pane absorb the rest. Rebalance the vertical splitter so the
-        analysis panel keeps its minimum height.
+        """Size the seg pane to its content; let the feature pane absorb the rest.
+
+        Rebalances the vertical splitter so the analysis pane keeps
+        its minimum height.
         """
         available = self._hsplit.width() or (seg_need_w + feat_need_w)
         feat_w = max(feat_need_w, available - seg_need_w)

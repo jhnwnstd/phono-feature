@@ -1,21 +1,21 @@
 """Validate phonological inventory data before loading.
 
-Returns a list of human-readable error/warning strings so the GUI can
-display them without crashing. A dict that passes with no errors is
-safe to hand to ``FeatureEngine.load_inventory_data``.
+Returns (errors, warnings) as human-readable strings so the GUI can
+surface them without crashing. A dict that produces no errors is safe
+to hand to ``FeatureEngine.load_inventory_data``.
 """
 
 from __future__ import annotations
 
 _VALID_VALUES = {"+", "-", "0"}
+_ALLCAPS_ALLOWED = {"CORONAL", "LABIAL", "DORSAL", "ATR"}
 
 
 def validate_inventory_data(data) -> tuple[list[str], list[str]]:
     """Validate an already-parsed inventory dict.
 
-    The caller is responsible for opening + parsing the JSON; sharing
-    that parse with the engine (which also parses) avoids reading the
-    file twice on every inventory load.
+    The caller opens and parses the JSON so the engine and validator
+    can share one parse instead of reading the file twice.
     """
     errors: list[str] = []
     warnings: list[str] = []
@@ -24,15 +24,12 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
             f"Top-level JSON value must be an object, not {type(data).__name__}"
         )
         return errors, warnings
-    # Required keys
     if "segments" not in data:
         errors.append("Missing required key 'segments'")
     if "features" not in data and "segments" in data:
-        # Features list is optional; can be inferred from segments
         warnings.append(
             "No 'features' key; feature list will be inferred from segments"
         )
-    # Features list
     features = data.get("features")
     if features is not None:
         if not isinstance(features, list):
@@ -45,13 +42,17 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
                 errors.append(
                     f"'features' contains non-string entries: {non_str[:5]}"
                 )
-            seen: set = set()
-            dupes = {f for f in features if f in seen or seen.add(f)}  # type: ignore[func-returns-value]
+            seen: set[str] = set()
+            dupes: set[str] = set()
+            for f in features:
+                if isinstance(f, str):
+                    if f in seen:
+                        dupes.add(f)
+                    seen.add(f)
             if dupes:
                 errors.append(
                     f"'features' contains duplicates: {sorted(dupes)}"
                 )
-    # Segments dict
     segments = data.get("segments")
     if segments is not None and not isinstance(segments, dict):
         errors.append(
@@ -62,7 +63,6 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
         if isinstance(segments, dict) and not segments:
             errors.append("'segments' is empty")
         return errors, warnings
-    # Per-segment checks
     declared_features = set(features) if isinstance(features, list) else None
     all_seg_features: set = set()
     bad_value_count = 0
@@ -98,22 +98,18 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
         errors.append(
             f"... and {bad_value_count - max_bad_examples} more invalid values"
         )
-    # Cross-checks between features list and segment data
     if declared_features is not None:
-        # Features declared but never used by any segment
         unused = declared_features - all_seg_features
         if unused:
             warnings.append(
                 f"Features declared but unused by any segment: {sorted(unused)}"
             )
-        # Features used by segments but not declared
         undeclared = all_seg_features - declared_features
         if undeclared:
             warnings.append(
                 f"Features used by segments but not in 'features' list: "
                 f"{sorted(undeclared)}"
             )
-    # Consistency: do all segments specify the same features?
     seg_names = list(segments.keys())
     if seg_names:
         first_feats = (
@@ -145,12 +141,10 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
                 warnings.append(
                     f"... and {len(inconsistent) - 3} more inconsistent segments"
                 )
-    # Duplicate segments: same specified (non-0) features and values
     sig_to_segs: dict = {}
     for seg_name, seg_feats in segments.items():
         if not isinstance(seg_feats, dict):
             continue
-        # Signature = only the specified features (ignore "0" / underspecified)
         sig = tuple(sorted((f, v) for f, v in seg_feats.items() if v != "0"))
         sig_to_segs.setdefault(sig, []).append(seg_name)
     warnings.extend(
@@ -158,10 +152,6 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
         for names in sig_to_segs.values()
         if len(names) > 1
     )
-    # Feature naming convention
-    # Only place nodes (CORONAL, LABIAL, DORSAL) should be all-caps.
-    # All other features should start with a capital letter (title case).
-    _ALLCAPS_ALLOWED = {"CORONAL", "LABIAL", "DORSAL", "ATR"}
     check_feats = declared_features or all_seg_features
     for feat in sorted(check_feats):
         if feat.isupper() and feat not in _ALLCAPS_ALLOWED:
@@ -175,7 +165,6 @@ def validate_inventory_data(data) -> tuple[list[str], list[str]]:
                 f"Feature '{feat}' starts with a lowercase letter. "
                 f"Consider renaming to '{feat[0].upper() + feat[1:]}'"
             )
-    # Optional metadata checks
     name = data.get("name")
     if name is not None and not isinstance(name, str):
         warnings.append(
