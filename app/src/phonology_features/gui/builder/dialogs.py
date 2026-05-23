@@ -3,7 +3,7 @@
 from phonology_features.gui.builder.presets import FEATURE_PRESETS
 from phonology_features.gui.palette import C
 from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter
+from PyQt6.QtGui import QColor, QFont, QPainter, QTextCursor
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -18,12 +18,21 @@ from PyQt6.QtWidgets import (
 
 
 class _AutofillTextEdit(QTextEdit):
-    """QTextEdit base: Tab on an empty box fills DEFAULT_FILL. Once
-    non-empty, Tab advances focus normally via ``setTabChangesFocus``.
+    """QTextEdit with two shared affordances used by both the segment
+    and feature inputs in the New Inventory dialog:
 
-    ``setTabChangesFocus(True)`` makes Qt route Tab through ``event()``
-    to ``focusNextPrevChild`` BEFORE ``keyPressEvent`` runs; the
-    autofill branch returns True to consume the event so focus stays.
+    1. **Tab autofill**: Tab on an empty box pastes ``DEFAULT_FILL``
+       (a quick-start example). Once non-empty, Tab advances focus
+       normally via ``setTabChangesFocus``.
+
+       ``setTabChangesFocus(True)`` makes Qt route Tab through
+       ``event()`` to ``focusNextPrevChild`` BEFORE ``keyPressEvent``
+       runs; the autofill branch returns True to consume the event
+       so focus stays.
+
+    2. **``entries()`` parser**: splits the contents on any whitespace
+       (spaces, tabs, newlines). Both ``a b c`` and one-per-line input
+       parse to the same list.
 
     Also overrides ``paintEvent`` to render multi-line placeholder text
     (Qt only paints the first line of placeholderText).
@@ -44,8 +53,20 @@ class _AutofillTextEdit(QTextEdit):
             and not self.toPlainText().strip()
         ):
             self.setPlainText(self.DEFAULT_FILL)
+            # Land the caret at the end of the seeded text so the user
+            # can type a continuation without having to click first.
+            cursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.setTextCursor(cursor)
             return True
         return super().event(e)
+
+    def entries(self) -> list[str]:
+        """Parse the current text as a list of entries. Default splits
+        on any whitespace -- spaces, tabs, newlines. Subclasses
+        override when a different split rule applies (e.g. Features
+        only one per line)."""
+        return [token for token in self.toPlainText().split() if token]
 
     def paintEvent(self, e):  # type: ignore[override]
         super().paintEvent(e)
@@ -81,9 +102,19 @@ class FeatureTextEdit(_AutofillTextEdit):
     """Tab on empty seeds the two major-class features (Syllabic and
     Consonantal) as a starting point for a custom set. The full
     Default (33) preset is in the dropdown.
-    """
+
+    Features are one-per-line (overrides the whitespace-split base):
+    feature names may legitimately contain spaces or unusual chars
+    that a whitespace splitter would shred."""
 
     DEFAULT_FILL = "Syllabic\nConsonantal"
+
+    def entries(self) -> list[str]:
+        return [
+            line.strip()
+            for line in self.toPlainText().splitlines()
+            if line.strip()
+        ]
 
 
 def center_on_parent(dialog, parent):
@@ -197,7 +228,7 @@ class InputDialog(QDialog):
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
         preset_row.addWidget(self.preset_combo)
         parent.addLayout(preset_row)
-        feat_label = QLabel("Features (one per line, or comma-separated):")
+        feat_label = QLabel("Features (one per line):")
         feat_label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
         parent.addWidget(feat_label)
         self.feat_edit = FeatureTextEdit()
@@ -240,20 +271,10 @@ class InputDialog(QDialog):
         self.feat_edit.setReadOnly(False)
 
     def get_segments(self) -> list:
-        text = self.seg_edit.toPlainText().strip()
-        if not text:
-            return []
-        text = text.replace("\n", " ")
-        raw_segments = text.split()
-        return [segment.strip() for segment in raw_segments if segment.strip()]
+        return self.seg_edit.entries()
 
     def get_features(self) -> list:
-        text = self.feat_edit.toPlainText().strip()
-        if not text:
-            return []
-        text = text.replace(",", "\n")
-        raw_features = text.split("\n")
-        return [feature.strip() for feature in raw_features if feature.strip()]
+        return self.feat_edit.entries()
 
     def get_name(self) -> str:
         name = self.name_edit.text().strip()
