@@ -19,7 +19,7 @@ from phonology_features.gui.builder.grid import (
 from phonology_features.gui.builder.presets import VALID_VALUES
 from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont, QPen
+from PyQt6.QtGui import QColor, QFont, QPalette, QPen
 from PyQt6.QtWidgets import (
     QAbstractButton,
     QDialog,
@@ -33,7 +33,6 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStatusBar,
-    QStyle,
     QStyledItemDelegate,
     QTableWidget,
     QTableWidgetItem,
@@ -53,28 +52,104 @@ class _CellEdit:
     new: str
 
 
-class _NoFillSelectionDelegate(QStyledItemDelegate):
-    """Cell delegate that draws a blue border for selected cells
-    instead of overlaying them with the default blue fill. Keeps the
-    +/-/0 value + its background tint readable through the highlight."""
+class _SelectionFillDelegate(QStyledItemDelegate):
+    """Selected cells render as light-blue fill + the cell's own text
+    colour, with a 2 px ``accent``-blue outline around the whole
+    selection region.
+
+    Selection membership uses a cached ``set[(row, col)]`` (refreshed
+    on ``selectionChanged``) so per-cell paint is O(1) for both the
+    fill / palette decision and the four neighbour lookups that drive
+    the outline.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._selected_set: set[tuple[int, int]] = set()
+
+    def refresh_selection(self):
+        """Rebuild the (row, col) cache from the live selection model.
+
+        Fast paths for header-driven selections (full row / full column
+        / select-all) enumerate by counts rather than materialising a
+        QModelIndex per cell via ``selectedIndexes()``.
+        """
+        view = self.parent()
+        if view is None:
+            self._selected_set = set()
+            return
+        sel_model = view.selectionModel()
+        if sel_model is None:
+            self._selected_set = set()
+            return
+        sel_cols = sel_model.selectedColumns()
+        sel_rows = sel_model.selectedRows()
+        rows = view.rowCount()
+        cols = view.columnCount()
+        if sel_cols and not sel_rows:
+            cs = {idx.column() for idx in sel_cols}
+            self._selected_set = {(r, c) for r in range(rows) for c in cs}
+            return
+        if sel_rows and not sel_cols:
+            rs = {idx.row() for idx in sel_rows}
+            self._selected_set = {(r, c) for r in rs for c in range(cols)}
+            return
+        if (
+            sel_rows
+            and sel_cols
+            and len(sel_rows) == rows
+            and len(sel_cols) == cols
+        ):
+            self._selected_set = {
+                (r, c) for r in range(rows) for c in range(cols)
+            }
+            return
+        # Fallback for arbitrary selections (cell-drag, shift-click).
+        self._selected_set = {
+            (idx.row(), idx.column()) for idx in sel_model.selectedIndexes()
+        }
 
     def paint(self, painter, option, index):  # type: ignore[override]
-        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        cell = (index.row(), index.column())
+        selected = cell in self._selected_set
+        view = self.parent()
         if selected:
-            # Strip the selected flag so the base painter draws the
-            # cell normally (own brush + text) without the blue fill.
-            option.state &= ~QStyle.StateFlag.State_Selected
+            # Override palette so the cell paints with light-blue bg
+            # + its own foreground (so green/red/grey value text shows
+            # through). Native QStyle handles the actual drawing.
+            item = view.item(cell[0], cell[1]) if view is not None else None
+            if item is not None:
+                option.palette.setBrush(
+                    QPalette.ColorRole.HighlightedText, item.foreground()
+                )
+            option.palette.setBrush(
+                QPalette.ColorRole.Highlight, QColor(C["accent_light"])
+            )
         super().paint(painter, option, index)
         if not selected:
             return
+        # Outline: draw an edge only if the neighbour in that direction
+        # isn't selected. For a row / column / rectangle this yields
+        # one continuous outline around the whole region.
+        sel = self._selected_set
+        row, col = cell
         painter.save()
         pen = QPen(QColor(C["accent"]))
         pen.setWidth(2)
         painter.setPen(pen)
-        # Inset by 1 px so the 2 px border falls fully inside the cell
-        # rect rather than half-clipping at the gridline.
-        r = option.rect.adjusted(1, 1, -1, -1)
-        painter.drawRect(r)
+        r = option.rect
+        top = r.top() + 1
+        bottom = r.bottom() - 1
+        left = r.left() + 1
+        right = r.right() - 1
+        if (row - 1, col) not in sel:
+            painter.drawLine(r.left(), top, r.right(), top)
+        if (row + 1, col) not in sel:
+            painter.drawLine(r.left(), bottom, r.right(), bottom)
+        if (row, col - 1) not in sel:
+            painter.drawLine(left, r.top(), left, r.bottom())
+        if (row, col + 1) not in sel:
+            painter.drawLine(right, r.top(), right, r.bottom())
         painter.restore()
 
 
@@ -196,9 +271,11 @@ class InventoryBuilder(QMainWindow):
             }}
         """
         self._btn_style_enabled = btn_style
+        # Disabled state: subtly greyer background so the button reads
+        # as "inactive" instead of blending into the toolbar.
         self._btn_style_disabled = f"""
             QPushButton {{
-                background: {C["bg"]};
+                background: {C["tag_gray"]};
                 color: {C["text_dim"]};
                 border: 1.5px solid {C["border"]};
                 border-radius: 6px;
@@ -219,9 +296,9 @@ class InventoryBuilder(QMainWindow):
             return btn
 
         make_btn("New", self.show_setup_dialog)
-        make_btn("Open\u2026", self._open_file)
+        make_btn("Open", self._open_file)
         make_btn("Save", self._save, style=save_style)
-        make_btn("Save As\u2026", self._save_as)
+        make_btn("Save As", self._save_as)
         toolbar.addSeparator()
         make_btn("+ Segment", self._add_segment)
         make_btn("+ Feature", self._add_feature)
@@ -243,7 +320,7 @@ class InventoryBuilder(QMainWindow):
         toolbar.addWidget(left_stretch)
         # Delete is only valid when an existing file is loaded; enabled
         # by _update_title whenever _current_path changes.
-        self._delete_btn = make_btn("Delete\u2026", self._delete_inventory)
+        self._delete_btn = make_btn("Delete", self._delete_inventory)
         self._delete_btn.setEnabled(False)
         self._delete_btn.setStyleSheet(self._btn_style_disabled)
         right_stretch = QWidget()
@@ -324,11 +401,16 @@ class InventoryBuilder(QMainWindow):
                 font-weight: bold;
             }}
             """)
-        # Selected cells get a blue outline instead of a blue fill so
-        # the underlying value + tint stay readable through the highlight.
-        self._table.setItemDelegate(_NoFillSelectionDelegate(self._table))
-        self._table.cellClicked.connect(self._on_cell_clicked)
+        # Selected cells get a light-blue fill + outer outline (delegate).
+        self._table.setItemDelegate(_SelectionFillDelegate(self._table))
         self._table.installEventFilter(self)
+        # Viewport press intercept implements the "click to select /
+        # second click to change" UX + the bulk cycle when clicking
+        # inside an existing multi-cell selection. Replaces the older
+        # cellClicked auto-cycle.
+        viewport = self._table.viewport()
+        if viewport is not None:
+            viewport.installEventFilter(self)
         h_header = self._table.horizontalHeader()
         v_header = self._table.verticalHeader()
         if h_header:
@@ -459,10 +541,48 @@ class InventoryBuilder(QMainWindow):
     }
 
     def eventFilter(self, obj, event):
-        if obj is self._table and event.type() == event.Type.KeyPress:
+        if obj is self._table.viewport():
+            if self._handle_viewport_press(event):
+                return True
+        elif obj is self._table and event.type() == event.Type.KeyPress:
             if self._handle_table_key(event):
                 return True
         return super().eventFilter(obj, event)
+
+    def _handle_viewport_press(self, event) -> bool:
+        """Implements the "select first, change second" + bulk-cycle UX.
+
+        Mouse press logic on a plain left-click (no Shift / Ctrl):
+          * If the clicked cell is ALREADY in the current selection,
+            cycle every selected cell's value (works for single-cell
+            click-to-change AND multi-cell bulk-change).
+          * Otherwise let Qt's default selection handling run -- the
+            click becomes a "move the selection here" with no value
+            change.
+
+        Shift / Ctrl clicks are user-driven selection extensions; the
+        handler stays out of the way so Qt grows the selection.
+        """
+        if event.type() != event.Type.MouseButtonPress:
+            return False
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+        if event.modifiers() & (
+            Qt.KeyboardModifier.ShiftModifier
+            | Qt.KeyboardModifier.ControlModifier
+        ):
+            return False
+        idx = self._table.indexAt(event.position().toPoint())
+        if not idx.isValid():
+            return False
+        sel_model = self._table.selectionModel()
+        if sel_model is None or not sel_model.isSelected(idx):
+            return False
+        clicked_item = self._table.item(idx.row(), idx.column())
+        if clicked_item is None:
+            return False
+        self._cycle_selection_from(clicked_item)
+        return True
 
     def _handle_table_key(self, event) -> bool:
         """Keyboard shortcuts on the table. Returns True if consumed.
@@ -611,26 +731,22 @@ class InventoryBuilder(QMainWindow):
 
     # Header selection / remove button state
     def _on_col_header_clicked(self, col: int):
-        """Toggle segment-column highlight; second click clears it."""
+        """Toggle segment-column highlight; second click clears it.
+
+        Sticky / rm-button state updates land in ``_on_selection_changed``
+        as a side effect of the selection change.
+        """
         if self._selected_remove_col == col:
-            self._selected_remove_col = None
-            self._selected_remove_row = None
             self._table.clearSelection()
-            return
-        self._selected_remove_col = col
-        self._selected_remove_row = None
-        self._table.selectColumn(col)
+        else:
+            self._table.selectColumn(col)
 
     def _on_row_header_clicked(self, row: int):
         """Toggle feature-row highlight; second click clears it."""
         if self._selected_remove_row == row:
-            self._selected_remove_row = None
-            self._selected_remove_col = None
             self._table.clearSelection()
-            return
-        self._selected_remove_row = row
-        self._selected_remove_col = None
-        self._table.selectRow(row)
+        else:
+            self._table.selectRow(row)
 
     def _on_corner_clicked(self):
         """Toggle select-all when the table corner is clicked."""
@@ -672,52 +788,36 @@ class InventoryBuilder(QMainWindow):
         )
 
     def _on_selection_changed(self):
-        """Derive rm-button enabled-state from the current Qt selection.
+        """Single source of truth for everything that derives from the
+        current Qt selection: sticky vars, rm-button enabled state,
+        and the delegate's selection cache.
 
-        Uses ``selectedColumns()`` / ``selectedRows()`` which return
-        only fully-selected columns/rows -- microsecond cost even on
-        select-all (vs walking ~4000 indexes).
-
-        Does NOT touch ``_selected_remove_col`` / ``_selected_remove_row``:
-        those are header-click "stickies" owned by the header handlers,
-        and a cell click transiently shrinks Qt's selection to one cell
-        before ``_on_cell_clicked`` restores the column/row. Clearing
-        the stickies here would break that restore path.
+        Uses ``selectedColumns()`` / ``selectedRows()`` -- microsecond
+        cost even on select-all (vs walking ~4000 indexes).
         """
         sel_model = self._table.selectionModel()
         if sel_model is None:
             return
-        n_cols = len(sel_model.selectedColumns())
-        n_rows = len(sel_model.selectedRows())
-        if n_cols == 1 and n_rows == 0:
+        delegate = self._table.itemDelegate()
+        if isinstance(delegate, _SelectionFillDelegate):
+            delegate.refresh_selection()
+        sel_cols = sel_model.selectedColumns()
+        sel_rows = sel_model.selectedRows()
+        if len(sel_cols) == 1 and len(sel_rows) == 0:
+            self._selected_remove_col = sel_cols[0].column()
+            self._selected_remove_row = None
             self._set_rm_seg_enabled(True)
             self._set_rm_feat_enabled(False)
-        elif n_rows == 1 and n_cols == 0:
+        elif len(sel_rows) == 1 and len(sel_cols) == 0:
+            self._selected_remove_row = sel_rows[0].row()
+            self._selected_remove_col = None
             self._set_rm_seg_enabled(False)
             self._set_rm_feat_enabled(True)
         else:
+            self._selected_remove_col = None
+            self._selected_remove_row = None
             self._set_rm_seg_enabled(False)
             self._set_rm_feat_enabled(False)
-
-    def _on_cell_clicked(self, row: int, col: int):
-        item = self._table.item(row, col)
-        if item is None:
-            return
-        # Cycle: 0 -> + -> minus -> 0. cycle_value always produces a different
-        # value (or resets to "0" from a bad state), so this always
-        # records an edit.
-        new_val = cycle_value(item.text())
-        edits = [_CellEdit(row, col, item.text(), new_val)]
-        item.setText(new_val)
-        style_cell(item, new_val)
-        self._commit_edits(edits)
-        # A cell click would otherwise replace the header-driven row/
-        # column highlight with a single-cell selection. Restore the
-        # sticky header selection so it persists across cell edits.
-        if self._selected_remove_col is not None:
-            self._table.selectColumn(self._selected_remove_col)
-        elif self._selected_remove_row is not None:
-            self._table.selectRow(self._selected_remove_row)
 
     # Add / remove segments and features
     def _add_segment(self) -> None:
