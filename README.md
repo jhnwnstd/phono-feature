@@ -4,32 +4,35 @@ A desktop tool for distinctive-feature phonology. Browse segment inventories, co
 
 ## Run it
 
-Requires Python 3.11+. Double-click the launcher for your OS. The first run sets up a private environment in under a minute. Later launches open the GUI immediately.
+Requires Python 3.11+. Double-click the launcher for your OS. The first run sets up a private environment in under a minute; later launches open the GUI immediately.
 
-| OS      | File              |
+| OS      | Launcher          |
 |---------|-------------------|
 | macOS   | `RUN-Mac.command` |
 | Windows | `RUN-Windows.bat` |
 | Linux   | `RUN-Linux.sh`    |
 
-If Python is missing, install it from <https://www.python.org/downloads/> and try again.
+If Python is missing, install it from <https://www.python.org/downloads/>.
 
-**First-launch warnings.** macOS Gatekeeper blocks unsigned `.command` files. Right-click the launcher, choose **Open**, and confirm. Windows SmartScreen flags unrecognized scripts. Click **More info**, then **Run anyway**. On Linux, if `.sh` files won't run from the file manager, open a terminal here and run `./RUN-Linux.sh` (prefix with `chmod +x RUN-Linux.sh` if a permission error appears).
+First-launch quirks by OS:
+
+- **macOS:** Gatekeeper blocks unsigned `.command` files. Right-click the launcher, choose **Open**, and confirm.
+- **Windows:** SmartScreen flags unrecognized scripts. Click **More info**, then **Run anyway**.
+- **Linux:** If the file manager won't launch `.sh` files, open a terminal here and run `./RUN-Linux.sh` (prefix with `chmod +x RUN-Linux.sh` once if you get a permission error).
 
 ## What it does
 
-- **Inventory browser** walks every segment by its distinctive features.
-- **Natural-class solver** returns the minimal feature bundle selecting exactly a chosen set of segments, when one exists.
-- **Inventory builder** authors or edits inventories with +/-/0 keyboard cycling.
+- **Inventory browser:** every segment as a +/-/0 distinctive-feature bundle.
+- **Natural-class solver:** the minimal feature bundle that picks exactly a chosen segment set, when one exists.
+- **Inventory builder:** author or edit inventories with +/-/0 keyboard cycling.
 
 ## Bundled inventories
 
-Four feature sets live in `app/inventories/` and appear automatically in the GUI dropdown.
+Three feature sets live in `app/inventories/` and appear automatically in the GUI dropdown.
 
 | File                       | Source                                  |
 |----------------------------|-----------------------------------------|
 | `hayes_features.json`      | Hayes (2009), Introductory Phonology    |
-| `blevins_features.json`    | Blevins (2004), Evolutionary Phonology  |
 | `general_features.json`    | General-purpose IPA superset            |
 | `english_features.json`    | English-focused inventory               |
 

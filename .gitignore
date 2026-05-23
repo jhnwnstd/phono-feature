@@ -38,3 +38,4 @@ Thumbs.db
 
 # Project: user-added inventory files are tracked; ignore scratch exports
 *.bak
+app/inventories/blevins_features.json
