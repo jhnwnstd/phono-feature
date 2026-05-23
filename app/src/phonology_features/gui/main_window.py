@@ -574,44 +574,29 @@ class MainWindow(QMainWindow):
         return app.primaryScreen()
 
     def _clamp_size_to_screen(
-        self,
-        w: int,
-        h: int,
-        deco_w: int | None = None,
-        deco_h: int | None = None,
+        self, w: int, h: int, deco_w: int = 40, deco_h: int = 40
     ) -> tuple[int, int]:
-        """Clamp ``(w, h)`` to the target screen's available area.
-
-        ``deco_w`` / ``deco_h`` are the WM decoration size (title bar +
-        borders). When known; i.e. once the window has been shown and
-        decorated; they let us size the widget so the *frame* fits
-        exactly inside ``availableGeometry``. When unknown (pre-show)
-        we fall back to a 40-pixel heuristic margin.
+        """Clamp ``(w, h)`` so the widget plus WM decoration fits in
+        ``availableGeometry``. ``deco_w`` / ``deco_h`` default to 40 px,
+        the heuristic used pre-show when no real decoration is known yet.
         """
         screen = self._target_screen()
         if screen is None:
             return w, h
         avail = screen.availableGeometry()
-        if deco_w is not None and deco_h is not None:
-            max_w = max(640, avail.width() - deco_w)
-            max_h = max(480, avail.height() - deco_h)
-        else:
-            max_w = max(640, avail.width() - 40)
-            max_h = max(480, avail.height() - 40)
-        return min(w, max_w), min(h, max_h)
+        return (
+            min(w, max(640, avail.width() - deco_w)),
+            min(h, max(480, avail.height() - deco_h)),
+        )
 
     def _ensure_visible_on_screen(self) -> None:
-        """
-        Run after the first show via QTimer so the WM has decorated the window.
-        Ensures the window is on the primary screen.  If the user had a saved
-        position that is still on *some* screen, we leave it alone; otherwise
-        we center on the primary screen.
-
-        Note: ``raise_`` and ``activateWindow`` are only called when we
-        actually move the window. On the happy path (window already on
-        a sane screen) they cause a visible title-bar focus blink and a
-        brief restack on some Linux WMs; and they're redundant since
-        the WM gives the only freshly-shown window focus by default.
+        """Run after the first show via QTimer so the WM has decorated the
+        window. Leaves the window alone whenever it's a reasonable size and
+        intersects *any* screen (the user can drag it back); only recenters
+        when it's truly off-screen or absurdly small. ``raise_`` /
+        ``activateWindow`` are only called on the recovery path -- on the
+        happy path they cause a visible focus blink on some Linux WMs and
+        the WM already focused the freshly-shown window.
         """
         app = QApplication.instance()
         assert isinstance(app, QApplication)
@@ -619,25 +604,12 @@ class MainWindow(QMainWindow):
         if screen is None:
             return
         frame = self.frameGeometry()
-        primary_geo = screen.geometry()
-        # If the window is already mostly on the primary screen, leave it
-        # alone; no raise/activate, no flicker.
-        if (
-            primary_geo.intersects(frame)
-            and frame.width() >= 300
-            and frame.height() >= 200
+        sane_size = frame.width() >= 300 and frame.height() >= 200
+        if sane_size and any(
+            s.geometry().intersects(frame) for s in app.screens()
         ):
             return
-        # If the window is on *some* other screen and has a saved position,
-        # leave it there; the user intentionally placed it.
-        if self._read_setting("window_pos") is not None:
-            on_any = any(s.geometry().intersects(frame) for s in app.screens())
-            if on_any and frame.width() >= 300 and frame.height() >= 200:
-                return
-        # Off-screen recovery: center on the primary screen and bring the
-        # window forward so the user can find it.
         avail = screen.availableGeometry()
-        frame = self.frameGeometry()
         frame.moveCenter(avail.center())
         self.move(frame.topLeft())
         self.raise_()
@@ -743,13 +715,12 @@ class MainWindow(QMainWindow):
         """Scan ``inventories/`` and fill the dropdown.
 
         Preserves the current selection if the previously-selected path
-        is still present after the rescan \u2014 this matters when the
-        Builder saves a new inventory and the directory watcher
-        triggers a refresh; we don't want to drop whatever the user
-        had loaded out from under them. ``blockSignals`` keeps the
-        clear/repopulate from emitting a spurious ``activated``.
+        is still present after the rescan -- matters when the Builder
+        saves a new inventory and the directory watcher triggers a
+        refresh; we don't want to drop whatever the user had loaded out
+        from under them. ``blockSignals`` keeps the clear/repopulate
+        from emitting a spurious ``activated``.
         """
-        inventories_dir = self._get_inventories_dir()
         previous_path = self.inventory_combo.currentData()
         self.inventory_combo.blockSignals(True)
         try:
@@ -758,29 +729,29 @@ class MainWindow(QMainWindow):
                 "Select inventory\u2026", userData=None
             )
             # Disable the placeholder row so it cannot be picked.
-            # QStandardItemModel is the default; the guard is defensive
-            # against style plugins that substitute a different model type.
-            # If it fails, _on_inventory_selected's `if path:` guard still
-            # prevents any action.
+            # QStandardItemModel is the default; ``_on_inventory_selected``
+            # still bails on a None path, so a model swap isn't fatal.
             model = self.inventory_combo.model()
-            if isinstance(model, QStandardItemModel):
-                item = model.item(0)
-                if item is not None:
-                    item.setEnabled(False)
+            placeholder = (
+                model.item(0)
+                if isinstance(model, QStandardItemModel)
+                else None
+            )
+            if placeholder is not None:
+                placeholder.setEnabled(False)
+            inventories_dir = self._get_inventories_dir()
             if os.path.isdir(inventories_dir):
                 for fname in sorted(os.listdir(inventories_dir)):
                     if fname.endswith(".json"):
                         path = os.path.join(inventories_dir, fname)
                         pretty = fname[:-5].replace("_", " ").title()
                         self.inventory_combo.addItem(pretty, userData=path)
-            if previous_path:
-                idx = self.inventory_combo.findData(previous_path)
-                if idx >= 0:
-                    self.inventory_combo.setCurrentIndex(idx)
-                else:
-                    self.inventory_combo.setCurrentIndex(0)
-            else:
-                self.inventory_combo.setCurrentIndex(0)
+            idx = (
+                self.inventory_combo.findData(previous_path)
+                if previous_path
+                else 0
+            )
+            self.inventory_combo.setCurrentIndex(max(idx, 0))
         finally:
             self.inventory_combo.blockSignals(False)
 
@@ -933,12 +904,9 @@ class MainWindow(QMainWindow):
             # Restore geometry while paint is still suspended so the
             # window doesn't flash at the default splitter ratios before
             # snapping back to the user's sizes.
-            self.resize(saved_size)
-            self.move(saved_pos)
-            if saved_hsplit and len(saved_hsplit) == self._hsplit.count():
-                self._hsplit.setSizes(saved_hsplit)
-            if saved_vsplit and len(saved_vsplit) == self._vsplit.count():
-                self._vsplit.setSizes(saved_vsplit)
+            self._restore_geometry(
+                saved_pos, saved_size, saved_hsplit, saved_vsplit
+            )
         # Deferred geometry pass: after one event-loop tick any singleShot
         # resize that _fit_to_content queued (via the populate path) has
         # fired. Re-apply the saved sizes to win against it and silence
@@ -946,23 +914,20 @@ class MainWindow(QMainWindow):
         if self.isVisible():
             QTimer.singleShot(
                 0,
-                lambda: self._restore_theme_geometry(
+                lambda: self._restore_geometry(
                     saved_pos, saved_size, saved_hsplit, saved_vsplit
                 ),
             )
 
-    def _restore_theme_geometry(
+    def _restore_geometry(
         self,
         pos,
         size,
         hsplit: list[int] | None,
         vsplit: list[int] | None,
     ) -> None:
-        """Re-apply geometry after a deferred ``_fit_to_content`` tick.
-
-        Pulled out so the closure capture is explicit and the lambda in
-        ``_apply_theme`` stays a one-liner. Same paint-suspended pattern
-        as the inline pass above.
+        """Apply saved geometry atomically: window pos/size + splitter
+        ratios, paint suspended so it's one frame.
         """
         with self._batched_updates():
             self.resize(size)
@@ -1022,44 +987,39 @@ class MainWindow(QMainWindow):
         Returns the parsed dict on success, or None after surfacing a
         human-readable error in the status bar / analysis panel.
         """
+        fname = os.path.basename(path)
         try:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
         except FileNotFoundError:
-            self.status.showMessage(
-                f"Cannot load {os.path.basename(path)}: file not found"
-            )
-            return None
-        except OSError as e:
-            self.status.showMessage(
-                f"Cannot load {os.path.basename(path)}: {e}"
-            )
+            self.status.showMessage(f"Cannot load {fname}: file not found")
             return None
         except json.JSONDecodeError as e:
             self.status.showMessage(
-                f"Cannot load {os.path.basename(path)}: invalid JSON "
+                f"Cannot load {fname}: invalid JSON "
                 f"({e.msg} on line {e.lineno})"
             )
             return None
+        except OSError as e:
+            self.status.showMessage(f"Cannot load {fname}: {e}")
+            return None
         errors, warnings = validate_inventory_data(data)
         if errors:
-            self.status.showMessage(
-                f"Cannot load {os.path.basename(path)}: {errors[0]}"
-            )
-            self.analysis.set_html(
-                f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"
-                + "".join(f"<p>{e}</p>" for e in errors)
-                + (
-                    "<p><b>Warnings:</b></p>"
-                    + "".join(f"<p>{w}</p>" for w in warnings)
-                    if warnings
-                    else ""
-                )
-            )
+            self.status.showMessage(f"Cannot load {fname}: {errors[0]}")
+            self.analysis.set_html(self._validation_report_html(errors, warnings))
             return None
         for w in warnings:
             self.status.showMessage(f"Warning: {w}")
         return data
+
+    @staticmethod
+    def _validation_report_html(errors: list[str], warnings: list[str]) -> str:
+        parts = [f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"]
+        parts.extend(f"<p>{e}</p>" for e in errors)
+        if warnings:
+            parts.append("<p><b>Warnings:</b></p>")
+            parts.extend(f"<p>{w}</p>" for w in warnings)
+        return "".join(parts)
 
     def _install_engine(self, path: str, data: dict) -> bool:
         """Build a fresh FeatureEngine for ``data`` and adopt it.
@@ -1597,23 +1557,16 @@ class MainWindow(QMainWindow):
     def _decoration_padding(self, old_pos) -> tuple[int, int, int, int]:
         """Return (deco_w, deco_h, left_pad, top_pad) from the current
         frame. Falls back to typical title-bar sizes when the WM reports
-        zero (Wayland CSD, freshly-shown windows).
+        zero (Wayland CSD, freshly-shown windows). Pre-show callers get
+        the same heuristic the rest of the code uses as its default.
         """
         if not self.isVisible():
-            return 0, 0, 0, 0
+            return _MIN_DECO_W, _MIN_DECO_H, 0, 0
         old_frame = self.frameGeometry()
-        deco_w_reported = max(0, old_frame.width() - self.width())
-        deco_h_reported = max(0, old_frame.height() - self.height())
-        if deco_h_reported == 0:
-            deco_h, top_pad = _MIN_DECO_H, _MIN_DECO_H
-        else:
-            deco_h = deco_h_reported
-            top_pad = max(0, old_pos.y() - old_frame.y())
-        if deco_w_reported == 0:
-            deco_w, left_pad = _MIN_DECO_W, 0
-        else:
-            deco_w = deco_w_reported
-            left_pad = max(0, old_pos.x() - old_frame.x())
+        deco_w = max(_MIN_DECO_W, old_frame.width() - self.width())
+        deco_h = max(_MIN_DECO_H, old_frame.height() - self.height())
+        left_pad = max(0, old_pos.x() - old_frame.x())
+        top_pad = max(0, old_pos.y() - old_frame.y())
         return deco_w, deco_h, left_pad, top_pad
 
     def _apply_splitter_sizes(
