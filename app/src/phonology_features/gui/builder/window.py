@@ -125,9 +125,7 @@ class _BulkCycleTable(QTableWidget):
         if len(sel_rows) == 1 and len(sel_cols) == 0:
             row = sel_rows[0].row()
             left_rect = self.visualRect(self.model().index(row, 0))
-            right_rect = self.visualRect(
-                self.model().index(row, n_cols - 1)
-            )
+            right_rect = self.visualRect(self.model().index(row, n_cols - 1))
             self._draw_outline_rect(left_rect.united(right_rect))
             return
         # Fast path 3: whole table.
@@ -163,6 +161,19 @@ class _BulkCycleTable(QTableWidget):
         pen.setWidth(2)
         painter.setPen(pen)
         for row, col in cells:
+            # Skip isolated cells (no neighbour also selected). Otherwise
+            # a single-cell selection would get a 4-sided border per
+            # cell -- user wants only the light-blue fill in that case,
+            # reserving outlines for actual GROUPS (row, col, rectangle,
+            # cross). Cells inside a group always have at least one
+            # selected neighbour, so this only suppresses lone cells.
+            if not (
+                (row - 1, col) in cells
+                or (row + 1, col) in cells
+                or (row, col - 1) in cells
+                or (row, col + 1) in cells
+            ):
+                continue
             r = self.visualRect(self.model().index(row, col))
             if not r.isValid():
                 continue
