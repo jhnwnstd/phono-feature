@@ -72,6 +72,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QStatusBar,
     QToolBar,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -308,8 +309,9 @@ class MainWindow(QMainWindow):
             }}
         """)
         self.addToolBar(toolbar)
-        # Inventory dropdown
-        self.inventory_combo = QComboBox()
+        # Inventory dropdown -- parent to ``toolbar`` (itself parented
+        # to ``self``) so it's never a parent-less widget.
+        self.inventory_combo = QComboBox(toolbar)
         self.inventory_combo.setFont(QFont("Noto Sans", 10))
         self.inventory_combo.setFixedHeight(32)
         self.inventory_combo.setMinimumWidth(220)
@@ -344,7 +346,7 @@ class MainWindow(QMainWindow):
         nav_style = self._nav_btn_style()
 
         def add_nav(label: str, slot) -> QPushButton:
-            btn = QPushButton(label)
+            btn = QPushButton(label, toolbar)
             btn.setFont(QFont("Noto Sans", 10))
             btn.setFixedHeight(32)
             btn.setStyleSheet(nav_style)
@@ -356,7 +358,7 @@ class MainWindow(QMainWindow):
         add_nav("Builder", self._open_builder)
         # Push the theme toggle to the far right of the toolbar so it
         # doesn't crowd the primary actions but stays visible.
-        spacer = QWidget()
+        spacer = QWidget(toolbar)
         spacer.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
@@ -366,7 +368,9 @@ class MainWindow(QMainWindow):
         # clicking will switch you to. Sun = "switch to light",
         # moon = "switch to dark".
         is_dark_now = get_theme_name() == "dark"
-        self._theme_btn = QPushButton("\u263c" if is_dark_now else "\u263e")
+        self._theme_btn = QPushButton(
+            "\u263c" if is_dark_now else "\u263e", toolbar
+        )
         self._theme_btn.setFont(QFont("Noto Sans", 12))
         self._theme_btn.setFixedSize(32, 32)
         self._theme_btn.setToolTip(
@@ -388,12 +392,20 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._theme_btn)
 
     def _build_central(self) -> None:
-        central = QWidget()
+        central = QWidget(self)
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        # Parent the splitter to ``central`` at construction. A parent-less
+        # QSplitter is a top-level widget; on multi-monitor setups the WM
+        # places that orphan on the leftmost monitor with default size, and
+        # its first paint draws the splitter handle -- which in many WM
+        # themes looks like two horizontal arrows pointing at each other.
+        # The "small window flash on the left monitor" was the orphaned
+        # splitter previewing for the few ms before ``root.addWidget``
+        # finally re-parented it.
+        splitter = QSplitter(Qt.Orientation.Horizontal, central)
         splitter.setHandleWidth(1)
         splitter.setStyleSheet(
             f"QSplitter::handle {{ background: {C['border']}; }}"
@@ -422,9 +434,10 @@ class MainWindow(QMainWindow):
         # leave dead space after the vowels inside the segment panel.
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        # Analysis panel below the split panes.
-        self.analysis = AnalysisPanel()
-        self._vsplit = QSplitter(Qt.Orientation.Vertical)
+        # Analysis panel below the split panes; both parented at
+        # construction so neither becomes a transient top-level window.
+        self.analysis = AnalysisPanel(central)
+        self._vsplit = QSplitter(Qt.Orientation.Vertical, central)
         self._vsplit.setHandleWidth(4)
         self._vsplit.setStyleSheet(
             "QSplitter::handle { background: transparent; }"
@@ -438,7 +451,7 @@ class MainWindow(QMainWindow):
         root.addWidget(self._vsplit)
 
     def _build_status_bar(self) -> None:
-        self.status = _BrandedStatusBar()
+        self.status = _BrandedStatusBar(self)
         self.status.setStyleSheet(
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
         )
@@ -853,6 +866,13 @@ class MainWindow(QMainWindow):
         saved_vsplit = (
             list(self._vsplit.sizes()) if hasattr(self, "_vsplit") else None
         )
+        # The mouse cursor is over the theme toggle button when this
+        # runs (the user just clicked it). The old button gets destroyed
+        # and a fresh one rebuilt under the same cursor, which trips
+        # Qt's tooltip system into showing the new button's tooltip --
+        # a small text window appearing for ~500 ms until the cursor
+        # moves. Cancelling the active tooltip up front silences that.
+        QToolTip.hideText()
         # Suspend paint events for the entire tear-down + rebuild. Without
         # this the user sees a sequence of intermediate frames: empty
         # central widget after setCentralWidget, missing toolbar after
@@ -1611,15 +1631,23 @@ class MainWindow(QMainWindow):
 
     def _decoration_padding(self, old_pos) -> tuple[int, int, int, int]:
         """Return (deco_w, deco_h, left_pad, top_pad) from the current
-        frame. Falls back to typical title-bar sizes when the WM reports
-        zero (Wayland CSD, freshly-shown windows). Pre-show callers get
-        the same heuristic the rest of the code uses as its default.
+        frame. Trusts the WM-reported decoration when nonzero; only falls
+        back to ``_MIN_DECO_*`` heuristics when the WM reports zero
+        (Wayland CSD, freshly-shown windows, pre-show callers).
+
+        Applying the floor unconditionally was a bug: thin-border WMs
+        report 2-4 px of decoration; treating that as 8/32 inflates
+        ``frame_right`` and shifts the anchor left a few pixels per
+        resize -- visible as the window inching toward the screen edge
+        on every inventory switch.
         """
         if not self.isVisible():
             return _MIN_DECO_W, _MIN_DECO_H, 0, 0
         old_frame = self.frameGeometry()
-        deco_w = max(_MIN_DECO_W, old_frame.width() - self.width())
-        deco_h = max(_MIN_DECO_H, old_frame.height() - self.height())
+        deco_w_reported = max(0, old_frame.width() - self.width())
+        deco_h_reported = max(0, old_frame.height() - self.height())
+        deco_w = deco_w_reported if deco_w_reported else _MIN_DECO_W
+        deco_h = deco_h_reported if deco_h_reported else _MIN_DECO_H
         left_pad = max(0, old_pos.x() - old_frame.x())
         top_pad = max(0, old_pos.y() - old_frame.y())
         return deco_w, deco_h, left_pad, top_pad
