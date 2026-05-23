@@ -139,10 +139,11 @@ def feat_edit(qapp):
 def test_feature_tab_on_empty_fills_two_major_class_seeds(feat_edit):
     assert feat_edit.toPlainText() == ""
     _tab(feat_edit)
-    text = feat_edit.toPlainText()
     # Tab seeds only the two major-class features; the user fills in the
     # rest. The full Default (33) preset is reachable via the dropdown.
-    assert text.splitlines() == ["Syllabic", "Consonantal"]
+    # Compare against ``entries()`` since the seed format (space- vs
+    # newline-separated) is an implementation detail.
+    assert feat_edit.entries() == ["Syllabic", "Consonantal"]
 
 
 def test_feature_tab_on_existing_content_leaves_it_alone(feat_edit):
