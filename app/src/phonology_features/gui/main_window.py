@@ -11,36 +11,6 @@ from contextlib import contextmanager
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import (
-    QEvent,
-    QFileSystemWatcher,
-    QSettings,
-    Qt,
-    QTimer,
-)
-from PyQt6.QtGui import (
-    QFont,
-    QScreen,
-    QStandardItemModel,
-)
-from PyQt6.QtWidgets import (
-    QApplication,
-    QComboBox,
-    QFileDialog,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QSplitter,
-    QStatusBar,
-    QToolBar,
-    QVBoxLayout,
-    QWidget,
-)
-
 from phonology_features.engine.feature_engine import FeatureEngine
 from phonology_features.engine.inventory_validator import (
     validate_inventory_data,
@@ -70,6 +40,35 @@ from phonology_features.gui.widgets import (
     SegmentButton,
     SegmentGridWidget,
     SegmentState,
+)
+from PyQt6.QtCore import (
+    QEvent,
+    QFileSystemWatcher,
+    QSettings,
+    Qt,
+    QTimer,
+)
+from PyQt6.QtGui import (
+    QFont,
+    QScreen,
+    QStandardItemModel,
+)
+from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
+    QStatusBar,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
 if TYPE_CHECKING:
@@ -1006,7 +1005,9 @@ class MainWindow(QMainWindow):
         errors, warnings = validate_inventory_data(data)
         if errors:
             self.status.showMessage(f"Cannot load {fname}: {errors[0]}")
-            self.analysis.set_html(self._validation_report_html(errors, warnings))
+            self.analysis.set_html(
+                self._validation_report_html(errors, warnings)
+            )
             return None
         for w in warnings:
             self.status.showMessage(f"Warning: {w}")
@@ -1014,7 +1015,9 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _validation_report_html(errors: list[str], warnings: list[str]) -> str:
-        parts = [f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"]
+        parts = [
+            f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"
+        ]
         parts.extend(f"<p>{e}</p>" for e in errors)
         if warnings:
             parts.append("<p><b>Warnings:</b></p>")
