@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
@@ -172,21 +173,34 @@ class InventoryBuilder(QMainWindow):
         make_btn("Open\u2026", self._open_file)
         make_btn("Save", self._save, style=save_style)
         make_btn("Save As\u2026", self._save_as)
-        # Delete is only valid when an existing file is loaded; enabled
-        # by _update_title whenever _current_path changes.
-        self._delete_btn = make_btn("Delete\u2026", self._delete_inventory)
-        self._delete_btn.setEnabled(False)
-        self._delete_btn.setStyleSheet(self._btn_style_disabled)
         toolbar.addSeparator()
         make_btn("+ Segment", self._add_segment)
         make_btn("+ Feature", self._add_feature)
-        toolbar.addSeparator()
         self._rm_seg_btn = make_btn("\u2212 Segment", self._remove_segment)
         self._rm_seg_btn.setEnabled(False)
         self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
         self._rm_feat_btn = make_btn("\u2212 Feature", self._remove_feature)
         self._rm_feat_btn.setEnabled(False)
         self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
+        toolbar.addSeparator()
+        # Two stretches sandwich Delete in the middle of the empty
+        # space: away from the edit cluster on the left AND away from
+        # the window's close button on the right.
+        left_stretch = QWidget()
+        left_stretch.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        toolbar.addWidget(left_stretch)
+        # Delete is only valid when an existing file is loaded; enabled
+        # by _update_title whenever _current_path changes.
+        self._delete_btn = make_btn("Delete\u2026", self._delete_inventory)
+        self._delete_btn.setEnabled(False)
+        self._delete_btn.setStyleSheet(self._btn_style_disabled)
+        right_stretch = QWidget()
+        right_stretch.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        toolbar.addWidget(right_stretch)
 
     def _build_central(self) -> None:
         central = QWidget()
