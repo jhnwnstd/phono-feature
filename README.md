@@ -1,6 +1,6 @@
 # Phonology Segment & Feature Engine
 
-A desktop tool for distinctive-feature phonology. Browse segment inventories, compute natural classes, find minimal distinguishing feature bundles, and infer hierarchical feature geometry.
+A desktop tool for distinctive-feature phonology. Browse segment inventories, compute natural classes, and find minimal distinguishing feature bundles.
 
 ## Run it
 
