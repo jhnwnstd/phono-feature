@@ -50,6 +50,7 @@ from PyQt6.QtCore import (
     QEvent,
     QFileSystemWatcher,
     QPoint,
+    QRectF,
     QSettings,
     Qt,
     QTimer,
@@ -58,6 +59,8 @@ from PyQt6.QtGui import (
     QColor,
     QFont,
     QPainter,
+    QPalette,
+    QPen,
     QScreen,
     QStandardItemModel,
 )
@@ -216,6 +219,25 @@ class _ThemedSplitter(QSplitter):
 
     def createHandle(self):  # type: ignore[override]
         return _ThemedHandle(self.orientation(), self)
+
+
+class _ThemedCard(QFrame):
+    """Feature-group card that paints its own bg + rounded border from
+    the live palette. Replaces a per-card setStyleSheet that previously
+    triggered a polish cascade through ~5 FeatureRow children every
+    theme toggle (6-7 cards = the cost behind _restyle_feature_cards).
+    """
+
+    def paintEvent(self, event):  # type: ignore[override]
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor(C["border"]))
+        pen.setWidth(1)
+        painter.setPen(pen)
+        painter.setBrush(QColor(C["panel"]))
+        # Inset by 0.5 so the 1 px border falls inside the widget rect.
+        rect = QRectF(0.5, 0.5, self.width() - 1.0, self.height() - 1.0)
+        painter.drawRoundedRect(rect, 7, 7)
 
 
 class MainWindow(QMainWindow):
@@ -923,28 +945,21 @@ class MainWindow(QMainWindow):
         self.seg_hint.setStyleSheet(f"color: {C['text_dim']};")
 
     def _restyle_feature_cards(self) -> None:
-        """Re-style each group card frame and its title label."""
-        card_qss = f"""
-            QFrame {{
-                background: {C["panel"]};
-                border: 1px solid {C["border"]};
-                border-radius: 7px;
-            }}
+        """Refresh each group card and its title.
+
+        Cards are ``_ThemedCard`` instances that paint themselves from
+        the live palette; one ``update()`` per card queues a single
+        repaint (no polish cascade). Title color lives in QPalette so
+        re-applying it is cheap and doesn't cascade either.
         """
-        title_qss = (
-            f"color: {C['text_dim']}; letter-spacing: 1px; "
-            "background: transparent; border: none; "
-            "padding: 0 8px 2px 8px;"
-        )
         cards: list[QFrame] = [card for card, _ in self._feat_cards]
         if self._other_card is not None:
             cards.append(self._other_card)
         for card in cards:
-            card.setStyleSheet(card_qss)
-            # Each card's first child label is its title.
+            card.update()
             title = card.findChild(QLabel)
             if title is not None:
-                title.setStyleSheet(title_qss)
+                self._apply_title_palette(title)
 
     def _restore_geometry(
         self,
@@ -1238,28 +1253,30 @@ class MainWindow(QMainWindow):
         active = [f for f in features if f in self._feat_rows]
         if not active:
             return None
-        group_frame = QFrame(self._feat_left_col)
-        group_frame.setStyleSheet(f"""
-            QFrame {{
-                background: {C["panel"]};
-                border: 1px solid {C["border"]};
-                border-radius: 7px;
-            }}
-        """)
+        group_frame = _ThemedCard(self._feat_left_col)
         glay = QVBoxLayout(group_frame)
         glay.setContentsMargins(0, 6, 0, 6)
         glay.setSpacing(1)
         title_label = QLabel(title)
         title_label.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
+        # Static styling once; color comes from QPalette so theme
+        # changes only need setPalette (no setStyleSheet polish).
         title_label.setStyleSheet(
-            f"color: {C['text_dim']}; letter-spacing: 1px; "
-            "background: transparent; border: none; "
-            "padding: 0 8px 2px 8px;"
+            "letter-spacing: 1px; background: transparent;"
+            " border: none; padding: 0 8px 2px 8px;"
         )
+        self._apply_title_palette(title_label)
         glay.addWidget(title_label)
         for feat in active:
             glay.addWidget(self._feat_rows[feat])
         return group_frame
+
+    @staticmethod
+    def _apply_title_palette(label: QLabel) -> None:
+        """Set the card-title color via QPalette (live ``text_dim``)."""
+        pal = label.palette()
+        pal.setColor(QPalette.ColorRole.WindowText, QColor(C["text_dim"]))
+        label.setPalette(pal)
 
     def _init_feature_pool(self) -> None:
         """Pre-create a FeatureRow per FEATURE_ORDER entry and build the
