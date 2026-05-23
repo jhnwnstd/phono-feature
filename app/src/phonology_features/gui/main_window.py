@@ -11,6 +11,36 @@ from contextlib import contextmanager
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import (
+    QEvent,
+    QFileSystemWatcher,
+    QSettings,
+    Qt,
+    QTimer,
+)
+from PyQt6.QtGui import (
+    QFont,
+    QScreen,
+    QStandardItemModel,
+)
+from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
+    QStatusBar,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
+)
+
 from phonology_features.engine.feature_engine import FeatureEngine
 from phonology_features.engine.inventory_validator import (
     validate_inventory_data,
@@ -40,35 +70,6 @@ from phonology_features.gui.widgets import (
     SegmentButton,
     SegmentGridWidget,
     SegmentState,
-)
-from PyQt6.QtCore import (
-    QEvent,
-    QFileSystemWatcher,
-    QSettings,
-    Qt,
-    QTimer,
-)
-from PyQt6.QtGui import (
-    QFont,
-    QScreen,
-    QStandardItemModel,
-)
-from PyQt6.QtWidgets import (
-    QApplication,
-    QComboBox,
-    QFileDialog,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QSplitter,
-    QStatusBar,
-    QToolBar,
-    QVBoxLayout,
-    QWidget,
 )
 
 if TYPE_CHECKING:
@@ -1525,202 +1526,111 @@ class MainWindow(QMainWindow):
         total_need_h = (
             top_need_h + analysis_h + toolbar_h + 30
         )  # extra overall height
-        # -- Size window to fit content on every inventory load --
+        # -- Size window + splitters to fit content --
         # Paint is suspended for the entire resize + splitter pass so the
         # window doesn't flash through "new size + old splitter ratio"
         # before the splitter setSizes lands. One paint at the end.
         screen = self._target_screen()
         with self._batched_updates():
-            self._fit_to_content_inner(
-                screen,
-                seg_need_w,
-                feat_need_w,
-                top_need_h,
-                total_need_h,
+            self._fit_window_to_size(
+                screen, seg_need_w + feat_need_w + 1, total_need_h
             )
-        # Defensive follow-up: by the next event-loop tick the resize
-        # and move events have actually been processed by the WM, so
-        # ``frameGeometry()`` reflects reality. If our prediction was
-        # off (decoration deltas misreported on some compositors), this
-        # final pass catches it and pulls the window back on-screen.
-        QTimer.singleShot(0, self._clamp_to_screen)
+            self._apply_splitter_sizes(seg_need_w, feat_need_w, top_need_h)
 
-    def _fit_to_content_inner(
-        self,
-        screen,
-        seg_need_w: int,
-        feat_need_w: int,
-        top_need_h: int,
-        total_need_h: int,
-    ) -> None:
-        """Geometry + splitter pass for ``_fit_to_content``.
+    def _fit_window_to_size(self, screen, need_w: int, need_h: int) -> None:
+        """Resize the window to fit ``(need_w, need_h)`` and keep the user's
+        chosen corner.
 
-        Extracted so the paint-suspension wrapper has a single guarded
-        body. Behavior is identical to inlining; the split exists only
-        to make the setUpdatesEnabled scope unambiguous.
+        Behavior, in one sentence: anchor to wherever the title bar is
+        right now, change the size, and only shift the window if doing
+        so would put the title bar itself off the screen (the only
+        scenario where the window would become unreachable).
+
+        First load is the one exception; the saved-pos check (``_has_
+        saved_size``) is False on a fresh launch, so we center on the
+        target screen so the user sees something sensible. Every load
+        after that anchors to ``self.pos()`` -- the live position,
+        including any manual drag the user just did.
         """
-        if screen is not None:
-            avail = screen.availableGeometry()
-            need_w = seg_need_w + feat_need_w + 1
-            need_h = total_need_h
-            # Always resize to the new inventory's needs. Each inventory
-            # gets its own layout; sizes from a previously-loaded
-            # inventory don't bleed into this one. Clamped to the
-            # screen's available area and the absolute window minimum.
-            cur_w = self.width()
-            cur_h = self.height()
-            # Capture decoration deltas and the offsets between widget
-            # pos() and frameGeometry() before resizing. We work in
-            # widget coordinates throughout; pos() and move() agree on
-            # those, while frameGeometry() is offset by the title bar.
-            # Mixing the two would consistently drift the window down
-            # (or up) by the title bar height each load, which is
-            # exactly the asymmetry you'd see in Y but not X (the left
-            # border is usually 0 px on most WMs).
-            old_pos = self.pos()
-            old_frame = self.frameGeometry()
-            if self.isVisible():
-                deco_w_reported = max(0, old_frame.width() - cur_w)
-                deco_h_reported = max(0, old_frame.height() - cur_h)
-                # If the WM reports zero decoration (Wayland CSD, some
-                # freshly-shown windows), assume a typical title bar
-                # exists. If it reports any positive value, trust it ;
-                # don't apply a floor that would shift the user's
-                # chosen window position unnecessarily.
-                if deco_h_reported == 0:
-                    deco_h = _MIN_DECO_H
-                    top_pad = _MIN_DECO_H
-                else:
-                    deco_h = deco_h_reported
-                    top_pad = max(0, old_pos.y() - old_frame.y())
-                if deco_w_reported == 0:
-                    deco_w = _MIN_DECO_W
-                    left_pad = 0
-                else:
-                    deco_w = deco_w_reported
-                    left_pad = max(0, old_pos.x() - old_frame.x())
-                new_w, new_h = self._clamp_size_to_screen(
-                    need_w, need_h, deco_w, deco_h
-                )
-            else:
-                deco_w = 0
-                deco_h = 0
-                left_pad = 0
-                top_pad = 0
-                new_w, new_h = self._clamp_size_to_screen(need_w, need_h)
-            size_changed = new_w != cur_w or new_h != cur_h
-            if not self._has_saved_size:
-                # First load: no prior position to preserve. Resize +
-                # center in one atomic setGeometry so the window doesn't
-                # flash at the WM-default top-left before centering.
-                frame_w = new_w + deco_w
-                frame_h = new_h + deco_h
-                frame_x = avail.x() + (avail.width() - frame_w) // 2
-                frame_y = avail.y() + (avail.height() - frame_h) // 2
-                self.setGeometry(
-                    frame_x + left_pad, frame_y + top_pad, new_w, new_h
-                )
-                self._has_saved_size = True
-            elif size_changed:
-                # Subsequent loads: anchor the window's top-left so the
-                # title bar stays put. Growth or shrink happens toward
-                # the bottom-right edge. Only shift left/up to keep the
-                # frame inside the screen when growth would push it off
-                # the right/bottom edge.
-                new_x = old_pos.x()
-                new_y = old_pos.y()
-                # Frame edges given the new widget size and the captured
-                # decoration padding.
-                frame_right = new_x + new_w + (deco_w - left_pad)
-                frame_bottom = new_y + new_h + (deco_h - top_pad)
-                avail_right = avail.x() + avail.width()
-                avail_bottom = avail.y() + avail.height()
-                overflow_x = max(0, frame_right - avail_right)
-                overflow_y = max(0, frame_bottom - avail_bottom)
-                new_x -= overflow_x
-                new_y -= overflow_y
-                # Defensive lower clamp so a too-tall window doesn't
-                # shift the title bar above the screen.
-                new_x = max(avail.x() + left_pad, new_x)
-                new_y = max(avail.y() + top_pad, new_y)
-                # Resize + move in one setGeometry; two separate calls
-                # produce a visible intermediate frame on some WMs where
-                # the window snaps to its old top-left at the new size
-                # before move() lands.
-                self.setGeometry(new_x, new_y, new_w, new_h)
-        # -- Apply to horizontal splitter --
-        # Seg panel: exactly its content width (no padding).
-        # Feat panel: at least its content width, but takes whatever is
-        # left of the available width; that's what makes it hug the
-        # vowels and absorb extra room as the user enlarges the window.
+        if screen is None:
+            return
+        avail = screen.availableGeometry()
+        cur_w = self.width()
+        cur_h = self.height()
+        old_pos = self.pos()
+        deco_w, deco_h, left_pad, top_pad = self._decoration_padding(old_pos)
+        new_w, new_h = self._clamp_size_to_screen(
+            need_w, need_h, deco_w, deco_h
+        )
+        # First-ever load: nothing to preserve, center on the screen so
+        # the window doesn't flash at the WM-default top-left.
+        if not self._has_saved_size:
+            frame_x = avail.x() + (avail.width() - (new_w + deco_w)) // 2
+            frame_y = avail.y() + (avail.height() - (new_h + deco_h)) // 2
+            self.setGeometry(
+                frame_x + left_pad, frame_y + top_pad, new_w, new_h
+            )
+            self._has_saved_size = True
+            return
+        # Same size as before: leave the position alone entirely.
+        if new_w == cur_w and new_h == cur_h:
+            return
+        # Anchor to the current corner. Only shift if doing nothing
+        # would push the *title bar* (frame.x()/y()) off the screen --
+        # that's the unreachable case the user actually cares about.
+        # Partial overflow on the right or bottom is left alone so the
+        # window stays where the user put it.
+        new_x = old_pos.x()
+        new_y = old_pos.y()
+        frame_x = new_x - left_pad
+        frame_y = new_y - top_pad
+        if frame_x < avail.x():
+            new_x = avail.x() + left_pad
+        if frame_y < avail.y():
+            new_y = avail.y() + top_pad
+        # setGeometry applies resize + move atomically; separate
+        # resize+move calls produce a visible intermediate frame on
+        # some WMs where the window snaps to its old top-left at the
+        # new size before move() lands.
+        self.setGeometry(new_x, new_y, new_w, new_h)
+
+    def _decoration_padding(self, old_pos) -> tuple[int, int, int, int]:
+        """Return (deco_w, deco_h, left_pad, top_pad) from the current
+        frame. Falls back to typical title-bar sizes when the WM reports
+        zero (Wayland CSD, freshly-shown windows).
+        """
+        if not self.isVisible():
+            return 0, 0, 0, 0
+        old_frame = self.frameGeometry()
+        deco_w_reported = max(0, old_frame.width() - self.width())
+        deco_h_reported = max(0, old_frame.height() - self.height())
+        if deco_h_reported == 0:
+            deco_h, top_pad = _MIN_DECO_H, _MIN_DECO_H
+        else:
+            deco_h = deco_h_reported
+            top_pad = max(0, old_pos.y() - old_frame.y())
+        if deco_w_reported == 0:
+            deco_w, left_pad = _MIN_DECO_W, 0
+        else:
+            deco_w = deco_w_reported
+            left_pad = max(0, old_pos.x() - old_frame.x())
+        return deco_w, deco_h, left_pad, top_pad
+
+    def _apply_splitter_sizes(
+        self, seg_need_w: int, feat_need_w: int, top_need_h: int
+    ) -> None:
+        """Size the seg pane to its content width and let the feature
+        pane absorb the rest; rebalance the vertical splitter so the
+        analysis panel keeps its minimum.
+        """
         available = self._hsplit.width() or (seg_need_w + feat_need_w)
         feat_w = max(feat_need_w, available - seg_need_w)
         self._hsplit.setSizes([seg_need_w, feat_w])
-        # -- Rebalance vertical splitter --
         total = self._vsplit.height()
         if total > 0:
             top_h = min(top_need_h, total - self._min_analysis_h)
             top_h = max(top_h, 200)
             self._vsplit.setSizes([top_h, total - top_h])
-
-    def _clamp_to_screen(self) -> None:
-        """Ensure the window's frame fits the screen's available area.
-
-        Uses the actual reported decoration if any, but floors to a
-        typical title-bar size; many WMs report no decoration even
-        when one is rendered, and we still want the window pulled
-        back if it's poking out.
-        """
-        screen = self._target_screen()
-        if screen is None:
-            return
-        avail = screen.availableGeometry()
-        frame = self.frameGeometry()
-        pos = self.pos()
-        cur_w = self.width()
-        cur_h = self.height()
-        # Effective frame dimensions: trust the reported values when
-        # they're nonzero; only fall back to the floor when the WM
-        # reports zero decoration. Same policy as _fit_to_content so
-        # the two stay consistent and we don't unnecessarily shift the
-        # window when reported values are correct.
-        deco_w_reported = max(0, frame.width() - cur_w)
-        deco_h_reported = max(0, frame.height() - cur_h)
-        if deco_h_reported == 0:
-            deco_h = _MIN_DECO_H
-            top_pad = _MIN_DECO_H
-        else:
-            deco_h = deco_h_reported
-            top_pad = max(0, pos.y() - frame.y())
-        if deco_w_reported == 0:
-            deco_w = _MIN_DECO_W
-            left_pad = 0
-        else:
-            deco_w = deco_w_reported
-            left_pad = max(0, pos.x() - frame.x())
-        eff_fw = cur_w + deco_w
-        eff_fh = cur_h + deco_h
-        eff_fx = pos.x() - left_pad
-        eff_fy = pos.y() - top_pad
-        # Already inside avail? Done.
-        inside = (
-            eff_fx >= avail.x()
-            and eff_fy >= avail.y()
-            and eff_fx + eff_fw <= avail.x() + avail.width()
-            and eff_fy + eff_fh <= avail.y() + avail.height()
-        )
-        if inside:
-            return
-        # Clamp the effective frame to fit avail.
-        target_fx = max(
-            avail.x(), min(eff_fx, avail.x() + avail.width() - eff_fw)
-        )
-        target_fy = max(
-            avail.y(), min(eff_fy, avail.y() + avail.height() - eff_fh)
-        )
-        if target_fx == eff_fx and target_fy == eff_fy:
-            return
-        self.move(target_fx + left_pad, target_fy + top_pad)
 
     def _rebalance_vsplit(self) -> None:
         """Size the top panel so segments/features don't need scrollbars.
