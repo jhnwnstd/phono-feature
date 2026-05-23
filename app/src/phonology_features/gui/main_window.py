@@ -812,7 +812,13 @@ class MainWindow(QMainWindow):
             self._builder.deleteLater()
             self._builder = None
         with self._batched_updates():
+            # Skip pool entries detached from the layout (orphans from
+            # prior inventories). _get_or_create_seg_button calls
+            # apply_theme on re-attachment so a stale orphan picks up
+            # the new palette before it becomes visible.
             for btn in self._seg_button_pool.values():
+                if btn.parent() is None:
+                    continue
                 btn.apply_theme()
             # Iterate every FeatureRow we own, not just the pool: the
             # "Other" card in inventories with non-FEATURE_ORDER features
@@ -1237,6 +1243,10 @@ class MainWindow(QMainWindow):
             )
             self._seg_button_pool[seg] = btn
             return btn
+        # Refresh theme on pool reuse: theme toggles skip orphaned
+        # entries, so a pooled button may carry stylesheets from a
+        # prior palette. No-op when already current.
+        btn.apply_theme()
         btn.setChecked(False)
         btn.set_state(SegmentState.DEFAULT)
         btn.setToolTip("")

@@ -66,8 +66,18 @@ class SegmentButton(QPushButton):
     def apply_theme(self) -> None:
         """Re-style against the active palette in place. Called by
         MainWindow on theme toggle so pooled buttons survive.
+
+        Short-circuits when the cached theme dict is already the one
+        we'd apply: ``_styles_cache`` returns the same dict instance
+        for repeated requests in the same theme, so identity check
+        is both correct and cheap. Lets the main theme loop safely
+        call apply_theme on orphan pool entries without paying for
+        widgets whose theme is already current.
         """
-        self._styles = self._styles_for_active_theme()
+        new_styles = self._styles_for_active_theme()
+        if new_styles is self._styles:
+            return
+        self._styles = new_styles
         self.setStyleSheet(self._styles[self._state])
 
     @staticmethod
