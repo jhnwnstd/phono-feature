@@ -116,6 +116,27 @@ def _run_gui(argv: list[str]) -> int:
     icon_pix.fill(QColor("#2563EB"))
     app.setWindowIcon(QIcon(icon_pix))
     app.setStyle("Fusion")
+    # Seed Qt's default palette + app-wide background BEFORE any window
+    # is constructed. Without this, the compositor's initial surface
+    # is filled by Qt against its default light palette; in dark mode
+    # the user sees a brief light flash inside any region our QSS
+    # hasn't painted yet (typical on Wayland/WSLg). Reading the saved
+    # theme here keeps this in sync with whatever MainWindow will pick.
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtGui import QPalette
+    from phonology_features.gui.constants import SETTINGS_APP, SETTINGS_ORG
+    from phonology_features.gui.palette import C, detect_system_theme, set_theme
+    _settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+    _seed_theme = _settings.value("theme", detect_system_theme())
+    if not isinstance(_seed_theme, str):
+        _seed_theme = detect_system_theme()
+    set_theme(_seed_theme)
+    _pal = app.palette()
+    _bg = QColor(C["bg"])
+    _pal.setColor(QPalette.ColorRole.Window, _bg)
+    _pal.setColor(QPalette.ColorRole.Base, _bg)
+    app.setPalette(_pal)
+    app.setStyleSheet(f"QMainWindow {{ background: {C['bg']}; }}")
     parser = QCommandLineParser()
     parser.setApplicationDescription("Phonology Segment & Feature Engine")
     parser.addHelpOption()
@@ -131,9 +152,12 @@ def _run_gui(argv: list[str]) -> int:
     from phonology_features.gui.main_window import MainWindow
 
     window = MainWindow(startup_path=startup_path)
+    # Force-realize the native handle so Qt commits the final geometry
+    # in one xdg_toplevel.configure round on Wayland, not two (default
+    # size -> our size). Cuts the brief flash where the compositor maps
+    # at minimum size before our resize takes effect.
+    window.winId()
     window.show()
-    # Flush the first paint before app.exec so the WM doesn't map the
-    # window with default content for a frame before Qt renders.
     app.processEvents()
     return app.exec()
 
