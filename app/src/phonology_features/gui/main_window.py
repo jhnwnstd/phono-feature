@@ -1544,36 +1544,45 @@ class MainWindow(QMainWindow):
                 top_pad = 0
                 new_w, new_h = self._clamp_size_to_screen(need_w, need_h)
             size_changed = new_w != cur_w or new_h != cur_h
-            if size_changed:
-                self.resize(new_w, new_h)
             if not self._has_saved_size:
-                # First load: no prior position to preserve. Center on
-                # screen so the window appears in a sensible spot.
-                frame = self.frameGeometry()
-                frame.moveCenter(avail.center())
-                self.move(frame.topLeft())
+                # First load: no prior position to preserve. Resize +
+                # center in one atomic setGeometry so the window doesn't
+                # flash at the WM-default top-left before centering.
+                frame_w = new_w + deco_w
+                frame_h = new_h + deco_h
+                frame_x = avail.x() + (avail.width() - frame_w) // 2
+                frame_y = avail.y() + (avail.height() - frame_h) // 2
+                self.setGeometry(
+                    frame_x + left_pad, frame_y + top_pad, new_w, new_h
+                )
                 self._has_saved_size = True
             elif size_changed:
-                # Subsequent loads: keep the window's center anchored.
-                # Translate the widget top-left by half the size delta
-                # using truncation toward zero; Python's // is floor,
-                # which biases negative-delta swaps in one direction
-                # and accumulates drift over repeated loads. ``int(x/2)``
-                # truncates symmetrically so a round-trip cancels.
-                dx = int((new_w - cur_w) / 2)
-                dy = int((new_h - cur_h) / 2)
-                new_x = old_pos.x() - dx
-                new_y = old_pos.y() - dy
-                # Clamp so the *frame* (widget + decoration) stays
-                # inside ``avail``. Frame edges are computed from the
-                # widget pos and the captured padding deltas.
-                min_x = avail.x() + left_pad
-                min_y = avail.y() + top_pad
-                max_x = avail.x() + avail.width() - new_w - (deco_w - left_pad)
-                max_y = avail.y() + avail.height() - new_h - (deco_h - top_pad)
-                new_x = max(min_x, min(new_x, max_x))
-                new_y = max(min_y, min(new_y, max_y))
-                self.move(new_x, new_y)
+                # Subsequent loads: anchor the window's top-left so the
+                # title bar stays put. Growth or shrink happens toward
+                # the bottom-right edge. Only shift left/up to keep the
+                # frame inside the screen when growth would push it off
+                # the right/bottom edge.
+                new_x = old_pos.x()
+                new_y = old_pos.y()
+                # Frame edges given the new widget size and the captured
+                # decoration padding.
+                frame_right = new_x + new_w + (deco_w - left_pad)
+                frame_bottom = new_y + new_h + (deco_h - top_pad)
+                avail_right = avail.x() + avail.width()
+                avail_bottom = avail.y() + avail.height()
+                overflow_x = max(0, frame_right - avail_right)
+                overflow_y = max(0, frame_bottom - avail_bottom)
+                new_x -= overflow_x
+                new_y -= overflow_y
+                # Defensive lower clamp so a too-tall window doesn't
+                # shift the title bar above the screen.
+                new_x = max(avail.x() + left_pad, new_x)
+                new_y = max(avail.y() + top_pad, new_y)
+                # Resize + move in one setGeometry; two separate calls
+                # produce a visible intermediate frame on some WMs where
+                # the window snaps to its old top-left at the new size
+                # before move() lands.
+                self.setGeometry(new_x, new_y, new_w, new_h)
         # -- Apply to horizontal splitter --
         # Seg panel: exactly its content width (no padding).
         # Feat panel: at least its content width, but takes whatever is
