@@ -97,3 +97,29 @@ def set_theme(name: str) -> None:
 def get_theme_name() -> str:
     """Return ``'light'`` or ``'dark'`` for the currently-active palette."""
     return "dark" if C.get("bg") == DARK["bg"] else "light"
+
+
+def detect_system_theme(default: str = "light") -> str:
+    """Return ``'dark'`` if the OS is in dark mode, else ``'light'``.
+
+    Uses Qt's ``styleHints().colorScheme()`` (added in Qt 6.5). Falls
+    back to ``default`` when no QApplication exists yet, when Qt
+    reports ColorScheme.Unknown, or when the running Qt is too old.
+    """
+    try:
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtWidgets import QApplication
+    except ImportError:
+        return default
+    app = QApplication.instance()
+    if not isinstance(app, QApplication):
+        return default
+    hints = app.styleHints()
+    if hints is None or not hasattr(hints, "colorScheme"):
+        return default
+    scheme = hints.colorScheme()
+    if scheme == Qt.ColorScheme.Dark:
+        return "dark"
+    if scheme == Qt.ColorScheme.Light:
+        return "light"
+    return default

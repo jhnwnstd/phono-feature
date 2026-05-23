@@ -32,7 +32,12 @@ from phonology_features.gui.constants import (
     scrollbar_style,
     sort_features,
 )
-from phonology_features.gui.palette import C, get_theme_name, set_theme
+from phonology_features.gui.palette import (
+    C,
+    detect_system_theme,
+    get_theme_name,
+    set_theme,
+)
 from phonology_features.gui.vowel_chart import VOWEL_LABEL_W, VowelChartWidget
 from phonology_features.gui.widgets import (
     AnalysisPanel,
@@ -224,7 +229,9 @@ class MainWindow(QMainWindow):
         # children built by _build_ui were dark, leaving light streaks
         # around toolbar margins and splitter handles until the user
         # toggled the theme twice.
-        saved_theme = self._read_setting_str("theme", "light")
+        # First-launch default follows the OS color scheme; subsequent
+        # launches honor the user's last manual toggle.
+        saved_theme = self._read_setting_str("theme", detect_system_theme())
         set_theme(saved_theme)
         self.setStyleSheet(f"background-color: {C['bg']};")
         # -- 150 ms debounce: batch rapid selection changes before analysis --
