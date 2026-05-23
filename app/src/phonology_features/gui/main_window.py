@@ -207,6 +207,10 @@ class MainWindow(QMainWindow):
         self._feat_cards: list[tuple[QFrame, list[str]]] = []
         self._other_card: QFrame | None = None
         self._feature_pool_initialized: bool = False
+        # Depth counter for ``_batched_updates`` so nested scopes share
+        # one setUpdatesEnabled(False/True) pair instead of toggling
+        # paint events back on mid-rebuild.
+        self._batched_depth: int = 0
         self.setWindowTitle("Feature visualizer")
         self.setMinimumSize(640, 480)
         # -- persistent settings (read theme before ANY palette-using
@@ -860,83 +864,112 @@ class MainWindow(QMainWindow):
         saved_vsplit = (
             list(self._vsplit.sizes()) if hasattr(self, "_vsplit") else None
         )
-        # Re-style pooled widgets and detach them so the upcoming
-        # central-widget destruction doesn't take them with it.
-        for btn in self._seg_button_pool.values():
-            btn.apply_theme()
-            btn.setParent(None)
-        for row in self._feat_row_pool.values():
-            row.apply_theme()
-            row.setParent(None)
-        # Cards live as children of the old central widget; drop our
-        # references so _init_feature_pool rebuilds them (it sees the
-        # populated row pool and skips re-creating rows).
-        self._feat_cards.clear()
-        self._other_card = None
-        self._feat_rows = {}
-        # Tear down central + toolbars + status bar; the QMainWindow
-        # itself stays so window pos/size and any child windows (Builder)
-        # are unaffected.
-        # Each of these would otherwise leak a chrome subtree per
-        # toggle (~90 widgets), and Qt would have to walk all of them
-        # on every subsequent re-style; that was the linear slowdown.
-        self.setCentralWidget(QWidget())
-        for tb in self.findChildren(QToolBar):
-            self.removeToolBar(tb)
-            tb.deleteLater()
-        # setStatusBar transfers ownership of the new bar but does NOT
-        # delete the old one; same accumulator pattern.
-        old_status = self.statusBar()
-        self.setStatusBar(QStatusBar())
-        if old_status is not None:
-            old_status.deleteLater()
-        # Drain DeferredDelete events now so the orphan trees are gone
-        # before we rebuild; otherwise findChildren and the style
-        # engine still see them on the next pass.
-        app = QApplication.instance()
-        if isinstance(app, QApplication):
-            app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
-        self.setStyleSheet(f"background-color: {C['bg']};")
-        # Rebuild chrome; every f-string stylesheet inside _build_ui
-        # re-evaluates against the active palette.
-        self._build_ui()
-        # _set_mode would bail (mode unchanged); apply chrome directly
-        # to wire up the freshly-built widgets.
-        if saved_mode != self._mode:
-            self._set_mode(saved_mode)
-        else:
-            self._apply_mode_phases()
-        # Re-place pooled widgets in the new chrome WITHOUT going
-        # through _load_path (no engine reload, no JSON parse, no
-        # validator). The cached engine data is unchanged; we only
-        # need the populate helpers to wire pool widgets to the
-        # freshly-built panels.
-        if self.engine is not None:
-            self._saved_seg_state = []
-            self._saved_feat_state = {}
-            with self._batched_updates():
+        # Suspend paint events for the entire tear-down + rebuild. Without
+        # this the user sees a sequence of intermediate frames: empty
+        # central widget after setCentralWidget, missing toolbar after
+        # removeToolBar, missing status bar, then unstyled rebuilt chrome,
+        # then populated chrome. Wrapping the whole thing means Qt paints
+        # exactly once, after restore_geometry, with the final state.
+        with self._batched_updates():
+            # Re-style pooled widgets and detach them so the upcoming
+            # central-widget destruction doesn't take them with it.
+            for btn in self._seg_button_pool.values():
+                btn.apply_theme()
+                btn.setParent(None)
+            for row in self._feat_row_pool.values():
+                row.apply_theme()
+                row.setParent(None)
+            # Cards live as children of the old central widget; drop our
+            # references so _init_feature_pool rebuilds them (it sees the
+            # populated row pool and skips re-creating rows).
+            self._feat_cards.clear()
+            self._other_card = None
+            self._feat_rows = {}
+            # Tear down central + toolbars + status bar; the QMainWindow
+            # itself stays so window pos/size and any child windows
+            # (Builder) are unaffected. Each of these would otherwise
+            # leak a chrome subtree per toggle (~90 widgets), and Qt
+            # would have to walk all of them on every subsequent
+            # re-style; that was the linear slowdown.
+            self.setCentralWidget(QWidget())
+            for tb in self.findChildren(QToolBar):
+                self.removeToolBar(tb)
+                tb.deleteLater()
+            # setStatusBar transfers ownership of the new bar but does NOT
+            # delete the old one; same accumulator pattern.
+            old_status = self.statusBar()
+            self.setStatusBar(QStatusBar())
+            if old_status is not None:
+                old_status.deleteLater()
+            # Drain DeferredDelete events now so the orphan trees are
+            # gone before we rebuild; otherwise findChildren and the
+            # style engine still see them on the next pass.
+            app = QApplication.instance()
+            if isinstance(app, QApplication):
+                app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+            self.setStyleSheet(f"background-color: {C['bg']};")
+            # Rebuild chrome; every f-string stylesheet inside _build_ui
+            # re-evaluates against the active palette.
+            self._build_ui()
+            # _set_mode would bail (mode unchanged); apply chrome
+            # directly to wire up the freshly-built widgets.
+            if saved_mode != self._mode:
+                self._set_mode(saved_mode)
+            else:
+                self._apply_mode_phases()
+            # Re-place pooled widgets in the new chrome WITHOUT going
+            # through _load_path (no engine reload, no JSON parse, no
+            # validator). The cached engine data is unchanged; we only
+            # need the populate helpers to wire pool widgets to the
+            # freshly-built panels.
+            if self.engine is not None:
+                self._saved_seg_state = []
+                self._saved_feat_state = {}
                 self._populate_segments()
                 self._populate_features()
                 self._apply_mode_to_new_widgets()
                 self.analysis.clear()
-        # Restore window pos/size + splitter positions. The synchronous
-        # pass sets the right pane proportions before ``_fit_to_content``
-        # runs as part of the populate path; the deferred pass wins
-        # against any ``singleShot`` resize that _fit_to_content has
-        # queued (it would otherwise recenter the window on a
-        # freshly-measured frame).
-
-        def restore_geometry() -> None:
+            # Restore geometry while paint is still suspended so the
+            # window doesn't flash at the default splitter ratios before
+            # snapping back to the user's sizes.
             self.resize(saved_size)
             self.move(saved_pos)
             if saved_hsplit and len(saved_hsplit) == self._hsplit.count():
                 self._hsplit.setSizes(saved_hsplit)
             if saved_vsplit and len(saved_vsplit) == self._vsplit.count():
                 self._vsplit.setSizes(saved_vsplit)
-
-        restore_geometry()
+        # Deferred geometry pass: after one event-loop tick any singleShot
+        # resize that _fit_to_content queued (via the populate path) has
+        # fired. Re-apply the saved sizes to win against it and silence
+        # the late jiggle.
         if self.isVisible():
-            QTimer.singleShot(0, restore_geometry)
+            QTimer.singleShot(
+                0,
+                lambda: self._restore_theme_geometry(
+                    saved_pos, saved_size, saved_hsplit, saved_vsplit
+                ),
+            )
+
+    def _restore_theme_geometry(
+        self,
+        pos,
+        size,
+        hsplit: list[int] | None,
+        vsplit: list[int] | None,
+    ) -> None:
+        """Re-apply geometry after a deferred ``_fit_to_content`` tick.
+
+        Pulled out so the closure capture is explicit and the lambda in
+        ``_apply_theme`` stays a one-liner. Same paint-suspended pattern
+        as the inline pass above.
+        """
+        with self._batched_updates():
+            self.resize(size)
+            self.move(pos)
+            if hsplit and len(hsplit) == self._hsplit.count():
+                self._hsplit.setSizes(hsplit)
+            if vsplit and len(vsplit) == self._vsplit.count():
+                self._vsplit.setSizes(vsplit)
 
     def _open_builder(self) -> None:
         if self._builder is not None and self._builder.isVisible():
@@ -1493,7 +1526,39 @@ class MainWindow(QMainWindow):
             top_need_h + analysis_h + toolbar_h + 30
         )  # extra overall height
         # -- Size window to fit content on every inventory load --
+        # Paint is suspended for the entire resize + splitter pass so the
+        # window doesn't flash through "new size + old splitter ratio"
+        # before the splitter setSizes lands. One paint at the end.
         screen = self._target_screen()
+        with self._batched_updates():
+            self._fit_to_content_inner(
+                screen,
+                seg_need_w,
+                feat_need_w,
+                top_need_h,
+                total_need_h,
+            )
+        # Defensive follow-up: by the next event-loop tick the resize
+        # and move events have actually been processed by the WM, so
+        # ``frameGeometry()`` reflects reality. If our prediction was
+        # off (decoration deltas misreported on some compositors), this
+        # final pass catches it and pulls the window back on-screen.
+        QTimer.singleShot(0, self._clamp_to_screen)
+
+    def _fit_to_content_inner(
+        self,
+        screen,
+        seg_need_w: int,
+        feat_need_w: int,
+        top_need_h: int,
+        total_need_h: int,
+    ) -> None:
+        """Geometry + splitter pass for ``_fit_to_content``.
+
+        Extracted so the paint-suspension wrapper has a single guarded
+        body. Behavior is identical to inlining; the split exists only
+        to make the setUpdatesEnabled scope unambiguous.
+        """
         if screen is not None:
             avail = screen.availableGeometry()
             need_w = seg_need_w + feat_need_w + 1
@@ -1597,12 +1662,6 @@ class MainWindow(QMainWindow):
             top_h = min(top_need_h, total - self._min_analysis_h)
             top_h = max(top_h, 200)
             self._vsplit.setSizes([top_h, total - top_h])
-        # Defensive follow-up: by the next event-loop tick the resize
-        # and move events have actually been processed by the WM, so
-        # ``frameGeometry()`` reflects reality. If our prediction was
-        # off (decoration deltas misreported on some compositors), this
-        # final pass catches it and pulls the window back on-screen.
-        QTimer.singleShot(0, self._clamp_to_screen)
 
     def _clamp_to_screen(self) -> None:
         """Ensure the window's frame fits the screen's available area.
@@ -1693,12 +1752,23 @@ class MainWindow(QMainWindow):
         result paints once with the final state instead of flickering
         through intermediate frames. Cuts both wall-clock latency and
         visible blink during mode toggles + inventory loads.
+
+        Depth-aware: nested ``with self._batched_updates()`` blocks share
+        a single setUpdatesEnabled(False/True) pair across the outermost
+        scope. Required because ``_apply_theme`` and ``_fit_to_content``
+        both wrap themselves AND call helpers that also use this context
+        manager; without depth tracking the inner exit would re-enable
+        paint mid tear-down and a blank frame would leak through.
         """
-        self.setUpdatesEnabled(False)
+        if self._batched_depth == 0:
+            self.setUpdatesEnabled(False)
+        self._batched_depth += 1
         try:
             yield
         finally:
-            self.setUpdatesEnabled(True)
+            self._batched_depth -= 1
+            if self._batched_depth == 0:
+                self.setUpdatesEnabled(True)
 
     def _set_mode(self, mode: Mode | str) -> None:
         """Switch top-level UI mode. Pure orchestration; every step is in a
