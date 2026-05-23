@@ -297,26 +297,30 @@ class FeatureRow(QWidget):
     def apply_theme(self) -> None:
         """Re-style this row against the active palette in place.
 
-        Re-binds the cached strings, then re-applies whatever visual
-        state the row was last in (display value or query value) and
-        the +/- button styles.
-
-        Also invalidates BOTH dedup caches:
-        - ``_last_display_state`` so the next ``set_display`` call
-          doesn't no-op against a stale theme-A state tuple.
-        - ``_reset_for_panel`` (forced to None) so the next ``reset()``
-          call takes the FULL reset path. Without this, rows that were
-          in the neutral state pre-toggle short-circuit, leaving the
-          badge / row background with the old palette's colors. The
-          badge is visible in non-interactive (seg) mode, so the
-          stale colors are user-visible there.
+        Re-binds the cached strings, then re-applies every visible
+        component with the new palette:
+        - The +/- button styles via ``_style_btn``.
+        - The query-mode background (active if ``_current_value`` is
+          set) via ``_apply_query_style``.
+        - The display-mode badge: if ``set_display`` had been called
+          (badge currently visible in seg mode), we replay that exact
+          state against the new palette so the dot / +/- badge gets
+          recolored. Without the replay, ``_last_display_state`` would
+          be cleared and the badge would keep its old palette colors
+          until the next selection change.
+        Also invalidates ``_reset_for_panel`` (forced to None) so any
+        subsequent ``reset()`` call takes the full path.
         """
+        saved_display = self._last_display_state
         self._build_styles()
         self._last_display_state = None
         self._reset_for_panel = None
         self._apply_query_style(self._current_value)
         self._style_btn(self.plus_btn, "+")
         self._style_btn(self.minus_btn, "-")
+        if saved_display is not None:
+            value, shared, contrastive = saved_display
+            self.set_display(value, shared, contrastive=contrastive)
 
     def _style_btn(self, btn: QPushButton, polarity: str):
         is_plus = polarity == "+"
