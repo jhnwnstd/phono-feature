@@ -439,10 +439,15 @@ class MainWindow(QMainWindow):
         self._seg_title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1.5px;"
         )
-        self.clear_seg_btn = QPushButton("Clear")
+        self.clear_seg_btn = QPushButton("Clear", container)
         self.clear_seg_btn.setFixedHeight(26)
         self.clear_seg_btn.setFont(QFont("Noto Sans", 9))
         self.clear_seg_btn.setStyleSheet(_clear_btn_style())
+        # Clicking inside the seg panel -- including its Clear button --
+        # activates seg mode first, then performs the action. Matches
+        # the "click in panel = activate panel" pattern used by
+        # SegmentButton.pressed and FeatureRow's +/- buttons.
+        self.clear_seg_btn.pressed.connect(self._on_segment_pressed)
         self.clear_seg_btn.clicked.connect(self._clear_segments)
         header.addWidget(self._seg_title)
         header.addStretch()
@@ -514,10 +519,13 @@ class MainWindow(QMainWindow):
         self._feat_title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1.5px;"
         )
-        self.clear_feat_btn = QPushButton("Clear")
+        self.clear_feat_btn = QPushButton("Clear", container)
         self.clear_feat_btn.setFixedHeight(26)
         self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
         self.clear_feat_btn.setStyleSheet(_clear_btn_style())
+        # Same panel-activation pattern as ``clear_seg_btn``: clicking
+        # this clear also activates feat mode first.
+        self.clear_feat_btn.pressed.connect(self._on_feature_pressed)
         self.clear_feat_btn.clicked.connect(self._clear_features)
         header.addWidget(self._feat_title)
         header.addStretch()
@@ -823,6 +831,14 @@ class MainWindow(QMainWindow):
                 panel.setStyleSheet(self._panel_chrome_qss(panel.objectName()))
                 panel.setProperty("active", None)
             self._apply_panel_chrome()
+            # Re-run the active mode's analysis so widgets that paint
+            # palette colors via ``set_display`` (feature-row badges in
+            # seg mode) or matched/unmatched (segment buttons in feat
+            # mode) refresh against the new palette. Without this, the
+            # row apply_theme calls above clear the dedup cache but
+            # nothing actually re-renders, so old-palette badge colors
+            # stay visible until the next selection change.
+            self._refresh_analysis_for_mode()
 
     def _restyle_chrome(self) -> None:
         """Re-apply every chrome stylesheet that depends on the palette.
@@ -2052,45 +2068,37 @@ class MainWindow(QMainWindow):
             row.reset()
 
     def _clear_segments(self, silent=False):
-        """Clear seg-side state and any seg-derived feat display.
+        """Either Clear button wipes BOTH sides.
 
-        Always resets _selected_segments and the seg buttons. Also resets the
-        feat rows IFF we are in seg mode; there they mirror the segment
-        selection via set_display(), so without this they'd show stale data.
-        In feat mode the feat rows hold the user's actual query, so they
-        are left alone (clearing segments shouldn't wipe the feat query).
+        The two panes are wired together: feat rows can be derived
+        from segs (seg-to-feat mode display) and seg buttons can be
+        derived from feats (feat-to-seg matched/unmatched). Asking
+        users to track which side is the "query" vs the "derived
+        display" is a leaky abstraction; the simpler model -- "Clear
+        means clear" -- wins.
+        """
+        self._reset_both_sides(silent)
+
+    def _clear_features(self, silent=False):
+        """Either Clear button wipes BOTH sides. See ``_clear_segments``."""
+        self._reset_both_sides(silent)
+
+    def _reset_both_sides(self, silent: bool) -> None:
+        """Reset segments and features to their neutral state. Shared
+        implementation behind both Clear buttons.
         """
         self._selected_segments.clear()
+        self._selected_features.clear()
         for btn in self._seg_buttons.values():
             if btn._state != SegmentState.DEFAULT:
                 btn.set_state(SegmentState.DEFAULT)
                 btn.setChecked(False)
-        if self._mode == Mode.SEG_TO_FEAT:
-            for row in self._feat_rows.values():
-                row.reset()
+        for row in self._feat_rows.values():
+            row.reset()
         if not silent:
             self._saved_seg_state = []
             self._saved_feat_state = {}
             self.analysis.clear()
-
-    def _clear_features(self, silent=False):
-        """Clear feat-side state and any feat-derived seg display.
-
-        Always resets _selected_features and the feat rows. Also resets the
-        seg buttons IFF we are in feat mode; there they mirror the feature
-        query via matched/unmatched. In seg mode the seg buttons hold the
-        user's actual selection, so they are left alone (clearing features
-        shouldn't wipe the segment selection).
-        """
-        self._selected_features.clear()
-        for row in self._feat_rows.values():
-            if row._current_value:
-                row.reset()
-        if self._mode == Mode.FEAT_TO_SEG:
-            for btn in self._seg_buttons.values():
-                if btn._state != SegmentState.DEFAULT:
-                    btn.set_state(SegmentState.DEFAULT)
-                    btn.setChecked(False)
         if not silent:
             self._saved_seg_state = []
             self._saved_feat_state = {}

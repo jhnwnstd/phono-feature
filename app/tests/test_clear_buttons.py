@@ -69,39 +69,31 @@ def test_clear_features_in_feat_mode_resets_everything(window):
 
 
 # ---------------------------------------------------------------------------
-# Cross-panel Clear: must not corrupt the active panel's primary state
+# Cross-panel Clear: either Clear button wipes both sides
 # ---------------------------------------------------------------------------
-def test_clear_features_in_seg_mode_preserves_segment_selection(window):
-    """REGRESSION: clicking the feat-side Clear in seg mode must NOT silently
-    wipe the user's segment selection. Previously this method reset every
-    seg button to default, leaving _selected_segments populated but the
-    buttons all visually unselected; data and visual state diverged.
-    """
+def test_clear_features_in_seg_mode_clears_segment_selection(window):
+    """Per the user-facing contract: Clear means clear. The feat-side
+    Clear button wipes the segment selection too, even in seg mode."""
     window._on_segment_clicked("b", True)
     window._on_segment_clicked("d", True)
     window._run_pending_update()
-    selected_before = list(window._selected_segments)
-    selected_button_count = _non_default_seg_buttons(window)
+    assert window._selected_segments == ["b", "d"]
     window._clear_features()
-    # _selected_features was already empty in seg mode; clearing is a no-op
-    # for that. CRITICAL: the seg-side state must be untouched.
-    assert window._selected_segments == selected_before
-    assert _non_default_seg_buttons(window) == selected_button_count
+    assert window._selected_segments == []
+    assert _non_default_seg_buttons(window) == 0
 
 
-def test_clear_segments_in_feat_mode_preserves_feature_query(window):
-    """Clicking the seg-side Clear in feat mode must NOT wipe the user's
-    feature query. The query lives in _selected_features and the feat row
-    visuals; both must survive."""
+def test_clear_segments_in_feat_mode_clears_feature_query(window):
+    """The seg-side Clear in feat mode wipes the feature query too.
+    Both clear buttons are equivalent: each resets both panes."""
     window._set_mode(Mode.FEAT_TO_SEG)
     window._feat_rows["Voice"]._on_click("+")
     window._feat_rows["Continuant"]._on_click("-")
     window._run_pending_update()
-    feats_before = dict(window._selected_features)
-    feat_rows_before = _selected_feat_rows(window)
+    assert window._selected_features  # sanity
     window._clear_segments()
-    assert window._selected_features == feats_before
-    assert _selected_feat_rows(window) == feat_rows_before
+    assert window._selected_features == {}
+    assert _selected_feat_rows(window) == set()
 
 
 # ---------------------------------------------------------------------------
