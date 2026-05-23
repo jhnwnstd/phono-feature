@@ -322,7 +322,10 @@ class VowelChartWidget(QWidget):
             f"color: {C['text_dim']}; letter-spacing: 1px;"
             " padding: 2px 2px 0 2px;"
         )
-        self._grid.addWidget(title, 0, 0, 1, 7)
+        # Span the data columns only (skip col 0, the row-label gutter)
+        # so the title sits flush with the vowel cells, not the row
+        # labels.
+        self._grid.addWidget(title, 0, 1, 1, 6)
         self._header_labels.append((title, False))
         for ci, label in enumerate(self._COL_HEADERS):
             lbl = QLabel(label, self)
