@@ -49,6 +49,7 @@ from phonology_features.gui.widgets import (
 from PyQt6.QtCore import (
     QEvent,
     QFileSystemWatcher,
+    QPoint,
     QSettings,
     Qt,
     QTimer,
@@ -208,6 +209,14 @@ class MainWindow(QMainWindow):
         # Depth counter so nested ``_batched_updates`` scopes share one
         # setUpdatesEnabled(False/True) pair.
         self._batched_depth: int = 0
+        # Anchor for programmatic resizes. Updated only by user-initiated
+        # moveEvents (mouse drag of the title bar); programmatic
+        # setGeometry / resize calls don't touch it. Reading the live
+        # ``self.pos()`` each resize caused leftward drift on Wayland
+        # compositors that nudge the reported position by 1-2 px in
+        # response to geometry requests.
+        self._anchor_pos: QPoint | None = None
+        self._programmatic_geom: bool = False
         self.setWindowTitle("Feature visualizer")
         self.setMinimumSize(640, 480)
         self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
@@ -556,6 +565,16 @@ class MainWindow(QMainWindow):
         if not self._did_first_show:
             self._did_first_show = True
             QTimer.singleShot(0, self._ensure_visible_on_screen)
+
+    def moveEvent(self, event) -> None:  # type: ignore[override]
+        """Update the resize anchor only on user-initiated moves.
+        Programmatic moves (setGeometry / resize from our own code)
+        guard with ``_programmatic_geom`` so the anchor isn't drifted
+        by the compositor's response to our requests.
+        """
+        super().moveEvent(event)
+        if not self._programmatic_geom:
+            self._anchor_pos = self.pos()
 
     def _read_setting(self, key: str, default=None):
         """Read a QSettings key, returning ``default`` if the stored
@@ -1436,33 +1455,45 @@ class MainWindow(QMainWindow):
         avail = screen.availableGeometry()
         cur_w = self.width()
         cur_h = self.height()
-        old_pos = self.pos()
-        deco_w, deco_h, left_pad, top_pad = self._decoration_padding(old_pos)
+        # Anchor: stored intended position (updated only on user moves)
+        # falls back to current self.pos() the first time through. Reading
+        # self.pos() each call lets compositor nudges accumulate into
+        # leftward drift across repeated inventory switches.
+        if self._anchor_pos is None:
+            self._anchor_pos = self.pos()
+        anchor = self._anchor_pos
+        deco_w, deco_h, left_pad, top_pad = self._decoration_padding(anchor)
         new_w, new_h = self._clamp_size_to_screen(
             need_w, need_h, deco_w, deco_h
         )
-        if not self._has_saved_size:
-            frame_x = avail.x() + (avail.width() - (new_w + deco_w)) // 2
-            frame_y = avail.y() + (avail.height() - (new_h + deco_h)) // 2
-            self.setGeometry(
-                frame_x + left_pad, frame_y + top_pad, new_w, new_h
-            )
-            self._has_saved_size = True
-            return
-        if new_w == cur_w and new_h == cur_h:
-            return
-        # Anchor to the current corner. Only shift when the title bar
-        # itself would go off the left/top edge (unreachable case).
-        # Partial overflow on right or bottom is left alone.
-        new_x = old_pos.x()
-        new_y = old_pos.y()
-        if new_x - left_pad < avail.x():
-            new_x = avail.x() + left_pad
-        if new_y - top_pad < avail.y():
-            new_y = avail.y() + top_pad
-        # setGeometry applies resize + move atomically; separate calls
-        # produce a visible intermediate frame on some WMs.
-        self.setGeometry(new_x, new_y, new_w, new_h)
+        self._programmatic_geom = True
+        try:
+            if not self._has_saved_size:
+                frame_x = avail.x() + (avail.width() - (new_w + deco_w)) // 2
+                frame_y = avail.y() + (avail.height() - (new_h + deco_h)) // 2
+                target_x = frame_x + left_pad
+                target_y = frame_y + top_pad
+                self.setGeometry(target_x, target_y, new_w, new_h)
+                self._anchor_pos = self.pos()
+                self._has_saved_size = True
+                return
+            if new_w == cur_w and new_h == cur_h:
+                return
+            # Always re-set the anchor explicitly on resize. Only shift
+            # off-anchor when the title bar would otherwise go off the
+            # left/top edge.
+            target_x = anchor.x()
+            target_y = anchor.y()
+            if target_x - left_pad < avail.x():
+                target_x = avail.x() + left_pad
+            if target_y - top_pad < avail.y():
+                target_y = avail.y() + top_pad
+            self.setGeometry(target_x, target_y, new_w, new_h)
+            if target_x != anchor.x() or target_y != anchor.y():
+                # Off-screen recovery: persist the new corner as the anchor.
+                self._anchor_pos = self.pos()
+        finally:
+            self._programmatic_geom = False
 
     def _decoration_padding(self, old_pos) -> tuple[int, int, int, int]:
         """Return (deco_w, deco_h, left_pad, top_pad) for the current
