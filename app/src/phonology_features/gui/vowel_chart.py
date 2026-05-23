@@ -245,17 +245,32 @@ class VowelChartWidget(QWidget):
         self._grid = QGridLayout(self)
         self._grid.setSpacing(btn_gap)
         self._grid.setContentsMargins(0, 0, 8, 0)
-        # Per-instance so a fresh widget (post-theme-swap rebuild) sees
-        # the active palette. See SegmentButton/FeatureRow for the same
-        # pattern.
+        # Per-instance so the chart sees the active palette. Rebuilt by
+        # ``apply_theme`` on every theme toggle so re-styling existing
+        # headers picks up the new colors.
+        self._HDR_ACTIVE = ""
+        self._HDR_INACTIVE = ""
+        self._ROW_ACTIVE = ""
+        self._ROW_INACTIVE = ""
+        self._rebuild_style_cache()
+        # Tracks the last ``active`` value styled into the headers so
+        # mode-toggle bursts can short-circuit when nothing changed.
+        # Reset by ``clear`` when fresh labels replace the cached ones,
+        # and by ``apply_theme`` so a theme swap forces a re-style even
+        # if the active state hasn't changed.
+        self._last_headers_active: bool | None = None
+
+    def _rebuild_style_cache(self) -> None:
         self._HDR_ACTIVE = f"color: {C['text']};"
         self._HDR_INACTIVE = f"color: {C['text_dim']};"
         self._ROW_ACTIVE = f"color: {C['text']}; padding-right: 4px;"
         self._ROW_INACTIVE = f"color: {C['text_dim']}; padding-right: 4px;"
-        # Tracks the last ``active`` value styled into the headers so
-        # mode-toggle bursts can short-circuit when nothing changed.
-        # Reset by ``clear`` when fresh labels replace the cached ones.
-        self._last_headers_active: bool | None = None
+
+    def apply_theme(self) -> None:
+        """Re-style cached header strings against the active palette and
+        force the next ``set_headers_active`` to actually re-apply."""
+        self._rebuild_style_cache()
+        self._last_headers_active = None
 
     def set_headers_active(self, active: bool):
         # Dedup is safe because ``clear`` (called by ``set_vowels`` on

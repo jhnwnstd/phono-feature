@@ -142,17 +142,13 @@ class _BrandedStatusBar(QStatusBar):
         super().__init__(parent)
         self.setSizeGripEnabled(False)
         self.setFixedHeight(self._BAR_HEIGHT)
-        self._message_label = QLabel("")
+        self._message_label = QLabel("", self)
         self._message_label.setFont(self._FONT)
-        self._message_label.setStyleSheet(f"color: {C['text']};")
         self._message_label.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        self._brand = QLabel("Language Doodad")
+        self._brand = QLabel("Language Doodad", self)
         self._brand.setFont(self._FONT)
-        self._brand.setStyleSheet(
-            f"color: {C['text_dim']}; font-style: italic; padding: 0 4px;"
-        )
         self._brand.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
@@ -160,6 +156,18 @@ class _BrandedStatusBar(QStatusBar):
         self.addWidget(self._message_label, 1)
         # Right section: brand sits permanently in the lower-right corner.
         self.addPermanentWidget(self._brand, 0)
+        self.apply_theme()
+
+    def apply_theme(self) -> None:
+        """Re-apply palette-dependent styles. Called on theme toggle."""
+        self.setStyleSheet(
+            f"background: {C['panel']};"
+            f" border-top: 1px solid {C['border']};"
+        )
+        self._message_label.setStyleSheet(f"color: {C['text']};")
+        self._brand.setStyleSheet(
+            f"color: {C['text_dim']}; font-style: italic; padding: 0 4px;"
+        )
 
     def showMessage(self, text: str, timeout: int = 0) -> None:  # type: ignore[override]
         # Don't call super(); that would hide left-section widgets.
@@ -296,62 +304,29 @@ class MainWindow(QMainWindow):
         # widget. A parent-less QToolBar takes the Qt.Tool window flag
         # and the WM tries to render it as a floating tool window for
         # the brief moment between construction and ``addToolBar``,
-        # producing a small window flash on theme toggle (when the
-        # toolbar is rebuilt).
-        toolbar = QToolBar(self)
-        toolbar.setMovable(False)
-        toolbar.setStyleSheet(f"""
-            QToolBar {{
-                background: {C["panel"]};
-                border-bottom: 1px solid {C["border"]};
-                padding: 4px 8px;
-                spacing: 6px;
-            }}
-        """)
-        self.addToolBar(toolbar)
+        # producing a small window flash.
+        self._toolbar = QToolBar(self)
+        self._toolbar.setMovable(False)
+        self.addToolBar(self._toolbar)
+        toolbar = self._toolbar  # local alias for the rest of construction
+        self._nav_buttons: list[QPushButton] = []
         # Inventory dropdown -- parent to ``toolbar`` (itself parented
         # to ``self``) so it's never a parent-less widget.
         self.inventory_combo = QComboBox(toolbar)
         self.inventory_combo.setFont(QFont("Noto Sans", 10))
         self.inventory_combo.setFixedHeight(32)
         self.inventory_combo.setMinimumWidth(220)
-        self.inventory_combo.setStyleSheet(f"""
-            QComboBox {{
-                background: {C["panel"]};
-                color: {C["text"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-                padding: 0 10px;
-            }}
-            QComboBox:hover {{
-                border: 1.5px solid {C["accent"]};
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                padding-right: 8px;
-            }}
-            QComboBox QAbstractItemView {{
-                background: {C["panel"]};
-                color: {C["text"]};
-                border: 1px solid {C["border"]};
-                selection-background-color: {C["accent_light"]};
-                selection-color: {C["accent"]};
-                outline: none;
-            }}
-        """)
         self._populate_inventory_dropdown()
         self.inventory_combo.activated.connect(self._on_inventory_selected)
         toolbar.addWidget(self.inventory_combo)
-        # Nav buttons share the same height/font/style.
-        nav_style = self._nav_btn_style()
 
         def add_nav(label: str, slot) -> QPushButton:
             btn = QPushButton(label, toolbar)
             btn.setFont(QFont("Noto Sans", 10))
             btn.setFixedHeight(32)
-            btn.setStyleSheet(nav_style)
             btn.clicked.connect(slot)
             toolbar.addWidget(btn)
+            self._nav_buttons.append(btn)
             return btn
 
         add_nav("Browse\u2026", self._browse_inventory)
@@ -364,32 +339,15 @@ class MainWindow(QMainWindow):
         )
         spacer.setStyleSheet("background: transparent;")
         toolbar.addWidget(spacer)
-        # Toggle shows the OPPOSITE of the active theme; i.e. what
-        # clicking will switch you to. Sun = "switch to light",
-        # moon = "switch to dark".
-        is_dark_now = get_theme_name() == "dark"
-        self._theme_btn = QPushButton(
-            "\u263c" if is_dark_now else "\u263e", toolbar
-        )
+        # Theme button: text + tooltip are updated by ``_apply_theme_btn``
+        # which is called both at construction and on every theme toggle.
+        self._theme_btn = QPushButton("", toolbar)
         self._theme_btn.setFont(QFont("Noto Sans", 12))
         self._theme_btn.setFixedSize(32, 32)
-        self._theme_btn.setToolTip(
-            "Switch to light mode" if is_dark_now else "Switch to dark mode"
-        )
-        self._theme_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: transparent;
-                color: {C["text_dim"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-            }}
-            QPushButton:hover {{
-                color: {C["accent"]};
-                border: 1.5px solid {C["accent"]};
-            }}
-        """)
         self._theme_btn.clicked.connect(self._toggle_theme)
         toolbar.addWidget(self._theme_btn)
+        # Apply theme-dependent styling now that every toolbar child exists.
+        self._restyle_toolbar()
 
     def _build_central(self) -> None:
         central = QWidget(self)
@@ -825,13 +783,13 @@ class MainWindow(QMainWindow):
         self._load_path(path)
 
     def _toggle_theme(self) -> None:
-        """Switch between light and dark theme; live, no restart.
+        """Switch between light and dark theme; live, in place, no rebuild.
 
-        Mutates the active palette in place and rebuilds the central
-        widget + toolbar so all freshly-constructed widgets pick up
-        the new colors. Pooled SegmentButtons / FeatureRows are
-        discarded (their styles were baked against the old palette)
-        and recreated on the inventory reload.
+        Mutates the active palette, then re-styles every widget that
+        depends on it. Geometry, splitter sizes, the inventory dropdown
+        selection, the engine, pooled widgets, and selections are all
+        preserved -- the widget tree never changes, only stylesheet
+        strings do.
         """
         new_theme = "dark" if get_theme_name() == "light" else "light"
         set_theme(new_theme)
@@ -839,148 +797,168 @@ class MainWindow(QMainWindow):
         self._apply_theme()
 
     def _apply_theme(self) -> None:
-        """Live theme swap with widget pools and engine preserved.
+        """In-place theme swap.
 
-        Re-styles every pooled SegmentButton and FeatureRow in place
-        (cheap; uses the per-class theme cache so the f-string work
-        runs once per theme), tears down only the chrome (toolbar +
-        central widget), rebuilds it, then re-parents the pool widgets
-        to the new chrome via the populate helpers. The engine and
-        cached inventory data are NOT reloaded; there's no JSON
-        re-parse and no validation pass on a theme change.
-
-        Window position and size are explicitly preserved so the
-        toggle never visually moves the window: a tear-down + rebuild
-        otherwise lets the WM re-place us, and ``_fit_to_content``
-        re-centers on a recomputed frame which can drift a few px due
-        to layout-time measurement differences.
-
-        Mode and current inventory are preserved; per-mode selections
-        are reset (acceptable for an explicit theme-change action).
+        Earlier versions tore down and rebuilt the central widget,
+        toolbar, and status bar so freshly-constructed children would
+        pick up the new palette. That worked but caused visible flashes
+        (parent-less transient widgets, splitter handle previews,
+        re-layout passes) and forced selections to reset. The new
+        approach calls ``apply_theme`` / re-applies stylesheets on every
+        chrome widget in place. Cost is ~10 ms vs ~140 ms for the
+        rebuild, and there's nothing to flash because no widgets are
+        destroyed or re-parented.
         """
-        saved_mode = self._mode
-        saved_pos = self.pos()
-        saved_size = self.size()
-        # Capture splitter sizes too; _build_ui re-creates the
-        # splitters with default sizes (500/400 + 700/220), so without
-        # this the panes visibly jump on every theme toggle.
-        saved_hsplit = (
-            list(self._hsplit.sizes()) if hasattr(self, "_hsplit") else None
-        )
-        saved_vsplit = (
-            list(self._vsplit.sizes()) if hasattr(self, "_vsplit") else None
-        )
-        # The mouse cursor is over the theme toggle button when this
-        # runs (the user just clicked it). The old button gets destroyed
-        # and a fresh one rebuilt under the same cursor, which trips
-        # Qt's tooltip system into showing the new button's tooltip --
-        # a small text window appearing for ~500 ms until the cursor
-        # moves. Cancelling the active tooltip up front silences that.
         QToolTip.hideText()
-        # Suspend paint events for the entire tear-down + rebuild. Without
-        # this the user sees a sequence of intermediate frames: empty
-        # central widget after setCentralWidget, missing toolbar after
-        # removeToolBar, missing status bar, then unstyled rebuilt chrome,
-        # then populated chrome. Wrapping the whole thing means Qt paints
-        # exactly once, after restore_geometry, with the final state.
         with self._batched_updates():
-            # Re-style pooled widgets and detach them so the upcoming
-            # central-widget destruction doesn't take them with it.
-            # ``hide()`` BEFORE ``setParent(None)`` is load-bearing: a
-            # widget with no parent is a top-level window, and Qt
-            # preserves the visible flag across reparenting. Without
-            # the hide, every pooled SegmentButton (140+) and FeatureRow
-            # briefly appears as its own tiny top-level window during
-            # the rebuild -- a noticeable flash of small windows on
-            # X11/Wayland. ``_populate_segments``/`_populate_features``
-            # call show() on the active subset after re-parenting.
             for btn in self._seg_button_pool.values():
                 btn.apply_theme()
-                btn.hide()
-                btn.setParent(None)
             for row in self._feat_row_pool.values():
                 row.apply_theme()
-                row.hide()
-                row.setParent(None)
-            # Cards live as children of the old central widget; drop our
-            # references so _init_feature_pool rebuilds them (it sees the
-            # populated row pool and skips re-creating rows).
-            self._feat_cards.clear()
-            self._other_card = None
-            self._feat_rows = {}
-            # Tear down central + toolbars + status bar; the QMainWindow
-            # itself stays so window pos/size and any child windows
-            # (Builder) are unaffected. Each of these would otherwise
-            # leak a chrome subtree per toggle (~90 widgets), and Qt
-            # would have to walk all of them on every subsequent
-            # re-style; that was the linear slowdown.
-            self.setCentralWidget(QWidget(self))
-            for tb in self.findChildren(QToolBar):
-                self.removeToolBar(tb)
-                tb.deleteLater()
-            # setStatusBar transfers ownership of the new bar but does NOT
-            # delete the old one; same accumulator pattern.
-            old_status = self.statusBar()
-            # Same reason as toolbar: pass ``self`` so the new status bar
-            # never exists parent-less, even for the gap between
-            # construction and ``setStatusBar``.
-            self.setStatusBar(QStatusBar(self))
-            if old_status is not None:
-                old_status.deleteLater()
-            # Drain DeferredDelete events now so the orphan trees are
-            # gone before we rebuild; otherwise findChildren and the
-            # style engine still see them on the next pass.
-            app = QApplication.instance()
-            if isinstance(app, QApplication):
-                app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
-            self.setStyleSheet(f"background-color: {C['bg']};")
-            # Rebuild chrome; every f-string stylesheet inside _build_ui
-            # re-evaluates against the active palette.
-            self._build_ui()
-            # _set_mode would bail (mode unchanged); apply chrome
-            # directly to wire up the freshly-built widgets.
-            if saved_mode != self._mode:
-                self._set_mode(saved_mode)
-            else:
-                self._apply_mode_phases()
-            # Re-place pooled widgets in the new chrome WITHOUT going
-            # through _load_path (no engine reload, no JSON parse, no
-            # validator). The cached engine data is unchanged; we only
-            # need the populate helpers to wire pool widgets to the
-            # freshly-built panels.
-            if self.engine is not None:
-                self._saved_seg_state = []
-                self._saved_feat_state = {}
-                self._populate_segments()
-                self._populate_features()
-                self._apply_mode_to_new_widgets()
-                self.analysis.clear()
-            # The fresh toolbar got a fresh ``inventory_combo`` whose
-            # ``_populate_inventory_dropdown`` couldn't see the old
-            # selection (different widget instance). Re-sync from the
-            # canonical loaded path so the dropdown doesn't snap back
-            # to "Select inventory...".
-            if self._current_path:
-                idx = self.inventory_combo.findData(self._current_path)
-                if idx >= 0:
-                    self.inventory_combo.setCurrentIndex(idx)
-            # Restore geometry while paint is still suspended so the
-            # window doesn't flash at the default splitter ratios before
-            # snapping back to the user's sizes.
-            self._restore_geometry(
-                saved_pos, saved_size, saved_hsplit, saved_vsplit
-            )
-        # Deferred geometry pass: after one event-loop tick any singleShot
-        # resize that _fit_to_content queued (via the populate path) has
-        # fired. Re-apply the saved sizes to win against it and silence
-        # the late jiggle.
-        if self.isVisible():
-            QTimer.singleShot(
-                0,
-                lambda: self._restore_geometry(
-                    saved_pos, saved_size, saved_hsplit, saved_vsplit
-                ),
-            )
+            self._restyle_chrome()
+            # Panel border highlight depends on theme AND mode; cheapest
+            # path is to invalidate the polish cache so the next
+            # ``_apply_panel_chrome`` call re-applies.
+            for panel in (self.seg_panel, self.feat_panel):
+                panel.setStyleSheet(self._panel_chrome_qss(panel.objectName()))
+                panel.setProperty("active", None)
+            self._apply_panel_chrome()
+
+    def _restyle_chrome(self) -> None:
+        """Re-apply every chrome stylesheet that depends on the palette.
+
+        Each method here re-applies one widget's styles in place. The
+        underlying widget instances persist across theme toggles; only
+        the stylesheet strings change. See individual ``_restyle_*``
+        helpers for what each one touches.
+        """
+        self.setStyleSheet(f"background-color: {C['bg']};")
+        self._restyle_toolbar()
+        self._restyle_splitters()
+        self._restyle_panel_chrome_widgets()
+        self._restyle_feature_cards()
+        self.seg_grid_widget.apply_theme()
+        self.vowel_chart_widget.apply_theme()
+        self.analysis.apply_theme()
+        self.status.apply_theme()
+
+    def _restyle_toolbar(self) -> None:
+        """Re-apply toolbar + toolbar-child stylesheets."""
+        self._toolbar.setStyleSheet(f"""
+            QToolBar {{
+                background: {C["panel"]};
+                border-bottom: 1px solid {C["border"]};
+                padding: 4px 8px;
+                spacing: 6px;
+            }}
+        """)
+        self.inventory_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {C["panel"]};
+                color: {C["text"]};
+                border: 1.5px solid {C["border"]};
+                border-radius: 6px;
+                padding: 0 10px;
+            }}
+            QComboBox:hover {{
+                border: 1.5px solid {C["accent"]};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                padding-right: 8px;
+            }}
+            QComboBox QAbstractItemView {{
+                background: {C["panel"]};
+                color: {C["text"]};
+                border: 1px solid {C["border"]};
+                selection-background-color: {C["accent_light"]};
+                selection-color: {C["accent"]};
+                outline: none;
+            }}
+        """)
+        nav_style = self._nav_btn_style()
+        for btn in self._nav_buttons:
+            btn.setStyleSheet(nav_style)
+        self._apply_theme_btn()
+
+    def _apply_theme_btn(self) -> None:
+        """Set the theme-button text + tooltip + styling. Symbol shows the
+        OPPOSITE of the active theme: clicking switches to that."""
+        is_dark = get_theme_name() == "dark"
+        self._theme_btn.setText("☼" if is_dark else "☾")
+        self._theme_btn.setToolTip(
+            "Switch to light mode" if is_dark else "Switch to dark mode"
+        )
+        self._theme_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {C["text_dim"]};
+                border: 1.5px solid {C["border"]};
+                border-radius: 6px;
+            }}
+            QPushButton:hover {{
+                color: {C["accent"]};
+                border: 1.5px solid {C["accent"]};
+            }}
+        """)
+
+    def _restyle_splitters(self) -> None:
+        """Re-style the splitter handle directly on the handle widget
+        instead of on the splitter itself. ``QSplitter.setStyleSheet``
+        cascades through every descendant (140+ segment buttons) which
+        is the bulk of the theme-toggle cost; targeting the handle
+        widget bypasses the cascade entirely.
+        """
+        for i in range(self._hsplit.count()):
+            handle = self._hsplit.handle(i)
+            if handle is not None:
+                handle.setStyleSheet(f"background: {C['border']};")
+        # vsplit handle is transparent; no palette dependency.
+
+    def _restyle_panel_chrome_widgets(self) -> None:
+        """Re-apply the panel-child widgets that have palette-dependent
+        stylesheets (clear buttons, scroll-area scrollbars, the seg
+        hint). Scrollbar styles go DIRECTLY on the scroll-bar widgets
+        (not the scroll area) so the cascade doesn't invalidate every
+        panel descendant's style. The panel container backgrounds /
+        borders are handled by ``_apply_panel_chrome`` via the
+        property-selector polish path.
+        """
+        self.clear_seg_btn.setStyleSheet(_clear_btn_style())
+        self.clear_feat_btn.setStyleSheet(_clear_btn_style())
+        sb_qss = scrollbar_style()
+        for scroll in (self._seg_scroll, self._feat_scroll):
+            for bar in (
+                scroll.verticalScrollBar(),
+                scroll.horizontalScrollBar(),
+            ):
+                if bar is not None:
+                    bar.setStyleSheet(sb_qss)
+        self.seg_hint.setStyleSheet(f"color: {C['text_dim']};")
+
+    def _restyle_feature_cards(self) -> None:
+        """Re-apply group-card frames and their title labels."""
+        card_qss = f"""
+            QFrame {{
+                background: {C["panel"]};
+                border: 1px solid {C["border"]};
+                border-radius: 7px;
+            }}
+        """
+        title_qss = (
+            f"color: {C['text_dim']}; letter-spacing: 1px; "
+            "background: transparent; border: none; "
+            "padding: 0 8px 2px 8px;"
+        )
+        cards: list[QFrame] = [card for card, _ in self._feat_cards]
+        if self._other_card is not None:
+            cards.append(self._other_card)
+        for card in cards:
+            card.setStyleSheet(card_qss)
+            # Each card's first child label is its title.
+            title = card.findChild(QLabel)
+            if title is not None:
+                title.setStyleSheet(title_qss)
 
     def _restore_geometry(
         self,

@@ -479,21 +479,28 @@ class FeatureRow(QWidget):
 class AnalysisPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet(
-            f"background: {C['analysis_bg']}; border-top: 1px solid {C['border']};"
-        )
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(8)
-        self.title = QLabel("Analysis")
+        self.title = QLabel("Analysis", self)
         self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-        self.title.setStyleSheet(
-            f"color: {C['text_dim']}; letter-spacing: 1px;"
-        )
-        self.content = QTextEdit()
+        self.content = QTextEdit(self)
         self.content.setReadOnly(True)
         self.content.setFont(QFont("Noto Sans Mono", 10))
         self.content.setMinimumHeight(60)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(8)
+        layout.addWidget(self.title)
+        layout.addWidget(self.content)
+        self.apply_theme()
+
+    def apply_theme(self) -> None:
+        """Re-apply palette-dependent styles. Called on theme toggle."""
+        self.setStyleSheet(
+            f"background: {C['analysis_bg']};"
+            f" border-top: 1px solid {C['border']};"
+        )
+        self.title.setStyleSheet(
+            f"color: {C['text_dim']}; letter-spacing: 1px;"
+        )
         self.content.setStyleSheet(f"""
             QTextEdit {{
                 background: {C["panel"]};
@@ -502,9 +509,7 @@ class AnalysisPanel(QWidget):
                 border-radius: 6px;
                 padding: 8px;
             }}
-        """ + scrollbar_style())
-        layout.addWidget(self.title)
-        layout.addWidget(self.content)
+            """ + scrollbar_style())
 
     def set_html(self, html: str):
         self.content.setHtml(html)
@@ -578,11 +583,19 @@ class SegmentGridWidget(QWidget):
         self._n_cols = 0
         self._do_relayout()
 
+    def apply_theme(self) -> None:
+        """Invalidate the headers-active dedup cache so the next
+        ``set_headers_active`` re-applies palette-dependent colors.
+        """
+        self._last_headers_active = None
+
     def set_headers_active(self, active: bool):
         # Dedup is safe because ``set_groups`` clears the cache when it
         # rebuilds the header labels; the only way ``self._headers`` and
         # the cached state get out of sync is when set_groups runs, and
-        # it resets ``_last_headers_active`` to None.
+        # it resets ``_last_headers_active`` to None. ``apply_theme``
+        # also clears the cache so a theme swap forces a re-style even
+        # if the active state hasn't changed.
         if self._last_headers_active == active:
             return
         color = C["text"] if active else C["text_dim"]
