@@ -856,11 +856,21 @@ class MainWindow(QMainWindow):
         with self._batched_updates():
             # Re-style pooled widgets and detach them so the upcoming
             # central-widget destruction doesn't take them with it.
+            # ``hide()`` BEFORE ``setParent(None)`` is load-bearing: a
+            # widget with no parent is a top-level window, and Qt
+            # preserves the visible flag across reparenting. Without
+            # the hide, every pooled SegmentButton (140+) and FeatureRow
+            # briefly appears as its own tiny top-level window during
+            # the rebuild -- a noticeable flash of small windows on
+            # X11/Wayland. ``_populate_segments``/`_populate_features``
+            # call show() on the active subset after re-parenting.
             for btn in self._seg_button_pool.values():
                 btn.apply_theme()
+                btn.hide()
                 btn.setParent(None)
             for row in self._feat_row_pool.values():
                 row.apply_theme()
+                row.hide()
                 row.setParent(None)
             # Cards live as children of the old central widget; drop our
             # references so _init_feature_pool rebuilds them (it sees the
@@ -912,6 +922,15 @@ class MainWindow(QMainWindow):
                 self._populate_features()
                 self._apply_mode_to_new_widgets()
                 self.analysis.clear()
+            # The fresh toolbar got a fresh ``inventory_combo`` whose
+            # ``_populate_inventory_dropdown`` couldn't see the old
+            # selection (different widget instance). Re-sync from the
+            # canonical loaded path so the dropdown doesn't snap back
+            # to "Select inventory...".
+            if self._current_path:
+                idx = self.inventory_combo.findData(self._current_path)
+                if idx >= 0:
+                    self.inventory_combo.setCurrentIndex(idx)
             # Restore geometry while paint is still suspended so the
             # window doesn't flash at the default splitter ratios before
             # snapping back to the user's sizes.
