@@ -311,8 +311,11 @@ class VowelChartWidget(QWidget):
         self._lay_out_rows(occupied, placements)
 
     def _add_top_headers(self) -> None:
-        """VOWELS title (spanning all columns) + Front/Central/Back labels."""
-        title = QLabel("VOWELS")
+        """VOWELS title (spanning all columns) + Front/Central/Back labels.
+        Labels are parented at construction so they're never transient
+        top-level widgets (would flash as taskbar entries on WSLg).
+        """
+        title = QLabel("VOWELS", self)
         title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
         title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1px;"
@@ -321,7 +324,7 @@ class VowelChartWidget(QWidget):
         self._grid.addWidget(title, 0, 0, 1, 7)
         self._header_labels.append((title, False))
         for ci, label in enumerate(self._COL_HEADERS):
-            lbl = QLabel(label)
+            lbl = QLabel(label, self)
             lbl.setFont(QFont("Noto Sans", 7))
             lbl.setStyleSheet(f"color: {C['text_dim']};")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -368,7 +371,7 @@ class VowelChartWidget(QWidget):
             grid_row += 1
 
     def _add_row_header(self, label: str, grid_row: int) -> None:
-        lbl = QLabel(label)
+        lbl = QLabel(label, self)
         lbl.setFont(QFont("Noto Sans", 7))
         lbl.setStyleSheet(f"color: {C['text_dim']}; padding-right: 4px;")
         lbl.setAlignment(
@@ -391,7 +394,12 @@ class VowelChartWidget(QWidget):
                 self._prep_button(btn, seg, placements[seg])
                 self._grid.addWidget(btn, grid_row, 1 + ci)
             return
-        cell = QWidget()
+        # Parent the collision-cell container at construction. Without a
+        # parent, this QWidget is a top-level window; on WSLg it briefly
+        # appears as a tiny taskbar entry on the leftmost monitor before
+        # ``self._grid.addWidget`` re-parents it. Theme rebuilds and
+        # inventory swaps both go through here.
+        cell = QWidget(self)
         cell.setStyleSheet("background: transparent;")
         self._cell_containers.append(cell)
         vbox = QVBoxLayout(cell)
