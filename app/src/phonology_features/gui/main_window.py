@@ -293,7 +293,7 @@ class MainWindow(QMainWindow):
         self.inventory_combo = QComboBox(toolbar)
         self.inventory_combo.setFont(QFont("Noto Sans", 10))
         self.inventory_combo.setFixedHeight(32)
-        self.inventory_combo.setMinimumWidth(220)
+        self.inventory_combo.setMinimumWidth(176)
         self._populate_inventory_dropdown()
         self.inventory_combo.activated.connect(self._on_inventory_selected)
         toolbar.addWidget(self.inventory_combo)
@@ -335,10 +335,7 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         splitter = QSplitter(Qt.Orientation.Horizontal, central)
-        splitter.setHandleWidth(1)
-        splitter.setStyleSheet(
-            f"QSplitter::handle {{ background: {C['border']}; }}"
-        )
+        splitter.setHandleWidth(4)
         self.seg_panel = self._build_segment_panel(splitter)
         splitter.addWidget(self.seg_panel)
         self.feat_panel = self._build_feature_panel(splitter)
@@ -358,9 +355,6 @@ class MainWindow(QMainWindow):
         self.analysis = AnalysisPanel(central)
         self._vsplit = QSplitter(Qt.Orientation.Vertical, central)
         self._vsplit.setHandleWidth(4)
-        self._vsplit.setStyleSheet(
-            "QSplitter::handle { background: transparent; }"
-        )
         self._vsplit.addWidget(splitter)
         self._vsplit.addWidget(self.analysis)
         self._vsplit.setSizes([700, 220])
@@ -373,6 +367,7 @@ class MainWindow(QMainWindow):
         self.analysis.setMinimumHeight(self._min_analysis_h)
         self._vsplit.setCollapsible(1, False)
         root.addWidget(self._vsplit)
+        self._restyle_splitters()
 
     def _build_status_bar(self) -> None:
         self.status = _BrandedStatusBar(self)
@@ -844,15 +839,22 @@ class MainWindow(QMainWindow):
         """)
 
     def _restyle_splitters(self) -> None:
-        """Re-style splitter handles directly on each ``handle()`` widget.
-        Calling ``setStyleSheet`` on the splitter itself would cascade
-        through every descendant (140+ segment buttons), the bulk of
-        the old theme-toggle cost.
+        """Apply the ``QSplitter::handle`` subcontrol stylesheet on each
+        splitter.
+
+        Setting on the handle widget directly does nothing: QSplitterHandle
+        paints itself via QStyle::drawControl(CE_Splitter), which paints
+        over any QWidget background the handle stylesheet sets. Going
+        through the ::handle subcontrol on the parent splitter is the
+        documented way to override that draw. It re-polishes descendants
+        as a side effect, but we only run this on init and theme toggle.
         """
-        for i in range(self._hsplit.count()):
-            handle = self._hsplit.handle(i)
-            if handle is not None:
-                handle.setStyleSheet(f"background: {C['border']};")
+        qss = (
+            f"QSplitter::handle {{ background-color: {C['border']}; }}"
+            f"QSplitter::handle:hover {{ background-color: {C['accent']}; }}"
+        )
+        self._hsplit.setStyleSheet(qss)
+        self._vsplit.setStyleSheet(qss)
 
     def _restyle_panel_chrome_widgets(self) -> None:
         """Re-style panel-child widgets with palette-dependent stylesheets:
@@ -920,6 +922,13 @@ class MainWindow(QMainWindow):
         """Open (or raise) the Builder window. Edits the current
         inventory in place if one is loaded; otherwise shows the
         new-inventory setup dialog.
+
+        The Builder is window-modal against MainWindow: while it's
+        open the user can't interact with the visualizer (in
+        particular, can't toggle the theme). The Builder's own
+        palette-dependent chrome doesn't get rebuilt on theme
+        changes, so blocking those changes while it's up avoids
+        the half-restyled state.
         """
         if self._builder is not None and self._builder.isVisible():
             self._builder.raise_()
@@ -932,11 +941,13 @@ class MainWindow(QMainWindow):
                 parent=self, load_path=self._current_path
             )
             self._builder.setWindowFlag(Qt.WindowType.Window)
+            self._builder.setWindowModality(Qt.WindowModality.WindowModal)
             self._builder.show()
             return
         # No inventory loaded; show the setup dialog. Cancel = no window.
         builder = InventoryBuilder(parent=self)
         builder.setWindowFlag(Qt.WindowType.Window)
+        builder.setWindowModality(Qt.WindowModality.WindowModal)
         if not builder.show_setup_dialog():
             builder.deleteLater()
             return

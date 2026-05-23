@@ -276,12 +276,6 @@ class InventoryBuilder(QMainWindow):
             """)
         self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.installEventFilter(self)
-        # Filter mouse events on the viewport too so we can detect a
-        # plain-click inside a multi-cell selection BEFORE Qt collapses
-        # that selection back to the single clicked cell.
-        viewport = self._table.viewport()
-        if viewport is not None:
-            viewport.installEventFilter(self)
         h_header = self._table.horizontalHeader()
         v_header = self._table.verticalHeader()
         if h_header:
@@ -386,43 +380,10 @@ class InventoryBuilder(QMainWindow):
     }
 
     def eventFilter(self, obj, event):
-        if obj is self._table.viewport():
-            if self._handle_viewport_press(event):
-                return True
-        elif obj is self._table and event.type() == event.Type.KeyPress:
+        if obj is self._table and event.type() == event.Type.KeyPress:
             if self._handle_table_key(event):
                 return True
         return super().eventFilter(obj, event)
-
-    def _handle_viewport_press(self, event) -> bool:
-        """Bulk-cycle every selected cell when the user plain-clicks
-        inside an existing multi-cell selection (header-click row/col,
-        shift-click range, or ctrl-click set). Catching the mouse
-        PRESS on the viewport lets us see the selection before Qt
-        collapses it to the clicked cell. Shift / Ctrl clicks are the
-        user EXTENDING the selection; let Qt handle those normally.
-        """
-        if event.type() != event.Type.MouseButtonPress:
-            return False
-        if event.button() != Qt.MouseButton.LeftButton:
-            return False
-        modifiers = event.modifiers()
-        if modifiers & (
-            Qt.KeyboardModifier.ShiftModifier
-            | Qt.KeyboardModifier.ControlModifier
-        ):
-            return False
-        items = self._table.selectedItems()
-        if len(items) <= 1:
-            return False
-        idx = self._table.indexAt(event.position().toPoint())
-        if not idx.isValid():
-            return False
-        clicked_item = self._table.item(idx.row(), idx.column())
-        if clicked_item not in items:
-            return False
-        self._cycle_selection_from(clicked_item)
-        return True
 
     def _handle_table_key(self, event) -> bool:
         """Keyboard shortcuts on the table. Returns True if consumed.
