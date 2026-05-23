@@ -19,8 +19,9 @@ from phonology_features.gui.builder.grid import (
 from phonology_features.gui.builder.presets import VALID_VALUES
 from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QColor, QFont, QPen
 from PyQt6.QtWidgets import (
+    QAbstractButton,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -32,6 +33,8 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStatusBar,
+    QStyle,
+    QStyledItemDelegate,
     QTableWidget,
     QTableWidgetItem,
     QToolBar,
@@ -48,6 +51,31 @@ class _CellEdit:
     col: int
     old: str
     new: str
+
+
+class _NoFillSelectionDelegate(QStyledItemDelegate):
+    """Cell delegate that draws a blue border for selected cells
+    instead of overlaying them with the default blue fill. Keeps the
+    +/-/0 value + its background tint readable through the highlight."""
+
+    def paint(self, painter, option, index):  # type: ignore[override]
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        if selected:
+            # Strip the selected flag so the base painter draws the
+            # cell normally (own brush + text) without the blue fill.
+            option.state &= ~QStyle.StateFlag.State_Selected
+        super().paint(painter, option, index)
+        if not selected:
+            return
+        painter.save()
+        pen = QPen(QColor(C["accent"]))
+        pen.setWidth(2)
+        painter.setPen(pen)
+        # Inset by 1 px so the 2 px border falls fully inside the cell
+        # rect rather than half-clipping at the gridline.
+        r = option.rect.adjusted(1, 1, -1, -1)
+        painter.drawRect(r)
+        painter.restore()
 
 
 # Undo-history depth cap. ~200 batches of at-most all cells covers a
@@ -83,6 +111,12 @@ class InventoryBuilder(QMainWindow):
         self._dirty: bool = False
         self._selected_remove_col: int | None = None
         self._selected_remove_row: int | None = None
+        # Last applied enabled-state for each rm button. Lets the
+        # selection handler short-circuit when nothing changed, so
+        # spamming a header click doesn't pay the setStyleSheet polish
+        # cost on every event.
+        self._rm_seg_enabled_state: bool | None = None
+        self._rm_feat_enabled_state: bool | None = None
         # Undo / redo: each entry is one batch (the cell edits produced
         # by a single user action). Cleared on table rebuild.
         self._undo_stack: list[list[_CellEdit]] = []
@@ -192,11 +226,12 @@ class InventoryBuilder(QMainWindow):
         make_btn("+ Segment", self._add_segment)
         make_btn("+ Feature", self._add_feature)
         self._rm_seg_btn = make_btn("\u2212 Segment", self._remove_segment)
-        self._rm_seg_btn.setEnabled(False)
-        self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
         self._rm_feat_btn = make_btn("\u2212 Feature", self._remove_feature)
-        self._rm_feat_btn.setEnabled(False)
-        self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
+        # Initial state: nothing selected => both greyed out. Use the
+        # cache-aware setters so the initial assignment also fills the
+        # ``_rm_*_enabled_state`` cache.
+        self._set_rm_seg_enabled(False)
+        self._set_rm_feat_enabled(False)
         toolbar.addSeparator()
         # Two stretches sandwich Delete in the middle of the empty
         # space: away from the edit cluster on the left AND away from
@@ -289,6 +324,9 @@ class InventoryBuilder(QMainWindow):
                 font-weight: bold;
             }}
             """)
+        # Selected cells get a blue outline instead of a blue fill so
+        # the underlying value + tint stay readable through the highlight.
+        self._table.setItemDelegate(_NoFillSelectionDelegate(self._table))
         self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.installEventFilter(self)
         h_header = self._table.horizontalHeader()
@@ -297,6 +335,22 @@ class InventoryBuilder(QMainWindow):
             h_header.sectionClicked.connect(self._on_col_header_clicked)
         if v_header:
             v_header.sectionClicked.connect(self._on_row_header_clicked)
+        # Single source of truth for rm-button enabled/disabled state:
+        # fires for every selection change regardless of source (header
+        # click, ctrl+A, corner click, drag-select). Setters inside
+        # short-circuit when nothing changed.
+        sel_model = self._table.selectionModel()
+        if sel_model is not None:
+            sel_model.selectionChanged.connect(self._on_selection_changed)
+        # Corner button (top-left of headers) drives select-all by
+        # default; intercept so a second click clears the selection.
+        corner = self._table.findChild(QAbstractButton)
+        if corner is not None:
+            try:
+                corner.clicked.disconnect()
+            except TypeError:
+                pass
+            corner.clicked.connect(self._on_corner_clicked)
         return self._table
 
     def _build_status_bar(self) -> None:
@@ -369,6 +423,16 @@ class InventoryBuilder(QMainWindow):
             h_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             h_header.setMinimumSectionSize(32)
             h_header.sectionClicked.connect(self._on_col_header_clicked)
+        # clear() can replace the selectionModel too; re-wire it here.
+        sel_model = self._table.selectionModel()
+        if sel_model is not None:
+            try:
+                sel_model.selectionChanged.disconnect(
+                    self._on_selection_changed
+                )
+            except TypeError:
+                pass
+            sel_model.selectionChanged.connect(self._on_selection_changed)
         for r in range(len(self._features)):
             for c in range(len(self._segments)):
                 self._table.setItem(r, c, make_cell("0"))
@@ -507,7 +571,7 @@ class InventoryBuilder(QMainWindow):
         if len(self._undo_stack) > _MAX_UNDO_DEPTH:
             self._undo_stack.pop(0)
         self._dirty = True
-        self._disable_remove_btns()
+        self._clear_remove_selection()
 
     def _undo(self) -> None:
         """Reverse the most recent batch and move it to the redo stack."""
@@ -522,7 +586,7 @@ class InventoryBuilder(QMainWindow):
                 style_cell(item, e.old)
         self._redo_stack.append(edits)
         self._dirty = True
-        self._disable_remove_btns()
+        self._clear_remove_selection()
         self._status.showMessage(
             f"Undid {len(edits)} cell change{'s' if len(edits) != 1 else ''}."
         )
@@ -540,39 +604,100 @@ class InventoryBuilder(QMainWindow):
                 style_cell(item, e.new)
         self._undo_stack.append(edits)
         self._dirty = True
-        self._disable_remove_btns()
+        self._clear_remove_selection()
         self._status.showMessage(
             f"Redid {len(edits)} cell change{'s' if len(edits) != 1 else ''}."
         )
 
     # Header selection / remove button state
     def _on_col_header_clicked(self, col: int):
-        """A segment column header was clicked; enable segment removal only."""
+        """Toggle segment-column highlight; second click clears it."""
+        if self._selected_remove_col == col:
+            self._selected_remove_col = None
+            self._selected_remove_row = None
+            self._table.clearSelection()
+            return
         self._selected_remove_col = col
         self._selected_remove_row = None
         self._table.selectColumn(col)
-        self._rm_seg_btn.setEnabled(True)
-        self._rm_seg_btn.setStyleSheet(self._btn_style_enabled)
-        self._rm_feat_btn.setEnabled(False)
-        self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
 
     def _on_row_header_clicked(self, row: int):
-        """A feature row header was clicked; enable feature removal only."""
+        """Toggle feature-row highlight; second click clears it."""
+        if self._selected_remove_row == row:
+            self._selected_remove_row = None
+            self._selected_remove_col = None
+            self._table.clearSelection()
+            return
         self._selected_remove_row = row
         self._selected_remove_col = None
         self._table.selectRow(row)
-        self._rm_feat_btn.setEnabled(True)
-        self._rm_feat_btn.setStyleSheet(self._btn_style_enabled)
-        self._rm_seg_btn.setEnabled(False)
-        self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
 
-    def _disable_remove_btns(self) -> None:
+    def _on_corner_clicked(self):
+        """Toggle select-all when the table corner is clicked."""
+        rows = self._table.rowCount()
+        cols = self._table.columnCount()
+        total = rows * cols
+        if total > 0 and len(self._table.selectedItems()) == total:
+            self._table.clearSelection()
+        else:
+            self._table.selectAll()
+
+    def _clear_remove_selection(self) -> None:
+        """Reset which header is currently selected for removal."""
         self._selected_remove_col = None
         self._selected_remove_row = None
-        self._rm_seg_btn.setEnabled(False)
-        self._rm_seg_btn.setStyleSheet(self._btn_style_disabled)
-        self._rm_feat_btn.setEnabled(False)
-        self._rm_feat_btn.setStyleSheet(self._btn_style_disabled)
+        self._set_rm_seg_enabled(False)
+        self._set_rm_feat_enabled(False)
+
+    def _set_rm_seg_enabled(self, enabled: bool) -> None:
+        """Toggle the − Segment button's enabled state, skipping the
+        setStyleSheet polish if nothing actually changed."""
+        if self._rm_seg_enabled_state == enabled:
+            return
+        self._rm_seg_enabled_state = enabled
+        self._rm_seg_btn.setEnabled(enabled)
+        self._rm_seg_btn.setStyleSheet(
+            self._btn_style_enabled if enabled else self._btn_style_disabled
+        )
+
+    def _set_rm_feat_enabled(self, enabled: bool) -> None:
+        """Toggle the − Feature button's enabled state, skipping the
+        setStyleSheet polish if nothing actually changed."""
+        if self._rm_feat_enabled_state == enabled:
+            return
+        self._rm_feat_enabled_state = enabled
+        self._rm_feat_btn.setEnabled(enabled)
+        self._rm_feat_btn.setStyleSheet(
+            self._btn_style_enabled if enabled else self._btn_style_disabled
+        )
+
+    def _on_selection_changed(self):
+        """Derive rm-button enabled-state from the current Qt selection.
+
+        Uses ``selectedColumns()`` / ``selectedRows()`` which return
+        only fully-selected columns/rows -- microsecond cost even on
+        select-all (vs walking ~4000 indexes).
+
+        Does NOT touch ``_selected_remove_col`` / ``_selected_remove_row``:
+        those are header-click "stickies" owned by the header handlers,
+        and a cell click transiently shrinks Qt's selection to one cell
+        before ``_on_cell_clicked`` restores the column/row. Clearing
+        the stickies here would break that restore path.
+        """
+        sel_model = self._table.selectionModel()
+        if sel_model is None:
+            return
+        n_cols = len(sel_model.selectedColumns())
+        n_rows = len(sel_model.selectedRows())
+        if n_cols == 1 and n_rows == 0:
+            self._set_rm_seg_enabled(True)
+            self._set_rm_feat_enabled(False)
+        elif n_rows == 1 and n_cols == 0:
+            self._set_rm_seg_enabled(False)
+            self._set_rm_feat_enabled(True)
+        else:
+            self._set_rm_seg_enabled(False)
+            self._set_rm_feat_enabled(False)
 
     def _on_cell_clicked(self, row: int, col: int):
         item = self._table.item(row, col)
@@ -586,6 +711,13 @@ class InventoryBuilder(QMainWindow):
         item.setText(new_val)
         style_cell(item, new_val)
         self._commit_edits(edits)
+        # A cell click would otherwise replace the header-driven row/
+        # column highlight with a single-cell selection. Restore the
+        # sticky header selection so it persists across cell edits.
+        if self._selected_remove_col is not None:
+            self._table.selectColumn(self._selected_remove_col)
+        elif self._selected_remove_row is not None:
+            self._table.selectRow(self._selected_remove_row)
 
     # Add / remove segments and features
     def _add_segment(self) -> None:
@@ -642,6 +774,9 @@ class InventoryBuilder(QMainWindow):
         """Remove the header-selected column (segment)."""
         col = self._selected_remove_col
         if col is None or col < 0 or col >= len(self._segments):
+            self._status.showMessage(
+                "Click a segment column header to choose which to remove."
+            )
             return
         seg = self._segments[col]
         reply = ask_question(
@@ -652,13 +787,16 @@ class InventoryBuilder(QMainWindow):
         self._segments.pop(col)
         self._table.removeColumn(col)
         self._dirty = True
-        self._disable_remove_btns()
+        self._clear_remove_selection()
         self._status.showMessage(f"Removed segment '{seg}'.")
 
     def _remove_feature(self) -> None:
         """Remove the header-selected row (feature)."""
         row = self._selected_remove_row
         if row is None or row < 0 or row >= len(self._features):
+            self._status.showMessage(
+                "Click a feature row header to choose which to remove."
+            )
             return
         feat = self._features[row]
         reply = ask_question(
@@ -669,7 +807,7 @@ class InventoryBuilder(QMainWindow):
         self._features.pop(row)
         self._table.removeRow(row)
         self._dirty = True
-        self._disable_remove_btns()
+        self._clear_remove_selection()
         self._status.showMessage(f"Removed feature '{feat}'.")
 
     # Serialization (save / load)
@@ -886,7 +1024,9 @@ class InventoryBuilder(QMainWindow):
         # the current grid; toggle the visual + interactive state.
         self._delete_btn.setEnabled(has_file)
         self._delete_btn.setStyleSheet(
-            self._delete_style_enabled if has_file else self._btn_style_disabled
+            self._delete_style_enabled
+            if has_file
+            else self._btn_style_disabled
         )
         self._refresh_meta_strip()
 
