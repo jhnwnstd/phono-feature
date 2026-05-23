@@ -291,7 +291,13 @@ class MainWindow(QMainWindow):
         self._build_status_bar()
 
     def _build_toolbar(self) -> None:
-        toolbar = QToolBar()
+        # Pass ``self`` as parent so the toolbar is never a parent-less
+        # widget. A parent-less QToolBar takes the Qt.Tool window flag
+        # and the WM tries to render it as a floating tool window for
+        # the brief moment between construction and ``addToolBar``,
+        # producing a small window flash on theme toggle (when the
+        # toolbar is rebuilt).
+        toolbar = QToolBar(self)
         toolbar.setMovable(False)
         toolbar.setStyleSheet(f"""
             QToolBar {{
@@ -884,14 +890,17 @@ class MainWindow(QMainWindow):
             # leak a chrome subtree per toggle (~90 widgets), and Qt
             # would have to walk all of them on every subsequent
             # re-style; that was the linear slowdown.
-            self.setCentralWidget(QWidget())
+            self.setCentralWidget(QWidget(self))
             for tb in self.findChildren(QToolBar):
                 self.removeToolBar(tb)
                 tb.deleteLater()
             # setStatusBar transfers ownership of the new bar but does NOT
             # delete the old one; same accumulator pattern.
             old_status = self.statusBar()
-            self.setStatusBar(QStatusBar())
+            # Same reason as toolbar: pass ``self`` so the new status bar
+            # never exists parent-less, even for the gap between
+            # construction and ``setStatusBar``.
+            self.setStatusBar(QStatusBar(self))
             if old_status is not None:
                 old_status.deleteLater()
             # Drain DeferredDelete events now so the orphan trees are
@@ -1212,8 +1221,10 @@ class MainWindow(QMainWindow):
         active = set(self._seg_buttons)
         for sym, btn in self._seg_button_pool.items():
             if sym not in active and btn.parent() is not None:
-                btn.setParent(None)
+                # Hide BEFORE re-parenting -- a parent-less visible widget
+                # is a top-level window, briefly visible on real WMs.
                 btn.hide()
+                btn.setParent(None)
 
     def _get_or_create_seg_button(self, seg: str):
         """Return a SegmentButton for ``seg``, creating it on first use.
@@ -1346,9 +1357,14 @@ class MainWindow(QMainWindow):
         cards.
         """
         if self._other_card is not None:
+            # Hide BEFORE setParent(None) to avoid the briefly-top-level
+            # window flash on real WMs.
             for feat in list(self._feat_rows.keys()):
                 if feat not in self._feat_row_pool:
-                    self._feat_rows.pop(feat).setParent(None)
+                    orphan = self._feat_rows.pop(feat)
+                    orphan.hide()
+                    orphan.setParent(None)
+            self._other_card.hide()
             self._other_card.setParent(None)
             self._other_card.deleteLater()
             self._other_card = None
