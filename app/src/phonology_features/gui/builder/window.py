@@ -845,6 +845,14 @@ class InventoryBuilder(QMainWindow):
         sel_model = self._table.selectionModel()
         if sel_model is None:
             return
+        # Force a full viewport repaint. Qt only invalidates cells whose
+        # selection state actually flipped, so the cell at the
+        # intersection of an old and new selection (e.g. col-then-row
+        # toggle: cell (row, col) stays selected) is NOT invalidated.
+        # Without this, the old outline's vertical/horizontal stripes
+        # through that cell persist as stale blue pixels under the new
+        # outline.
+        self._table.viewport().update()
         sel_cols = sel_model.selectedColumns()
         sel_rows = sel_model.selectedRows()
         if len(sel_cols) == 1 and len(sel_rows) == 0:
