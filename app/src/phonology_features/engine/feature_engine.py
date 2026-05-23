@@ -44,9 +44,7 @@ class FeatureEngine:
         self._seg_value_tuples: dict[str, tuple[str, ...]] = {}
         self._contrastive_features: list[str] | None = None
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
     def _validate_segment(self, segment: str) -> None:
         if segment not in self.segments:
             raise KeyError(f"Segment '{segment}' not found in inventory")
@@ -91,9 +89,7 @@ class FeatureEngine:
                 matching.append(segment)
         return matching
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
     def load_inventory(self, filepath: str) -> None:
         """
         Load a phonological inventory from JSON file.

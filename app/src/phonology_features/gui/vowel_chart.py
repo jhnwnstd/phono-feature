@@ -1,16 +1,9 @@
-"""
-gui/vowel_chart.py
-
-IPA-style vowel trapezoid chart widget.
-
-Maps vowel segments onto a height x backness x rounding grid using
-normalised phonological features. Placement is inventory-sensitive.
-A VowelProfile is computed once per inventory to determine which
-features are active, so fallback logic only fires when the inventory
-actually lacks the direct feature.
-
-Each placement carries a confidence level and a human-readable reason
-string, surfaced as tooltips on the buttons.
+"""IPA-style vowel trapezoid chart. Maps vowel segments onto a
+height x backness x rounding grid using normalised phonological
+features. A VowelProfile is computed per inventory so fallback logic
+only fires when the inventory actually lacks the direct feature.
+Each placement carries a confidence level and a reason string that
+surface as tooltips on the buttons.
 """
 
 from __future__ import annotations
@@ -245,19 +238,14 @@ class VowelChartWidget(QWidget):
         self._grid = QGridLayout(self)
         self._grid.setSpacing(btn_gap)
         self._grid.setContentsMargins(0, 0, 8, 0)
-        # Per-instance so the chart sees the active palette. Rebuilt by
-        # ``apply_theme`` on every theme toggle so re-styling existing
-        # headers picks up the new colors.
+        # Cached header styles, rebuilt by apply_theme each toggle.
         self._HDR_ACTIVE = ""
         self._HDR_INACTIVE = ""
         self._ROW_ACTIVE = ""
         self._ROW_INACTIVE = ""
         self._rebuild_style_cache()
-        # Tracks the last ``active`` value styled into the headers so
-        # mode-toggle bursts can short-circuit when nothing changed.
-        # Reset by ``clear`` when fresh labels replace the cached ones,
-        # and by ``apply_theme`` so a theme swap forces a re-style even
-        # if the active state hasn't changed.
+        # Last ``active`` value styled into the headers; cleared by
+        # clear() and apply_theme() to force a re-style.
         self._last_headers_active: bool | None = None
 
     def _rebuild_style_cache(self) -> None:
@@ -267,15 +255,16 @@ class VowelChartWidget(QWidget):
         self._ROW_INACTIVE = f"color: {C['text_dim']}; padding-right: 4px;"
 
     def apply_theme(self) -> None:
-        """Re-style cached header strings against the active palette and
-        force the next ``set_headers_active`` to actually re-apply."""
+        """Re-style cached header strings against the active palette
+        and force the next ``set_headers_active`` to re-apply.
+        """
         self._rebuild_style_cache()
         self._last_headers_active = None
 
     def set_headers_active(self, active: bool):
-        # Dedup is safe because ``clear`` (called by ``set_vowels`` on
+        # Dedup is safe: clear() (called by set_vowels on
         # every inventory swap) resets ``_last_headers_active`` to None
-        # whenever the cached labels are about to be replaced.
+        # when fresh labels replace the cached ones.
         if self._last_headers_active == active:
             return
         if active:
@@ -293,11 +282,10 @@ class VowelChartWidget(QWidget):
 
     def clear(self) -> None:
         """Remove all buttons, labels, and collision containers.
-
-        Buttons are detached (NOT destroyed); they belong to the
-        caller's segment-button pool. Detaching them BEFORE deleting
-        their parent cell containers is essential, otherwise destroying
-        the container would take the children with it.
+        Buttons are detached (not destroyed) since they belong to the
+        caller's pool. Detaching them BEFORE deleting cell containers
+        is essential; otherwise destroying the container would take
+        the children with it.
         """
         for btn in self._buttons.values():
             btn.setParent(None)
@@ -307,8 +295,6 @@ class VowelChartWidget(QWidget):
         for lbl, _ in self._header_labels:
             lbl.deleteLater()
         self._header_labels.clear()
-        # Fresh labels will be appended by ``set_vowels``; any cached
-        # "we already styled these for this active value" is now stale.
         self._last_headers_active = None
         for container in self._cell_containers:
             container.deleteLater()
@@ -326,9 +312,9 @@ class VowelChartWidget(QWidget):
         self._lay_out_rows(occupied, placements)
 
     def _add_top_headers(self) -> None:
-        """VOWELS title (spanning all columns) + Front/Central/Back labels.
-        Labels are parented at construction so they're never transient
-        top-level widgets (would flash as taskbar entries on WSLg).
+        """VOWELS title (spanning all columns) + Front/Central/Back
+        labels. Labels are parented at construction so they're never
+        transient top-level widgets.
         """
         title = QLabel("VOWELS", self)
         title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
@@ -399,9 +385,10 @@ class VowelChartWidget(QWidget):
     def _place_cell(
         self, cell_segs: list, placements: dict, grid_row: int, ci: int
     ) -> None:
-        """Single vowel: drop the button straight into the grid cell.
-        Multiple vowels at the same (row, col): stack them in a
-        transparent vbox container that we own."""
+        """Place one cell's button(s) in the grid. Single vowel: button
+        goes straight in. Multiple vowels at the same (row, col): stack
+        them in a transparent vbox container that we own.
+        """
         if len(cell_segs) == 1:
             seg = cell_segs[0]
             btn = self._buttons.get(seg)
@@ -409,11 +396,9 @@ class VowelChartWidget(QWidget):
                 self._prep_button(btn, seg, placements[seg])
                 self._grid.addWidget(btn, grid_row, 1 + ci)
             return
-        # Parent the collision-cell container at construction. Without a
-        # parent, this QWidget is a top-level window; on WSLg it briefly
-        # appears as a tiny taskbar entry on the leftmost monitor before
-        # ``self._grid.addWidget`` re-parents it. Theme rebuilds and
-        # inventory swaps both go through here.
+        # Parented at construction so the container is never a
+        # transient top-level widget during the brief gap before
+        # ``self._grid.addWidget`` re-parents it.
         cell = QWidget(self)
         cell.setStyleSheet("background: transparent;")
         self._cell_containers.append(cell)

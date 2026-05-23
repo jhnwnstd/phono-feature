@@ -28,10 +28,8 @@ Heuristic notes:
 from collections import defaultdict
 from functools import lru_cache
 
-# ---------------------------------------------------------------------------
 # Primary groups; broad manner classes for initial assignment.
 # Only uses the most universal, stable features.
-# ---------------------------------------------------------------------------
 PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
     ("Clicks", {"click": "+"}),
     (
@@ -97,20 +95,16 @@ _MIN_POSITIVE: dict[str, int] = {
     "Central Approximants": 2,
     "Semivowels": 2,
 }
-# ---------------------------------------------------------------------------
 # Derived breakouts; split from a parent class after initial assignment.
 # Only surfaced when the feature is active, enough segments qualify,
 # AND the parent retains at least one member.
-# ---------------------------------------------------------------------------
 DERIVED_BREAKOUTS: list[tuple[str, str, dict[str, str]]] = [
     ("Sibilants", "Fricatives", {"strident": "+", "coronal": "+"}),
     ("Lateral Fricatives", "Fricatives", {"lateral": "+"}),
     ("Lateral Affricates", "Affricates", {"lateral": "+"}),
 ]
-# ---------------------------------------------------------------------------
 # Explicit parent map for upward merging of small groups.
 # setdefault is used so the parent is recreated if it was deleted.
-# ---------------------------------------------------------------------------
 _MERGE_PARENT: dict[str, str] = {
     "Lateral Affricates": "Affricates",
     "Sibilants": "Fricatives",
@@ -121,9 +115,7 @@ _MERGE_PARENT: dict[str, str] = {
 # Groups exempt from upward merging.  Laryngeal rescue (Step 5) can still
 # peel individual segments out.
 _FROZEN_GROUPS: set[str] = {"Plosives"}
-# ---------------------------------------------------------------------------
 # Display order: manner-first (plosives -> fricatives -> affricates)
-# ---------------------------------------------------------------------------
 DISPLAY_ORDER: list[str] = [
     "Clicks",
     "Plosives",
@@ -144,9 +136,7 @@ DISPLAY_ORDER: list[str] = [
     "Laryngeals",
     "Vowels",
 ]
-# ---------------------------------------------------------------------------
 # Relabeling: frozenset of origin names -> derived display label
-# ---------------------------------------------------------------------------
 _RELABEL_PATTERNS: dict[frozenset[str], str] = {
     frozenset({"Trills", "Taps & Flaps"}): "Vibrants",
     frozenset({"Trills", "Central Approximants"}): "Rhotics",
@@ -178,9 +168,7 @@ _DERIVED_MERGES: list[tuple[frozenset[str], str]] = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Key normalisation
-# ---------------------------------------------------------------------------
 @lru_cache(maxsize=512)
 def _normalize_key(key: str) -> str:
     """Normalise a feature name to a canonical lowercase token.
@@ -202,9 +190,7 @@ def _normalize_feats(feat_dict: dict[str, str]) -> dict[str, str]:
     return {_normalize_key(k): v for k, v in feat_dict.items()}
 
 
-# ---------------------------------------------------------------------------
 # IPA place ordering (left -> right on the IPA chart)
-# ---------------------------------------------------------------------------
 _VAL_ORD: dict[str, int] = {"-": 0, "+": 1, "0": 2}
 _SORT_KEYS: list[tuple[str, dict[str, int]]] = [
     ("sonorant", _VAL_ORD),
@@ -273,9 +259,7 @@ def _ipa_place(feats: dict[str, str]) -> int:
     return 11  # vowels / unclassified
 
 
-# ---------------------------------------------------------------------------
 # Main grouping function
-# ---------------------------------------------------------------------------
 def _should_merge_up(group_size: int, inventory_size: int) -> bool:
     """True if a group is too small to display on its own."""
     return group_size < max(3, int(inventory_size * 0.05))

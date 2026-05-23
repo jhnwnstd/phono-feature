@@ -1,13 +1,6 @@
-"""
-gui/widgets.py
-
-Reusable UI widgets.
-
-Defines:
-SegmentButton
-FeatureRow
-AnalysisPanel
-SegmentGridWidget
+"""Reusable GUI widgets: SegmentButton, FeatureRow, AnalysisPanel,
+SegmentGridWidget. Each owns its own ``apply_theme`` for live theme
+swaps; per-widget style dicts are cached per theme at class level.
 """
 
 import math
@@ -40,16 +33,13 @@ class SegmentState(StrEnum):
 
 
 class SegmentButton(QPushButton):
-    """Toggleable button for a single phonological segment.
-
-    Stylesheet dicts are cached per theme at class level, so a live
-    theme swap on a 140-segment inventory only does the f-string work
-    once per theme; subsequent swaps back are a cache hit. Each
-    instance keeps a reference to the dict for its current theme;
-    ``apply_theme`` swaps the reference on toggle.
+    """Toggleable button for a single phonological segment. Stylesheet
+    dicts are cached per theme at class level so a 140-segment swap
+    only does the f-string work once per theme; subsequent swaps back
+    are a cache hit.
     """
 
-    # theme name -> styles dict. Survives across instances.
+    # theme name -> styles dict, shared across instances.
     _styles_cache: dict[str, dict] = {}
 
     @classmethod
@@ -74,10 +64,8 @@ class SegmentButton(QPushButton):
         self.setStyleSheet(self._styles[SegmentState.DEFAULT])
 
     def apply_theme(self) -> None:
-        """Re-style against the active palette in place.
-
-        Used by MainWindow on a theme toggle so pooled buttons don't
-        have to be destroyed and recreated.
+        """Re-style against the active palette in place. Called by
+        MainWindow on theme toggle so pooled buttons survive.
         """
         self._styles = self._styles_for_active_theme()
         self.setStyleSheet(self._styles[self._state])
@@ -140,9 +128,10 @@ class SegmentButton(QPushButton):
         }
 
     def set_state(self, state: SegmentState | str) -> None:
-        # Most callers already pass a SegmentState; only re-instantiate
-        # for the str-literal path. Saves an enum lookup per call on the
-        # hot mode-toggle path.
+        """Set the button's visual state. Accepts the enum or its string
+        value; the isinstance check avoids an enum lookup on the hot
+        mode-toggle path where most callers already pass the enum.
+        """
         if isinstance(state, SegmentState):
             new_state = state
         else:
@@ -154,24 +143,17 @@ class SegmentButton(QPushButton):
 
 
 class FeatureRow(QWidget):
-    """
-    One feature row in the feature panel.
-
-    Interactive mode shows plus and minus toggle buttons.
-    Display mode shows a coloured value badge.
-
-    Style strings are cached per theme at class level (see
-    SegmentButton for the same pattern); ``apply_theme`` re-binds
-    instance-level attrs on a live theme swap.
+    """One feature row in the feature panel. Interactive mode shows
+    +/- toggle buttons; display mode shows a coloured value badge.
+    Style strings cached per theme at class level (see SegmentButton);
+    ``apply_theme`` re-binds instance attrs on a live theme swap.
     """
 
     value_changed = pyqtSignal(str, str)
     # theme name -> styles dict (BADGE_*, ROW_*, NAME_*).
     _styles_cache: dict[str, dict[str, str]] = {}
-    # Instance-level style strings. Declared here so mypy can see them.
-    # Actually populated by ``_build_styles`` via setattr from the cached
-    # theme dict. Default values are placeholders; overwritten before
-    # first use.
+    # Instance attrs populated by ``_build_styles`` via setattr from
+    # the cached theme dict; declared here so mypy sees them.
     _BADGE_CONTRASTIVE: str = ""
     _NAME_CONTRASTIVE: str = ""
     _ROW_CONTRASTIVE: str = ""
@@ -205,13 +187,12 @@ class FeatureRow(QWidget):
         self._interactive = True
         self._panel_active = False
         self._build_styles()
-        # Cache for set_display dedup; cleared by reset/_apply_query_style
-        # because they bypass set_display but rewrite the same stylesheets.
+        # Dedup cache for set_display; cleared by reset / _apply_query_style
+        # (both rewrite the same stylesheets without going through set_display).
         self._last_display_state: tuple[str, bool, bool] | None = None
-        # Tracks whether the row is currently in the visual "reset"
-        # state for a given ``_panel_active`` value. Lets ``reset()``
-        # short-circuit on repeat calls (common during populate +
-        # mode-switch sequences) and skip 3 setStyleSheet calls.
+        # Tracks the panel-active value the row was last reset for, so
+        # repeat reset() calls during populate + mode-switch can
+        # short-circuit. None forces the next reset to take the full path.
         self._reset_for_panel: bool | None = None
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 3, 8, 3)
@@ -382,10 +363,10 @@ class FeatureRow(QWidget):
         self.value_changed.emit(self.feature, self._current_value)
 
     def _apply_query_style(self, value: str) -> None:
-        """Apply row tinting that matches the current query value."""
-        # _on_click and restore_value bypass set_display, so its dedup cache
-        # would falsely report "no change" next time. Same for reset()'s
-        # short-circuit cache. Invalidate both.
+        """Apply row tinting that matches the current query value.
+        Invalidates both dedup caches since _on_click / restore_value
+        bypass set_display and reset but rewrite the same stylesheets.
+        """
         self._last_display_state = None
         self._reset_for_panel = None
         if value == "+":
@@ -410,21 +391,20 @@ class FeatureRow(QWidget):
         self.badge.setVisible(not yes)
 
     def set_display(self, value: str, shared: bool, contrastive: bool = False):
-        """
-        Display a feature value in segment to feature mode.
+        """Display a feature value in seg-to-feat mode.
 
-        value is plus, minus, or empty.
-        shared means all selected segments share the value.
-        contrastive means selected segments split cleanly on this feature.
+        Args:
+            value: "+", "-", or "" (empty when not shared).
+            shared: all selected segments share this value.
+            contrastive: selected segments split cleanly on this feature.
         """
-        # Dedup: every seg-mode update re-runs through every row even when
-        # the displayed state didn't change. Skip the 3 setStyleSheet +
-        # 1 setText calls below if nothing's different.
+        # Dedup: seg-mode updates re-run through every row even when the
+        # state didn't change. Skip 3 setStyleSheet + 1 setText calls.
         state = (value, shared, contrastive)
         if self._last_display_state == state:
             return
         self._last_display_state = state
-        self._reset_for_panel = None  # row no longer in "reset" state
+        self._reset_for_panel = None
         if contrastive:
             self.badge.setText("\u00b1")
             self.badge.setStyleSheet(self._BADGE_CONTRASTIVE)
@@ -458,16 +438,15 @@ class FeatureRow(QWidget):
         self._panel_active = active
 
     def reset(self) -> None:
-        # Fast paths in priority order:
-        # 1. Truly idempotent: value is "", set_display never dirtied us
-        #    since last reset, and panel-active matches. Nothing to do.
-        # 2. Clean-but-panel-active-changed: only the name_label style
-        #    depends on panel_active when value is "" and the visual
-        #    state is neutral. Rewrite just that. The badge/row styles
-        #    are panel-active-invariant in the reset state.
-        # 3. Visual-dirty, value-non-empty, OR ``_reset_for_panel`` is
-        #    None (the apply_theme sentinel that says "old palette is
-        #    baked into your visible styles; rebuild them"): full reset.
+        """Return the row to its neutral state. Three fast paths:
+        1. Truly idempotent (value empty, no display dirt, panel
+           matches): no-op.
+        2. Clean-but-panel-changed: only name_label depends on the
+           panel_active value when neutral, so rewrite just that.
+        3. Visual-dirty, value non-empty, or ``_reset_for_panel is None``
+           (the apply_theme sentinel meaning "palette may be stale,
+           rebuild visible styles"): full reset.
+        """
         visual_dirty = self._last_display_state is not None
         force_full = self._reset_for_panel is None
         if self._current_value == "" and not visual_dirty and not force_full:
@@ -482,8 +461,6 @@ class FeatureRow(QWidget):
             self._reset_for_panel = self._panel_active
             return
         self._current_value = ""
-        # set_display's dedup cache must be invalidated since reset() bypasses
-        # it but rewrites all the stylesheets it tracks.
         self._last_display_state = None
         self.plus_btn.setChecked(False)
         self.minus_btn.setChecked(False)
@@ -544,10 +521,8 @@ class AnalysisPanel(QWidget):
 
 
 class SegmentGridWidget(QWidget):
-    """
-    Fluid grid of segment buttons.
-
-    The column count is recomputed from the current widget width on resize.
+    """Fluid grid of segment buttons. Column count is recomputed from
+    the current widget width on resize.
     """
 
     MAX_COLS = 12
@@ -557,10 +532,9 @@ class SegmentGridWidget(QWidget):
         self._groups: dict = {}
         self._buttons: dict = {}
         self._headers: list = []
-        # Tracks the last value of ``active`` we styled the headers with,
-        # so ``set_headers_active`` can short-circuit when mode toggles
-        # don't actually change the header color. Reset by ``set_groups``
-        # whenever fresh header labels replace the old ones.
+        # Last value ``set_headers_active`` styled the headers with;
+        # cached so mode toggles short-circuit. Reset whenever fresh
+        # header labels replace the old ones.
         self._last_headers_active: bool | None = None
         self._n_cols: int = 0
         self._grid = QGridLayout(self)
@@ -578,10 +552,8 @@ class SegmentGridWidget(QWidget):
     def set_groups(self, groups: dict, buttons: dict):
         """Replace all content.
 
-        Old buttons are detached (NOT destroyed); they belong to the
-        caller's segment-button pool and may reappear in the next
-        inventory. Headers are recreated each swap so destroying them
-        is fine.
+        Old buttons are detached (not destroyed) since they belong to
+        the caller's pool. Headers are recreated each swap.
         """
         while self._grid.count():
             self._grid.takeAt(0)
@@ -590,8 +562,6 @@ class SegmentGridWidget(QWidget):
         for hdr in self._headers:
             hdr.deleteLater()
         self._headers.clear()
-        # New header instances start with no style, so any cached "we
-        # already styled them with this active value" is stale.
         self._last_headers_active = None
         self._groups = groups
         self._buttons = buttons
@@ -615,12 +585,10 @@ class SegmentGridWidget(QWidget):
         self._last_headers_active = None
 
     def set_headers_active(self, active: bool):
-        # Dedup is safe because ``set_groups`` clears the cache when it
-        # rebuilds the header labels; the only way ``self._headers`` and
-        # the cached state get out of sync is when set_groups runs, and
-        # it resets ``_last_headers_active`` to None. ``apply_theme``
-        # also clears the cache so a theme swap forces a re-style even
-        # if the active state hasn't changed.
+        """Style headers for the given active state. Skips re-applying
+        if the cached state matches; ``set_groups`` and ``apply_theme``
+        both clear the cache to force a re-style.
+        """
         if self._last_headers_active == active:
             return
         color = C["text"] if active else C["text_dim"]
@@ -633,14 +601,11 @@ class SegmentGridWidget(QWidget):
         self._last_headers_active = active
 
     def sizeHint(self) -> QSize:  # type: ignore[override]
-        """Report the *natural* width; width needed to fit the widest
-        manner-class group in a single row; instead of the layout's
-        currently-rendered width.
-
-        Why: QGridLayout.sizeHint reflects the columns currently in use
-        (which depends on this widget's current width), so during
-        inventory load the parent splitter is computing layout from a
-        stale/squeezed value and never lets the grid open up. Reporting
+        """Report the natural width (widest manner-class group on one
+        row) instead of the layout's currently-rendered width.
+        QGridLayout.sizeHint reflects the columns currently in use,
+        which depends on this widget's width, so the parent splitter
+        gets stuck on a squeezed value during inventory load. Reporting
         the natural width breaks that chicken-and-egg.
         """
         if not self._groups:

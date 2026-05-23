@@ -1,7 +1,4 @@
-"""
-gui/builder/window.py
-InventoryBuilder; main grid editor window for creating/editing inventories.
-"""
+"""InventoryBuilder: grid editor for creating or editing inventories."""
 
 import json
 import os
@@ -52,18 +49,16 @@ class _CellEdit:
     new: str
 
 
-# Cap on the undo history depth. ~200 batches x at-most all cells per
-# batch easily covers a normal editing session without unbounded growth.
+# Undo-history depth cap. ~200 batches of at-most all cells covers a
+# normal editing session without unbounded growth.
 _MAX_UNDO_DEPTH = 200
 
 
 def _suggest_filename(inv_name: str) -> str:
-    """Slugify an inventory name into a bundled-inventory-style filename.
-
-    Mirrors the convention used by the bundled inventories
-    (``hayes_features.json``, ``english_features.json``, ...): lowercase,
-    runs of non-alphanumeric replaced with ``_``, suffix ``_features``
-    appended unless the name already ends with it.
+    """Slugify an inventory name into a bundled-style filename.
+    Mirrors ``hayes_features.json`` / ``english_features.json``:
+    lowercase, non-alphanumeric runs to ``_``, ``_features`` suffix
+    appended unless already present.
     """
     slug = re.sub(r"[^a-z0-9]+", "_", inv_name.lower()).strip("_")
     if not slug:
@@ -87,13 +82,11 @@ class InventoryBuilder(QMainWindow):
         self._dirty: bool = False
         self._selected_remove_col: int | None = None
         self._selected_remove_row: int | None = None
-        # Undo / redo: each entry is a batch; the list of cell edits
-        # produced by one user action (cycle, set, bulk apply). Cleared
-        # whenever the table is rebuilt (new inventory or load).
+        # Undo / redo: each entry is one batch (the cell edits produced
+        # by a single user action). Cleared on table rebuild.
         self._undo_stack: list[list[_CellEdit]] = []
         self._redo_stack: list[list[_CellEdit]] = []
         self._build_ui()
-        # Position on the same screen as the parent window
         if parent is not None:
             parent_screen = parent.screen()
             if parent_screen is not None:
@@ -108,9 +101,6 @@ class InventoryBuilder(QMainWindow):
         if load_path:
             self._load_existing(load_path)
 
-    # ------------------------------------------------------------------
-    # UI construction
-    # ------------------------------------------------------------------
     def _build_ui(self) -> None:
         self._build_toolbar()
         self._build_central()
@@ -167,9 +157,8 @@ class InventoryBuilder(QMainWindow):
         """
 
         def make_btn(label: str, slot, *, style: str = btn_style):
-            """Add a fixed-height 32 px Noto Sans 10 button to the toolbar.
-            Centralizes the create + font + style + connect + addWidget
-            pattern that was duplicated nine times before this refactor.
+            """Add a 32 px Noto Sans 10 button to the toolbar with the
+            given label, slot, and style.
             """
             btn = QPushButton(label)
             btn.setFont(QFont("Noto Sans", 10))
@@ -183,9 +172,8 @@ class InventoryBuilder(QMainWindow):
         make_btn("Open\u2026", self._open_file)
         make_btn("Save", self._save, style=save_style)
         make_btn("Save As\u2026", self._save_as)
-        # Delete: only meaningful when an existing file is loaded; the
-        # enable state is updated from ``_update_title`` whenever
-        # ``_current_path`` changes.
+        # Delete is only valid when an existing file is loaded; enabled
+        # by _update_title whenever _current_path changes.
         self._delete_btn = make_btn("Delete\u2026", self._delete_inventory)
         self._delete_btn.setEnabled(False)
         self._delete_btn.setStyleSheet(self._btn_style_disabled)
@@ -298,9 +286,7 @@ class InventoryBuilder(QMainWindow):
             "Create a new inventory or open an existing one."
         )
 
-    # ------------------------------------------------------------------
     # Setup dialog
-    # ------------------------------------------------------------------
     def show_setup_dialog(self) -> bool:
         """Show the new-inventory setup dialog. Returns True if the user
         committed and a grid was built; False if they cancelled or the
@@ -332,9 +318,7 @@ class InventoryBuilder(QMainWindow):
         )
         return True
 
-    # ------------------------------------------------------------------
     # Table management
-    # ------------------------------------------------------------------
     def _rebuild_table(self) -> None:
         """Build the table: rows=features, cols=segments."""
         # Edits captured against the previous table refer to row/col
@@ -571,9 +555,7 @@ class InventoryBuilder(QMainWindow):
             f"Redid {len(edits)} cell change{'s' if len(edits) != 1 else ''}."
         )
 
-    # ------------------------------------------------------------------
     # Header selection / remove button state
-    # ------------------------------------------------------------------
     def _on_col_header_clicked(self, col: int):
         """A segment column header was clicked; enable segment removal only."""
         self._selected_remove_col = col
@@ -615,9 +597,7 @@ class InventoryBuilder(QMainWindow):
         style_cell(item, new_val)
         self._commit_edits(edits)
 
-    # ------------------------------------------------------------------
     # Add / remove segments and features
-    # ------------------------------------------------------------------
     def _add_segment(self) -> None:
         """Prompt for a new segment and add a column."""
         from PyQt6.QtWidgets import QInputDialog
@@ -702,9 +682,7 @@ class InventoryBuilder(QMainWindow):
         self._disable_remove_btns()
         self._status.showMessage(f"Removed feature '{feat}'.")
 
-    # ------------------------------------------------------------------
     # Serialization (save / load)
-    # ------------------------------------------------------------------
     def _to_dict(self) -> dict:
         """Convert the current grid to the JSON-compatible dict format."""
         assert self._table.columnCount() == len(self._segments)
@@ -878,9 +856,7 @@ class InventoryBuilder(QMainWindow):
             f"{len(self._segments)} segments \u00d7 {len(self._features)} features."
         )
 
-    # ------------------------------------------------------------------
     # Unsaved changes guard
-    # ------------------------------------------------------------------
     def _check_unsaved(self) -> bool:
         """Return True if it's OK to discard changes (or there are none)."""
         if not self._dirty:

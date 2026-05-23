@@ -1,8 +1,4 @@
-"""
-gui/builder/dialogs.py
-
-Reusable dialog helpers and the InputDialog for inventory setup.
-"""
+"""Reusable dialog helpers and the InputDialog for inventory setup."""
 
 from phonology_features.gui.builder.presets import FEATURE_PRESETS
 from phonology_features.gui.palette import C
@@ -22,22 +18,15 @@ from PyQt6.QtWidgets import (
 
 
 class _AutofillTextEdit(QTextEdit):
-    """QTextEdit shared base: on Tab while empty, fill a class-defined
-    DEFAULT_FILL value. Subsequent Tab presses (with the box non-empty)
-    advance focus normally via ``setTabChangesFocus``.
+    """QTextEdit base: Tab on an empty box fills DEFAULT_FILL. Once
+    non-empty, Tab advances focus normally via ``setTabChangesFocus``.
 
-    Implementation note: ``setTabChangesFocus(True)`` makes Qt route
-    Tab through ``event()`` to ``focusNextPrevChild`` BEFORE
-    ``keyPressEvent`` is called. The autofill branch returns ``True``
-    to consume the event so the very same press doesn't also advance
-    focus to the next widget; that's separately reachable with a
-    second Tab press once the box has content.
+    ``setTabChangesFocus(True)`` makes Qt route Tab through ``event()``
+    to ``focusNextPrevChild`` BEFORE ``keyPressEvent`` runs; the
+    autofill branch returns True to consume the event so focus stays.
 
-    Also overrides ``paintEvent`` to render multi-line placeholder text:
-    QTextEdit's built-in placeholder paints only the first line, which
-    hides the rest of the hint. We bypass it by painting the lines
-    ourselves; callers should set the multi-line text via
-    ``setPlaceholderText`` as usual.
+    Also overrides ``paintEvent`` to render multi-line placeholder text
+    (Qt only paints the first line of placeholderText).
     """
 
     DEFAULT_FILL: str = ""  # subclasses override
@@ -54,20 +43,12 @@ class _AutofillTextEdit(QTextEdit):
             and self.DEFAULT_FILL
             and not self.toPlainText().strip()
         ):
-            # Empty + Tab: fill the seed text and consume the event so
-            # focus stays here. The user can hit Tab a second time to
-            # advance to the next widget once they're satisfied with
-            # what got filled.
             self.setPlainText(self.DEFAULT_FILL)
             return True
         return super().event(e)
 
     def paintEvent(self, e):  # type: ignore[override]
         super().paintEvent(e)
-        # Qt only renders the first line of placeholderText. When the box
-        # is empty, draw the remaining lines ourselves so multi-line
-        # hints (e.g. "Syllabic / Consonantal / (Tab fills these two)")
-        # are fully visible.
         if self.toPlainText() or not self.placeholderText():
             return
         lines = self.placeholderText().splitlines()
@@ -77,13 +58,10 @@ class _AutofillTextEdit(QTextEdit):
         painter.setPen(QColor(C["text_dim"]))
         painter.setFont(self.font())
         metrics = painter.fontMetrics()
-        # Match Qt's first-line origin: top-left of the document margin.
-        # ``documentMargin`` is the inset Qt uses when laying out text.
         margin = int(self.document().documentMargin())
         x = margin
-        y = margin + metrics.ascent()
         # Skip the first line; Qt already painted it.
-        y += metrics.lineSpacing()
+        y = margin + metrics.ascent() + metrics.lineSpacing()
         for line in lines[1:]:
             painter.drawText(x, y, line)
             y += metrics.lineSpacing()
@@ -100,10 +78,10 @@ class SegmentTextEdit(_AutofillTextEdit):
 
 
 class FeatureTextEdit(_AutofillTextEdit):
-    """Tab on empty seeds just the two major-class features (Syllabic and
-    Consonantal) so the user has a starting point to build a custom set
-    from. The full Default (33) preset is available directly from the
-    dropdown; no point dumping it here too."""
+    """Tab on empty seeds the two major-class features (Syllabic and
+    Consonantal) as a starting point for a custom set. The full
+    Default (33) preset is in the dropdown.
+    """
 
     DEFAULT_FILL = "Syllabic\nConsonantal"
 
@@ -182,7 +160,7 @@ class InputDialog(QDialog):
         label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
         parent.addWidget(label)
         self.seg_edit = SegmentTextEdit()
-        # Placeholder = exactly what Tab fills. The grayed text IS the hint.
+        # Placeholder = what Tab fills; the grayed text is the hint.
         self.seg_edit.setPlaceholderText(SegmentTextEdit.DEFAULT_FILL)
         self.seg_edit.setFont(QFont("Noto Sans", 12))
         parent.addWidget(self.seg_edit)
@@ -191,11 +169,9 @@ class InputDialog(QDialog):
         preset_row = QHBoxLayout()
         preset_row.addWidget(QLabel("Feature set:"))
         self.preset_combo = QComboBox()
-        # Native combo highlight is white-on-white in some OS themes,
-        # making the focused/selected item invisible. Use the same
-        # accent-light + accent-text scheme MainWindow's inventory dropdown
-        # uses so both "Default (33)" and "Custom" stay legible when
-        # highlighted.
+        # Native combo highlight is white-on-white in some OS themes;
+        # mirror MainWindow's inventory dropdown styling so items stay
+        # legible when highlighted.
         self.preset_combo.setStyleSheet(f"""
             QComboBox {{
                 background: {C["panel"]};
@@ -257,13 +233,11 @@ class InputDialog(QDialog):
     def _on_preset_changed(self, name: str):
         features = FEATURE_PRESETS.get(name, [])
         if features:
-            feature_text = "\n".join(features)
-            self.feat_edit.setPlainText(feature_text)
+            self.feat_edit.setPlainText("\n".join(features))
             self.feat_edit.setReadOnly(False)
             return
         self.feat_edit.clear()
         self.feat_edit.setReadOnly(False)
-        # Placeholder set once at construction; no need to overwrite it.
 
     def get_segments(self) -> list:
         text = self.seg_edit.toPlainText().strip()
@@ -288,9 +262,8 @@ class InputDialog(QDialog):
         return "Untitled Inventory"
 
     def accept(self) -> None:  # type: ignore[override]
-        """Validate inputs before dismissing. If validation fails, show a
-        warning, focus the offending field, and keep the dialog open so the
-        user can fix it without losing what they typed.
+        """Validate inputs before dismissing. On failure, warn, focus
+        the offending field, and keep the dialog open.
         """
         if not self.get_segments():
             QMessageBox.warning(
