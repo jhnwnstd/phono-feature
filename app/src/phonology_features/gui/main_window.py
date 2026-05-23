@@ -443,12 +443,13 @@ class MainWindow(QMainWindow):
         self.clear_seg_btn.setFixedHeight(26)
         self.clear_seg_btn.setFont(QFont("Noto Sans", 9))
         self.clear_seg_btn.setStyleSheet(_clear_btn_style())
-        # Clicking inside the seg panel -- including its Clear button --
-        # activates seg mode first, then performs the action. Matches
-        # the "click in panel = activate panel" pattern used by
-        # SegmentButton.pressed and FeatureRow's +/- buttons.
-        self.clear_seg_btn.pressed.connect(self._on_segment_pressed)
-        self.clear_seg_btn.clicked.connect(self._clear_segments)
+        # Order matters: clear FIRST, then activate seg mode. With the
+        # in-place theme refactor everything runs fast enough that
+        # ``pressed`` -> mode switch -> ``clicked`` -> clear flashes
+        # the new mode's colors visibly for a frame before the wipe.
+        # Reversing to ``clicked`` -> clear -> mode switch makes the
+        # cleared state the first thing the user sees.
+        self.clear_seg_btn.clicked.connect(self._clear_then_activate_segs)
         header.addWidget(self._seg_title)
         header.addStretch()
         header.addWidget(self.clear_seg_btn)
@@ -523,10 +524,9 @@ class MainWindow(QMainWindow):
         self.clear_feat_btn.setFixedHeight(26)
         self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
         self.clear_feat_btn.setStyleSheet(_clear_btn_style())
-        # Same panel-activation pattern as ``clear_seg_btn``: clicking
-        # this clear also activates feat mode first.
-        self.clear_feat_btn.pressed.connect(self._on_feature_pressed)
-        self.clear_feat_btn.clicked.connect(self._clear_features)
+        # See ``clear_seg_btn``: clear first, then activate, so the
+        # user doesn't see the new mode's chrome flash before the wipe.
+        self.clear_feat_btn.clicked.connect(self._clear_then_activate_feats)
         header.addWidget(self._feat_title)
         header.addStretch()
         header.addWidget(self.clear_feat_btn)
@@ -821,8 +821,19 @@ class MainWindow(QMainWindow):
         with self._batched_updates():
             for btn in self._seg_button_pool.values():
                 btn.apply_theme()
+            # Iterate every FeatureRow we own, not just the pool: the
+            # "Other" card in inventories with non-FEATURE_ORDER features
+            # (e.g. general_features.json) creates rows that live in
+            # ``_feat_rows`` but NOT in ``_feat_row_pool``. Missing them
+            # leaves their name / +/- buttons styled with the old
+            # palette -- in dark mode after starting from light, the
+            # name label's text color stays light against the dark bg,
+            # making the name appear "unpopulated".
             for row in self._feat_row_pool.values():
                 row.apply_theme()
+            for feat, row in self._feat_rows.items():
+                if feat not in self._feat_row_pool:
+                    row.apply_theme()
             self._restyle_chrome()
             # Panel border highlight depends on theme AND mode; cheapest
             # path is to invalidate the polish cache so the next
@@ -2082,6 +2093,21 @@ class MainWindow(QMainWindow):
     def _clear_features(self, silent=False):
         """Either Clear button wipes BOTH sides. See ``_clear_segments``."""
         self._reset_both_sides(silent)
+
+    def _clear_then_activate_segs(self) -> None:
+        """Clear-button handler: wipe both panes, THEN activate seg mode.
+        Reversing those two steps (activate first, then clear) would
+        flash the new mode's colors for a frame before the wipe lands.
+        """
+        self._reset_both_sides(silent=False)
+        if self._mode != Mode.SEG_TO_FEAT:
+            self._set_mode(Mode.SEG_TO_FEAT)
+
+    def _clear_then_activate_feats(self) -> None:
+        """See ``_clear_then_activate_segs``."""
+        self._reset_both_sides(silent=False)
+        if self._mode != Mode.FEAT_TO_SEG:
+            self._set_mode(Mode.FEAT_TO_SEG)
 
     def _reset_both_sides(self, silent: bool) -> None:
         """Reset segments and features to their neutral state. Shared
