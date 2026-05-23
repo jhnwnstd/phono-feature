@@ -739,6 +739,14 @@ class MainWindow(QMainWindow):
         styling refresh against the new palette.
         """
         QToolTip.hideText()
+        # The builder caches palette-dependent button stylesheets at
+        # construction and never re-styles. Drop the cached instance
+        # here so the next ``_open_builder`` builds against the new
+        # palette. Modality prevents the builder from being open at
+        # this point, so this never destroys an in-use window.
+        if self._builder is not None:
+            self._builder.deleteLater()
+            self._builder = None
         with self._batched_updates():
             for btn in self._seg_button_pool.values():
                 btn.apply_theme()
