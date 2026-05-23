@@ -11,7 +11,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from phonology_features.engine.feature_engine import FeatureEngine
 from phonology_features.engine.geometry import GeometryAnalyzer
 
@@ -108,9 +107,9 @@ def test_natural_class_bundle_recovers_originals(
     bundle = engine.compute_natural_class(segments)
     assert bundle is not None
     recovered = set(engine.find_segments(bundle))
-    assert set(segments).issubset(recovered), (
-        f"bundle {bundle} did not recover {segments}: got {recovered}"
-    )
+    assert set(segments).issubset(
+        recovered
+    ), f"bundle {bundle} did not recover {segments}: got {recovered}"
 
 
 # ----------------------------------------------------------------------
@@ -131,7 +130,9 @@ def test_segment_distance_is_nonneg_int(
 
 
 def test_distance_is_symmetric(engine: FeatureEngine) -> None:
-    assert engine.segment_distance("b", "p") == engine.segment_distance("p", "b")
+    assert engine.segment_distance("b", "p") == engine.segment_distance(
+        "p", "b"
+    )
 
 
 def test_distance_to_self_is_zero(engine: FeatureEngine) -> None:

@@ -422,14 +422,25 @@ class FeatureRow(QWidget):
         self._panel_active = active
 
     def reset(self) -> None:
-        # Short-circuit when the row is already in the reset visual
-        # state for the current panel-active mode. Saves 3 setStyleSheet
-        # calls on every redundant invocation (populate + mode-switch
-        # sequences call this on rows that are already cleared).
-        if (
-            self._current_value == ""
-            and self._reset_for_panel == self._panel_active
-        ):
+        # Fast paths in priority order:
+        # 1. Truly idempotent: value is "", set_display never dirtied us
+        #    since last reset, and panel-active matches. Nothing to do.
+        # 2. Clean-but-panel-active-changed: only the name_label style
+        #    depends on panel_active when value is "" and the visual
+        #    state is neutral. Rewrite just that. The badge/row styles
+        #    are panel-active-invariant in the reset state.
+        # 3. Visual-dirty or value-non-empty: full reset.
+        visual_dirty = self._last_display_state is not None
+        if self._current_value == "" and not visual_dirty:
+            if self._reset_for_panel == self._panel_active:
+                return
+            name_style = (
+                self._NAME_ACTIVE
+                if self._panel_active
+                else self._NAME_INACTIVE
+            )
+            self.name_label.setStyleSheet(name_style)
+            self._reset_for_panel = self._panel_active
             return
         self._current_value = ""
         # set_display's dedup cache must be invalidated since reset() bypasses
@@ -439,10 +450,9 @@ class FeatureRow(QWidget):
         self.minus_btn.setChecked(False)
         self.badge.setText("\u00b7")
         self.badge.setStyleSheet(self._BADGE_NEUTRAL)
-        if self._panel_active:
-            name_style = self._NAME_ACTIVE
-        else:
-            name_style = self._NAME_INACTIVE
+        name_style = (
+            self._NAME_ACTIVE if self._panel_active else self._NAME_INACTIVE
+        )
         self.name_label.setStyleSheet(name_style)
         self.setStyleSheet(self._ROW_NEUTRAL)
         self._reset_for_panel = self._panel_active
@@ -503,6 +513,11 @@ class SegmentGridWidget(QWidget):
         self._groups: dict = {}
         self._buttons: dict = {}
         self._headers: list = []
+        # Tracks the last value of ``active`` we styled the headers with,
+        # so ``set_headers_active`` can short-circuit when mode toggles
+        # don't actually change the header color. Reset by ``set_groups``
+        # whenever fresh header labels replace the old ones.
+        self._last_headers_active: bool | None = None
         self._n_cols: int = 0
         self._grid = QGridLayout(self)
         self._grid.setSpacing(BTN_GAP)
@@ -531,6 +546,9 @@ class SegmentGridWidget(QWidget):
         for hdr in self._headers:
             hdr.deleteLater()
         self._headers.clear()
+        # New header instances start with no style, so any cached "we
+        # already styled them with this active value" is stale.
+        self._last_headers_active = None
         self._groups = groups
         self._buttons = buttons
         for manner in groups:
@@ -547,16 +565,20 @@ class SegmentGridWidget(QWidget):
         self._do_relayout()
 
     def set_headers_active(self, active: bool):
-        # No dedup: every call must re-style. ``set_groups`` recreates the
-        # header labels on each inventory load, and a stale cache here
-        # would leave fresh headers stuck at their initial muted color
-        # when the active state hadn't changed across the reload.
+        # Dedup is safe because ``set_groups`` clears the cache when it
+        # rebuilds the header labels; the only way ``self._headers`` and
+        # the cached state get out of sync is when set_groups runs, and
+        # it resets ``_last_headers_active`` to None.
+        if self._last_headers_active == active:
+            return
         color = C["text"] if active else C["text_dim"]
+        style = (
+            f"color: {color}; letter-spacing: 1px;"
+            " padding: 4px 2px 1px 2px;"
+        )
         for hdr in self._headers:
-            hdr.setStyleSheet(
-                f"color: {color}; letter-spacing: 1px;"
-                " padding: 4px 2px 1px 2px;"
-            )
+            hdr.setStyleSheet(style)
+        self._last_headers_active = active
 
     def sizeHint(self) -> QSize:  # type: ignore[override]
         """Report the *natural* width; width needed to fit the widest

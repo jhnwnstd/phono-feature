@@ -98,6 +98,12 @@ def _clear_btn_style() -> str:
 _MIN_DECO_W = 8
 _MIN_DECO_H = 32
 
+# Cached enum member: eventFilter runs on every Qt event (10k+ per
+# user action), and resolving QEvent.Type.MouseButtonPress through the
+# enum machinery on each call shows up in profiles. Binding to a name
+# once turns the comparison into a single attribute load.
+_QEVENT_MOUSE_BUTTON_PRESS = QEvent.Type.MouseButtonPress
+
 
 class Mode(StrEnum):
     """Top-level UI mode. StrEnum members compare equal to their string
@@ -1867,7 +1873,7 @@ class MainWindow(QMainWindow):
         type first and bail; only do the isinstance + parent walk on the
         rare MouseButtonPress.
         """
-        if a1 is None or a1.type() != QEvent.Type.MouseButtonPress:
+        if a1 is None or a1.type() != _QEVENT_MOUSE_BUTTON_PRESS:
             return False
         if not isinstance(a0, QWidget):
             return False

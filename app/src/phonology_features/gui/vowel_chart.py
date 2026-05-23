@@ -252,12 +252,17 @@ class VowelChartWidget(QWidget):
         self._HDR_INACTIVE = f"color: {C['text_dim']};"
         self._ROW_ACTIVE = f"color: {C['text']}; padding-right: 4px;"
         self._ROW_INACTIVE = f"color: {C['text_dim']}; padding-right: 4px;"
+        # Tracks the last ``active`` value styled into the headers so
+        # mode-toggle bursts can short-circuit when nothing changed.
+        # Reset by ``clear`` when fresh labels replace the cached ones.
+        self._last_headers_active: bool | None = None
 
     def set_headers_active(self, active: bool):
-        # No dedup: ``set_vowels`` recreates the header labels on each
-        # inventory load, so a stale cache would leave fresh labels
-        # stuck at their initial muted style when the active state
-        # happened to match across the reload.
+        # Dedup is safe because ``clear`` (called by ``set_vowels`` on
+        # every inventory swap) resets ``_last_headers_active`` to None
+        # whenever the cached labels are about to be replaced.
+        if self._last_headers_active == active:
+            return
         if active:
             header_style = self._HDR_ACTIVE
             row_style = self._ROW_ACTIVE
@@ -269,6 +274,7 @@ class VowelChartWidget(QWidget):
                 lbl.setStyleSheet(row_style)
             else:
                 lbl.setStyleSheet(header_style)
+        self._last_headers_active = active
 
     def clear(self) -> None:
         """Remove all buttons, labels, and collision containers.
@@ -286,6 +292,9 @@ class VowelChartWidget(QWidget):
         for lbl, _ in self._header_labels:
             lbl.deleteLater()
         self._header_labels.clear()
+        # Fresh labels will be appended by ``set_vowels``; any cached
+        # "we already styled these for this active value" is now stale.
+        self._last_headers_active = None
         for container in self._cell_containers:
             container.deleteLater()
         self._cell_containers.clear()
