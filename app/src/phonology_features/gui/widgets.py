@@ -6,6 +6,8 @@ swaps; per-widget style dicts are cached per theme at class level.
 import math
 from enum import StrEnum
 
+from phonology_features.gui.constants import BTN_GAP, BTN_W, scrollbar_style
+from phonology_features.gui.palette import C
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -18,9 +20,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from phonology_features.gui.constants import BTN_GAP, BTN_W, scrollbar_style
-from phonology_features.gui.palette import C
 
 
 class SegmentState(StrEnum):

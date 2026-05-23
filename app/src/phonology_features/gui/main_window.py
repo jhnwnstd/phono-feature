@@ -11,37 +11,6 @@ from contextlib import contextmanager
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import (
-    QEvent,
-    QFileSystemWatcher,
-    QSettings,
-    Qt,
-    QTimer,
-)
-from PyQt6.QtGui import (
-    QFont,
-    QScreen,
-    QStandardItemModel,
-)
-from PyQt6.QtWidgets import (
-    QApplication,
-    QComboBox,
-    QFileDialog,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QSplitter,
-    QStatusBar,
-    QToolBar,
-    QToolTip,
-    QVBoxLayout,
-    QWidget,
-)
-
 from phonology_features.engine.feature_engine import FeatureEngine
 from phonology_features.engine.inventory_validator import (
     validate_inventory_data,
@@ -76,6 +45,36 @@ from phonology_features.gui.widgets import (
     SegmentButton,
     SegmentGridWidget,
     SegmentState,
+)
+from PyQt6.QtCore import (
+    QEvent,
+    QFileSystemWatcher,
+    QSettings,
+    Qt,
+    QTimer,
+)
+from PyQt6.QtGui import (
+    QFont,
+    QScreen,
+    QStandardItemModel,
+)
+from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
+    QStatusBar,
+    QToolBar,
+    QToolTip,
+    QVBoxLayout,
+    QWidget,
 )
 
 if TYPE_CHECKING:
