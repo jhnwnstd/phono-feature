@@ -340,6 +340,36 @@ class MainWindow(QMainWindow):
             }}
         """
 
+    @staticmethod
+    def _combo_style() -> str:
+        """Inventory dropdown QSS. Styles the box to look button-like
+        (so it visibly invites a click) and themes the popup list.
+        The Fusion native arrow is suppressed by any QComboBox rule
+        without a paired down-arrow image asset; that's a known
+        trade-off we accept since the box-as-button styling reads as
+        a dropdown affordance on its own.
+        """
+        return f"""
+            QComboBox {{
+                background: {C["bg"]};
+                color: {C["text"]};
+                border: 1.5px solid {C["border"]};
+                border-radius: 6px;
+                padding: 0 10px;
+            }}
+            QComboBox:hover {{
+                border: 1.5px solid {C["accent"]};
+            }}
+            QComboBox QAbstractItemView {{
+                background: {C["panel"]};
+                color: {C["text"]};
+                border: 1px solid {C["border"]};
+                selection-background-color: {C["accent_light"]};
+                selection-color: {C["accent"]};
+                outline: none;
+            }}
+        """
+
     def _build_ui(self) -> None:
         self._build_toolbar()
         self._build_central()
@@ -359,6 +389,7 @@ class MainWindow(QMainWindow):
         self.inventory_combo.setFont(QFont("Noto Sans", 10))
         self.inventory_combo.setFixedHeight(32)
         self.inventory_combo.setMinimumWidth(176)
+        self.inventory_combo.setStyleSheet(self._combo_style())
         self._populate_inventory_dropdown()
         self.inventory_combo.activated.connect(self._on_inventory_selected)
         toolbar.addWidget(self.inventory_combo)

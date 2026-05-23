@@ -146,6 +146,21 @@ class InventoryBuilder(QMainWindow):
                 background: #1D4ED8;
             }}
             """
+        # Destructive action: red fill so it reads as "danger" against
+        # the rest of the toolbar's neutral buttons.
+        self._delete_style_enabled = f"""
+            QPushButton {{
+                background: {C["minus"]};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 0 16px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background: #991B1B;
+            }}
+        """
         self._btn_style_enabled = btn_style
         self._btn_style_disabled = f"""
             QPushButton {{
@@ -871,7 +886,7 @@ class InventoryBuilder(QMainWindow):
         # the current grid; toggle the visual + interactive state.
         self._delete_btn.setEnabled(has_file)
         self._delete_btn.setStyleSheet(
-            self._btn_style_enabled if has_file else self._btn_style_disabled
+            self._delete_style_enabled if has_file else self._btn_style_disabled
         )
         self._refresh_meta_strip()
 
