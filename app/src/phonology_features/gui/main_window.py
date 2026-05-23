@@ -370,6 +370,12 @@ class MainWindow(QMainWindow):
         self._vsplit.setStretchFactor(0, 1)
         self._vsplit.setStretchFactor(1, 0)
         self._min_analysis_h = 220
+        # Hard floor on the analysis pane. Without these guards the
+        # splitter can collapse it to 0 when _apply_splitter_sizes runs
+        # before the window is shown (vsplit.height() == 0 path), as on
+        # startup with a large inventory like Blevins.
+        self.analysis.setMinimumHeight(self._min_analysis_h)
+        self._vsplit.setCollapsible(1, False)
         root.addWidget(self._vsplit)
 
     def _build_status_bar(self) -> None:
@@ -1475,9 +1481,6 @@ class MainWindow(QMainWindow):
                 return
             if new_w == cur_w and new_h == cur_h:
                 return
-            # Resize first; the compositor will preserve center, which
-            # shifts top-left by half the size delta in either direction.
-            self.resize(new_w, new_h)
             # Decide the target top-left, defaulting to the anchor.
             # Only override when the title bar would otherwise be
             # unreachable off the left/top edge.
@@ -1487,14 +1490,11 @@ class MainWindow(QMainWindow):
                 target_x = avail.x() + left_pad
             if target_y - top_pad < avail.y():
                 target_y = avail.y() + top_pad
-            pos = self.pos()
-            if pos.x() != target_x or pos.y() != target_y:
-                # Counter the compositor's center-preserve by moving
-                # back to the anchor. One move per resize is bounded;
-                # the per-call drift can't accumulate because the next
-                # resize anchors against the same _anchor_pos, not the
-                # post-move actual pos.
-                self.move(target_x, target_y)
+            # Atomic geometry change: one xdg_toplevel configure carries
+            # both size and position, so the compositor places once
+            # instead of twice (resize then move-back), which was where
+            # the per-call drift came from.
+            self.setGeometry(target_x, target_y, new_w, new_h)
             if target_x != anchor.x() or target_y != anchor.y():
                 # Off-screen recovery promoted to the new anchor.
                 self._anchor_pos = QPoint(target_x, target_y)
