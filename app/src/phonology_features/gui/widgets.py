@@ -558,6 +558,14 @@ class SegmentGridWidget(QWidget):
         self._resize_timer.setSingleShot(True)
         self._resize_timer.setInterval(40)
         self._resize_timer.timeout.connect(self._do_relayout)
+        # ``set_groups`` runs during __init__ when the widget width is
+        # ~0, so _compute_n_cols comes out as 1. The first post-show
+        # resizeEvent must relayout SYNCHRONOUSLY so paint #1 already
+        # shows the final column count; debouncing it would leave the
+        # window flashing through the 1-col layout on startup. The
+        # flag flips True after the first sync relayout; subsequent
+        # resizes (live drag) keep the debounce.
+        self._needs_sync_relayout = True
 
     def set_groups(self, groups: dict, buttons: dict):
         """Replace all content.
@@ -586,6 +594,10 @@ class SegmentGridWidget(QWidget):
             hdr.setParent(self)
             self._headers.append(hdr)
         self._n_cols = 0
+        # New content; the next resizeEvent should treat it as a fresh
+        # layout (sync, not debounced) so a mid-app inventory swap
+        # doesn't flash through a wrong column count either.
+        self._needs_sync_relayout = True
         self._do_relayout()
 
     def apply_theme(self) -> None:
@@ -627,6 +639,10 @@ class SegmentGridWidget(QWidget):
 
     def resizeEvent(self, a0):
         super().resizeEvent(a0)
+        if self._needs_sync_relayout:
+            self._needs_sync_relayout = False
+            self._do_relayout()
+            return
         self._resize_timer.start()
 
     def _compute_n_cols(self) -> int:
