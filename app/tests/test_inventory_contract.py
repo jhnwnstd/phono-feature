@@ -1198,6 +1198,125 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
     close_builder_silent(b)
 
 
+def test_inventory_swap_does_not_resize_window(tmp_path: Path) -> None:
+    """Once the user (or restored settings) owns the window geometry,
+    swapping inventories must leave the top-level size and position
+    untouched. The previous behaviour was to chase each inventory's
+    content sizeHint with self.resize(), which moved the window on
+    every load and clobbered any manual sizing.
+    """
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    QApplication.instance() or QApplication([])
+    from phonology_features.gui.main_window import MainWindow
+
+    w = MainWindow(startup_path=HAYES)
+    # Simulate user-owned geometry: pretend settings restored a size.
+    # The production path also sets this in ``_restore_settings``.
+    w._has_saved_size = True
+    w.resize(1100, 850)
+    w.show()
+    QApplication.instance().processEvents()
+    before_size = (w.width(), w.height())
+
+    # Swap to a different inventory with a different segment / feature
+    # count so the content sizeHint differs from the previous one.
+    english = str(REPO_ROOT / "inventories" / "english_features.json")
+    general = str(REPO_ROOT / "inventories" / "general_features.json")
+    for path in (english, general, HAYES):
+        w._load_path(path)
+        QApplication.instance().processEvents()
+        assert (w.width(), w.height()) == before_size, (
+            f"window resized on inventory swap to {os.path.basename(path)}: "
+            f"{before_size} -> {(w.width(), w.height())}"
+        )
+    w.close()
+
+
+def test_inventory_swap_preserves_splitter_ratio(tmp_path: Path) -> None:
+    """Once the splitter has been sized (restored from settings or
+    nudged by the user), subsequent inventory swaps must not re-apply
+    the content-derived ratio. Previously ``_apply_splitter_sizes``
+    ran on every load and snapped the panel boundary back to the
+    new inventory's seg-pane sizeHint.
+    """
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    QApplication.instance() or QApplication([])
+    from phonology_features.gui.main_window import MainWindow
+
+    w = MainWindow(startup_path=HAYES)
+    w._has_saved_size = True
+    w._has_saved_splitter = True  # simulate restored state
+    w.resize(1100, 850)
+    w.show()
+    QApplication.instance().processEvents()
+    # User-chosen ratio.
+    w._hsplit.setSizes([400, 700])
+    QApplication.instance().processEvents()
+    before = w._hsplit.sizes()
+
+    english = str(REPO_ROOT / "inventories" / "english_features.json")
+    general = str(REPO_ROOT / "inventories" / "general_features.json")
+    for path in (english, general, HAYES):
+        w._load_path(path)
+        QApplication.instance().processEvents()
+        assert w._hsplit.sizes() == before, (
+            f"splitter ratio drifted on load of {os.path.basename(path)}: "
+            f"{before} -> {w._hsplit.sizes()}"
+        )
+    w.close()
+
+
+def test_user_splitter_drag_promotes_to_owned(tmp_path: Path) -> None:
+    """Dragging a splitter handle must flip the owned flag, so the
+    drag survives the next inventory load. Without this, a manual
+    drag would silently revert on the next inventory swap.
+    """
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    QApplication.instance() or QApplication([])
+    from phonology_features.gui.main_window import MainWindow
+
+    w = MainWindow(startup_path=HAYES)
+    # Fresh install path: no settings yet, so first _fit_to_content
+    # already ran and the flag is True from that programmatic setSizes.
+    # Simulate the user dragging by emitting the signal directly.
+    w._has_saved_splitter = False
+    w._hsplit.splitterMoved.emit(450, 0)
+    assert w._has_saved_splitter, (
+        "splitterMoved should promote the splitter to user-owned"
+    )
+    w.close()
+
+
 def test_validation_report_html_escapes_issue_text() -> None:
     """The validation-report HTML interpolates raw issue strings; if
     one of those quotes back inventory data containing tag characters

@@ -467,6 +467,13 @@ class MainWindow(QMainWindow):
         self.analysis.setMinimumHeight(self._min_analysis_h)
         self._vsplit.setCollapsible(1, False)
         root.addWidget(self._vsplit)
+        # User-drag is also "user owns the ratio". Without this, a
+        # manual drag would survive only until the next inventory
+        # load, when _fit_to_content's content-based sizing would
+        # clobber it -- the same shape of bug as the window-resize
+        # one. The flag is initialized in _restore_settings.
+        self._hsplit.splitterMoved.connect(self._mark_splitter_owned)
+        self._vsplit.splitterMoved.connect(self._mark_splitter_owned)
 
     def _build_status_bar(self) -> None:
         self.status = _BrandedStatusBar(self)
@@ -691,7 +698,8 @@ class MainWindow(QMainWindow):
         return value if isinstance(value, str) else default
 
     def _restore_settings(self, startup_path: str | None) -> None:
-        """Restore window size/position, mode, and last inventory."""
+        """Restore window size/position, splitter state, mode, and
+        last inventory."""
         # Drop the old binary geometry blob: it encodes absolute
         # positions that can place the window off-screen after a
         # display configuration change.
@@ -712,6 +720,15 @@ class MainWindow(QMainWindow):
             frame = self.frameGeometry()
             frame.moveCenter(screen.availableGeometry().center())
             self.move(frame.topLeft())
+        # Restore splitter state BEFORE loading an inventory, so the
+        # post-load ``_fit_to_content`` pass can see the flag and skip
+        # the content-derived sizing. Restore order: horizontal first
+        # (panel ratio), then vertical (top vs analysis). Both flags
+        # default to False; ``restoreState`` returns False if the
+        # stored blob is empty or incompatible with the current
+        # splitter children, in which case we fall back to first-launch
+        # sizing.
+        self._has_saved_splitter = self._restore_splitter_state()
         path = startup_path or self._read_setting("last_inventory")
         if path and isinstance(path, str) and os.path.isfile(path):
             idx = self.inventory_combo.findData(path)
@@ -744,6 +761,12 @@ class MainWindow(QMainWindow):
         else:
             self._settings.setValue("window_pos", self.pos())
             self._settings.setValue("window_size", self.size())
+        # Persist splitter state so reopening + inventory swaps don't
+        # snap the panel boundary back to the content-derived ratio.
+        # Stored as the Qt-native QByteArray from ``saveState`` so the
+        # round-trip matches Qt's internal format exactly.
+        self._settings.setValue("hsplit_state", self._hsplit.saveState())
+        self._settings.setValue("vsplit_state", self._vsplit.saveState())
         self._settings.setValue("mode", self._mode.value)
         if self._current_path:
             self._settings.setValue("last_inventory", self._current_path)
@@ -1486,10 +1509,20 @@ class MainWindow(QMainWindow):
         return ""
 
     def _fit_to_content(self) -> None:
-        """Measure content and size window + splitters to fit. Called
-        after each inventory load. On first load (no saved size) the
-        window itself is resized; always sets the horizontal splitter
-        so both panels get the width their content needs.
+        """Measure content and size the splitters; on first launch
+        only, also size the top-level window. Called after each
+        inventory load.
+
+        Window-geometry policy: once ``_has_saved_size`` is True --
+        either because settings had a saved size at startup, or
+        because the first-launch auto-fit ran and claimed one --
+        inventory changes MUST NOT resize or move the window. The
+        user (or their last session's saved state) owns the shell;
+        inventory swaps only repaint the scrollable interior. The
+        previous behaviour was to chase every inventory's content
+        ``sizeHint`` with ``self.resize()``, which produced visible
+        layout shift on every load and clobbered the user's manual
+        window sizing.
         """
         QApplication.processEvents()
         # Seg panel sticks to its natural content width; extra horizontal
@@ -1518,10 +1551,21 @@ class MainWindow(QMainWindow):
         # "new size + old splitter ratio" before setSizes lands.
         screen = self._target_screen()
         with self._batched_updates():
-            self._fit_window_to_size(
-                screen, seg_need_w + feat_need_w + 1, total_need_h
-            )
-            self._apply_splitter_sizes(seg_need_w, feat_need_w, top_need_h)
+            # First-launch only: claim a sensible window size from
+            # the first inventory's content. Subsequent loads skip
+            # this and rely on the splitter to absorb width changes.
+            if not self._has_saved_size:
+                self._fit_window_to_size(
+                    screen, seg_need_w + feat_need_w + 1, total_need_h
+                )
+            # Same rule for the panel boundary: once the user has a
+            # restored or manually-dragged splitter ratio, leave it
+            # alone on inventory swap. Only the first launch (no saved
+            # state) gets a content-derived ratio.
+            if not self._has_saved_splitter:
+                self._apply_splitter_sizes(
+                    seg_need_w, feat_need_w, top_need_h
+                )
 
     def _fit_window_to_size(self, screen, need_w: int, need_h: int) -> None:
         """Resize the window to ``(need_w, need_h)`` and anchor it in place.
@@ -1587,6 +1631,26 @@ class MainWindow(QMainWindow):
         left_pad = max(0, old_pos.x() - old_frame.x())
         top_pad = max(0, old_pos.y() - old_frame.y())
         return deco_w, deco_h, left_pad, top_pad
+
+    def _mark_splitter_owned(self, *_args) -> None:
+        """Promoted to user-owned the first time a splitter handle
+        moves under user input. Subsequent inventory loads then
+        leave both splitters alone."""
+        self._has_saved_splitter = True
+
+    def _restore_splitter_state(self) -> bool:
+        """Apply saved horizontal+vertical splitter state. Returns
+        True if at least one splitter was successfully restored, so
+        the caller can suppress content-based sizing.
+        """
+        h_state = self._read_setting("hsplit_state")
+        v_state = self._read_setting("vsplit_state")
+        restored = False
+        if h_state is not None and self._hsplit.restoreState(h_state):
+            restored = True
+        if v_state is not None and self._vsplit.restoreState(v_state):
+            restored = True
+        return restored
 
     def _apply_splitter_sizes(
         self, seg_need_w: int, feat_need_w: int, top_need_h: int
