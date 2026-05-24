@@ -716,6 +716,17 @@ class MainWindow(QMainWindow):
             self._set_mode(Mode(saved_mode))
 
     def closeEvent(self, event):  # type: ignore[override]
+        # If the builder is open with unsaved changes, give it the
+        # chance to prompt -- without this, Qt's parent-child cleanup
+        # destroys the builder when the main window dies, bypassing
+        # its closeEvent / _check_unsaved and silently dropping any
+        # unsaved grid edits. ``close()`` returns True only if the
+        # builder accepted the close; if the user picked Cancel in
+        # the unsaved dialog we abort the main window close too.
+        if self._builder is not None and self._builder.isVisible():
+            if not self._builder.close():
+                event.ignore()
+                return
         self._settings.remove("geometry")
         if self.isMaximized() or self.isFullScreen():
             normal = self.normalGeometry()
@@ -727,6 +738,11 @@ class MainWindow(QMainWindow):
         self._settings.setValue("mode", self._mode.value)
         if self._current_path:
             self._settings.setValue("last_inventory", self._current_path)
+        # Flush settings to disk synchronously. Without sync(), a hard
+        # process exit between the setValue calls and QSettings'
+        # destructor can lose the last update (window geometry,
+        # last_inventory, theme).
+        self._settings.sync()
         super().closeEvent(event)
 
     def _get_inventories_dir(self) -> str:
@@ -764,10 +780,16 @@ class MainWindow(QMainWindow):
             inventories_dir = self._get_inventories_dir()
             if os.path.isdir(inventories_dir):
                 for fname in sorted(os.listdir(inventories_dir)):
-                    if fname.endswith(".json"):
-                        path = os.path.join(inventories_dir, fname)
-                        pretty = fname[:-5].replace("_", " ").title()
-                        self.inventory_combo.addItem(pretty, userData=path)
+                    # Skip hidden files and the .tmp_inv_*.json side
+                    # files atomic writes create momentarily between
+                    # mkstemp and os.replace; the directory watcher
+                    # can fire on the tmp create and we don't want it
+                    # to show up in the dropdown for that ~ms window.
+                    if fname.startswith(".") or not fname.endswith(".json"):
+                        continue
+                    path = os.path.join(inventories_dir, fname)
+                    pretty = fname[:-5].replace("_", " ").title()
+                    self.inventory_combo.addItem(pretty, userData=path)
             idx = (
                 self.inventory_combo.findData(previous_path)
                 if previous_path

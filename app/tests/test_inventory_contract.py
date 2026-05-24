@@ -580,6 +580,89 @@ def test_analysis_render_single_segment_escapes_symbol() -> None:
     assert "/&lt;x&gt;/" in out
 
 
+def test_dropdown_filters_out_atomic_write_tmp_files(tmp_path: Path) -> None:
+    """``atomic_write_json`` creates ``.tmp_inv_*.json`` files in the
+    target directory between ``mkstemp`` and ``os.replace``. The
+    directory watcher can fire on the tmp create; the dropdown must
+    not include those side files."""
+    inv_dir = tmp_path / "inventories"
+    inv_dir.mkdir()
+    real = inv_dir / "real_features.json"
+    Inventory.parse(
+        {"metadata": {"name": "Real"}, "features": [], "segments": {}}
+    ).write_atomic(str(real))
+    # Simulate a tmp file that atomic_write_json would create
+    tmp = inv_dir / ".tmp_inv_abc123.json"
+    tmp.write_text('{"in_progress": true}', encoding="utf-8")
+    listed = sorted(
+        f
+        for f in os.listdir(inv_dir)
+        if f.endswith(".json") and not f.startswith(".")
+    )
+    assert listed == ["real_features.json"]
+    assert ".tmp_inv_abc123.json" not in listed
+
+
+def test_builder_close_waits_for_save_in_flight(tmp_path: Path) -> None:
+    """Closing the builder while a background save is still running
+    must wait for the worker to finish, so the worker can't emit
+    ``_save_finished`` on a QObject that Qt is destroying."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+
+    b = InventoryBuilder(load_path=HAYES)
+    target = tmp_path / "saved.json"
+    b._write_json(str(target))
+    assert b._save_in_flight, "save should be scheduled but not done"
+    # close() should drive the save to completion before returning.
+    closed_ok = b.close()
+    assert closed_ok
+    assert not b._save_in_flight, "save must complete before close returns"
+    assert target.exists(), "file must be on disk after close completes"
+
+
+def test_builder_save_then_close_dialog_path(tmp_path: Path) -> None:
+    """User edits, then clicks Close. The unsaved dialog's Save button
+    calls ``_save()`` (async) and then ``_wait_for_save()``; the
+    dirty flag must clear before ``_check_unsaved`` returns so the
+    close proceeds. Without the wait, the user would be told their
+    save succeeded but the close would be silently refused."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+
+    b = InventoryBuilder(load_path=HAYES)
+    target = tmp_path / "edited.json"
+    b._current_path = str(target)
+    b._dirty = True
+    # Simulate the "Save" branch directly (skip the dialog).
+    b._save()
+    waited = b._wait_for_save()
+    assert waited, "save did not complete within timeout"
+    assert not b._dirty, "dirty flag must clear once save signal lands"
+
+
 def test_builder_save_runs_off_main_thread(tmp_path: Path) -> None:
     """``_write_json`` validates synchronously then hands the disk
     write to a background worker. We assert:

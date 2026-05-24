@@ -1265,6 +1265,31 @@ class InventoryBuilder(QMainWindow):
         )
 
     # Unsaved changes guard
+    def _wait_for_save(self, timeout_ms: int = 5000) -> bool:
+        """Pump the event loop until the background save completes or
+        ``timeout_ms`` elapses. Returns True if the save finished,
+        False on timeout.
+
+        Used by ``_check_unsaved`` (Save+Close flow) and ``closeEvent``
+        (post-close cleanup): without this, a window close while the
+        save thread is still running would let the worker emit
+        ``_save_finished`` on a QObject that's being destroyed by Qt.
+        """
+        if not self._save_in_flight:
+            return True
+        from PyQt6.QtCore import QElapsedTimer
+        from PyQt6.QtWidgets import QApplication
+
+        elapsed = QElapsedTimer()
+        elapsed.start()
+        while self._save_in_flight and elapsed.elapsed() < timeout_ms:
+            # Process pending events so the queued ``_save_finished``
+            # signal can deliver; AllEvents (default) is fine here
+            # because the user already chose to close -- new input
+            # events just queue.
+            QApplication.processEvents()
+        return not self._save_in_flight
+
     def _check_unsaved(self) -> bool:
         """Return True if it's OK to discard changes (or there are none)."""
         if not self._dirty:
@@ -1282,14 +1307,27 @@ class InventoryBuilder(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Save:
             self._save()
+            # _save is async (background thread + signal). Block until
+            # the worker finishes so ``not self._dirty`` reflects the
+            # ACTUAL outcome -- without the wait, _dirty is still True
+            # at this point and Close would get refused even though
+            # the user asked for Save+Close.
+            self._wait_for_save()
             return not self._dirty
         return reply == QMessageBox.StandardButton.Discard
 
     def closeEvent(self, event):
-        if self._check_unsaved():
-            event.accept()
-        else:
+        if not self._check_unsaved():
             event.ignore()
+            return
+        # Wait for any background save before letting Qt destroy the
+        # window. If the worker thread emits ``_save_finished`` after
+        # the QObject is destroyed, PyQt raises ``RuntimeError:
+        # wrapped C/C++ object has been deleted`` on the worker
+        # thread -- harmless but noisy in logs, and a clean wait is
+        # cheap (atomic write on a healthy disk is sub-ms).
+        self._wait_for_save()
+        event.accept()
 
     def _update_title(self) -> None:
         name = self._inv_name or "Untitled"
