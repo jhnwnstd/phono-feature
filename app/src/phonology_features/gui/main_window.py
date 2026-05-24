@@ -204,10 +204,16 @@ class _ThemedHandle(QSplitterHandle):
         super().leaveEvent(event)
 
     def paintEvent(self, event):
+        # Resting state: blends with neighbouring panel chrome via
+        # ``border``. Hover state: ``splitter_hover`` -- a neutral
+        # grey, NOT the accent blue. Accent is reserved for "active
+        # / selected" semantics; the drag handle is just signalling
+        # "this surface is interactive", and a darker grey reads as
+        # affordance without overloading the selected meaning.
         painter = QPainter(self)
         painter.fillRect(
             self.rect(),
-            QColor(C["accent"] if self._hover else C["border"]),
+            QColor(C["splitter_hover"] if self._hover else C["border"]),
         )
 
 

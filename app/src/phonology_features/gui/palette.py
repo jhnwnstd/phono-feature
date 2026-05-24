@@ -57,6 +57,11 @@ LIGHT = {
     "btn_disabled_bg": "#E2E4E7",
     "btn_disabled_text": "#9AA0A6",
     "btn_disabled_border": "#E2E4E7",
+    # Splitter handle hover: a neutral grey, NOT the accent blue.
+    # Accent is reserved for "active / selected" semantics; the
+    # drag handle is an "interactive surface" cue, which a darker
+    # grey communicates without overloading the selected meaning.
+    "splitter_hover": "#9AA0A6",
     # Analysis panel + tag chips
     "analysis_bg": "#F2F3F5",
     "tag_blue": "#DBEAFE",
@@ -111,6 +116,10 @@ DARK = {
     "btn_disabled_bg": "#161616",
     "btn_disabled_text": "#555555",
     "btn_disabled_border": "#161616",
+    # See LIGHT.splitter_hover comment. Dark mode wants the hover
+    # cue LIGHTER than the resting border so it pops against the
+    # dark background; same "neutral, not accent" rule applies.
+    "splitter_hover": "#6A6A6A",
     # Analysis panel + tag chips
     "analysis_bg": "#262626",
     "tag_blue": "#1E3A8A",
