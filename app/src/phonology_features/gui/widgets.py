@@ -8,6 +8,7 @@ from enum import StrEnum
 
 from phonology_features.gui.constants import BTN_GAP, BTN_W, scrollbar_style
 from phonology_features.gui.palette import C
+from phonology_features.gui.style_utils import set_css, set_html
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -61,7 +62,7 @@ class SegmentButton(QPushButton):
         self.setFixedSize(33, 26)
         self.setFont(QFont("Noto Sans", 9))
         self._styles = self._styles_for_active_theme()
-        self.setStyleSheet(self._styles[SegmentState.DEFAULT])
+        set_css(self, self._styles[SegmentState.DEFAULT])
 
     def apply_theme(self) -> None:
         """Re-style against the active palette in place. Called by
@@ -78,7 +79,7 @@ class SegmentButton(QPushButton):
         if new_styles is self._styles:
             return
         self._styles = new_styles
-        self.setStyleSheet(self._styles[self._state])
+        set_css(self, self._styles[self._state])
 
     @staticmethod
     def _build_styles() -> dict[SegmentState, str]:
@@ -149,7 +150,7 @@ class SegmentButton(QPushButton):
         if self._state == new_state:
             return
         self._state = new_state
-        self.setStyleSheet(self._styles[new_state])
+        set_css(self, self._styles[new_state])
 
 
 class FeatureRow(QWidget):
@@ -213,7 +214,7 @@ class FeatureRow(QWidget):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Preferred,
         )
-        self.name_label.setStyleSheet(f"color: {C['text']};")
+        set_css(self.name_label, f"color: {C['text']};")
         self.plus_btn = QPushButton("+", self)
         self.plus_btn.setFixedSize(28, 24)
         self.plus_btn.setCheckable(True)
@@ -236,7 +237,7 @@ class FeatureRow(QWidget):
         self.plus_btn.clicked.connect(lambda: self._on_click("+"))
         self.minus_btn.clicked.connect(lambda: self._on_click("-"))
         self.setAutoFillBackground(True)
-        self.setStyleSheet(self._ROW_NEUTRAL)
+        set_css(self, self._ROW_NEUTRAL)
 
     def _build_styles(self) -> None:
         """Bind the active theme's style strings as instance attrs."""
@@ -324,14 +325,17 @@ class FeatureRow(QWidget):
         else:
             # State 3: neutral. Directly re-apply the neutral styles
             # since neither of the above paths runs.
-            self.badge.setStyleSheet(self._BADGE_NEUTRAL)
+            set_css(self.badge, self._BADGE_NEUTRAL)
             self.badge.setText("·")
-            self.name_label.setStyleSheet(
-                self._NAME_ACTIVE
-                if self._panel_active
-                else self._NAME_INACTIVE
+            set_css(
+                self.name_label,
+                (
+                    self._NAME_ACTIVE
+                    if self._panel_active
+                    else self._NAME_INACTIVE
+                ),
             )
-            self.setStyleSheet(self._ROW_NEUTRAL)
+            set_css(self, self._ROW_NEUTRAL)
             self._reset_for_panel = self._panel_active
 
     def _style_btn(self, btn: QPushButton, polarity: str):
@@ -339,7 +343,9 @@ class FeatureRow(QWidget):
         active_bg = C["plus_bg"] if is_plus else C["minus_bg"]
         active_text = C["plus"] if is_plus else C["minus"]
         border = C["plus"] if is_plus else C["minus"]
-        btn.setStyleSheet(f"""
+        set_css(
+            btn,
+            f"""
             QPushButton {{
                 background: {C["analysis_bg"]};
                 color: {C["text_dim"]};
@@ -357,7 +363,8 @@ class FeatureRow(QWidget):
                 border: 2px solid {border};
                 font-weight: bold;
             }}
-        """)
+        """,
+        )
 
     def _on_click(self, polarity: str):
         clicked_current_value = self._current_value == polarity
@@ -380,19 +387,19 @@ class FeatureRow(QWidget):
         self._last_display_state = None
         self._reset_for_panel = None
         if value == "+":
-            self.setStyleSheet(self._ROW_PLUS)
-            self.name_label.setStyleSheet(self._NAME_BOLD)
+            set_css(self, self._ROW_PLUS)
+            set_css(self.name_label, self._NAME_BOLD)
             return
         if value == "-":
-            self.setStyleSheet(self._ROW_MINUS)
-            self.name_label.setStyleSheet(self._NAME_BOLD)
+            set_css(self, self._ROW_MINUS)
+            set_css(self.name_label, self._NAME_BOLD)
             return
         if self._panel_active:
             name_style = self._NAME_ACTIVE
         else:
             name_style = self._NAME_INACTIVE
-        self.setStyleSheet(self._ROW_NEUTRAL)
-        self.name_label.setStyleSheet(name_style)
+        set_css(self, self._ROW_NEUTRAL)
+        set_css(self.name_label, name_style)
 
     def set_interactive(self, yes: bool):
         self._interactive = yes
@@ -417,25 +424,25 @@ class FeatureRow(QWidget):
         self._reset_for_panel = None
         if contrastive:
             self.badge.setText("\u00b1")
-            self.badge.setStyleSheet(self._BADGE_CONTRASTIVE)
-            self.name_label.setStyleSheet(self._NAME_CONTRASTIVE)
-            self.setStyleSheet(self._ROW_CONTRASTIVE)
+            set_css(self.badge, self._BADGE_CONTRASTIVE)
+            set_css(self.name_label, self._NAME_CONTRASTIVE)
+            set_css(self, self._ROW_CONTRASTIVE)
             return
         has_display_value = bool(value)
         if not has_display_value or not shared:
             self.badge.setText("\u00b7")
-            self.badge.setStyleSheet(self._BADGE_NEUTRAL)
-            self.name_label.setStyleSheet(self._NAME_DIM)
-            self.setStyleSheet(self._ROW_TRANSPARENT)
+            set_css(self.badge, self._BADGE_NEUTRAL)
+            set_css(self.name_label, self._NAME_DIM)
+            set_css(self, self._ROW_TRANSPARENT)
             return
         self.badge.setText(value)
-        self.name_label.setStyleSheet(self._NAME_BOLD)
+        set_css(self.name_label, self._NAME_BOLD)
         if value == "+":
-            self.badge.setStyleSheet(self._BADGE_PLUS)
-            self.setStyleSheet(self._ROW_PLUS)
+            set_css(self.badge, self._BADGE_PLUS)
+            set_css(self, self._ROW_PLUS)
         else:
-            self.badge.setStyleSheet(self._BADGE_MINUS)
-            self.setStyleSheet(self._ROW_MINUS)
+            set_css(self.badge, self._BADGE_MINUS)
+            set_css(self, self._ROW_MINUS)
 
     def restore_value(self, value: str):
         """Silently restore a saved plus or minus value."""
@@ -467,7 +474,7 @@ class FeatureRow(QWidget):
                 if self._panel_active
                 else self._NAME_INACTIVE
             )
-            self.name_label.setStyleSheet(name_style)
+            set_css(self.name_label, name_style)
             self._reset_for_panel = self._panel_active
             return
         self._current_value = ""
@@ -475,12 +482,12 @@ class FeatureRow(QWidget):
         self.plus_btn.setChecked(False)
         self.minus_btn.setChecked(False)
         self.badge.setText("\u00b7")
-        self.badge.setStyleSheet(self._BADGE_NEUTRAL)
+        set_css(self.badge, self._BADGE_NEUTRAL)
         name_style = (
             self._NAME_ACTIVE if self._panel_active else self._NAME_INACTIVE
         )
-        self.name_label.setStyleSheet(name_style)
-        self.setStyleSheet(self._ROW_NEUTRAL)
+        set_css(self.name_label, name_style)
+        set_css(self, self._ROW_NEUTRAL)
         self._reset_for_panel = self._panel_active
 
     @property
@@ -506,14 +513,18 @@ class AnalysisPanel(QWidget):
 
     def apply_theme(self) -> None:
         """Re-apply palette-dependent styles. Called on theme toggle."""
-        self.setStyleSheet(
+        set_css(
+            self,
             f"background: {C['analysis_bg']};"
-            f" border-top: 1px solid {C['border']};"
+            f" border-top: 1px solid {C['border']};",
         )
-        self.title.setStyleSheet(
-            f"color: {C['text_dim']}; letter-spacing: 1px;"
+        set_css(
+            self.title,
+            f"color: {C['text_dim']}; letter-spacing: 1px;",
         )
-        self.content.setStyleSheet(f"""
+        set_css(
+            self.content,
+            f"""
             QTextEdit {{
                 background: {C["panel"]};
                 color: {C["text"]};
@@ -521,10 +532,11 @@ class AnalysisPanel(QWidget):
                 border-radius: 6px;
                 padding: 8px;
             }}
-            """ + scrollbar_style())
+            """ + scrollbar_style(),
+        )
 
     def set_html(self, html: str):
-        self.content.setHtml(html)
+        set_html(self.content, html)
 
     def clear(self) -> None:
         self.content.clear()
@@ -586,10 +598,11 @@ class SegmentGridWidget(QWidget):
         for manner in groups:
             hdr = QLabel(manner.upper())
             hdr.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
-            hdr.setStyleSheet(
+            set_css(
+                hdr,
                 f"color: {C['text_dim']};"
                 " letter-spacing: 1px;"
-                " padding: 4px 2px 1px 2px;"
+                " padding: 4px 2px 1px 2px;",
             )
             hdr.setParent(self)
             self._headers.append(hdr)
@@ -619,7 +632,7 @@ class SegmentGridWidget(QWidget):
             " padding: 4px 2px 1px 2px;"
         )
         for hdr in self._headers:
-            hdr.setStyleSheet(style)
+            set_css(hdr, style)
         self._last_headers_active = active
 
     def sizeHint(self) -> QSize:  # type: ignore[override]

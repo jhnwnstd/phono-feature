@@ -328,10 +328,12 @@ def test_find_all_minimal_bundles_bitmask_matches_naive() -> None:
         bundles = eng.find_all_minimal_bundles(segs)
         # Every returned bundle must characterise S exactly.
         for bundle in bundles:
-            recovered = set(eng.find_segments(bundle, underspec_compatible=True))
-            assert recovered == set(segs), (
-                f"bundle {bundle} for {segs} recovered {recovered}"
+            recovered = set(
+                eng.find_segments(bundle, underspec_compatible=True)
             )
+            assert recovered == set(
+                segs
+            ), f"bundle {bundle} for {segs} recovered {recovered}"
         # All bundles must be the same size (minimal).
         sizes = {len(b) for b in bundles}
         assert len(sizes) <= 1, f"non-uniform bundle sizes for {segs}: {sizes}"

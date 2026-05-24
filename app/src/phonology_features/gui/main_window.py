@@ -35,6 +35,7 @@ from phonology_features.gui.palette import (
     get_theme_name,
     set_theme,
 )
+from phonology_features.gui.style_utils import set_css
 from phonology_features.gui.vowel_chart import VOWEL_LABEL_W, VowelChartWidget
 from phonology_features.gui.widgets import (
     AnalysisPanel,
@@ -159,7 +160,7 @@ class _BrandedStatusBar(QStatusBar):
             f"background: {C['panel']};"
             f" border-top: 1px solid {C['border']};"
         )
-        self._message_label.setStyleSheet(f"color: {C['text']};")
+        set_css(self._message_label, f"color: {C['text']};")
         self._brand.setStyleSheet(
             f"color: {C['text_dim']}; font-style: italic; padding: 0 4px;"
         )
@@ -282,7 +283,7 @@ class MainWindow(QMainWindow):
         # subsequent launches honour the user's last manual toggle.
         saved_theme = self._read_setting_str("theme", detect_system_theme())
         set_theme(saved_theme)
-        self.setStyleSheet(f"background-color: {C['bg']};")
+        set_css(self, f"background-color: {C['bg']};")
         # 150 ms debounce for selection-change analysis.
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
@@ -383,7 +384,7 @@ class MainWindow(QMainWindow):
         self.inventory_combo.setFont(QFont("Noto Sans", 10))
         self.inventory_combo.setFixedHeight(32)
         self.inventory_combo.setMinimumWidth(176)
-        self.inventory_combo.setStyleSheet(self._combo_style())
+        set_css(self.inventory_combo, self._combo_style())
         self._populate_inventory_dropdown()
         self.inventory_combo.activated.connect(self._on_inventory_selected)
         toolbar.addWidget(self.inventory_combo)
@@ -404,7 +405,7 @@ class MainWindow(QMainWindow):
         spacer.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
-        spacer.setStyleSheet("background: transparent;")
+        set_css(spacer, "background: transparent;")
         toolbar.addWidget(spacer)
         # Theme button text and tooltip are set by ``_apply_theme_btn``.
         self._theme_btn = QPushButton("", toolbar)
@@ -477,7 +478,7 @@ class MainWindow(QMainWindow):
         """
         container = QFrame(parent)
         container.setObjectName("seg_panel")
-        container.setStyleSheet(self._panel_chrome_qss("seg_panel"))
+        set_css(container, self._panel_chrome_qss("seg_panel"))
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -490,7 +491,7 @@ class MainWindow(QMainWindow):
         self.clear_seg_btn = QPushButton("Clear", container)
         self.clear_seg_btn.setFixedHeight(26)
         self.clear_seg_btn.setFont(QFont("Noto Sans", 9))
-        self.clear_seg_btn.setStyleSheet(_clear_btn_style())
+        set_css(self.clear_seg_btn, _clear_btn_style())
         self.clear_seg_btn.clicked.connect(self._clear_then_activate_segs)
         header.addWidget(self._seg_title)
         header.addStretch()
@@ -509,12 +510,12 @@ class MainWindow(QMainWindow):
             "QScrollArea { background: transparent; }" + scrollbar_style()
         )
         seg_content = QWidget(self._seg_scroll)
-        seg_content.setStyleSheet("background: transparent;")
+        set_css(seg_content, "background: transparent;")
         seg_content_layout = QHBoxLayout(seg_content)
         seg_content_layout.setContentsMargins(0, 0, 0, 0)
         seg_content_layout.setSpacing(12)
         left_wrap = QWidget(seg_content)
-        left_wrap.setStyleSheet("background: transparent;")
+        set_css(left_wrap, "background: transparent;")
         left_lay = QVBoxLayout(left_wrap)
         left_lay.setContentsMargins(0, 0, 0, 0)
         left_lay.setSpacing(0)
@@ -538,11 +539,11 @@ class MainWindow(QMainWindow):
         self._seg_scroll.setWidget(seg_content)
         vp = self._seg_scroll.viewport()
         assert vp is not None
-        vp.setStyleSheet("background: transparent;")
+        set_css(vp, "background: transparent;")
         vlay.addWidget(self._seg_scroll, stretch=1)
         self.seg_hint = QLabel("\u2190 Select an inventory to see segments")
         self.seg_hint.setFont(QFont("Noto Sans", 9))
-        self.seg_hint.setStyleSheet(f"color: {C['text_dim']};")
+        set_css(self.seg_hint, f"color: {C['text_dim']};")
         self.seg_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         vlay.addWidget(self.seg_hint)
         return container
@@ -550,7 +551,7 @@ class MainWindow(QMainWindow):
     def _build_feature_panel(self, parent=None) -> QFrame:
         container = QFrame(parent)
         container.setObjectName("feat_panel")
-        container.setStyleSheet(self._panel_chrome_qss("feat_panel"))
+        set_css(container, self._panel_chrome_qss("feat_panel"))
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -563,7 +564,7 @@ class MainWindow(QMainWindow):
         self.clear_feat_btn = QPushButton("Clear", container)
         self.clear_feat_btn.setFixedHeight(26)
         self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
-        self.clear_feat_btn.setStyleSheet(_clear_btn_style())
+        set_css(self.clear_feat_btn, _clear_btn_style())
         self.clear_feat_btn.clicked.connect(self._clear_then_activate_feats)
         header.addWidget(self._feat_title)
         header.addStretch()
@@ -576,18 +577,18 @@ class MainWindow(QMainWindow):
             "QScrollArea { background: transparent; }" + scrollbar_style()
         )
         self._feat_content = QWidget(self._feat_scroll)
-        self._feat_content.setStyleSheet("background: transparent;")
+        set_css(self._feat_content, "background: transparent;")
         feat_main_layout = QHBoxLayout(self._feat_content)
         feat_main_layout.setContentsMargins(0, 0, 0, 0)
         feat_main_layout.setSpacing(8)
         self._feat_left_col = QWidget(self._feat_content)
-        self._feat_left_col.setStyleSheet("background: transparent;")
+        set_css(self._feat_left_col, "background: transparent;")
         self._feat_left_layout = QVBoxLayout(self._feat_left_col)
         self._feat_left_layout.setContentsMargins(0, 0, 0, 0)
         self._feat_left_layout.setSpacing(8)
         self._feat_left_layout.addStretch()
         self._feat_right_col = QWidget(self._feat_content)
-        self._feat_right_col.setStyleSheet("background: transparent;")
+        set_css(self._feat_right_col, "background: transparent;")
         self._feat_right_layout = QVBoxLayout(self._feat_right_col)
         self._feat_right_layout.setContentsMargins(0, 0, 0, 0)
         self._feat_right_layout.setSpacing(8)
@@ -862,7 +863,7 @@ class MainWindow(QMainWindow):
             # Refresh the panel-chrome QSS rules then re-polish so the
             # active-mode border picks up the new accent color.
             for panel in (self.seg_panel, self.feat_panel):
-                panel.setStyleSheet(self._panel_chrome_qss(panel.objectName()))
+                set_css(panel, self._panel_chrome_qss(panel.objectName()))
                 panel.setProperty("active", None)
             self._apply_panel_chrome()
             self._refresh_analysis_for_mode()
@@ -871,7 +872,7 @@ class MainWindow(QMainWindow):
         """Re-apply every chrome stylesheet that depends on the palette.
         Each helper touches one logical group of widgets in place.
         """
-        self.setStyleSheet(f"background-color: {C['bg']};")
+        set_css(self, f"background-color: {C['bg']};")
         self._restyle_toolbar()
         self._repaint_splitter_handles()
         self._restyle_panel_chrome_widgets()
@@ -882,15 +883,20 @@ class MainWindow(QMainWindow):
         self.status.apply_theme()
 
     def _restyle_toolbar(self) -> None:
-        self._toolbar.setStyleSheet(f"""
+        set_css(
+            self._toolbar,
+            f"""
             QToolBar {{
                 background: {C["panel"]};
                 border-bottom: 1px solid {C["border"]};
                 padding: 4px 8px;
                 spacing: 6px;
             }}
-        """)
-        self.inventory_combo.setStyleSheet(f"""
+        """,
+        )
+        set_css(
+            self.inventory_combo,
+            f"""
             QComboBox {{
                 background: {C["panel"]};
                 color: {C["text"]};
@@ -913,10 +919,11 @@ class MainWindow(QMainWindow):
                 selection-color: {C["accent"]};
                 outline: none;
             }}
-        """)
+        """,
+        )
         nav_style = self._nav_btn_style()
         for btn in self._nav_buttons:
-            btn.setStyleSheet(nav_style)
+            set_css(btn, nav_style)
         self._apply_theme_btn()
 
     def _apply_theme_btn(self) -> None:
@@ -928,7 +935,9 @@ class MainWindow(QMainWindow):
         self._theme_btn.setToolTip(
             "Switch to light mode" if is_dark else "Switch to dark mode"
         )
-        self._theme_btn.setStyleSheet(f"""
+        set_css(
+            self._theme_btn,
+            f"""
             QPushButton {{
                 background: transparent;
                 color: {C["text_dim"]};
@@ -939,7 +948,8 @@ class MainWindow(QMainWindow):
                 color: {C["accent"]};
                 border: 1.5px solid {C["accent"]};
             }}
-        """)
+        """,
+        )
 
     def _repaint_splitter_handles(self) -> None:
         """Force splitter handles to repaint with the live palette.
@@ -963,8 +973,8 @@ class MainWindow(QMainWindow):
         Panel container backgrounds / borders are handled separately
         by ``_apply_panel_chrome`` via property-selector polish.
         """
-        self.clear_seg_btn.setStyleSheet(_clear_btn_style())
-        self.clear_feat_btn.setStyleSheet(_clear_btn_style())
+        set_css(self.clear_seg_btn, _clear_btn_style())
+        set_css(self.clear_feat_btn, _clear_btn_style())
         sb_qss = scrollbar_style()
         for scroll in (self._seg_scroll, self._feat_scroll):
             for bar in (
@@ -972,8 +982,8 @@ class MainWindow(QMainWindow):
                 scroll.horizontalScrollBar(),
             ):
                 if bar is not None:
-                    bar.setStyleSheet(sb_qss)
-        self.seg_hint.setStyleSheet(f"color: {C['text_dim']};")
+                    set_css(bar, sb_qss)
+        set_css(self.seg_hint, f"color: {C['text_dim']};")
 
     def _restyle_feature_cards(self) -> None:
         """Refresh each group card and its title.
