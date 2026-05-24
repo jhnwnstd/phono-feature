@@ -58,3 +58,32 @@ def window(qapp: QApplication):
     w._set_mode("seg_to_feat")
     yield w
     w.close()
+
+
+def close_builder_silent(builder) -> None:
+    """Close an InventoryBuilder in tests without triggering the
+    unsaved-changes modal.
+
+    The builder's ``closeEvent`` calls ``_check_unsaved()`` which
+    pops a modal ``QMessageBox`` when ``_dirty`` is True. Modal
+    ``exec()`` blocks the event loop waiting for a user click that
+    never comes under the offscreen QPA, so tests that mutated the
+    grid would hang forever on teardown.
+
+    Forcing ``_dirty=False`` is the cheapest fix: it asserts "no
+    unsaved changes worth prompting about" and lets ``closeEvent``
+    fall through cleanly. ``_save_in_flight`` is also forced low
+    because any pending save would block via ``_wait_for_save`` --
+    tests that care about that path should call ``_wait_for_save``
+    explicitly rather than relying on close-time bookkeeping.
+    """
+    builder._dirty = False
+    builder._save_in_flight = False
+    builder.close()
+
+
+@pytest.fixture
+def close_builder_silent_fn():
+    """Expose ``close_builder_silent`` as a pytest fixture for tests
+    that prefer parameter injection over module import."""
+    return close_builder_silent

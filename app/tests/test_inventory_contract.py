@@ -32,6 +32,8 @@ from phonology_features.engine.segment_grouper import (
     _normalize_feats,
 )
 
+from .conftest import close_builder_silent
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HAYES = str(REPO_ROOT / "inventories" / "hayes_features.json")
 
@@ -619,10 +621,9 @@ def test_bulk_cycle_whole_table_under_100ms(tmp_path: Path) -> None:
         f"regression vs <100 ms target. Did vertical header drift "
         f"back to ResizeToContents?"
     )
-    # Bulk cycle set _dirty=True; clear before close() to skip the
+    # Bulk cycle dirtied the grid; close_builder_silent skips the
     # unsaved-changes modal that would block forever in offscreen mode.
-    b._dirty = False
-    b.close()
+    close_builder_silent(b)
 
 
 def test_bulk_edit_does_not_disable_rm_buttons(tmp_path: Path) -> None:
@@ -666,8 +667,7 @@ def test_bulk_edit_does_not_disable_rm_buttons(tmp_path: Path) -> None:
         "-Segment must stay enabled (Qt selection didn't change)"
     )
     assert b._user_clicked_col == 5
-    b._dirty = False
-    b.close()
+    close_builder_silent(b)
 
 
 def test_header_doubleclick_still_toggles_selection(tmp_path: Path) -> None:

@@ -43,12 +43,22 @@ from PyQt6.QtWidgets import (
 
 
 @dataclass(frozen=True)
-class _CellEdit:
-    """One cell mutation, captured for undo/redo."""
+class _BulkEdit:
+    """One undoable mutation. ``new`` is the value applied to every
+    cell in the batch (uniform -- bulk-cycle and key-set targets
+    always pick a single destination value). ``cells`` carries the
+    per-cell old state as a tuple of ``(row, col, old_value)``
+    triples. Single-cell edits use a 1-element ``cells`` tuple; bulk
+    edits share one ``new`` string across N cells instead of
+    duplicating it N times.
 
-    row: int
-    col: int
-    old: str
+    Memory: tuple wrapper (~56 B) + ~56 B per cell triple. A 3920-
+    cell select-all batch used to allocate 3920 ``_CellEdit`` records
+    (~96 B each = ~375 KB); the new shape is ~220 KB, a ~40 % saving
+    that compounds across the 200-batch undo cap.
+    """
+
+    cells: tuple[tuple[int, int, str], ...]
     new: str
 
 
@@ -367,8 +377,8 @@ class InventoryBuilder(QMainWindow):
         self._rm_feat_enabled_state: bool | None = None
         # Undo / redo: each entry is one batch (the cell edits produced
         # by a single user action). Cleared on table rebuild.
-        self._undo_stack: list[list[_CellEdit]] = []
-        self._redo_stack: list[list[_CellEdit]] = []
+        self._undo_stack: list[_BulkEdit] = []
+        self._redo_stack: list[_BulkEdit] = []
         self._build_ui()
         if parent is not None:
             parent_screen = parent.screen()
@@ -794,10 +804,10 @@ class InventoryBuilder(QMainWindow):
         item = self._table.item(row, col)
         if item is None or item.text() == value:
             return
-        edits = [_CellEdit(row, col, item.text(), value)]
+        old = item.text()
         item.setText(value)
         style_cell(item, value)
-        self._commit_edits(edits)
+        self._commit_edit(_BulkEdit(((row, col, old),), value))
 
     def _cycle_selection_from(self, anchor_item: QTableWidgetItem) -> None:
         """Cycle every selected cell to the value ``anchor_item`` would
@@ -848,7 +858,7 @@ class InventoryBuilder(QMainWindow):
         cascade and the cumulative cost was much higher than the
         actual work.
         """
-        edits: list[_CellEdit] = []
+        triples: list[tuple[int, int, str]] = []
         table = self._table
         table.setUpdatesEnabled(False)
         was_blocking = table.blockSignals(True)
@@ -861,26 +871,27 @@ class InventoryBuilder(QMainWindow):
                 old = item.text()
                 if old == value:
                     continue
-                edits.append(_CellEdit(row, col, old, value))
+                triples.append((row, col, old))
                 item.setText(value)
                 style_cell(item, value)
         finally:
             table.blockSignals(was_blocking)
             table.setUpdatesEnabled(True)
-        if edits:
-            # One viewport update covers every changed cell at once
-            # instead of N queued data-change paints. Painter clips
-            # to dirty regions, so this isn't even a full repaint --
-            # Qt re-paints only the cells whose items mutated.
-            viewport = table.viewport()
-            if viewport is not None:
-                viewport.update()
-        self._commit_edits(edits)
+        if not triples:
+            return
+        # One viewport update covers every changed cell at once
+        # instead of N queued data-change paints. Painter clips to
+        # dirty regions, so this isn't even a full repaint -- Qt
+        # re-paints only the cells whose items mutated.
+        viewport = table.viewport()
+        if viewport is not None:
+            viewport.update()
+        self._commit_edit(_BulkEdit(tuple(triples), value))
 
-    def _commit_edits(self, edits: list[_CellEdit]) -> None:
-        """Push a non-empty edit batch onto the undo stack and update
-        dirty state. Empty batches are ignored so no-op operations
-        don't pollute the history.
+    def _commit_edit(self, edit: _BulkEdit) -> None:
+        """Push a non-empty edit onto the undo stack and update dirty
+        state. Empty batches are ignored so no-op operations don't
+        pollute the history.
 
         Does NOT touch the rm-button enabled state -- the Qt selection
         model is unchanged by an edit, so the existing enable state
@@ -890,9 +901,9 @@ class InventoryBuilder(QMainWindow):
         disabled mismatch: the column stayed highlighted but the
         - Segment button went grey, forcing a header re-click.
         """
-        if not edits:
+        if not edit.cells:
             return
-        self._undo_stack.append(edits)
+        self._undo_stack.append(edit)
         # A new edit invalidates any redo history; same convention as
         # most editors (you can't redo into a divergent timeline).
         self._redo_stack.clear()
@@ -905,12 +916,13 @@ class InventoryBuilder(QMainWindow):
         if not self._undo_stack:
             self._status.showMessage("Nothing to undo.")
             return
-        edits = self._undo_stack.pop()
-        self._replay_edits(edits, use_old=True)
-        self._redo_stack.append(edits)
+        edit = self._undo_stack.pop()
+        self._replay_edit(edit, use_old=True)
+        self._redo_stack.append(edit)
         self._dirty = True
+        n = len(edit.cells)
         self._status.showMessage(
-            f"Undid {len(edits)} cell change{'s' if len(edits) != 1 else ''}."
+            f"Undid {n} cell change{'s' if n != 1 else ''}."
         )
 
     def _redo(self) -> None:
@@ -918,30 +930,42 @@ class InventoryBuilder(QMainWindow):
         if not self._redo_stack:
             self._status.showMessage("Nothing to redo.")
             return
-        edits = self._redo_stack.pop()
-        self._replay_edits(edits, use_old=False)
-        self._undo_stack.append(edits)
+        edit = self._redo_stack.pop()
+        self._replay_edit(edit, use_old=False)
+        self._undo_stack.append(edit)
         self._dirty = True
+        n = len(edit.cells)
         self._status.showMessage(
-            f"Redid {len(edits)} cell change{'s' if len(edits) != 1 else ''}."
+            f"Redid {n} cell change{'s' if n != 1 else ''}."
         )
 
-    def _replay_edits(self, edits: list[_CellEdit], *, use_old: bool) -> None:
-        """Apply ``edits`` to the grid (``use_old`` for undo, new for
-        redo). Same batching trick as ``_apply_value_to_indexes``:
-        suspend paint + signals during the loop, then a single
-        viewport.update() at the end."""
+    def _replay_edit(self, edit: _BulkEdit, *, use_old: bool) -> None:
+        """Apply ``edit`` to the grid (``use_old`` for undo, the
+        shared ``new`` for redo). Same batching trick as
+        ``_apply_value_to_indexes``: suspend paint + signals during
+        the loop, then a single viewport.update() at the end. ``new``
+        is hoisted out of the loop on the redo path so the per-cell
+        body doesn't re-read it (the per-cell ``old`` is still in the
+        triple, so the undo path destructures it inline)."""
         table = self._table
         table.setUpdatesEnabled(False)
         was_blocking = table.blockSignals(True)
         try:
-            for e in edits:
-                item = table.item(e.row, e.col)
-                if item is None:
-                    continue
-                target = e.old if use_old else e.new
-                item.setText(target)
-                style_cell(item, target)
+            if use_old:
+                for row, col, old in edit.cells:
+                    item = table.item(row, col)
+                    if item is None:
+                        continue
+                    item.setText(old)
+                    style_cell(item, old)
+            else:
+                new = edit.new
+                for row, col, _ in edit.cells:
+                    item = table.item(row, col)
+                    if item is None:
+                        continue
+                    item.setText(new)
+                    style_cell(item, new)
         finally:
             table.blockSignals(was_blocking)
             table.setUpdatesEnabled(True)
