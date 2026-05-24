@@ -580,6 +580,96 @@ def test_analysis_render_single_segment_escapes_symbol() -> None:
     assert "/&lt;x&gt;/" in out
 
 
+def test_bulk_cycle_whole_table_under_100ms(tmp_path: Path) -> None:
+    """Regression guard against the ResizeToContents footgun. Before
+    we switched the vertical header to Fixed, every per-cell
+    setForeground stalled Qt re-walking the row to recompute height;
+    a whole-table cycle on Hayes (3920 cells) took ~60+ seconds. The
+    Fixed-mode fix dropped it to ~17 ms. 100 ms is a comfortable
+    ceiling that still catches the failure mode if it ever regresses."""
+    import os as _os
+    import time as _time
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+
+    b = InventoryBuilder(load_path=HAYES)
+    b.show()
+    for _ in range(4):
+        app.processEvents()
+    b._table.selectAll()
+    for _ in range(2):
+        app.processEvents()
+    anchor = b._table.item(0, 0)
+    assert anchor is not None
+    t0 = _time.perf_counter()
+    b._cycle_selection_from(anchor)
+    elapsed_ms = (_time.perf_counter() - t0) * 1000
+    assert elapsed_ms < 100, (
+        f"whole-table bulk cycle took {elapsed_ms:.1f} ms; "
+        f"regression vs <100 ms target. Did vertical header drift "
+        f"back to ResizeToContents?"
+    )
+    # Bulk cycle set _dirty=True; clear before close() to skip the
+    # unsaved-changes modal that would block forever in offscreen mode.
+    b._dirty = False
+    b.close()
+
+
+def test_bulk_edit_does_not_disable_rm_buttons(tmp_path: Path) -> None:
+    """After a bulk-cycle on a selected column the Qt selection is
+    UNCHANGED. The -Segment button must stay enabled to reflect
+    that the column is still selected and still removable. The old
+    behaviour cleared rm state in ``_commit_edits`` and produced a
+    visible-but-disabled mismatch (column highlighted, -Segment
+    grey, forcing a header re-click)."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+
+    b = InventoryBuilder(load_path=HAYES)
+    b.show()
+    for _ in range(4):
+        app.processEvents()
+    b._on_col_header_clicked(5)
+    for _ in range(2):
+        app.processEvents()
+    assert (
+        b._rm_seg_btn.isEnabled()
+    ), "after selecting a column, -Segment should be enabled"
+    anchor = b._table.item(0, 5)
+    assert anchor is not None
+    b._cycle_selection_from(anchor)
+    for _ in range(2):
+        app.processEvents()
+    assert b._rm_seg_btn.isEnabled(), (
+        "after a bulk edit on a still-selected column, "
+        "-Segment must stay enabled (Qt selection didn't change)"
+    )
+    assert b._user_clicked_col == 5
+    b._dirty = False
+    b.close()
+
+
 def test_header_doubleclick_still_toggles_selection(tmp_path: Path) -> None:
     """PyQt6's QHeaderView suppresses ``sectionClicked`` when a press
     lands within the OS double-click interval (~400 ms) of the previous

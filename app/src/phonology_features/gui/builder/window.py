@@ -872,7 +872,9 @@ class InventoryBuilder(QMainWindow):
             # instead of N queued data-change paints. Painter clips
             # to dirty regions, so this isn't even a full repaint --
             # Qt re-paints only the cells whose items mutated.
-            table.viewport().update()
+            viewport = table.viewport()
+            if viewport is not None:
+                viewport.update()
         self._commit_edits(edits)
 
     def _commit_edits(self, edits: list[_CellEdit]) -> None:
@@ -924,9 +926,7 @@ class InventoryBuilder(QMainWindow):
             f"Redid {len(edits)} cell change{'s' if len(edits) != 1 else ''}."
         )
 
-    def _replay_edits(
-        self, edits: list[_CellEdit], *, use_old: bool
-    ) -> None:
+    def _replay_edits(self, edits: list[_CellEdit], *, use_old: bool) -> None:
         """Apply ``edits`` to the grid (``use_old`` for undo, new for
         redo). Same batching trick as ``_apply_value_to_indexes``:
         suspend paint + signals during the loop, then a single
@@ -945,7 +945,9 @@ class InventoryBuilder(QMainWindow):
         finally:
             table.blockSignals(was_blocking)
             table.setUpdatesEnabled(True)
-        table.viewport().update()
+        viewport = table.viewport()
+        if viewport is not None:
+            viewport.update()
 
     # Header selection / remove button state
     def _on_col_header_clicked(self, col: int):
