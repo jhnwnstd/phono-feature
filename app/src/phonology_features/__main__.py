@@ -139,9 +139,15 @@ def _run_gui(argv: list[str]) -> int:
     from PyQt6.QtGui import QPalette
 
     _settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
-    _seed_theme = _settings.value("theme", detect_system_theme())
-    if not isinstance(_seed_theme, str):
-        _seed_theme = detect_system_theme()
+    # safe_read_setting defends against stale-pickled-enum SystemError
+    # AND wrong-type values; without it a corrupt theme value would
+    # crash startup BEFORE MainWindow's own ``_read_setting`` guard
+    # ever ran, leaving the user with no in-app way to recover.
+    from phonology_features._settings import safe_read_setting
+
+    _seed_theme = safe_read_setting(
+        _settings, "theme", detect_system_theme(), expected_type=str
+    )
     set_theme(_seed_theme)
     _pal = app.palette()
     _bg = QColor(C["bg"])

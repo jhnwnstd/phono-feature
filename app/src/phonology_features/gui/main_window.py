@@ -12,6 +12,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from phonology_features._logging import get_logger
+from phonology_features._settings import safe_read_setting
 from phonology_features.engine.feature_engine import FeatureEngine
 from phonology_features.engine.inventory import Inventory, ValidationError
 from phonology_features.gui.analysis import (
@@ -48,7 +49,9 @@ from phonology_features.gui.widgets import (
 from PyQt6.QtCore import (
     QEvent,
     QFileSystemWatcher,
+    QByteArray,
     QPoint,
+    QSize,
     QRectF,
     QSettings,
     Qt,
@@ -680,22 +683,15 @@ class MainWindow(QMainWindow):
             self._anchor_pos = self.pos()
 
     def _read_setting(self, key: str, default=None):
-        """Read a QSettings key, returning ``default`` if the stored
-        value can't be deserialized. Older builds wrote pickled enum
-        members; renaming the package invalidates those pickles and
-        QSettings.value raises SystemError. Catching here lets a fresh
-        default replace the bad blob on the next setValue.
-        """
-        try:
-            value = self._settings.value(key, default)
-        except (SystemError, ModuleNotFoundError, TypeError):
-            self._settings.remove(key)
-            return default
-        return value
+        """Defensive QSettings read. Thin wrapper around the
+        shared ``safe_read_setting`` helper; kept as an instance
+        method so call sites don't have to plumb ``self._settings``."""
+        return safe_read_setting(self._settings, key, default)
 
     def _read_setting_str(self, key: str, default: str) -> str:
-        value = self._read_setting(key, default)
-        return value if isinstance(value, str) else default
+        return safe_read_setting(
+            self._settings, key, default, expected_type=str
+        )
 
     def _restore_settings(self, startup_path: str | None) -> None:
         """Restore window size/position, splitter state, mode, and
@@ -704,8 +700,16 @@ class MainWindow(QMainWindow):
         # positions that can place the window off-screen after a
         # display configuration change.
         self._settings.remove("geometry")
-        size = self._read_setting("window_size")
-        pos = self._read_setting("window_pos")
+        # expected_type guards against a hand-edited INI or a previous
+        # schema putting a string / int / wrong shape under these keys.
+        # Without the check ``size.width()`` would AttributeError-crash
+        # startup; with the check the bad value falls back to default.
+        size = safe_read_setting(
+            self._settings, "window_size", None, expected_type=QSize
+        )
+        pos = safe_read_setting(
+            self._settings, "window_pos", None, expected_type=QPoint
+        )
         self._has_saved_size = size is not None
         screen = self._target_screen()
         if size is not None:
@@ -729,8 +733,10 @@ class MainWindow(QMainWindow):
         # splitter children, in which case we fall back to first-launch
         # sizing.
         self._has_saved_splitter = self._restore_splitter_state()
-        path = startup_path or self._read_setting("last_inventory")
-        if path and isinstance(path, str) and os.path.isfile(path):
+        path = startup_path or safe_read_setting(
+            self._settings, "last_inventory", None, expected_type=str
+        )
+        if path and os.path.isfile(path):
             idx = self.inventory_combo.findData(path)
             if idx >= 0:
                 self.inventory_combo.setCurrentIndex(idx)
@@ -1652,8 +1658,22 @@ class MainWindow(QMainWindow):
         True if at least one splitter was successfully restored, so
         the caller can suppress content-based sizing.
         """
-        h_state = self._read_setting("hsplit_state")
-        v_state = self._read_setting("vsplit_state")
+        # QByteArray is what ``saveState`` produces. A non-QByteArray
+        # value (hand-edited INI, previous schema) reaching
+        # ``restoreState`` can crash or silently fail; the type guard
+        # falls back cleanly to the unrestored case.
+        h_state = safe_read_setting(
+            self._settings,
+            "hsplit_state",
+            None,
+            expected_type=QByteArray,
+        )
+        v_state = safe_read_setting(
+            self._settings,
+            "vsplit_state",
+            None,
+            expected_type=QByteArray,
+        )
         restored = False
         if h_state is not None and self._hsplit.restoreState(h_state):
             restored = True

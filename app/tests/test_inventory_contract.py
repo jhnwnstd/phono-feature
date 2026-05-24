@@ -1713,6 +1713,136 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
     close_builder_silent(b)
 
 
+# ---------------------------------------------------------------------------
+# Defensive QSettings reads at startup -- a corrupt or wrong-typed
+# value must NEVER prevent the app from launching.
+# ---------------------------------------------------------------------------
+def test_safe_read_setting_recovers_from_systemerror() -> None:
+    """Stale pickled enum values from a renamed package raise
+    ``SystemError`` inside ``QSettings.value``. The helper must
+    catch, remove the bad key, and return the default."""
+    from phonology_features._settings import safe_read_setting
+
+    class FakeSettings:
+        def __init__(self) -> None:
+            self.removed: list[str] = []
+
+        def value(self, key: str, default: object) -> object:
+            raise SystemError("stale pickled enum")
+
+        def remove(self, key: str) -> None:
+            self.removed.append(key)
+
+    s = FakeSettings()
+    out = safe_read_setting(s, "theme", "light", expected_type=str)
+    assert out == "light"
+    assert s.removed == ["theme"]
+
+
+def test_safe_read_setting_recovers_from_module_not_found() -> None:
+    """Same shape as SystemError but for an old import path that
+    no longer exists -- e.g. an enum class moved between modules."""
+    from phonology_features._settings import safe_read_setting
+
+    class FakeSettings:
+        def __init__(self) -> None:
+            self.removed: list[str] = []
+
+        def value(self, key: str, default: object) -> object:
+            raise ModuleNotFoundError("phonology_features.old.path")
+
+        def remove(self, key: str) -> None:
+            self.removed.append(key)
+
+    s = FakeSettings()
+    out = safe_read_setting(s, "mode", "seg_to_feat", expected_type=str)
+    assert out == "seg_to_feat"
+    assert s.removed == ["mode"]
+
+
+def test_safe_read_setting_rejects_wrong_type_without_removing() -> None:
+    """A wrong-typed value (e.g. a hand-edited INI replaced a QSize
+    with a string) falls back to default but is NOT removed -- the
+    user may have set it deliberately and we just don't know how
+    to use it yet."""
+    from phonology_features._settings import safe_read_setting
+    from PyQt6.QtCore import QSize
+
+    class FakeSettings:
+        def __init__(self) -> None:
+            self.removed: list[str] = []
+
+        def value(self, key: str, default: object) -> object:
+            return "not a QSize"  # wrong type on purpose
+
+        def remove(self, key: str) -> None:
+            self.removed.append(key)
+
+    s = FakeSettings()
+    out = safe_read_setting(s, "window_size", None, expected_type=QSize)
+    assert out is None
+    assert s.removed == [], "wrong-type fallback should preserve the value"
+
+
+def test_safe_read_setting_accepts_correct_type() -> None:
+    from phonology_features._settings import safe_read_setting
+    from PyQt6.QtCore import QSize
+
+    class FakeSettings:
+        def value(self, key: str, default: object) -> object:
+            return QSize(1024, 768)
+
+        def remove(self, key: str) -> None:
+            raise AssertionError("should not be called on success path")
+
+    out = safe_read_setting(
+        FakeSettings(), "window_size", QSize(1, 1), expected_type=QSize
+    )
+    assert isinstance(out, QSize)
+    assert (out.width(), out.height()) == (1024, 768)
+
+
+def test_mainwindow_construction_survives_corrupt_window_size(
+    tmp_path: Path,
+) -> None:
+    """Pre-fix, a wrong-typed window_size value (string instead of
+    QSize) would crash ``_restore_settings`` at ``size.width()``,
+    aborting startup with a traceback and no in-app recovery. With
+    the ``expected_type=QSize`` guard the bad value falls back to
+    the default and the window launches normally."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    QApplication.instance() or QApplication([])
+
+    # Pre-populate corrupt settings BEFORE the window is constructed.
+    from phonology_features.gui.constants import SETTINGS_APP, SETTINGS_ORG
+
+    settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+    settings.setValue("window_size", "1200x900-not-a-qsize")
+    settings.setValue("window_pos", "0,0-not-a-qpoint")
+    settings.sync()
+
+    from phonology_features.gui.main_window import MainWindow
+
+    # Should NOT raise. Pre-fix this raised AttributeError on
+    # size.width().
+    w = MainWindow()
+    # Window came up at a clamped default; specific size depends on
+    # the screen, just assert it's nonzero.
+    assert w.width() > 0
+    assert w.height() > 0
+    w.close()
+
+
 def test_inventory_swap_does_not_resize_window(tmp_path: Path) -> None:
     """Once the user (or restored settings) owns the window geometry,
     swapping inventories must leave the top-level size and position
