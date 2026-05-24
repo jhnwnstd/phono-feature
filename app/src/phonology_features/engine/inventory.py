@@ -603,9 +603,7 @@ def _validate_features(
         if canonical in seen:
             prior = canonical_origin[canonical]
             if prior == f:
-                issues.append(
-                    f"{prefix}'features' contains duplicate {f!r}"
-                )
+                issues.append(f"{prefix}'features' contains duplicate {f!r}")
             else:
                 # Two distinct spellings collapsed to the same identity
                 # (e.g. " Voice " vs "Voice", or NFC vs NFD of "é").

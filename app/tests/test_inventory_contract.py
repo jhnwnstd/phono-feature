@@ -159,9 +159,7 @@ def test_parse_rejects_nfc_nfd_feature_collision() -> None:
     nfc = "Café"
     nfd = unicodedata.normalize("NFD", nfc)
     with pytest.raises(ValidationError) as ex:
-        Inventory.parse(
-            {"features": [nfc, nfd, "Voice"], "segments": {}}
-        )
+        Inventory.parse({"features": [nfc, nfd, "Voice"], "segments": {}})
     msg = " ".join(ex.value.issues).lower()
     assert "nfc" in msg or "normalization" in msg
 
@@ -170,9 +168,7 @@ def test_parse_rejects_whitespace_padded_feature_collision() -> None:
     """``" Voice "`` and ``"Voice"`` canonicalize identically; both
     appearing in one inventory is ambiguous and must be reported."""
     with pytest.raises(ValidationError) as ex:
-        Inventory.parse(
-            {"features": ["Voice", " Voice "], "segments": {}}
-        )
+        Inventory.parse({"features": ["Voice", " Voice "], "segments": {}})
     msg = " ".join(ex.value.issues).lower()
     assert "voice" in msg
     assert "normalization" in msg or "whitespace" in msg
@@ -277,9 +273,7 @@ def test_load_rejects_duplicate_features_key(tmp_path: Path) -> None:
     """Duplicate top-level keys are the same data-loss class as
     duplicate segment keys -- check the hook applies at every depth."""
     target = tmp_path / "dup.json"
-    target.write_text(
-        '{"features": ["V"], "features": ["X"], "segments": {}}'
-    )
+    target.write_text('{"features": ["V"], "features": ["X"], "segments": {}}')
     with pytest.raises(ValidationError) as ex:
         Inventory.load(str(target))
     assert "duplicate" in " ".join(ex.value.issues).lower()
@@ -298,9 +292,9 @@ def test_bundled_inventories_produce_no_advisories() -> None:
         "blevins_features.json",
     ):
         inv = Inventory.load(str(REPO_ROOT / "inventories" / fname))
-        assert inv.advisories == (), (
-            f"{fname} produced advisories: {inv.advisories}"
-        )
+        assert (
+            inv.advisories == ()
+        ), f"{fname} produced advisories: {inv.advisories}"
 
 
 def test_advisory_fires_for_unusually_many_features() -> None:
@@ -320,9 +314,7 @@ def test_segment_ascii_g_normalized_to_script_g() -> None:
     canonical IPA ``ɡ`` (U+0261). Users typing on a US keyboard
     get the IPA voiced velar stop identity regardless of which
     character they actually typed."""
-    inv = Inventory.parse(
-        {"features": ["V"], "segments": {"g": {"V": "+"}}}
-    )
+    inv = Inventory.parse({"features": ["V"], "segments": {"g": {"V": "+"}}})
     assert "ɡ" in inv.segments
     assert "g" not in inv.segments
 
@@ -330,9 +322,7 @@ def test_segment_ascii_g_normalized_to_script_g() -> None:
 def test_segment_ascii_apostrophe_normalized_to_modifier_letter() -> None:
     """ASCII ``'`` (U+0027) in a segment label is folded to the
     canonical IPA ``ʼ`` (U+02BC) -- the modern IPA ejective marker."""
-    inv = Inventory.parse(
-        {"features": ["V"], "segments": {"p'": {"V": "-"}}}
-    )
+    inv = Inventory.parse({"features": ["V"], "segments": {"p'": {"V": "-"}}})
     assert "pʼ" in inv.segments
     assert "p'" not in inv.segments
 
@@ -341,9 +331,7 @@ def test_segment_r_left_alone() -> None:
     """``r`` is the legitimate IPA alveolar trill character;
     DON'T fold it to ``ɹ`` (turned r, the approximant) -- that
     would silently change the meaning of users' inventories."""
-    inv = Inventory.parse(
-        {"features": ["V"], "segments": {"r": {"V": "+"}}}
-    )
+    inv = Inventory.parse({"features": ["V"], "segments": {"r": {"V": "+"}}})
     assert "r" in inv.segments
     assert "ɹ" not in inv.segments
 
@@ -378,9 +366,7 @@ def test_advisory_fires_for_ascii_colon_in_segment_label() -> None:
     """ASCII colon (U+003A) in a segment label is almost always a
     typing substitute for the IPA length mark U+02D0. The advisory
     is informational only -- the inventory still loads."""
-    inv = Inventory.parse(
-        {"features": ["V"], "segments": {"a:": {"V": "+"}}}
-    )
+    inv = Inventory.parse({"features": ["V"], "segments": {"a:": {"V": "+"}}})
     assert any(
         "U+003A" in a and "U+02D0" in a for a in inv.advisories
     ), inv.advisories
@@ -390,9 +376,7 @@ def test_no_ascii_colon_advisory_when_proper_length_mark_used() -> None:
     """A segment using the canonical IPA length mark must NOT fire
     the advisory -- the whole point of the advisory is to flag
     likely paste mistakes, not penalize correct IPA notation."""
-    inv = Inventory.parse(
-        {"features": ["V"], "segments": {"aː": {"V": "+"}}}
-    )
+    inv = Inventory.parse({"features": ["V"], "segments": {"aː": {"V": "+"}}})
     assert not any("U+003A" in a for a in inv.advisories)
 
 
@@ -412,7 +396,8 @@ def test_bundled_inventories_produce_no_ipa_confusable_advisories() -> None:
         # Size advisories are checked separately; this test guards
         # specifically against IPA-confusable false positives.
         confusable_advisories = [
-            a for a in inv.advisories
+            a
+            for a in inv.advisories
             if "U+" in a and "IPA" in a or "length mark" in a
         ]
         assert confusable_advisories == [], (
@@ -440,16 +425,33 @@ def test_ipa_segment_labels_survive_round_trip() -> None:
     modifier letters would trip this test loudly.
     """
     ipa_labels = [
-        "t͡ʃ", "d͡ʒ", "n̪", "ã", "pʰ", "tʼ", "kʷ", "ɫ", "ɲ",
-        "χ", "ʁ", "m̥", "ɜː", "ə", "ɡ", "ʔ", "θ", "ð", "ɬ",
+        "t͡ʃ",
+        "d͡ʒ",
+        "n̪",
+        "ã",
+        "pʰ",
+        "tʼ",
+        "kʷ",
+        "ɫ",
+        "ɲ",
+        "χ",
+        "ʁ",
+        "m̥",
+        "ɜː",
+        "ə",
+        "ɡ",
+        "ʔ",
+        "θ",
+        "ð",
+        "ɬ",
     ]
     segments = {seg: {"V": "+"} for seg in ipa_labels}
     inv1 = Inventory.parse({"features": ["V"], "segments": segments})
     # All labels survive parse with their original spelling.
     for seg in ipa_labels:
-        assert seg in inv1.segments, (
-            f"label {seg!r} ({[hex(ord(c)) for c in seg]}) lost in parse"
-        )
+        assert (
+            seg in inv1.segments
+        ), f"label {seg!r} ({[hex(ord(c)) for c in seg]}) lost in parse"
     # Round-trip through serialization.
     serialized = inv1.to_json_dict()
     inv2 = Inventory.parse(serialized)
@@ -517,9 +519,7 @@ def test_parse_rejects_invisible_format_char_in_feature_name() -> None:
     """
     for cp in ("‍", "‌", "‎", "‏", "﻿"):
         with pytest.raises(ValidationError) as ex:
-            Inventory.parse(
-                {"features": [f"Voi{cp}ce"], "segments": {}}
-            )
+            Inventory.parse({"features": [f"Voi{cp}ce"], "segments": {}})
         msg = " ".join(ex.value.issues)
         assert "invisible" in msg.lower() or "format" in msg.lower()
         assert f"U+{ord(cp):04X}" in msg
@@ -541,9 +541,7 @@ def test_parse_strips_nbsp_from_names() -> None:
     """NBSP (U+00A0) is a SPACE separator (category Zs), not a
     format character, so ``str.strip()`` removes it. A name with
     trailing NBSP canonicalizes the same as the unpadded form."""
-    inv = Inventory.parse(
-        {"features": ["Voice "], "segments": {}}
-    )
+    inv = Inventory.parse({"features": ["Voice "], "segments": {}})
     assert inv.features == ("Voice",)
 
 
@@ -749,8 +747,12 @@ def test_hayes_parses_without_issues() -> None:
 
 @pytest.mark.parametrize(
     "fname",
-    ["hayes_features.json", "general_features.json",
-     "english_features.json", "blevins_features.json"],
+    [
+        "hayes_features.json",
+        "general_features.json",
+        "english_features.json",
+        "blevins_features.json",
+    ],
 )
 def test_bundled_inventory_survives_engine_consumers(fname: str) -> None:
     """Every bundled inventory must load, construct an engine, and

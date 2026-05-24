@@ -47,13 +47,13 @@ from phonology_features.gui.widgets import (
     SegmentState,
 )
 from PyQt6.QtCore import (
+    QByteArray,
     QEvent,
     QFileSystemWatcher,
-    QByteArray,
     QPoint,
-    QSize,
     QRectF,
     QSettings,
+    QSize,
     Qt,
     QTimer,
 )
