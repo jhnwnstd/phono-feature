@@ -50,6 +50,13 @@ LIGHT = {
     "btn_danger_text": "#FFFFFF",
     "btn_danger_hover": "#7F1D1D",
     "btn_danger_hover_text": "#FFFFFF",
+    # Disabled-button palette: darker bg than ``tag_gray`` and a
+    # heavily muted text colour so the button recedes from the
+    # active toolbar buttons. The border matches the bg (no rim)
+    # so the disabled state reads as "flat tile, not interactive".
+    "btn_disabled_bg": "#E2E4E7",
+    "btn_disabled_text": "#9AA0A6",
+    "btn_disabled_border": "#E2E4E7",
     # Analysis panel + tag chips
     "analysis_bg": "#F2F3F5",
     "tag_blue": "#DBEAFE",
@@ -97,6 +104,13 @@ DARK = {
     "btn_danger_text": "#FFFFFF",
     "btn_danger_hover": "#FCA5A5",
     "btn_danger_hover_text": "#181818",
+    # Dark-mode disabled: bg darker than the panel chrome (sinks BELOW
+    # the toolbar surface so it reads as "carved out, inactive"), text
+    # heavily muted so it's barely legible -- the visible cue is the
+    # darker tile, the label is just a hint.
+    "btn_disabled_bg": "#161616",
+    "btn_disabled_text": "#555555",
+    "btn_disabled_border": "#161616",
     # Analysis panel + tag chips
     "analysis_bg": "#262626",
     "tag_blue": "#1E3A8A",

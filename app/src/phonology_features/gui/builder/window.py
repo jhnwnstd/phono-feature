@@ -456,13 +456,16 @@ class InventoryBuilder(QMainWindow):
             }}
         """
         self._btn_style_enabled = btn_style
-        # Disabled state: subtly greyer background so the button reads
-        # as "inactive" instead of blending into the toolbar.
+        # Disabled state: noticeably darker / more muted than the
+        # active buttons so it visually recedes into the toolbar
+        # instead of competing with active controls. See the
+        # btn_disabled_* entries in palette.py for the per-theme
+        # colour choices and rationale.
         self._btn_style_disabled = f"""
             QPushButton {{
-                background: {C["tag_gray"]};
-                color: {C["text_dim"]};
-                border: 1.5px solid {C["border"]};
+                background: {C["btn_disabled_bg"]};
+                color: {C["btn_disabled_text"]};
+                border: 1.5px solid {C["btn_disabled_border"]};
                 border-radius: 6px;
                 padding: 0 12px;
             }}
