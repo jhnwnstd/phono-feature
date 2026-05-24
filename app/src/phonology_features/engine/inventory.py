@@ -162,24 +162,41 @@ def _canonicalize_name(s: str) -> str:
     return unicodedata.normalize("NFC", s).strip()
 
 
-def _invisible_format_chars(s: str) -> list[str]:
-    """Return the Unicode FORMAT characters (category ``Cf``) present
-    in ``s``, one human-readable label per occurrence. Empty when the
-    string contains none.
+# Unicode general categories rejected inside canonical names. All
+# three classes share the "no legitimate use in a phonological
+# identifier and creates a hidden hazard if accepted":
+#   Cf -- FORMAT (ZWJ, ZWNJ, LRM, RLM, BOM): invisible, survive
+#         NFC + strip, create distinct keys that LOOK identical.
+#   Cs -- SURROGATE (lone halves like U+DCFF): NFC accepts them,
+#         but ``str.encode('utf-8')`` raises "surrogates not
+#         allowed" -- the inventory loads but every save fails
+#         (save lockout). Reject at parse so the user never reaches
+#         that state.
+#   Cc -- CONTROL (NUL, BEL, BS, FF, VT, CR, LF, TAB inside a
+#         name): ``str.strip()`` only removes Cc at edges, not in
+#         the middle. Hand-edited JSON could embed them, leading to
+#         odd rendering in the grid, validation reports, and logs.
+_DISALLOWED_NAME_CATEGORIES: frozenset[str] = frozenset({"Cf", "Cs", "Cc"})
 
-    Format characters are invisible to a human reader -- ZWJ
-    (U+200D), ZWNJ (U+200C), LRM (U+200E), RLM (U+200F), BOM
-    (U+FEFF), etc. They survive NFC and ``str.strip`` and would
-    create distinct dict keys that look identical to the user. None
-    of them have a legitimate use in feature or segment identifiers
-    for a phonology engine; reject at the parser boundary with a
-    descriptive message so the user can find the bad paste.
+
+def _invisible_format_chars(s: str) -> list[str]:
+    """Return any Unicode characters in ``s`` whose general category
+    is in ``_DISALLOWED_NAME_CATEGORIES`` (format, surrogate, or
+    control). Empty when the string contains none.
+
+    Each entry is human-readable: code point + Unicode name (or
+    ``UNNAMED`` for code points without one, such as some
+    surrogates). The caller embeds them in a ValidationError
+    message so the user can locate and remove the offender.
+
+    Function name kept for compatibility with existing callers;
+    its scope is now broader than purely "invisible" -- it also
+    rejects surrogate code points that would save-lock the file
+    and embedded controls that would render oddly.
     """
     found: list[str] = []
     for ch in s:
-        if unicodedata.category(ch) == "Cf":
-            # Include both code point and name so the user can locate
-            # the offending character in their editor without guessing.
+        if unicodedata.category(ch) in _DISALLOWED_NAME_CATEGORIES:
             try:
                 cp_name = unicodedata.name(ch)
             except ValueError:
@@ -461,7 +478,14 @@ class Inventory:
         basename = os.path.basename(path)
         _log.debug("inventory load start: %s", basename)
         try:
-            with open(path, encoding="utf-8") as f:
+            # ``utf-8-sig`` transparently consumes a leading UTF-8 BOM
+            # (``b"\xef\xbb\xbf"``). Files exported from Windows
+            # Notepad / Excel / many other tools commonly add one;
+            # plain ``utf-8`` would raise ``invalid JSON: Unexpected
+            # UTF-8 BOM`` with a cryptic message that tells a linguist
+            # nothing actionable. The codec behaves identically to
+            # ``utf-8`` for files without a BOM.
+            with open(path, encoding="utf-8-sig") as f:
                 # object_pairs_hook intercepts each JSON object literal
                 # before dict construction so a duplicate key (which a
                 # plain json.load would silently collapse to the last
@@ -737,7 +761,13 @@ def _validate_segments(
                     f"{feat_name!r} is empty after canonicalization"
                 )
                 continue
-            if declared and canonical_feat not in declared:
+            # No ``if declared and ...`` short-circuit: an inventory
+            # with ``features=[]`` AND per-segment feature keys would
+            # otherwise be silently accepted, storing ghost data that
+            # ``feature_value`` can never reach (raises KeyError
+            # because the feature isn't in ``inv.features``). Always
+            # cross-check so the contract holds at every count.
+            if canonical_feat not in declared:
                 issues.append(
                     f"{prefix}segment {canonical_seg!r}: feature "
                     f"{feat_name!r} is not declared in 'features'"

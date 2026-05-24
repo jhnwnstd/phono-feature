@@ -279,6 +279,75 @@ def test_load_rejects_duplicate_features_key(tmp_path: Path) -> None:
     assert "duplicate" in " ".join(ex.value.issues).lower()
 
 
+def test_load_handles_utf8_bom_transparently(tmp_path: Path) -> None:
+    """Files exported from Windows Notepad / Excel / many other
+    tools commonly include a UTF-8 BOM. Pre-fix the parser produced
+    a cryptic ``invalid JSON (Unexpected UTF-8 BOM (decode using
+    utf-8-sig))`` error -- accurate but unhelpful for a linguist.
+    Fix: open with ``utf-8-sig`` codec which silently consumes a
+    leading BOM and behaves like ``utf-8`` for files without one.
+    """
+    target = tmp_path / "bom.json"
+    # Hand-write the file with a BOM prefix.
+    target.write_bytes(
+        b"\xef\xbb\xbf"
+        + b'{"features": ["Voice"], "segments": {"p": {"Voice": "-"}}}'
+    )
+    inv = Inventory.load(str(target))
+    assert inv.features == ("Voice",)
+    assert "p" in inv.segments
+
+
+def test_parse_rejects_surrogate_in_segment_name() -> None:
+    """A lone surrogate code point (U+DCFF etc.) NFC-survives but
+    cannot be UTF-8 encoded; ``inv.write_atomic`` would
+    UnicodeEncodeError every save attempt -- a save lockout where
+    the inventory loads fine but can never be persisted. Reject at
+    the parser boundary so the user never reaches that state."""
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {"features": ["V"], "segments": {"p\udcff": {"V": "+"}}}
+        )
+    msg = " ".join(ex.value.issues)
+    assert "U+DCFF" in msg
+
+
+def test_parse_rejects_control_char_in_name() -> None:
+    """``str.strip()`` only removes Cc characters at name edges, not
+    in the middle. ``Voice\\x07`` (with embedded BEL) would survive
+    and render oddly in the grid header and validation messages."""
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {"features": ["Voi\x07ce"], "segments": {}}
+        )
+    msg = " ".join(ex.value.issues)
+    assert "U+0007" in msg
+
+
+def test_parse_rejects_per_segment_feature_when_features_empty() -> None:
+    """An inventory with ``features=[]`` AND per-segment feature
+    keys was silently accepted -- the cross-check short-circuited
+    when ``declared`` was empty. Result: segments carry ghost data
+    that ``feature_value`` can never reach (raises KeyError because
+    the feature isn't in ``inv.features``). Now rejected."""
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {"features": [], "segments": {"p": {"Voice": "+"}}}
+        )
+    assert any(
+        "Voice" in i and "not declared" in i for i in ex.value.issues
+    )
+
+
+def test_parse_accepts_empty_features_with_empty_bundles() -> None:
+    """The fix to the empty-features check must NOT break the
+    legitimate degenerate case: ``features=[]`` with segments that
+    have no feature bundles (empty dicts). That's still valid."""
+    inv = Inventory.parse({"features": [], "segments": {"p": {}, "b": {}}})
+    assert "p" in inv.segments and "b" in inv.segments
+    assert inv.features == ()
+
+
 # ---------------------------------------------------------------------------
 # Soft advisories: notable-but-valid observations
 # ---------------------------------------------------------------------------
@@ -1843,6 +1912,43 @@ def test_mainwindow_construction_survives_corrupt_window_size(
     assert w.width() > 0
     assert w.height() > 0
     w.close()
+
+
+def test_stale_tmp_files_swept_on_dropdown_populate(tmp_path: Path) -> None:
+    """A save killed between mkstemp and os.replace leaves a
+    ``.tmp_inv_*.json`` orphan in the inventories dir. They're
+    hidden from the dropdown by the filter but accumulate across
+    crashes. The sweep removes orphans older than 1 hour and
+    leaves recent ones (which might be in-flight saves) alone.
+    """
+    import time as _time
+
+    from phonology_features.gui.main_window import MainWindow
+
+    # Set up the inventories dir with one stale and one fresh tmp.
+    inv_dir = tmp_path / "inventories"
+    inv_dir.mkdir()
+    stale = inv_dir / ".tmp_inv_oldcrash.json"
+    fresh = inv_dir / ".tmp_inv_inflight.json"
+    legit = inv_dir / "user_inventory.json"
+    stale.write_text("{}")
+    fresh.write_text("{}")
+    legit.write_text('{"features": [], "segments": {}}')
+    # Make ``stale`` look 2 hours old.
+    old_t = _time.time() - 7200
+    os.utime(stale, (old_t, old_t))
+
+    MainWindow._sweep_stale_tmp_files(str(inv_dir))
+
+    assert not stale.exists(), (
+        "stale tmp file from an old crashed save was not swept"
+    )
+    assert fresh.exists(), (
+        "fresh tmp file (possibly an in-flight save) must not be touched"
+    )
+    assert legit.exists(), (
+        "non-tmp file got swept -- the filter is too aggressive"
+    )
 
 
 def test_main_viewer_loads_freshly_saved_builder_inventory(

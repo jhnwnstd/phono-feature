@@ -793,6 +793,41 @@ class MainWindow(QMainWindow):
             )
         )
 
+    @staticmethod
+    def _sweep_stale_tmp_files(directory: str) -> None:
+        """Remove ``.tmp_inv_*.json`` files older than 1 hour from
+        ``directory``. These are atomic-write side files that were
+        orphaned because a previous save was killed between
+        ``mkstemp`` and ``os.replace``. They're hidden from the
+        dropdown by the filter below, but without sweeping they
+        accumulate forever across crashes. The 1-hour age threshold
+        is well past any legitimate in-flight save (atomic writes
+        complete in milliseconds), so the sweep never touches an
+        active operation.
+
+        Failures are swallowed silently: the dropdown population
+        must succeed even when the inventories directory is
+        read-only or partially permissioned.
+        """
+        import time as _time
+
+        cutoff = _time.time() - 3600
+        try:
+            entries = os.listdir(directory)
+        except OSError:
+            return
+        for fname in entries:
+            if not (fname.startswith(".tmp_inv_") and fname.endswith(".json")):
+                continue
+            path = os.path.join(directory, fname)
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    os.remove(path)
+            except OSError:
+                # Race with another save, permission denied, file
+                # vanished -- all benign for an opportunistic sweep.
+                continue
+
     def _populate_inventory_dropdown(self) -> None:
         """Scan ``inventories/`` and fill the dropdown. Preserves the
         current selection if the previously-loaded path still exists
@@ -817,6 +852,7 @@ class MainWindow(QMainWindow):
                 placeholder.setEnabled(False)
             inventories_dir = self._get_inventories_dir()
             if os.path.isdir(inventories_dir):
+                self._sweep_stale_tmp_files(inventories_dir)
                 for fname in sorted(os.listdir(inventories_dir)):
                     # Skip hidden files and the .tmp_inv_*.json side
                     # files atomic writes create momentarily between
