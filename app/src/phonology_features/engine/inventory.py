@@ -31,6 +31,10 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from phonology_features._logging import get_logger
+
+_log = get_logger(__name__)
+
 VALID_VALUES: frozenset[str] = frozenset({"+", "-", "0"})
 
 
@@ -183,18 +187,44 @@ class Inventory:
         problem; the underlying ``OSError`` / ``JSONDecodeError`` is
         wrapped as a ValidationError so callers only need to handle
         one exception type."""
+        basename = os.path.basename(path)
+        _log.debug("inventory load start: %s", basename)
         try:
             with open(path, encoding="utf-8") as f:
                 raw = json.load(f)
         except FileNotFoundError as e:
+            _log.warning("inventory load failed: %s: file not found", basename)
             raise ValidationError((f"{path}: file not found",)) from e
         except json.JSONDecodeError as e:
+            _log.warning(
+                "inventory load failed: %s: invalid JSON (%s line %d)",
+                basename,
+                e.msg,
+                e.lineno,
+            )
             raise ValidationError(
                 (f"{path}: invalid JSON ({e.msg} on line {e.lineno})",)
             ) from e
         except OSError as e:
+            _log.warning("inventory load failed: %s: %s", basename, e)
             raise ValidationError((f"{path}: {e}",)) from e
-        return cls.parse(raw, source=path)
+        try:
+            inv = cls.parse(raw, source=path)
+        except ValidationError as e:
+            _log.warning(
+                "inventory validation failed: %s (%d issue%s)",
+                basename,
+                len(e.issues),
+                "" if len(e.issues) == 1 else "s",
+            )
+            raise
+        _log.info(
+            "inventory loaded: %s (%d segments, %d features)",
+            basename,
+            len(inv.segments),
+            len(inv.features),
+        )
+        return inv
 
     # ----- output -----
     def to_json_dict(self) -> dict[str, Any]:
@@ -332,6 +362,8 @@ def atomic_write_json(path: str, data: Any) -> None:
     (the rename), not a sequence of write-truncate-write events that
     would each trigger reload.
     """
+    basename = os.path.basename(path)
+    _log.debug("atomic write start: %s", basename)
     directory = os.path.dirname(os.path.abspath(path)) or "."
     fd, tmp_path = tempfile.mkstemp(
         prefix=".tmp_inv_", suffix=".json", dir=directory
@@ -342,9 +374,11 @@ def atomic_write_json(path: str, data: Any) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_path, path)
-    except BaseException:
+    except BaseException as e:
+        _log.error("atomic write failed: %s: %s", basename, e)
         try:
             os.remove(tmp_path)
         except OSError:
             pass
         raise
+    _log.info("atomic write complete: %s", basename)

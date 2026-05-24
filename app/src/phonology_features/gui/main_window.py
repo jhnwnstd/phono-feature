@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from phonology_features._logging import get_logger
 from phonology_features.engine.feature_engine import FeatureEngine
 from phonology_features.engine.inventory import Inventory, ValidationError
 from phonology_features.gui.analysis import (
@@ -84,6 +85,8 @@ from PyQt6.QtWidgets import (
 
 if TYPE_CHECKING:
     from phonology_features.gui.builder import InventoryBuilder
+
+_log = get_logger(__name__)
 
 
 def _clear_btn_style() -> str:
@@ -844,6 +847,7 @@ class MainWindow(QMainWindow):
         preserved; only stylesheet strings change.
         """
         new_theme = "dark" if get_theme_name() == "light" else "light"
+        _log.info("theme toggle: %s", new_theme)
         set_theme(new_theme)
         self._settings.setValue("theme", new_theme)
         self._apply_theme()
@@ -1073,9 +1077,13 @@ class MainWindow(QMainWindow):
         ``OSError`` and ``JSONDecodeError`` as ``ValidationError``."""
         path = os.path.abspath(path)
         fname = os.path.basename(path)
+        _log.info("load path: %s", fname)
         try:
             inventory = Inventory.load(path)
         except ValidationError as e:
+            # Inventory.load already logged the failure category; here
+            # we just record what the GUI did about it.
+            _log.info("surfacing validation error to user: %s", fname)
             self.status.showMessage(f"Cannot load {fname}: {e.issues[0]}")
             self.analysis.set_html(self._validation_report_html(e.issues))
             return
@@ -1176,8 +1184,9 @@ class MainWindow(QMainWindow):
     def _do_auto_reload(self) -> None:
         """Reload the current inventory after the watcher debounce fires."""
         if self._current_path and os.path.isfile(self._current_path):
-            self._load_path(self._current_path)
             fname = os.path.basename(self._current_path)
+            _log.info("auto-reload (watcher fired): %s", fname)
+            self._load_path(self._current_path)
             self.status.showMessage(f"Auto-reloaded \u201c{fname}\u201d")
 
     def _populate_segments(self):

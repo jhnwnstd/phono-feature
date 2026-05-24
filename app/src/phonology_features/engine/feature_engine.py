@@ -23,10 +23,13 @@ from __future__ import annotations
 from functools import cached_property
 from typing import Any, Mapping
 
+from phonology_features._logging import get_logger
 from phonology_features.engine.inventory import (
     VALID_VALUES,
     Inventory,
 )
+
+_log = get_logger(__name__)
 
 
 class FeatureEngine:
@@ -51,6 +54,12 @@ class FeatureEngine:
         self.plus_segs: dict[str, frozenset[str]] = {}
         self.minus_segs: dict[str, frozenset[str]] = {}
         self._build_membership_caches()
+        _log.debug(
+            "engine constructed: %r (%d segments, %d features)",
+            inventory.name,
+            len(inventory.segments),
+            len(inventory.features),
+        )
         # Bundle search memoization: is_natural_class and
         # compute_natural_class both delegate to find_all_minimal_bundles,
         # so calling both on the same input would re-run an

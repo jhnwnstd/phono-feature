@@ -104,6 +104,13 @@ def _spawn_gui_child(platform: str) -> tuple[int, bool]:
 
 def _run_gui(argv: list[str]) -> int:
     """Run the Qt GUI in this process. Doesn't return on Wayland disconnect."""
+    # Install logging FIRST so anything that fails during startup is
+    # captured. Default to INFO on console; PHONOLOGY_LOG_LEVEL /
+    # PHONOLOGY_LOG_FILE env vars let users opt into debug without
+    # a rebuild when filing a bug.
+    from phonology_features._logging import configure
+
+    configure()
     app = QApplication(argv)
     app.setApplicationName("Phonology Segment & Feature Engine")
     app.setOrganizationName("Phonology Research Tools")

@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 from typing import NamedTuple
 
+from phonology_features._logging import get_logger
 from phonology_features.engine.inventory import Inventory, ValidationError
 from phonology_features.gui.builder.dialogs import (
     InputDialog,
@@ -49,6 +50,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+_log = get_logger(__name__)
 
 
 class _CellPrev(NamedTuple):
@@ -1317,12 +1320,19 @@ class InventoryBuilder(QMainWindow):
         directly and the dirty flag / status text mutate only on
         the main thread.
         """
+        basename = os.path.basename(path)
         if getattr(self, "_save_in_flight", False):
+            _log.info("save rejected (already in flight): %s", basename)
             self._status.showMessage("Save already in progress; ignored.")
             return
         try:
             inventory = self._to_inventory()
         except ValidationError as e:
+            _log.warning(
+                "save aborted: grid failed validation (%d issue%s)",
+                len(e.issues),
+                "" if len(e.issues) == 1 else "s",
+            )
             show_warning(
                 self,
                 "Cannot save inventory",
@@ -1334,7 +1344,13 @@ class InventoryBuilder(QMainWindow):
         import threading
 
         self._save_in_flight = True
-        self._status.showMessage(f"Saving {os.path.basename(path)}...")
+        _log.info(
+            "save start: %s (%d segments, %d features)",
+            basename,
+            len(inventory.segments),
+            len(inventory.features),
+        )
+        self._status.showMessage(f"Saving {basename}...")
 
         def worker() -> None:
             try:
@@ -1348,6 +1364,10 @@ class InventoryBuilder(QMainWindow):
                 # restart. The error string surfaced to the user is
                 # the same shape regardless of the exception class.
                 err = f"{type(e).__name__}: {e}"
+                # Use exception() so the worker's traceback shows up in
+                # logs -- this is the only place a save failure becomes
+                # diagnosable after the fact.
+                _log.exception("save worker failed: %s", basename)
             self._save_finished.emit(path, err)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -1356,13 +1376,16 @@ class InventoryBuilder(QMainWindow):
         """Main-thread completion handler for the background save.
         ``error`` is empty on success, the ``str(OSError)`` otherwise."""
         self._save_in_flight = False
+        basename = os.path.basename(path)
         if error:
+            _log.warning("save failed: %s: %s", basename, error)
             show_warning(
                 self, "Save failed", f"Could not write '{path}':\n{error}"
             )
             return
         self._dirty = False
-        self._status.showMessage(f"Saved to {os.path.basename(path)}")
+        _log.info("save complete: %s", basename)
+        self._status.showMessage(f"Saved to {basename}")
 
     def _delete_inventory(self) -> None:
         """Delete the on-disk file for the currently-loaded inventory.
