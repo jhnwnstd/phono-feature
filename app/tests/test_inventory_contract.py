@@ -580,6 +580,74 @@ def test_analysis_render_single_segment_escapes_symbol() -> None:
     assert "/&lt;x&gt;/" in out
 
 
+def test_header_doubleclick_still_toggles_selection(tmp_path: Path) -> None:
+    """PyQt6's QHeaderView suppresses ``sectionClicked`` when a press
+    lands within the OS double-click interval of the previous press --
+    only ``sectionDoubleClicked`` fires. Without wiring the doubleclick
+    signal to the toggle handler, every other rapid header click is
+    silently dropped (the user's reported bug). We assert here that
+    the doubleclick path drives the toggle to the same final state
+    that two single clicks would."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QPoint, QSettings
+    from PyQt6.QtCore import Qt as _Qt
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+
+    b = InventoryBuilder(load_path=HAYES)
+    b.resize(1600, 900)
+    b.show()
+    for _ in range(4):
+        app.processEvents()
+    h = b._table.horizontalHeader()
+    assert h is not None
+    col = 5
+    x = h.sectionViewportPosition(col) + h.sectionSize(col) // 2
+    y = h.height() // 2
+    viewport = h.viewport()
+    assert viewport is not None
+
+    # A single click should toggle ON.
+    QTest.mouseClick(  # type: ignore[call-overload]
+        viewport,
+        _Qt.MouseButton.LeftButton,
+        _Qt.KeyboardModifier.NoModifier,
+        QPoint(x, y),
+    )
+    for _ in range(3):
+        app.processEvents()
+    assert b._user_clicked_col == col, "first click did not toggle ON"
+
+    # A double-click on the same column should fire 2 toggles
+    # (ON -> OFF -> ON). The OLD code only got 1 toggle from
+    # sectionClicked (sectionDoubleClicked was unhandled), so the
+    # column would end up OFF -- the dropped-click symptom.
+    QTest.mouseDClick(  # type: ignore[call-overload]
+        viewport,
+        _Qt.MouseButton.LeftButton,
+        _Qt.KeyboardModifier.NoModifier,
+        QPoint(x, y),
+    )
+    for _ in range(3):
+        app.processEvents()
+    assert b._user_clicked_col == col, (
+        "double-click did not produce 2 toggles -- "
+        "sectionDoubleClicked is not wired to the handler"
+    )
+
+    b.close()
+
+
 def test_dropdown_filters_out_atomic_write_tmp_files(tmp_path: Path) -> None:
     """``atomic_write_json`` creates ``.tmp_inv_*.json`` files in the
     target directory between ``mkstemp`` and ``os.replace``. The

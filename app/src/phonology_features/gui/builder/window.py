@@ -541,12 +541,14 @@ class InventoryBuilder(QMainWindow):
         v_header = self._table.verticalHeader()
         if h_header:
             h_header.sectionClicked.connect(self._on_col_header_clicked)
-            # See comment in _rebuild_table: doubleclick suppresses
-            # sectionClicked, so wire both signals into the toggle.
-            h_header.sectionDoubleClicked.connect(self._on_col_header_clicked)
+            h_header.sectionDoubleClicked.connect(
+                self._on_col_header_double_clicked
+            )
         if v_header:
             v_header.sectionClicked.connect(self._on_row_header_clicked)
-            v_header.sectionDoubleClicked.connect(self._on_row_header_clicked)
+            v_header.sectionDoubleClicked.connect(
+                self._on_row_header_double_clicked
+            )
         # Single source of truth for rm-button enabled/disabled state:
         # fires for every selection change regardless of source (header
         # click, ctrl+A, corner click, drag-select). Setters inside
@@ -628,16 +630,19 @@ class InventoryBuilder(QMainWindow):
             )
             v_header.setMinimumSectionSize(24)
             v_header.sectionClicked.connect(self._on_row_header_clicked)
-            # Critical: PyQt6's QHeaderView suppresses sectionClicked
-            # when the press lands within the OS double-click interval
-            # (~400 ms) of the previous press; it fires
-            # sectionDoubleClicked once instead. So a fast double-
-            # click sequence drops every second click from our toggle
-            # handler -- the bug the user reported as "clicks not
-            # always detecting". Wiring the doubleclick signal to the
-            # same handler reclaims those clicks (it's NEVER fired in
-            # the same press as sectionClicked, so no double-counting).
-            v_header.sectionDoubleClicked.connect(self._on_row_header_clicked)
+            # PyQt6 quirk we're working around: when a press lands
+            # within the OS double-click interval (~400 ms) of the
+            # previous press, QHeaderView SUPPRESSES sectionClicked
+            # for BOTH presses and emits exactly one
+            # sectionDoubleClicked. So a rapid two-click sequence
+            # silently drops both clicks from the single-click toggle
+            # handler -- that was the user's "clicks not always
+            # detecting" symptom. The doubleclick signal represents
+            # two user clicks consumed as a pair, so we route it
+            # through a handler that fires the toggle TWICE.
+            v_header.sectionDoubleClicked.connect(
+                self._on_row_header_double_clicked
+            )
         h_header = self._table.horizontalHeader()
         if h_header:
             h_header.setFont(QFont("Noto Sans", 11))
@@ -645,7 +650,9 @@ class InventoryBuilder(QMainWindow):
             h_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             h_header.setMinimumSectionSize(32)
             h_header.sectionClicked.connect(self._on_col_header_clicked)
-            h_header.sectionDoubleClicked.connect(self._on_col_header_clicked)
+            h_header.sectionDoubleClicked.connect(
+                self._on_col_header_double_clicked
+            )
         # clear() can replace the selectionModel too; re-wire it here.
         sel_model = self._table.selectionModel()
         if sel_model is not None:
@@ -856,6 +863,15 @@ class InventoryBuilder(QMainWindow):
             # didn't actually set it (e.g. clicked-while-modifier).
             self._table.selectColumn(col)
 
+    def _on_col_header_double_clicked(self, col: int):
+        """Qt double-click swallows BOTH clicked emissions of the pair
+        and emits one sectionDoubleClicked instead. From the user's
+        intent that's two clicks, so we fire the single-click toggle
+        twice. ON-then-OFF on the same column is a no-op net state
+        change, which is exactly what the user expected anyway."""
+        self._on_col_header_clicked(col)
+        self._on_col_header_clicked(col)
+
     def _on_row_header_clicked(self, row: int):
         """Toggle feature-row highlight; second click clears it."""
         if self._user_clicked_row == row:
@@ -866,6 +882,12 @@ class InventoryBuilder(QMainWindow):
             self._user_clicked_row = row
             self._user_clicked_col = None
             self._table.selectRow(row)
+
+    def _on_row_header_double_clicked(self, row: int):
+        """See ``_on_col_header_double_clicked``: a doubleclick is two
+        user clicks consumed as a pair; replay both toggles."""
+        self._on_row_header_clicked(row)
+        self._on_row_header_clicked(row)
 
     def _on_corner_clicked(self):
         """Toggle select-all when the table corner is clicked."""
