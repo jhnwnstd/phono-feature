@@ -196,6 +196,66 @@ def test_parse_uses_metadata_name_then_top_level_name() -> None:
     assert inv3.name == "Untitled Inventory"
 
 
+def test_parse_missing_schema_version_assumed_current() -> None:
+    """Existing files (bundled + user-saved) predate the field and
+    must keep loading without migration. Missing == current."""
+    inv = Inventory.parse({"features": [], "segments": {}})
+    assert inv.name == "Untitled Inventory"
+
+
+def test_parse_accepts_current_schema_version() -> None:
+    inv = Inventory.parse(
+        {"schema_version": 1, "features": [], "segments": {}}
+    )
+    assert inv.name == "Untitled Inventory"
+
+
+def test_parse_rejects_unsupported_schema_version() -> None:
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {"schema_version": 2, "features": [], "segments": {}}
+        )
+    msg = str(ex.value)
+    assert "schema_version" in msg
+    assert "2" in msg
+
+
+def test_parse_rejects_non_integer_schema_version() -> None:
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {"schema_version": "1", "features": [], "segments": {}}
+        )
+    assert "schema_version" in str(ex.value)
+
+
+def test_parse_rejects_bool_as_schema_version() -> None:
+    # ``bool`` is a subclass of ``int``; without an explicit reject
+    # ``True`` would pass the integer check and read as version 1.
+    with pytest.raises(ValidationError):
+        Inventory.parse(
+            {"schema_version": True, "features": [], "segments": {}}
+        )
+
+
+def test_schema_version_round_trips_on_write() -> None:
+    """Saving emits ``schema_version: 1`` so future readers can
+    branch on format without guessing."""
+    inv = Inventory.parse({"features": [], "segments": {}})
+    out = inv.to_json_dict()
+    assert out["schema_version"] == 1
+    # And not duplicated into metadata.
+    assert "schema_version" not in out["metadata"]
+
+
+def test_schema_version_does_not_leak_into_metadata() -> None:
+    """Round-trip: schema_version present on input must not appear in
+    the parsed inventory's metadata view, only on the serialized output."""
+    inv = Inventory.parse(
+        {"schema_version": 1, "features": [], "segments": {}}
+    )
+    assert "schema_version" not in inv.metadata
+
+
 def test_hayes_parses_without_issues() -> None:
     inv = Inventory.load(HAYES)
     assert len(inv.features) > 0

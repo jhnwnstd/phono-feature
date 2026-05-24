@@ -361,6 +361,17 @@ class InventoryBuilder(QMainWindow):
     # Qt picks QueuedConnection automatically for cross-thread emit,
     # so the slot runs on the main thread.
     _save_finished = pyqtSignal(str, str)
+    # Emitted from ``_on_save_finished`` AFTER ``_save_in_flight`` and
+    # ``_dirty`` have settled, on the main thread. ``_wait_for_save``
+    # connects ``loop.quit`` to this so a worker that fired BEFORE the
+    # wait was set up still triggers the quit: the queued
+    # ``_save_finished`` call dispatches inside the nested loop, runs
+    # ``_on_save_finished``, and that emits ``_save_drained`` direct-
+    # connect into our freshly-connected ``loop.quit`` slot. Connecting
+    # ``loop.quit`` to ``_save_finished`` itself would miss this case
+    # -- queued signals capture the slot list at emit time, so a slot
+    # connected after the emit never runs.
+    _save_drained = pyqtSignal()
 
     def __init__(self, parent=None, load_path: str | None = None):
         super().__init__(parent)
@@ -368,6 +379,12 @@ class InventoryBuilder(QMainWindow):
         self.setMinimumSize(800, 500)
         self._save_finished.connect(self._on_save_finished)
         self._save_in_flight: bool = False
+        # True while ``_wait_for_save`` is running a nested QEventLoop
+        # to drain a background save (close, save-as, Save+Close dialog).
+        # User-triggered file actions early-return on this flag so a
+        # paint/mouse event delivered by the nested loop can't re-enter
+        # _save/_save_as/_open_file while we're half-closing.
+        self._draining_save: bool = False
         self._segments: list = []
         self._features: list = []
         self._inv_name: str = "Untitled Inventory"
@@ -1256,12 +1273,16 @@ class InventoryBuilder(QMainWindow):
         )
 
     def _save(self) -> None:
+        if self._draining_save:
+            return
         if self._current_path:
             self._write_json(self._current_path)
         else:
             self._save_as()
 
     def _save_as(self) -> None:
+        if self._draining_save:
+            return
         inventories_dir = os.path.normpath(
             os.path.join(
                 os.path.dirname(__file__),
@@ -1381,7 +1402,12 @@ class InventoryBuilder(QMainWindow):
 
     def _on_save_finished(self, path: str, error: str) -> None:
         """Main-thread completion handler for the background save.
-        ``error`` is empty on success, the ``str(OSError)`` otherwise."""
+        ``error`` is empty on success, the ``str(OSError)`` otherwise.
+
+        Branches structured as if/else (not early-return) so the
+        ``_save_drained.emit()`` at the end runs on BOTH paths --
+        ``_wait_for_save`` quits the nested loop only when this fires.
+        """
         self._save_in_flight = False
         basename = os.path.basename(path)
         if error:
@@ -1393,13 +1419,15 @@ class InventoryBuilder(QMainWindow):
             show_warning(
                 self, "Save failed", f"Could not write '{path}':\n{error}"
             )
-            return
-        # Success path: do NOT touch ``_dirty``. It was cleared at save
-        # start; any edit made during the worker re-dirtied it via
-        # ``_commit_edit`` (the single chokepoint every edit path goes
-        # through), which is the authoritative source of truth here.
-        _log.info("save complete: %s", basename)
-        self._status.showMessage(f"Saved to {basename}")
+        else:
+            # Success: do NOT touch ``_dirty``. It was cleared at save
+            # start; any edit made during the worker re-dirtied it via
+            # ``_commit_edit`` (the single chokepoint every edit path
+            # goes through), which is the authoritative source of
+            # truth here.
+            _log.info("save complete: %s", basename)
+            self._status.showMessage(f"Saved to {basename}")
+        self._save_drained.emit()
 
     def _delete_inventory(self) -> None:
         """Delete the on-disk file for the currently-loaded inventory.
@@ -1409,6 +1437,8 @@ class InventoryBuilder(QMainWindow):
         a refactor rather than a discard. The main window's directory
         watcher picks up the removal and refreshes its dropdown.
         """
+        if self._draining_save:
+            return
         path = self._current_path
         if not path:
             return
@@ -1442,6 +1472,8 @@ class InventoryBuilder(QMainWindow):
         )
 
     def _open_file(self) -> None:
+        if self._draining_save:
+            return
         if not self._check_unsaved():
             return
         inventories_dir = os.path.normpath(
@@ -1503,28 +1535,59 @@ class InventoryBuilder(QMainWindow):
 
     # Unsaved changes guard
     def _wait_for_save(self, timeout_ms: int = 5000) -> bool:
-        """Pump the event loop until the background save completes or
-        ``timeout_ms`` elapses. Returns True if the save finished,
-        False on timeout.
+        """Block on a nested QEventLoop until the background save
+        completes or ``timeout_ms`` elapses. Returns True if the save
+        finished, False on timeout.
 
-        Used by ``_check_unsaved`` (Save+Close flow) and ``closeEvent``
-        (post-close cleanup): without this, a window close while the
-        save thread is still running would let the worker emit
-        ``_save_finished`` on a QObject that's being destroyed by Qt.
+        Used by ``_check_unsaved`` (Save+Close flow), ``_save_as``
+        (drain before second write), and ``closeEvent`` (post-close
+        cleanup) -- without this, a window close while the save thread
+        is still running would let the worker emit ``_save_finished``
+        on a QObject that's being destroyed by Qt.
+
+        Implementation: connect ``_save_finished`` to ``loop.quit`` so
+        the loop exits as soon as the worker reports. Backed by a
+        single-shot ``QTimer`` so a stuck worker (frozen NFS, etc.)
+        can't hang the close indefinitely. The previous version called
+        ``QApplication.processEvents()`` in a tight loop -- correct in
+        outcome but it processed ALL pending events on every spin,
+        which is exactly the reentrancy surface Qt's docs warn about.
+        ``QEventLoop`` here still processes events (a nested loop has
+        to), but the exit condition is the single signal we actually
+        care about, not a polled flag.
         """
         if not self._save_in_flight:
             return True
-        from PyQt6.QtCore import QElapsedTimer
-        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtCore import QEventLoop, QTimer
 
-        elapsed = QElapsedTimer()
-        elapsed.start()
-        while self._save_in_flight and elapsed.elapsed() < timeout_ms:
-            # Process pending events so the queued ``_save_finished``
-            # signal can deliver; AllEvents (default) is fine here
-            # because the user already chose to close -- new input
-            # events just queue.
-            QApplication.processEvents()
+        loop = QEventLoop()
+        # Connect to ``_save_drained``, not ``_save_finished``:
+        # ``_save_drained`` is emitted synchronously from
+        # ``_on_save_finished`` on the main thread, AFTER the state
+        # flags have settled. That guarantees:
+        #   - We quit only once ``_save_in_flight`` is False.
+        #   - Even if the worker fired BEFORE we entered this wait
+        #     (signal already queued, slot list captured at emit time),
+        #     ``_save_drained`` is emitted inside the dispatched
+        #     ``_on_save_finished`` call -- at which point our
+        #     ``loop.quit`` slot is connected.
+        self._save_drained.connect(loop.quit)
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(loop.quit)
+        timer.start(timeout_ms)
+        self._draining_save = True
+        try:
+            loop.exec()
+        finally:
+            self._draining_save = False
+            timer.stop()
+            try:
+                self._save_drained.disconnect(loop.quit)
+            except TypeError:
+                # Disconnect raises TypeError if the signal-slot pair
+                # is no longer connected. Benign: nothing to clean up.
+                pass
         return not self._save_in_flight
 
     def _check_unsaved(self) -> bool:

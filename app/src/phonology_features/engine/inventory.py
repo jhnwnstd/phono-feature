@@ -37,6 +37,20 @@ _log = get_logger(__name__)
 
 VALID_VALUES: frozenset[str] = frozenset({"+", "-", "0"})
 
+# Inventory file format version. Bumped when the on-disk shape changes
+# in a way old readers cannot understand. Files written by this version
+# always include ``schema_version`` at the top level. Files written by
+# previous versions omitted the field; reads treat the absence as
+# ``CURRENT_SCHEMA_VERSION`` so existing bundled and user inventories
+# load without migration.
+#
+# When you add version 2: keep version 1 in ``SUPPORTED_SCHEMA_VERSIONS``
+# until at least one release has shipped the migration path, then drop
+# it. Reading an unsupported version raises ``ValidationError`` with a
+# clear message rather than guessing.
+CURRENT_SCHEMA_VERSION: int = 1
+SUPPORTED_SCHEMA_VERSIONS: frozenset[int] = frozenset({1})
+
 
 class ValidationError(Exception):
     """Raised by ``Inventory.parse`` when the input is not a valid
@@ -100,6 +114,33 @@ class Inventory:
                 )
             )
 
+        # ----- schema version -----
+        # Checked BEFORE per-field validation: if we can't read the
+        # format, every subsequent issue is meaningless. Missing is
+        # treated as version 1 so files written before this field was
+        # introduced load without migration.
+        if "schema_version" in raw:
+            sv = raw["schema_version"]
+            # bool is a subclass of int; reject it explicitly so True
+            # / False can't sneak through as "schema_version 1".
+            if isinstance(sv, bool) or not isinstance(sv, int):
+                raise ValidationError(
+                    (
+                        f"{prefix}'schema_version' must be an integer, "
+                        f"got {type(sv).__name__}",
+                    )
+                )
+            if sv not in SUPPORTED_SCHEMA_VERSIONS:
+                supported = ", ".join(
+                    str(v) for v in sorted(SUPPORTED_SCHEMA_VERSIONS)
+                )
+                raise ValidationError(
+                    (
+                        f"{prefix}unsupported schema_version {sv}; "
+                        f"this build reads version(s) {supported}",
+                    )
+                )
+
         # ----- features -----
         if "features" not in raw:
             issues.append(f"{prefix}missing required key 'features'")
@@ -133,7 +174,10 @@ class Inventory:
         # object wins on key collision so callers can override.
         metadata: dict[str, Any] = {}
         for key, value in raw.items():
-            if key in ("features", "segments", "metadata"):
+            # ``schema_version`` lives at the top level for tooling
+            # visibility; never duplicate it into metadata or it would
+            # round-trip into two places on save.
+            if key in ("features", "segments", "metadata", "schema_version"):
                 continue
             metadata[key] = value
         explicit_metadata = raw.get("metadata")
@@ -230,8 +274,12 @@ class Inventory:
     def to_json_dict(self) -> dict[str, Any]:
         """Plain dict suitable for ``json.dump``. Inner views are
         unwrapped to dicts because ``json.dump`` doesn't know about
-        ``MappingProxyType``."""
+        ``MappingProxyType``. ``schema_version`` is the first key by
+        convention -- tooling that inspects without parsing (jq, grep,
+        future migrators) can find it without walking the whole file.
+        """
         return {
+            "schema_version": CURRENT_SCHEMA_VERSION,
             "metadata": dict(self.metadata),
             "features": list(self.features),
             "segments": {
