@@ -919,7 +919,14 @@ class InventoryBuilder(QMainWindow):
             if old_region is not None
             else new_region
         )
-        self._table.viewport().update(invalid)
+        # ``repaint(region)`` is synchronous; bypasses Qt's paint-event
+        # coalescing. update() would let Qt merge a rapid sequence of
+        # clicks into ONE paint at the end, so the user sees nothing
+        # change between clicks -- the "sticky" / "click didn't
+        # register" symptom. With bounded invalidation each repaint
+        # is ~3 ms on Hayes, so we can afford 300+ clicks/sec before
+        # paint becomes the bottleneck.
+        self._table.viewport().repaint(invalid)
         self._last_selection_region = new_region
         sel_cols = sel_model.selectedColumns()
         sel_rows = sel_model.selectedRows()
