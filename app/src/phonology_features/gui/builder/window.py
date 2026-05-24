@@ -52,6 +52,49 @@ class _CellEdit:
     new: str
 
 
+class _ToggleHeaderView(QHeaderView):
+    """QHeaderView with the click semantics of a QPushButton.
+
+    Background: when two presses land within the OS double-click
+    interval (~400 ms), Qt routes the second press through
+    ``mouseDoubleClickEvent`` instead of ``mousePressEvent``. Qt's
+    QHeaderView::mouseDoubleClickEvent emits ``sectionDoubleClicked``
+    but NOT ``sectionClicked``. The release after the doubleclick
+    finds state already cleared and doesn't emit either. Result on
+    a real OS: a fast two-click pair fires sectionClicked exactly
+    once (from the first release), so every second click silently
+    drops out of the toggle handler -- the "clicks not always
+    detecting" symptom the user reported.
+
+    Fix: emit ``sectionClicked`` from our ``mouseDoubleClickEvent``
+    override so the second press of the pair is represented as a
+    normal click event. Skip the super call so ``sectionDoubleClicked``
+    doesn't also fire (no consumer wants it, and emitting both would
+    double-count if anyone wired both signals).
+
+    Result: every user press = one ``sectionClicked``, same haptic as
+    a QPushButton's clicked signal. No dedicated doubleclick gesture
+    is used on these headers (resize is fixed, no edit-on-doubleclick),
+    so there's nothing to lose by repurposing the doubleclick path.
+    """
+
+    def __init__(self, orientation, parent=None):
+        super().__init__(orientation, parent)
+        # QTableWidget's default header has sectionsClickable=True;
+        # a fresh QHeaderView defaults to False. Without this, no
+        # sectionClicked signals fire at all.
+        self.setSectionsClickable(True)
+
+    def mouseDoubleClickEvent(self, e):  # type: ignore[override]
+        # Coordinate space: x for horizontal headers, y for vertical.
+        if self.orientation() == Qt.Orientation.Horizontal:
+            section = self.logicalIndexAt(e.pos().x())
+        else:
+            section = self.logicalIndexAt(e.pos().y())
+        if section >= 0:
+            self.sectionClicked.emit(section)
+
+
 class _BulkCycleTable(QTableWidget):
     """Subclass with two custom behaviours:
 
@@ -513,6 +556,14 @@ class InventoryBuilder(QMainWindow):
 
     def _build_table(self) -> QTableWidget:
         self._table = _BulkCycleTable()
+        # Install QPushButton-haptic headers BEFORE any signal wiring;
+        # see _ToggleHeaderView for why.
+        self._table.setHorizontalHeader(
+            _ToggleHeaderView(Qt.Orientation.Horizontal, self._table)
+        )
+        self._table.setVerticalHeader(
+            _ToggleHeaderView(Qt.Orientation.Vertical, self._table)
+        )
         self._table.set_bulk_cycle_callback(self._cycle_selection_from)
         self._table.setFont(QFont("Noto Sans", 10))
         self._table.setStyleSheet(f"""
@@ -540,15 +591,12 @@ class InventoryBuilder(QMainWindow):
         h_header = self._table.horizontalHeader()
         v_header = self._table.verticalHeader()
         if h_header:
+            # _ToggleHeaderView forwards doubleclick -> press, so every
+            # user click fires sectionClicked exactly once. Same haptic
+            # as a QPushButton; no need to wire sectionDoubleClicked.
             h_header.sectionClicked.connect(self._on_col_header_clicked)
-            h_header.sectionDoubleClicked.connect(
-                self._on_col_header_double_clicked
-            )
         if v_header:
             v_header.sectionClicked.connect(self._on_row_header_clicked)
-            v_header.sectionDoubleClicked.connect(
-                self._on_row_header_double_clicked
-            )
         # Single source of truth for rm-button enabled/disabled state:
         # fires for every selection change regardless of source (header
         # click, ctrl+A, corner click, drag-select). Setters inside
@@ -619,9 +667,18 @@ class InventoryBuilder(QMainWindow):
         self._table.clear()
         self._table.setRowCount(len(self._features))
         self._table.setColumnCount(len(self._segments))
+        # clear() can replace header objects with default QHeaderView,
+        # destroying our _ToggleHeaderView's doubleclick-as-press
+        # override. Re-install our custom headers BEFORE setting labels
+        # or wiring signals so the per-click haptic survives a reload.
+        self._table.setHorizontalHeader(
+            _ToggleHeaderView(Qt.Orientation.Horizontal, self._table)
+        )
+        self._table.setVerticalHeader(
+            _ToggleHeaderView(Qt.Orientation.Vertical, self._table)
+        )
         self._table.setVerticalHeaderLabels(self._features)
         self._table.setHorizontalHeaderLabels(self._segments)
-        # clear() may replace header objects, so reconnect signals each time.
         v_header = self._table.verticalHeader()
         if v_header:
             v_header.setFont(QFont("Noto Sans", 9))
@@ -630,19 +687,6 @@ class InventoryBuilder(QMainWindow):
             )
             v_header.setMinimumSectionSize(24)
             v_header.sectionClicked.connect(self._on_row_header_clicked)
-            # PyQt6 quirk we're working around: when a press lands
-            # within the OS double-click interval (~400 ms) of the
-            # previous press, QHeaderView SUPPRESSES sectionClicked
-            # for BOTH presses and emits exactly one
-            # sectionDoubleClicked. So a rapid two-click sequence
-            # silently drops both clicks from the single-click toggle
-            # handler -- that was the user's "clicks not always
-            # detecting" symptom. The doubleclick signal represents
-            # two user clicks consumed as a pair, so we route it
-            # through a handler that fires the toggle TWICE.
-            v_header.sectionDoubleClicked.connect(
-                self._on_row_header_double_clicked
-            )
         h_header = self._table.horizontalHeader()
         if h_header:
             h_header.setFont(QFont("Noto Sans", 11))
@@ -650,9 +694,6 @@ class InventoryBuilder(QMainWindow):
             h_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             h_header.setMinimumSectionSize(32)
             h_header.sectionClicked.connect(self._on_col_header_clicked)
-            h_header.sectionDoubleClicked.connect(
-                self._on_col_header_double_clicked
-            )
         # clear() can replace the selectionModel too; re-wire it here.
         sel_model = self._table.selectionModel()
         if sel_model is not None:
@@ -863,15 +904,6 @@ class InventoryBuilder(QMainWindow):
             # didn't actually set it (e.g. clicked-while-modifier).
             self._table.selectColumn(col)
 
-    def _on_col_header_double_clicked(self, col: int):
-        """Qt double-click swallows BOTH clicked emissions of the pair
-        and emits one sectionDoubleClicked instead. From the user's
-        intent that's two clicks, so we fire the single-click toggle
-        twice. ON-then-OFF on the same column is a no-op net state
-        change, which is exactly what the user expected anyway."""
-        self._on_col_header_clicked(col)
-        self._on_col_header_clicked(col)
-
     def _on_row_header_clicked(self, row: int):
         """Toggle feature-row highlight; second click clears it."""
         if self._user_clicked_row == row:
@@ -882,12 +914,6 @@ class InventoryBuilder(QMainWindow):
             self._user_clicked_row = row
             self._user_clicked_col = None
             self._table.selectRow(row)
-
-    def _on_row_header_double_clicked(self, row: int):
-        """See ``_on_col_header_double_clicked``: a doubleclick is two
-        user clicks consumed as a pair; replay both toggles."""
-        self._on_row_header_clicked(row)
-        self._on_row_header_clicked(row)
 
     def _on_corner_clicked(self):
         """Toggle select-all when the table corner is clicked."""
