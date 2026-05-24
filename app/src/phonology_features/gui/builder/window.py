@@ -1260,8 +1260,8 @@ class InventoryBuilder(QMainWindow):
         self._dirty = False
         self._update_title()
         self._status.showMessage(
-            f"Loaded {os.path.basename(path)}: "
-            f"{len(self._segments)} segments \u00d7 {len(self._features)} features."
+            f"{len(self._segments)} segments \u00d7 "
+            f"{len(self._features)} features."
         )
 
     # Unsaved changes guard
@@ -1330,14 +1330,12 @@ class InventoryBuilder(QMainWindow):
         event.accept()
 
     def _update_title(self) -> None:
-        name = self._inv_name or "Untitled"
+        # Window title stays plain; the inventory name and filename
+        # already appear in the meta strip below the toolbar, so
+        # repeating them in the title bar is noise.
         path = self._current_path
         has_file = bool(path)
-        if path:
-            fname = os.path.basename(path)
-            self.setWindowTitle(f"Inventory Builder: {name} ({fname})")
-        else:
-            self.setWindowTitle(f"Inventory Builder: {name}")
+        self.setWindowTitle("Inventory Builder")
         # Delete only makes sense when there's an on-disk file backing
         # the current grid; toggle the visual + interactive state.
         self._delete_btn.setEnabled(has_file)
