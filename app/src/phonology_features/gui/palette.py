@@ -40,11 +40,15 @@ LIGHT = {
     # contrast against background".
     "btn_primary": "#2563EB",
     "btn_primary_text": "#FFFFFF",
-    "btn_primary_hover": "#1D4ED8",
+    # One Tailwind shade past the default (blue-700 -> blue-800,
+    # red-800 -> red-900). Reads as a subtle "press" -- the
+    # original hovers were essentially the default colour, which
+    # made the hover state hard to feel.
+    "btn_primary_hover": "#1E40AF",
     "btn_primary_hover_text": "#FFFFFF",
     "btn_danger": "#B91C1C",
     "btn_danger_text": "#FFFFFF",
-    "btn_danger_hover": "#991B1B",
+    "btn_danger_hover": "#7F1D1D",
     "btn_danger_hover_text": "#FFFFFF",
     # Analysis panel + tag chips
     "analysis_bg": "#F2F3F5",
