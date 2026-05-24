@@ -1075,6 +1075,18 @@ class InventoryBuilder(QMainWindow):
             if old_region is not None
             else new_region
         )
+        # Inflate by the outline pen width before repainting.
+        # ``visualRegionForSelection`` returns rects covering the cell
+        # interiors; our 2-px outline pen extends one pixel PAST the
+        # cell boundary into the neighbour. If the neighbour isn't in
+        # (old | new), those leaked pen pixels survive the repaint
+        # and stick around as ghost outlines after the selection
+        # moves away -- the residual artifact visible after shift+
+        # arrow extends/shrinks a selection.
+        # Use boundingRect (not per-sub-rect inflation) because
+        # QRegion has no built-in inflate and the bbox is still
+        # bounded by the actual selection size, not the viewport.
+        leaked = invalid.boundingRect().adjusted(-2, -2, 2, 2)
         # ``repaint(region)`` is synchronous; bypasses Qt's paint-event
         # coalescing. update() would let Qt merge a rapid sequence of
         # clicks into ONE paint at the end, so the user sees nothing
@@ -1082,7 +1094,7 @@ class InventoryBuilder(QMainWindow):
         # register" symptom. With bounded invalidation each repaint
         # is ~3 ms on Hayes, so we can afford 300+ clicks/sec before
         # paint becomes the bottleneck.
-        self._table.viewport().repaint(invalid)
+        self._table.viewport().repaint(leaked)
         self._last_selection_region = new_region
         sel_cols = sel_model.selectedColumns()
         sel_rows = sel_model.selectedRows()
