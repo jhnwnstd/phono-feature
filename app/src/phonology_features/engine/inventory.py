@@ -84,6 +84,65 @@ ADVISORY_SEGMENT_THRESHOLD: int = 200
 ADVISORY_FEATURE_THRESHOLD: int = 50
 
 
+# Domain-specific identity folding for segment labels: ASCII
+# characters that users routinely type as substitutes for IPA
+# characters are folded to the canonical IPA form so two spellings
+# produce one segment. Applied AFTER ``_canonicalize_name`` (NFC +
+# strip) and BEFORE the identity-collision check, so an inventory
+# containing both ``g`` and ``ɡ`` is correctly reported as a
+# duplicate-after-normalization rather than silently kept as two.
+#
+# Applied to segment labels ONLY -- feature names are analytical
+# identifiers (not IPA notation) and the inventory name is a
+# display label.
+#
+# ``r`` is deliberately excluded. ``r`` IS the legitimate IPA
+# alveolar trill character; folding it to ``ɹ`` (turned r, the
+# approximant) would silently change the meaning.
+# ``:`` is not folded but kept as an advisory (``_ipa_confusable_notes``
+# below) -- it's much more likely a paste mistake than a deliberate
+# choice, but the cost of getting it wrong is high (changes vowel
+# length semantics), so we inform rather than rewrite.
+_IPA_SEGMENT_TRANSLATIONS: dict[str, str] = {
+    "'": "ʼ",  # APOSTROPHE → MODIFIER LETTER APOSTROPHE (ejective)
+    "g": "ɡ",  # ASCII g → LATIN SMALL LETTER SCRIPT G (voiced velar)
+}
+_IPA_TRANSLATION_TABLE = str.maketrans(_IPA_SEGMENT_TRANSLATIONS)
+
+
+def _ipa_normalize_segment(canonical: str) -> str:
+    """Fold the small set of ASCII substitutes that users commonly
+    type instead of canonical IPA characters in segment labels.
+    Idempotent. Pure transformation -- no validation."""
+    return canonical.translate(_IPA_TRANSLATION_TABLE)
+
+
+def _ipa_confusable_notes(canonical_seg: str) -> list[str]:
+    """Return advisory notes for IPA-confusable characters in the
+    segment label. ADVISORY ONLY -- never an error. Used to surface
+    common paste-source mistakes (ASCII colon used where the user
+    probably meant the IPA length mark).
+
+    Scope is deliberately narrow. The essay's broader curated set
+    (g/ɡ, '/ʼ, r/ɹ) was verified against the bundled inventories
+    and would produce false positives on every load (Hayes and
+    Blevins use literal 'g' in 'g͡b'; the General inventory uses
+    ASCII apostrophe for ejectives; 'r' is the legitimate IPA
+    alveolar trill character, not a confusable). ASCII colon is the
+    one hazard that has no realistic legitimate use in IPA segment
+    labels -- if it appears it's almost always a typing substitute
+    for U+02D0 MODIFIER LETTER TRIANGULAR COLON.
+    """
+    notes: list[str] = []
+    if ":" in canonical_seg:
+        notes.append(
+            f"segment {canonical_seg!r} contains U+003A COLON; if you "
+            f"intended the IPA length mark, the canonical code point is "
+            f"U+02D0 MODIFIER LETTER TRIANGULAR COLON (ː)"
+        )
+    return notes
+
+
 def _canonicalize_name(s: str) -> str:
     """Apply the name-identity canonicalization: NFC, then strip
     leading/trailing whitespace. The returned string is what the
@@ -350,6 +409,11 @@ class Inventory:
                 f"unusually large feature set: {len(features_tuple)} "
                 f"features (typical max ~{ADVISORY_FEATURE_THRESHOLD})"
             )
+        # Curated IPA-confusable advisories on segment labels.
+        # Narrow (just ASCII colon) by design -- see
+        # ``_ipa_confusable_notes`` for why.
+        for canonical_seg in segments_view:
+            advisories.extend(_ipa_confusable_notes(canonical_seg))
 
         return cls(
             name=name,
@@ -621,6 +685,11 @@ def _validate_segments(
                 f"canonicalization"
             )
             continue
+        # Domain-specific identity folding (ASCII g→ɡ, '→ʼ). Applied
+        # AFTER NFC canonicalization but BEFORE the collision check so
+        # an inventory containing both "g" and "ɡ" is detected as a
+        # duplicate rather than silently kept as two distinct keys.
+        canonical_seg = _ipa_normalize_segment(canonical_seg)
         invisible = _invisible_format_chars(canonical_seg)
         if invisible:
             issues.append(

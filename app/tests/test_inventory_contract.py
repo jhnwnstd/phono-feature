@@ -315,6 +315,199 @@ def test_advisory_fires_for_unusually_many_segments() -> None:
     assert any("segment" in a.lower() for a in inv.advisories)
 
 
+def test_segment_ascii_g_normalized_to_script_g() -> None:
+    """ASCII ``g`` (U+0067) in a segment label is folded to the
+    canonical IPA ``ɡ`` (U+0261). Users typing on a US keyboard
+    get the IPA voiced velar stop identity regardless of which
+    character they actually typed."""
+    inv = Inventory.parse(
+        {"features": ["V"], "segments": {"g": {"V": "+"}}}
+    )
+    assert "ɡ" in inv.segments
+    assert "g" not in inv.segments
+
+
+def test_segment_ascii_apostrophe_normalized_to_modifier_letter() -> None:
+    """ASCII ``'`` (U+0027) in a segment label is folded to the
+    canonical IPA ``ʼ`` (U+02BC) -- the modern IPA ejective marker."""
+    inv = Inventory.parse(
+        {"features": ["V"], "segments": {"p'": {"V": "-"}}}
+    )
+    assert "pʼ" in inv.segments
+    assert "p'" not in inv.segments
+
+
+def test_segment_r_left_alone() -> None:
+    """``r`` is the legitimate IPA alveolar trill character;
+    DON'T fold it to ``ɹ`` (turned r, the approximant) -- that
+    would silently change the meaning of users' inventories."""
+    inv = Inventory.parse(
+        {"features": ["V"], "segments": {"r": {"V": "+"}}}
+    )
+    assert "r" in inv.segments
+    assert "ɹ" not in inv.segments
+
+
+def test_ipa_translation_does_not_touch_feature_names() -> None:
+    """The IPA-segment translation is for SEGMENT labels only.
+    Feature names are analytical identifiers (``DelayedRelease``,
+    ``Voice``); folding ``g`` to ``ɡ`` in a feature name like
+    ``Glottal`` would silently rename ``Glottal`` to ``ɡlottal``."""
+    inv = Inventory.parse(
+        {"features": ["Glottal"], "segments": {"ʔ": {"Glottal": "+"}}}
+    )
+    assert inv.features == ("Glottal",)
+
+
+def test_ascii_g_and_script_g_in_one_inventory_is_collision() -> None:
+    """A user with both ``g`` and ``ɡ`` in one inventory probably
+    didn't mean two distinct segments; the parser folds ASCII to
+    canonical then rejects the resulting collision."""
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {
+                "features": ["V"],
+                "segments": {"g": {"V": "+"}, "ɡ": {"V": "-"}},
+            }
+        )
+    msg = " ".join(ex.value.issues).lower()
+    assert "normalization" in msg or "duplicate" in msg
+
+
+def test_advisory_fires_for_ascii_colon_in_segment_label() -> None:
+    """ASCII colon (U+003A) in a segment label is almost always a
+    typing substitute for the IPA length mark U+02D0. The advisory
+    is informational only -- the inventory still loads."""
+    inv = Inventory.parse(
+        {"features": ["V"], "segments": {"a:": {"V": "+"}}}
+    )
+    assert any(
+        "U+003A" in a and "U+02D0" in a for a in inv.advisories
+    ), inv.advisories
+
+
+def test_no_ascii_colon_advisory_when_proper_length_mark_used() -> None:
+    """A segment using the canonical IPA length mark must NOT fire
+    the advisory -- the whole point of the advisory is to flag
+    likely paste mistakes, not penalize correct IPA notation."""
+    inv = Inventory.parse(
+        {"features": ["V"], "segments": {"aː": {"V": "+"}}}
+    )
+    assert not any("U+003A" in a for a in inv.advisories)
+
+
+def test_bundled_inventories_produce_no_ipa_confusable_advisories() -> None:
+    """Bundled inventories use canonical IPA (``ɡ͡b`` not ``g͡b``;
+    ``pʼ`` not ``p'``; ``ɹ`` or ``r`` according to the inventory's
+    intent), so the IPA-confusable advisory should never fire on a
+    bundled load -- otherwise users see scary notes every time
+    they open the app."""
+    for fname in (
+        "hayes_features.json",
+        "general_features.json",
+        "english_features.json",
+        "blevins_features.json",
+    ):
+        inv = Inventory.load(str(REPO_ROOT / "inventories" / fname))
+        # Size advisories are checked separately; this test guards
+        # specifically against IPA-confusable false positives.
+        confusable_advisories = [
+            a for a in inv.advisories
+            if "U+" in a and "IPA" in a or "length mark" in a
+        ]
+        assert confusable_advisories == [], (
+            f"{fname} triggered IPA confusable advisories: "
+            f"{confusable_advisories}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# IPA text-surface regression: notation survives parse → save → re-parse
+# ---------------------------------------------------------------------------
+def test_ipa_segment_labels_survive_round_trip() -> None:
+    """Linguistically plausible IPA segment labels must round-trip
+    through ``parse → to_json_dict → parse`` with their canonical
+    names byte-for-byte unchanged. Stress cases:
+
+      - combining diacritics (n̪, m̥, ã)
+      - tie bars / affricates (t͡ʃ, d͡ʒ)
+      - modifier letters (pʰ, tʼ, kʷ)
+      - length marks (ɜː)
+      - non-Latin IPA letters (χ, ʁ, θ, ð, ɫ, ɲ, ʔ, ɬ, ɡ, ə)
+
+    Protects against future over-tightening: a regression that
+    rejected combining marks, stripped tie bars, or NFKC-folded
+    modifier letters would trip this test loudly.
+    """
+    ipa_labels = [
+        "t͡ʃ", "d͡ʒ", "n̪", "ã", "pʰ", "tʼ", "kʷ", "ɫ", "ɲ",
+        "χ", "ʁ", "m̥", "ɜː", "ə", "ɡ", "ʔ", "θ", "ð", "ɬ",
+    ]
+    segments = {seg: {"V": "+"} for seg in ipa_labels}
+    inv1 = Inventory.parse({"features": ["V"], "segments": segments})
+    # All labels survive parse with their original spelling.
+    for seg in ipa_labels:
+        assert seg in inv1.segments, (
+            f"label {seg!r} ({[hex(ord(c)) for c in seg]}) lost in parse"
+        )
+    # Round-trip through serialization.
+    serialized = inv1.to_json_dict()
+    inv2 = Inventory.parse(serialized)
+    assert set(inv2.segments.keys()) == set(ipa_labels), (
+        f"labels changed across round-trip: "
+        f"{set(ipa_labels) - set(inv2.segments.keys())} lost; "
+        f"{set(inv2.segments.keys()) - set(ipa_labels)} added"
+    )
+
+
+def test_ipa_nfd_segment_normalizes_to_nfc() -> None:
+    """A label provided in NFD form (e.g. ``"a" + combining tilde``)
+    must canonicalize to the same NFC form (``"ã"``) that's stored
+    if the label were provided pre-composed. This is the property
+    that makes NFC-based identity reliable across paste sources."""
+    import unicodedata
+
+    nfc = "ã"
+    nfd = unicodedata.normalize("NFD", nfc)
+    assert nfc != nfd, "test setup: NFD form must differ from NFC"
+
+    inv_from_nfc = Inventory.parse(
+        {"features": ["V"], "segments": {nfc: {"V": "+"}}}
+    )
+    inv_from_nfd = Inventory.parse(
+        {"features": ["V"], "segments": {nfd: {"V": "+"}}}
+    )
+    # Both produce the same canonical key.
+    assert list(inv_from_nfc.segments) == list(inv_from_nfd.segments)
+    assert nfc in inv_from_nfd.segments
+
+
+def test_ipa_serialization_keeps_unicode_readable() -> None:
+    """Saved JSON for IPA inventories must keep IPA glyphs readable
+    (``ensure_ascii=False`` is the right choice for a linguistics
+    tool). Linguists diff and grep inventory files; ``\\u02d0`` for
+    the length mark would defeat that. ``atomic_write_json`` is the
+    only writer; verify its output."""
+    import json as _json
+
+    inv = Inventory.parse(
+        {
+            "features": ["V"],
+            "segments": {"aː": {"V": "+"}, "t͡ʃ": {"V": "-"}},
+        }
+    )
+    out = inv.to_json_dict()
+    # Confirm to_json_dict carries IPA glyphs as-is in the dict.
+    assert "aː" in out["segments"]
+    assert "t͡ʃ" in out["segments"]
+    # And that json.dumps(..., ensure_ascii=False) keeps them
+    # readable -- ``atomic_write_json`` uses this serializer.
+    text = _json.dumps(out, indent=2, ensure_ascii=False)
+    assert "ː" in text
+    assert "t͡ʃ" in text
+    assert "\\u02d0" not in text
+
+
 def test_parse_rejects_invisible_format_char_in_feature_name() -> None:
     """ZWJ (U+200D) and friends are invisible to readers and SURVIVE
     NFC + ``str.strip()``. Two feature names that differ only in an
