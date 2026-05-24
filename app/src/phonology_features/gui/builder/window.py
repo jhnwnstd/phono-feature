@@ -1346,7 +1346,7 @@ class InventoryBuilder(QMainWindow):
         the main thread.
         """
         basename = os.path.basename(path)
-        if getattr(self, "_save_in_flight", False):
+        if self._save_in_flight:
             _log.info("save rejected (already in flight): %s", basename)
             self._status.showMessage("Save already in progress; ignored.")
             return
@@ -1400,7 +1400,22 @@ class InventoryBuilder(QMainWindow):
                 # logs -- this is the only place a save failure becomes
                 # diagnosable after the fact.
                 _log.exception("save worker failed: %s", basename)
-            self._save_finished.emit(path, err)
+            try:
+                self._save_finished.emit(path, err)
+            except RuntimeError:
+                # The window was destroyed while we were still running
+                # (close drain timed out, Qt deleted the C++ widget).
+                # PyQt raises ``RuntimeError: wrapped C/C++ object has
+                # been deleted`` on the daemon thread. Functionally
+                # fine -- the app is already shutting down and no one
+                # is left to receive the signal -- but logging it
+                # avoids the silent thread death the BaseException
+                # catch above was added to prevent in the first place.
+                _log.debug(
+                    "save worker: receiver destroyed before completion "
+                    "emit: %s",
+                    basename,
+                )
 
         threading.Thread(target=worker, daemon=True).start()
 

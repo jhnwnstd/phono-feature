@@ -26,6 +26,7 @@ Design choices that match the rest of the codebase:
 from __future__ import annotations
 
 import html
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from phonology_features.gui.constants import (
@@ -116,7 +117,7 @@ def _plural(n: int, singular: str, plural: str | None = None) -> str:
 # ---------------------------------------------------------------------------
 # Spec-list rendering
 # ---------------------------------------------------------------------------
-def _render_spec_list(specs: list[dict[str, str]]) -> str:
+def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
     """Render minimal feature specifications as numbered HTML rows.
 
     Drops ``0`` values (under-specification is implicit), collapses

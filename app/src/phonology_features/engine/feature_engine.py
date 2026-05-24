@@ -21,6 +21,7 @@ table feeding ``segment_distance``) build lazily via
 from __future__ import annotations
 
 from functools import cached_property
+from types import MappingProxyType
 from typing import Any, Mapping
 
 from phonology_features._logging import get_logger
@@ -30,6 +31,12 @@ from phonology_features.engine.inventory import (
 )
 
 _log = get_logger(__name__)
+
+# Singleton read-only empty mapping shared across cache entries for
+# the universal-class and no-spec-found return paths. Module-level so
+# every empty result is the same object -- callers cannot mutate it,
+# and we don't pay an allocation per call.
+_EMPTY_BUNDLE: Mapping[str, str] = MappingProxyType({})
 
 
 class FeatureEngine:
@@ -64,7 +71,12 @@ class FeatureEngine:
         # compute_natural_class both delegate to find_all_minimal_bundles,
         # so calling both on the same input would re-run an
         # exponential-worst-case search. Keyed by frozenset(segments).
-        self._bundle_cache: dict[frozenset[str], list[dict[str, str]]] = {}
+        # Stored as tuples of MappingProxyType so a caller cannot
+        # mutate the cached result and corrupt subsequent queries on
+        # the same input.
+        self._bundle_cache: dict[
+            frozenset[str], tuple[Mapping[str, str], ...]
+        ] = {}
 
     @classmethod
     def from_path(cls, path: str) -> "FeatureEngine":
@@ -106,7 +118,7 @@ class FeatureEngine:
 
     def _find_segments_unsorted(
         self,
-        feature_spec: dict[str, str],
+        feature_spec: Mapping[str, str],
         *,
         underspec_compatible: bool = False,
     ) -> list[str]:
@@ -212,7 +224,7 @@ class FeatureEngine:
 
     def find_segments(
         self,
-        feature_spec: dict[str, str],
+        feature_spec: Mapping[str, str],
         *,
         underspec_compatible: bool = False,
     ) -> list[str]:
@@ -238,14 +250,20 @@ class FeatureEngine:
         segments: list[str],
         *,
         max_bundles: int = 10_000,
-    ) -> list[dict[str, str]]:
+    ) -> tuple[Mapping[str, str], ...]:
         """Every minimal feature bundle that characterises the segment set.
 
         A bundle B characterises S when
         ``find_segments(B, underspec_compatible=True) == S``. Returns
         ALL bundles of the smallest size, not just one greedy solution.
-        Returns ``[{}]`` for the universal class, ``[]`` if S is not a
-        natural class.
+        Returns ``(EMPTY_BUNDLE,)`` for the universal class, ``()``
+        if S is not a natural class.
+
+        Return shape is ``tuple[Mapping[str, str], ...]`` -- a tuple
+        of read-only views. The same object is returned across
+        cache hits, so handing back a mutable list would let a caller
+        ``append`` / ``clear`` / mutate-in-place and silently corrupt
+        every subsequent query on the same input.
 
         Implementation: hitting-set backtracking. For each segment
         outside S, find the candidate features that can exclude it,
@@ -268,7 +286,7 @@ class FeatureEngine:
         for their lifetime.
         """
         if not segments:
-            return [{}]
+            return (_EMPTY_BUNDLE,)
         for seg in segments:
             if seg not in self.segments:
                 raise ValueError(f"Segment '{seg}' not in inventory")
@@ -285,7 +303,7 @@ class FeatureEngine:
                 candidates[feature] = specified.pop()
         outside = [s for s in self.segments if s not in segment_set]
         if not outside:
-            self._bundle_cache[cache_key] = [{}]
+            self._bundle_cache[cache_key] = (_EMPTY_BUNDLE,)
             return self._bundle_cache[cache_key]
 
         # ------------------------------------------------------------------
@@ -314,7 +332,7 @@ class FeatureEngine:
                 if not self._feat_match(self.segments[seg].get(feat, "0"), val)
             ]
             if not exc_feats:
-                self._bundle_cache[cache_key] = []
+                self._bundle_cache[cache_key] = ()
                 return self._bundle_cache[cache_key]
             raw_excluders.append(exc_feats)
             for f in exc_feats:
@@ -389,17 +407,20 @@ class FeatureEngine:
             }
 
         backtrack(0, 0, 0)
-        self._bundle_cache[cache_key] = results
-        return results
+        frozen = tuple(MappingProxyType(b) for b in results)
+        self._bundle_cache[cache_key] = frozen
+        return frozen
 
-    def compute_natural_class(self, segments: list[str]) -> dict[str, str]:
+    def compute_natural_class(self, segments: list[str]) -> Mapping[str, str]:
         """One minimal feature bundle characterising the segment set.
 
-        Returns ``{}`` for both the universal class AND for sets that
-        are not natural classes. Use ``is_natural_class`` to disambiguate.
+        Returns an empty mapping for both the universal class AND for
+        sets that are not natural classes. Use ``is_natural_class`` to
+        disambiguate. Returned mapping is read-only (a view into the
+        per-engine bundle cache).
         """
         bundles = self.find_all_minimal_bundles(segments)
-        return bundles[0] if bundles else {}
+        return bundles[0] if bundles else _EMPTY_BUNDLE
 
     def is_contrastive(self, feature: str) -> bool:
         """True if the feature takes both '+' and '-' across the inventory."""
@@ -429,10 +450,13 @@ class FeatureEngine:
 
     def is_natural_class(
         self, segments: list[str]
-    ) -> tuple[bool, list[dict[str, str]]]:
-        """Return ``(is_natural_class, minimal_bundles)``; bundles is [] when False."""
+    ) -> tuple[bool, tuple[Mapping[str, str], ...]]:
+        """Return ``(is_natural_class, minimal_bundles)``; bundles is
+        ``()`` when False. The bundle tuple is a read-only view into
+        the per-engine cache; callers may iterate but must not mutate.
+        """
         bundles = self.find_all_minimal_bundles(segments)
-        return (True, bundles) if bundles else (False, [])
+        return (True, bundles) if bundles else (False, ())
 
     def segment_distance(self, seg1: str, seg2: str) -> int:
         """Number of features whose values differ between two segments.

@@ -1,5 +1,6 @@
 """Shared GUI constants, geometry, and tiny helpers."""
 
+from collections.abc import Mapping
 from enum import StrEnum
 
 from phonology_features.gui.palette import C
@@ -209,8 +210,10 @@ def sort_features(features: list[str]) -> list[str]:
     )
 
 
-def sort_spec(spec: dict[str, str]) -> dict[str, str]:
-    """Reorder a feature-bundle dict into canonical key order."""
+def sort_spec(spec: Mapping[str, str]) -> dict[str, str]:
+    """Reorder a feature-bundle into canonical key order. Accepts any
+    Mapping (incl. read-only views from the engine bundle cache);
+    returns a fresh dict so callers can safely iterate."""
     return {
         feature: spec[feature] for feature in sort_features(list(spec.keys()))
     }

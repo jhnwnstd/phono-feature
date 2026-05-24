@@ -344,6 +344,31 @@ def test_engine_grouped_segments_cached_per_engine() -> None:
     assert eng2.grouped_segments is not a
 
 
+def test_bundle_cache_results_are_immutable() -> None:
+    """``find_all_minimal_bundles`` returns a reference into the
+    per-engine cache; before the fix the return type was
+    ``list[dict[str, str]]`` and a caller mutation would silently
+    corrupt the cache for every subsequent call on the same input.
+    The new shape is ``tuple[Mapping[str, str], ...]`` -- both layers
+    immutable -- so mutation attempts raise rather than corrupt.
+    """
+    eng = FeatureEngine.from_path(HAYES)
+    segs = ["b", "d", "ɡ"]
+    bundles_a = eng.find_all_minimal_bundles(segs)
+    # Outer container is a tuple: no append / pop / clear.
+    assert isinstance(bundles_a, tuple)
+    with pytest.raises(AttributeError):
+        bundles_a.append({"X": "+"})  # type: ignore[attr-defined]
+    # Inner bundles are read-only mappings.
+    if bundles_a:
+        with pytest.raises(TypeError):
+            bundles_a[0]["bogus"] = "+"  # type: ignore[index]
+    # Cache hit returns the same object so consumers don't pay
+    # rewrap costs on repeated queries.
+    bundles_b = eng.find_all_minimal_bundles(segs)
+    assert bundles_a is bundles_b
+
+
 def test_engine_seg_value_tuples_lazy() -> None:
     """Built lazily: not present in ``__dict__`` until first access."""
     eng = FeatureEngine.from_path(HAYES)
