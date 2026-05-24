@@ -320,10 +320,13 @@ class _SelectionFillDelegate(QStyledItemDelegate):
 
     def paint(self, painter, option, index):
         if option.state & self._SELECTED_FLAG:
+            # parent() is typed QObject | None; in practice it's the
+            # QTableWidget that owns this delegate. ``hasattr`` keeps
+            # mypy happy without a cast and is cheap on the hot path.
             view = self.parent()
             item = (
                 view.item(index.row(), index.column())
-                if view is not None
+                if view is not None and hasattr(view, "item")
                 else None
             )
             if item is not None:
@@ -1184,7 +1187,9 @@ class InventoryBuilder(QMainWindow):
         # register" symptom. With bounded invalidation each repaint
         # is ~3 ms on Hayes, so we can afford 300+ clicks/sec before
         # paint becomes the bottleneck.
-        self._table.viewport().repaint(leaked)
+        viewport = self._table.viewport()
+        if viewport is not None:
+            viewport.repaint(leaked)
         self._last_selection_region = new_region
         sel_cols = sel_model.selectedColumns()
         sel_rows = sel_model.selectedRows()
