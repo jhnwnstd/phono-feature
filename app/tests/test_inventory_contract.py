@@ -556,8 +556,9 @@ def test_analysis_tag_escapes_html_in_text() -> None:
     inventory text reaches the HTML output, so escaping there is
     sufficient."""
     from phonology_features.gui.analysis import _tag
+    from phonology_features.gui.constants import TagColor
 
-    out = _tag("<b>oops</b>", "green")
+    out = _tag("<b>oops</b>", TagColor.PLUS)
     assert "<b>oops</b>" not in out
     assert "&lt;b&gt;oops&lt;/b&gt;" in out
 
@@ -577,7 +578,9 @@ def test_analysis_render_single_segment_escapes_symbol() -> None:
         def find_segments(self, *args, **kwargs):
             return []
 
-    out = render_single_segment(_FakeEngine(), "<x>", {"Voice": "+"})
+    # The renderer treats ``engine`` as duck-typed for testability;
+    # the cast keeps mypy happy without forcing a real FeatureEngine.
+    out = render_single_segment(_FakeEngine(), "<x>", {"Voice": "+"})  # type: ignore[arg-type]
     assert "/<x>/" not in out
     assert "/&lt;x&gt;/" in out
 
