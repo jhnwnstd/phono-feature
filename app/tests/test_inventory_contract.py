@@ -24,9 +24,6 @@ from phonology_features.engine.inventory import (
     ValidationError,
     atomic_write_json,
 )
-from phonology_features.engine.inventory_validator import (
-    validate_inventory_data,
-)
 from phonology_features.engine.segment_grouper import (
     AliasCollisionError,
     _normalize_feats,
@@ -277,19 +274,6 @@ def test_load_invalid_json_raises_validation_error(tmp_path: Path) -> None:
     with pytest.raises(ValidationError) as ex:
         Inventory.load(str(bad))
     assert any("invalid JSON" in i for i in ex.value.issues)
-
-
-# ---------------------------------------------------------------------------
-# Engine / validator agreement
-# ---------------------------------------------------------------------------
-def test_engine_rejects_what_validator_rejects() -> None:
-    """Reviewer's #1: the engine and validator must not disagree on
-    'is this valid'. With one parse path they cannot."""
-    bad = {"segments": {"p": {"Voice": "+"}}}  # missing features
-    errors, _ = validate_inventory_data(bad)
-    assert errors
-    with pytest.raises(ValidationError):
-        Inventory.parse(bad)
 
 
 def test_engine_requires_inventory_not_raw_dict() -> None:

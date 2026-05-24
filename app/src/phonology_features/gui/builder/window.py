@@ -3,10 +3,15 @@
 import os
 import re
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from phonology_features._logging import get_logger
 from phonology_features.engine.inventory import Inventory, ValidationError
+
+if TYPE_CHECKING:
+    # Only used in a string-form type annotation; importing at runtime
+    # is pure cost (PyQt6.QtGui.QRegion drags in extra Qt symbols).
+    from PyQt6.QtGui import QRegion  # noqa: F401
 from phonology_features.gui.builder.dialogs import (
     InputDialog,
     ask_question,
@@ -27,7 +32,6 @@ from PyQt6.QtGui import (
     QPainter,
     QPalette,
     QPen,
-    QRegion,
 )
 from PyQt6.QtWidgets import (
     QAbstractButton,

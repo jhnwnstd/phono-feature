@@ -36,7 +36,7 @@ Three feature sets live in `app/inventories/` and appear automatically in the GU
 | `general_features.json`    | General-purpose IPA superset            |
 | `english_features.json`    | English-focused inventory               |
 
-Add your own through **New Inventory** in the GUI, or write a JSON file matching the schema in `app/src/phonology_features/engine/inventory_validator.py`.
+Add your own through **New Inventory** in the GUI, or write a JSON file matching the schema in `app/src/phonology_features/engine/inventory.py` (see `Inventory.parse`).
 
 ## For developers
 
