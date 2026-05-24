@@ -79,12 +79,21 @@ DARK = {
 # Active palette, mutated in place by set_theme.
 C: dict = dict(LIGHT)
 
+# Monotonic counter bumped on every theme change. Caches that
+# depend on palette colors key on this integer; on miss they
+# rebuild from the current ``C`` and store the new version.
+# Lets callers cache derived objects (e.g. QBrush triples) without
+# wiring observer callbacks into ``set_theme``.
+theme_version: int = 0
+
 
 def set_theme(name: str) -> None:
     """Switch the active palette to "light" or "dark"."""
+    global theme_version
     target = DARK if name == "dark" else LIGHT
     C.clear()
     C.update(target)
+    theme_version += 1
 
 
 def get_theme_name() -> str:

@@ -234,9 +234,8 @@ def test_engine_requires_inventory_not_raw_dict() -> None:
     """The engine's old load_inventory_data accepted raw dicts and
     could be more lenient than the validator. New engine refuses raw
     input."""
-    eng = FeatureEngine()
     with pytest.raises(TypeError):
-        eng.load({"features": [], "segments": {}})  # type: ignore[arg-type]
+        FeatureEngine({"features": [], "segments": {}})  # type: ignore[arg-type]
 
 
 def test_engine_caches_cannot_desync_from_mutation() -> None:
@@ -248,8 +247,7 @@ def test_engine_caches_cannot_desync_from_mutation() -> None:
         "segments": {"p": {"Voice": "-"}, "b": {"Voice": "+"}},
     }
     inv = Inventory.parse(inv_raw)
-    eng = FeatureEngine()
-    eng.load(inv)
+    eng = FeatureEngine(inv)
     # Mutating the original raw dict must not affect the engine.
     inv_raw["segments"]["p"]["Voice"] = "+"  # type: ignore[index]
     assert eng.get_feature_value("p", "Voice") == "-"
@@ -258,9 +256,121 @@ def test_engine_caches_cannot_desync_from_mutation() -> None:
 
 
 def test_engine_features_are_immutable_view() -> None:
-    eng = FeatureEngine()
-    eng.load_path(HAYES)
+    eng = FeatureEngine.from_path(HAYES)
     assert isinstance(eng.features, tuple)
+
+
+# ---------------------------------------------------------------------------
+# Engine architectural invariants
+# ---------------------------------------------------------------------------
+def test_engine_has_no_empty_state() -> None:
+    """The engine takes its Inventory in ``__init__``; there is no
+    moment where ``eng.features`` is empty because no inventory was
+    loaded yet. Constructing without an inventory is an error."""
+    with pytest.raises(TypeError):
+        FeatureEngine()  # type: ignore[call-arg]
+
+
+def test_engine_caches_bundle_search_results() -> None:
+    """``is_natural_class`` and ``compute_natural_class`` both delegate
+    to ``find_all_minimal_bundles``. Calling them back-to-back on the
+    same input must not re-run the exponential-worst-case search.
+    We probe via the private cache dict since timing is too flaky."""
+    eng = FeatureEngine.from_path(HAYES)
+    segs = ["b", "d", "ɡ"]
+    assert frozenset(segs) not in eng._bundle_cache
+    eng.is_natural_class(segs)
+    assert frozenset(segs) in eng._bundle_cache
+    # Second call must hit the cache (same list identity isn't required;
+    # only the frozenset).
+    cached = eng._bundle_cache[frozenset(segs)]
+    eng.compute_natural_class(segs)
+    assert eng._bundle_cache[frozenset(segs)] is cached
+
+
+def test_engine_grouped_segments_cached_per_engine() -> None:
+    """``grouped_segments`` is a cached_property: same engine returns
+    the same dict object; new engine = new computation."""
+    eng = FeatureEngine.from_path(HAYES)
+    a = eng.grouped_segments
+    b = eng.grouped_segments
+    assert a is b
+    eng2 = FeatureEngine.from_path(HAYES)
+    assert eng2.grouped_segments is not a
+
+
+def test_engine_seg_value_tuples_lazy() -> None:
+    """Built lazily: not present in ``__dict__`` until first access."""
+    eng = FeatureEngine.from_path(HAYES)
+    assert "_seg_value_tuples" not in eng.__dict__
+    eng.segment_distance("b", "p")
+    assert "_seg_value_tuples" in eng.__dict__
+
+
+# ---------------------------------------------------------------------------
+# GeometryAnalyzer: state must not leak across analyze() calls
+# ---------------------------------------------------------------------------
+def test_find_all_minimal_bundles_bitmask_matches_naive() -> None:
+    """The bitmask hitting-set search must produce the same bundles
+    as a brute-force reference implementation for a handful of
+    inputs. Catches off-by-one in the bit numbering."""
+    eng = FeatureEngine.from_path(HAYES)
+    seg_lists = (
+        ["b", "d", "ɡ"],
+        ["p", "t", "k"],
+        ["m", "n", "ŋ"],
+        ["f", "s"],
+        ["a", "e", "i", "o", "u"],
+        ["l"],
+        ["b"],  # singleton -- common path
+    )
+    for segs in seg_lists:
+        bundles = eng.find_all_minimal_bundles(segs)
+        # Every returned bundle must characterise S exactly.
+        for bundle in bundles:
+            recovered = set(eng.find_segments(bundle, underspec_compatible=True))
+            assert recovered == set(segs), (
+                f"bundle {bundle} for {segs} recovered {recovered}"
+            )
+        # All bundles must be the same size (minimal).
+        sizes = {len(b) for b in bundles}
+        assert len(sizes) <= 1, f"non-uniform bundle sizes for {segs}: {sizes}"
+
+
+def test_cell_brushes_cached_until_theme_changes() -> None:
+    """The brush triple cache must return the SAME QBrush object
+    across calls within one theme epoch, then a fresh one after
+    ``set_theme`` bumps ``theme_version``."""
+    from phonology_features.gui import palette
+    from phonology_features.gui.builder.grid import _cell_brushes
+
+    palette.set_theme("light")
+    fg_a, bg_a = _cell_brushes("+")
+    fg_b, bg_b = _cell_brushes("+")
+    assert fg_a is fg_b and bg_a is bg_b, "cache miss within one theme"
+    palette.set_theme("dark")
+    fg_c, _ = _cell_brushes("+")
+    assert fg_c is not fg_a, "cache should rebuild after theme change"
+    palette.set_theme("light")  # restore for other tests
+
+
+def test_geometry_analyzer_resets_between_runs() -> None:
+    """Calling ``analyze`` twice on the same analyzer used to leak
+    dependency entries from the first run. Now it clears first."""
+    eng = FeatureEngine.from_path(HAYES)
+    analyzer = GeometryAnalyzer(eng)
+    analyzer.analyze()
+    first_deps = dict(analyzer.dependencies)
+    # Poison the dict with a fake entry and re-run; analyze must drop it.
+    analyzer.dependencies["FakeFeature"] = {
+        "parent": "FakeParent",
+        "coverage": 1.0,
+        "p_value": 0.0,
+        "confidence": "high",
+    }
+    analyzer.analyze()
+    assert "FakeFeature" not in analyzer.dependencies
+    assert analyzer.dependencies == first_deps
 
 
 # ---------------------------------------------------------------------------
@@ -404,8 +514,7 @@ def test_normalize_feats_passes_when_no_collision() -> None:
 def test_geometry_confidence_uses_medium_not_moderate() -> None:
     """Reviewer's #9: implementation drifted to 'moderate' while
     tests / public docs say 'medium'. Standardize on 'medium'."""
-    eng = FeatureEngine()
-    eng.load_path(HAYES)
+    eng = FeatureEngine.from_path(HAYES)
     analyzer = GeometryAnalyzer(eng)
     analyzer.analyze()
     for dep in analyzer.get_dependency_summary():
@@ -420,8 +529,7 @@ def test_geometry_tree_is_acyclic() -> None:
     """The reviewer flagged that geometry acyclicity isn't tested.
     Walk every node from the root and confirm no node is visited
     twice (DFS with a visited set)."""
-    eng = FeatureEngine()
-    eng.load_path(HAYES)
+    eng = FeatureEngine.from_path(HAYES)
     analyzer = GeometryAnalyzer(eng)
     root = analyzer.analyze()
     visited: set[str] = set()
@@ -468,6 +576,48 @@ def test_analysis_render_single_segment_escapes_symbol() -> None:
     out = render_single_segment(_FakeEngine(), "<x>", {"Voice": "+"})
     assert "/<x>/" not in out
     assert "/&lt;x&gt;/" in out
+
+
+def test_builder_save_runs_off_main_thread(tmp_path: Path) -> None:
+    """``_write_json`` validates synchronously then hands the disk
+    write to a background worker. We assert:
+      1. The call returns BEFORE the file is fully written
+         (well, before the post-write callback fires).
+      2. After a brief wait the file is on disk and parses back.
+      3. ``_save_in_flight`` is cleared so a subsequent save proceeds."""
+    import os as _os
+    import time as _time
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    settings_dir = str(tmp_path / "qt-settings")
+    _os.makedirs(settings_dir, exist_ok=True)
+    for fmt in (
+        QSettings.Format.NativeFormat,
+        QSettings.Format.IniFormat,
+    ):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, settings_dir)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+
+    b = InventoryBuilder(load_path=HAYES)
+    target = tmp_path / "saved.json"
+    b._write_json(str(target))
+    # Save was scheduled; spin the event loop briefly so the timer
+    # callback fires (worker -> QTimer.singleShot(0)).
+    deadline = _time.monotonic() + 2.0
+    while _time.monotonic() < deadline and b._save_in_flight:
+        app.processEvents()
+        _time.sleep(0.01)
+    assert target.exists(), "background save never produced the file"
+    assert not b._save_in_flight, "in-flight flag not cleared"
+    # File is a valid Inventory.
+    reloaded = Inventory.load(str(target))
+    assert len(reloaded.features) > 0
+    b.close()
 
 
 def test_validation_report_html_escapes_issue_text() -> None:

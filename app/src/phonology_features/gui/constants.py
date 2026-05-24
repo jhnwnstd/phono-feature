@@ -21,7 +21,6 @@ def tag_palettes() -> dict:
 
 
 BTN_W = 33
-BTN_H = 26
 BTN_GAP = 4
 # Canonical feature display order. Features absent from this list trail
 # at the end in their original order.

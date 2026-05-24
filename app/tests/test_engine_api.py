@@ -21,9 +21,7 @@ HAYES_INVENTORY = str(REPO_ROOT / "inventories" / "hayes_features.json")
 @pytest.fixture(scope="module")
 def engine() -> FeatureEngine:
     """One Hayes-loaded engine shared across the module."""
-    eng = FeatureEngine()
-    eng.load_path(HAYES_INVENTORY)
-    return eng
+    return FeatureEngine.from_path(HAYES_INVENTORY)
 
 
 # ----------------------------------------------------------------------

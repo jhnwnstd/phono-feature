@@ -80,7 +80,14 @@ class GeometryAnalyzer:
         self.geometry_tree: GeometryNode | None = None
 
     def analyze(self) -> GeometryNode:
-        """Run dependency inference and return the root node."""
+        """Run dependency inference and return the root node.
+
+        Resets ``dependencies`` and ``geometry_tree`` first so calling
+        ``analyze`` twice on the same analyzer produces a clean run --
+        previously a second call left stale entries from the first.
+        """
+        self.dependencies = {}
+        self.geometry_tree = None
         self._compute_dependencies()
         self.geometry_tree = self._build_tree()
         return self.geometry_tree

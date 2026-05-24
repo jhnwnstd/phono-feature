@@ -17,7 +17,7 @@ from phonology_features.gui.builder.grid import (
     style_cell,
 )
 from phonology_features.gui.palette import C
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPalette, QPen
 from PyQt6.QtWidgets import (
     QAbstractButton,
@@ -250,10 +250,17 @@ def _suggest_filename(inv_name: str) -> str:
 class InventoryBuilder(QMainWindow):
     """Grid editor for creating phonological feature inventories."""
 
+    # Emitted from the save worker thread with (path, error_message).
+    # Qt picks QueuedConnection automatically for cross-thread emit,
+    # so the slot runs on the main thread.
+    _save_finished = pyqtSignal(str, str)
+
     def __init__(self, parent=None, load_path: str | None = None):
         super().__init__(parent)
         self.setWindowTitle("Inventory Builder")
         self.setMinimumSize(800, 500)
+        self._save_finished.connect(self._on_save_finished)
+        self._save_in_flight: bool = False
         self._segments: list = []
         self._features: list = []
         self._inv_name: str = "Untitled Inventory"
@@ -1038,9 +1045,29 @@ class InventoryBuilder(QMainWindow):
         self._update_title()
 
     def _write_json(self, path: str):
-        """Save the grid via the shared Inventory contract: validate
-        first, then atomic write. Surfaces a warning dialog on
-        validation failure instead of corrupting the file."""
+        """Save the grid via the shared Inventory contract.
+
+        Validation + Inventory construction run on the main thread
+        (they touch grid widgets); the actual disk write runs on a
+        worker thread. Atomic write means an external reader sees
+        either the old file or the new file, never a half-written
+        one, regardless of how long the background write takes.
+
+        On a slow / network disk this keeps the UI responsive: a
+        ``json.dump`` + ``fsync`` on a remote share can freeze the
+        window for hundreds of milliseconds. Re-entrancy guard
+        (``_save_in_flight``) drops a second click rather than
+        racing two writers on the same path.
+
+        Completion hops back to the main thread via the
+        ``_save_finished`` signal (QueuedConnection by default for
+        cross-thread emit), so the worker never touches GUI state
+        directly and the dirty flag / status text mutate only on
+        the main thread.
+        """
+        if getattr(self, "_save_in_flight", False):
+            self._status.showMessage("Save already in progress; ignored.")
+            return
         try:
             inventory = self._to_inventory()
         except ValidationError as e:
@@ -1051,11 +1078,29 @@ class InventoryBuilder(QMainWindow):
                 + "\n".join(f"• {issue}" for issue in e.issues),
             )
             return
-        try:
-            inventory.write_atomic(path)
-        except OSError as e:
+
+        import threading
+
+        self._save_in_flight = True
+        self._status.showMessage(f"Saving {os.path.basename(path)}...")
+
+        def worker() -> None:
+            try:
+                inventory.write_atomic(path)
+                err: str = ""
+            except OSError as e:
+                err = str(e)
+            self._save_finished.emit(path, err)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_save_finished(self, path: str, error: str) -> None:
+        """Main-thread completion handler for the background save.
+        ``error`` is empty on success, the ``str(OSError)`` otherwise."""
+        self._save_in_flight = False
+        if error:
             show_warning(
-                self, "Save failed", f"Could not write '{path}':\n{e}"
+                self, "Save failed", f"Could not write '{path}':\n{error}"
             )
             return
         self._dirty = False

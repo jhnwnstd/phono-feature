@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 
 from phonology_features.engine.feature_engine import FeatureEngine
 from phonology_features.engine.inventory import Inventory, ValidationError
-from phonology_features.engine.segment_grouper import group_segments
 from phonology_features.gui.analysis import (
     compute_contrastive,
     render_feat_to_seg,
@@ -258,9 +257,6 @@ class MainWindow(QMainWindow):
         self._saved_feat_state: dict = {}
         self._current_path: str | None = None
         self._did_first_show = False
-        # Per-engine cache for segment grouping. Cleared on engine reload.
-        self._cached_groups: dict | None = None
-        self._cached_norm_feats: dict | None = None
         self._builder: InventoryBuilder | None = None
         # Pool of every FeatureRow ever created (FEATURE_ORDER plus any
         # inventory-specific Other-card extras). ``_feat_rows`` above is
@@ -1063,16 +1059,15 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"Cannot load {fname}: {e.issues[0]}")
             self.analysis.set_html(self._validation_report_html(e.issues))
             return
-        engine = FeatureEngine()
-        engine.load(inventory)
-        self.engine = engine
-        self._cached_groups = None
-        self._cached_norm_feats = None
+        # Swap engines: grouping/normalization caches live on the
+        # engine (cached_property), so a new engine = fresh caches.
+        # No manual invalidation needed.
+        self.engine = FeatureEngine(inventory)
         name = inventory.name
         self.status.showMessage(
             f"{name}: "
-            f"{len(engine.segments)} segments, "
-            f"{len(engine.features)} features."
+            f"{len(self.engine.segments)} segments, "
+            f"{len(self.engine.features)} features."
         )
         self._register_loaded_path(path)
         self._populate_after_load()
@@ -1174,19 +1169,11 @@ class MainWindow(QMainWindow):
             return
         self._selected_segments.clear()
         self.seg_hint.hide()
-        # Cache grouping per engine; cleared in _load_path on engine swap.
-        if self._cached_groups is None:
-            from phonology_features.engine.segment_grouper import (
-                _normalize_feats,
-            )
-
-            self._cached_groups = group_segments(self.engine.segments)
-            self._cached_norm_feats = {
-                seg: _normalize_feats(self.engine.segments[seg])
-                for seg in self.engine.segments
-            }
-        groups = dict(self._cached_groups)  # shallow copy; pop mutates
-        norm_feats = self._cached_norm_feats
+        # grouped_segments/normalized_segment_feats are cached_property
+        # on the engine itself, so swapping engines (in _load_path)
+        # automatically invalidates them.
+        groups = dict(self.engine.grouped_segments)  # shallow; pop mutates
+        norm_feats = self.engine.normalized_segment_feats
         vowel_segs = groups.pop("Vowels", [])
         consonant_buttons: dict = {}
         for segs in groups.values():

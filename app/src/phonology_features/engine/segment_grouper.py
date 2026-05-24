@@ -9,6 +9,7 @@ related step.
 
 from collections import defaultdict
 from functools import lru_cache
+from typing import Mapping
 
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.
@@ -179,7 +180,7 @@ class AliasCollisionError(ValueError):
         )
 
 
-def _normalize_feats(feat_dict: dict[str, str]) -> dict[str, str]:
+def _normalize_feats(feat_dict: Mapping[str, str]) -> dict[str, str]:
     """Normalize feature names. Raises ``AliasCollisionError`` when
     two distinct input keys collapse to the same canonical key --
     silently dropping one would be data loss."""
@@ -199,8 +200,8 @@ def _normalize_feats(feat_dict: dict[str, str]) -> dict[str, str]:
 
 
 def _find_existing_key(
-    feat_dict: dict[str, str],
-    result: dict[str, str],
+    feat_dict: Mapping[str, str],
+    result: Mapping[str, str],
     canonical: str,
     *,
     exclude: str,
@@ -318,7 +319,7 @@ def _is_laryngeal_candidate(feats: dict[str, str]) -> bool:
 
 
 def group_segments(
-    inventory: dict[str, dict[str, str]],
+    inventory: Mapping[str, Mapping[str, str]],
 ) -> dict[str, list[str]]:
     """Assign every segment to a phonological display group.
 
