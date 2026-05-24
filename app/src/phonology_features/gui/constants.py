@@ -1,9 +1,44 @@
 """Shared GUI constants, geometry, and tiny helpers."""
 
+from enum import StrEnum
+
 from phonology_features.gui.palette import C
 
 SETTINGS_ORG = "features"
 SETTINGS_APP = "SegFeatureEngine"
+
+# Unicode minus (U+2212), not ASCII hyphen-minus (U+002D). Used
+# wherever we render the negative-feature symbol so it visually
+# matches the width and stroke weight of ``+``. Named constant
+# rather than ``chr(8722)`` so readers don't have to look it up.
+MINUS_SIGN: str = "−"
+
+
+class TagColor(StrEnum):
+    """Semantic name for an analysis-pane chip colour.
+
+    Magic strings were typo-silent before: ``_tag(text, "bleu")``
+    fell back to gray with no warning. This enum is exhaustive (mypy
+    can verify every consumer), self-documenting (``TagColor.SEGMENT``
+    says WHY the chip is blue), and the string values match the
+    historical palette keys so existing lookups keep working.
+    """
+
+    SEGMENT = "blue"
+    PLUS = "green"
+    MINUS = "red"
+    NEUTRAL = "gray"
+
+
+# One source of truth for the inline-chip box model. Every chip in
+# the analysis pane shares this geometry; the previous magic numbers
+# (``border-radius:4px; padding:2px 7px; ...``) were duplicated in
+# every f-string in analysis.py and went out of sync at least once
+# during the dark-mode work.
+CHIP_BORDER_RADIUS_PX: int = 4
+CHIP_PADDING_CSS: str = "2px 7px"
+CHIP_MARGIN_PX: int = 2
+CHIP_FONT_SIZE_PT: int = 10
 
 # Monospace font fallback chain for IPA-heavy text (analysis-pane
 # chips, anything rendering segment symbols / feature values). Order:
@@ -27,17 +62,18 @@ MONO_FAMILY_CSS: str = ", ".join(
 )
 
 
-def tag_palettes() -> dict:
-    """Inline-chip palette keyed by colour name.
+def tag_palettes() -> dict[TagColor, tuple[str, str]]:
+    """Inline-chip ``(background, foreground)`` palette keyed by
+    :class:`TagColor`.
 
     A function (not a module constant) so it re-reads ``C`` on every
     call; theme swaps would otherwise bake in the import-time palette.
     """
     return {
-        "blue": (C["tag_blue"], C["tag_blue_text"]),
-        "green": (C["tag_green"], C["tag_green_text"]),
-        "red": (C["tag_red"], C["tag_red_text"]),
-        "gray": (C["tag_gray"], C["tag_gray_text"]),
+        TagColor.SEGMENT: (C["tag_blue"], C["tag_blue_text"]),
+        TagColor.PLUS: (C["tag_green"], C["tag_green_text"]),
+        TagColor.MINUS: (C["tag_red"], C["tag_red_text"]),
+        TagColor.NEUTRAL: (C["tag_gray"], C["tag_gray_text"]),
     }
 
 

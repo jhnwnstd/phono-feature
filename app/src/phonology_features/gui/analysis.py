@@ -5,46 +5,131 @@ interpolation of inventory-provided text (segment symbols, feature
 names) goes through ``html.escape`` -- nothing else in the project
 sanitizes them, so a feature named ``"<b>oops</b>"`` would otherwise
 break the rendered layout.
+
+Design choices that match the rest of the codebase:
+
+  - **Typed chip colours.** ``_tag`` takes a :class:`TagColor` enum,
+    not a magic string. Renaming or removing a palette colour shows
+    up as a type error; ``_tag(text, "bleu")`` no longer silently
+    falls back to gray.
+
+  - **Single chip style.** Border radius, padding, margin, font size
+    live in ``constants.py``. Every chip is identical by construction;
+    no f-string ever hardcodes a chip dimension.
+
+  - **Compose, don't concatenate.** Repeated HTML shapes (segment
+    chips, signed-feature chips, muted-italic paragraphs, count
+    paragraphs) live in tiny helpers so the renderer functions read
+    as a sequence of intent rather than a wall of f-strings.
 """
 
+from __future__ import annotations
+
 import html
+from typing import TYPE_CHECKING
 
 from phonology_features.gui.constants import (
+    CHIP_BORDER_RADIUS_PX,
+    CHIP_FONT_SIZE_PT,
+    CHIP_MARGIN_PX,
+    CHIP_PADDING_CSS,
+    MINUS_SIGN,
     MONO_FAMILY_CSS,
+    TagColor,
     sort_features,
     sort_spec,
     tag_palettes,
 )
 from phonology_features.gui.palette import C
 
+if TYPE_CHECKING:
+    from phonology_features.engine.feature_engine import FeatureEngine
 
-def _tag(text: str, colour: str) -> str:
+
+# ---------------------------------------------------------------------------
+# Chip + paragraph primitives. Every renderer below composes from these.
+# ---------------------------------------------------------------------------
+def _tag(text: str, colour: TagColor) -> str:
     """Render a coloured inline chip. ``text`` is escaped here so
     every caller can pass raw inventory strings without thinking
-    about it."""
-    bg, fg = tag_palettes().get(colour, (C["tag_gray"], C["tag_gray_text"]))
+    about it. Chip geometry is shared via ``constants.CHIP_*``."""
+    palette = tag_palettes()
+    bg, fg = palette.get(colour, palette[TagColor.NEUTRAL])
     return (
         f"<span style='"
-        f"background:{bg}; color:{fg}; border-radius:4px;"
-        f" padding:2px 7px; margin:2px;"
+        f"background:{bg}; color:{fg};"
+        f" border-radius:{CHIP_BORDER_RADIUS_PX}px;"
+        f" padding:{CHIP_PADDING_CSS};"
+        f" margin:{CHIP_MARGIN_PX}px;"
         f" font-family:{MONO_FAMILY_CSS};"
-        f" font-size:10pt;'>{html.escape(text)}</span>"
+        f" font-size:{CHIP_FONT_SIZE_PT}pt;'>"
+        f"{html.escape(text)}</span>"
     )
 
 
-def _render_spec_list(specs: list) -> str:
-    """Render a deduplicated list of minimal specifications as HTML.
+def _segment_chip(seg: str, colour: TagColor = TagColor.SEGMENT) -> str:
+    """Render a segment symbol as a chip with surrounding slashes."""
+    return _tag(f"/{seg}/", colour)
 
-    Underspecified features with value "0" are hidden from display.
-    Specs that become identical after filtering are collapsed.
+
+def _signed_feature_chip(value: str, feature: str) -> str:
+    """Render a feature with its sign as a chip. ``value`` is ``+``
+    or ``-`` (ASCII); the rendered prefix is the matching glyph and
+    the chip colour follows the sign."""
+    if value == "+":
+        return _tag(f"+{feature}", TagColor.PLUS)
+    # Any non-``+`` value renders as a minus chip. Callers only ever
+    # pass ``+`` or ``-`` -- ``0`` is filtered upstream by the spec
+    # display logic.
+    return _tag(f"{MINUS_SIGN}{feature}", TagColor.MINUS)
+
+
+def _muted_italic_span(text: str) -> str:
+    """Inline ``<i>`` styled with the palette's muted-text colour.
+    Used for "none" / "not present" placeholders that sit inside a
+    larger paragraph."""
+    return f"<i style='color:{C['text_dim']}'>{text}</i>"
+
+
+def _muted_italic_p(text: str) -> str:
+    """Standalone ``<p>`` wrapping ``_muted_italic_span`` for cases
+    where the placeholder is its own paragraph block."""
+    return f"<p>{_muted_italic_span(text)}</p>"
+
+
+def _yes_no(yes: bool) -> str:
+    """Render a Yes/No verdict in the palette's positive / negative
+    colour."""
+    colour = C["plus"] if yes else C["minus"]
+    label = "Yes" if yes else "No"
+    return f"<span style='color:{colour}'>{label}</span>"
+
+
+def _plural(n: int, singular: str, plural: str | None = None) -> str:
+    """English pluralisation. ``_plural(1, "segment")`` -> "segment";
+    ``_plural(2, "segment")`` -> "segments"."""
+    if n == 1:
+        return singular
+    return plural if plural is not None else singular + "s"
+
+
+# ---------------------------------------------------------------------------
+# Spec-list rendering
+# ---------------------------------------------------------------------------
+def _render_spec_list(specs: list[dict[str, str]]) -> str:
+    """Render minimal feature specifications as numbered HTML rows.
+
+    Drops ``0`` values (under-specification is implicit), collapses
+    rows that become identical after the drop, and special-cases the
+    single-row case to omit the ``1.`` numbering prefix. Returns ``""``
+    if there's nothing left to show.
     """
-    seen: set = set()
-    rows: list = []
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    chip_rows: list[str] = []  # each row is just the chips, no prefix
     for spec in specs:
-        sorted_spec = sort_spec(spec)
         filtered = {
             feature: value
-            for feature, value in sorted_spec.items()
+            for feature, value in sort_spec(spec).items()
             if value != "0"
         }
         if not filtered:
@@ -53,27 +138,32 @@ def _render_spec_list(specs: list) -> str:
         if key in seen:
             continue
         seen.add(key)
-        row_tags = " ".join(
-            _tag(f"{value}{feature}", "green" if value == "+" else "red")
-            for feature, value in filtered.items()
+        chip_rows.append(
+            " ".join(
+                _signed_feature_chip(value, feature)
+                for feature, value in filtered.items()
+            )
         )
-        row_number = len(rows) + 1
-        rows.append(
-            f"<span style='color:{C['text_dim']}'>{row_number}.</span> {row_tags}"
-        )
-    if not rows:
+    if not chip_rows:
         return ""
-    if len(rows) == 1:
-        _, content = rows[0].split("</span> ", 1)
-        return f"<p><b>Minimal specification:</b><br>{content}</p>"
+    if len(chip_rows) == 1:
+        return f"<p><b>Minimal specification:</b><br>{chip_rows[0]}</p>"
+    numbered = "<br>".join(
+        f"<span style='color:{C['text_dim']}'>{i + 1}.</span> {row}"
+        for i, row in enumerate(chip_rows)
+    )
     return (
-        f"<p><b>Minimal specifications ({len(rows)}):</b><br>"
-        + "<br>".join(rows)
-        + "</p>"
+        f"<p><b>Minimal specifications ({len(chip_rows)}):</b>"
+        f"<br>{numbered}</p>"
     )
 
 
-def compute_contrastive(engine, segs: list) -> dict:
+# ---------------------------------------------------------------------------
+# Engine-side query: bucket segments by their value of each contrastive feature
+# ---------------------------------------------------------------------------
+def compute_contrastive(
+    engine: FeatureEngine, segs: list[str]
+) -> dict[str, dict[str, list[str]]]:
     """For each feature with both '+' and '-' among ``segs``, bucket the segments.
 
     Returns ``{feat: {'+': [...], '-': [...], '0': [...]}}``. The '0'
@@ -81,7 +171,7 @@ def compute_contrastive(engine, segs: list) -> dict:
     Bucket order follows the caller's ``segs`` list so rendered chips
     align with selection order.
     """
-    result = {}
+    result: dict[str, dict[str, list[str]]] = {}
     seg_set = set(segs)
     for feat in engine.features:
         plus_in = engine.plus_segs[feat] & seg_set
@@ -89,7 +179,7 @@ def compute_contrastive(engine, segs: list) -> dict:
         if not (plus_in and minus_in):
             continue
         spec_in = engine.spec_segs[feat] & seg_set
-        entry: dict = {
+        entry: dict[str, list[str]] = {
             "+": [s for s in segs if s in plus_in],
             "-": [s for s in segs if s in minus_in],
         }
@@ -99,17 +189,24 @@ def compute_contrastive(engine, segs: list) -> dict:
     return result
 
 
-def render_single_segment(engine, seg: str, feats: dict) -> str:
+# ---------------------------------------------------------------------------
+# Top-level renderers (each returns one HTML fragment for the analysis pane)
+# ---------------------------------------------------------------------------
+def render_single_segment(
+    engine: FeatureEngine, seg: str, feats: dict[str, str]
+) -> str:
     """Build HTML for a single selected segment."""
-    plus_feats = [feature for feature, value in feats.items() if value == "+"]
-    minus_feats = [feature for feature, value in feats.items() if value == "-"]
-    plus_feats = sort_features(plus_feats)
-    minus_feats = sort_features(minus_feats)
+    plus_feats = sort_features(
+        [feature for feature, value in feats.items() if value == "+"]
+    )
+    minus_feats = sort_features(
+        [feature for feature, value in feats.items() if value == "-"]
+    )
     plus_tags = " ".join(
-        _tag(f"+{feature}", "green") for feature in plus_feats
+        _signed_feature_chip("+", feature) for feature in plus_feats
     )
     minus_tags = " ".join(
-        _tag(f"\u2212{feature}", "red") for feature in minus_feats
+        _signed_feature_chip("-", feature) for feature in minus_feats
     )
     seg_safe = html.escape(seg)
     out = (
@@ -123,142 +220,160 @@ def render_single_segment(engine, seg: str, feats: dict) -> str:
         non_zero = {
             feature: value for feature, value in feats.items() if value != "0"
         }
-        equiv = engine.find_segments(
-            non_zero,
-            underspec_compatible=True,
-        )
+        equiv = engine.find_segments(non_zero, underspec_compatible=True)
         if len(equiv) > 1:
             is_nc, specs = engine.is_natural_class(equiv)
     if is_nc and specs:
         out += _render_spec_list(specs)
     else:
-        out += (
-            f"<p style='color:{C['text_dim']}'><i>"
-            "Not uniquely characterizable."
-            "</i></p>"
-        )
+        out += _muted_italic_p("Not uniquely characterizable.")
     return out
 
 
 def render_multi_segment(
-    engine,
-    segs: list,
-    common: dict,
-    contrastive: dict,
-    suggested: list,
+    engine: FeatureEngine,
+    segs: list[str],
+    common: dict[str, str],
+    contrastive: dict[str, dict[str, list[str]]],
+    suggested: list[str],
 ) -> str:
     """Build HTML for multiple selected segments."""
-    seg_tags = " ".join(_tag(f"/{seg}/", "blue") for seg in segs)
-    if common:
-        sorted_common = sort_spec(common)
-        common_tags = " ".join(
-            _tag(f"{value}{feature}", "green" if value == "+" else "red")
-            for feature, value in sorted_common.items()
-        )
-        common_html = f"<p><b>Shared features:</b><br>{common_tags}</p>"
-    else:
-        common_html = f"<p><b>Shared features:</b> <i style='color:{C['text_dim']}'>none</i></p>"
-    if contrastive:
-        rows = []
-        for feat in sort_features(list(contrastive)):
-            groups = contrastive[feat]
-            plus_segs = " ".join(
-                _tag(f"/{seg}/", "blue") for seg in groups["+"]
-            )
-            minus_segs = " ".join(
-                _tag(f"/{seg}/", "blue") for seg in groups["-"]
-            )
-            minus_sign = chr(8722)
-            clr_plus = C["plus"]
-            clr_minus = C["minus"]
-            row_html = (
-                f"{_tag(feat, 'gray')}"
-                f" <span style='color:{clr_plus};font-weight:bold'>+</span>"
-                f" {plus_segs}"
-                f" &nbsp;"
-                f" <span style='color:{clr_minus};font-weight:bold'>"
-                f"{minus_sign}</span>"
-                f" {minus_segs}"
-            )
-            if "0" in groups:
-                zero_segs = " ".join(
-                    _tag(f"/{seg}/", "gray") for seg in groups["0"]
-                )
-                row_html += f" &nbsp; <span style='color:{C['text_dim']}'>0</span> {zero_segs}"
-            rows.append(row_html)
-        contrast_html = (
-            "<p><b>Contrasting features:</b><br>" + "<br>".join(rows) + "</p>"
-        )
-    else:
-        has_underspec_diff = False
-        for feat in engine.features:
-            values = {engine.segments[seg].get(feat, "0") for seg in segs}
-            values_are_mixed = len(values) > 1
-            includes_underspec = "0" in values
-            if values_are_mixed and includes_underspec:
-                has_underspec_diff = True
-                break
-        if has_underspec_diff:
-            contrast_html = (
-                f"<p><b>Contrasting features:</b>"
-                f" <i style='color:{C['text_dim']}'>none"
-                " (only unspecified features differ)</i></p>"
-            )
-        else:
-            contrast_html = (
-                f"<p><b>Contrasting features:</b>"
-                f" <i style='color:{C['text_dim']}'>none"
-                " (featurally identical)</i></p>"
-            )
-    is_nc, specs = engine.is_natural_class(segs)
-    spec_html = ""
-    if is_nc:
-        nc_html = f"<p><b>Natural class:</b> <span style='color:{C['plus']}'>Yes</span></p>"
-        is_universal_class = not specs or not specs[0]
-        if is_universal_class:
-            universal_label = "\u2205 (universal)"
-            spec_html = f"<p><b>Minimal specification:</b> {_tag(universal_label, 'gray')}</p>"
-        else:
-            spec_html = _render_spec_list(specs)
-    else:
-        if suggested:
-            suggested_tags = " ".join(
-                _tag(f"/{seg}/", "gray") for seg in suggested
-            )
-            plural_suffix = "s" if len(suggested) != 1 else ""
-            nc_html = (
-                "<p><b>Natural class:</b>"
-                f" <span style='color:{C['minus']}'>No</span>"
-                f", add {len(suggested)} segment{plural_suffix} to complete:"
-                f"<br>{suggested_tags}</p>"
-            )
-        else:
-            nc_html = (
-                "<p><b>Natural class:</b>"
-                f" <span style='color:{C['minus']}'>No</span>"
-                "</p>"
-            )
+    seg_tags = " ".join(_segment_chip(seg) for seg in segs)
+    common_html = _render_shared_features(common)
+    contrast_html = _render_contrast_section(engine, segs, contrastive)
+    nc_html, spec_html = _render_natural_class_verdict(engine, segs, suggested)
     return (
         f"<p><b>Selected:</b> {seg_tags}</p>"
         f"{nc_html}{common_html}{spec_html}{contrast_html}"
     )
 
 
-def render_feat_to_seg(engine, feature_dict: dict, matching: list) -> str:
-    """Build HTML for a feature-to-segment query result."""
-    sorted_features = sort_spec(feature_dict)
+def render_feat_to_seg(
+    engine: FeatureEngine,
+    feature_dict: dict[str, str],
+    matching: list[str],
+) -> str:
+    """Build HTML for a feature-to-segment query result. ``engine`` is
+    kept in the signature even though this renderer doesn't query it
+    directly; future extensions (e.g. showing the spec's effect on
+    contrast) would need it and rewiring callers later is more work
+    than carrying a known-good handle now."""
+    del engine  # currently unused; see docstring
     feat_tags = " ".join(
-        _tag(f"{value}{feature}", "green" if value == "+" else "red")
-        for feature, value in sorted_features.items()
+        _signed_feature_chip(value, feature)
+        for feature, value in sort_spec(feature_dict).items()
     )
     if matching:
-        seg_tags = " ".join(_tag(f"/{seg}/", "blue") for seg in matching)
+        seg_tags = " ".join(_segment_chip(seg) for seg in matching)
+        n = len(matching)
         segs_html = (
-            f"<p><b>Matching segments ({len(matching)}):</b><br>{seg_tags}</p>"
+            f"<p><b>Matching {_plural(n, 'segment')} ({n}):</b>"
+            f"<br>{seg_tags}</p>"
         )
     else:
         segs_html = (
-            "<p><b>Matching segments:</b>"
-            f" <i style='color:{C['text_dim']}'>none</i></p>"
+            f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
         )
     return f"<p><b>Query:</b> {feat_tags}</p>{segs_html}"
+
+
+# ---------------------------------------------------------------------------
+# Helpers for render_multi_segment (kept here so the top-level renderer
+# reads as a sequence of intent rather than four screens of f-strings).
+# ---------------------------------------------------------------------------
+def _render_shared_features(common: dict[str, str]) -> str:
+    if not common:
+        return f"<p><b>Shared features:</b> {_muted_italic_span('none')}</p>"
+    chips = " ".join(
+        _signed_feature_chip(value, feature)
+        for feature, value in sort_spec(common).items()
+    )
+    return f"<p><b>Shared features:</b><br>{chips}</p>"
+
+
+def _render_contrast_section(
+    engine: FeatureEngine,
+    segs: list[str],
+    contrastive: dict[str, dict[str, list[str]]],
+) -> str:
+    if contrastive:
+        rows = [
+            _render_contrast_row(feat, contrastive[feat])
+            for feat in sort_features(list(contrastive))
+        ]
+        return (
+            "<p><b>Contrasting features:</b><br>" + "<br>".join(rows) + "</p>"
+        )
+    # No contrastive features. Distinguish "actually identical" from
+    # "only differ in unspecified features"; the latter is a common
+    # source of confusion ("why do these look the same?").
+    has_underspec_diff = any(
+        len({engine.segments[seg].get(feat, "0") for seg in segs}) > 1
+        and "0" in {engine.segments[seg].get(feat, "0") for seg in segs}
+        for feat in engine.features
+    )
+    reason = (
+        "none (only unspecified features differ)"
+        if has_underspec_diff
+        else "none (featurally identical)"
+    )
+    return f"<p><b>Contrasting features:</b> {_muted_italic_span(reason)}</p>"
+
+
+def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
+    """One line in the contrastive-features table: feature name, the
+    segments on the ``+`` side, the segments on the ``-`` side, and
+    (when present) the segments where the feature is unspecified."""
+    plus_segs = " ".join(_segment_chip(seg) for seg in groups["+"])
+    minus_segs = " ".join(_segment_chip(seg) for seg in groups["-"])
+    plus_glyph = f"<span style='color:{C['plus']};font-weight:bold'>+</span>"
+    minus_glyph = (
+        f"<span style='color:{C['minus']};font-weight:bold'>"
+        f"{MINUS_SIGN}</span>"
+    )
+    row = (
+        f"{_tag(feat, TagColor.NEUTRAL)}"
+        f" {plus_glyph} {plus_segs}"
+        f" &nbsp; {minus_glyph} {minus_segs}"
+    )
+    if "0" in groups:
+        zero_segs = " ".join(
+            _segment_chip(seg, TagColor.NEUTRAL) for seg in groups["0"]
+        )
+        row += (
+            f" &nbsp; <span style='color:{C['text_dim']}'>0</span>"
+            f" {zero_segs}"
+        )
+    return row
+
+
+def _render_natural_class_verdict(
+    engine: FeatureEngine, segs: list[str], suggested: list[str]
+) -> tuple[str, str]:
+    """Returns ``(verdict_html, spec_html)``. ``spec_html`` is empty
+    when the answer is "No" since there's no minimal bundle to show."""
+    is_nc, specs = engine.is_natural_class(segs)
+    if is_nc:
+        verdict = f"<p><b>Natural class:</b> {_yes_no(True)}</p>"
+        is_universal = not specs or not specs[0]
+        if is_universal:
+            spec_html = (
+                f"<p><b>Minimal specification:</b>"
+                f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"
+            )
+        else:
+            spec_html = _render_spec_list(specs)
+        return verdict, spec_html
+    if suggested:
+        suggested_tags = " ".join(
+            _segment_chip(seg, TagColor.NEUTRAL) for seg in suggested
+        )
+        n = len(suggested)
+        verdict = (
+            f"<p><b>Natural class:</b> {_yes_no(False)},"
+            f" add {n} {_plural(n, 'segment')} to complete:"
+            f"<br>{suggested_tags}</p>"
+        )
+    else:
+        verdict = f"<p><b>Natural class:</b> {_yes_no(False)}</p>"
+    return verdict, ""
