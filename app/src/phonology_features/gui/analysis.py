@@ -343,13 +343,21 @@ _CONTRAST_NAME_CELL: str = _CONTRAST_CELL_BASE + " white-space:nowrap;"
 def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
     """One ``<tr>`` for the contrastive-features table. Columns:
 
-        | feature | + segments | − segments | 0 segments (or empty) |
+        | feature | + segments | − segments | (0 segments, only when present) |
 
-    The ``0`` column is always emitted (empty when there are no
-    underspecified segments) so the right-hand edge of the table
-    stays vertical across rows that differ in whether ``0`` is
-    present.
+    The ``0`` cell is omitted entirely when the row has no
+    underspecified segments. An empty ``<td>`` would still occupy a
+    selectable area on screen (and contribute a stray tab on copy),
+    which surfaced as "selection highlights an empty third column".
+    Omitting the cell removes both the phantom highlight and the
+    extra tab; rows that DO have ``0`` data simply extend one column
+    further to the right.
     """
+    # Plain bold for the feature name. The chip background was
+    # redundant once the table column provided visual separation, and
+    # the pale gray on near-white panel had almost no contrast in
+    # light mode -- the name was effectively unstyled either way.
+    name_html = f"<b>{html.escape(feat)}</b>"
     plus_chips = " ".join(_segment_chip(seg) for seg in groups["+"])
     minus_chips = " ".join(_segment_chip(seg) for seg in groups["-"])
     plus_glyph = f"<span style='color:{C['plus']};font-weight:bold'>+</span>"
@@ -357,27 +365,21 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
         f"<span style='color:{C['minus']};font-weight:bold'>"
         f"{MINUS_SIGN}</span>"
     )
-    zero_cell = ""
+    cells = [
+        f"<td style='{_CONTRAST_NAME_CELL}'>{name_html}</td>",
+        f"<td style='{_CONTRAST_CELL_BASE}'>{plus_glyph} {plus_chips}</td>",
+        f"<td style='{_CONTRAST_CELL_BASE}'>{minus_glyph} {minus_chips}</td>",
+    ]
     if "0" in groups:
         zero_chips = " ".join(
             _segment_chip(seg, TagColor.NEUTRAL) for seg in groups["0"]
         )
         zero_glyph = f"<span style='color:{C['text_dim']}'>0</span>"
-        zero_cell = f"{zero_glyph} {zero_chips}"
-    # Plain bold for the feature name. We dropped the chip background
-    # because (a) the table column already provides visual separation,
-    # so the chip is redundant decoration, and (b) the chip's pale gray
-    # against the panel's near-white bg has almost no contrast in light
-    # mode -- the name was effectively unstyled anyway.
-    name_html = f"<b>{html.escape(feat)}</b>"
-    return (
-        "<tr>"
-        f"<td style='{_CONTRAST_NAME_CELL}'>{name_html}</td>"
-        f"<td style='{_CONTRAST_CELL_BASE}'>{plus_glyph} {plus_chips}</td>"
-        f"<td style='{_CONTRAST_CELL_BASE}'>{minus_glyph} {minus_chips}</td>"
-        f"<td style='{_CONTRAST_CELL_BASE}'>{zero_cell}</td>"
-        "</tr>"
-    )
+        cells.append(
+            f"<td style='{_CONTRAST_CELL_BASE}'>"
+            f"{zero_glyph} {zero_chips}</td>"
+        )
+    return "<tr>" + "".join(cells) + "</tr>"
 
 
 def _render_natural_class_verdict(
