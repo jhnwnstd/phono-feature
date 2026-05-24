@@ -60,7 +60,6 @@ Repository layout.
 ├── RUN-Mac.command / RUN-Windows.bat / RUN-Linux.sh
 └── app/
     ├── pyproject.toml
-    ├── requirements.txt
     ├── inventories/
     ├── src/phonology_features/   # engine + GUI
     └── tests/
