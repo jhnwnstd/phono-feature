@@ -195,7 +195,6 @@ class FeatureRow(QWidget):
         super().__init__(parent)
         self.feature = feature_name
         self._current_value = ""
-        self._interactive = True
         self._panel_active = False
         self._build_styles()
         # Dedup cache for set_display; cleared by reset / _apply_query_style
@@ -402,7 +401,10 @@ class FeatureRow(QWidget):
         set_css(self.name_label, name_style)
 
     def set_interactive(self, yes: bool):
-        self._interactive = yes
+        # No need to stash ``yes`` on the instance: the +/- buttons'
+        # visibility IS the source of truth for "interactive mode".
+        # Anything that needs to query the state can check
+        # plus_btn.isVisible().
         self.plus_btn.setVisible(yes)
         self.minus_btn.setVisible(yes)
         self.badge.setVisible(not yes)
@@ -489,10 +491,6 @@ class FeatureRow(QWidget):
         set_css(self.name_label, name_style)
         set_css(self, self._ROW_NEUTRAL)
         self._reset_for_panel = self._panel_active
-
-    @property
-    def current_value(self) -> str:
-        return self._current_value
 
 
 class AnalysisPanel(QWidget):

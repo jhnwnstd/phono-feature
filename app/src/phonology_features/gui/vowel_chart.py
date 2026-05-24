@@ -35,25 +35,25 @@ _ROW_LABELS = [label for label, *_ in _VOWEL_HEIGHT]
 
 @dataclass(frozen=True)
 class VowelProfile:
-    """Which vowel-relevant features are actively used in this inventory."""
+    """Which vowel-relevant features are actively used in this inventory.
+
+    Only fields actually consumed by the chart's layout decisions are
+    carried. Earlier versions also tracked ``has_back``, ``has_high``,
+    ``has_low``, and ``has_anterior``, but no code read them so they
+    were dropped to keep the dataclass honest about what it informs.
+    """
 
     has_front: bool
-    has_back: bool
     has_round: bool
     has_labial: bool
-    has_high: bool
-    has_low: bool
     has_atr: bool
     has_tense: bool
     has_coronal: bool
-    has_anterior: bool
 
     @property
     def use_coronal_front_fallback(self) -> bool:
         """Use CORONAL as a proxy for frontness only when Front is absent."""
-        has_coronal_feature = self.has_coronal
-        lacks_front_feature = not self.has_front
-        return has_coronal_feature and lacks_front_feature
+        return self.has_coronal and not self.has_front
 
     @property
     def has_height_sub_distinction(self) -> bool:
@@ -63,31 +63,23 @@ class VowelProfile:
     @property
     def use_labial_round_fallback(self) -> bool:
         """Use LABIAL as a rounding proxy only when Round is absent."""
-        has_labial_feature = self.has_labial
-        lacks_round_feature = not self.has_round
-        return has_labial_feature and lacks_round_feature
+        return self.has_labial and not self.has_round
 
 
 def _detect_vowel_profile(segs: list, norm_feats: dict) -> VowelProfile:
     """Scan the vowel segments to determine which features are in play."""
     active: set[str] = set()
     for seg in segs:
-        seg_features = norm_feats.get(seg, {})
-        for feat, val in seg_features.items():
-            feature_is_active = val != "0"
-            if feature_is_active:
+        for feat, val in norm_feats.get(seg, {}).items():
+            if val != "0":
                 active.add(feat)
     return VowelProfile(
         has_front="front" in active,
-        has_back="back" in active,
         has_round="round" in active,
         has_labial="labial" in active,
-        has_high="high" in active,
-        has_low="low" in active,
         has_atr="atr" in active,
         has_tense="tense" in active,
         has_coronal="coronal" in active,
-        has_anterior="anterior" in active,
     )
 
 

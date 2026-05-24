@@ -1024,24 +1024,6 @@ class MainWindow(QMainWindow):
             if title is not None:
                 self._apply_title_palette(title)
 
-    def _restore_geometry(
-        self,
-        pos,
-        size,
-        hsplit: list[int] | None,
-        vsplit: list[int] | None,
-    ) -> None:
-        """Apply saved geometry atomically: window pos/size + splitter
-        ratios, paint suspended so it's one frame.
-        """
-        with self._batched_updates():
-            self.resize(size)
-            self.move(pos)
-            if hsplit and len(hsplit) == self._hsplit.count():
-                self._hsplit.setSizes(hsplit)
-            if vsplit and len(vsplit) == self._vsplit.count():
-                self._vsplit.setSizes(vsplit)
-
     def _open_builder(self) -> None:
         """Open (or raise) the Builder window. Edits the current
         inventory in place if one is loaded; otherwise shows the
