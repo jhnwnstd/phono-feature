@@ -541,8 +541,12 @@ class InventoryBuilder(QMainWindow):
         v_header = self._table.verticalHeader()
         if h_header:
             h_header.sectionClicked.connect(self._on_col_header_clicked)
+            # See comment in _rebuild_table: doubleclick suppresses
+            # sectionClicked, so wire both signals into the toggle.
+            h_header.sectionDoubleClicked.connect(self._on_col_header_clicked)
         if v_header:
             v_header.sectionClicked.connect(self._on_row_header_clicked)
+            v_header.sectionDoubleClicked.connect(self._on_row_header_clicked)
         # Single source of truth for rm-button enabled/disabled state:
         # fires for every selection change regardless of source (header
         # click, ctrl+A, corner click, drag-select). Setters inside
@@ -624,6 +628,16 @@ class InventoryBuilder(QMainWindow):
             )
             v_header.setMinimumSectionSize(24)
             v_header.sectionClicked.connect(self._on_row_header_clicked)
+            # Critical: PyQt6's QHeaderView suppresses sectionClicked
+            # when the press lands within the OS double-click interval
+            # (~400 ms) of the previous press; it fires
+            # sectionDoubleClicked once instead. So a fast double-
+            # click sequence drops every second click from our toggle
+            # handler -- the bug the user reported as "clicks not
+            # always detecting". Wiring the doubleclick signal to the
+            # same handler reclaims those clicks (it's NEVER fired in
+            # the same press as sectionClicked, so no double-counting).
+            v_header.sectionDoubleClicked.connect(self._on_row_header_clicked)
         h_header = self._table.horizontalHeader()
         if h_header:
             h_header.setFont(QFont("Noto Sans", 11))
@@ -631,6 +645,7 @@ class InventoryBuilder(QMainWindow):
             h_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             h_header.setMinimumSectionSize(32)
             h_header.sectionClicked.connect(self._on_col_header_clicked)
+            h_header.sectionDoubleClicked.connect(self._on_col_header_clicked)
         # clear() can replace the selectionModel too; re-wire it here.
         sel_model = self._table.selectionModel()
         if sel_model is not None:
