@@ -830,6 +830,98 @@ def test_builder_save_then_close_dialog_path(tmp_path: Path) -> None:
     assert not b._dirty, "dirty flag must clear once save signal lands"
 
 
+def test_worker_non_oserror_clears_save_in_flight(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The save worker catches BaseException, not just OSError. If
+    any other exception slipped through, the daemon thread would die
+    silently, ``_save_finished`` would never fire, and
+    ``_save_in_flight`` would be stuck True forever -- a permanent
+    save lockout. Reproduce by monkey-patching write_atomic to raise
+    TypeError."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.engine.inventory import Inventory
+    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.builder import window as _bw
+
+    # Stub modal warning so the error path doesn't deadlock the test.
+    monkeypatch.setattr(_bw, "show_warning", lambda *a, **k: None)
+
+    def boom(self, path):
+        raise TypeError("simulated non-OSError")
+
+    monkeypatch.setattr(Inventory, "write_atomic", boom)
+
+    b = InventoryBuilder(load_path=HAYES)
+    b._write_json(str(tmp_path / "out.json"))
+    import time as _time
+
+    deadline = _time.monotonic() + 2.0
+    while b._save_in_flight and _time.monotonic() < deadline:
+        app.processEvents()
+        _time.sleep(0.01)
+    assert not b._save_in_flight, (
+        "non-OSError in worker left _save_in_flight=True forever; "
+        "user would be permanently locked out of save"
+    )
+    close_builder_silent(b)
+
+
+def test_save_as_drains_in_flight_save(tmp_path: Path, monkeypatch) -> None:
+    """A Save-As during an in-flight Save must wait for the first
+    save to drain so its own write isn't silently dropped by the
+    re-entrancy guard in ``_write_json``."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication, QFileDialog
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+
+    b = InventoryBuilder(load_path=HAYES)
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+    b._current_path = str(first)
+    b._write_json(str(first))
+    assert b._save_in_flight, "first save did not schedule"
+    # Patch the file dialog to return ``second`` without opening.
+    monkeypatch.setattr(QFileDialog, "exec", lambda self: 1)
+    monkeypatch.setattr(
+        QFileDialog, "selectedFiles", lambda self: [str(second)]
+    )
+    b._save_as()
+    import time as _time
+
+    deadline = _time.monotonic() + 3.0
+    while b._save_in_flight and _time.monotonic() < deadline:
+        app.processEvents()
+        _time.sleep(0.01)
+    assert first.exists(), "first save did not complete"
+    assert second.exists(), (
+        "Save-As silently dropped because _save_as did not drain the "
+        "in-flight save before issuing the second write"
+    )
+    close_builder_silent(b)
+
+
 def test_builder_save_runs_off_main_thread(tmp_path: Path) -> None:
     """``_write_json`` validates synchronously then hands the disk
     write to a background worker. We assert:

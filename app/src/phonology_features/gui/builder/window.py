@@ -1269,6 +1269,13 @@ class InventoryBuilder(QMainWindow):
             return
         if not path.endswith(".json"):
             path += ".json"
+        # Drain any in-flight save FIRST so the re-entrancy guard in
+        # ``_write_json`` doesn't silently drop this Save-As. Without
+        # this, a user who hits Save then immediately Save-As (e.g.
+        # because they realised they want a new filename) saw the
+        # second action quietly do nothing.
+        if self._save_in_flight:
+            self._wait_for_save()
         self._write_json(path)
         self._current_path = path
         self._update_title()
@@ -1317,8 +1324,14 @@ class InventoryBuilder(QMainWindow):
             try:
                 inventory.write_atomic(path)
                 err: str = ""
-            except OSError as e:
-                err = str(e)
+            except BaseException as e:
+                # Catch EVERYTHING -- not just OSError. If any other
+                # exception escapes, the daemon thread dies silently,
+                # _save_finished never fires, and _save_in_flight stays
+                # True forever -- a permanent save lockout until app
+                # restart. The error string surfaced to the user is
+                # the same shape regardless of the exception class.
+                err = f"{type(e).__name__}: {e}"
             self._save_finished.emit(path, err)
 
         threading.Thread(target=worker, daemon=True).start()
