@@ -14,7 +14,7 @@ from phonology_features.gui.constants import (
 )
 from phonology_features.gui.palette import C
 from phonology_features.gui.style_utils import set_css, set_html
-from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QGridLayout,
@@ -526,8 +526,6 @@ class _CopyableTextEdit(QTextEdit):
     )
 
     def createMimeDataFromSelection(self):  # type: ignore[override]
-        from PyQt6.QtCore import QMimeData
-
         original = super().createMimeDataFromSelection()
         if original is None:
             return original

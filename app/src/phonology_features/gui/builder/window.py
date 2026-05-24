@@ -19,7 +19,15 @@ from phonology_features.gui.builder.grid import (
 )
 from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor, QFont, QPalette, QPen, QRegion
+from PyQt6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QPainter,
+    QPalette,
+    QPen,
+    QRegion,
+)
 from PyQt6.QtWidgets import (
     QAbstractButton,
     QDialog,
@@ -218,8 +226,6 @@ class _BulkCycleTable(QTableWidget):
             cells.add((idx.row(), idx.column()))
         if not cells:
             return
-        from PyQt6.QtGui import QPainter
-
         painter = QPainter(self.viewport())
         pen = QPen(QColor(C["accent"]))
         pen.setWidth(2)
@@ -256,8 +262,6 @@ class _BulkCycleTable(QTableWidget):
         by the full-row / full-column / full-table fast paths."""
         if not rect.isValid():
             return
-        from PyQt6.QtGui import QPainter
-
         painter = QPainter(self.viewport())
         pen = QPen(QColor(C["accent"]))
         pen.setWidth(2)

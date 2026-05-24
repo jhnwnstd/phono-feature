@@ -86,7 +86,7 @@ BTN_W = 33
 BTN_GAP = 4
 # Canonical feature display order. Features absent from this list trail
 # at the end in their original order.
-FEATURE_ORDER: list = [
+FEATURE_ORDER: list[str] = [
     # Major class
     "Syllabic",
     "Consonantal",
@@ -128,11 +128,12 @@ FEATURE_ORDER: list = [
     "Tone",
     "UpperRegister",
 ]
-_FEATURE_ORDER_INDEX: dict = {
+_FEATURE_ORDER_INDEX: dict[str, int] = {
     feature: index for index, feature in enumerate(FEATURE_ORDER)
 }
-# Two-column feature panel layout.
-FEATURE_GROUPS: list = [
+# Two-column feature panel layout. Each entry is
+# ``(group_title, member_features)``.
+FEATURE_GROUPS: list[tuple[str, list[str]]] = [
     (
         "Major Class",
         [
@@ -200,7 +201,7 @@ FEATURE_GROUPS: list = [
 ]
 
 
-def sort_features(features: list) -> list:
+def sort_features(features: list[str]) -> list[str]:
     """Sort features by ``FEATURE_ORDER``; unknowns trail in original order."""
     unknown_index = len(FEATURE_ORDER)
     return sorted(
@@ -208,7 +209,7 @@ def sort_features(features: list) -> list:
     )
 
 
-def sort_spec(spec: dict) -> dict:
+def sort_spec(spec: dict[str, str]) -> dict[str, str]:
     """Reorder a feature-bundle dict into canonical key order."""
     return {
         feature: spec[feature] for feature in sort_features(list(spec.keys()))
