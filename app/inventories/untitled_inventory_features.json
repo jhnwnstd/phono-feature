@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "name": "Untitled Inventory"
+  },
+  "features": [
+    "Syllabic",
+    "Consonantal"
+  ],
+  "segments": {
+    "p": {},
+    "b": {},
+    "t": {},
+    "d": {},
+    "k": {},
+    "ɡ": {}
+  }
+}

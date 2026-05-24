@@ -1,8 +1,5 @@
 """Reusable dialog helpers and the InputDialog for inventory setup."""
 
-from phonology_features.engine.inventory import MAX_NAME_LENGTH
-from phonology_features.gui.builder.presets import FEATURE_PRESETS
-from phonology_features.gui.palette import C
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QColor, QFont, QPainter, QTextCursor
 from PyQt6.QtWidgets import (
@@ -16,6 +13,10 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
+
+from phonology_features.engine.inventory import MAX_NAME_LENGTH
+from phonology_features.gui.builder.presets import FEATURE_PRESETS
+from phonology_features.gui.palette import C
 
 
 class _AutofillTextEdit(QPlainTextEdit):
@@ -102,10 +103,8 @@ class SegmentTextEdit(_AutofillTextEdit):
     separator -- ``entries()`` splits on whitespace and filters
     empties so the trailer doesn't introduce a phantom entry."""
 
-    DEFAULT_FILL = (
-        # noqa: RUF001; IPA voiced velar (script g)
-        "p b t d k \u0261 "
-    )
+    # The \u0261 here is U+0261 (IPA voiced velar script g), not ASCII g.
+    DEFAULT_FILL = "p b t d k \u0261 "
 
 
 class FeatureTextEdit(_AutofillTextEdit):

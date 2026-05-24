@@ -20,9 +20,10 @@ table feeding ``segment_distance``) build lazily via
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from functools import cached_property
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 from phonology_features._logging import get_logger
 from phonology_features.engine.inventory import (
@@ -79,7 +80,7 @@ class FeatureEngine:
         ] = {}
 
     @classmethod
-    def from_path(cls, path: str) -> "FeatureEngine":
+    def from_path(cls, path: str) -> FeatureEngine:
         """Parse a JSON inventory file and return a loaded engine.
         Convenience wrapper around ``Inventory.load`` + ``__init__``."""
         return cls(Inventory.load(path))
@@ -467,7 +468,10 @@ class FeatureEngine:
         self._validate_segment(seg2)
         t1 = self._seg_value_tuples[seg1]
         t2 = self._seg_value_tuples[seg2]
-        return sum(1 for a, b in zip(t1, t2) if a != b)
+        # ``strict=True``: t1 and t2 come from the same engine, so they
+        # MUST have the same length (one entry per declared feature);
+        # a mismatch is a contract bug worth surfacing.
+        return sum(1 for a, b in zip(t1, t2, strict=True) if a != b)
 
     def find_nearest_segments(
         self, segment: str, n: int = 5
@@ -512,7 +516,9 @@ class FeatureEngine:
                 ti = tuples[i]
                 for j in range(i + 1, n):
                     tj = tuples[j]
-                    total += sum(1 for a, b in zip(ti, tj) if a != b)
+                    total += sum(
+                        1 for a, b in zip(ti, tj, strict=True) if a != b
+                    )
             count = n * (n - 1) // 2
             stats["avg_feature_distance"] = total / count
         else:

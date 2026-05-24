@@ -8,8 +8,8 @@ related step.
 """
 
 from collections import defaultdict
+from collections.abc import Mapping
 from functools import lru_cache
-from typing import Mapping
 
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.

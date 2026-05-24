@@ -15,14 +15,15 @@ Covers the recently-fixed UX bugs:
 from __future__ import annotations
 
 import pytest
+from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtWidgets import QDialog, QMessageBox
+
 from phonology_features.gui.builder.dialogs import (
     FeatureTextEdit,
     InputDialog,
     SegmentTextEdit,
 )
-from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QKeyEvent
-from PyQt6.QtWidgets import QDialog, QMessageBox
 
 
 # ---------------------------------------------------------------------------

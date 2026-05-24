@@ -13,11 +13,11 @@ import os
 
 # Must be set before any PyQt6 import so the QApplication picks the right plugin.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from pathlib import Path  # noqa: E402
+from pathlib import Path
 
-import pytest  # noqa: E402
-from PyQt6.QtCore import QSettings  # noqa: E402
-from PyQt6.QtWidgets import QApplication  # noqa: E402
+import pytest
+from PyQt6.QtCore import QSettings
+from PyQt6.QtWidgets import QApplication
 
 
 @pytest.fixture(scope="session")

@@ -3,7 +3,7 @@
 import os
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, ClassVar, NamedTuple
 
 from phonology_features._logging import get_logger
 from phonology_features.engine.inventory import (
@@ -15,19 +15,7 @@ from phonology_features.engine.inventory import (
 if TYPE_CHECKING:
     # Only used in a string-form type annotation; importing at runtime
     # is pure cost (PyQt6.QtGui.QRegion drags in extra Qt symbols).
-    from PyQt6.QtGui import QRegion  # noqa: F401
-from phonology_features.gui.builder.dialogs import (
-    InputDialog,
-    ask_question,
-    center_on_parent,
-    show_warning,
-)
-from phonology_features.gui.builder.grid import (
-    cycle_value,
-    make_cell,
-    style_cell,
-)
-from phonology_features.gui.palette import C
+    from PyQt6.QtGui import QRegion
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import (
     QBrush,
@@ -58,6 +46,19 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from phonology_features.gui.builder.dialogs import (
+    InputDialog,
+    ask_question,
+    center_on_parent,
+    show_warning,
+)
+from phonology_features.gui.builder.grid import (
+    cycle_value,
+    make_cell,
+    style_cell,
+)
+from phonology_features.gui.palette import C
 
 _log = get_logger(__name__)
 
@@ -404,7 +405,7 @@ class InventoryBuilder(QMainWindow):
         # the next selection change can repaint only (old | new) rather
         # than the entire viewport. Held as a QRegion so the union
         # works for arbitrary shapes (single column, cross, rectangle).
-        self._last_selection_region: "QRegion | None" = None
+        self._last_selection_region: QRegion | None = None
         # User-click stickies, distinct from the Qt-selection-derived
         # ``_selected_remove_*`` above. Qt auto-selects the column /
         # row on header PRESS (before sectionClicked fires on
@@ -805,14 +806,14 @@ class InventoryBuilder(QMainWindow):
     # Number / numpad keys set the cell directly to a specific value.
     # 0 is also accepted alongside 3 because that's where "zero" sits on
     # most keyboards (and it's the most natural press for "underspecified").
-    _VALUE_KEYS = {
+    _VALUE_KEYS: ClassVar[dict] = {
         Qt.Key.Key_1: "+",
         Qt.Key.Key_2: "\u2212",  # Unicode minus, matches cycle_value()
         Qt.Key.Key_3: "0",
         Qt.Key.Key_0: "0",
     }
     # Numpad-style + Vim-style cell navigation. dr, dc as relative steps.
-    _MOVE_KEYS = {
+    _MOVE_KEYS: ClassVar[dict] = {
         Qt.Key.Key_8: (-1, 0),
         Qt.Key.Key_K: (-1, 0),
         Qt.Key.Key_5: (1, 0),

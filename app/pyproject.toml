@@ -6,7 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "phonology-features"
 version = "0.1.0"
 description = "Desktop tool for browsing phonological inventories, computing natural classes, finding minimal feature bundles, and inferring feature geometry."
-readme = "README.md"
+# README.md and LICENSE here are symlinks to the repo-root files;
+# setuptools refuses paths outside the pyproject directory, so the
+# alternative would be two sources of truth. Symlinks keep one.
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "John Winstead" }]
@@ -46,7 +49,20 @@ extend-exclude = [".venv", "build", "dist"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "RUF"]
-ignore = ["E501"]
+ignore = [
+    "E501",
+    # RUF001/002/003 flag "ambiguous Unicode characters" -- the
+    # default policy treats e.g. ɡ (U+0261 LATIN SMALL LETTER SCRIPT
+    # G) as suspicious because it resembles g (U+0067). For a
+    # phonology engine these characters are the WHOLE POINT: IPA
+    # notation deliberately uses script g, modifier letter
+    # apostrophe (ʼ), length mark (ː), etc. Suppressing here keeps
+    # the substantive RUF checks (RUF012 mutable class default,
+    # RUF013 implicit Optional, etc.) active.
+    "RUF001",  # ambiguous-unicode-character-string
+    "RUF002",  # ambiguous-unicode-character-docstring
+    "RUF003",  # ambiguous-unicode-character-comment
+]
 
 [tool.mypy]
 python_version = "3.11"
@@ -57,6 +73,12 @@ warn_redundant_casts = true
 # ignores accumulate and silently hide real errors that move under
 # them later.
 warn_unused_ignores = true
+# Without this, function bodies that lack annotations on the def
+# itself (the common Qt-override pattern in this codebase) are
+# silently skipped -- mypy reports them as "annotation-unchecked"
+# notes. Enabling means the actual statements inside those bodies
+# are type-checked, which catches real bugs.
+check_untyped_defs = true
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

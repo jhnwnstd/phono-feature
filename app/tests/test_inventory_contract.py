@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 
 import pytest
+
 from phonology_features.engine.feature_engine import FeatureEngine
 from phonology_features.engine.geometry import GeometryAnalyzer
 from phonology_features.engine.inventory import (
@@ -467,7 +468,7 @@ def test_bundled_inventories_produce_no_ipa_confusable_advisories() -> None:
         confusable_advisories = [
             a
             for a in inv.advisories
-            if "U+" in a and "IPA" in a or "length mark" in a
+            if ("U+" in a and "IPA" in a) or "length mark" in a
         ]
         assert confusable_advisories == [], (
             f"{fname} triggered IPA confusable advisories: "
@@ -1274,11 +1275,13 @@ def test_analysis_tag_escapes_html_in_text() -> None:
 def test_analysis_render_single_segment_escapes_symbol() -> None:
     """The segment symbol is interpolated into the bold header
     outside the tag chip, so it has its own escape call."""
+    from typing import ClassVar
+
     from phonology_features.gui.analysis import render_single_segment
 
     class _FakeEngine:
         features: tuple[str, ...] = ("Voice",)
-        segments = {"<x>": {"Voice": "+"}}
+        segments: ClassVar[dict] = {"<x>": {"Voice": "+"}}
 
         def is_natural_class(self, segs):
             return False, []
@@ -1836,8 +1839,9 @@ def test_safe_read_setting_rejects_wrong_type_without_removing() -> None:
     with a string) falls back to default but is NOT removed -- the
     user may have set it deliberately and we just don't know how
     to use it yet."""
-    from phonology_features._settings import safe_read_setting
     from PyQt6.QtCore import QSize
+
+    from phonology_features._settings import safe_read_setting
 
     class FakeSettings:
         def __init__(self) -> None:
@@ -1856,8 +1860,9 @@ def test_safe_read_setting_rejects_wrong_type_without_removing() -> None:
 
 
 def test_safe_read_setting_accepts_correct_type() -> None:
-    from phonology_features._settings import safe_read_setting
     from PyQt6.QtCore import QSize
+
+    from phonology_features._settings import safe_read_setting
 
     class FakeSettings:
         def value(self, key: str, default: object) -> object:

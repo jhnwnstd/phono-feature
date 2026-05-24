@@ -83,6 +83,25 @@ jobs:
           fi
           python -m pip install --quiet -e ".[dev]"
 
+      - name: Run ruff in the launcher's venv
+        # Lint runs ONCE on Linux -- the rules are platform-agnostic and
+        # running on every matrix entry would triple the CI minutes for
+        # zero coverage gain.
+        if: runner.os == 'Linux'
+        working-directory: app
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          ruff check src tests
+
+      - name: Run mypy in the launcher's venv
+        if: runner.os == 'Linux'
+        working-directory: app
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          mypy src tests
+
       - name: Run pytest in the launcher's venv
         working-directory: app
         shell: bash

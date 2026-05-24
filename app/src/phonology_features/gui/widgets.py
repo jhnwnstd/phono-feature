@@ -5,15 +5,8 @@ swaps; per-widget style dicts are cached per theme at class level.
 
 import math
 from enum import StrEnum
+from typing import ClassVar
 
-from phonology_features.gui.constants import (
-    BTN_GAP,
-    BTN_W,
-    MONO_FAMILIES,
-    scrollbar_style,
-)
-from phonology_features.gui.palette import C
-from phonology_features.gui.style_utils import set_css, set_html
 from PyQt6.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -26,6 +19,15 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from phonology_features.gui.constants import (
+    BTN_GAP,
+    BTN_W,
+    MONO_FAMILIES,
+    scrollbar_style,
+)
+from phonology_features.gui.palette import C
+from phonology_features.gui.style_utils import set_css, set_html
 
 
 class SegmentState(StrEnum):
@@ -46,7 +48,7 @@ class SegmentButton(QPushButton):
     """
 
     # theme name -> styles dict, shared across instances.
-    _styles_cache: dict[str, dict] = {}
+    _styles_cache: ClassVar[dict[str, dict]] = {}
 
     @classmethod
     def _styles_for_active_theme(cls) -> dict:
@@ -167,7 +169,7 @@ class FeatureRow(QWidget):
 
     value_changed = pyqtSignal(str, str)
     # theme name -> styles dict (BADGE_*, ROW_*, NAME_*).
-    _styles_cache: dict[str, dict[str, str]] = {}
+    _styles_cache: ClassVar[dict[str, dict[str, str]]] = {}
     # Instance attrs populated by ``_build_styles`` via setattr from
     # the cached theme dict; declared here so mypy sees them.
     _BADGE_CONTRASTIVE: str = ""

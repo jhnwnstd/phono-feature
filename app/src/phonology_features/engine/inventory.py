@@ -28,9 +28,10 @@ import json
 import os
 import tempfile
 import unicodedata
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 from phonology_features._logging import get_logger
 
@@ -304,7 +305,7 @@ class Inventory:
     advisories: tuple[str, ...] = field(default=())
 
     @classmethod
-    def parse(cls, raw: Any, *, source: str | None = None) -> "Inventory":
+    def parse(cls, raw: Any, *, source: str | None = None) -> Inventory:
         """Validate raw (already-JSON-decoded) data into an Inventory.
 
         Collects every issue before raising so the caller can show them
@@ -447,7 +448,7 @@ class Inventory:
         name: str,
         features: list[str],
         segments: dict[str, dict[str, str]],
-    ) -> "Inventory":
+    ) -> Inventory:
         """Construct from builder grid state. Validates by funneling
         through ``parse`` so there is exactly one validation code path.
         ASCII-minus normalization (Unicode ``−`` -> ``-``) happens
@@ -469,7 +470,7 @@ class Inventory:
         )
 
     @classmethod
-    def load(cls, path: str) -> "Inventory":
+    def load(cls, path: str) -> Inventory:
         """Read and parse a JSON inventory file. Raises
         ``ValidationError`` (with ``source=path`` in messages) on any
         problem; the underlying ``OSError`` / ``JSONDecodeError`` is

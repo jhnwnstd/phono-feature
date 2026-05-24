@@ -11,41 +11,6 @@ from contextlib import contextmanager
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from phonology_features._logging import get_logger
-from phonology_features._settings import safe_read_setting
-from phonology_features.engine.feature_engine import FeatureEngine
-from phonology_features.engine.inventory import Inventory, ValidationError
-from phonology_features.gui.analysis import (
-    compute_contrastive,
-    render_feat_to_seg,
-    render_multi_segment,
-    render_single_segment,
-)
-from phonology_features.gui.constants import (
-    BTN_GAP,
-    BTN_W,
-    FEATURE_GROUPS,
-    FEATURE_ORDER,
-    SETTINGS_APP,
-    SETTINGS_ORG,
-    scrollbar_style,
-    sort_features,
-)
-from phonology_features.gui.palette import (
-    C,
-    detect_system_theme,
-    get_theme_name,
-    set_theme,
-)
-from phonology_features.gui.style_utils import set_css
-from phonology_features.gui.vowel_chart import VOWEL_LABEL_W, VowelChartWidget
-from phonology_features.gui.widgets import (
-    AnalysisPanel,
-    FeatureRow,
-    SegmentButton,
-    SegmentGridWidget,
-    SegmentState,
-)
 from PyQt6.QtCore import (
     QByteArray,
     QEvent,
@@ -84,6 +49,42 @@ from PyQt6.QtWidgets import (
     QToolTip,
     QVBoxLayout,
     QWidget,
+)
+
+from phonology_features._logging import get_logger
+from phonology_features._settings import safe_read_setting
+from phonology_features.engine.feature_engine import FeatureEngine
+from phonology_features.engine.inventory import Inventory, ValidationError
+from phonology_features.gui.analysis import (
+    compute_contrastive,
+    render_feat_to_seg,
+    render_multi_segment,
+    render_single_segment,
+)
+from phonology_features.gui.constants import (
+    BTN_GAP,
+    BTN_W,
+    FEATURE_GROUPS,
+    FEATURE_ORDER,
+    SETTINGS_APP,
+    SETTINGS_ORG,
+    scrollbar_style,
+    sort_features,
+)
+from phonology_features.gui.palette import (
+    C,
+    detect_system_theme,
+    get_theme_name,
+    set_theme,
+)
+from phonology_features.gui.style_utils import set_css
+from phonology_features.gui.vowel_chart import VOWEL_LABEL_W, VowelChartWidget
+from phonology_features.gui.widgets import (
+    AnalysisPanel,
+    FeatureRow,
+    SegmentButton,
+    SegmentGridWidget,
+    SegmentState,
 )
 
 if TYPE_CHECKING:
