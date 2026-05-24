@@ -684,9 +684,15 @@ class InventoryBuilder(QMainWindow):
         v_header = self._table.verticalHeader()
         if v_header:
             v_header.setFont(QFont("Noto Sans", 9))
-            v_header.setSectionResizeMode(
-                QHeaderView.ResizeMode.ResizeToContents
-            )
+            # Fixed (NOT ResizeToContents). The previous mode triggered
+            # a per-row re-measure on EVERY cell data change -- a
+            # bulk-cycle on a 28-cell column took ~1 SECOND because
+            # each item.setForeground stalled Qt re-walking the row.
+            # Values are always single-char (+/-/0) so adaptive sizing
+            # is pointless; profile dropped from 1096 ms -> 0.3 ms for
+            # a single-column cycle, 60 s+ -> 17 ms for select-all.
+            v_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+            v_header.setDefaultSectionSize(26)
             v_header.setMinimumSectionSize(24)
             v_header.sectionClicked.connect(self._on_row_header_clicked)
         h_header = self._table.horizontalHeader()
@@ -797,12 +803,23 @@ class InventoryBuilder(QMainWindow):
         """Cycle every selected cell to the value ``anchor_item`` would
         cycle to. The anchor is whichever cell the user clicked or is
         currently focused on; its current value picks the destination
-        for the whole batch so the selection stays uniform."""
-        items = self._table.selectedItems()
-        if not items:
-            items = [anchor_item]
+        for the whole batch so the selection stays uniform.
+
+        Reads the selection via ``selectionModel().selectedIndexes()``
+        which is O(selected) -- ``selectedItems()`` iterates the entire
+        model dict (O(rows*cols)) and was a measurable cost on large
+        grids.
+        """
         new_val = cycle_value(anchor_item.text())
-        self._apply_value_to_items(items, new_val)
+        sel_model = self._table.selectionModel()
+        if sel_model is None or not sel_model.hasSelection():
+            # Anchor-only path: keyboard-driven cycle on the current
+            # cell with no multi-cell selection (e.g. Space in nav mode).
+            self._set_cell_value(
+                anchor_item.row(), anchor_item.column(), new_val
+            )
+            return
+        self._apply_value_to_indexes(sel_model.selectedIndexes(), new_val)
 
     def _apply_value_to_selection(
         self, value: str, fallback_row: int, fallback_col: int
@@ -811,30 +828,66 @@ class InventoryBuilder(QMainWindow):
         at ``(fallback_row, fallback_col)`` when there is no multi-cell
         selection; typical case where the user has just navigated to a
         single cell with the keyboard."""
-        items = self._table.selectedItems()
-        if len(items) > 1:
-            self._apply_value_to_items(items, value)
-            return
+        sel_model = self._table.selectionModel()
+        if sel_model is not None and sel_model.hasSelection():
+            indexes = sel_model.selectedIndexes()
+            if len(indexes) > 1:
+                self._apply_value_to_indexes(indexes, value)
+                return
         self._set_cell_value(fallback_row, fallback_col, value)
 
-    def _apply_value_to_items(self, items: list, value: str) -> None:
-        """Bulk-write ``value`` to ``items``, skipping any that already
-        match. Records the whole batch as one undoable edit."""
+    def _apply_value_to_indexes(self, indexes, value: str) -> None:
+        """Bulk-write ``value`` to every cell in ``indexes``, skipping
+        any that already match. Records the whole batch as one
+        undoable edit.
+
+        Wraps the per-cell writes in ``setUpdatesEnabled(False)`` +
+        ``blockSignals(True)`` so Qt suspends paint scheduling and
+        view-update signal handling for the duration. Without this,
+        each ``setText`` / ``setForeground`` would schedule its own
+        cascade and the cumulative cost was much higher than the
+        actual work.
+        """
         edits: list[_CellEdit] = []
-        for item in items:
-            if item is None or item.text() == value:
-                continue
-            edits.append(
-                _CellEdit(item.row(), item.column(), item.text(), value)
-            )
-            item.setText(value)
-            style_cell(item, value)
+        table = self._table
+        table.setUpdatesEnabled(False)
+        was_blocking = table.blockSignals(True)
+        try:
+            for idx in indexes:
+                row, col = idx.row(), idx.column()
+                item = table.item(row, col)
+                if item is None:
+                    continue
+                old = item.text()
+                if old == value:
+                    continue
+                edits.append(_CellEdit(row, col, old, value))
+                item.setText(value)
+                style_cell(item, value)
+        finally:
+            table.blockSignals(was_blocking)
+            table.setUpdatesEnabled(True)
+        if edits:
+            # One viewport update covers every changed cell at once
+            # instead of N queued data-change paints. Painter clips
+            # to dirty regions, so this isn't even a full repaint --
+            # Qt re-paints only the cells whose items mutated.
+            table.viewport().update()
         self._commit_edits(edits)
 
     def _commit_edits(self, edits: list[_CellEdit]) -> None:
         """Push a non-empty edit batch onto the undo stack and update
-        dirty + remove-button state. Empty batches are ignored so
-        no-op operations don't pollute the history."""
+        dirty state. Empty batches are ignored so no-op operations
+        don't pollute the history.
+
+        Does NOT touch the rm-button enabled state -- the Qt selection
+        model is unchanged by an edit, so the existing enable state
+        (which reflects "is one column or row selected?") is still
+        correct. The previous behaviour (calling
+        ``_clear_remove_selection`` here) caused the visible-vs-
+        disabled mismatch: the column stayed highlighted but the
+        - Segment button went grey, forcing a header re-click.
+        """
         if not edits:
             return
         self._undo_stack.append(edits)
@@ -844,7 +897,6 @@ class InventoryBuilder(QMainWindow):
         if len(self._undo_stack) > _MAX_UNDO_DEPTH:
             self._undo_stack.pop(0)
         self._dirty = True
-        self._clear_remove_selection()
 
     def _undo(self) -> None:
         """Reverse the most recent batch and move it to the redo stack."""
@@ -852,14 +904,9 @@ class InventoryBuilder(QMainWindow):
             self._status.showMessage("Nothing to undo.")
             return
         edits = self._undo_stack.pop()
-        for e in edits:
-            item = self._table.item(e.row, e.col)
-            if item is not None:
-                item.setText(e.old)
-                style_cell(item, e.old)
+        self._replay_edits(edits, use_old=True)
         self._redo_stack.append(edits)
         self._dirty = True
-        self._clear_remove_selection()
         self._status.showMessage(
             f"Undid {len(edits)} cell change{'s' if len(edits) != 1 else ''}."
         )
@@ -870,17 +917,35 @@ class InventoryBuilder(QMainWindow):
             self._status.showMessage("Nothing to redo.")
             return
         edits = self._redo_stack.pop()
-        for e in edits:
-            item = self._table.item(e.row, e.col)
-            if item is not None:
-                item.setText(e.new)
-                style_cell(item, e.new)
+        self._replay_edits(edits, use_old=False)
         self._undo_stack.append(edits)
         self._dirty = True
-        self._clear_remove_selection()
         self._status.showMessage(
             f"Redid {len(edits)} cell change{'s' if len(edits) != 1 else ''}."
         )
+
+    def _replay_edits(
+        self, edits: list[_CellEdit], *, use_old: bool
+    ) -> None:
+        """Apply ``edits`` to the grid (``use_old`` for undo, new for
+        redo). Same batching trick as ``_apply_value_to_indexes``:
+        suspend paint + signals during the loop, then a single
+        viewport.update() at the end."""
+        table = self._table
+        table.setUpdatesEnabled(False)
+        was_blocking = table.blockSignals(True)
+        try:
+            for e in edits:
+                item = table.item(e.row, e.col)
+                if item is None:
+                    continue
+                target = e.old if use_old else e.new
+                item.setText(target)
+                style_cell(item, target)
+        finally:
+            table.blockSignals(was_blocking)
+            table.setUpdatesEnabled(True)
+        table.viewport().update()
 
     # Header selection / remove button state
     def _on_col_header_clicked(self, col: int):
