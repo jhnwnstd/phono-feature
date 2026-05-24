@@ -44,7 +44,7 @@ class _AutofillTextEdit(QTextEdit):
         super().__init__(parent)
         self.setTabChangesFocus(True)
 
-    def event(self, e: QEvent | None) -> bool:  # type: ignore[override]
+    def event(self, e: QEvent | None) -> bool:
         if (
             e is not None
             and e.type() == QEvent.Type.KeyPress
@@ -68,7 +68,7 @@ class _AutofillTextEdit(QTextEdit):
         only one per line)."""
         return [token for token in self.toPlainText().split() if token]
 
-    def paintEvent(self, e):  # type: ignore[override]
+    def paintEvent(self, e):
         super().paintEvent(e)
         if self.toPlainText() or not self.placeholderText():
             return
@@ -283,7 +283,7 @@ class InputDialog(QDialog):
             return name
         return "Untitled Inventory"
 
-    def accept(self) -> None:  # type: ignore[override]
+    def accept(self) -> None:
         """Validate inputs before dismissing. On failure, warn, focus
         the offending field, and keep the dialog open.
         """

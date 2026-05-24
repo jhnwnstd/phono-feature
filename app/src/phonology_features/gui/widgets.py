@@ -633,7 +633,7 @@ class SegmentGridWidget(QWidget):
             set_css(hdr, style)
         self._last_headers_active = active
 
-    def sizeHint(self) -> QSize:  # type: ignore[override]
+    def sizeHint(self) -> QSize:
         """Report the natural width (widest manner-class group on one
         row) instead of the layout's currently-rendered width.
         QGridLayout.sizeHint reflects the columns currently in use,

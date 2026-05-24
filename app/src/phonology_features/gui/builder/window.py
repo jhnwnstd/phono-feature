@@ -3,6 +3,7 @@
 import os
 import re
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from phonology_features.engine.inventory import Inventory, ValidationError
 from phonology_features.gui.builder.dialogs import (
@@ -42,23 +43,34 @@ from PyQt6.QtWidgets import (
 )
 
 
+class _CellPrev(NamedTuple):
+    """One cell's pre-edit state. NamedTuple instead of a raw
+    ``tuple[int, int, str]`` so the destructuring in undo / redo
+    (``for row, col, old in edit.cells``) reads against named slots
+    rather than positional ones. Zero runtime overhead vs. a plain
+    tuple."""
+
+    row: int
+    col: int
+    old: str
+
+
 @dataclass(frozen=True)
 class _BulkEdit:
     """One undoable mutation. ``new`` is the value applied to every
     cell in the batch (uniform -- bulk-cycle and key-set targets
     always pick a single destination value). ``cells`` carries the
-    per-cell old state as a tuple of ``(row, col, old_value)``
-    triples. Single-cell edits use a 1-element ``cells`` tuple; bulk
-    edits share one ``new`` string across N cells instead of
-    duplicating it N times.
+    per-cell old state as a tuple of ``_CellPrev`` records. Single-
+    cell edits use a 1-element ``cells`` tuple; bulk edits share one
+    ``new`` string across N cells instead of duplicating it N times.
 
-    Memory: tuple wrapper (~56 B) + ~56 B per cell triple. A 3920-
+    Memory: tuple wrapper (~56 B) + ~56 B per cell entry. A 3920-
     cell select-all batch used to allocate 3920 ``_CellEdit`` records
     (~96 B each = ~375 KB); the new shape is ~220 KB, a ~40 % saving
     that compounds across the 200-batch undo cap.
     """
 
-    cells: tuple[tuple[int, int, str], ...]
+    cells: tuple[_CellPrev, ...]
     new: str
 
 
@@ -95,7 +107,7 @@ class _ToggleHeaderView(QHeaderView):
         # sectionClicked signals fire at all.
         self.setSectionsClickable(True)
 
-    def mouseDoubleClickEvent(self, e):  # type: ignore[override]
+    def mouseDoubleClickEvent(self, e):
         # Coordinate space: x for horizontal headers, y for vertical.
         if self.orientation() == Qt.Orientation.Horizontal:
             section = self.logicalIndexAt(e.pos().x())
@@ -131,7 +143,7 @@ class _BulkCycleTable(QTableWidget):
         """Builder hands us a function ``(QTableWidgetItem) -> None``."""
         self._bulk_cycle_cb = cb
 
-    def mousePressEvent(self, event):  # type: ignore[override]
+    def mousePressEvent(self, event):
         if (
             event.button() == Qt.MouseButton.LeftButton
             and not event.modifiers()
@@ -155,7 +167,7 @@ class _BulkCycleTable(QTableWidget):
                     return
         super().mousePressEvent(event)
 
-    def paintEvent(self, event):  # type: ignore[override]
+    def paintEvent(self, event):
         super().paintEvent(event)
         sel_model = self.selectionModel()
         if sel_model is None:
@@ -277,7 +289,7 @@ class _SelectionFillDelegate(QStyledItemDelegate):
     # at runtime so caching at class load is safe.
     _SELECTED_FLAG = QStyle.StateFlag.State_Selected
 
-    def paint(self, painter, option, index):  # type: ignore[override]
+    def paint(self, painter, option, index):
         if option.state & self._SELECTED_FLAG:
             view = self.parent()
             item = (
@@ -810,7 +822,7 @@ class InventoryBuilder(QMainWindow):
         old = item.text()
         item.setText(value)
         style_cell(item, value)
-        self._commit_edit(_BulkEdit(((row, col, old),), value))
+        self._commit_edit(_BulkEdit((_CellPrev(row, col, old),), value))
 
     def _cycle_selection_from(self, anchor_item: QTableWidgetItem) -> None:
         """Cycle every selected cell to the value ``anchor_item`` would
@@ -861,7 +873,7 @@ class InventoryBuilder(QMainWindow):
         cascade and the cumulative cost was much higher than the
         actual work.
         """
-        triples: list[tuple[int, int, str]] = []
+        prevs: list[_CellPrev] = []
         table = self._table
         table.setUpdatesEnabled(False)
         was_blocking = table.blockSignals(True)
@@ -874,13 +886,13 @@ class InventoryBuilder(QMainWindow):
                 old = item.text()
                 if old == value:
                     continue
-                triples.append((row, col, old))
+                prevs.append(_CellPrev(row, col, old))
                 item.setText(value)
                 style_cell(item, value)
         finally:
             table.blockSignals(was_blocking)
             table.setUpdatesEnabled(True)
-        if not triples:
+        if not prevs:
             return
         # One viewport update covers every changed cell at once
         # instead of N queued data-change paints. Painter clips to
@@ -889,7 +901,7 @@ class InventoryBuilder(QMainWindow):
         viewport = table.viewport()
         if viewport is not None:
             viewport.update()
-        self._commit_edit(_BulkEdit(tuple(triples), value))
+        self._commit_edit(_BulkEdit(tuple(prevs), value))
 
     def _commit_edit(self, edit: _BulkEdit) -> None:
         """Push a non-empty edit onto the undo stack and update dirty

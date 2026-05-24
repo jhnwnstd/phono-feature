@@ -172,10 +172,10 @@ class _BrandedStatusBar(QStatusBar):
         """
         self._message_label.setText(text)
 
-    def clearMessage(self) -> None:  # type: ignore[override]
+    def clearMessage(self) -> None:
         self._message_label.setText("")
 
-    def currentMessage(self) -> str:  # type: ignore[override]
+    def currentMessage(self) -> str:
         return self._message_label.text()
 
 
@@ -193,17 +193,17 @@ class _ThemedHandle(QSplitterHandle):
         super().__init__(orientation, parent)
         self._hover = False
 
-    def enterEvent(self, event):  # type: ignore[override]
+    def enterEvent(self, event):
         self._hover = True
         self.update()
         super().enterEvent(event)
 
-    def leaveEvent(self, event):  # type: ignore[override]
+    def leaveEvent(self, event):
         self._hover = False
         self.update()
         super().leaveEvent(event)
 
-    def paintEvent(self, event):  # type: ignore[override]
+    def paintEvent(self, event):
         painter = QPainter(self)
         painter.fillRect(
             self.rect(),
@@ -215,7 +215,7 @@ class _ThemedSplitter(QSplitter):
     """``QSplitter`` whose handles are ``_ThemedHandle`` (live palette,
     no stylesheet). Cursor is still set automatically by the base."""
 
-    def createHandle(self):  # type: ignore[override]
+    def createHandle(self):
         return _ThemedHandle(self.orientation(), self)
 
 
@@ -226,7 +226,7 @@ class _ThemedCard(QFrame):
     theme toggle (6-7 cards = the cost behind _restyle_feature_cards).
     """
 
-    def paintEvent(self, event):  # type: ignore[override]
+    def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         pen = QPen(QColor(C["border"]))
@@ -647,13 +647,13 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
-    def showEvent(self, event) -> None:  # type: ignore[override]
+    def showEvent(self, event) -> None:
         super().showEvent(event)
         if not self._did_first_show:
             self._did_first_show = True
             QTimer.singleShot(0, self._ensure_visible_on_screen)
 
-    def moveEvent(self, event) -> None:  # type: ignore[override]
+    def moveEvent(self, event) -> None:
         """Update the resize anchor only on user-initiated moves.
 
         Programmatic geometry changes guard with ``_programmatic_geom``
@@ -715,7 +715,7 @@ class MainWindow(QMainWindow):
         if saved_mode in (Mode.SEG_TO_FEAT.value, Mode.FEAT_TO_SEG.value):
             self._set_mode(Mode(saved_mode))
 
-    def closeEvent(self, event):  # type: ignore[override]
+    def closeEvent(self, event):
         # If the builder is open with unsaved changes, give it the
         # chance to prompt -- without this, Qt's parent-child cleanup
         # destroys the builder when the main window dies, bypassing

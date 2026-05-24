@@ -52,6 +52,11 @@ ignore = ["E501"]
 python_version = "3.11"
 strict_optional = true
 warn_redundant_casts = true
+# Surface ``# type: ignore`` comments that are no longer needed (Qt
+# stubs or our own annotations have caught up). Without this dead
+# ignores accumulate and silently hide real errors that move under
+# them later.
+warn_unused_ignores = true
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
