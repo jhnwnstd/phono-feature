@@ -1344,6 +1344,13 @@ class InventoryBuilder(QMainWindow):
         import threading
 
         self._save_in_flight = True
+        # Commit the snapshot to "being written" RIGHT HERE. Any edit
+        # made between this point and worker completion goes through
+        # _commit_edit, which re-sets _dirty=True. Without this clear,
+        # _on_save_finished unconditionally cleared _dirty -- silently
+        # marking post-snapshot edits as saved and losing them on
+        # close-without-save.
+        self._dirty = False
         _log.info(
             "save start: %s (%d segments, %d features)",
             basename,
@@ -1378,12 +1385,19 @@ class InventoryBuilder(QMainWindow):
         self._save_in_flight = False
         basename = os.path.basename(path)
         if error:
+            # Snapshot didn't reach disk; in-memory state diverges from
+            # the file. Re-dirty so the close guard and title bar
+            # correctly reflect the unsaved state.
+            self._dirty = True
             _log.warning("save failed: %s: %s", basename, error)
             show_warning(
                 self, "Save failed", f"Could not write '{path}':\n{error}"
             )
             return
-        self._dirty = False
+        # Success path: do NOT touch ``_dirty``. It was cleared at save
+        # start; any edit made during the worker re-dirtied it via
+        # ``_commit_edit`` (the single chokepoint every edit path goes
+        # through), which is the authoritative source of truth here.
         _log.info("save complete: %s", basename)
         self._status.showMessage(f"Saved to {basename}")
 

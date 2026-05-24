@@ -1029,6 +1029,115 @@ def test_builder_save_runs_off_main_thread(tmp_path: Path) -> None:
     b.close()
 
 
+def test_edit_during_in_flight_save_preserves_dirty(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The snapshot handed to the save worker is fixed at the moment
+    ``_to_inventory()`` ran. Any edit made *after* the snapshot but
+    *before* the worker finishes is NOT in the file on disk -- so the
+    completion handler must not clear ``_dirty``. Before the fix, the
+    completion handler unconditionally cleared the flag, silently
+    marking post-snapshot edits as saved and losing them at close.
+    """
+    import os as _os
+    import time as _time
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.engine.inventory import Inventory
+    from phonology_features.gui.builder import InventoryBuilder
+
+    # Stall the worker so the main thread has time to mutate the grid
+    # between snapshot and completion.
+    real_write = Inventory.write_atomic
+
+    def slow_write(self, path):
+        _time.sleep(0.15)
+        return real_write(self, path)
+
+    monkeypatch.setattr(Inventory, "write_atomic", slow_write)
+
+    b = InventoryBuilder(load_path=HAYES)
+    target = tmp_path / "out.json"
+    b._write_json(str(target))
+    # Snapshot is committed; _dirty cleared by the save-start path.
+    assert b._save_in_flight, "worker should still be running"
+    assert not b._dirty, "snapshot commit should have cleared _dirty"
+
+    # Edit a cell while the worker is still writing the OLD snapshot.
+    # Route through _set_cell_value so it goes through _commit_edit
+    # (the real edit chokepoint), the same path a user click takes.
+    item = b._table.item(0, 0)
+    assert item is not None
+    new = "-" if item.text() == "+" else "+"
+    b._set_cell_value(0, 0, new)
+
+    deadline = _time.monotonic() + 3.0
+    while b._save_in_flight and _time.monotonic() < deadline:
+        app.processEvents()
+        _time.sleep(0.01)
+    assert not b._save_in_flight, "worker never completed"
+    assert b._dirty, (
+        "post-snapshot edit was clobbered: completion handler cleared "
+        "_dirty even though the edit is not in the file on disk"
+    )
+    close_builder_silent(b)
+
+
+def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
+    """A failed write leaves in-memory state diverged from the file on
+    disk. ``_dirty`` is cleared at save-start (snapshot commit), so on
+    worker failure the completion handler must restore it -- otherwise
+    the close guard would let the user discard their unsaved changes.
+    """
+    import os as _os
+    import time as _time
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.engine.inventory import Inventory
+    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.builder import window as _bw
+
+    monkeypatch.setattr(_bw, "show_warning", lambda *a, **k: None)
+    monkeypatch.setattr(
+        Inventory,
+        "write_atomic",
+        lambda self, path: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    b = InventoryBuilder(load_path=HAYES)
+    b._dirty = True
+    b._write_json(str(tmp_path / "out.json"))
+
+    deadline = _time.monotonic() + 2.0
+    while b._save_in_flight and _time.monotonic() < deadline:
+        app.processEvents()
+        _time.sleep(0.01)
+    assert not b._save_in_flight
+    assert b._dirty, (
+        "save failure left _dirty=False; close guard would discard "
+        "the user's unsaved work silently"
+    )
+    close_builder_silent(b)
+
+
 def test_validation_report_html_escapes_issue_text() -> None:
     """The validation-report HTML interpolates raw issue strings; if
     one of those quotes back inventory data containing tag characters
