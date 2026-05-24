@@ -1956,6 +1956,61 @@ def test_stale_tmp_files_swept_on_dropdown_populate(tmp_path: Path) -> None:
     )
 
 
+def test_main_viewer_falls_back_when_current_inventory_deleted(
+    tmp_path: Path,
+) -> None:
+    """When the currently-loaded inventory is deleted from disk
+    (typically via Builder -> Delete), the viewer should switch
+    automatically to the most-recently-opened non-deleted inventory.
+    Pre-fix the viewer kept the dangling path and the watcher
+    auto-reload code path simply no-op'd on the missing file."""
+    import os as _os
+    import shutil as _shutil
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    QApplication.instance() or QApplication([])
+    from phonology_features.gui.main_window import MainWindow
+
+    # Put two inventories in a writable temp dir we can delete from.
+    work_dir = tmp_path / "inventories"
+    work_dir.mkdir()
+    a = work_dir / "a_features.json"
+    b = work_dir / "b_features.json"
+    _shutil.copyfile(HAYES, str(a))
+    _shutil.copyfile(HAYES, str(b))
+
+    w = MainWindow()
+    # Force the bundled-inventories pointer at our temp dir for the
+    # fallback scan (the test isn't dependent on the real bundled set).
+    w._get_inventories_dir = lambda: str(work_dir)  # type: ignore[method-assign]
+    # Load A, then B -- MRU is now [B, A].
+    w._load_path(str(a))
+    w._load_path(str(b))
+    assert w._current_path == _os.path.abspath(str(b))
+    assert w._recent_paths[0] == _os.path.abspath(str(b))
+    assert _os.path.abspath(str(a)) in w._recent_paths
+
+    # Simulate the Builder's delete path: file vanishes from disk,
+    # then the directory watcher fires.
+    _os.remove(str(b))
+    w._on_directory_changed(str(work_dir))
+
+    # Viewer must have fallen back to A (the MRU survivor).
+    assert w._current_path == _os.path.abspath(str(a)), (
+        f"viewer did not fall back after delete: "
+        f"current_path={w._current_path!r}"
+    )
+    w.close()
+
+
 def test_main_viewer_loads_freshly_saved_builder_inventory(
     tmp_path: Path,
 ) -> None:

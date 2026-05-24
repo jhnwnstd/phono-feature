@@ -270,6 +270,11 @@ class MainWindow(QMainWindow):
         self._saved_seg_state: list = []
         self._saved_feat_state: dict = {}
         self._current_path: str | None = None
+        # MRU of paths the user has loaded, deduplicated, capped.
+        # Used to pick a sensible fallback when the currently-loaded
+        # file is deleted under us (e.g. via Builder -> Delete).
+        # Not persisted across sessions -- starts empty each launch.
+        self._recent_paths: list[str] = []
         self._did_first_show = False
         self._builder: InventoryBuilder | None = None
         # Pool of every FeatureRow ever created (FEATURE_ORDER plus any
@@ -1234,6 +1239,36 @@ class MainWindow(QMainWindow):
         if idx >= 0:
             self.inventory_combo.setCurrentIndex(idx)
         self._settings.setValue("last_inventory", path)
+        # Push to MRU front for delete-fallback. Dedup so a repeated
+        # load doesn't push the same path twice. Cap so the list
+        # doesn't grow unbounded over a long session.
+        if path in self._recent_paths:
+            self._recent_paths.remove(path)
+        self._recent_paths.insert(0, path)
+        del self._recent_paths[10:]
+
+    def _pick_fallback_after_delete(self, deleted_path: str) -> str | None:
+        """Choose what to load when ``deleted_path`` has been removed
+        from disk while it was the current inventory. Priority:
+
+        1. Most recent previously-opened inventory that still exists
+           (skipping the deleted one itself).
+        2. First file in the bundled inventories directory (sorted).
+        3. None if nothing's available -- caller falls back to the
+           "no inventory loaded" placeholder.
+        """
+        for path in self._recent_paths:
+            if path == deleted_path:
+                continue
+            if os.path.isfile(path):
+                return path
+        inv_dir = self._get_inventories_dir()
+        if os.path.isdir(inv_dir):
+            for fname in sorted(os.listdir(inv_dir)):
+                if fname.startswith(".") or not fname.endswith(".json"):
+                    continue
+                return os.path.join(inv_dir, fname)
+        return None
 
     def _populate_after_load(self) -> None:
         """Rebuild segment + feature widgets for the freshly-loaded engine.
@@ -1273,16 +1308,46 @@ class MainWindow(QMainWindow):
         """Watched directory changed (file created / renamed / deleted).
         Refresh the dropdown if the inventories dir changed; re-arm the
         file watcher if the current file reappeared after a
-        delete-then-write editor cycle.
+        delete-then-write editor cycle. If the currently-loaded file
+        was deleted, fall back to the most-recent previously-opened
+        inventory (or the first one in the directory) so the viewer
+        doesn't sit on a dangling reference.
         """
         if os.path.normpath(directory) == self._get_inventories_dir():
             self._populate_inventory_dropdown()
         if not self._current_path:
             return
-        if (
-            os.path.isfile(self._current_path)
-            and self._current_path not in self._watcher.files()
-        ):
+        if not os.path.isfile(self._current_path):
+            # Current inventory was deleted under us (most often via
+            # Builder -> Delete). Pick a fallback so the viewer
+            # doesn't continue showing stale data with a missing-file
+            # path. _pick_fallback_after_delete prefers an MRU
+            # neighbour; if none survives, it picks the first file in
+            # the inventories dir; if none of those either, returns
+            # None and we clear current_path.
+            deleted = self._current_path
+            fname = os.path.basename(deleted)
+            _log.info(
+                "current inventory deleted on disk: %s", fname
+            )
+            fallback = self._pick_fallback_after_delete(deleted)
+            self._current_path = None
+            self._settings.remove("last_inventory")
+            if fallback is not None:
+                _log.info(
+                    "falling back to: %s", os.path.basename(fallback)
+                )
+                self._load_path(fallback)
+            else:
+                # Nothing to fall back to. Reset the dropdown to the
+                # placeholder.
+                self.inventory_combo.setCurrentIndex(0)
+                self.status.showMessage(
+                    f"Deleted “{fname}”; no other "
+                    f"inventories available."
+                )
+            return
+        if self._current_path not in self._watcher.files():
             self._watcher.addPath(self._current_path)
             self._reload_timer.start()
 

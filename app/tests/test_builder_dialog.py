@@ -92,7 +92,7 @@ def test_tab_on_empty_fills_but_keeps_focus(qapp):
     qapp.processEvents()
     assert seg.hasFocus()
     # First Tab on empty; fills, keeps focus.
-    QTest.keyClick(seg, Qt.Key.Key_Tab)
+    QTest.keyClick(seg, Qt.Key.Key_Tab)  # type: ignore[call-overload]
     qapp.processEvents()
     assert seg.toPlainText() == SegmentTextEdit.DEFAULT_FILL
     assert seg.hasFocus(), (
@@ -100,7 +100,7 @@ def test_tab_on_empty_fills_but_keeps_focus(qapp):
         "Pressing Tab again advances normally."
     )
     # Second Tab; now non-empty, should advance focus normally.
-    QTest.keyClick(seg, Qt.Key.Key_Tab)
+    QTest.keyClick(seg, Qt.Key.Key_Tab)  # type: ignore[call-overload]
     qapp.processEvents()
     assert (
         sibling.hasFocus()
@@ -122,7 +122,7 @@ def test_tab_on_filled_just_moves_focus(qapp):
     container.show()
     seg.setFocus()
     qapp.processEvents()
-    QTest.keyClick(seg, Qt.Key.Key_Tab)
+    QTest.keyClick(seg, Qt.Key.Key_Tab)  # type: ignore[call-overload]
     qapp.processEvents()
     assert seg.toPlainText() == "m n \u014b"
     assert sibling.hasFocus()
