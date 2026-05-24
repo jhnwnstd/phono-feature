@@ -336,6 +336,27 @@ def _validate_features(
             continue
         seen.add(f)
         valid.append(f)
+
+    # Normalized-collision check: two distinct literal names that
+    # collapse to the same canonical key (e.g. "DelRel" vs
+    # "delayed_release") would later raise AliasCollisionError inside
+    # ``engine.grouped_segments`` -- uncaught, that escapes
+    # ``_load_path`` and can crash app startup via the last-inventory
+    # restore. Reject at the parser boundary so the parser remains the
+    # single source of truth for "is this inventory valid".
+    # Lazy import: segment_grouper depends on lru_cache + collections
+    # only, no cycle with this module.
+    from phonology_features.engine.segment_grouper import _normalize_key
+
+    by_canonical: dict[str, list[str]] = {}
+    for f in valid:
+        by_canonical.setdefault(_normalize_key(f), []).append(f)
+    for canonical, originals in by_canonical.items():
+        if len(originals) > 1:
+            issues.append(
+                f"{prefix}features {sorted(originals)} collide after "
+                f"normalization to {canonical!r}; rename or remove one"
+            )
     return tuple(valid), seen
 
 

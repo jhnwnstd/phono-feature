@@ -1657,6 +1657,17 @@ class MainWindow(QMainWindow):
 
         Rebalances the vertical splitter so the analysis pane keeps
         its minimum height.
+
+        Called from ``_fit_to_content`` which may run BEFORE the
+        window is laid out (sync path when an inventory is autoloaded
+        from settings during ``__init__``). In that case
+        ``_vsplit.height()`` is 0 and we can't compute a sensible top
+        height -- the horizontal axis still applies, but
+        ``_mark_splitter_owned`` flips ``_has_saved_splitter`` and
+        blocks any future re-attempt. Schedule a one-shot retry for
+        after the post-show layout pass so the vertical splitter
+        still gets sized once before the user sees the analysis pane
+        at the constructor default.
         """
         available = self._hsplit.width() or (seg_need_w + feat_need_w)
         feat_w = max(feat_need_w, available - seg_need_w)
@@ -1666,6 +1677,20 @@ class MainWindow(QMainWindow):
             top_h = min(top_need_h, total - self._min_analysis_h)
             top_h = max(top_h, 200)
             self._vsplit.setSizes([top_h, total - top_h])
+            return
+        QTimer.singleShot(0, lambda: self._fit_vsplit_after_layout(top_need_h))
+
+    def _fit_vsplit_after_layout(self, top_need_h: int) -> None:
+        """Vertical-only fallback for the case in ``_apply_splitter_sizes``
+        where the window hadn't been laid out yet. Runs after one
+        event-loop tick (post-show); if height is still 0 we accept the
+        constructor default rather than recurse."""
+        total = self._vsplit.height()
+        if total <= 0:
+            return
+        top_h = min(top_need_h, total - self._min_analysis_h)
+        top_h = max(top_h, 200)
+        self._vsplit.setSizes([top_h, total - top_h])
 
     def _rebalance_vsplit(self) -> None:
         """Re-run the fit pass. Wired to the post-load QTimer."""

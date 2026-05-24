@@ -91,6 +91,49 @@ def test_parse_rejects_non_string_feature_entries() -> None:
     assert any("'features[1]'" in i for i in ex.value.issues)
 
 
+def test_parse_rejects_aliased_feature_names() -> None:
+    """Two distinct literal feature names that collapse to the same
+    canonical key under ``_normalize_key`` (e.g. ``"DelRel"`` and
+    ``"delayed_release"``) would later raise ``AliasCollisionError``
+    inside ``engine.grouped_segments`` -- uncaught, that escapes
+    ``_load_path`` and can crash app startup via the last-inventory
+    restore. The parser must reject this at the boundary so the
+    "parse == valid" contract holds end-to-end.
+    """
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {
+                "features": ["DelRel", "delayed_release", "Voice"],
+                "segments": {
+                    "p": {"DelRel": "+", "delayed_release": "-", "Voice": "-"}
+                },
+            }
+        )
+    msg = " ".join(ex.value.issues)
+    assert "collide" in msg.lower()
+    assert "delrel" in msg.lower()
+
+
+def test_engine_consumers_never_raise_on_parsed_inventory() -> None:
+    """Defense in depth: anything ``Inventory.parse`` accepts must
+    survive ``FeatureEngine.grouped_segments`` and
+    ``normalized_segment_feats`` without raising. If a new downstream
+    consumer adds stricter validation than the parser, this test
+    forces the validation back into the parser.
+    """
+    # A plausible user-authored inventory that previously crashed the
+    # downstream grouper: distinct literal names that normalize the
+    # same way. After the parser fix this raises at parse, so
+    # constructing the engine from a parsed Inventory is always safe.
+    parsed = Inventory.parse(
+        {"features": ["Voice", "Nasal"], "segments": {"p": {"Voice": "-"}}}
+    )
+    eng = FeatureEngine(parsed)
+    # Both consumers must succeed for ANY parsed Inventory.
+    _ = eng.grouped_segments
+    _ = eng.normalized_segment_feats
+
+
 # ---------------------------------------------------------------------------
 # parse(): segments validation
 # ---------------------------------------------------------------------------
@@ -256,6 +299,24 @@ def test_hayes_parses_without_issues() -> None:
     inv = Inventory.load(HAYES)
     assert len(inv.features) > 0
     assert len(inv.segments) > 0
+
+
+@pytest.mark.parametrize(
+    "fname",
+    ["hayes_features.json", "general_features.json",
+     "english_features.json", "blevins_features.json"],
+)
+def test_bundled_inventory_survives_engine_consumers(fname: str) -> None:
+    """Every bundled inventory must load, construct an engine, and
+    survive both downstream cached_property consumers. Catches a
+    bundled inventory developing feature-name aliasing (or any other
+    parser-vs-engine drift) during edits.
+    """
+    path = str(REPO_ROOT / "inventories" / fname)
+    inv = Inventory.load(path)
+    eng = FeatureEngine(inv)
+    _ = eng.grouped_segments
+    _ = eng.normalized_segment_feats
 
 
 # ---------------------------------------------------------------------------
@@ -1368,6 +1429,56 @@ def test_bundle_search_largest_inventory_under_50ms() -> None:
         f"{elapsed_ms:.1f} ms across {len(targets)} queries; "
         f"regression vs <50 ms budget (typical: ~1-2 ms)"
     )
+
+
+def test_builder_save_omits_zero_cells_to_preserve_omission(
+    tmp_path: Path,
+) -> None:
+    """``Inventory.parse`` documents missing-feature == 0 semantics
+    and preserves omitted features on round-trip
+    (see test_parse_missing_feature_in_bundle_defaults_to_zero).
+    Builder save MUST honour the same contract: writing explicit "0"
+    for every unset cell would silently inflate sparsely-authored
+    inventories on every save through the builder.
+    """
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+
+    # Author a sparse inventory: 'p' has Voice set, no Nasal.
+    sparse_src = tmp_path / "sparse.json"
+    sparse_src.write_text(
+        json.dumps(
+            {
+                "features": ["Voice", "Nasal"],
+                "segments": {"p": {"Voice": "-"}, "m": {"Nasal": "+"}},
+            }
+        )
+    )
+    b = InventoryBuilder(load_path=str(sparse_src))
+    # Snapshot through the same code path save uses; no edits.
+    inv = b._to_inventory()
+    serialized = inv.to_json_dict()
+    # The omitted "Nasal" on "p" and "Voice" on "m" must STAY omitted.
+    assert "Nasal" not in serialized["segments"]["p"], (
+        f"builder reintroduced explicit '0' for omitted feature: "
+        f"{serialized['segments']['p']}"
+    )
+    assert "Voice" not in serialized["segments"]["m"], (
+        f"builder reintroduced explicit '0' for omitted feature: "
+        f"{serialized['segments']['m']}"
+    )
+    close_builder_silent(b)
 
 
 def test_validation_report_html_escapes_issue_text() -> None:

@@ -1259,6 +1259,13 @@ class InventoryBuilder(QMainWindow):
         silent normalization of unknown cell values: the cycle ladder
         only produces '+'/'-'/'0'/'\u2212', so anything else is a
         contract violation worth surfacing.
+
+        Cells with value "0" are OMITTED from the serialized form.
+        ``Inventory.parse`` documents "missing == 0" semantics
+        (test_parse_missing_feature_in_bundle_defaults_to_zero), so
+        writing explicit "0" entries would silently inflate sparsely-
+        authored on-disk inventories on every round-trip through the
+        builder. Omission keeps load/save symmetric.
         """
         assert self._table.columnCount() == len(self._segments)
         assert self._table.rowCount() == len(self._features)
@@ -1268,6 +1275,14 @@ class InventoryBuilder(QMainWindow):
             for r, feat in enumerate(self._features):
                 item = self._table.item(r, c)
                 val = item.text() if item else "0"
+                # Normalize the Unicode display form to ASCII here so
+                # the omit-on-zero check sees the final value. (parse
+                # would do the same normalization via from_grid, but
+                # the value comparison needs to happen first.)
+                if val == "\u2212":
+                    val = "-"
+                if val == "0":
+                    continue
                 feats[feat] = val
             segments[seg] = feats
         return Inventory.from_grid(
