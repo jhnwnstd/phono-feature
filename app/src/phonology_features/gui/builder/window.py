@@ -417,30 +417,32 @@ class InventoryBuilder(QMainWindow):
         """
         save_style = f"""
             QPushButton {{
-                background: {C["accent"]};
-                color: white;
+                background: {C["btn_primary"]};
+                color: {C["btn_primary_text"]};
                 border: none;
                 border-radius: 6px;
                 padding: 0 16px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background: #1D4ED8;
+                background: {C["btn_primary_hover"]};
+                color: {C["btn_primary_hover_text"]};
             }}
             """
         # Destructive action: red fill so it reads as "danger" against
         # the rest of the toolbar's neutral buttons.
         self._delete_style_enabled = f"""
             QPushButton {{
-                background: {C["minus"]};
-                color: white;
+                background: {C["btn_danger"]};
+                color: {C["btn_danger_text"]};
                 border: none;
                 border-radius: 6px;
                 padding: 0 16px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background: #991B1B;
+                background: {C["btn_danger_hover"]};
+                color: {C["btn_danger_hover_text"]};
             }}
         """
         self._btn_style_enabled = btn_style

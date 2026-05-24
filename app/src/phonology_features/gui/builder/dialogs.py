@@ -246,15 +246,16 @@ class InputDialog(QDialog):
         ok_btn = QPushButton("Create Grid")
         ok_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C["accent"]};
-                color: white;
+                background: {C["btn_primary"]};
+                color: {C["btn_primary_text"]};
                 border: none;
                 border-radius: 6px;
                 padding: 6px 20px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background: #1D4ED8;
+                background: {C["btn_primary_hover"]};
+                color: {C["btn_primary_hover_text"]};
             }}
             """)
         ok_btn.clicked.connect(self.accept)

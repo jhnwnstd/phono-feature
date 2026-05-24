@@ -30,6 +30,22 @@ LIGHT = {
     "minus_bg": "#FEE2E2",
     "shared_plus": "#DCFCE7",
     "shared_minus": "#FEE2E2",
+    # Primary-action and destructive-action buttons (Save / Delete /
+    # Create-Grid). Hover is slightly DEEPER than default in light
+    # mode so "pressing in" reads as a darker version of the same hue.
+    # In dark mode these flip (see DARK) because the dark-mode accent
+    # is pale; using it as the default makes the button look washed
+    # out and the hover then has to swing to a vivid saturated state
+    # for distinction. Both directions should read as "press == more
+    # contrast against background".
+    "btn_primary": "#2563EB",
+    "btn_primary_text": "#FFFFFF",
+    "btn_primary_hover": "#1D4ED8",
+    "btn_primary_hover_text": "#FFFFFF",
+    "btn_danger": "#B91C1C",
+    "btn_danger_text": "#FFFFFF",
+    "btn_danger_hover": "#991B1B",
+    "btn_danger_hover_text": "#FFFFFF",
     # Analysis panel + tag chips
     "analysis_bg": "#F2F3F5",
     "tag_blue": "#DBEAFE",
@@ -64,6 +80,19 @@ DARK = {
     "minus_bg": "#7F1D1D",
     "shared_plus": "#14532D",
     "shared_minus": "#7F1D1D",
+    # See LIGHT.btn_primary comment: in dark mode the saturated deep
+    # blue / deep red is the DEFAULT (reads boldly on dark bg), and
+    # the pale tint becomes the hover (reads as a "lift"). Hover text
+    # switches to dark because white on pale pink / pale blue would
+    # smear; everything else stays white on the saturated default.
+    "btn_primary": "#1D4ED8",
+    "btn_primary_text": "#FFFFFF",
+    "btn_primary_hover": "#60A5FA",
+    "btn_primary_hover_text": "#181818",
+    "btn_danger": "#991B1B",
+    "btn_danger_text": "#FFFFFF",
+    "btn_danger_hover": "#FCA5A5",
+    "btn_danger_hover_text": "#181818",
     # Analysis panel + tag chips
     "analysis_bg": "#262626",
     "tag_blue": "#1E3A8A",
