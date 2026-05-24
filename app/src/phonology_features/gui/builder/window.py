@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple
 
 from phonology_features._logging import get_logger
-from phonology_features.engine.inventory import Inventory, ValidationError
+from phonology_features.engine.inventory import (
+    MAX_NAME_LENGTH,
+    Inventory,
+    ValidationError,
+)
 
 if TYPE_CHECKING:
     # Only used in a string-form type annotation; importing at runtime
@@ -586,6 +590,10 @@ class InventoryBuilder(QMainWindow):
         name_label.setStyleSheet(f"color: {C['text_dim']};")
         lay.addWidget(name_label)
         self._name_edit = QLineEdit(self._inv_name)
+        # UI cap mirrors Inventory.MAX_NAME_LENGTH so the field stops
+        # accepting input at the limit; without it, the user could
+        # type/paste past the cap and only learn at save.
+        self._name_edit.setMaxLength(MAX_NAME_LENGTH)
         self._name_edit.setFont(QFont("Noto Sans", 10))
         self._name_edit.setStyleSheet(f"""
             QLineEdit {{

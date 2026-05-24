@@ -1,5 +1,6 @@
 """Reusable dialog helpers and the InputDialog for inventory setup."""
 
+from phonology_features.engine.inventory import MAX_NAME_LENGTH
 from phonology_features.gui.builder.presets import FEATURE_PRESETS
 from phonology_features.gui.palette import C
 from PyQt6.QtCore import QEvent, Qt
@@ -11,15 +12,20 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
-    QTextEdit,
     QVBoxLayout,
 )
 
 
-class _AutofillTextEdit(QTextEdit):
-    """QTextEdit with two shared affordances used by both the segment
-    and feature inputs in the New Inventory dialog:
+class _AutofillTextEdit(QPlainTextEdit):
+    """Plain-text editor (NOT QTextEdit) with two shared affordances
+    used by both the segment and feature inputs in the New Inventory
+    dialog. ``QPlainTextEdit`` is the correct base for untrusted text
+    input: it cannot render pasted rich text from word processors or
+    browsers (Qt's QTextEdit interprets HTML on paste; the styled
+    fragment would display briefly even though ``entries()`` later
+    strips formatting via ``toPlainText``).
 
     1. **Tab autofill**: Tab on an empty box pastes ``DEFAULT_FILL``
        (a quick-start example). Once non-empty, Tab advances focus
@@ -190,6 +196,11 @@ class InputDialog(QDialog):
         row = QHBoxLayout()
         row.addWidget(QLabel("Inventory name:"))
         self.name_edit = QLineEdit()
+        # UI cap mirrors the parser cap (Inventory.MAX_NAME_LENGTH).
+        # Without it, the user could type/paste 10k chars, see them
+        # accepted in the field, and only get the error at save. With
+        # it, the field itself stops accepting input at the limit.
+        self.name_edit.setMaxLength(MAX_NAME_LENGTH)
         self.name_edit.setPlaceholderText("e.g. My Language Inventory")
         row.addWidget(self.name_edit)
         return row
