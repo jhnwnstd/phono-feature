@@ -210,9 +210,7 @@ def test_parse_accepts_current_schema_version() -> None:
 
 def test_parse_rejects_unsupported_schema_version() -> None:
     with pytest.raises(ValidationError) as ex:
-        Inventory.parse(
-            {"schema_version": 2, "features": [], "segments": {}}
-        )
+        Inventory.parse({"schema_version": 2, "features": [], "segments": {}})
     msg = str(ex.value)
     assert "schema_version" in msg
     assert "2" in msg
@@ -1296,9 +1294,9 @@ def test_user_splitter_drag_promotes_to_owned(tmp_path: Path) -> None:
     # Simulate the user dragging by emitting the signal directly.
     w._has_saved_splitter = False
     w._hsplit.splitterMoved.emit(450, 0)
-    assert w._has_saved_splitter, (
-        "splitterMoved should promote the splitter to user-owned"
-    )
+    assert (
+        w._has_saved_splitter
+    ), "splitterMoved should promote the splitter to user-owned"
     w.close()
 
 

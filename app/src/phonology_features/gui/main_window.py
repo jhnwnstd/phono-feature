@@ -1563,9 +1563,7 @@ class MainWindow(QMainWindow):
             # alone on inventory swap. Only the first launch (no saved
             # state) gets a content-derived ratio.
             if not self._has_saved_splitter:
-                self._apply_splitter_sizes(
-                    seg_need_w, feat_need_w, top_need_h
-                )
+                self._apply_splitter_sizes(seg_need_w, feat_need_w, top_need_h)
 
     def _fit_window_to_size(self, screen, need_w: int, need_h: int) -> None:
         """Resize the window to ``(need_w, need_h)`` and anchor it in place.
