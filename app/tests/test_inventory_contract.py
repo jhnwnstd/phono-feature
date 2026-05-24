@@ -33,6 +33,7 @@ from .conftest import close_builder_silent
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HAYES = str(REPO_ROOT / "inventories" / "hayes_features.json")
+GENERAL = str(REPO_ROOT / "inventories" / "general_features.json")
 
 
 # ---------------------------------------------------------------------------
@@ -1299,6 +1300,51 @@ def test_user_splitter_drag_promotes_to_owned(tmp_path: Path) -> None:
         "splitterMoved should promote the splitter to user-owned"
     )
     w.close()
+
+
+def test_bundle_search_largest_inventory_under_50ms() -> None:
+    """Performance guard for ``find_all_minimal_bundles`` on the
+    biggest bundled inventory (``general_features.json`` -- 135
+    segments x 30 features, the deepest candidate-feature search
+    space we ship). Runs a mix of small / medium / large target sets
+    so a regression in any one shape gets caught.
+
+    Current measured total on a developer laptop is ~1-2 ms across
+    these five queries. 50 ms gives ~25x dev headroom and ~5-10x CI
+    headroom -- enough to tolerate slow virtualized runners while
+    still catching the regression patterns the search relies on:
+      - bitmask encoding reverted to Python set ops (~7-10x per the
+        comment at find_all_minimal_bundles).
+      - branch-and-bound pruning broken (often 100x+ on hard inputs).
+      - per-engine memoization cache disabled.
+
+    Engine-only -- no GUI, no QApplication, so it stays cheap.
+    """
+    import time as _time
+
+    inv = Inventory.load(GENERAL)
+    eng = FeatureEngine(inv)
+    all_segs = list(inv.segments.keys())
+    # Picked to exercise three shapes:
+    #   - tiny target  -> huge outside set, many excluders per outside
+    #   - medium       -> mixed
+    #   - large        -> few outsiders, but each may need many features
+    targets = [
+        all_segs[:3],
+        all_segs[:8],
+        all_segs[:20],
+        all_segs[:50],
+        all_segs[:100],
+    ]
+    t0 = _time.perf_counter()
+    for segs in targets:
+        eng.find_all_minimal_bundles(segs)
+    elapsed_ms = (_time.perf_counter() - t0) * 1000
+    assert elapsed_ms < 50, (
+        f"bundle search on general_features (135 seg x 30 feat) took "
+        f"{elapsed_ms:.1f} ms across {len(targets)} queries; "
+        f"regression vs <50 ms budget (typical: ~1-2 ms)"
+    )
 
 
 def test_validation_report_html_escapes_issue_text() -> None:
