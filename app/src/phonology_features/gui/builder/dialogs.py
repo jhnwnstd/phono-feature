@@ -91,10 +91,14 @@ class _AutofillTextEdit(QTextEdit):
 
 class SegmentTextEdit(_AutofillTextEdit):
     """Tab on empty fills a quick-start segment list (IPA voiceless and
-    voiced stops)."""
+    voiced stops). Trailing space so the caret lands ready for the
+    user to type the next segment without first having to add a
+    separator -- ``entries()`` splits on whitespace and filters
+    empties so the trailer doesn't introduce a phantom entry."""
 
     DEFAULT_FILL = (
-        "p b t d k \u0261"  # noqa: RUF001; IPA voiced velar (script g)
+        # noqa: RUF001; IPA voiced velar (script g)
+        "p b t d k \u0261 "
     )
 
 
@@ -105,9 +109,13 @@ class FeatureTextEdit(_AutofillTextEdit):
 
     Features are one-per-line (overrides the whitespace-split base):
     feature names may legitimately contain spaces or unusual chars
-    that a whitespace splitter would shred."""
+    that a whitespace splitter would shred.
 
-    DEFAULT_FILL = "Syllabic\nConsonantal"
+    Trailing newline so the caret lands on a fresh line ready for
+    the user to type the next feature; ``entries()`` filters empty
+    lines so the trailer doesn't introduce a phantom feature."""
+
+    DEFAULT_FILL = "Syllabic\nConsonantal\n"
 
     def entries(self) -> list[str]:
         return [
