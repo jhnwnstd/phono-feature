@@ -5,6 +5,27 @@ from phonology_features.gui.palette import C
 SETTINGS_ORG = "features"
 SETTINGS_APP = "SegFeatureEngine"
 
+# Monospace font fallback chain for IPA-heavy text (analysis-pane
+# chips, anything rendering segment symbols / feature values). Order:
+# most-IPA-coverage first, then per-OS defaults that are usually
+# installed, then the system ``monospace`` alias as a last resort.
+# Without an explicit chain Qt resolves ``monospace`` to whatever the
+# system aliases, which on stripped-down Linux can land on a font with
+# poor coverage of combining marks like U+0361 (the tie bar in d͡ʒ).
+# Python list -- usable with ``QFont.setFamilies``; ``MONO_FAMILY_CSS``
+# is the CSS string form for inline ``font-family:`` rules.
+MONO_FAMILIES: list[str] = [
+    "Noto Sans Mono",
+    "DejaVu Sans Mono",
+    "Menlo",
+    "Consolas",
+    "Liberation Mono",
+    "monospace",
+]
+MONO_FAMILY_CSS: str = ", ".join(
+    f"'{f}'" if " " in f else f for f in MONO_FAMILIES
+)
+
 
 def tag_palettes() -> dict:
     """Inline-chip palette keyed by colour name.

@@ -10,6 +10,7 @@ break the rendered layout.
 import html
 
 from phonology_features.gui.constants import (
+    MONO_FAMILY_CSS,
     sort_features,
     sort_spec,
     tag_palettes,
@@ -25,7 +26,8 @@ def _tag(text: str, colour: str) -> str:
     return (
         f"<span style='"
         f"background:{bg}; color:{fg}; border-radius:4px;"
-        f" padding:2px 7px; margin:2px; font-family:monospace;"
+        f" padding:2px 7px; margin:2px;"
+        f" font-family:{MONO_FAMILY_CSS};"
         f" font-size:10pt;'>{html.escape(text)}</span>"
     )
 

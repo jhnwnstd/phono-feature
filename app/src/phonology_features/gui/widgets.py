@@ -6,7 +6,12 @@ swaps; per-widget style dicts are cached per theme at class level.
 import math
 from enum import StrEnum
 
-from phonology_features.gui.constants import BTN_GAP, BTN_W, scrollbar_style
+from phonology_features.gui.constants import (
+    BTN_GAP,
+    BTN_W,
+    MONO_FAMILIES,
+    scrollbar_style,
+)
 from phonology_features.gui.palette import C
 from phonology_features.gui.style_utils import set_css, set_html
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
@@ -500,7 +505,15 @@ class AnalysisPanel(QWidget):
         self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
         self.content = QTextEdit(self)
         self.content.setReadOnly(True)
-        self.content.setFont(QFont("Noto Sans Mono", 10))
+        # Explicit family chain rather than ``QFont("Noto Sans Mono")``:
+        # Noto Sans Mono isn't on every system, and QFont's single-family
+        # constructor silently falls back to the platform default (which
+        # may have poor IPA / combining-mark coverage). ``setFamilies``
+        # gives Qt an ordered list to try.
+        mono_font = QFont()
+        mono_font.setFamilies(MONO_FAMILIES)
+        mono_font.setPointSize(10)
+        self.content.setFont(mono_font)
         self.content.setMinimumHeight(60)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
