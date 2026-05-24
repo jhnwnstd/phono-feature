@@ -297,12 +297,23 @@ def _render_contrast_section(
     contrastive: dict[str, dict[str, list[str]]],
 ) -> str:
     if contrastive:
-        rows = [
+        # Rendered as an HTML table so feature names left-align in a
+        # fixed column and the ``+`` / ``−`` / ``0`` buckets line up
+        # vertically across every row. The previous inline-flow shape
+        # put feature names of different lengths on the same baseline
+        # as the bucket glyphs, so the eye had to re-scan from the
+        # left edge for each feature -- the user's "hard to parse"
+        # complaint. Table columns make vertical scanning trivial.
+        body = "".join(
             _render_contrast_row(feat, contrastive[feat])
             for feat in sort_features(list(contrastive))
-        ]
+        )
         return (
-            "<p><b>Contrasting features:</b><br>" + "<br>".join(rows) + "</p>"
+            "<p><b>Contrasting features:</b></p>"
+            "<table cellpadding='3' cellspacing='0'"
+            " style='border-collapse:separate; border-spacing:0 2px;'>"
+            f"{body}"
+            "</table>"
         )
     # No contrastive features. Distinguish "actually identical" from
     # "only differ in unspecified features"; the latter is a common
@@ -320,31 +331,53 @@ def _render_contrast_section(
     return f"<p><b>Contrasting features:</b> {_muted_italic_span(reason)}</p>"
 
 
+# ---------------------------------------------------------------------------
+# Cell-style constants for the contrastive-features table.
+# Pre-built so the per-row helper isn't reconstructing identical CSS
+# strings for every feature; also keeps geometry editable in one place.
+# ---------------------------------------------------------------------------
+_CONTRAST_CELL_BASE: str = "vertical-align:top; padding-right:14px;"
+_CONTRAST_NAME_CELL: str = _CONTRAST_CELL_BASE + " white-space:nowrap;"
+
+
 def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
-    """One line in the contrastive-features table: feature name, the
-    segments on the ``+`` side, the segments on the ``-`` side, and
-    (when present) the segments where the feature is unspecified."""
-    plus_segs = " ".join(_segment_chip(seg) for seg in groups["+"])
-    minus_segs = " ".join(_segment_chip(seg) for seg in groups["-"])
+    """One ``<tr>`` for the contrastive-features table. Columns:
+
+        | feature | + segments | − segments | 0 segments (or empty) |
+
+    The ``0`` column is always emitted (empty when there are no
+    underspecified segments) so the right-hand edge of the table
+    stays vertical across rows that differ in whether ``0`` is
+    present.
+    """
+    plus_chips = " ".join(_segment_chip(seg) for seg in groups["+"])
+    minus_chips = " ".join(_segment_chip(seg) for seg in groups["-"])
     plus_glyph = f"<span style='color:{C['plus']};font-weight:bold'>+</span>"
     minus_glyph = (
         f"<span style='color:{C['minus']};font-weight:bold'>"
         f"{MINUS_SIGN}</span>"
     )
-    row = (
-        f"{_tag(feat, TagColor.NEUTRAL)}"
-        f" {plus_glyph} {plus_segs}"
-        f" &nbsp; {minus_glyph} {minus_segs}"
-    )
+    zero_cell = ""
     if "0" in groups:
-        zero_segs = " ".join(
+        zero_chips = " ".join(
             _segment_chip(seg, TagColor.NEUTRAL) for seg in groups["0"]
         )
-        row += (
-            f" &nbsp; <span style='color:{C['text_dim']}'>0</span>"
-            f" {zero_segs}"
-        )
-    return row
+        zero_glyph = f"<span style='color:{C['text_dim']}'>0</span>"
+        zero_cell = f"{zero_glyph} {zero_chips}"
+    # Plain bold for the feature name. We dropped the chip background
+    # because (a) the table column already provides visual separation,
+    # so the chip is redundant decoration, and (b) the chip's pale gray
+    # against the panel's near-white bg has almost no contrast in light
+    # mode -- the name was effectively unstyled anyway.
+    name_html = f"<b>{html.escape(feat)}</b>"
+    return (
+        "<tr>"
+        f"<td style='{_CONTRAST_NAME_CELL}'>{name_html}</td>"
+        f"<td style='{_CONTRAST_CELL_BASE}'>{plus_glyph} {plus_chips}</td>"
+        f"<td style='{_CONTRAST_CELL_BASE}'>{minus_glyph} {minus_chips}</td>"
+        f"<td style='{_CONTRAST_CELL_BASE}'>{zero_cell}</td>"
+        "</tr>"
+    )
 
 
 def _render_natural_class_verdict(

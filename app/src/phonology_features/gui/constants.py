@@ -57,8 +57,13 @@ MONO_FAMILIES: list[str] = [
     "Liberation Mono",
     "monospace",
 ]
+# CSS uses double quotes around family names with spaces; this keeps
+# the string safe to embed inside ``style='...'`` HTML attributes
+# (single-quoted on the outside). CSS accepts either quote style for
+# strings -- the choice here avoids quote-collision with our inline-
+# style attribute convention.
 MONO_FAMILY_CSS: str = ", ".join(
-    f"'{f}'" if " " in f else f for f in MONO_FAMILIES
+    f'"{f}"' if " " in f else f for f in MONO_FAMILIES
 )
 
 

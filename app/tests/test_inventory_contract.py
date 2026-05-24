@@ -550,6 +550,68 @@ def test_geometry_tree_is_acyclic() -> None:
 # ---------------------------------------------------------------------------
 # HTML escaping in the analysis pane
 # ---------------------------------------------------------------------------
+def test_analysis_copy_translates_unicode_minus_to_ascii(
+    tmp_path: Path,
+) -> None:
+    """The analysis pane renders feature negatives as U+2212 (`−`)
+    for visual symmetry with `+`, but the rest of the ecosystem
+    (JSON values, code, regex, terminals) expects ASCII `-`. The
+    ``_CopyableTextEdit`` subclass must translate at the clipboard
+    boundary so a user copying `-Voice` from the pane can paste it
+    into a JSON value and have it actually match.
+
+    Asserts both payloads: the plain-text mime (for code editors and
+    terminals) AND the HTML mime (for rich-text targets like docx).
+    """
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.widgets import _CopyableTextEdit
+
+    edit = _CopyableTextEdit()
+    # The display layer puts U+2212 in the HTML; verify the copy
+    # path turns it into ASCII '-' in both mime payloads. The
+    # show()+processEvents() bit is required for selectAll() to
+    # establish a real selection under the offscreen QPA -- an
+    # unrealised widget produces an empty selection and Qt then
+    # crashes deep in createMimeDataFromSelection.
+    edit.setHtml(
+        "<p>shared: <span style='color:red'>" "−Voice</span> +Continuant</p>"
+    )
+    edit.show()
+    for _ in range(3):
+        app.processEvents()
+    edit.selectAll()
+    for _ in range(3):
+        app.processEvents()
+    mime = edit.createMimeDataFromSelection()
+    assert mime is not None
+    assert (
+        "−" not in mime.text()
+    ), "plain-text payload still contains U+2212 minus"
+    assert "-Voice" in mime.text()
+    assert mime.hasHtml()
+    assert "−" not in mime.html(), "HTML payload still contains U+2212 minus"
+
+    # Sanity: a selection with no U+2212 still produces a usable mime
+    # (the fast path returns the original; we don't care which branch
+    # ran, only that the output is right).
+    edit.clear()
+    edit.setHtml("<p>just plain ASCII +Voice +Nasal</p>")
+    for _ in range(3):
+        app.processEvents()
+    edit.selectAll()
+    for _ in range(3):
+        app.processEvents()
+    mime2 = edit.createMimeDataFromSelection()
+    assert mime2 is not None
+    assert "+Voice" in mime2.text()
+    edit.close()
+
+
 def test_analysis_tag_escapes_html_in_text() -> None:
     """A feature named ``"<b>X"`` must not break the rendered
     layout. The ``_tag`` chip is the only path through which

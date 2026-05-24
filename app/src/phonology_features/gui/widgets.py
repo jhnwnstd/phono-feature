@@ -498,12 +498,61 @@ class FeatureRow(QWidget):
         self._reset_for_panel = self._panel_active
 
 
+class _CopyableTextEdit(QTextEdit):
+    """``QTextEdit`` that normalises display-only characters back to
+    their interchange forms at the clipboard boundary.
+
+    The analysis pane renders feature minus values as U+2212 (`−`,
+    MATHEMATICAL MINUS SIGN) for typographic symmetry with `+`. But
+    the rest of the ecosystem -- JSON files, code, regex, most
+    terminals -- expects ASCII U+002D (`-`, HYPHEN-MINUS). Pasting
+    `−Voice` into a JSON value silently does NOT match `"-"`.
+
+    Translating at the copy boundary lets the display layer keep the
+    nice typographic glyph and gives every paste target the byte
+    they expect. Both the plain-text and HTML mime payloads get
+    translated so rich-text targets (a doc editor) agree with
+    plain-text targets (a code editor).
+    """
+
+    # ``str.maketrans`` precomputes the translation table at class
+    # load. The dict literal is intentionally minimal -- if we ever
+    # add another display-only glyph (e.g. ``∅`` for "universal"),
+    # add it here, not as scattered ``replace`` calls.
+    _COPY_TRANSLATIONS = str.maketrans(
+        {
+            "−": "-",  # U+2212 MINUS SIGN -> ASCII hyphen-minus
+        }
+    )
+
+    def createMimeDataFromSelection(self):  # type: ignore[override]
+        from PyQt6.QtCore import QMimeData
+
+        original = super().createMimeDataFromSelection()
+        if original is None:
+            return original
+        text = original.text()
+        translated = text.translate(self._COPY_TRANSLATIONS)
+        # Fast path: no display-only chars in the selection.
+        if text == translated and not original.hasHtml():
+            return original
+        out = QMimeData()
+        out.setText(translated)
+        if original.hasHtml():
+            # Apply the same translation to the HTML payload so a
+            # rich-text paste target sees the ASCII form too. Without
+            # this, copying to e.g. a docx editor would still produce
+            # U+2212 because Qt prefers the HTML payload for those.
+            out.setHtml(original.html().translate(self._COPY_TRANSLATIONS))
+        return out
+
+
 class AnalysisPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.title = QLabel("Analysis", self)
         self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-        self.content = QTextEdit(self)
+        self.content = _CopyableTextEdit(self)
         self.content.setReadOnly(True)
         # Explicit family chain rather than ``QFont("Noto Sans Mono")``:
         # Noto Sans Mono isn't on every system, and QFont's single-family
