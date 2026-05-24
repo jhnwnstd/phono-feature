@@ -1115,11 +1115,22 @@ class MainWindow(QMainWindow):
         # No manual invalidation needed.
         self.engine = FeatureEngine(inventory)
         name = inventory.name
-        self.status.showMessage(
+        base_msg = (
             f"{name}: "
             f"{len(self.engine.segments)} segments, "
             f"{len(self.engine.features)} features."
         )
+        if inventory.advisories:
+            # Show the first advisory inline; the rest go to the log so
+            # we don't truncate or wrap the status bar. Empty for every
+            # bundled inventory.
+            self.status.showMessage(
+                f"{base_msg} Note: {inventory.advisories[0]}"
+            )
+            for note in inventory.advisories:
+                _log.info("inventory advisory: %s: %s", fname, note)
+        else:
+            self.status.showMessage(base_msg)
         self._register_loaded_path(path)
         self._populate_after_load()
 
