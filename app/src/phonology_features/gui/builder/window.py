@@ -627,6 +627,15 @@ class InventoryBuilder(QMainWindow):
         self._table.setVerticalHeader(
             _ToggleHeaderView(Qt.Orientation.Vertical, self._table)
         )
+        # See _rebuild_table for the full explanation: a fresh
+        # QHeaderView is isHidden=True by default and Qt doesn't
+        # auto-show it when handed to a view via setHorizontalHeader.
+        _h_hdr = self._table.horizontalHeader()
+        if _h_hdr is not None:
+            _h_hdr.show()
+        _v_hdr = self._table.verticalHeader()
+        if _v_hdr is not None:
+            _v_hdr.show()
         self._table.set_bulk_cycle_callback(self._cycle_selection_from)
         self._table.setFont(QFont("Noto Sans", 10))
         self._table.setStyleSheet(f"""
@@ -740,6 +749,22 @@ class InventoryBuilder(QMainWindow):
         self._table.setVerticalHeader(
             _ToggleHeaderView(Qt.Orientation.Vertical, self._table)
         )
+        # A freshly-constructed QHeaderView starts isHidden=True. When
+        # we replace the table's header via setHorizontalHeader on an
+        # already-visible (or about-to-be-visible) table, Qt does NOT
+        # auto-show the new header -- it inherits the constructor's
+        # default. The result: width/height stay at 0, no label area
+        # paints, the cells fill the viewport, and the user sees a
+        # grid with the right dimensions but no segment / feature
+        # labels (the visible bug after New Inventory creates a grid).
+        # Explicitly show both headers to make replacement work the
+        # same regardless of view-show ordering.
+        _h_hdr_new = self._table.horizontalHeader()
+        if _h_hdr_new is not None:
+            _h_hdr_new.show()
+        _v_hdr_new = self._table.verticalHeader()
+        if _v_hdr_new is not None:
+            _v_hdr_new.show()
         self._table.setVerticalHeaderLabels(self._features)
         self._table.setHorizontalHeaderLabels(self._segments)
         v_header = self._table.verticalHeader()

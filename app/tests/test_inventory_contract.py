@@ -1845,6 +1845,141 @@ def test_mainwindow_construction_survives_corrupt_window_size(
     w.close()
 
 
+def test_main_viewer_loads_freshly_saved_builder_inventory(
+    tmp_path: Path,
+) -> None:
+    """When the user creates a NEW inventory in the builder and
+    saves, the main feature visualizer should switch to that
+    inventory automatically. Pre-fix the builder closed silently and
+    the user had to open the dropdown to find their new file.
+    """
+    import os as _os
+    import time as _time
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.main_window import MainWindow
+
+    w = MainWindow()
+    # Spawn a builder the same way _open_builder does for the
+    # no-current-inventory case, including the save-finished wiring.
+    builder = InventoryBuilder(parent=w)
+    builder._save_finished.connect(w._on_builder_save_finished)
+    w._builder = builder
+    # Author a minimal inventory by hand.
+    builder._segments = ["p", "b"]
+    builder._features = ["Voice"]
+    builder._inv_name = "Built-In-Test"
+    builder._dirty = True
+    builder._rebuild_table()
+    # Need to set the cells properly so _to_inventory produces valid output.
+    from phonology_features.gui.builder.grid import make_cell
+    builder._table.setItem(0, 0, make_cell("-"))  # p is voiceless
+    builder._table.setItem(0, 1, make_cell("+"))  # b is voiced
+
+    target = tmp_path / "built_in_test.json"
+    assert w._current_path is None
+    builder._write_json(str(target))
+
+    # Drain the background save -- _on_builder_save_finished fires
+    # via the queued _save_finished signal back on the main thread.
+    deadline = _time.monotonic() + 3.0
+    while builder._save_in_flight and _time.monotonic() < deadline:
+        app.processEvents()
+        _time.sleep(0.01)
+    # Process events one more time so the queued save_finished slot
+    # in MainWindow gets dispatched.
+    for _ in range(3):
+        app.processEvents()
+
+    assert target.exists(), "save did not produce the file"
+    assert w._current_path == str(_os.path.abspath(target)), (
+        f"main viewer did not switch to the freshly-saved inventory: "
+        f"current_path={w._current_path!r}, expected={str(target)!r}"
+    )
+    assert w.engine is not None
+    assert "p" in w.engine.segments
+    close_builder_silent(builder)
+    w.close()
+
+
+def test_builder_rebuild_table_keeps_headers_visible(tmp_path: Path) -> None:
+    """When the user creates a new inventory in the builder, the grid
+    showed correct dimensions but no header labels (segments/features
+    invisible). Cause: ``_rebuild_table`` replaces the table's headers
+    via ``setHorizontalHeader(new)``; a freshly-constructed
+    QHeaderView starts ``isHidden=True``, and Qt does NOT auto-show
+    the new header when handed to the view. Result: header height/
+    width = 0, cells fill the viewport, labels disappear.
+
+    Regression guard: after both initial _build_table and any
+    subsequent _rebuild_table, both headers must be visible with
+    nonzero height/width.
+    """
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+
+    b = InventoryBuilder()
+    b._segments = ["p", "b", "t"]
+    b._features = ["Voice", "Nasal"]
+    b._rebuild_table()
+    b.show()
+    for _ in range(3):
+        app.processEvents()
+
+    h1 = b._table.horizontalHeader()
+    v1 = b._table.verticalHeader()
+    assert h1 is not None and v1 is not None
+    assert h1.isVisible() and h1.height() > 0, (
+        f"horizontal header invisible after first rebuild: "
+        f"isVisible={h1.isVisible()}, height={h1.height()}"
+    )
+    assert v1.isVisible() and v1.width() > 0, (
+        f"vertical header invisible after first rebuild: "
+        f"isVisible={v1.isVisible()}, width={v1.width()}"
+    )
+
+    # The bug originally triggered on the SECOND rebuild after show.
+    b._segments = ["s", "z"]
+    b._features = ["Voice", "Continuant"]
+    b._rebuild_table()
+    for _ in range(3):
+        app.processEvents()
+
+    h2 = b._table.horizontalHeader()
+    v2 = b._table.verticalHeader()
+    assert h2 is not None and v2 is not None
+    assert h2.isVisible() and h2.height() > 0, (
+        f"horizontal header invisible after rebuild on visible table: "
+        f"isVisible={h2.isVisible()}, height={h2.height()}"
+    )
+    assert v2.isVisible() and v2.width() > 0, (
+        f"vertical header invisible after rebuild on visible table: "
+        f"isVisible={v2.isVisible()}, width={v2.width()}"
+    )
+    close_builder_silent(b)
+
+
 def test_inventory_swap_does_not_resize_window(tmp_path: Path) -> None:
     """Once the user (or restored settings) owns the window geometry,
     swapping inventories must leave the top-level size and position

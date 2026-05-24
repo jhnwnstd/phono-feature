@@ -1087,6 +1087,9 @@ class MainWindow(QMainWindow):
             )
             self._builder.setWindowFlag(Qt.WindowType.Window)
             self._builder.setWindowModality(Qt.WindowModality.WindowModal)
+            self._builder._save_finished.connect(
+                self._on_builder_save_finished
+            )
             self._builder.show()
             return
         # No inventory loaded; show the setup dialog. Cancel = no window.
@@ -1097,7 +1100,32 @@ class MainWindow(QMainWindow):
             builder.deleteLater()
             return
         self._builder = builder
+        self._builder._save_finished.connect(
+            self._on_builder_save_finished
+        )
         self._builder.show()
+
+    def _on_builder_save_finished(self, path: str, err: str) -> None:
+        """When the builder finishes a save, switch the main viewer to
+        the freshly-saved file if it's not already the current one.
+
+        Covers the "user just authored a new inventory in the builder"
+        case (current_path was None) and the "Save As to a different
+        path" case. For saves to the SAME path the user is already
+        viewing, the directory watcher's auto-reload handles it --
+        explicit reload here would clear the user's analysis state
+        twice for no benefit.
+        """
+        if err:
+            return  # builder already showed its own error dialog
+        if path == self._current_path:
+            return  # same-path save -> watcher will refresh
+        if os.path.isfile(path):
+            _log.info(
+                "switching to inventory saved from builder: %s",
+                os.path.basename(path),
+            )
+            self._load_path(path)
 
     def _load_path(self, path: str):
         """Load an inventory JSON. Shared by the dropdown, Browse, and
