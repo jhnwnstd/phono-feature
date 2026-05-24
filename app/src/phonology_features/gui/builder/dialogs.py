@@ -86,7 +86,8 @@ class _AutofillTextEdit(QPlainTextEdit):
         painter.setPen(QColor(C["text_dim"]))
         painter.setFont(self.font())
         metrics = painter.fontMetrics()
-        margin = int(self.document().documentMargin())
+        doc = self.document()
+        margin = int(doc.documentMargin()) if doc is not None else 0
         x = margin
         # Skip the first line; Qt already painted it.
         y = margin + metrics.ascent() + metrics.lineSpacing()

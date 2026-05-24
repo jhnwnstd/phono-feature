@@ -190,7 +190,8 @@ class _BulkCycleTable(QTableWidget):
     def paintEvent(self, event):
         super().paintEvent(event)
         sel_model = self.selectionModel()
-        if sel_model is None:
+        model = self.model()
+        if sel_model is None or model is None:
             return
         sel_cols = sel_model.selectedColumns()
         sel_rows = sel_model.selectedRows()
@@ -201,22 +202,22 @@ class _BulkCycleTable(QTableWidget):
         # Fast path 1: exactly one full column.
         if len(sel_cols) == 1 and len(sel_rows) == 0:
             col = sel_cols[0].column()
-            top_rect = self.visualRect(self.model().index(0, col))
-            bot_rect = self.visualRect(self.model().index(n_rows - 1, col))
+            top_rect = self.visualRect(model.index(0, col))
+            bot_rect = self.visualRect(model.index(n_rows - 1, col))
             self._draw_outline_rect(top_rect.united(bot_rect))
             return
         # Fast path 2: exactly one full row.
         if len(sel_rows) == 1 and len(sel_cols) == 0:
             row = sel_rows[0].row()
-            left_rect = self.visualRect(self.model().index(row, 0))
-            right_rect = self.visualRect(self.model().index(row, n_cols - 1))
+            left_rect = self.visualRect(model.index(row, 0))
+            right_rect = self.visualRect(model.index(row, n_cols - 1))
             self._draw_outline_rect(left_rect.united(right_rect))
             return
         # Fast path 3: whole table.
         if len(sel_rows) == n_rows and len(sel_cols) == n_cols:
-            tl_rect = self.visualRect(self.model().index(0, 0))
+            tl_rect = self.visualRect(model.index(0, 0))
             br_rect = self.visualRect(
-                self.model().index(n_rows - 1, n_cols - 1)
+                model.index(n_rows - 1, n_cols - 1)
             )
             self._draw_outline_rect(tl_rect.united(br_rect))
             return
@@ -228,12 +229,12 @@ class _BulkCycleTable(QTableWidget):
         cells: set[tuple[int, int]] = set()
         for col_idx in sel_cols:
             c = col_idx.column()
-            for r in range(n_rows):
-                cells.add((r, c))
+            for ri in range(n_rows):
+                cells.add((ri, c))
         for row_idx in sel_rows:
-            r = row_idx.row()
-            for c in range(n_cols):
-                cells.add((r, c))
+            ri = row_idx.row()
+            for ci in range(n_cols):
+                cells.add((ri, ci))
         for idx in sel_model.selectedIndexes():
             cells.add((idx.row(), idx.column()))
         if not cells:
@@ -256,17 +257,29 @@ class _BulkCycleTable(QTableWidget):
                 or (row, col + 1) in cells
             ):
                 continue
-            r = self.visualRect(self.model().index(row, col))
-            if not r.isValid():
+            cell_rect = self.visualRect(model.index(row, col))
+            if not cell_rect.isValid():
                 continue
             if (row - 1, col) not in cells:
-                painter.drawLine(r.left(), r.top(), r.right(), r.top())
+                painter.drawLine(
+                    cell_rect.left(), cell_rect.top(),
+                    cell_rect.right(), cell_rect.top(),
+                )
             if (row + 1, col) not in cells:
-                painter.drawLine(r.left(), r.bottom(), r.right(), r.bottom())
+                painter.drawLine(
+                    cell_rect.left(), cell_rect.bottom(),
+                    cell_rect.right(), cell_rect.bottom(),
+                )
             if (row, col - 1) not in cells:
-                painter.drawLine(r.left(), r.top(), r.left(), r.bottom())
+                painter.drawLine(
+                    cell_rect.left(), cell_rect.top(),
+                    cell_rect.left(), cell_rect.bottom(),
+                )
             if (row, col + 1) not in cells:
-                painter.drawLine(r.right(), r.top(), r.right(), r.bottom())
+                painter.drawLine(
+                    cell_rect.right(), cell_rect.top(),
+                    cell_rect.right(), cell_rect.bottom(),
+                )
         painter.end()
 
     def _draw_outline_rect(self, rect):
