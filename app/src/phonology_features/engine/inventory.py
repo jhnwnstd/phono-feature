@@ -93,8 +93,40 @@ def _canonicalize_name(s: str) -> str:
     that look identical (precomposed vs combining), while NFKC also
     folds compatibility variants that may carry phonetic or
     orthographic meaning (e.g. ligatures, half-width forms).
+
+    ``str.strip()`` is Unicode-aware for whitespace (NBSP, NNBSP, etc.)
+    but does NOT strip Unicode FORMAT characters (ZWJ, ZWNJ, LRM, RLM,
+    BOM). Those survive canonicalization and create truly invisible
+    distinct keys, so they're rejected separately via
+    ``_invisible_format_chars`` rather than silently stripped.
     """
     return unicodedata.normalize("NFC", s).strip()
+
+
+def _invisible_format_chars(s: str) -> list[str]:
+    """Return the Unicode FORMAT characters (category ``Cf``) present
+    in ``s``, one human-readable label per occurrence. Empty when the
+    string contains none.
+
+    Format characters are invisible to a human reader -- ZWJ
+    (U+200D), ZWNJ (U+200C), LRM (U+200E), RLM (U+200F), BOM
+    (U+FEFF), etc. They survive NFC and ``str.strip`` and would
+    create distinct dict keys that look identical to the user. None
+    of them have a legitimate use in feature or segment identifiers
+    for a phonology engine; reject at the parser boundary with a
+    descriptive message so the user can find the bad paste.
+    """
+    found: list[str] = []
+    for ch in s:
+        if unicodedata.category(ch) == "Cf":
+            # Include both code point and name so the user can locate
+            # the offending character in their editor without guessing.
+            try:
+                cp_name = unicodedata.name(ch)
+            except ValueError:
+                cp_name = "UNNAMED"
+            found.append(f"U+{ord(ch):04X} ({cp_name})")
+    return found
 
 
 class _DuplicateJSONKey(ValueError):
@@ -284,11 +316,24 @@ class Inventory:
         explicit_metadata = raw.get("metadata")
         if isinstance(explicit_metadata, dict):
             metadata.update(explicit_metadata)
-        name = metadata.get("name")
-        if not isinstance(name, str) or not name.strip():
-            name = "Untitled Inventory"
-        # Ensure name round-trips even when the input had none.
-        metadata.setdefault("name", name)
+        # Inventory name is a display label, not a key, so the policy
+        # is lighter than segment/feature names: canonicalize and cap,
+        # but skip the alias/collision/invisible-char checks. Length
+        # cap protects the title bar and meta strip from a pasted
+        # paragraph.
+        raw_name = metadata.get("name")
+        if isinstance(raw_name, str):
+            canonical_name = _canonicalize_name(raw_name)
+        else:
+            canonical_name = ""
+        if not canonical_name:
+            canonical_name = "Untitled Inventory"
+        if len(canonical_name) > MAX_NAME_LENGTH:
+            canonical_name = canonical_name[:MAX_NAME_LENGTH]
+        name = canonical_name
+        # Ensure name round-trips even when the input had none, and
+        # that the on-disk metadata reflects the canonical form.
+        metadata["name"] = name
 
         # Soft advisories: notable-but-valid observations surfaced to
         # the user but not blocking. Pure cardinality only -- no
@@ -482,6 +527,15 @@ def _validate_features(
                 f"{prefix}'features[{i}]' is empty after canonicalization"
             )
             continue
+        invisible = _invisible_format_chars(canonical)
+        if invisible:
+            issues.append(
+                f"{prefix}'features[{i}]' ({f!r}) contains invisible "
+                f"format character(s): {invisible}; these have no use "
+                f"in feature identifiers and would create distinct keys "
+                f"that look identical"
+            )
+            continue
         if canonical in seen:
             prior = canonical_origin[canonical]
             if prior == f:
@@ -565,6 +619,14 @@ def _validate_segments(
             issues.append(
                 f"{prefix}segment key {seg_name!r} is empty after "
                 f"canonicalization"
+            )
+            continue
+        invisible = _invisible_format_chars(canonical_seg)
+        if invisible:
+            issues.append(
+                f"{prefix}segment key {seg_name!r} contains invisible "
+                f"format character(s): {invisible}; these would create "
+                f"a distinct segment that looks identical to another"
             )
             continue
         if canonical_seg in result:

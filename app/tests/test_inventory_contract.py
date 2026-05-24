@@ -315,6 +315,78 @@ def test_advisory_fires_for_unusually_many_segments() -> None:
     assert any("segment" in a.lower() for a in inv.advisories)
 
 
+def test_parse_rejects_invisible_format_char_in_feature_name() -> None:
+    """ZWJ (U+200D) and friends are invisible to readers and SURVIVE
+    NFC + ``str.strip()``. Two feature names that differ only in an
+    embedded ZWJ would look identical in the UI but be distinct keys.
+    Reject at the parser boundary with a message that names the
+    actual code point so the user can find and remove the bad paste.
+    """
+    for cp in ("‍", "‌", "‎", "‏", "﻿"):
+        with pytest.raises(ValidationError) as ex:
+            Inventory.parse(
+                {"features": [f"Voi{cp}ce"], "segments": {}}
+            )
+        msg = " ".join(ex.value.issues)
+        assert "invisible" in msg.lower() or "format" in msg.lower()
+        assert f"U+{ord(cp):04X}" in msg
+
+
+def test_parse_rejects_invisible_format_char_in_segment_name() -> None:
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {
+                "features": ["V"],
+                "segments": {"p‍t": {"V": "+"}},
+            }
+        )
+    msg = " ".join(ex.value.issues)
+    assert "U+200D" in msg
+
+
+def test_parse_strips_nbsp_from_names() -> None:
+    """NBSP (U+00A0) is a SPACE separator (category Zs), not a
+    format character, so ``str.strip()`` removes it. A name with
+    trailing NBSP canonicalizes the same as the unpadded form."""
+    inv = Inventory.parse(
+        {"features": ["Voice "], "segments": {}}
+    )
+    assert inv.features == ("Voice",)
+
+
+def test_parse_canonicalizes_inventory_name() -> None:
+    """The inventory name is a display label, not a key, but it
+    still gets NFC + strip so the UI title matches the file's
+    metadata regardless of paste source."""
+    import unicodedata
+
+    nfd_name = unicodedata.normalize("NFD", "Café")
+    inv = Inventory.parse(
+        {
+            "metadata": {"name": f"  {nfd_name}  "},
+            "features": [],
+            "segments": {},
+        }
+    )
+    assert inv.name == "Café"
+    # And the metadata round-trips with the canonical form.
+    assert inv.metadata["name"] == "Café"
+
+
+def test_parse_caps_overlong_inventory_name() -> None:
+    """A 5000-char inventory name would destroy the title bar /
+    status strip. Truncate (don't reject -- the inventory is
+    otherwise fine) so the user still gets a working load."""
+    inv = Inventory.parse(
+        {
+            "metadata": {"name": "X" * 5000},
+            "features": [],
+            "segments": {},
+        }
+    )
+    assert len(inv.name) <= 256
+
+
 # ---------------------------------------------------------------------------
 # parse(): segments validation
 # ---------------------------------------------------------------------------
