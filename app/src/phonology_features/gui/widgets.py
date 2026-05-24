@@ -525,7 +525,7 @@ class _CopyableTextEdit(QTextEdit):
         }
     )
 
-    def createMimeDataFromSelection(self):  # type: ignore[override]
+    def createMimeDataFromSelection(self):
         original = super().createMimeDataFromSelection()
         if original is None:
             return original

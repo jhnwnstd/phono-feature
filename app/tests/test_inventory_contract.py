@@ -1199,7 +1199,7 @@ def test_inventory_swap_does_not_resize_window(tmp_path: Path) -> None:
     _os.makedirs(sd, exist_ok=True)
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
-    QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication([])
     from phonology_features.gui.main_window import MainWindow
 
     w = MainWindow(startup_path=HAYES)
@@ -1208,7 +1208,7 @@ def test_inventory_swap_does_not_resize_window(tmp_path: Path) -> None:
     w._has_saved_size = True
     w.resize(1100, 850)
     w.show()
-    QApplication.instance().processEvents()
+    app.processEvents()
     before_size = (w.width(), w.height())
 
     # Swap to a different inventory with a different segment / feature
@@ -1217,7 +1217,7 @@ def test_inventory_swap_does_not_resize_window(tmp_path: Path) -> None:
     general = str(REPO_ROOT / "inventories" / "general_features.json")
     for path in (english, general, HAYES):
         w._load_path(path)
-        QApplication.instance().processEvents()
+        app.processEvents()
         assert (w.width(), w.height()) == before_size, (
             f"window resized on inventory swap to {os.path.basename(path)}: "
             f"{before_size} -> {(w.width(), w.height())}"
@@ -1243,7 +1243,7 @@ def test_inventory_swap_preserves_splitter_ratio(tmp_path: Path) -> None:
     _os.makedirs(sd, exist_ok=True)
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
-    QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication([])
     from phonology_features.gui.main_window import MainWindow
 
     w = MainWindow(startup_path=HAYES)
@@ -1251,17 +1251,17 @@ def test_inventory_swap_preserves_splitter_ratio(tmp_path: Path) -> None:
     w._has_saved_splitter = True  # simulate restored state
     w.resize(1100, 850)
     w.show()
-    QApplication.instance().processEvents()
+    app.processEvents()
     # User-chosen ratio.
     w._hsplit.setSizes([400, 700])
-    QApplication.instance().processEvents()
+    app.processEvents()
     before = w._hsplit.sizes()
 
     english = str(REPO_ROOT / "inventories" / "english_features.json")
     general = str(REPO_ROOT / "inventories" / "general_features.json")
     for path in (english, general, HAYES):
         w._load_path(path)
-        QApplication.instance().processEvents()
+        app.processEvents()
         assert w._hsplit.sizes() == before, (
             f"splitter ratio drifted on load of {os.path.basename(path)}: "
             f"{before} -> {w._hsplit.sizes()}"
