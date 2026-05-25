@@ -97,7 +97,7 @@ class _AutofillTextEdit(QPlainTextEdit):
         self._placeholder = text
         super().setPlaceholderText("")
 
-    def placeholderText(self) -> str:  # type: ignore[override]
+    def placeholderText(self) -> str:
         return self._placeholder
 
     def event(self, e: QEvent | None) -> bool:
