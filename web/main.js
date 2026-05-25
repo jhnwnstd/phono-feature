@@ -152,6 +152,16 @@ const MODE = Object.freeze({
     FEAT_TO_SEG: "feat_to_seg",
 });
 
+// Per-mode status-bar prompt. Single source of truth for the two
+// strings; before this they were copy-pasted at the boot site, the
+// mode-switch site, and the Clear site, drifting separately every
+// time wording was tweaked.
+const STATUS_TEXT = Object.freeze({
+    [MODE.SEG_TO_FEAT]: "Click a segment to inspect its features.",
+    [MODE.FEAT_TO_SEG]:
+        "Toggle feature values (+/−) to find matching segments.",
+});
+
 // State managed in JS (Python holds the engine + inventory).
 const state = {
     mode: MODE.SEG_TO_FEAT,
@@ -268,7 +278,7 @@ async function bootPyodide() {
     mark("inventory:end");
 
     $("loading-overlay").classList.add("hidden");
-    setStatus("Click a segment to inspect its features.");
+    setStatus(STATUS_TEXT[state.mode]);
 
     mark("boot:end");
     measure("Manifest fetch", "manifest:start", "manifest:end");
@@ -699,9 +709,7 @@ function activateMode(mode) {
         }
     }
 
-    setStatus(isS2F
-        ? "Click a segment to inspect its features."
-        : "Toggle feature values (+/−) to find matching segments.");
+    setStatus(STATUS_TEXT[mode]);
 
     // Re-run analysis with the restored state so the pane reflects
     // the just-activated mode immediately.
@@ -726,13 +734,17 @@ function scheduleAnalysis() {
     state.debounce_timer = setTimeout(runAnalysis, 80);
 }
 
+// Mode -> analysis handler. Lookup beats if/else for two reasons:
+// adding a third mode (if one ever appears) is a one-line edit, and
+// the handlers compose cleanly with the token pattern -- every
+// dispatch goes through one place that bumps and forwards the token.
+const MODE_HANDLERS = Object.freeze({
+    [MODE.SEG_TO_FEAT]: runSegToFeat,
+    [MODE.FEAT_TO_SEG]: runFeatToSeg,
+});
+
 function runAnalysis() {
-    const myToken = ++state.analysis_token;
-    if (state.mode === MODE.SEG_TO_FEAT) {
-        runSegToFeat(myToken);
-    } else {
-        runFeatToSeg(myToken);
-    }
+    MODE_HANDLERS[state.mode](++state.analysis_token);
 }
 
 function _isStaleToken(token) {
@@ -902,9 +914,7 @@ function clearAll() {
         rec.minus.dataset.active = "false";
     }
     $("analysis-content").innerHTML = "";
-    setStatus(state.mode === MODE.SEG_TO_FEAT
-        ? "Click a segment to inspect its features."
-        : "Toggle feature values (+/−) to find matching segments.");
+    setStatus(STATUS_TEXT[state.mode]);
 }
 
 // ---------------------------------------------------------------------
