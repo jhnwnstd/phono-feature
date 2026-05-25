@@ -692,8 +692,10 @@ class MainWindow(QMainWindow):
         """
         # App-level QSS (QMainWindow bg + QToolTip styling) reads the
         # active palette at call time, so re-set it on theme toggle.
+        # ``instance()`` returns ``QCoreApplication | None``; setStyleSheet
+        # is a QApplication method, so narrow before calling.
         app = QApplication.instance()
-        if app is not None:
+        if isinstance(app, QApplication):
             app.setStyleSheet(app_qss())
         set_css(self, f"background-color: {C['bg']};")
         self._restyle_toolbar()

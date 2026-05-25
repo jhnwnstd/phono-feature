@@ -361,7 +361,12 @@ def test_bundled_inventories_produce_no_advisories() -> None:
         "english_features.json",
         "blevins_features.json",
     ):
-        inv = Inventory.load(str(REPO_ROOT / "inventories" / fname))
+        path = REPO_ROOT / "inventories" / fname
+        if not path.exists():
+            # Some bundled inventories (e.g. blevins) are gitignored
+            # and absent from CI; skip rather than fail.
+            continue
+        inv = Inventory.load(str(path))
         assert (
             inv.advisories == ()
         ), f"{fname} produced advisories: {inv.advisories}"
@@ -462,7 +467,10 @@ def test_bundled_inventories_produce_no_ipa_confusable_advisories() -> None:
         "english_features.json",
         "blevins_features.json",
     ):
-        inv = Inventory.load(str(REPO_ROOT / "inventories" / fname))
+        path = REPO_ROOT / "inventories" / fname
+        if not path.exists():
+            continue
+        inv = Inventory.load(str(path))
         # Size advisories are checked separately; this test guards
         # specifically against IPA-confusable false positives.
         confusable_advisories = [
@@ -830,8 +838,10 @@ def test_bundled_inventory_survives_engine_consumers(fname: str) -> None:
     bundled inventory developing feature-name aliasing (or any other
     parser-vs-engine drift) during edits.
     """
-    path = str(REPO_ROOT / "inventories" / fname)
-    inv = Inventory.load(path)
+    full = REPO_ROOT / "inventories" / fname
+    if not full.exists():
+        pytest.skip(f"{fname} not present (gitignored in CI)")
+    inv = Inventory.load(str(full))
     eng = FeatureEngine(inv)
     _ = eng.grouped_segments
     _ = eng.normalized_segment_feats
@@ -2035,7 +2045,15 @@ def test_main_viewer_loads_freshly_saved_builder_inventory(
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
     from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.constants import SETTINGS_APP, SETTINGS_ORG
     from phonology_features.gui.main_window import MainWindow
+
+    # On macOS/Windows, QSettings.setPath may not redirect an already-
+    # initialized backing store, so a prior test's persisted
+    # ``last_inventory`` leaks into this MainWindow construction and
+    # auto-loads a stale path. Wipe the key explicitly under whatever
+    # QSettings backing this platform is using.
+    QSettings(SETTINGS_ORG, SETTINGS_APP).remove("last_inventory")
 
     w = MainWindow()
     # Spawn a builder the same way _open_builder does for the
