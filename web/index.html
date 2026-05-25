@@ -42,6 +42,14 @@
   behind a host that sets X-Frame-Options: DENY or the equivalent
   Content-Security-Policy header.
 -->
+<!--
+  Hint the browser to set up the TLS connection to the Pyodide CDN
+  early, in parallel with parsing the rest of the document. Saves
+  ~100-300 ms on cold loads. dns-prefetch is a backstop for
+  browsers that ignore preconnect.
+-->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="theme.css">
 <link rel="stylesheet" href="style.css">
 </head>

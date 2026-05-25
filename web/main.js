@@ -11,6 +11,28 @@ const setStatus = (msg) => { $("statusbar").textContent = msg; };
 const setLoadingStatus = (msg) => { $("loading-status").textContent = msg; };
 
 // ---------------------------------------------------------------------
+// Boot timing instrumentation. Each phase brackets itself with two
+// performance.mark calls; printBootMeasures() prints a table of
+// phase durations to the devtools console after boot completes.
+// Measure first, optimize second.
+// ---------------------------------------------------------------------
+const mark = (name) => performance.mark(name);
+function measure(label, start, end) {
+    try {
+        performance.measure(label, start, end);
+    } catch {
+        // mark missing means an earlier phase failed; skip silently.
+    }
+}
+function printBootMeasures() {
+    const rows = performance
+        .getEntriesByType("measure")
+        .map((e) => ({ phase: e.name, ms: Math.round(e.duration) }));
+    // eslint-disable-next-line no-console
+    console.table(rows);
+}
+
+// ---------------------------------------------------------------------
 // fetch wrappers that throw a useful Error on non-2xx instead of
 // returning an HTML 404 page that .json() then parses as a mystery
 // SyntaxError. Use everywhere we hit network.
@@ -24,6 +46,37 @@ async function fetchOk(url) {
 }
 async function fetchJson(url) { return (await fetchOk(url)).json(); }
 async function fetchText(url) { return (await fetchOk(url)).text(); }
+
+// ---------------------------------------------------------------------
+// withTimeout: rejects if ``promise`` doesn't settle within ``ms``.
+// Use on anything that could stall indefinitely (CDN fetches,
+// Pyodide cold start). Without it, a stalled load leaves users on
+// the loading screen forever with no error.
+// ---------------------------------------------------------------------
+function withTimeout(promise, ms, label) {
+    let timer;
+    const stall = new Promise((_, reject) => {
+        timer = setTimeout(
+            () => reject(new Error(`${label} timed out after ${ms} ms`)),
+            ms,
+        );
+    });
+    return Promise.race([promise, stall]).finally(() => clearTimeout(timer));
+}
+
+// ---------------------------------------------------------------------
+// In-memory cache of inventory JSON text keyed by file path. Switching
+// the dropdown to a previously-loaded inventory becomes a no-network
+// hit. The Python side still re-parses; if that becomes the bottleneck
+// (per the boot marks), cache the parsed bridge state too.
+// ---------------------------------------------------------------------
+const inventoryTextCache = new Map();
+async function fetchInventoryText(file) {
+    if (inventoryTextCache.has(file)) return inventoryTextCache.get(file);
+    const text = await fetchText(file);
+    inventoryTextCache.set(file, text);
+    return text;
+}
 
 // ---------------------------------------------------------------------
 // Pyodide bridge call wrapper. Two responsibilities:
@@ -80,21 +133,48 @@ const state = {
 // in the file (falling back to a Title-Cased filename).
 let BUNDLED_INVENTORIES = [];
 
+// Boot timeouts. Pyodide cold start on a fast connection is
+// typically 2-5s; 30s is a generous failure threshold. Bridge
+// fetches are local to the deploy, so 10s is plenty there.
+const PYODIDE_BOOT_TIMEOUT_MS = 30_000;
+const LOCAL_FETCH_TIMEOUT_MS = 10_000;
+
+// Preferred default-inventory filename. English is the smallest
+// (~21 KB, 39 segments) so first paint comes up fastest. Falls
+// back to whatever the manifest sorts first when this file isn't
+// in the build.
+const PREFERRED_DEFAULT_INVENTORY = "inventories/english_features.json";
+
 async function bootPyodide() {
+    mark("boot:start");
+
     setLoadingStatus("Loading inventory list…");
-    BUNDLED_INVENTORIES = await fetchJson("inventories.json");
+    mark("manifest:start");
+    BUNDLED_INVENTORIES = await withTimeout(
+        fetchJson("inventories.json"),
+        LOCAL_FETCH_TIMEOUT_MS,
+        "inventories manifest fetch",
+    );
     if (!BUNDLED_INVENTORIES.length) {
         throw new Error(
             "no inventories in inventories.json; check the build script"
         );
     }
     populateInventoryPicker();
+    mark("manifest:end");
 
     setLoadingStatus("Loading the Python runtime…");
-    const pyodide = await loadPyodide();
+    mark("pyodide:start");
+    const pyodide = await withTimeout(
+        loadPyodide(),
+        PYODIDE_BOOT_TIMEOUT_MS,
+        "Pyodide startup",
+    );
     state.pyodide = pyodide;
+    mark("pyodide:end");
 
     setLoadingStatus("Installing the phonology engine…");
+    mark("wheel:start");
     await pyodide.loadPackage("micropip");
     const micropip = pyodide.pyimport("micropip");
     // The build script puts the wheel at ./wheels/. Glob isn't
@@ -103,24 +183,51 @@ async function bootPyodide() {
         document.baseURI).toString();
     await micropip.install(wheelUrl);
     micropip.destroy();
+    mark("wheel:end");
 
     setLoadingStatus("Loading renderer modules…");
+    mark("renderer:start");
     // The build copies palette.py / constants.py / analysis.py into
     // ./render/phonology_features/gui/ so the api.py imports resolve
     // to the same code the desktop runs.
     await mountRendererPackage(pyodide);
+    mark("renderer:end");
 
     setLoadingStatus("Initializing the bridge…");
+    mark("bridge:start");
     const apiSource = await fetchText("api.py");
     pyodide.FS.writeFile("/home/pyodide/api.py", apiSource);
     state.bridge = pyodide.pyimport("api");
+    mark("bridge:end");
 
     enableBridgeGatedControls();
     setLoadingStatus("Loading default inventory…");
-    await loadBundledInventory(BUNDLED_INVENTORIES[0]);
+    mark("inventory:start");
+    await loadBundledInventory(pickDefaultInventory(BUNDLED_INVENTORIES));
+    mark("inventory:end");
 
     $("loading-overlay").classList.add("hidden");
     setStatus("Click a segment to inspect its features.");
+
+    mark("boot:end");
+    measure("Manifest fetch", "manifest:start", "manifest:end");
+    measure("Pyodide load", "pyodide:start", "pyodide:end");
+    measure("Engine wheel install", "wheel:start", "wheel:end");
+    measure("Renderer mount", "renderer:start", "renderer:end");
+    measure("Bridge init", "bridge:start", "bridge:end");
+    measure("Default inventory", "inventory:start", "inventory:end");
+    measure("Total boot", "boot:start", "boot:end");
+    printBootMeasures();
+}
+
+function pickDefaultInventory(manifest) {
+    // Prefer the explicit smallest-default if present; falls back to
+    // the first manifest entry. Centralized so the choice is
+    // discoverable and not buried in bootPyodide.
+    const preferred = manifest.find(
+        (m) => m.file === PREFERRED_DEFAULT_INVENTORY,
+    );
+    return preferred ?? manifest[0];
 }
 
 async function mountRendererPackage(pyodide) {
@@ -165,7 +272,9 @@ function enableBridgeGatedControls() {
 // Inventory loading
 // ---------------------------------------------------------------------
 async function loadBundledInventory(item) {
-    const text = await fetchText(item.file);
+    // Inventory text is cached after first fetch so switching the
+    // dropdown to a previously-loaded inventory and back is no-network.
+    const text = await fetchInventoryText(item.file);
     await loadInventoryText(text, item.label);
 }
 
