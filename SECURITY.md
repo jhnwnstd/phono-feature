@@ -29,10 +29,14 @@ The desktop launchers create a local virtual environment and install Python pack
 - Inventory parsing uses size limits and structural validation.
 - Browser rendering escapes user controlled strings.
 - The browser app uses a Content Security Policy.
-- Pyodide loads with Subresource Integrity.
+- Pyodide loads from a pinned URL with Subresource Integrity.
+- JavaScript bridge calls clean up Pyodide proxy objects after use.
+- The web deploy runs a browser smoke test before publishing.
 - Desktop inventory saves use atomic file replacement.
 
 ## Limits
+
+The Content Security Policy is delivered as a `<meta>` tag. Some directives, including `frame-ancestors`, require HTTP headers and cannot be enforced this way.
 
 The launcher scripts are trust on first run. Review them before running if needed.
 
