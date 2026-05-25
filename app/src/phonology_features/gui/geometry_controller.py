@@ -47,6 +47,16 @@ class _GeometryController:
     MIN_DECO_W: ClassVar[int] = 8
     MIN_DECO_H: ClassVar[int] = 32
     MIN_ANALYSIS_H: ClassVar[int] = 220
+    # First-launch floor: the content-derived width can come out
+    # around 900-1100 px depending on the inventory, which leaves the
+    # analysis pane visibly cramped on a fresh install. Clamping the
+    # initial size up to these floors gives the analysis pane real
+    # breathing room on first open without overriding the user's
+    # saved size on subsequent launches. ``clamp_size_to_screen``
+    # still caps at the actual screen, so smaller displays remain
+    # usable.
+    MIN_FIRST_LAUNCH_W: ClassVar[int] = 1400
+    MIN_FIRST_LAUNCH_H: ClassVar[int] = 900
 
     def __init__(
         self,
@@ -200,7 +210,9 @@ class _GeometryController:
             # this and rely on the splitter to absorb width changes.
             if not self.has_saved_size:
                 self.fit_window_to_size(
-                    screen, seg_need_w + feat_need_w + 1, total_need_h
+                    screen,
+                    max(seg_need_w + feat_need_w + 1, self.MIN_FIRST_LAUNCH_W),
+                    max(total_need_h, self.MIN_FIRST_LAUNCH_H),
                 )
             # Same rule for the panel boundary: once the user has
             # a restored or manually-dragged splitter ratio, leave
