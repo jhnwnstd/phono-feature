@@ -244,13 +244,17 @@ function pickDefaultInventory(manifest) {
 
 async function mountRendererPackage(pyodide) {
     // Replicate the package directory layout under /render/ in
-    // Pyodide's FS, then add /render/ to sys.path.
+    // Pyodide's FS, then add /render/ to sys.path. File list must
+    // mirror RELAYED_SOURCES in web/scripts/build.py -- adding a
+    // file there without also adding it here means the renderer
+    // can build but api.py's import fails at boot.
     const base = "render/phonology_features";
     const files = [
         ["__init__.py", `${base}/__init__.py`],
         ["gui/__init__.py", `${base}/gui/__init__.py`],
         ["gui/palette.py", `${base}/gui/palette.py`],
         ["gui/constants.py", `${base}/gui/constants.py`],
+        ["gui/layout.py", `${base}/gui/layout.py`],
         ["gui/analysis.py", `${base}/gui/analysis.py`],
     ];
     pyodide.FS.mkdirTree("/home/pyodide/render/phonology_features/gui");
