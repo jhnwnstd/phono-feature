@@ -10,6 +10,8 @@ import os
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
+from phonology_engine.feature_engine import FeatureEngine
+from phonology_engine.inventory import Inventory, ValidationError
 from PyQt6.QtCore import (
     QEvent,
     QPoint,
@@ -43,8 +45,6 @@ from PyQt6.QtWidgets import (
 
 from phonology_features._logging import get_logger
 from phonology_features._settings import safe_read_setting
-from phonology_features.engine.feature_engine import FeatureEngine
-from phonology_features.engine.inventory import Inventory, ValidationError
 from phonology_features.gui.analysis import (
     compute_contrastive,
     render_feat_to_seg,

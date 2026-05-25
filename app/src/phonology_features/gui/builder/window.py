@@ -4,12 +4,13 @@ import os
 import re
 from typing import TYPE_CHECKING, ClassVar
 
-from phonology_features._logging import get_logger
-from phonology_features.engine.inventory import (
+from phonology_engine.inventory import (
     MAX_NAME_LENGTH,
     Inventory,
     ValidationError,
 )
+
+from phonology_features._logging import get_logger
 
 if TYPE_CHECKING:
     # Only used in a string-form type annotation; importing at runtime

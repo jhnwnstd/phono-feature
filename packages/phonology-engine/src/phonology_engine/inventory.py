@@ -33,9 +33,9 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
 
-from phonology_features._logging import get_logger
+import logging
 
-_log = get_logger(__name__)
+_log = logging.getLogger(__name__)
 
 VALID_VALUES: frozenset[str] = frozenset({"+", "-", "0"})
 
@@ -677,7 +677,7 @@ def _validate_features(
     # never has to defend against AliasCollisionError downstream.
     # Lazy import: segment_grouper depends on lru_cache + collections
     # only, no cycle with this module.
-    from phonology_features.engine.segment_grouper import _normalize_key
+    from phonology_engine.segment_grouper import _normalize_key
 
     by_alias: dict[str, list[str]] = {}
     for f in valid:

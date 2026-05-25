@@ -2,6 +2,7 @@
 
 import re
 
+from phonology_engine.inventory import MAX_NAME_LENGTH
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QFont, QPainter, QTextCursor
 from PyQt6.QtWidgets import (
@@ -16,7 +17,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from phonology_features.engine.inventory import MAX_NAME_LENGTH
 from phonology_features.gui.builder.presets import FEATURE_PRESETS
 from phonology_features.gui.palette import C
 

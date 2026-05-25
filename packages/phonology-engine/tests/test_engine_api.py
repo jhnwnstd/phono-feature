@@ -1,5 +1,5 @@
 """
-Public-API tests for ``phonology_features.engine``.
+Public-API tests for ``phonology_engine``.
 
 These exercise the engine without any PyQt6 import path. They double as the
 smoke test the README points new users at: a clean run here proves the
@@ -12,11 +12,27 @@ from pathlib import Path
 
 import pytest
 
-from phonology_features.engine.feature_engine import FeatureEngine
-from phonology_features.engine.geometry import GeometryAnalyzer
+from phonology_engine.feature_engine import FeatureEngine
+from phonology_engine.geometry import GeometryAnalyzer
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-HAYES_INVENTORY = str(REPO_ROOT / "inventories" / "hayes_features.json")
+
+def _find_repo_root() -> Path:
+    """Walk up from this file until we find the workspace root.
+
+    The bundled inventories currently ship with the desktop app at
+    ``app/inventories/``; the engine package is at
+    ``packages/phonology-engine/``. From either depth, the workspace
+    root is the first ancestor that contains both ``app`` and
+    ``packages`` directories.
+    """
+    for ancestor in Path(__file__).resolve().parents:
+        if (ancestor / "app").is_dir() and (ancestor / "packages").is_dir():
+            return ancestor
+    raise RuntimeError("could not locate workspace root from test file")
+
+
+REPO_ROOT = _find_repo_root()
+HAYES_INVENTORY = str(REPO_ROOT / "app" / "inventories" / "hayes_features.json")
 
 
 @pytest.fixture(scope="module")

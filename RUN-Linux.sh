@@ -44,9 +44,16 @@ fi
 # shellcheck source=/dev/null
 source "$VENV_DIR/bin/activate"
 
-if [[ ! -f "$STAMP" ]] || [[ "pyproject.toml" -nt "$STAMP" ]]; then
+ENGINE_DIR="../packages/phonology-engine"
+ENGINE_PYPROJECT="$ENGINE_DIR/pyproject.toml"
+
+if [[ ! -f "$STAMP" ]] || [[ "pyproject.toml" -nt "$STAMP" ]] \
+        || [[ "$ENGINE_PYPROJECT" -nt "$STAMP" ]]; then
     echo "Installing dependencies ..."
     pip install --quiet --upgrade pip
+    # Engine first so the app's resolver sees a satisfied
+    # phonology-engine dep instead of going to PyPI for it.
+    pip install --quiet -e "$ENGINE_DIR"
     pip install --quiet -e .
     touch "$STAMP"
 fi

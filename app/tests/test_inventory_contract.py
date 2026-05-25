@@ -17,15 +17,14 @@ import os
 from pathlib import Path
 
 import pytest
-
-from phonology_features.engine.feature_engine import FeatureEngine
-from phonology_features.engine.geometry import GeometryAnalyzer
-from phonology_features.engine.inventory import (
+from phonology_engine.feature_engine import FeatureEngine
+from phonology_engine.geometry import GeometryAnalyzer
+from phonology_engine.inventory import (
     Inventory,
     ValidationError,
     atomic_write_json,
 )
-from phonology_features.engine.segment_grouper import (
+from phonology_engine.segment_grouper import (
     AliasCollisionError,
     _normalize_feats,
 )
@@ -720,9 +719,9 @@ def test_parse_returns_immutable_inventory() -> None:
     )
     assert isinstance(inv.features, tuple)
     with pytest.raises(TypeError):
-        inv.segments["p"] = {}  # type: ignore[index]
+        inv.segments["p"] = {}
     with pytest.raises(TypeError):
-        inv.segments["p"]["Voice"] = "+"  # type: ignore[index]
+        inv.segments["p"]["Voice"] = "+"
 
 
 def test_parse_missing_feature_in_bundle_defaults_to_zero() -> None:
@@ -869,7 +868,7 @@ def test_engine_requires_inventory_not_raw_dict() -> None:
     could be more lenient than the validator. New engine refuses raw
     input."""
     with pytest.raises(TypeError):
-        FeatureEngine({"features": [], "segments": {}})  # type: ignore[arg-type]
+        FeatureEngine({"features": [], "segments": {}})
 
 
 def test_engine_caches_cannot_desync_from_mutation() -> None:
@@ -902,7 +901,7 @@ def test_engine_has_no_empty_state() -> None:
     moment where ``eng.features`` is empty because no inventory was
     loaded yet. Constructing without an inventory is an error."""
     with pytest.raises(TypeError):
-        FeatureEngine()  # type: ignore[call-arg]
+        FeatureEngine()
 
 
 def test_engine_caches_bundle_search_results() -> None:
@@ -951,7 +950,7 @@ def test_bundle_cache_results_are_immutable() -> None:
     # Inner bundles are read-only mappings.
     if bundles_a:
         with pytest.raises(TypeError):
-            bundles_a[0]["bogus"] = "+"  # type: ignore[index]
+            bundles_a[0]["bogus"] = "+"
     # Cache hit returns the same object so consumers don't pay
     # rewrap costs on repeated queries.
     bundles_b = eng.find_all_minimal_bundles(segs)
@@ -1301,7 +1300,7 @@ def test_analysis_render_single_segment_escapes_symbol() -> None:
 
     # The renderer treats ``engine`` as duck-typed for testability;
     # the cast keeps mypy happy without forcing a real FeatureEngine.
-    out = render_single_segment(_FakeEngine(), "<x>", {"Voice": "+"})  # type: ignore[arg-type]
+    out = render_single_segment(_FakeEngine(), "<x>", {"Voice": "+"})
     assert "/<x>/" not in out
     assert "/&lt;x&gt;/" in out
 
@@ -1575,7 +1574,8 @@ def test_worker_non_oserror_clears_save_in_flight(
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.engine.inventory import Inventory
+    from phonology_engine.inventory import Inventory
+
     from phonology_features.gui.builder import InventoryBuilder
     from phonology_features.gui.builder import save_controller as _sc
 
@@ -1711,7 +1711,8 @@ def test_edit_during_in_flight_save_preserves_dirty(
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.engine.inventory import Inventory
+    from phonology_engine.inventory import Inventory
+
     from phonology_features.gui.builder import InventoryBuilder
 
     # Stall the worker so the main thread has time to mutate the grid
@@ -1770,7 +1771,8 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.engine.inventory import Inventory
+    from phonology_engine.inventory import Inventory
+
     from phonology_features.gui.builder import InventoryBuilder
     from phonology_features.gui.builder import save_controller as _sc
 

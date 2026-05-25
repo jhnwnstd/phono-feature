@@ -27,7 +27,15 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Topic :: Text Processing :: Linguistic",
 ]
-dependencies = ["PyQt6>=6.6.0"]
+dependencies = [
+    "PyQt6>=6.6.0",
+    # Pure-Python phonological analysis engine. Lives at
+    # ../packages/phonology-engine in the monorepo; installs from
+    # PyPI in a standalone clone of just this app directory. The
+    # ``RUN-*`` launchers do an editable install of the workspace
+    # root, which picks up the local engine before checking PyPI.
+    "phonology-engine>=0.1.0",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-mock>=3.12", "mypy>=1.8", "ruff>=0.4"]

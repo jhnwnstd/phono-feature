@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phonology-engine"
+version = "0.1.0"
+description = "Pure-Python phonological analysis engine: inventory parsing, natural-class computation, minimal-bundle search, segment grouping, feature geometry."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "John Winstead" }]
+keywords = ["phonology", "linguistics", "ipa", "features", "feature-geometry", "natural-class"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Text Processing :: Linguistic",
+]
+# Pure Python, stdlib only. No PyQt6, no NumPy, no anything that
+# would block Pyodide / WebAssembly distribution of the engine.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-mock>=3.12", "mypy>=1.8", "ruff>=0.4"]
+
+[project.urls]
+Homepage = "https://github.com/jhnwnstd/features"
+Issues = "https://github.com/jhnwnstd/features/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]

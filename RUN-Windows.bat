@@ -30,6 +30,9 @@ call "%VENV_DIR%\Scripts\activate.bat"
 if not exist "%STAMP%" (
     echo Installing dependencies ...
     python -m pip install --quiet --upgrade pip
+    REM Engine first so the app's resolver sees a satisfied
+    REM phonology-engine dep instead of going to PyPI for it.
+    python -m pip install --quiet -e "..\packages\phonology-engine" || goto :pip_fail
     python -m pip install --quiet -e . || goto :pip_fail
     type nul > "%STAMP%"
 )

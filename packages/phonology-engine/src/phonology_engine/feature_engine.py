@@ -25,13 +25,14 @@ from functools import cached_property
 from types import MappingProxyType
 from typing import Any
 
-from phonology_features._logging import get_logger
-from phonology_features.engine.inventory import (
+import logging
+
+from phonology_engine.inventory import (
     VALID_VALUES,
     Inventory,
 )
 
-_log = get_logger(__name__)
+_log = logging.getLogger(__name__)
 
 # Singleton read-only empty mapping shared across cache entries for
 # the universal-class and no-spec-found return paths. Module-level so
@@ -195,7 +196,7 @@ class FeatureEngine:
         callers don't have to remember to invalidate when swapping
         inventories; they swap engines instead.
         """
-        from phonology_features.engine.segment_grouper import group_segments
+        from phonology_engine.segment_grouper import group_segments
 
         return group_segments(self._inventory.segments)
 
@@ -204,7 +205,7 @@ class FeatureEngine:
         """Per-segment feature bundles with names normalized to the
         segment_grouper's canonical keys. Same lifetime / invalidation
         story as ``grouped_segments``."""
-        from phonology_features.engine.segment_grouper import _normalize_feats
+        from phonology_engine.segment_grouper import _normalize_feats
 
         return {
             seg: _normalize_feats(self._inventory.segments[seg])

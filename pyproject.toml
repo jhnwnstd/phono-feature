@@ -1,0 +1,19 @@
+[project]
+name = "phonology-features-workspace"
+version = "0.0.0"
+description = "Monorepo workspace for the phonology-engine package and the desktop / web apps that consume it."
+requires-python = ">=3.11"
+
+# Workspace marker. uv (and other tools that respect it) install all
+# member packages in editable mode against each other; pip users can
+# run ``pip install -e packages/phonology-engine -e app`` to achieve
+# the same result without uv.
+[tool.uv.workspace]
+members = ["packages/*", "app"]
+
+[tool.uv.sources]
+# The desktop app depends on phonology-engine. In the workspace,
+# resolve that against the local source tree instead of PyPI so
+# edits to the engine show up immediately in the desktop without a
+# release cycle.
+phonology-engine = { workspace = true }

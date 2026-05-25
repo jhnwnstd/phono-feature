@@ -44,7 +44,7 @@ from phonology_features.gui.constants import (
 from phonology_features.gui.palette import C
 
 if TYPE_CHECKING:
-    from phonology_features.engine.feature_engine import FeatureEngine
+    from phonology_engine.feature_engine import FeatureEngine
 
 
 # ---------------------------------------------------------------------------
