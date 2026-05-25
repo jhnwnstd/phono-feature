@@ -9,6 +9,7 @@ surface as tooltips on the buttons.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import IntEnum
 from typing import ClassVar
 
 from PyQt6.QtCore import Qt
@@ -84,11 +85,22 @@ def _detect_vowel_profile(segs: list, norm_feats: dict) -> VowelProfile:
     )
 
 
+class Confidence(IntEnum):
+    """Placement confidence ranks. Higher value = higher confidence;
+    ``min(a, b)`` picks the weaker of two placement signals (used when
+    height and backness disagree). Subclassing ``IntEnum`` so direct
+    comparison and ``min``/``max`` work without a lookup table."""
+
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+
+
 @dataclass(frozen=True)
 class VowelPlacement:
     row: int
     col: int
-    confidence: str
+    confidence: Confidence
     reason: str
 
 
@@ -106,7 +118,9 @@ def _nonzero(val: str | None) -> str | None:
     return None
 
 
-def _infer_height(feats: dict, profile: VowelProfile) -> tuple[int, str, str]:
+def _infer_height(
+    feats: dict, profile: VowelProfile
+) -> tuple[int, Confidence, str]:
     """Return row, confidence, and reason."""
     hi = _fv(feats, "high")
     lo = _fv(feats, "low")
@@ -119,51 +133,51 @@ def _infer_height(feats: dict, profile: VowelProfile) -> tuple[int, str, str]:
     if is_high_vowel:
         is_near_close = profile.has_height_sub_distinction and atr_tn == "-"
         if is_near_close:
-            return 1, "medium", "Near-close: [+high, -low, -tense/ATR]"
+            return 1, Confidence.MEDIUM, "Near-close: [+high, -low, -tense/ATR]"
         if atr_tn == "+":
-            return 0, "high", "Close: [+high, -low, +tense/ATR]"
-        return 0, "high", "Close: [+high, -low]"
+            return 0, Confidence.HIGH, "Close: [+high, -low, +tense/ATR]"
+        return 0, Confidence.HIGH, "Close: [+high, -low]"
     if is_low_vowel:
         is_near_open = profile.has_height_sub_distinction and atr_tn == "-"
         if is_near_open:
-            return 4, "medium", "Near-open: [-high, +low, -tense/ATR]"
-        return 5, "high", "Open: [-high, +low]"
+            return 4, Confidence.MEDIUM, "Near-open: [-high, +low, -tense/ATR]"
+        return 5, Confidence.HIGH, "Open: [-high, +low]"
     if is_mid_vowel:
         if atr_tn == "+":
-            return 2, "medium", "Close-mid: [-high, -low, +tense/ATR]"
+            return 2, Confidence.MEDIUM, "Close-mid: [-high, -low, +tense/ATR]"
         if atr_tn == "-":
-            return 3, "medium", "Open-mid: [-high, -low, -tense/ATR]"
-        return 3, "low", "Open-mid (default): [-high, -low], no tense/ATR"
-    return 3, "low", "Open-mid (default): underspecified height"
+            return 3, Confidence.MEDIUM, "Open-mid: [-high, -low, -tense/ATR]"
+        return 3, Confidence.LOW, "Open-mid (default): [-high, -low], no tense/ATR"
+    return 3, Confidence.LOW, "Open-mid (default): underspecified height"
 
 
 def _infer_backness(
     feats: dict,
     profile: VowelProfile,
-) -> tuple[str, str, str]:
+) -> tuple[str, Confidence, str]:
     """Return place, confidence, and reason."""
     fr = _nonzero(feats.get("front"))
     bk = _nonzero(feats.get("back"))
     has_positive_front = fr == "+"
     has_positive_back = bk == "+"
     if has_positive_front and not has_positive_back:
-        return "front", "high", "Front: [+front]"
+        return "front", Confidence.HIGH, "Front: [+front]"
     if has_positive_back and not has_positive_front:
-        return "back", "high", "Back: [+back]"
+        return "back", Confidence.HIGH, "Back: [+back]"
     if has_positive_front and has_positive_back:
-        return "central", "low", "Central (conflict): [+front, +back]"
+        return "central", Confidence.LOW, "Central (conflict): [+front, +back]"
     has_no_front_value = fr is None
     has_negative_back = bk == "-"
     if has_no_front_value and has_negative_back:
-        return "front", "medium", "Front (inferred): [-back]"
+        return "front", Confidence.MEDIUM, "Front (inferred): [-back]"
     if profile.use_coronal_front_fallback:
         cor = _nonzero(feats.get("coronal"))
         ant = feats.get("anterior", "0")
         is_coronal = cor == "+"
         is_retroflex_or_rhotic = ant == "-"
         if is_coronal and not is_retroflex_or_rhotic:
-            return "front", "low", "Front (inferred): CORONAL fallback"
-    return "central", "low", "Central (default): no front/back specified"
+            return "front", Confidence.LOW, "Front (inferred): CORONAL fallback"
+    return "central", Confidence.LOW, "Central (default): no front/back specified"
 
 
 def _infer_rounding(feats: dict, profile: VowelProfile) -> tuple[bool, str]:
@@ -175,13 +189,6 @@ def _infer_rounding(feats: dict, profile: VowelProfile) -> tuple[bool, str]:
     if can_use_labial_fallback and has_labial:
         return True, "Rounded (inferred): LABIAL fallback"
     return False, "Unrounded"
-
-
-_CONF_RANK = {
-    "high": 3,
-    "medium": 2,
-    "low": 1,
-}
 
 
 def _vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
@@ -199,11 +206,9 @@ def _vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
         col = base_col + 1
     else:
         col = base_col
-    confidence = min(
-        h_conf,
-        p_conf,
-        key=lambda confidence_name: _CONF_RANK[confidence_name],
-    )
+    # IntEnum orders by underlying int, so min picks the weaker signal
+    # directly; no lookup table needed.
+    confidence = min(h_conf, p_conf)
     reason = f"{h_reason}; {p_reason}; {r_reason}"
     return VowelPlacement(
         row=row,
@@ -345,10 +350,7 @@ class VowelChartWidget(QWidget):
             occupied.setdefault((placement.row, placement.col), []).append(seg)
         for key in occupied:
             occupied[key].sort(
-                key=lambda s: (
-                    _CONF_RANK.get(placements[s].confidence, 0),
-                    s,
-                ),
+                key=lambda s: (placements[s].confidence, s),
                 reverse=True,
             )
         return occupied, placements
@@ -412,6 +414,7 @@ class VowelChartWidget(QWidget):
     def _prep_button(btn, seg: str, placement: VowelPlacement) -> None:
         """Set the tooltip + show. Shared by single + collision cells."""
         btn.setToolTip(
-            f"/{seg}/  [{placement.confidence}]  {placement.reason}"
+            f"/{seg}/  [{placement.confidence.name.lower()}]"
+            f"  {placement.reason}"
         )
         btn.show()

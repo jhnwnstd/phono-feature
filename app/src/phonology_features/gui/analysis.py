@@ -278,16 +278,10 @@ def render_multi_segment(
 
 
 def render_feat_to_seg(
-    engine: FeatureEngine,
     feature_dict: dict[str, str],
     matching: list[str],
 ) -> str:
-    """Build HTML for a feature-to-segment query result. ``engine`` is
-    kept in the signature even though this renderer doesn't query it
-    directly; future extensions (e.g. showing the spec's effect on
-    contrast) would need it and rewiring callers later is more work
-    than carrying a known-good handle now."""
-    del engine  # currently unused; see docstring
+    """Build HTML for a feature-to-segment query result."""
     feat_tags = " ".join(
         _signed_feature_chip(value, feature)
         for feature, value in sort_spec(feature_dict).items()

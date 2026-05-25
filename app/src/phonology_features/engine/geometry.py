@@ -216,38 +216,3 @@ class GeometryAnalyzer:
         )
         return summary
 
-    def export_tree(self) -> dict:
-        """Nested-dict representation of the geometry tree."""
-        tree = (
-            self.geometry_tree
-            if self.geometry_tree is not None
-            else self.analyze()
-        )
-        return tree.to_dict()
-
-    def get_path_to_root(self, feature: str) -> list[str]:
-        """List of feature names from ``feature`` up to the root."""
-        tree = (
-            self.geometry_tree
-            if self.geometry_tree is not None
-            else self.analyze()
-        )
-
-        def find_node(node: GeometryNode, target: str) -> GeometryNode | None:
-            if node.feature == target:
-                return node
-            for child in node.children:
-                result = find_node(child, target)
-                if result is not None:
-                    return result
-            return None
-
-        node = find_node(tree, feature)
-        if node is None:
-            return []
-        path = []
-        current: GeometryNode | None = node
-        while current is not None:
-            path.append(current.feature)
-            current = current.parent
-        return path

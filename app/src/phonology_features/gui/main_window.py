@@ -1593,7 +1593,7 @@ class MainWindow(QMainWindow):
                 else SegmentState.UNMATCHED
             )
         self.analysis.set_html(
-            render_feat_to_seg(self.engine, selected_feats, matching)
+            render_feat_to_seg(selected_feats, matching)
         )
 
     def _reset_feature_display(self) -> None:

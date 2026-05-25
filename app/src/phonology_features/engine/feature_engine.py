@@ -423,11 +423,6 @@ class FeatureEngine:
         bundles = self.find_all_minimal_bundles(segments)
         return bundles[0] if bundles else _EMPTY_BUNDLE
 
-    def is_contrastive(self, feature: str) -> bool:
-        """True if the feature takes both '+' and '-' across the inventory."""
-        self._validate_feature(feature)
-        return bool(self.plus_segs[feature]) and bool(self.minus_segs[feature])
-
     def get_contrastive_features(self) -> list[str]:
         """List of features that are contrastive in the loaded inventory.
         Returns a list for back-compat; prefer the ``contrastive_features``
@@ -486,14 +481,6 @@ class FeatureEngine:
         distances.sort(key=lambda x: (x[1], x[0]))
         return distances[:n]
 
-    def get_feature_distribution(self, feature: str) -> dict[str, int]:
-        """Counts of '+', '-', and '0' for ``feature`` across the inventory."""
-        self._validate_feature(feature)
-        distribution: dict[str, int] = {"+": 0, "-": 0, "0": 0}
-        for segment in self.segments.values():
-            distribution[segment.get(feature, "0")] += 1
-        return distribution
-
     def get_inventory_stats(self) -> dict[str, int | float | str]:
         """Summary stats: name, segment/feature counts, contrastive count, avg distance.
 
@@ -525,8 +512,3 @@ class FeatureEngine:
             stats["avg_feature_distance"] = 0.0
         return stats
 
-    def export_inventory(self, filepath: str) -> None:
-        """Atomically write the current inventory to ``filepath`` as
-        JSON. See ``Inventory.write_atomic`` for the durability
-        guarantee."""
-        self._inventory.write_atomic(filepath)
