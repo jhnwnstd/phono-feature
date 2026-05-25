@@ -108,7 +108,7 @@ async function loadInventoryText(text, sourceLabel) {
         state.selected_segments = [];
         state.selected_features = {};
         renderSegmentGrid(info.groups);
-        renderFeaturePanel(info.features);
+        renderFeaturePanel(info.feature_groups);
         $("analysis-content").innerHTML = "";
         setStatus(`Loaded ${info.name} (${info.segments.length} segments, ${info.features.length} features).`);
     } catch (e) {
@@ -169,34 +169,50 @@ function onSegmentClicked(seg) {
 }
 
 // ---------------------------------------------------------------------
-// Feature panel
+// Feature panel: grouped into Major Class, Laryngeal, Manner, Place,
+// Tongue-Root, Prosodic, plus an Other bucket for inventory-specific
+// extras. Layout mirrors the desktop's feature-card panel.
 // ---------------------------------------------------------------------
-function renderFeaturePanel(features) {
+function renderFeaturePanel(featureGroups) {
     const list = $("feat-list");
     list.innerHTML = "";
-    for (const feat of features) {
-        const row = document.createElement("div");
-        row.className = "feat-row";
-        row.dataset.feat = feat;
-        const name = document.createElement("div");
-        name.className = "feat-name";
-        name.textContent = feat;
-        row.appendChild(name);
-        const badge = document.createElement("div");
-        badge.className = "feat-badge";
-        badge.textContent = "·";
-        row.appendChild(badge);
-        for (const polarity of ["+", "−"]) {
-            const btn = document.createElement("button");
-            btn.className = "feat-btn";
-            btn.type = "button";
-            btn.dataset.polarity = polarity === "+" ? "+" : "-";
-            btn.textContent = polarity;
-            btn.addEventListener("click", () => onFeatureClicked(feat, polarity === "+" ? "+" : "-"));
-            row.appendChild(btn);
+    for (const group of featureGroups) {
+        const groupEl = document.createElement("div");
+        groupEl.className = "feat-group";
+        const header = document.createElement("div");
+        header.className = "feat-group-header";
+        header.textContent = group.name.toUpperCase();
+        groupEl.appendChild(header);
+        for (const feat of group.features) {
+            groupEl.appendChild(_buildFeatureRow(feat));
         }
-        list.appendChild(row);
+        list.appendChild(groupEl);
     }
+}
+
+function _buildFeatureRow(feat) {
+    const row = document.createElement("div");
+    row.className = "feat-row";
+    row.dataset.feat = feat;
+    const name = document.createElement("div");
+    name.className = "feat-name";
+    name.textContent = feat;
+    row.appendChild(name);
+    const badge = document.createElement("div");
+    badge.className = "feat-badge";
+    badge.textContent = "·";
+    row.appendChild(badge);
+    for (const polarity of ["+", "−"]) {
+        const btn = document.createElement("button");
+        btn.className = "feat-btn";
+        btn.type = "button";
+        const code = polarity === "+" ? "+" : "-";
+        btn.dataset.polarity = code;
+        btn.textContent = polarity;
+        btn.addEventListener("click", () => onFeatureClicked(feat, code));
+        row.appendChild(btn);
+    }
+    return row;
 }
 
 function onFeatureClicked(feat, polarity) {
@@ -372,6 +388,64 @@ function wireExpandButton() {
 }
 
 // ---------------------------------------------------------------------
+// Clear buttons (one per panel, both wipe the same shared state).
+// Matches the desktop's "Clear means clear" semantics: each Clear
+// resets both panes and the analysis pane, and activates the panel
+// whose Clear was pressed.
+// ---------------------------------------------------------------------
+function wireClearButtons() {
+    $("seg-clear-btn").addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        activateMode("seg_to_feat");
+        clearAll();
+    });
+    $("feat-clear-btn").addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        activateMode("feat_to_seg");
+        clearAll();
+    });
+}
+
+function clearAll() {
+    state.selected_segments = [];
+    state.selected_features = {};
+    for (const btn of document.querySelectorAll(".seg-btn")) {
+        btn.dataset.state = "default";
+    }
+    for (const row of document.querySelectorAll(".feat-row")) {
+        row.dataset.value = "";
+        row.dataset.shared = "false";
+        row.dataset.contrastive = "false";
+        const badge = row.querySelector(".feat-badge");
+        if (badge) badge.textContent = "·";
+    }
+    for (const btn of document.querySelectorAll(".feat-btn[data-active='true']")) {
+        btn.dataset.active = "false";
+    }
+    $("analysis-content").innerHTML = "";
+    setStatus(state.mode === "seg_to_feat"
+        ? "Click a segment to inspect its features."
+        : "Toggle feature values (+/−) to find matching segments.");
+}
+
+// ---------------------------------------------------------------------
+// Clicking anywhere in a panel switches mode to that panel's mode,
+// except when the click was on a button (which has its own handler).
+// Equivalent to the desktop's eventFilter that listens for clicks in
+// empty panel space.
+// ---------------------------------------------------------------------
+function wirePanelClickMode() {
+    $("seg-panel").addEventListener("click", (ev) => {
+        if (ev.target.closest("button")) return;
+        activateMode("seg_to_feat");
+    });
+    $("feat-panel").addEventListener("click", (ev) => {
+        if (ev.target.closest("button")) return;
+        activateMode("feat_to_seg");
+    });
+}
+
+// ---------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------
 async function main() {
@@ -379,6 +453,8 @@ async function main() {
     wireInventoryPicker();
     wireUploadDownload();
     wireExpandButton();
+    wireClearButtons();
+    wirePanelClickMode();
     try {
         await bootPyodide();
     } catch (e) {

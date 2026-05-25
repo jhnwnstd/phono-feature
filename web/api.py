@@ -27,6 +27,7 @@ from phonology_features.gui.analysis import (
     render_multi_segment,
     render_single_segment,
 )
+from phonology_features.gui.constants import FEATURE_GROUPS
 from phonology_features.gui.palette import set_theme
 
 # Single engine instance per loaded inventory. JS never sees the
@@ -73,7 +74,28 @@ def _summarize_engine(engine: FeatureEngine) -> dict:
         "segments": list(engine.segments),
         "features": list(engine.features),
         "groups": groups,
+        "feature_groups": _grouped_features(list(engine.features)),
     }
+
+
+def _grouped_features(features: list[str]) -> list[dict]:
+    """Bucket the inventory's active features into FEATURE_GROUPS
+    cards (Major Class, Laryngeal, Manner, Place, etc.), matching
+    the desktop's feature-panel layout. Features that don't fit any
+    group land in an "Other" bucket at the end.
+    """
+    present = set(features)
+    out: list[dict] = []
+    placed: set[str] = set()
+    for group_name, group_feats in FEATURE_GROUPS:
+        in_inv = [f for f in group_feats if f in present]
+        if in_inv:
+            out.append({"name": group_name, "features": in_inv})
+            placed.update(in_inv)
+    leftovers = [f for f in features if f not in placed]
+    if leftovers:
+        out.append({"name": "Other", "features": leftovers})
+    return out
 
 
 def serialize_current_inventory() -> str:

@@ -83,15 +83,37 @@ body {
   border-color: var(--accent);
 }
 .panel-header {
-  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-title {
+  flex: 1;
   font-size: 11px;
   font-weight: bold;
   letter-spacing: 1.5px;
   color: var(--text-dim);
-  border-bottom: 1px solid var(--border);
 }
-.panel[data-active="true"] .panel-header {
+.panel[data-active="true"] .panel-title {
   color: var(--text);
+}
+.panel-clear-btn {
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.panel-clear-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-light);
 }
 .panel-body {
   flex: 1;
@@ -101,8 +123,20 @@ body {
 
 /* ------------------------------------------------------------------ */
 /* Segment grid                                                        */
+/* Two-column flow on wider viewports keeps Vowels / Laryngeals from   */
+/* falling below the fold on short windows. Each manner-class group is */
+/* a "card" that flows into the columns. break-inside prevents a group */
+/* from being split across the boundary.                               */
 /* ------------------------------------------------------------------ */
+#seg-grid {
+  column-gap: 16px;
+  column-count: 1;
+}
+@media (min-width: 700px) {
+  #seg-grid { column-count: 2; }
+}
 .seg-group {
+  break-inside: avoid;
   margin-bottom: 8px;
 }
 .seg-group-header {
@@ -156,7 +190,30 @@ body {
 
 /* ------------------------------------------------------------------ */
 /* Feature panel                                                       */
+/* Grouped into named cards (Major Class, Laryngeal, Manner, Place,    */
+/* ...) mirroring the desktop's feature panel.                         */
 /* ------------------------------------------------------------------ */
+#feat-list {
+  column-gap: 16px;
+  column-count: 1;
+}
+@media (min-width: 700px) {
+  #feat-list { column-count: 2; }
+}
+.feat-group {
+  break-inside: avoid;
+  margin-bottom: 12px;
+}
+.feat-group-header {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  padding: 4px 2px 6px;
+}
+.panel[data-active="true"] .feat-group-header {
+  color: var(--text);
+}
 .feat-row {
   display: flex;
   align-items: center;

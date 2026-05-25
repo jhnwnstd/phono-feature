@@ -1,69 +1,97 @@
-# Phonology Segment & Feature Engine
+# Phonology Segment and Feature Engine
 
-A desktop tool for distinctive-feature phonology. Browse segment inventories, compute natural classes, and find minimal distinguishing feature bundles.
+A desktop tool for distinctive feature phonology. It supports segment inventories, natural class search, and minimal distinguishing feature bundles.
 
-**Use it in your browser:** <https://jhnwnstd.github.io/features/>. Same engine, same inventories, no install. Upload your own JSON to analyse it; download anything you build. Everything stays in your browser.
+Browser version: <https://jhnwnstd.github.io/features/>
 
-## Run it
+The browser version uses the same engine and inventories. It runs locally in the browser. You can upload JSON inventories and download your work.
 
-Requires Python 3.11+. Double-click the launcher for your OS. The first run sets up a private environment in under a minute; later launches open the GUI immediately.
+## Features
 
-| OS      | Launcher          |
-|---------|-------------------|
-| macOS   | `RUN-Mac.command` |
+- View and edit segment inventories.
+- Search for natural classes by feature criteria.
+- Find the features that distinguish a segment from a natural class.
+- Find the smallest feature set that distinguishes two segments.
+- Create inventories for any language.
+
+## Run
+
+Requires Python 3.11+.
+
+Use the launcher for your operating system.
+
+| OS | Launcher |
+|---|---|
+| macOS | `RUN-Mac.command` |
 | Windows | `RUN-Windows.bat` |
-| Linux   | `RUN-Linux.sh`    |
+| Linux | `RUN-Linux.sh` |
 
-If Python is missing, install it from <https://www.python.org/downloads/>.
+The first launch creates a local Python environment. Later launches open the app directly.
 
-First-launch quirks by OS:
+Install Python from <https://www.python.org/downloads/> if your system does not have it.
 
-- **macOS:** Gatekeeper blocks unsigned `.command` files. Right-click the launcher, choose **Open**, and confirm.
-- **Windows:** SmartScreen flags unrecognized scripts. Click **More info**, then **Run anyway**.
-- **Linux:** If the file manager won't launch `.sh` files, open a terminal here and run `./RUN-Linux.sh` (prefix with `chmod +x RUN-Linux.sh` once if you get a permission error).
+### OS notes
 
-## What it does
+macOS may block unsigned command files. Right click `RUN-Mac.command`, choose **Open**, then confirm.
 
-- **Inventory browser:** every segment as a +/-/0 distinctive-feature bundle.
-- **Natural-class solver:** the minimal feature bundle that picks exactly a chosen segment set, when one exists.
-- **Inventory builder:** author or edit inventories with +/-/0 keyboard cycling.
+Windows may show a SmartScreen warning. Click **More info**, then **Run anyway**.
 
-## Bundled inventories
+Linux file managers may not run shell scripts directly. Open a terminal in the project folder and run:
 
-Three feature sets live in `app/inventories/` and appear automatically in the GUI dropdown.
+```bash
+./RUN-Linux.sh
+````
 
-| File                       | Source                                  |
-|----------------------------|-----------------------------------------|
-| `hayes_features.json`      | Hayes (2009), Introductory Phonology    |
-| `general_features.json`    | General-purpose IPA superset            |
-| `english_features.json`    | English-focused inventory               |
+If needed, make the launcher executable first:
 
-Add your own through **New Inventory** in the GUI, or write a JSON file matching the schema in `app/src/phonology_features/engine/inventory.py` (see `Inventory.parse`).
+```bash
+chmod +x RUN-Linux.sh
+```
 
-## For developers
+## Inventories
 
-Pure-Python engine, PyQt6 GUI. Set up the dev environment manually.
+Bundled inventories live in `app/inventories/` and appear in the app menu.
+
+| File                    | Description                    |
+| ----------------------- | ------------------------------ |
+| `hayes_features.json`   | Hayes 2009 inventory           |
+| `general_features.json` | General IPA oriented inventory |
+| `english_features.json` | English oriented inventory     |
+
+You can add inventories through **New Inventory** in the app.
+
+## Development
+
+The engine is pure Python. The GUI uses PyQt6.
 
 ```bash
 cd app
 python -m venv .venv
-source .venv/bin/activate           # Windows: .venv\Scripts\activate.bat
+source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                              # full suite, headless
-pytest tests/test_engine_api.py     # engine-only, no Qt
+pytest
+pytest tests/test_engine_api.py
 ```
 
-Repository layout.
+On Windows, activate the environment with:
 
+```bat
+.venv\Scripts\activate.bat
 ```
+
+## Repository layout
+
+```text
 .
 ├── README.md
 ├── LICENSE
-├── RUN-Mac.command / RUN-Windows.bat / RUN-Linux.sh
+├── RUN-Mac.command
+├── RUN-Windows.bat
+├── RUN-Linux.sh
 └── app/
     ├── pyproject.toml
     ├── inventories/
-    ├── src/phonology_features/   # engine + GUI
+    ├── src/phonology_features/
     └── tests/
 ```
 
