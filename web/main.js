@@ -70,11 +70,34 @@ function withTimeout(promise, ms, label) {
 // hit. The Python side still re-parses; if that becomes the bottleneck
 // (per the boot marks), cache the parsed bridge state too.
 // ---------------------------------------------------------------------
+// Bounded LRU. The underlying Map preserves insertion order, so
+// "least recently used" = first key. On a cache hit we promote the
+// entry by re-inserting (delete + set) so it moves to the back.
+// Cap at INVENTORY_CACHE_MAX entries; over the cap, drop the
+// front-most key. Without this, uploading a long sequence of files
+// would grow the cache without bound -- each entry is the full JSON
+// text, which the file-size cap puts at ~50 MB per slot worst case.
+const INVENTORY_CACHE_MAX = 8;
 const inventoryTextCache = new Map();
-async function fetchInventoryText(file) {
-    if (inventoryTextCache.has(file)) return inventoryTextCache.get(file);
-    const text = await fetchText(file);
+function _cacheGet(file) {
+    if (!inventoryTextCache.has(file)) return undefined;
+    const text = inventoryTextCache.get(file);
+    inventoryTextCache.delete(file);
     inventoryTextCache.set(file, text);
+    return text;
+}
+function _cacheSet(file, text) {
+    inventoryTextCache.set(file, text);
+    while (inventoryTextCache.size > INVENTORY_CACHE_MAX) {
+        const oldest = inventoryTextCache.keys().next().value;
+        inventoryTextCache.delete(oldest);
+    }
+}
+async function fetchInventoryText(file) {
+    const cached = _cacheGet(file);
+    if (cached !== undefined) return cached;
+    const text = await fetchText(file);
+    _cacheSet(file, text);
     return text;
 }
 
@@ -91,7 +114,13 @@ async function fetchInventoryText(file) {
 // cleanup automatic.
 // ---------------------------------------------------------------------
 function callBridge(fnName, ...args) {
-    if (!state.bridge) throw new Error(`bridge not ready: ${fnName}`);
+    // Guard BOTH bridge and pyodide: toPy below dereferences
+    // state.pyodide before we'd otherwise notice it was still null.
+    // Boot order is pyodide first, bridge last, but a click handler
+    // racing the boot could land here with one set and the other not.
+    if (!state.bridge || !state.pyodide) {
+        throw new Error(`bridge not ready: ${fnName}`);
+    }
     const proxies = [];
     const pyArgs = args.map((a) => {
         if (a === null || typeof a !== "object") return a;
@@ -113,9 +142,19 @@ function callBridge(fnName, ...args) {
     }
 }
 
+// Frozen enum of the two top-level UI modes. Use MODE.SEG_TO_FEAT
+// everywhere instead of the bare string so a typo becomes a
+// ReferenceError at parse time instead of silently mis-comparing.
+// Values match the desktop's Mode StrEnum so QSettings strings
+// round-trip if we ever share persistence.
+const MODE = Object.freeze({
+    SEG_TO_FEAT: "seg_to_feat",
+    FEAT_TO_SEG: "feat_to_seg",
+});
+
 // State managed in JS (Python holds the engine + inventory).
 const state = {
-    mode: "seg_to_feat",          // or "feat_to_seg"
+    mode: MODE.SEG_TO_FEAT,
     selected_segments: [],         // ordered for analysis consistency
     selected_features: {},         // {feature: "+" | "-"}
     // State of each mode at the moment we leave it. Restored on
@@ -127,8 +166,18 @@ const state = {
     segments: [],
     features: [],
     debounce_timer: null,
+    // Monotonic counter; see scheduleAnalysis / runAnalysis. Used
+    // to discard stale bridge responses if a later analysis was
+    // scheduled before the earlier one's DOM update landed.
+    analysis_token: 0,
     pyodide: null,
     bridge: null,                  // imported api module
+    // Cached node maps populated by the render functions. Iterating
+    // these in the analysis hot path is ~10x cheaper than
+    // querySelectorAll(".seg-btn") on every tick; the desktop's
+    // _seg_buttons / _feat_rows dicts serve the same role.
+    seg_buttons: new Map(),        // seg -> HTMLButtonElement
+    feat_rows: new Map(),          // feat -> {row, plus, minus}
 };
 
 // Bundled inventories come from inventories.json, which is generated
@@ -368,6 +417,7 @@ function renderSegmentGrid(groups, vowelChart) {
     // width. Pure float-wrap, no per-row layout logic needed.
     const grid = $("seg-grid");
     grid.innerHTML = "";
+    state.seg_buttons.clear();
     if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
         const vowels = document.createElement("div");
         vowels.className = "seg-vowels";
@@ -396,6 +446,11 @@ function _buildConsonantGroup(group) {
 }
 
 function _buildSegmentButton(seg, extraAttrs) {
+    // No per-button click handler: a single delegated listener on
+    // #seg-grid (wired in wireSegmentDelegation) reads data-seg off
+    // the clicked button. For Hayes that's 1 listener instead of
+    // ~100; smaller listener footprint and a fresh inventory load
+    // doesn't have to re-register N closures.
     const btn = document.createElement("button");
     btn.className = "seg-btn";
     btn.type = "button";
@@ -404,13 +459,13 @@ function _buildSegmentButton(seg, extraAttrs) {
     btn.setAttribute("aria-pressed", "false");
     btn.setAttribute("aria-label", `/${seg}/`);
     btn.textContent = seg;
-    btn.addEventListener("click", () => onSegmentClicked(seg));
     if (extraAttrs) {
         for (const [k, v] of Object.entries(extraAttrs)) {
             if (k.startsWith("data-")) btn.setAttribute(k, v);
             else if (k === "title") btn.title = v;
         }
     }
+    state.seg_buttons.set(seg, btn);
     return btn;
 }
 
@@ -475,7 +530,7 @@ function _buildVowelChart(chart) {
 }
 
 function onSegmentClicked(seg) {
-    activateMode("seg_to_feat");
+    activateMode(MODE.SEG_TO_FEAT);
     const idx = state.selected_segments.indexOf(seg);
     if (idx >= 0) {
         state.selected_segments.splice(idx, 1);
@@ -499,6 +554,7 @@ function onSegmentClicked(seg) {
 function renderFeaturePanel(featureGroups) {
     const list = $("feat-list");
     list.innerHTML = "";
+    state.feat_rows.clear();
     const columnCount = 2;
     const cols = Array.from({ length: columnCount }, () => {
         const c = document.createElement("div");
@@ -526,6 +582,12 @@ function _buildFeatureGroup(group) {
 }
 
 function _buildFeatureRow(feat) {
+    // Like seg buttons, no per-button click handlers: a single
+    // delegated listener on #feat-list (wireFeatureDelegation)
+    // walks up to the .feat-row to recover the feature name. The
+    // row is stashed in state.feat_rows together with both polarity
+    // buttons so the per-click visual refresh doesn't have to call
+    // querySelectorAll or rely on CSS.escape for special-char feats.
     const row = document.createElement("div");
     row.className = "feat-row";
     row.dataset.feat = feat;
@@ -537,6 +599,7 @@ function _buildFeatureRow(feat) {
     badge.className = "feat-badge";
     badge.textContent = "·";
     row.appendChild(badge);
+    const polarityButtons = {};
     for (const polarity of ["+", "−"]) {
         const btn = document.createElement("button");
         btn.className = "feat-btn";
@@ -544,29 +607,33 @@ function _buildFeatureRow(feat) {
         const code = polarity === "+" ? "+" : "-";
         btn.dataset.polarity = code;
         btn.textContent = polarity;
-        btn.addEventListener("click", () => onFeatureClicked(feat, code));
         row.appendChild(btn);
+        polarityButtons[code] = btn;
     }
+    state.feat_rows.set(feat, {
+        row, badge,
+        plus: polarityButtons["+"],
+        minus: polarityButtons["-"],
+    });
     return row;
 }
 
 function onFeatureClicked(feat, polarity) {
-    activateMode("feat_to_seg");
+    activateMode(MODE.FEAT_TO_SEG);
     if (state.selected_features[feat] === polarity) {
         delete state.selected_features[feat];
     } else {
         state.selected_features[feat] = polarity;
     }
-    // Update the feat-btn active visual on this row.
-    for (const btn of document.querySelectorAll(`.feat-row[data-feat="${cssEscape(feat)}"] .feat-btn`)) {
-        const active = state.selected_features[feat] === btn.dataset.polarity;
-        btn.dataset.active = active ? "true" : "false";
+    // Visual refresh: just the two buttons on this row. No DOM
+    // query, no CSS.escape, no string interpolation.
+    const rec = state.feat_rows.get(feat);
+    if (rec) {
+        const cur = state.selected_features[feat];
+        rec.plus.dataset.active = cur === "+" ? "true" : "false";
+        rec.minus.dataset.active = cur === "-" ? "true" : "false";
     }
     scheduleAnalysis();
-}
-
-function cssEscape(s) {
-    return (window.CSS && window.CSS.escape) ? window.CSS.escape(s) : s.replace(/"/g, '\\"');
 }
 
 // ---------------------------------------------------------------------
@@ -584,7 +651,7 @@ function activateMode(mode) {
     // ``FeatureEngine.project_segments_to_features`` (and the
     // existing ``find_segments``) is the single source of truth;
     // we just call it through the bridge.
-    if (state.mode === "seg_to_feat") {
+    if (state.mode === MODE.SEG_TO_FEAT) {
         state.saved_seg_state = state.selected_segments.slice();
         state.saved_feat_state = state.bridge
             ? callBridge("project_segments_to_features", state.selected_segments)
@@ -597,19 +664,21 @@ function activateMode(mode) {
     }
 
     state.mode = mode;
-    $("seg-panel").dataset.active = (mode === "seg_to_feat") ? "true" : "false";
-    $("feat-panel").dataset.active = (mode === "feat_to_seg") ? "true" : "false";
+    const isS2F = mode === MODE.SEG_TO_FEAT;
+    $("seg-panel").dataset.active = isS2F ? "true" : "false";
+    $("feat-panel").dataset.active = isS2F ? "false" : "true";
 
-    if (mode === "seg_to_feat") {
+    if (isS2F) {
         // Adopt the projected seg selection; clear feat-side.
         state.selected_segments = state.saved_seg_state.slice();
         state.selected_features = {};
-        for (const btn of document.querySelectorAll(".feat-btn[data-active='true']")) {
-            btn.dataset.active = "false";
+        for (const rec of state.feat_rows.values()) {
+            rec.plus.dataset.active = "false";
+            rec.minus.dataset.active = "false";
         }
         const selectedSet = new Set(state.selected_segments);
-        for (const btn of document.querySelectorAll(".seg-btn")) {
-            const isSelected = selectedSet.has(btn.dataset.seg);
+        for (const [seg, btn] of state.seg_buttons) {
+            const isSelected = selectedSet.has(seg);
             btn.dataset.state = isSelected ? "selected" : "default";
             btn.setAttribute("aria-pressed", isSelected ? "true" : "false");
         }
@@ -617,19 +686,20 @@ function activateMode(mode) {
         // Adopt the projected feat query; clear seg-side.
         state.selected_features = { ...state.saved_feat_state };
         state.selected_segments = [];
-        for (const btn of document.querySelectorAll(".seg-btn[data-state='selected']")) {
-            btn.dataset.state = "default";
-            btn.setAttribute("aria-pressed", "false");
+        for (const btn of state.seg_buttons.values()) {
+            if (btn.dataset.state === "selected") {
+                btn.dataset.state = "default";
+                btn.setAttribute("aria-pressed", "false");
+            }
         }
-        for (const btn of document.querySelectorAll(".feat-btn")) {
-            const feat = btn.closest(".feat-row")?.dataset.feat;
-            const polarity = btn.dataset.polarity;
-            const active = state.selected_features[feat] === polarity;
-            btn.dataset.active = active ? "true" : "false";
+        for (const [feat, rec] of state.feat_rows) {
+            const cur = state.selected_features[feat];
+            rec.plus.dataset.active = cur === "+" ? "true" : "false";
+            rec.minus.dataset.active = cur === "-" ? "true" : "false";
         }
     }
 
-    setStatus(mode === "seg_to_feat"
+    setStatus(isS2F
         ? "Click a segment to inspect its features."
         : "Toggle feature values (+/−) to find matching segments.");
 
@@ -642,36 +712,52 @@ function activateMode(mode) {
 // ---------------------------------------------------------------------
 // Analysis (debounced to coalesce rapid clicks)
 // ---------------------------------------------------------------------
+// Monotonic token for in-flight analyses. Every scheduleAnalysis
+// bumps it; every runAnalysis captures the current value, runs the
+// (synchronous) bridge call, and checks the token is still current
+// before mutating the DOM. A rapid selection change that fires a
+// second runAnalysis between the first's bridge return and its DOM
+// update would otherwise paint stale state. Synchronous bridge
+// calls today make the window tiny, but a future Web Worker move
+// (where analyze_segments becomes async) widens it; the token
+// pattern works regardless.
 function scheduleAnalysis() {
     clearTimeout(state.debounce_timer);
     state.debounce_timer = setTimeout(runAnalysis, 80);
 }
 
 function runAnalysis() {
-    if (state.mode === "seg_to_feat") {
-        runSegToFeat();
+    const myToken = ++state.analysis_token;
+    if (state.mode === MODE.SEG_TO_FEAT) {
+        runSegToFeat(myToken);
     } else {
-        runFeatToSeg();
+        runFeatToSeg(myToken);
     }
 }
 
-function runSegToFeat() {
+function _isStaleToken(token) {
+    return token !== state.analysis_token;
+}
+
+function runSegToFeat(token) {
     const result = callBridge("analyze_segments", state.selected_segments);
+    if (_isStaleToken(token)) return;
     $("analysis-content").innerHTML = result.analysis_html;
     _updateSegmentButtonStates(result.segment_states);
-    // Update feature row display.
-    for (const row of document.querySelectorAll(".feat-row")) {
-        const info = result.feature_display[row.dataset.feat] || { value: "", shared: false };
-        row.dataset.value = info.value || "";
-        row.dataset.shared = info.shared ? "true" : "false";
-        row.dataset.contrastive = info.contrastive ? "true" : "false";
-        const badge = row.querySelector(".feat-badge");
-        if (badge) badge.textContent = info.value || "·";
+    // Update feature row display from cached node map: no DOM
+    // query, single hash lookup per feature row.
+    for (const [feat, rec] of state.feat_rows) {
+        const info = result.feature_display[feat] || { value: "", shared: false };
+        rec.row.dataset.value = info.value || "";
+        rec.row.dataset.shared = info.shared ? "true" : "false";
+        rec.row.dataset.contrastive = info.contrastive ? "true" : "false";
+        rec.badge.textContent = info.value || "·";
     }
 }
 
-function runFeatToSeg() {
+function runFeatToSeg(token) {
     const result = callBridge("analyze_features", state.selected_features);
+    if (_isStaleToken(token)) return;
     $("analysis-content").innerHTML = result.analysis_html;
     _updateSegmentButtonStates(result.segment_states);
 }
@@ -680,8 +766,8 @@ function _updateSegmentButtonStates(segmentStates) {
     // Centralized so aria-pressed stays in lockstep with data-state.
     // Selected/matched both read as "pressed" to assistive tech;
     // unmatched/suggested/default read as not-pressed.
-    for (const btn of document.querySelectorAll(".seg-btn")) {
-        const newState = segmentStates[btn.dataset.seg] || "default";
+    for (const [seg, btn] of state.seg_buttons) {
+        const newState = segmentStates[seg] || "default";
         if (btn.dataset.state !== newState) {
             btn.dataset.state = newState;
             const pressed = (newState === "selected" || newState === "matched");
@@ -790,12 +876,12 @@ function wireExpandButton() {
 function wireClearButtons() {
     $("seg-clear-btn").addEventListener("click", (ev) => {
         ev.stopPropagation();
-        activateMode("seg_to_feat");
+        activateMode(MODE.SEG_TO_FEAT);
         clearAll();
     });
     $("feat-clear-btn").addEventListener("click", (ev) => {
         ev.stopPropagation();
-        activateMode("feat_to_seg");
+        activateMode(MODE.FEAT_TO_SEG);
         clearAll();
     });
 }
@@ -803,22 +889,20 @@ function wireClearButtons() {
 function clearAll() {
     state.selected_segments = [];
     state.selected_features = {};
-    for (const btn of document.querySelectorAll(".seg-btn")) {
+    for (const btn of state.seg_buttons.values()) {
         btn.dataset.state = "default";
         btn.setAttribute("aria-pressed", "false");
     }
-    for (const row of document.querySelectorAll(".feat-row")) {
-        row.dataset.value = "";
-        row.dataset.shared = "false";
-        row.dataset.contrastive = "false";
-        const badge = row.querySelector(".feat-badge");
-        if (badge) badge.textContent = "·";
-    }
-    for (const btn of document.querySelectorAll(".feat-btn[data-active='true']")) {
-        btn.dataset.active = "false";
+    for (const rec of state.feat_rows.values()) {
+        rec.row.dataset.value = "";
+        rec.row.dataset.shared = "false";
+        rec.row.dataset.contrastive = "false";
+        rec.badge.textContent = "·";
+        rec.plus.dataset.active = "false";
+        rec.minus.dataset.active = "false";
     }
     $("analysis-content").innerHTML = "";
-    setStatus(state.mode === "seg_to_feat"
+    setStatus(state.mode === MODE.SEG_TO_FEAT
         ? "Click a segment to inspect its features."
         : "Toggle feature values (+/−) to find matching segments.");
 }
@@ -832,11 +916,38 @@ function clearAll() {
 function wirePanelClickMode() {
     $("seg-panel").addEventListener("click", (ev) => {
         if (ev.target.closest("button")) return;
-        activateMode("seg_to_feat");
+        activateMode(MODE.SEG_TO_FEAT);
     });
     $("feat-panel").addEventListener("click", (ev) => {
         if (ev.target.closest("button")) return;
-        activateMode("feat_to_seg");
+        activateMode(MODE.FEAT_TO_SEG);
+    });
+}
+
+// ---------------------------------------------------------------------
+// Event delegation: one click listener per container instead of one
+// per button. Fewer registered closures (under Hayes: ~140 buttons
+// became 2 listeners), and a fresh inventory load only has to rebuild
+// DOM, not re-bind handlers. The listener walks up to the nearest
+// .seg-btn / .feat-btn and reads dataset attributes for the dispatch.
+// ---------------------------------------------------------------------
+function wireSegmentDelegation() {
+    $("seg-grid").addEventListener("click", (ev) => {
+        const btn = ev.target.closest(".seg-btn");
+        if (!btn || !$("seg-grid").contains(btn)) return;
+        const seg = btn.dataset.seg;
+        if (seg) onSegmentClicked(seg);
+    });
+}
+
+function wireFeatureDelegation() {
+    $("feat-list").addEventListener("click", (ev) => {
+        const btn = ev.target.closest(".feat-btn");
+        if (!btn || !$("feat-list").contains(btn)) return;
+        const row = btn.closest(".feat-row");
+        const feat = row?.dataset.feat;
+        const polarity = btn.dataset.polarity;
+        if (feat && polarity) onFeatureClicked(feat, polarity);
     });
 }
 
@@ -850,6 +961,8 @@ async function main() {
     wireExpandButton();
     wireClearButtons();
     wirePanelClickMode();
+    wireSegmentDelegation();
+    wireFeatureDelegation();
     try {
         await bootPyodide();
     } catch (e) {

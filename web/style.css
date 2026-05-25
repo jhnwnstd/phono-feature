@@ -36,8 +36,16 @@ html, body {
 
 body {
   display: grid;
-  grid-template-rows: auto 1fr auto auto;
-  min-height: 100vh;
+  /* Rows: toolbar (content), panels (content), analysis (fills
+     remaining), statusbar (content). The features pane drives the
+     panels-row height: it's the tallest sub-pane, and ``auto`` lets
+     it claim exactly the room its 6 grouped cards need. Analysis
+     then takes only what's left below, never eating into the panel
+     area. height: 100vh (not min-height) caps the body to the
+     viewport so the 1fr distribution actually has a finite remainder
+     to give the analysis. */
+  grid-template-rows: auto auto 1fr auto;
+  height: 100vh;
 }
 
 /* ------------------------------------------------------------------ */
@@ -398,11 +406,19 @@ body {
   background: var(--analysis-bg);
   border-top: 1px solid var(--border);
   padding: 12px 16px;
-  max-height: 40vh;
   display: flex;
   flex-direction: column;
+  /* No max-height: this row sits below the panels in the body grid,
+     so it just fills the leftover vertical space. min-height keeps
+     it visible even when the panels need most of the viewport (e.g.
+     short windows); .analysis-content's overflow:auto handles
+     content that doesn't fit. */
+  min-height: 120px;
 }
-.analysis.expanded { max-height: 80vh; }
+/* Expanded state: claim 55vh instead of 1fr-of-remainder so panels
+   visibly shrink and the analysis gets meaningfully more room.
+   Pairs with the ⤢/⤣ toggle button in the analysis header. */
+.analysis.expanded { min-height: 55vh; }
 .analysis-header {
   display: flex;
   align-items: center;
