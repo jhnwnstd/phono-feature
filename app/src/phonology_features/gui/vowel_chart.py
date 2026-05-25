@@ -25,7 +25,11 @@ from phonology_features.gui.vowel_layout import (
     Confidence,
     VowelPlacement,
     VowelProfile,
+)
+from phonology_features.gui.vowel_layout import (
     detect_vowel_profile as _detect_vowel_profile,
+)
+from phonology_features.gui.vowel_layout import (
     vowel_grid_pos as _vowel_grid_pos,
 )
 

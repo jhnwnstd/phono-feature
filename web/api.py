@@ -30,9 +30,9 @@ from phonology_features.gui.analysis import (
 from phonology_features.gui.constants import FEATURE_GROUPS
 from phonology_features.gui.layout import distribute_feature_groups
 from phonology_features.gui.palette import set_theme
+from phonology_features.gui.vowel_layout import COL_LABELS as VOWEL_COL_LABELS
+from phonology_features.gui.vowel_layout import ROW_LABELS as VOWEL_ROW_LABELS
 from phonology_features.gui.vowel_layout import (
-    COL_LABELS as VOWEL_COL_LABELS,
-    ROW_LABELS as VOWEL_ROW_LABELS,
     detect_vowel_profile,
     vowel_grid_pos,
 )
@@ -100,18 +100,14 @@ def _vowel_chart(engine: FeatureEngine, vowel_segs: list[str]) -> dict:
 
     Placement runs through ``gui.vowel_layout.vowel_grid_pos`` so
     the chart matches the desktop's VowelChartWidget exactly. We
-    feed it ``engine.normalized_segment_feats`` (lowercased keys
-    via segment_grouper._normalize_feats) because the placement
-    code looks up ``high``, ``low``, ``front``, ``back``, ``round``
-    by canonical lowercase names; raw inventory keys are
-    PascalCase and would all miss.
+    pass raw inventory feats; ``vowel_layout`` normalizes keys
+    internally (PascalCase ``"High"`` works the same as ``"high"``).
     """
-    norm_all = engine.normalized_segment_feats
-    norm_feats = {seg: dict(norm_all.get(seg, {})) for seg in vowel_segs}
-    profile = detect_vowel_profile(vowel_segs, norm_feats)
+    seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
+    profile = detect_vowel_profile(vowel_segs, seg_feats)
     cells: list[dict] = []
     for seg in vowel_segs:
-        placement = vowel_grid_pos(norm_feats[seg], profile)
+        placement = vowel_grid_pos(seg_feats[seg], profile)
         cells.append({
             "seg": seg,
             "row": placement.row,

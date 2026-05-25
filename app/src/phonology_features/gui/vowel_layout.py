@@ -95,13 +95,34 @@ class VowelPlacement:
     reason: str
 
 
-def detect_vowel_profile(segs: list[str], norm_feats: dict) -> VowelProfile:
-    """Scan the vowel segments to determine which features are in play."""
+def _normalize_feat_keys(feats: dict) -> dict:
+    """Lowercase every key in ``feats`` so downstream lookups by
+    canonical IPA-feature name (``high``, ``low``, ``front``, etc.)
+    work regardless of whether the caller passed raw PascalCase
+    inventory keys or pre-normalized lowercase keys.
+
+    The placement code is the only consumer that mandates canonical
+    case (segment_grouper uses a similar convention); doing the
+    lowercase pass HERE means call sites can't accidentally pass
+    raw inventory feats and silently get every vowel placed in the
+    "Open-mid Central" default cell.
+    """
+    return {k.lower(): v for k, v in feats.items()}
+
+
+def detect_vowel_profile(segs: list[str], seg_feats: dict) -> VowelProfile:
+    """Scan the vowel segments to determine which features are in play.
+
+    ``seg_feats`` maps each segment to its feature bundle. Keys
+    inside each bundle are case-normalized internally, so callers
+    may pass raw PascalCase inventory feats (``{"High": "+", ...}``)
+    or pre-normalized lowercase feats (``{"high": "+", ...}``).
+    """
     active: set[str] = set()
     for seg in segs:
-        for feat, val in norm_feats.get(seg, {}).items():
+        for feat, val in seg_feats.get(seg, {}).items():
             if val != "0":
-                active.add(feat)
+                active.add(feat.lower())
     return VowelProfile(
         has_front="front" in active,
         has_round="round" in active,
@@ -219,7 +240,13 @@ def vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
 
     Columns 0-5 map to (front-unr, front-rnd, central-unr,
     central-rnd, back-unr, back-rnd). Rows 0-5 map to ``ROW_LABELS``.
+
+    ``feats`` is a single segment's feature bundle. Keys are
+    case-normalized internally, so the caller may pass raw inventory
+    feats (PascalCase keys like ``"High"``) or pre-normalized
+    lowercase feats; both produce identical results.
     """
+    feats = _normalize_feat_keys(feats)
     row, h_conf, h_reason = _infer_height(feats, profile)
     place, p_conf, p_reason = _infer_backness(feats, profile)
     rounded, r_reason = _infer_rounding(feats, profile)
