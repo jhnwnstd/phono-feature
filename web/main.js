@@ -246,7 +246,7 @@ const state = {
     inventory_name: "",
     segments: [],
     features: [],
-    debounce_timer: null,
+    debounce_timer: null,  // setTimeout handle while pending, null otherwise
     // Monotonic counter; see scheduleAnalysis / runAnalysis. Used
     // to discard stale bridge responses if a later analysis was
     // scheduled before the earlier one's DOM update landed.
@@ -796,8 +796,13 @@ function activateMode(mode) {
 // (where analyze_segments becomes async) widens it; the token
 // pattern works regardless.
 function scheduleAnalysis() {
-    clearTimeout(state.debounce_timer);
-    state.debounce_timer = setTimeout(runAnalysis, 80);
+    if (state.debounce_timer !== null) clearTimeout(state.debounce_timer);
+    state.debounce_timer = setTimeout(() => {
+        // Null the handle when the timer fires so a subsequent
+        // schedule doesn't pointlessly clearTimeout a fired id.
+        state.debounce_timer = null;
+        runAnalysis();
+    }, 80);
 }
 
 // Mode -> analysis handler. Lookup beats if/else for two reasons:
@@ -876,7 +881,10 @@ function wireUploadDownload() {
             a.href = url;
             a.download = `${name}.json`;
             a.click();
-            URL.revokeObjectURL(url);
+            // Defer revoke past this tick: some browsers (Safari,
+            // older Firefox) hadn't actually started the download
+            // by the time a synchronous revoke runs.
+            setTimeout(() => URL.revokeObjectURL(url), 0);
         } catch (e) {
             setStatus(`Download failed: ${e.message}`);
         }

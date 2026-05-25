@@ -242,6 +242,60 @@ def _load_palette_module():
     return module
 
 
+def write_python_bundle() -> None:
+    """Pack every Python source (engine + relayed renderer + api.py)
+    into a single ``python_bundle.json`` for one-request mounting.
+
+    Why: before this, main.js held a hand-maintained file list that
+    had to mirror RELAYED_SOURCES and the engine *.py glob. Adding a
+    file here without updating the JS side (or vice versa) produced
+    an import error at runtime. The bundle has the build emit the
+    list it ships, and main.js just consumes it -- one source of
+    truth for "what Python code does this deploy contain".
+
+    Side benefit: one HTTP request instead of one-per-file (engine
+    is 5 files, renderer is 6, plus api.py -- 12 round trips
+    collapse to 1).
+
+    Bundle shape:
+        {
+          "sys_paths": [absolute dirs to push onto sys.path],
+          "files": { "<rel-path>": "<source>", ... }
+        }
+
+    ``rel-path`` is the path under /home/pyodide/ where the file
+    should be written. ``sys_paths`` are pushed in order, so the
+    earlier ones win on ``import`` collisions (engine first, then
+    render).
+    """
+    print("Bundling Python sources...")
+    files: dict[str, str] = {}
+    # Engine package + the empty __init__'s.
+    for path in sorted((DIST / "engine").rglob("*.py")):
+        rel = path.relative_to(DIST).as_posix()
+        files[rel] = path.read_text(encoding="utf-8")
+    # Renderer package (relayed from desktop) + __init__'s.
+    for path in sorted((DIST / "render").rglob("*.py")):
+        rel = path.relative_to(DIST).as_posix()
+        files[rel] = path.read_text(encoding="utf-8")
+    # Bridge module, mounted at /home/pyodide/api.py.
+    files["api.py"] = (DIST / "api.py").read_text(encoding="utf-8")
+
+    bundle = {
+        "sys_paths": [
+            "/home/pyodide/engine",
+            "/home/pyodide/render",
+            "/home/pyodide",
+        ],
+        "files": files,
+    }
+    (DIST / "python_bundle.json").write_text(
+        json.dumps(bundle, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    print(f"  {len(files)} files, {sum(len(v) for v in files.values())} chars")
+
+
 def write_pages_no_jekyll() -> None:
     """Tell GitHub Pages to serve the directory as-is. Without this,
     files starting with ``_`` are filtered out by the default Jekyll
@@ -257,6 +311,7 @@ def main() -> int:
     relay_renderer_sources()
     generate_theme_css()
     copy_inventories()
+    write_python_bundle()
     write_pages_no_jekyll()
 
     print(f"\nBuild complete: {DIST}")
