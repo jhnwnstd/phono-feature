@@ -25,7 +25,6 @@ from PyQt6.QtGui import (
     QPalette,
 )
 from PyQt6.QtWidgets import (
-    QApplication,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -71,7 +70,10 @@ from phonology_features.gui.palette import (
     get_theme_name,
     set_theme,
 )
-from phonology_features.gui.style_utils import app_qss, set_css
+from phonology_features.gui.style_utils import (
+    apply_tooltip_palette,
+    set_css,
+)
 from phonology_features.gui.themed_widgets import (
     _BrandedStatusBar,
     _clear_btn_style,
@@ -690,13 +692,13 @@ class MainWindow(QMainWindow):
         """Re-apply every chrome stylesheet that depends on the palette.
         Each helper touches one logical group of widgets in place.
         """
-        # App-level QSS (QMainWindow bg + QToolTip styling) reads the
-        # active palette at call time, so re-set it on theme toggle.
-        # ``instance()`` returns ``QCoreApplication | None``; setStyleSheet
-        # is a QApplication method, so narrow before calling.
-        app = QApplication.instance()
-        if isinstance(app, QApplication):
-            app.setStyleSheet(app_qss())
+        # Tooltip colors refresh via the shared QToolTip palette,
+        # NOT via app.setStyleSheet -- the latter would re-polish
+        # every widget in the tree and turn theme toggle into a
+        # hundred-millisecond stall on populated inventories.
+        # The shape rules (border, radius, padding) were applied
+        # once at startup in app_qss() and don't change with theme.
+        apply_tooltip_palette()
         set_css(self, f"background-color: {C['bg']};")
         self._restyle_toolbar()
         self._repaint_splitter_handles()

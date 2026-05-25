@@ -33,26 +33,43 @@ def set_css(widget: QWidget, css: str) -> bool:
 
 
 def app_qss() -> str:
-    """QSS rules applied at the QApplication level, so they cascade
-    to every widget. Read the current ``C`` palette at call time;
-    re-invoke after ``set_theme`` to refresh.
+    """QSS rules applied at the QApplication level once, at startup.
 
-    The QToolTip block exists because Qt's default tooltip palette
-    on Linux paints a near-black rectangle with no padding that
-    clashes against the app's lighter chips and panels. Vowel
-    buttons set tooltips with placement metadata, so this is
-    visible on hover.
+    Do NOT re-apply on theme toggle: ``QApplication.setStyleSheet``
+    re-polishes every widget in the tree (Qt re-parses the QSS,
+    rebuilds selector matches, and walks the whole tree), which on
+    a populated inventory is hundreds of milliseconds of jank.
+    Theme-dependent tooltip COLORS are refreshed via
+    ``apply_tooltip_palette`` instead, which only touches
+    ``QToolTip``'s shared palette and skips the global re-polish.
+
+    Shape rules (border, radius, padding) belong here because they
+    don't change with the theme. Colors are deliberately omitted
+    so the palette can drive them without QSS overriding.
     """
     return (
         f"QMainWindow {{ background: {C['bg']}; }}"
         f" QToolTip {{"
-        f" background: {C['panel']};"
-        f" color: {C['text']};"
         f" border: 1px solid {C['border']};"
         f" border-radius: 4px;"
         f" padding: 4px 7px;"
         f" }}"
     )
+
+
+def apply_tooltip_palette() -> None:
+    """Refresh ``QToolTip``'s shared palette from the active ``C``
+    palette. Cheap enough to call on every theme toggle; does not
+    trigger an app-wide re-polish the way
+    ``QApplication.setStyleSheet`` would.
+    """
+    from PyQt6.QtGui import QColor, QPalette
+    from PyQt6.QtWidgets import QToolTip
+
+    pal = QToolTip.palette()
+    pal.setColor(QPalette.ColorRole.ToolTipBase, QColor(C["panel"]))
+    pal.setColor(QPalette.ColorRole.ToolTipText, QColor(C["text"]))
+    QToolTip.setPalette(pal)
 
 
 _LAST_HTML_ATTR = "_set_html_last"

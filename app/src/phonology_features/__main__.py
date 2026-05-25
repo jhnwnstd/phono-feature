@@ -155,9 +155,13 @@ def _run_gui(argv: list[str]) -> int:
     _pal.setColor(QPalette.ColorRole.Window, _bg)
     _pal.setColor(QPalette.ColorRole.Base, _bg)
     app.setPalette(_pal)
-    from phonology_features.gui.style_utils import app_qss
+    from phonology_features.gui.style_utils import (
+        app_qss,
+        apply_tooltip_palette,
+    )
 
     app.setStyleSheet(app_qss())
+    apply_tooltip_palette()
     parser = QCommandLineParser()
     parser.setApplicationDescription("Phonology Segment & Feature Engine")
     parser.addHelpOption()
