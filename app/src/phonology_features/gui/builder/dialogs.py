@@ -3,7 +3,7 @@
 import re
 
 from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QTextCursor
+from PyQt6.QtGui import QFont, QPainter, QTextCursor
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
