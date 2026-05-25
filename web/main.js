@@ -359,13 +359,23 @@ function escapeHtml(s) {
 // so it matches the desktop's VowelChartWidget cell-for-cell.
 // ---------------------------------------------------------------------
 function renderSegmentGrid(groups, vowelChart) {
+    // Vowel chart goes FIRST in the DOM so the float-right CSS
+    // pushes it to the top-right corner. Consonant groups follow as
+    // plain block-level siblings; each one wraps its buttons within
+    // whatever width the float left available. Groups in rows that
+    // share vertical space with the chart end at the chart's left
+    // edge; groups that fall below the chart take the full panel
+    // width. Pure float-wrap, no per-row layout logic needed.
     const grid = $("seg-grid");
     grid.innerHTML = "";
+    if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
+        const vowels = document.createElement("div");
+        vowels.className = "seg-vowels";
+        vowels.appendChild(_buildVowelChart(vowelChart));
+        grid.appendChild(vowels);
+    }
     for (const group of groups) {
         grid.appendChild(_buildConsonantGroup(group));
-    }
-    if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
-        grid.appendChild(_buildVowelChart(vowelChart));
     }
 }
 

@@ -77,10 +77,13 @@ body {
 
 /* ------------------------------------------------------------------ */
 /* Two-pane split (segments | features)                               */
+/* Segments take ~60% of the width so the vowel chart can sit pinned */
+/* to the right without crowding the consonant area; features fit    */
+/* their two-column card layout into the remaining ~40%.             */
 /* ------------------------------------------------------------------ */
 .grid {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(420px, 3fr) minmax(380px, 2fr);
   gap: 8px;
   padding: 8px;
   min-height: 0;
@@ -141,21 +144,39 @@ body {
 
 /* ------------------------------------------------------------------ */
 /* Segment grid                                                        */
-/* Two-column flow on wider viewports keeps Vowels / Laryngeals from   */
-/* falling below the fold on short windows. Each manner-class group is */
-/* a "card" that flows into the columns. break-inside prevents a group */
-/* from being split across the boundary.                               */
+/* Vowel chart floats to the top-right of the panel; consonant        */
+/* groups stack vertically in a single column and WRAP AROUND the     */
+/* float. Groups whose row sits beside the vowel chart get squeezed   */
+/* horizontally so their buttons don't collide with the chart; groups */
+/* far enough down to clear the vowel chart's bottom edge take the    */
+/* full panel width naturally. This is the classic "text flowing      */
+/* around an image" pattern but with block-level segment cards.       */
+/*                                                                    */
+/* No display:grid here -- float interactions with grid are unstable. */
+/* Each .seg-group is a plain block element so the float-wrap         */
+/* algorithm decides how wide each row is.                             */
 /* ------------------------------------------------------------------ */
 #seg-grid {
-  column-gap: 16px;
-  column-count: 1;
+  display: block;
+  /* New block formatting context so floats stay contained inside the */
+  /* panel-body even when one consonant group is very tall.           */
 }
-@media (min-width: 700px) {
-  #seg-grid { column-count: 2; }
+#seg-grid::after {
+  /* Clearfix so the panel-body's overflow calc includes the float.   */
+  content: "";
+  display: block;
+  clear: both;
+}
+.seg-vowels {
+  float: right;
+  margin: 0 0 8px 16px;
+  /* Don't let the floated chart stretch absurdly wide on narrow      */
+  /* panels; the consonants need some room to wrap into.              */
+  max-width: 55%;
 }
 .seg-group {
-  break-inside: avoid;
   margin-bottom: 8px;
+  min-width: 0;
 }
 .seg-group-header {
   font-size: 11px;
