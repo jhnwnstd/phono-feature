@@ -28,6 +28,7 @@ from phonology_features.gui.analysis import (
     render_single_segment,
 )
 from phonology_features.gui.constants import FEATURE_GROUPS
+from phonology_features.gui.layout import distribute_feature_groups
 from phonology_features.gui.palette import set_theme
 
 # Single engine instance per loaded inventory. JS never sees the
@@ -83,19 +84,34 @@ def _grouped_features(features: list[str]) -> list[dict]:
     cards (Major Class, Laryngeal, Manner, Place, etc.), matching
     the desktop's feature-panel layout. Features that don't fit any
     group land in an "Other" bucket at the end.
+
+    The cards are pre-distributed into left/right columns using the
+    SAME algorithm the desktop uses
+    (``gui.layout.distribute_feature_groups``). The web renderer
+    just reads ``column`` to decide which DOM column to mount each
+    card under; no duplicated layout logic on the JS side.
     """
     present = set(features)
-    out: list[dict] = []
+    cards: list[dict] = []
     placed: set[str] = set()
     for group_name, group_feats in FEATURE_GROUPS:
         in_inv = [f for f in group_feats if f in present]
         if in_inv:
-            out.append({"name": group_name, "features": in_inv})
+            cards.append({"name": group_name, "features": in_inv})
             placed.update(in_inv)
     leftovers = [f for f in features if f not in placed]
     if leftovers:
-        out.append({"name": "Other", "features": leftovers})
-    return out
+        cards.append({"name": "Other", "features": leftovers})
+    sizes = {c["name"]: len(c["features"]) for c in cards}
+    group_order = [c["name"] for c in cards]
+    left_names, right_names = distribute_feature_groups(
+        sizes, group_order=group_order
+    )
+    column_of = {name: 0 for name in left_names}
+    column_of.update({name: 1 for name in right_names})
+    for card in cards:
+        card["column"] = column_of.get(card["name"], 0)
+    return cards
 
 
 def serialize_current_inventory() -> str:

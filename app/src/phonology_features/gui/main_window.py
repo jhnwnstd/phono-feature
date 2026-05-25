@@ -65,6 +65,7 @@ from phonology_features.gui.geometry_controller import _GeometryController
 from phonology_features.gui.inventory_dir_controller import (
     _InventoryDirController,
 )
+from phonology_features.gui.layout import distribute_feature_groups
 from phonology_features.gui.mode_controller import Mode, _ModeController
 from phonology_features.gui.palette import (
     C,
@@ -1215,71 +1216,50 @@ class MainWindow(QMainWindow):
     # dropped into whichever column is shorter at placement time (LPT
     # scheduling). Packs columns as close to equal height as the active
     # counts allow.
-    _LEFT_PINS: tuple[str, ...] = ("Major Class", "Place")
-    _RIGHT_PINS: tuple[str, ...] = ("Manner",)
-    # Per-card overhead (header + padding) expressed in row-equivalents,
-    # added to each card's row count when balancing column heights so
-    # many-small-cards columns aren't under-counted vs few-big-cards.
-    _CARD_OVERHEAD: int = 1
+    # Pin / overhead constants moved to gui/layout.py so the web app
+    # can use the same values via the renderer relay.
 
     def _redistribute_feature_cards(self, active: set[str]) -> None:
         """Place cards in left/right columns using soft pins + LPT.
         Re-runs on every inventory load because card heights vary with
         the active feature count (Tongue-Root has 1 active feature in
         Hayes but 4 in Blevins).
+
+        The placement decision is delegated to
+        ``gui.layout.distribute_feature_groups`` so the web app can
+        reuse the same algorithm (it runs the same module via
+        Pyodide). This function only does the Qt-specific work:
+        clear/refill the column layouts and toggle card visibility.
         """
         self._take_cards_out_of_columns()
-        # info[title] = (card, cost) where cost = active rows + overhead.
-        info: dict[str, tuple[QFrame, int]] = {}
+        cards_by_title: dict[str, QFrame] = {}
+        sizes: dict[str, int] = {}
         for card, feats in self._feat_cards:
             n_active = sum(1 for f in feats if f in active)
             title = self._card_title(card)
-            if title:
-                info[title] = (
-                    card,
-                    n_active + self._CARD_OVERHEAD if n_active > 0 else 0,
-                )
-                card.setVisible(n_active > 0)
+            if not title:
+                continue
+            cards_by_title[title] = card
+            sizes[title] = n_active
+            card.setVisible(n_active > 0)
         if self._other_card is not None:
             other_title = self._card_title(self._other_card) or "Other"
             n_active = sum(1 for f in active if f not in self._feat_row_pool)
-            info[other_title] = (
-                self._other_card,
-                n_active + self._CARD_OVERHEAD if n_active > 0 else 0,
-            )
+            cards_by_title[other_title] = self._other_card
+            sizes[other_title] = n_active
             self._other_card.setVisible(n_active > 0)
-        pinned: set[str] = set(self._LEFT_PINS) | set(self._RIGHT_PINS)
-        left_height = 0
-        right_height = 0
-        for title in self._LEFT_PINS:
-            entry = info.get(title)
-            if entry is not None and entry[1] > 0:
-                self._feat_left_layout.addWidget(entry[0])
-                left_height += entry[1]
-        for title in self._RIGHT_PINS:
-            entry = info.get(title)
-            if entry is not None and entry[1] > 0:
-                self._feat_right_layout.addWidget(entry[0])
-                right_height += entry[1]
-        unpinned_titles: list[str] = [
-            t for t, _ in FEATURE_GROUPS if t not in pinned
-        ]
+        group_order = [t for t, _ in FEATURE_GROUPS]
         if self._other_card is not None:
             other_title = self._card_title(self._other_card) or "Other"
-            if other_title not in pinned:
-                unpinned_titles.append(other_title)
-        remaining: list[tuple[QFrame, int]] = sorted(
-            (info[t] for t in unpinned_titles if t in info and info[t][1] > 0),
-            key=lambda pair: pair[1],
-            reverse=True,
+            if other_title not in group_order:
+                group_order.append(other_title)
+        left_names, right_names = distribute_feature_groups(
+            sizes, group_order=group_order
         )
-        for card, cost in remaining:
-            if left_height <= right_height:
-                self._feat_left_layout.addWidget(card)
-                left_height += cost
-            else:
-                self._feat_right_layout.addWidget(card)
-                right_height += cost
+        for name in left_names:
+            self._feat_left_layout.addWidget(cards_by_title[name])
+        for name in right_names:
+            self._feat_right_layout.addWidget(cards_by_title[name])
         self._feat_left_layout.addStretch()
         self._feat_right_layout.addStretch()
 

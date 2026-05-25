@@ -395,23 +395,41 @@ function onSegmentClicked(seg) {
 // ---------------------------------------------------------------------
 // Feature panel: grouped into Major Class, Laryngeal, Manner, Place,
 // Tongue-Root, Prosodic, plus an Other bucket for inventory-specific
-// extras. Layout mirrors the desktop's feature-card panel.
+// extras.
+//
+// Column placement is decided by Python in api.py via
+// gui.layout.distribute_feature_groups (the same module the desktop
+// runs through _redistribute_feature_cards). Each group dict comes
+// with a ``column`` field; we just mount each one into the right
+// DOM column here. Single source of truth for the placement algo.
 // ---------------------------------------------------------------------
 function renderFeaturePanel(featureGroups) {
     const list = $("feat-list");
     list.innerHTML = "";
+    const columnCount = 2;
+    const cols = Array.from({ length: columnCount }, () => {
+        const c = document.createElement("div");
+        c.className = "feat-col";
+        return c;
+    });
     for (const group of featureGroups) {
-        const groupEl = document.createElement("div");
-        groupEl.className = "feat-group";
-        const header = document.createElement("div");
-        header.className = "feat-group-header";
-        header.textContent = group.name.toUpperCase();
-        groupEl.appendChild(header);
-        for (const feat of group.features) {
-            groupEl.appendChild(_buildFeatureRow(feat));
-        }
-        list.appendChild(groupEl);
+        const colIndex = Math.max(0, Math.min(columnCount - 1, group.column ?? 0));
+        cols[colIndex].appendChild(_buildFeatureGroup(group));
     }
+    for (const c of cols) list.appendChild(c);
+}
+
+function _buildFeatureGroup(group) {
+    const groupEl = document.createElement("div");
+    groupEl.className = "feat-group";
+    const header = document.createElement("div");
+    header.className = "feat-group-header";
+    header.textContent = group.name.toUpperCase();
+    groupEl.appendChild(header);
+    for (const feat of group.features) {
+        groupEl.appendChild(_buildFeatureRow(feat));
+    }
+    return groupEl;
 }
 
 function _buildFeatureRow(feat) {

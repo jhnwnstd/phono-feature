@@ -61,6 +61,7 @@ RELAYED_SOURCES = [
     "palette.py",
     "constants.py",
     "analysis.py",
+    "layout.py",
 ]
 
 

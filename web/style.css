@@ -218,14 +218,27 @@ body {
 /* count to fit whatever the panel width allows, so every group stays  */
 /* visible.                                                           */
 /* ------------------------------------------------------------------ */
+/* Two columns side by side. JS (distributeFeatureGroups) decides
+   which group goes in which column using the desktop's pin + LPT
+   algorithm; this CSS just spaces them. On narrow viewports the
+   media query below stacks them vertically. */
 #feat-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 4px 16px;
-  align-content: start;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.feat-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  #feat-list { flex-direction: column; }
 }
 .feat-group {
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 .feat-group-header {
   font-size: 11px;
@@ -241,7 +254,10 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  /* Slightly tighter padding than the desktop's row spacing to
+     trade a few pixels of breathing room for fitting all features
+     in the panel without scrolling on a 720-900 px viewport. */
+  padding: 2px 8px;
   border-radius: 6px;
 }
 .feat-row[data-shared="true"][data-value="+"] { background: var(--shared-plus); }
