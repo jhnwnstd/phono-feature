@@ -38,7 +38,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-mock>=3.12", "mypy>=1.8", "ruff>=0.4"]
+dev = ["pytest>=7", "pytest-mock>=3.12", "mypy>=1.8", "ruff>=0.4", "build>=1"]
 
 [project.scripts]
 phonology-features = "phonology_features.__main__:main"

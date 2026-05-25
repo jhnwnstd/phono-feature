@@ -64,6 +64,45 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
     subprocess.run(cmd, cwd=cwd, check=True)
 
 
+def _require_build_module() -> None:
+    """``python -m build`` requires the ``build`` package. Fail fast
+    with a useful message instead of letting subprocess spit out
+    "No module named build.__main__".
+
+    Detection runs ``python -m build --version`` in a fresh
+    subprocess. find_spec("build") is unreliable here: this script
+    is named ``build.py``, so when Python prepends its directory to
+    ``sys.path`` the importer finds the script itself (a plain
+    module without ``__path__`` or ``__main__``). The subprocess
+    probe is the same import path subprocess.run will take below,
+    so a green probe means the real run will work too.
+    """
+    probe = subprocess.run(
+        [sys.executable, "-m", "build", "--version"],
+        capture_output=True,
+    )
+    if probe.returncode == 0:
+        return
+    venv_python = ROOT / "app" / ".venv" / "bin" / "python"
+    if not venv_python.exists():
+        venv_python = ROOT / "app" / ".venv" / "Scripts" / "python.exe"
+    interpreter_hint = (
+        f"{venv_python} web/scripts/build.py"
+        if venv_python.exists()
+        else "python -m pip install build && python web/scripts/build.py"
+    )
+    sys.exit(
+        "Error: the 'build' package is not installed in the current Python "
+        f"({sys.executable}).\n"
+        "Run one of:\n"
+        "  ./RUN-Linux.sh                          # creates app/.venv "
+        "with build available\n"
+        f"  {interpreter_hint}\n"
+        "  pip install build                       # install into the "
+        "current interpreter"
+    )
+
+
 def clean_dist() -> None:
     if DIST.exists():
         shutil.rmtree(DIST)
@@ -72,6 +111,7 @@ def clean_dist() -> None:
 
 def build_engine_wheel() -> Path:
     """Build the engine wheel into apps/web/dist/wheels/."""
+    _require_build_module()
     print("Building phonology-engine wheel...")
     wheels_dir = DIST / "wheels"
     wheels_dir.mkdir(parents=True, exist_ok=True)
