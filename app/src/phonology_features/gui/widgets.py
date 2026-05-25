@@ -552,10 +552,27 @@ class _CopyableTextEdit(QTextEdit):
 
 
 class AnalysisPanel(QWidget):
+    """Analysis output pane. Header row carries the title and a
+    maximize/restore toggle (RStudio-style "Zoom Plot"). The toggle
+    just emits ``expand_toggled``; MainWindow owns the vsplit and
+    handles the actual resize.
+    """
+
+    expand_toggled = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.title = QLabel("Analysis", self)
         self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
+        # Expand/restore toggle. Text glyphs (not emoji) so the button
+        # honors the active font and palette.
+        self.expand_btn = QPushButton("⤢", self)
+        self.expand_btn.setFlat(True)
+        self.expand_btn.setFixedSize(24, 20)
+        self.expand_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.expand_btn.setToolTip("Maximize analysis pane")
+        self.expand_btn.clicked.connect(self.expand_toggled.emit)
+        self._is_expanded = False
         self.content = _CopyableTextEdit(self)
         self.content.setReadOnly(True)
         # Explicit family chain rather than ``QFont("Noto Sans Mono")``:
@@ -568,12 +585,34 @@ class AnalysisPanel(QWidget):
         mono_font.setPointSize(10)
         self.content.setFont(mono_font)
         self.content.setMinimumHeight(60)
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(0)
+        header_row.addWidget(self.title)
+        header_row.addStretch(1)
+        header_row.addWidget(self.expand_btn)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(8)
-        layout.addWidget(self.title)
+        layout.addLayout(header_row)
         layout.addWidget(self.content)
         self.apply_theme()
+
+    def set_expanded(self, expanded: bool) -> None:
+        """Update the toggle's visual state. MainWindow calls this
+        after applying the splitter swap so the button glyph reflects
+        the live state regardless of which path triggered the change
+        (button click, keyboard shortcut, or user-drag detection).
+        """
+        if self._is_expanded == expanded:
+            return
+        self._is_expanded = expanded
+        # U+2922 (diagonal arrows out) = expand, U+2923 (diagonal
+        # arrows in) = restore.
+        self.expand_btn.setText("⤣" if expanded else "⤢")
+        self.expand_btn.setToolTip(
+            "Restore analysis pane" if expanded else "Maximize analysis pane"
+        )
 
     def apply_theme(self) -> None:
         """Re-apply palette-dependent styles. Called on theme toggle."""
@@ -585,6 +624,19 @@ class AnalysisPanel(QWidget):
         set_css(
             self.title,
             f"color: {C['text_dim']}; letter-spacing: 1px;",
+        )
+        set_css(
+            self.expand_btn,
+            f"""
+            QPushButton {{
+                color: {C['text_dim']};
+                background: transparent;
+                border: none;
+                font-size: 14px;
+                padding: 0;
+            }}
+            QPushButton:hover {{ color: {C['text']}; }}
+            """,
         )
         set_css(
             self.content,

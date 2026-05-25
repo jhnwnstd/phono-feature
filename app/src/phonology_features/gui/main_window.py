@@ -22,7 +22,9 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import (
     QColor,
     QFont,
+    QKeySequence,
     QPalette,
+    QShortcut,
 )
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -341,6 +343,18 @@ class MainWindow(QMainWindow):
         # one). The flag is initialized in _restore_settings.
         self._hsplit.splitterMoved.connect(self._geom.mark_splitter_owned)
         self._vsplit.splitterMoved.connect(self._geom.mark_splitter_owned)
+        # Analysis pane maximize/restore wiring. Stash the pre-expand
+        # vsplit sizes so the restore returns the user to exactly the
+        # split they had, not a hardcoded default. A user-drag during
+        # the expanded state invalidates the stash (handled by
+        # _on_vsplit_user_moved).
+        self._pre_expand_vsplit_sizes: list[int] | None = None
+        self.analysis.expand_toggled.connect(self._toggle_analysis_expanded)
+        self._vsplit.splitterMoved.connect(self._on_vsplit_user_moved)
+        # Ctrl+Shift+M (mnemonic: Maximize) mirrors the header button
+        # so power users can toggle without the mouse.
+        _expand_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
+        _expand_shortcut.activated.connect(self._toggle_analysis_expanded)
 
     def _build_status_bar(self) -> None:
         self.status = _BrandedStatusBar(self)
@@ -1434,6 +1448,45 @@ class MainWindow(QMainWindow):
                 row.restore_value(restore_feats[feat])
             else:
                 row.reset()
+
+    def _toggle_analysis_expanded(self) -> None:
+        """Maximize the analysis pane to ~80% of the vsplit height
+        or restore it to whatever ratio the user had before. Pure
+        toggle: clicking again returns to the stashed sizes.
+
+        Marks the splitter as user-owned so inventory loads after
+        the expand don't reset the ratio via fit_to_content.
+        """
+        total = sum(self._vsplit.sizes())
+        if self._pre_expand_vsplit_sizes is None:
+            # Currently restored: capture sizes and expand.
+            self._pre_expand_vsplit_sizes = list(self._vsplit.sizes())
+            top = max(120, total // 5)  # ~20% for seg/feat top
+            self._vsplit.setSizes([top, total - top])
+            self.analysis.set_expanded(True)
+        else:
+            # Currently expanded: restore. Sum may differ from when
+            # we stashed (window was resized while expanded), so
+            # scale the stashed ratio rather than re-applying the
+            # raw pixel sizes.
+            old_top, old_bot = self._pre_expand_vsplit_sizes
+            old_total = old_top + old_bot
+            if old_total > 0:
+                top = round(total * old_top / old_total)
+                self._vsplit.setSizes([top, total - top])
+            self._pre_expand_vsplit_sizes = None
+            self.analysis.set_expanded(False)
+        self._geom.has_saved_splitter = True
+
+    def _on_vsplit_user_moved(self, *_args) -> None:
+        """A user-initiated drag while expanded invalidates the
+        stashed restore sizes: the user has overridden them, so the
+        next button click should toggle relative to the new state,
+        not snap back to a stale stash.
+        """
+        if self._pre_expand_vsplit_sizes is not None:
+            self._pre_expand_vsplit_sizes = None
+            self.analysis.set_expanded(False)
 
     def _refresh_analysis_for_mode(self) -> None:
         """Clear the analysis panel and re-run the active mode's
