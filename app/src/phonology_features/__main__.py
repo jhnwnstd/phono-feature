@@ -155,7 +155,9 @@ def _run_gui(argv: list[str]) -> int:
     _pal.setColor(QPalette.ColorRole.Window, _bg)
     _pal.setColor(QPalette.ColorRole.Base, _bg)
     app.setPalette(_pal)
-    app.setStyleSheet(f"QMainWindow {{ background: {C['bg']}; }}")
+    from phonology_features.gui.style_utils import app_qss
+
+    app.setStyleSheet(app_qss())
     parser = QCommandLineParser()
     parser.setApplicationDescription("Phonology Segment & Feature Engine")
     parser.addHelpOption()

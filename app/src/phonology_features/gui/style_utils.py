@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QTextEdit, QWidget
 
+from phonology_features.gui.palette import C
+
 
 def set_css(widget: QWidget, css: str) -> bool:
     """Apply ``css`` to ``widget`` only when it differs from the
@@ -28,6 +30,29 @@ def set_css(widget: QWidget, css: str) -> bool:
         return False
     widget.setStyleSheet(css)
     return True
+
+
+def app_qss() -> str:
+    """QSS rules applied at the QApplication level, so they cascade
+    to every widget. Read the current ``C`` palette at call time;
+    re-invoke after ``set_theme`` to refresh.
+
+    The QToolTip block exists because Qt's default tooltip palette
+    on Linux paints a near-black rectangle with no padding that
+    clashes against the app's lighter chips and panels. Vowel
+    buttons set tooltips with placement metadata, so this is
+    visible on hover.
+    """
+    return (
+        f"QMainWindow {{ background: {C['bg']}; }}"
+        f" QToolTip {{"
+        f" background: {C['panel']};"
+        f" color: {C['text']};"
+        f" border: 1px solid {C['border']};"
+        f" border-radius: 4px;"
+        f" padding: 4px 7px;"
+        f" }}"
+    )
 
 
 _LAST_HTML_ATTR = "_set_html_last"

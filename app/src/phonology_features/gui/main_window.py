@@ -25,6 +25,7 @@ from PyQt6.QtGui import (
     QPalette,
 )
 from PyQt6.QtWidgets import (
+    QApplication,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -70,7 +71,7 @@ from phonology_features.gui.palette import (
     get_theme_name,
     set_theme,
 )
-from phonology_features.gui.style_utils import set_css
+from phonology_features.gui.style_utils import app_qss, set_css
 from phonology_features.gui.themed_widgets import (
     _BrandedStatusBar,
     _clear_btn_style,
@@ -689,6 +690,11 @@ class MainWindow(QMainWindow):
         """Re-apply every chrome stylesheet that depends on the palette.
         Each helper touches one logical group of widgets in place.
         """
+        # App-level QSS (QMainWindow bg + QToolTip styling) reads the
+        # active palette at call time, so re-set it on theme toggle.
+        app = QApplication.instance()
+        if app is not None:
+            app.setStyleSheet(app_qss())
         set_css(self, f"background-color: {C['bg']};")
         self._restyle_toolbar()
         self._repaint_splitter_handles()

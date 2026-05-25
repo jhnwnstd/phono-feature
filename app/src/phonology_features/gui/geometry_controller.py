@@ -71,10 +71,14 @@ class _GeometryController:
         # the reported position by 1-2 px in response to geometry
         # requests.
         self.anchor_pos: QPoint | None = None
-        # Set True while we're mid-programmatic resize so the
-        # paired moveEvent doesn't treat the compositor's response
-        # as a user drag.
-        self._programmatic_geom: bool = False
+        # Nonzero while we're mid-programmatic resize so the paired
+        # moveEvent doesn't treat the compositor's response as a
+        # user drag. A counter (not a bool) so a nested call from
+        # within a programmatic resize, e.g. an inventory load that
+        # triggers fit_window_to_size while another is still in its
+        # finally, doesn't drop the outer guard when the inner call
+        # exits.
+        self._programmatic_geom_depth: int = 0
 
     # ------------------------------------------------------------------
     # Screen / clamping
@@ -135,7 +139,7 @@ class _GeometryController:
         anchor only when the move was user-initiated (not when we
         triggered it ourselves via the programmatic_geom guard).
         """
-        if not self._programmatic_geom:
+        if self._programmatic_geom_depth == 0:
             self.anchor_pos = pos
 
     def mark_splitter_owned(self, *_args) -> None:
@@ -229,7 +233,7 @@ class _GeometryController:
         new_w, new_h = self.clamp_size_to_screen(
             need_w, need_h, deco_w, deco_h
         )
-        self._programmatic_geom = True
+        self._programmatic_geom_depth += 1
         try:
             if not self.has_saved_size:
                 self._w.resize(new_w, new_h)
@@ -255,7 +259,7 @@ class _GeometryController:
                 # Off-screen recovery promoted to the new anchor.
                 self.anchor_pos = QPoint(target_x, target_y)
         finally:
-            self._programmatic_geom = False
+            self._programmatic_geom_depth -= 1
 
     def decoration_padding(
         self, old_pos

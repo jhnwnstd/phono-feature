@@ -276,6 +276,13 @@ class _InventoryDirController:
         in the directory) so the viewer doesn't sit on a dangling
         reference.
         """
+        # Cancel any pending file-watcher debounce: if we're about
+        # to load synchronously (fallback after delete) or re-arm
+        # the watcher ourselves below, letting an earlier 600 ms
+        # timer also fire would reload the file twice. The two
+        # paths that need it (re-arm at the bottom, fallback load)
+        # re-start it explicitly when appropriate.
+        self._reload_timer.stop()
         if os.path.normpath(directory) == self.get_inventories_dir():
             self.populate_dropdown()
         if not self._w._current_path:
