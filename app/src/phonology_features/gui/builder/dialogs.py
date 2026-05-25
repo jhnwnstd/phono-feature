@@ -118,7 +118,13 @@ class _AutofillTextEdit(QPlainTextEdit):
         if len(lines) <= 1:
             return
         painter = QPainter(self.viewport())
-        painter.setPen(QColor(C["text_dim"]))
+        # Match Qt's own placeholder color rather than ``C[text_dim]``.
+        # Qt paints the first line with ``QPalette.PlaceholderText``
+        # which is black at 50% alpha by default. Composited over the
+        # panel background it reads as a lighter, cooler grey than the
+        # opaque slate ``C[text_dim]``. Using the palette role here
+        # makes every line of the placeholder render identically.
+        painter.setPen(self.palette().placeholderText().color())
         painter.setFont(self.font())
         metrics = painter.fontMetrics()
         doc = self.document()
