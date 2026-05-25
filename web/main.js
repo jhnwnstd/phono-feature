@@ -118,6 +118,11 @@ const state = {
     mode: "seg_to_feat",          // or "feat_to_seg"
     selected_segments: [],         // ordered for analysis consistency
     selected_features: {},         // {feature: "+" | "-"}
+    // State of each mode at the moment we leave it. Restored on
+    // toggle back so flipping modes doesn't wipe your selection.
+    // Matches the desktop's _saved_seg_state / _saved_feat_state.
+    saved_seg_state: [],
+    saved_feat_state: {},
     inventory_name: "",
     segments: [],
     features: [],
@@ -458,21 +463,57 @@ function cssEscape(s) {
 // ---------------------------------------------------------------------
 function activateMode(mode) {
     if (state.mode === mode) return;
+
+    // Snapshot the outgoing mode's state before swapping. Restoring
+    // it on the next toggle-back means switching modes preserves
+    // your work instead of wiping it.
+    if (state.mode === "seg_to_feat") {
+        state.saved_seg_state = state.selected_segments.slice();
+    } else {
+        state.saved_feat_state = { ...state.selected_features };
+    }
+
     state.mode = mode;
     $("seg-panel").dataset.active = (mode === "seg_to_feat") ? "true" : "false";
     $("feat-panel").dataset.active = (mode === "feat_to_seg") ? "true" : "false";
-    // Clear the opposite-mode state so the analysis pane reflects
-    // only the active mode's input.
+
     if (mode === "seg_to_feat") {
+        // Restore the previous seg selection; clear feat-side.
+        state.selected_segments = state.saved_seg_state.slice();
         state.selected_features = {};
-        document.querySelectorAll(".feat-btn[data-active='true']").forEach(b => b.dataset.active = "false");
+        for (const btn of document.querySelectorAll(".feat-btn[data-active='true']")) {
+            btn.dataset.active = "false";
+        }
+        const selectedSet = new Set(state.selected_segments);
+        for (const btn of document.querySelectorAll(".seg-btn")) {
+            const isSelected = selectedSet.has(btn.dataset.seg);
+            btn.dataset.state = isSelected ? "selected" : "default";
+            btn.setAttribute("aria-pressed", isSelected ? "true" : "false");
+        }
     } else {
+        // Restore the previous feat query; clear seg-side.
+        state.selected_features = { ...state.saved_feat_state };
         state.selected_segments = [];
-        document.querySelectorAll(".seg-btn[data-state='selected']").forEach(b => b.dataset.state = "default");
+        for (const btn of document.querySelectorAll(".seg-btn[data-state='selected']")) {
+            btn.dataset.state = "default";
+            btn.setAttribute("aria-pressed", "false");
+        }
+        for (const btn of document.querySelectorAll(".feat-btn")) {
+            const feat = btn.closest(".feat-row")?.dataset.feat;
+            const polarity = btn.dataset.polarity;
+            const active = state.selected_features[feat] === polarity;
+            btn.dataset.active = active ? "true" : "false";
+        }
     }
+
     setStatus(mode === "seg_to_feat"
         ? "Click a segment to inspect its features."
         : "Toggle feature values (+/−) to find matching segments.");
+
+    // Re-run analysis with the restored state so the pane reflects
+    // the just-activated mode immediately.
+    if (state.bridge) scheduleAnalysis();
+    else $("analysis-content").innerHTML = "";
 }
 
 // ---------------------------------------------------------------------
