@@ -1,5 +1,7 @@
 """Reusable dialog helpers and the InputDialog for inventory setup."""
 
+import re
+
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QColor, QFont, QPainter, QTextCursor
 from PyQt6.QtWidgets import (
@@ -17,6 +19,38 @@ from PyQt6.QtWidgets import (
 from phonology_features.engine.inventory import MAX_NAME_LENGTH
 from phonology_features.gui.builder.presets import FEATURE_PRESETS
 from phonology_features.gui.palette import C
+
+# Candidate delimiters _infer_split tries, in no particular order.
+# Whitespace is the FALLBACK (used only when none of these appear);
+# kept separate because feature names may legitimately contain spaces
+# (e.g. "Long Vowel") and the whole point of supporting explicit
+# delimiters is to let those names survive paste.
+_EXPLICIT_DELIMITERS: tuple[str, ...] = (",", ";", "|", "\t", "\n")
+
+
+def _infer_split(text: str) -> list[str]:
+    """Split ``text`` on whichever of the candidate delimiters appears.
+
+    Lets the user paste any consistently-delimited list (CSV, TSV,
+    semicolons, pipes, one-per-line, plain whitespace) without
+    pre-processing. The rule:
+
+    * If any of ``,``, ``;``, ``|``, ``\\t``, ``\\n`` appears in the
+      text, split on EVERY explicit delimiter that's present.
+      Handles mixed cases like ``"p, b, t\\nd, e, f"`` (commas and
+      newlines together) which should yield six tokens, not two
+      strings of three.
+    * Otherwise fall back to any-whitespace split (the legacy
+      behaviour for ``"p b t d"``).
+
+    Each token is whitespace-stripped; empties are filtered. Order
+    is preserved.
+    """
+    used = [d for d in _EXPLICIT_DELIMITERS if d in text]
+    if not used:
+        return [tok for tok in text.split() if tok]
+    pattern = "|".join(re.escape(d) for d in used)
+    return [tok.strip() for tok in re.split(pattern, text) if tok.strip()]
 
 
 class _AutofillTextEdit(QPlainTextEdit):
@@ -69,11 +103,12 @@ class _AutofillTextEdit(QPlainTextEdit):
         return super().event(e)
 
     def entries(self) -> list[str]:
-        """Parse the current text as a list of entries. Default splits
-        on any whitespace -- spaces, tabs, newlines. Subclasses
-        override when a different split rule applies (e.g. Features
-        only one per line)."""
-        return [token for token in self.toPlainText().split() if token]
+        """Parse the current text as a list of entries by inferring
+        the delimiter. See ``_infer_split`` for the rule. Same shape
+        for segments and features so pasted input from any source
+        (CSV exports, spreadsheet columns, one-per-line lists,
+        space-separated jottings) works without pre-processing."""
+        return _infer_split(self.toPlainText())
 
     def paintEvent(self, e):
         super().paintEvent(e)
@@ -113,22 +148,16 @@ class FeatureTextEdit(_AutofillTextEdit):
     Consonantal) as a starting point for a custom set. The full
     Default (33) preset is in the dropdown.
 
-    Features are one-per-line (overrides the whitespace-split base):
-    feature names may legitimately contain spaces or unusual chars
-    that a whitespace splitter would shred.
-
     Trailing newline so the caret lands on a fresh line ready for
-    the user to type the next feature; ``entries()`` filters empty
-    lines so the trailer doesn't introduce a phantom feature."""
+    the user to type the next feature; ``_infer_split`` filters empty
+    lines so the trailer doesn't introduce a phantom feature. The
+    inferred-delimiter parser inherited from the base accepts any
+    consistent delimiter (newline, comma, tab, etc.) so a pasted
+    list from any source works without pre-processing, AND lets
+    feature names contain spaces (e.g. "Long Vowel") as long as the
+    user separates with something other than whitespace."""
 
     DEFAULT_FILL = "Syllabic\nConsonantal\n"
-
-    def entries(self) -> list[str]:
-        return [
-            line.strip()
-            for line in self.toPlainText().splitlines()
-            if line.strip()
-        ]
 
 
 def center_on_parent(dialog, parent):
@@ -206,18 +235,22 @@ class InputDialog(QDialog):
         return row
 
     def _add_segments_section(self, parent: QVBoxLayout) -> None:
-        label = QLabel("Segments (one per line, or space-separated):")
+        label = QLabel("Segments (delimited):")
         label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
         parent.addWidget(label)
         self.seg_edit = SegmentTextEdit()
-        # Placeholder = what Tab fills; the grayed text is the hint.
+        # Placeholder = what Tab fills; the grayed text doubles as a
+        # format hint for the inferred-delimiter parser.
         self.seg_edit.setPlaceholderText(SegmentTextEdit.DEFAULT_FILL)
         self.seg_edit.setFont(QFont("Noto Sans", 12))
-        parent.addWidget(self.seg_edit)
+        # Stretch 1 here vs 4 on the features edit below: segments
+        # are typically a short list (~10-40 symbols) while features
+        # are routinely 30+ entries, often pasted from a spreadsheet.
+        # Giving features the lion's share of vertical room matches
+        # the common shape of pasted input.
+        parent.addWidget(self.seg_edit, stretch=1)
 
     def _add_features_section(self, parent: QVBoxLayout) -> None:
-        preset_row = QHBoxLayout()
-        preset_row.addWidget(QLabel("Feature set:"))
         self.preset_combo = QComboBox()
         # Native combo highlight is white-on-white in some OS themes;
         # mirror MainWindow's inventory dropdown styling so items stay
@@ -245,15 +278,24 @@ class InputDialog(QDialog):
         for name in FEATURE_PRESETS:
             self.preset_combo.addItem(name)
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
-        preset_row.addWidget(self.preset_combo)
-        parent.addLayout(preset_row)
-        feat_label = QLabel("Features (one per line):")
+        # Features header row: bold label on the left, preset combo
+        # flush to the RIGHT edge (separated by stretch). The combo
+        # doubles as the section's "set" control, so it sits in the
+        # header rather than under its own "Feature set:" label.
+        feat_header_row = QHBoxLayout()
+        feat_label = QLabel("Features (delimited):")
         feat_label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
-        parent.addWidget(feat_label)
+        feat_header_row.addWidget(feat_label)
+        feat_header_row.addStretch()
+        feat_header_row.addWidget(self.preset_combo)
+        parent.addLayout(feat_header_row)
         self.feat_edit = FeatureTextEdit()
         self.feat_edit.setFont(QFont("Noto Sans", 10))
         self.feat_edit.setPlaceholderText(FeatureTextEdit.DEFAULT_FILL)
-        parent.addWidget(self.feat_edit)
+        # See the segments edit for why features get the larger
+        # stretch factor: feature sets are routinely 30+ entries,
+        # often pasted from a spreadsheet column.
+        parent.addWidget(self.feat_edit, stretch=4)
         self._on_preset_changed(self.preset_combo.currentText())
 
     def _build_button_row(self) -> QHBoxLayout:
@@ -305,22 +347,34 @@ class InputDialog(QDialog):
     def accept(self) -> None:
         """Validate inputs before dismissing. On failure, warn, focus
         the offending field, and keep the dialog open.
+
+        The "no items" branches double as the surface for "couldn't
+        infer the delimiter": ``_infer_split`` only returns an empty
+        list when the input is empty or whitespace-only. The message
+        names every accepted delimiter so a user who pasted something
+        the parser couldn't tokenize can see what to try.
         """
         if not self.get_segments():
             QMessageBox.warning(
                 self,
-                "No segments",
-                "Please enter at least one segment "
-                "(or press Tab in the segment box for a quick-start set).",
+                "No segments found",
+                "The segments box is empty, or none of the recognized "
+                "delimiters were found. Separate segments with any of: "
+                "newline, space, tab, comma, semicolon, or pipe. "
+                "Press Tab in an empty box for a quick-start set.",
             )
             self.seg_edit.setFocus()
             return
         if not self.get_features():
             QMessageBox.warning(
                 self,
-                "No features",
-                "Please enter at least one feature, "
-                "or pick a feature set from the dropdown.",
+                "No features found",
+                "The features box is empty, or none of the recognized "
+                "delimiters were found. Separate features with any of: "
+                "newline, comma, semicolon, tab, or pipe. (Whitespace "
+                "is allowed but only as a fallback, so feature names "
+                "that contain spaces survive when you use a non-space "
+                "delimiter.) Or pick a feature set from the dropdown.",
             )
             self.feat_edit.setFocus()
             return

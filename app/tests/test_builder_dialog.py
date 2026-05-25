@@ -189,7 +189,7 @@ def test_accept_with_empty_segments_does_not_dismiss(dialog, mocker):
     dialog.accept()
     warn.assert_called_once()
     args = warn.call_args.args
-    assert args[1] == "No segments"
+    assert args[1] == "No segments found"
     # Dialog must remain in its pre-accept state; Accepted is QDialog.DialogCode.Accepted == 1
     assert dialog.result() != QDialog.DialogCode.Accepted
 
@@ -202,7 +202,7 @@ def test_accept_with_empty_features_does_not_dismiss(dialog, mocker):
     assert dialog.get_features() == []
     dialog.accept()
     warn.assert_called_once()
-    assert warn.call_args.args[1] == "No features"
+    assert warn.call_args.args[1] == "No features found"
     assert dialog.result() != QDialog.DialogCode.Accepted
 
 
@@ -216,3 +216,92 @@ def test_accept_with_valid_inputs_dismisses(dialog, mocker):
     dialog.accept()
     warn.assert_not_called()
     assert dialog.result() == QDialog.DialogCode.Accepted
+
+
+# ---------------------------------------------------------------------------
+# Delimiter inference: any consistently-delimited paste should parse
+# ---------------------------------------------------------------------------
+def test_infer_split_whitespace_fallback():
+    """No explicit delimiter -> whitespace fallback. Covers the
+    legacy "p b t d" segment input shape."""
+    from phonology_features.gui.builder.dialogs import _infer_split
+
+    assert _infer_split("p b t d") == ["p", "b", "t", "d"]
+
+
+def test_infer_split_newline_separated():
+    from phonology_features.gui.builder.dialogs import _infer_split
+
+    assert _infer_split("Syllabic\nConsonantal\nVoice\n") == [
+        "Syllabic",
+        "Consonantal",
+        "Voice",
+    ]
+
+
+def test_infer_split_comma_separated_with_internal_spaces():
+    """Explicit delimiter present -> only split on it, NOT on
+    whitespace. Lets multi-word feature names like "Long Vowel"
+    survive a paste."""
+    from phonology_features.gui.builder.dialogs import _infer_split
+
+    assert _infer_split("Long Vowel, Short Vowel, Schwa") == [
+        "Long Vowel",
+        "Short Vowel",
+        "Schwa",
+    ]
+
+
+def test_infer_split_semicolon_pipe_tab_each_work():
+    from phonology_features.gui.builder.dialogs import _infer_split
+
+    assert _infer_split("a; b; c") == ["a", "b", "c"]
+    assert _infer_split("a|b|c") == ["a", "b", "c"]
+    assert _infer_split("a\tb\tc") == ["a", "b", "c"]
+
+
+def test_infer_split_mixed_explicit_delimiters():
+    """Multiple explicit delimiters in one paste (commas + newlines,
+    as you'd get from a column accidentally pasted with both row and
+    cell separators) split on all of them."""
+    from phonology_features.gui.builder.dialogs import _infer_split
+
+    assert _infer_split("p, b, t\nd, e, f") == [
+        "p", "b", "t", "d", "e", "f"
+    ]
+
+
+def test_infer_split_empty_returns_empty():
+    from phonology_features.gui.builder.dialogs import _infer_split
+
+    assert _infer_split("") == []
+    assert _infer_split("   \n\t  ") == []
+
+
+def test_infer_split_single_item_no_delimiter():
+    """A single token with no delimiter at all is preserved as a
+    one-item list. accept()'s "no items" guard fires only on truly
+    empty input, not on legitimate single-segment inventories."""
+    from phonology_features.gui.builder.dialogs import _infer_split
+
+    assert _infer_split("Voice") == ["Voice"]
+
+
+def test_segment_and_feature_editors_share_inference(qapp):
+    """The unified delimiter inference means a comma-separated
+    paste works in BOTH the segments box and the features box.
+    Pre-refactor the segments box used whitespace-split and the
+    features box used newline-split, so neither accepted the
+    other's natural shape."""
+    from phonology_features.gui.builder.dialogs import (
+        FeatureTextEdit,
+        SegmentTextEdit,
+    )
+
+    seg = SegmentTextEdit()
+    seg.setPlainText("p, b, t, d")
+    assert seg.entries() == ["p", "b", "t", "d"]
+
+    feat = FeatureTextEdit()
+    feat.setPlainText("Voice, Nasal, Continuant")
+    assert feat.entries() == ["Voice", "Nasal", "Continuant"]
