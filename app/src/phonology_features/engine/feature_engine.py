@@ -270,7 +270,7 @@ class FeatureEngine:
         Returns ``(EMPTY_BUNDLE,)`` for the universal class, ``()``
         if S is not a natural class.
 
-        GOTCHA -- "I queried this bundle and it returned my exact
+        GOTCHA. "I queried this bundle and it returned my exact
         selection, why isn't it listed as a minimal spec?"
 
         Reason: the minimal-spec search uses UNDERSPEC-COMPATIBLE
@@ -288,7 +288,7 @@ class FeatureEngine:
         strict equality excludes them). Under underspec-compatible
         matching the same bundle ALSO matches /b p k m h j w/ etc.
         (their ``0Strident`` matches ``+Strident`` via the wildcard
-        rule), so it describes 16 segments, not 6 -- and is therefore
+        rule), so it describes 16 segments (not 6), and is therefore
         not a characterization of the 6.
 
         Why the engine chose underspec semantics: a minimal spec under
