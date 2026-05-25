@@ -84,6 +84,21 @@ class _AutofillTextEdit(QPlainTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setTabChangesFocus(True)
+        # Stored separately from Qt's placeholderText so our paintEvent
+        # owns the full multi-line render. See setPlaceholderText.
+        self._placeholder: str = ""
+
+    def setPlaceholderText(self, text: str) -> None:  # type: ignore[override]
+        """Capture the placeholder text for our own multi-line paint
+        and tell Qt the placeholder is empty so its built-in single
+        line render stays out of our way. Both lines of a multi-line
+        placeholder then come from the same paintEvent code path,
+        guaranteeing identical shading."""
+        self._placeholder = text
+        super().setPlaceholderText("")
+
+    def placeholderText(self) -> str:  # type: ignore[override]
+        return self._placeholder
 
     def event(self, e: QEvent | None) -> bool:
         if (
@@ -115,24 +130,28 @@ class _AutofillTextEdit(QPlainTextEdit):
         if self.toPlainText() or not self.placeholderText():
             return
         lines = self.placeholderText().splitlines()
-        if len(lines) <= 1:
+        if not lines:
             return
+        # Paint EVERY placeholder line ourselves rather than letting
+        # Qt's built-in placeholder paint the first line and us paint
+        # the rest. Two reasons: (1) Qt only paints the first line of
+        # a multi-line placeholderText, so we have to paint the others
+        # anyway; (2) when both Qt and we paint the same buffer, the
+        # alpha-blended lines end up at different effective opacities
+        # (Qt's first-line render and our subsequent-line renders
+        # composite slightly differently across paint frames), giving
+        # the user visibly different shades for adjacent lines.
+        # Owning the whole multi-line paint here keeps every line at
+        # the same colour.
         painter = QPainter(self.viewport())
-        # Match Qt's own placeholder color rather than ``C[text_dim]``.
-        # Qt paints the first line with ``QPalette.PlaceholderText``
-        # which is black at 50% alpha by default. Composited over the
-        # panel background it reads as a lighter, cooler grey than the
-        # opaque slate ``C[text_dim]``. Using the palette role here
-        # makes every line of the placeholder render identically.
         painter.setPen(self.palette().placeholderText().color())
         painter.setFont(self.font())
         metrics = painter.fontMetrics()
         doc = self.document()
         margin = int(doc.documentMargin()) if doc is not None else 0
         x = margin
-        # Skip the first line; Qt already painted it.
-        y = margin + metrics.ascent() + metrics.lineSpacing()
-        for line in lines[1:]:
+        y = margin + metrics.ascent()
+        for line in lines:
             painter.drawText(x, y, line)
             y += metrics.lineSpacing()
         painter.end()
