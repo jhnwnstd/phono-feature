@@ -1928,7 +1928,6 @@ def test_stale_tmp_files_swept_on_dropdown_populate(tmp_path: Path) -> None:
     """
     import time as _time
 
-    from phonology_features.gui.main_window import MainWindow
 
     # Set up the inventories dir with one stale and one fresh tmp.
     inv_dir = tmp_path / "inventories"
@@ -1943,7 +1942,10 @@ def test_stale_tmp_files_swept_on_dropdown_populate(tmp_path: Path) -> None:
     old_t = _time.time() - 7200
     os.utime(stale, (old_t, old_t))
 
-    MainWindow._sweep_stale_tmp_files(str(inv_dir))
+    from phonology_features.gui.inventory_dir_controller import (
+        _InventoryDirController,
+    )
+    _InventoryDirController.sweep_stale_tmp_files(str(inv_dir))
 
     assert not stale.exists(), (
         "stale tmp file from an old crashed save was not swept"
@@ -1990,18 +1992,18 @@ def test_main_viewer_falls_back_when_current_inventory_deleted(
     w = MainWindow()
     # Force the bundled-inventories pointer at our temp dir for the
     # fallback scan (the test isn't dependent on the real bundled set).
-    w._get_inventories_dir = lambda: str(work_dir)  # type: ignore[method-assign]
-    # Load A, then B -- MRU is now [B, A].
+    w._inv_dir.get_inventories_dir = lambda: str(work_dir)  # type: ignore[method-assign]
+    # Load A, then B. MRU is now [B, A].
     w._load_path(str(a))
     w._load_path(str(b))
     assert w._current_path == _os.path.abspath(str(b))
-    assert w._recent_paths[0] == _os.path.abspath(str(b))
-    assert _os.path.abspath(str(a)) in w._recent_paths
+    assert w._inv_dir.recent_paths[0] == _os.path.abspath(str(b))
+    assert _os.path.abspath(str(a)) in w._inv_dir.recent_paths
 
     # Simulate the Builder's delete path: file vanishes from disk,
     # then the directory watcher fires.
     _os.remove(str(b))
-    w._on_directory_changed(str(work_dir))
+    w._inv_dir._on_directory_changed(str(work_dir))
 
     # Viewer must have fallen back to A (the MRU survivor).
     assert w._current_path == _os.path.abspath(str(a)), (
@@ -2170,7 +2172,7 @@ def test_inventory_swap_does_not_resize_window(tmp_path: Path) -> None:
     w = MainWindow(startup_path=HAYES)
     # Simulate user-owned geometry: pretend settings restored a size.
     # The production path also sets this in ``_restore_settings``.
-    w._has_saved_size = True
+    w._geom.has_saved_size = True
     w.resize(1100, 850)
     w.show()
     app.processEvents()
@@ -2212,8 +2214,8 @@ def test_inventory_swap_preserves_splitter_ratio(tmp_path: Path) -> None:
     from phonology_features.gui.main_window import MainWindow
 
     w = MainWindow(startup_path=HAYES)
-    w._has_saved_size = True
-    w._has_saved_splitter = True  # simulate restored state
+    w._geom.has_saved_size = True
+    w._geom.has_saved_splitter = True  # simulate restored state
     w.resize(1100, 850)
     w.show()
     app.processEvents()
@@ -2257,10 +2259,10 @@ def test_user_splitter_drag_promotes_to_owned(tmp_path: Path) -> None:
     # Fresh install path: no settings yet, so first _fit_to_content
     # already ran and the flag is True from that programmatic setSizes.
     # Simulate the user dragging by emitting the signal directly.
-    w._has_saved_splitter = False
+    w._geom.has_saved_splitter = False
     w._hsplit.splitterMoved.emit(450, 0)
     assert (
-        w._has_saved_splitter
+        w._geom.has_saved_splitter
     ), "splitterMoved should promote the splitter to user-owned"
     w.close()
 

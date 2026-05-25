@@ -12,9 +12,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import (
-    QByteArray,
     QEvent,
-    QFileSystemWatcher,
     QPoint,
     QSettings,
     QSize,
@@ -25,11 +23,8 @@ from PyQt6.QtGui import (
     QColor,
     QFont,
     QPalette,
-    QScreen,
-    QStandardItemModel,
 )
 from PyQt6.QtWidgets import (
-    QApplication,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -65,6 +60,10 @@ from phonology_features.gui.constants import (
     scrollbar_style,
     sort_features,
 )
+from phonology_features.gui.geometry_controller import _GeometryController
+from phonology_features.gui.inventory_dir_controller import (
+    _InventoryDirController,
+)
 from phonology_features.gui.palette import (
     C,
     detect_system_theme,
@@ -92,12 +91,6 @@ if TYPE_CHECKING:
 
 _log = get_logger(__name__)
 
-
-# Floor for WM decoration when the WM reports zero (Wayland CSD, some
-# X11 themes). Keeps the window frame inside the screen on inventory
-# swaps even when Qt thinks frame == widget.
-_MIN_DECO_W = 8
-_MIN_DECO_H = 32
 
 # Cached enum member. eventFilter runs on every Qt event (10k+ per user
 # action); binding the comparison target to a name avoids resolving
@@ -133,11 +126,10 @@ class MainWindow(QMainWindow):
         self._saved_seg_state: list = []
         self._saved_feat_state: dict = {}
         self._current_path: str | None = None
-        # MRU of paths the user has loaded, deduplicated, capped.
-        # Used to pick a sensible fallback when the currently-loaded
-        # file is deleted under us (e.g. via Builder -> Delete).
-        # Not persisted across sessions -- starts empty each launch.
-        self._recent_paths: list[str] = []
+        # Watcher, MRU, dropdown population, and delete-fallback all
+        # live in the InventoryDirController, built after _build_ui
+        # because it needs the combobox widget.
+        self._inv_dir: _InventoryDirController  # populated below
         self._did_first_show = False
         self._builder: InventoryBuilder | None = None
         # Pool of every FeatureRow ever created (FEATURE_ORDER plus any
@@ -150,12 +142,11 @@ class MainWindow(QMainWindow):
         # Depth counter so nested ``_batched_updates`` scopes share one
         # setUpdatesEnabled(False/True) pair.
         self._batched_depth: int = 0
-        # Anchor for programmatic resizes; updated only by user moves
-        # (mouse drag). Reading live self.pos() each resize caused
-        # leftward drift on Wayland compositors that nudge the reported
-        # position by 1-2 px in response to geometry requests.
-        self._anchor_pos: QPoint | None = None
-        self._programmatic_geom: bool = False
+        # Geometry / splitter policy lives in a controller built in
+        # _build_central once the splitter widgets exist. Holds the
+        # anchor_pos, programmatic_geom flag, and the sizing rules
+        # that previously lived inline as MainWindow methods.
+        self._geom: _GeometryController  # populated in _build_central
         self.setWindowTitle("Feature visualizer")
         self.setMinimumSize(640, 480)
         self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
@@ -170,24 +161,16 @@ class MainWindow(QMainWindow):
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(150)
         self._debounce.timeout.connect(self._run_pending_update)
-        # File-system watcher for live inventory reloads.
-        self._watcher = QFileSystemWatcher(self)
-        self._watcher.fileChanged.connect(self._on_file_changed)
-        self._watcher.directoryChanged.connect(self._on_directory_changed)
-        # 600 ms delay so editors that delete-then-write don't re-trigger.
-        self._reload_timer = QTimer(self)
-        self._reload_timer.setSingleShot(True)
-        self._reload_timer.setInterval(600)
-        self._reload_timer.timeout.connect(self._do_auto_reload)
         self._build_ui()
-        # Watch ``inventories/`` so newly-saved inventories (from the
-        # Builder or external edits) appear in the dropdown live.
-        inventories_dir = self._get_inventories_dir()
-        if (
-            os.path.isdir(inventories_dir)
-            and inventories_dir not in self._watcher.directories()
-        ):
-            self._watcher.addPath(inventories_dir)
+        # Inventory-dir controller owns the file watcher, MRU, and
+        # dropdown population. Constructed AFTER _build_ui because it
+        # needs the inventory_combo widget that _build_toolbar creates.
+        # It also starts watching the bundled inventories directory in
+        # its own __init__, so the previous inline addPath call is
+        # gone.
+        self._inv_dir = _InventoryDirController(
+            self, self._settings, self.inventory_combo
+        )
         # Initial mode is already SEG_TO_FEAT, so _set_mode would no-op.
         # Apply chrome directly to wire up the freshly-built widgets.
         self._apply_mode_phases()
@@ -266,7 +249,11 @@ class MainWindow(QMainWindow):
         self.inventory_combo.setFixedHeight(32)
         self.inventory_combo.setMinimumWidth(176)
         set_css(self.inventory_combo, self._combo_style())
-        self._populate_inventory_dropdown()
+        # Dropdown is populated by _InventoryDirController.__init__,
+        # which runs after _build_ui completes (it needs the
+        # inventory_combo widget). The toolbar shows an empty combo
+        # for the few microseconds between toolbar build and
+        # controller construction; visually unobservable.
         self.inventory_combo.activated.connect(self._on_inventory_selected)
         toolbar.addWidget(self.inventory_combo)
 
@@ -332,20 +319,25 @@ class MainWindow(QMainWindow):
         self._vsplit.setSizes([700, 220])
         self._vsplit.setStretchFactor(0, 1)
         self._vsplit.setStretchFactor(1, 0)
-        self._min_analysis_h = 220
-        # Hard floor; without these the splitter can collapse the
-        # analysis pane to 0 when _apply_splitter_sizes runs before
+        # Splitter widgets exist now: build the geometry controller
+        # that owns sizing policy + ownership flags. Everything below
+        # routes through it.
+        self._geom = _GeometryController(
+            self, self._hsplit, self._vsplit, self._settings
+        )
+        # Hard floor; without it the splitter can collapse the
+        # analysis pane to 0 when apply_splitter_sizes runs before
         # the window is shown.
-        self.analysis.setMinimumHeight(self._min_analysis_h)
+        self.analysis.setMinimumHeight(self._geom.min_analysis_h)
         self._vsplit.setCollapsible(1, False)
         root.addWidget(self._vsplit)
         # User-drag is also "user owns the ratio". Without this, a
         # manual drag would survive only until the next inventory
-        # load, when _fit_to_content's content-based sizing would
-        # clobber it -- the same shape of bug as the window-resize
-        # one. The flag is initialized in _restore_settings.
-        self._hsplit.splitterMoved.connect(self._mark_splitter_owned)
-        self._vsplit.splitterMoved.connect(self._mark_splitter_owned)
+        # load, when fit_to_content's content-based sizing would
+        # clobber it (the same shape of bug as the window-resize
+        # one). The flag is initialized in _restore_settings.
+        self._hsplit.splitterMoved.connect(self._geom.mark_splitter_owned)
+        self._vsplit.splitterMoved.connect(self._geom.mark_splitter_owned)
 
     def _build_status_bar(self) -> None:
         self.status = _BrandedStatusBar(self)
@@ -487,69 +479,18 @@ class MainWindow(QMainWindow):
         vlay.addWidget(self._feat_scroll, stretch=1)
         return container
 
-    def _target_screen(self) -> QScreen | None:
-        """Primary screen for initial placement. The user can drag the
-        window anywhere afterwards; that position is what's persisted.
-        """
-        app = QApplication.instance()
-        assert isinstance(app, QApplication)
-        return app.primaryScreen()
-
-    def _clamp_size_to_screen(
-        self, w: int, h: int, deco_w: int = 40, deco_h: int = 40
-    ) -> tuple[int, int]:
-        """Clamp ``(w, h)`` so widget + decoration fits in
-        ``availableGeometry``. Defaults to 40 px decoration, the
-        heuristic used pre-show when real decoration isn't known.
-        """
-        screen = self._target_screen()
-        if screen is None:
-            return w, h
-        avail = screen.availableGeometry()
-        return (
-            min(w, max(640, avail.width() - deco_w)),
-            min(h, max(480, avail.height() - deco_h)),
-        )
-
-    def _ensure_visible_on_screen(self) -> None:
-        """Run after first show. Leaves the window alone when it's a
-        reasonable size and intersects any screen; only recenters when
-        truly off-screen. ``raise_`` / ``activateWindow`` fire only on
-        the recovery path (on the happy path they cause a visible focus
-        blink on some Linux WMs).
-        """
-        app = QApplication.instance()
-        assert isinstance(app, QApplication)
-        screen = self._target_screen()
-        if screen is None:
-            return
-        frame = self.frameGeometry()
-        sane_size = frame.width() >= 300 and frame.height() >= 200
-        if sane_size and any(
-            s.geometry().intersects(frame) for s in app.screens()
-        ):
-            return
-        avail = screen.availableGeometry()
-        frame.moveCenter(avail.center())
-        self.move(frame.topLeft())
-        self.raise_()
-        self.activateWindow()
-
     def showEvent(self, event) -> None:
         super().showEvent(event)
         if not self._did_first_show:
             self._did_first_show = True
-            QTimer.singleShot(0, self._ensure_visible_on_screen)
+            QTimer.singleShot(0, self._geom.ensure_visible_on_screen)
 
     def moveEvent(self, event) -> None:
-        """Update the resize anchor only on user-initiated moves.
-
-        Programmatic geometry changes guard with ``_programmatic_geom``
-        so the anchor isn't drifted by the compositor's response.
-        """
+        """Forward to the geometry controller so it can update its
+        anchor (only on user-initiated moves; programmatic geometry
+        changes are guarded inside the controller)."""
         super().moveEvent(event)
-        if not self._programmatic_geom:
-            self._anchor_pos = self.pos()
+        self._geom.on_user_move(self.pos())
 
     def _read_setting(self, key: str, default=None):
         """Defensive QSettings read. Thin wrapper around the
@@ -579,14 +520,14 @@ class MainWindow(QMainWindow):
         pos = safe_read_setting(
             self._settings, "window_pos", None, expected_type=QPoint
         )
-        self._has_saved_size = size is not None
-        screen = self._target_screen()
+        self._geom.has_saved_size = size is not None
+        screen = self._geom.target_screen()
         if size is not None:
             self.resize(
-                *self._clamp_size_to_screen(size.width(), size.height())
+                *self._geom.clamp_size_to_screen(size.width(), size.height())
             )
         else:
-            self.resize(*self._clamp_size_to_screen(1200, 900))
+            self.resize(*self._geom.clamp_size_to_screen(1200, 900))
         if pos is not None:
             self.move(pos)
         elif screen is not None:
@@ -594,14 +535,14 @@ class MainWindow(QMainWindow):
             frame.moveCenter(screen.availableGeometry().center())
             self.move(frame.topLeft())
         # Restore splitter state BEFORE loading an inventory, so the
-        # post-load ``_fit_to_content`` pass can see the flag and skip
-        # the content-derived sizing. Restore order: horizontal first
-        # (panel ratio), then vertical (top vs analysis). Both flags
-        # default to False; ``restoreState`` returns False if the
-        # stored blob is empty or incompatible with the current
-        # splitter children, in which case we fall back to first-launch
-        # sizing.
-        self._has_saved_splitter = self._restore_splitter_state()
+        # post-load fit_to_content pass can see the flag and skip
+        # the content-derived sizing. Restore order: horizontal
+        # first (panel ratio), then vertical (top vs analysis).
+        # Both flags default to False; restoreState returns False
+        # if the stored blob is empty or incompatible with the
+        # current splitter children, in which case we fall back to
+        # first-launch sizing.
+        self._geom.has_saved_splitter = self._geom.restore_splitter_state()
         path = startup_path or safe_read_setting(
             self._settings, "last_inventory", None, expected_type=str
         )
@@ -651,96 +592,6 @@ class MainWindow(QMainWindow):
         # last_inventory, theme).
         self._settings.sync()
         super().closeEvent(event)
-
-    def _get_inventories_dir(self) -> str:
-        """Absolute path to the bundled ``inventories/`` directory.
-        Resolves three levels up from this file (``app/src/phonology_features/gui/``).
-        """
-        return os.path.normpath(
-            os.path.join(
-                os.path.dirname(__file__), "..", "..", "..", "inventories"
-            )
-        )
-
-    @staticmethod
-    def _sweep_stale_tmp_files(directory: str) -> None:
-        """Remove ``.tmp_inv_*.json`` files older than 1 hour from
-        ``directory``. These are atomic-write side files that were
-        orphaned because a previous save was killed between
-        ``mkstemp`` and ``os.replace``. They're hidden from the
-        dropdown by the filter below, but without sweeping they
-        accumulate forever across crashes. The 1-hour age threshold
-        is well past any legitimate in-flight save (atomic writes
-        complete in milliseconds), so the sweep never touches an
-        active operation.
-
-        Failures are swallowed silently: the dropdown population
-        must succeed even when the inventories directory is
-        read-only or partially permissioned.
-        """
-        import time as _time
-
-        cutoff = _time.time() - 3600
-        try:
-            entries = os.listdir(directory)
-        except OSError:
-            return
-        for fname in entries:
-            if not (fname.startswith(".tmp_inv_") and fname.endswith(".json")):
-                continue
-            path = os.path.join(directory, fname)
-            try:
-                if os.path.getmtime(path) < cutoff:
-                    os.remove(path)
-            except OSError:
-                # Race with another save, permission denied, file
-                # vanished -- all benign for an opportunistic sweep.
-                continue
-
-    def _populate_inventory_dropdown(self) -> None:
-        """Scan ``inventories/`` and fill the dropdown. Preserves the
-        current selection if the previously-loaded path still exists
-        after the rescan (matters when the Builder saves a new file
-        and the directory watcher triggers a refresh).
-        """
-        previous_path = self.inventory_combo.currentData()
-        self.inventory_combo.blockSignals(True)
-        try:
-            self.inventory_combo.clear()
-            self.inventory_combo.addItem(
-                "Select inventory\u2026", userData=None
-            )
-            # Disable the placeholder row so it can't be picked.
-            model = self.inventory_combo.model()
-            placeholder = (
-                model.item(0)
-                if isinstance(model, QStandardItemModel)
-                else None
-            )
-            if placeholder is not None:
-                placeholder.setEnabled(False)
-            inventories_dir = self._get_inventories_dir()
-            if os.path.isdir(inventories_dir):
-                self._sweep_stale_tmp_files(inventories_dir)
-                for fname in sorted(os.listdir(inventories_dir)):
-                    # Skip hidden files and the .tmp_inv_*.json side
-                    # files atomic writes create momentarily between
-                    # mkstemp and os.replace; the directory watcher
-                    # can fire on the tmp create and we don't want it
-                    # to show up in the dropdown for that ~ms window.
-                    if fname.startswith(".") or not fname.endswith(".json"):
-                        continue
-                    path = os.path.join(inventories_dir, fname)
-                    pretty = fname[:-5].replace("_", " ").title()
-                    self.inventory_combo.addItem(pretty, userData=path)
-            idx = (
-                self.inventory_combo.findData(previous_path)
-                if previous_path
-                else 0
-            )
-            self.inventory_combo.setCurrentIndex(max(idx, 0))
-        finally:
-            self.inventory_combo.blockSignals(False)
 
     def _on_inventory_selected(self, index: int):
         """Load the inventory chosen from the dropdown."""
@@ -1070,7 +921,7 @@ class MainWindow(QMainWindow):
                 _log.info("inventory advisory: %s: %s", fname, note)
         else:
             self.status.showMessage(base_msg)
-        self._register_loaded_path(path)
+        self._inv_dir.register_loaded_path(path)
         self._populate_after_load()
 
     @staticmethod
@@ -1084,60 +935,11 @@ class MainWindow(QMainWindow):
         parts.extend(f"<p>{html.escape(issue)}</p>" for issue in issues)
         return "".join(parts)
 
-    def _register_loaded_path(self, path: str) -> None:
-        """Wire watcher, dropdown, and settings for a newly-loaded path."""
-        if self._current_path and self._current_path != path:
-            self._watcher.removePath(self._current_path)
-            old_dir = os.path.dirname(os.path.abspath(self._current_path))
-            new_dir = os.path.dirname(os.path.abspath(path))
-            if old_dir != new_dir:
-                self._watcher.removePath(old_dir)
-        self._current_path = path
-        if path not in self._watcher.files():
-            self._watcher.addPath(path)
-        parent_dir = os.path.dirname(os.path.abspath(path))
-        if parent_dir not in self._watcher.directories():
-            self._watcher.addPath(parent_dir)
-        idx = self.inventory_combo.findData(path)
-        if idx >= 0:
-            self.inventory_combo.setCurrentIndex(idx)
-        self._settings.setValue("last_inventory", path)
-        # Push to MRU front for delete-fallback. Dedup so a repeated
-        # load doesn't push the same path twice. Cap so the list
-        # doesn't grow unbounded over a long session.
-        if path in self._recent_paths:
-            self._recent_paths.remove(path)
-        self._recent_paths.insert(0, path)
-        del self._recent_paths[10:]
-
-    def _pick_fallback_after_delete(self, deleted_path: str) -> str | None:
-        """Choose what to load when ``deleted_path`` has been removed
-        from disk while it was the current inventory. Priority:
-
-        1. Most recent previously-opened inventory that still exists
-           (skipping the deleted one itself).
-        2. First file in the bundled inventories directory (sorted).
-        3. None if nothing's available -- caller falls back to the
-           "no inventory loaded" placeholder.
-        """
-        for path in self._recent_paths:
-            if path == deleted_path:
-                continue
-            if os.path.isfile(path):
-                return path
-        inv_dir = self._get_inventories_dir()
-        if os.path.isdir(inv_dir):
-            for fname in sorted(os.listdir(inv_dir)):
-                if fname.startswith(".") or not fname.endswith(".json"):
-                    continue
-                return os.path.join(inv_dir, fname)
-        return None
-
     def _populate_after_load(self) -> None:
         """Rebuild segment + feature widgets for the freshly-loaded engine.
-        Startup runs ``_rebalance_vsplit`` synchronously so the first
-        paint is already at the right size; runtime swaps defer one
-        event-loop tick so pending paints drain before we resize.
+        Startup runs ``_geom.fit_to_content`` synchronously so the
+        first paint is already at the right size; runtime swaps defer
+        one event-loop tick so pending paints drain before we resize.
         """
         self._saved_seg_state = []
         self._saved_feat_state = {}
@@ -1147,80 +949,9 @@ class MainWindow(QMainWindow):
             self._apply_mode_to_new_widgets()
             self.analysis.clear()
         if self.isVisible():
-            QTimer.singleShot(0, self._rebalance_vsplit)
+            QTimer.singleShot(0, self._geom.fit_to_content)
         else:
-            self._rebalance_vsplit()
-
-    # ------------------------------------------------------------------
-    # File-system watcher: auto-reload on disk change
-    # ------------------------------------------------------------------
-    def _on_file_changed(self, path: str):
-        """Called by QFileSystemWatcher when the watched file changes."""
-        # Some editors remove and recreate the file; re-add if needed.
-        QTimer.singleShot(
-            200,
-            lambda: (
-                self._watcher.addPath(path)
-                if path not in self._watcher.files()
-                else None
-            ),
-        )
-        self._reload_timer.start()
-
-    def _on_directory_changed(self, directory: str):
-        """Watched directory changed (file created / renamed / deleted).
-        Refresh the dropdown if the inventories dir changed; re-arm the
-        file watcher if the current file reappeared after a
-        delete-then-write editor cycle. If the currently-loaded file
-        was deleted, fall back to the most-recent previously-opened
-        inventory (or the first one in the directory) so the viewer
-        doesn't sit on a dangling reference.
-        """
-        if os.path.normpath(directory) == self._get_inventories_dir():
-            self._populate_inventory_dropdown()
-        if not self._current_path:
-            return
-        if not os.path.isfile(self._current_path):
-            # Current inventory was deleted under us (most often via
-            # Builder -> Delete). Pick a fallback so the viewer
-            # doesn't continue showing stale data with a missing-file
-            # path. _pick_fallback_after_delete prefers an MRU
-            # neighbour; if none survives, it picks the first file in
-            # the inventories dir; if none of those either, returns
-            # None and we clear current_path.
-            deleted = self._current_path
-            fname = os.path.basename(deleted)
-            _log.info(
-                "current inventory deleted on disk: %s", fname
-            )
-            fallback = self._pick_fallback_after_delete(deleted)
-            self._current_path = None
-            self._settings.remove("last_inventory")
-            if fallback is not None:
-                _log.info(
-                    "falling back to: %s", os.path.basename(fallback)
-                )
-                self._load_path(fallback)
-            else:
-                # Nothing to fall back to. Reset the dropdown to the
-                # placeholder.
-                self.inventory_combo.setCurrentIndex(0)
-                self.status.showMessage(
-                    f"Deleted “{fname}”; no other "
-                    f"inventories available."
-                )
-            return
-        if self._current_path not in self._watcher.files():
-            self._watcher.addPath(self._current_path)
-            self._reload_timer.start()
-
-    def _do_auto_reload(self) -> None:
-        """Reload the current inventory after the watcher debounce fires."""
-        if self._current_path and os.path.isfile(self._current_path):
-            fname = os.path.basename(self._current_path)
-            _log.info("auto-reload (watcher fired): %s", fname)
-            self._load_path(self._current_path)
-            self.status.showMessage(f"Auto-reloaded \u201c{fname}\u201d")
+            self._geom.fit_to_content()
 
     def _populate_segments(self):
         """Populate the seg grid + vowel chart from the active engine.
@@ -1517,208 +1248,6 @@ class MainWindow(QMainWindow):
         if first is not None and hasattr(first, "text"):
             return first.text()
         return ""
-
-    def _fit_to_content(self) -> None:
-        """Measure content and size the splitters; on first launch
-        only, also size the top-level window. Called after each
-        inventory load.
-
-        Window-geometry policy: once ``_has_saved_size`` is True --
-        either because settings had a saved size at startup, or
-        because the first-launch auto-fit ran and claimed one --
-        inventory changes MUST NOT resize or move the window. The
-        user (or their last session's saved state) owns the shell;
-        inventory swaps only repaint the scrollable interior. The
-        previous behaviour was to chase every inventory's content
-        ``sizeHint`` with ``self.resize()``, which produced visible
-        layout shift on every load and clobbered the user's manual
-        window sizing.
-        """
-        QApplication.processEvents()
-        # Seg panel sticks to its natural content width; extra horizontal
-        # room belongs to the feature pane (stretch=1 on the splitter),
-        # not to dead space after the vowels.
-        seg_content = self._seg_scroll.widget()
-        seg_content_w = seg_content.sizeHint().width() if seg_content else 400
-        seg_chrome = 28 + 6  # panel margins (14 * 2) + scrollbar clearance
-        seg_need_w = seg_content_w + seg_chrome
-        feat_content = self._feat_scroll.widget()
-        feat_content_w = (
-            feat_content.sizeHint().width() if feat_content else 380
-        )
-        feat_chrome = 28 + 6
-        feat_padding = 40
-        feat_need_w = feat_content_w + feat_chrome + feat_padding
-        feat_content_h = (
-            feat_content.sizeHint().height() if feat_content else 400
-        )
-        feat_v_padding = 20
-        top_need_h = feat_content_h + 80 + feat_v_padding
-        analysis_h = self._min_analysis_h
-        toolbar_h = 50
-        total_need_h = top_need_h + analysis_h + toolbar_h + 30
-        # Paint suspended so the window doesn't flash through
-        # "new size + old splitter ratio" before setSizes lands.
-        screen = self._target_screen()
-        with self._batched_updates():
-            # First-launch only: claim a sensible window size from
-            # the first inventory's content. Subsequent loads skip
-            # this and rely on the splitter to absorb width changes.
-            if not self._has_saved_size:
-                self._fit_window_to_size(
-                    screen, seg_need_w + feat_need_w + 1, total_need_h
-                )
-            # Same rule for the panel boundary: once the user has a
-            # restored or manually-dragged splitter ratio, leave it
-            # alone on inventory swap. Only the first launch (no saved
-            # state) gets a content-derived ratio.
-            if not self._has_saved_splitter:
-                self._apply_splitter_sizes(seg_need_w, feat_need_w, top_need_h)
-
-    def _fit_window_to_size(self, screen, need_w: int, need_h: int) -> None:
-        """Resize the window to ``(need_w, need_h)`` and anchor it in place.
-
-        Anchors to the user's last position; only shifts when the title
-        bar would otherwise be off-screen. First load centers instead.
-        """
-        if screen is None:
-            return
-        avail = screen.availableGeometry()
-        cur_w = self.width()
-        cur_h = self.height()
-        if self._anchor_pos is None:
-            self._anchor_pos = self.pos()
-        anchor = self._anchor_pos
-        deco_w, deco_h, left_pad, top_pad = self._decoration_padding(anchor)
-        new_w, new_h = self._clamp_size_to_screen(
-            need_w, need_h, deco_w, deco_h
-        )
-        self._programmatic_geom = True
-        try:
-            if not self._has_saved_size:
-                self.resize(new_w, new_h)
-                frame = self.frameGeometry()
-                frame.moveCenter(avail.center())
-                self.move(frame.topLeft())
-                self._anchor_pos = self.pos()
-                self._has_saved_size = True
-                return
-            if new_w == cur_w and new_h == cur_h:
-                return
-            target_x = anchor.x()
-            target_y = anchor.y()
-            if target_x - left_pad < avail.x():
-                target_x = avail.x() + left_pad
-            if target_y - top_pad < avail.y():
-                target_y = avail.y() + top_pad
-            # Atomic setGeometry: one xdg_toplevel configure carries
-            # both size and position so the compositor places once,
-            # not twice (resize then move-back drifted on Wayland).
-            self.setGeometry(target_x, target_y, new_w, new_h)
-            if target_x != anchor.x() or target_y != anchor.y():
-                # Off-screen recovery promoted to the new anchor.
-                self._anchor_pos = QPoint(target_x, target_y)
-        finally:
-            self._programmatic_geom = False
-
-    def _decoration_padding(self, old_pos) -> tuple[int, int, int, int]:
-        """Return ``(deco_w, deco_h, left_pad, top_pad)`` for the current frame.
-
-        Trusts the WM-reported decoration when nonzero; falls back to
-        ``_MIN_DECO_*`` only when the WM reports zero (Wayland CSD,
-        pre-show callers). Inflating real values past their true size
-        used to shift the anchor a few pixels per resize.
-        """
-        if not self.isVisible():
-            return _MIN_DECO_W, _MIN_DECO_H, 0, 0
-        old_frame = self.frameGeometry()
-        deco_w_reported = max(0, old_frame.width() - self.width())
-        deco_h_reported = max(0, old_frame.height() - self.height())
-        deco_w = deco_w_reported if deco_w_reported else _MIN_DECO_W
-        deco_h = deco_h_reported if deco_h_reported else _MIN_DECO_H
-        left_pad = max(0, old_pos.x() - old_frame.x())
-        top_pad = max(0, old_pos.y() - old_frame.y())
-        return deco_w, deco_h, left_pad, top_pad
-
-    def _mark_splitter_owned(self, *_args) -> None:
-        """Promoted to user-owned the first time a splitter handle
-        moves under user input. Subsequent inventory loads then
-        leave both splitters alone."""
-        self._has_saved_splitter = True
-
-    def _restore_splitter_state(self) -> bool:
-        """Apply saved horizontal+vertical splitter state. Returns
-        True if at least one splitter was successfully restored, so
-        the caller can suppress content-based sizing.
-        """
-        # QByteArray is what ``saveState`` produces. A non-QByteArray
-        # value (hand-edited INI, previous schema) reaching
-        # ``restoreState`` can crash or silently fail; the type guard
-        # falls back cleanly to the unrestored case.
-        h_state = safe_read_setting(
-            self._settings,
-            "hsplit_state",
-            None,
-            expected_type=QByteArray,
-        )
-        v_state = safe_read_setting(
-            self._settings,
-            "vsplit_state",
-            None,
-            expected_type=QByteArray,
-        )
-        restored = False
-        if h_state is not None and self._hsplit.restoreState(h_state):
-            restored = True
-        if v_state is not None and self._vsplit.restoreState(v_state):
-            restored = True
-        return restored
-
-    def _apply_splitter_sizes(
-        self, seg_need_w: int, feat_need_w: int, top_need_h: int
-    ) -> None:
-        """Size the seg pane to its content; let the feature pane absorb the rest.
-
-        Rebalances the vertical splitter so the analysis pane keeps
-        its minimum height.
-
-        Called from ``_fit_to_content`` which may run BEFORE the
-        window is laid out (sync path when an inventory is autoloaded
-        from settings during ``__init__``). In that case
-        ``_vsplit.height()`` is 0 and we can't compute a sensible top
-        height -- the horizontal axis still applies, but
-        ``_mark_splitter_owned`` flips ``_has_saved_splitter`` and
-        blocks any future re-attempt. Schedule a one-shot retry for
-        after the post-show layout pass so the vertical splitter
-        still gets sized once before the user sees the analysis pane
-        at the constructor default.
-        """
-        available = self._hsplit.width() or (seg_need_w + feat_need_w)
-        feat_w = max(feat_need_w, available - seg_need_w)
-        self._hsplit.setSizes([seg_need_w, feat_w])
-        total = self._vsplit.height()
-        if total > 0:
-            top_h = min(top_need_h, total - self._min_analysis_h)
-            top_h = max(top_h, 200)
-            self._vsplit.setSizes([top_h, total - top_h])
-            return
-        QTimer.singleShot(0, lambda: self._fit_vsplit_after_layout(top_need_h))
-
-    def _fit_vsplit_after_layout(self, top_need_h: int) -> None:
-        """Vertical-only fallback for the case in ``_apply_splitter_sizes``
-        where the window hadn't been laid out yet. Runs after one
-        event-loop tick (post-show); if height is still 0 we accept the
-        constructor default rather than recurse."""
-        total = self._vsplit.height()
-        if total <= 0:
-            return
-        top_h = min(top_need_h, total - self._min_analysis_h)
-        top_h = max(top_h, 200)
-        self._vsplit.setSizes([top_h, total - top_h])
-
-    def _rebalance_vsplit(self) -> None:
-        """Re-run the fit pass. Wired to the post-load QTimer."""
-        self._fit_to_content()
 
     def _apply_mode_to_new_widgets(self) -> None:
         """Set interactivity on freshly-populated rows + headers for the
