@@ -233,6 +233,16 @@ class FeatureEngine:
 
         With ``underspec_compatible``, a segment's '0' is treated as
         compatible with any spec value.
+
+        Note on matching semantics. The default (``False``) is STRICT:
+        '0' is its own value and does not match '+' or '-'. The GUI's
+        feat-to-seg query mode uses this default, so a query like
+        ``{Syllabic: '-', Strident: '+'}`` returns only segments that
+        are EXPLICITLY ``-syllabic`` AND EXPLICITLY ``+strident``.
+        Underspec-compatible is used internally by
+        ``find_all_minimal_bundles`` and the per-segment matching it
+        derives from; see that method for the rationale and the
+        documented gotcha.
         """
         for feature, value in feature_spec.items():
             self._validate_feature(feature)
@@ -259,6 +269,43 @@ class FeatureEngine:
         ALL bundles of the smallest size, not just one greedy solution.
         Returns ``(EMPTY_BUNDLE,)`` for the universal class, ``()``
         if S is not a natural class.
+
+        GOTCHA -- "I queried this bundle and it returned my exact
+        selection, why isn't it listed as a minimal spec?"
+
+        Reason: the minimal-spec search uses UNDERSPEC-COMPATIBLE
+        matching (a segment's '0' counts as compatible with any spec
+        value), while the GUI feat-to-seg query mode uses STRICT
+        matching ('0' does not match '+'/'-'). Concrete example,
+        English inventory:
+
+            Selection: /t͡ʃ d͡ʒ s z ʃ ʒ/
+            Engine minimal spec returned: {+CORONAL, +Strident}
+            User tries: {-Syllabic, +Strident}
+
+        Under strict matching the user's bundle returns exactly the 6
+        stridents (other consonants like /b/ are ``0Strident``, so
+        strict equality excludes them). Under underspec-compatible
+        matching the same bundle ALSO matches /b p k m h j w/ etc.
+        (their ``0Strident`` matches ``+Strident`` via the wildcard
+        rule), so it describes 16 segments, not 6 -- and is therefore
+        not a characterization of the 6.
+
+        Why the engine chose underspec semantics: a minimal spec under
+        wildcard semantics is robust against the inventory's
+        underspecified slots being filled in later. If /b/ ever got
+        annotated ``+Strident``, ``-Syllabic +Strident`` would
+        suddenly include it; ``+CORONAL +Strident`` still wouldn't,
+        because /b/ is EXPLICITLY ``-CORONAL``. The minimal spec is
+        the bundle that's safe under any extension of the inventory's
+        currently-unspecified values.
+
+        If the user's expectation is "the smallest bundle that
+        matches MY selected segments under strict equality," that is
+        a different question from "the smallest bundle that proves
+        these segments form a natural class." This engine answers the
+        latter; the strict-query view is available separately via the
+        GUI's feat-to-seg mode.
 
         Return shape is ``tuple[Mapping[str, str], ...]`` -- a tuple
         of read-only views. The same object is returned across
