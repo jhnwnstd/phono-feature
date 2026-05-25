@@ -713,9 +713,9 @@ def test_parse_returns_immutable_inventory() -> None:
     )
     assert isinstance(inv.features, tuple)
     with pytest.raises(TypeError):
-        inv.segments["p"] = {}
+        inv.segments["p"] = {}  # type: ignore[index,unused-ignore]
     with pytest.raises(TypeError):
-        inv.segments["p"]["Voice"] = "+"
+        inv.segments["p"]["Voice"] = "+"  # type: ignore[index,unused-ignore]
 
 
 def test_parse_missing_feature_in_bundle_defaults_to_zero() -> None:
@@ -862,7 +862,9 @@ def test_engine_requires_inventory_not_raw_dict() -> None:
     could be more lenient than the validator. New engine refuses raw
     input."""
     with pytest.raises(TypeError):
-        FeatureEngine({"features": [], "segments": {}})
+        FeatureEngine(
+            {"features": [], "segments": {}}  # type: ignore[arg-type,unused-ignore]
+        )
 
 
 def test_engine_caches_cannot_desync_from_mutation() -> None:
@@ -895,7 +897,7 @@ def test_engine_has_no_empty_state() -> None:
     moment where ``eng.features`` is empty because no inventory was
     loaded yet. Constructing without an inventory is an error."""
     with pytest.raises(TypeError):
-        FeatureEngine()
+        FeatureEngine()  # type: ignore[call-arg,unused-ignore]
 
 
 def test_engine_caches_bundle_search_results() -> None:
@@ -944,7 +946,12 @@ def test_bundle_cache_results_are_immutable() -> None:
     # Inner bundles are read-only mappings.
     if bundles_a:
         with pytest.raises(TypeError):
-            bundles_a[0]["bogus"] = "+"
+            # Two ignore codes because mypy's narrowing differs by
+            # cwd: from app/ this looks valid (no [index] needed),
+            # from the repo root the Mapping[str, str] view fires
+            # the assignment error. ``unused-ignore`` keeps the
+            # warn_unused_ignores config quiet under either path.
+            bundles_a[0]["bogus"] = "+"  # type: ignore[index,unused-ignore]
     # Cache hit returns the same object so consumers don't pay
     # rewrap costs on repeated queries.
     bundles_b = eng.find_all_minimal_bundles(segs)
@@ -1292,9 +1299,15 @@ def test_analysis_render_single_segment_escapes_symbol() -> None:
         def find_segments(self, *args, **kwargs):
             return []
 
-    # The renderer treats ``engine`` as duck-typed for testability;
-    # the cast keeps mypy happy without forcing a real FeatureEngine.
-    out = render_single_segment(_FakeEngine(), "<x>", {"Voice": "+"})
+    # The renderer treats ``engine`` as duck-typed for testability:
+    # it only ever reads ``segments``. Compound ignore: from app/
+    # mypy sees no mismatch (so unused-ignore would fire); from the
+    # repo root the path resolution surfaces the type error.
+    out = render_single_segment(
+        _FakeEngine(),  # type: ignore[arg-type,unused-ignore]
+        "<x>",
+        {"Voice": "+"},
+    )
     assert "/<x>/" not in out
     assert "/&lt;x&gt;/" in out
 

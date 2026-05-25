@@ -76,6 +76,13 @@ ignore = [
 python_version = "3.11"
 strict_optional = true
 warn_redundant_casts = true
+# Skip the setuptools build artifact directory. ``python -m build``
+# (run by the web app's build step and occasionally locally) lays
+# down ``build/lib/phonology_features/`` which is a verbatim copy of
+# ``src/phonology_features/``. With both on the mypy search path the
+# duplicate-module error blocks the rest of the type check. The
+# directory is gitignored; nothing in CI publishes it.
+exclude = "^(app/)?build/"
 # Surface ``# type: ignore`` comments that are no longer needed (Qt
 # stubs or our own annotations have caught up). Without this dead
 # ignores accumulate and silently hide real errors that move under
