@@ -6,9 +6,45 @@
 // work both under `python -m http.server` locally and under GitHub
 // Pages with a project subpath (the <base> tag handles the prefix).
 
-const $ = (id) => document.getElementById(id);
-const setStatus = (msg) => { $("statusbar").textContent = msg; };
-const setLoadingStatus = (msg) => { $("loading-status").textContent = msg; };
+// Required DOM nodes. Validated at boot via initNodes() so a
+// missing ID fails fast at startup instead of as a null deref
+// inside a click handler. The map's keys are the camelCase names
+// used in JS; values are the DOM ids in index.html. Adding a new
+// id means adding it here.
+const NODE_IDS = Object.freeze({
+    statusbar: "statusbar",
+    loadingStatus: "loading-status",
+    loadingOverlay: "loading-overlay",
+    inventoryPicker: "inventory-picker",
+    uploadBtn: "upload-btn",
+    uploadInput: "upload-input",
+    downloadBtn: "download-btn",
+    segPanel: "seg-panel",
+    featPanel: "feat-panel",
+    segGrid: "seg-grid",
+    featList: "feat-list",
+    segClearBtn: "seg-clear-btn",
+    featClearBtn: "feat-clear-btn",
+    analysisPane: "analysis-pane",
+    analysisContent: "analysis-content",
+    expandBtn: "expand-btn",
+    themeBtn: "theme-btn",
+});
+const nodes = Object.create(null);
+function initNodes() {
+    const missing = [];
+    for (const [key, id] of Object.entries(NODE_IDS)) {
+        const el = document.getElementById(id);
+        if (el === null) missing.push(id);
+        else nodes[key] = el;
+    }
+    if (missing.length) {
+        throw new Error(`required DOM nodes missing: ${missing.join(", ")}`);
+    }
+}
+
+const setStatus = (msg) => { nodes.statusbar.textContent = msg; };
+const setLoadingStatus = (msg) => { nodes.loadingStatus.textContent = msg; };
 
 // ---------------------------------------------------------------------
 // Boot timing instrumentation. Each phase brackets itself with two
@@ -33,25 +69,44 @@ function printBootMeasures() {
 }
 
 // ---------------------------------------------------------------------
-// fetch wrappers that throw a useful Error on non-2xx instead of
-// returning an HTML 404 page that .json() then parses as a mystery
-// SyntaxError. Use everywhere we hit network.
+// fetch wrappers. Two responsibilities:
+//
+//   1. Throw a useful Error on non-2xx instead of returning an
+//      HTML 404 page that .json() then parses as a mystery
+//      SyntaxError.
+//   2. Honor a timeout by actually CANCELLING the in-flight
+//      request via AbortController, not just rejecting the wait
+//      promise. Without abort, a stalled CDN keeps the socket open
+//      until the browser eventually drops it; we waste connection
+//      slots and the rejection only tells US to give up, not the
+//      network stack.
 // ---------------------------------------------------------------------
-async function fetchOk(url) {
-    const r = await fetch(url);
-    if (!r.ok) {
-        throw new Error(`fetch ${url}: ${r.status} ${r.statusText}`);
+async function fetchOk(url, { timeoutMs = LOCAL_FETCH_TIMEOUT_MS } = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const r = await fetch(url, { signal: controller.signal });
+        if (!r.ok) {
+            throw new Error(`fetch ${url}: ${r.status} ${r.statusText}`);
+        }
+        return r;
+    } catch (e) {
+        if (e.name === "AbortError") {
+            throw new Error(`fetch ${url}: timed out after ${timeoutMs} ms`);
+        }
+        throw e;
+    } finally {
+        clearTimeout(timer);
     }
-    return r;
 }
-async function fetchJson(url) { return (await fetchOk(url)).json(); }
-async function fetchText(url) { return (await fetchOk(url)).text(); }
+async function fetchJson(url, opts) { return (await fetchOk(url, opts)).json(); }
+async function fetchText(url, opts) { return (await fetchOk(url, opts)).text(); }
 
 // ---------------------------------------------------------------------
 // withTimeout: rejects if ``promise`` doesn't settle within ``ms``.
-// Use on anything that could stall indefinitely (CDN fetches,
-// Pyodide cold start). Without it, a stalled load leaves users on
-// the loading screen forever with no error.
+// Used for non-fetch promises that we can't abort directly
+// (loadPyodide, which owns its own internal network/wasm work).
+// Cancellable network requests use fetchOk's AbortController instead.
 // ---------------------------------------------------------------------
 function withTimeout(promise, ms, label) {
     let timer;
@@ -128,13 +183,19 @@ function callBridge(fnName, ...args) {
         proxies.push(p);
         return p;
     });
-    let result;
     try {
-        result = state.bridge[fnName](...pyArgs);
+        const result = state.bridge[fnName](...pyArgs);
         if (result && typeof result.toJs === "function") {
-            const js = result.toJs({ dict_converter: Object.fromEntries });
-            result.destroy();
-            return js;
+            // Nested finally so result.destroy() still runs if
+            // toJs() throws (e.g. a Python object the converter
+            // can't handle). Previously the destroy sat AFTER the
+            // toJs call and was skipped on exception, leaking the
+            // proxy.
+            try {
+                return result.toJs({ dict_converter: Object.fromEntries });
+            } finally {
+                result.destroy();
+            }
         }
         return result;
     } finally {
@@ -162,16 +223,26 @@ const STATUS_TEXT = Object.freeze({
         "Toggle feature values (+/−) to find matching segments.",
 });
 
+// Feature names come from user-uploaded inventories. An adversarial
+// JSON file could ship a feature named "__proto__" / "constructor"
+// / "toString"; a plain {} would let those reach Object.prototype
+// or look already-set when probed. Null-prototype maps avoid that
+// class of confusion. Use everywhere feat-name keys mutate.
+function emptyFeatureSpec() { return Object.create(null); }
+function cloneFeatureSpec(spec) {
+    return Object.assign(Object.create(null), spec);
+}
+
 // State managed in JS (Python holds the engine + inventory).
 const state = {
     mode: MODE.SEG_TO_FEAT,
     selected_segments: [],         // ordered for analysis consistency
-    selected_features: {},         // {feature: "+" | "-"}
+    selected_features: emptyFeatureSpec(),   // {feature: "+" | "-"}
     // State of each mode at the moment we leave it. Restored on
     // toggle back so flipping modes doesn't wipe your selection.
     // Matches the desktop's _saved_seg_state / _saved_feat_state.
     saved_seg_state: [],
-    saved_feat_state: {},
+    saved_feat_state: emptyFeatureSpec(),
     inventory_name: "",
     segments: [],
     features: [],
@@ -214,11 +285,7 @@ async function bootPyodide() {
 
     setLoadingStatus("Loading inventory list…");
     mark("manifest:start");
-    BUNDLED_INVENTORIES = await withTimeout(
-        fetchJson("inventories.json"),
-        LOCAL_FETCH_TIMEOUT_MS,
-        "inventories manifest fetch",
-    );
+    BUNDLED_INVENTORIES = await fetchJson("inventories.json");
     if (!BUNDLED_INVENTORIES.length) {
         throw new Error(
             "no inventories in inventories.json; check the build script"
@@ -277,7 +344,7 @@ async function bootPyodide() {
     await loadBundledInventory(pickDefaultInventory(BUNDLED_INVENTORIES));
     mark("inventory:end");
 
-    $("loading-overlay").classList.add("hidden");
+    nodes.loadingOverlay.classList.add("hidden");
     setStatus(STATUS_TEXT[state.mode]);
 
     mark("boot:end");
@@ -390,14 +457,14 @@ async function loadInventoryText(text, sourceLabel) {
         state.segments = info.segments;
         state.features = info.features;
         state.selected_segments = [];
-        state.selected_features = {};
+        state.selected_features = emptyFeatureSpec();
         renderSegmentGrid(info.groups, info.vowel_chart);
         renderFeaturePanel(info.feature_groups);
-        $("analysis-content").innerHTML = "";
+        nodes.analysisContent.innerHTML = "";
         setStatus(`Loaded ${info.name} (${info.segments.length} segments, ${info.features.length} features).`);
     } catch (e) {
         const issues = e.message ? [e.message] : ["unknown error"];
-        $("analysis-content").innerHTML =
+        nodes.analysisContent.innerHTML =
             "<p><b>Could not load inventory:</b></p><ul>" +
             issues.map(i => `<li>${escapeHtml(i)}</li>`).join("") +
             "</ul>";
@@ -425,7 +492,7 @@ function renderSegmentGrid(groups, vowelChart) {
     // share vertical space with the chart end at the chart's left
     // edge; groups that fall below the chart take the full panel
     // width. Pure float-wrap, no per-row layout logic needed.
-    const grid = $("seg-grid");
+    const grid = nodes.segGrid;
     grid.innerHTML = "";
     state.seg_buttons.clear();
     if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
@@ -562,7 +629,7 @@ function onSegmentClicked(seg) {
 // DOM column here. Single source of truth for the placement algo.
 // ---------------------------------------------------------------------
 function renderFeaturePanel(featureGroups) {
-    const list = $("feat-list");
+    const list = nodes.featList;
     list.innerHTML = "";
     state.feat_rows.clear();
     const columnCount = 2;
@@ -663,11 +730,14 @@ function activateMode(mode) {
     // we just call it through the bridge.
     if (state.mode === MODE.SEG_TO_FEAT) {
         state.saved_seg_state = state.selected_segments.slice();
+        // Re-home the bridge result on a null prototype: Python
+        // dict_converter gives us a plain {} that could carry a
+        // hostile __proto__ key from a user inventory.
         state.saved_feat_state = state.bridge
-            ? callBridge("project_segments_to_features", state.selected_segments)
-            : {};
+            ? cloneFeatureSpec(callBridge("project_segments_to_features", state.selected_segments))
+            : emptyFeatureSpec();
     } else {
-        state.saved_feat_state = { ...state.selected_features };
+        state.saved_feat_state = cloneFeatureSpec(state.selected_features);
         state.saved_seg_state = state.bridge
             ? callBridge("project_features_to_segments", state.selected_features)
             : [];
@@ -681,7 +751,7 @@ function activateMode(mode) {
     if (isS2F) {
         // Adopt the projected seg selection; clear feat-side.
         state.selected_segments = state.saved_seg_state.slice();
-        state.selected_features = {};
+        state.selected_features = emptyFeatureSpec();
         for (const rec of state.feat_rows.values()) {
             rec.plus.dataset.active = "false";
             rec.minus.dataset.active = "false";
@@ -694,7 +764,7 @@ function activateMode(mode) {
         }
     } else {
         // Adopt the projected feat query; clear seg-side.
-        state.selected_features = { ...state.saved_feat_state };
+        state.selected_features = cloneFeatureSpec(state.saved_feat_state);
         state.selected_segments = [];
         for (const btn of state.seg_buttons.values()) {
             if (btn.dataset.state === "selected") {
@@ -714,7 +784,7 @@ function activateMode(mode) {
     // Re-run analysis with the restored state so the pane reflects
     // the just-activated mode immediately.
     if (state.bridge) scheduleAnalysis();
-    else $("analysis-content").innerHTML = "";
+    else nodes.analysisContent.innerHTML = "";
 }
 
 // ---------------------------------------------------------------------
@@ -754,7 +824,7 @@ function _isStaleToken(token) {
 function runSegToFeat(token) {
     const result = callBridge("analyze_segments", state.selected_segments);
     if (_isStaleToken(token)) return;
-    $("analysis-content").innerHTML = result.analysis_html;
+    nodes.analysisContent.innerHTML = result.analysis_html;
     _updateSegmentButtonStates(result.segment_states);
     // Update feature row display from cached node map: no DOM
     // query, single hash lookup per feature row.
@@ -770,7 +840,7 @@ function runSegToFeat(token) {
 function runFeatToSeg(token) {
     const result = callBridge("analyze_features", state.selected_features);
     if (_isStaleToken(token)) return;
-    $("analysis-content").innerHTML = result.analysis_html;
+    nodes.analysisContent.innerHTML = result.analysis_html;
     _updateSegmentButtonStates(result.segment_states);
 }
 
@@ -900,7 +970,7 @@ function wireClearButtons() {
 
 function clearAll() {
     state.selected_segments = [];
-    state.selected_features = {};
+    state.selected_features = emptyFeatureSpec();
     for (const btn of state.seg_buttons.values()) {
         btn.dataset.state = "default";
         btn.setAttribute("aria-pressed", "false");
@@ -913,7 +983,7 @@ function clearAll() {
         rec.plus.dataset.active = "false";
         rec.minus.dataset.active = "false";
     }
-    $("analysis-content").innerHTML = "";
+    nodes.analysisContent.innerHTML = "";
     setStatus(STATUS_TEXT[state.mode]);
 }
 
@@ -942,18 +1012,18 @@ function wirePanelClickMode() {
 // .seg-btn / .feat-btn and reads dataset attributes for the dispatch.
 // ---------------------------------------------------------------------
 function wireSegmentDelegation() {
-    $("seg-grid").addEventListener("click", (ev) => {
+    nodes.segGrid.addEventListener("click", (ev) => {
         const btn = ev.target.closest(".seg-btn");
-        if (!btn || !$("seg-grid").contains(btn)) return;
+        if (!btn || !nodes.segGrid.contains(btn)) return;
         const seg = btn.dataset.seg;
         if (seg) onSegmentClicked(seg);
     });
 }
 
 function wireFeatureDelegation() {
-    $("feat-list").addEventListener("click", (ev) => {
+    nodes.featList.addEventListener("click", (ev) => {
         const btn = ev.target.closest(".feat-btn");
-        if (!btn || !$("feat-list").contains(btn)) return;
+        if (!btn || !nodes.featList.contains(btn)) return;
         const row = btn.closest(".feat-row");
         const feat = row?.dataset.feat;
         const polarity = btn.dataset.polarity;
