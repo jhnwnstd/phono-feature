@@ -30,6 +30,12 @@ from phonology_features.gui.analysis import (
 from phonology_features.gui.constants import FEATURE_GROUPS
 from phonology_features.gui.layout import distribute_feature_groups
 from phonology_features.gui.palette import set_theme
+from phonology_features.gui.vowel_layout import (
+    COL_LABELS as VOWEL_COL_LABELS,
+    ROW_LABELS as VOWEL_ROW_LABELS,
+    detect_vowel_profile,
+    vowel_grid_pos,
+)
 
 # Single engine instance per loaded inventory. JS never sees the
 # engine directly; all access goes through the functions below.
@@ -65,17 +71,52 @@ def _summarize_engine(engine: FeatureEngine) -> dict:
     inventory load.
     """
     grouped = engine.grouped_segments
-    # Ordered dict of (manner_class -> [segments]) for the grid.
-    groups: list[dict] = [
-        {"name": manner, "segments": list(segs)}
-        for manner, segs in grouped.items()
-    ]
+    # Split the manner-class buckets into two streams: the "Vowels"
+    # group renders as an IPA trapezoid; everything else renders as
+    # the consonant flow-grid the web already had.
+    consonant_groups: list[dict] = []
+    vowel_segs: list[str] = []
+    for manner, segs in grouped.items():
+        if manner.lower() == "vowels":
+            vowel_segs = list(segs)
+        else:
+            consonant_groups.append({"name": manner, "segments": list(segs)})
     return {
         "name": _inventory_name,
         "segments": list(engine.segments),
         "features": list(engine.features),
-        "groups": groups,
+        "groups": consonant_groups,
         "feature_groups": _grouped_features(list(engine.features)),
+        "vowel_chart": _vowel_chart(engine, vowel_segs),
+    }
+
+
+def _vowel_chart(engine: FeatureEngine, vowel_segs: list[str]) -> dict:
+    """Compute the IPA-style vowel trapezoid layout.
+
+    Returns ``{rows, cols, cells}`` where ``cells`` is a list of
+    ``{seg, row, col, confidence, reason}`` per vowel. JS uses this
+    to mount each vowel button into the right cell of a CSS grid.
+
+    Placement runs through ``gui.vowel_layout.vowel_grid_pos`` so
+    the chart matches the desktop's VowelChartWidget exactly.
+    """
+    norm_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
+    profile = detect_vowel_profile(vowel_segs, norm_feats)
+    cells: list[dict] = []
+    for seg in vowel_segs:
+        placement = vowel_grid_pos(norm_feats[seg], profile)
+        cells.append({
+            "seg": seg,
+            "row": placement.row,
+            "col": placement.col,
+            "confidence": placement.confidence.name.lower(),
+            "reason": placement.reason,
+        })
+    return {
+        "rows": list(VOWEL_ROW_LABELS),
+        "cols": list(VOWEL_COL_LABELS),
+        "cells": cells,
     }
 
 

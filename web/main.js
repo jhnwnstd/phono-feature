@@ -255,6 +255,7 @@ async function mountRendererPackage(pyodide) {
         ["gui/palette.py", `${base}/gui/palette.py`],
         ["gui/constants.py", `${base}/gui/constants.py`],
         ["gui/layout.py", `${base}/gui/layout.py`],
+        ["gui/vowel_layout.py", `${base}/gui/vowel_layout.py`],
         ["gui/analysis.py", `${base}/gui/analysis.py`],
     ];
     pyodide.FS.mkdirTree("/home/pyodide/render/phonology_features/gui");
@@ -331,7 +332,7 @@ async function loadInventoryText(text, sourceLabel) {
         state.features = info.features;
         state.selected_segments = [];
         state.selected_features = {};
-        renderSegmentGrid(info.groups);
+        renderSegmentGrid(info.groups, info.vowel_chart);
         renderFeaturePanel(info.feature_groups);
         $("analysis-content").innerHTML = "";
         setStatus(`Loaded ${info.name} (${info.segments.length} segments, ${info.features.length} features).`);
@@ -352,37 +353,115 @@ function escapeHtml(s) {
 }
 
 // ---------------------------------------------------------------------
-// Segment grid
+// Segment grid: consonant groups flow as wrapping rows; vowels render
+// as an IPA-style trapezoid. Placement of each vowel into a chart
+// cell comes from the Python bridge (gui.vowel_layout.vowel_grid_pos)
+// so it matches the desktop's VowelChartWidget cell-for-cell.
 // ---------------------------------------------------------------------
-function renderSegmentGrid(groups) {
+function renderSegmentGrid(groups, vowelChart) {
     const grid = $("seg-grid");
     grid.innerHTML = "";
     for (const group of groups) {
-        const groupEl = document.createElement("div");
-        groupEl.className = "seg-group";
-        const header = document.createElement("div");
-        header.className = "seg-group-header";
-        header.textContent = group.name.toUpperCase();
-        groupEl.appendChild(header);
-        const row = document.createElement("div");
-        row.className = "seg-row";
-        for (const seg of group.segments) {
-            const btn = document.createElement("button");
-            btn.className = "seg-btn";
-            btn.type = "button";
-            btn.dataset.seg = seg;
-            btn.dataset.state = "default";
-            // aria-pressed mirrors data-state for screen readers. Updated
-            // on every state change so AT users hear the toggle.
-            btn.setAttribute("aria-pressed", "false");
-            btn.setAttribute("aria-label", `/${seg}/`);
-            btn.textContent = seg;
-            btn.addEventListener("click", () => onSegmentClicked(seg));
-            row.appendChild(btn);
-        }
-        groupEl.appendChild(row);
-        grid.appendChild(groupEl);
+        grid.appendChild(_buildConsonantGroup(group));
     }
+    if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
+        grid.appendChild(_buildVowelChart(vowelChart));
+    }
+}
+
+function _buildConsonantGroup(group) {
+    const groupEl = document.createElement("div");
+    groupEl.className = "seg-group";
+    const header = document.createElement("div");
+    header.className = "seg-group-header";
+    header.textContent = group.name.toUpperCase();
+    groupEl.appendChild(header);
+    const row = document.createElement("div");
+    row.className = "seg-row";
+    for (const seg of group.segments) {
+        row.appendChild(_buildSegmentButton(seg));
+    }
+    groupEl.appendChild(row);
+    return groupEl;
+}
+
+function _buildSegmentButton(seg, extraAttrs) {
+    const btn = document.createElement("button");
+    btn.className = "seg-btn";
+    btn.type = "button";
+    btn.dataset.seg = seg;
+    btn.dataset.state = "default";
+    btn.setAttribute("aria-pressed", "false");
+    btn.setAttribute("aria-label", `/${seg}/`);
+    btn.textContent = seg;
+    btn.addEventListener("click", () => onSegmentClicked(seg));
+    if (extraAttrs) {
+        for (const [k, v] of Object.entries(extraAttrs)) {
+            if (k.startsWith("data-")) btn.setAttribute(k, v);
+            else if (k === "title") btn.title = v;
+        }
+    }
+    return btn;
+}
+
+// Vowel chart: 6 height rows × 6 backness-rounding columns. The
+// Python side returns row/col integers per vowel; CSS Grid places
+// them. Row labels (Close, Near-close, ...) appear at the left of
+// each row; column labels (Front, Central, Back) span their two
+// child cells (unrounded + rounded) above the grid.
+function _buildVowelChart(chart) {
+    const groupEl = document.createElement("div");
+    groupEl.className = "seg-group vowel-chart-group";
+    const header = document.createElement("div");
+    header.className = "seg-group-header";
+    header.textContent = "VOWELS";
+    groupEl.appendChild(header);
+
+    const chartEl = document.createElement("div");
+    chartEl.className = "vowel-chart";
+    chartEl.setAttribute("role", "grid");
+    chartEl.setAttribute("aria-label", "IPA vowel chart");
+
+    // Top-left corner is empty (sits above the row-label column,
+    // below the column-label row).
+    const corner = document.createElement("div");
+    corner.className = "vowel-chart-corner";
+    chartEl.appendChild(corner);
+
+    // Column headers (Front, Central, Back) each span 2 cells.
+    chart.cols.forEach((label, i) => {
+        const colHeader = document.createElement("div");
+        colHeader.className = "vowel-chart-col-label";
+        colHeader.textContent = label;
+        // Each backness label spans its unrounded + rounded cells.
+        colHeader.style.gridColumn = `${i * 2 + 2} / span 2`;
+        chartEl.appendChild(colHeader);
+    });
+
+    // Row labels (Close, Near-close, ...).
+    chart.rows.forEach((label, r) => {
+        const rowLabel = document.createElement("div");
+        rowLabel.className = "vowel-chart-row-label";
+        rowLabel.textContent = label;
+        rowLabel.style.gridRow = r + 2;
+        rowLabel.style.gridColumn = 1;
+        chartEl.appendChild(rowLabel);
+    });
+
+    // Vowel cells. The IPA cell index 0-5 maps to grid columns 2-7
+    // (column 1 is the row label).
+    for (const cell of chart.cells) {
+        const btn = _buildSegmentButton(cell.seg, {
+            title: `/${cell.seg}/  [${cell.confidence}]  ${cell.reason}`,
+        });
+        btn.classList.add("vowel-chart-cell");
+        btn.style.gridRow = cell.row + 2;
+        btn.style.gridColumn = cell.col + 2;
+        chartEl.appendChild(btn);
+    }
+
+    groupEl.appendChild(chartEl);
+    return groupEl;
 }
 
 function onSegmentClicked(seg) {

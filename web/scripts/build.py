@@ -62,6 +62,7 @@ RELAYED_SOURCES = [
     "constants.py",
     "analysis.py",
     "layout.py",
+    "vowel_layout.py",
 ]
 
 
