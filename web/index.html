@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phonology Segment &amp; Feature Engine</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="loading-overlay" class="loading">
+  <div class="loading-card">
+    <div class="loading-title">Phonology Segment &amp; Feature Engine</div>
+    <div class="loading-status" id="loading-status">Loading the Python runtime…</div>
+    <progress></progress>
+    <div class="loading-hint">First load fetches ~10 MB and is cached for next time.</div>
+  </div>
+</div>
+
+<header class="toolbar">
+  <select id="inventory-picker" aria-label="Inventory"></select>
+  <button id="upload-btn" type="button">Open file…</button>
+  <input id="upload-input" type="file" accept=".json" hidden>
+  <button id="download-btn" type="button">Save as…</button>
+  <div class="toolbar-spacer"></div>
+  <button id="theme-btn" type="button" aria-label="Toggle theme">☾</button>
+</header>
+
+<main class="grid">
+  <section class="panel" id="seg-panel" data-active="true">
+    <header class="panel-header" id="seg-title">SEGMENTS</header>
+    <div class="panel-body" id="seg-grid"></div>
+  </section>
+  <section class="panel" id="feat-panel">
+    <header class="panel-header" id="feat-title">FEATURES</header>
+    <div class="panel-body" id="feat-list"></div>
+  </section>
+</main>
+
+<section class="analysis" id="analysis-pane">
+  <header class="analysis-header">
+    <span class="analysis-title">ANALYSIS</span>
+    <button id="expand-btn" type="button" aria-label="Maximize analysis pane">⤢</button>
+  </header>
+  <div class="analysis-content" id="analysis-content"></div>
+</section>
+
+<footer class="statusbar" id="statusbar">
+  Select an inventory from the dropdown to begin.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
