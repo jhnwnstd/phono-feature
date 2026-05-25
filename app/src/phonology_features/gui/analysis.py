@@ -268,10 +268,10 @@ def render_multi_segment(
         "<table width='100%' cellpadding='0' cellspacing='0'>"
         "<tr>"
         "<td width='50%' style='vertical-align:top; padding-right:18px;'>"
-        f"{selected_html}{nc_html}{spec_html}"
+        f"{selected_html}{nc_html}{spec_html}{common_html}"
         "</td>"
         "<td width='50%' style='vertical-align:top;'>"
-        f"{common_html}{contrast_html}"
+        f"{contrast_html}"
         "</td>"
         "</tr></table>"
     )
