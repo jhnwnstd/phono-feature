@@ -77,6 +77,12 @@ VALID_VALUES: frozenset[str] = frozenset({"+", "-", "0"})
 MAX_NAME_LENGTH: int = 256
 MAX_FEATURES: int = 100
 MAX_SEGMENTS: int = 1000
+# A bundled inventory at MAX_SEGMENTS * MAX_FEATURES with realistic
+# value tokens lands around 200 KB serialized. 50 MB is ~250x the
+# largest legitimate file: easily rejects a paste-the-wrong-file
+# accident or a malicious payload before json.load can OOM the
+# process trying to materialize it.
+MAX_FILE_BYTES: int = 50 * 1024 * 1024
 
 # Soft thresholds. Bundled inventories must stay BELOW these so they
 # don't trigger advisories on every load. General (the largest
@@ -478,6 +484,28 @@ class Inventory:
         one exception type."""
         basename = os.path.basename(path)
         _log.debug("inventory load start: %s", basename)
+        # Cap before opening: refuse comically large files instead of
+        # letting ``json.load`` allocate gigabytes trying to parse
+        # them. ``getsize`` raises ``FileNotFoundError`` if the path
+        # is missing; let the existing handler below catch it so the
+        # user sees the same "file not found" message as before.
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            size = 0  # let the open() below produce the canonical error
+        if size > MAX_FILE_BYTES:
+            _log.warning(
+                "inventory load failed: %s: file too large (%d bytes > %d)",
+                basename,
+                size,
+                MAX_FILE_BYTES,
+            )
+            raise ValidationError(
+                (
+                    f"{path}: file is {size // (1024 * 1024)} MB, "
+                    f"larger than the {MAX_FILE_BYTES // (1024 * 1024)} MB limit",
+                )
+            )
         try:
             # ``utf-8-sig`` transparently consumes a leading UTF-8 BOM
             # (``b"\xef\xbb\xbf"``). Files exported from Windows

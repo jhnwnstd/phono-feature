@@ -382,8 +382,10 @@ def group_segments(
         ]
         if not matches:
             return ""
-        matches.sort(key=lambda x: (-x[1], -x[2]))
-        return matches[0][0]
+        # max with a tuple key picks the highest positive match count,
+        # tie-broken by specificity. O(n) and reads as intent, vs
+        # sorting the whole list to throw away all but the first.
+        return max(matches, key=lambda x: (x[1], x[2]))[0]
 
     def fallback_assignment(seg_feats: dict[str, str]) -> str:
         """Best-fit group by fewest contradictions, then most matches.

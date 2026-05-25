@@ -403,4 +403,30 @@ class InputDialog(QDialog):
             )
             self.feat_edit.setFocus()
             return
+        # Per-entry length cap. Catches the "pasted a wall of prose
+        # into the segments box and didn't notice it has no delimiter
+        # the inferrer recognizes" case: ``_infer_split`` would return
+        # the whole paragraph as one giant "segment", which would then
+        # crawl through json.dump and balloon the saved file. Reject
+        # at the dialog boundary, where we can still surface a
+        # focusable error, instead of letting it land in the parser.
+        for label, edit, entries in (
+            ("segments", self.seg_edit, self.get_segments()),
+            ("features", self.feat_edit, self.get_features()),
+        ):
+            offender = next(
+                (e for e in entries if len(e) > MAX_NAME_LENGTH), None
+            )
+            if offender is not None:
+                QMessageBox.warning(
+                    self,
+                    f"{label.capitalize()} entry too long",
+                    f"One of the {label} is {len(offender)} characters "
+                    f"long, longer than the {MAX_NAME_LENGTH}-character "
+                    f"limit. This usually means the delimiter wasn't "
+                    f"recognized and the whole input was treated as a "
+                    f"single entry. Check the delimiter and try again.",
+                )
+                edit.setFocus()
+                return
         super().accept()

@@ -341,11 +341,15 @@ def _render_contrast_section(
     # No contrastive features. Distinguish "actually identical" from
     # "only differ in unspecified features"; the latter is a common
     # source of confusion ("why do these look the same?").
-    has_underspec_diff = any(
-        len({engine.segments[seg].get(feat, "0") for seg in segs}) > 1
-        and "0" in {engine.segments[seg].get(feat, "0") for seg in segs}
-        for feat in engine.features
-    )
+    def _has_mixed_underspec(feat: str) -> bool:
+        # Hoist the per-segment value set into a local so we don't
+        # build it twice per feature -- once for the size check, once
+        # for the "0" membership test. Hot path: this runs over every
+        # feature on every "no contrastive features" render.
+        vals = {engine.segments[seg].get(feat, "0") for seg in segs}
+        return len(vals) > 1 and "0" in vals
+
+    has_underspec_diff = any(_has_mixed_underspec(f) for f in engine.features)
     reason = (
         "none (only unspecified features differ)"
         if has_underspec_diff
