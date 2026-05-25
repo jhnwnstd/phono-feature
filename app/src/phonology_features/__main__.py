@@ -129,12 +129,13 @@ def _run_gui(argv: list[str]) -> int:
     # the user sees a brief light flash inside any region our QSS
     # hasn't painted yet (typical on Wayland/WSLg). Reading the saved
     # theme here keeps this in sync with whatever MainWindow will pick.
+    from PyQt6.QtCore import QSettings
+
     from phonology_features.gui.constants import SETTINGS_APP, SETTINGS_ORG
     from phonology_features.gui.palette import (
         detect_system_theme,
         set_theme,
     )
-    from PyQt6.QtCore import QSettings
 
     _settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
     # safe_read_setting defends against stale-pickled-enum SystemError

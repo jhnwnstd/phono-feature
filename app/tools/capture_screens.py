@@ -37,8 +37,9 @@ def _isolate_qsettings() -> None:
 
 def main() -> int:
     _isolate_qsettings()
-    from phonology_features.gui.main_window import MainWindow, Mode
     from PyQt6.QtWidgets import QApplication
+
+    from phonology_features.gui.main_window import MainWindow, Mode
 
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)

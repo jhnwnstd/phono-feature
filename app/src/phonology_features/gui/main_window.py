@@ -10,6 +10,37 @@ import os
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import (
+    QEvent,
+    QPoint,
+    QSettings,
+    QSize,
+    Qt,
+    QTimer,
+)
+from PyQt6.QtGui import (
+    QColor,
+    QFont,
+    QKeySequence,
+    QPalette,
+    QShortcut,
+)
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QToolBar,
+    QToolTip,
+    QVBoxLayout,
+    QWidget,
+)
+
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features._logging import get_logger
@@ -59,36 +90,6 @@ from phonology_features.gui.widgets import (
     SegmentButton,
     SegmentGridWidget,
     SegmentState,
-)
-from PyQt6.QtCore import (
-    QEvent,
-    QPoint,
-    QSettings,
-    QSize,
-    Qt,
-    QTimer,
-)
-from PyQt6.QtGui import (
-    QColor,
-    QFont,
-    QKeySequence,
-    QPalette,
-    QShortcut,
-)
-from PyQt6.QtWidgets import (
-    QComboBox,
-    QFileDialog,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QToolBar,
-    QToolTip,
-    QVBoxLayout,
-    QWidget,
 )
 
 if TYPE_CHECKING:

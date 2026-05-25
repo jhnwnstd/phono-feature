@@ -25,15 +25,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from phonology_features._settings import safe_read_setting
 from PyQt6.QtCore import QByteArray, QPoint, QTimer
 from PyQt6.QtGui import QScreen
 from PyQt6.QtWidgets import QApplication
 
+from phonology_features._settings import safe_read_setting
+
 if TYPE_CHECKING:
-    from phonology_features.gui.main_window import MainWindow
     from PyQt6.QtCore import QSettings
     from PyQt6.QtWidgets import QSplitter
+
+    from phonology_features.gui.main_window import MainWindow
 
 
 class _GeometryController:

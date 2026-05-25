@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QPainter, QPalette, QPen
 from PyQt6.QtWidgets import (
@@ -31,6 +30,8 @@ from PyQt6.QtWidgets import (
     QStyledItemDelegate,
     QTableWidget,
 )
+
+from phonology_features.gui.palette import C
 
 
 class _ToggleHeaderView(QHeaderView):

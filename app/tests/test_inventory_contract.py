@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 
 import pytest
+
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.geometry import GeometryAnalyzer
 from phonology_engine.inventory import (
@@ -1855,8 +1856,9 @@ def test_safe_read_setting_rejects_wrong_type_without_removing() -> None:
     with a string) falls back to default but is NOT removed -- the
     user may have set it deliberately and we just don't know how
     to use it yet."""
-    from phonology_features._settings import safe_read_setting
     from PyQt6.QtCore import QSize
+
+    from phonology_features._settings import safe_read_setting
 
     class FakeSettings:
         def __init__(self) -> None:
@@ -1875,8 +1877,9 @@ def test_safe_read_setting_rejects_wrong_type_without_removing() -> None:
 
 
 def test_safe_read_setting_accepts_correct_type() -> None:
-    from phonology_features._settings import safe_read_setting
     from PyQt6.QtCore import QSize
+
+    from phonology_features._settings import safe_read_setting
 
     class FakeSettings:
         def value(self, key: str, default: object) -> object:

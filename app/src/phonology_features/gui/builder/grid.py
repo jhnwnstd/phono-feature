@@ -1,10 +1,11 @@
 """Grid cell creation, styling, and value cycling for the feature table."""
 
-from phonology_features.gui import palette
-from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import QTableWidgetItem
+
+from phonology_features.gui import palette
+from phonology_features.gui.palette import C
 
 # Fonts don't change with the theme so they're safe to cache at import.
 _CELL_FONT_BOLD = QFont("Noto Sans", 10, QFont.Weight.Bold)

@@ -14,8 +14,6 @@ swap).
 
 from __future__ import annotations
 
-from phonology_features.gui.palette import C
-from phonology_features.gui.style_utils import set_css
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import (
@@ -25,6 +23,9 @@ from PyQt6.QtWidgets import (
     QSplitterHandle,
     QStatusBar,
 )
+
+from phonology_features.gui.palette import C
+from phonology_features.gui.style_utils import set_css
 
 
 def _clear_btn_style() -> str:

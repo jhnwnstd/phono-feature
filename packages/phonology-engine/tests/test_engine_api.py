@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.geometry import GeometryAnalyzer
 

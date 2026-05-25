@@ -71,6 +71,18 @@ ignore = [
     "RUF002",  # ambiguous-unicode-character-docstring
     "RUF003",  # ambiguous-unicode-character-comment
 ]
+# Preserve noqa codes that target external tools (flake8 E402 in
+# conftest.py is real: the QT_QPA_PLATFORM env var must be set
+# before any PyQt6 import). Ruff itself doesn't fire those rules
+# but other linters do; treat them as intentional, not stale.
+external = ["E402"]
+
+[tool.ruff.lint.isort]
+# Our two monorepo packages. Without this, ruff's isort plugin
+# treats them as third-party and reorders against PyQt6 imports,
+# which conflicts with what ``isort --profile black`` produces.
+# Listed here so both tools agree on grouping.
+known-first-party = ["phonology_engine", "phonology_features"]
 
 [tool.mypy]
 python_version = "3.11"

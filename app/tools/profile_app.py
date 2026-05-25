@@ -108,8 +108,9 @@ def run_session(only: str | None = None) -> None:
     _redirect_qsettings_to_tempdir()
 
     # PyQt imports stay deferred so QT_QPA_PLATFORM applies first.
-    from phonology_features.gui.main_window import MainWindow, Mode
     from PyQt6.QtWidgets import QApplication
+
+    from phonology_features.gui.main_window import MainWindow, Mode
 
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)

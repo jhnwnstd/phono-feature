@@ -16,28 +16,6 @@ if TYPE_CHECKING:
     # is pure cost (PyQt6.QtGui.QRegion drags in extra Qt symbols).
     from PyQt6.QtGui import QRegion
 
-from phonology_features.gui.builder.dialogs import (
-    InputDialog,
-    ask_question,
-    center_on_parent,
-    show_warning,
-)
-from phonology_features.gui.builder.edits import (
-    _MAX_UNDO_DEPTH,
-    _BulkEdit,
-    _CellPrev,
-)
-from phonology_features.gui.builder.grid import (
-    cycle_value,
-    make_cell,
-    style_cell,
-)
-from phonology_features.gui.builder.table import (
-    _BulkCycleTable,
-    _SelectionFillDelegate,
-    _ToggleHeaderView,
-)
-from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import (
     QFont,
@@ -61,6 +39,29 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from phonology_features.gui.builder.dialogs import (
+    InputDialog,
+    ask_question,
+    center_on_parent,
+    show_warning,
+)
+from phonology_features.gui.builder.edits import (
+    _MAX_UNDO_DEPTH,
+    _BulkEdit,
+    _CellPrev,
+)
+from phonology_features.gui.builder.grid import (
+    cycle_value,
+    make_cell,
+    style_cell,
+)
+from phonology_features.gui.builder.table import (
+    _BulkCycleTable,
+    _SelectionFillDelegate,
+    _ToggleHeaderView,
+)
+from phonology_features.gui.palette import C
 
 _log = get_logger(__name__)
 

@@ -32,8 +32,9 @@ from phonology_features.gui.palette import C
 from phonology_features.gui.widgets import SegmentState
 
 if TYPE_CHECKING:
-    from phonology_features.gui.main_window import MainWindow
     from PyQt6.QtWidgets import QWidget
+
+    from phonology_features.gui.main_window import MainWindow
 
 
 class Mode(StrEnum):

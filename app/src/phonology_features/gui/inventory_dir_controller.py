@@ -26,14 +26,16 @@ import os
 import time
 from typing import TYPE_CHECKING
 
-from phonology_features._logging import get_logger
 from PyQt6.QtCore import QFileSystemWatcher, QTimer
 from PyQt6.QtGui import QStandardItemModel
 
+from phonology_features._logging import get_logger
+
 if TYPE_CHECKING:
-    from phonology_features.gui.main_window import MainWindow
     from PyQt6.QtCore import QSettings
     from PyQt6.QtWidgets import QComboBox
+
+    from phonology_features.gui.main_window import MainWindow
 
 _log = get_logger(__name__)
 

@@ -28,18 +28,20 @@ import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtWidgets import QMessageBox
+
 from phonology_engine.inventory import (
     Inventory,
     ValidationError,
 )
 from phonology_features._logging import get_logger
 from phonology_features.gui.builder.dialogs import ask_question, show_warning
-from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtWidgets import QMessageBox
 
 if TYPE_CHECKING:
-    from phonology_features.gui.builder.window import InventoryBuilder
     from PyQt6.QtWidgets import QStatusBar
+
+    from phonology_features.gui.builder.window import InventoryBuilder
 
 _log = get_logger(__name__)
 
