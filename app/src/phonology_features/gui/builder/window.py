@@ -82,39 +82,14 @@ def _suggest_filename(inv_name: str) -> str:
 class InventoryBuilder(QMainWindow):
     """Grid editor for creating phonological feature inventories."""
 
-    # Emitted from the save worker thread with (path, error_message).
-    # Qt picks QueuedConnection automatically for cross-thread emit,
-    # so the slot runs on the main thread.
-    _save_finished = pyqtSignal(str, str)
-    # Emitted from ``_on_save_finished`` AFTER ``_save_in_flight`` and
-    # ``_dirty`` have settled, on the main thread. ``_wait_for_save``
-    # connects ``loop.quit`` to this so a worker that fired BEFORE the
-    # wait was set up still triggers the quit: the queued
-    # ``_save_finished`` call dispatches inside the nested loop, runs
-    # ``_on_save_finished``, and that emits ``_save_drained`` direct-
-    # connect into our freshly-connected ``loop.quit`` slot. Connecting
-    # ``loop.quit`` to ``_save_finished`` itself would miss this case
-    # -- queued signals capture the slot list at emit time, so a slot
-    # connected after the emit never runs.
-    _save_drained = pyqtSignal()
-
     def __init__(self, parent=None, load_path: str | None = None):
         super().__init__(parent)
         self.setWindowTitle("Inventory Builder")
         self.setMinimumSize(800, 500)
-        self._save_finished.connect(self._on_save_finished)
-        self._save_in_flight: bool = False
-        # True while ``_wait_for_save`` is running a nested QEventLoop
-        # to drain a background save (close, save-as, Save+Close dialog).
-        # User-triggered file actions early-return on this flag so a
-        # paint/mouse event delivered by the nested loop can't re-enter
-        # _save/_save_as/_open_file while we're half-closing.
-        self._draining_save: bool = False
         self._segments: list = []
         self._features: list = []
         self._inv_name: str = "Untitled Inventory"
         self._current_path: str | None = None
-        self._dirty: bool = False
         self._selected_remove_col: int | None = None
         self._selected_remove_row: int | None = None
         # Bounded invalidation: track the previous selection's region so
@@ -141,6 +116,16 @@ class InventoryBuilder(QMainWindow):
         self._undo_stack: list[_BulkEdit] = []
         self._redo_stack: list[_BulkEdit] = []
         self._build_ui()
+        # SaveController owns save_in_flight / dirty / draining_save
+        # state plus the cross-thread save_finished / save_drained
+        # signals. Built after _build_ui because it needs the status
+        # bar that _build_status_bar creates. _to_inventory is passed
+        # as a callback so the controller never has to know about the
+        # grid widgets.
+        from phonology_features.gui.builder.save_controller import (
+            _SaveController,
+        )
+        self._save = _SaveController(self, self._status, self._to_inventory)
         if parent is not None:
             parent_screen = parent.screen()
             if parent_screen is not None:
@@ -1042,6 +1027,59 @@ class InventoryBuilder(QMainWindow):
             features=list(self._features),
             segments=segments,
         )
+
+    # ------------------------------------------------------------------
+    # Save state forwarders. The SaveController owns the actual
+    # state and signals; these properties keep internal callers
+    # (and tests) reading ``self._dirty`` / ``self._save_in_flight``
+    # / ``self._save_finished`` without churn.
+    # ------------------------------------------------------------------
+    @property
+    def _save_in_flight(self) -> bool:
+        return self._save.save_in_flight
+
+    @_save_in_flight.setter
+    def _save_in_flight(self, value: bool) -> None:
+        self._save.save_in_flight = value
+
+    @property
+    def _dirty(self) -> bool:
+        return self._save.dirty
+
+    @_dirty.setter
+    def _dirty(self, value: bool) -> None:
+        self._save.dirty = value
+
+    @property
+    def _draining_save(self) -> bool:
+        return self._save.draining_save
+
+    @_draining_save.setter
+    def _draining_save(self, value: bool) -> None:
+        self._save.draining_save = value
+
+    @property
+    def _save_finished(self):
+        """Signal alias for back-compat. External callers do
+        ``builder._save_finished.connect(...)``."""
+        return self._save.save_finished
+
+    @property
+    def _save_drained(self):
+        return self._save.save_drained
+
+    # ------------------------------------------------------------------
+    # Save method forwarders
+    # ------------------------------------------------------------------
+    def _write_json(self, path: str) -> None:
+        """Delegates to the SaveController. Name kept for tests."""
+        self._save.request_save(path)
+
+    def _wait_for_save(self, timeout_ms: int = 5000) -> bool:
+        return self._save.wait_for_save(timeout_ms)
+
+    def _check_unsaved(self) -> bool:
+        return self._save.check_unsaved()
 
     def _save(self) -> None:
         if self._draining_save:
