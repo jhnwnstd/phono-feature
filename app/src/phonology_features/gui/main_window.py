@@ -8,7 +8,6 @@ from __future__ import annotations
 import html
 import os
 from contextlib import contextmanager
-from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import (
@@ -66,6 +65,7 @@ from phonology_features.gui.geometry_controller import _GeometryController
 from phonology_features.gui.inventory_dir_controller import (
     _InventoryDirController,
 )
+from phonology_features.gui.mode_controller import Mode, _ModeController
 from phonology_features.gui.palette import (
     C,
     detect_system_theme,
@@ -103,20 +103,15 @@ _log = get_logger(__name__)
 _QEVENT_MOUSE_BUTTON_PRESS = QEvent.Type.MouseButtonPress
 
 
-class Mode(StrEnum):
-    """Top-level UI mode. StrEnum so members compare equal to their
-    string values for QSettings round-tripping.
-    """
-
-    SEG_TO_FEAT = "seg_to_feat"
-    FEAT_TO_SEG = "feat_to_seg"
-
-
 class MainWindow(QMainWindow):
     def __init__(self, startup_path: str | None = None):
         super().__init__()
         self.engine: FeatureEngine | None = None
-        self._mode: Mode = Mode.SEG_TO_FEAT
+        # Mode controller owns ``mode``, ``saved_seg_state``, and
+        # ``saved_feat_state``. MainWindow keeps forwarding properties
+        # below (``_mode``, ``_saved_seg_state``, ``_saved_feat_state``)
+        # so existing test API stays stable.
+        self._mode_ctrl = _ModeController(self)
         # segment -> SegmentButton for the active inventory
         self._seg_buttons: dict = {}
         # Cross-inventory pool keyed by segment symbol. Reused across
@@ -126,10 +121,6 @@ class MainWindow(QMainWindow):
         self._feat_rows: dict = {}  # feature -> FeatureRow, active subset
         self._selected_segments: list = []
         self._selected_features: dict = {}  # feature -> '+'/'-'
-        # State of each mode at the moment we leave it, projected into
-        # the other mode as a pre-fill on switch.
-        self._saved_seg_state: list = []
-        self._saved_feat_state: dict = {}
         self._current_path: str | None = None
         # Watcher, MRU, dropdown population, and delete-fallback all
         # live in the InventoryDirController, built after _build_ui
@@ -178,8 +169,44 @@ class MainWindow(QMainWindow):
         )
         # Initial mode is already SEG_TO_FEAT, so _set_mode would no-op.
         # Apply chrome directly to wire up the freshly-built widgets.
-        self._apply_mode_phases()
+        self._mode_ctrl.apply_phases()
         self._restore_settings(startup_path)
+
+    # ------------------------------------------------------------------
+    # Mode-controller forwarding (test API stability + brevity at
+    # call sites). The controller is the source of truth; these
+    # properties / wrappers exist so existing callers don't churn.
+    # ------------------------------------------------------------------
+    @property
+    def _mode(self) -> Mode:
+        return self._mode_ctrl.mode
+
+    @_mode.setter
+    def _mode(self, value: Mode) -> None:
+        self._mode_ctrl.mode = value
+
+    @property
+    def _saved_seg_state(self) -> list:
+        return self._mode_ctrl.saved_seg_state
+
+    @_saved_seg_state.setter
+    def _saved_seg_state(self, value: list) -> None:
+        self._mode_ctrl.saved_seg_state = value
+
+    @property
+    def _saved_feat_state(self) -> dict:
+        return self._mode_ctrl.saved_feat_state
+
+    @_saved_feat_state.setter
+    def _saved_feat_state(self, value: dict) -> None:
+        self._mode_ctrl.saved_feat_state = value
+
+    def _set_mode(self, mode: Mode | str) -> None:
+        """Thin wrapper around the mode-controller transition. Kept
+        because it's called from many internal sites (event filter,
+        builder save handler, tests) and the short name reads better
+        than the controller-qualified form at the call site."""
+        self._mode_ctrl.set_mode(mode)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -375,7 +402,7 @@ class MainWindow(QMainWindow):
         """
         container = QFrame(parent)
         container.setObjectName("seg_panel")
-        set_css(container, self._panel_chrome_qss("seg_panel"))
+        set_css(container, _ModeController.panel_chrome_qss("seg_panel"))
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -448,7 +475,7 @@ class MainWindow(QMainWindow):
     def _build_feature_panel(self, parent=None) -> QFrame:
         container = QFrame(parent)
         container.setObjectName("feat_panel")
-        set_css(container, self._panel_chrome_qss("feat_panel"))
+        set_css(container, _ModeController.panel_chrome_qss("feat_panel"))
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -697,10 +724,10 @@ class MainWindow(QMainWindow):
             # Refresh the panel-chrome QSS rules then re-polish so the
             # active-mode border picks up the new accent color.
             for panel in (self.seg_panel, self.feat_panel):
-                set_css(panel, self._panel_chrome_qss(panel.objectName()))
+                set_css(panel, _ModeController.panel_chrome_qss(panel.objectName()))
                 panel.setProperty("active", None)
-            self._apply_panel_chrome()
-            self._refresh_analysis_for_mode()
+            self._mode_ctrl.apply_panel_chrome()
+            self._mode_ctrl.refresh_analysis()
 
     def _restyle_chrome(self) -> None:
         """Re-apply every chrome stylesheet that depends on the palette.
@@ -970,7 +997,7 @@ class MainWindow(QMainWindow):
         with self._batched_updates():
             self._populate_segments()
             self._populate_features()
-            self._apply_mode_to_new_widgets()
+            self._mode_ctrl.apply_to_new_widgets()
             self.analysis.clear()
         if self.isVisible():
             QTimer.singleShot(0, self._geom.fit_to_content)
@@ -1273,19 +1300,6 @@ class MainWindow(QMainWindow):
             return first.text()
         return ""
 
-    def _apply_mode_to_new_widgets(self) -> None:
-        """Set interactivity on freshly-populated rows + headers for the
-        current mode, then clear both sides. Called after inventory load.
-        """
-        is_s2f = self._mode == Mode.SEG_TO_FEAT
-        self.seg_grid_widget.set_headers_active(is_s2f)
-        self.vowel_chart_widget.set_headers_active(is_s2f)
-        for row in self._feat_rows.values():
-            row.set_panel_active(not is_s2f)
-            row.set_interactive(not is_s2f)
-        self._clear_segments(silent=True)
-        self._clear_features(silent=True)
-
     @contextmanager
     def _batched_updates(self):
         """Suspend Qt paint events for the duration. Depth-aware so
@@ -1301,153 +1315,6 @@ class MainWindow(QMainWindow):
             self._batched_depth -= 1
             if self._batched_depth == 0:
                 self.setUpdatesEnabled(True)
-
-    def _set_mode(self, mode: Mode | str) -> None:
-        """Switch top-level UI mode. Accepts bare strings (from QSettings
-        and tests) and coerces. Bails when the requested mode equals the
-        current one; callers that need to re-apply chrome unconditionally
-        call ``_apply_mode_phases`` directly.
-        """
-        mode = Mode(mode)
-        if mode == self._mode:
-            return
-        self._save_outgoing_mode_state()
-        self._mode = mode
-        self._apply_mode_phases()
-
-    def _apply_mode_phases(self) -> None:
-        """Run every mode-aware UI update against the current mode."""
-        with self._batched_updates():
-            self._apply_panel_chrome()
-            self._apply_row_interactivity()
-            self._restore_segment_selection()
-            self._restore_feature_selection()
-            self._refresh_analysis_for_mode()
-            self._update_status_message()
-
-    # _save_outgoing_mode_state runs BEFORE self._mode is updated (it
-    # captures the state of the mode being left); every other _set_mode
-    # phase runs after self._mode has been set.
-    def _save_outgoing_mode_state(self) -> None:
-        """Snapshot the current mode's exact state and project it into the
-        opposite mode's saved state. Called only when the mode is actually
-        changing.
-        """
-        if self._mode == Mode.SEG_TO_FEAT:
-            # Preserve exact seg selection so toggling back restores it.
-            self._saved_seg_state = list(self._selected_segments)
-            # Project into feat mode: shared (non-contradictory) features only.
-            if self._selected_segments and self.engine:
-                self._saved_feat_state = {
-                    f: v
-                    for f, v in self.engine.common_features(
-                        self._selected_segments
-                    ).items()
-                    if v in ("+", "-")
-                }
-            else:
-                self._saved_feat_state = {}
-        else:
-            # Preserve exact feat query so toggling back restores it.
-            self._saved_feat_state = dict(self._selected_features)
-            # Project into seg mode: segments matched by current feature query.
-            if self._selected_features and self.engine:
-                self._saved_seg_state = list(
-                    self.engine.find_segments(self._selected_features)
-                )
-            else:
-                self._saved_seg_state = []
-
-    @staticmethod
-    def _panel_chrome_qss(object_name: str) -> str:
-        """Stylesheet baked once at panel creation with both active and
-        inactive rules. ``_apply_panel_chrome`` toggles the ``active``
-        property instead of replacing the sheet; Qt then only re-polishes
-        the panel widget, not every descendant.
-        """
-        return (
-            f"QFrame#{object_name} {{ background: {C['bg']}; border: none; }}"
-            f'QFrame#{object_name}[active="true"] {{'
-            f" background: {C['panel']};"
-            f" border: 1.5px solid {C['accent']};"
-            f" }}"
-        )
-
-    def _apply_panel_chrome(self) -> None:
-        """Reflect the active mode on the chrome. Panel highlight uses
-        a Qt property + ``style().polish()`` so the active border swap
-        re-styles the panel only, not its 140+ descendants. Title
-        labels are tiny so a direct setStyleSheet on them is fine.
-        """
-        is_s2f = self._mode == Mode.SEG_TO_FEAT
-        self._polish_active(self.seg_panel, is_s2f)
-        self._polish_active(self.feat_panel, not is_s2f)
-        self._seg_title.setStyleSheet(
-            f"color: {C['text'] if is_s2f else C['text_dim']};"
-            " letter-spacing: 1.5px;"
-        )
-        self._feat_title.setStyleSheet(
-            f"color: {C['text'] if not is_s2f else C['text_dim']};"
-            " letter-spacing: 1.5px;"
-        )
-        self.seg_grid_widget.set_headers_active(is_s2f)
-        self.vowel_chart_widget.set_headers_active(is_s2f)
-
-    @staticmethod
-    def _polish_active(widget, active: bool) -> None:
-        """Flip the ``active`` Qt property and re-polish so the
-        property-selector rule takes effect. Cheaper than setStyleSheet
-        because polish doesn't cascade.
-        """
-        if widget.property("active") == active:
-            return
-        widget.setProperty("active", active)
-        style = widget.style()
-        if style is not None:
-            style.unpolish(widget)
-            style.polish(widget)
-
-    def _apply_row_interactivity(self) -> None:
-        """Set each FeatureRow's interactivity to match the active mode."""
-        is_s2f = self._mode == Mode.SEG_TO_FEAT
-        for row in self._feat_rows.values():
-            row.set_panel_active(not is_s2f)
-            row.set_interactive(not is_s2f)
-
-    def _restore_segment_selection(self) -> None:
-        """Set each segment button to its final state for the new mode.
-        Seg mode restores from ``_saved_seg_state``; feat mode clears
-        the visual selection (matched/unmatched styling is applied
-        later by ``_refresh_analysis_for_mode``).
-        """
-        is_s2f = self._mode == Mode.SEG_TO_FEAT
-        restore_segs = set(self._saved_seg_state) if is_s2f else set()
-        self._selected_segments.clear()
-        for seg, btn in self._seg_buttons.items():
-            if seg in restore_segs:
-                self._selected_segments.append(seg)
-                if btn._state != SegmentState.SELECTED:
-                    btn.set_state(SegmentState.SELECTED)
-                    btn.setChecked(True)
-            elif btn._state != SegmentState.DEFAULT:
-                btn.set_state(SegmentState.DEFAULT)
-                btn.setChecked(False)
-
-    def _restore_feature_selection(self) -> None:
-        """Set each feature row to its final state for the new mode.
-        Sole authority on per-row visual state during a mode switch;
-        rows in ``_saved_feat_state`` get ``restore_value``, the rest
-        get ``reset``.
-        """
-        is_s2f = self._mode == Mode.SEG_TO_FEAT
-        restore_feats = self._saved_feat_state if not is_s2f else {}
-        self._selected_features.clear()
-        for feat, row in self._feat_rows.items():
-            if feat in restore_feats:
-                self._selected_features[feat] = restore_feats[feat]
-                row.restore_value(restore_feats[feat])
-            else:
-                row.reset()
 
     def _toggle_analysis_expanded(self) -> None:
         """Maximize the analysis pane to ~80% of the vsplit height
@@ -1487,31 +1354,6 @@ class MainWindow(QMainWindow):
         if self._pre_expand_vsplit_sizes is not None:
             self._pre_expand_vsplit_sizes = None
             self.analysis.set_expanded(False)
-
-    def _refresh_analysis_for_mode(self) -> None:
-        """Clear the analysis panel and re-run the active mode's
-        analysis if there's something to analyze.
-        """
-        is_s2f = self._mode == Mode.SEG_TO_FEAT
-        self.analysis.clear()
-        if is_s2f and self._selected_segments:
-            self._update_seg_to_feat()
-        elif not is_s2f and self._selected_features:
-            self._update_feat_to_seg()
-
-    def _update_status_message(self) -> None:
-        """Show the per-mode helper text in the status bar."""
-        is_s2f = self._mode == Mode.SEG_TO_FEAT
-        if not self.engine:
-            self.status.showMessage(
-                "Select an inventory from the dropdown to begin."
-            )
-        elif is_s2f:
-            self.status.showMessage("Click a segment to inspect its features.")
-        else:
-            self.status.showMessage(
-                "Toggle feature values (+/\u2212) to find matching segments."
-            )
 
     def eventFilter(self, a0, a1):
         """Activate the clicked panel on a press in its empty area.
