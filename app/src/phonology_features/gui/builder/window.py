@@ -2,8 +2,7 @@
 
 import os
 import re
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, ClassVar
 
 from phonology_features._logging import get_logger
 from phonology_features.engine.inventory import (
@@ -18,12 +17,7 @@ if TYPE_CHECKING:
     from PyQt6.QtGui import QRegion
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import (
-    QBrush,
-    QColor,
     QFont,
-    QPainter,
-    QPalette,
-    QPen,
 )
 from PyQt6.QtWidgets import (
     QAbstractButton,
@@ -38,8 +32,6 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStatusBar,
-    QStyle,
-    QStyledItemDelegate,
     QTableWidget,
     QTableWidgetItem,
     QToolBar,
@@ -53,316 +45,24 @@ from phonology_features.gui.builder.dialogs import (
     center_on_parent,
     show_warning,
 )
+from phonology_features.gui.builder.edits import (
+    _MAX_UNDO_DEPTH,
+    _BulkEdit,
+    _CellPrev,
+)
 from phonology_features.gui.builder.grid import (
     cycle_value,
     make_cell,
     style_cell,
 )
+from phonology_features.gui.builder.table import (
+    _BulkCycleTable,
+    _SelectionFillDelegate,
+    _ToggleHeaderView,
+)
 from phonology_features.gui.palette import C
 
 _log = get_logger(__name__)
-
-
-class _CellPrev(NamedTuple):
-    """One cell's pre-edit state. NamedTuple instead of a raw
-    ``tuple[int, int, str]`` so the destructuring in undo / redo
-    (``for row, col, old in edit.cells``) reads against named slots
-    rather than positional ones. Zero runtime overhead vs. a plain
-    tuple."""
-
-    row: int
-    col: int
-    old: str
-
-
-@dataclass(frozen=True)
-class _BulkEdit:
-    """One undoable mutation. ``new`` is the value applied to every
-    cell in the batch (uniform -- bulk-cycle and key-set targets
-    always pick a single destination value). ``cells`` carries the
-    per-cell old state as a tuple of ``_CellPrev`` records. Single-
-    cell edits use a 1-element ``cells`` tuple; bulk edits share one
-    ``new`` string across N cells instead of duplicating it N times.
-
-    Memory: tuple wrapper (~56 B) + ~56 B per cell entry. A 3920-
-    cell select-all batch used to allocate 3920 ``_CellEdit`` records
-    (~96 B each = ~375 KB); the new shape is ~220 KB, a ~40 % saving
-    that compounds across the 200-batch undo cap.
-    """
-
-    cells: tuple[_CellPrev, ...]
-    new: str
-
-
-class _ToggleHeaderView(QHeaderView):
-    """QHeaderView with the click semantics of a QPushButton.
-
-    Background: when two presses land within the OS double-click
-    interval (~400 ms), Qt routes the second press through
-    ``mouseDoubleClickEvent`` instead of ``mousePressEvent``. Qt's
-    QHeaderView::mouseDoubleClickEvent emits ``sectionDoubleClicked``
-    but NOT ``sectionClicked``. The release after the doubleclick
-    finds state already cleared and doesn't emit either. Result on
-    a real OS: a fast two-click pair fires sectionClicked exactly
-    once (from the first release), so every second click silently
-    drops out of the toggle handler -- the "clicks not always
-    detecting" symptom the user reported.
-
-    Fix: emit ``sectionClicked`` from our ``mouseDoubleClickEvent``
-    override so the second press of the pair is represented as a
-    normal click event. Skip the super call so ``sectionDoubleClicked``
-    doesn't also fire (no consumer wants it, and emitting both would
-    double-count if anyone wired both signals).
-
-    Result: every user press = one ``sectionClicked``, same haptic as
-    a QPushButton's clicked signal. No dedicated doubleclick gesture
-    is used on these headers (resize is fixed, no edit-on-doubleclick),
-    so there's nothing to lose by repurposing the doubleclick path.
-    """
-
-    def __init__(self, orientation, parent=None):
-        super().__init__(orientation, parent)
-        # QTableWidget's default header has sectionsClickable=True;
-        # a fresh QHeaderView defaults to False. Without this, no
-        # sectionClicked signals fire at all.
-        self.setSectionsClickable(True)
-
-    def mouseDoubleClickEvent(self, e):
-        # Coordinate space: x for horizontal headers, y for vertical.
-        if self.orientation() == Qt.Orientation.Horizontal:
-            section = self.logicalIndexAt(e.pos().x())
-        else:
-            section = self.logicalIndexAt(e.pos().y())
-        if section >= 0:
-            self.sectionClicked.emit(section)
-
-
-class _BulkCycleTable(QTableWidget):
-    """Subclass with two custom behaviours:
-
-    1. ``mousePressEvent``: when the user clicks a cell that's
-       already in the selection, run the builder's bulk-cycle
-       callback without forwarding the press to the base class.
-       Keeps Qt's selection intact AND avoids the orphan-release
-       problem where consuming via an event filter let the base
-       release handler see a press it didn't process.
-
-    2. ``paintEvent``: after the base class paints cells +
-       gridlines, draw the selection outline ON TOP. Doing this in
-       the cell delegate doesn't work -- Qt paints gridlines AFTER
-       delegates, so any outline drawn at cell boundaries gets
-       overwritten by the gridline. Drawing here puts the outline
-       above everything.
-    """
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._bulk_cycle_cb = None
-
-    def set_bulk_cycle_callback(self, cb):
-        """Builder hands us a function ``(QTableWidgetItem) -> None``."""
-        self._bulk_cycle_cb = cb
-
-    def mousePressEvent(self, event):
-        if (
-            event.button() == Qt.MouseButton.LeftButton
-            and not event.modifiers()
-            & (
-                Qt.KeyboardModifier.ShiftModifier
-                | Qt.KeyboardModifier.ControlModifier
-            )
-            and self._bulk_cycle_cb is not None
-        ):
-            idx = self.indexAt(event.position().toPoint())
-            sel_model = self.selectionModel()
-            if (
-                idx.isValid()
-                and sel_model is not None
-                and sel_model.isSelected(idx)
-            ):
-                item = self.item(idx.row(), idx.column())
-                if item is not None:
-                    self._bulk_cycle_cb(item)
-                    event.accept()
-                    return
-        super().mousePressEvent(event)
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        sel_model = self.selectionModel()
-        model = self.model()
-        if sel_model is None or model is None:
-            return
-        sel_cols = sel_model.selectedColumns()
-        sel_rows = sel_model.selectedRows()
-        n_rows = self.rowCount()
-        n_cols = self.columnCount()
-        if n_rows == 0 or n_cols == 0:
-            return
-        # Fast path 1: exactly one full column.
-        if len(sel_cols) == 1 and len(sel_rows) == 0:
-            col = sel_cols[0].column()
-            top_rect = self.visualRect(model.index(0, col))
-            bot_rect = self.visualRect(model.index(n_rows - 1, col))
-            self._draw_outline_rect(top_rect.united(bot_rect))
-            return
-        # Fast path 2: exactly one full row.
-        if len(sel_rows) == 1 and len(sel_cols) == 0:
-            row = sel_rows[0].row()
-            left_rect = self.visualRect(model.index(row, 0))
-            right_rect = self.visualRect(model.index(row, n_cols - 1))
-            self._draw_outline_rect(left_rect.united(right_rect))
-            return
-        # Fast path 3: whole table.
-        if len(sel_rows) == n_rows and len(sel_cols) == n_cols:
-            tl_rect = self.visualRect(model.index(0, 0))
-            br_rect = self.visualRect(
-                model.index(n_rows - 1, n_cols - 1)
-            )
-            self._draw_outline_rect(tl_rect.united(br_rect))
-            return
-        # General case: arbitrary selection shape (cross, multi-col,
-        # rectangle, ctrl+click set). Build a {(row, col)} membership
-        # set, then for each selected cell draw its edges on sides
-        # whose neighbour isn't also selected. Drawing happens AFTER
-        # super().paintEvent so the border lands above Qt's gridlines.
-        cells: set[tuple[int, int]] = set()
-        for col_idx in sel_cols:
-            c = col_idx.column()
-            for ri in range(n_rows):
-                cells.add((ri, c))
-        for row_idx in sel_rows:
-            ri = row_idx.row()
-            for ci in range(n_cols):
-                cells.add((ri, ci))
-        for idx in sel_model.selectedIndexes():
-            cells.add((idx.row(), idx.column()))
-        if not cells:
-            return
-        painter = QPainter(self.viewport())
-        pen = QPen(QColor(C["accent"]))
-        pen.setWidth(2)
-        painter.setPen(pen)
-        for row, col in cells:
-            # Skip isolated cells (no neighbour also selected). Otherwise
-            # a single-cell selection would get a 4-sided border per
-            # cell -- user wants only the light-blue fill in that case,
-            # reserving outlines for actual GROUPS (row, col, rectangle,
-            # cross). Cells inside a group always have at least one
-            # selected neighbour, so this only suppresses lone cells.
-            if not (
-                (row - 1, col) in cells
-                or (row + 1, col) in cells
-                or (row, col - 1) in cells
-                or (row, col + 1) in cells
-            ):
-                continue
-            cell_rect = self.visualRect(model.index(row, col))
-            if not cell_rect.isValid():
-                continue
-            if (row - 1, col) not in cells:
-                painter.drawLine(
-                    cell_rect.left(), cell_rect.top(),
-                    cell_rect.right(), cell_rect.top(),
-                )
-            if (row + 1, col) not in cells:
-                painter.drawLine(
-                    cell_rect.left(), cell_rect.bottom(),
-                    cell_rect.right(), cell_rect.bottom(),
-                )
-            if (row, col - 1) not in cells:
-                painter.drawLine(
-                    cell_rect.left(), cell_rect.top(),
-                    cell_rect.left(), cell_rect.bottom(),
-                )
-            if (row, col + 1) not in cells:
-                painter.drawLine(
-                    cell_rect.right(), cell_rect.top(),
-                    cell_rect.right(), cell_rect.bottom(),
-                )
-        painter.end()
-
-    def _draw_outline_rect(self, rect):
-        """Draw a 2 px outline around ``rect`` on the viewport. Used
-        by the full-row / full-column / full-table fast paths."""
-        if not rect.isValid():
-            return
-        painter = QPainter(self.viewport())
-        pen = QPen(QColor(C["accent"]))
-        pen.setWidth(2)
-        painter.setPen(pen)
-        # Inset by 1 so the 2-px border lands inside the selection
-        # bounds rather than half outside.
-        painter.drawRect(rect.adjusted(1, 1, -1, -1))
-        painter.end()
-
-
-class _SelectionFillDelegate(QStyledItemDelegate):
-    """Selected cells render as light-blue fill + the cell's own text
-    colour. The outline around the whole selection region is drawn by
-    ``_BulkCycleTable.paintEvent`` so it sits ON TOP of Qt's
-    gridlines instead of being overwritten by them.
-
-    Hot path: this ``paint`` runs once per visible cell on every
-    selection change. Two micro-optimisations vs the obvious version:
-      - State_Selected check is done against a cached ``int`` to skip
-        Python's slow ``enum.__and__`` (was 60 ms / 15k calls on the
-        row-toggle profile).
-      - The highlight QBrush is module-level cached and theme-version
-        keyed (see ``_get_highlight_brush``) so we don't allocate a
-        QColor on every selected-cell paint.
-    """
-
-    # Pre-extracted int value so the per-cell hot path is an int AND
-    # rather than an enum.__and__ call. The Flag value never changes
-    # at runtime so caching at class load is safe.
-    _SELECTED_FLAG = QStyle.StateFlag.State_Selected
-
-    def paint(self, painter, option, index):
-        if option.state & self._SELECTED_FLAG:
-            # parent() is typed QObject | None; in practice it's the
-            # QTableWidget that owns this delegate. ``hasattr`` keeps
-            # mypy happy without a cast and is cheap on the hot path.
-            view = self.parent()
-            item = (
-                view.item(index.row(), index.column())
-                if view is not None and hasattr(view, "item")
-                else None
-            )
-            if item is not None:
-                option.palette.setBrush(
-                    QPalette.ColorRole.HighlightedText, item.foreground()
-                )
-            option.palette.setBrush(
-                QPalette.ColorRole.Highlight, _get_highlight_brush()
-            )
-        super().paint(painter, option, index)
-
-
-# Module-level highlight brush cache. Theme-version keyed so a theme
-# toggle invalidates it transparently (no observer wiring), same trick
-# the cell-brush cache uses in builder/grid.py.
-_highlight_brush_version: int = -1
-_highlight_brush: QBrush | None = None
-
-
-def _get_highlight_brush() -> QBrush:
-    """Return the cached highlight QBrush, rebuilding if theme changed."""
-    global _highlight_brush, _highlight_brush_version
-    from phonology_features.gui import palette as _palette
-
-    if (
-        _highlight_brush is None
-        or _highlight_brush_version != _palette.theme_version
-    ):
-        _highlight_brush_version = _palette.theme_version
-        _highlight_brush = QBrush(QColor(C["accent_light"]))
-    return _highlight_brush
-
-
-# Undo-history depth cap. ~200 batches of at-most all cells covers a
-# normal editing session without unbounded growth.
-_MAX_UNDO_DEPTH = 200
 
 
 def _suggest_filename(inv_name: str) -> str:
