@@ -1,6 +1,6 @@
 # Phonology Segment and Feature Engine
 
-Distinctive-feature phonology tool. Browse inventories, compute natural classes, find minimal distinguishing feature bundles.
+Feature phonology tool. Compute natural classes, find minimal distinguishing feature bundles, and edit segment inventories.
 
 Browser version: <https://jhnwnstd.github.io/features/>.
 

@@ -210,16 +210,21 @@ body {
 /* Feature panel                                                       */
 /* Grouped into named cards (Major Class, Laryngeal, Manner, Place,    */
 /* ...) mirroring the desktop's feature panel.                         */
+/*                                                                    */
+/* Layout uses CSS Grid with ``auto-fill`` rather than                 */
+/* ``column-count``: the latter overflows into a hidden third column   */
+/* when the panel is shorter than the content (e.g. after the          */
+/* analysis pane takes vertical space). auto-fill grows the column     */
+/* count to fit whatever the panel width allows, so every group stays  */
+/* visible.                                                           */
 /* ------------------------------------------------------------------ */
 #feat-list {
-  column-gap: 16px;
-  column-count: 1;
-}
-@media (min-width: 700px) {
-  #feat-list { column-count: 2; }
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 4px 16px;
+  align-content: start;
 }
 .feat-group {
-  break-inside: avoid;
   margin-bottom: 12px;
 }
 .feat-group-header {
