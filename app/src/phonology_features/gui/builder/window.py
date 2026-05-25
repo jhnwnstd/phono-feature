@@ -125,7 +125,7 @@ class InventoryBuilder(QMainWindow):
         from phonology_features.gui.builder.save_controller import (
             _SaveController,
         )
-        self._save = _SaveController(self, self._status, self._to_inventory)
+        self._save_ctrl = _SaveController(self, self._status, self._to_inventory)
         if parent is not None:
             parent_screen = parent.screen()
             if parent_screen is not None:
@@ -1036,50 +1036,50 @@ class InventoryBuilder(QMainWindow):
     # ------------------------------------------------------------------
     @property
     def _save_in_flight(self) -> bool:
-        return self._save.save_in_flight
+        return self._save_ctrl.save_in_flight
 
     @_save_in_flight.setter
     def _save_in_flight(self, value: bool) -> None:
-        self._save.save_in_flight = value
+        self._save_ctrl.save_in_flight = value
 
     @property
     def _dirty(self) -> bool:
-        return self._save.dirty
+        return self._save_ctrl.dirty
 
     @_dirty.setter
     def _dirty(self, value: bool) -> None:
-        self._save.dirty = value
+        self._save_ctrl.dirty = value
 
     @property
     def _draining_save(self) -> bool:
-        return self._save.draining_save
+        return self._save_ctrl.draining_save
 
     @_draining_save.setter
     def _draining_save(self, value: bool) -> None:
-        self._save.draining_save = value
+        self._save_ctrl.draining_save = value
 
     @property
     def _save_finished(self):
         """Signal alias for back-compat. External callers do
         ``builder._save_finished.connect(...)``."""
-        return self._save.save_finished
+        return self._save_ctrl.save_finished
 
     @property
     def _save_drained(self):
-        return self._save.save_drained
+        return self._save_ctrl.save_drained
 
     # ------------------------------------------------------------------
     # Save method forwarders
     # ------------------------------------------------------------------
     def _write_json(self, path: str) -> None:
         """Delegates to the SaveController. Name kept for tests."""
-        self._save.request_save(path)
+        self._save_ctrl.request_save(path)
 
     def _wait_for_save(self, timeout_ms: int = 5000) -> bool:
-        return self._save.wait_for_save(timeout_ms)
+        return self._save_ctrl.wait_for_save(timeout_ms)
 
     def _check_unsaved(self) -> bool:
-        return self._save.check_unsaved()
+        return self._save_ctrl.check_unsaved()
 
     def _save(self) -> None:
         if self._draining_save:
