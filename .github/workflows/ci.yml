@@ -113,3 +113,20 @@ jobs:
           fi
           pytest -v
 
+      - name: Run engine-package pytest in the same venv
+        # Engine tests live with the package (packages/phonology-engine).
+        # The launcher already installed the engine in editable mode,
+        # so we just point pytest at the package's tests directory.
+        # Runs on every OS in the matrix because the engine is the
+        # single source of truth shared with the (future) web build,
+        # and a regression here breaks BOTH downstream consumers.
+        working-directory: packages/phonology-engine
+        shell: bash
+        run: |
+          if [[ -f ../../app/.venv/bin/activate ]]; then
+              source ../../app/.venv/bin/activate
+          else
+              source ../../app/.venv/Scripts/activate
+          fi
+          pytest -v
+
