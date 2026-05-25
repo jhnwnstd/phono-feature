@@ -2,6 +2,8 @@
 
 A desktop tool for distinctive-feature phonology. Browse segment inventories, compute natural classes, and find minimal distinguishing feature bundles.
 
+**Use it in your browser:** <https://jhnwnstd.github.io/features/>. Same engine, same inventories, no install. Upload your own JSON to analyse it; download anything you build. Everything stays in your browser.
+
 ## Run it
 
 Requires Python 3.11+. Double-click the launcher for your OS. The first run sets up a private environment in under a minute; later launches open the GUI immediately.
