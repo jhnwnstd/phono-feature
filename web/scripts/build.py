@@ -12,8 +12,12 @@ Layout produced:
     ├── style.css
     ├── main.js
     ├── api.py
-    ├── wheels/
-    │   └── phonology_engine-<ver>-py3-none-any.whl
+    ├── engine/phonology_engine/
+    │   ├── __init__.py
+    │   ├── inventory.py
+    │   ├── feature_engine.py
+    │   ├── geometry.py
+    │   └── segment_grouper.py
     ├── render/phonology_features/
     │   ├── __init__.py
     │   └── gui/
@@ -26,10 +30,11 @@ Layout produced:
         ├── general_features.json
         └── hayes_features.json
 
-The render/ tree is COPIES of the canonical desktop sources. They
-are NOT edited by hand; this script just relays the latest version
-from ``app/src/phonology_features/gui/`` into the wheel-adjacent
-import path so the same code runs in the browser as on the desktop.
+Both ``engine/`` and ``render/`` are COPIES of canonical sources
+(packages/phonology-engine/ and app/src/phonology_features/gui/).
+Mounted into Pyodide's FS at runtime and added to sys.path; no
+wheel build, no micropip install. Faster cold boot, fewer build
+dependencies (no need for the ``build`` package).
 """
 
 from __future__ import annotations
@@ -38,7 +43,6 @@ import argparse
 import importlib.util
 import json
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -59,48 +63,6 @@ RELAYED_SOURCES = [
 ]
 
 
-def run(cmd: list[str], cwd: Path | None = None) -> None:
-    print(f"  $ {' '.join(cmd)}")
-    subprocess.run(cmd, cwd=cwd, check=True)
-
-
-def _require_build_module() -> None:
-    """``python -m build`` requires the ``build`` package. Fail fast
-    with a useful message instead of letting subprocess spit out
-    "No module named build.__main__".
-
-    Detection runs ``python -m build --version`` in a fresh
-    subprocess. find_spec("build") is unreliable here: this script
-    is named ``build.py``, so when Python prepends its directory to
-    ``sys.path`` the importer finds the script itself (a plain
-    module without ``__path__`` or ``__main__``). The subprocess
-    probe is the same import path subprocess.run will take below,
-    so a green probe means the real run will work too.
-    """
-    probe = subprocess.run(
-        [sys.executable, "-m", "build", "--version"],
-        capture_output=True,
-    )
-    if probe.returncode == 0:
-        return
-    venv_python = ROOT / "app" / ".venv" / "bin" / "python"
-    if not venv_python.exists():
-        venv_python = ROOT / "app" / ".venv" / "Scripts" / "python.exe"
-    interpreter_hint = (
-        f"{venv_python} web/scripts/build.py"
-        if venv_python.exists()
-        else "python -m pip install build && python web/scripts/build.py"
-    )
-    sys.exit(
-        "Error: the 'build' package is not installed in the current Python "
-        f"({sys.executable}).\n"
-        "Run one of:\n"
-        "  ./RUN-Linux.sh                          # creates app/.venv "
-        "with build available\n"
-        f"  {interpreter_hint}\n"
-        "  pip install build                       # install into the "
-        "current interpreter"
-    )
 
 
 def clean_dist() -> None:
@@ -109,34 +71,29 @@ def clean_dist() -> None:
     DIST.mkdir(parents=True)
 
 
-def build_engine_wheel() -> Path:
-    """Build the engine wheel into apps/web/dist/wheels/."""
-    _require_build_module()
-    print("Building phonology-engine wheel...")
-    wheels_dir = DIST / "wheels"
-    wheels_dir.mkdir(parents=True, exist_ok=True)
-    run(
-        [
-            sys.executable,
-            "-m",
-            "build",
-            "--wheel",
-            "--outdir",
-            str(wheels_dir),
-        ],
-        cwd=ENGINE_PKG,
-    )
-    wheels = sorted(wheels_dir.glob("phonology_engine-*-py3-none-any.whl"))
-    if not wheels:
-        raise RuntimeError("wheel build produced no output")
-    # Pin the JS bootstrap to a stable filename so main.js doesn't
-    # need to know the version. Latest wheel wins if multiple exist.
-    target = wheels_dir / "phonology_engine-0.1.0-py3-none-any.whl"
-    if wheels[-1] != target:
-        if target.exists():
-            target.unlink()
-        wheels[-1].rename(target)
-    return target
+def copy_engine_sources() -> None:
+    """Copy the engine package's source tree into the deploy.
+
+    Previously this built a wheel and let ``micropip.install`` unpack
+    it inside Pyodide. micropip is a pip-equivalent (dep resolution,
+    METADATA parsing, version satisfaction, importer-cache
+    invalidation) and we use none of that: the engine is one pure
+    Python package with zero deps. Bypassing micropip and just
+    writing the .py files to Pyodide's FS saves ~1s on cold boot.
+    main.js mounts the directory below at /home/pyodide/engine and
+    adds it to sys.path; the rest of the bridge code is unchanged.
+    """
+    print("Copying engine package source...")
+    target_pkg = DIST / "engine" / "phonology_engine"
+    if target_pkg.exists():
+        shutil.rmtree(target_pkg)
+    src_pkg = ENGINE_PKG / "src" / "phonology_engine"
+    shutil.copytree(src_pkg, target_pkg)
+    # Strip __pycache__ if the source tree happens to carry one.
+    for pycache in target_pkg.rglob("__pycache__"):
+        shutil.rmtree(pycache, ignore_errors=True)
+    py_files = sorted(target_pkg.glob("*.py"))
+    print(f"  {len(py_files)} .py files in engine/phonology_engine/")
 
 
 def copy_static_assets() -> None:
@@ -261,17 +218,9 @@ def write_pages_no_jekyll() -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--skip-wheel",
-        action="store_true",
-        help="Skip the wheel rebuild (use the existing one in dist/wheels/)",
-    )
-    args = parser.parse_args()
-
-    clean_dist() if not args.skip_wheel else DIST.mkdir(exist_ok=True)
-    if not args.skip_wheel:
-        build_engine_wheel()
+    argparse.ArgumentParser(description=__doc__).parse_args()
+    clean_dist()
+    copy_engine_sources()
     copy_static_assets()
     relay_renderer_sources()
     generate_theme_css()

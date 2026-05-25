@@ -166,24 +166,31 @@ async function bootPyodide() {
     setLoadingStatus("Loading the Python runtime…");
     mark("pyodide:start");
     const pyodide = await withTimeout(
-        loadPyodide(),
+        // packages: [] skips the automatic load of pyodide-py /
+        // distutils that we don't use; ~100-300 ms init saved.
+        // Our engine is pure Python and loads explicitly below.
+        loadPyodide({ packages: [] }),
         PYODIDE_BOOT_TIMEOUT_MS,
         "Pyodide startup",
     );
     state.pyodide = pyodide;
     mark("pyodide:end");
 
-    setLoadingStatus("Installing the phonology engine…");
-    mark("wheel:start");
-    await pyodide.loadPackage("micropip");
-    const micropip = pyodide.pyimport("micropip");
-    // The build script puts the wheel at ./wheels/. Glob isn't
-    // available; the filename is templated by the build script.
-    const wheelUrl = new URL("wheels/phonology_engine-0.1.0-py3-none-any.whl",
-        document.baseURI).toString();
-    await micropip.install(wheelUrl);
-    micropip.destroy();
-    mark("wheel:end");
+    setLoadingStatus("Mounting the phonology engine…");
+    mark("engine:start");
+    // Bypass micropip entirely: the engine is pure Python with no
+    // deps. We just fetch the .py files and write them into Pyodide's
+    // FS at /home/pyodide/engine/phonology_engine/, then add the
+    // parent dir to sys.path. Saves ~1 s vs micropip's dep-resolve +
+    // METADATA-parse + wheel-extract path. Same effect at import.
+    await mountPackage(pyodide, "engine/phonology_engine", [
+        "__init__.py",
+        "inventory.py",
+        "feature_engine.py",
+        "geometry.py",
+        "segment_grouper.py",
+    ], "/home/pyodide/engine");
+    mark("engine:end");
 
     setLoadingStatus("Loading renderer modules…");
     mark("renderer:start");
@@ -212,7 +219,7 @@ async function bootPyodide() {
     mark("boot:end");
     measure("Manifest fetch", "manifest:start", "manifest:end");
     measure("Pyodide load", "pyodide:start", "pyodide:end");
-    measure("Engine wheel install", "wheel:start", "wheel:end");
+    measure("Engine mount", "engine:start", "engine:end");
     measure("Renderer mount", "renderer:start", "renderer:end");
     measure("Bridge init", "bridge:start", "bridge:end");
     measure("Default inventory", "inventory:start", "inventory:end");
@@ -251,6 +258,35 @@ async function mountRendererPackage(pyodide) {
         sys.path.insert(0, "/home/pyodide/render")
         sys.path.insert(0, "/home/pyodide")
     `);
+}
+
+// ---------------------------------------------------------------------
+// Mount a Python package's source files into Pyodide's FS and add
+// the package's parent directory to sys.path. Used in place of
+// micropip.install for pure-Python packages we ship as source: we
+// know exactly which files to fetch and where they go, so we can
+// skip the wheel-format dance entirely.
+//
+// fsRelativePackagePath is the in-FS path of the package directory,
+// e.g. "engine/phonology_engine" (mounted at /home/pyodide/<that>).
+// sysPathDir is the directory to add to sys.path (the parent of the
+// package), e.g. "/home/pyodide/engine".
+// ---------------------------------------------------------------------
+async function mountPackage(pyodide, fsRelativePackagePath, files, sysPathDir) {
+    const fsAbsPackagePath = `/home/pyodide/${fsRelativePackagePath}`;
+    pyodide.FS.mkdirTree(fsAbsPackagePath);
+    const fetches = files.map(async (filename) => {
+        const text = await fetchText(`${fsRelativePackagePath}/${filename}`);
+        pyodide.FS.writeFile(`${fsAbsPackagePath}/${filename}`, text);
+    });
+    await Promise.all(fetches);
+    // sys.path.insert is idempotent in practice -- adding the same
+    // dir twice just leaves two equal entries that resolve the same.
+    pyodide.runPython(
+        `import sys\n`
+        + `if ${JSON.stringify(sysPathDir)} not in sys.path:\n`
+        + `    sys.path.insert(0, ${JSON.stringify(sysPathDir)})\n`
+    );
 }
 
 // ---------------------------------------------------------------------
