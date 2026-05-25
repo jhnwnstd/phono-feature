@@ -5,6 +5,52 @@
    colors; both the desktop and this web app pick up the change on
    the next build. */
 
+/* Layout tokens. Colors live in theme.css (chromatic); these are
+   spatial. Centralized so spacing/radius/border choices apply
+   consistently and have one place to retune. One-off values that
+   appear exactly once stay as literals -- naming them would only
+   spread the value across grep results without removing a
+   decision. */
+:root {
+  /* Spacing scale. Pick the smallest that fits. */
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-md: 8px;
+  --space-lg: 12px;
+  --space-xl: 16px;
+  /* Corner radius. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  /* Border thicknesses. */
+  --border-thin: 1px;
+  --border-std: 1.5px;
+  --border-thick: 2px;
+  /* Control sizes. */
+  --control-h-md: 32px;     /* toolbar buttons / selects */
+  --control-h-sm: 26px;     /* segment buttons */
+  --control-h-xs: 22px;     /* panel clear button */
+  --seg-btn-min-w: 33px;
+  --feat-btn-w: 28px;
+  --feat-btn-h: 24px;       /* also feat-badge height */
+  --feat-badge-w: 30px;
+  /* Type sizes. */
+  --font-size-base: 14px;
+  --font-size-control: 13px;
+  --font-size-meta: 12px;
+  --font-size-label: 11px;
+  --font-size-micro: 10px;
+  /* Font stacks. */
+  --font-ui: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-ipa: "Noto Sans Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+}
+
+/* Tell native UI (form controls, scrollbars) which palette to use.
+   The base value matches the default (light); the dark override
+   pairs with the JS-driven data-theme attribute. */
+html { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+
 * { box-sizing: border-box; }
 
 /* Visible focus ring for keyboard users. ``:focus-visible`` excludes
@@ -12,7 +58,7 @@
    navigation lands. Uses the active palette's accent so it stays
    visible in both light and dark themes. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--border-thick) solid var(--accent);
   outline-offset: 2px;
 }
 :focus:not(:focus-visible) { outline: none; }
@@ -30,8 +76,8 @@ html, body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-base);
 }
 
 body {
@@ -41,11 +87,14 @@ body {
      panels-row height: it's the tallest sub-pane, and ``auto`` lets
      it claim exactly the room its 6 grouped cards need. Analysis
      then takes only what's left below, never eating into the panel
-     area. height: 100vh (not min-height) caps the body to the
-     viewport so the 1fr distribution actually has a finite remainder
-     to give the analysis. */
+     area. height: 100vh caps the body to the viewport so the 1fr
+     distribution actually has a finite remainder to give the
+     analysis. 100dvh tracks mobile browser chrome so the bottom
+     row isn't hidden under a URL bar; the 100vh declaration is the
+     fallback for browsers that don't support dvh. */
   grid-template-rows: auto auto 1fr auto;
   height: 100vh;
+  height: 100dvh;
 }
 
 /* ------------------------------------------------------------------ */
@@ -54,17 +103,17 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
   background: var(--panel);
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--border-thin) solid var(--border);
 }
 .toolbar select,
 .toolbar button {
-  height: 32px;
-  padding: 0 12px;
-  border: 1.5px solid var(--border);
-  border-radius: 6px;
+  height: var(--control-h-md);
+  padding: 0 var(--space-lg);
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
   background: var(--bg);
   color: var(--text);
   font: inherit;
@@ -78,7 +127,7 @@ body {
 }
 .toolbar-spacer { flex: 1; }
 #theme-btn {
-  width: 32px;
+  width: var(--control-h-md);
   padding: 0;
   font-size: 16px;
 }
@@ -92,20 +141,36 @@ body {
 .grid {
   display: grid;
   grid-template-columns: minmax(420px, 3fr) minmax(380px, 2fr);
-  gap: 8px;
-  padding: 8px;
+  gap: var(--space-md);
+  padding: var(--space-md);
   min-height: 0;
   overflow: hidden;
+}
+
+/* Narrow-screen stack. Without this, the two minmax tracks above
+   force a horizontal overflow under ~800 px wide. Single-column
+   layout below 900 px stacks segments above features; each panel
+   keeps its own internal scroll, and the .grid container itself
+   scrolls if the combined height exceeds the panels-row. */
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
 }
 
 .panel {
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-lg);
   min-height: 0;
   overflow: hidden;
+  /* Isolate the panel subtree so a re-render inside one panel
+     can't trigger relayout/repaint of the other panel or the
+     analysis pane. Bounded blast radius for DOM updates. */
+  contain: layout style;
 }
 .panel[data-active="true"] {
   background: var(--panel);
@@ -114,13 +179,13 @@ body {
 .panel-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: var(--border-thin) solid var(--border);
 }
 .panel-title {
   flex: 1;
-  font-size: 11px;
+  font-size: var(--font-size-label);
   font-weight: bold;
   letter-spacing: 1.5px;
   color: var(--text-dim);
@@ -129,14 +194,14 @@ body {
   color: var(--text);
 }
 .panel-clear-btn {
-  height: 22px;
+  height: var(--control-h-xs);
   padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  border: var(--border-thin) solid var(--border);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-dim);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--font-size-label);
   cursor: pointer;
 }
 .panel-clear-btn:hover {
@@ -147,7 +212,11 @@ body {
 .panel-body {
   flex: 1;
   overflow: auto;
-  padding: 12px;
+  padding: var(--space-lg);
+  /* Reserve the scrollbar column even when there's nothing to
+     scroll, so the panel contents don't shift horizontally when
+     content grows past the visible height. */
+  scrollbar-gutter: stable;
 }
 
 /* ------------------------------------------------------------------ */
@@ -177,21 +246,24 @@ body {
 }
 .seg-vowels {
   float: right;
-  margin: 0 0 8px 16px;
+  margin: 0 0 var(--space-md) var(--space-xl);
   /* Don't let the floated chart stretch absurdly wide on narrow      */
   /* panels; the consonants need some room to wrap into.              */
   max-width: 55%;
 }
 .seg-group {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-md);
   min-width: 0;
 }
 .seg-group-header {
-  font-size: 11px;
+  font-size: var(--font-size-label);
   font-weight: bold;
   letter-spacing: 1px;
   color: var(--text-dim);
-  padding: 4px 2px 6px;
+  padding: var(--space-xs) 2px var(--space-sm);
+  /* Group names from inventories can be long; wrap rather than
+     blow out the seg-grid width. */
+  overflow-wrap: anywhere;
 }
 .panel[data-active="true"] .seg-group-header {
   color: var(--text);
@@ -199,19 +271,22 @@ body {
 .seg-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 .seg-btn {
-  min-width: 33px;
-  height: 26px;
-  padding: 0 6px;
-  border-radius: 8px;
-  border: 1.5px solid var(--border);
+  min-width: var(--seg-btn-min-w);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-lg);
+  border: var(--border-std) solid var(--border);
   background: var(--seg-default);
   color: var(--text);
-  font-family: "Noto Sans Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
-  font-size: 13px;
+  font-family: var(--font-ipa);
+  font-size: var(--font-size-control);
   cursor: pointer;
+  /* Don't let multi-character segments (e.g. /tʃ/, /dʒ/, /aɪ/)
+     wrap inside the button; widen instead. */
+  white-space: nowrap;
 }
 .seg-btn:hover {
   background: var(--accent-light);
@@ -221,18 +296,18 @@ body {
 .seg-btn[data-state="matched"] {
   background: var(--seg-selected);
   color: #FFF;
-  border: 2px solid var(--accent);
+  border: var(--border-thick) solid var(--accent);
   font-weight: bold;
 }
 .seg-btn[data-state="unmatched"] {
   background: var(--seg-unmatched);
   color: var(--text-dim);
-  border: 1px solid var(--border);
+  border: var(--border-thin) solid var(--border);
 }
 .seg-btn[data-state="suggested"] {
   background: var(--accent-light);
   color: var(--accent);
-  border: 1.5px dashed var(--accent);
+  border: var(--border-std) dashed var(--accent);
 }
 
 /* ------------------------------------------------------------------ */
@@ -245,17 +320,17 @@ body {
   /* Span the full segment-grid width so the chart isn't squeezed */
   /* into one of the column-flow's narrow columns. */
   break-inside: avoid;
-  margin-top: 4px;
+  margin-top: var(--space-xs);
 }
 .vowel-chart {
   display: grid;
   /* Column 1: row labels. Columns 2-7: front-unr, front-rnd, */
   /* central-unr, central-rnd, back-unr, back-rnd. */
   grid-template-columns: minmax(60px, auto) repeat(6, minmax(28px, 1fr));
-  grid-auto-rows: 26px;
-  column-gap: 4px;
+  grid-auto-rows: var(--control-h-sm);
+  column-gap: var(--space-xs);
   row-gap: 2px;
-  padding: 4px 2px;
+  padding: var(--space-xs) 2px;
   align-items: center;
 }
 .vowel-chart-corner {
@@ -265,7 +340,7 @@ body {
 .vowel-chart-col-label {
   grid-row: 1;
   text-align: center;
-  font-size: 10px;
+  font-size: var(--font-size-micro);
   font-weight: bold;
   letter-spacing: 1px;
   color: var(--text-dim);
@@ -273,8 +348,8 @@ body {
 }
 .vowel-chart-row-label {
   text-align: right;
-  padding-right: 6px;
-  font-size: 10px;
+  padding-right: var(--space-sm);
+  font-size: var(--font-size-micro);
   font-weight: bold;
   letter-spacing: 0.5px;
   color: var(--text-dim);
@@ -307,14 +382,14 @@ body {
    media query below stacks them vertically. */
 #feat-list {
   display: flex;
-  gap: 16px;
+  gap: var(--space-xl);
   align-items: flex-start;
 }
 .feat-col {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-lg);
   min-width: 0;
 }
 @media (max-width: 600px) {
@@ -324,11 +399,12 @@ body {
   margin-bottom: 0;
 }
 .feat-group-header {
-  font-size: 11px;
+  font-size: var(--font-size-label);
   font-weight: bold;
   letter-spacing: 1px;
   color: var(--text-dim);
-  padding: 4px 2px 6px;
+  padding: var(--space-xs) 2px var(--space-sm);
+  overflow-wrap: anywhere;
 }
 .panel[data-active="true"] .feat-group-header {
   color: var(--text);
@@ -336,12 +412,12 @@ body {
 .feat-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   /* Slightly tighter padding than the desktop's row spacing to
      trade a few pixels of breathing room for fitting all features
      in the panel without scrolling on a 720-900 px viewport. */
-  padding: 2px 8px;
-  border-radius: 6px;
+  padding: 2px var(--space-md);
+  border-radius: var(--radius-md);
 }
 .feat-row[data-shared="true"][data-value="+"] { background: var(--shared-plus); }
 .feat-row[data-shared="true"][data-value="-"] { background: var(--shared-minus); }
@@ -350,17 +426,21 @@ body {
 .feat-name {
   flex: 1;
   color: var(--text);
+  /* Feature names come from user-uploaded inventories. A long
+     "PHARYNGEALIZED_BACKNESS" or similar shouldn't blow out the
+     row width; wrap on any character if needed. */
+  overflow-wrap: anywhere;
 }
 .feat-row[data-contrastive="true"] .feat-name { color: var(--accent); font-weight: bold; }
 .feat-row[data-shared="true"] .feat-name { font-weight: bold; }
 
 .feat-badge {
-  width: 30px;
-  height: 24px;
+  width: var(--feat-badge-w);
+  height: var(--feat-btn-h);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-weight: bold;
   /* Themed via palette.py's tag_gray token so both modes track the
      palette source. The previous hardcoded #E5E7EB / #2A2A2A pair
@@ -373,9 +453,9 @@ body {
 .feat-row[data-contrastive="true"] .feat-badge { background: var(--accent-light); color: var(--accent); }
 
 .feat-btn {
-  width: 28px;
-  height: 24px;
-  border: 1.5px solid var(--border);
+  width: var(--feat-btn-w);
+  height: var(--feat-btn-h);
+  border: var(--border-std) solid var(--border);
   border-radius: 5px;
   background: var(--analysis-bg);
   color: var(--text-dim);
@@ -404,8 +484,8 @@ body {
 /* ------------------------------------------------------------------ */
 .analysis {
   background: var(--analysis-bg);
-  border-top: 1px solid var(--border);
-  padding: 12px 16px;
+  border-top: var(--border-thin) solid var(--border);
+  padding: var(--space-lg) var(--space-xl);
   display: flex;
   flex-direction: column;
   /* No max-height: this row sits below the panels in the body grid,
@@ -417,40 +497,50 @@ body {
 }
 /* Expanded state: claim 55vh instead of 1fr-of-remainder so panels
    visibly shrink and the analysis gets meaningfully more room.
-   Pairs with the ⤢/⤣ toggle button in the analysis header. */
-.analysis.expanded { min-height: 55vh; }
+   Pairs with the ⤢/⤣ toggle button in the analysis header. The
+   dvh fallback keeps the expanded analysis from being clipped by
+   mobile browser chrome the way 55vh would. */
+.analysis.expanded {
+  min-height: 55vh;
+  min-height: 55dvh;
+}
 .analysis-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  gap: var(--space-md);
+  font-size: var(--font-size-label);
   font-weight: bold;
   letter-spacing: 1px;
   color: var(--text-dim);
 }
 .analysis-title { flex: 1; }
 #expand-btn {
-  width: 24px;
+  width: var(--feat-btn-h);
   height: 20px;
   background: transparent;
   border: none;
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: var(--font-size-base);
   cursor: pointer;
 }
 #expand-btn:hover { color: var(--text); }
 .analysis-content {
-  margin-top: 8px;
+  margin-top: var(--space-md);
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 12px;
+  border: var(--border-thin) solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
   overflow: auto;
+  scrollbar-gutter: stable;
   flex: 1;
-  font-size: 13px;
+  font-size: var(--font-size-control);
   color: var(--text);
+  /* Re-rendering the analysis HTML is the most frequent update;
+     contain so the bridge-driven innerHTML swap doesn't reflow the
+     panels or status bar. */
+  contain: layout style;
 }
-.analysis-content p { margin: 0 0 8px; }
+.analysis-content p { margin: 0 0 var(--space-md); }
 .analysis-content b { color: var(--text); }
 .analysis-content table { border-collapse: collapse; }
 .analysis-content td { padding-bottom: 3px; }
@@ -460,9 +550,9 @@ body {
 /* ------------------------------------------------------------------ */
 .statusbar {
   background: var(--panel);
-  border-top: 1px solid var(--border);
-  padding: 6px 12px;
-  font-size: 12px;
+  border-top: var(--border-thin) solid var(--border);
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--font-size-meta);
   color: var(--text-dim);
 }
 
@@ -481,8 +571,8 @@ body {
 .loading.hidden { display: none; }
 .loading-card {
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: var(--border-thin) solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 24px 32px;
   text-align: center;
   max-width: 360px;
@@ -490,16 +580,16 @@ body {
 .loading-title {
   font-weight: bold;
   font-size: 16px;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-md);
 }
 .loading-status {
   color: var(--text-dim);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-lg);
   min-height: 20px;
 }
 .loading-hint {
-  margin-top: 12px;
-  font-size: 12px;
+  margin-top: var(--space-lg);
+  font-size: var(--font-size-meta);
   color: var(--text-dim);
 }
 progress {
