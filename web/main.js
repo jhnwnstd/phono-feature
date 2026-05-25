@@ -575,13 +575,25 @@ function cssEscape(s) {
 function activateMode(mode) {
     if (state.mode === mode) return;
 
-    // Snapshot the outgoing mode's state before swapping. Restoring
-    // it on the next toggle-back means switching modes preserves
-    // your work instead of wiping it.
+    // Snapshot + PROJECT the outgoing mode's state into the
+    // incoming mode's saved slot. Projection matches the desktop's
+    // _ModeController.save_outgoing_state semantics:
+    //   seg→feat: feat_state = common +/- features of the selection
+    //   feat→seg: seg_state  = every segment matching the query
+    // The engine method
+    // ``FeatureEngine.project_segments_to_features`` (and the
+    // existing ``find_segments``) is the single source of truth;
+    // we just call it through the bridge.
     if (state.mode === "seg_to_feat") {
         state.saved_seg_state = state.selected_segments.slice();
+        state.saved_feat_state = state.bridge
+            ? callBridge("project_segments_to_features", state.selected_segments)
+            : {};
     } else {
         state.saved_feat_state = { ...state.selected_features };
+        state.saved_seg_state = state.bridge
+            ? callBridge("project_features_to_segments", state.selected_features)
+            : [];
     }
 
     state.mode = mode;
@@ -589,7 +601,7 @@ function activateMode(mode) {
     $("feat-panel").dataset.active = (mode === "feat_to_seg") ? "true" : "false";
 
     if (mode === "seg_to_feat") {
-        // Restore the previous seg selection; clear feat-side.
+        // Adopt the projected seg selection; clear feat-side.
         state.selected_segments = state.saved_seg_state.slice();
         state.selected_features = {};
         for (const btn of document.querySelectorAll(".feat-btn[data-active='true']")) {
@@ -602,7 +614,7 @@ function activateMode(mode) {
             btn.setAttribute("aria-pressed", isSelected ? "true" : "false");
         }
     } else {
-        // Restore the previous feat query; clear seg-side.
+        // Adopt the projected feat query; clear seg-side.
         state.selected_features = { ...state.saved_feat_state };
         state.selected_segments = [];
         for (const btn of document.querySelectorAll(".seg-btn[data-state='selected']")) {

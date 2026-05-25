@@ -177,6 +177,31 @@ def set_active_theme(name: str) -> None:
 
 
 # ----------------------------------------------------------------------
+# Mode-switch projection. Delegated to the engine so the web mode
+# toggle behaves identically to the desktop's _ModeController:
+# seg→feat pre-fills the feature query with the common +/- features
+# of the selection; feat→seg pre-selects every segment that matches
+# the current query.
+# ----------------------------------------------------------------------
+def project_segments_to_features(segs: list[str]) -> dict[str, str]:
+    """For mode switch seg → feat: returns the feature query that
+    represents the selection. Empty list -> empty dict."""
+    engine = _require_engine()
+    if not segs:
+        return {}
+    return engine.project_segments_to_features(list(segs))
+
+
+def project_features_to_segments(spec: dict[str, str]) -> list[str]:
+    """For mode switch feat → seg: returns the segments matching
+    the query. Empty dict -> empty list."""
+    engine = _require_engine()
+    if not spec:
+        return []
+    return engine.find_segments(dict(spec))
+
+
+# ----------------------------------------------------------------------
 # Selection-driven analysis. ``segs`` is a JS array; Pyodide proxies
 # it to Python. Functions return dicts that JS can read directly.
 # ----------------------------------------------------------------------

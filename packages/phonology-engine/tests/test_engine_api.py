@@ -97,6 +97,41 @@ def test_find_segments_unknown_feature_raises(engine: FeatureEngine) -> None:
 
 
 # ----------------------------------------------------------------------
+# Mode-switch projection: shared by the desktop's _ModeController and
+# the web bridge so toggling modes produces identical pre-filled
+# states across both UIs.
+# ----------------------------------------------------------------------
+def test_project_segments_to_features_empty(engine: FeatureEngine) -> None:
+    assert engine.project_segments_to_features([]) == {}
+
+
+def test_project_segments_to_features_drops_zero(
+    engine: FeatureEngine,
+) -> None:
+    """Only '+' / '-' values survive; '0' values are dropped so the
+    projected query doesn't pin features the user didn't explicitly
+    set."""
+    projection = engine.project_segments_to_features(["b", "d", "ɡ"])
+    assert all(v in ("+", "-") for v in projection.values())
+
+
+def test_project_round_trips_to_natural_class(
+    engine: FeatureEngine,
+) -> None:
+    """Projecting a natural class to a feature query and then
+    matching segments against that query must include every input
+    segment. This is the round-trip the GUI relies on: seg→feat→seg
+    on a natural class must not silently lose the original segments.
+    """
+    seed = ["b", "d", "ɡ"]
+    spec = engine.project_segments_to_features(seed)
+    matched = set(engine.find_segments(spec))
+    assert set(seed).issubset(matched), (
+        f"round-trip lost segments: spec={spec}, matched={matched}"
+    )
+
+
+# ----------------------------------------------------------------------
 # Natural class computation
 # ----------------------------------------------------------------------
 

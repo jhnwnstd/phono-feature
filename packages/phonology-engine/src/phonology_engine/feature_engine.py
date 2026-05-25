@@ -491,6 +491,33 @@ class FeatureEngine:
                     result[feature] = v
         return result
 
+    def project_segments_to_features(
+        self, segments: list[str]
+    ) -> dict[str, str]:
+        """Translate a segment selection into an equivalent
+        feature-query spec, suitable for prefilling a feat-to-seg
+        panel after switching modes from seg-to-feat.
+
+        Returns the common +/- features of the selection (drops '0'
+        values; the user can re-add underspecification deliberately
+        if they want). Empty input -> empty spec.
+
+        Single source of truth for the seg→feat side of the GUI's
+        mode-switch projection; both the desktop's
+        ``_ModeController.save_outgoing_state`` and the web bridge
+        call this so both frontends produce identical pre-filled
+        states on toggle.
+
+        The reverse direction (feat→seg projection) is just
+        ``find_segments(spec)`` which already exists; no separate
+        method is needed.
+        """
+        return {
+            f: v
+            for f, v in self.common_features(segments).items()
+            if v in ("+", "-")
+        }
+
     def is_natural_class(
         self, segments: list[str]
     ) -> tuple[bool, tuple[Mapping[str, str], ...]]:

@@ -88,27 +88,27 @@ class _ModeController:
         the opposite mode's saved state. Called only when the mode is
         actually changing.
         """
+        engine = self._w.engine
         if self.mode == Mode.SEG_TO_FEAT:
             # Preserve exact seg selection so toggling back restores it.
             self.saved_seg_state = list(self._w._selected_segments)
-            # Project into feat mode: shared (non-contradictory) features only.
-            if self._w._selected_segments and self._w.engine:
-                self.saved_feat_state = {
-                    f: v
-                    for f, v in self._w.engine.common_features(
-                        self._w._selected_segments
-                    ).items()
-                    if v in ("+", "-")
-                }
+            # Project into feat mode: shared (non-contradictory) features.
+            # ``project_segments_to_features`` is the canonical engine
+            # method; the web bridge calls the same method so both UIs
+            # produce identical pre-filled states on mode toggle.
+            if self._w._selected_segments and engine:
+                self.saved_feat_state = engine.project_segments_to_features(
+                    self._w._selected_segments
+                )
             else:
                 self.saved_feat_state = {}
         else:
             # Preserve exact feat query so toggling back restores it.
             self.saved_feat_state = dict(self._w._selected_features)
-            # Project into seg mode: segments matched by current feature query.
-            if self._w._selected_features and self._w.engine:
+            # Project into seg mode: segments matched by current query.
+            if self._w._selected_features and engine:
                 self.saved_seg_state = list(
-                    self._w.engine.find_segments(self._w._selected_features)
+                    engine.find_segments(self._w._selected_features)
                 )
             else:
                 self.saved_seg_state = []
