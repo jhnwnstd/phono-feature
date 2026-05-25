@@ -1,24 +1,18 @@
 # Phonology Segment and Feature Engine
 
-A desktop tool for distinctive feature phonology. It supports segment inventories, natural class search, and minimal distinguishing feature bundles.
+Distinctive-feature phonology tool. Browse inventories, compute natural classes, find minimal distinguishing feature bundles.
 
-Browser version: <https://jhnwnstd.github.io/features/>
-
-The browser version uses the same engine and inventories. It runs locally in the browser. You can upload JSON inventories and download your work.
+Browser version: <https://jhnwnstd.github.io/features/>.
 
 ## Features
 
-- View and edit segment inventories.
-- Search for natural classes by feature criteria.
-- Find the features that distinguish a segment from a natural class.
-- Find the smallest feature set that distinguishes two segments.
-- Create inventories for any language.
+- Browse, edit, and create segment inventories.
+- Select any set of segments to see the features they share, the features that split them, and the minimal feature bundle that uniquely characterizes the set (when one exists).
+- Toggle feature values to query in the other direction: find every segment matching a `+`/`-` spec.
 
 ## Run
 
 Requires Python 3.11+.
-
-Use the launcher for your operating system.
 
 | OS | Launcher |
 |---|---|
@@ -36,17 +30,7 @@ macOS may block unsigned command files. Right click `RUN-Mac.command`, choose **
 
 Windows may show a SmartScreen warning. Click **More info**, then **Run anyway**.
 
-Linux file managers may not run shell scripts directly. Open a terminal in the project folder and run:
-
-```bash
-./RUN-Linux.sh
-````
-
-If needed, make the launcher executable first:
-
-```bash
-chmod +x RUN-Linux.sh
-```
+Linux file managers may refuse to launch shell scripts; run from a terminal instead. If you get a permission error, `chmod +x RUN-Linux.sh` first.
 
 ## Inventories
 
@@ -62,21 +46,23 @@ You can add inventories through **New Inventory** in the app.
 
 ## Development
 
-The engine is pure Python. The GUI uses PyQt6.
+The engine is pure Python in `packages/phonology-engine/`. The desktop GUI in `app/` uses PyQt6 and depends on the engine. The browser version in `web/` reuses the same engine via Pyodide.
+
+The launcher creates `app/.venv/` and installs both packages editable. Activate it to run the tests:
 
 ```bash
-cd app
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-pytest
-pytest tests/test_engine_api.py
+./RUN-Linux.sh                                  # creates app/.venv
+source app/.venv/bin/activate
+pytest app/tests                                # GUI + integration
+pytest packages/phonology-engine/tests          # engine, no Qt
 ```
 
-On Windows, activate the environment with:
+Manual setup without the launcher (any OS):
 
-```bat
-.venv\Scripts\activate.bat
+```bash
+python -m venv app/.venv
+source app/.venv/bin/activate                   # Windows: app\.venv\Scripts\activate.bat
+pip install -e packages/phonology-engine -e "app[dev]"
 ```
 
 ## Repository layout
@@ -85,14 +71,26 @@ On Windows, activate the environment with:
 .
 ├── README.md
 ├── LICENSE
+├── pyproject.toml          # workspace marker
 ├── RUN-Mac.command
 ├── RUN-Windows.bat
 ├── RUN-Linux.sh
-└── app/
-    ├── pyproject.toml
-    ├── inventories/
-    ├── src/phonology_features/
-    └── tests/
+├── app/                    # desktop GUI (PyQt6)
+│   ├── pyproject.toml
+│   ├── inventories/
+│   ├── src/phonology_features/
+│   └── tests/
+├── web/                    # browser version (static, Pyodide)
+│   ├── api.py
+│   ├── index.html
+│   ├── main.js
+│   ├── style.css
+│   └── scripts/build.py
+└── packages/
+    └── phonology-engine/   # shared pure-Python engine
+        ├── pyproject.toml
+        ├── src/phonology_engine/
+        └── tests/
 ```
 
 ## License
