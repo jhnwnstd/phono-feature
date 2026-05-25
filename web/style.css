@@ -7,6 +7,24 @@
 
 * { box-sizing: border-box; }
 
+/* Visible focus ring for keyboard users. ``:focus-visible`` excludes
+   mouse-click focus, so the ring only appears when keyboard tab
+   navigation lands. Uses the active palette's accent so it stays
+   visible in both light and dark themes. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* Bridge-gated toolbar controls start with ``disabled`` set in HTML;
+   the JS removes it once Pyodide + the engine are loaded. Style so
+   the disabled state is visually obvious instead of looking broken. */
+.toolbar :disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 html, body {
   height: 100%;
   margin: 0;
@@ -240,10 +258,12 @@ body {
   justify-content: center;
   border-radius: 4px;
   font-weight: bold;
-  background: #E5E7EB;
+  /* Themed via palette.py's tag_gray token so both modes track the
+     palette source. The previous hardcoded #E5E7EB / #2A2A2A pair
+     drifted from theme.css whenever the palette changed. */
+  background: var(--tag-gray);
   color: var(--text-dim);
 }
-html[data-theme="dark"] .feat-badge { background: #2A2A2A; }
 .feat-row[data-shared="true"][data-value="+"] .feat-badge { background: var(--plus-bg); color: var(--plus); }
 .feat-row[data-shared="true"][data-value="-"] .feat-badge { background: var(--minus-bg); color: var(--minus); }
 .feat-row[data-contrastive="true"] .feat-badge { background: var(--accent-light); color: var(--accent); }

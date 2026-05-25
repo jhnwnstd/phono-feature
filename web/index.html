@@ -4,6 +4,44 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Phonology Segment &amp; Feature Engine</title>
+<!--
+  Content Security Policy. Restricts which origins can supply
+  scripts, workers, and other resources, providing defense-in-depth
+  against XSS even though analysis.py already escapes user strings.
+
+  Pyodide needs 'wasm-unsafe-eval' for its WebAssembly compile and
+  blob: workers for its worker pool; it loads from JSDelivr (swap
+  the origin if you self-host).
+
+  style-src includes 'unsafe-inline' because analysis.py emits chips
+  with per-element inline styles (background and color baked from
+  the active palette so they survive the QTextEdit / browser DOM
+  swap). A future refactor that moves chip styling to CSS classes
+  would let us drop this and lock style-src to 'self' too. Inline-
+  style XSS is meaningfully less severe than inline-script XSS, and
+  the user text in chips is escaped via html.escape at the chip-
+  building level.
+-->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
+  worker-src 'self' blob:;
+  connect-src 'self' https://cdn.jsdelivr.net;
+  img-src 'self' data:;
+  style-src 'self' 'unsafe-inline';
+  font-src 'self';
+  object-src 'none';
+  base-uri 'none';
+  form-action 'none';
+">
+<!--
+  frame-ancestors is intentionally omitted here. The directive is
+  ignored when delivered via <meta> (HTML spec; only HTTP headers
+  honor it). GitHub Pages doesn't let us set arbitrary headers, so
+  we accept the gap. To prevent clickjacking entirely, deploy
+  behind a host that sets X-Frame-Options: DENY or the equivalent
+  Content-Security-Policy header.
+-->
 <link rel="stylesheet" href="theme.css">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -18,10 +56,13 @@
 </div>
 
 <header class="toolbar">
-  <select id="inventory-picker" aria-label="Inventory"></select>
-  <button id="upload-btn" type="button">Open file…</button>
+  <!-- Bridge-gated controls start disabled so a keyboard-tab user
+       can't activate them before bootPyodide finishes. enableBridge
+       GatedControls() in main.js re-enables them after boot. -->
+  <select id="inventory-picker" aria-label="Inventory" disabled></select>
+  <button id="upload-btn" type="button" disabled>Open file…</button>
   <input id="upload-input" type="file" accept=".json" hidden>
-  <button id="download-btn" type="button">Save as…</button>
+  <button id="download-btn" type="button" disabled>Save as…</button>
   <div class="toolbar-spacer"></div>
   <button id="theme-btn" type="button" aria-label="Toggle theme">☾</button>
 </header>
@@ -30,14 +71,16 @@
   <section class="panel" id="seg-panel" data-active="true">
     <header class="panel-header">
       <span class="panel-title" id="seg-title">SEGMENTS</span>
-      <button class="panel-clear-btn" id="seg-clear-btn" type="button">Clear</button>
+      <button class="panel-clear-btn" id="seg-clear-btn" type="button"
+              aria-label="Clear segment selection">Clear</button>
     </header>
     <div class="panel-body" id="seg-grid"></div>
   </section>
   <section class="panel" id="feat-panel">
     <header class="panel-header">
       <span class="panel-title" id="feat-title">FEATURES</span>
-      <button class="panel-clear-btn" id="feat-clear-btn" type="button">Clear</button>
+      <button class="panel-clear-btn" id="feat-clear-btn" type="button"
+              aria-label="Clear feature query">Clear</button>
     </header>
     <div class="panel-body" id="feat-list"></div>
   </section>
@@ -51,11 +94,20 @@
   <div class="analysis-content" id="analysis-content"></div>
 </section>
 
-<footer class="statusbar" id="statusbar">
+<footer class="statusbar" id="statusbar" aria-live="polite">
   Select an inventory from the dropdown to begin.
 </footer>
 
-<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<!--
+  Pyodide CDN load with Sub-Resource Integrity. The hash is for
+  v0.26.4's pyodide.js bootstrap file (computed via sha384 of the
+  CDN response body). If you bump the Pyodide version in main.js,
+  re-compute this hash; the page will fail to boot rather than load
+  a tampered CDN payload.
+-->
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"
+        integrity="sha384-i3R37b3tF+HWudsUf1VSEOY2YxwSNMqY8DQa9Z0O3xh+NkJ9o+yjcGyIi5huj+nB"
+        crossorigin="anonymous"></script>
 <script type="module" src="main.js"></script>
 </body>
 </html>

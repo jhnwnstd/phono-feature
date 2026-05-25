@@ -10,6 +10,56 @@ const $ = (id) => document.getElementById(id);
 const setStatus = (msg) => { $("statusbar").textContent = msg; };
 const setLoadingStatus = (msg) => { $("loading-status").textContent = msg; };
 
+// ---------------------------------------------------------------------
+// fetch wrappers that throw a useful Error on non-2xx instead of
+// returning an HTML 404 page that .json() then parses as a mystery
+// SyntaxError. Use everywhere we hit network.
+// ---------------------------------------------------------------------
+async function fetchOk(url) {
+    const r = await fetch(url);
+    if (!r.ok) {
+        throw new Error(`fetch ${url}: ${r.status} ${r.statusText}`);
+    }
+    return r;
+}
+async function fetchJson(url) { return (await fetchOk(url)).json(); }
+async function fetchText(url) { return (await fetchOk(url)).text(); }
+
+// ---------------------------------------------------------------------
+// Pyodide bridge call wrapper. Two responsibilities:
+//
+//   1. Convert plain-JS args (lists/dicts) into PyProxy via toPy.
+//   2. Destroy every PyProxy created in this call (the args AND the
+//      Python return value before/after toJs unwraps it).
+//
+// PyProxy objects are NOT garbage collected automatically. Every call
+// site that omitted .destroy() leaked a wrapper per click; over a
+// long session that grows without bound. This wrapper makes the
+// cleanup automatic.
+// ---------------------------------------------------------------------
+function callBridge(fnName, ...args) {
+    if (!state.bridge) throw new Error(`bridge not ready: ${fnName}`);
+    const proxies = [];
+    const pyArgs = args.map((a) => {
+        if (a === null || typeof a !== "object") return a;
+        const p = state.pyodide.toPy(a);
+        proxies.push(p);
+        return p;
+    });
+    let result;
+    try {
+        result = state.bridge[fnName](...pyArgs);
+        if (result && typeof result.toJs === "function") {
+            const js = result.toJs({ dict_converter: Object.fromEntries });
+            result.destroy();
+            return js;
+        }
+        return result;
+    } finally {
+        for (const p of proxies) p.destroy();
+    }
+}
+
 // State managed in JS (Python holds the engine + inventory).
 const state = {
     mode: "seg_to_feat",          // or "feat_to_seg"
@@ -32,7 +82,12 @@ let BUNDLED_INVENTORIES = [];
 
 async function bootPyodide() {
     setLoadingStatus("Loading inventory list…");
-    BUNDLED_INVENTORIES = await (await fetch("inventories.json")).json();
+    BUNDLED_INVENTORIES = await fetchJson("inventories.json");
+    if (!BUNDLED_INVENTORIES.length) {
+        throw new Error(
+            "no inventories in inventories.json; check the build script"
+        );
+    }
     populateInventoryPicker();
 
     setLoadingStatus("Loading the Python runtime…");
@@ -47,6 +102,7 @@ async function bootPyodide() {
     const wheelUrl = new URL("wheels/phonology_engine-0.1.0-py3-none-any.whl",
         document.baseURI).toString();
     await micropip.install(wheelUrl);
+    micropip.destroy();
 
     setLoadingStatus("Loading renderer modules…");
     // The build copies palette.py / constants.py / analysis.py into
@@ -55,10 +111,11 @@ async function bootPyodide() {
     await mountRendererPackage(pyodide);
 
     setLoadingStatus("Initializing the bridge…");
-    const apiSource = await (await fetch("api.py")).text();
+    const apiSource = await fetchText("api.py");
     pyodide.FS.writeFile("/home/pyodide/api.py", apiSource);
     state.bridge = pyodide.pyimport("api");
 
+    enableBridgeGatedControls();
     setLoadingStatus("Loading default inventory…");
     await loadBundledInventory(BUNDLED_INVENTORIES[0]);
 
@@ -79,7 +136,7 @@ async function mountRendererPackage(pyodide) {
     ];
     pyodide.FS.mkdirTree("/home/pyodide/render/phonology_features/gui");
     for (const [_local, urlPath] of files) {
-        const text = await (await fetch(urlPath)).text();
+        const text = await fetchText(urlPath);
         pyodide.FS.writeFile(`/home/pyodide/${urlPath}`, text);
     }
     pyodide.runPython(`
@@ -90,18 +147,31 @@ async function mountRendererPackage(pyodide) {
 }
 
 // ---------------------------------------------------------------------
+// Bridge-gated controls. Toolbar controls that call into Python are
+// disabled at page load and re-enabled once bootPyodide finishes. The
+// loading overlay covers the panels visually, but keyboard focus can
+// still reach the toolbar; disabling is the only reliable guard.
+// ---------------------------------------------------------------------
+const BRIDGE_GATED_IDS = [
+    "inventory-picker",
+    "upload-btn",
+    "download-btn",
+];
+function enableBridgeGatedControls() {
+    for (const id of BRIDGE_GATED_IDS) $(id).disabled = false;
+}
+
+// ---------------------------------------------------------------------
 // Inventory loading
 // ---------------------------------------------------------------------
 async function loadBundledInventory(item) {
-    const text = await (await fetch(item.file)).text();
+    const text = await fetchText(item.file);
     await loadInventoryText(text, item.label);
 }
 
 async function loadInventoryText(text, sourceLabel) {
     try {
-        const info = state.bridge.load_inventory_json(text, sourceLabel).toJs(
-            { dict_converter: Object.fromEntries }
-        );
+        const info = callBridge("load_inventory_json", text, sourceLabel);
         state.inventory_name = info.name;
         state.segments = info.segments;
         state.features = info.features;
@@ -148,6 +218,10 @@ function renderSegmentGrid(groups) {
             btn.type = "button";
             btn.dataset.seg = seg;
             btn.dataset.state = "default";
+            // aria-pressed mirrors data-state for screen readers. Updated
+            // on every state change so AT users hear the toggle.
+            btn.setAttribute("aria-pressed", "false");
+            btn.setAttribute("aria-label", `/${seg}/`);
             btn.textContent = seg;
             btn.addEventListener("click", () => onSegmentClicked(seg));
             row.appendChild(btn);
@@ -273,15 +347,9 @@ function runAnalysis() {
 }
 
 function runSegToFeat() {
-    const result = state.bridge.analyze_segments(
-        state.pyodide.toPy(state.selected_segments)
-    ).toJs({ dict_converter: Object.fromEntries });
+    const result = callBridge("analyze_segments", state.selected_segments);
     $("analysis-content").innerHTML = result.analysis_html;
-    // Update segment button states.
-    for (const btn of document.querySelectorAll(".seg-btn")) {
-        const newState = result.segment_states[btn.dataset.seg] || "default";
-        if (btn.dataset.state !== newState) btn.dataset.state = newState;
-    }
+    _updateSegmentButtonStates(result.segment_states);
     // Update feature row display.
     for (const row of document.querySelectorAll(".feat-row")) {
         const info = result.feature_display[row.dataset.feat] || { value: "", shared: false };
@@ -294,13 +362,22 @@ function runSegToFeat() {
 }
 
 function runFeatToSeg() {
-    const result = state.bridge.analyze_features(
-        state.pyodide.toPy(state.selected_features)
-    ).toJs({ dict_converter: Object.fromEntries });
+    const result = callBridge("analyze_features", state.selected_features);
     $("analysis-content").innerHTML = result.analysis_html;
+    _updateSegmentButtonStates(result.segment_states);
+}
+
+function _updateSegmentButtonStates(segmentStates) {
+    // Centralized so aria-pressed stays in lockstep with data-state.
+    // Selected/matched both read as "pressed" to assistive tech;
+    // unmatched/suggested/default read as not-pressed.
     for (const btn of document.querySelectorAll(".seg-btn")) {
-        const newState = result.segment_states[btn.dataset.seg] || "default";
-        if (btn.dataset.state !== newState) btn.dataset.state = newState;
+        const newState = segmentStates[btn.dataset.seg] || "default";
+        if (btn.dataset.state !== newState) {
+            btn.dataset.state = newState;
+            const pressed = (newState === "selected" || newState === "matched");
+            btn.setAttribute("aria-pressed", pressed ? "true" : "false");
+        }
     }
 }
 
@@ -317,15 +394,19 @@ function wireUploadDownload() {
         ev.target.value = "";
     });
     $("download-btn").addEventListener("click", () => {
-        const text = state.bridge.serialize_current_inventory();
-        const name = state.bridge.get_current_inventory_name();
-        const blob = new Blob([text], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${name}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        try {
+            const text = callBridge("serialize_current_inventory");
+            const name = callBridge("get_current_inventory_name");
+            const blob = new Blob([text], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${name}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            setStatus(`Download failed: ${e.message}`);
+        }
     });
 }
 
@@ -344,9 +425,13 @@ function wireThemeToggle() {
         $("theme-btn").textContent = next === "dark" ? "☀" : "☾";
         localStorage.setItem("theme", next);
         if (state.bridge) {
-            state.bridge.set_active_theme(next);
-            // Re-run analysis to refresh chip colors embedded in HTML.
-            runAnalysis();
+            callBridge("set_active_theme", next);
+            // Re-run analysis only if the user has a selection; an
+            // empty analysis pane has no chip colors to refresh.
+            const hasSelection =
+                state.selected_segments.length > 0
+                || Object.keys(state.selected_features).length > 0;
+            if (hasSelection) runAnalysis();
         }
     });
 }
@@ -411,6 +496,7 @@ function clearAll() {
     state.selected_features = {};
     for (const btn of document.querySelectorAll(".seg-btn")) {
         btn.dataset.state = "default";
+        btn.setAttribute("aria-pressed", "false");
     }
     for (const row of document.querySelectorAll(".feat-row")) {
         row.dataset.value = "";

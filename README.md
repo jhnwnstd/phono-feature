@@ -12,7 +12,7 @@ Browser version: <https://jhnwnstd.github.io/features/>.
 
 ## Run
 
-Requires Python 3.11+.
+Requires [Python 3.11+](https://www.python.org/downloads/).
 
 | OS | Launcher |
 |---|---|
@@ -20,9 +20,7 @@ Requires Python 3.11+.
 | Windows | `RUN-Windows.bat` |
 | Linux | `RUN-Linux.sh` |
 
-The first launch creates a local Python environment. Later launches open the app directly.
-
-Install Python from <https://www.python.org/downloads/> if your system does not have it.
+The first launch sets up the app. Later launches start immediately.
 
 ### OS notes
 
@@ -42,7 +40,7 @@ Bundled inventories live in `app/inventories/` and appear in the app menu.
 | `general_features.json` | General IPA oriented inventory |
 | `english_features.json` | English oriented inventory     |
 
-You can add inventories through **New Inventory** in the app.
+You can add and build inventories through **New Inventory** in the app.
 
 ## Development
 

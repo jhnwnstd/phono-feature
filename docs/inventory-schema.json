@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jhnwnstd/features/blob/main/docs/inventory-schema.json",
+  "title": "Phonology Inventory",
+  "description": "Schema for inventory JSON files consumed by the phonology-engine package. This is a declarative companion to the runtime validation in Inventory.parse; the parser enforces additional constraints (NFC normalization of segment names, duplicate-key detection, IPA-confusable advisories) that JSON Schema cannot express directly.",
+  "type": "object",
+  "required": ["features", "segments"],
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Human-readable inventory name shown in dropdowns and tab titles.",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Free-form metadata. The browser-app inventory picker reads metadata.name as the dropdown label; everything else is pass-through.",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "source": { "type": "string" },
+        "notes": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "features": {
+      "type": "array",
+      "description": "Declared distinctive-feature names. Order is the canonical display order. Every segment's bundle is keyed by these names; segments may omit features (the engine defaults missing keys to '0').",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "description": "Feature name. Convention: PascalCase or UPPERCASE (e.g. Voice, Nasal, CORONAL, DORSAL)."
+      },
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true
+    },
+    "segments": {
+      "type": "object",
+      "description": "Map of segment symbol (IPA or other) to a feature bundle. Keys are NFC-normalized at parse time. Values within each bundle must be '+', '-', or '0'. Missing features in a bundle are treated as '0' by the engine.",
+      "minProperties": 1,
+      "maxProperties": 1000,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "enum": ["+", "-", "0"]
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "name": "Tiny Demo",
+      "metadata": { "source": "hand-authored" },
+      "features": ["Voice", "Nasal"],
+      "segments": {
+        "p": { "Voice": "-", "Nasal": "-" },
+        "b": { "Voice": "+", "Nasal": "-" },
+        "m": { "Voice": "+", "Nasal": "+" }
+      }
+    }
+  ]
+}

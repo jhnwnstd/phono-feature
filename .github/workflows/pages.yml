@@ -45,6 +45,19 @@ jobs:
       - name: Build the deploy artifact
         run: python web/scripts/build.py
 
+      # End-to-end smoke test in headless Chromium. Boots the built
+      # site through Pyodide and verifies that the bridge mounts, the
+      # default inventory renders, and clicking a segment populates
+      # the analysis pane. Catches Pyodide-version bumps that break
+      # micropip's wheel resolution, engine API changes the bridge
+      # didn't catch up to, and JS regressions that pytest can't see.
+      - name: Install Playwright + Chromium
+        run: |
+          python -m pip install playwright
+          python -m playwright install chromium
+      - name: Smoke-test the built site
+        run: python web/scripts/smoke.py
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
