@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import ClassVar
 
+from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -20,8 +21,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from phonology_features.gui.palette import C
 
 VOWEL_LABEL_W = 72
 _VOWEL_HEIGHT: list = [
@@ -133,7 +132,11 @@ def _infer_height(
     if is_high_vowel:
         is_near_close = profile.has_height_sub_distinction and atr_tn == "-"
         if is_near_close:
-            return 1, Confidence.MEDIUM, "Near-close: [+high, -low, -tense/ATR]"
+            return (
+                1,
+                Confidence.MEDIUM,
+                "Near-close: [+high, -low, -tense/ATR]",
+            )
         if atr_tn == "+":
             return 0, Confidence.HIGH, "Close: [+high, -low, +tense/ATR]"
         return 0, Confidence.HIGH, "Close: [+high, -low]"
@@ -147,7 +150,11 @@ def _infer_height(
             return 2, Confidence.MEDIUM, "Close-mid: [-high, -low, +tense/ATR]"
         if atr_tn == "-":
             return 3, Confidence.MEDIUM, "Open-mid: [-high, -low, -tense/ATR]"
-        return 3, Confidence.LOW, "Open-mid (default): [-high, -low], no tense/ATR"
+        return (
+            3,
+            Confidence.LOW,
+            "Open-mid (default): [-high, -low], no tense/ATR",
+        )
     return 3, Confidence.LOW, "Open-mid (default): underspecified height"
 
 
@@ -176,8 +183,16 @@ def _infer_backness(
         is_coronal = cor == "+"
         is_retroflex_or_rhotic = ant == "-"
         if is_coronal and not is_retroflex_or_rhotic:
-            return "front", Confidence.LOW, "Front (inferred): CORONAL fallback"
-    return "central", Confidence.LOW, "Central (default): no front/back specified"
+            return (
+                "front",
+                Confidence.LOW,
+                "Front (inferred): CORONAL fallback",
+            )
+    return (
+        "central",
+        Confidence.LOW,
+        "Central (default): no front/back specified",
+    )
 
 
 def _infer_rounding(feats: dict, profile: VowelProfile) -> tuple[bool, str]:

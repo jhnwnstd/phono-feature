@@ -215,4 +215,3 @@ class GeometryAnalyzer:
             key=lambda x: (confidence_order[x["confidence"]], -x["coverage"])
         )
         return summary
-

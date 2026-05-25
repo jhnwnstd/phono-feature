@@ -15,15 +15,14 @@ Covers the recently-fixed UX bugs:
 from __future__ import annotations
 
 import pytest
-from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QKeyEvent
-from PyQt6.QtWidgets import QDialog, QMessageBox
-
 from phonology_features.gui.builder.dialogs import (
     FeatureTextEdit,
     InputDialog,
     SegmentTextEdit,
 )
+from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtWidgets import QDialog, QMessageBox
 
 
 # ---------------------------------------------------------------------------
@@ -266,9 +265,7 @@ def test_infer_split_mixed_explicit_delimiters():
     cell separators) split on all of them."""
     from phonology_features.gui.builder.dialogs import _infer_split
 
-    assert _infer_split("p, b, t\nd, e, f") == [
-        "p", "b", "t", "d", "e", "f"
-    ]
+    assert _infer_split("p, b, t\nd, e, f") == ["p", "b", "t", "d", "e", "f"]
 
 
 def test_infer_split_empty_returns_empty():

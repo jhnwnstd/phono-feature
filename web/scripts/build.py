@@ -134,10 +134,12 @@ def copy_inventories() -> None:
     manifest: list[dict[str, str]] = []
     for inv in sorted(INVENTORIES.glob("*.json")):
         shutil.copy(inv, out / inv.name)
-        manifest.append({
-            "file": f"inventories/{inv.name}",
-            "label": _inventory_label(inv),
-        })
+        manifest.append(
+            {
+                "file": f"inventories/{inv.name}",
+                "label": _inventory_label(inv),
+            }
+        )
     (DIST / "inventories.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False)
     )

@@ -7,19 +7,6 @@ import math
 from enum import StrEnum
 from typing import ClassVar
 
-from PyQt6.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QSizePolicy,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
-
 from phonology_features.gui.constants import (
     BTN_GAP,
     BTN_W,
@@ -31,6 +18,18 @@ from phonology_features.gui.style_utils import (
     _LAST_HTML_ATTR,
     set_css,
     set_html,
+)
+from PyQt6.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
 

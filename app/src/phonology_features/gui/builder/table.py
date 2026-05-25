@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from phonology_features.gui.palette import C
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QPainter, QPalette, QPen
 from PyQt6.QtWidgets import (
@@ -30,8 +31,6 @@ from PyQt6.QtWidgets import (
     QStyledItemDelegate,
     QTableWidget,
 )
-
-from phonology_features.gui.palette import C
 
 
 class _ToggleHeaderView(QHeaderView):
@@ -156,9 +155,7 @@ class _BulkCycleTable(QTableWidget):
         # Fast path 3: whole table.
         if len(sel_rows) == n_rows and len(sel_cols) == n_cols:
             tl_rect = self.visualRect(model.index(0, 0))
-            br_rect = self.visualRect(
-                model.index(n_rows - 1, n_cols - 1)
-            )
+            br_rect = self.visualRect(model.index(n_rows - 1, n_cols - 1))
             self._draw_outline_rect(tl_rect.united(br_rect))
             return
         # General case: arbitrary selection shape (cross, multi-col,
@@ -202,23 +199,31 @@ class _BulkCycleTable(QTableWidget):
                 continue
             if (row - 1, col) not in cells:
                 painter.drawLine(
-                    cell_rect.left(), cell_rect.top(),
-                    cell_rect.right(), cell_rect.top(),
+                    cell_rect.left(),
+                    cell_rect.top(),
+                    cell_rect.right(),
+                    cell_rect.top(),
                 )
             if (row + 1, col) not in cells:
                 painter.drawLine(
-                    cell_rect.left(), cell_rect.bottom(),
-                    cell_rect.right(), cell_rect.bottom(),
+                    cell_rect.left(),
+                    cell_rect.bottom(),
+                    cell_rect.right(),
+                    cell_rect.bottom(),
                 )
             if (row, col - 1) not in cells:
                 painter.drawLine(
-                    cell_rect.left(), cell_rect.top(),
-                    cell_rect.left(), cell_rect.bottom(),
+                    cell_rect.left(),
+                    cell_rect.top(),
+                    cell_rect.left(),
+                    cell_rect.bottom(),
                 )
             if (row, col + 1) not in cells:
                 painter.drawLine(
-                    cell_rect.right(), cell_rect.top(),
-                    cell_rect.right(), cell_rect.bottom(),
+                    cell_rect.right(),
+                    cell_rect.top(),
+                    cell_rect.right(),
+                    cell_rect.bottom(),
                 )
         painter.end()
 

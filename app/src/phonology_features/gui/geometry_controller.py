@@ -25,17 +25,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
+from phonology_features._settings import safe_read_setting
 from PyQt6.QtCore import QByteArray, QPoint, QTimer
 from PyQt6.QtGui import QScreen
 from PyQt6.QtWidgets import QApplication
 
-from phonology_features._settings import safe_read_setting
-
 if TYPE_CHECKING:
+    from phonology_features.gui.main_window import MainWindow
     from PyQt6.QtCore import QSettings
     from PyQt6.QtWidgets import QSplitter
-
-    from phonology_features.gui.main_window import MainWindow
 
 
 class _GeometryController:
@@ -181,9 +179,7 @@ class _GeometryController:
         # horizontal room belongs to the feature pane (stretch=1 on
         # the splitter), not to dead space after the vowels.
         seg_content = self._w._seg_scroll.widget()
-        seg_content_w = (
-            seg_content.sizeHint().width() if seg_content else 400
-        )
+        seg_content_w = seg_content.sizeHint().width() if seg_content else 400
         seg_chrome = 28 + 6  # panel margins (14 * 2) + scrollbar
         seg_need_w = seg_content_w + seg_chrome
         feat_content = self._w._feat_scroll.widget()
@@ -219,13 +215,9 @@ class _GeometryController:
             # it alone on inventory swap. Only the first launch
             # (no saved state) gets a content-derived ratio.
             if not self.has_saved_splitter:
-                self.apply_splitter_sizes(
-                    seg_need_w, feat_need_w, top_need_h
-                )
+                self.apply_splitter_sizes(seg_need_w, feat_need_w, top_need_h)
 
-    def fit_window_to_size(
-        self, screen, need_w: int, need_h: int
-    ) -> None:
+    def fit_window_to_size(self, screen, need_w: int, need_h: int) -> None:
         """Resize the window to ``(need_w, need_h)`` and anchor it
         in place.
 
@@ -273,9 +265,7 @@ class _GeometryController:
         finally:
             self._programmatic_geom_depth -= 1
 
-    def decoration_padding(
-        self, old_pos
-    ) -> tuple[int, int, int, int]:
+    def decoration_padding(self, old_pos) -> tuple[int, int, int, int]:
         """Return ``(deco_w, deco_h, left_pad, top_pad)`` for the
         current frame.
 
@@ -353,9 +343,7 @@ class _GeometryController:
             top_h = max(top_h, 200)
             self._vsplit.setSizes([top_h, total - top_h])
             return
-        QTimer.singleShot(
-            0, lambda: self.fit_vsplit_after_layout(top_need_h)
-        )
+        QTimer.singleShot(0, lambda: self.fit_vsplit_after_layout(top_need_h))
 
     def fit_vsplit_after_layout(self, top_need_h: int) -> None:
         """Vertical-only fallback for the case in

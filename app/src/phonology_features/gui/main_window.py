@@ -12,37 +12,6 @@ from typing import TYPE_CHECKING
 
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
-from PyQt6.QtCore import (
-    QEvent,
-    QPoint,
-    QSettings,
-    QSize,
-    Qt,
-    QTimer,
-)
-from PyQt6.QtGui import (
-    QColor,
-    QFont,
-    QKeySequence,
-    QPalette,
-    QShortcut,
-)
-from PyQt6.QtWidgets import (
-    QComboBox,
-    QFileDialog,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QToolBar,
-    QToolTip,
-    QVBoxLayout,
-    QWidget,
-)
-
 from phonology_features._logging import get_logger
 from phonology_features._settings import safe_read_setting
 from phonology_features.gui.analysis import (
@@ -90,6 +59,36 @@ from phonology_features.gui.widgets import (
     SegmentButton,
     SegmentGridWidget,
     SegmentState,
+)
+from PyQt6.QtCore import (
+    QEvent,
+    QPoint,
+    QSettings,
+    QSize,
+    Qt,
+    QTimer,
+)
+from PyQt6.QtGui import (
+    QColor,
+    QFont,
+    QKeySequence,
+    QPalette,
+    QShortcut,
+)
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QToolBar,
+    QToolTip,
+    QVBoxLayout,
+    QWidget,
 )
 
 if TYPE_CHECKING:
@@ -725,7 +724,9 @@ class MainWindow(QMainWindow):
             # Refresh the panel-chrome QSS rules then re-polish so the
             # active-mode border picks up the new accent color.
             for panel in (self.seg_panel, self.feat_panel):
-                set_css(panel, _ModeController.panel_chrome_qss(panel.objectName()))
+                set_css(
+                    panel, _ModeController.panel_chrome_qss(panel.objectName())
+                )
                 panel.setProperty("active", None)
             self._mode_ctrl.apply_panel_chrome()
             self._mode_ctrl.refresh_analysis()
@@ -914,9 +915,7 @@ class MainWindow(QMainWindow):
             builder.deleteLater()
             return
         self._builder = builder
-        self._builder._save_finished.connect(
-            self._on_builder_save_finished
-        )
+        self._builder._save_finished.connect(self._on_builder_save_finished)
         self._builder.show()
 
     def _on_builder_save_finished(self, path: str, err: str) -> None:
@@ -1496,9 +1495,7 @@ class MainWindow(QMainWindow):
                 if seg in matching_set
                 else SegmentState.UNMATCHED
             )
-        self.analysis.set_html(
-            render_feat_to_seg(selected_feats, matching)
-        )
+        self.analysis.set_html(render_feat_to_seg(selected_feats, matching))
 
     def _reset_feature_display(self) -> None:
         for row in self._feat_rows.values():

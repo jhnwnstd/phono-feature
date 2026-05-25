@@ -41,7 +41,9 @@ def _require_engine() -> FeatureEngine:
     return _engine
 
 
-def load_inventory_json(json_text: str, source_label: str = "uploaded") -> dict:
+def load_inventory_json(
+    json_text: str, source_label: str = "uploaded"
+) -> dict:
     """Parse a JSON inventory string, swap to it, return basic info
     for the UI to render the segment grid and feature list.
 
@@ -77,7 +79,9 @@ def _summarize_engine(engine: FeatureEngine) -> dict:
 def serialize_current_inventory() -> str:
     """Round-trip the active inventory to JSON for download."""
     engine = _require_engine()
-    return json.dumps(engine.inventory.to_json_dict(), indent=2, ensure_ascii=False)
+    return json.dumps(
+        engine.inventory.to_json_dict(), indent=2, ensure_ascii=False
+    )
 
 
 def get_current_inventory_name() -> str:

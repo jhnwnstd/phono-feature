@@ -263,7 +263,9 @@ def render_multi_segment(
     contrast_html = _render_contrast_section(engine, segs, contrastive)
     selected_html = f"<p><b>Selected:</b> {seg_tags}</p>"
     if is_universal:
-        return f"{selected_html}{nc_html}{spec_html}{common_html}{contrast_html}"
+        return (
+            f"{selected_html}{nc_html}{spec_html}{common_html}{contrast_html}"
+        )
     return (
         "<table width='100%' cellpadding='0' cellspacing='0'>"
         "<tr>"
@@ -338,6 +340,7 @@ def _render_contrast_section(
             f"{body}"
             "</table>"
         )
+
     # No contrastive features. Distinguish "actually identical" from
     # "only differ in unspecified features"; the latter is a common
     # source of confusion ("why do these look the same?").

@@ -9,36 +9,12 @@ from phonology_engine.inventory import (
     Inventory,
     ValidationError,
 )
-
 from phonology_features._logging import get_logger
 
 if TYPE_CHECKING:
     # Only used in a string-form type annotation; importing at runtime
     # is pure cost (PyQt6.QtGui.QRegion drags in extra Qt symbols).
     from PyQt6.QtGui import QRegion
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import (
-    QFont,
-)
-from PyQt6.QtWidgets import (
-    QAbstractButton,
-    QDialog,
-    QFileDialog,
-    QHBoxLayout,
-    QHeaderView,
-    QLabel,
-    QLineEdit,
-    QMainWindow,
-    QMessageBox,
-    QPushButton,
-    QSizePolicy,
-    QStatusBar,
-    QTableWidget,
-    QTableWidgetItem,
-    QToolBar,
-    QVBoxLayout,
-    QWidget,
-)
 
 from phonology_features.gui.builder.dialogs import (
     InputDialog,
@@ -62,6 +38,29 @@ from phonology_features.gui.builder.table import (
     _ToggleHeaderView,
 )
 from phonology_features.gui.palette import C
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import (
+    QFont,
+)
+from PyQt6.QtWidgets import (
+    QAbstractButton,
+    QDialog,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QStatusBar,
+    QTableWidget,
+    QTableWidgetItem,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 _log = get_logger(__name__)
 
@@ -126,7 +125,10 @@ class InventoryBuilder(QMainWindow):
         from phonology_features.gui.builder.save_controller import (
             _SaveController,
         )
-        self._save_ctrl = _SaveController(self, self._status, self._to_inventory)
+
+        self._save_ctrl = _SaveController(
+            self, self._status, self._to_inventory
+        )
         if parent is not None:
             parent_screen = parent.screen()
             if parent_screen is not None:

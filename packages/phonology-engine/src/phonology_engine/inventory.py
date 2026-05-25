@@ -25,6 +25,7 @@ so a crash mid-write never leaves a truncated JSON on disk.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 import unicodedata
@@ -32,8 +33,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
-
-import logging
 
 _log = logging.getLogger(__name__)
 

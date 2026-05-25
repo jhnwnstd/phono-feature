@@ -17,9 +17,8 @@ rebuild is wasted. ``set_html`` short-circuits the common case.
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QTextEdit, QWidget
-
 from phonology_features.gui.palette import C
+from PyQt6.QtWidgets import QTextEdit, QWidget
 
 
 def set_css(widget: QWidget, css: str) -> bool:

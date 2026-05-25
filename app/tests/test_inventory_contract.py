@@ -317,9 +317,7 @@ def test_parse_rejects_control_char_in_name() -> None:
     in the middle. ``Voice\\x07`` (with embedded BEL) would survive
     and render oddly in the grid header and validation messages."""
     with pytest.raises(ValidationError) as ex:
-        Inventory.parse(
-            {"features": ["Voi\x07ce"], "segments": {}}
-        )
+        Inventory.parse({"features": ["Voi\x07ce"], "segments": {}})
     msg = " ".join(ex.value.issues)
     assert "U+0007" in msg
 
@@ -331,12 +329,8 @@ def test_parse_rejects_per_segment_feature_when_features_empty() -> None:
     that ``feature_value`` can never reach (raises KeyError because
     the feature isn't in ``inv.features``). Now rejected."""
     with pytest.raises(ValidationError) as ex:
-        Inventory.parse(
-            {"features": [], "segments": {"p": {"Voice": "+"}}}
-        )
-    assert any(
-        "Voice" in i and "not declared" in i for i in ex.value.issues
-    )
+        Inventory.parse({"features": [], "segments": {"p": {"Voice": "+"}}})
+    assert any("Voice" in i and "not declared" in i for i in ex.value.issues)
 
 
 def test_parse_accepts_empty_features_with_empty_bundles() -> None:
@@ -1575,7 +1569,6 @@ def test_worker_non_oserror_clears_save_in_flight(
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
     from phonology_engine.inventory import Inventory
-
     from phonology_features.gui.builder import InventoryBuilder
     from phonology_features.gui.builder import save_controller as _sc
 
@@ -1712,7 +1705,6 @@ def test_edit_during_in_flight_save_preserves_dirty(
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
     from phonology_engine.inventory import Inventory
-
     from phonology_features.gui.builder import InventoryBuilder
 
     # Stall the worker so the main thread has time to mutate the grid
@@ -1772,7 +1764,6 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
     from phonology_engine.inventory import Inventory
-
     from phonology_features.gui.builder import InventoryBuilder
     from phonology_features.gui.builder import save_controller as _sc
 
@@ -1851,9 +1842,8 @@ def test_safe_read_setting_rejects_wrong_type_without_removing() -> None:
     with a string) falls back to default but is NOT removed -- the
     user may have set it deliberately and we just don't know how
     to use it yet."""
-    from PyQt6.QtCore import QSize
-
     from phonology_features._settings import safe_read_setting
+    from PyQt6.QtCore import QSize
 
     class FakeSettings:
         def __init__(self) -> None:
@@ -1872,9 +1862,8 @@ def test_safe_read_setting_rejects_wrong_type_without_removing() -> None:
 
 
 def test_safe_read_setting_accepts_correct_type() -> None:
-    from PyQt6.QtCore import QSize
-
     from phonology_features._settings import safe_read_setting
+    from PyQt6.QtCore import QSize
 
     class FakeSettings:
         def value(self, key: str, default: object) -> object:
@@ -1940,7 +1929,6 @@ def test_stale_tmp_files_swept_on_dropdown_populate(tmp_path: Path) -> None:
     """
     import time as _time
 
-
     # Set up the inventories dir with one stale and one fresh tmp.
     inv_dir = tmp_path / "inventories"
     inv_dir.mkdir()
@@ -1957,17 +1945,18 @@ def test_stale_tmp_files_swept_on_dropdown_populate(tmp_path: Path) -> None:
     from phonology_features.gui.inventory_dir_controller import (
         _InventoryDirController,
     )
+
     _InventoryDirController.sweep_stale_tmp_files(str(inv_dir))
 
-    assert not stale.exists(), (
-        "stale tmp file from an old crashed save was not swept"
-    )
-    assert fresh.exists(), (
-        "fresh tmp file (possibly an in-flight save) must not be touched"
-    )
-    assert legit.exists(), (
-        "non-tmp file got swept -- the filter is too aggressive"
-    )
+    assert (
+        not stale.exists()
+    ), "stale tmp file from an old crashed save was not swept"
+    assert (
+        fresh.exists()
+    ), "fresh tmp file (possibly an in-flight save) must not be touched"
+    assert (
+        legit.exists()
+    ), "non-tmp file got swept -- the filter is too aggressive"
 
 
 def test_main_viewer_falls_back_when_current_inventory_deleted(
@@ -2071,6 +2060,7 @@ def test_main_viewer_loads_freshly_saved_builder_inventory(
     builder._rebuild_table()
     # Need to set the cells properly so _to_inventory produces valid output.
     from phonology_features.gui.builder.grid import make_cell
+
     builder._table.setItem(0, 0, make_cell("-"))  # p is voiceless
     builder._table.setItem(0, 1, make_cell("+"))  # b is voiced
 

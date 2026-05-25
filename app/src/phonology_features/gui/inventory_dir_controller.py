@@ -26,16 +26,14 @@ import os
 import time
 from typing import TYPE_CHECKING
 
+from phonology_features._logging import get_logger
 from PyQt6.QtCore import QFileSystemWatcher, QTimer
 from PyQt6.QtGui import QStandardItemModel
 
-from phonology_features._logging import get_logger
-
 if TYPE_CHECKING:
+    from phonology_features.gui.main_window import MainWindow
     from PyQt6.QtCore import QSettings
     from PyQt6.QtWidgets import QComboBox
-
-    from phonology_features.gui.main_window import MainWindow
 
 _log = get_logger(__name__)
 
@@ -106,7 +104,10 @@ class _InventoryDirController:
         return os.path.normpath(
             os.path.join(
                 os.path.dirname(__file__),
-                "..", "..", "..", "inventories",
+                "..",
+                "..",
+                "..",
+                "inventories",
             )
         )
 
@@ -181,11 +182,7 @@ class _InventoryDirController:
                     path = os.path.join(inventories_dir, fname)
                     pretty = fname[:-5].replace("_", " ").title()
                     self._combo.addItem(pretty, userData=path)
-            idx = (
-                self._combo.findData(previous_path)
-                if previous_path
-                else 0
-            )
+            idx = self._combo.findData(previous_path) if previous_path else 0
             self._combo.setCurrentIndex(max(idx, 0))
         finally:
             self._combo.blockSignals(False)
@@ -199,9 +196,7 @@ class _InventoryDirController:
         inventory load."""
         if self._w._current_path and self._w._current_path != path:
             self._watcher.removePath(self._w._current_path)
-            old_dir = os.path.dirname(
-                os.path.abspath(self._w._current_path)
-            )
+            old_dir = os.path.dirname(os.path.abspath(self._w._current_path))
             new_dir = os.path.dirname(os.path.abspath(path))
             if old_dir != new_dir:
                 self._watcher.removePath(old_dir)
@@ -223,9 +218,7 @@ class _InventoryDirController:
         self.recent_paths.insert(0, path)
         del self.recent_paths[_MRU_CAP:]
 
-    def pick_fallback_after_delete(
-        self, deleted_path: str
-    ) -> str | None:
+    def pick_fallback_after_delete(self, deleted_path: str) -> str | None:
         """Choose what to load when ``deleted_path`` has been removed
         from disk while it was the current inventory. Priority:
 
@@ -302,17 +295,14 @@ class _InventoryDirController:
             self._w._current_path = None
             self._settings.remove("last_inventory")
             if fallback is not None:
-                _log.info(
-                    "falling back to: %s", os.path.basename(fallback)
-                )
+                _log.info("falling back to: %s", os.path.basename(fallback))
                 self._w._load_path(fallback)
             else:
                 # Nothing to fall back to. Reset the dropdown to
                 # the placeholder.
                 self._combo.setCurrentIndex(0)
                 self._w.status.showMessage(
-                    f"Deleted “{fname}”; no other "
-                    f"inventories available."
+                    f"Deleted “{fname}”; no other " f"inventories available."
                 )
             return
         if self._w._current_path not in self._watcher.files():
@@ -327,6 +317,4 @@ class _InventoryDirController:
             fname = os.path.basename(path)
             _log.info("auto-reload (watcher fired): %s", fname)
             self._w._load_path(path)
-            self._w.status.showMessage(
-                f"Auto-reloaded “{fname}”"
-            )
+            self._w.status.showMessage(f"Auto-reloaded “{fname}”")

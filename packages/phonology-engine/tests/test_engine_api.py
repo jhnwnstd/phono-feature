@@ -11,7 +11,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.geometry import GeometryAnalyzer
 
@@ -32,7 +31,9 @@ def _find_repo_root() -> Path:
 
 
 REPO_ROOT = _find_repo_root()
-HAYES_INVENTORY = str(REPO_ROOT / "app" / "inventories" / "hayes_features.json")
+HAYES_INVENTORY = str(
+    REPO_ROOT / "app" / "inventories" / "hayes_features.json"
+)
 
 
 @pytest.fixture(scope="module")

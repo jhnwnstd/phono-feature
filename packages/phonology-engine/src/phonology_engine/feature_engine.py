@@ -20,12 +20,11 @@ table feeding ``segment_distance``) build lazily via
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from functools import cached_property
 from types import MappingProxyType
 from typing import Any
-
-import logging
 
 from phonology_engine.inventory import (
     VALID_VALUES,
@@ -559,4 +558,3 @@ class FeatureEngine:
         else:
             stats["avg_feature_distance"] = 0.0
         return stats
-
