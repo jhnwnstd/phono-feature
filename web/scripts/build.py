@@ -43,6 +43,7 @@ import argparse
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -124,12 +125,21 @@ def copy_inventories() -> None:
     a manifest. Both are read by main.js at runtime; adding a new
     inventory to ``app/inventories/`` makes it appear in the web app
     on the next build with zero web/-side edits.
+
+    Inventories that ``.gitignore`` excludes are SKIPPED. This keeps
+    local-only test files (like ``blevins_features.json``) out of
+    the deployed web app, so local builds match what CI ships even
+    when the user has extra files on disk.
     """
     print("Copying bundled inventories...")
     out = DIST / "inventories"
     out.mkdir(parents=True, exist_ok=True)
     manifest: list[dict[str, str]] = []
+    skipped: list[str] = []
     for inv in sorted(INVENTORIES.glob("*.json")):
+        if _is_gitignored(inv):
+            skipped.append(inv.name)
+            continue
         shutil.copy(inv, out / inv.name)
         manifest.append(
             {
@@ -141,6 +151,26 @@ def copy_inventories() -> None:
         json.dumps(manifest, indent=2, ensure_ascii=False)
     )
     print(f"  manifest: {len(manifest)} inventories")
+    if skipped:
+        print(f"  skipped (gitignored): {', '.join(skipped)}")
+
+
+def _is_gitignored(path: Path) -> bool:
+    """Return True if git would ignore ``path`` (per the repo's
+    .gitignore / .git/info/exclude). Returns False if git isn't
+    available or this isn't a git checkout, which is the right
+    default for CI environments and tarball installs: ship
+    everything, since there's no .gitignore to consult.
+    """
+    result = subprocess.run(
+        ["git", "check-ignore", "-q", str(path)],
+        cwd=ROOT,
+        capture_output=True,
+    )
+    # exit 0  = path IS ignored
+    # exit 1  = path is NOT ignored
+    # other   = git error (not a repo, git missing, etc.) -> treat as not ignored
+    return result.returncode == 0
 
 
 def _inventory_label(path: Path) -> str:
