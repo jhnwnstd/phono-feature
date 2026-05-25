@@ -1762,9 +1762,9 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
     app = QApplication.instance() or QApplication([])
     from phonology_features.engine.inventory import Inventory
     from phonology_features.gui.builder import InventoryBuilder
-    from phonology_features.gui.builder import window as _bw
+    from phonology_features.gui.builder import save_controller as _sc
 
-    monkeypatch.setattr(_bw, "show_warning", lambda *a, **k: None)
+    monkeypatch.setattr(_sc, "show_warning", lambda *a, **k: None)
     monkeypatch.setattr(
         Inventory,
         "write_atomic",
