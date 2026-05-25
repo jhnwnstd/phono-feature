@@ -25,7 +25,11 @@ from __future__ import annotations
 
 import os
 import threading
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtWidgets import QMessageBox
 
 from phonology_features._logging import get_logger
 from phonology_features.engine.inventory import (
@@ -33,8 +37,6 @@ from phonology_features.engine.inventory import (
     ValidationError,
 )
 from phonology_features.gui.builder.dialogs import ask_question, show_warning
-from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtWidgets import QMessageBox
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QStatusBar

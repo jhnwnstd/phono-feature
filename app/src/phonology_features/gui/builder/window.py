@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     # Only used in a string-form type annotation; importing at runtime
     # is pure cost (PyQt6.QtGui.QRegion drags in extra Qt symbols).
     from PyQt6.QtGui import QRegion
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import (
     QFont,
 )
