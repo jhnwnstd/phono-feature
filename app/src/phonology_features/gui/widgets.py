@@ -27,7 +27,11 @@ from phonology_features.gui.constants import (
     scrollbar_style,
 )
 from phonology_features.gui.palette import C
-from phonology_features.gui.style_utils import set_css, set_html
+from phonology_features.gui.style_utils import (
+    _LAST_HTML_ATTR,
+    set_css,
+    set_html,
+)
 
 
 class SegmentState(StrEnum):
@@ -600,6 +604,14 @@ class AnalysisPanel(QWidget):
 
     def clear(self) -> None:
         self.content.clear()
+        # set_html caches the last HTML string on the widget and
+        # short-circuits duplicate calls. clear() resets the widget
+        # but not the cache, so a later set_html(X) where X matches
+        # the pre-clear value would no-op and leave the pane blank.
+        # Invalidate the cache here so the next set_html always
+        # re-paints.
+        if hasattr(self.content, _LAST_HTML_ATTR):
+            delattr(self.content, _LAST_HTML_ATTR)
 
 
 class SegmentGridWidget(QWidget):

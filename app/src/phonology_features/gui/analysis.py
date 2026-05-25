@@ -238,14 +238,42 @@ def render_multi_segment(
     contrastive: dict[str, dict[str, list[str]]],
     suggested: list[str],
 ) -> str:
-    """Build HTML for multiple selected segments."""
+    """Build HTML for multiple selected segments.
+
+    Two columns from the very top, no full-width header row. The
+    selection / natural-class side sits on the left, the analysis
+    side (shared and contrasting features) on the right, so
+    ``Selected:`` shares its visual row with ``Shared features:``.
+
+        left  (50%): Selected segments, Natural class verdict,
+                     minimal specification (or suggested
+                     completions when the verdict is "No")
+        right (50%): Shared features, Contrasting features
+
+    Falls back to a single full-width column for the universal
+    class (whole inventory selected): the left side reduces to a
+    one-line "Natural class: Yes" plus an "∅ universal" badge and
+    would leave the right side towering over an almost-empty left.
+    """
     seg_tags = " ".join(_segment_chip(seg) for seg in segs)
+    is_nc, specs = engine.is_natural_class(segs)
+    is_universal = is_nc and (not specs or not specs[0])
+    nc_html, spec_html = _render_natural_class_verdict(engine, segs, suggested)
     common_html = _render_shared_features(common)
     contrast_html = _render_contrast_section(engine, segs, contrastive)
-    nc_html, spec_html = _render_natural_class_verdict(engine, segs, suggested)
+    selected_html = f"<p><b>Selected:</b> {seg_tags}</p>"
+    if is_universal:
+        return f"{selected_html}{nc_html}{spec_html}{common_html}{contrast_html}"
     return (
-        f"<p><b>Selected:</b> {seg_tags}</p>"
-        f"{nc_html}{common_html}{spec_html}{contrast_html}"
+        "<table width='100%' cellpadding='0' cellspacing='0'>"
+        "<tr>"
+        "<td width='50%' style='vertical-align:top; padding-right:18px;'>"
+        f"{selected_html}{nc_html}{spec_html}"
+        "</td>"
+        "<td width='50%' style='vertical-align:top;'>"
+        f"{common_html}{contrast_html}"
+        "</td>"
+        "</tr></table>"
     )
 
 
