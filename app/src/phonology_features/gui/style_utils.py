@@ -72,6 +72,64 @@ def apply_tooltip_palette() -> None:
     QToolTip.setPalette(pal)
 
 
+def apply_app_palette() -> None:
+    """Refresh the ``QApplication`` palette from the active ``C`` palette.
+
+    Qt widgets that don't go through our ``set_css`` / ``apply_theme``
+    discipline (QDialog, QFileDialog, QInputDialog, QMessageBox,
+    QLineEdit, QLabel, default QPushButton chrome) read their colors
+    from this palette. Without refreshing it on theme toggle, dark
+    mode gets the window background right but leaves text fields with
+    black text on a dark background.
+
+    Sets every palette role that any widget in the tree might read.
+    Cheaper than ``QApplication.setStyleSheet`` (which re-parses QSS
+    and re-polishes every widget); a palette change just fires
+    PaletteChange events that widgets queue a repaint for.
+    """
+    from PyQt6.QtGui import QColor, QPalette
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if not isinstance(app, QApplication):
+        return
+    bg = QColor(C["bg"])
+    panel = QColor(C["panel"])
+    text = QColor(C["text"])
+    text_dim = QColor(C["text_dim"])
+    accent = QColor(C["accent"])
+    accent_light = QColor(C["accent_light"])
+    border = QColor(C["border"])
+
+    pal = app.palette()
+    # Window-level chrome (QMainWindow body, QDialog body, etc.)
+    pal.setColor(QPalette.ColorRole.Window, bg)
+    pal.setColor(QPalette.ColorRole.WindowText, text)
+    # Input-widget surfaces (QLineEdit, QTextEdit, QPlainTextEdit,
+    # QListView item background, etc.)
+    pal.setColor(QPalette.ColorRole.Base, panel)
+    pal.setColor(QPalette.ColorRole.AlternateBase, bg)
+    pal.setColor(QPalette.ColorRole.Text, text)
+    pal.setColor(QPalette.ColorRole.PlaceholderText, text_dim)
+    # Default QPushButton chrome. App-specific buttons set their own
+    # QSS and ignore palette; system dialogs (QInputDialog OK/Cancel,
+    # QFileDialog buttons, QMessageBox buttons) use palette.
+    pal.setColor(QPalette.ColorRole.Button, panel)
+    pal.setColor(QPalette.ColorRole.ButtonText, text)
+    pal.setColor(QPalette.ColorRole.BrightText, text)
+    # Selection (highlighted item in a QListView, selected text in a
+    # QLineEdit, etc.)
+    pal.setColor(QPalette.ColorRole.Highlight, accent_light)
+    pal.setColor(QPalette.ColorRole.HighlightedText, accent)
+    # Frames / dividers / etched borders
+    pal.setColor(QPalette.ColorRole.Mid, border)
+    pal.setColor(QPalette.ColorRole.Dark, border)
+    pal.setColor(QPalette.ColorRole.Shadow, border)
+    # Tooltip is handled separately by apply_tooltip_palette() so
+    # both stay in sync.
+    app.setPalette(pal)
+
+
 _LAST_HTML_ATTR = "_set_html_last"
 
 

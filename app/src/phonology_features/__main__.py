@@ -130,11 +130,9 @@ def _run_gui(argv: list[str]) -> int:
     # hasn't painted yet (typical on Wayland/WSLg). Reading the saved
     # theme here keeps this in sync with whatever MainWindow will pick.
     from PyQt6.QtCore import QSettings
-    from PyQt6.QtGui import QPalette
 
     from phonology_features.gui.constants import SETTINGS_APP, SETTINGS_ORG
     from phonology_features.gui.palette import (
-        C,
         detect_system_theme,
         set_theme,
     )
@@ -150,17 +148,18 @@ def _run_gui(argv: list[str]) -> int:
         _settings, "theme", detect_system_theme(), expected_type=str
     )
     set_theme(_seed_theme)
-    _pal = app.palette()
-    _bg = QColor(C["bg"])
-    _pal.setColor(QPalette.ColorRole.Window, _bg)
-    _pal.setColor(QPalette.ColorRole.Base, _bg)
-    app.setPalette(_pal)
     from phonology_features.gui.style_utils import (
         app_qss,
+        apply_app_palette,
         apply_tooltip_palette,
     )
 
     app.setStyleSheet(app_qss())
+    # Apply the full palette (Window, Base, Text, Button, Highlight,
+    # ...) before any window construction so system dialogs that
+    # spawn during startup (validation errors on auto-load, etc.)
+    # render with the right colors instead of black-on-dark.
+    apply_app_palette()
     apply_tooltip_palette()
     parser = QCommandLineParser()
     parser.setApplicationDescription("Phonology Segment & Feature Engine")

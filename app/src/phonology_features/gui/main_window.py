@@ -73,6 +73,7 @@ from phonology_features.gui.palette import (
     set_theme,
 )
 from phonology_features.gui.style_utils import (
+    apply_app_palette,
     apply_tooltip_palette,
     set_css,
 )
@@ -740,6 +741,12 @@ class MainWindow(QMainWindow):
         # The shape rules (border, radius, padding) were applied
         # once at startup in app_qss() and don't change with theme.
         apply_tooltip_palette()
+        # QApplication palette governs widgets that don't go through
+        # our set_css discipline: dialogs (QDialog/QFileDialog/
+        # QMessageBox/QInputDialog), default QPushButton chrome,
+        # QLineEdit text colors, etc. Without this refresh, dark mode
+        # would leave file-dialog text black on dark background.
+        apply_app_palette()
         set_css(self, f"background-color: {C['bg']};")
         self._restyle_toolbar()
         self._repaint_splitter_handles()
