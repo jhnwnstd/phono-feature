@@ -431,13 +431,9 @@ async function mountPackage(pyodide, fsRelativePackagePath, files, sysPathDir) {
 // loading overlay covers the panels visually, but keyboard focus can
 // still reach the toolbar; disabling is the only reliable guard.
 // ---------------------------------------------------------------------
-const BRIDGE_GATED_IDS = [
-    "inventory-picker",
-    "upload-btn",
-    "download-btn",
-];
+const BRIDGE_GATED_NODES = ["inventoryPicker", "uploadBtn", "downloadBtn"];
 function enableBridgeGatedControls() {
-    for (const id of BRIDGE_GATED_IDS) $(id).disabled = false;
+    for (const key of BRIDGE_GATED_NODES) nodes[key].disabled = false;
 }
 
 // ---------------------------------------------------------------------
@@ -745,8 +741,8 @@ function activateMode(mode) {
 
     state.mode = mode;
     const isS2F = mode === MODE.SEG_TO_FEAT;
-    $("seg-panel").dataset.active = isS2F ? "true" : "false";
-    $("feat-panel").dataset.active = isS2F ? "false" : "true";
+    nodes.segPanel.dataset.active = isS2F ? "true" : "false";
+    nodes.featPanel.dataset.active = isS2F ? "false" : "true";
 
     if (isS2F) {
         // Adopt the projected seg selection; clear feat-side.
@@ -862,15 +858,15 @@ function _updateSegmentButtonStates(segmentStates) {
 // Inventory upload / download
 // ---------------------------------------------------------------------
 function wireUploadDownload() {
-    $("upload-btn").addEventListener("click", () => $("upload-input").click());
-    $("upload-input").addEventListener("change", async (ev) => {
+    nodes.uploadBtn.addEventListener("click", () => nodes.uploadInput.click());
+    nodes.uploadInput.addEventListener("change", async (ev) => {
         const file = ev.target.files[0];
         if (!file) return;
         const text = await file.text();
         await loadInventoryText(text, file.name);
         ev.target.value = "";
     });
-    $("download-btn").addEventListener("click", () => {
+    nodes.downloadBtn.addEventListener("click", () => {
         try {
             const text = callBridge("serialize_current_inventory");
             const name = callBridge("get_current_inventory_name");
@@ -890,16 +886,24 @@ function wireUploadDownload() {
 // ---------------------------------------------------------------------
 // Theme toggle (CSS variables + Python palette swap)
 // ---------------------------------------------------------------------
+const THEME = Object.freeze({ LIGHT: "light", DARK: "dark" });
+// localStorage is external input. Anything other than the dark
+// sentinel reads as light -- including stale or hand-edited values.
+function normalizeTheme(value) {
+    return value === THEME.DARK ? THEME.DARK : THEME.LIGHT;
+}
+
 function wireThemeToggle() {
-    const stored = localStorage.getItem("theme");
-    if (stored === "dark") {
-        document.documentElement.dataset.theme = "dark";
-        $("theme-btn").textContent = "☀";
+    const stored = normalizeTheme(localStorage.getItem("theme"));
+    if (stored === THEME.DARK) {
+        document.documentElement.dataset.theme = THEME.DARK;
+        nodes.themeBtn.textContent = "☀";
     }
-    $("theme-btn").addEventListener("click", () => {
-        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    nodes.themeBtn.addEventListener("click", () => {
+        const cur = normalizeTheme(document.documentElement.dataset.theme);
+        const next = cur === THEME.DARK ? THEME.LIGHT : THEME.DARK;
         document.documentElement.dataset.theme = next;
-        $("theme-btn").textContent = next === "dark" ? "☀" : "☾";
+        nodes.themeBtn.textContent = next === THEME.DARK ? "☀" : "☾";
         localStorage.setItem("theme", next);
         if (state.bridge) {
             callBridge("set_active_theme", next);
@@ -920,15 +924,15 @@ function wireInventoryPicker() {
     // Picker is populated by populateInventoryPicker() AFTER the
     // build-time manifest is fetched (see bootPyodide). Wire the
     // change handler here so it survives the later DOM additions.
-    $("inventory-picker").addEventListener("change", () => {
-        const file = $("inventory-picker").value;
+    nodes.inventoryPicker.addEventListener("change", () => {
+        const file = nodes.inventoryPicker.value;
         const item = BUNDLED_INVENTORIES.find(i => i.file === file);
         if (item) loadBundledInventory(item);
     });
 }
 
 function populateInventoryPicker() {
-    const picker = $("inventory-picker");
+    const picker = nodes.inventoryPicker;
     picker.innerHTML = "";
     for (const item of BUNDLED_INVENTORIES) {
         const opt = document.createElement("option");
@@ -942,10 +946,10 @@ function populateInventoryPicker() {
 // Expand/restore analysis pane
 // ---------------------------------------------------------------------
 function wireExpandButton() {
-    $("expand-btn").addEventListener("click", () => {
-        const pane = $("analysis-pane");
+    nodes.expandBtn.addEventListener("click", () => {
+        const pane = nodes.analysisPane;
         const expanded = pane.classList.toggle("expanded");
-        $("expand-btn").textContent = expanded ? "⤣" : "⤢";
+        nodes.expandBtn.textContent = expanded ? "⤣" : "⤢";
     });
 }
 
@@ -956,12 +960,12 @@ function wireExpandButton() {
 // whose Clear was pressed.
 // ---------------------------------------------------------------------
 function wireClearButtons() {
-    $("seg-clear-btn").addEventListener("click", (ev) => {
+    nodes.segClearBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         activateMode(MODE.SEG_TO_FEAT);
         clearAll();
     });
-    $("feat-clear-btn").addEventListener("click", (ev) => {
+    nodes.featClearBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         activateMode(MODE.FEAT_TO_SEG);
         clearAll();
@@ -994,11 +998,11 @@ function clearAll() {
 // empty panel space.
 // ---------------------------------------------------------------------
 function wirePanelClickMode() {
-    $("seg-panel").addEventListener("click", (ev) => {
+    nodes.segPanel.addEventListener("click", (ev) => {
         if (ev.target.closest("button")) return;
         activateMode(MODE.SEG_TO_FEAT);
     });
-    $("feat-panel").addEventListener("click", (ev) => {
+    nodes.featPanel.addEventListener("click", (ev) => {
         if (ev.target.closest("button")) return;
         activateMode(MODE.FEAT_TO_SEG);
     });
@@ -1035,6 +1039,7 @@ function wireFeatureDelegation() {
 // Entry point
 // ---------------------------------------------------------------------
 async function main() {
+    initNodes();
     wireThemeToggle();
     wireInventoryPicker();
     wireUploadDownload();
