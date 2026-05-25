@@ -1567,10 +1567,10 @@ def test_worker_non_oserror_clears_save_in_flight(
     app = QApplication.instance() or QApplication([])
     from phonology_features.engine.inventory import Inventory
     from phonology_features.gui.builder import InventoryBuilder
-    from phonology_features.gui.builder import window as _bw
+    from phonology_features.gui.builder import save_controller as _sc
 
     # Stub modal warning so the error path doesn't deadlock the test.
-    monkeypatch.setattr(_bw, "show_warning", lambda *a, **k: None)
+    monkeypatch.setattr(_sc, "show_warning", lambda *a, **k: None)
 
     def boom(self, path):
         raise TypeError("simulated non-OSError")
