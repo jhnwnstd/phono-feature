@@ -483,13 +483,31 @@ async function bootPyodide({ prerendered = false } = {}) {
 }
 
 function pickDefaultInventory(manifest) {
-    // Prefer the explicit smallest-default if present; falls back to
-    // the first manifest entry. Centralized so the choice is
+    // Prefer the named default if present; falls back to the
+    // first manifest entry. Centralized so the choice is
     // discoverable and not buried in bootPyodide.
+    //
+    // hash_assets() renames each inventory file to
+    // ``name.<10-hex>.json`` for cache-busting and rewrites the
+    // manifest's ``file`` field to point at the hashed name.
+    // PREFERRED_DEFAULT_INVENTORY holds the un-hashed name (the
+    // constant has to be stable at runtime), so we have to strip
+    // the hash before comparing. Without this the lookup misses
+    // and we silently fall through to manifest[0] (English,
+    // alphabetically first) -- the bootstrap renders one
+    // inventory's segments while the bridge loads a different
+    // inventory, leaving ghost segments stuck in 'default' state
+    // when the user queries features.
     const preferred = manifest.find(
-        (m) => m.file === PREFERRED_DEFAULT_INVENTORY,
+        (m) => _stripAssetHash(m.file) === PREFERRED_DEFAULT_INVENTORY,
     );
     return preferred ?? manifest[0];
+}
+
+// "inventories/general_features.116857c74f.json"
+//   -> "inventories/general_features.json"
+function _stripAssetHash(path) {
+    return path.replace(/\.[0-9a-f]{10}(\.[^./]+)$/, "$1");
 }
 
 // Mount every Python source we ship via one fetch of
@@ -1253,6 +1271,13 @@ function populateInventoryPicker() {
         opt.textContent = item.label;
         picker.appendChild(opt);
     }
+    // Sync the picker's selected value to the preferred default;
+    // otherwise the browser auto-selects the first <option> (English,
+    // alphabetically first) while pickDefaultInventory loaded the
+    // actually-preferred inventory into the engine. User would see
+    // the wrong inventory name in the dropdown.
+    const preferred = pickDefaultInventory(BUNDLED_INVENTORIES);
+    if (preferred) picker.value = preferred.file;
 }
 
 // ---------------------------------------------------------------------
