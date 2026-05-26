@@ -25,6 +25,7 @@ from phonology_features.gui.inventory_setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
     FEATURE_PRESETS,
+    suggest_filename,
     validate_setup,
 )
 from phonology_features.gui.layout import distribute_feature_groups
@@ -192,6 +193,17 @@ def serialize_current_inventory() -> str:
 
 def get_current_inventory_name() -> str:
     return _inventory_name or "inventory"
+
+
+def get_download_filename() -> str:
+    """Suggested download filename for the active inventory.
+
+    Same slugifier the desktop's Save As dialog uses, so a "Save as"
+    on the web produces a filename in the bundled-inventories
+    convention (``my_language_features.json``) rather than the raw
+    display name with spaces and punctuation.
+    """
+    return suggest_filename(_inventory_name or "")
 
 
 def get_setup_defaults() -> dict[str, Any]:

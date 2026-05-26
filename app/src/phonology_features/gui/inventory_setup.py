@@ -154,6 +154,27 @@ class SetupResult:
         return not self.issues
 
 
+def suggest_filename(inv_name: str) -> str:
+    """Slugify an inventory name into a bundled-style filename.
+
+    Mirrors the bundled files (``hayes_features.json`` and
+    similar): lowercase, non-alphanumeric runs collapsed to ``_``,
+    ``_features`` suffix appended unless already present, ``.json``
+    extension. Empty input falls back to ``untitled``.
+
+    The desktop's Save As dialog uses this for the default
+    filename. The web's download path uses it for the ``download``
+    attribute so both frontends produce filenames that match the
+    bundled inventories' naming convention.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "_", inv_name.lower()).strip("_")
+    if not slug:
+        slug = "untitled"
+    if not slug.endswith("_features"):
+        slug = f"{slug}_features"
+    return f"{slug}.json"
+
+
 def normalize_setup_name(raw: str) -> str:
     """Trim and default the inventory name.
 

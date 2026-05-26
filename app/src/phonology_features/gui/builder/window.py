@@ -1,7 +1,6 @@
 """InventoryBuilder: grid editor for creating or editing inventories."""
 
 import os
-import re
 from typing import TYPE_CHECKING, ClassVar
 
 from phonology_engine.inventory import (
@@ -10,6 +9,7 @@ from phonology_engine.inventory import (
     ValidationError,
 )
 from phonology_features._logging import get_logger
+from phonology_features.gui.inventory_setup import suggest_filename
 
 if TYPE_CHECKING:
     # Only used in a string-form type annotation; importing at runtime
@@ -64,20 +64,6 @@ from phonology_features.gui.builder.table import (
 from phonology_features.gui.palette import C
 
 _log = get_logger(__name__)
-
-
-def _suggest_filename(inv_name: str) -> str:
-    """Slugify an inventory name into a bundled-style filename.
-    Mirrors ``hayes_features.json`` / ``english_features.json``:
-    lowercase, non-alphanumeric runs to ``_``, ``_features`` suffix
-    appended unless already present.
-    """
-    slug = re.sub(r"[^a-z0-9]+", "_", inv_name.lower()).strip("_")
-    if not slug:
-        slug = "untitled"
-    if not slug.endswith("_features"):
-        slug = f"{slug}_features"
-    return f"{slug}.json"
 
 
 class InventoryBuilder(QMainWindow):
@@ -1113,7 +1099,7 @@ class InventoryBuilder(QMainWindow):
         # Pre-fill the filename from the inventory name, slugified to
         # match the existing inventories/ naming convention. The user can
         # still override it in the dialog.
-        dlg.selectFile(_suggest_filename(self._inv_name))
+        dlg.selectFile(suggest_filename(self._inv_name))
         center_on_parent(dlg, self)
         if not dlg.exec():
             return

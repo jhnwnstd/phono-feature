@@ -22,6 +22,7 @@ from phonology_features.gui.inventory_setup import (
     SetupResult,
     infer_split,
     normalize_setup_name,
+    suggest_filename,
     validate_setup,
 )
 
@@ -198,6 +199,40 @@ def test_presets_custom_is_empty_list():
 
 
 # SetupResult contract
+
+
+# suggest_filename: download/save-as slug
+
+
+def test_suggest_filename_basic_lowercase_underscores():
+    """Lowercase, non-alphanumeric runs collapse to ``_``,
+    ``_features`` suffix appended, ``.json`` extension."""
+    assert suggest_filename("My Language") == "my_language_features.json"
+
+
+def test_suggest_filename_preserves_existing_features_suffix():
+    """An already-slugged name does not get a doubled suffix."""
+    assert (
+        suggest_filename("hayes_features") == "hayes_features.json"
+    )
+
+
+def test_suggest_filename_strips_punctuation_and_parens():
+    """Realistic bundled-style: parens, year, mixed case all fold."""
+    out = suggest_filename("Hayes 2009 (Universal)")
+    assert out == "hayes_2009_universal_features.json"
+
+
+def test_suggest_filename_empty_falls_back():
+    assert suggest_filename("") == "untitled_features.json"
+    assert suggest_filename("   ") == "untitled_features.json"
+
+
+def test_suggest_filename_non_ascii_collapses():
+    """Non-ASCII (and any character outside ``[a-z0-9]``) becomes a
+    single underscore. Avoids producing filenames the OS may render
+    inconsistently across platforms."""
+    assert suggest_filename("Énglish") == "nglish_features.json"
 
 
 def test_setup_result_ok_property():
