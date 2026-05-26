@@ -147,16 +147,56 @@ body {
   overflow: hidden;
 }
 
+/* Right column = features card on top, analysis extension below.
+   When features is shorter than segments, the extension absorbs
+   the would-be empty gap, giving the analysis area an L-shape:
+   full-width band along the bottom + this extension reaching up
+   under features. The extension is the right wing of that L. */
+.right-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-height: 0;
+}
+.right-stack > .panel {
+  /* Features sizes to content when space allows, but can shrink
+     (and scroll internally via .panel-body's overflow:auto) when
+     the analysis pane is expanded and the panels row is squeezed.
+     Without `1` shrink, the panel would push past its container. */
+  flex: 0 1 auto;
+}
+.analysis-extension {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--analysis-bg);
+  border: var(--border-thin) solid var(--border);
+  /* Round only the TOP corners. The bottom edge meets the
+     analysis pane below; matching squared corners + same border
+     color reads as one continuous L-shape across the body grid
+     row boundary. */
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-bottom: none;
+  /* Eat the .grid's padding-bottom so the extension touches the
+     analysis pane below it. Without this, the L has an 8px gap
+     between its vertical and horizontal arms and reads as two
+     separate panels. */
+  margin-bottom: calc(-1 * var(--space-md));
+}
+
 /* Narrow-screen stack. Without this, the two minmax tracks above
    force a horizontal overflow under ~800 px wide. Single-column
    layout below 900 px stacks segments above features; each panel
    keeps its own internal scroll, and the .grid container itself
-   scrolls if the combined height exceeds the panels-row. */
+   scrolls if the combined height exceeds the panels-row. The
+   extension is hidden because in a single-column layout there's
+   no "right side" for the analysis to spill into; the analysis
+   pane just lives below at full width. */
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
     overflow: auto;
   }
+  .analysis-extension { display: none; }
 }
 
 .panel {

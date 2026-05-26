@@ -97,14 +97,25 @@
     </header>
     <div class="panel-body" id="seg-grid"></div>
   </section>
-  <section class="panel" id="feat-panel">
-    <header class="panel-header">
-      <span class="panel-title" id="feat-title">FEATURES</span>
-      <button class="panel-clear-btn" id="feat-clear-btn" type="button"
-              aria-label="Clear feature query">Clear</button>
-    </header>
-    <div class="panel-body" id="feat-list"></div>
-  </section>
+  <!--
+    Right-column stack: features card (sizes to content) plus an
+    analysis extension that reclaims the gap below features when
+    the features pane is shorter than the segments pane. The
+    extension carries the same background as #analysis-pane so the
+    two read as one L-shaped analysis area; the actual analysis
+    content still lives in #analysis-content below.
+  -->
+  <div class="right-stack">
+    <section class="panel" id="feat-panel">
+      <header class="panel-header">
+        <span class="panel-title" id="feat-title">FEATURES</span>
+        <button class="panel-clear-btn" id="feat-clear-btn" type="button"
+                aria-label="Clear feature query">Clear</button>
+      </header>
+      <div class="panel-body" id="feat-list"></div>
+    </section>
+    <div class="analysis-extension" aria-hidden="true"></div>
+  </div>
 </main>
 
 <section class="analysis" id="analysis-pane">
