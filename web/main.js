@@ -1327,10 +1327,12 @@ function wireSetupDialog() {
 
 // In-memory edit state for the builder editor. Mirrors the desktop
 // ``InventoryBuilder``'s ``_segments`` / ``_features`` / table-item
-// values, plus a ``dirty`` flag that the Back / Save-as paths
-// consult. ``cells`` is indexed as cells[feature_index][segment_index]
-// to match the engine's get_grid_state shape and the shared
-// :py:func:`grid_to_inventory` contract.
+// values, plus selection state, anchor for shift-click range
+// extension, focused cell for keyboard fallback, and a ``dirty``
+// flag the Back / Save-as paths consult. ``cells`` is indexed as
+// cells[feature_index][segment_index] to match the engine's
+// get_grid_state shape and the shared :py:func:`grid_to_inventory`
+// contract.
 const editorState = {
     open: false,
     name: "",
@@ -1338,17 +1340,38 @@ const editorState = {
     segments: [],
     cells: [],
     dirty: false,
+    selected: new Set(),  // "r,c" keys
+    anchor: null,         // {r, c}, used by shift-click range extension
+    focused: null,        // {r, c}, fallback target when no selection
 };
 
-// Cycle ladder fetched from the bridge at editor first-open. Maps
-// the current cell value to the next value in the ladder. Same
-// data the desktop ``cycle_value`` reads.
+// Cycle ladder and value-key map, fetched from the bridge at the
+// editor's first open. Same constants the desktop builder reads;
+// centralizing them on the Python side keeps the two frontends in
+// lockstep and avoids per-click bridge cost.
 let cycleLadder = null;
+let valueKeys = null;
 const ZERO_VALUE = "0";
 
 const PLUS_DISPLAY = "+";
 const MINUS_DISPLAY = "−";   // U+2212 MATHEMATICAL MINUS SIGN
 const MINUS_SERIALIZED = "-"; // ASCII U+002D HYPHEN-MINUS
+
+// Cached cell <td> nodes keyed by row index. Populated by
+// renderEditorGrid and consulted by selection-paint and bulk-cycle.
+// O(1) lookup beats querySelector at the cost of a single 2D array
+// rebuild per grid render.
+let _cellNodes = [];
+// Last-painted selection so repaintSelection only toggles the
+// symmetric difference rather than every cell on the page.
+let _lastPaintedSelection = new Set();
+
+const cellKey = (r, c) => `${r},${c}`;
+const parseCellKey = (key) => {
+    const [r, c] = key.split(",").map(Number);
+    return { r, c };
+};
+const cellNode = (r, c) => _cellNodes[r]?.[c] ?? null;
 
 /** Lookup the next value in the ladder, defaulting to "0" for any
  *  value that drifted out of the ladder (defensive; mirrors the
@@ -1383,20 +1406,31 @@ function cellSerialized(value) {
  *   ``_check_unsaved`` guard).
  * * The name field commits on change/Enter, going through the same
  *   rename_current_inventory bridge as the main toolbar's pencil.
- * * Cells respond to click by cycling 0 -> + -> minus -> 0 via the
- *   shared cycle ladder.
+ * * Plain click on an UNSELECTED cell selects just that cell. Plain
+ *   click on a SELECTED cell bulk-cycles every selected cell to the
+ *   clicked cell's next value. Matches desktop's
+ *   ``_BulkCycleTable.mousePressEvent``.
+ * * Shift-click extends the selection from the anchor as a rectangle.
+ * * Ctrl/Cmd-click toggles individual cells in and out of the
+ *   selection.
+ * * Column / row headers select their column / row; second click
+ *   on the same header clears the selection. Corner cell toggles
+ *   select-all.
+ * * Keyboard: Space bulk-cycles the selection (or the focused
+ *   cell), 1/2/3/0 set the value directly (via the shared
+ *   :py:data:`VALUE_KEYS` mapping), Esc clears the selection.
  */
 function wireBuilderEditor(setupDialog) {
     const openEditor = () => {
         if (cycleLadder === null) {
-            // First open: fetch the cycle ladder once. Same constant
-            // the desktop ``cycle_value`` reads.
+            // First open: fetch the shared constants once.
             cycleLadder = callBridge("get_cycle_ladder");
+            valueKeys = callBridge("get_value_keys");
         }
         refreshEditorFromCurrent();
         editorState.open = true;
         nodes.editorView.hidden = false;
-        nodes.editorGrid.focus();
+        nodes.editorGridScroll.focus();
     };
     const closeEditor = () => {
         if (editorState.dirty
@@ -1405,6 +1439,7 @@ function wireBuilderEditor(setupDialog) {
         }
         editorState.open = false;
         editorState.dirty = false;
+        clearSelection();
         nodes.editorView.hidden = true;
     };
 
@@ -1414,14 +1449,12 @@ function wireBuilderEditor(setupDialog) {
     nodes.editorSaveAsBtn.addEventListener("click", commitAndDownload);
 
     // Name commits on Enter or focus loss via the "change" event.
-    // Same rename_current_inventory path the pencil button uses, so
-    // canonicalization and validation are identical.
+    // Local rename only; engine swap happens on Save-as alongside
+    // the cell commits so a typed-then-cancelled rename does not
+    // mutate the engine.
     nodes.editorNameInput.addEventListener("change", () => {
         const newName = nodes.editorNameInput.value;
         if (newName === editorState.name) return;
-        // Local rename only; engine swap happens on Save-as alongside
-        // the cell commits so a typed-then-cancelled rename does not
-        // mutate the engine.
         editorState.name = newName;
         markEditorDirty();
         setEditorStatus(
@@ -1429,14 +1462,12 @@ function wireBuilderEditor(setupDialog) {
         );
     });
 
-    // One click handler bubbled at the grid root; per-cell listeners
-    // would multiply by hundreds for a typical inventory.
-    nodes.editorGrid.addEventListener("click", onGridClick);
+    // Single bubbled handler at the table root. Resolves the target
+    // (<td>, column <th>, row <th>, corner) inside.
+    nodes.editorGrid.addEventListener("mousedown", onGridMouseDown);
+    nodes.editorGridScroll.addEventListener("keydown", onGridKeyDown);
 
     // Browser-level unsaved-changes guard for refresh / tab close.
-    // Returning a non-empty string triggers the standard confirm
-    // prompt. Modern browsers ignore custom strings but show their
-    // own message; the presence of the listener is what matters.
     window.addEventListener("beforeunload", (ev) => {
         if (!editorState.dirty) return;
         ev.preventDefault();
@@ -1462,33 +1493,47 @@ function refreshEditorFromCurrent() {
     editorState.segments = snapshot.segments.slice();
     editorState.cells = snapshot.cells.map((row) => row.slice());
     editorState.dirty = false;
+    clearSelection();
+    editorState.focused = editorState.cells.length > 0
+        && editorState.cells[0].length > 0
+        ? { r: 0, c: 0 }
+        : null;
     nodes.editorNameInput.value = editorState.name;
     nodes.editorFileLabel.textContent = "(unsaved)";
     renderEditorGrid();
     setEditorStatus(
         `${editorState.segments.length} segments × `
         + `${editorState.features.length} features. `
-        + "Click cells to cycle +/−/0.",
+        + "Click a cell to select; click again to cycle. "
+        + "Shift-click for range, Ctrl-click to toggle.",
     );
 }
 
 /**
  * Render the editor grid from ``editorState``. Rows are features,
- * columns are segments. ``data-row`` / ``data-col`` indices on each
- * ``<td>`` let the bubbled click handler resolve the cell without
- * walking parents.
+ * columns are segments. Stores per-cell ``<td>`` nodes in
+ * ``_cellNodes`` for O(1) lookup from the selection model and
+ * paint paths. Headers get ``data-col`` / ``data-row`` so the
+ * bubbled click handler can resolve them without DOM walking.
  */
 function renderEditorGrid() {
     const table = nodes.editorGrid;
     const { features, segments, cells } = editorState;
     table.innerHTML = "";
+    _cellNodes = [];
+    _lastPaintedSelection = new Set();
+
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
-    headerRow.appendChild(document.createElement("th"));
-    for (const seg of segments) {
+    const corner = document.createElement("th");
+    corner.dataset.corner = "true";
+    corner.setAttribute("aria-label", "Select all");
+    headerRow.appendChild(corner);
+    for (let c = 0; c < segments.length; c++) {
         const th = document.createElement("th");
         th.scope = "col";
-        th.textContent = seg;
+        th.textContent = segments[c];
+        th.dataset.col = String(c);
         headerRow.appendChild(th);
     }
     thead.appendChild(headerRow);
@@ -1496,10 +1541,12 @@ function renderEditorGrid() {
 
     const tbody = document.createElement("tbody");
     for (let r = 0; r < features.length; r++) {
+        const rowNodes = [];
         const tr = document.createElement("tr");
         const rowHeader = document.createElement("th");
         rowHeader.scope = "row";
         rowHeader.textContent = features[r];
+        rowHeader.dataset.row = String(r);
         tr.appendChild(rowHeader);
         for (let c = 0; c < segments.length; c++) {
             const td = document.createElement("td");
@@ -1507,8 +1554,10 @@ function renderEditorGrid() {
             td.dataset.col = String(c);
             paintCell(td, cells[r][c]);
             tr.appendChild(td);
+            rowNodes.push(td);
         }
         tbody.appendChild(tr);
+        _cellNodes.push(rowNodes);
     }
     table.appendChild(tbody);
 }
@@ -1521,29 +1570,305 @@ function paintCell(td, rawValue) {
     td.dataset.value = cellSerialized(rawValue);
 }
 
-/** Bubbled click handler on the grid root. Resolves the target
- *  ``<td>`` and cycles its value via the shared ladder; rejects
- *  clicks that landed on a header or whitespace. */
-function onGridClick(ev) {
-    const td = ev.target.closest("td");
-    if (td === null || !nodes.editorGrid.contains(td)) return;
-    const r = Number.parseInt(td.dataset.row, 10);
-    const c = Number.parseInt(td.dataset.col, 10);
-    if (Number.isNaN(r) || Number.isNaN(c)) return;
-    const current = editorState.cells[r][c];
-    const next = nextCycleValue(current);
-    if (next === current) return;
-    editorState.cells[r][c] = next;
-    paintCell(td, next);
-    markEditorDirty();
-}
-
 /** Mark the edit state dirty, updating the file-label indicator
  *  exactly once on the first edit so the toggle is cheap. */
 function markEditorDirty() {
     if (editorState.dirty) return;
     editorState.dirty = true;
     nodes.editorFileLabel.textContent = "(modified)";
+}
+
+// Selection model ------------------------------------------------------
+
+function clearSelection() {
+    editorState.selected.clear();
+    editorState.anchor = null;
+    repaintSelection();
+}
+
+function selectSingleCell(r, c) {
+    editorState.selected.clear();
+    editorState.selected.add(cellKey(r, c));
+    editorState.anchor = { r, c };
+    editorState.focused = { r, c };
+    repaintSelection();
+}
+
+function extendSelectionTo(r, c) {
+    if (editorState.anchor === null) {
+        selectSingleCell(r, c);
+        return;
+    }
+    const { r: ar, c: ac } = editorState.anchor;
+    const r0 = Math.min(ar, r);
+    const r1 = Math.max(ar, r);
+    const c0 = Math.min(ac, c);
+    const c1 = Math.max(ac, c);
+    editorState.selected.clear();
+    for (let i = r0; i <= r1; i++) {
+        for (let j = c0; j <= c1; j++) {
+            editorState.selected.add(cellKey(i, j));
+        }
+    }
+    editorState.focused = { r, c };
+    repaintSelection();
+}
+
+function toggleCellSelection(r, c) {
+    const k = cellKey(r, c);
+    if (editorState.selected.has(k)) {
+        editorState.selected.delete(k);
+    } else {
+        editorState.selected.add(k);
+    }
+    // Anchor advances to the toggled cell so a follow-up shift-click
+    // extends from this position (matches Qt's QTableWidget behavior).
+    editorState.anchor = { r, c };
+    editorState.focused = { r, c };
+    repaintSelection();
+}
+
+function selectColumn(c) {
+    const numRows = editorState.features.length;
+    editorState.selected.clear();
+    for (let r = 0; r < numRows; r++) {
+        editorState.selected.add(cellKey(r, c));
+    }
+    editorState.anchor = { r: 0, c };
+    editorState.focused = { r: 0, c };
+    repaintSelection();
+}
+
+function selectRow(r) {
+    const numCols = editorState.segments.length;
+    editorState.selected.clear();
+    for (let c = 0; c < numCols; c++) {
+        editorState.selected.add(cellKey(r, c));
+    }
+    editorState.anchor = { r, c: 0 };
+    editorState.focused = { r, c: 0 };
+    repaintSelection();
+}
+
+function selectAll() {
+    const numRows = editorState.features.length;
+    const numCols = editorState.segments.length;
+    editorState.selected.clear();
+    for (let r = 0; r < numRows; r++) {
+        for (let c = 0; c < numCols; c++) {
+            editorState.selected.add(cellKey(r, c));
+        }
+    }
+    editorState.anchor = { r: 0, c: 0 };
+    editorState.focused = { r: 0, c: 0 };
+    repaintSelection();
+}
+
+/** Diff-based selection repaint: toggle .is-selected only on cells
+ *  whose membership actually changed. O(symmetric difference) per
+ *  selection change, not O(grid size). */
+function repaintSelection() {
+    for (const key of _lastPaintedSelection) {
+        if (editorState.selected.has(key)) continue;
+        const { r, c } = parseCellKey(key);
+        cellNode(r, c)?.classList.remove("is-selected");
+    }
+    for (const key of editorState.selected) {
+        if (_lastPaintedSelection.has(key)) continue;
+        const { r, c } = parseCellKey(key);
+        cellNode(r, c)?.classList.add("is-selected");
+    }
+    _lastPaintedSelection = new Set(editorState.selected);
+}
+
+// Mouse handling -------------------------------------------------------
+
+/**
+ * Dispatch a mousedown inside the grid table to the right handler.
+ * Distinguishes:
+ *
+ * * Corner cell (data-corner): select-all toggle.
+ * * Column header (data-col on a <th>): select that column.
+ * * Row header (data-row on a <th>): select that row.
+ * * Cell (<td> with data-row + data-col): apply selection-and-cycle
+ *   logic per :py:meth:`_BulkCycleTable.mousePressEvent` semantics.
+ */
+function onGridMouseDown(ev) {
+    if (ev.button !== 0) return;
+    const target = ev.target;
+    if (target instanceof HTMLElement && target.dataset.corner) {
+        ev.preventDefault();
+        onCornerClicked();
+        return;
+    }
+    const th = target instanceof HTMLElement
+        ? target.closest("thead th, tbody th")
+        : null;
+    if (th !== null && nodes.editorGrid.contains(th)) {
+        ev.preventDefault();
+        if (th.dataset.corner) {
+            onCornerClicked();
+            return;
+        }
+        if (th.dataset.col !== undefined) {
+            onColumnHeaderClicked(Number.parseInt(th.dataset.col, 10));
+            return;
+        }
+        if (th.dataset.row !== undefined) {
+            onRowHeaderClicked(Number.parseInt(th.dataset.row, 10));
+            return;
+        }
+        return;
+    }
+    const td = target instanceof HTMLElement
+        ? target.closest("td")
+        : null;
+    if (td === null || !nodes.editorGrid.contains(td)) return;
+    const r = Number.parseInt(td.dataset.row, 10);
+    const c = Number.parseInt(td.dataset.col, 10);
+    if (Number.isNaN(r) || Number.isNaN(c)) return;
+    ev.preventDefault();
+    nodes.editorGridScroll.focus();
+    onCellClicked(r, c, ev);
+}
+
+function onCellClicked(r, c, ev) {
+    if (ev.shiftKey) {
+        extendSelectionTo(r, c);
+        return;
+    }
+    if (ev.ctrlKey || ev.metaKey) {
+        toggleCellSelection(r, c);
+        return;
+    }
+    // Plain click. The desktop rule (see ``_BulkCycleTable``):
+    // click on a selected cell -> bulk-cycle; click on an unselected
+    // cell -> select that cell (no cycle on the selecting click).
+    if (editorState.selected.has(cellKey(r, c))) {
+        const next = nextCycleValue(editorState.cells[r][c]);
+        applyValueToSelection(next);
+        return;
+    }
+    selectSingleCell(r, c);
+}
+
+/** Toggle a single column's selection. Matches the desktop's
+ *  ``_on_col_header_clicked``: first click selects the column,
+ *  second click on the same column clears.
+ */
+function onColumnHeaderClicked(c) {
+    const numRows = editorState.features.length;
+    const isAlreadyColumn = editorState.selected.size === numRows
+        && [...editorState.selected].every((k) => {
+            const { c: kc } = parseCellKey(k);
+            return kc === c;
+        });
+    if (isAlreadyColumn) {
+        clearSelection();
+        return;
+    }
+    selectColumn(c);
+}
+
+function onRowHeaderClicked(r) {
+    const numCols = editorState.segments.length;
+    const isAlreadyRow = editorState.selected.size === numCols
+        && [...editorState.selected].every((k) => {
+            const { r: kr } = parseCellKey(k);
+            return kr === r;
+        });
+    if (isAlreadyRow) {
+        clearSelection();
+        return;
+    }
+    selectRow(r);
+}
+
+/** Desktop ``_on_corner_clicked``: select-all when nothing is fully
+ *  selected, clear when everything is. */
+function onCornerClicked() {
+    const total = editorState.features.length * editorState.segments.length;
+    if (total > 0 && editorState.selected.size === total) {
+        clearSelection();
+    } else {
+        selectAll();
+    }
+}
+
+// Keyboard handling ----------------------------------------------------
+
+/**
+ * Editor keydown router. Mirrors the desktop ``_handle_table_key``:
+ * Space cycles the selection (or focused cell), 1/2/3/0 set the
+ * value via the shared :py:data:`VALUE_KEYS` mapping, Esc clears.
+ */
+function onGridKeyDown(ev) {
+    if (ev.key === "Escape") {
+        ev.preventDefault();
+        clearSelection();
+        return;
+    }
+    if (ev.key === " " || ev.key === "Spacebar") {
+        ev.preventDefault();
+        bulkCycleFromFocused();
+        return;
+    }
+    if (valueKeys !== null && Object.hasOwn(valueKeys, ev.key)) {
+        ev.preventDefault();
+        applyValueToSelection(valueKeys[ev.key]);
+    }
+}
+
+/** Compute the next value from the focused cell (or anchor as
+ *  fallback) and apply it to every selected cell. Single-cell
+ *  fallback when there's no selection: cycle the focused cell
+ *  alone, matching desktop's anchor-only path. */
+function bulkCycleFromFocused() {
+    const anchor = editorState.focused
+        ?? editorState.anchor
+        ?? cellFromFirstSelected();
+    if (anchor === null) return;
+    const current = editorState.cells[anchor.r][anchor.c];
+    const next = nextCycleValue(current);
+    if (editorState.selected.size === 0) {
+        // Anchor-only path: write just the focused cell.
+        if (next === current) return;
+        editorState.cells[anchor.r][anchor.c] = next;
+        paintCell(cellNode(anchor.r, anchor.c), next);
+        markEditorDirty();
+        return;
+    }
+    applyValueToSelection(next);
+}
+
+function cellFromFirstSelected() {
+    const first = editorState.selected.values().next().value;
+    return first === undefined ? null : parseCellKey(first);
+}
+
+/**
+ * Write ``value`` to every cell in the selection (or the focused
+ * cell if no selection). Repaints only the cells that actually
+ * changed and marks the edit state dirty.
+ */
+function applyValueToSelection(value) {
+    const targets = editorState.selected.size > 0
+        ? [...editorState.selected].map(parseCellKey)
+        : editorState.focused !== null
+            ? [editorState.focused]
+            : [];
+    if (targets.length === 0) return;
+    let changed = 0;
+    for (const { r, c } of targets) {
+        const cur = editorState.cells[r][c];
+        const normalized = cellSerialized(cur);
+        const targetNormalized = cellSerialized(value);
+        if (normalized === targetNormalized) continue;
+        editorState.cells[r][c] = value;
+        paintCell(cellNode(r, c), value);
+        changed += 1;
+    }
+    if (changed > 0) markEditorDirty();
 }
 
 /**
