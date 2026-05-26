@@ -336,7 +336,21 @@ function loadPyodideScript() {
         s.src = PYODIDE_BOOTSTRAP_URL;
         s.integrity = PYODIDE_BOOTSTRAP_SRI;
         s.crossOrigin = "anonymous";
-        s.onload = () => resolve();
+        s.onload = () => {
+            // onload fires when the script TAG has executed, not
+            // when loadPyodide is guaranteed to be defined. A
+            // bizarrely-corrupted CDN response (200 OK, passes SRI,
+            // but exports the wrong thing) would resolve here with
+            // no global; subsequent loadPyodide({...}) would throw
+            // a confusing TypeError. Verify before resolving.
+            if (typeof loadPyodide !== "function") {
+                reject(new Error(
+                    "pyodide.js loaded but loadPyodide global is missing"
+                ));
+                return;
+            }
+            resolve();
+        };
         s.onerror = () => reject(new Error("pyodide.js failed to load"));
         document.head.appendChild(s);
     });
@@ -611,14 +625,24 @@ async function loadInventoryText(text, sourceLabel) {
 // click: the moment a real click fires, scheduleAnalysis runs and
 // the browser preempts the idle queue.
 const PREWARM_COUNT = 10;
+// Monotonic generation counter. Each call to prewarmCommonAnalyses
+// bumps it; each scheduled step captures the value at start and
+// bails if a newer prewarm has begun. This prevents an in-flight
+// prewarm from continuing to warm the previous inventory's segments
+// against the new engine after an inventory swap (the LRU cache
+// was just invalidated, so those calls would do real work and
+// populate the cache with results the user can't reach).
+let _prewarmGen = 0;
 function prewarmCommonAnalyses() {
     if (!state.bridge) return;
+    const myGen = ++_prewarmGen;
     const targets = state.segments.slice(0, PREWARM_COUNT);
     const idle = ("requestIdleCallback" in window)
         ? (cb) => window.requestIdleCallback(cb, { timeout: 1000 })
         : (cb) => setTimeout(cb, 0);
     let i = 0;
     function step() {
+        if (myGen !== _prewarmGen) return;   // newer prewarm took over
         if (i >= targets.length) return;
         try {
             // Result discarded; the side effect is the Python-side
@@ -1126,11 +1150,27 @@ function _updateSegmentButtonStates(segmentStates) {
 // ---------------------------------------------------------------------
 // Inventory upload / download
 // ---------------------------------------------------------------------
+// Bundled inventories are ~10-50 KB. 5 MB ceiling is ~100x the
+// typical size -- enough headroom for the wildest real inventory
+// while still rejecting accidentally-selected huge files before
+// we read them into memory and freeze the tab.
+const MAX_INVENTORY_BYTES = 5 * 1024 * 1024;
+
 function wireUploadDownload() {
     nodes.uploadBtn.addEventListener("click", () => nodes.uploadInput.click());
     nodes.uploadInput.addEventListener("change", async (ev) => {
         const file = ev.target.files[0];
         if (!file) return;
+        if (file.size > MAX_INVENTORY_BYTES) {
+            const mb = (file.size / (1024 * 1024)).toFixed(1);
+            setStatus(
+                `File too large (${mb} MB > `
+                + `${MAX_INVENTORY_BYTES / (1024 * 1024)} MB). `
+                + "Inventories are usually <50 KB; check the file."
+            );
+            ev.target.value = "";
+            return;
+        }
         const text = await file.text();
         await loadInventoryText(text, file.name);
         ev.target.value = "";

@@ -77,7 +77,7 @@ self.addEventListener("fetch", (event) => {
     );
 
     if (isIndexHtml) {
-        event.respondWith(staleWhileRevalidate(req));
+        event.respondWith(staleWhileRevalidate(event, req));
     } else {
         event.respondWith(cacheFirst(req));
     }
@@ -101,7 +101,7 @@ async function cacheFirst(req) {
     }
 }
 
-async function staleWhileRevalidate(req) {
+async function staleWhileRevalidate(event, req) {
     const cache = await caches.open(CACHE_NAME);
     const cached = await cache.match(req);
     const networkPromise = fetch(req)
@@ -110,5 +110,11 @@ async function staleWhileRevalidate(req) {
             return response;
         })
         .catch(() => cached || Response.error());
+    // If we return the cached response, the background fetch is
+    // still in flight. waitUntil keeps the SW alive until the
+    // cache.put completes -- otherwise an idle eviction between
+    // page close and fetch completion would lose the update, and
+    // the user would see the stale build on the next visit too.
+    event.waitUntil(networkPromise);
     return cached || networkPromise;
 }
