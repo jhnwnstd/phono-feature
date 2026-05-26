@@ -58,6 +58,7 @@ from phonology_features.gui.builder.table import (
     _SelectionFillDelegate,
     _ToggleHeaderView,
 )
+from phonology_features.gui.grid_logic import grid_to_inventory
 from phonology_features.gui.palette import C
 
 _log = get_logger(__name__)
@@ -976,43 +977,27 @@ class InventoryBuilder(QMainWindow):
     def _to_inventory(self) -> Inventory:
         """Snapshot the current grid as a validated ``Inventory``.
 
-        Routes through ``Inventory.from_grid`` which funnels into
-        ``Inventory.parse``, so save uses the same contract as load.
-        Raises ``ValidationError`` if the grid is somehow inconsistent
-        (which would be a bug in the builder, not user input). No
-        silent normalization of unknown cell values: the cycle ladder
-        only produces '+'/'-'/'0'/'\u2212', so anything else is a
-        contract violation worth surfacing.
-
-        Cells with value "0" are OMITTED from the serialized form.
-        ``Inventory.parse`` documents "missing == 0" semantics
-        (test_parse_missing_feature_in_bundle_defaults_to_zero), so
-        writing explicit "0" entries would silently inflate sparsely-
-        authored on-disk inventories on every round-trip through the
-        builder. Omission keeps load/save symmetric.
+        Reads cell text from the QTableWidget into a pure 2D list,
+        then delegates to :py:func:`grid_to_inventory` for the
+        Unicode-minus normalization, the omit-on-zero rule, and the
+        :py:meth:`Inventory.from_grid` round-trip. The shared helper
+        is the same one the web builder calls, so the on-disk format
+        is identical across both frontends.
         """
         assert self._table.columnCount() == len(self._segments)
         assert self._table.rowCount() == len(self._features)
-        segments: dict[str, dict[str, str]] = {}
-        for c, seg in enumerate(self._segments):
-            feats: dict[str, str] = {}
-            for r, feat in enumerate(self._features):
+        cells: list[list[str]] = []
+        for r in range(len(self._features)):
+            row: list[str] = []
+            for c in range(len(self._segments)):
                 item = self._table.item(r, c)
-                val = item.text() if item else "0"
-                # Normalize the Unicode display form to ASCII here so
-                # the omit-on-zero check sees the final value. (parse
-                # would do the same normalization via from_grid, but
-                # the value comparison needs to happen first.)
-                if val == "\u2212":
-                    val = "-"
-                if val == "0":
-                    continue
-                feats[feat] = val
-            segments[seg] = feats
-        return Inventory.from_grid(
+                row.append(item.text() if item is not None else "0")
+            cells.append(row)
+        return grid_to_inventory(
             name=self._inv_name,
-            features=list(self._features),
-            segments=segments,
+            features=self._features,
+            segments=self._segments,
+            cells=cells,
         )
 
     # ------------------------------------------------------------------

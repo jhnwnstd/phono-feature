@@ -21,6 +21,7 @@ from typing import Any
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features.gui.constants import FEATURE_GROUPS
+from phonology_features.gui.grid_logic import grid_to_inventory
 from phonology_features.gui.inventory_setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
@@ -253,6 +254,39 @@ def create_new_inventory(
         name=result.name,
         features=list(result.features),
         segments=grid,
+    )
+    _engine = FeatureEngine(inventory)
+    _inventory_name = inventory.name
+    _invalidate_analysis_caches()
+    return _summarize_engine(_engine)
+
+
+def commit_inventory_from_grid(
+    name: str,
+    features: list[str],
+    segments: list[str],
+    cells: list[list[str]],
+) -> dict[str, Any]:
+    """Build and adopt a new inventory from web-builder grid state.
+
+    Calls the shared :py:func:`grid_to_inventory` (the same path the
+    desktop builder's Save uses), which folds U+2212 minus to ASCII,
+    omits ``"0"`` cells, and routes through
+    :py:meth:`Inventory.from_grid` for validation. On success
+    replaces the active engine and returns the standard summary
+    that JS uses to repaint the viewer.
+
+    ``cells`` is indexed as ``cells[feature_index][segment_index]``.
+
+    Raises :py:class:`ValidationError` if the grid is not a valid
+    inventory.
+    """
+    global _engine, _inventory_name
+    inventory = grid_to_inventory(
+        name=name,
+        features=features,
+        segments=segments,
+        cells=cells,
     )
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name

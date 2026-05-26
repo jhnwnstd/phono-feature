@@ -5,7 +5,23 @@ from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import QTableWidgetItem
 
 from phonology_features.gui import palette
+from phonology_features.gui.grid_logic import (
+    MINUS_DISPLAY,
+    MINUS_SERIALIZED,
+    cycle_value,
+)
 from phonology_features.gui.palette import C
+
+# Re-export so existing ``from .grid import cycle_value`` call sites
+# in the builder continue to resolve. The canonical home is
+# :py:mod:`phonology_features.gui.grid_logic`.
+__all__ = [
+    "MINUS_DISPLAY",
+    "MINUS_SERIALIZED",
+    "cycle_value",
+    "make_cell",
+    "style_cell",
+]
 
 # Fonts don't change with the theme so they're safe to cache at import.
 _CELL_FONT_BOLD = QFont("Noto Sans", 10, QFont.Weight.Bold)
@@ -63,8 +79,8 @@ def _cell_brushes(value: str) -> tuple[QBrush, QBrush]:
 
 def make_cell(value: str = "0") -> QTableWidgetItem:
     """Create a styled table cell with the given feature value."""
-    if value == "-":
-        value = "−"
+    if value == MINUS_SERIALIZED:
+        value = MINUS_DISPLAY
     item = QTableWidgetItem(value)
     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
     item.setFlags(_CELL_FLAGS)
@@ -78,12 +94,3 @@ def style_cell(item: QTableWidgetItem, value: str):
     item.setForeground(fg)
     item.setBackground(bg)
     item.setFont(_CELL_FONT_BOLD if value != "0" else _CELL_FONT_NORMAL)
-
-
-def cycle_value(current: str) -> str:
-    """Cycle 0 -> + -> minus -> 0. Unknown values reset to 0."""
-    if current == "0":
-        return "+"
-    if current == "+":
-        return "−"
-    return "0"

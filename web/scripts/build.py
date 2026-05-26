@@ -60,6 +60,7 @@ RELAYED_SOURCES = [
     "layout.py",
     "vowel_layout.py",
     "inventory_setup.py",
+    "grid_logic.py",
 ]
 
 
