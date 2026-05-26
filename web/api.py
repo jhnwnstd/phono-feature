@@ -25,6 +25,8 @@ from phonology_features.gui.grid_logic import (
     CYCLE_LADDER,
     VALUE_KEYS,
     grid_to_inventory,
+    validate_new_feature_label,
+    validate_new_segment_label,
 )
 from phonology_features.gui.inventory_setup import (
     DEFAULT_FEATURES,
@@ -274,6 +276,25 @@ def get_cycle_ladder() -> dict[str, str]:
     web cycle order in lockstep and avoids per-click bridge cost.
     """
     return dict(CYCLE_LADDER)
+
+
+def validate_segment_label(label: str, existing: list[str]) -> str:
+    """Validate a new segment label and return its canonical form.
+
+    Thin bridge wrapper over the shared
+    :py:func:`validate_new_segment_label` so the web editor's
+    add-segment button surfaces the same error wording the desktop
+    builder produces.
+    """
+    return validate_new_segment_label(label, existing)
+
+
+def validate_feature_label(label: str, existing: list[str]) -> str:
+    """Validate a new feature label and return its canonical form.
+
+    Bridge wrapper for :py:func:`validate_new_feature_label`.
+    """
+    return validate_new_feature_label(label, existing)
 
 
 def get_value_keys() -> dict[str, str]:

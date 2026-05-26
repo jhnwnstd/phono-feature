@@ -121,6 +121,13 @@
             aria-label="Close editor and return to viewer">← Back</button>
     <button id="editor-new-btn" type="button">New</button>
     <button id="editor-save-as-btn" type="button">Save as…</button>
+    <span class="editor-toolbar-sep" aria-hidden="true"></span>
+    <button id="editor-add-seg-btn" type="button">+ Segment</button>
+    <button id="editor-add-feat-btn" type="button">+ Feature</button>
+    <button id="editor-remove-seg-btn" type="button" disabled
+            aria-label="Remove selected segment column">− Segment</button>
+    <button id="editor-remove-feat-btn" type="button" disabled
+            aria-label="Remove selected feature row">− Feature</button>
     <div class="editor-toolbar-spacer"></div>
   </header>
   <div class="editor-meta">
@@ -140,6 +147,27 @@
   <footer class="editor-status" id="editor-status" aria-live="polite">
   </footer>
 </section>
+
+<!--
+  Single text-prompt modal reused by the editor's + Segment and
+  + Feature buttons. JS sets the title, label, and submit handler
+  per invocation. Matches the pattern of the rename and setup
+  dialogs (one modal per concern, sized small).
+-->
+<dialog id="label-prompt-dialog" aria-labelledby="label-prompt-title">
+  <form method="dialog" id="label-prompt-form">
+    <div class="dialog-title" id="label-prompt-title">Add</div>
+    <label class="dialog-label" for="label-prompt-input"
+           id="label-prompt-label">Label</label>
+    <input id="label-prompt-input" type="text" maxlength="256"
+           autocomplete="off" spellcheck="false" required>
+    <div class="dialog-error" id="label-prompt-error" role="alert"></div>
+    <div class="dialog-actions">
+      <button type="button" id="label-prompt-cancel">Cancel</button>
+      <button type="submit" id="label-prompt-submit">Add</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="rename-dialog" aria-labelledby="rename-dialog-title">
   <form method="dialog" id="rename-form">

@@ -61,7 +61,11 @@ from phonology_features.gui.builder.table import (
 from phonology_features.gui.grid_logic import (
     VALUE_KEYS as _SHARED_VALUE_KEYS,
 )
-from phonology_features.gui.grid_logic import grid_to_inventory
+from phonology_features.gui.grid_logic import (
+    grid_to_inventory,
+    validate_new_feature_label,
+    validate_new_segment_label,
+)
 from phonology_features.gui.palette import C
 
 _log = get_logger(__name__)
@@ -887,20 +891,26 @@ class InventoryBuilder(QMainWindow):
 
     # Add / remove segments and features
     def _add_segment(self) -> None:
-        """Prompt for a new segment and add a column."""
+        """Prompt for a new segment and add a column.
+
+        The trim + dupe-check rule lives in the shared
+        :py:func:`validate_new_segment_label`, so the web editor's
+        add-segment flow produces identical error wording.
+        """
         from PyQt6.QtWidgets import QInputDialog
 
         dlg = QInputDialog(self)
         dlg.setWindowTitle("Add Segment")
         dlg.setLabelText("Segment symbol (IPA):")
         center_on_parent(dlg, self)
-        ok = dlg.exec() == QDialog.DialogCode.Accepted
-        text = dlg.textValue()
-        if not ok or not text.strip():
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        seg = text.strip()
-        if seg in self._segments:
-            self._status.showMessage(f"Segment '{seg}' already exists.")
+        try:
+            seg = validate_new_segment_label(
+                dlg.textValue(), self._segments
+            )
+        except ValueError as e:
+            self._status.showMessage(str(e))
             return
         self._segments.append(seg)
         col = self._table.columnCount()
@@ -912,20 +922,25 @@ class InventoryBuilder(QMainWindow):
         self._status.showMessage(f"Added segment '{seg}'.")
 
     def _add_feature(self) -> None:
-        """Prompt for a new feature and add a row."""
+        """Prompt for a new feature and add a row.
+
+        Trim + dupe-check via the shared
+        :py:func:`validate_new_feature_label`.
+        """
         from PyQt6.QtWidgets import QInputDialog
 
         dlg = QInputDialog(self)
         dlg.setWindowTitle("Add Feature")
         dlg.setLabelText("Feature name:")
         center_on_parent(dlg, self)
-        ok = dlg.exec() == QDialog.DialogCode.Accepted
-        text = dlg.textValue()
-        if not ok or not text.strip():
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        feat = text.strip()
-        if feat in self._features:
-            self._status.showMessage(f"Feature '{feat}' already exists.")
+        try:
+            feat = validate_new_feature_label(
+                dlg.textValue(), self._features
+            )
+        except ValueError as e:
+            self._status.showMessage(str(e))
             return
         self._features.append(feat)
         row = self._table.rowCount()

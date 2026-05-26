@@ -758,6 +758,23 @@ progress {
   background: var(--accent-light);
 }
 .editor-toolbar-spacer { flex: 1; }
+.editor-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 0 var(--space-sm);
+}
+.editor-toolbar button[disabled] {
+  background: var(--btn-disabled-bg);
+  color: var(--btn-disabled-text);
+  border-color: var(--btn-disabled-border);
+  cursor: not-allowed;
+}
+.editor-toolbar button[disabled]:hover {
+  background: var(--btn-disabled-bg);
+  color: var(--btn-disabled-text);
+  border-color: var(--btn-disabled-border);
+}
 .editor-meta {
   display: flex;
   align-items: center;

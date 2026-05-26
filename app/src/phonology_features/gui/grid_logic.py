@@ -84,6 +84,49 @@ def normalize_minus(value: str) -> str:
     return MINUS_SERIALIZED if value == MINUS_DISPLAY else value
 
 
+def validate_new_segment_label(
+    label: str, existing: Sequence[str]
+) -> str:
+    """Return the canonical (trimmed) form of ``label`` after
+    validating it for use as a new segment column.
+
+    Raises :py:class:`ValueError` with a user-facing message when
+    the label is empty after trim or already present in
+    ``existing``. The trim-and-string-compare semantics mirror the
+    desktop's :py:meth:`InventoryBuilder._add_segment`; save-time
+    validation through :py:meth:`Inventory.parse` catches any
+    post-NFC or IPA-folding collisions later.
+
+    Shared with the web editor so both frontends produce identical
+    error wording on duplicate or empty input.
+    """
+    trimmed = label.strip()
+    if not trimmed:
+        raise ValueError("Segment label is empty.")
+    if trimmed in existing:
+        raise ValueError(f"Segment '{trimmed}' already exists.")
+    return trimmed
+
+
+def validate_new_feature_label(
+    label: str, existing: Sequence[str]
+) -> str:
+    """Return the canonical (trimmed) form of ``label`` after
+    validating it for use as a new feature row.
+
+    Same shape as :py:func:`validate_new_segment_label`. The
+    desktop's :py:meth:`InventoryBuilder._add_feature` and the
+    web editor's add-feature handler both route through here, so
+    duplicate-feature errors look identical across frontends.
+    """
+    trimmed = label.strip()
+    if not trimmed:
+        raise ValueError("Feature label is empty.")
+    if trimmed in existing:
+        raise ValueError(f"Feature '{trimmed}' already exists.")
+    return trimmed
+
+
 def grid_to_inventory(
     *,
     name: str,

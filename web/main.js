@@ -45,11 +45,23 @@ const NODE_IDS = Object.freeze({
     editorExitBtn: "editor-exit-btn",
     editorNewBtn: "editor-new-btn",
     editorSaveAsBtn: "editor-save-as-btn",
+    editorAddSegBtn: "editor-add-seg-btn",
+    editorAddFeatBtn: "editor-add-feat-btn",
+    editorRemoveSegBtn: "editor-remove-seg-btn",
+    editorRemoveFeatBtn: "editor-remove-feat-btn",
     editorNameInput: "editor-name-input",
     editorFileLabel: "editor-file-label",
     editorGrid: "editor-grid",
     editorGridScroll: "editor-grid-scroll",
     editorStatus: "editor-status",
+    labelPromptDialog: "label-prompt-dialog",
+    labelPromptForm: "label-prompt-form",
+    labelPromptTitle: "label-prompt-title",
+    labelPromptLabel: "label-prompt-label",
+    labelPromptInput: "label-prompt-input",
+    labelPromptError: "label-prompt-error",
+    labelPromptCancel: "label-prompt-cancel",
+    labelPromptSubmit: "label-prompt-submit",
 });
 const nodes = Object.create(null);
 
@@ -1467,6 +1479,30 @@ function wireBuilderEditor(setupDialog) {
     nodes.editorGrid.addEventListener("mousedown", onGridMouseDown);
     nodes.editorGridScroll.addEventListener("keydown", onGridKeyDown);
 
+    // +/− Segment / Feature buttons.
+    nodes.editorAddSegBtn.addEventListener("click", () => {
+        labelPrompt({
+            title: "Add segment",
+            label: "Segment symbol (IPA):",
+            submitLabel: "Add",
+            bridgeEndpoint: "validate_segment_label",
+            existing: editorState.segments,
+            onAccept: addSegmentToState,
+        });
+    });
+    nodes.editorAddFeatBtn.addEventListener("click", () => {
+        labelPrompt({
+            title: "Add feature",
+            label: "Feature name:",
+            submitLabel: "Add",
+            bridgeEndpoint: "validate_feature_label",
+            existing: editorState.features,
+            onAccept: addFeatureToState,
+        });
+    });
+    nodes.editorRemoveSegBtn.addEventListener("click", removeSelectedSegment);
+    nodes.editorRemoveFeatBtn.addEventListener("click", removeSelectedFeature);
+
     // Browser-level unsaved-changes guard for refresh / tab close.
     window.addEventListener("beforeunload", (ev) => {
         if (!editorState.dirty) return;
@@ -1666,7 +1702,9 @@ function selectAll() {
 
 /** Diff-based selection repaint: toggle .is-selected only on cells
  *  whose membership actually changed. O(symmetric difference) per
- *  selection change, not O(grid size). */
+ *  selection change, not O(grid size). Also refreshes the
+ *  remove-segment / remove-feature button enabled states so they
+ *  reflect the current selection shape. */
 function repaintSelection() {
     for (const key of _lastPaintedSelection) {
         if (editorState.selected.has(key)) continue;
@@ -1679,6 +1717,42 @@ function repaintSelection() {
         cellNode(r, c)?.classList.add("is-selected");
     }
     _lastPaintedSelection = new Set(editorState.selected);
+    updateRemoveButtonStates();
+}
+
+/** Compute whether the current selection is exactly one full
+ *  column. Returns the column index, or null if the selection has
+ *  any other shape. Matches the desktop's enable rule for the
+ *  ``− Segment`` button in :py:meth:`_on_selection_changed`. */
+function getSingleSelectedColumn() {
+    const numRows = editorState.features.length;
+    if (numRows === 0) return null;
+    if (editorState.selected.size !== numRows) return null;
+    let theCol = null;
+    for (const key of editorState.selected) {
+        const { c } = parseCellKey(key);
+        if (theCol === null) theCol = c;
+        else if (c !== theCol) return null;
+    }
+    return theCol;
+}
+
+function getSingleSelectedRow() {
+    const numCols = editorState.segments.length;
+    if (numCols === 0) return null;
+    if (editorState.selected.size !== numCols) return null;
+    let theRow = null;
+    for (const key of editorState.selected) {
+        const { r } = parseCellKey(key);
+        if (theRow === null) theRow = r;
+        else if (r !== theRow) return null;
+    }
+    return theRow;
+}
+
+function updateRemoveButtonStates() {
+    nodes.editorRemoveSegBtn.disabled = getSingleSelectedColumn() === null;
+    nodes.editorRemoveFeatBtn.disabled = getSingleSelectedRow() === null;
 }
 
 // Mouse handling -------------------------------------------------------
@@ -1851,6 +1925,65 @@ function cellFromFirstSelected() {
  * cell if no selection). Repaints only the cells that actually
  * changed and marks the edit state dirty.
  */
+// Add / remove segments and features --------------------------------
+
+/**
+ * Add a new segment column to the edit state. Called by the
+ * label-prompt's onAccept after the shared validator has run, so
+ * ``seg`` is already trimmed and known to be non-duplicate.
+ * Mutates editorState in place and re-renders the grid (which
+ * also clears any stale selection that referenced the old shape).
+ */
+function addSegmentToState(seg) {
+    editorState.segments.push(seg);
+    for (const row of editorState.cells) {
+        row.push(ZERO_VALUE);
+    }
+    renderEditorGrid();
+    clearSelection();
+    markEditorDirty();
+    setEditorStatus(`Added segment '${seg}'.`);
+}
+
+function addFeatureToState(feat) {
+    editorState.features.push(feat);
+    editorState.cells.push(
+        Array.from({ length: editorState.segments.length }, () => ZERO_VALUE),
+    );
+    renderEditorGrid();
+    clearSelection();
+    markEditorDirty();
+    setEditorStatus(`Added feature '${feat}'.`);
+}
+
+function removeSelectedSegment() {
+    const c = getSingleSelectedColumn();
+    if (c === null) return;
+    const seg = editorState.segments[c];
+    if (!confirm(`Remove segment '${seg}'?`)) return;
+    editorState.segments.splice(c, 1);
+    for (const row of editorState.cells) {
+        row.splice(c, 1);
+    }
+    renderEditorGrid();
+    clearSelection();
+    markEditorDirty();
+    setEditorStatus(`Removed segment '${seg}'.`);
+}
+
+function removeSelectedFeature() {
+    const r = getSingleSelectedRow();
+    if (r === null) return;
+    const feat = editorState.features[r];
+    if (!confirm(`Remove feature '${feat}'?`)) return;
+    editorState.features.splice(r, 1);
+    editorState.cells.splice(r, 1);
+    renderEditorGrid();
+    clearSelection();
+    markEditorDirty();
+    setEditorStatus(`Removed feature '${feat}'.`);
+}
+
 function applyValueToSelection(value) {
     const targets = editorState.selected.size > 0
         ? [...editorState.selected].map(parseCellKey)
@@ -1901,6 +2034,81 @@ function commitAndDownload() {
 
 function setEditorStatus(msg) {
     nodes.editorStatus.textContent = msg;
+}
+
+// Label-prompt modal -------------------------------------------------
+
+// Pending invocation state: the title / labels / handlers vary per
+// call site (+ Segment vs + Feature), but the dialog itself is
+// reused. ``_labelPromptPending`` is the active invocation; the
+// form-submit listener is wired once and reads from it.
+let _labelPromptPending = null;
+
+/**
+ * Show the shared text-input modal. Used by + Segment and
+ * + Feature to gather the new label, validate it via the bridge
+ * (which routes through the same validator the desktop builder
+ * uses), and apply it to ``editorState`` on success.
+ *
+ * ``onAccept`` receives the canonical (trimmed) label string.
+ */
+function labelPrompt({
+    title,
+    label,
+    submitLabel,
+    bridgeEndpoint,
+    existing,
+    onAccept,
+}) {
+    nodes.labelPromptTitle.textContent = title;
+    nodes.labelPromptLabel.textContent = label;
+    nodes.labelPromptSubmit.textContent = submitLabel;
+    nodes.labelPromptInput.value = "";
+    nodes.labelPromptError.textContent = "";
+    _labelPromptPending = { bridgeEndpoint, existing, onAccept };
+    const dlg = nodes.labelPromptDialog;
+    if (typeof dlg.showModal === "function") {
+        dlg.showModal();
+    } else {
+        dlg.setAttribute("open", "");
+    }
+    requestAnimationFrame(() => nodes.labelPromptInput.focus());
+}
+
+function closeLabelPrompt() {
+    const dlg = nodes.labelPromptDialog;
+    if (typeof dlg.close === "function") {
+        dlg.close();
+    } else {
+        dlg.removeAttribute("open");
+    }
+    _labelPromptPending = null;
+}
+
+function wireLabelPrompt() {
+    nodes.labelPromptCancel.addEventListener("click", closeLabelPrompt);
+    nodes.labelPromptForm.addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        if (_labelPromptPending === null) {
+            closeLabelPrompt();
+            return;
+        }
+        const pending = _labelPromptPending;
+        let canonical;
+        try {
+            canonical = callBridge(
+                pending.bridgeEndpoint,
+                nodes.labelPromptInput.value,
+                pending.existing,
+            );
+        } catch (e) {
+            nodes.labelPromptError.textContent = e.message || "Invalid label.";
+            nodes.labelPromptInput.focus();
+            return;
+        }
+        closeLabelPrompt();
+        pending.onAccept(canonical);
+    });
 }
 
 const THEME = Object.freeze({ LIGHT: "light", DARK: "dark" });
@@ -2084,6 +2292,7 @@ async function main() {
     // editor, because the editor's New button receives its open()
     // trigger from the dialog's wire-up return value.
     const setupDialog = wireSetupDialog();
+    wireLabelPrompt();
     wireBuilderEditor(setupDialog);
     wireExpandButton();
     wireClearButtons();

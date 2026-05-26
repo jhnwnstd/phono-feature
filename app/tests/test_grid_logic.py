@@ -19,6 +19,8 @@ from phonology_features.gui.grid_logic import (
     cycle_value,
     grid_to_inventory,
     normalize_minus,
+    validate_new_feature_label,
+    validate_new_segment_label,
 )
 
 # Constants
@@ -133,6 +135,46 @@ def test_value_keys_is_read_only():
     cannot mutate the singleton and silently change behavior."""
     with pytest.raises(TypeError):
         VALUE_KEYS["1"] = "?"  # type: ignore[index]
+
+
+# validate_new_segment_label / validate_new_feature_label
+
+
+def test_validate_new_segment_label_trims_whitespace():
+    assert validate_new_segment_label("  p  ", []) == "p"
+
+
+def test_validate_new_segment_label_rejects_empty():
+    with pytest.raises(ValueError, match="empty"):
+        validate_new_segment_label("   ", [])
+
+
+def test_validate_new_segment_label_rejects_duplicate():
+    """The error message embeds the offending label so the user
+    knows which entry conflicts. The wording must match the
+    desktop's prior inline message so both frontends produce the
+    same status-bar text."""
+    with pytest.raises(ValueError, match="already exists"):
+        validate_new_segment_label("p", ["p", "b", "t"])
+
+
+def test_validate_new_segment_label_duplicate_uses_trimmed_form():
+    """Trim runs BEFORE the dupe check, so leading/trailing
+    whitespace doesn't smuggle a duplicate past the check."""
+    with pytest.raises(ValueError, match="'p'"):
+        validate_new_segment_label("  p  ", ["p"])
+
+
+def test_validate_new_segment_label_accepts_new_label():
+    assert validate_new_segment_label("ɡ", ["p", "b", "t"]) == "ɡ"
+
+
+def test_validate_new_feature_label_trims_and_dedupes():
+    assert validate_new_feature_label(" Voice ", ["Nasal"]) == "Voice"
+    with pytest.raises(ValueError, match="empty"):
+        validate_new_feature_label("", [])
+    with pytest.raises(ValueError, match="'Voice'"):
+        validate_new_feature_label("Voice", ["Voice"])
 
 
 # normalize_minus: display -> serialized form
