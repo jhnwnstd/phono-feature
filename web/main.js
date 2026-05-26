@@ -68,6 +68,25 @@ function printBootMeasures() {
     console.table(rows);
 }
 
+// Resource timing for the boot-critical network fetches. Pairs with
+// printBootMeasures(): phase measures show where TIME goes, resource
+// timing shows where BYTES come from. Use it to tell whether a slow
+// boot is CDN latency, payload size, or local Python work.
+function printResourceSummary() {
+    const INTERESTING = ["pyodide", "python_bundle", "inventories", "theme"];
+    const rows = performance
+        .getEntriesByType("resource")
+        .filter((r) => INTERESTING.some((needle) => r.name.includes(needle)))
+        .map((r) => ({
+            name: new URL(r.name).pathname.split("/").pop(),
+            ms: Math.round(r.duration),
+            transfer_kb: Math.round((r.transferSize || 0) / 1024),
+            decoded_kb: Math.round((r.decodedBodySize || 0) / 1024),
+        }));
+    // eslint-disable-next-line no-console
+    console.table(rows);
+}
+
 // ---------------------------------------------------------------------
 // fetch wrappers. Two responsibilities:
 //
@@ -268,6 +287,28 @@ const state = {
 // in the file (falling back to a Title-Cased filename).
 let BUNDLED_INVENTORIES = [];
 
+// Asset URL resolver. In built deploys the index.html ships an
+// inline JSON block (<script type="application/json"
+// id="asset-manifest">) that maps logical names to content-hashed
+// filenames; we read it once and cache. In raw-source dev (no
+// build), the block is absent and we fall back to the unhashed
+// names. This is what lets a fresh push break GitHub Pages' 600 s
+// asset cache: every changed bundle gets a new URL.
+const _DEFAULT_ASSET_URLS = Object.freeze({
+    inventories_manifest: "inventories.json",
+    python_bundle: "python_bundle.json",
+});
+let _ASSET_MANIFEST = null;
+function assetUrl(name) {
+    if (_ASSET_MANIFEST === null) {
+        const el = document.getElementById("asset-manifest");
+        _ASSET_MANIFEST = el
+            ? JSON.parse(el.textContent)
+            : {};
+    }
+    return _ASSET_MANIFEST[name] || _DEFAULT_ASSET_URLS[name];
+}
+
 // Boot timeouts. Pyodide cold start on a fast connection is
 // typically 2-5s; 30s is a generous failure threshold. Bridge
 // fetches are local to the deploy, so 10s is plenty there.
@@ -285,7 +326,7 @@ async function bootPyodide() {
 
     setLoadingStatus("Loading inventory list…");
     mark("manifest:start");
-    BUNDLED_INVENTORIES = await fetchJson("inventories.json");
+    BUNDLED_INVENTORIES = await fetchJson(assetUrl("inventories_manifest"));
     if (!BUNDLED_INVENTORIES.length) {
         throw new Error(
             "no inventories in inventories.json; check the build script"
@@ -337,6 +378,7 @@ async function bootPyodide() {
     measure("Default inventory", "inventory:start", "inventory:end");
     measure("Total boot", "boot:start", "boot:end");
     printBootMeasures();
+    printResourceSummary();
 }
 
 function pickDefaultInventory(manifest) {
@@ -356,10 +398,41 @@ function pickDefaultInventory(manifest) {
 // declared sys.path entries. Replaces the old mountPackage +
 // mountRendererPackage helpers, whose file lists had to mirror
 // build-side constants by hand.
+// FFI-style boundary check on the build-emitted bundle. Fails loudly
+// at boot if the bundle shape doesn't match what mountPythonBundle
+// expects, rather than producing a confusing ENOENT mid-mount.
+const PYTHON_BUNDLE_SCHEMA = 1;
+function validatePythonBundle(bundle) {
+    if (!bundle || typeof bundle !== "object") {
+        throw new Error("python_bundle.json is not an object");
+    }
+    if (bundle.schema !== PYTHON_BUNDLE_SCHEMA) {
+        throw new Error(
+            `python_bundle.json schema=${bundle.schema}, `
+            + `expected ${PYTHON_BUNDLE_SCHEMA}`
+        );
+    }
+    if (!bundle.files || typeof bundle.files !== "object") {
+        throw new Error("python_bundle.json missing files map");
+    }
+    if (!Array.isArray(bundle.sys_paths)) {
+        throw new Error("python_bundle.json missing sys_paths array");
+    }
+    for (const [path, source] of Object.entries(bundle.files)) {
+        if (!path.endsWith(".py")) {
+            throw new Error(`unexpected bundle entry: ${path}`);
+        }
+        if (typeof source !== "string") {
+            throw new Error(`bundle source is not a string: ${path}`);
+        }
+    }
+    return bundle;
+}
+
 async function mountPythonBundle(pyodide) {
-    const bundle = await fetchJson("python_bundle.json");
-    const files = bundle.files || {};
-    const sysPaths = bundle.sys_paths || [];
+    const bundle = validatePythonBundle(await fetchJson(assetUrl("python_bundle")));
+    const files = bundle.files;
+    const sysPaths = bundle.sys_paths;
     // Pre-create parent directories so writeFile doesn't ENOENT.
     const dirs = new Set();
     for (const rel of Object.keys(files)) {

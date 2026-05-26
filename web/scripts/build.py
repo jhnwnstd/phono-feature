@@ -40,6 +40,7 @@ dependencies (no need for the ``build`` package).
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -282,6 +283,11 @@ def write_python_bundle() -> None:
     files["api.py"] = (DIST / "api.py").read_text(encoding="utf-8")
 
     bundle = {
+        # Schema version. Bump when the bundle's shape changes in a
+        # way main.js's validatePythonBundle would have to handle
+        # differently (e.g. adding required fields, changing files to
+        # a list, adding per-file metadata).
+        "schema": 1,
         "sys_paths": [
             "/home/pyodide/engine",
             "/home/pyodide/render",
@@ -294,6 +300,114 @@ def write_python_bundle() -> None:
         encoding="utf-8",
     )
     print(f"  {len(files)} files, {sum(len(v) for v in files.values())} chars")
+
+
+def _hashed_name(path: Path, hash_len: int = 10) -> str:
+    """Stable content-hash filename: ``name.<hex>.ext``."""
+    h = hashlib.sha256(path.read_bytes()).hexdigest()[:hash_len]
+    return f"{path.stem}.{h}{path.suffix}"
+
+
+def hash_assets() -> None:
+    """Rename build outputs to content-hashed filenames so any change
+    gets a new URL. GitHub Pages caches assets at ``max-age=600`` with
+    no header override, so cache-busting has to live in the URL.
+
+    The only unhashed file is ``index.html`` (the browser fetches it
+    by URL). It carries hashed references to every other asset, plus
+    an inline ``application/json`` script with the runtime asset
+    map main.js needs to find the (hashed) python_bundle and
+    inventories manifest.
+
+    Order matters: hash files BEFORE the files that reference them.
+    Inventories first (since inventories.json names them), then the
+    inventories manifest, then python_bundle and CSS, finally main.js
+    and index.html.
+    """
+    print("Hashing assets for cache-busting...")
+    runtime_map: dict[str, str] = {}
+    full_map: dict[str, str] = {}
+
+    # 1. Individual inventory JSON files. Update the manifest's
+    #    ``file`` field to point at the new hashed name before we
+    #    rewrite the manifest.
+    inv_manifest_path = DIST / "inventories.json"
+    inv_manifest = json.loads(inv_manifest_path.read_text(encoding="utf-8"))
+    for entry in inv_manifest:
+        old = DIST / entry["file"]
+        new_name = _hashed_name(old)
+        old.rename(old.with_name(new_name))
+        entry["file"] = f"inventories/{new_name}"
+        full_map[Path(old).name] = new_name
+
+    # 2. The manifest itself: rewrite with hashed inventory paths,
+    #    then hash the manifest file.
+    inv_manifest_path.write_text(
+        json.dumps(inv_manifest, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    new_inv_manifest = _hashed_name(inv_manifest_path)
+    inv_manifest_path.rename(DIST / new_inv_manifest)
+    runtime_map["inventories_manifest"] = new_inv_manifest
+    full_map["inventories.json"] = new_inv_manifest
+
+    # 3. python_bundle.json (api.py is bundled inside it; the
+    #    standalone api.py copy was only needed by write_python_bundle
+    #    and is now dead weight).
+    (DIST / "api.py").unlink(missing_ok=True)
+    py_bundle = DIST / "python_bundle.json"
+    new_py_bundle = _hashed_name(py_bundle)
+    py_bundle.rename(DIST / new_py_bundle)
+    runtime_map["python_bundle"] = new_py_bundle
+    full_map["python_bundle.json"] = new_py_bundle
+
+    # 4. CSS files referenced from index.html.
+    for css in ("theme.css", "style.css"):
+        path = DIST / css
+        new_name = _hashed_name(path)
+        path.rename(DIST / new_name)
+        full_map[css] = new_name
+
+    # 5. main.js (last among renamed assets so its hash captures the
+    #    final shipped JS).
+    main_path = DIST / "main.js"
+    new_main = _hashed_name(main_path)
+    main_path.rename(DIST / new_main)
+    full_map["main.js"] = new_main
+
+    # 6. Rewrite index.html.
+    index_path = DIST / "index.html"
+    html = index_path.read_text(encoding="utf-8")
+    html = html.replace(
+        '<link rel="stylesheet" href="theme.css">',
+        f'<link rel="stylesheet" href="{full_map["theme.css"]}">',
+    )
+    html = html.replace(
+        '<link rel="stylesheet" href="style.css">',
+        f'<link rel="stylesheet" href="{full_map["style.css"]}">',
+    )
+    # Inline JSON block so main.js can read the runtime asset map
+    # without an extra HTTP fetch. ``type="application/json"`` is
+    # data, not script, so CSP ``script-src 'self'`` still applies
+    # without needing 'unsafe-inline'.
+    runtime_block = (
+        '<script id="asset-manifest" type="application/json">'
+        + json.dumps(runtime_map, separators=(",", ":"))
+        + "</script>"
+    )
+    html = html.replace(
+        '<script type="module" src="main.js"></script>',
+        f'{runtime_block}\n'
+        f'<script type="module" src="{full_map["main.js"]}"></script>',
+    )
+    index_path.write_text(html, encoding="utf-8")
+
+    # 7. Full asset manifest for diagnostics, CI, and the smoke test.
+    (DIST / "asset-manifest.json").write_text(
+        json.dumps({"schema": 1, "assets": full_map}, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    print(f"  {len(full_map)} assets hashed")
 
 
 def write_pages_no_jekyll() -> None:
@@ -312,6 +426,7 @@ def main() -> int:
     generate_theme_css()
     copy_inventories()
     write_python_bundle()
+    hash_assets()
     write_pages_no_jekyll()
 
     print(f"\nBuild complete: {DIST}")
