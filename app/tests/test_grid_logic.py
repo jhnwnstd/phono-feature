@@ -13,8 +13,10 @@ import pytest
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features.gui.grid_logic import (
     CYCLE_LADDER,
+    MAX_UNDO_DEPTH,
     MINUS_DISPLAY,
     MINUS_SERIALIZED,
+    MOVE_KEYS,
     VALUE_KEYS,
     cycle_value,
     grid_to_inventory,
@@ -135,6 +137,50 @@ def test_value_keys_is_read_only():
     cannot mutate the singleton and silently change behavior."""
     with pytest.raises(TypeError):
         VALUE_KEYS["1"] = "?"  # type: ignore[index]
+
+
+# MOVE_KEYS: cell-cursor navigation shortcuts
+
+
+def test_move_keys_cover_all_four_directions():
+    """One Vim and one numpad entry per direction. Documents the
+    contract so changing the binding scheme breaks this test."""
+    directions = {tuple(step) for step in MOVE_KEYS.values()}
+    assert directions == {(-1, 0), (1, 0), (0, -1), (0, 1)}
+
+
+def test_move_keys_vim_and_numpad_pairs_match():
+    """h/4 = left, j/5 = down, k/8 = up, l/6 = right. Pairs share
+    a step so users on either input habit see the same behavior."""
+    assert MOVE_KEYS["h"] == MOVE_KEYS["4"] == (0, -1)
+    assert MOVE_KEYS["j"] == MOVE_KEYS["5"] == (1, 0)
+    assert MOVE_KEYS["k"] == MOVE_KEYS["8"] == (-1, 0)
+    assert MOVE_KEYS["l"] == MOVE_KEYS["6"] == (0, 1)
+
+
+def test_move_keys_is_read_only():
+    with pytest.raises(TypeError):
+        MOVE_KEYS["h"] = (0, 0)  # type: ignore[index]
+
+
+# MAX_UNDO_DEPTH: shared with the web editor
+
+
+def test_max_undo_depth_is_a_positive_int():
+    """A positive int cap. The value is documented to be ~200
+    batches; this test guards against a typo (e.g. 0 or negative)
+    that would make undo silently inert."""
+    assert isinstance(MAX_UNDO_DEPTH, int)
+    assert MAX_UNDO_DEPTH > 0
+
+
+def test_max_undo_depth_re_exported_by_builder_edits():
+    """The desktop's ``_MAX_UNDO_DEPTH`` alias points at the same
+    integer. Web editor caps its own JS stack to this value
+    through the bridge."""
+    from phonology_features.gui.builder.edits import _MAX_UNDO_DEPTH
+
+    assert _MAX_UNDO_DEPTH is MAX_UNDO_DEPTH or _MAX_UNDO_DEPTH == MAX_UNDO_DEPTH
 
 
 # validate_new_segment_label / validate_new_feature_label
