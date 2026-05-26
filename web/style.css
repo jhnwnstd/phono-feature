@@ -166,11 +166,11 @@ body {
 .seg-spillover {
   display: grid;
   grid-template-columns: auto auto;
-  /* 24 px: tight enough that the two columns read as a paired
+  /* 32 px: tight enough that the two columns read as a paired
      block, loose enough that the gap between groups in the
      left column and groups in the right column is clearly larger
      than the gap between buttons inside a row. Tunable. */
-  column-gap: 24px;
+  column-gap: 32px;
   row-gap: 0;
   margin-top: 0;
   justify-content: start;
