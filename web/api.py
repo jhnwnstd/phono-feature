@@ -258,6 +258,8 @@ def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict:
             "analysis_html": "",
             "feature_display": {},
             "segment_states": {seg: "default" for seg in engine.segments},
+            "selected": [],
+            "suggested": [],
         }
     analysis = _analysis()
     selected_set = set(segs)
@@ -276,6 +278,8 @@ def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict:
             "analysis_html": analysis_html,
             "feature_display": feature_display,
             "segment_states": segment_states,
+            "selected": list(segs),
+            "suggested": [],
         }
     common = engine.common_features(segs)
     contrastive = analysis.compute_contrastive(engine, segs)
@@ -308,6 +312,8 @@ def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict:
         "analysis_html": analysis_html,
         "feature_display": feature_display,
         "segment_states": segment_states,
+        "selected": list(segs),
+        "suggested": list(suggested),
     }
 
 

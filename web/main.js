@@ -886,10 +886,10 @@ function onSegmentClicked(seg) {
         state.selected_segments.push(seg);
     }
     // Optimistic visual flip: register the press immediately so the
-    // user doesn't wait 80 ms (debounce) + bridge round-trip to see
-    // the button respond. _updateSegmentButtonStates after the
-    // bridge call reconciles -- possibly upgrading other buttons to
-    // suggested / matched states based on the new selection.
+    // user doesn't wait the debounce + bridge round-trip to see
+    // the button respond. The bridge-driven runSegToFeat reconciles
+    // afterward -- possibly upgrading other buttons to suggested /
+    // matched states based on the new selection.
     // Mirrors the desktop's _on_segment_clicked, which calls
     // btn.set_state(SegmentState.SELECTED) before its debounce.
     const btn = state.seg_buttons.get(seg);
@@ -1129,13 +1129,45 @@ function _isStaleToken(token) {
     return token !== state.analysis_token;
 }
 
+// Apply a per-button state derivation function over every cached
+// segment button. Mirrors the desktop's _update_seg_to_feat /
+// _update_feat_to_seg loops: each button's state is computed
+// inline from set membership, never looked up in a dict that
+// might be missing keys. This is what makes the desktop immune
+// to "differently muted" ghosts -- there's no fallback branch,
+// every button is explicitly placed into exactly one bucket.
+function _applySegmentStates(stateFor) {
+    for (const [seg, btn] of state.seg_buttons) {
+        const newState = stateFor(seg);
+        if (btn.dataset.state !== newState) {
+            btn.dataset.state = newState;
+            const pressed = (newState === "selected" || newState === "matched");
+            btn.setAttribute("aria-pressed", pressed ? "true" : "false");
+        }
+    }
+}
+
 function runSegToFeat(token) {
     const result = callBridge("analyze_segments", state.selected_segments);
     if (_isStaleToken(token)) return;
     nodes.analysisContent.innerHTML = result.analysis_html;
-    _updateSegmentButtonStates(result.segment_states);
-    // Update feature row display from cached node map: no DOM
-    // query, single hash lookup per feature row.
+
+    // Compute each button's state from the SELECTED + SUGGESTED
+    // sets directly. Like the desktop's _update_seg_to_feat, this
+    // can't produce a ghost "default" for a button that's drifted
+    // out of sync with the engine -- every button gets exactly one
+    // state from this decision tree.
+    const selectedSet = new Set(state.selected_segments);
+    const suggestedSet = new Set(result.suggested || []);
+    _applySegmentStates((seg) =>
+        selectedSet.has(seg) ? "selected"
+        : suggestedSet.has(seg) ? "suggested"
+        : "default"
+    );
+
+    // Feature row display still comes from the dict (a feat
+    // missing from feature_display falls back to neutral, which
+    // is the correct rendering for "no info about this feature").
     for (const [feat, rec] of state.feat_rows) {
         const info = result.feature_display[feat] || { value: "", shared: false };
         rec.row.dataset.value = info.value || "";
@@ -1149,21 +1181,17 @@ function runFeatToSeg(token) {
     const result = callBridge("analyze_features", state.selected_features);
     if (_isStaleToken(token)) return;
     nodes.analysisContent.innerHTML = result.analysis_html;
-    _updateSegmentButtonStates(result.segment_states);
-}
 
-function _updateSegmentButtonStates(segmentStates) {
-    // Centralized so aria-pressed stays in lockstep with data-state.
-    // Selected/matched both read as "pressed" to assistive tech;
-    // unmatched/suggested/default read as not-pressed.
-    for (const [seg, btn] of state.seg_buttons) {
-        const newState = segmentStates[seg] || "default";
-        if (btn.dataset.state !== newState) {
-            btn.dataset.state = newState;
-            const pressed = (newState === "selected" || newState === "matched");
-            btn.setAttribute("aria-pressed", pressed ? "true" : "false");
-        }
-    }
+    // Same desktop-style per-button derivation: matched set wins,
+    // everything else is unmatched (or default when the spec is
+    // empty, which gives the panel its "no query active" look).
+    const matchingSet = new Set(result.matching || []);
+    const hasQuery = Object.keys(state.selected_features).length > 0;
+    _applySegmentStates((seg) =>
+        !hasQuery ? "default"
+        : matchingSet.has(seg) ? "matched"
+        : "unmatched"
+    );
 }
 
 // ---------------------------------------------------------------------
