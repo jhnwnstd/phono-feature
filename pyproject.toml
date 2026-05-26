@@ -1,5 +1,5 @@
 [project]
-name = "phonology-features-workspace"
+name = "phono-feature"
 version = "0.0.0"
 description = "Monorepo workspace for the phonology-engine package and the desktop / web apps that consume it."
 requires-python = ">=3.11"

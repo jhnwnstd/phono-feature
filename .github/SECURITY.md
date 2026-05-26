@@ -4,7 +4,7 @@
 
 Report security issues through GitHub private vulnerability reporting:
 
-<https://github.com/jhnwnstd/features/security/advisories/new>
+<https://github.com/jhnwnstd/phono-feature/security/advisories/new>
 
 Do not open a public issue for problems that affect user data, the build pipeline, or the deployed web app.
 

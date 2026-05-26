@@ -2,7 +2,7 @@
 
 Feature phonology tool. Compute natural classes, find minimal distinguishing feature bundles, and edit segment inventories.
 
-Browser version: <https://jhnwnstd.github.io/features/>.
+Browser version: <https://jhnwnstd.github.io/phono-feature/>.
 
 ## Features
 
