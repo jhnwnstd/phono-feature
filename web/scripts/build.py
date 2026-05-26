@@ -301,6 +301,50 @@ def write_python_bundle() -> None:
     print(f"  {len(entries)} files, {out.stat().st_size} bytes zip ({raw} raw)")
 
 
+def write_bootstrap() -> None:
+    """Precompute the default inventory's render-ready summary so
+    the web app can paint segments + features on first paint,
+    before Pyodide finishes loading.
+
+    Runs as a subprocess: this script's own process doesn't import
+    the engine or renderer, and we don't want to pollute its
+    import state. Falls back gracefully (build succeeds without an
+    inlined bootstrap; main.js renders via the bridge instead) if
+    the precompute can't run.
+    """
+    print("Precomputing default inventory bootstrap...")
+    default_inv = INVENTORIES / "english_features.json"
+    if not default_inv.exists():
+        print(f"  skipped: no default inventory at {default_inv}")
+        return
+    label = _inventory_label(default_inv)
+    code = (
+        "import sys, json\n"
+        f"sys.path.insert(0, {str(ENGINE_PKG / 'src')!r})\n"
+        f"sys.path.insert(0, {str(ROOT / 'app' / 'src')!r})\n"
+        f"sys.path.insert(0, {str(WEB_DIR)!r})\n"
+        "import api\n"
+        f"text = open({str(default_inv)!r}, encoding='utf-8-sig').read()\n"
+        f"summary = api.load_inventory_json(text, {label!r})\n"
+        "sys.stdout.write(json.dumps(summary, ensure_ascii=False))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        # Non-fatal: main.js still has the bridge-driven path as a
+        # fallback. We just lose the perceived-boot win.
+        print("  WARNING: bootstrap precompute failed; "
+              "main.js will fall back to bridge-driven render")
+        print(f"  stderr: {result.stderr.strip()[:500]}")
+        return
+    out = DIST / "bootstrap.json"
+    out.write_text(result.stdout, encoding="utf-8")
+    print(f"  bootstrap.json: {out.stat().st_size} bytes")
+
+
 def _hashed_name(path: Path, hash_len: int = 10) -> str:
     """Stable content-hash filename: ``name.<hex>.ext``."""
     h = hashlib.sha256(path.read_bytes()).hexdigest()[:hash_len]
@@ -394,10 +438,34 @@ def hash_assets() -> None:
         + json.dumps(runtime_map, separators=(",", ":"))
         + "</script>"
     )
+    # Inline the precomputed default-inventory bootstrap so main.js
+    # can paint the segments grid + features panel on first paint
+    # (before Pyodide loads). Best-effort: if write_bootstrap
+    # couldn't run the block is absent and main.js falls back to
+    # the bridge-driven render path.
+    bootstrap_block = ""
+    bootstrap_path = DIST / "bootstrap.json"
+    if bootstrap_path.exists():
+        compact = json.dumps(
+            json.loads(bootstrap_path.read_text(encoding="utf-8")),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        bootstrap_block = (
+            '<script id="bootstrap" type="application/json">'
+            + compact
+            + "</script>"
+        )
+        new_bootstrap = _hashed_name(bootstrap_path)
+        bootstrap_path.rename(DIST / new_bootstrap)
+        full_map["bootstrap.json"] = new_bootstrap
     html = html.replace(
         '<script type="module" src="main.js"></script>',
-        f'{runtime_block}\n'
-        f'<script type="module" src="{full_map["main.js"]}"></script>',
+        (
+            f'{runtime_block}\n'
+            + (f'{bootstrap_block}\n' if bootstrap_block else "")
+            + f'<script type="module" src="{full_map["main.js"]}"></script>'
+        ),
     )
     index_path.write_text(html, encoding="utf-8")
 
@@ -425,6 +493,7 @@ def main() -> int:
     generate_theme_css()
     copy_inventories()
     write_python_bundle()
+    write_bootstrap()
     hash_assets()
     write_pages_no_jekyll()
 

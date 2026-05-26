@@ -318,13 +318,37 @@ function assetUrl(name) {
 const PYODIDE_BOOT_TIMEOUT_MS = 30_000;
 const LOCAL_FETCH_TIMEOUT_MS = 10_000;
 
+// Pyodide bootstrap script (the small loader that defines the
+// loadPyodide global). Injected by loadPyodideScript() AFTER the
+// bootstrap render has painted, so its CDN fetch doesn't hold up
+// first paint. Preloaded from index.html so the bytes are usually
+// already cached by the time we ask. SRI guards against a tampered
+// CDN response; bump the hash when the pinned version changes.
+const PYODIDE_BOOTSTRAP_URL =
+    "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js";
+const PYODIDE_BOOTSTRAP_SRI =
+    "sha384-i3R37b3tF+HWudsUf1VSEOY2YxwSNMqY8DQa9Z0O3xh+NkJ9o+yjcGyIi5huj+nB";
+
+function loadPyodideScript() {
+    if (typeof loadPyodide === "function") return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = PYODIDE_BOOTSTRAP_URL;
+        s.integrity = PYODIDE_BOOTSTRAP_SRI;
+        s.crossOrigin = "anonymous";
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("pyodide.js failed to load"));
+        document.head.appendChild(s);
+    });
+}
+
 // Preferred default-inventory filename. English is the smallest
 // (~21 KB, 39 segments) so first paint comes up fastest. Falls
 // back to whatever the manifest sorts first when this file isn't
 // in the build.
 const PREFERRED_DEFAULT_INVENTORY = "inventories/english_features.json";
 
-async function bootPyodide() {
+async function bootPyodide({ prerendered = false } = {}) {
     mark("boot:start");
 
     setLoadingStatus("Loading inventory list…");
@@ -341,11 +365,17 @@ async function bootPyodide() {
     setLoadingStatus("Loading the Python runtime…");
     mark("pyodide:start");
     mark("bundle-fetch:start");
-    // Kick off Pyodide load AND the Python bundle download in
-    // parallel. They're independent: the bundle fetch only needs
-    // the network, Pyodide load only needs WebAssembly compile.
-    // Before this, the bundle fetch sat sequentially after Pyodide
-    // and lost ~50-150 ms of overlap on cold loads.
+    // Three independent boot lanes overlap here:
+    //   1. pyodide.js script tag injection + load (the small
+    //      loader that defines window.loadPyodide).
+    //   2. python_bundle.zip download.
+    //   3. (after lane 1) loadPyodide() running WASM compile.
+    // Lane 2 runs concurrently with both 1 and 3. Without these
+    // overlaps the bundle fetch and the pyodide.js download both
+    // sat sequentially before loadPyodide(), losing ~1-2 s on
+    // cold boots.
+    const bundleBytesPromise = fetchBytes(assetUrl("python_bundle"));
+    await loadPyodideScript();
     const pyodidePromise = withTimeout(
         // packages: [] skips the automatic load of pyodide-py /
         // distutils that we don't use; ~100-300 ms init saved.
@@ -354,13 +384,25 @@ async function bootPyodide() {
         PYODIDE_BOOT_TIMEOUT_MS,
         "Pyodide startup",
     );
-    const bundleBytesPromise = fetchBytes(assetUrl("python_bundle"));
     const [pyodide, bundleBytes] = await Promise.all([
         pyodidePromise, bundleBytesPromise,
     ]);
     state.pyodide = pyodide;
     mark("pyodide:end");
     mark("bundle-fetch:end");
+
+    // Reveal the pre-rendered UI here. Remaining work (bundle
+    // mount + bridge init + default inventory sync) is ~170 ms,
+    // shorter than human reaction-to-click time. By the time the
+    // user spots a button and reaches for it, the bridge is up
+    // and the click goes through instantly. The fallback path
+    // (no bootstrap) still hides the overlay at the end of boot
+    // since its DOM isn't populated until then.
+    if (prerendered) {
+        mark("overlay-hide");
+        nodes.loadingOverlay.classList.add("hidden");
+        setStatus("Almost ready…");
+    }
 
     setLoadingStatus("Mounting Python sources…");
     mark("bundle:start");
@@ -375,9 +417,27 @@ async function bootPyodide() {
     enableBridgeGatedControls();
     setLoadingStatus("Loading default inventory…");
     mark("inventory:start");
-    await loadBundledInventory(pickDefaultInventory(BUNDLED_INVENTORIES));
+    const defaultItem = pickDefaultInventory(BUNDLED_INVENTORIES);
+    if (prerendered) {
+        // DOM is already populated by applyBootstrap(). Just sync
+        // the engine to the same inventory so subsequent bridge
+        // calls operate on a matching state -- no re-render.
+        const text = await fetchInventoryText(defaultItem.file);
+        callBridge("load_inventory_json", text, defaultItem.label);
+        // If the user clicked something while we were booting, the
+        // optimistic visual updated but scheduleAnalysis short-
+        // circuited (no bridge). Trigger now.
+        const hasPending =
+            state.selected_segments.length > 0
+            || Object.keys(state.selected_features).length > 0;
+        if (hasPending) scheduleAnalysis();
+    } else {
+        await loadBundledInventory(defaultItem);
+    }
     mark("inventory:end");
 
+    // Idempotent: prerendered path already hid after Pyodide load;
+    // fallback path needs it here once the inventory has rendered.
     nodes.loadingOverlay.classList.add("hidden");
     setStatus(STATUS_TEXT[state.mode]);
 
@@ -388,6 +448,11 @@ async function bootPyodide() {
     measure("Bridge init", "bridge:start", "bridge:end");
     measure("Default inventory", "inventory:start", "inventory:end");
     measure("Total boot", "boot:start", "boot:end");
+    // Reveal lag: from overlay-hide to engine-ready. This is the
+    // only window where the UI is visible but bridge calls would
+    // still queue. Shrink this and the perceived loading time
+    // shrinks with it.
+    measure("Reveal -> ready", "overlay-hide", "boot:end");
     printBootMeasures();
     printResourceSummary();
 }
@@ -454,6 +519,40 @@ function mountPythonBundle(pyodide, bundleBytes) {
 const BRIDGE_GATED_NODES = ["inventoryPicker", "uploadBtn", "downloadBtn"];
 function enableBridgeGatedControls() {
     for (const key of BRIDGE_GATED_NODES) nodes[key].disabled = false;
+}
+
+// ---------------------------------------------------------------------
+// First-paint bootstrap: render the default inventory's segments
+// grid and features panel from a build-time precomputed summary,
+// BEFORE Pyodide finishes loading. Without this, the user stares
+// at the loading overlay for ~4 s of WASM compile; with it, the
+// IPA chart paints in under ~200 ms and the bridge attaches in
+// the background.
+//
+// The inlined block is generated by web/scripts/build.py's
+// write_bootstrap() and lives at <script id="bootstrap"
+// type="application/json"> in index.html. The shape is identical
+// to what callBridge("load_inventory_json", ...) returns at
+// runtime, so applyBootstrap() and the post-boot reconcile share
+// the same rendering code.
+// ---------------------------------------------------------------------
+function applyBootstrap() {
+    const el = document.getElementById("bootstrap");
+    if (!el) return false;
+    let info;
+    try {
+        info = JSON.parse(el.textContent);
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("bootstrap parse failed; falling back to bridge", e);
+        return false;
+    }
+    state.inventory_name = info.name;
+    state.segments = info.segments;
+    state.features = info.features;
+    renderSegmentGrid(info.groups, info.vowel_chart);
+    renderFeaturePanel(info.feature_groups);
+    return true;
 }
 
 // ---------------------------------------------------------------------
@@ -848,6 +947,10 @@ const MODE_HANDLERS = Object.freeze({
 });
 
 function runAnalysis() {
+    // Pre-bridge clicks queue: the optimistic visual flip and
+    // selection state already updated. Bail here without throwing
+    // and let bootPyodide trigger us once the bridge attaches.
+    if (!state.bridge) return;
     MODE_HANDLERS[state.mode](++state.analysis_token);
 }
 
@@ -1089,9 +1192,25 @@ async function main() {
     wirePanelClickMode();
     wireSegmentDelegation();
     wireFeatureDelegation();
+
+    // Paint the default inventory from the build-time bootstrap if
+    // present, but DON'T drop the loading overlay yet. Doing so
+    // would expose a "visible but frozen" UI for the 4-5 s it
+    // takes Pyodide to compile -- clicks would queue but feel
+    // broken. The overlay drops in bootPyodide right after the
+    // Pyodide WASM phase ends, when only ~170 ms of bundle mount
+    // + bridge init + inventory sync remain. By the time the user
+    // sees the chart and decides what to click (~250-500 ms
+    // human reaction time), the bridge is already ready.
+    const prerendered = applyBootstrap();
+    if (prerendered) {
+        mark("first-paint:bootstrap");
+    }
+
     try {
-        await bootPyodide();
+        await bootPyodide({ prerendered });
     } catch (e) {
+        // eslint-disable-next-line no-console
         console.error(e);
         setLoadingStatus(`Failed to load: ${e.message}`);
     }

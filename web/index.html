@@ -59,6 +59,8 @@
   cold loads. The URLs hardcode CDN paths; bump together with the
   pyodide.js <script> tag below and the SRI hash there.
 -->
+<link rel="preload" as="script" crossorigin
+      href="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js">
 <link rel="preload" as="fetch" type="application/wasm" crossorigin
       href="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.asm.wasm">
 <link rel="preload" as="fetch" type="application/javascript" crossorigin
@@ -142,15 +144,13 @@
 </footer>
 
 <!--
-  Pyodide CDN load with Sub-Resource Integrity. The hash is for
-  v0.26.4's pyodide.js bootstrap file (computed via sha384 of the
-  CDN response body). If you bump the Pyodide version in main.js,
-  re-compute this hash; the page will fail to boot rather than load
-  a tampered CDN payload.
+  Pyodide's bootstrap file (pyodide.js) is loaded DYNAMICALLY by
+  main.js so the bootstrap render path doesn't sit behind a 1-2 s
+  CDN fetch. The preload link above gets the fetch started during
+  HTML parse; main.js's loadPyodideScript() injects the <script>
+  tag once the bootstrap UI has painted. SRI hash + URL live in
+  main.js (PYODIDE_BOOTSTRAP_*).
 -->
-<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"
-        integrity="sha384-i3R37b3tF+HWudsUf1VSEOY2YxwSNMqY8DQa9Z0O3xh+NkJ9o+yjcGyIi5huj+nB"
-        crossorigin="anonymous"></script>
 <script type="module" src="main.js"></script>
 </body>
 </html>
