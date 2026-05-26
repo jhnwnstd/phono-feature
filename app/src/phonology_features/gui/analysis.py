@@ -140,14 +140,17 @@ def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
     if not chip_rows:
         return ""
     if len(chip_rows) == 1:
-        return f"<p><b>Minimal specification:</b><br>{chip_rows[0]}</p>"
+        return (
+            f"<p><b>Minimal specification:</b></p>"
+            f"<p>{chip_rows[0]}</p>"
+        )
     numbered = "<br>".join(
         f"<span style='color:{C['text_dim']}'>{i + 1}.</span> {row}"
         for i, row in enumerate(chip_rows)
     )
     return (
-        f"<p><b>Minimal specifications ({len(chip_rows)}):</b>"
-        f"<br>{numbered}</p>"
+        f"<p><b>Minimal specifications ({len(chip_rows)}):</b></p>"
+        f"<p>{numbered}</p>"
     )
 
 
@@ -280,8 +283,8 @@ def render_feat_to_seg(
         seg_tags = " ".join(_segment_chip(seg) for seg in matching)
         n = len(matching)
         segs_html = (
-            f"<p><b>Matching {_plural(n, 'segment')} ({n}):</b>"
-            f"<br>{seg_tags}</p>"
+            f"<p><b>Matching {_plural(n, 'segment')} ({n}):</b></p>"
+            f"<p>{seg_tags}</p>"
         )
     else:
         segs_html = (
@@ -300,7 +303,7 @@ def _render_shared_features(common: dict[str, str]) -> str:
         _signed_feature_chip(value, feature)
         for feature, value in sort_spec(common).items()
     )
-    return f"<p><b>Shared features:</b><br>{chips}</p>"
+    return f"<p><b>Shared features:</b></p><p>{chips}</p>"
 
 
 def _render_contrast_section(
@@ -411,8 +414,8 @@ def _render_natural_class_verdict(
         n = len(suggested)
         verdict = (
             f"<p><b>Natural class:</b> {_yes_no(False)},"
-            f" add {n} {_plural(n, 'segment')} to complete:"
-            f"<br>{suggested_tags}</p>"
+            f" add {n} {_plural(n, 'segment')} to complete:</p>"
+            f"<p>{suggested_tags}</p>"
         )
     else:
         verdict = f"<p><b>Natural class:</b> {_yes_no(False)}</p>"
