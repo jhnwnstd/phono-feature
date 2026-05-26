@@ -655,14 +655,12 @@ function renderSegmentGrid(groups, vowelChart) {
     // edge; groups that fall below the chart take the full panel
     // width. Pure float-wrap, no per-row layout logic needed.
     const grid = nodes.segGrid;
+    // innerHTML = "" removes ALL children including any spillover
+    // from the previous inventory, so we don't need a separate
+    // cleanup pass. Spillover lives inside #seg-grid (see
+    // rebalanceSegmentSpillover for why).
     grid.innerHTML = "";
     state.seg_buttons.clear();
-    // Also drop the spillover sibling from a previous inventory; its
-    // groups would otherwise re-merge into the new grid on the next
-    // rebalance and produce duplicates.
-    const body = grid.parentElement;
-    const oldSpillover = body && body.querySelector(".seg-spillover");
-    if (oldSpillover) oldSpillover.remove();
     if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
         const vowels = document.createElement("div");
         vowels.className = "seg-vowels";
@@ -700,34 +698,38 @@ function renderSegmentGrid(groups, vowelChart) {
 //
 // The vowel chart is never touched -- it stays floating top-right.
 function rebalanceSegmentSpillover() {
+    // #seg-grid IS the .panel-body of #seg-panel (one element, two
+    // hats). The spillover must therefore live INSIDE #seg-grid so
+    // it inherits the same content-area positioning as the
+    // consonant groups above it; appending it to grid.parentElement
+    // would put it outside the panel-body's 12 px padding and
+    // shift it left by 12 px relative to the consonant flow.
     const grid = nodes.segGrid;
-    const body = grid.parentElement;  // .panel-body of #seg-panel
-    if (!body) return;
+    if (!grid) return;
 
-    // Find or create the spillover container.
-    let spillover = body.querySelector(".seg-spillover");
+    let spillover = grid.querySelector(".seg-spillover");
     if (!spillover) {
         spillover = document.createElement("div");
         spillover.className = "seg-spillover";
     }
-    // Step 1: pull everything back into #seg-grid in original order.
+    // Step 1: pull everything back into #seg-grid in original order,
+    // then drop the spillover so step 2 measures the pristine flow.
     while (spillover.firstChild) grid.appendChild(spillover.firstChild);
     if (spillover.parentElement) spillover.remove();
 
-    // Step 2: does the grid actually overflow? Use scrollHeight,
-    // which reports the FULL content size; the .panel-body
-    // overflow:auto otherwise hides it from offsetHeight when
-    // content exceeds the available space.
-    const available = body.clientHeight;
+    // Step 2: does the grid actually overflow? scrollHeight reports
+    // the FULL content size; offsetHeight clips at the panel
+    // boundary when overflow:auto is active.
+    const available = grid.clientHeight;
     if (grid.scrollHeight <= available) return;
 
-    // Step 3: enable spillover and walk consonants bottom-up,
-    // moving each into the spillover until grid + spillover fit.
-    body.appendChild(spillover);
-    const consonants = grid.querySelectorAll(".seg-group:not(.vowel-chart-group)");
+    // Step 3: enable spillover (inside the grid) and walk consonants
+    // bottom-up, moving each into spillover until everything fits.
+    grid.appendChild(spillover);
+    const consonants = grid.querySelectorAll(":scope > .seg-group:not(.vowel-chart-group)");
     for (let i = consonants.length - 1; i >= 0; i--) {
         spillover.insertBefore(consonants[i], spillover.firstChild);
-        if (grid.scrollHeight + spillover.scrollHeight <= available) break;
+        if (grid.scrollHeight <= available) break;
     }
 }
 

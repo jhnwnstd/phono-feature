@@ -155,15 +155,25 @@ body {
    panels-row without forcing the segments pane to scroll.
 
    For inventories that fit (Hayes, English), the spillover stays
-   empty and the segments pane looks exactly as before. */
+   empty and the segments pane looks exactly as before.
+
+   Column widths: content-sized (auto). Each column shrinks to its
+   widest .seg-row, so there's no dead space inside a column. The
+   left column's groups sit flush against the panel's left padding,
+   aligning with the consonant rows above. margin-top: 0 keeps the
+   gap between the last top group and the first spillover group
+   identical to the gap between groups within either section. */
 .seg-spillover {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: var(--space-md);
+  grid-template-columns: auto auto;
+  /* 24 px: tight enough that the two columns read as a paired
+     block, loose enough that the gap between groups in the
+     left column and groups in the right column is clearly larger
+     than the gap between buttons inside a row. Tunable. */
+  column-gap: 24px;
   row-gap: 0;
-  margin-top: var(--space-md);
-  padding-top: var(--space-md);
-  border-top: var(--border-thin) dashed var(--border);
+  margin-top: 0;
+  justify-content: start;
 }
 
 /* Narrow-screen stack. Without this, the two minmax tracks above
