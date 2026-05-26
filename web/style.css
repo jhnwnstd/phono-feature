@@ -673,11 +673,6 @@ dialog input[type="text"]:focus-visible {
   margin-bottom: var(--space-lg);
   min-height: 20px;
 }
-.loading-hint {
-  margin-top: var(--space-lg);
-  font-size: var(--font-size-meta);
-  color: var(--text-dim);
-}
 progress {
   width: 100%;
 }
