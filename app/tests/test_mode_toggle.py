@@ -23,7 +23,7 @@ def _selected_feat_rows(window) -> set[str]:
 # Initial state
 # ---------------------------------------------------------------------------
 def test_fresh_window_has_no_selections(window):
-    assert window._mode == "seg_to_feat"
+    assert window._mode_ctrl.mode == "seg_to_feat"
     assert window._selected_segments == []
     assert window._selected_features == {}
     assert _selected_feat_rows(window) == set()
@@ -68,7 +68,7 @@ def test_toggle_seg_to_feat_projects_common_features(window):
     window._on_segment_clicked("d", True)
     window._on_segment_clicked("\u0261", True)  # voiced velar (script g)
     window._set_mode("feat_to_seg")
-    assert window._mode == "feat_to_seg"
+    assert window._mode_ctrl.mode == "feat_to_seg"
     # Voiced stops share many features in Hayes; projection must be non-empty
     assert len(window._selected_features) > 0
     # Every projected value is +/-, never "0"

@@ -110,9 +110,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.engine: FeatureEngine | None = None
         # Mode controller owns ``mode``, ``saved_seg_state``, and
-        # ``saved_feat_state``. MainWindow keeps forwarding properties
-        # below (``_mode``, ``_saved_seg_state``, ``_saved_feat_state``)
-        # so existing test API stays stable.
+        # ``saved_feat_state``. Reach through ``self._mode_ctrl`` at
+        # call sites; do not add forwarding properties here.
         self._mode_ctrl = _ModeController(self)
         # segment -> SegmentButton for the active inventory
         self._seg_buttons: dict = {}
@@ -174,45 +173,17 @@ class MainWindow(QMainWindow):
         self._mode_ctrl.apply_phases()
         self._restore_settings(startup_path)
 
-    # ------------------------------------------------------------------
-    # Mode-controller forwarding (test API stability + brevity at
-    # call sites). The controller is the source of truth; these
-    # properties / wrappers exist so existing callers don't churn.
-    # ------------------------------------------------------------------
-    @property
-    def _mode(self) -> Mode:
-        return self._mode_ctrl.mode
-
-    @_mode.setter
-    def _mode(self, value: Mode) -> None:
-        self._mode_ctrl.mode = value
-
-    @property
-    def _saved_seg_state(self) -> list:
-        return self._mode_ctrl.saved_seg_state
-
-    @_saved_seg_state.setter
-    def _saved_seg_state(self, value: list) -> None:
-        self._mode_ctrl.saved_seg_state = value
-
-    @property
-    def _saved_feat_state(self) -> dict:
-        return self._mode_ctrl.saved_feat_state
-
-    @_saved_feat_state.setter
-    def _saved_feat_state(self, value: dict) -> None:
-        self._mode_ctrl.saved_feat_state = value
-
     def _set_mode(self, mode: Mode | str) -> None:
-        """Thin wrapper around the mode-controller transition. Kept
-        because it's called from many internal sites (event filter,
-        builder save handler, tests) and the short name reads better
-        than the controller-qualified form at the call site."""
+        """Thin wrapper around the mode-controller transition.
+
+        Kept as a one-liner because it is called from many internal
+        sites (event filter, builder save handler, click handlers)
+        and the short name reads better at the call site than the
+        controller-qualified form.
+        """
         self._mode_ctrl.set_mode(mode)
 
-    # ------------------------------------------------------------------
     # UI construction
-    # ------------------------------------------------------------------
     @staticmethod
     def _nav_btn_style() -> str:
         """Toolbar nav-button stylesheet, evaluated against the active
@@ -629,7 +600,7 @@ class MainWindow(QMainWindow):
         # round-trip matches Qt's internal format exactly.
         self._settings.setValue("hsplit_state", self._hsplit.saveState())
         self._settings.setValue("vsplit_state", self._vsplit.saveState())
-        self._settings.setValue("mode", self._mode.value)
+        self._settings.setValue("mode", self._mode_ctrl.mode.value)
         if self._current_path:
             self._settings.setValue("last_inventory", self._current_path)
         # Flush settings to disk synchronously. Without sync(), a hard
@@ -1000,8 +971,8 @@ class MainWindow(QMainWindow):
         first paint is already at the right size; runtime swaps defer
         one event-loop tick so pending paints drain before we resize.
         """
-        self._saved_seg_state = []
-        self._saved_feat_state = {}
+        self._mode_ctrl.saved_seg_state = []
+        self._mode_ctrl.saved_feat_state = {}
         with self._batched_updates():
             self._populate_segments()
             self._populate_features()
@@ -1356,15 +1327,15 @@ class MainWindow(QMainWindow):
         """
         if a1 is None or a1.type() != _QEVENT_MOUSE_BUTTON_PRESS:
             return False
-        if a0 is self.seg_panel and self._mode != Mode.SEG_TO_FEAT:
+        if a0 is self.seg_panel and self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             self._set_mode(Mode.SEG_TO_FEAT)
-        elif a0 is self.feat_panel and self._mode != Mode.FEAT_TO_SEG:
+        elif a0 is self.feat_panel and self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
             self._set_mode(Mode.FEAT_TO_SEG)
         return False
 
     # State changes are immediate; analysis is debounced via _debounce.
     def _on_segment_clicked(self, segment: str, checked: bool):
-        if self._mode != Mode.SEG_TO_FEAT:
+        if self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             # Real mouse clicks switch mode via _on_segment_pressed
             # before the clicked signal fires; this branch protects
             # programmatic / test callers from mutating state.
@@ -1385,11 +1356,11 @@ class MainWindow(QMainWindow):
         """Mouse press on a segment button: switch to seg mode before
         the click signal lands.
         """
-        if self._mode != Mode.SEG_TO_FEAT:
+        if self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             self._set_mode(Mode.SEG_TO_FEAT)
 
     def _on_feature_changed(self, feature: str, value: str):
-        if self._mode != Mode.FEAT_TO_SEG:
+        if self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
             return
         if value:
             self._selected_features[feature] = value
@@ -1401,13 +1372,13 @@ class MainWindow(QMainWindow):
         """Mouse press on a +/- button: switch to feat mode before the
         value_changed signal lands.
         """
-        if self._mode != Mode.FEAT_TO_SEG:
+        if self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
             self._set_mode(Mode.FEAT_TO_SEG)
 
     def _run_pending_update(self) -> None:
         """Fired by the debounce timer; dispatches to the active mode."""
         with self._batched_updates():
-            if self._mode == Mode.SEG_TO_FEAT:
+            if self._mode_ctrl.mode == Mode.SEG_TO_FEAT:
                 self._update_seg_to_feat()
             else:
                 self._update_feat_to_seg()
@@ -1494,13 +1465,13 @@ class MainWindow(QMainWindow):
         frame before the wipe lands.
         """
         self._reset_both_sides(silent=False)
-        if self._mode != Mode.SEG_TO_FEAT:
+        if self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             self._set_mode(Mode.SEG_TO_FEAT)
 
     def _clear_then_activate_feats(self) -> None:
         """See ``_clear_then_activate_segs``."""
         self._reset_both_sides(silent=False)
-        if self._mode != Mode.FEAT_TO_SEG:
+        if self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
             self._set_mode(Mode.FEAT_TO_SEG)
 
     def _reset_both_sides(self, silent: bool) -> None:
@@ -1517,10 +1488,6 @@ class MainWindow(QMainWindow):
         for row in self._feat_rows.values():
             row.reset()
         if not silent:
-            self._saved_seg_state = []
-            self._saved_feat_state = {}
-            self.analysis.clear()
-        if not silent:
-            self._saved_seg_state = []
-            self._saved_feat_state = {}
+            self._mode_ctrl.saved_seg_state = []
+            self._mode_ctrl.saved_feat_state = {}
             self.analysis.clear()

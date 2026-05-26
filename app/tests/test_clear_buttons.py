@@ -155,9 +155,9 @@ def test_silent_clear_in_inventory_reload_resets_both_sides(window):
     assert _selected_feat_rows(window) == set()
     # silent=True must NOT touch saved_*_state (those preserve toggle history)
     # Set them to known values, then verify they aren't clobbered.
-    window._saved_seg_state = ["sentinel"]
-    window._saved_feat_state = {"sentinel": "+"}
+    window._mode_ctrl.saved_seg_state = ["sentinel"]
+    window._mode_ctrl.saved_feat_state = {"sentinel": "+"}
     window._clear_segments(silent=True)
     window._clear_features(silent=True)
-    assert window._saved_seg_state == ["sentinel"]
-    assert window._saved_feat_state == {"sentinel": "+"}
+    assert window._mode_ctrl.saved_seg_state == ["sentinel"]
+    assert window._mode_ctrl.saved_feat_state == {"sentinel": "+"}
