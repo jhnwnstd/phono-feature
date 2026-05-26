@@ -58,6 +58,9 @@ from phonology_features.gui.builder.table import (
     _SelectionFillDelegate,
     _ToggleHeaderView,
 )
+from phonology_features.gui.grid_logic import (
+    VALUE_KEYS as _SHARED_VALUE_KEYS,
+)
 from phonology_features.gui.grid_logic import grid_to_inventory
 from phonology_features.gui.palette import C
 
@@ -492,14 +495,14 @@ class InventoryBuilder(QMainWindow):
             for c in range(len(self._segments)):
                 self._table.setItem(r, c, make_cell("0"))
 
-    # Number / numpad keys set the cell directly to a specific value.
-    # 0 is also accepted alongside 3 because that's where "zero" sits on
-    # most keyboards (and it's the most natural press for "underspecified").
+    # Direct-entry keyboard shortcuts. Derived from the shared
+    # :py:data:`VALUE_KEYS` constant in grid_logic so the desktop
+    # and web editor stay in lockstep on which key sets which value.
+    # Translation step here: shared dict is char -> value; Qt's
+    # KeyPress events carry the Qt.Key.Key_<char> constant.
     _VALUE_KEYS: ClassVar[dict] = {
-        Qt.Key.Key_1: "+",
-        Qt.Key.Key_2: "\u2212",  # Unicode minus, matches cycle_value()
-        Qt.Key.Key_3: "0",
-        Qt.Key.Key_0: "0",
+        getattr(Qt.Key, f"Key_{char}"): value
+        for char, value in _SHARED_VALUE_KEYS.items()
     }
     # Numpad-style + Vim-style cell navigation. dr, dc as relative steps.
     _MOVE_KEYS: ClassVar[dict] = {

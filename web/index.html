@@ -129,7 +129,12 @@
            autocomplete="off" spellcheck="false">
     <span class="editor-meta-file" id="editor-file-label">(unsaved)</span>
   </div>
-  <div class="editor-grid-scroll">
+  <!--
+    tabindex on the scroll container so keyboard shortcuts (Space
+    cycle, 1/2/3/0 set value, Esc clear) fire reliably. The table
+    is not natively focusable.
+  -->
+  <div class="editor-grid-scroll" id="editor-grid-scroll" tabindex="0">
     <table class="editor-grid" id="editor-grid"></table>
   </div>
   <footer class="editor-status" id="editor-status" aria-live="polite">

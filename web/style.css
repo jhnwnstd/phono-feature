@@ -799,6 +799,10 @@ progress {
   overflow: auto;
   background: var(--panel);
 }
+.editor-grid-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 .editor-grid {
   border-collapse: collapse;
   font-family: var(--mono-family, ui-monospace, monospace);
@@ -829,6 +833,28 @@ progress {
 }
 .editor-grid td[data-value="0"] {
   color: var(--text-dim);
+}
+/* Multi-select highlight. Painted over the value-colored bg so the
+   selection reads regardless of which value the cell holds. The
+   ``box-shadow inset`` draws a single accent overlay inside the
+   cell border without breaking the grid's gridline alignment. */
+.editor-grid td.is-selected {
+  box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 100px var(--accent-light);
+}
+.editor-grid td.is-anchor {
+  box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 100px var(--accent-light),
+              inset 0 0 0 4px var(--panel);
+}
+/* Header click affordance: cursor change so the user knows
+   headers are interactive (the desktop builder gets this for
+   free via Qt's QPushButton-haptic header subclass). */
+.editor-grid thead th,
+.editor-grid tbody th {
+  cursor: pointer;
+}
+.editor-grid thead th[data-corner],
+.editor-grid thead th[data-corner]:hover {
+  cursor: pointer;
 }
 .editor-status {
   padding: var(--space-sm) var(--space-lg);

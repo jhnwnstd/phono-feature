@@ -23,6 +23,7 @@ from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features.gui.constants import FEATURE_GROUPS
 from phonology_features.gui.grid_logic import (
     CYCLE_LADDER,
+    VALUE_KEYS,
     grid_to_inventory,
 )
 from phonology_features.gui.inventory_setup import (
@@ -273,6 +274,17 @@ def get_cycle_ladder() -> dict[str, str]:
     web cycle order in lockstep and avoids per-click bridge cost.
     """
     return dict(CYCLE_LADDER)
+
+
+def get_value_keys() -> dict[str, str]:
+    """Return the direct-entry keyboard shortcuts.
+
+    Maps the typed character (the logical key, not a scancode) to
+    the cell value the editor should apply. The web editor reads
+    this once at boot; the desktop ``InventoryBuilder`` derives its
+    Qt-flavoured dict from the same constant.
+    """
+    return dict(VALUE_KEYS)
 
 
 def get_grid_state() -> dict[str, Any]:

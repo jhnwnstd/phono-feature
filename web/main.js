@@ -48,6 +48,7 @@ const NODE_IDS = Object.freeze({
     editorNameInput: "editor-name-input",
     editorFileLabel: "editor-file-label",
     editorGrid: "editor-grid",
+    editorGridScroll: "editor-grid-scroll",
     editorStatus: "editor-status",
 });
 const nodes = Object.create(null);

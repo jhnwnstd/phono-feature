@@ -51,6 +51,22 @@ CYCLE_LADDER: Mapping[str, str] = MappingProxyType({
     MINUS_DISPLAY: "0",
 })
 
+# Direct-entry keyboard shortcuts. Maps the typed character (the
+# logical key, not a platform-specific scancode) to the cell value
+# applied. Both the desktop (which translates ``Qt.Key.Key_N`` to
+# the character) and the web (which reads ``event.key`` directly)
+# look up this mapping so the shortcuts stay in lockstep.
+#
+# ``"0"`` is accepted alongside ``"3"`` because the zero key sits
+# in the natural "zero" slot on most keyboards, and ``0`` reads as
+# "underspecified" intuitively. Both produce the same cell value.
+VALUE_KEYS: Mapping[str, str] = MappingProxyType({
+    "1": "+",
+    "2": MINUS_DISPLAY,
+    "3": "0",
+    "0": "0",
+})
+
 
 def cycle_value(current: str) -> str:
     """Return the next value in the ladder. Unknown inputs reset to
