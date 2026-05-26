@@ -15,6 +15,7 @@ from phonology_features.gui.grid_logic import (
     CYCLE_LADDER,
     MINUS_DISPLAY,
     MINUS_SERIALIZED,
+    VALUE_KEYS,
     cycle_value,
     grid_to_inventory,
     normalize_minus,
@@ -100,6 +101,38 @@ def test_cycle_ladder_covers_three_states():
     Documents the contract: a new state added to the ladder is a
     deliberate change, not an accident."""
     assert set(CYCLE_LADDER.keys()) == {"0", "+", MINUS_DISPLAY}
+
+
+# VALUE_KEYS: direct-entry keyboard shortcut data, shared with web JS
+
+
+def test_value_keys_covers_plus_minus_zero():
+    """The shortcut set maps every key the cycle ladder produces,
+    plus an extra zero alias on the ``0`` key. Documents the
+    contract so adding a new value to the cycle without wiring a
+    shortcut breaks this test."""
+    assert set(VALUE_KEYS.values()) == {"+", MINUS_DISPLAY, "0"}
+
+
+def test_value_keys_uses_display_minus_not_ascii():
+    """The shortcut value must be the display form (U+2212) so
+    cells written via the keyboard render identically to cells
+    written via the click cycle."""
+    assert VALUE_KEYS["2"] == MINUS_DISPLAY
+
+
+def test_value_keys_zero_and_three_both_produce_zero():
+    """Both keys are alias entries for ``0``: ``3`` is the ladder
+    position, ``0`` is the natural keyboard slot for "zero"."""
+    assert VALUE_KEYS["0"] == "0"
+    assert VALUE_KEYS["3"] == "0"
+
+
+def test_value_keys_is_read_only():
+    """Same MappingProxyType guarantee as CYCLE_LADDER: callers
+    cannot mutate the singleton and silently change behavior."""
+    with pytest.raises(TypeError):
+        VALUE_KEYS["1"] = "?"  # type: ignore[index]
 
 
 # normalize_minus: display -> serialized form
