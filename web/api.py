@@ -21,7 +21,10 @@ from typing import Any
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features.gui.constants import FEATURE_GROUPS
-from phonology_features.gui.grid_logic import grid_to_inventory
+from phonology_features.gui.grid_logic import (
+    CYCLE_LADDER,
+    grid_to_inventory,
+)
 from phonology_features.gui.inventory_setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
@@ -259,6 +262,17 @@ def create_new_inventory(
     _inventory_name = inventory.name
     _invalidate_analysis_caches()
     return _summarize_engine(_engine)
+
+
+def get_cycle_ladder() -> dict[str, str]:
+    """Return the value-cycle ladder used by the editor click handler.
+
+    Same constant the desktop builder's ``cycle_value`` reads.
+    The web editor fetches this once at boot and consults it on
+    every click; centralizing the source here keeps the desktop and
+    web cycle order in lockstep and avoids per-click bridge cost.
+    """
+    return dict(CYCLE_LADDER)
 
 
 def get_grid_state() -> dict[str, Any]:

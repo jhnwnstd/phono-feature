@@ -12,6 +12,7 @@ import pytest
 
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features.gui.grid_logic import (
+    CYCLE_LADDER,
     MINUS_DISPLAY,
     MINUS_SERIALIZED,
     cycle_value,
@@ -70,6 +71,35 @@ def test_cycle_value_full_round_trip():
     assert v == MINUS_DISPLAY
     v = cycle_value(v)
     assert v == "0"
+
+
+# CYCLE_LADDER: the data cycle_value reads, exposed for the web JS
+
+
+def test_cycle_ladder_matches_cycle_value_for_every_in_ladder_key():
+    """The ladder constant is the single source of truth shared with
+    the web editor; ``cycle_value`` is a thin lookup. They must
+    agree for every key in the ladder so the JS-side lookup
+    behaves identically to the Python function."""
+    for key, expected_next in CYCLE_LADDER.items():
+        assert cycle_value(key) == expected_next
+
+
+def test_cycle_ladder_is_read_only():
+    """The exported mapping is a MappingProxyType so a caller (or a
+    bridge user) cannot mutate the singleton and silently change
+    behavior elsewhere. The type checker also flags the assignment;
+    the runtime check below proves the protection survives even if
+    a caller bypasses the static checker."""
+    with pytest.raises(TypeError):
+        CYCLE_LADDER["0"] = "?"  # type: ignore[index]
+
+
+def test_cycle_ladder_covers_three_states():
+    """Exactly the three values that participate in the cycle.
+    Documents the contract: a new state added to the ladder is a
+    deliberate change, not an accident."""
+    assert set(CYCLE_LADDER.keys()) == {"0", "+", MINUS_DISPLAY}
 
 
 # normalize_minus: display -> serialized form

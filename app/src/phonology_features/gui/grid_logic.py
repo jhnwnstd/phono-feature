@@ -23,7 +23,8 @@ rule land in both UIs on the next build.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from types import MappingProxyType
 
 from phonology_engine.inventory import Inventory
 
@@ -36,18 +37,26 @@ MINUS_DISPLAY: str = "−"
 # tool (regex, jq, spreadsheets, code) expects to see in JSON values.
 MINUS_SERIALIZED: str = "-"
 
+# The value-cycle ladder, ``0`` -> ``+`` -> minus -> ``0``. Exposed
+# as a read-only mapping so both the desktop builder and the web
+# editor can drive the click-to-cycle behavior off the same data.
+# Treat any value not in the ladder as a return to ``0``: the
+# defensive default in :py:func:`cycle_value` and the fallback the
+# web JS uses when looking up a cell with a drift-induced unknown
+# value. Wrapped in :py:class:`MappingProxyType` so callers cannot
+# mutate the singleton.
+CYCLE_LADDER: Mapping[str, str] = MappingProxyType({
+    "0": "+",
+    "+": MINUS_DISPLAY,
+    MINUS_DISPLAY: "0",
+})
+
 
 def cycle_value(current: str) -> str:
-    """Return the next value in the ``0`` -> ``+`` -> minus -> ``0``
-    ladder. Any value outside the ladder resets to ``0`` so a cell
-    that has somehow drifted out of the expected set returns to a
-    known state on the next click.
+    """Return the next value in the ladder. Unknown inputs reset to
+    ``0``. Pure lookup over :py:data:`CYCLE_LADDER`.
     """
-    if current == "0":
-        return "+"
-    if current == "+":
-        return MINUS_DISPLAY
-    return "0"
+    return CYCLE_LADDER.get(current, "0")
 
 
 def normalize_minus(value: str) -> str:

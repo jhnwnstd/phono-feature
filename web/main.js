@@ -1324,6 +1324,50 @@ function wireSetupDialog() {
     return { open: openDialog };
 }
 
+// In-memory edit state for the builder editor. Mirrors the desktop
+// ``InventoryBuilder``'s ``_segments`` / ``_features`` / table-item
+// values, plus a ``dirty`` flag that the Back / Save-as paths
+// consult. ``cells`` is indexed as cells[feature_index][segment_index]
+// to match the engine's get_grid_state shape and the shared
+// :py:func:`grid_to_inventory` contract.
+const editorState = {
+    open: false,
+    name: "",
+    features: [],
+    segments: [],
+    cells: [],
+    dirty: false,
+};
+
+// Cycle ladder fetched from the bridge at editor first-open. Maps
+// the current cell value to the next value in the ladder. Same
+// data the desktop ``cycle_value`` reads.
+let cycleLadder = null;
+const ZERO_VALUE = "0";
+
+const PLUS_DISPLAY = "+";
+const MINUS_DISPLAY = "−";   // U+2212 MATHEMATICAL MINUS SIGN
+const MINUS_SERIALIZED = "-"; // ASCII U+002D HYPHEN-MINUS
+
+/** Lookup the next value in the ladder, defaulting to "0" for any
+ *  value that drifted out of the ladder (defensive; mirrors the
+ *  same default in :py:func:`cycle_value`). */
+function nextCycleValue(current) {
+    if (cycleLadder === null) return ZERO_VALUE;
+    return cycleLadder[current] ?? ZERO_VALUE;
+}
+
+/** Cell-rendering normalization. The grid always shows U+2212 for
+ *  the minus value (typographic symmetry with the plus glyph); the
+ *  data-value attribute always carries the ASCII serialized form so
+ *  CSS selectors match regardless of how the cell got its value. */
+function cellDisplay(value) {
+    return value === MINUS_SERIALIZED ? MINUS_DISPLAY : value;
+}
+function cellSerialized(value) {
+    return value === MINUS_DISPLAY ? MINUS_SERIALIZED : value;
+}
+
 /**
  * Wire the builder editor. Mirrors the desktop ``InventoryBuilder``
  * window:
@@ -1331,57 +1375,78 @@ function wireSetupDialog() {
  * * Main toolbar's "Builder" button opens the editor.
  * * Inside the editor, "New" opens the setup dialog (same dialog
  *   the desktop builder's New button shows).
- * * "Save as..." downloads the current grid through the same path
- *   the main toolbar uses.
- * * "Back" closes the editor.
+ * * "Save as..." commits the current grid through
+ *   commit_inventory_from_grid then triggers a download.
+ * * "Back" closes the editor; if there are unsaved edits, the user
+ *   is prompted to discard or stay (matches the desktop's
+ *   ``_check_unsaved`` guard).
  * * The name field commits on change/Enter, going through the same
  *   rename_current_inventory bridge as the main toolbar's pencil.
- *
- * The grid is read-only this iteration; click-to-cycle, add/remove
- * segment/feature, undo/redo land in subsequent iterations. The
- * shell is in place so the navigation matches the desktop today.
+ * * Cells respond to click by cycling 0 -> + -> minus -> 0 via the
+ *   shared cycle ladder.
  */
 function wireBuilderEditor(setupDialog) {
     const openEditor = () => {
+        if (cycleLadder === null) {
+            // First open: fetch the cycle ladder once. Same constant
+            // the desktop ``cycle_value`` reads.
+            cycleLadder = callBridge("get_cycle_ladder");
+        }
         refreshEditorFromCurrent();
+        editorState.open = true;
         nodes.editorView.hidden = false;
-        // Land focus on the grid scroll container so PageDown / arrow
-        // keys work immediately; the name field still gets focus on
-        // click if the user wants to rename.
         nodes.editorGrid.focus();
     };
     const closeEditor = () => {
+        if (editorState.dirty
+            && !confirm("Discard unsaved changes to the inventory?")) {
+            return;
+        }
+        editorState.open = false;
+        editorState.dirty = false;
         nodes.editorView.hidden = true;
     };
 
     nodes.builderBtn.addEventListener("click", openEditor);
     nodes.editorExitBtn.addEventListener("click", closeEditor);
     nodes.editorNewBtn.addEventListener("click", setupDialog.open);
-    nodes.editorSaveAsBtn.addEventListener("click", downloadCurrentInventory);
+    nodes.editorSaveAsBtn.addEventListener("click", commitAndDownload);
 
     // Name commits on Enter or focus loss via the "change" event.
     // Same rename_current_inventory path the pencil button uses, so
     // canonicalization and validation are identical.
     nodes.editorNameInput.addEventListener("change", () => {
         const newName = nodes.editorNameInput.value;
-        if (newName === state.inventory_name) return;
-        try {
-            const result = callBridge("rename_current_inventory", newName);
-            state.inventory_name = result.name;
-            nodes.editorNameInput.value = result.name;
-            setEditorStatus(`Renamed to ${result.name}.`);
-        } catch (e) {
-            setEditorStatus(`Rename failed: ${e.message}`);
-            nodes.editorNameInput.value = state.inventory_name;
-        }
+        if (newName === editorState.name) return;
+        // Local rename only; engine swap happens on Save-as alongside
+        // the cell commits so a typed-then-cancelled rename does not
+        // mutate the engine.
+        editorState.name = newName;
+        markEditorDirty();
+        setEditorStatus(
+            "Name will apply on Save as... (Back to discard).",
+        );
+    });
+
+    // One click handler bubbled at the grid root; per-cell listeners
+    // would multiply by hundreds for a typical inventory.
+    nodes.editorGrid.addEventListener("click", onGridClick);
+
+    // Browser-level unsaved-changes guard for refresh / tab close.
+    // Returning a non-empty string triggers the standard confirm
+    // prompt. Modern browsers ignore custom strings but show their
+    // own message; the presence of the listener is what matters.
+    window.addEventListener("beforeunload", (ev) => {
+        if (!editorState.dirty) return;
+        ev.preventDefault();
+        ev.returnValue = "";
     });
 }
 
 /**
- * Pull the active engine's grid state through the bridge and paint
- * it into the editor. Used on editor open and after any action that
- * swaps the engine (create_new_inventory from the New dialog,
- * future commit_inventory_from_grid from grid edits).
+ * Pull the active engine's grid state through the bridge and adopt
+ * it as the editor's edit state. Called on editor open and after
+ * any action that swaps the engine (New dialog, Save-as commit).
  */
 function refreshEditorFromCurrent() {
     let snapshot;
@@ -1391,32 +1456,33 @@ function refreshEditorFromCurrent() {
         setEditorStatus(`Could not load grid: ${e.message}`);
         return;
     }
-    nodes.editorNameInput.value = snapshot.name;
-    // Web has no on-disk file backing; mirror the desktop's "(unsaved)"
-    // label until a Save-as / commit-from-grid surface exists.
+    editorState.name = snapshot.name;
+    editorState.features = snapshot.features.slice();
+    editorState.segments = snapshot.segments.slice();
+    editorState.cells = snapshot.cells.map((row) => row.slice());
+    editorState.dirty = false;
+    nodes.editorNameInput.value = editorState.name;
     nodes.editorFileLabel.textContent = "(unsaved)";
-    renderEditorGrid(snapshot.features, snapshot.segments, snapshot.cells);
+    renderEditorGrid();
     setEditorStatus(
-        `${snapshot.segments.length} segments × `
-        + `${snapshot.features.length} features.`,
+        `${editorState.segments.length} segments × `
+        + `${editorState.features.length} features. `
+        + "Click cells to cycle +/−/0.",
     );
 }
 
 /**
- * Render the grid as an HTML table. Rows are features, columns are
- * segments, matching the desktop ``InventoryBuilder``'s
- * ``QTableWidget`` layout (so the visual is consistent across both
- * frontends). Cell values use the Unicode display minus (U+2212)
- * for typographic symmetry with the plus; the ``data-value`` attr
- * carries the serialized form so CSS rules match regardless of
- * which form the engine returned.
+ * Render the editor grid from ``editorState``. Rows are features,
+ * columns are segments. ``data-row`` / ``data-col`` indices on each
+ * ``<td>`` let the bubbled click handler resolve the cell without
+ * walking parents.
  */
-function renderEditorGrid(features, segments, cells) {
+function renderEditorGrid() {
     const table = nodes.editorGrid;
+    const { features, segments, cells } = editorState;
     table.innerHTML = "";
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
-    // Empty corner cell aligns the column headers with the data.
     headerRow.appendChild(document.createElement("th"));
     for (const seg of segments) {
         const th = document.createElement("th");
@@ -1436,19 +1502,75 @@ function renderEditorGrid(features, segments, cells) {
         tr.appendChild(rowHeader);
         for (let c = 0; c < segments.length; c++) {
             const td = document.createElement("td");
-            const raw = cells[r][c];
-            // Normalize ASCII minus to display form for the cell text
-            // and to ASCII for the data-value attr; the CSS keyed on
-            // [data-value="-"] matches regardless of source form.
-            const serialized = raw === "−" ? "-" : raw;
-            const display = raw === "-" ? "−" : raw;
-            td.textContent = display;
-            td.dataset.value = serialized;
+            td.dataset.row = String(r);
+            td.dataset.col = String(c);
+            paintCell(td, cells[r][c]);
             tr.appendChild(td);
         }
         tbody.appendChild(tr);
     }
     table.appendChild(tbody);
+}
+
+/** Paint a single cell from its raw value (display or serialized
+ *  minus both accepted). Used by both the full render and the
+ *  click-to-cycle path so the visual is consistent. */
+function paintCell(td, rawValue) {
+    td.textContent = cellDisplay(rawValue);
+    td.dataset.value = cellSerialized(rawValue);
+}
+
+/** Bubbled click handler on the grid root. Resolves the target
+ *  ``<td>`` and cycles its value via the shared ladder; rejects
+ *  clicks that landed on a header or whitespace. */
+function onGridClick(ev) {
+    const td = ev.target.closest("td");
+    if (td === null || !nodes.editorGrid.contains(td)) return;
+    const r = Number.parseInt(td.dataset.row, 10);
+    const c = Number.parseInt(td.dataset.col, 10);
+    if (Number.isNaN(r) || Number.isNaN(c)) return;
+    const current = editorState.cells[r][c];
+    const next = nextCycleValue(current);
+    if (next === current) return;
+    editorState.cells[r][c] = next;
+    paintCell(td, next);
+    markEditorDirty();
+}
+
+/** Mark the edit state dirty, updating the file-label indicator
+ *  exactly once on the first edit so the toggle is cheap. */
+function markEditorDirty() {
+    if (editorState.dirty) return;
+    editorState.dirty = true;
+    nodes.editorFileLabel.textContent = "(modified)";
+}
+
+/**
+ * Commit the editor's edit state through
+ * commit_inventory_from_grid, swap the engine on success, then
+ * trigger the standard JSON download. Refreshes both the viewer
+ * (so the underlying inventory updates) and the editor (so the
+ * grid reflects any canonicalization the parser applied).
+ */
+function commitAndDownload() {
+    let info;
+    try {
+        info = callBridge(
+            "commit_inventory_from_grid",
+            editorState.name,
+            editorState.features,
+            editorState.segments,
+            editorState.cells,
+        );
+    } catch (e) {
+        setEditorStatus(`Save failed: ${e.message}`);
+        return;
+    }
+    editorState.dirty = false;
+    applyInventoryInfo(info);
+    refreshEditorFromCurrent();
+    downloadCurrentInventory();
+    setEditorStatus(`Saved as ${info.name}.`);
 }
 
 function setEditorStatus(msg) {
