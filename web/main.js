@@ -392,16 +392,24 @@ async function bootPyodide({ prerendered = false } = {}) {
     mark("bundle-fetch:end");
 
     // Reveal the pre-rendered UI here. Remaining work (bundle
-    // mount + bridge init + default inventory sync) is ~170 ms,
-    // shorter than human reaction-to-click time. By the time the
-    // user spots a button and reaches for it, the bridge is up
-    // and the click goes through instantly. The fallback path
-    // (no bootstrap) still hides the overlay at the end of boot
-    // since its DOM isn't populated until then.
+    // mount + bridge init + default inventory sync) is ~170 ms;
+    // we add a small yield so the total reveal-to-ready gap
+    // lands around 220 ms. That's comfortably below the 250-500
+    // ms human reaction-to-click window even on slower devices,
+    // without making the loading screen feel longer than it
+    // needs to. The fallback path (no bootstrap) still hides
+    // the overlay at the end of boot since its DOM isn't
+    // populated until then.
     if (prerendered) {
         mark("overlay-hide");
         nodes.loadingOverlay.classList.add("hidden");
         setStatus("Almost ready…");
+        // Yield long enough that the browser commits the overlay
+        // hide as a paint frame before we start the synchronous
+        // pyimport call (which blocks the main thread for ~140 ms).
+        // Also pads the reveal-to-ready gap toward the 220 ms
+        // target.
+        await new Promise((r) => setTimeout(r, 50));
     }
 
     setLoadingStatus("Mounting Python sources…");
