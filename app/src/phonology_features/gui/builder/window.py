@@ -3,11 +3,8 @@
 import os
 from typing import TYPE_CHECKING, ClassVar
 
-from phonology_engine.inventory import (
-    MAX_NAME_LENGTH,
-    Inventory,
-    ValidationError,
-)
+from phonology_engine.inventory import Inventory, ValidationError
+from phonology_engine.limits import MAX_NAME_LENGTH
 from phonology_features._logging import get_logger
 from phonology_features.gui.inventory_setup import suggest_filename
 

@@ -105,7 +105,8 @@ class _ThemedHandle(QSplitterHandle):
 
     Avoids the prior ``QSplitter::handle`` subcontrol stylesheet,
     which forced a polish cascade through every descendant of the
-    splitter on each theme toggle (the biggest cost in _apply_theme).
+    splitter on each theme toggle (the biggest cost in
+    :py:meth:`_ThemeController.apply`).
     Reading ``C`` per paintEvent costs microseconds; the polish
     cascade cost ~65 ms.
     """

@@ -12,7 +12,7 @@ Split rationale: theme handling crossed nine inline methods on
 MainWindow and a hundred and fifty lines of code. Centralizing them
 makes the cross-widget polish order explicit (palette before
 property-selector polish, scrollbars before panel chrome) and lets
-``_apply_theme`` read as a single sequence rather than a chain of
+:py:meth:`apply` read as a single sequence rather than a chain of
 private helpers.
 """
 

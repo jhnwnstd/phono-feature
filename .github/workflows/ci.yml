@@ -26,10 +26,10 @@ jobs:
       QT_QPA_PLATFORM: offscreen
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           # Minimum supported. The launcher's pick_python prefers higher
           # versions if available on the runner, so this is the floor.
