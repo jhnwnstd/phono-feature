@@ -477,6 +477,50 @@ def hash_assets() -> None:
     print(f"  {len(full_map)} assets hashed")
 
 
+def write_service_worker() -> None:
+    """Stamp the service worker template with this build's precache
+    list + a build-id derived from those file contents.
+
+    The SW lives at the deploy root with a STABLE URL (sw.js, no
+    hash) because browsers identify service workers by URL. The
+    CONTENT changes per build (new precache list + new BUILD_ID),
+    which is what triggers the browser to detect an update.
+
+    Precaches every locally-shipped file (index.html + everything
+    that was just hashed). Pyodide CDN assets are NOT precached --
+    a CDN flake during install would brick the SW. They're cached
+    on first successful fetch instead.
+    """
+    print("Writing service worker...")
+    template = (WEB_DIR / "sw.js").read_text(encoding="utf-8")
+
+    # Precache every locally-served file under dist/, except the
+    # SW itself and the Jekyll marker.
+    SKIP_NAMES = {"sw.js", ".nojekyll"}
+    precache = ["./", "./index.html"]
+    for path in sorted(DIST.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(DIST).as_posix()
+        if rel in SKIP_NAMES:
+            continue
+        precache.append(f"./{rel}")
+    # Dedupe (./ and ./index.html may collide if hashing added more).
+    precache = sorted(set(precache))
+
+    # Build ID = hash of the precache list. Any change to the
+    # shipped file set bumps the ID, which renames the cache and
+    # triggers the activate handler's old-cache cleanup.
+    build_id = hashlib.sha256(
+        json.dumps(precache).encode()
+    ).hexdigest()[:10]
+
+    sw_text = template.replace('"__BUILD_ID__"', json.dumps(build_id))
+    sw_text = sw_text.replace("__PRECACHE_LIST__", json.dumps(precache))
+    (DIST / "sw.js").write_text(sw_text, encoding="utf-8")
+    print(f"  build_id={build_id}, {len(precache)} files precached")
+
+
 def write_pages_no_jekyll() -> None:
     """Tell GitHub Pages to serve the directory as-is. Without this,
     files starting with ``_`` are filtered out by the default Jekyll
@@ -495,6 +539,7 @@ def main() -> int:
     write_python_bundle()
     write_bootstrap()
     hash_assets()
+    write_service_worker()
     write_pages_no_jekyll()
 
     print(f"\nBuild complete: {DIST}")

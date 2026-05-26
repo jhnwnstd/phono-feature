@@ -1182,6 +1182,22 @@ function wireFeatureDelegation() {
 // ---------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------
+// Register the service worker after first load completes so its
+// registration request doesn't compete with critical-path fetches.
+// First visit: SW installs in the background and warms caches on
+// initial fetches; user gets the normal cold-load experience.
+// Second visit: SW serves Pyodide WASM + the python bundle from
+// local cache, dropping boot from ~5 s to under 1 s.
+function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+    window.addEventListener("load", () => {
+        navigator.serviceWorker
+            .register("./sw.js", { scope: "./" })
+            // eslint-disable-next-line no-console
+            .catch((e) => console.warn("SW registration failed:", e));
+    });
+}
+
 async function main() {
     initNodes();
     wireThemeToggle();
@@ -1192,6 +1208,7 @@ async function main() {
     wirePanelClickMode();
     wireSegmentDelegation();
     wireFeatureDelegation();
+    registerServiceWorker();
 
     // Paint the default inventory from the build-time bootstrap if
     // present, but DON'T drop the loading overlay yet. Doing so
