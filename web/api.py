@@ -261,6 +261,33 @@ def create_new_inventory(
     return _summarize_engine(_engine)
 
 
+def get_grid_state() -> dict[str, Any]:
+    """Return the active inventory in editor-grid shape.
+
+    The web builder editor reads this on open to populate its grid:
+    ``cells[feature_index][segment_index]`` mirrors the desktop
+    ``InventoryBuilder``'s ``rows = features, cols = segments``
+    table layout. Missing values default to ``"0"`` (same semantics
+    as :py:meth:`Inventory.feature_value`).
+
+    Round-trips with :py:func:`commit_inventory_from_grid`: take
+    the cells out, edit them, hand the result back.
+    """
+    engine = _require_engine()
+    segments = list(engine.segments)
+    features = list(engine.features)
+    cells = [
+        [engine.segments[seg].get(feat, "0") for seg in segments]
+        for feat in features
+    ]
+    return {
+        "name": _inventory_name or engine.inventory.name,
+        "features": features,
+        "segments": segments,
+        "cells": cells,
+    }
+
+
 def commit_inventory_from_grid(
     name: str,
     features: list[str],

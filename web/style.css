@@ -719,3 +719,122 @@ dialog input[type="text"]:focus-visible {
 progress {
   width: 100%;
 }
+
+/* ---------- builder editor (full-screen overlay) ---------- */
+
+/* Full-viewport overlay so the viewer chrome stays in the DOM
+   (no rebuild on toggle) but is visually hidden while the editor
+   is up. Display rows: toolbar | meta | grid (1fr) | status. */
+.editor-view {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+}
+.editor-view[hidden] { display: none; }
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--panel);
+  border-bottom: var(--border-thin) solid var(--border);
+}
+.editor-toolbar button {
+  height: var(--control-h-md);
+  padding: 0 var(--space-lg);
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.editor-toolbar button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+.editor-toolbar-spacer { flex: 1; }
+.editor-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--bg);
+  border-bottom: var(--border-thin) solid var(--border);
+}
+.editor-meta-label {
+  font-weight: bold;
+  color: var(--text-dim);
+  font-size: var(--font-size-meta);
+}
+.editor-meta input {
+  flex: 1;
+  height: var(--control-h-md);
+  padding: 0 10px;
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.editor-meta input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+.editor-meta-file {
+  color: var(--text-dim);
+  font-size: var(--font-size-meta);
+  padding: 0 var(--space-sm);
+}
+/* Scroll wrapper so the grid can be wider than the viewport without
+   blowing out the editor frame. The grid itself uses native table
+   layout so the desktop and web visuals stay aligned without a CSS
+   grid reimplementation. */
+.editor-grid-scroll {
+  overflow: auto;
+  background: var(--panel);
+}
+.editor-grid {
+  border-collapse: collapse;
+  font-family: var(--mono-family, ui-monospace, monospace);
+}
+.editor-grid th,
+.editor-grid td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  min-width: 32px;
+  text-align: center;
+}
+.editor-grid th {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: bold;
+  position: sticky;
+}
+.editor-grid thead th { top: 0; }
+.editor-grid tbody th { left: 0; text-align: right; }
+/* Cell value styling. Same semantics as the desktop's
+   _cell_brushes: + on green, minus on red, 0 on a dim neutral.
+   Read-only this iteration; the click-to-cycle wiring lands next. */
+.editor-grid td[data-value="+"] {
+  background: var(--plus-bg); color: var(--plus); font-weight: bold;
+}
+.editor-grid td[data-value="-"] {
+  background: var(--minus-bg); color: var(--minus); font-weight: bold;
+}
+.editor-grid td[data-value="0"] {
+  color: var(--text-dim);
+}
+.editor-status {
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--panel);
+  border-top: var(--border-thin) solid var(--border);
+  font-size: var(--font-size-meta);
+  color: var(--text-dim);
+  min-height: 24px;
+}

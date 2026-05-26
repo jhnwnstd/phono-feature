@@ -71,7 +71,7 @@
           aria-label="Rename current inventory" title="Rename inventory">✎</button>
   <button id="upload-btn" type="button" disabled>Browse…</button>
   <input id="upload-input" type="file" accept=".json" hidden>
-  <button id="new-btn" type="button" disabled>Builder</button>
+  <button id="builder-btn" type="button" disabled>Builder</button>
   <button id="download-btn" type="button" disabled>Save as…</button>
   <div class="toolbar-spacer"></div>
   <button id="theme-btn" type="button" aria-label="Toggle theme">☾</button>
@@ -107,6 +107,34 @@
 <footer class="statusbar" id="statusbar" aria-live="polite">
   Select an inventory from the dropdown to begin.
 </footer>
+
+<!--
+  Builder editor. Mirrors the desktop ``InventoryBuilder`` window:
+  toolbar with New / Save as..., editable name strip, then the grid.
+  Initially hidden; the main toolbar's Builder button toggles
+  ``hidden`` on this block so the editor swaps in as a full-screen
+  view (the viewer chrome stays in the DOM but hides behind it).
+-->
+<section id="editor-view" class="editor-view" hidden>
+  <header class="editor-toolbar">
+    <button id="editor-exit-btn" type="button"
+            aria-label="Close editor and return to viewer">← Back</button>
+    <button id="editor-new-btn" type="button">New</button>
+    <button id="editor-save-as-btn" type="button">Save as…</button>
+    <div class="editor-toolbar-spacer"></div>
+  </header>
+  <div class="editor-meta">
+    <label class="editor-meta-label" for="editor-name-input">Name:</label>
+    <input id="editor-name-input" type="text" maxlength="256"
+           autocomplete="off" spellcheck="false">
+    <span class="editor-meta-file" id="editor-file-label">(unsaved)</span>
+  </div>
+  <div class="editor-grid-scroll">
+    <table class="editor-grid" id="editor-grid"></table>
+  </div>
+  <footer class="editor-status" id="editor-status" aria-live="polite">
+  </footer>
+</section>
 
 <dialog id="rename-dialog" aria-labelledby="rename-dialog-title">
   <form method="dialog" id="rename-form">
