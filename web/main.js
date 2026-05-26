@@ -406,10 +406,12 @@ async function bootPyodide({ prerendered = false } = {}) {
         setStatus("Almost ready…");
         // Yield long enough that the browser commits the overlay
         // hide as a paint frame before we start the synchronous
-        // pyimport call (which blocks the main thread for ~140 ms).
-        // Also pads the reveal-to-ready gap toward the 220 ms
-        // target.
-        await new Promise((r) => setTimeout(r, 50));
+        // pyimport call (which blocks the main thread for ~100 ms
+        // now that gui.analysis is lazy-loaded). Combined with
+        // bundle mount + bridge init + inventory sync, this pads
+        // the reveal-to-ready gap to ~220 ms -- comfortably under
+        // human reaction-to-click time on slow devices.
+        await new Promise((r) => setTimeout(r, 90));
     }
 
     setLoadingStatus("Mounting Python sources…");
