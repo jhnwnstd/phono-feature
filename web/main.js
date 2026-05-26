@@ -657,6 +657,12 @@ function renderSegmentGrid(groups, vowelChart) {
     const grid = nodes.segGrid;
     grid.innerHTML = "";
     state.seg_buttons.clear();
+    // Also drop the spillover sibling from a previous inventory; its
+    // groups would otherwise re-merge into the new grid on the next
+    // rebalance and produce duplicates.
+    const body = grid.parentElement;
+    const oldSpillover = body && body.querySelector(".seg-spillover");
+    if (oldSpillover) oldSpillover.remove();
     if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
         const vowels = document.createElement("div");
         vowels.className = "seg-vowels";
@@ -708,18 +714,20 @@ function rebalanceSegmentSpillover() {
     while (spillover.firstChild) grid.appendChild(spillover.firstChild);
     if (spillover.parentElement) spillover.remove();
 
-    // Step 2: still overflow?
-    if (grid.offsetHeight <= body.clientHeight) return;
+    // Step 2: does the grid actually overflow? Use scrollHeight,
+    // which reports the FULL content size; the .panel-body
+    // overflow:auto otherwise hides it from offsetHeight when
+    // content exceeds the available space.
+    const available = body.clientHeight;
+    if (grid.scrollHeight <= available) return;
 
-    // Step 3: enable spillover and walk bottom-up.
+    // Step 3: enable spillover and walk consonants bottom-up,
+    // moving each into the spillover until grid + spillover fit.
     body.appendChild(spillover);
     const consonants = grid.querySelectorAll(".seg-group:not(.vowel-chart-group)");
     for (let i = consonants.length - 1; i >= 0; i--) {
         spillover.insertBefore(consonants[i], spillover.firstChild);
-        // Measure after each move; stop when everything fits.
-        if (grid.offsetHeight + spillover.offsetHeight <= body.clientHeight) {
-            break;
-        }
+        if (grid.scrollHeight + spillover.scrollHeight <= available) break;
     }
 }
 
