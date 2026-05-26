@@ -1,6 +1,6 @@
 """Feature geometry inference.
 
-Identifies parent-child dependencies (e.g. [nasal] requires
+Identifies parent-child dependencies (for example [nasal] requires
 [+consonantal]) and sibling groupings, with confidence levels derived
 from coverage thresholds and a hypergeometric significance test.
 """
@@ -83,8 +83,8 @@ class GeometryAnalyzer:
         """Run dependency inference and return the root node.
 
         Resets ``dependencies`` and ``geometry_tree`` first so calling
-        ``analyze`` twice on the same analyzer produces a clean run --
-        previously a second call left stale entries from the first.
+        ``analyze`` twice on the same analyzer produces a clean run.
+        Previously a second call left stale entries from the first.
         """
         self.dependencies = {}
         self.geometry_tree = None

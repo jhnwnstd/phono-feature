@@ -1,21 +1,21 @@
 """Phonological segment and feature engine.
 
-Holds one validated ``Inventory`` and answers analytical queries on it:
-feature lookups, natural classes, contrast checks, segment distances.
-GUI-free.
+Holds one validated :py:class:`Inventory` and answers analytical
+queries on it: feature lookups, natural classes, contrast checks,
+segment distances. GUI-free.
 
-The engine takes the inventory in its constructor. There is no
-"empty engine" state to defend against, and there is no in-place
-``load`` -- replacing the inventory means constructing a new engine.
-The contract gain: ``self._inventory`` and its derived caches are
-written exactly once, so the "caches stale relative to inventory"
-class of bug is structurally impossible.
+The engine takes the inventory in its constructor. There is no empty
+state to defend against, and there is no in-place ``load``. Replacing
+the inventory means constructing a new engine. The contract gain:
+``self._inventory`` and its derived caches are written exactly once,
+so the "cache stale relative to inventory" class of bug is
+structurally impossible.
 
-Cache strategy: cheap caches (the ``+/-/0`` segment-sets, used by
-the analysis pane on every selection) build eagerly in ``__init__``.
+Cache strategy: cheap caches (the +/-/0 segment-sets used by the
+analysis pane on every selection) build eagerly in ``__init__``.
 Expensive caches that not every consumer pays for (the value-tuple
-table feeding ``segment_distance``) build lazily via
-``functools.cached_property``.
+table feeding :py:meth:`segment_distance`) build lazily via
+:py:func:`functools.cached_property`.
 """
 
 from __future__ import annotations
@@ -30,21 +30,25 @@ from phonology_engine.inventory import (
     VALID_VALUES,
     Inventory,
 )
+from phonology_engine.segment_grouper import (
+    _normalize_feats,
+    group_segments,
+)
 
 _log = logging.getLogger(__name__)
 
-# Singleton read-only empty mapping shared across cache entries for
-# the universal-class and no-spec-found return paths. Module-level so
-# every empty result is the same object -- callers cannot mutate it,
-# and we don't pay an allocation per call.
+# Singleton read-only empty mapping shared across the universal-class
+# and no-spec-found return paths. Module-level so every empty result
+# is the same object; callers cannot mutate it, and there is no
+# per-call allocation.
 _EMPTY_BUNDLE: Mapping[str, str] = MappingProxyType({})
 
 
 class FeatureEngine:
-    """Holds one inventory and supports analytical queries on it.
+    """Holds one inventory and answers analytical queries on it.
 
-    Construct with ``FeatureEngine(inventory)`` -- or, for the common
-    "load from disk" path, ``FeatureEngine.from_path(filepath)``.
+    Construct with ``FeatureEngine(inventory)`` or, for the common
+    load-from-disk path, ``FeatureEngine.from_path(filepath)``.
     """
 
     def __init__(self, inventory: Inventory) -> None:
@@ -57,7 +61,7 @@ class FeatureEngine:
         self._inventory = inventory
         # Per-feature segment-set caches built once at construction.
         # Used by analysis.compute_contrastive (every selection change),
-        # GeometryAnalyzer, and is_contrastive -- the common path.
+        # GeometryAnalyzer, and is_contrastive.
         self.spec_segs: dict[str, frozenset[str]] = {}
         self.plus_segs: dict[str, frozenset[str]] = {}
         self.minus_segs: dict[str, frozenset[str]] = {}
@@ -68,24 +72,22 @@ class FeatureEngine:
             len(inventory.segments),
             len(inventory.features),
         )
-        # Bundle search memoization: is_natural_class and
-        # compute_natural_class both delegate to find_all_minimal_bundles,
-        # so calling both on the same input would re-run an
-        # exponential-worst-case search. Keyed by frozenset(segments).
-        # Stored as tuples of MappingProxyType so a caller cannot
-        # mutate the cached result and corrupt subsequent queries on
-        # the same input.
+        # Bundle-search memoization. is_natural_class and
+        # compute_natural_class both delegate to
+        # find_all_minimal_bundles, so calling both on the same input
+        # would re-run an exponential-worst-case search. Keyed by
+        # frozenset(segments). Stored as tuples of MappingProxyType so
+        # a caller cannot mutate the cached result and corrupt
+        # subsequent queries on the same input.
         self._bundle_cache: dict[
             frozenset[str], tuple[Mapping[str, str], ...]
         ] = {}
 
     @classmethod
     def from_path(cls, path: str) -> FeatureEngine:
-        """Parse a JSON inventory file and return a loaded engine.
-        Convenience wrapper around ``Inventory.load`` + ``__init__``."""
+        """Parse a JSON inventory file and return a loaded engine."""
         return cls(Inventory.load(path))
 
-    # ----- properties exposing the inventory as read-only views -----
     @property
     def inventory(self) -> Inventory:
         """The currently-loaded validated Inventory."""
@@ -103,7 +105,6 @@ class FeatureEngine:
     def segments(self) -> Mapping[str, Mapping[str, str]]:
         return self._inventory.segments
 
-    # ----- validation helpers -----
     def _validate_segment(self, segment: str) -> None:
         if segment not in self.segments:
             raise KeyError(f"Segment '{segment}' not found in inventory")
@@ -114,7 +115,8 @@ class FeatureEngine:
 
     @staticmethod
     def _feat_match(seg_val: str, spec_val: str) -> bool:
-        """True if a segment value matches a spec value, with '0' as a wildcard."""
+        """True if a segment value matches a spec value, with '0'
+        treated as a wildcard."""
         return seg_val == spec_val or seg_val == "0"
 
     def _find_segments_unsorted(
@@ -125,8 +127,9 @@ class FeatureEngine:
     ) -> list[str]:
         """Match segments against a feature spec; unsorted result.
 
-        When ``underspec_compatible`` is True, a segment's '0' counts as
-        compatible with any spec value (used for natural-class analysis).
+        With ``underspec_compatible``, a segment's '0' counts as
+        compatible with any spec value (used for natural-class
+        analysis).
         """
         match = self._feat_match if underspec_compatible else None
         matching = []
@@ -145,8 +148,7 @@ class FeatureEngine:
         return matching
 
     def _build_membership_caches(self) -> None:
-        """Single pass over (segment, feature) populating the three
-        membership sets. Run once, in ``__init__``."""
+        """Populate the three membership sets in one pass."""
         features = self._inventory.features
         segments = self._inventory.segments
         spec: dict[str, set[str]] = {f: set() for f in features}
@@ -167,10 +169,13 @@ class FeatureEngine:
 
     @cached_property
     def _seg_value_tuples(self) -> dict[str, tuple[str, ...]]:
-        """``seg -> (val_for_feat0, val_for_feat1, ...)``. Only
-        consumed by ``segment_distance``, ``find_nearest_segments``,
-        and ``get_inventory_stats``. Lazy because the analysis pane
-        and geometry analyzer never touch it."""
+        """``seg -> (val_for_feat0, val_for_feat1, ...)``.
+
+        Only consumed by :py:meth:`segment_distance`,
+        :py:meth:`find_nearest_segments`, and
+        :py:meth:`get_inventory_stats`. Lazy because the analysis pane
+        and geometry analyzer never touch it.
+        """
         features = self._inventory.features
         return {
             seg: tuple(feats.get(f, "0") for f in features)
@@ -179,8 +184,7 @@ class FeatureEngine:
 
     @cached_property
     def contrastive_features(self) -> tuple[str, ...]:
-        """Features that take both '+' and '-' in this inventory.
-        Used by ``GeometryAnalyzer`` and ``get_inventory_stats``."""
+        """Features that take both '+' and '-' in this inventory."""
         return tuple(
             f
             for f in self._inventory.features
@@ -191,34 +195,31 @@ class FeatureEngine:
     def grouped_segments(self) -> dict[str, list[str]]:
         """Display-grouped segments (Plosives, Fricatives, ...).
 
-        Lives on the engine so the cache is tied to engine identity --
-        callers don't have to remember to invalidate when swapping
+        Lives on the engine so the cache is tied to engine identity.
+        Callers do not have to remember to invalidate when swapping
         inventories; they swap engines instead.
         """
-        from phonology_engine.segment_grouper import group_segments
-
         return group_segments(self._inventory.segments)
 
     @cached_property
     def normalized_segment_feats(self) -> dict[str, dict[str, str]]:
         """Per-segment feature bundles with names normalized to the
-        segment_grouper's canonical keys. Same lifetime / invalidation
-        story as ``grouped_segments``."""
-        from phonology_engine.segment_grouper import _normalize_feats
-
+        :py:mod:`segment_grouper` canonical keys. Same lifetime and
+        invalidation story as :py:attr:`grouped_segments`."""
         return {
             seg: _normalize_feats(self._inventory.segments[seg])
             for seg in self._inventory.segments
         }
 
-    # ----- public query API -----
     def get_segment_features(self, segment: str) -> dict[str, str]:
-        """Full feature bundle for ``segment``; missing features default to '0'."""
+        """Full feature bundle for ``segment``. Missing features
+        default to ``'0'``."""
         self._validate_segment(segment)
         return {f: self.segments[segment].get(f, "0") for f in self.features}
 
     def get_feature_value(self, segment: str, feature: str) -> str:
-        """Value of ``feature`` on ``segment`` ('+', '-', or '0')."""
+        """Value of ``feature`` on ``segment`` (``'+'``, ``'-'``, or
+        ``'0'``)."""
         self._validate_segment(segment)
         self._validate_feature(feature)
         return self.segments[segment].get(feature, "0")
@@ -229,20 +230,20 @@ class FeatureEngine:
         *,
         underspec_compatible: bool = False,
     ) -> list[str]:
-        """Sorted list of segments matching a (possibly partial) feature spec.
+        """Sorted list of segments matching a (possibly partial) spec.
 
-        With ``underspec_compatible``, a segment's '0' is treated as
-        compatible with any spec value.
+        With ``underspec_compatible``, a segment's ``'0'`` is treated
+        as compatible with any spec value.
 
-        Note on matching semantics. The default (``False``) is STRICT:
-        '0' is its own value and does not match '+' or '-'. The GUI's
-        feat-to-seg query mode uses this default, so a query like
+        Matching semantics. The default (``False``) is STRICT: ``'0'``
+        is its own value and does not match ``'+'`` or ``'-'``. The
+        GUI's feat-to-seg query mode uses this default, so a query
         ``{Syllabic: '-', Strident: '+'}`` returns only segments that
-        are EXPLICITLY ``-syllabic`` AND EXPLICITLY ``+strident``.
+        are explicitly ``-syllabic`` AND explicitly ``+strident``.
         Underspec-compatible is used internally by
-        ``find_all_minimal_bundles`` and the per-segment matching it
-        derives from; see that method for the rationale and the
-        documented gotcha.
+        :py:meth:`find_all_minimal_bundles` and the per-segment
+        matching it derives; see that method for the rationale and
+        the documented gotcha.
         """
         for feature, value in feature_spec.items():
             self._validate_feature(feature)
@@ -264,20 +265,20 @@ class FeatureEngine:
     ) -> tuple[Mapping[str, str], ...]:
         """Every minimal feature bundle that characterises the segment set.
 
-        A bundle B characterises S when
+        A bundle ``B`` characterises ``S`` when
         ``find_segments(B, underspec_compatible=True) == S``. Returns
-        ALL bundles of the smallest size, not just one greedy solution.
-        Returns ``(EMPTY_BUNDLE,)`` for the universal class, ``()``
-        if S is not a natural class.
+        ALL bundles of the smallest size, not just one greedy
+        solution. Returns ``(EMPTY_BUNDLE,)`` for the universal class,
+        and ``()`` if ``S`` is not a natural class.
 
-        GOTCHA. "I queried this bundle and it returned my exact
-        selection, why isn't it listed as a minimal spec?"
+        Gotcha: "I queried this bundle and it returned my exact
+        selection, why is it not listed as a minimal spec?"
 
         Reason: the minimal-spec search uses UNDERSPEC-COMPATIBLE
-        matching (a segment's '0' counts as compatible with any spec
-        value), while the GUI feat-to-seg query mode uses STRICT
-        matching ('0' does not match '+'/'-'). Concrete example,
-        English inventory:
+        matching (a segment's ``'0'`` counts as compatible with any
+        spec value), while the GUI feat-to-seg query mode uses STRICT
+        matching (``'0'`` does not match ``'+'``/``'-'``). Concrete
+        example using the English inventory:
 
             Selection: /t͡ʃ d͡ʒ s z ʃ ʒ/
             Engine minimal spec returned: {+CORONAL, +Strident}
@@ -286,52 +287,49 @@ class FeatureEngine:
         Under strict matching the user's bundle returns exactly the 6
         stridents (other consonants like /b/ are ``0Strident``, so
         strict equality excludes them). Under underspec-compatible
-        matching the same bundle ALSO matches /b p k m h j w/ etc.
-        (their ``0Strident`` matches ``+Strident`` via the wildcard
-        rule), so it describes 16 segments (not 6), and is therefore
-        not a characterization of the 6.
+        matching the same bundle ALSO matches /b p k m h j w/ and
+        their relatives (their ``0Strident`` matches ``+Strident`` via
+        the wildcard rule), so it describes 16 segments, not 6, and
+        is therefore not a characterization of the 6.
 
-        Why the engine chose underspec semantics: a minimal spec under
-        wildcard semantics is robust against the inventory's
-        underspecified slots being filled in later. If /b/ ever got
-        annotated ``+Strident``, ``-Syllabic +Strident`` would
-        suddenly include it; ``+CORONAL +Strident`` still wouldn't,
-        because /b/ is EXPLICITLY ``-CORONAL``. The minimal spec is
-        the bundle that's safe under any extension of the inventory's
+        Why underspec semantics: a minimal spec under wildcard
+        matching is robust against the inventory's underspecified
+        slots being filled in later. If /b/ were ever annotated
+        ``+Strident``, ``{-Syllabic, +Strident}`` would suddenly
+        include it; ``{+CORONAL, +Strident}`` still would not because
+        /b/ is explicitly ``-CORONAL``. The minimal spec is the
+        bundle that is safe under any extension of the inventory's
         currently-unspecified values.
 
-        If the user's expectation is "the smallest bundle that
-        matches MY selected segments under strict equality," that is
-        a different question from "the smallest bundle that proves
-        these segments form a natural class." This engine answers the
-        latter; the strict-query view is available separately via the
-        GUI's feat-to-seg mode.
+        If the user's question is "the smallest bundle that matches
+        MY selected segments under strict equality", that is a
+        different question from "the smallest bundle that proves
+        these segments form a natural class". This engine answers
+        the latter; the strict-query view is available via the GUI's
+        feat-to-seg mode.
 
-        Return shape is ``tuple[Mapping[str, str], ...]`` -- a tuple
-        of read-only views. The same object is returned across
-        cache hits, so handing back a mutable list would let a caller
-        ``append`` / ``clear`` / mutate-in-place and silently corrupt
-        every subsequent query on the same input.
+        Return shape is ``tuple[Mapping[str, str], ...]``: a tuple of
+        read-only views. The same object is returned across cache
+        hits, so handing back a mutable list would let a caller
+        append/clear/mutate-in-place and silently corrupt every
+        subsequent query on the same input.
 
-        Implementation: hitting-set backtracking. For each segment
-        outside S, find the candidate features that can exclude it,
-        then search for the smallest set of candidates that hits every
-        outside segment.
+        Implementation: hitting-set backtracking with bitmask
+        representation. For each segment outside ``S``, find the
+        candidate features that can exclude it, then search for the
+        smallest set of candidates that hits every outside segment.
 
-        Complexity: worst case ``O(C^k)`` where ``C`` is the number of
-        candidate features and ``k`` the best-size bound. Branch-and-
-        bound pruning typically keeps it well below the worst case.
-        ``max_bundles`` is a hard ceiling on result size; if hit, the
-        search terminates early -- the caller gets up to that many
-        bundles rather than a hang. ``10_000`` is large enough that
-        no realistic inventory hits it.
+        Complexity: worst case ``O(C^k)`` where ``C`` is the number
+        of candidate features and ``k`` the best-size bound.
+        Branch-and-bound pruning typically keeps it well below the
+        worst case. ``max_bundles`` is a hard ceiling on result size;
+        if hit, the search terminates early.
 
         Results are memoized per-engine on ``frozenset(segments)``.
-        ``is_natural_class`` and ``compute_natural_class`` both call
-        through here on the same input; the cache turns a back-to-back
-        pair into one search instead of two. Memoization is safe
-        because the engine and its underlying Inventory are immutable
-        for their lifetime.
+        is_natural_class and compute_natural_class both call through
+        here on the same input; the cache turns a back-to-back pair
+        into one search instead of two. Safe because the engine and
+        its underlying Inventory are immutable for their lifetime.
         """
         if not segments:
             return (_EMPTY_BUNDLE,)
@@ -354,21 +352,20 @@ class FeatureEngine:
             self._bundle_cache[cache_key] = (_EMPTY_BUNDLE,)
             return self._bundle_cache[cache_key]
 
-        # ------------------------------------------------------------------
-        # Hitting-set search via bitmask. Number each candidate feature
-        # 0..N-1; the chosen set, the "still available" set, and each
-        # excluder become single Python ints. Set intersection becomes
-        # ``&``, non-empty test becomes truthiness on the int. This is
-        # ~7-10x faster than the previous ``set`` version (profile:
-        # backtrack accounted for 95% of analysis-pane render time and
-        # was dominated by Python-level set operations).
+        # Hitting-set search via bitmask. Each candidate feature gets
+        # a bit index 0..N-1; the chosen set, the still-available set,
+        # and each excluder become single Python ints. Set
+        # intersection is ``&``, non-empty test is truthiness. This is
+        # ~7-10x faster than the previous set-based version; the
+        # previous profile had backtrack at 95% of analysis-pane
+        # render time, dominated by Python-level set operations.
         # Python ints are arbitrary precision, so N has no hard limit;
         # the bit-count cost grows linearly with N.
-        # ------------------------------------------------------------------
-        # Order candidates by how often they appear in excluders --
-        # heavy hitters first, so branch-and-bound prunes earlier.
-        # Count is built during the same pass that collects excluders;
-        # the bit numbering happens after sorting.
+        #
+        # Candidates are ordered by how often they appear in
+        # excluders, heavy hitters first, so branch-and-bound prunes
+        # earlier. Counts are built during the same pass that collects
+        # excluders; the bit numbering happens after sorting.
         feat_to_bit: dict[str, int] = {}
         excluder_bits: list[int] = []
         counts: dict[str, int] = dict.fromkeys(candidates, 0)
@@ -396,9 +393,9 @@ class FeatureEngine:
                 mask |= feat_to_bit[f]
             excluder_bits.append(mask)
         n = len(candidate_list)
-        # all_remaining[idx] = bitmask of candidates with index >= idx
-        # (precomputed so the "is it still solvable from here?" check
-        # is a constant-time AND instead of a set rebuild).
+        # all_remaining[idx] is the bitmask of candidates with index
+        # >= idx, precomputed so the "still solvable from here?" check
+        # is a constant-time AND instead of a set rebuild.
         all_remaining = [0] * (n + 1)
         for i in range(n - 1, -1, -1):
             all_remaining[i] = all_remaining[i + 1] | (1 << i)
@@ -408,11 +405,10 @@ class FeatureEngine:
 
         def backtrack(idx: int, depth: int, chosen_bits: int) -> bool:
             """``depth`` mirrors ``bin(chosen_bits).count('1')`` but
-            tracked separately to skip a popcount per call. Returns
+            is tracked separately to skip a popcount per call. Returns
             False once ``max_bundles`` is reached so the caller can
             terminate the recursion early."""
             nonlocal best_size
-            # All excluders hit?
             satisfied = True
             for eb in excluder_bits:
                 if not (eb & chosen_bits):
@@ -430,17 +426,17 @@ class FeatureEngine:
                 return True
             if idx >= n:
                 return True
-            # Pruning: can the remaining bits still hit every excluder?
+            # Can the remaining bits still hit every excluder?
             remaining_bits = all_remaining[idx]
             for eb in excluder_bits:
                 if not (eb & (chosen_bits | remaining_bits)):
                     return True
-            # Try including candidate[idx]
             bit = 1 << idx
             if not backtrack(idx + 1, depth + 1, chosen_bits | bit):
                 return False
-            # Try excluding it -- but only if the still-remaining
-            # candidates (idx+1..) can still satisfy every excluder.
+            # Try excluding the candidate, but only if the
+            # still-remaining candidates (idx+1..) can still satisfy
+            # every excluder without it.
             remaining_without = all_remaining[idx + 1]
             for eb in excluder_bits:
                 if not (eb & (chosen_bits | remaining_without)):
@@ -459,25 +455,34 @@ class FeatureEngine:
         self._bundle_cache[cache_key] = frozen
         return frozen
 
-    def compute_natural_class(self, segments: list[str]) -> Mapping[str, str]:
+    def compute_natural_class(
+        self, segments: list[str]
+    ) -> Mapping[str, str] | None:
         """One minimal feature bundle characterising the segment set.
 
-        Returns an empty mapping for both the universal class AND for
-        sets that are not natural classes. Use ``is_natural_class`` to
-        disambiguate. Returned mapping is read-only (a view into the
-        per-engine bundle cache).
+        Three distinct return shapes:
+
+        * a non-empty mapping: the minimal feature bundle.
+        * an empty mapping: the segments form the universal class
+          (every segment in the inventory).
+        * ``None``: the segments are not a natural class.
+
+        The mapping (when not ``None``) is read-only, a view into
+        the per-engine bundle cache.
         """
         bundles = self.find_all_minimal_bundles(segments)
-        return bundles[0] if bundles else _EMPTY_BUNDLE
+        return bundles[0] if bundles else None
 
     def get_contrastive_features(self) -> list[str]:
-        """List of features that are contrastive in the loaded inventory.
-        Returns a list for back-compat; prefer the ``contrastive_features``
-        tuple cached property in new code."""
+        """List of features that are contrastive in the loaded
+        inventory. Returns a list for back-compat; prefer the
+        :py:attr:`contrastive_features` tuple in new code.
+        """
         return list(self.contrastive_features)
 
     def common_features(self, segments: list[str]) -> dict[str, str]:
-        """Features whose '+' or '-' value is shared by every given segment."""
+        """Features whose ``'+'`` or ``'-'`` value is shared by every
+        given segment."""
         if not segments:
             return {}
         for seg in segments:
@@ -498,19 +503,18 @@ class FeatureEngine:
         feature-query spec, suitable for prefilling a feat-to-seg
         panel after switching modes from seg-to-feat.
 
-        Returns the common +/- features of the selection (drops '0'
-        values; the user can re-add underspecification deliberately
-        if they want). Empty input -> empty spec.
+        Returns the common +/- features of the selection (drops
+        ``'0'`` values; the user can re-add underspecification
+        deliberately). Empty input produces an empty spec.
 
-        Single source of truth for the seg→feat side of the GUI's
-        mode-switch projection; both the desktop's
+        Single source of truth for the seg-to-feat side of the GUI's
+        mode-switch projection: the desktop's
         ``_ModeController.save_outgoing_state`` and the web bridge
-        call this so both frontends produce identical pre-filled
-        states on toggle.
+        both call this, so both frontends produce identical
+        pre-filled states on toggle.
 
-        The reverse direction (feat→seg projection) is just
-        ``find_segments(spec)`` which already exists; no separate
-        method is needed.
+        The reverse direction (feat-to-seg projection) is just
+        :py:meth:`find_segments`.
         """
         return {
             f: v
@@ -526,8 +530,8 @@ class FeatureEngine:
 
         Returns ``[]`` when ``segments`` is already a natural class
         or has no shared +/- features to extend by. Single source of
-        truth for the "natural-class completion" UX hint used by
-        both the desktop and the web bridge.
+        truth for the "natural-class completion" UX hint used by both
+        the desktop and the web bridge.
         """
         is_nc, _ = self.is_natural_class(segments)
         if is_nc:
@@ -542,25 +546,26 @@ class FeatureEngine:
     def is_natural_class(
         self, segments: list[str]
     ) -> tuple[bool, tuple[Mapping[str, str], ...]]:
-        """Return ``(is_natural_class, minimal_bundles)``; bundles is
-        ``()`` when False. The bundle tuple is a read-only view into
-        the per-engine cache; callers may iterate but must not mutate.
+        """Return ``(is_natural_class, minimal_bundles)``.
+
+        ``bundles`` is ``()`` when ``is_natural_class`` is False.
+        The bundle tuple is a read-only view into the per-engine
+        cache; callers may iterate but must not mutate.
         """
         bundles = self.find_all_minimal_bundles(segments)
         return (True, bundles) if bundles else (False, ())
 
     def segment_distance(self, seg1: str, seg2: str) -> int:
-        """Number of features whose values differ between two segments.
-
-        '0' counts as different from '+' or '-'.
-        """
+        """Number of features whose values differ between two
+        segments. ``'0'`` counts as different from ``'+'`` or
+        ``'-'``."""
         self._validate_segment(seg1)
         self._validate_segment(seg2)
         t1 = self._seg_value_tuples[seg1]
         t2 = self._seg_value_tuples[seg2]
-        # ``strict=True``: t1 and t2 come from the same engine, so they
-        # MUST have the same length (one entry per declared feature);
-        # a mismatch is a contract bug worth surfacing.
+        # ``strict=True``: t1 and t2 come from the same engine, so
+        # they must have the same length. A mismatch is a contract
+        # bug worth surfacing.
         return sum(1 for a, b in zip(t1, t2, strict=True) if a != b)
 
     def find_nearest_segments(
@@ -577,7 +582,8 @@ class FeatureEngine:
         return distances[:n]
 
     def get_inventory_stats(self) -> dict[str, int | float | str]:
-        """Summary stats: name, segment/feature counts, contrastive count, avg distance.
+        """Summary stats: name, segment/feature counts, contrastive
+        count, average distance.
 
         ``avg_feature_distance`` is ``O(n^2 * |features|)`` over the
         inventory and is recomputed on every call. Callers that hit

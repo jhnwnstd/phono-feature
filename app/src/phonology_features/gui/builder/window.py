@@ -102,7 +102,7 @@ class InventoryBuilder(QMainWindow):
         # ``_selected_remove_*`` above. Qt auto-selects the column /
         # row on header PRESS (before sectionClicked fires on
         # RELEASE), so the toggle decision can't be based on Qt's
-        # selection state -- it'd always look "already selected".
+        # selection state, which would always look "already selected".
         # These mutate ONLY in the header click handlers.
         self._user_clicked_col: int | None = None
         self._user_clicked_row: int | None = None
@@ -363,7 +363,7 @@ class InventoryBuilder(QMainWindow):
             """)
         # Selected cells get a light-blue fill + outer outline (delegate).
         self._table.setItemDelegate(_SelectionFillDelegate(self._table))
-        # Key-handling event filter only -- the click-to-select /
+        # Key-handling event filter only. The click-to-select and
         # click-to-cycle UX lives in _BulkCycleTable.mousePressEvent.
         self._table.installEventFilter(self)
         h_header = self._table.horizontalHeader()
@@ -458,7 +458,7 @@ class InventoryBuilder(QMainWindow):
         # A freshly-constructed QHeaderView starts isHidden=True. When
         # we replace the table's header via setHorizontalHeader on an
         # already-visible (or about-to-be-visible) table, Qt does NOT
-        # auto-show the new header -- it inherits the constructor's
+        # auto-show the new header; it inherits the constructor's
         # default. The result: width/height stay at 0, no label area
         # paints, the cells fill the viewport, and the user sees a
         # grid with the right dimensions but no segment / feature
@@ -477,11 +477,11 @@ class InventoryBuilder(QMainWindow):
         if v_header:
             v_header.setFont(QFont("Noto Sans", 9))
             # Fixed (NOT ResizeToContents). The previous mode triggered
-            # a per-row re-measure on EVERY cell data change -- a
+            # a per-row re-measure on EVERY cell data change. A
             # bulk-cycle on a 28-cell column took ~1 SECOND because
             # each item.setForeground stalled Qt re-walking the row.
             # Values are always single-char (+/-/0) so adaptive sizing
-            # is pointless; profile dropped from 1096 ms -> 0.3 ms for
+            # is pointless; profile dropped from 1096 ms to 0.3 ms for
             # a single-column cycle, 60 s+ -> 17 ms for select-all.
             v_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             v_header.setDefaultSectionSize(26)
@@ -598,7 +598,7 @@ class InventoryBuilder(QMainWindow):
         for the whole batch so the selection stays uniform.
 
         Reads the selection via ``selectionModel().selectedIndexes()``
-        which is O(selected) -- ``selectedItems()`` iterates the entire
+        which is O(selected). ``selectedItems()`` iterates the entire
         model dict (O(rows*cols)) and was a measurable cost on large
         grids.
         """
@@ -663,7 +663,7 @@ class InventoryBuilder(QMainWindow):
             return
         # One viewport update covers every changed cell at once
         # instead of N queued data-change paints. Painter clips to
-        # dirty regions, so this isn't even a full repaint -- Qt
+        # dirty regions, so this is not even a full repaint; Qt
         # re-paints only the cells whose items mutated.
         viewport = table.viewport()
         if viewport is not None:
@@ -675,11 +675,11 @@ class InventoryBuilder(QMainWindow):
         state. Empty batches are ignored so no-op operations don't
         pollute the history.
 
-        Does NOT touch the rm-button enabled state -- the Qt selection
+        Does NOT touch the rm-button enabled state. The Qt selection
         model is unchanged by an edit, so the existing enable state
         (which reflects "is one column or row selected?") is still
         correct. The previous behaviour (calling
-        ``_clear_remove_selection`` here) caused the visible-vs-
+        ``_clear_remove_selection`` here) caused a visible vs
         disabled mismatch: the column stayed highlighted but the
         - Segment button went grey, forcing a header re-click.
         """
@@ -761,7 +761,7 @@ class InventoryBuilder(QMainWindow):
 
         Compares against ``_user_clicked_col`` (a separate sticky
         owned by THIS handler) rather than the Qt-derived
-        ``_selected_remove_col`` -- Qt auto-selects the column on
+        ``_selected_remove_col``. Qt auto-selects the column on
         press, so by the time this handler fires on release the
         Qt-derived sticky already shows ``col``, which would make
         every first click look like a toggle-off.
@@ -834,15 +834,15 @@ class InventoryBuilder(QMainWindow):
         current Qt selection: sticky vars, rm-button enabled state,
         and the targeted viewport invalidation.
 
-        Uses ``selectedColumns()`` / ``selectedRows()`` -- microsecond
-        cost even on select-all (vs walking ~4000 indexes).
+        Uses ``selectedColumns()`` and ``selectedRows()``, which are
+        microsecond cost even on select-all (vs walking ~4000 indexes).
         """
         sel_model = self._table.selectionModel()
         if sel_model is None:
             return
         # Invalidate ONLY the union of the previous and current
         # selection regions. The old "viewport().update()" repainted
-        # every visible cell on every toggle (~768 cells on Hayes ->
+        # every visible cell on every toggle (~768 cells on Hayes,
         # ~38 ms per click); switching to a bounded region cuts that
         # to just the cells that actually change selection state OR
         # sit at the intersection. Profile saw the delegate paint
@@ -863,8 +863,8 @@ class InventoryBuilder(QMainWindow):
         # cell boundary into the neighbour. If the neighbour isn't in
         # (old | new), those leaked pen pixels survive the repaint
         # and stick around as ghost outlines after the selection
-        # moves away -- the residual artifact visible after shift+
-        # arrow extends/shrinks a selection.
+        # moves away (the residual artifact visible after shift+
+        # arrow extends or shrinks a selection).
         # Use boundingRect (not per-sub-rect inflation) because
         # QRegion has no built-in inflate and the bbox is still
         # bounded by the actual selection size, not the viewport.
@@ -872,8 +872,8 @@ class InventoryBuilder(QMainWindow):
         # ``repaint(region)`` is synchronous; bypasses Qt's paint-event
         # coalescing. update() would let Qt merge a rapid sequence of
         # clicks into ONE paint at the end, so the user sees nothing
-        # change between clicks -- the "sticky" / "click didn't
-        # register" symptom. With bounded invalidation each repaint
+        # change between clicks (the "sticky" or "click didn't
+        # register" symptom). With bounded invalidation each repaint
         # is ~3 ms on Hayes, so we can afford 300+ clicks/sec before
         # paint becomes the bottleneck.
         viewport = self._table.viewport()
@@ -994,7 +994,7 @@ class InventoryBuilder(QMainWindow):
         """Snapshot the current grid as a validated ``Inventory``.
 
         Routes through ``Inventory.from_grid`` which funnels into
-        ``Inventory.parse`` -- so save uses the same contract as load.
+        ``Inventory.parse``, so save uses the same contract as load.
         Raises ``ValidationError`` if the grid is somehow inconsistent
         (which would be a bug in the builder, not user input). No
         silent normalization of unknown cell values: the cycle ladder
@@ -1246,7 +1246,7 @@ class InventoryBuilder(QMainWindow):
         # window. If the worker thread emits ``_save_finished`` after
         # the QObject is destroyed, PyQt raises ``RuntimeError:
         # wrapped C/C++ object has been deleted`` on the worker
-        # thread -- harmless but noisy in logs, and a clean wait is
+        # thread. Harmless but noisy in logs, and a clean wait is
         # cheap (atomic write on a healthy disk is sub-ms).
         self._wait_for_save()
         event.accept()

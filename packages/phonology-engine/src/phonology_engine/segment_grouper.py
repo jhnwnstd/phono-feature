@@ -1,10 +1,10 @@
 """Assign inventory segments to phonological display groups.
 
-Pipeline: primary manner-class assignment, derived breakouts (e.g.
-Sibilants from Fricatives), relational relabeling (Rhotics, Liquids),
-small-group merging, laryngeal rescue, then sort. Each step is keyed to
-the active feature set so inventories that lack a feature skip the
-related step.
+Pipeline: primary manner-class assignment, derived breakouts (for
+example Sibilants from Fricatives), relational relabeling (Rhotics,
+Liquids), small-group merging, laryngeal rescue, then sort. Each step
+is keyed to the active feature set so inventories that lack a feature
+skip the related step.
 """
 
 from collections import defaultdict
@@ -163,10 +163,10 @@ def _normalize_key(key: str) -> str:
 
 class AliasCollisionError(ValueError):
     """Raised when two feature names in the same bundle collapse to
-    the same normalized key (e.g. ``"DelRel"`` and ``"delayed_release"``).
-    A plain dict-comprehension rebuild would have silently kept whichever
-    came last; instead we surface the collision so the caller can rename
-    the duplicate or remove one. The blocked features are on
+    the same normalized key (for example ``"DelRel"`` and
+    ``"delayed_release"``). A plain dict-comprehension rebuild would
+    silently keep whichever came last; surfacing the collision lets
+    the caller rename or remove one. The blocked features are on
     ``.collisions`` as ``{canonical_key: [original_names]}``."""
 
     def __init__(self, collisions: dict[str, list[str]]):
@@ -182,8 +182,9 @@ class AliasCollisionError(ValueError):
 
 def _normalize_feats(feat_dict: Mapping[str, str]) -> dict[str, str]:
     """Normalize feature names. Raises ``AliasCollisionError`` when
-    two distinct input keys collapse to the same canonical key --
-    silently dropping one would be data loss."""
+    two distinct input keys collapse to the same canonical key.
+    Silently dropping one would be data loss.
+    """
     result: dict[str, str] = {}
     collisions: dict[str, list[str]] = {}
     for k, v in feat_dict.items():

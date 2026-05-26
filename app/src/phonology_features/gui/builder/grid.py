@@ -18,7 +18,7 @@ _CELL_FONT_NORMAL = QFont("Noto Sans", 10)
 _CELL_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
 
 # QBrush/QColor construction is ~14us per call and ran 4x per cell on
-# the old code path -- on the Hayes inventory that's ~16k QColor
+# the old code path. On the Hayes inventory that produced ~16k QColor
 # objects per builder load. The brush set has exactly three states
 # (+, -, 0), so cache one (fg, bg) tuple per state and rebuild ALL of
 # them only when the theme changes. Keyed on ``palette.theme_version``

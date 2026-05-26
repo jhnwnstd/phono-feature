@@ -161,8 +161,9 @@ class SegmentTextEdit(_AutofillTextEdit):
     """Tab on empty fills a quick-start segment list (IPA voiceless and
     voiced stops). Trailing space so the caret lands ready for the
     user to type the next segment without first having to add a
-    separator -- ``entries()`` splits on whitespace and filters
-    empties so the trailer doesn't introduce a phantom entry."""
+    separator. ``entries()`` splits on whitespace and filters empties,
+    so the trailer does not introduce a phantom entry.
+    """
 
     # The \u0261 here is U+0261 (IPA voiced velar script g), not ASCII g.
     DEFAULT_FILL = "p b t d k \u0261 "

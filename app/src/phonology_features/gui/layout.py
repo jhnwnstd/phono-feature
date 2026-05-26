@@ -38,9 +38,9 @@ def distribute_feature_groups(
 ) -> tuple[list[str], list[str]]:
     """Assign feature-group names to two columns.
 
-    ``group_sizes`` maps each group name to its row count (i.e. the
-    number of active features in the group). Groups with size 0 are
-    dropped from the output -- empty cards shouldn't render.
+    ``group_sizes`` maps each group name to its row count (that is,
+    the number of active features in the group). Groups with size 0
+    are dropped from the output; empty cards should not render.
 
     Returns ``(left_names, right_names)``: each is a list of group
     names in the order they should be stacked vertically in that

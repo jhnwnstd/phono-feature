@@ -605,7 +605,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         # If the builder is open with unsaved changes, give it the
-        # chance to prompt -- without this, Qt's parent-child cleanup
+        # chance to prompt. Without this, Qt's parent-child cleanup
         # destroys the builder when the main window dies, bypassing
         # its closeEvent / _check_unsaved and silently dropping any
         # unsaved grid edits. ``close()`` returns True only if the
@@ -711,10 +711,10 @@ class MainWindow(QMainWindow):
                 btn.apply_theme()
             # Iterate every FeatureRow we own, not just the pool: the
             # "Other" card in inventories with non-FEATURE_ORDER features
-            # (e.g. general_features.json) creates rows that live in
-            # ``_feat_rows`` but NOT in ``_feat_row_pool``. Missing them
-            # leaves their name / +/- buttons styled with the old
-            # palette -- in dark mode after starting from light, the
+            # (for example general_features.json) creates rows that live
+            # in ``_feat_rows`` but NOT in ``_feat_row_pool``. Missing
+            # them leaves their name and +/- buttons styled with the
+            # old palette. In dark mode after starting from light, the
             # name label's text color stays light against the dark bg,
             # making the name appear "unpopulated".
             for row in self._feat_row_pool.values():
@@ -738,9 +738,9 @@ class MainWindow(QMainWindow):
         Each helper touches one logical group of widgets in place.
         """
         # Tooltip colors refresh via the shared QToolTip palette,
-        # NOT via app.setStyleSheet -- the latter would re-polish
-        # every widget in the tree and turn theme toggle into a
-        # hundred-millisecond stall on populated inventories.
+        # NOT via app.setStyleSheet. The latter would re-polish every
+        # widget in the tree and turn theme toggle into a hundred-
+        # millisecond stall on populated inventories.
         # The shape rules (border, radius, padding) were applied
         # once at startup in app_qss() and don't change with theme.
         apply_tooltip_palette()

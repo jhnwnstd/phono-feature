@@ -10,18 +10,18 @@ applications configure handlers.
 Why structured logging matters here:
 
   - **User bug reports are unreproducible.** Without a log we have
-    only "it crashed" / "save didn't work" -- no timing, no error
-    cause, no inventory size. A log line per observable boundary
-    (load, save start, save finish, validation failure, theme
-    toggle, engine swap) turns a blind incident into a traceable
-    one.
+    only "it crashed" or "save didn't work", with no timing, no
+    error cause, no inventory size. A log line per observable
+    boundary (load, save start, save finish, validation failure,
+    theme toggle, engine swap) turns a blind incident into a
+    traceable one.
 
   - **Background work is invisible.** The save worker runs on a
-    daemon thread and reports completion via a signal; if it dies
-    silently (we used to have an OSError-only catch -- the
-    permanent-lockout bug) the user sees nothing. A log statement
-    on every worker entry / exit makes that class of bug obvious
-    on its first occurrence.
+    daemon thread and reports completion via a signal. If it dies
+    silently (we used to have an OSError-only catch, which produced
+    the permanent-lockout bug) the user sees nothing. A log
+    statement on every worker entry and exit makes that class of
+    bug obvious on its first occurrence.
 
   - **Performance regressions are silent.** ``cProfile`` finds them
     when we go looking; a debug-level "inventory load took N ms"
@@ -64,8 +64,8 @@ def configure(
     file_level: int = logging.DEBUG,
 ) -> None:
     """Install a single console handler on the root logger, and
-    optionally a file handler. Idempotent -- repeated calls re-apply
-    levels but don't stack handlers.
+    optionally a file handler. Idempotent: repeated calls re-apply
+    levels but do not stack handlers.
 
     The console handler writes to stderr so logs don't interfere
     with anything the GUI prints to stdout (currently nothing, but
@@ -90,8 +90,8 @@ def configure(
         min(console_level, file_level if file_path else console_level)
     )
 
-    # Wipe existing handlers so a repeat ``configure`` doesn't pile
-    # up duplicates (e.g. test setup re-calling configure).
+    # Wipe existing handlers so a repeat ``configure`` does not pile
+    # up duplicates (for example test setup re-calling configure).
     for h in list(root.handlers):
         root.removeHandler(h)
 
@@ -109,7 +109,7 @@ def configure(
         )
         root.addHandler(file_handler)
 
-    # Don't propagate to Python root -- our handlers are the only
+    # Do not propagate to Python root. Our handlers are the only
     # consumers of the ``phonology_features.*`` namespace.
     root.propagate = False
     _CONFIGURED = True

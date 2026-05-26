@@ -40,10 +40,10 @@ LIGHT = {
     # contrast against background".
     "btn_primary": "#2563EB",
     "btn_primary_text": "#FFFFFF",
-    # One Tailwind shade past the default (blue-700 -> blue-800,
-    # red-800 -> red-900). Reads as a subtle "press" -- the
-    # original hovers were essentially the default colour, which
-    # made the hover state hard to feel.
+    # One Tailwind shade past the default (blue-700 to blue-800,
+    # red-800 to red-900). Reads as a subtle "press". The original
+    # hovers were essentially the default colour, which made the
+    # hover state hard to feel.
     "btn_primary_hover": "#1E40AF",
     "btn_primary_hover_text": "#FFFFFF",
     "btn_danger": "#B91C1C",
@@ -111,8 +111,8 @@ DARK = {
     "btn_danger_hover_text": "#181818",
     # Dark-mode disabled: bg darker than the panel chrome (sinks BELOW
     # the toolbar surface so it reads as "carved out, inactive"), text
-    # heavily muted so it's barely legible -- the visible cue is the
-    # darker tile, the label is just a hint.
+    # heavily muted so it is barely legible. The visible cue is the
+    # darker tile; the label is just a hint.
     "btn_disabled_bg": "#161616",
     "btn_disabled_text": "#555555",
     "btn_disabled_border": "#161616",
@@ -138,8 +138,8 @@ C: dict = dict(LIGHT)
 # Monotonic counter bumped on every theme change. Caches that
 # depend on palette colors key on this integer; on miss they
 # rebuild from the current ``C`` and store the new version.
-# Lets callers cache derived objects (e.g. QBrush triples) without
-# wiring observer callbacks into ``set_theme``.
+# Lets callers cache derived objects (for example QBrush triples)
+# without wiring observer callbacks into ``set_theme``.
 theme_version: int = 0
 
 

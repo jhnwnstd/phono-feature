@@ -300,13 +300,14 @@ class FeatureRow(QWidget):
         """Re-style this row against the active palette in place.
 
         A FeatureRow can be in one of three visual states:
-        1. **Query mode** -- the user clicked + or - on this row.
+
+        1. **Query mode**: the user clicked + or - on this row.
            ``_current_value`` is "+"/"-". The row background is tinted.
-        2. **Display mode** -- ``set_display`` painted the badge with
-           a value derived from seg-mode analysis. ``_last_display_state``
+        2. **Display mode**: ``set_display`` painted the badge with a
+           value derived from seg-mode analysis. ``_last_display_state``
            holds the args.
-        3. **Neutral** -- neither of the above. Badge shows "·" with
-           the neutral palette colors. ``_last_display_state`` is None.
+        3. **Neutral**: neither of the above. Badge shows "·" with the
+           neutral palette colors. ``_last_display_state`` is None.
 
         Each state's visible styling was baked against the OLD palette
         and has to be re-applied. We handle the three cases explicitly
@@ -509,10 +510,10 @@ class _CopyableTextEdit(QTextEdit):
     their interchange forms at the clipboard boundary.
 
     The analysis pane renders feature minus values as U+2212 (`−`,
-    MATHEMATICAL MINUS SIGN) for typographic symmetry with `+`. But
-    the rest of the ecosystem -- JSON files, code, regex, most
-    terminals -- expects ASCII U+002D (`-`, HYPHEN-MINUS). Pasting
-    `−Voice` into a JSON value silently does NOT match `"-"`.
+    MATHEMATICAL MINUS SIGN) for typographic symmetry with `+`. The
+    rest of the ecosystem (JSON files, code, regex, most terminals)
+    expects ASCII U+002D (`-`, HYPHEN-MINUS). Pasting `−Voice` into
+    a JSON value silently does NOT match `"-"`.
 
     Translating at the copy boundary lets the display layer keep the
     nice typographic glyph and gives every paste target the byte
@@ -522,9 +523,9 @@ class _CopyableTextEdit(QTextEdit):
     """
 
     # ``str.maketrans`` precomputes the translation table at class
-    # load. The dict literal is intentionally minimal -- if we ever
-    # add another display-only glyph (e.g. ``∅`` for "universal"),
-    # add it here, not as scattered ``replace`` calls.
+    # load. The dict literal is intentionally minimal: if we ever
+    # add another display-only glyph (for example ``∅`` for
+    # "universal"), add it here, not as scattered ``replace`` calls.
     _COPY_TRANSLATIONS = str.maketrans(
         {
             "−": "-",  # U+2212 MINUS SIGN -> ASCII hyphen-minus

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 
 # The six height tiers of the IPA vowel chart, in row order. Tuple
-# is (label, +high, +low, +tense-or-atr) -- the feature bundle that
+# is (label, +high, +low, +tense-or-atr): the feature bundle that
 # canonically populates the row. Used by the chart widget to label
 # rows and by tests to spot-check that placement maps correctly.
 VOWEL_HEIGHT: list[tuple[str, str, str, str | None]] = [

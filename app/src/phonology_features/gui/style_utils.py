@@ -24,8 +24,9 @@ from phonology_features.gui.palette import C
 
 def set_css(widget: QWidget, css: str) -> bool:
     """Apply ``css`` to ``widget`` only when it differs from the
-    currently-applied stylesheet. Returns True if a re-parse
-    actually happened, False on cache hit -- useful for tests."""
+    currently-applied stylesheet. Returns True if a re-parse actually
+    happened, False on cache hit. The bool is useful in tests.
+    """
     if widget.styleSheet() == css:
         return False
     widget.setStyleSheet(css)
@@ -134,12 +135,14 @@ _LAST_HTML_ATTR = "_set_html_last"
 
 
 def set_html(view: QTextEdit, html: str) -> bool:
-    """Apply ``html`` to ``view`` only when it differs from the
-    last value we applied via this helper. We stash the input string
-    on the widget as ``_set_html_last`` -- comparing against the
-    input avoids Qt's expensive ``toHtml()`` round-trip serializer.
-    Useful when the same HTML gets re-applied (e.g. theme toggle
-    with no selection change)."""
+    """Apply ``html`` to ``view`` only when it differs from the last
+    value we applied via this helper.
+
+    The input string is stashed on the widget as ``_set_html_last``.
+    Comparing against the input avoids Qt's expensive ``toHtml()``
+    round-trip serializer, which matters when the same HTML gets
+    re-applied (for example a theme toggle with no selection change).
+    """
     last = getattr(view, _LAST_HTML_ATTR, None)
     if last == html:
         return False

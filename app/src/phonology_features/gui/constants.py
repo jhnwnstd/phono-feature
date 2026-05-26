@@ -48,7 +48,7 @@ CHIP_FONT_SIZE_PT: int = 10
 # Without an explicit chain Qt resolves ``monospace`` to whatever the
 # system aliases, which on stripped-down Linux can land on a font with
 # poor coverage of combining marks like U+0361 (the tie bar in d͡ʒ).
-# Python list -- usable with ``QFont.setFamilies``; ``MONO_FAMILY_CSS``
+# Python list, usable with ``QFont.setFamilies``. ``MONO_FAMILY_CSS``
 # is the CSS string form for inline ``font-family:`` rules.
 MONO_FAMILIES: list[str] = [
     "Noto Sans Mono",
@@ -61,8 +61,8 @@ MONO_FAMILIES: list[str] = [
 # CSS uses double quotes around family names with spaces; this keeps
 # the string safe to embed inside ``style='...'`` HTML attributes
 # (single-quoted on the outside). CSS accepts either quote style for
-# strings -- the choice here avoids quote-collision with our inline-
-# style attribute convention.
+# strings; double quotes here avoid colliding with our inline-style
+# attribute convention.
 MONO_FAMILY_CSS: str = ", ".join(
     f'"{f}"' if " " in f else f for f in MONO_FAMILIES
 )
