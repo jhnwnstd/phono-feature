@@ -26,7 +26,6 @@ from phonology_features.gui.inventory_setup import (
     validate_setup,
 )
 
-
 # infer_split: delimiter inference contract
 
 

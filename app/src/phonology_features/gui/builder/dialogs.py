@@ -1,5 +1,7 @@
 """Reusable dialog helpers and the InputDialog for inventory setup."""
 
+from typing import ClassVar
+
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QFont, QPainter, QTextCursor
 from PyQt6.QtWidgets import (
@@ -347,7 +349,7 @@ class InputDialog(QDialog):
     # Drives the warning box title and where focus lands on rejection;
     # keeps the Qt UI vocabulary local to this class while the shared
     # :py:func:`validate_setup` owns the rules.
-    _ISSUE_TITLES = {
+    _ISSUE_TITLES: ClassVar[dict[tuple[str, str], str]] = {
         ("segments", "empty"): "No segments found",
         ("features", "empty"): "No features found",
         ("segments", "too_long"): "Segments entry too long",

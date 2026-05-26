@@ -24,8 +24,8 @@ frontends genuinely consistent rather than approximately consistent.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 from phonology_engine.limits import MAX_NAME_LENGTH
 
