@@ -165,6 +165,48 @@ def test_natural_class_bundle_recovers_originals(
 
 
 # ----------------------------------------------------------------------
+# Natural-class extension suggestions
+# ----------------------------------------------------------------------
+
+
+def test_suggest_natural_class_extension_empty_for_natural_class(
+    engine: FeatureEngine,
+) -> None:
+    """A selection that's already a natural class -> empty list.
+
+    /l/ alone is a natural class per ``NATURAL_CLASS_CASES`` above,
+    so the engine should suggest nothing further.
+    """
+    assert engine.suggest_natural_class_extension(["l"]) == []
+
+
+def test_suggest_natural_class_extension_completes_partial(
+    engine: FeatureEngine,
+) -> None:
+    """When the selection isn't a natural class, the engine should
+    suggest the additional segments needed to complete it.
+
+    In this Hayes inventory /b, d, ɡ/ alone aren't a natural class
+    (other voiced stops match the same features); the suggestion
+    must include some of those other voiced stops and never the
+    already-selected segments.
+    """
+    selected = ["b", "d", "ɡ"]
+    suggested = engine.suggest_natural_class_extension(selected)
+    assert suggested, "expected non-empty extension for a partial class"
+    assert not set(suggested) & set(selected), (
+        "suggestion must not re-include selected segments"
+    )
+
+
+def test_suggest_natural_class_extension_empty_input(
+    engine: FeatureEngine,
+) -> None:
+    """Empty selection has no features to extend by -> empty list."""
+    assert engine.suggest_natural_class_extension([]) == []
+
+
+# ----------------------------------------------------------------------
 # Distance / nearest neighbors
 # ----------------------------------------------------------------------
 

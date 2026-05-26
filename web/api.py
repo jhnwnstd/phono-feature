@@ -277,14 +277,9 @@ def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict[str, Any]:
             "common": common,
             "contrastive": [],
         }
-    selected_set = set(segs)
     common_raw = engine.common_features(segs)
     contrastive_raw = analysis.compute_contrastive(engine, segs)
-    is_nc, _ = engine.is_natural_class(segs)
-    suggested: list[str] = []
-    if not is_nc and common_raw:
-        extension = engine.find_segments(common_raw, underspec_compatible=True)
-        suggested = [s for s in extension if s not in selected_set]
+    suggested = engine.suggest_natural_class_extension(segs)
     analysis_html = analysis.render_multi_segment(
         engine, segs, common_raw, contrastive_raw, suggested,
     )

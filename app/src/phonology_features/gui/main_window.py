@@ -1026,7 +1026,13 @@ class MainWindow(QMainWindow):
         # automatically invalidates them.
         groups = dict(self.engine.grouped_segments)  # shallow; pop mutates
         norm_feats = self.engine.normalized_segment_feats
-        vowel_segs = groups.pop("Vowels", [])
+        # Case-insensitive lookup so an inventory with "vowels" or
+        # "VOWELS" still gets routed to the IPA chart. Matches the
+        # web bridge's _summarize_engine behaviour.
+        vowel_key = next(
+            (k for k in groups if k.lower() == "vowels"), None,
+        )
+        vowel_segs = groups.pop(vowel_key, []) if vowel_key else []
         consonant_buttons: dict = {}
         for segs in groups.values():
             for seg in segs:
@@ -1436,15 +1442,7 @@ class MainWindow(QMainWindow):
                     row.set_display("", shared=False, contrastive=True)
                 else:
                     row.set_display("", shared=False)
-            # Natural-class completion: find segments that would extend
-            # the current selection to the smallest valid natural class.
-            is_nc, _ = self.engine.is_natural_class(segs)
-            suggested: list = []
-            if not is_nc and common:
-                nc_extension = self.engine.find_segments(
-                    common, underspec_compatible=True
-                )
-                suggested = [s for s in nc_extension if s not in selected_set]
+            suggested = self.engine.suggest_natural_class_extension(segs)
             suggested_set = set(suggested)
             for seg, btn in self._seg_buttons.items():
                 if seg not in selected_set:

@@ -518,6 +518,27 @@ class FeatureEngine:
             if v in ("+", "-")
         }
 
+    def suggest_natural_class_extension(
+        self, segments: list[str]
+    ) -> list[str]:
+        """Segments that, added to ``segments``, would complete it
+        into a natural class.
+
+        Returns ``[]`` when ``segments`` is already a natural class
+        or has no shared +/- features to extend by. Single source of
+        truth for the "natural-class completion" UX hint used by
+        both the desktop and the web bridge.
+        """
+        is_nc, _ = self.is_natural_class(segments)
+        if is_nc:
+            return []
+        common = self.common_features(segments)
+        if not common:
+            return []
+        selected = set(segments)
+        extension = self.find_segments(common, underspec_compatible=True)
+        return [s for s in extension if s not in selected]
+
     def is_natural_class(
         self, segments: list[str]
     ) -> tuple[bool, tuple[Mapping[str, str], ...]]:
