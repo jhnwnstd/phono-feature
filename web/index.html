@@ -68,6 +68,8 @@
        after the bridge attaches so keyboard tab focus can't activate
        them before Pyodide is ready. -->
   <select id="inventory-picker" aria-label="Inventory" disabled></select>
+  <button id="rename-btn" type="button" disabled
+          aria-label="Rename current inventory" title="Rename inventory">✎</button>
   <button id="upload-btn" type="button" disabled>Open file…</button>
   <input id="upload-input" type="file" accept=".json" hidden>
   <button id="download-btn" type="button" disabled>Save as…</button>
@@ -105,6 +107,20 @@
 <footer class="statusbar" id="statusbar" aria-live="polite">
   Select an inventory from the dropdown to begin.
 </footer>
+
+<dialog id="rename-dialog" aria-labelledby="rename-dialog-title">
+  <form method="dialog" id="rename-form">
+    <div class="dialog-title" id="rename-dialog-title">Rename inventory</div>
+    <label class="dialog-label" for="rename-input">Name</label>
+    <input id="rename-input" type="text" maxlength="256" autocomplete="off"
+           spellcheck="false" required>
+    <div class="dialog-error" id="rename-error" role="alert"></div>
+    <div class="dialog-actions">
+      <button type="button" id="rename-cancel" value="cancel">Cancel</button>
+      <button type="submit" id="rename-save" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
 
 <script type="module" src="main.js"></script>
 </body>

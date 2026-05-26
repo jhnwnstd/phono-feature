@@ -11,6 +11,7 @@ const NODE_IDS = Object.freeze({
     loadingStatus: "loading-status",
     loadingOverlay: "loading-overlay",
     inventoryPicker: "inventory-picker",
+    renameBtn: "rename-btn",
     uploadBtn: "upload-btn",
     uploadInput: "upload-input",
     downloadBtn: "download-btn",
@@ -24,6 +25,12 @@ const NODE_IDS = Object.freeze({
     analysisContent: "analysis-content",
     expandBtn: "expand-btn",
     themeBtn: "theme-btn",
+    renameDialog: "rename-dialog",
+    renameForm: "rename-form",
+    renameInput: "rename-input",
+    renameError: "rename-error",
+    renameCancel: "rename-cancel",
+    renameSave: "rename-save",
 });
 const nodes = Object.create(null);
 
@@ -445,7 +452,12 @@ function validatePythonBundleBytes(bytes) {
     return bytes;
 }
 
-const BRIDGE_GATED_NODES = ["inventoryPicker", "uploadBtn", "downloadBtn"];
+const BRIDGE_GATED_NODES = [
+    "inventoryPicker",
+    "uploadBtn",
+    "downloadBtn",
+    "renameBtn",
+];
 
 /**
  * Toolbar controls that call into Python start disabled in HTML
@@ -1066,6 +1078,66 @@ function wireUploadDownload() {
     });
 }
 
+/**
+ * Wire the pencil button to a modal dialog that renames the active
+ * inventory. The bridge endpoint round-trips the new name through
+ * Inventory.parse so the same validation rules as the load path
+ * apply (NFC + strip + length cap). Validation errors are surfaced
+ * inline inside the dialog; the modal stays open so the user can
+ * correct without losing context.
+ */
+function wireRename() {
+    const dialog = nodes.renameDialog;
+    const form = nodes.renameForm;
+    const input = nodes.renameInput;
+    const errorBox = nodes.renameError;
+    const cancelBtn = nodes.renameCancel;
+
+    const openDialog = () => {
+        input.value = state.inventory_name || "";
+        errorBox.textContent = "";
+        // Native <dialog>.showModal traps focus and dims with ::backdrop.
+        // Fallback to show() if showModal is unavailable (very old browsers).
+        if (typeof dialog.showModal === "function") {
+            dialog.showModal();
+        } else {
+            dialog.setAttribute("open", "");
+        }
+        // Select-on-open so a confirming user can just retype the
+        // whole name without manually selecting it first.
+        requestAnimationFrame(() => input.select());
+    };
+
+    const closeDialog = () => {
+        if (typeof dialog.close === "function") {
+            dialog.close();
+        } else {
+            dialog.removeAttribute("open");
+        }
+    };
+
+    nodes.renameBtn.addEventListener("click", openDialog);
+    cancelBtn.addEventListener("click", closeDialog);
+
+    form.addEventListener("submit", (ev) => {
+        // method="dialog" would auto-close on submit; preventDefault
+        // keeps the dialog open until the bridge confirms so a
+        // validation error can be shown inline.
+        ev.preventDefault();
+        const newName = input.value;
+        try {
+            const result = callBridge("rename_current_inventory", newName);
+            state.inventory_name = result.name;
+            setStatus(`Renamed to ${result.name}.`);
+            errorBox.textContent = "";
+            closeDialog();
+        } catch (e) {
+            errorBox.textContent = e.message || "Rename failed.";
+            input.focus();
+        }
+    });
+}
+
 const THEME = Object.freeze({ LIGHT: "light", DARK: "dark" });
 
 /** localStorage is external input: anything other than the dark
@@ -1242,6 +1314,7 @@ async function main() {
     wireThemeToggle();
     wireInventoryPicker();
     wireUploadDownload();
+    wireRename();
     wireExpandButton();
     wireClearButtons();
     wirePanelClickMode();

@@ -188,6 +188,33 @@ def get_current_inventory_name() -> str:
     return _inventory_name or "inventory"
 
 
+def rename_current_inventory(new_name: str) -> dict[str, Any]:
+    """Replace the active inventory's display name.
+
+    Round-trips through :py:meth:`Inventory.parse` so the new name is
+    validated and canonicalized (NFC, strip, length cap) the same way
+    the file loader would. The engine is reconstructed with the
+    renamed inventory; analysis caches are invalidated because their
+    cached HTML may embed the old name.
+
+    Returns ``{"name": canonical_name}`` so the caller can update its
+    own display without a follow-up query.
+
+    Raises :py:class:`ValidationError` if the new name fails
+    validation, matching the existing load path's contract.
+    """
+    global _engine, _inventory_name
+    engine = _require_engine()
+    data = engine.inventory.to_json_dict()
+    metadata = data.setdefault("metadata", {})
+    metadata["name"] = new_name
+    inventory = Inventory.parse(data)
+    _engine = FeatureEngine(inventory)
+    _inventory_name = inventory.name
+    _invalidate_analysis_caches()
+    return {"name": inventory.name}
+
+
 def set_active_theme(name: str) -> None:
     """Switch the renderer palette so subsequent HTML output uses
     the new chip colors. Invalidates the analyze_* caches because

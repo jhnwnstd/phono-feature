@@ -132,6 +132,92 @@ body {
   padding: 0;
   font-size: 16px;
 }
+/* Pencil-icon rename button. Sized like #theme-btn so square-icon
+   buttons share one footprint. Sits next to the picker so the
+   "edit the displayed inventory" affordance is local to its target. */
+#rename-btn {
+  width: var(--control-h-md);
+  padding: 0;
+  font-size: 14px;
+}
+
+/* ---------- dialogs (rename, future modal flows) ---------- */
+dialog {
+  border: var(--border-thin) solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  color: var(--text);
+  padding: 20px 24px;
+  min-width: 320px;
+  max-width: 480px;
+  font: inherit;
+}
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.dialog-title {
+  font-weight: bold;
+  font-size: 15px;
+}
+.dialog-label {
+  font-size: var(--font-size-meta);
+  color: var(--text-dim);
+}
+dialog input[type="text"] {
+  height: var(--control-h-md);
+  padding: 0 10px;
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+dialog input[type="text"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+.dialog-error {
+  min-height: 18px;
+  font-size: var(--font-size-meta);
+  color: var(--minus);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  margin-top: var(--space-sm);
+}
+.dialog-actions button {
+  height: var(--control-h-md);
+  padding: 0 var(--space-lg);
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.dialog-actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+.dialog-actions button[type="submit"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--panel);
+}
+.dialog-actions button[type="submit"]:hover {
+  /* Keep the high-contrast accent fill on hover; just nudge the
+     border so the press affordance is still readable. */
+  filter: brightness(0.92);
+}
 
 /* ---------- two-pane split (segments | features) ---------- */
 
