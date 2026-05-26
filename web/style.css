@@ -552,13 +552,17 @@ body {
   padding: var(--space-lg) var(--space-xl);
   display: flex;
   flex-direction: column;
-  /* Body grid is "auto 1fr auto auto" so panels gets the remaining
-     space and analysis sizes to its content (with this floor).
-     220 px gives a substantial baseline that doesn't change
-     much between inventories -- General IPA's overflowing segments
-     now spill into .seg-spillover rather than pushing the analysis
-     toward this minimum. */
+  /* Body grid is "auto 1fr auto auto" so panels gets the
+     remaining space. Analysis is FIXED at 220 px (min == max) so
+     it never grows with content -- a long multi-segment analysis
+     would otherwise eat enough vertical space that the segments
+     pane became too small to click in. Inside, the
+     .analysis-content's overflow:auto handles scrolling when the
+     rendered HTML exceeds the visible area. .analysis.expanded
+     overrides this with min-height: 55vh; max-height stays
+     baseline but min-height wins per the CSS spec when min > max. */
   min-height: 220px;
+  max-height: 220px;
 }
 /* Expanded state: claim 55vh instead of 1fr-of-remainder so panels
    visibly shrink and the analysis gets meaningfully more room.
