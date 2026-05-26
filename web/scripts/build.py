@@ -313,7 +313,7 @@ def write_bootstrap() -> None:
     the precompute can't run.
     """
     print("Precomputing default inventory bootstrap...")
-    default_inv = INVENTORIES / "english_features.json"
+    default_inv = INVENTORIES / "general_features.json"
     if not default_inv.exists():
         print(f"  skipped: no default inventory at {default_inv}")
         return

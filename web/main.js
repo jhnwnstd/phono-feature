@@ -356,11 +356,12 @@ function loadPyodideScript() {
     });
 }
 
-// Preferred default-inventory filename. English is the smallest
-// (~21 KB, 39 segments) so first paint comes up fastest. Falls
-// back to whatever the manifest sorts first when this file isn't
-// in the build.
-const PREFERRED_DEFAULT_INVENTORY = "inventories/english_features.json";
+// Preferred default-inventory filename. General IPA is the
+// richest demo inventory (135 segments, 30 features) and is
+// what the web app should open on first visit. Falls back to
+// whatever the manifest sorts first when this file isn't in
+// the build.
+const PREFERRED_DEFAULT_INVENTORY = "inventories/general_features.json";
 
 async function bootPyodide({ prerendered = false } = {}) {
     mark("boot:start");
