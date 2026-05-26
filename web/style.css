@@ -31,8 +31,18 @@
   --font-size-meta: 12px;
   --font-size-label: 11px;
   --font-size-micro: 10px;
-  --font-ui: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-ipa: "Noto Sans Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  /* `system-ui` and `ui-monospace` map to the OS's native UI fonts
+     on modern browsers (SF Pro on macOS, Segoe UI Variable on
+     Windows 11, Roboto on Android). The named fallbacks cover older
+     browsers and Linux. */
+  --font-ui:
+    system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-ipa:
+    ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono",
+    "Noto Sans Mono", "Menlo", Consolas, "DejaVu Sans Mono",
+    monospace;
 }
 
 /* Native UI palette (scrollbars, form controls). Paired with the
@@ -64,6 +74,18 @@ html, body {
   color: var(--text);
   font-family: var(--font-ui);
   font-size: var(--font-size-base);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+}
+
+/* Tabular nums keep digit columns from jittering when the value
+   changes (status counts, analysis tables). */
+.statusbar,
+.analysis-content {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Body grid rows: toolbar | panels (1fr) | analysis | statusbar.
@@ -172,8 +194,8 @@ body {
 .panel-title {
   flex: 1;
   font-size: var(--font-size-label);
-  font-weight: bold;
-  letter-spacing: 1.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   color: var(--text-dim);
 }
 .panel[data-active="true"] .panel-title {
@@ -230,8 +252,8 @@ body {
 }
 .seg-group-header {
   font-size: var(--font-size-label);
-  font-weight: bold;
-  letter-spacing: 1px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   color: var(--text-dim);
   padding: var(--space-xs) 2px var(--space-sm);
   overflow-wrap: anywhere;
@@ -309,8 +331,8 @@ body {
   grid-row: 1;
   text-align: center;
   font-size: var(--font-size-micro);
-  font-weight: bold;
-  letter-spacing: 1px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   color: var(--text-dim);
   padding-bottom: 2px;
 }
@@ -318,8 +340,8 @@ body {
   text-align: right;
   padding-right: var(--space-sm);
   font-size: var(--font-size-micro);
-  font-weight: bold;
-  letter-spacing: 0.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
   color: var(--text-dim);
 }
 .panel[data-active="true"] .vowel-chart-col-label,
@@ -357,8 +379,8 @@ body {
 }
 .feat-group-header {
   font-size: var(--font-size-label);
-  font-weight: bold;
-  letter-spacing: 1px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   color: var(--text-dim);
   padding: var(--space-xs) 2px var(--space-sm);
   overflow-wrap: anywhere;
@@ -490,8 +512,8 @@ body {
   align-items: center;
   gap: var(--space-md);
   font-size: var(--font-size-label);
-  font-weight: bold;
-  letter-spacing: 1px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   color: var(--text-dim);
 }
 .analysis-title { flex: 1; }
