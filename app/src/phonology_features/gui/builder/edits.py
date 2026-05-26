@@ -8,14 +8,18 @@ paths that ``Inventory`` and ``FeatureEngine`` live on.
 
 The undo stack is a list of ``_BulkEdit`` records. Each carries the
 pre-edit value of every cell that changed plus the single new value
-they all moved to. Capped at ``_MAX_UNDO_DEPTH`` (200) so a long
-session does not grow the stack without bound.
+they all moved to. Capped at :py:data:`MAX_UNDO_DEPTH` (200) so a
+long session does not grow the stack without bound. The cap is
+defined in :py:mod:`phonology_features.gui.grid_logic` so the web
+editor's JS undo stack uses the same value.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import NamedTuple
+
+from phonology_features.gui.grid_logic import MAX_UNDO_DEPTH
 
 
 class _CellPrev(NamedTuple):
@@ -49,6 +53,7 @@ class _BulkEdit:
     new: str
 
 
-# Undo history depth cap. ~200 batches of at most all cells covers a
-# normal editing session without unbounded growth.
-_MAX_UNDO_DEPTH = 200
+# Re-export the shared cap under the package-internal name so
+# existing callers (window.py's ``_undo_stack`` cap check) keep
+# working without churn.
+_MAX_UNDO_DEPTH = MAX_UNDO_DEPTH

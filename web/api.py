@@ -23,6 +23,8 @@ from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features.gui.constants import FEATURE_GROUPS
 from phonology_features.gui.grid_logic import (
     CYCLE_LADDER,
+    MAX_UNDO_DEPTH,
+    MOVE_KEYS,
     VALUE_KEYS,
     grid_to_inventory,
     validate_new_feature_label,
@@ -306,6 +308,27 @@ def get_value_keys() -> dict[str, str]:
     Qt-flavoured dict from the same constant.
     """
     return dict(VALUE_KEYS)
+
+
+def get_move_keys() -> dict[str, list[int]]:
+    """Return the cell-cursor navigation shortcuts.
+
+    Maps the typed character to a ``[dr, dc]`` step in the grid.
+    Tuples become arrays through the Pyodide bridge so JS can
+    destructure them directly. Same constant the desktop's
+    ``InventoryBuilder._MOVE_KEYS`` derives from.
+    """
+    return {key: list(step) for key, step in MOVE_KEYS.items()}
+
+
+def get_max_undo_depth() -> int:
+    """Return the undo-stack depth cap shared by both editors.
+
+    The desktop's ``_undo_stack`` enforces this cap via
+    :py:data:`_MAX_UNDO_DEPTH`; the web editor caps its own JS-side
+    stack identically so behavior matches across frontends.
+    """
+    return MAX_UNDO_DEPTH
 
 
 def get_grid_state() -> dict[str, Any]:

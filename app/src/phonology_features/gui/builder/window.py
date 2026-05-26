@@ -59,6 +59,9 @@ from phonology_features.gui.builder.table import (
     _ToggleHeaderView,
 )
 from phonology_features.gui.grid_logic import (
+    MOVE_KEYS as _SHARED_MOVE_KEYS,
+)
+from phonology_features.gui.grid_logic import (
     VALUE_KEYS as _SHARED_VALUE_KEYS,
 )
 from phonology_features.gui.grid_logic import (
@@ -508,16 +511,12 @@ class InventoryBuilder(QMainWindow):
         getattr(Qt.Key, f"Key_{char}"): value
         for char, value in _SHARED_VALUE_KEYS.items()
     }
-    # Numpad-style + Vim-style cell navigation. dr, dc as relative steps.
+    # Numpad and Vim cell navigation. Derived from the shared
+    # :py:data:`MOVE_KEYS` constant so the desktop and the web
+    # editor stay in lockstep on which key moves which direction.
     _MOVE_KEYS: ClassVar[dict] = {
-        Qt.Key.Key_8: (-1, 0),
-        Qt.Key.Key_K: (-1, 0),
-        Qt.Key.Key_5: (1, 0),
-        Qt.Key.Key_J: (1, 0),
-        Qt.Key.Key_4: (0, -1),
-        Qt.Key.Key_H: (0, -1),
-        Qt.Key.Key_6: (0, 1),
-        Qt.Key.Key_L: (0, 1),
+        getattr(Qt.Key, f"Key_{char.upper()}"): step
+        for char, step in _SHARED_MOVE_KEYS.items()
     }
 
     def eventFilter(self, obj, event):

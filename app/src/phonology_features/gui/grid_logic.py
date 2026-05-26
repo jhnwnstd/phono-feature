@@ -67,6 +67,27 @@ VALUE_KEYS: Mapping[str, str] = MappingProxyType({
     "0": "0",
 })
 
+# Cell-cursor navigation. Maps the typed character to a (dr, dc)
+# step in the grid. Vim conventions on h/j/k/l plus the numpad
+# directions on 4/5/6/8 give users a choice without leaving the
+# home row or the numpad. Shared with the web editor.
+MOVE_KEYS: Mapping[str, tuple[int, int]] = MappingProxyType({
+    "8": (-1, 0),
+    "k": (-1, 0),
+    "5": (1, 0),
+    "j": (1, 0),
+    "4": (0, -1),
+    "h": (0, -1),
+    "6": (0, 1),
+    "l": (0, 1),
+})
+
+# Maximum depth of the undo / redo stack. A typical editing session
+# does not exceed a few dozen batches; the cap is generous enough
+# that nobody hits it in practice and small enough that the stack
+# cannot grow unbounded.
+MAX_UNDO_DEPTH: int = 200
+
 
 def cycle_value(current: str) -> str:
     """Return the next value in the ladder. Unknown inputs reset to

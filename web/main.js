@@ -1340,11 +1340,15 @@ function wireSetupDialog() {
 // In-memory edit state for the builder editor. Mirrors the desktop
 // ``InventoryBuilder``'s ``_segments`` / ``_features`` / table-item
 // values, plus selection state, anchor for shift-click range
-// extension, focused cell for keyboard fallback, and a ``dirty``
-// flag the Back / Save-as paths consult. ``cells`` is indexed as
+// extension, focused cell for keyboard fallback, undo/redo stacks
+// matching the desktop's ``_BulkEdit`` shape, and a ``dirty`` flag
+// the Back / Save-as paths consult. ``cells`` is indexed as
 // cells[feature_index][segment_index] to match the engine's
 // get_grid_state shape and the shared :py:func:`grid_to_inventory`
 // contract.
+//
+// Undo stack entries mirror ``builder.edits._BulkEdit``:
+//   {cells: [{r, c, old}, ...], new: "value"}
 const editorState = {
     open: false,
     name: "",
@@ -1355,14 +1359,19 @@ const editorState = {
     selected: new Set(),  // "r,c" keys
     anchor: null,         // {r, c}, used by shift-click range extension
     focused: null,        // {r, c}, fallback target when no selection
+    undoStack: [],
+    redoStack: [],
 };
 
-// Cycle ladder and value-key map, fetched from the bridge at the
-// editor's first open. Same constants the desktop builder reads;
-// centralizing them on the Python side keeps the two frontends in
-// lockstep and avoids per-click bridge cost.
+// Cycle ladder, value-key map, move-key map, and the undo depth
+// cap. All fetched from the bridge at the editor's first open;
+// the desktop's ``cycle_value`` / ``_VALUE_KEYS`` / ``_MOVE_KEYS``
+// / ``_MAX_UNDO_DEPTH`` derive from the same constants, so the
+// two frontends stay in lockstep without per-click bridge cost.
 let cycleLadder = null;
 let valueKeys = null;
+let moveKeys = null;
+let maxUndoDepth = 200;  // sane default; overwritten on first open
 const ZERO_VALUE = "0";
 
 const PLUS_DISPLAY = "+";
@@ -1438,6 +1447,8 @@ function wireBuilderEditor(setupDialog) {
             // First open: fetch the shared constants once.
             cycleLadder = callBridge("get_cycle_ladder");
             valueKeys = callBridge("get_value_keys");
+            moveKeys = callBridge("get_move_keys");
+            maxUndoDepth = callBridge("get_max_undo_depth");
         }
         refreshEditorFromCurrent();
         editorState.open = true;
@@ -1452,6 +1463,8 @@ function wireBuilderEditor(setupDialog) {
         editorState.open = false;
         editorState.dirty = false;
         clearSelection();
+        editorState.undoStack.length = 0;
+        editorState.redoStack.length = 0;
         nodes.editorView.hidden = true;
     };
 
@@ -1529,6 +1542,11 @@ function refreshEditorFromCurrent() {
     editorState.segments = snapshot.segments.slice();
     editorState.cells = snapshot.cells.map((row) => row.slice());
     editorState.dirty = false;
+    // Drop undo history: edits recorded against the previous shape
+    // refer to row/col indices that may no longer match the new
+    // table. Matches the desktop's ``_rebuild_table`` discipline.
+    editorState.undoStack.length = 0;
+    editorState.redoStack.length = 0;
     clearSelection();
     editorState.focused = editorState.cells.length > 0
         && editorState.cells[0].length > 0
@@ -1537,6 +1555,7 @@ function refreshEditorFromCurrent() {
     nodes.editorNameInput.value = editorState.name;
     nodes.editorFileLabel.textContent = "(unsaved)";
     renderEditorGrid();
+    repaintFocused();
     setEditorStatus(
         `${editorState.segments.length} segments × `
         + `${editorState.features.length} features. `
@@ -1558,6 +1577,10 @@ function renderEditorGrid() {
     table.innerHTML = "";
     _cellNodes = [];
     _lastPaintedSelection = new Set();
+    // Re-render discards previous DOM nodes; the cached focus
+    // pointer is now stale. Null it so the next repaintFocused
+    // does not try to remove a class from a detached node.
+    _lastFocusedCell = null;
 
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
@@ -1628,6 +1651,7 @@ function selectSingleCell(r, c) {
     editorState.anchor = { r, c };
     editorState.focused = { r, c };
     repaintSelection();
+    repaintFocused();
 }
 
 function extendSelectionTo(r, c) {
@@ -1648,6 +1672,7 @@ function extendSelectionTo(r, c) {
     }
     editorState.focused = { r, c };
     repaintSelection();
+    repaintFocused();
 }
 
 function toggleCellSelection(r, c) {
@@ -1662,6 +1687,7 @@ function toggleCellSelection(r, c) {
     editorState.anchor = { r, c };
     editorState.focused = { r, c };
     repaintSelection();
+    repaintFocused();
 }
 
 function selectColumn(c) {
@@ -1755,6 +1781,96 @@ function updateRemoveButtonStates() {
     nodes.editorRemoveFeatBtn.disabled = getSingleSelectedRow() === null;
 }
 
+// Keyboard focus indicator -------------------------------------------
+
+// Last-painted focused cell, kept as a separate handle so the
+// repaint can clear the previous mark without scanning every cell.
+let _lastFocusedCell = null;
+
+function repaintFocused() {
+    if (_lastFocusedCell !== null) {
+        cellNode(_lastFocusedCell.r, _lastFocusedCell.c)
+            ?.classList.remove("is-focused");
+    }
+    const f = editorState.focused;
+    if (f !== null) {
+        cellNode(f.r, f.c)?.classList.add("is-focused");
+    }
+    _lastFocusedCell = f === null ? null : { r: f.r, c: f.c };
+}
+
+// Edit primitive -----------------------------------------------------
+
+/**
+ * Apply ``value`` to every ``(r, c)`` in ``targets``, capture the
+ * previous values, and push the batch onto the undo stack. Skips
+ * cells whose value is already ``value`` (cheap no-op). Marks the
+ * edit state dirty when at least one cell actually changed.
+ *
+ * Single source of truth for in-editor cell mutations: every path
+ * that writes cell values goes through here so undo / redo see
+ * every change in the same shape. Mirrors the desktop's
+ * ``_BulkEdit`` lifecycle (commit + push + cap).
+ */
+function commitEdit(targets, value) {
+    const cells = [];
+    const normalizedNew = cellSerialized(value);
+    for (const { r, c } of targets) {
+        const cur = editorState.cells[r][c];
+        if (cellSerialized(cur) === normalizedNew) continue;
+        cells.push({ r, c, old: cur });
+        editorState.cells[r][c] = value;
+        paintCell(cellNode(r, c), value);
+    }
+    if (cells.length === 0) return;
+    pushUndoEdit({ cells, new: value });
+    markEditorDirty();
+}
+
+function pushUndoEdit(edit) {
+    editorState.undoStack.push(edit);
+    if (editorState.undoStack.length > maxUndoDepth) {
+        editorState.undoStack.shift();
+    }
+    // New edit invalidates any redo history; same convention as
+    // most editors (no redo into a divergent timeline).
+    editorState.redoStack.length = 0;
+}
+
+function applyEdit(edit, useOld) {
+    for (const { r, c, old } of edit.cells) {
+        const value = useOld ? old : edit.new;
+        editorState.cells[r][c] = value;
+        paintCell(cellNode(r, c), value);
+    }
+}
+
+function undo() {
+    const edit = editorState.undoStack.pop();
+    if (edit === undefined) {
+        setEditorStatus("Nothing to undo.");
+        return;
+    }
+    applyEdit(edit, true);
+    editorState.redoStack.push(edit);
+    markEditorDirty();
+    const n = edit.cells.length;
+    setEditorStatus(`Undid ${n} cell change${n === 1 ? "" : "s"}.`);
+}
+
+function redo() {
+    const edit = editorState.redoStack.pop();
+    if (edit === undefined) {
+        setEditorStatus("Nothing to redo.");
+        return;
+    }
+    applyEdit(edit, false);
+    editorState.undoStack.push(edit);
+    markEditorDirty();
+    const n = edit.cells.length;
+    setEditorStatus(`Redid ${n} cell change${n === 1 ? "" : "s"}.`);
+}
+
 // Mouse handling -------------------------------------------------------
 
 /**
@@ -1820,10 +1936,23 @@ function onCellClicked(r, c, ev) {
     // cell -> select that cell (no cycle on the selecting click).
     if (editorState.selected.has(cellKey(r, c))) {
         const next = nextCycleValue(editorState.cells[r][c]);
-        applyValueToSelection(next);
+        commitEdit(selectionTargets(), next);
         return;
     }
     selectSingleCell(r, c);
+}
+
+/** Cells targeted by selection-aware operations (value keys, bulk
+ *  cycle). Returns the selection if non-empty, else the focused
+ *  cell as a single-element list, else empty. */
+function selectionTargets() {
+    if (editorState.selected.size > 0) {
+        return [...editorState.selected].map(parseCellKey);
+    }
+    if (editorState.focused !== null) {
+        return [editorState.focused];
+    }
+    return [];
 }
 
 /** Toggle a single column's selection. Matches the desktop's
@@ -1873,10 +2002,36 @@ function onCornerClicked() {
 
 /**
  * Editor keydown router. Mirrors the desktop ``_handle_table_key``:
- * Space cycles the selection (or focused cell), 1/2/3/0 set the
- * value via the shared :py:data:`VALUE_KEYS` mapping, Esc clears.
+ *
+ * * Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y = redo.
+ * * Space cycles the selection (or focused cell).
+ * * 1/2/3/0 set the value via the shared :py:data:`VALUE_KEYS`.
+ * * h/j/k/l and 4/5/6/8 move the focused cell via the shared
+ *   :py:data:`MOVE_KEYS`.
+ * * Esc clears the selection.
  */
 function onGridKeyDown(ev) {
+    if (ev.ctrlKey || ev.metaKey) {
+        // Modifier-bound shortcuts; check these first so plain-key
+        // handlers below don't fire on Ctrl-1 etc.
+        const lower = ev.key.toLowerCase();
+        if (lower === "z" && ev.shiftKey) {
+            ev.preventDefault();
+            redo();
+            return;
+        }
+        if (lower === "z") {
+            ev.preventDefault();
+            undo();
+            return;
+        }
+        if (lower === "y") {
+            ev.preventDefault();
+            redo();
+            return;
+        }
+        return;
+    }
     if (ev.key === "Escape") {
         ev.preventDefault();
         clearSelection();
@@ -1890,29 +2045,45 @@ function onGridKeyDown(ev) {
     if (valueKeys !== null && Object.hasOwn(valueKeys, ev.key)) {
         ev.preventDefault();
         applyValueToSelection(valueKeys[ev.key]);
+        return;
     }
+    if (moveKeys !== null && Object.hasOwn(moveKeys, ev.key)) {
+        ev.preventDefault();
+        moveFocused(moveKeys[ev.key]);
+    }
+}
+
+/** Move the focused cell by ``(dr, dc)``, clamping at the grid
+ *  edges. Matches the desktop's clamped navigation in
+ *  :py:meth:`_handle_table_key`. */
+function moveFocused([dr, dc]) {
+    const numRows = editorState.features.length;
+    const numCols = editorState.segments.length;
+    if (numRows === 0 || numCols === 0) return;
+    const cur = editorState.focused ?? { r: 0, c: 0 };
+    const r = Math.max(0, Math.min(numRows - 1, cur.r + dr));
+    const c = Math.max(0, Math.min(numCols - 1, cur.c + dc));
+    editorState.focused = { r, c };
+    repaintFocused();
+    // Bring the newly-focused cell into view if it scrolled out.
+    cellNode(r, c)?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 /** Compute the next value from the focused cell (or anchor as
  *  fallback) and apply it to every selected cell. Single-cell
  *  fallback when there's no selection: cycle the focused cell
- *  alone, matching desktop's anchor-only path. */
+ *  alone, matching desktop's anchor-only path in
+ *  :py:meth:`_cycle_selection_from`. */
 function bulkCycleFromFocused() {
     const anchor = editorState.focused
         ?? editorState.anchor
         ?? cellFromFirstSelected();
     if (anchor === null) return;
-    const current = editorState.cells[anchor.r][anchor.c];
-    const next = nextCycleValue(current);
-    if (editorState.selected.size === 0) {
-        // Anchor-only path: write just the focused cell.
-        if (next === current) return;
-        editorState.cells[anchor.r][anchor.c] = next;
-        paintCell(cellNode(anchor.r, anchor.c), next);
-        markEditorDirty();
-        return;
-    }
-    applyValueToSelection(next);
+    const next = nextCycleValue(editorState.cells[anchor.r][anchor.c]);
+    const targets = editorState.selected.size === 0
+        ? [anchor]
+        : [...editorState.selected].map(parseCellKey);
+    commitEdit(targets, next);
 }
 
 function cellFromFirstSelected() {
@@ -1920,11 +2091,6 @@ function cellFromFirstSelected() {
     return first === undefined ? null : parseCellKey(first);
 }
 
-/**
- * Write ``value`` to every cell in the selection (or the focused
- * cell if no selection). Repaints only the cells that actually
- * changed and marks the edit state dirty.
- */
 // Add / remove segments and features --------------------------------
 
 /**
@@ -1984,24 +2150,14 @@ function removeSelectedFeature() {
     setEditorStatus(`Removed feature '${feat}'.`);
 }
 
+/** Write ``value`` to the selection (or the focused cell when
+ *  there is no selection). Thin wrapper over :py:func:`commitEdit`
+ *  so the keyboard value-key path uses the same undo-aware
+ *  primitive as click-driven edits. */
 function applyValueToSelection(value) {
-    const targets = editorState.selected.size > 0
-        ? [...editorState.selected].map(parseCellKey)
-        : editorState.focused !== null
-            ? [editorState.focused]
-            : [];
+    const targets = selectionTargets();
     if (targets.length === 0) return;
-    let changed = 0;
-    for (const { r, c } of targets) {
-        const cur = editorState.cells[r][c];
-        const normalized = cellSerialized(cur);
-        const targetNormalized = cellSerialized(value);
-        if (normalized === targetNormalized) continue;
-        editorState.cells[r][c] = value;
-        paintCell(cellNode(r, c), value);
-        changed += 1;
-    }
-    if (changed > 0) markEditorDirty();
+    commitEdit(targets, value);
 }
 
 /**

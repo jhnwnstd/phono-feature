@@ -862,6 +862,14 @@ progress {
   box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 100px var(--accent-light),
               inset 0 0 0 4px var(--panel);
 }
+/* Keyboard focus indicator. A dashed inset outline so it reads as
+   "cursor here" without competing with the solid-outline selection
+   highlight. Applied independently of is-selected so a selected
+   focused cell gets both. */
+.editor-grid td.is-focused {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
 /* Header click affordance: cursor change so the user knows
    headers are interactive (the desktop builder gets this for
    free via Qt's QPushButton-haptic header subclass). */
