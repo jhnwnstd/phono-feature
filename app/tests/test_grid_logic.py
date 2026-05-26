@@ -18,6 +18,8 @@ from phonology_features.gui.grid_logic import (
     MINUS_SERIALIZED,
     MOVE_KEYS,
     VALUE_KEYS,
+    confirm_remove_feature_prompt,
+    confirm_remove_segment_prompt,
     cycle_value,
     grid_to_inventory,
     normalize_minus,
@@ -221,6 +223,70 @@ def test_validate_new_feature_label_trims_and_dedupes():
         validate_new_feature_label("", [])
     with pytest.raises(ValueError, match="'Voice'"):
         validate_new_feature_label("Voice", ["Voice"])
+
+
+def test_validate_new_segment_label_catches_nfc_duplicates():
+    """U+00E9 (precomposed é) and ``e`` + U+0301 (combining acute)
+    look identical on screen but are distinct code points. The
+    inventory parser rejects them as duplicates after NFC
+    normalization; this validator catches them at add-time so the
+    user sees the conflict before commit.
+
+    Building the decomposed form explicitly is necessary because
+    Python string literals stored in this source file end up NFC
+    even when typed as a decomposed sequence (the file editor
+    may have folded them on save).
+    """
+    import unicodedata as ud
+
+    precomposed = ud.normalize("NFC", "é")
+    decomposed = ud.normalize("NFD", "é")
+    assert precomposed != decomposed
+    with pytest.raises(ValueError, match="already exists"):
+        validate_new_segment_label(decomposed, [precomposed])
+
+
+def test_validate_new_feature_label_catches_nfc_duplicates():
+    import unicodedata as ud
+
+    precomposed = ud.normalize("NFC", "Tensé")
+    decomposed = ud.normalize("NFD", "Tensé")
+    assert precomposed != decomposed
+    with pytest.raises(ValueError, match="already exists"):
+        validate_new_feature_label(decomposed, [precomposed])
+
+
+def test_validate_new_segment_label_enforces_cap_when_provided():
+    """When ``max_segments`` is passed the validator refuses adds
+    that would exceed the cap. The desktop and web wrappers always
+    pass the cap; calling the bare helper without one preserves
+    backwards-compatible behavior."""
+    with pytest.raises(ValueError, match="limit of 3 reached"):
+        validate_new_segment_label("d", ["a", "b", "c"], max_segments=3)
+    # Same call without the cap: succeeds.
+    assert validate_new_segment_label("d", ["a", "b", "c"]) == "d"
+
+
+def test_validate_new_feature_label_enforces_cap_when_provided():
+    with pytest.raises(ValueError, match="limit of 2 reached"):
+        validate_new_feature_label(
+            "C", ["A", "B"], max_features=2,
+        )
+
+
+# Confirm-remove prompts: shared so the wording matches across UIs
+
+
+def test_confirm_remove_segment_prompt_quotes_the_label():
+    """The desktop ``ask_question`` body and the web ``confirm``
+    body must produce identical text; both call this formatter."""
+    assert confirm_remove_segment_prompt("p") == "Remove segment 'p'?"
+
+
+def test_confirm_remove_feature_prompt_quotes_the_label():
+    assert (
+        confirm_remove_feature_prompt("Voice") == "Remove feature 'Voice'?"
+    )
 
 
 # normalize_minus: display -> serialized form

@@ -20,12 +20,15 @@ from typing import Any
 
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
+from phonology_engine.limits import MAX_FEATURES, MAX_SEGMENTS
 from phonology_features.gui.constants import FEATURE_GROUPS
 from phonology_features.gui.grid_logic import (
     CYCLE_LADDER,
     MAX_UNDO_DEPTH,
     MOVE_KEYS,
     VALUE_KEYS,
+    confirm_remove_feature_prompt,
+    confirm_remove_segment_prompt,
     grid_to_inventory,
     validate_new_feature_label,
     validate_new_segment_label,
@@ -283,20 +286,38 @@ def get_cycle_ladder() -> dict[str, str]:
 def validate_segment_label(label: str, existing: list[str]) -> str:
     """Validate a new segment label and return its canonical form.
 
-    Thin bridge wrapper over the shared
-    :py:func:`validate_new_segment_label` so the web editor's
-    add-segment button surfaces the same error wording the desktop
-    builder produces.
+    Thin bridge wrapper over :py:func:`validate_new_segment_label`,
+    passing :py:data:`MAX_SEGMENTS` so the web editor enforces the
+    inventory cap at add-time rather than at save-time. Same
+    validator the desktop builder uses, so error wording matches.
     """
-    return validate_new_segment_label(label, existing)
+    return validate_new_segment_label(
+        label, existing, max_segments=MAX_SEGMENTS
+    )
 
 
 def validate_feature_label(label: str, existing: list[str]) -> str:
     """Validate a new feature label and return its canonical form.
 
-    Bridge wrapper for :py:func:`validate_new_feature_label`.
+    Bridge wrapper over :py:func:`validate_new_feature_label` with
+    :py:data:`MAX_FEATURES` enforced at add-time.
     """
-    return validate_new_feature_label(label, existing)
+    return validate_new_feature_label(
+        label, existing, max_features=MAX_FEATURES
+    )
+
+
+def get_confirm_remove_segment_prompt(seg: str) -> str:
+    """Return the confirmation prompt text for removing a segment.
+    Shared with the desktop builder so the wording stays in sync.
+    """
+    return confirm_remove_segment_prompt(seg)
+
+
+def get_confirm_remove_feature_prompt(feat: str) -> str:
+    """Return the confirmation prompt text for removing a feature.
+    """
+    return confirm_remove_feature_prompt(feat)
 
 
 def get_value_keys() -> dict[str, str]:

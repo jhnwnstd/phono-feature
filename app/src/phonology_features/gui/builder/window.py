@@ -4,7 +4,11 @@ import os
 from typing import TYPE_CHECKING, ClassVar
 
 from phonology_engine.inventory import Inventory, ValidationError
-from phonology_engine.limits import MAX_NAME_LENGTH
+from phonology_engine.limits import (
+    MAX_FEATURES,
+    MAX_NAME_LENGTH,
+    MAX_SEGMENTS,
+)
 from phonology_features._logging import get_logger
 from phonology_features.gui.inventory_setup import suggest_filename
 
@@ -65,6 +69,8 @@ from phonology_features.gui.grid_logic import (
     VALUE_KEYS as _SHARED_VALUE_KEYS,
 )
 from phonology_features.gui.grid_logic import (
+    confirm_remove_feature_prompt,
+    confirm_remove_segment_prompt,
     grid_to_inventory,
     validate_new_feature_label,
     validate_new_segment_label,
@@ -906,7 +912,9 @@ class InventoryBuilder(QMainWindow):
             return
         try:
             seg = validate_new_segment_label(
-                dlg.textValue(), self._segments
+                dlg.textValue(),
+                self._segments,
+                max_segments=MAX_SEGMENTS,
             )
         except ValueError as e:
             self._status.showMessage(str(e))
@@ -936,7 +944,9 @@ class InventoryBuilder(QMainWindow):
             return
         try:
             feat = validate_new_feature_label(
-                dlg.textValue(), self._features
+                dlg.textValue(),
+                self._features,
+                max_features=MAX_FEATURES,
             )
         except ValueError as e:
             self._status.showMessage(str(e))
@@ -960,7 +970,7 @@ class InventoryBuilder(QMainWindow):
             return
         seg = self._segments[col]
         reply = ask_question(
-            self, "Remove segment", f"Remove segment '{seg}'?"
+            self, "Remove segment", confirm_remove_segment_prompt(seg)
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
@@ -980,7 +990,7 @@ class InventoryBuilder(QMainWindow):
             return
         feat = self._features[row]
         reply = ask_question(
-            self, "Remove feature", f"Remove feature '{feat}'?"
+            self, "Remove feature", confirm_remove_feature_prompt(feat)
         )
         if reply != QMessageBox.StandardButton.Yes:
             return

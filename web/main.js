@@ -1309,6 +1309,17 @@ function wireSetupDialog() {
 
     form.addEventListener("submit", (ev) => {
         ev.preventDefault();
+        // Editor-dirty guard: creating a new inventory swaps the
+        // engine, which discards any unsaved edits the user made in
+        // the editor. Prompt once before the swap so the dialog
+        // submit cannot silently erase in-progress work. Matches
+        // the spirit of the desktop's ``_check_unsaved`` gate
+        // around :py:meth:`show_setup_dialog`.
+        if (!nodes.editorView.hidden && editorState.dirty) {
+            if (!confirm("Discard unsaved changes to the current inventory?")) {
+                return;
+            }
+        }
         try {
             const info = callBridge(
                 "create_new_inventory",
@@ -1453,6 +1464,7 @@ function wireBuilderEditor(setupDialog) {
         refreshEditorFromCurrent();
         editorState.open = true;
         nodes.editorView.hidden = false;
+        setMainChromeInert(true);
         nodes.editorGridScroll.focus();
     };
     const closeEditor = () => {
@@ -1466,6 +1478,7 @@ function wireBuilderEditor(setupDialog) {
         editorState.undoStack.length = 0;
         editorState.redoStack.length = 0;
         nodes.editorView.hidden = true;
+        setMainChromeInert(false);
     };
 
     nodes.builderBtn.addEventListener("click", openEditor);
@@ -2126,7 +2139,10 @@ function removeSelectedSegment() {
     const c = getSingleSelectedColumn();
     if (c === null) return;
     const seg = editorState.segments[c];
-    if (!confirm(`Remove segment '${seg}'?`)) return;
+    // Confirm prompt text comes from the shared Python so the web
+    // wording matches the desktop's ``ask_question`` body exactly.
+    const prompt = callBridge("get_confirm_remove_segment_prompt", seg);
+    if (!confirm(prompt)) return;
     editorState.segments.splice(c, 1);
     for (const row of editorState.cells) {
         row.splice(c, 1);
@@ -2141,7 +2157,8 @@ function removeSelectedFeature() {
     const r = getSingleSelectedRow();
     if (r === null) return;
     const feat = editorState.features[r];
-    if (!confirm(`Remove feature '${feat}'?`)) return;
+    const prompt = callBridge("get_confirm_remove_feature_prompt", feat);
+    if (!confirm(prompt)) return;
     editorState.features.splice(r, 1);
     editorState.cells.splice(r, 1);
     renderEditorGrid();
@@ -2166,8 +2183,18 @@ function applyValueToSelection(value) {
  * trigger the standard JSON download. Refreshes both the viewer
  * (so the underlying inventory updates) and the editor (so the
  * grid reflects any canonicalization the parser applied).
+ *
+ * When the editor is clean (no in-progress edits) we skip the
+ * commit and download the engine state directly. Avoids an
+ * engine-swap-with-identical-content that would flush analysis
+ * caches and clear the undo history for no reason.
  */
 function commitAndDownload() {
+    if (!editorState.dirty) {
+        downloadCurrentInventory();
+        setEditorStatus("Downloaded current inventory (no edits to commit).");
+        return;
+    }
     let info;
     try {
         info = callBridge(
@@ -2190,6 +2217,30 @@ function commitAndDownload() {
 
 function setEditorStatus(msg) {
     nodes.editorStatus.textContent = msg;
+}
+
+/**
+ * Toggle the ``inert`` attribute on every direct child of
+ * ``<body>`` except the editor itself and any open dialogs. Removes
+ * those elements from the keyboard tab order and click pipeline
+ * while editor mode is active, so the user cannot Tab into the
+ * main toolbar's picker / pencil / Browse / Save-as and trigger an
+ * engine swap that would discard editor edits.
+ *
+ * The HTML ``inert`` attribute is supported in all modern browsers
+ * (added to the platform in 2022). Falls back gracefully to
+ * tabindex manipulation on older browsers, but this codebase
+ * targets evergreen browsers via Pyodide so the fallback is
+ * unreachable in practice.
+ */
+function setMainChromeInert(on) {
+    for (const child of document.body.children) {
+        if (child === nodes.editorView) continue;
+        // Dialogs sit in the top layer when shown via showModal();
+        // they handle their own focus trapping.
+        if (child.tagName === "DIALOG") continue;
+        child.inert = on;
+    }
 }
 
 // Label-prompt modal -------------------------------------------------

@@ -23,6 +23,7 @@ rule land in both UIs on the next build.
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 
@@ -105,47 +106,92 @@ def normalize_minus(value: str) -> str:
     return MINUS_SERIALIZED if value == MINUS_DISPLAY else value
 
 
+def _canonicalize_label(label: str) -> str:
+    """Trim, then NFC-normalize. Mirrors the inventory parser's
+    name canonicalization path (NFC + strip). Doing it here surfaces
+    NFC-equivalent duplicates at add-time rather than at save-time,
+    where the error message would land far from the offending input.
+    """
+    return unicodedata.normalize("NFC", label.strip())
+
+
 def validate_new_segment_label(
-    label: str, existing: Sequence[str]
+    label: str,
+    existing: Sequence[str],
+    *,
+    max_segments: int | None = None,
 ) -> str:
-    """Return the canonical (trimmed) form of ``label`` after
-    validating it for use as a new segment column.
+    """Return the canonical (NFC-normalized, trimmed) form of
+    ``label`` after validating it for use as a new segment column.
 
-    Raises :py:class:`ValueError` with a user-facing message when
-    the label is empty after trim or already present in
-    ``existing``. The trim-and-string-compare semantics mirror the
-    desktop's :py:meth:`InventoryBuilder._add_segment`; save-time
-    validation through :py:meth:`Inventory.parse` catches any
-    post-NFC or IPA-folding collisions later.
+    Catches the failure modes the desktop user used to hit only at
+    save time:
 
-    Shared with the web editor so both frontends produce identical
-    error wording on duplicate or empty input.
+    * Empty after trim.
+    * Duplicate of an existing segment after NFC normalization
+      (e.g. "Café" precomposed vs "Café" decomposed).
+    * Inventory has reached ``max_segments`` (per :py:data:`limits.
+      MAX_SEGMENTS`); caller passes the cap so this module stays
+      independent of the limits module.
+
+    Raises :py:class:`ValueError` with user-facing wording. Shared
+    with the web editor so both frontends produce identical
+    error messages.
     """
     trimmed = label.strip()
     if not trimmed:
         raise ValueError("Segment label is empty.")
-    if trimmed in existing:
-        raise ValueError(f"Segment '{trimmed}' already exists.")
-    return trimmed
+    canonical = unicodedata.normalize("NFC", trimmed)
+    if canonical in existing:
+        raise ValueError(f"Segment '{canonical}' already exists.")
+    if max_segments is not None and len(existing) >= max_segments:
+        raise ValueError(
+            f"Cannot add segment: limit of {max_segments} reached."
+        )
+    return canonical
 
 
 def validate_new_feature_label(
-    label: str, existing: Sequence[str]
+    label: str,
+    existing: Sequence[str],
+    *,
+    max_features: int | None = None,
 ) -> str:
-    """Return the canonical (trimmed) form of ``label`` after
-    validating it for use as a new feature row.
+    """Return the canonical (NFC-normalized, trimmed) form of
+    ``label`` after validating it for use as a new feature row.
 
-    Same shape as :py:func:`validate_new_segment_label`. The
-    desktop's :py:meth:`InventoryBuilder._add_feature` and the
-    web editor's add-feature handler both route through here, so
-    duplicate-feature errors look identical across frontends.
+    Same shape as :py:func:`validate_new_segment_label`; catches
+    empty, NFC-duplicate, and over-cap inputs at add-time.
     """
     trimmed = label.strip()
     if not trimmed:
         raise ValueError("Feature label is empty.")
-    if trimmed in existing:
-        raise ValueError(f"Feature '{trimmed}' already exists.")
-    return trimmed
+    canonical = unicodedata.normalize("NFC", trimmed)
+    if canonical in existing:
+        raise ValueError(f"Feature '{canonical}' already exists.")
+    if max_features is not None and len(existing) >= max_features:
+        raise ValueError(
+            f"Cannot add feature: limit of {max_features} reached."
+        )
+    return canonical
+
+
+def confirm_remove_segment_prompt(seg: str) -> str:
+    """Return the user-facing confirmation message for removing a
+    segment column. Shared with the web editor so the wording stays
+    in sync across frontends. The desktop wraps this in
+    :py:class:`QMessageBox.Question`; the web wraps it in
+    :py:func:`window.confirm`.
+    """
+    return f"Remove segment '{seg}'?"
+
+
+def confirm_remove_feature_prompt(feat: str) -> str:
+    """Return the user-facing confirmation message for removing a
+    feature row. Same shape as
+    :py:func:`confirm_remove_segment_prompt`.
+    """
+    return f"Remove feature '{feat}'?"
 
 
 def grid_to_inventory(
