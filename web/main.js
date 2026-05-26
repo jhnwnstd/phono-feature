@@ -877,13 +877,17 @@ function onFeatureClicked(feat, polarity) {
     } else {
         state.selected_features[feat] = polarity;
     }
-    // Visual refresh: just the two buttons on this row. No DOM
+    // Visual refresh: the two buttons + the row-level query state
+    // (data-query-value drives the row background in FEAT mode via
+    // CSS, mirroring the desktop's _apply_query_style). No DOM
     // query, no CSS.escape, no string interpolation.
     const rec = state.feat_rows.get(feat);
     if (rec) {
         const cur = state.selected_features[feat];
         rec.plus.dataset.active = cur === "+" ? "true" : "false";
         rec.minus.dataset.active = cur === "-" ? "true" : "false";
+        if (cur === "+" || cur === "-") rec.row.dataset.queryValue = cur;
+        else delete rec.row.dataset.queryValue;
     }
     scheduleAnalysis();
 }
@@ -925,11 +929,19 @@ function activateMode(mode) {
 
     if (isS2F) {
         // Adopt the projected seg selection; clear feat-side.
+        // Row data-value/shared/contrastive/badge persist -- the
+        // pending scheduleAnalysis() will overwrite them with the
+        // new SEG-mode analysis, and the CSS hides the FEAT-mode
+        // query rules (data-query-value) when feat panel is
+        // inactive. Mirrors the desktop's behavior where the row
+        // display state survives panel switches and the active
+        // analysis path repaints it.
         state.selected_segments = state.saved_seg_state.slice();
         state.selected_features = emptyFeatureSpec();
         for (const rec of state.feat_rows.values()) {
             rec.plus.dataset.active = "false";
             rec.minus.dataset.active = "false";
+            delete rec.row.dataset.queryValue;
         }
         const selectedSet = new Set(state.selected_segments);
         for (const [seg, btn] of state.seg_buttons) {
@@ -951,6 +963,8 @@ function activateMode(mode) {
             const cur = state.selected_features[feat];
             rec.plus.dataset.active = cur === "+" ? "true" : "false";
             rec.minus.dataset.active = cur === "-" ? "true" : "false";
+            if (cur === "+" || cur === "-") rec.row.dataset.queryValue = cur;
+            else delete rec.row.dataset.queryValue;
         }
     }
 
@@ -1179,6 +1193,7 @@ function clearAll() {
         rec.badge.textContent = "·";
         rec.plus.dataset.active = "false";
         rec.minus.dataset.active = "false";
+        delete rec.row.dataset.queryValue;
     }
     nodes.analysisContent.innerHTML = "";
     setStatus(STATUS_TEXT[state.mode]);

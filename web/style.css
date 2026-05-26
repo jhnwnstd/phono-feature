@@ -459,9 +459,32 @@ body {
   padding: 2px var(--space-md);
   border-radius: var(--radius-md);
 }
-.feat-row[data-shared="true"][data-value="+"] { background: var(--shared-plus); }
-.feat-row[data-shared="true"][data-value="-"] { background: var(--shared-minus); }
-.feat-row[data-contrastive="true"] { background: var(--accent-light); }
+/* Row backgrounds are mode-dependent:
+   - In SEG mode (feat panel inactive), they encode the analysis of
+     the current selection: green for shared-+, red for shared-,
+     blue for contrastive.
+   - In FEAT mode (feat panel active), they echo the user's query:
+     green for +, red for -. Mirrors the desktop's
+     _apply_query_style.
+   The data attributes are set independently and the row keeps both
+   sets stable; the gating selectors here pick which fires. This is
+   what lets the same row survive a mode toggle without flashing
+   stale colors. */
+#feat-panel:not([data-active="true"]) .feat-row[data-shared="true"][data-value="+"] {
+  background: var(--shared-plus);
+}
+#feat-panel:not([data-active="true"]) .feat-row[data-shared="true"][data-value="-"] {
+  background: var(--shared-minus);
+}
+#feat-panel:not([data-active="true"]) .feat-row[data-contrastive="true"] {
+  background: var(--accent-light);
+}
+#feat-panel[data-active="true"] .feat-row[data-query-value="+"] {
+  background: var(--shared-plus);
+}
+#feat-panel[data-active="true"] .feat-row[data-query-value="-"] {
+  background: var(--shared-minus);
+}
 
 .feat-name {
   flex: 1;
@@ -471,8 +494,17 @@ body {
      row width; wrap on any character if needed. */
   overflow-wrap: anywhere;
 }
-.feat-row[data-contrastive="true"] .feat-name { color: var(--accent); font-weight: bold; }
-.feat-row[data-shared="true"] .feat-name { font-weight: bold; }
+#feat-panel:not([data-active="true"]) .feat-row[data-contrastive="true"] .feat-name {
+  color: var(--accent);
+  font-weight: bold;
+}
+#feat-panel:not([data-active="true"]) .feat-row[data-shared="true"] .feat-name {
+  font-weight: bold;
+}
+#feat-panel[data-active="true"] .feat-row[data-query-value="+"] .feat-name,
+#feat-panel[data-active="true"] .feat-row[data-query-value="-"] .feat-name {
+  font-weight: bold;
+}
 
 .feat-badge {
   width: var(--feat-badge-w);
