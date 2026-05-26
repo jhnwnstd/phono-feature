@@ -37,8 +37,8 @@ from phonology_features.gui.vowel_layout import (
 # from vowel_chart directly. Canonical definitions live in
 # gui.vowel_layout so the web app sees the same values.
 __all__ = [
-    "Confidence",
     "VOWEL_LABEL_W",
+    "Confidence",
     "VowelChartWidget",
     "VowelPlacement",
     "VowelProfile",

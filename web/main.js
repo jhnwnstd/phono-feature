@@ -560,10 +560,23 @@ function _buildVowelChart(chart) {
 function onSegmentClicked(seg) {
     activateMode(MODE.SEG_TO_FEAT);
     const idx = state.selected_segments.indexOf(seg);
-    if (idx >= 0) {
+    const wasSelected = idx >= 0;
+    if (wasSelected) {
         state.selected_segments.splice(idx, 1);
     } else {
         state.selected_segments.push(seg);
+    }
+    // Optimistic visual flip: register the press immediately so the
+    // user doesn't wait 80 ms (debounce) + bridge round-trip to see
+    // the button respond. _updateSegmentButtonStates after the
+    // bridge call reconciles -- possibly upgrading other buttons to
+    // suggested / matched states based on the new selection.
+    // Mirrors the desktop's _on_segment_clicked, which calls
+    // btn.set_state(SegmentState.SELECTED) before its debounce.
+    const btn = state.seg_buttons.get(seg);
+    if (btn) {
+        btn.dataset.state = wasSelected ? "default" : "selected";
+        btn.setAttribute("aria-pressed", wasSelected ? "false" : "true");
     }
     scheduleAnalysis();
 }

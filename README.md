@@ -6,7 +6,7 @@ Browser version: <https://jhnwnstd.github.io/features/>.
 
 ## Features
 
-- Browse, edit, and create segment inventories.
+- Edit and create segment inventories.
 - Select any set of segments to see the features they share, the features that split them, and the minimal feature bundle that uniquely characterizes the set (when one exists).
 - Toggle feature values to query in the other direction: find every segment matching a `+`/`-` spec.
 
