@@ -53,7 +53,16 @@ if TYPE_CHECKING:
 def _tag(text: str, colour: TagColor) -> str:
     """Render a coloured inline chip. ``text`` is escaped here so
     every caller can pass raw inventory strings without thinking
-    about it. Chip geometry is shared via ``constants.CHIP_*``."""
+    about it. Chip geometry is shared via ``constants.CHIP_*``.
+
+    ``white-space: nowrap`` keeps the chip text atomic. Without it,
+    browsers treat the slashes in ``/seg/`` as soft break points
+    (same heuristic that lets long URLs wrap), so a chip like
+    ``/ɪ/`` can end up with the leading ``/`` on one line and
+    ``ɪ/`` on the next. Same defense for any multi-character text
+    inside a chip (signed feature names, etc.). The chip itself
+    still wraps as a whole unit when the line is too long.
+    """
     palette = tag_palettes()
     bg, fg = palette.get(colour, palette[TagColor.NEUTRAL])
     return (
@@ -63,7 +72,8 @@ def _tag(text: str, colour: TagColor) -> str:
         f" padding:{CHIP_PADDING_CSS};"
         f" margin:{CHIP_MARGIN_PX}px;"
         f" font-family:{MONO_FAMILY_CSS};"
-        f" font-size:{CHIP_FONT_SIZE_PT}pt;'>"
+        f" font-size:{CHIP_FONT_SIZE_PT}pt;"
+        f" white-space:nowrap;'>"
         f"{html.escape(text)}</span>"
     )
 
@@ -395,10 +405,14 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
         f"<span style='color:{C['minus']};font-weight:bold'>"
         f"{MINUS_SIGN}</span>"
     )
+    # Non-breaking space between the +/-/0 glyph and the FIRST chip
+    # so the marker can't end up orphaned at the end of a line with
+    # the first chip alone on the next line. Spaces between chips
+    # stay breakable, so a long chip list still wraps cleanly.
     cells = [
         f"<td style='{_CONTRAST_NAME_CELL}'>{name_html}</td>",
-        f"<td style='{_CONTRAST_CELL_BASE}'>{plus_glyph} {plus_chips}</td>",
-        f"<td style='{_CONTRAST_CELL_BASE}'>{minus_glyph} {minus_chips}</td>",
+        f"<td style='{_CONTRAST_CELL_BASE}'>{plus_glyph}&nbsp;{plus_chips}</td>",
+        f"<td style='{_CONTRAST_CELL_BASE}'>{minus_glyph}&nbsp;{minus_chips}</td>",
     ]
     if "0" in groups:
         zero_chips = " ".join(
@@ -407,7 +421,7 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
         zero_glyph = f"<span style='color:{C['text_dim']}'>0</span>"
         cells.append(
             f"<td style='{_CONTRAST_CELL_BASE}'>"
-            f"{zero_glyph} {zero_chips}</td>"
+            f"{zero_glyph}&nbsp;{zero_chips}</td>"
         )
     return "<tr>" + "".join(cells) + "</tr>"
 
