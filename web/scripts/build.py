@@ -46,6 +46,7 @@ import json
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -245,61 +246,59 @@ def _load_palette_module():
 
 def write_python_bundle() -> None:
     """Pack every Python source (engine + relayed renderer + api.py)
-    into a single ``python_bundle.json`` for one-request mounting.
+    into a single ``python_bundle.zip`` that gets mounted onto
+    Pyodide's ``sys.path`` via zipimport.
 
-    Why: before this, main.js held a hand-maintained file list that
-    had to mirror RELAYED_SOURCES and the engine *.py glob. Adding a
-    file here without updating the JS side (or vice versa) produced
-    an import error at runtime. The bundle has the build emit the
-    list it ships, and main.js just consumes it -- one source of
-    truth for "what Python code does this deploy contain".
+    Why a zip (vs. the JSON map we previously shipped):
+    * One binary fetch + one writeFile, instead of fetch+JSON.parse
+      + N writeFiles. Less JS string churn, no per-file FS syscall
+      loop on the Pyodide side.
+    * Python imports lazily from the zip via zipimport, so only the
+      modules api.py actually imports get decoded.
+    * Compressed-on-wire even without server gzip (zip uses deflate
+      per-file).
 
-    Side benefit: one HTTP request instead of one-per-file (engine
-    is 5 files, renderer is 6, plus api.py -- 12 round trips
-    collapse to 1).
+    Layout inside the zip (packages flattened to root so zipimport
+    can find them with a single sys.path entry):
 
-    Bundle shape:
-        {
-          "sys_paths": [absolute dirs to push onto sys.path],
-          "files": { "<rel-path>": "<source>", ... }
-        }
-
-    ``rel-path`` is the path under /home/pyodide/ where the file
-    should be written. ``sys_paths`` are pushed in order, so the
-    earlier ones win on ``import`` collisions (engine first, then
-    render).
+        phonology_engine/__init__.py
+        phonology_engine/inventory.py
+        ...
+        phonology_features/__init__.py
+        phonology_features/gui/__init__.py
+        ...
+        api.py
     """
-    print("Bundling Python sources...")
-    files: dict[str, str] = {}
-    # Engine package + the empty __init__'s.
+    print("Bundling Python sources into zip...")
+    out = DIST / "python_bundle.zip"
+    entries: list[tuple[str, Path]] = []
+    # Engine package: dist/engine/phonology_engine/*  ->  phonology_engine/*
     for path in sorted((DIST / "engine").rglob("*.py")):
-        rel = path.relative_to(DIST).as_posix()
-        files[rel] = path.read_text(encoding="utf-8")
-    # Renderer package (relayed from desktop) + __init__'s.
+        zip_path = path.relative_to(DIST / "engine").as_posix()
+        entries.append((zip_path, path))
+    # Renderer package: dist/render/phonology_features/*  ->  phonology_features/*
     for path in sorted((DIST / "render").rglob("*.py")):
-        rel = path.relative_to(DIST).as_posix()
-        files[rel] = path.read_text(encoding="utf-8")
-    # Bridge module, mounted at /home/pyodide/api.py.
-    files["api.py"] = (DIST / "api.py").read_text(encoding="utf-8")
+        zip_path = path.relative_to(DIST / "render").as_posix()
+        entries.append((zip_path, path))
+    # Bridge module: dist/api.py  ->  api.py
+    entries.append(("api.py", DIST / "api.py"))
 
-    bundle = {
-        # Schema version. Bump when the bundle's shape changes in a
-        # way main.js's validatePythonBundle would have to handle
-        # differently (e.g. adding required fields, changing files to
-        # a list, adding per-file metadata).
-        "schema": 1,
-        "sys_paths": [
-            "/home/pyodide/engine",
-            "/home/pyodide/render",
-            "/home/pyodide",
-        ],
-        "files": files,
-    }
-    (DIST / "python_bundle.json").write_text(
-        json.dumps(bundle, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    print(f"  {len(files)} files, {sum(len(v) for v in files.values())} chars")
+    # ZIP_DEFLATED gives us ~40-50% compression on Python source
+    # without needing the server to gzip. ZIP_DEFLATED is in the
+    # stdlib (uses zlib).
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        for zip_path, src in entries:
+            zf.write(src, arcname=zip_path)
+
+    # Don't ship the loose copies once they're in the zip; the engine/
+    # and render/ trees and the loose api.py become dead weight in
+    # the deploy. hash_assets() also unlinks api.py; this is the
+    # rest.
+    shutil.rmtree(DIST / "engine", ignore_errors=True)
+    shutil.rmtree(DIST / "render", ignore_errors=True)
+
+    raw = sum(p.stat().st_size for _, p in entries if p.exists())
+    print(f"  {len(entries)} files, {out.stat().st_size} bytes zip ({raw} raw)")
 
 
 def _hashed_name(path: Path, hash_len: int = 10) -> str:
@@ -351,15 +350,15 @@ def hash_assets() -> None:
     runtime_map["inventories_manifest"] = new_inv_manifest
     full_map["inventories.json"] = new_inv_manifest
 
-    # 3. python_bundle.json (api.py is bundled inside it; the
-    #    standalone api.py copy was only needed by write_python_bundle
-    #    and is now dead weight).
+    # 3. python_bundle.zip (api.py is bundled inside; the loose
+    #    api.py copy was only needed by write_python_bundle and is
+    #    dead weight now).
     (DIST / "api.py").unlink(missing_ok=True)
-    py_bundle = DIST / "python_bundle.json"
+    py_bundle = DIST / "python_bundle.zip"
     new_py_bundle = _hashed_name(py_bundle)
     py_bundle.rename(DIST / new_py_bundle)
     runtime_map["python_bundle"] = new_py_bundle
-    full_map["python_bundle.json"] = new_py_bundle
+    full_map["python_bundle.zip"] = new_py_bundle
 
     # 4. CSS files referenced from index.html.
     for css in ("theme.css", "style.css"):

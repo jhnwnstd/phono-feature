@@ -120,6 +120,9 @@ async function fetchOk(url, { timeoutMs = LOCAL_FETCH_TIMEOUT_MS } = {}) {
 }
 async function fetchJson(url, opts) { return (await fetchOk(url, opts)).json(); }
 async function fetchText(url, opts) { return (await fetchOk(url, opts)).text(); }
+async function fetchBytes(url, opts) {
+    return new Uint8Array(await (await fetchOk(url, opts)).arrayBuffer());
+}
 
 // ---------------------------------------------------------------------
 // withTimeout: rejects if ``promise`` doesn't settle within ``ms``.
@@ -337,7 +340,13 @@ async function bootPyodide() {
 
     setLoadingStatus("Loading the Python runtime…");
     mark("pyodide:start");
-    const pyodide = await withTimeout(
+    mark("bundle-fetch:start");
+    // Kick off Pyodide load AND the Python bundle download in
+    // parallel. They're independent: the bundle fetch only needs
+    // the network, Pyodide load only needs WebAssembly compile.
+    // Before this, the bundle fetch sat sequentially after Pyodide
+    // and lost ~50-150 ms of overlap on cold loads.
+    const pyodidePromise = withTimeout(
         // packages: [] skips the automatic load of pyodide-py /
         // distutils that we don't use; ~100-300 ms init saved.
         // Our engine is pure Python and loads explicitly below.
@@ -345,15 +354,17 @@ async function bootPyodide() {
         PYODIDE_BOOT_TIMEOUT_MS,
         "Pyodide startup",
     );
+    const bundleBytesPromise = fetchBytes(assetUrl("python_bundle"));
+    const [pyodide, bundleBytes] = await Promise.all([
+        pyodidePromise, bundleBytesPromise,
+    ]);
     state.pyodide = pyodide;
     mark("pyodide:end");
+    mark("bundle-fetch:end");
 
     setLoadingStatus("Mounting Python sources…");
     mark("bundle:start");
-    // One bundled fetch instead of 12 separate file requests, and
-    // the file list lives in the build script -- main.js no longer
-    // has to mirror RELAYED_SOURCES or hand-maintain the engine glob.
-    await mountPythonBundle(pyodide);
+    mountPythonBundle(pyodide, bundleBytes);
     mark("bundle:end");
 
     setLoadingStatus("Initializing the bridge…");
@@ -398,58 +409,39 @@ function pickDefaultInventory(manifest) {
 // declared sys.path entries. Replaces the old mountPackage +
 // mountRendererPackage helpers, whose file lists had to mirror
 // build-side constants by hand.
-// FFI-style boundary check on the build-emitted bundle. Fails loudly
-// at boot if the bundle shape doesn't match what mountPythonBundle
-// expects, rather than producing a confusing ENOENT mid-mount.
-const PYTHON_BUNDLE_SCHEMA = 1;
-function validatePythonBundle(bundle) {
-    if (!bundle || typeof bundle !== "object") {
-        throw new Error("python_bundle.json is not an object");
+// Cheap shape check on the bundle bytes before we hand them to
+// Pyodide. The first 4 bytes of any ZIP file are "PK\x03\x04"
+// (local file header); a bundle that doesn't start with that is
+// either truncated, served as an error page, or the wrong file.
+// Fails loudly at boot with a useful message rather than ENOENT
+// mid-import.
+function validatePythonBundleBytes(bytes) {
+    if (!(bytes instanceof Uint8Array) || bytes.length < 4) {
+        throw new Error("python bundle is empty or not bytes");
     }
-    if (bundle.schema !== PYTHON_BUNDLE_SCHEMA) {
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B
+        && bytes[2] === 0x03 && bytes[3] === 0x04;
+    if (!isZip) {
         throw new Error(
-            `python_bundle.json schema=${bundle.schema}, `
-            + `expected ${PYTHON_BUNDLE_SCHEMA}`
+            `python bundle doesn't look like a zip `
+            + `(first bytes: ${[...bytes.slice(0, 4)].map(b => b.toString(16)).join(" ")})`
         );
     }
-    if (!bundle.files || typeof bundle.files !== "object") {
-        throw new Error("python_bundle.json missing files map");
-    }
-    if (!Array.isArray(bundle.sys_paths)) {
-        throw new Error("python_bundle.json missing sys_paths array");
-    }
-    for (const [path, source] of Object.entries(bundle.files)) {
-        if (!path.endsWith(".py")) {
-            throw new Error(`unexpected bundle entry: ${path}`);
-        }
-        if (typeof source !== "string") {
-            throw new Error(`bundle source is not a string: ${path}`);
-        }
-    }
-    return bundle;
+    return bytes;
 }
 
-async function mountPythonBundle(pyodide) {
-    const bundle = validatePythonBundle(await fetchJson(assetUrl("python_bundle")));
-    const files = bundle.files;
-    const sysPaths = bundle.sys_paths;
-    // Pre-create parent directories so writeFile doesn't ENOENT.
-    const dirs = new Set();
-    for (const rel of Object.keys(files)) {
-        const slash = rel.lastIndexOf("/");
-        if (slash > 0) dirs.add(`/home/pyodide/${rel.slice(0, slash)}`);
-    }
-    for (const dir of dirs) pyodide.FS.mkdirTree(dir);
-    for (const [rel, source] of Object.entries(files)) {
-        pyodide.FS.writeFile(`/home/pyodide/${rel}`, source);
-    }
-    // sys.path.insert in REVERSE so the first declared path ends
-    // up at index 0 (highest precedence).
+// Mount the build-emitted zip onto sys.path via zipimport. One
+// writeFile, no per-file JS string churn -- Python imports each
+// module lazily on first use. Replaces the previous JSON map +
+// per-file writeFile loop.
+const BUNDLE_FS_PATH = "/home/pyodide/python_bundle.zip";
+function mountPythonBundle(pyodide, bundleBytes) {
+    validatePythonBundleBytes(bundleBytes);
+    pyodide.FS.writeFile(BUNDLE_FS_PATH, bundleBytes);
     pyodide.runPython(
         "import sys\n"
-        + sysPaths.slice().reverse().map(
-            (p) => `if ${JSON.stringify(p)} not in sys.path: sys.path.insert(0, ${JSON.stringify(p)})\n`
-        ).join("")
+        + `if ${JSON.stringify(BUNDLE_FS_PATH)} not in sys.path:\n`
+        + `    sys.path.insert(0, ${JSON.stringify(BUNDLE_FS_PATH)})\n`
     );
 }
 
