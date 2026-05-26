@@ -1159,13 +1159,20 @@ function wireRename() {
 }
 
 /**
- * Wire the New… button to a modal that builds a fresh all-zero
+ * Wire the Builder button to a modal that builds a fresh all-zero
  * inventory from a name plus delimited segments and features. The
  * preset dropdown and Tab-autofill seeds come from the same
  * inventory_setup module the desktop builder uses, so the two
  * frontends offer identical defaults. Validation is server-side
  * (Pyodide-side) through validate_setup; the dialog stays open
  * on error so the user can correct without losing input.
+ *
+ * Future divergence (deliberately deferred): when the grid editor
+ * lands, the desktop's "Builder" button branches: it opens the
+ * grid editor on the loaded inventory when one is active, and
+ * falls back to this setup dialog when none is. The web should
+ * eventually do the same. For now the button only opens the
+ * setup dialog regardless of state.
  */
 function wireNewInventory() {
     const dialog = nodes.setupDialog;
@@ -1178,16 +1185,20 @@ function wireNewInventory() {
 
     let defaultsLoaded = false;
     let presets = Object.create(null);
+    let defaultSegments = "";
+    let defaultFeatures = "";
 
     const loadDefaultsOnce = () => {
         if (defaultsLoaded) return;
         const defaults = callBridge("get_setup_defaults");
-        // Tab on empty would mirror the desktop, but a browser
-        // textarea consumes Tab for focus navigation by default.
-        // Use placeholder text instead so the seed is visible and
-        // the user can either type their own or copy the placeholder.
-        segInput.placeholder = defaults.default_segments;
-        featInput.placeholder = defaults.default_features;
+        defaultSegments = defaults.default_segments;
+        defaultFeatures = defaults.default_features;
+        // Placeholder shows the seed as ghost text. Tab while empty
+        // converts it into real content (see autofillOnTab below);
+        // this mirrors :py:class:`_AutofillTextEdit` on the desktop,
+        // which Pastes ``DEFAULT_FILL`` on Tab when the box is empty.
+        segInput.placeholder = defaultSegments;
+        featInput.placeholder = defaultFeatures;
         presets = defaults.presets || {};
         // Populate the dropdown in insertion order. "Custom" empty list
         // gives the user a no-fill option.
@@ -1209,6 +1220,33 @@ function wireNewInventory() {
         }
         featInput.value = list.join("\n");
     };
+
+    /**
+     * Tab on an empty textarea pastes ``seed`` and lands the caret
+     * at the end so the user can keep typing without first having
+     * to clear or click. Mirrors the desktop's
+     * :py:class:`_AutofillTextEdit` behavior, where Tab triggers the
+     * same seed paste when the box is empty.
+     *
+     * Browser default for Tab in a textarea is focus advance; we
+     * preventDefault only on the empty-box path so users can still
+     * Tab out of a non-empty box normally.
+     */
+    const autofillOnTab = (textarea, getSeed) => {
+        textarea.addEventListener("keydown", (ev) => {
+            if (ev.key !== "Tab" || ev.shiftKey) return;
+            if (textarea.value.trim() !== "") return;
+            const seed = getSeed();
+            if (!seed) return;
+            ev.preventDefault();
+            textarea.value = seed;
+            // Caret to the end so the user types a continuation.
+            const end = seed.length;
+            textarea.setSelectionRange(end, end);
+        });
+    };
+    autofillOnTab(segInput, () => defaultSegments);
+    autofillOnTab(featInput, () => defaultFeatures);
 
     const openDialog = () => {
         loadDefaultsOnce();
