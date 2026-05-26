@@ -666,6 +666,61 @@ function renderSegmentGrid(groups, vowelChart) {
     for (const group of groups) {
         grid.appendChild(_buildConsonantGroup(group));
     }
+    // After the DOM lands, check if the panel overflows; if so,
+    // spill the bottom consonant groups into a 2-column area. Done
+    // in a requestAnimationFrame so layout has flushed and our
+    // measurements are real.
+    if ("requestAnimationFrame" in window) {
+        window.requestAnimationFrame(rebalanceSegmentSpillover);
+    } else {
+        rebalanceSegmentSpillover();
+    }
+}
+
+// Move overflowing consonant groups into a 2-column spillover sub-
+// grid at the bottom of the segments pane. Used when an inventory
+// (typically General IPA) has more consonant groups than fit in
+// the single-column flow above the analysis pane. Two columns cut
+// the vertical footprint roughly in half, fitting everything in
+// view without forcing the panel to scroll.
+//
+// Algorithm:
+//   1. Move any previously-spilled groups back into #seg-grid so we
+//      start from a known single-column state.
+//   2. Measure: does #seg-grid still overflow .panel-body?
+//   3. If yes: append .seg-spillover to .panel-body and walk
+//      consonant groups bottom-up, moving each into spillover until
+//      grid + spillover fit, or we've moved them all.
+//
+// The vowel chart is never touched -- it stays floating top-right.
+function rebalanceSegmentSpillover() {
+    const grid = nodes.segGrid;
+    const body = grid.parentElement;  // .panel-body of #seg-panel
+    if (!body) return;
+
+    // Find or create the spillover container.
+    let spillover = body.querySelector(".seg-spillover");
+    if (!spillover) {
+        spillover = document.createElement("div");
+        spillover.className = "seg-spillover";
+    }
+    // Step 1: pull everything back into #seg-grid in original order.
+    while (spillover.firstChild) grid.appendChild(spillover.firstChild);
+    if (spillover.parentElement) spillover.remove();
+
+    // Step 2: still overflow?
+    if (grid.offsetHeight <= body.clientHeight) return;
+
+    // Step 3: enable spillover and walk bottom-up.
+    body.appendChild(spillover);
+    const consonants = grid.querySelectorAll(".seg-group:not(.vowel-chart-group)");
+    for (let i = consonants.length - 1; i >= 0; i--) {
+        spillover.insertBefore(consonants[i], spillover.firstChild);
+        // Measure after each move; stop when everything fits.
+        if (grid.offsetHeight + spillover.offsetHeight <= body.clientHeight) {
+            break;
+        }
+    }
 }
 
 function _buildConsonantGroup(group) {
@@ -1246,6 +1301,21 @@ function wireFeatureDelegation() {
 // ---------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------
+// Re-run the spillover rebalance whenever the viewport changes
+// size; the segments pane's available height changes with it.
+// Debounced so dragging a window edge doesn't trigger the
+// offsetHeight measurement loop on every pixel.
+function wireSegmentSpilloverResize() {
+    let timer = 0;
+    window.addEventListener("resize", () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+            timer = 0;
+            rebalanceSegmentSpillover();
+        }, 80);
+    });
+}
+
 // Register the service worker after first load completes so its
 // registration request doesn't compete with critical-path fetches.
 // First visit: SW installs in the background and warms caches on
@@ -1272,6 +1342,7 @@ async function main() {
     wirePanelClickMode();
     wireSegmentDelegation();
     wireFeatureDelegation();
+    wireSegmentSpilloverResize();
     registerServiceWorker();
 
     // Paint the default inventory from the build-time bootstrap if

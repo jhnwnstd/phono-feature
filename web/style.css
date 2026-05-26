@@ -82,17 +82,16 @@ html, body {
 
 body {
   display: grid;
-  /* Rows: toolbar (content), panels (content), analysis (fills
-     remaining), statusbar (content). The features pane drives the
-     panels-row height: it's the tallest sub-pane, and ``auto`` lets
-     it claim exactly the room its 6 grouped cards need. Analysis
-     then takes only what's left below, never eating into the panel
-     area. height: 100vh caps the body to the viewport so the 1fr
-     distribution actually has a finite remainder to give the
-     analysis. 100dvh tracks mobile browser chrome so the bottom
-     row isn't hidden under a URL bar; the 100vh declaration is the
-     fallback for browsers that don't support dvh. */
-  grid-template-rows: auto auto 1fr auto;
+  /* Rows: toolbar (content), panels (1fr, takes variable space),
+     analysis (content with min-height, stable across inventories),
+     statusbar (content). The flip from previous layout (panels:auto,
+     analysis:1fr) gives the analysis pane a CONSISTENT height
+     regardless of how tall the segments pane WANTS to be -- General
+     IPA's 135 segments no longer push analysis down to its
+     min-height. Segments that don't fit in the panels-row get
+     spilled into the .seg-spillover sub-grid (handled in main.js).
+     100dvh tracks mobile browser chrome; 100vh is the fallback. */
+  grid-template-rows: auto 1fr auto auto;
   height: 100vh;
   height: 100dvh;
 }
@@ -147,56 +146,39 @@ body {
   overflow: hidden;
 }
 
-/* Right column = features card on top, analysis extension below.
-   When features is shorter than segments, the extension absorbs
-   the would-be empty gap, giving the analysis area an L-shape:
-   full-width band along the bottom + this extension reaching up
-   under features. The extension is the right wing of that L. */
-.right-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  min-height: 0;
-}
-.right-stack > .panel {
-  /* Features sizes to content when space allows, but can shrink
-     (and scroll internally via .panel-body's overflow:auto) when
-     the analysis pane is expanded and the panels row is squeezed.
-     Without `1` shrink, the panel would push past its container. */
-  flex: 0 1 auto;
-}
-.analysis-extension {
-  flex: 1 1 auto;
-  min-height: 0;
-  background: var(--analysis-bg);
-  border: var(--border-thin) solid var(--border);
-  /* Round only the TOP corners. The bottom edge meets the
-     analysis pane below; matching squared corners + same border
-     color reads as one continuous L-shape across the body grid
-     row boundary. */
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  border-bottom: none;
-  /* Eat the .grid's padding-bottom so the extension touches the
-     analysis pane below it. Without this, the L has an 8px gap
-     between its vertical and horizontal arms and reads as two
-     separate panels. */
-  margin-bottom: calc(-1 * var(--space-md));
+/* Spillover sub-grid for consonant groups that don't fit in the
+   single-column segments pane (only relevant for large inventories
+   like General IPA). main.js's rebalanceSegmentSpillover() moves
+   the bottom consonant groups from #seg-grid into this container
+   when overflow is detected; the 2-column layout cuts their
+   vertical footprint roughly in half, fitting them within the
+   panels-row without forcing the segments pane to scroll.
+
+   For inventories that fit (Hayes, English), the spillover stays
+   empty and the segments pane looks exactly as before. */
+.seg-spillover {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: var(--space-md);
+  row-gap: 0;
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: var(--border-thin) dashed var(--border);
 }
 
 /* Narrow-screen stack. Without this, the two minmax tracks above
    force a horizontal overflow under ~800 px wide. Single-column
    layout below 900 px stacks segments above features; each panel
    keeps its own internal scroll, and the .grid container itself
-   scrolls if the combined height exceeds the panels-row. The
-   extension is hidden because in a single-column layout there's
-   no "right side" for the analysis to spill into; the analysis
-   pane just lives below at full width. */
+   scrolls if the combined height exceeds the panels-row. */
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
     overflow: auto;
   }
-  .analysis-extension { display: none; }
+  /* On stacked narrow layout, the segments pane has full viewport
+     width to itself; the spillover serves no purpose. */
+  .seg-spillover { grid-template-columns: 1fr; }
 }
 
 .panel {
@@ -560,12 +542,13 @@ body {
   padding: var(--space-lg) var(--space-xl);
   display: flex;
   flex-direction: column;
-  /* No max-height: this row sits below the panels in the body grid,
-     so it just fills the leftover vertical space. min-height keeps
-     it visible even when the panels need most of the viewport (e.g.
-     short windows); .analysis-content's overflow:auto handles
-     content that doesn't fit. */
-  min-height: 120px;
+  /* Body grid is "auto 1fr auto auto" so panels gets the remaining
+     space and analysis sizes to its content (with this floor).
+     220 px gives a substantial baseline that doesn't change
+     much between inventories -- General IPA's overflowing segments
+     now spill into .seg-spillover rather than pushing the analysis
+     toward this minimum. */
+  min-height: 220px;
 }
 /* Expanded state: claim 55vh instead of 1fr-of-remainder so panels
    visibly shrink and the analysis gets meaningfully more room.
