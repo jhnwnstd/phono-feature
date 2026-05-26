@@ -1,71 +1,57 @@
-/* Theme CSS variables (--bg, --panel, --text, etc.) come from
-   theme.css, which is auto-generated from palette.py by the build
-   script. style.css is hand-edited layout/structure that REFERENCES
-   those variables but doesn't define them. Edit palette.py to change
-   colors; both the desktop and this web app pick up the change on
-   the next build. */
+/* Chromatic tokens (--bg, --panel, --accent, ...) live in
+   theme.css, auto-generated from palette.py by web/scripts/build.py.
+   This file is hand-edited layout/structure that REFERENCES those
+   tokens; edit palette.py to change colors, both targets pick up
+   the change on the next build. */
 
-/* Layout tokens. Colors live in theme.css (chromatic); these are
-   spatial. Centralized so spacing/radius/border choices apply
-   consistently and have one place to retune. One-off values that
-   appear exactly once stay as literals -- naming them would only
-   spread the value across grep results without removing a
-   decision. */
+/* Spatial tokens. One-off values that appear exactly once stay as
+   literals; naming them would spread the value across grep results
+   without removing a decision. */
 :root {
-  /* Spacing scale. Pick the smallest that fits. */
   --space-xs: 4px;
   --space-sm: 6px;
   --space-md: 8px;
   --space-lg: 12px;
   --space-xl: 16px;
-  /* Corner radius. */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
-  /* Border thicknesses. */
   --border-thin: 1px;
   --border-std: 1.5px;
   --border-thick: 2px;
-  /* Control sizes. */
-  --control-h-md: 32px;     /* toolbar buttons / selects */
-  --control-h-sm: 26px;     /* segment buttons */
-  --control-h-xs: 22px;     /* panel clear button */
+  --control-h-md: 32px;   /* toolbar buttons / selects */
+  --control-h-sm: 26px;   /* segment buttons */
+  --control-h-xs: 22px;   /* panel clear button */
   --seg-btn-min-w: 33px;
   --feat-btn-w: 28px;
-  --feat-btn-h: 24px;       /* also feat-badge height */
+  --feat-btn-h: 24px;     /* also feat-badge height */
   --feat-badge-w: 30px;
-  /* Type sizes. */
   --font-size-base: 14px;
   --font-size-control: 13px;
   --font-size-meta: 12px;
   --font-size-label: 11px;
   --font-size-micro: 10px;
-  /* Font stacks. */
   --font-ui: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-ipa: "Noto Sans Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
 }
 
-/* Tell native UI (form controls, scrollbars) which palette to use.
-   The base value matches the default (light); the dark override
-   pairs with the JS-driven data-theme attribute. */
+/* Native UI palette (scrollbars, form controls). Paired with the
+   JS-driven data-theme attribute. */
 html { color-scheme: light; }
 html[data-theme="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 
-/* Visible focus ring for keyboard users. ``:focus-visible`` excludes
-   mouse-click focus, so the ring only appears when keyboard tab
-   navigation lands. Uses the active palette's accent so it stays
-   visible in both light and dark themes. */
+/* Keyboard-only focus ring (mouse clicks don't trigger it). */
 :focus-visible {
   outline: var(--border-thick) solid var(--accent);
   outline-offset: 2px;
 }
 :focus:not(:focus-visible) { outline: none; }
 
-/* Bridge-gated toolbar controls start with ``disabled`` set in HTML;
-   the JS removes it once Pyodide + the engine are loaded. Style so
-   the disabled state is visually obvious instead of looking broken. */
+/* Bridge-gated toolbar controls start disabled in HTML; main.js
+   enables them after Pyodide attaches. Style so the disabled state
+   reads as "loading" rather than "broken". */
 .toolbar :disabled {
   opacity: 0.55;
   cursor: progress;
@@ -80,25 +66,19 @@ html, body {
   font-size: var(--font-size-base);
 }
 
+/* Body grid rows: toolbar | panels (1fr) | analysis | statusbar.
+   Panels gets the variable space so the analysis pane stays at a
+   stable height regardless of inventory size; segments that don't
+   fit are moved into .seg-spillover by main.js. */
 body {
   display: grid;
-  /* Rows: toolbar (content), panels (1fr, takes variable space),
-     analysis (content with min-height, stable across inventories),
-     statusbar (content). The flip from previous layout (panels:auto,
-     analysis:1fr) gives the analysis pane a CONSISTENT height
-     regardless of how tall the segments pane WANTS to be -- General
-     IPA's 135 segments no longer push analysis down to its
-     min-height. Segments that don't fit in the panels-row get
-     spilled into the .seg-spillover sub-grid (handled in main.js).
-     100dvh tracks mobile browser chrome; 100vh is the fallback. */
   grid-template-rows: auto 1fr auto auto;
   height: 100vh;
   height: 100dvh;
 }
 
-/* ------------------------------------------------------------------ */
-/* Toolbar                                                             */
-/* ------------------------------------------------------------------ */
+/* ---------- toolbar ---------- */
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -131,12 +111,8 @@ body {
   font-size: 16px;
 }
 
-/* ------------------------------------------------------------------ */
-/* Two-pane split (segments | features)                               */
-/* Segments take ~60% of the width so the vowel chart can sit pinned */
-/* to the right without crowding the consonant area; features fit    */
-/* their two-column card layout into the remaining ~40%.             */
-/* ------------------------------------------------------------------ */
+/* ---------- two-pane split (segments | features) ---------- */
+
 .grid {
   display: grid;
   grid-template-columns: minmax(420px, 3fr) minmax(380px, 2fr);
@@ -146,48 +122,27 @@ body {
   overflow: hidden;
 }
 
-/* Spillover sub-grid for consonant groups that don't fit in the
-   single-column segments pane (only relevant for large inventories
-   like General IPA). main.js's rebalanceSegmentSpillover() moves
-   the bottom consonant groups from #seg-grid into this container
-   when overflow is detected; the 2-column layout cuts their
-   vertical footprint roughly in half, fitting them within the
-   panels-row without forcing the segments pane to scroll.
-
-   For inventories that fit (Hayes, English), the spillover stays
-   empty and the segments pane looks exactly as before.
-
-   Column widths: content-sized (auto). Each column shrinks to its
-   widest .seg-row, so there's no dead space inside a column. The
-   left column's groups sit flush against the panel's left padding,
-   aligning with the consonant rows above. margin-top: 0 keeps the
-   gap between the last top group and the first spillover group
-   identical to the gap between groups within either section. */
+/* Spillover for consonant groups that don't fit in the segments
+   pane (only triggers for large inventories like General IPA).
+   main.js's rebalanceSegmentSpillover moves the bottom groups
+   here in 2 content-width columns. The grid stays empty for
+   inventories that already fit. */
 .seg-spillover {
   display: grid;
   grid-template-columns: auto auto;
-  /* 32 px: tight enough that the two columns read as a paired
-     block, loose enough that the gap between groups in the
-     left column and groups in the right column is clearly larger
-     than the gap between buttons inside a row. Tunable. */
   column-gap: 32px;
   row-gap: 0;
   margin-top: 0;
   justify-content: start;
 }
 
-/* Narrow-screen stack. Without this, the two minmax tracks above
-   force a horizontal overflow under ~800 px wide. Single-column
-   layout below 900 px stacks segments above features; each panel
-   keeps its own internal scroll, and the .grid container itself
-   scrolls if the combined height exceeds the panels-row. */
 @media (max-width: 900px) {
+  /* Narrow screens stack vertically; the spillover's 2 columns
+     would just split the already-narrow pane. */
   .grid {
     grid-template-columns: 1fr;
     overflow: auto;
   }
-  /* On stacked narrow layout, the segments pane has full viewport
-     width to itself; the spillover serves no purpose. */
   .seg-spillover { grid-template-columns: 1fr; }
 }
 
@@ -199,9 +154,8 @@ body {
   border-radius: var(--radius-lg);
   min-height: 0;
   overflow: hidden;
-  /* Isolate the panel subtree so a re-render inside one panel
-     can't trigger relayout/repaint of the other panel or the
-     analysis pane. Bounded blast radius for DOM updates. */
+  /* Isolate the panel subtree so a re-render in one panel can't
+     reflow/repaint the other panel or the analysis pane. */
   contain: layout style;
 }
 .panel[data-active="true"] {
@@ -245,33 +199,21 @@ body {
   flex: 1;
   overflow: auto;
   padding: var(--space-lg);
-  /* Reserve the scrollbar column even when there's nothing to
-     scroll, so the panel contents don't shift horizontally when
-     content grows past the visible height. */
+  /* Reserve the scrollbar gutter so content doesn't shift
+     horizontally when overflow appears. */
   scrollbar-gutter: stable;
 }
 
-/* ------------------------------------------------------------------ */
-/* Segment grid                                                        */
-/* Vowel chart floats to the top-right of the panel; consonant        */
-/* groups stack vertically in a single column and WRAP AROUND the     */
-/* float. Groups whose row sits beside the vowel chart get squeezed   */
-/* horizontally so their buttons don't collide with the chart; groups */
-/* far enough down to clear the vowel chart's bottom edge take the    */
-/* full panel width naturally. This is the classic "text flowing      */
-/* around an image" pattern but with block-level segment cards.       */
-/*                                                                    */
-/* No display:grid here -- float interactions with grid are unstable. */
-/* Each .seg-group is a plain block element so the float-wrap         */
-/* algorithm decides how wide each row is.                             */
-/* ------------------------------------------------------------------ */
+/* ---------- segment grid ---------- */
+
+/* Vowel chart floats top-right; consonant groups wrap around it
+   like text around an image. Plain block elements (not grid) so
+   the float-wrap algorithm decides each row's width. */
 #seg-grid {
   display: block;
-  /* New block formatting context so floats stay contained inside the */
-  /* panel-body even when one consonant group is very tall.           */
 }
 #seg-grid::after {
-  /* Clearfix so the panel-body's overflow calc includes the float.   */
+  /* Clearfix so the panel-body overflow calc includes the float. */
   content: "";
   display: block;
   clear: both;
@@ -279,8 +221,7 @@ body {
 .seg-vowels {
   float: right;
   margin: 0 0 var(--space-md) var(--space-xl);
-  /* Don't let the floated chart stretch absurdly wide on narrow      */
-  /* panels; the consonants need some room to wrap into.              */
+  /* Cap the chart so consonants always have room to wrap left. */
   max-width: 55%;
 }
 .seg-group {
@@ -293,8 +234,6 @@ body {
   letter-spacing: 1px;
   color: var(--text-dim);
   padding: var(--space-xs) 2px var(--space-sm);
-  /* Group names from inventories can be long; wrap rather than
-     blow out the seg-grid width. */
   overflow-wrap: anywhere;
 }
 .panel[data-active="true"] .seg-group-header {
@@ -316,8 +255,8 @@ body {
   font-family: var(--font-ipa);
   font-size: var(--font-size-control);
   cursor: pointer;
-  /* Don't let multi-character segments (e.g. /tʃ/, /dʒ/, /aɪ/)
-     wrap inside the button; widen instead. */
+  /* Multi-character segments like /tʃ/, /dʒ/, /aɪ/ stay on one
+     line; the button widens instead. */
   white-space: nowrap;
 }
 .seg-btn:hover {
@@ -342,22 +281,19 @@ body {
   border: var(--border-std) dashed var(--accent);
 }
 
-/* ------------------------------------------------------------------ */
-/* IPA-style vowel trapezoid                                          */
-/* Layout matches the desktop's VowelChartWidget: 6 height rows ×    */
-/* 6 backness-rounding columns. Placement comes from Python (the     */
-/* same gui.vowel_layout.vowel_grid_pos function the desktop calls). */
-/* ------------------------------------------------------------------ */
+/* ---------- IPA vowel trapezoid ----------
+   6 height rows × 6 backness-rounding columns. Placement comes
+   from Python (gui.vowel_layout.vowel_grid_pos) so the chart
+   matches the desktop's VowelChartWidget. */
+
 .vowel-chart-group {
-  /* Span the full segment-grid width so the chart isn't squeezed */
-  /* into one of the column-flow's narrow columns. */
   break-inside: avoid;
   margin-top: var(--space-xs);
 }
 .vowel-chart {
   display: grid;
-  /* Column 1: row labels. Columns 2-7: front-unr, front-rnd, */
-  /* central-unr, central-rnd, back-unr, back-rnd. */
+  /* Column 1: row labels. Columns 2-7 pair unrounded + rounded
+     per backness (front, central, back). */
   grid-template-columns: minmax(60px, auto) repeat(6, minmax(28px, 1fr));
   grid-auto-rows: var(--control-h-sm);
   column-gap: var(--space-xs);
@@ -391,27 +327,16 @@ body {
   color: var(--text);
 }
 .vowel-chart-cell {
-  /* Center the button in its grid cell (the cell itself is wider */
-  /* than a button so the chart preserves trapezoid proportions). */
+  /* Each grid cell is wider than a button so the trapezoid keeps
+     its proportions; center the button within the cell. */
   justify-self: center;
 }
 
-/* ------------------------------------------------------------------ */
-/* Feature panel                                                       */
-/* Grouped into named cards (Major Class, Laryngeal, Manner, Place,    */
-/* ...) mirroring the desktop's feature panel.                         */
-/*                                                                    */
-/* Layout uses CSS Grid with ``auto-fill`` rather than                 */
-/* ``column-count``: the latter overflows into a hidden third column   */
-/* when the panel is shorter than the content (e.g. after the          */
-/* analysis pane takes vertical space). auto-fill grows the column     */
-/* count to fit whatever the panel width allows, so every group stays  */
-/* visible.                                                           */
-/* ------------------------------------------------------------------ */
-/* Two columns side by side. JS (distributeFeatureGroups) decides
-   which group goes in which column using the desktop's pin + LPT
-   algorithm; this CSS just spaces them. On narrow viewports the
-   media query below stacks them vertically. */
+/* ---------- feature panel ----------
+   Two columns of named cards. JS decides which card goes in which
+   column (gui.layout.distribute_feature_groups); we just space
+   them. Narrow viewports stack vertically. */
+
 #feat-list {
   display: flex;
   gap: var(--space-xl);
@@ -445,23 +370,17 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  /* Slightly tighter padding than the desktop's row spacing to
-     trade a few pixels of breathing room for fitting all features
-     in the panel without scrolling on a 720-900 px viewport. */
   padding: 2px var(--space-md);
   border-radius: var(--radius-md);
 }
-/* Row backgrounds are mode-dependent:
-   - In SEG mode (feat panel inactive), they encode the analysis of
-     the current selection: green for shared-+, red for shared-,
-     blue for contrastive.
-   - In FEAT mode (feat panel active), they echo the user's query:
-     green for +, red for -. Mirrors the desktop's
-     _apply_query_style.
-   The data attributes are set independently and the row keeps both
-   sets stable; the gating selectors here pick which fires. This is
-   what lets the same row survive a mode toggle without flashing
-   stale colors. */
+
+/* Row backgrounds are mode-dependent. SEG mode (feat panel
+   inactive) encodes the analysis result via data-shared /
+   data-value / data-contrastive. FEAT mode (feat panel active)
+   echoes the user's query via data-query-value, mirroring the
+   desktop's _apply_query_style. The selectors gate by panel
+   active state so a stale data attribute from one mode can't
+   bleed into the other. */
 #feat-panel:not([data-active="true"]) .feat-row[data-shared="true"][data-value="+"] {
   background: var(--shared-plus);
 }
@@ -481,9 +400,8 @@ body {
 .feat-name {
   flex: 1;
   color: var(--text);
-  /* Feature names come from user-uploaded inventories. A long
-     "PHARYNGEALIZED_BACKNESS" or similar shouldn't blow out the
-     row width; wrap on any character if needed. */
+  /* User-uploaded inventories may carry long feature names; wrap
+     on any character rather than blowing out the row. */
   overflow-wrap: anywhere;
 }
 #feat-panel:not([data-active="true"]) .feat-row[data-contrastive="true"] .feat-name {
@@ -506,15 +424,18 @@ body {
   justify-content: center;
   border-radius: var(--radius-sm);
   font-weight: bold;
-  /* Themed via palette.py's tag_gray token so both modes track the
-     palette source. The previous hardcoded #E5E7EB / #2A2A2A pair
-     drifted from theme.css whenever the palette changed. */
   background: var(--tag-gray);
   color: var(--text-dim);
 }
-.feat-row[data-shared="true"][data-value="+"] .feat-badge { background: var(--plus-bg); color: var(--plus); }
-.feat-row[data-shared="true"][data-value="-"] .feat-badge { background: var(--minus-bg); color: var(--minus); }
-.feat-row[data-contrastive="true"] .feat-badge { background: var(--accent-light); color: var(--accent); }
+.feat-row[data-shared="true"][data-value="+"] .feat-badge {
+  background: var(--plus-bg); color: var(--plus);
+}
+.feat-row[data-shared="true"][data-value="-"] .feat-badge {
+  background: var(--minus-bg); color: var(--minus);
+}
+.feat-row[data-contrastive="true"] .feat-badge {
+  background: var(--accent-light); color: var(--accent);
+}
 
 .feat-btn {
   width: var(--feat-btn-w);
@@ -539,36 +460,27 @@ body {
   border-color: var(--minus);
 }
 
-/* Hide interactive controls in the inactive (display-only) panel. */
+/* The inactive panel is display-only: badge visible, buttons
+   hidden; reversed in the active panel. */
 .panel:not([data-active="true"]) .feat-btn { display: none; }
 .panel[data-active="true"] .feat-badge { display: none; }
 
-/* ------------------------------------------------------------------ */
-/* Analysis pane                                                       */
-/* ------------------------------------------------------------------ */
+/* ---------- analysis pane ----------
+   Fixed at 220 px (min == max) so a long multi-segment analysis
+   can't eat enough vertical space to crowd the segments pane.
+   Inside, .analysis-content's overflow:auto handles content
+   that exceeds the visible area. The expand button overrides
+   min-height to 55vh; min-height wins over max-height per CSS. */
+
 .analysis {
   background: var(--analysis-bg);
   border-top: var(--border-thin) solid var(--border);
   padding: var(--space-lg) var(--space-xl);
   display: flex;
   flex-direction: column;
-  /* Body grid is "auto 1fr auto auto" so panels gets the
-     remaining space. Analysis is FIXED at 220 px (min == max) so
-     it never grows with content -- a long multi-segment analysis
-     would otherwise eat enough vertical space that the segments
-     pane became too small to click in. Inside, the
-     .analysis-content's overflow:auto handles scrolling when the
-     rendered HTML exceeds the visible area. .analysis.expanded
-     overrides this with min-height: 55vh; max-height stays
-     baseline but min-height wins per the CSS spec when min > max. */
   min-height: 220px;
   max-height: 220px;
 }
-/* Expanded state: claim 55vh instead of 1fr-of-remainder so panels
-   visibly shrink and the analysis gets meaningfully more room.
-   Pairs with the ⤢/⤣ toggle button in the analysis header. The
-   dvh fallback keeps the expanded analysis from being clipped by
-   mobile browser chrome the way 55vh would. */
 .analysis.expanded {
   min-height: 55vh;
   min-height: 55dvh;
@@ -604,9 +516,8 @@ body {
   flex: 1;
   font-size: var(--font-size-control);
   color: var(--text);
-  /* Re-rendering the analysis HTML is the most frequent update;
-     contain so the bridge-driven innerHTML swap doesn't reflow the
-     panels or status bar. */
+  /* Innerhtml swaps are the most frequent DOM update; contain so
+     they don't reflow the panels or status bar. */
   contain: layout style;
 }
 .analysis-content p { margin: 0 0 var(--space-md); }
@@ -614,9 +525,8 @@ body {
 .analysis-content table { border-collapse: collapse; }
 .analysis-content td { padding-bottom: 3px; }
 
-/* ------------------------------------------------------------------ */
-/* Status bar                                                          */
-/* ------------------------------------------------------------------ */
+/* ---------- status bar ---------- */
+
 .statusbar {
   background: var(--panel);
   border-top: var(--border-thin) solid var(--border);
@@ -625,9 +535,8 @@ body {
   color: var(--text-dim);
 }
 
-/* ------------------------------------------------------------------ */
-/* Loading overlay                                                     */
-/* ------------------------------------------------------------------ */
+/* ---------- loading overlay ---------- */
+
 .loading {
   position: fixed;
   inset: 0;

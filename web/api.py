@@ -1,14 +1,15 @@
 """Python bridge between JS and the phonology engine.
 
-Loaded into Pyodide at startup. Maintains one ``engine`` global per
-loaded inventory; JS calls the module-level functions, which return
-plain-Python types that Pyodide proxies to JS as dicts/lists/strings.
+Imported by main.js via ``pyodide.pyimport("api")`` after the
+zipped engine + renderer bundle has been mounted on sys.path.
+JS calls the module-level functions; their return values are
+Pyodide-converted into plain JS dicts/lists/strings.
 
-The HTML renderers live in ``phonology_features.gui.analysis`` (in
-the desktop's source tree). The build script copies those files into
-the web bundle under the same package path, so the imports resolve
-identically to the desktop. One source of truth; edits to the
-desktop renderer automatically flow to the next web build.
+The HTML renderers live in ``phonology_features.gui.analysis``
+(the desktop's source tree). The web build copies those files
+into the bundle at the same package path so imports resolve
+identically here and on the desktop, keeping one source of
+truth for analysis output.
 """
 
 from __future__ import annotations
@@ -19,14 +20,6 @@ from typing import Any
 
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
-
-# Lazy holder for gui.analysis. Importing it at module-load time
-# adds ~20-30 ms of parse + exec cost to the bridge init phase
-# that pyimport("api") incurs at boot. None of the analysis
-# functions are needed until the user makes a selection (which is
-# after the loading screen drops), so we defer the import to the
-# first analyze_* call. Then the user is in 'click cost' mode and
-# the ms cost is hidden inside the click latency budget.
 from phonology_features.gui.constants import FEATURE_GROUPS
 from phonology_features.gui.layout import distribute_feature_groups
 from phonology_features.gui.palette import set_theme
@@ -41,15 +34,21 @@ _analysis_mod: Any = None
 
 
 def _analysis() -> Any:
-    """Lazy import + memoize of phonology_features.gui.analysis."""
+    """Lazy-load ``phonology_features.gui.analysis``.
+
+    Importing it at module load adds ~20-30 ms to the bridge-init
+    phase that ``pyimport("api")`` incurs. None of its functions
+    are needed until the user makes a selection, so defer the cost
+    into the first click where it's hidden under the click latency
+    budget.
+    """
     global _analysis_mod
     if _analysis_mod is None:
         from phonology_features.gui import analysis as _mod
         _analysis_mod = _mod
     return _analysis_mod
 
-# Single engine instance per loaded inventory. JS never sees the
-# engine directly; all access goes through the functions below.
+
 _engine: FeatureEngine | None = None
 _inventory_name: str = ""
 
@@ -61,13 +60,14 @@ def _require_engine() -> FeatureEngine:
 
 
 def load_inventory_json(
-    json_text: str, source_label: str = "uploaded"
-) -> dict:
-    """Parse a JSON inventory string, swap to it, return basic info
-    for the UI to render the segment grid and feature list.
+    json_text: str,
+    source_label: str = "uploaded",
+) -> dict[str, Any]:
+    """Parse a JSON inventory, swap it in, and return the summary
+    JS needs to render the segment grid and feature list.
 
-    Raises ``ValidationError`` with the same shape as ``Inventory.load``
-    so JS can surface the issues list.
+    Raises ``ValidationError`` with the same shape as
+    ``Inventory.load`` so JS can surface the issues list.
     """
     global _engine, _inventory_name
     raw = json.loads(json_text)
@@ -79,28 +79,22 @@ def load_inventory_json(
 
 
 def _invalidate_analysis_caches() -> None:
-    """Clear the LRU caches that memoize analyze_segments and
-    analyze_features. Must be called any time the cached result
-    would become stale:
+    """Clear the LRU caches for ``analyze_segments`` /
+    ``analyze_features``.
 
-    * load_inventory_json: engine state changed; cached analyses
-      reference segments and features from the OLD inventory.
-    * set_active_theme: cached analysis HTML embeds chip colors
-      from the PREVIOUS palette; on theme swap those colors are
-      wrong and we have to regenerate.
+    Required after any change that would invalidate a cached
+    result: a new inventory (engine state changed) or a theme swap
+    (the cached HTML embeds chip colors from the previous palette).
     """
     _analyze_segments_cached.cache_clear()
     _analyze_features_cached.cache_clear()
 
 
-def _summarize_engine(engine: FeatureEngine) -> dict:
-    """Shape of what JS needs to populate the panels on every fresh
-    inventory load.
-    """
+def _summarize_engine(engine: FeatureEngine) -> dict[str, Any]:
+    """Shape the inventory summary JS needs for first paint."""
     grouped = engine.grouped_segments
-    # Split the manner-class buckets into two streams: the "Vowels"
-    # group renders as an IPA trapezoid; everything else renders as
-    # the consonant flow-grid the web already had.
+    # Split the manner-class buckets: "vowels" renders as the IPA
+    # trapezoid, everything else as the consonant flow-grid.
     consonant_groups: list[dict] = []
     vowel_segs: list[str] = []
     for manner, segs in grouped.items():
@@ -118,17 +112,17 @@ def _summarize_engine(engine: FeatureEngine) -> dict:
     }
 
 
-def _vowel_chart(engine: FeatureEngine, vowel_segs: list[str]) -> dict:
-    """Compute the IPA-style vowel trapezoid layout.
+def _vowel_chart(
+    engine: FeatureEngine,
+    vowel_segs: list[str],
+) -> dict[str, Any]:
+    """Compute the IPA vowel trapezoid layout.
 
     Returns ``{rows, cols, cells}`` where ``cells`` is a list of
-    ``{seg, row, col, confidence, reason}`` per vowel. JS uses this
-    to mount each vowel button into the right cell of a CSS grid.
-
+    ``{seg, row, col, confidence, reason}`` per vowel. JS uses
+    this to mount each vowel button into the right CSS-grid cell.
     Placement runs through ``gui.vowel_layout.vowel_grid_pos`` so
-    the chart matches the desktop's VowelChartWidget exactly. We
-    pass raw inventory feats; ``vowel_layout`` normalizes keys
-    internally (PascalCase ``"High"`` works the same as ``"high"``).
+    the chart matches the desktop's VowelChartWidget exactly.
     """
     seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)
@@ -149,17 +143,15 @@ def _vowel_chart(engine: FeatureEngine, vowel_segs: list[str]) -> dict:
     }
 
 
-def _grouped_features(features: list[str]) -> list[dict]:
-    """Bucket the inventory's active features into FEATURE_GROUPS
-    cards (Major Class, Laryngeal, Manner, Place, etc.), matching
-    the desktop's feature-panel layout. Features that don't fit any
-    group land in an "Other" bucket at the end.
+def _grouped_features(features: list[str]) -> list[dict[str, Any]]:
+    """Bucket the inventory's features into named cards matching
+    the desktop's feature-panel layout (Major Class, Laryngeal,
+    Manner, Place, etc.). Features that don't fit any group land
+    in an "Other" bucket at the end.
 
-    The cards are pre-distributed into left/right columns using the
-    SAME algorithm the desktop uses
-    (``gui.layout.distribute_feature_groups``). The web renderer
-    just reads ``column`` to decide which DOM column to mount each
-    card under; no duplicated layout logic on the JS side.
+    Cards are pre-distributed into left/right columns by
+    ``gui.layout.distribute_feature_groups`` so the web renderer
+    just mounts each card into the column it advertises.
     """
     present = set(features)
     cards: list[dict] = []
@@ -175,7 +167,7 @@ def _grouped_features(features: list[str]) -> list[dict]:
     sizes = {c["name"]: len(c["features"]) for c in cards}
     group_order = [c["name"] for c in cards]
     left_names, right_names = distribute_feature_groups(
-        sizes, group_order=group_order
+        sizes, group_order=group_order,
     )
     column_of = {name: 0 for name in left_names}
     column_of.update({name: 1 for name in right_names})
@@ -188,7 +180,7 @@ def serialize_current_inventory() -> str:
     """Round-trip the active inventory to JSON for download."""
     engine = _require_engine()
     return json.dumps(
-        engine.inventory.to_json_dict(), indent=2, ensure_ascii=False
+        engine.inventory.to_json_dict(), indent=2, ensure_ascii=False,
     )
 
 
@@ -198,26 +190,18 @@ def get_current_inventory_name() -> str:
 
 def set_active_theme(name: str) -> None:
     """Switch the renderer palette so subsequent HTML output uses
-    the right chip colors. JS handles the surrounding CSS variables;
-    this exists for the chip backgrounds embedded in analysis HTML.
-
-    Invalidates the analyze_* caches because their cached HTML
-    embeds chip colors from the previous palette.
+    the new chip colors. Invalidates the analyze_* caches because
+    their cached HTML embeds colors from the previous palette.
     """
     set_theme(name)
     _invalidate_analysis_caches()
 
 
-# ----------------------------------------------------------------------
-# Mode-switch projection. Delegated to the engine so the web mode
-# toggle behaves identically to the desktop's _ModeController:
-# seg→feat pre-fills the feature query with the common +/- features
-# of the selection; feat→seg pre-selects every segment that matches
-# the current query.
-# ----------------------------------------------------------------------
 def project_segments_to_features(segs: list[str]) -> dict[str, str]:
-    """For mode switch seg → feat: returns the feature query that
-    represents the selection. Empty list -> empty dict."""
+    """Mode-switch projection (SEG -> FEAT): the feature query
+    that represents the current segment selection. Empty list maps
+    to empty dict.
+    """
     engine = _require_engine()
     if not segs:
         return {}
@@ -225,56 +209,47 @@ def project_segments_to_features(segs: list[str]) -> dict[str, str]:
 
 
 def project_features_to_segments(spec: dict[str, str]) -> list[str]:
-    """For mode switch feat → seg: returns the segments matching
-    the query. Empty dict -> empty list."""
+    """Mode-switch projection (FEAT -> SEG): the segments matching
+    the current feature query. Empty dict maps to empty list.
+    """
     engine = _require_engine()
     if not spec:
         return []
     return engine.find_segments(dict(spec))
 
 
-# ----------------------------------------------------------------------
-# Selection-driven analysis. ``segs`` is a JS array; Pyodide proxies
-# it to Python. Functions return dicts that JS can read directly.
-# ----------------------------------------------------------------------
-def analyze_segments(segs: list[str]) -> dict:
-    """Seg-to-feat update. Returns the full state JS needs to paint
-    the panels and analysis pane.
+def analyze_segments(segs: list[str]) -> dict[str, Any]:
+    """SEG-mode analysis. Returns ``analysis_html`` + the inputs
+    JS needs to derive each row/button's state inline (mirroring
+    the desktop's _update_seg_to_feat).
 
-    Thin wrapper around an LRU-cached impl. Same selection clicked
-    twice (e.g. toggled off then on) returns from cache in ~5 us
-    instead of redoing ~30 ms of feature math + HTML render.
-    Cache is invalidated by load_inventory_json + set_active_theme.
+    Cache hit on a repeated selection returns in ~5 us; a fresh
+    selection takes ~30 ms for the feature math + HTML render.
+    Cache is invalidated by ``load_inventory_json`` and
+    ``set_active_theme``.
     """
     return _analyze_segments_cached(tuple(segs))
 
 
 @lru_cache(maxsize=256)
-def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict:
-    """SEG mode analysis. Returns the inputs JS needs to derive each
-    row/button's state inline, mirroring the desktop's _update_seg_
-    to_feat. Keys:
+def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict[str, Any]:
+    """SEG analysis result. Keys returned to JS:
 
     * ``analysis_html``: pre-rendered HTML for the analysis pane.
-    * ``selected``: list of currently-selected segments (the input,
-      echoed back for the caller's convenience).
-    * ``suggested``: natural-class extension suggestions (empty for
-      single-seg or genuine natural classes).
-    * ``common``: dict of ``{feat: value}`` for features where all
-      selected segments share the same value. Includes ``"0"`` and
-      ``""`` values; JS decides which ones to display as a +/- chip
+    * ``selected``: input list, echoed back.
+    * ``suggested``: natural-class extension suggestions (empty
+      for single-seg selections or genuine natural classes).
+    * ``common``: ``{feat: value}`` for features where every
+      selected segment shares the same value. Values include
+      ``"0"`` / ``""``; JS decides which to display as a +/- chip
       vs. neutral.
-    * ``contrastive``: list of feature names that split cleanly
-      across the selection (some segs +, others -, neither in
-      majority unspecified).
+    * ``contrastive``: feature names that split cleanly across
+      the selection.
 
-    JS does NOT receive a precomputed ``feature_display`` dict
-    anymore. The old shape silently fell back to a neutral default
-    for any feat missing from the dict; the new shape forces JS to
-    walk every row in ``state.feat_rows`` and place each into
-    exactly one bucket (contrastive / shared / neutral) using
-    ``common`` and ``contrastive`` directly. Matches the desktop
-    pattern, which is total by construction.
+    No precomputed ``feature_display`` dict: a dict-with-fallback
+    pattern silently produced neutral-state ghosts whenever a feat
+    was missing. JS now derives each row's state inline from
+    ``common`` and ``contrastive``, matching the desktop pattern.
     """
     engine = _require_engine()
     segs = list(segs_tuple)
@@ -289,13 +264,11 @@ def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict:
     analysis = _analysis()
     if len(segs) == 1:
         feats = engine.get_segment_features(segs[0])
-        # Single-seg case: every feature has a defined value for
-        # this segment. "0" maps to "" so JS sees a blank slot
-        # (matches desktop's set_display("", shared=True) → neutral
-        # branch).
+        # Map "0" to "" so JS sees a neutral slot for unspecified
+        # features (desktop set_display("", shared=True) -> neutral).
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
         analysis_html = analysis.render_single_segment(
-            engine, segs[0], dict(feats)
+            engine, segs[0], dict(feats),
         )
         return {
             "analysis_html": analysis_html,
@@ -313,7 +286,7 @@ def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict:
         extension = engine.find_segments(common_raw, underspec_compatible=True)
         suggested = [s for s in extension if s not in selected_set]
     analysis_html = analysis.render_multi_segment(
-        engine, segs, common_raw, contrastive_raw, suggested
+        engine, segs, common_raw, contrastive_raw, suggested,
     )
     return {
         "analysis_html": analysis_html,
@@ -324,23 +297,18 @@ def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict:
     }
 
 
-def analyze_features(spec: dict[str, str]) -> dict:
-    """Feat-to-seg update. ``spec`` is ``{feature_name: '+' | '-'}``.
-    Returns the matching segments and analysis HTML.
-
-    Same LRU-cache treatment as analyze_segments: hashable cache
-    key is the spec's items as a tuple. Dict iteration order is
-    preserved (Python 3.7+), so the cache distinguishes between
-    differently-ordered specs even though they produce the same
-    matching set -- the renderer may iterate the spec in chip
-    order, so different orders can produce slightly different
-    HTML.
+def analyze_features(spec: dict[str, str]) -> dict[str, Any]:
+    """FEAT-mode analysis. Returns ``analysis_html`` + the
+    matching segment list. JS derives matched/unmatched state per
+    button inline (mirroring _update_feat_to_seg).
     """
     return _analyze_features_cached(tuple(spec.items()))
 
 
 @lru_cache(maxsize=256)
-def _analyze_features_cached(spec_items: tuple[tuple[str, str], ...]) -> dict:
+def _analyze_features_cached(
+    spec_items: tuple[tuple[str, str], ...],
+) -> dict[str, Any]:
     engine = _require_engine()
     spec = dict(spec_items)
     if not spec:
@@ -358,9 +326,9 @@ def _analyze_features_cached(spec_items: tuple[tuple[str, str], ...]) -> dict:
 
 
 def validation_issues_from_error(exc: Any) -> list[str]:
-    """Convenience for JS catching a ValidationError raised from
-    ``load_inventory_json``. The exception's ``issues`` tuple is the
-    canonical human-readable list."""
+    """Extract the canonical human-readable issues list from a
+    ``ValidationError`` raised by ``load_inventory_json``.
+    """
     if isinstance(exc, ValidationError):
         return list(exc.issues)
     return [str(exc)]

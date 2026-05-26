@@ -1,37 +1,26 @@
-/* Service worker for the phonology engine web app.
+/**
+ * Service worker.
  *
- * web/scripts/build.py stamps in BUILD_ID and PRECACHE at build
- * time. BUILD_ID changes when any shipped asset changes (it's a
- * hash of the precache list), so a new build means a new cache
- * name, which the activate handler garbage-collects.
+ * BUILD_ID and PRECACHE are stamped in by web/scripts/build.py.
+ * BUILD_ID is a hash of the precache list; any change in the
+ * shipped file set bumps it, so a new build gets a new cache name
+ * and the activate handler garbage-collects the old ones.
  *
- * Caching strategy by URL class:
+ * Caching strategy:
  *
- * - index.html: stale-while-revalidate. Serves the cached copy
- *   instantly (fast warm load), kicks off a background fetch to
- *   pick up a new build on the next visit. Without this, the
- *   user is permanently pinned to whichever build they first
- *   visited.
+ *   index.html       stale-while-revalidate (so a new build is
+ *                    picked up on the next visit, never deeper
+ *                    than one visit's lag).
+ *   hashed assets    cache-first (immutable per content hash;
+ *                    a changed file means a changed URL).
+ *   Pyodide CDN      cache-first, populated on first successful
+ *                    fetch. NOT precached in install() because a
+ *                    transient CDN failure would break the install.
+ *   anything else    pass through.
  *
- * - Locally-hashed assets (main.HASH.js, python_bundle.HASH.zip,
- *   etc.): cache-first. They're immutable per the content hash;
- *   if the bytes change the URL changes, and the new URL misses
- *   the cache and goes to network anyway.
- *
- * - Pyodide CDN (jsdelivr): cache-first. The URLs are pinned by
- *   version, so they're effectively immutable too. We don't
- *   precache them in install() because a transient CDN failure
- *   would break the SW install -- we cache on first successful
- *   fetch instead.
- *
- * - Anything else: pass through to the network. We don't want
- *   to be the cache for arbitrary URLs.
- *
- * Update semantics: a new SW installs in the background but does
- * NOT skipWaiting -- the audit advice was to avoid hot-swapping
- * bundles under a live Pyodide instance. Activation happens once
- * the user closes the last tab; until then the old SW stays in
- * charge of any open page.
+ * skipWaiting is intentionally not called: hot-swapping bundles
+ * under a live Pyodide instance is hazardous. The new SW activates
+ * once the user closes the last tab.
  */
 
 const BUILD_ID = "__BUILD_ID__";
@@ -41,7 +30,7 @@ const PYODIDE_ORIGIN = "https://cdn.jsdelivr.net";
 
 self.addEventListener("install", (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE))
+        caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE)),
     );
 });
 
@@ -51,9 +40,9 @@ self.addEventListener("activate", (event) => {
             Promise.all(
                 keys
                     .filter((k) => k !== CACHE_NAME)
-                    .map((k) => caches.delete(k))
+                    .map((k) => caches.delete(k)),
             )
-        )
+        ),
     );
 });
 
@@ -72,8 +61,7 @@ self.addEventListener("fetch", (event) => {
     if (!sameOrigin && !pyodideCdn) return;
 
     const isIndexHtml = sameOrigin && (
-        url.pathname.endsWith("/")
-        || url.pathname.endsWith("/index.html")
+        url.pathname.endsWith("/") || url.pathname.endsWith("/index.html")
     );
 
     if (isIndexHtml) {
@@ -89,12 +77,9 @@ async function cacheFirst(req) {
     if (cached) return cached;
     try {
         const response = await fetch(req);
-        if (response.ok) {
-            // Cache successful responses. Failed responses are
-            // not cached so a transient 5xx doesn't pin us to
-            // an error page until the cache is cleared.
-            cache.put(req, response.clone());
-        }
+        // Don't cache error responses; a transient 5xx shouldn't
+        // pin the user to an error page.
+        if (response.ok) cache.put(req, response.clone());
         return response;
     } catch (e) {
         return cached || Response.error();
@@ -110,11 +95,11 @@ async function staleWhileRevalidate(event, req) {
             return response;
         })
         .catch(() => cached || Response.error());
-    // If we return the cached response, the background fetch is
-    // still in flight. waitUntil keeps the SW alive until the
-    // cache.put completes -- otherwise an idle eviction between
-    // page close and fetch completion would lose the update, and
-    // the user would see the stale build on the next visit too.
+    // waitUntil keeps the SW alive long enough for the cache.put
+    // to land, even when we return the cached response immediately.
+    // Without it, an idle eviction between page close and fetch
+    // completion would drop the update and the user would see the
+    // stale build for an extra visit.
     event.waitUntil(networkPromise);
     return cached || networkPromise;
 }

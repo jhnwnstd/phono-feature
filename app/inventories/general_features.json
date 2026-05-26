@@ -2,7 +2,7 @@
   "name": "General IPA Feature Inventory",
   "version": "3.0",
   "source": "Compiled from Chomsky & Halle (1968), Hayes (2009), Clements & Hume (1995), Ladefoged & Maddieson (1996), and post-2000 research. Cross-system verification v2.1: corrections applied per Miller (2011/2016) on click posterior closure, Walker (2011) on laryngeal sonorance, and Hayes (2009) on strident/coronal. See accompanying document 'Distinctive Features v2' and inline notes.",
-  "notes": "v3.0: Pharyngeal/Click absent→'0'; click High:+→- (uvular posterior, Miller 2011); Front added (DORSAL-dependent); Long added; LoweredLarynxImplosive added (Moisik & Esling 2011); implosives: ConstrGl→'-', LoweredLarynxImplosive→'+'; new segments: k͡p ɡ͡b ŋ͡m (labial-velar), ᵐb ⁿd ᵑɡ (prenasalized), m̥ n̥ ŋ̊ (voiceless nasals).",
+  "notes": "v3.0: Pharyngeal/Click absent→'0'; click High:+→- (uvular posterior, Miller 2011); Front added (DORSAL-dependent); Long added; LowerLarynx added (Moisik & Esling 2011); implosives: ConstrGl→'-', LowerLarynx→'+'; new segments: k͡p ɡ͡b ŋ͡m (labial-velar), ᵐb ⁿd ᵑɡ (prenasalized), m̥ n̥ ŋ̊ (voiceless nasals).",
   "features": [
     "Syllabic",
     "Consonantal",
@@ -33,7 +33,7 @@
     "ATR",
     "Click",
     "Long",
-    "LoweredLarynxImplosive"
+    "LowerLarynx"
   ],
   "segments": {
     "p": {
@@ -66,7 +66,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "b": {
       "Syllabic": "-",
@@ -98,7 +98,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "t": {
       "Syllabic": "-",
@@ -130,7 +130,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "d": {
       "Syllabic": "-",
@@ -162,7 +162,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʈ": {
       "Syllabic": "-",
@@ -194,7 +194,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɖ": {
       "Syllabic": "-",
@@ -226,7 +226,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "c": {
       "Syllabic": "-",
@@ -258,7 +258,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɟ": {
       "Syllabic": "-",
@@ -290,7 +290,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "k": {
       "Syllabic": "-",
@@ -322,7 +322,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɡ": {
       "Syllabic": "-",
@@ -354,7 +354,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "q": {
       "Syllabic": "-",
@@ -386,7 +386,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɢ": {
       "Syllabic": "-",
@@ -418,7 +418,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʔ": {
       "Syllabic": "-",
@@ -450,7 +450,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "t͡ʃ": {
       "Syllabic": "-",
@@ -482,7 +482,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "d͡ʒ": {
       "Syllabic": "-",
@@ -514,7 +514,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "t͡s": {
       "Syllabic": "-",
@@ -546,7 +546,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "d͡z": {
       "Syllabic": "-",
@@ -578,7 +578,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "t͡ɕ": {
       "Syllabic": "-",
@@ -610,7 +610,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "d͡ʑ": {
       "Syllabic": "-",
@@ -642,7 +642,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʈ͡ʂ": {
       "Syllabic": "-",
@@ -674,7 +674,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɖ͡ʐ": {
       "Syllabic": "-",
@@ -706,7 +706,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "t͡ɬ": {
       "Syllabic": "-",
@@ -738,7 +738,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "d͡ɮ": {
       "Syllabic": "-",
@@ -770,7 +770,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "p͡f": {
       "Syllabic": "-",
@@ -802,7 +802,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "b͡v": {
       "Syllabic": "-",
@@ -834,7 +834,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "p'": {
       "Syllabic": "-",
@@ -866,7 +866,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "tʼ": {
       "Syllabic": "-",
@@ -898,7 +898,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "kʼ": {
       "Syllabic": "-",
@@ -930,7 +930,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "sʼ": {
       "Syllabic": "-",
@@ -962,7 +962,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʃʼ": {
       "Syllabic": "-",
@@ -994,7 +994,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "t͡sʼ": {
       "Syllabic": "-",
@@ -1026,7 +1026,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɓ": {
       "Syllabic": "-",
@@ -1058,7 +1058,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "+"
+      "LowerLarynx": "+"
     },
     "ɗ": {
       "Syllabic": "-",
@@ -1090,7 +1090,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "+"
+      "LowerLarynx": "+"
     },
     "ɠ": {
       "Syllabic": "-",
@@ -1122,7 +1122,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "+"
+      "LowerLarynx": "+"
     },
     "ʛ": {
       "Syllabic": "-",
@@ -1154,7 +1154,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "+"
+      "LowerLarynx": "+"
     },
     "m": {
       "Syllabic": "-",
@@ -1186,7 +1186,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɱ": {
       "Syllabic": "-",
@@ -1218,7 +1218,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "n": {
       "Syllabic": "-",
@@ -1250,7 +1250,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɳ": {
       "Syllabic": "-",
@@ -1282,7 +1282,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɲ": {
       "Syllabic": "-",
@@ -1314,7 +1314,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ŋ": {
       "Syllabic": "-",
@@ -1346,7 +1346,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɴ": {
       "Syllabic": "-",
@@ -1378,7 +1378,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "f": {
       "Syllabic": "-",
@@ -1410,7 +1410,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "v": {
       "Syllabic": "-",
@@ -1442,7 +1442,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "θ": {
       "Syllabic": "-",
@@ -1474,7 +1474,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ð": {
       "Syllabic": "-",
@@ -1506,7 +1506,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "s": {
       "Syllabic": "-",
@@ -1538,7 +1538,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "z": {
       "Syllabic": "-",
@@ -1570,7 +1570,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʃ": {
       "Syllabic": "-",
@@ -1602,7 +1602,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʒ": {
       "Syllabic": "-",
@@ -1634,7 +1634,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʂ": {
       "Syllabic": "-",
@@ -1666,7 +1666,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʐ": {
       "Syllabic": "-",
@@ -1698,7 +1698,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɕ": {
       "Syllabic": "-",
@@ -1730,7 +1730,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʑ": {
       "Syllabic": "-",
@@ -1762,7 +1762,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "x": {
       "Syllabic": "-",
@@ -1794,7 +1794,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɣ": {
       "Syllabic": "-",
@@ -1826,7 +1826,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "χ": {
       "Syllabic": "-",
@@ -1858,7 +1858,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʁ": {
       "Syllabic": "-",
@@ -1890,7 +1890,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ħ": {
       "Syllabic": "-",
@@ -1922,7 +1922,7 @@
       "Pharyngeal": "+",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʕ": {
       "Syllabic": "-",
@@ -1954,7 +1954,7 @@
       "Pharyngeal": "+",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɸ": {
       "Syllabic": "-",
@@ -1986,7 +1986,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "β": {
       "Syllabic": "-",
@@ -2018,7 +2018,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ç": {
       "Syllabic": "-",
@@ -2050,7 +2050,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʝ": {
       "Syllabic": "-",
@@ -2082,7 +2082,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɬ": {
       "Syllabic": "-",
@@ -2114,7 +2114,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɮ": {
       "Syllabic": "-",
@@ -2146,7 +2146,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɧ": {
       "Syllabic": "-",
@@ -2178,7 +2178,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "h": {
       "Syllabic": "-",
@@ -2210,7 +2210,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɦ": {
       "Syllabic": "-",
@@ -2242,7 +2242,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "l": {
       "Syllabic": "-",
@@ -2274,7 +2274,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɫ": {
       "Syllabic": "-",
@@ -2306,7 +2306,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɭ": {
       "Syllabic": "-",
@@ -2338,7 +2338,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʎ": {
       "Syllabic": "-",
@@ -2370,7 +2370,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʟ": {
       "Syllabic": "-",
@@ -2402,7 +2402,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʟ̠": {
       "Syllabic": "-",
@@ -2434,7 +2434,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "r": {
       "Syllabic": "-",
@@ -2466,7 +2466,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʀ": {
       "Syllabic": "-",
@@ -2498,7 +2498,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʙ": {
       "Syllabic": "-",
@@ -2530,7 +2530,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "r̥": {
       "Syllabic": "-",
@@ -2562,7 +2562,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɾ": {
       "Syllabic": "-",
@@ -2594,7 +2594,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɽ": {
       "Syllabic": "-",
@@ -2626,7 +2626,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɺ": {
       "Syllabic": "-",
@@ -2658,7 +2658,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ⱱ": {
       "Syllabic": "-",
@@ -2690,7 +2690,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɹ": {
       "Syllabic": "-",
@@ -2722,7 +2722,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɻ": {
       "Syllabic": "-",
@@ -2754,7 +2754,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʋ": {
       "Syllabic": "-",
@@ -2786,7 +2786,7 @@
       "Pharyngeal": "0",
       "Front": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "j": {
       "Syllabic": "-",
@@ -2818,7 +2818,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɥ": {
       "Syllabic": "-",
@@ -2850,7 +2850,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "w": {
       "Syllabic": "-",
@@ -2882,7 +2882,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɰ": {
       "Syllabic": "-",
@@ -2914,7 +2914,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɰ̠": {
       "Syllabic": "-",
@@ -2946,7 +2946,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʍ": {
       "Syllabic": "-",
@@ -2978,7 +2978,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʘ": {
       "Syllabic": "-",
@@ -3010,7 +3010,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ǀ": {
       "Syllabic": "-",
@@ -3042,7 +3042,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ǃ": {
       "Syllabic": "-",
@@ -3074,7 +3074,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ǂ": {
       "Syllabic": "-",
@@ -3106,7 +3106,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ǁ": {
       "Syllabic": "-",
@@ -3138,7 +3138,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "i": {
       "Syllabic": "+",
@@ -3170,7 +3170,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "y": {
       "Syllabic": "+",
@@ -3202,7 +3202,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɪ": {
       "Syllabic": "+",
@@ -3234,7 +3234,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʏ": {
       "Syllabic": "+",
@@ -3266,7 +3266,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɯ": {
       "Syllabic": "+",
@@ -3298,7 +3298,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "u": {
       "Syllabic": "+",
@@ -3330,7 +3330,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʊ": {
       "Syllabic": "+",
@@ -3362,7 +3362,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɨ": {
       "Syllabic": "+",
@@ -3394,7 +3394,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʉ": {
       "Syllabic": "+",
@@ -3426,7 +3426,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "e": {
       "Syllabic": "+",
@@ -3458,7 +3458,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ø": {
       "Syllabic": "+",
@@ -3490,7 +3490,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɤ": {
       "Syllabic": "+",
@@ -3522,7 +3522,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "o": {
       "Syllabic": "+",
@@ -3554,7 +3554,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɛ": {
       "Syllabic": "+",
@@ -3586,7 +3586,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "œ": {
       "Syllabic": "+",
@@ -3618,7 +3618,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ʌ": {
       "Syllabic": "+",
@@ -3650,7 +3650,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɔ": {
       "Syllabic": "+",
@@ -3682,7 +3682,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ə": {
       "Syllabic": "+",
@@ -3714,7 +3714,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɘ": {
       "Syllabic": "+",
@@ -3746,7 +3746,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɵ": {
       "Syllabic": "+",
@@ -3778,7 +3778,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɜ": {
       "Syllabic": "+",
@@ -3810,7 +3810,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɞ": {
       "Syllabic": "+",
@@ -3842,7 +3842,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "æ": {
       "Syllabic": "+",
@@ -3874,7 +3874,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɐ": {
       "Syllabic": "+",
@@ -3906,7 +3906,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "a": {
       "Syllabic": "+",
@@ -3938,7 +3938,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɑ": {
       "Syllabic": "+",
@@ -3970,7 +3970,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɒ": {
       "Syllabic": "+",
@@ -4002,7 +4002,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɶ": {
       "Syllabic": "+",
@@ -4034,7 +4034,7 @@
       "Pharyngeal": "0",
       "Front": "+",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɚ": {
       "Syllabic": "+",
@@ -4066,7 +4066,7 @@
       "Pharyngeal": "0",
       "Front": "-",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "k͡p": {
       "Syllabic": "-",
@@ -4098,7 +4098,7 @@
       "ATR": "0",
       "Click": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ɡ͡b": {
       "Syllabic": "-",
@@ -4130,7 +4130,7 @@
       "ATR": "0",
       "Click": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ŋ͡m": {
       "Syllabic": "-",
@@ -4162,7 +4162,7 @@
       "ATR": "0",
       "Click": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ᵐb": {
       "Syllabic": "-",
@@ -4194,7 +4194,7 @@
       "ATR": "0",
       "Click": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ⁿd": {
       "Syllabic": "-",
@@ -4226,7 +4226,7 @@
       "ATR": "0",
       "Click": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ᵑɡ": {
       "Syllabic": "-",
@@ -4258,7 +4258,7 @@
       "ATR": "0",
       "Click": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "m̥": {
       "Syllabic": "-",
@@ -4290,7 +4290,7 @@
       "ATR": "0",
       "Click": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "n̥": {
       "Syllabic": "-",
@@ -4322,7 +4322,7 @@
       "ATR": "0",
       "Click": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     },
     "ŋ̊": {
       "Syllabic": "-",
@@ -4354,7 +4354,7 @@
       "ATR": "0",
       "Click": "0",
       "Long": "-",
-      "LoweredLarynxImplosive": "0"
+      "LowerLarynx": "0"
     }
   }
 }

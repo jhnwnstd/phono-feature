@@ -1,26 +1,17 @@
-"""Build the HTML shown in the AnalysisPanel.
+"""HTML rendering for the AnalysisPanel.
 
-All functions return HTML strings and hold no GUI state. Every
-interpolation of inventory-provided text (segment symbols, feature
-names) goes through ``html.escape`` -- nothing else in the project
-sanitizes them, so a feature named ``"<b>oops</b>"`` would otherwise
-break the rendered layout.
+All public functions return HTML strings and hold no GUI state.
+Every interpolation of inventory-provided text (segment symbols,
+feature names) goes through ``html.escape``; nothing else in the
+project sanitizes them.
 
-Design choices that match the rest of the codebase:
+Conventions:
 
-  - **Typed chip colours.** ``_tag`` takes a :class:`TagColor` enum,
-    not a magic string. Renaming or removing a palette colour shows
-    up as a type error; ``_tag(text, "bleu")`` no longer silently
-    falls back to gray.
-
-  - **Single chip style.** Border radius, padding, margin, font size
-    live in ``constants.py``. Every chip is identical by construction;
-    no f-string ever hardcodes a chip dimension.
-
-  - **Compose, don't concatenate.** Repeated HTML shapes (segment
-    chips, signed-feature chips, muted-italic paragraphs, count
-    paragraphs) live in tiny helpers so the renderer functions read
-    as a sequence of intent rather than a wall of f-strings.
+* Chip colours are typed (:class:`TagColor`), not magic strings.
+* Chip geometry (border-radius, padding, margin, font size) lives
+  in ``constants.py`` so every chip is identical by construction.
+* Repeated HTML shapes are factored into helpers so the top-level
+  renderers read as a sequence of intent.
 """
 
 from __future__ import annotations
@@ -47,21 +38,16 @@ if TYPE_CHECKING:
     from phonology_engine.feature_engine import FeatureEngine
 
 
-# ---------------------------------------------------------------------------
-# Chip + paragraph primitives. Every renderer below composes from these.
-# ---------------------------------------------------------------------------
-def _tag(text: str, colour: TagColor) -> str:
-    """Render a coloured inline chip. ``text`` is escaped here so
-    every caller can pass raw inventory strings without thinking
-    about it. Chip geometry is shared via ``constants.CHIP_*``.
+# --- chip + paragraph primitives ---------------------------------
 
-    ``white-space: nowrap`` keeps the chip text atomic. Without it,
-    browsers treat the slashes in ``/seg/`` as soft break points
-    (same heuristic that lets long URLs wrap), so a chip like
-    ``/ɪ/`` can end up with the leading ``/`` on one line and
-    ``ɪ/`` on the next. Same defense for any multi-character text
-    inside a chip (signed feature names, etc.). The chip itself
-    still wraps as a whole unit when the line is too long.
+
+def _tag(text: str, colour: TagColor) -> str:
+    """Render a coloured inline chip. ``text`` is escaped here.
+
+    ``white-space: nowrap`` keeps the chip atomic: browsers treat
+    ``/`` as a soft break point (same heuristic that lets long URLs
+    wrap), so without nowrap a chip like ``/ɪ/`` can end up split
+    across lines with ``/`` on one line and ``ɪ/`` on the next.
     """
     palette = tag_palettes()
     bg, fg = palette.get(colour, palette[TagColor.NEUTRAL])
@@ -79,64 +65,60 @@ def _tag(text: str, colour: TagColor) -> str:
 
 
 def _segment_chip(seg: str, colour: TagColor = TagColor.SEGMENT) -> str:
-    """Render a segment symbol as a chip with surrounding slashes."""
+    """Render a segment symbol as a chip wrapped in slashes."""
     return _tag(f"/{seg}/", colour)
 
 
 def _signed_feature_chip(value: str, feature: str) -> str:
-    """Render a feature with its sign as a chip. ``value`` is ``+``
-    or ``-`` (ASCII); the rendered prefix is the matching glyph and
-    the chip colour follows the sign."""
+    """Render a signed feature chip (e.g. +Voice).
+
+    ``value`` is ``+`` or ``-`` (ASCII); ``0`` is filtered upstream
+    by the spec-display logic so any non-``+`` falls through to a
+    minus chip.
+    """
     if value == "+":
         return _tag(f"+{feature}", TagColor.PLUS)
-    # Any non-``+`` value renders as a minus chip. Callers only ever
-    # pass ``+`` or ``-`` -- ``0`` is filtered upstream by the spec
-    # display logic.
     return _tag(f"{MINUS_SIGN}{feature}", TagColor.MINUS)
 
 
 def _muted_italic_span(text: str) -> str:
-    """Inline ``<i>`` styled with the palette's muted-text colour.
-    Used for "none" / "not present" placeholders that sit inside a
-    larger paragraph."""
+    """Inline ``<i>`` styled with the palette's muted-text colour."""
     return f"<i style='color:{C['text_dim']}'>{text}</i>"
 
 
 def _muted_italic_p(text: str) -> str:
-    """Standalone ``<p>`` wrapping ``_muted_italic_span`` for cases
-    where the placeholder is its own paragraph block."""
+    """Standalone ``<p>`` wrapping ``_muted_italic_span``."""
     return f"<p>{_muted_italic_span(text)}</p>"
 
 
 def _yes_no(yes: bool) -> str:
-    """Render a Yes/No verdict in the palette's positive / negative
-    colour."""
+    """Yes/No verdict in the palette's positive / negative colour."""
     colour = C["plus"] if yes else C["minus"]
     label = "Yes" if yes else "No"
     return f"<span style='color:{colour}'>{label}</span>"
 
 
 def _plural(n: int, singular: str, plural: str | None = None) -> str:
-    """English pluralisation. ``_plural(1, "segment")`` -> "segment";
+    """English pluralisation: ``_plural(1, "segment")`` -> "segment",
     ``_plural(2, "segment")`` -> "segments"."""
     if n == 1:
         return singular
     return plural if plural is not None else singular + "s"
 
 
-# ---------------------------------------------------------------------------
-# Spec-list rendering
-# ---------------------------------------------------------------------------
+# --- spec-list rendering -----------------------------------------
+
+
 def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
     """Render minimal feature specifications as numbered HTML rows.
 
     Drops ``0`` values (under-specification is implicit), collapses
-    rows that become identical after the drop, and special-cases the
-    single-row case to omit the ``1.`` numbering prefix. Returns ``""``
-    if there's nothing left to show.
+    rows that become identical after the drop, and omits the
+    ``1.`` numbering when only one row remains. Returns ``""`` if
+    nothing's left to show.
     """
     seen: set[tuple[tuple[str, str], ...]] = set()
-    chip_rows: list[str] = []  # each row is just the chips, no prefix
+    chip_rows: list[str] = []
     for spec in specs:
         filtered = {
             feature: value
@@ -169,18 +151,20 @@ def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# Engine-side query: bucket segments by their value of each contrastive feature
-# ---------------------------------------------------------------------------
-def compute_contrastive(
-    engine: FeatureEngine, segs: list[str]
-) -> dict[str, dict[str, list[str]]]:
-    """For each feature with both '+' and '-' among ``segs``, bucket the segments.
+# --- engine-side query helper ------------------------------------
 
-    Returns ``{feat: {'+': [...], '-': [...], '0': [...]}}``. The '0'
-    bucket is only present when some segments are underspecified.
-    Bucket order follows the caller's ``segs`` list so rendered chips
-    align with selection order.
+
+def compute_contrastive(
+    engine: FeatureEngine,
+    segs: list[str],
+) -> dict[str, dict[str, list[str]]]:
+    """For each feature with both '+' and '-' among ``segs``, bucket
+    the segments by their value.
+
+    Returns ``{feat: {'+': [...], '-': [...], '0': [...]}}``. The
+    '0' bucket is included only when some segments are
+    underspecified. Bucket order follows the caller's ``segs`` list
+    so rendered chips align with selection order.
     """
     result: dict[str, dict[str, list[str]]] = {}
     seg_set = set(segs)
@@ -200,11 +184,13 @@ def compute_contrastive(
     return result
 
 
-# ---------------------------------------------------------------------------
-# Top-level renderers (each returns one HTML fragment for the analysis pane)
-# ---------------------------------------------------------------------------
+# --- top-level renderers -----------------------------------------
+
+
 def render_single_segment(
-    engine: FeatureEngine, seg: str, feats: dict[str, str]
+    engine: FeatureEngine,
+    seg: str,
+    feats: dict[str, str],
 ) -> str:
     """Build HTML for a single selected segment."""
     plus_feats = sort_features(
@@ -229,7 +215,9 @@ def render_single_segment(
     is_nc, specs = engine.is_natural_class([seg])
     if not is_nc:
         non_zero = {
-            feature: value for feature, value in feats.items() if value != "0"
+            feature: value
+            for feature, value in feats.items()
+            if value != "0"
         }
         equiv = engine.find_segments(non_zero, underspec_compatible=True)
         if len(equiv) > 1:
@@ -250,20 +238,10 @@ def render_multi_segment(
 ) -> str:
     """Build HTML for multiple selected segments.
 
-    Two columns from the very top, no full-width header row. The
-    selection / natural-class side sits on the left, the analysis
-    side (shared and contrasting features) on the right, so
-    ``Selected:`` shares its visual row with ``Shared features:``.
-
-        left  (50%): Selected segments, Natural class verdict,
-                     minimal specification (or suggested
-                     completions when the verdict is "No")
-        right (50%): Shared features, Contrasting features
-
-    Falls back to a single full-width column for the universal
-    class (whole inventory selected): the left side reduces to a
-    one-line "Natural class: Yes" plus an "∅ universal" badge and
-    would leave the right side towering over an almost-empty left.
+    Two-column layout: selection / natural-class verdict on the
+    left, shared / contrasting features on the right. Falls back to
+    a single full-width column for the universal class (whole
+    inventory selected), where the left side reduces to one line.
     """
     seg_tags = " ".join(_segment_chip(seg) for seg in segs)
     is_nc, specs = engine.is_natural_class(segs)
@@ -312,10 +290,9 @@ def render_feat_to_seg(
     return f"<p><b>Query:</b> {feat_tags}</p>{segs_html}"
 
 
-# ---------------------------------------------------------------------------
-# Helpers for render_multi_segment (kept here so the top-level renderer
-# reads as a sequence of intent rather than four screens of f-strings).
-# ---------------------------------------------------------------------------
+# --- helpers for render_multi_segment ----------------------------
+
+
 def _render_shared_features(common: dict[str, str]) -> str:
     if not common:
         return f"<p><b>Shared features:</b> {_muted_italic_span('none')}</p>"
@@ -331,14 +308,12 @@ def _render_contrast_section(
     segs: list[str],
     contrastive: dict[str, dict[str, list[str]]],
 ) -> str:
+    """Contrastive-features table, or a one-line "none" reason.
+
+    Rendered as a table so feature names left-align in a fixed
+    column and the +/-/0 buckets stack vertically across rows.
+    """
     if contrastive:
-        # Rendered as an HTML table so feature names left-align in a
-        # fixed column and the ``+`` / ``−`` / ``0`` buckets line up
-        # vertically across every row. The previous inline-flow shape
-        # put feature names of different lengths on the same baseline
-        # as the bucket glyphs, so the eye had to re-scan from the
-        # left edge for each feature -- the user's "hard to parse"
-        # complaint. Table columns make vertical scanning trivial.
         body = "".join(
             _render_contrast_row(feat, contrastive[feat])
             for feat in sort_features(list(contrastive))
@@ -351,14 +326,10 @@ def _render_contrast_section(
             "</table>"
         )
 
-    # No contrastive features. Distinguish "actually identical" from
-    # "only differ in unspecified features"; the latter is a common
-    # source of confusion ("why do these look the same?").
+    # No contrastive features. Distinguish "actually identical"
+    # from "only differ in unspecified features": the latter is a
+    # common source of "why do these look the same?" confusion.
     def _has_mixed_underspec(feat: str) -> bool:
-        # Hoist the per-segment value set into a local so we don't
-        # build it twice per feature -- once for the size check, once
-        # for the "0" membership test. Hot path: this runs over every
-        # feature on every "no contrastive features" render.
         vals = {engine.segments[seg].get(feat, "0") for seg in segs}
         return len(vals) > 1 and "0" in vals
 
@@ -371,32 +342,24 @@ def _render_contrast_section(
     return f"<p><b>Contrasting features:</b> {_muted_italic_span(reason)}</p>"
 
 
-# ---------------------------------------------------------------------------
-# Cell-style constants for the contrastive-features table.
-# Pre-built so the per-row helper isn't reconstructing identical CSS
-# strings for every feature; also keeps geometry editable in one place.
-# ---------------------------------------------------------------------------
+# Pre-built cell styles to avoid reconstructing identical CSS in
+# the per-row helper and to keep geometry tweaks in one place.
 _CONTRAST_CELL_BASE: str = "vertical-align:top; padding-right:14px;"
 _CONTRAST_NAME_CELL: str = _CONTRAST_CELL_BASE + " white-space:nowrap;"
 
 
 def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
-    """One ``<tr>`` for the contrastive-features table. Columns:
+    """One ``<tr>`` for the contrastive-features table.
 
-        | feature | + segments | − segments | (0 segments, only when present) |
+    Columns: feature | + segments | − segments | (0 segments,
+    only when the row has underspecified data). Omitting the empty
+    third column prevents a selectable empty cell from showing
+    up as a phantom highlight.
 
-    The ``0`` cell is omitted entirely when the row has no
-    underspecified segments. An empty ``<td>`` would still occupy a
-    selectable area on screen (and contribute a stray tab on copy),
-    which surfaced as "selection highlights an empty third column".
-    Omitting the cell removes both the phantom highlight and the
-    extra tab; rows that DO have ``0`` data simply extend one column
-    further to the right.
+    A non-breaking space sits between each +/-/0 glyph and its
+    first chip so the marker can't end up orphaned on its own
+    line; chip-to-chip gaps stay breakable.
     """
-    # Plain bold for the feature name. The chip background was
-    # redundant once the table column provided visual separation, and
-    # the pale gray on near-white panel had almost no contrast in
-    # light mode -- the name was effectively unstyled either way.
     name_html = f"<b>{html.escape(feat)}</b>"
     plus_chips = " ".join(_segment_chip(seg) for seg in groups["+"])
     minus_chips = " ".join(_segment_chip(seg) for seg in groups["-"])
@@ -405,10 +368,6 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
         f"<span style='color:{C['minus']};font-weight:bold'>"
         f"{MINUS_SIGN}</span>"
     )
-    # Non-breaking space between the +/-/0 glyph and the FIRST chip
-    # so the marker can't end up orphaned at the end of a line with
-    # the first chip alone on the next line. Spaces between chips
-    # stay breakable, so a long chip list still wraps cleanly.
     cells = [
         f"<td style='{_CONTRAST_NAME_CELL}'>{name_html}</td>",
         f"<td style='{_CONTRAST_CELL_BASE}'>{plus_glyph}&nbsp;{plus_chips}</td>",
@@ -427,10 +386,12 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
 
 
 def _render_natural_class_verdict(
-    engine: FeatureEngine, segs: list[str], suggested: list[str]
+    engine: FeatureEngine,
+    segs: list[str],
+    suggested: list[str],
 ) -> tuple[str, str]:
-    """Returns ``(verdict_html, spec_html)``. ``spec_html`` is empty
-    when the answer is "No" since there's no minimal bundle to show."""
+    """Return ``(verdict_html, spec_html)``. ``spec_html`` is empty
+    for a No verdict (no minimal bundle to show)."""
     is_nc, specs = engine.is_natural_class(segs)
     if is_nc:
         verdict = f"<p><b>Natural class:</b> {_yes_no(True)}</p>"

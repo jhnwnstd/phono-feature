@@ -1,16 +1,11 @@
-// Web app bootstrap. Loads Pyodide, installs the phonology-engine
-// wheel + the desktop-source renderer files, then wires UI events
-// to call the Python bridge in api.py.
-//
-// All paths below are relative to the deployed site root, so they
-// work both under `python -m http.server` locally and under GitHub
-// Pages with a project subpath (the <base> tag handles the prefix).
+/**
+ * Web app entry point.
+ *
+ * Boots Pyodide, mounts the phonology engine bundle, renders an
+ * inlined bootstrap inventory before Pyodide finishes loading, then
+ * wires UI events to bridge calls into api.py.
+ */
 
-// Required DOM nodes. Validated at boot via initNodes() so a
-// missing ID fails fast at startup instead of as a null deref
-// inside a click handler. The map's keys are the camelCase names
-// used in JS; values are the DOM ids in index.html. Adding a new
-// id means adding it here.
 const NODE_IDS = Object.freeze({
     statusbar: "statusbar",
     loadingStatus: "loading-status",
@@ -31,6 +26,8 @@ const NODE_IDS = Object.freeze({
     themeBtn: "theme-btn",
 });
 const nodes = Object.create(null);
+
+/** Validate every required DOM id and cache the elements. */
 function initNodes() {
     const missing = [];
     for (const [key, id] of Object.entries(NODE_IDS)) {
@@ -46,20 +43,15 @@ function initNodes() {
 const setStatus = (msg) => { nodes.statusbar.textContent = msg; };
 const setLoadingStatus = (msg) => { nodes.loadingStatus.textContent = msg; };
 
-// ---------------------------------------------------------------------
-// Boot timing instrumentation. Each phase brackets itself with two
-// performance.mark calls; printBootMeasures() prints a table of
-// phase durations to the devtools console after boot completes.
-// Measure first, optimize second.
-// ---------------------------------------------------------------------
 const mark = (name) => performance.mark(name);
 function measure(label, start, end) {
     try {
         performance.measure(label, start, end);
     } catch {
-        // mark missing means an earlier phase failed; skip silently.
+        /* a missing mark means an earlier phase failed; skip */
     }
 }
+
 function printBootMeasures() {
     const rows = performance
         .getEntriesByType("measure")
@@ -68,10 +60,6 @@ function printBootMeasures() {
     console.table(rows);
 }
 
-// Resource timing for the boot-critical network fetches. Pairs with
-// printBootMeasures(): phase measures show where TIME goes, resource
-// timing shows where BYTES come from. Use it to tell whether a slow
-// boot is CDN latency, payload size, or local Python work.
 function printResourceSummary() {
     const INTERESTING = ["pyodide", "python_bundle", "inventories", "theme"];
     const rows = performance
@@ -87,19 +75,11 @@ function printResourceSummary() {
     console.table(rows);
 }
 
-// ---------------------------------------------------------------------
-// fetch wrappers. Two responsibilities:
-//
-//   1. Throw a useful Error on non-2xx instead of returning an
-//      HTML 404 page that .json() then parses as a mystery
-//      SyntaxError.
-//   2. Honor a timeout by actually CANCELLING the in-flight
-//      request via AbortController, not just rejecting the wait
-//      promise. Without abort, a stalled CDN keeps the socket open
-//      until the browser eventually drops it; we waste connection
-//      slots and the rejection only tells US to give up, not the
-//      network stack.
-// ---------------------------------------------------------------------
+/**
+ * Fetch wrapper that throws on non-2xx and uses an AbortController
+ * for timeout so the underlying request is actually cancelled, not
+ * just the wait promise.
+ */
 async function fetchOk(url, { timeoutMs = LOCAL_FETCH_TIMEOUT_MS } = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -124,12 +104,11 @@ async function fetchBytes(url, opts) {
     return new Uint8Array(await (await fetchOk(url, opts)).arrayBuffer());
 }
 
-// ---------------------------------------------------------------------
-// withTimeout: rejects if ``promise`` doesn't settle within ``ms``.
-// Used for non-fetch promises that we can't abort directly
-// (loadPyodide, which owns its own internal network/wasm work).
-// Cancellable network requests use fetchOk's AbortController instead.
-// ---------------------------------------------------------------------
+/**
+ * Reject after `ms` if `promise` hasn't settled. Used for non-fetch
+ * promises that own their own internal I/O (loadPyodide); fetch
+ * uses AbortController directly via fetchOk.
+ */
 function withTimeout(promise, ms, label) {
     let timer;
     const stall = new Promise((_, reject) => {
@@ -141,28 +120,23 @@ function withTimeout(promise, ms, label) {
     return Promise.race([promise, stall]).finally(() => clearTimeout(timer));
 }
 
-// ---------------------------------------------------------------------
-// In-memory cache of inventory JSON text keyed by file path. Switching
-// the dropdown to a previously-loaded inventory becomes a no-network
-// hit. The Python side still re-parses; if that becomes the bottleneck
-// (per the boot marks), cache the parsed bridge state too.
-// ---------------------------------------------------------------------
-// Bounded LRU. The underlying Map preserves insertion order, so
-// "least recently used" = first key. On a cache hit we promote the
-// entry by re-inserting (delete + set) so it moves to the back.
-// Cap at INVENTORY_CACHE_MAX entries; over the cap, drop the
-// front-most key. Without this, uploading a long sequence of files
-// would grow the cache without bound -- each entry is the full JSON
-// text, which the file-size cap puts at ~50 MB per slot worst case.
+/**
+ * Bounded LRU cache of inventory JSON text keyed by URL. Re-selecting
+ * a previously-loaded inventory becomes a no-network hit; the bound
+ * prevents the per-session upload pile-up from growing unbounded.
+ */
 const INVENTORY_CACHE_MAX = 8;
 const inventoryTextCache = new Map();
+
 function _cacheGet(file) {
     if (!inventoryTextCache.has(file)) return undefined;
     const text = inventoryTextCache.get(file);
+    // Promote on hit by re-inserting at the tail.
     inventoryTextCache.delete(file);
     inventoryTextCache.set(file, text);
     return text;
 }
+
 function _cacheSet(file, text) {
     inventoryTextCache.set(file, text);
     while (inventoryTextCache.size > INVENTORY_CACHE_MAX) {
@@ -170,6 +144,7 @@ function _cacheSet(file, text) {
         inventoryTextCache.delete(oldest);
     }
 }
+
 async function fetchInventoryText(file) {
     const cached = _cacheGet(file);
     if (cached !== undefined) return cached;
@@ -178,23 +153,15 @@ async function fetchInventoryText(file) {
     return text;
 }
 
-// ---------------------------------------------------------------------
-// Pyodide bridge call wrapper. Two responsibilities:
-//
-//   1. Convert plain-JS args (lists/dicts) into PyProxy via toPy.
-//   2. Destroy every PyProxy created in this call (the args AND the
-//      Python return value before/after toJs unwraps it).
-//
-// PyProxy objects are NOT garbage collected automatically. Every call
-// site that omitted .destroy() leaked a wrapper per click; over a
-// long session that grows without bound. This wrapper makes the
-// cleanup automatic.
-// ---------------------------------------------------------------------
+/**
+ * Pyodide bridge call. Converts plain-JS args to PyProxy, converts
+ * the result back to plain JS, and destroys every PyProxy involved
+ * (PyProxies aren't garbage-collected; each leak grows with click
+ * count over a session).
+ */
 function callBridge(fnName, ...args) {
-    // Guard BOTH bridge and pyodide: toPy below dereferences
-    // state.pyodide before we'd otherwise notice it was still null.
-    // Boot order is pyodide first, bridge last, but a click handler
-    // racing the boot could land here with one set and the other not.
+    // Guard pyodide too: toPy below dereferences state.pyodide
+    // before the bridge null-check would otherwise catch the issue.
     if (!state.bridge || !state.pyodide) {
         throw new Error(`bridge not ready: ${fnName}`);
     }
@@ -208,11 +175,7 @@ function callBridge(fnName, ...args) {
     try {
         const result = state.bridge[fnName](...pyArgs);
         if (result && typeof result.toJs === "function") {
-            // Nested finally so result.destroy() still runs if
-            // toJs() throws (e.g. a Python object the converter
-            // can't handle). Previously the destroy sat AFTER the
-            // toJs call and was skipped on exception, leaking the
-            // proxy.
+            // Nested finally so result.destroy runs even if toJs throws.
             try {
                 return result.toJs({ dict_converter: Object.fromEntries });
             } finally {
@@ -225,110 +188,85 @@ function callBridge(fnName, ...args) {
     }
 }
 
-// Frozen enum of the two top-level UI modes. Use MODE.SEG_TO_FEAT
-// everywhere instead of the bare string so a typo becomes a
-// ReferenceError at parse time instead of silently mis-comparing.
-// Values match the desktop's Mode StrEnum so QSettings strings
-// round-trip if we ever share persistence.
+/** Top-level UI mode. Values match the desktop's Mode StrEnum. */
 const MODE = Object.freeze({
     SEG_TO_FEAT: "seg_to_feat",
     FEAT_TO_SEG: "feat_to_seg",
 });
 
-// Per-mode status-bar prompt. Single source of truth for the two
-// strings; before this they were copy-pasted at the boot site, the
-// mode-switch site, and the Clear site, drifting separately every
-// time wording was tweaked.
 const STATUS_TEXT = Object.freeze({
     [MODE.SEG_TO_FEAT]: "Click a segment to inspect its features.",
     [MODE.FEAT_TO_SEG]:
         "Toggle feature values (+/−) to find matching segments.",
 });
 
-// Feature names come from user-uploaded inventories. An adversarial
-// JSON file could ship a feature named "__proto__" / "constructor"
-// / "toString"; a plain {} would let those reach Object.prototype
-// or look already-set when probed. Null-prototype maps avoid that
-// class of confusion. Use everywhere feat-name keys mutate.
+/**
+ * Feature-spec maps use a null prototype because feature names come
+ * from user-uploaded inventories: a hostile key like "__proto__"
+ * mustn't reach Object.prototype.
+ */
 function emptyFeatureSpec() { return Object.create(null); }
 function cloneFeatureSpec(spec) {
     return Object.assign(Object.create(null), spec);
 }
 
-// State managed in JS (Python holds the engine + inventory).
 const state = {
     mode: MODE.SEG_TO_FEAT,
-    selected_segments: [],         // ordered for analysis consistency
-    selected_features: emptyFeatureSpec(),   // {feature: "+" | "-"}
-    // State of each mode at the moment we leave it. Restored on
-    // toggle back so flipping modes doesn't wipe your selection.
-    // Matches the desktop's _saved_seg_state / _saved_feat_state.
+    selected_segments: [],
+    selected_features: emptyFeatureSpec(),
+    // Cross-mode projections: snapshot the outgoing mode's state on
+    // every mode toggle so flipping back restores it. Mirrors the
+    // desktop's _ModeController.saved_seg_state / saved_feat_state.
     saved_seg_state: [],
     saved_feat_state: emptyFeatureSpec(),
     inventory_name: "",
     segments: [],
     features: [],
-    debounce_timer: null,  // setTimeout handle while pending, null otherwise
-    // Monotonic counter; see scheduleAnalysis / runAnalysis. Used
-    // to discard stale bridge responses if a later analysis was
-    // scheduled before the earlier one's DOM update landed.
+    debounce_timer: null,
     analysis_token: 0,
     pyodide: null,
-    bridge: null,                  // imported api module
-    // Cached node maps populated by the render functions. Iterating
-    // these in the analysis hot path is ~10x cheaper than
-    // querySelectorAll(".seg-btn") on every tick; the desktop's
-    // _seg_buttons / _feat_rows dicts serve the same role.
-    seg_buttons: new Map(),        // seg -> HTMLButtonElement
-    feat_rows: new Map(),          // feat -> {row, plus, minus}
+    bridge: null,
+    // Cached DOM node maps. Iterating these is ~10x cheaper than
+    // querySelectorAll in the analysis hot path.
+    seg_buttons: new Map(),  // seg -> HTMLButtonElement
+    feat_rows: new Map(),    // feat -> { row, badge, plus, minus }
 };
 
-// Bundled inventories come from inventories.json, which is generated
-// at build time by scripts/build.py from app/inventories/*.json.
-// Add a new JSON file to app/inventories/ and it appears in the
-// dropdown on the next build, with the label taken from metadata.name
-// in the file (falling back to a Title-Cased filename).
 let BUNDLED_INVENTORIES = [];
 
-// Asset URL resolver. In built deploys the index.html ships an
-// inline JSON block (<script type="application/json"
-// id="asset-manifest">) that maps logical names to content-hashed
-// filenames; we read it once and cache. In raw-source dev (no
-// build), the block is absent and we fall back to the unhashed
-// names. This is what lets a fresh push break GitHub Pages' 600 s
-// asset cache: every changed bundle gets a new URL.
+/**
+ * Resolve a logical asset name (e.g. "python_bundle") to its hashed
+ * URL. The asset manifest is inlined into index.html by the build;
+ * dev runs without a build fall back to unhashed names.
+ */
 const _DEFAULT_ASSET_URLS = Object.freeze({
     inventories_manifest: "inventories.json",
     python_bundle: "python_bundle.json",
 });
 let _ASSET_MANIFEST = null;
+
 function assetUrl(name) {
     if (_ASSET_MANIFEST === null) {
         const el = document.getElementById("asset-manifest");
-        _ASSET_MANIFEST = el
-            ? JSON.parse(el.textContent)
-            : {};
+        _ASSET_MANIFEST = el ? JSON.parse(el.textContent) : {};
     }
     return _ASSET_MANIFEST[name] || _DEFAULT_ASSET_URLS[name];
 }
 
-// Boot timeouts. Pyodide cold start on a fast connection is
-// typically 2-5s; 30s is a generous failure threshold. Bridge
-// fetches are local to the deploy, so 10s is plenty there.
 const PYODIDE_BOOT_TIMEOUT_MS = 30_000;
 const LOCAL_FETCH_TIMEOUT_MS = 10_000;
 
-// Pyodide bootstrap script (the small loader that defines the
-// loadPyodide global). Injected by loadPyodideScript() AFTER the
-// bootstrap render has painted, so its CDN fetch doesn't hold up
-// first paint. Preloaded from index.html so the bytes are usually
-// already cached by the time we ask. SRI guards against a tampered
-// CDN response; bump the hash when the pinned version changes.
 const PYODIDE_BOOTSTRAP_URL =
     "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js";
 const PYODIDE_BOOTSTRAP_SRI =
     "sha384-i3R37b3tF+HWudsUf1VSEOY2YxwSNMqY8DQa9Z0O3xh+NkJ9o+yjcGyIi5huj+nB";
 
+/**
+ * Inject pyodide.js as a <script> tag and resolve when loadPyodide
+ * is callable. Loaded dynamically (not via a static <script> in
+ * index.html) so the bootstrap render path isn't blocked behind a
+ * CDN fetch.
+ */
 function loadPyodideScript() {
     if (typeof loadPyodide === "function") return Promise.resolve();
     return new Promise((resolve, reject) => {
@@ -337,12 +275,10 @@ function loadPyodideScript() {
         s.integrity = PYODIDE_BOOTSTRAP_SRI;
         s.crossOrigin = "anonymous";
         s.onload = () => {
-            // onload fires when the script TAG has executed, not
-            // when loadPyodide is guaranteed to be defined. A
-            // bizarrely-corrupted CDN response (200 OK, passes SRI,
-            // but exports the wrong thing) would resolve here with
-            // no global; subsequent loadPyodide({...}) would throw
-            // a confusing TypeError. Verify before resolving.
+            // onload fires when the tag has executed, not when the
+            // global is guaranteed defined. A 200/SRI-valid response
+            // that exports the wrong shape would otherwise produce a
+            // confusing TypeError later.
             if (typeof loadPyodide !== "function") {
                 reject(new Error(
                     "pyodide.js loaded but loadPyodide global is missing"
@@ -356,13 +292,12 @@ function loadPyodideScript() {
     });
 }
 
-// Preferred default-inventory filename. General IPA is the
-// richest demo inventory (135 segments, 30 features) and is
-// what the web app should open on first visit. Falls back to
-// whatever the manifest sorts first when this file isn't in
-// the build.
 const PREFERRED_DEFAULT_INVENTORY = "inventories/general_features.json";
 
+/** Boot Pyodide + the engine bundle. `prerendered` indicates that
+ *  applyBootstrap already painted the default inventory's DOM; in
+ *  that case the loading overlay drops earlier (right after WASM
+ *  compile), and the inventory load skips a redundant re-render. */
 async function bootPyodide({ prerendered = false } = {}) {
     mark("boot:start");
 
@@ -380,21 +315,13 @@ async function bootPyodide({ prerendered = false } = {}) {
     setLoadingStatus("Loading the Python runtime…");
     mark("pyodide:start");
     mark("bundle-fetch:start");
-    // Three independent boot lanes overlap here:
-    //   1. pyodide.js script tag injection + load (the small
-    //      loader that defines window.loadPyodide).
-    //   2. python_bundle.zip download.
-    //   3. (after lane 1) loadPyodide() running WASM compile.
-    // Lane 2 runs concurrently with both 1 and 3. Without these
-    // overlaps the bundle fetch and the pyodide.js download both
-    // sat sequentially before loadPyodide(), losing ~1-2 s on
-    // cold boots.
+    // Overlap three independent boot lanes: pyodide.js download,
+    // python bundle download, WASM compile. Without this they
+    // serialized and added ~1-2 s to cold boot.
     const bundleBytesPromise = fetchBytes(assetUrl("python_bundle"));
     await loadPyodideScript();
     const pyodidePromise = withTimeout(
-        // packages: [] skips the automatic load of pyodide-py /
-        // distutils that we don't use; ~100-300 ms init saved.
-        // Our engine is pure Python and loads explicitly below.
+        // packages: [] skips automatic load of pyodide-py / distutils.
         loadPyodide({ packages: [] }),
         PYODIDE_BOOT_TIMEOUT_MS,
         "Pyodide startup",
@@ -406,26 +333,17 @@ async function bootPyodide({ prerendered = false } = {}) {
     mark("pyodide:end");
     mark("bundle-fetch:end");
 
-    // Reveal the pre-rendered UI here. Remaining work (bundle
-    // mount + bridge init + default inventory sync) is ~170 ms;
-    // we add a small yield so the total reveal-to-ready gap
-    // lands around 220 ms. That's comfortably below the 250-500
-    // ms human reaction-to-click window even on slower devices,
-    // without making the loading screen feel longer than it
-    // needs to. The fallback path (no bootstrap) still hides
-    // the overlay at the end of boot since its DOM isn't
-    // populated until then.
     if (prerendered) {
+        // Reveal the pre-rendered UI. The remaining ~170 ms of
+        // bundle mount + bridge init + inventory sync is shorter
+        // than human reaction-to-click time, so the user reaches a
+        // ready bridge by the time they decide what to click. The
+        // 90 ms yield lets the browser commit the overlay-hide as a
+        // paint frame before the synchronous pyimport blocks the
+        // main thread, and pads the reveal-to-ready gap to ~220 ms.
         mark("overlay-hide");
         nodes.loadingOverlay.classList.add("hidden");
         setStatus("Almost ready…");
-        // Yield long enough that the browser commits the overlay
-        // hide as a paint frame before we start the synchronous
-        // pyimport call (which blocks the main thread for ~100 ms
-        // now that gui.analysis is lazy-loaded). Combined with
-        // bundle mount + bridge init + inventory sync, this pads
-        // the reveal-to-ready gap to ~220 ms -- comfortably under
-        // human reaction-to-click time on slow devices.
         await new Promise((r) => setTimeout(r, 90));
     }
 
@@ -444,14 +362,11 @@ async function bootPyodide({ prerendered = false } = {}) {
     mark("inventory:start");
     const defaultItem = pickDefaultInventory(BUNDLED_INVENTORIES);
     if (prerendered) {
-        // DOM is already populated by applyBootstrap(). Just sync
-        // the engine to the same inventory so subsequent bridge
-        // calls operate on a matching state -- no re-render.
+        // DOM is already populated by applyBootstrap; just sync the
+        // engine state so subsequent bridge calls operate on a
+        // matching inventory.
         const text = await fetchInventoryText(defaultItem.file);
         callBridge("load_inventory_json", text, defaultItem.label);
-        // If the user clicked something while we were booting, the
-        // optimistic visual updated but scheduleAnalysis short-
-        // circuited (no bridge). Trigger now.
         const hasPending =
             state.selected_segments.length > 0
             || Object.keys(state.selected_features).length > 0;
@@ -461,8 +376,8 @@ async function bootPyodide({ prerendered = false } = {}) {
     }
     mark("inventory:end");
 
-    // Idempotent: prerendered path already hid after Pyodide load;
-    // fallback path needs it here once the inventory has rendered.
+    // Idempotent: prerendered path hid the overlay early; the
+    // non-prerendered path hides it here once the DOM is ready.
     nodes.loadingOverlay.classList.add("hidden");
     setStatus(STATUS_TEXT[state.mode]);
 
@@ -473,76 +388,34 @@ async function bootPyodide({ prerendered = false } = {}) {
     measure("Bridge init", "bridge:start", "bridge:end");
     measure("Default inventory", "inventory:start", "inventory:end");
     measure("Total boot", "boot:start", "boot:end");
-    // Reveal lag: from overlay-hide to engine-ready. This is the
-    // only window where the UI is visible but bridge calls would
-    // still queue. Shrink this and the perceived loading time
-    // shrinks with it.
     measure("Reveal -> ready", "overlay-hide", "boot:end");
     printBootMeasures();
     printResourceSummary();
 }
 
+/**
+ * Pick the preferred default inventory from the manifest, falling
+ * back to manifest[0]. Compares against the un-hashed PREFERRED_*
+ * constant since the build hashes filenames for cache-busting.
+ */
 function pickDefaultInventory(manifest) {
-    // Prefer the named default if present; falls back to the
-    // first manifest entry. Centralized so the choice is
-    // discoverable and not buried in bootPyodide.
-    //
-    // hash_assets() renames each inventory file to
-    // ``name.<10-hex>.json`` for cache-busting and rewrites the
-    // manifest's ``file`` field to point at the hashed name.
-    // PREFERRED_DEFAULT_INVENTORY holds the un-hashed name (the
-    // constant has to be stable at runtime), so we have to strip
-    // the hash before comparing. Without this the lookup misses
-    // and we silently fall through to manifest[0] (English,
-    // alphabetically first) -- the bootstrap renders one
-    // inventory's segments while the bridge loads a different
-    // inventory, leaving ghost segments stuck in 'default' state
-    // when the user queries features.
     const preferred = manifest.find(
         (m) => _stripAssetHash(m.file) === PREFERRED_DEFAULT_INVENTORY,
     );
     return preferred ?? manifest[0];
 }
 
-// "inventories/general_features.116857c74f.json"
-//   -> "inventories/general_features.json"
+/** "name.116857c74f.json" -> "name.json" */
 function _stripAssetHash(path) {
     return path.replace(/\.[0-9a-f]{10}(\.[^./]+)$/, "$1");
 }
 
-// Mount every Python source we ship via one fetch of
-// python_bundle.json. The bundle is generated by build.py
-// (write_python_bundle); main.js doesn't know which files exist,
-// it just lays out whatever the bundle declares and pushes the
-// declared sys.path entries. Replaces the old mountPackage +
-// mountRendererPackage helpers, whose file lists had to mirror
-// build-side constants by hand.
-// Cheap shape check on the bundle bytes before we hand them to
-// Pyodide. The first 4 bytes of any ZIP file are "PK\x03\x04"
-// (local file header); a bundle that doesn't start with that is
-// either truncated, served as an error page, or the wrong file.
-// Fails loudly at boot with a useful message rather than ENOENT
-// mid-import.
-function validatePythonBundleBytes(bytes) {
-    if (!(bytes instanceof Uint8Array) || bytes.length < 4) {
-        throw new Error("python bundle is empty or not bytes");
-    }
-    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B
-        && bytes[2] === 0x03 && bytes[3] === 0x04;
-    if (!isZip) {
-        throw new Error(
-            `python bundle doesn't look like a zip `
-            + `(first bytes: ${[...bytes.slice(0, 4)].map(b => b.toString(16)).join(" ")})`
-        );
-    }
-    return bytes;
-}
-
-// Mount the build-emitted zip onto sys.path via zipimport. One
-// writeFile, no per-file JS string churn -- Python imports each
-// module lazily on first use. Replaces the previous JSON map +
-// per-file writeFile loop.
 const BUNDLE_FS_PATH = "/home/pyodide/python_bundle.zip";
+
+/**
+ * Mount the build-emitted python_bundle.zip onto sys.path via
+ * zipimport. Python imports each module lazily on first use.
+ */
 function mountPythonBundle(pyodide, bundleBytes) {
     validatePythonBundleBytes(bundleBytes);
     pyodide.FS.writeFile(BUNDLE_FS_PATH, bundleBytes);
@@ -553,32 +426,43 @@ function mountPythonBundle(pyodide, bundleBytes) {
     );
 }
 
-// ---------------------------------------------------------------------
-// Bridge-gated controls. Toolbar controls that call into Python are
-// disabled at page load and re-enabled once bootPyodide finishes. The
-// loading overlay covers the panels visually, but keyboard focus can
-// still reach the toolbar; disabling is the only reliable guard.
-// ---------------------------------------------------------------------
+/**
+ * Fail fast if the bundle isn't a zip (truncated, served as an
+ * error page, wrong file). Zip files start with "PK\x03\x04".
+ */
+function validatePythonBundleBytes(bytes) {
+    if (!(bytes instanceof Uint8Array) || bytes.length < 4) {
+        throw new Error("python bundle is empty or not bytes");
+    }
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B
+        && bytes[2] === 0x03 && bytes[3] === 0x04;
+    if (!isZip) {
+        const head = [...bytes.slice(0, 4)]
+            .map((b) => b.toString(16))
+            .join(" ");
+        throw new Error(`python bundle doesn't look like a zip (first bytes: ${head})`);
+    }
+    return bytes;
+}
+
 const BRIDGE_GATED_NODES = ["inventoryPicker", "uploadBtn", "downloadBtn"];
+
+/**
+ * Toolbar controls that call into Python start disabled in HTML
+ * and are re-enabled only after the bridge attaches. Keyboard tab
+ * focus could otherwise activate them before Pyodide is ready.
+ */
 function enableBridgeGatedControls() {
     for (const key of BRIDGE_GATED_NODES) nodes[key].disabled = false;
 }
 
-// ---------------------------------------------------------------------
-// First-paint bootstrap: render the default inventory's segments
-// grid and features panel from a build-time precomputed summary,
-// BEFORE Pyodide finishes loading. Without this, the user stares
-// at the loading overlay for ~4 s of WASM compile; with it, the
-// IPA chart paints in under ~200 ms and the bridge attaches in
-// the background.
-//
-// The inlined block is generated by web/scripts/build.py's
-// write_bootstrap() and lives at <script id="bootstrap"
-// type="application/json"> in index.html. The shape is identical
-// to what callBridge("load_inventory_json", ...) returns at
-// runtime, so applyBootstrap() and the post-boot reconcile share
-// the same rendering code.
-// ---------------------------------------------------------------------
+/**
+ * Render the default inventory from the inlined bootstrap JSON.
+ * Lets the UI paint at ~100 ms instead of waiting ~5 s for Pyodide.
+ * Returns false (and logs) if the inline block is absent, parses
+ * fail, or the shape doesn't match what the renderers expect; the
+ * caller then falls back to the bridge-driven render path.
+ */
 function applyBootstrap() {
     const el = document.getElementById("bootstrap");
     if (!el) return false;
@@ -590,13 +474,6 @@ function applyBootstrap() {
         console.error("bootstrap parse failed; falling back to bridge", e);
         return false;
     }
-    // Structural validation: a malformed bootstrap (parses but
-    // missing fields) would otherwise crash deep inside
-    // renderSegmentGrid / renderFeaturePanel with a useless
-    // "undefined is not iterable" message, freezing the page
-    // before the loading overlay can hide. Failing the check here
-    // returns false; bootPyodide takes the bridge-driven path
-    // instead, and the user gets a normal cold-load experience.
     if (!_isValidBootstrap(info)) {
         // eslint-disable-next-line no-console
         console.error("bootstrap shape invalid; falling back to bridge", info);
@@ -622,12 +499,7 @@ function _isValidBootstrap(info) {
     return true;
 }
 
-// ---------------------------------------------------------------------
-// Inventory loading
-// ---------------------------------------------------------------------
 async function loadBundledInventory(item) {
-    // Inventory text is cached after first fetch so switching the
-    // dropdown to a previously-loaded inventory and back is no-network.
     const text = await fetchInventoryText(item.file);
     await loadInventoryText(text, item.label);
 }
@@ -643,39 +515,32 @@ async function loadInventoryText(text, sourceLabel) {
         renderSegmentGrid(info.groups, info.vowel_chart);
         renderFeaturePanel(info.feature_groups);
         nodes.analysisContent.innerHTML = "";
-        setStatus(`Loaded ${info.name} (${info.segments.length} segments, ${info.features.length} features).`);
-        // Inventory swap invalidated the Python-side LRU cache; warm
-        // the new inventory's common selections during idle time.
+        setStatus(
+            `Loaded ${info.name} `
+            + `(${info.segments.length} segments, ${info.features.length} features).`
+        );
         prewarmCommonAnalyses();
     } catch (e) {
         const issues = e.message ? [e.message] : ["unknown error"];
         nodes.analysisContent.innerHTML =
-            "<p><b>Could not load inventory:</b></p><ul>" +
-            issues.map(i => `<li>${escapeHtml(i)}</li>`).join("") +
-            "</ul>";
+            "<p><b>Could not load inventory:</b></p><ul>"
+            + issues.map((i) => `<li>${escapeHtml(i)}</li>`).join("")
+            + "</ul>";
         setStatus("Load failed.");
     }
 }
 
-// Speculative pre-warm: after boot completes, run analyze_segments
-// for the first N single-segment selections during idle time. Each
-// pre-warm call populates the Python-side LRU cache (added in
-// api.py); when the user clicks /p/, the bridge call hits the
-// cache and returns in ~5 us instead of doing ~30 ms of feature
-// math + HTML rendering.
-//
-// Runs via requestIdleCallback so it never competes with a user
-// click: the moment a real click fires, scheduleAnalysis runs and
-// the browser preempts the idle queue.
+/**
+ * Speculatively warm the Python-side LRU cache for the first N
+ * single-segment selections during idle time, so the user's first
+ * click hits a cached analysis (~10 ms total click-to-analysis
+ * instead of ~120 ms). The generation counter cancels an in-flight
+ * prewarm when a new one starts (e.g. after inventory swap), so a
+ * stale chain can't populate the (just-invalidated) cache.
+ */
 const PREWARM_COUNT = 10;
-// Monotonic generation counter. Each call to prewarmCommonAnalyses
-// bumps it; each scheduled step captures the value at start and
-// bails if a newer prewarm has begun. This prevents an in-flight
-// prewarm from continuing to warm the previous inventory's segments
-// against the new engine after an inventory swap (the LRU cache
-// was just invalidated, so those calls would do real work and
-// populate the cache with results the user can't reach).
 let _prewarmGen = 0;
+
 function prewarmCommonAnalyses() {
     if (!state.bridge) return;
     const myGen = ++_prewarmGen;
@@ -685,15 +550,12 @@ function prewarmCommonAnalyses() {
         : (cb) => setTimeout(cb, 0);
     let i = 0;
     function step() {
-        if (myGen !== _prewarmGen) return;   // newer prewarm took over
+        if (myGen !== _prewarmGen) return;
         if (i >= targets.length) return;
         try {
-            // Result discarded; the side effect is the Python-side
-            // cache entry. callBridge handles PyProxy cleanup so
-            // dropping the return value is safe.
             callBridge("analyze_segments", [targets[i]]);
         } catch {
-            // Bridge may go away during teardown; silently skip.
+            /* bridge may go away during teardown; silently skip */
         }
         i++;
         idle(step);
@@ -703,29 +565,19 @@ function prewarmCommonAnalyses() {
 
 function escapeHtml(s) {
     return s.replace(/[&<>"']/g, (c) => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+        "&": "&amp;", "<": "&lt;", ">": "&gt;",
+        '"': "&quot;", "'": "&#39;",
     })[c]);
 }
 
-// ---------------------------------------------------------------------
-// Segment grid: consonant groups flow as wrapping rows; vowels render
-// as an IPA-style trapezoid. Placement of each vowel into a chart
-// cell comes from the Python bridge (gui.vowel_layout.vowel_grid_pos)
-// so it matches the desktop's VowelChartWidget cell-for-cell.
-// ---------------------------------------------------------------------
+/**
+ * Render the segments pane. Vowel chart is a floated trapezoid in
+ * the top-right; consonant groups stack below as flow content. If
+ * the pane would overflow after layout settles, rebalance moves
+ * the bottom groups into a 2-column spillover at the bottom.
+ */
 function renderSegmentGrid(groups, vowelChart) {
-    // Vowel chart goes FIRST in the DOM so the float-right CSS
-    // pushes it to the top-right corner. Consonant groups follow as
-    // plain block-level siblings; each one wraps its buttons within
-    // whatever width the float left available. Groups in rows that
-    // share vertical space with the chart end at the chart's left
-    // edge; groups that fall below the chart take the full panel
-    // width. Pure float-wrap, no per-row layout logic needed.
     const grid = nodes.segGrid;
-    // innerHTML = "" removes ALL children including any spillover
-    // from the previous inventory, so we don't need a separate
-    // cleanup pass. Spillover lives inside #seg-grid (see
-    // rebalanceSegmentSpillover for why).
     grid.innerHTML = "";
     state.seg_buttons.clear();
     if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
@@ -737,10 +589,7 @@ function renderSegmentGrid(groups, vowelChart) {
     for (const group of groups) {
         grid.appendChild(_buildConsonantGroup(group));
     }
-    // After the DOM lands, check if the panel overflows; if so,
-    // spill the bottom consonant groups into a 2-column area. Done
-    // in a requestAnimationFrame so layout has flushed and our
-    // measurements are real.
+    // Defer to next frame so layout has flushed before we measure.
     if ("requestAnimationFrame" in window) {
         window.requestAnimationFrame(rebalanceSegmentSpillover);
     } else {
@@ -748,29 +597,17 @@ function renderSegmentGrid(groups, vowelChart) {
     }
 }
 
-// Move overflowing consonant groups into a 2-column spillover sub-
-// grid at the bottom of the segments pane. Used when an inventory
-// (typically General IPA) has more consonant groups than fit in
-// the single-column flow above the analysis pane. Two columns cut
-// the vertical footprint roughly in half, fitting everything in
-// view without forcing the panel to scroll.
-//
-// Algorithm:
-//   1. Move any previously-spilled groups back into #seg-grid so we
-//      start from a known single-column state.
-//   2. Measure: does #seg-grid still overflow .panel-body?
-//   3. If yes: append .seg-spillover to .panel-body and walk
-//      consonant groups bottom-up, moving each into spillover until
-//      grid + spillover fit, or we've moved them all.
-//
-// The vowel chart is never touched -- it stays floating top-right.
+/**
+ * Move overflowing consonant groups into a 2-column spillover
+ * sub-grid at the bottom of the segments pane. Only fires when
+ * the natural single-column flow exceeds the panel's clientHeight
+ * (typically only with the General IPA inventory).
+ *
+ * #seg-grid is itself the .panel-body, so the spillover lives
+ * INSIDE it (not as a sibling) to inherit the same content-area
+ * padding and align with the consonant rows above.
+ */
 function rebalanceSegmentSpillover() {
-    // #seg-grid IS the .panel-body of #seg-panel (one element, two
-    // hats). The spillover must therefore live INSIDE #seg-grid so
-    // it inherits the same content-area positioning as the
-    // consonant groups above it; appending it to grid.parentElement
-    // would put it outside the panel-body's 12 px padding and
-    // shift it left by 12 px relative to the consonant flow.
     const grid = nodes.segGrid;
     if (!grid) return;
 
@@ -779,21 +616,17 @@ function rebalanceSegmentSpillover() {
         spillover = document.createElement("div");
         spillover.className = "seg-spillover";
     }
-    // Step 1: pull everything back into #seg-grid in original order,
-    // then drop the spillover so step 2 measures the pristine flow.
+    // Reset to the pristine single-column state before measuring.
     while (spillover.firstChild) grid.appendChild(spillover.firstChild);
     if (spillover.parentElement) spillover.remove();
 
-    // Step 2: does the grid actually overflow? scrollHeight reports
-    // the FULL content size; offsetHeight clips at the panel
-    // boundary when overflow:auto is active.
     const available = grid.clientHeight;
     if (grid.scrollHeight <= available) return;
 
-    // Step 3: enable spillover (inside the grid) and walk consonants
-    // bottom-up, moving each into spillover until everything fits.
     grid.appendChild(spillover);
-    const consonants = grid.querySelectorAll(":scope > .seg-group:not(.vowel-chart-group)");
+    const consonants = grid.querySelectorAll(
+        ":scope > .seg-group:not(.vowel-chart-group)",
+    );
     for (let i = consonants.length - 1; i >= 0; i--) {
         spillover.insertBefore(consonants[i], spillover.firstChild);
         if (grid.scrollHeight <= available) break;
@@ -816,12 +649,12 @@ function _buildConsonantGroup(group) {
     return groupEl;
 }
 
+/**
+ * Build a single segment button. No per-button click handler:
+ * a single delegated listener on #seg-grid (wireSegmentDelegation)
+ * dispatches by data-seg.
+ */
 function _buildSegmentButton(seg, extraAttrs) {
-    // No per-button click handler: a single delegated listener on
-    // #seg-grid (wired in wireSegmentDelegation) reads data-seg off
-    // the clicked button. For Hayes that's 1 listener instead of
-    // ~100; smaller listener footprint and a fresh inventory load
-    // doesn't have to re-register N closures.
     const btn = document.createElement("button");
     btn.className = "seg-btn";
     btn.type = "button";
@@ -840,11 +673,12 @@ function _buildSegmentButton(seg, extraAttrs) {
     return btn;
 }
 
-// Vowel chart: 6 height rows × 6 backness-rounding columns. The
-// Python side returns row/col integers per vowel; CSS Grid places
-// them. Row labels (Close, Near-close, ...) appear at the left of
-// each row; column labels (Front, Central, Back) span their two
-// child cells (unrounded + rounded) above the grid.
+/**
+ * Build the IPA vowel trapezoid: 6 height rows × 6 backness-
+ * rounding columns. Row/column placement comes from Python
+ * (gui.vowel_layout.vowel_grid_pos) so it matches the desktop's
+ * VowelChartWidget cell-for-cell.
+ */
 function _buildVowelChart(chart) {
     const groupEl = document.createElement("div");
     groupEl.className = "seg-group vowel-chart-group";
@@ -858,23 +692,19 @@ function _buildVowelChart(chart) {
     chartEl.setAttribute("role", "grid");
     chartEl.setAttribute("aria-label", "IPA vowel chart");
 
-    // Top-left corner is empty (sits above the row-label column,
-    // below the column-label row).
     const corner = document.createElement("div");
     corner.className = "vowel-chart-corner";
     chartEl.appendChild(corner);
 
-    // Column headers (Front, Central, Back) each span 2 cells.
     chart.cols.forEach((label, i) => {
         const colHeader = document.createElement("div");
         colHeader.className = "vowel-chart-col-label";
         colHeader.textContent = label;
-        // Each backness label spans its unrounded + rounded cells.
+        // Each backness label spans its unrounded + rounded pair.
         colHeader.style.gridColumn = `${i * 2 + 2} / span 2`;
         chartEl.appendChild(colHeader);
     });
 
-    // Row labels (Close, Near-close, ...).
     chart.rows.forEach((label, r) => {
         const rowLabel = document.createElement("div");
         rowLabel.className = "vowel-chart-row-label";
@@ -884,8 +714,6 @@ function _buildVowelChart(chart) {
         chartEl.appendChild(rowLabel);
     });
 
-    // Vowel cells. The IPA cell index 0-5 maps to grid columns 2-7
-    // (column 1 is the row label).
     for (const cell of chart.cells) {
         const btn = _buildSegmentButton(cell.seg, {
             title: `/${cell.seg}/  [${cell.confidence}]  ${cell.reason}`,
@@ -909,13 +737,9 @@ function onSegmentClicked(seg) {
     } else {
         state.selected_segments.push(seg);
     }
-    // Optimistic visual flip: register the press immediately so the
-    // user doesn't wait the debounce + bridge round-trip to see
-    // the button respond. The bridge-driven runSegToFeat reconciles
-    // afterward -- possibly upgrading other buttons to suggested /
-    // matched states based on the new selection.
-    // Mirrors the desktop's _on_segment_clicked, which calls
-    // btn.set_state(SegmentState.SELECTED) before its debounce.
+    // Optimistic visual flip so the click feels instant; the
+    // bridge-driven runSegToFeat reconciles after the debounce
+    // (possibly upgrading other buttons to suggested/matched).
     const btn = state.seg_buttons.get(seg);
     if (btn) {
         btn.dataset.state = wasSelected ? "default" : "selected";
@@ -924,17 +748,12 @@ function onSegmentClicked(seg) {
     scheduleAnalysis();
 }
 
-// ---------------------------------------------------------------------
-// Feature panel: grouped into Major Class, Laryngeal, Manner, Place,
-// Tongue-Root, Prosodic, plus an Other bucket for inventory-specific
-// extras.
-//
-// Column placement is decided by Python in api.py via
-// gui.layout.distribute_feature_groups (the same module the desktop
-// runs through _redistribute_feature_cards). Each group dict comes
-// with a ``column`` field; we just mount each one into the right
-// DOM column here. Single source of truth for the placement algo.
-// ---------------------------------------------------------------------
+/**
+ * Render the feature panel as cards distributed across two
+ * columns. The Python side decides which card lands in which
+ * column (via gui.layout.distribute_feature_groups); we just
+ * mount each card into the column it advertises.
+ */
 function renderFeaturePanel(featureGroups) {
     const list = nodes.featList;
     list.innerHTML = "";
@@ -946,7 +765,9 @@ function renderFeaturePanel(featureGroups) {
         return c;
     });
     for (const group of featureGroups) {
-        const colIndex = Math.max(0, Math.min(columnCount - 1, group.column ?? 0));
+        const colIndex = Math.max(
+            0, Math.min(columnCount - 1, group.column ?? 0),
+        );
         cols[colIndex].appendChild(_buildFeatureGroup(group));
     }
     for (const c of cols) list.appendChild(c);
@@ -965,13 +786,12 @@ function _buildFeatureGroup(group) {
     return groupEl;
 }
 
+/**
+ * Build a single feature row. No per-button click handler: a
+ * single delegated listener on #feat-list (wireFeatureDelegation)
+ * dispatches by data-feat + data-polarity.
+ */
 function _buildFeatureRow(feat) {
-    // Like seg buttons, no per-button click handlers: a single
-    // delegated listener on #feat-list (wireFeatureDelegation)
-    // walks up to the .feat-row to recover the feature name. The
-    // row is stashed in state.feat_rows together with both polarity
-    // buttons so the per-click visual refresh doesn't have to call
-    // querySelectorAll or rely on CSS.escape for special-char feats.
     const row = document.createElement("div");
     row.className = "feat-row";
     row.dataset.feat = feat;
@@ -1009,43 +829,40 @@ function onFeatureClicked(feat, polarity) {
     } else {
         state.selected_features[feat] = polarity;
     }
-    // Visual refresh: the two buttons + the row-level query state
-    // (data-query-value drives the row background in FEAT mode via
-    // CSS, mirroring the desktop's _apply_query_style). No DOM
-    // query, no CSS.escape, no string interpolation.
     const rec = state.feat_rows.get(feat);
     if (rec) {
         const cur = state.selected_features[feat];
         rec.plus.dataset.active = cur === "+" ? "true" : "false";
         rec.minus.dataset.active = cur === "-" ? "true" : "false";
+        // data-query-value drives the FEAT-mode row background via
+        // CSS (mirrors the desktop's _apply_query_style).
         if (cur === "+" || cur === "-") rec.row.dataset.queryValue = cur;
         else delete rec.row.dataset.queryValue;
     }
     scheduleAnalysis();
 }
 
-// ---------------------------------------------------------------------
-// Mode toggle (visual chrome only; actual mode lives in state.mode)
-// ---------------------------------------------------------------------
+/**
+ * Switch top-level mode, projecting the outgoing mode's state
+ * into the incoming one (mirrors desktop's _ModeController.
+ * save_outgoing_state).
+ *
+ *   seg→feat: feat_state := common +/- features of the selection
+ *   feat→seg: seg_state  := every segment matching the query
+ */
 function activateMode(mode) {
     if (state.mode === mode) return;
 
-    // Snapshot + PROJECT the outgoing mode's state into the
-    // incoming mode's saved slot. Projection matches the desktop's
-    // _ModeController.save_outgoing_state semantics:
-    //   seg→feat: feat_state = common +/- features of the selection
-    //   feat→seg: seg_state  = every segment matching the query
-    // The engine method
-    // ``FeatureEngine.project_segments_to_features`` (and the
-    // existing ``find_segments``) is the single source of truth;
-    // we just call it through the bridge.
     if (state.mode === MODE.SEG_TO_FEAT) {
         state.saved_seg_state = state.selected_segments.slice();
-        // Re-home the bridge result on a null prototype: Python
-        // dict_converter gives us a plain {} that could carry a
-        // hostile __proto__ key from a user inventory.
+        // cloneFeatureSpec re-homes the bridge result on a null
+        // prototype to neutralize hostile "__proto__" / similar
+        // feature keys.
         state.saved_feat_state = state.bridge
-            ? cloneFeatureSpec(callBridge("project_segments_to_features", state.selected_segments))
+            ? cloneFeatureSpec(callBridge(
+                "project_segments_to_features",
+                state.selected_segments,
+            ))
             : emptyFeatureSpec();
     } else {
         state.saved_feat_state = cloneFeatureSpec(state.selected_features);
@@ -1060,14 +877,6 @@ function activateMode(mode) {
     nodes.featPanel.dataset.active = isS2F ? "false" : "true";
 
     if (isS2F) {
-        // Adopt the projected seg selection; clear feat-side.
-        // Row data-value/shared/contrastive/badge persist -- the
-        // pending scheduleAnalysis() will overwrite them with the
-        // new SEG-mode analysis, and the CSS hides the FEAT-mode
-        // query rules (data-query-value) when feat panel is
-        // inactive. Mirrors the desktop's behavior where the row
-        // display state survives panel switches and the active
-        // analysis path repaints it.
         state.selected_segments = state.saved_seg_state.slice();
         state.selected_features = emptyFeatureSpec();
         for (const rec of state.feat_rows.values()) {
@@ -1082,7 +891,6 @@ function activateMode(mode) {
             btn.setAttribute("aria-pressed", isSelected ? "true" : "false");
         }
     } else {
-        // Adopt the projected feat query; clear seg-side.
         state.selected_features = cloneFeatureSpec(state.saved_feat_state);
         state.selected_segments = [];
         for (const btn of state.seg_buttons.values()) {
@@ -1102,49 +910,36 @@ function activateMode(mode) {
 
     setStatus(STATUS_TEXT[mode]);
 
-    // Re-run analysis with the restored state so the pane reflects
-    // the just-activated mode immediately.
     if (state.bridge) scheduleAnalysis();
     else nodes.analysisContent.innerHTML = "";
 }
 
-// ---------------------------------------------------------------------
-// Analysis (debounced to coalesce rapid clicks)
-// ---------------------------------------------------------------------
-// Monotonic token for in-flight analyses. Every scheduleAnalysis
-// bumps it; every runAnalysis captures the current value, runs the
-// (synchronous) bridge call, and checks the token is still current
-// before mutating the DOM. A rapid selection change that fires a
-// second runAnalysis between the first's bridge return and its DOM
-// update would otherwise paint stale state. Synchronous bridge
-// calls today make the window tiny, but a future Web Worker move
-// (where analyze_segments becomes async) widens it; the token
-// pattern works regardless.
+const ANALYSIS_DEBOUNCE_MS = 30;
+
+/**
+ * Schedule a debounced runAnalysis. Coalesces rapid clicks so a
+ * burst (toggle on/off/on) doesn't trigger N bridge calls.
+ */
 function scheduleAnalysis() {
     if (state.debounce_timer !== null) clearTimeout(state.debounce_timer);
     state.debounce_timer = setTimeout(() => {
-        // Null the handle when the timer fires so a subsequent
-        // schedule doesn't pointlessly clearTimeout a fired id.
         state.debounce_timer = null;
         runAnalysis();
-    }, 30);  // tightened from 80 ms; combined with the Python-side
-              // LRU cache and idle prewarm, the user perceives
-              // ~10-50 ms total click-to-analysis instead of ~120 ms.
+    }, ANALYSIS_DEBOUNCE_MS);
 }
 
-// Mode -> analysis handler. Lookup beats if/else for two reasons:
-// adding a third mode (if one ever appears) is a one-line edit, and
-// the handlers compose cleanly with the token pattern -- every
-// dispatch goes through one place that bumps and forwards the token.
 const MODE_HANDLERS = Object.freeze({
     [MODE.SEG_TO_FEAT]: runSegToFeat,
     [MODE.FEAT_TO_SEG]: runFeatToSeg,
 });
 
+/**
+ * Run the analysis for the current mode. Returns silently if the
+ * bridge isn't attached yet: a click made before Pyodide finishes
+ * has its optimistic UI flip already applied; bootPyodide triggers
+ * a final analysis run once the bridge is ready.
+ */
 function runAnalysis() {
-    // Pre-bridge clicks queue: the optimistic visual flip and
-    // selection state already updated. Bail here without throwing
-    // and let bootPyodide trigger us once the bridge attaches.
     if (!state.bridge) return;
     MODE_HANDLERS[state.mode](++state.analysis_token);
 }
@@ -1153,19 +948,19 @@ function _isStaleToken(token) {
     return token !== state.analysis_token;
 }
 
-// Apply a per-button state derivation function over every cached
-// segment button. Mirrors the desktop's _update_seg_to_feat /
-// _update_feat_to_seg loops: each button's state is computed
-// inline from set membership, never looked up in a dict that
-// might be missing keys. This is what makes the desktop immune
-// to "differently muted" ghosts -- there's no fallback branch,
-// every button is explicitly placed into exactly one bucket.
+/**
+ * Apply `stateFor(seg)` to every cached segment button. The
+ * caller computes the new state inline from the relevant set
+ * (selected/suggested/matching) instead of looking up a dict;
+ * mirrors the desktop's _update_* loops, which are total by
+ * construction and immune to dict-fallback ghosts.
+ */
 function _applySegmentStates(stateFor) {
     for (const [seg, btn] of state.seg_buttons) {
         const newState = stateFor(seg);
         if (btn.dataset.state !== newState) {
             btn.dataset.state = newState;
-            const pressed = (newState === "selected" || newState === "matched");
+            const pressed = newState === "selected" || newState === "matched";
             btn.setAttribute("aria-pressed", pressed ? "true" : "false");
         }
     }
@@ -1176,28 +971,21 @@ function runSegToFeat(token) {
     if (_isStaleToken(token)) return;
     nodes.analysisContent.innerHTML = result.analysis_html;
 
-    // Per-button SEG state: derive from selected + suggested sets,
-    // not from a dict that might be missing keys. Mirrors desktop.
     const selectedSet = new Set(state.selected_segments);
     const suggestedSet = new Set(result.suggested || []);
     _applySegmentStates((seg) =>
         selectedSet.has(seg) ? "selected"
-        : suggestedSet.has(seg) ? "suggested"
-        : "default"
+            : suggestedSet.has(seg) ? "suggested"
+            : "default"
     );
 
-    // Per-row feature state: same desktop pattern, three explicit
-    // buckets (contrastive / shared-with-value / neutral) decided
-    // inline from `common` and `contrastive`. No dict-fallback,
-    // every row in state.feat_rows gets exactly one bucket.
-    // Mirrors desktop's _update_seg_to_feat row loop:
-    //   if feat in common AND value is +/-: shared display
-    //   elif feat in contrastive: contrastive display
-    //   else: neutral (includes "0" / missing values)
+    // Per-row feature display: three explicit buckets matching the
+    // desktop's _update_seg_to_feat. "0" / missing values fall to
+    // neutral (NOT shared) so the row name doesn't render bold.
     const common = result.common || {};
     const contrastiveSet = new Set(result.contrastive || []);
     for (const [feat, rec] of state.feat_rows) {
-        const v = common[feat];                    // "+", "-", "", "0", or undefined
+        const v = common[feat];
         const isDisplayable = v === "+" || v === "-";
         const isContrastive = contrastiveSet.has(feat);
         if (isDisplayable) {
@@ -1209,12 +997,12 @@ function runSegToFeat(token) {
             rec.row.dataset.value = "";
             rec.row.dataset.shared = "false";
             rec.row.dataset.contrastive = "true";
-            rec.badge.textContent = "±";      // ± matches desktop
+            rec.badge.textContent = "±";
         } else {
             rec.row.dataset.value = "";
             rec.row.dataset.shared = "false";
             rec.row.dataset.contrastive = "false";
-            rec.badge.textContent = "·";      // · neutral dot
+            rec.badge.textContent = "·";
         }
     }
 }
@@ -1224,25 +1012,19 @@ function runFeatToSeg(token) {
     if (_isStaleToken(token)) return;
     nodes.analysisContent.innerHTML = result.analysis_html;
 
-    // Same desktop-style per-button derivation: matched set wins,
-    // everything else is unmatched (or default when the spec is
-    // empty, which gives the panel its "no query active" look).
     const matchingSet = new Set(result.matching || []);
     const hasQuery = Object.keys(state.selected_features).length > 0;
     _applySegmentStates((seg) =>
         !hasQuery ? "default"
-        : matchingSet.has(seg) ? "matched"
-        : "unmatched"
+            : matchingSet.has(seg) ? "matched"
+            : "unmatched"
     );
 }
 
-// ---------------------------------------------------------------------
-// Inventory upload / download
-// ---------------------------------------------------------------------
-// Bundled inventories are ~10-50 KB. 5 MB ceiling is ~100x the
-// typical size -- enough headroom for the wildest real inventory
-// while still rejecting accidentally-selected huge files before
-// we read them into memory and freeze the tab.
+// Inventories are typically 10-50 KB. 5 MB is ~100x the typical
+// size: enough headroom for legitimate large inventories but
+// catches accidentally-selected huge files before we freeze the
+// tab reading them.
 const MAX_INVENTORY_BYTES = 5 * 1024 * 1024;
 
 function wireUploadDownload() {
@@ -1274,8 +1056,8 @@ function wireUploadDownload() {
             a.href = url;
             a.download = `${name}.json`;
             a.click();
-            // Defer revoke past this tick: some browsers (Safari,
-            // older Firefox) hadn't actually started the download
+            // Defer revoke past this tick: Safari and some older
+            // Firefox versions haven't actually started the download
             // by the time a synchronous revoke runs.
             setTimeout(() => URL.revokeObjectURL(url), 0);
         } catch (e) {
@@ -1284,12 +1066,10 @@ function wireUploadDownload() {
     });
 }
 
-// ---------------------------------------------------------------------
-// Theme toggle (CSS variables + Python palette swap)
-// ---------------------------------------------------------------------
 const THEME = Object.freeze({ LIGHT: "light", DARK: "dark" });
-// localStorage is external input. Anything other than the dark
-// sentinel reads as light -- including stale or hand-edited values.
+
+/** localStorage is external input: anything other than the dark
+ *  sentinel reads as light. */
 function normalizeTheme(value) {
     return value === THEME.DARK ? THEME.DARK : THEME.LIGHT;
 }
@@ -1308,8 +1088,8 @@ function wireThemeToggle() {
         localStorage.setItem("theme", next);
         if (state.bridge) {
             callBridge("set_active_theme", next);
-            // Re-run analysis only if the user has a selection; an
-            // empty analysis pane has no chip colors to refresh.
+            // Re-run only if a selection is active; an empty pane
+            // has no chip colors to refresh.
             const hasSelection =
                 state.selected_segments.length > 0
                 || Object.keys(state.selected_features).length > 0;
@@ -1318,16 +1098,10 @@ function wireThemeToggle() {
     });
 }
 
-// ---------------------------------------------------------------------
-// Inventory picker (bundled list + uploaded slot)
-// ---------------------------------------------------------------------
 function wireInventoryPicker() {
-    // Picker is populated by populateInventoryPicker() AFTER the
-    // build-time manifest is fetched (see bootPyodide). Wire the
-    // change handler here so it survives the later DOM additions.
     nodes.inventoryPicker.addEventListener("change", () => {
         const file = nodes.inventoryPicker.value;
-        const item = BUNDLED_INVENTORIES.find(i => i.file === file);
+        const item = BUNDLED_INVENTORIES.find((i) => i.file === file);
         if (item) loadBundledInventory(item);
     });
 }
@@ -1341,18 +1115,14 @@ function populateInventoryPicker() {
         opt.textContent = item.label;
         picker.appendChild(opt);
     }
-    // Sync the picker's selected value to the preferred default;
-    // otherwise the browser auto-selects the first <option> (English,
-    // alphabetically first) while pickDefaultInventory loaded the
-    // actually-preferred inventory into the engine. User would see
-    // the wrong inventory name in the dropdown.
+    // Sync the picker's selected value to the preferred default.
+    // Without this the browser auto-selects <option>[0] while
+    // pickDefaultInventory loads a different inventory into the
+    // engine; the dropdown label and engine state disagree.
     const preferred = pickDefaultInventory(BUNDLED_INVENTORIES);
     if (preferred) picker.value = preferred.file;
 }
 
-// ---------------------------------------------------------------------
-// Expand/restore analysis pane
-// ---------------------------------------------------------------------
 function wireExpandButton() {
     nodes.expandBtn.addEventListener("click", () => {
         const pane = nodes.analysisPane;
@@ -1361,12 +1131,6 @@ function wireExpandButton() {
     });
 }
 
-// ---------------------------------------------------------------------
-// Clear buttons (one per panel, both wipe the same shared state).
-// Matches the desktop's "Clear means clear" semantics: each Clear
-// resets both panes and the analysis pane, and activates the panel
-// whose Clear was pressed.
-// ---------------------------------------------------------------------
 function wireClearButtons() {
     nodes.segClearBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -1400,12 +1164,7 @@ function clearAll() {
     setStatus(STATUS_TEXT[state.mode]);
 }
 
-// ---------------------------------------------------------------------
-// Clicking anywhere in a panel switches mode to that panel's mode,
-// except when the click was on a button (which has its own handler).
-// Equivalent to the desktop's eventFilter that listens for clicks in
-// empty panel space.
-// ---------------------------------------------------------------------
+/** Clicks in empty panel space activate that panel's mode. */
 function wirePanelClickMode() {
     nodes.segPanel.addEventListener("click", (ev) => {
         if (ev.target.closest("button")) return;
@@ -1417,13 +1176,11 @@ function wirePanelClickMode() {
     });
 }
 
-// ---------------------------------------------------------------------
-// Event delegation: one click listener per container instead of one
-// per button. Fewer registered closures (under Hayes: ~140 buttons
-// became 2 listeners), and a fresh inventory load only has to rebuild
-// DOM, not re-bind handlers. The listener walks up to the nearest
-// .seg-btn / .feat-btn and reads dataset attributes for the dispatch.
-// ---------------------------------------------------------------------
+/**
+ * Single delegated listener per container instead of one per
+ * button. Fewer closures registered and a fresh inventory load
+ * only rebuilds DOM, not handlers.
+ */
 function wireSegmentDelegation() {
     nodes.segGrid.addEventListener("click", (ev) => {
         const btn = ev.target.closest(".seg-btn");
@@ -1444,13 +1201,9 @@ function wireFeatureDelegation() {
     });
 }
 
-// ---------------------------------------------------------------------
-// Entry point
-// ---------------------------------------------------------------------
-// Re-run the spillover rebalance whenever the viewport changes
-// size; the segments pane's available height changes with it.
-// Debounced so dragging a window edge doesn't trigger the
-// offsetHeight measurement loop on every pixel.
+const SPILLOVER_RESIZE_DEBOUNCE_MS = 80;
+
+/** Re-run the spillover rebalance on viewport resize. */
 function wireSegmentSpilloverResize() {
     let timer = 0;
     window.addEventListener("resize", () => {
@@ -1458,16 +1211,17 @@ function wireSegmentSpilloverResize() {
         timer = setTimeout(() => {
             timer = 0;
             rebalanceSegmentSpillover();
-        }, 80);
+        }, SPILLOVER_RESIZE_DEBOUNCE_MS);
     });
 }
 
-// Register the service worker after first load completes so its
-// registration request doesn't compete with critical-path fetches.
-// First visit: SW installs in the background and warms caches on
-// initial fetches; user gets the normal cold-load experience.
-// Second visit: SW serves Pyodide WASM + the python bundle from
-// local cache, dropping boot from ~5 s to under 1 s.
+/**
+ * Register the service worker after first load completes so the
+ * registration request doesn't compete with critical-path fetches.
+ * If main.js parsed slowly enough that window.load already fired,
+ * register immediately instead of waiting for an event that won't
+ * come.
+ */
 function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
     const register = () => {
@@ -1476,11 +1230,6 @@ function registerServiceWorker() {
             // eslint-disable-next-line no-console
             .catch((e) => console.warn("SW registration failed:", e));
     };
-    // Defer to after first load so the registration request
-    // doesn't compete with critical-path fetches. But if main.js
-    // parsed slowly enough that window.load already fired, the
-    // listener would never trigger; explicitly check readyState
-    // to cover that edge case.
     if (document.readyState === "complete") {
         register();
     } else {
@@ -1501,15 +1250,10 @@ async function main() {
     wireSegmentSpilloverResize();
     registerServiceWorker();
 
-    // Paint the default inventory from the build-time bootstrap if
-    // present, but DON'T drop the loading overlay yet. Doing so
-    // would expose a "visible but frozen" UI for the 4-5 s it
-    // takes Pyodide to compile -- clicks would queue but feel
-    // broken. The overlay drops in bootPyodide right after the
-    // Pyodide WASM phase ends, when only ~170 ms of bundle mount
-    // + bridge init + inventory sync remain. By the time the user
-    // sees the chart and decides what to click (~250-500 ms
-    // human reaction time), the bridge is already ready.
+    // Paint the inlined default-inventory DOM but leave the loading
+    // overlay up. Dropping it now would expose a frozen-feeling UI
+    // for the ~5 s of Pyodide compile; bootPyodide drops it after
+    // the WASM phase, when only ~170 ms remain.
     const prerendered = applyBootstrap();
     if (prerendered) {
         mark("first-paint:bootstrap");
@@ -1517,10 +1261,6 @@ async function main() {
 
     try {
         await bootPyodide({ prerendered });
-        // Engine is ready. Speculatively warm the LRU cache for
-        // the first 10 single-segment selections during idle time.
-        // First-click latency drops from ~120 ms to ~10 ms when
-        // the user picks any of them.
         prewarmCommonAnalyses();
     } catch (e) {
         // eslint-disable-next-line no-console

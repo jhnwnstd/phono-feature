@@ -5,22 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Phonology Segment &amp; Feature Engine</title>
 <!--
-  Content Security Policy. Restricts which origins can supply
-  scripts, workers, and other resources, providing defense-in-depth
-  against XSS even though analysis.py already escapes user strings.
-
-  Pyodide needs 'wasm-unsafe-eval' for its WebAssembly compile and
-  blob: workers for its worker pool; it loads from JSDelivr (swap
-  the origin if you self-host).
-
-  style-src includes 'unsafe-inline' because analysis.py emits chips
-  with per-element inline styles (background and color baked from
-  the active palette so they survive the QTextEdit / browser DOM
-  swap). A future refactor that moves chip styling to CSS classes
-  would let us drop this and lock style-src to 'self' too. Inline-
-  style XSS is meaningfully less severe than inline-script XSS, and
-  the user text in chips is escaped via html.escape at the chip-
-  building level.
+  CSP: defense-in-depth on top of the analysis renderer's
+  html.escape. style-src needs 'unsafe-inline' because analysis.py
+  emits chips with per-element styles; moving chip colors to CSS
+  classes would let us drop that. frame-ancestors is omitted: the
+  directive is ignored when delivered via <meta>, and GitHub Pages
+  doesn't let us set HTTP headers.
 -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
@@ -35,30 +25,14 @@
   form-action 'none';
 ">
 <!--
-  frame-ancestors is intentionally omitted here. The directive is
-  ignored when delivered via <meta> (HTML spec; only HTTP headers
-  honor it). GitHub Pages doesn't let us set arbitrary headers, so
-  we accept the gap. To prevent clickjacking entirely, deploy
-  behind a host that sets X-Frame-Options: DENY or the equivalent
-  Content-Security-Policy header.
--->
-<!--
-  Hint the browser to set up the TLS connection to the Pyodide CDN
-  early, in parallel with parsing the rest of the document. Saves
-  ~100-300 ms on cold loads. dns-prefetch is a backstop for
-  browsers that ignore preconnect.
+  Open the TLS connection and prefetch Pyodide's payloads in
+  parallel with HTML parse. pyodide.js is loaded dynamically by
+  main.js (not via a static <script> tag) so first paint isn't
+  blocked by its CDN fetch; the preload below warms the cache so
+  main.js's injected <script> finds it already in flight.
 -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-<!--
-  Preload Pyodide's two biggest payloads in parallel with main.js
-  compile + run. Without these, the browser doesn't learn about the
-  asm.wasm / asm.js requests until loadPyodide() is awaited several
-  hundred ms into boot. With them, both downloads start at parse
-  time and saturate the connection earlier. Saves 200-400 ms on
-  cold loads. The URLs hardcode CDN paths; bump together with the
-  pyodide.js <script> tag below and the SRI hash there.
--->
 <link rel="preload" as="script" crossorigin
       href="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js">
 <link rel="preload" as="fetch" type="application/wasm" crossorigin
@@ -90,9 +64,9 @@
 </div>
 
 <header class="toolbar">
-  <!-- Bridge-gated controls start disabled so a keyboard-tab user
-       can't activate them before bootPyodide finishes. enableBridge
-       GatedControls() in main.js re-enables them after boot. -->
+  <!-- Bridge-gated controls start disabled; main.js re-enables them
+       after the bridge attaches so keyboard tab focus can't activate
+       them before Pyodide is ready. -->
   <select id="inventory-picker" aria-label="Inventory" disabled></select>
   <button id="upload-btn" type="button" disabled>Open file…</button>
   <input id="upload-input" type="file" accept=".json" hidden>
@@ -132,14 +106,6 @@
   Select an inventory from the dropdown to begin.
 </footer>
 
-<!--
-  Pyodide's bootstrap file (pyodide.js) is loaded DYNAMICALLY by
-  main.js so the bootstrap render path doesn't sit behind a 1-2 s
-  CDN fetch. The preload link above gets the fetch started during
-  HTML parse; main.js's loadPyodideScript() injects the <script>
-  tag once the bootstrap UI has painted. SRI hash + URL live in
-  main.js (PYODIDE_BOOTSTRAP_*).
--->
 <script type="module" src="main.js"></script>
 </body>
 </html>
