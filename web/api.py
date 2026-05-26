@@ -21,6 +21,12 @@ from typing import Any
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features.gui.constants import FEATURE_GROUPS
+from phonology_features.gui.inventory_setup import (
+    DEFAULT_FEATURES,
+    DEFAULT_SEGMENTS,
+    FEATURE_PRESETS,
+    validate_setup,
+)
 from phonology_features.gui.layout import distribute_feature_groups
 from phonology_features.gui.palette import set_theme
 from phonology_features.gui.vowel_layout import COL_LABELS as VOWEL_COL_LABELS
@@ -186,6 +192,60 @@ def serialize_current_inventory() -> str:
 
 def get_current_inventory_name() -> str:
     return _inventory_name or "inventory"
+
+
+def get_setup_defaults() -> dict[str, Any]:
+    """Return the autofill seeds and named feature presets the
+    web setup modal needs to populate its UI.
+
+    Shared with the desktop builder via
+    :py:mod:`phonology_features.gui.inventory_setup` so both
+    frontends offer the same Tab-autofill strings and the same
+    named presets in the dropdown.
+    """
+    return {
+        "default_segments": DEFAULT_SEGMENTS,
+        "default_features": DEFAULT_FEATURES,
+        "presets": {name: list(feats) for name, feats in FEATURE_PRESETS.items()},
+    }
+
+
+def create_new_inventory(
+    raw_name: str, segments_text: str, features_text: str
+) -> dict[str, Any]:
+    """Build a new all-zero inventory from delimited text inputs.
+
+    Runs the shared :py:func:`validate_setup` so the rules and
+    error wording match the desktop's New Inventory dialog. On
+    success constructs an Inventory with every (segment, feature)
+    cell at ``"0"`` and swaps the engine; the inventory summary
+    (the same shape :py:func:`load_inventory_json` returns) is
+    handed back so JS can mount the empty grid as the active view.
+
+    Raises :py:class:`ValidationError` with the full tuple of
+    issue messages when validation fails. JS surfaces the first
+    via the standard ``e.message`` channel; the others can be
+    requested separately via
+    :py:func:`validation_issues_from_error`.
+    """
+    global _engine, _inventory_name
+    result = validate_setup(raw_name, segments_text, features_text)
+    if not result.ok:
+        raise ValidationError(
+            tuple(issue.message for issue in result.issues)
+        )
+    grid = {
+        seg: dict.fromkeys(result.features, "0") for seg in result.segments
+    }
+    inventory = Inventory.from_grid(
+        name=result.name,
+        features=list(result.features),
+        segments=grid,
+    )
+    _engine = FeatureEngine(inventory)
+    _inventory_name = inventory.name
+    _invalidate_analysis_caches()
+    return _summarize_engine(_engine)
 
 
 def rename_current_inventory(new_name: str) -> dict[str, Any]:

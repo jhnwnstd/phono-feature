@@ -1,40 +1,13 @@
-"""Feature preset definitions for the inventory builder."""
+"""Feature preset definitions for the inventory builder.
 
-FEATURE_PRESETS = {
-    "Default (33)": [
-        "Syllabic",
-        "Consonantal",
-        "Sonorant",
-        "Approximant",
-        "Voice",
-        "SpreadGl",
-        "ConstrGl",
-        "Continuant",
-        "Strident",
-        "DelRel",
-        "Nasal",
-        "Lateral",
-        "Trill",
-        "Tap",
-        "Click",
-        "LABIAL",
-        "Round",
-        "Labiodental",
-        "CORONAL",
-        "Anterior",
-        "Distributed",
-        "DORSAL",
-        "High",
-        "Low",
-        "Back",
-        "Front",
-        "Pharyngeal",
-        "ATR",
-        "Tense",
-        "Long",
-        "Stress",
-        "Tone",
-        "UpperRegister",
-    ],
-    "Custom": [],
-}
+Re-exports :py:data:`FEATURE_PRESETS` from
+:py:mod:`phonology_features.gui.inventory_setup`, which is the
+shared source consumed by both the desktop builder and the web
+setup modal. Kept as a thin alias so existing
+``from ...builder.presets import FEATURE_PRESETS`` imports stay
+stable and the web bundle does not need to relay this submodule.
+"""
+
+from phonology_features.gui.inventory_setup import FEATURE_PRESETS
+
+__all__ = ["FEATURE_PRESETS"]

@@ -219,6 +219,49 @@ dialog input[type="text"]:focus-visible {
   filter: brightness(0.92);
 }
 
+/* New-inventory setup dialog. Wider than the rename modal because
+   the segments and features textareas need horizontal room for a
+   typical 30+-entry feature list to read comfortably. */
+.setup-dialog {
+  min-width: 520px;
+  max-width: 720px;
+}
+.setup-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-family: var(--mono-family, ui-monospace, monospace);
+  resize: vertical;
+}
+.setup-dialog textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+.setup-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+.setup-field-header select {
+  height: var(--control-h-md);
+  padding: 0 var(--space-md);
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.setup-field-header select:hover {
+  border-color: var(--accent);
+}
+
 /* ---------- two-pane split (segments | features) ---------- */
 
 .grid {

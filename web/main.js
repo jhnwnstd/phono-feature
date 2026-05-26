@@ -31,6 +31,16 @@ const NODE_IDS = Object.freeze({
     renameError: "rename-error",
     renameCancel: "rename-cancel",
     renameSave: "rename-save",
+    newBtn: "new-btn",
+    setupDialog: "setup-dialog",
+    setupForm: "setup-form",
+    setupNameInput: "setup-name-input",
+    setupSegmentsInput: "setup-segments-input",
+    setupFeaturesInput: "setup-features-input",
+    setupPresetPicker: "setup-preset-picker",
+    setupError: "setup-error",
+    setupCancel: "setup-cancel",
+    setupCreate: "setup-create",
 });
 const nodes = Object.create(null);
 
@@ -457,6 +467,7 @@ const BRIDGE_GATED_NODES = [
     "uploadBtn",
     "downloadBtn",
     "renameBtn",
+    "newBtn",
 ];
 
 /**
@@ -516,17 +527,26 @@ async function loadBundledInventory(item) {
     await loadInventoryText(text, item.label);
 }
 
+/**
+ * Adopt a bridge-returned inventory summary as the active state and
+ * paint the panels. Shared by the load-from-text and create-new
+ * paths so both produce identical post-load UI state.
+ */
+function applyInventoryInfo(info) {
+    state.inventory_name = info.name;
+    state.segments = info.segments;
+    state.features = info.features;
+    state.selected_segments = [];
+    state.selected_features = emptyFeatureSpec();
+    renderSegmentGrid(info.groups, info.vowel_chart);
+    renderFeaturePanel(info.feature_groups);
+    nodes.analysisContent.innerHTML = "";
+}
+
 async function loadInventoryText(text, sourceLabel) {
     try {
         const info = callBridge("load_inventory_json", text, sourceLabel);
-        state.inventory_name = info.name;
-        state.segments = info.segments;
-        state.features = info.features;
-        state.selected_segments = [];
-        state.selected_features = emptyFeatureSpec();
-        renderSegmentGrid(info.groups, info.vowel_chart);
-        renderFeaturePanel(info.feature_groups);
-        nodes.analysisContent.innerHTML = "";
+        applyInventoryInfo(info);
         setStatus(
             `Loaded ${info.name} `
             + `(${info.segments.length} segments, ${info.features.length} features).`
@@ -1138,6 +1158,115 @@ function wireRename() {
     });
 }
 
+/**
+ * Wire the New… button to a modal that builds a fresh all-zero
+ * inventory from a name plus delimited segments and features. The
+ * preset dropdown and Tab-autofill seeds come from the same
+ * inventory_setup module the desktop builder uses, so the two
+ * frontends offer identical defaults. Validation is server-side
+ * (Pyodide-side) through validate_setup; the dialog stays open
+ * on error so the user can correct without losing input.
+ */
+function wireNewInventory() {
+    const dialog = nodes.setupDialog;
+    const form = nodes.setupForm;
+    const nameInput = nodes.setupNameInput;
+    const segInput = nodes.setupSegmentsInput;
+    const featInput = nodes.setupFeaturesInput;
+    const presetPicker = nodes.setupPresetPicker;
+    const errorBox = nodes.setupError;
+
+    let defaultsLoaded = false;
+    let presets = Object.create(null);
+
+    const loadDefaultsOnce = () => {
+        if (defaultsLoaded) return;
+        const defaults = callBridge("get_setup_defaults");
+        // Tab on empty would mirror the desktop, but a browser
+        // textarea consumes Tab for focus navigation by default.
+        // Use placeholder text instead so the seed is visible and
+        // the user can either type their own or copy the placeholder.
+        segInput.placeholder = defaults.default_segments;
+        featInput.placeholder = defaults.default_features;
+        presets = defaults.presets || {};
+        // Populate the dropdown in insertion order. "Custom" empty list
+        // gives the user a no-fill option.
+        presetPicker.innerHTML = "";
+        for (const name of Object.keys(presets)) {
+            const opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
+            presetPicker.appendChild(opt);
+        }
+        defaultsLoaded = true;
+    };
+
+    const applyPreset = (name) => {
+        const list = presets[name];
+        if (!list || list.length === 0) {
+            featInput.value = "";
+            return;
+        }
+        featInput.value = list.join("\n");
+    };
+
+    const openDialog = () => {
+        loadDefaultsOnce();
+        nameInput.value = "";
+        segInput.value = "";
+        // Default to the first preset (Default(33)) on open so the
+        // common case is one click. The user can switch to Custom
+        // and clear if they want to start blank.
+        if (presetPicker.options.length > 0) {
+            presetPicker.selectedIndex = 0;
+            applyPreset(presetPicker.value);
+        }
+        errorBox.textContent = "";
+        if (typeof dialog.showModal === "function") {
+            dialog.showModal();
+        } else {
+            dialog.setAttribute("open", "");
+        }
+        requestAnimationFrame(() => nameInput.focus());
+    };
+
+    const closeDialog = () => {
+        if (typeof dialog.close === "function") {
+            dialog.close();
+        } else {
+            dialog.removeAttribute("open");
+        }
+    };
+
+    nodes.newBtn.addEventListener("click", openDialog);
+    nodes.setupCancel.addEventListener("click", closeDialog);
+    presetPicker.addEventListener("change", () => {
+        applyPreset(presetPicker.value);
+    });
+
+    form.addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        try {
+            const info = callBridge(
+                "create_new_inventory",
+                nameInput.value,
+                segInput.value,
+                featInput.value,
+            );
+            applyInventoryInfo(info);
+            setStatus(
+                `Created ${info.name} `
+                + `(${info.segments.length} segments, `
+                + `${info.features.length} features).`,
+            );
+            errorBox.textContent = "";
+            closeDialog();
+        } catch (e) {
+            errorBox.textContent = e.message || "Could not create inventory.";
+        }
+    });
+}
+
 const THEME = Object.freeze({ LIGHT: "light", DARK: "dark" });
 
 /** localStorage is external input: anything other than the dark
@@ -1315,6 +1444,7 @@ async function main() {
     wireInventoryPicker();
     wireUploadDownload();
     wireRename();
+    wireNewInventory();
     wireExpandButton();
     wireClearButtons();
     wirePanelClickMode();

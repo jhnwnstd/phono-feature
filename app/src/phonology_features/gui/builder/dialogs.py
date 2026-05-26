@@ -1,7 +1,5 @@
 """Reusable dialog helpers and the InputDialog for inventory setup."""
 
-import re
-
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QFont, QPainter, QTextCursor
 from PyQt6.QtWidgets import (
@@ -16,41 +14,16 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from phonology_engine.inventory import MAX_NAME_LENGTH
-from phonology_features.gui.builder.presets import FEATURE_PRESETS
+from phonology_engine.limits import MAX_NAME_LENGTH
+from phonology_features.gui.inventory_setup import (
+    DEFAULT_FEATURES,
+    DEFAULT_SEGMENTS,
+    FEATURE_PRESETS,
+    infer_split,
+    normalize_setup_name,
+    validate_setup,
+)
 from phonology_features.gui.palette import C
-
-# Candidate delimiters _infer_split tries, in no particular order.
-# Whitespace is the FALLBACK (used only when none of these appear);
-# kept separate because feature names may legitimately contain spaces
-# (e.g. "Long Vowel") and the whole point of supporting explicit
-# delimiters is to let those names survive paste.
-_EXPLICIT_DELIMITERS: tuple[str, ...] = (",", ";", "|", "\t", "\n")
-
-
-def _infer_split(text: str) -> list[str]:
-    """Split ``text`` on whichever of the candidate delimiters appears.
-
-    Lets the user paste any consistently-delimited list (CSV, TSV,
-    semicolons, pipes, one-per-line, plain whitespace) without
-    pre-processing. The rule:
-
-    * If any of ``,``, ``;``, ``|``, ``\\t``, ``\\n`` appears in the
-      text, split on EVERY explicit delimiter that's present.
-      Handles mixed cases like ``"p, b, t\\nd, e, f"`` (commas and
-      newlines together) which should yield six tokens, not two
-      strings of three.
-    * Otherwise fall back to any-whitespace split (the legacy
-      behaviour for ``"p b t d"``).
-
-    Each token is whitespace-stripped; empties are filtered. Order
-    is preserved.
-    """
-    used = [d for d in _EXPLICIT_DELIMITERS if d in text]
-    if not used:
-        return [tok for tok in text.split() if tok]
-    pattern = "|".join(re.escape(d) for d in used)
-    return [tok.strip() for tok in re.split(pattern, text) if tok.strip()]
 
 
 class _AutofillTextEdit(QPlainTextEdit):
@@ -119,11 +92,12 @@ class _AutofillTextEdit(QPlainTextEdit):
 
     def entries(self) -> list[str]:
         """Parse the current text as a list of entries by inferring
-        the delimiter. See ``_infer_split`` for the rule. Same shape
-        for segments and features so pasted input from any source
-        (CSV exports, spreadsheet columns, one-per-line lists,
-        space-separated jottings) works without pre-processing."""
-        return _infer_split(self.toPlainText())
+        the delimiter. See :py:func:`infer_split` for the rule. Same
+        shape for segments and features so pasted input from any
+        source (CSV exports, spreadsheet columns, one-per-line
+        lists, space-separated jottings) works without pre-processing.
+        """
+        return infer_split(self.toPlainText())
 
     def paintEvent(self, e):
         super().paintEvent(e)
@@ -165,8 +139,10 @@ class SegmentTextEdit(_AutofillTextEdit):
     so the trailer does not introduce a phantom entry.
     """
 
-    # The \u0261 here is U+0261 (IPA voiced velar script g), not ASCII g.
-    DEFAULT_FILL = "p b t d k \u0261 "
+    # Sourced from the shared setup module so the web setup dialog
+    # offers the same Tab-autofill string. The \u0261 inside
+    # DEFAULT_SEGMENTS is U+0261 (IPA voiced velar script g).
+    DEFAULT_FILL = DEFAULT_SEGMENTS
 
 
 class FeatureTextEdit(_AutofillTextEdit):
@@ -183,7 +159,7 @@ class FeatureTextEdit(_AutofillTextEdit):
     feature names contain spaces (e.g. "Long Vowel") as long as the
     user separates with something other than whitespace."""
 
-    DEFAULT_FILL = "Syllabic\nConsonantal\n"
+    DEFAULT_FILL = DEFAULT_FEATURES
 
 
 def center_on_parent(dialog, parent):
@@ -365,69 +341,41 @@ class InputDialog(QDialog):
         return self.feat_edit.entries()
 
     def get_name(self) -> str:
-        name = self.name_edit.text().strip()
-        if name:
-            return name
-        return "Untitled Inventory"
+        return normalize_setup_name(self.name_edit.text())
+
+    # Field name (from :py:class:`SetupIssue`) to (title, focus widget).
+    # Drives the warning box title and where focus lands on rejection;
+    # keeps the Qt UI vocabulary local to this class while the shared
+    # :py:func:`validate_setup` owns the rules.
+    _ISSUE_TITLES = {
+        ("segments", "empty"): "No segments found",
+        ("features", "empty"): "No features found",
+        ("segments", "too_long"): "Segments entry too long",
+        ("features", "too_long"): "Features entry too long",
+    }
 
     def accept(self) -> None:
-        """Validate inputs before dismissing. On failure, warn, focus
-        the offending field, and keep the dialog open.
+        """Validate inputs before dismissing.
 
-        The "no items" branches double as the surface for "couldn't
-        infer the delimiter": ``_infer_split`` only returns an empty
-        list when the input is empty or whitespace-only. The message
-        names every accepted delimiter so a user who pasted something
-        the parser couldn't tokenize can see what to try.
+        On failure, surface the first issue via QMessageBox, focus
+        the offending field, and keep the dialog open. The rules and
+        messages are owned by :py:func:`validate_setup` so the web
+        setup modal produces identical wording.
         """
-        if not self.get_segments():
-            QMessageBox.warning(
-                self,
-                "No segments found",
-                "The segments box is empty, or none of the recognized "
-                "delimiters were found. Separate segments with any of: "
-                "newline, space, tab, comma, semicolon, or pipe. "
-                "Press Tab in an empty box for a quick-start set.",
-            )
-            self.seg_edit.setFocus()
+        result = validate_setup(
+            self.name_edit.text(),
+            self.seg_edit.toPlainText(),
+            self.feat_edit.toPlainText(),
+        )
+        if not result.issues:
+            super().accept()
             return
-        if not self.get_features():
-            QMessageBox.warning(
-                self,
-                "No features found",
-                "The features box is empty, or none of the recognized "
-                "delimiters were found. Separate features with any of: "
-                "newline, comma, semicolon, tab, or pipe. (Whitespace "
-                "is allowed but only as a fallback, so feature names "
-                "that contain spaces survive when you use a non-space "
-                "delimiter.) Or pick a feature set from the dropdown.",
-            )
-            self.feat_edit.setFocus()
-            return
-        # Per-entry length cap. Catches the "pasted a wall of prose
-        # into the segments box and didn't notice it has no delimiter
-        # the inferrer recognizes" case: ``_infer_split`` would return
-        # the whole paragraph as one giant "segment", which would then
-        # crawl through json.dump and balloon the saved file. Reject
-        # at the dialog boundary, where we can still surface a
-        # focusable error, instead of letting it land in the parser.
-        for label, edit, entries in (
-            ("segments", self.seg_edit, self.get_segments()),
-            ("features", self.feat_edit, self.get_features()),
-        ):
-            offender = next(
-                (e for e in entries if len(e) > MAX_NAME_LENGTH), None
-            )
-            if offender is not None:
-                QMessageBox.warning(
-                    self,
-                    f"{label.capitalize()} entry too long",
-                    f"One of the {label} is {len(offender)} characters "
-                    f"long, longer than the {MAX_NAME_LENGTH}-character "
-                    f"limit. This usually means the delimiter wasn't "
-                    f"recognized and the whole input was treated as a "
-                    f"single entry. Check the delimiter and try again.",
-                )
-                edit.setFocus()
-                return
-        super().accept()
+        first = result.issues[0]
+        title = self._ISSUE_TITLES.get(
+            (first.field, first.code), "Cannot create grid"
+        )
+        QMessageBox.warning(self, title, first.message)
+        focus_widget = (
+            self.seg_edit if first.field == "segments" else self.feat_edit
+        )
+        focus_widget.setFocus()

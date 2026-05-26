@@ -69,6 +69,7 @@
   <select id="inventory-picker" aria-label="Inventory" disabled></select>
   <button id="rename-btn" type="button" disabled
           aria-label="Rename current inventory" title="Rename inventory">✎</button>
+  <button id="new-btn" type="button" disabled>New…</button>
   <button id="upload-btn" type="button" disabled>Open file…</button>
   <input id="upload-input" type="file" accept=".json" hidden>
   <button id="download-btn" type="button" disabled>Save as…</button>
@@ -117,6 +118,42 @@
     <div class="dialog-actions">
       <button type="button" id="rename-cancel" value="cancel">Cancel</button>
       <button type="submit" id="rename-save" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="setup-dialog" class="setup-dialog"
+        aria-labelledby="setup-dialog-title">
+  <form method="dialog" id="setup-form">
+    <div class="dialog-title" id="setup-dialog-title">New inventory</div>
+
+    <label class="dialog-label" for="setup-name-input">Inventory name</label>
+    <input id="setup-name-input" type="text" maxlength="256"
+           autocomplete="off" spellcheck="false"
+           placeholder="e.g. My Language Inventory">
+
+    <div class="setup-field-header">
+      <label class="dialog-label" for="setup-segments-input">
+        Segments (delimited)
+      </label>
+    </div>
+    <textarea id="setup-segments-input" rows="4" spellcheck="false"
+              autocomplete="off"></textarea>
+
+    <div class="setup-field-header">
+      <label class="dialog-label" for="setup-features-input">
+        Features (delimited)
+      </label>
+      <select id="setup-preset-picker" aria-label="Feature preset">
+      </select>
+    </div>
+    <textarea id="setup-features-input" rows="10" spellcheck="false"
+              autocomplete="off"></textarea>
+
+    <div class="dialog-error" id="setup-error" role="alert"></div>
+    <div class="dialog-actions">
+      <button type="button" id="setup-cancel" value="cancel">Cancel</button>
+      <button type="submit" id="setup-create" value="create">Create grid</button>
     </div>
   </form>
 </dialog>
