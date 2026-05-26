@@ -251,69 +251,76 @@ def analyze_segments(segs: list[str]) -> dict:
 
 @lru_cache(maxsize=256)
 def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict:
+    """SEG mode analysis. Returns the inputs JS needs to derive each
+    row/button's state inline, mirroring the desktop's _update_seg_
+    to_feat. Keys:
+
+    * ``analysis_html``: pre-rendered HTML for the analysis pane.
+    * ``selected``: list of currently-selected segments (the input,
+      echoed back for the caller's convenience).
+    * ``suggested``: natural-class extension suggestions (empty for
+      single-seg or genuine natural classes).
+    * ``common``: dict of ``{feat: value}`` for features where all
+      selected segments share the same value. Includes ``"0"`` and
+      ``""`` values; JS decides which ones to display as a +/- chip
+      vs. neutral.
+    * ``contrastive``: list of feature names that split cleanly
+      across the selection (some segs +, others -, neither in
+      majority unspecified).
+
+    JS does NOT receive a precomputed ``feature_display`` dict
+    anymore. The old shape silently fell back to a neutral default
+    for any feat missing from the dict; the new shape forces JS to
+    walk every row in ``state.feat_rows`` and place each into
+    exactly one bucket (contrastive / shared / neutral) using
+    ``common`` and ``contrastive`` directly. Matches the desktop
+    pattern, which is total by construction.
+    """
     engine = _require_engine()
     segs = list(segs_tuple)
     if not segs:
         return {
             "analysis_html": "",
-            "feature_display": {},
-            "segment_states": {seg: "default" for seg in engine.segments},
             "selected": [],
             "suggested": [],
+            "common": {},
+            "contrastive": [],
         }
     analysis = _analysis()
-    selected_set = set(segs)
     if len(segs) == 1:
         feats = engine.get_segment_features(segs[0])
-        feature_display = {
-            feat: {"value": v if v != "0" else "", "shared": True}
-            for feat, v in feats.items()
-        }
-        segment_states = {
-            seg: "selected" if seg in selected_set else "default"
-            for seg in engine.segments
-        }
-        analysis_html = analysis.render_single_segment(engine, segs[0], dict(feats))
+        # Single-seg case: every feature has a defined value for
+        # this segment. "0" maps to "" so JS sees a blank slot
+        # (matches desktop's set_display("", shared=True) → neutral
+        # branch).
+        common = {feat: v if v != "0" else "" for feat, v in feats.items()}
+        analysis_html = analysis.render_single_segment(
+            engine, segs[0], dict(feats)
+        )
         return {
             "analysis_html": analysis_html,
-            "feature_display": feature_display,
-            "segment_states": segment_states,
             "selected": list(segs),
             "suggested": [],
+            "common": common,
+            "contrastive": [],
         }
-    common = engine.common_features(segs)
-    contrastive = analysis.compute_contrastive(engine, segs)
-    feature_display = {}
-    for feat in engine.features:
-        if feat in common:
-            feature_display[feat] = {"value": common[feat], "shared": True}
-        elif feat in contrastive:
-            feature_display[feat] = {"value": "", "contrastive": True}
-        else:
-            feature_display[feat] = {"value": "", "shared": False}
+    selected_set = set(segs)
+    common_raw = engine.common_features(segs)
+    contrastive_raw = analysis.compute_contrastive(engine, segs)
     is_nc, _ = engine.is_natural_class(segs)
     suggested: list[str] = []
-    if not is_nc and common:
-        extension = engine.find_segments(common, underspec_compatible=True)
+    if not is_nc and common_raw:
+        extension = engine.find_segments(common_raw, underspec_compatible=True)
         suggested = [s for s in extension if s not in selected_set]
-    suggested_set = set(suggested)
-    segment_states = {}
-    for seg in engine.segments:
-        if seg in selected_set:
-            segment_states[seg] = "selected"
-        elif seg in suggested_set:
-            segment_states[seg] = "suggested"
-        else:
-            segment_states[seg] = "default"
     analysis_html = analysis.render_multi_segment(
-        engine, segs, common, contrastive, suggested
+        engine, segs, common_raw, contrastive_raw, suggested
     )
     return {
         "analysis_html": analysis_html,
-        "feature_display": feature_display,
-        "segment_states": segment_states,
         "selected": list(segs),
         "suggested": list(suggested),
+        "common": dict(common_raw),
+        "contrastive": list(contrastive_raw),
     }
 
 
@@ -339,20 +346,13 @@ def _analyze_features_cached(spec_items: tuple[tuple[str, str], ...]) -> dict:
     if not spec:
         return {
             "analysis_html": "",
-            "segment_states": {seg: "default" for seg in engine.segments},
             "matching": [],
         }
     analysis = _analysis()
     matching = engine.find_segments(spec)
-    matching_set = set(matching)
-    segment_states = {
-        seg: "matched" if seg in matching_set else "unmatched"
-        for seg in engine.segments
-    }
     analysis_html = analysis.render_feat_to_seg(spec, matching)
     return {
         "analysis_html": analysis_html,
-        "segment_states": segment_states,
         "matching": matching,
     }
 

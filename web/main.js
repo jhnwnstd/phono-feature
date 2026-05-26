@@ -590,11 +590,35 @@ function applyBootstrap() {
         console.error("bootstrap parse failed; falling back to bridge", e);
         return false;
     }
+    // Structural validation: a malformed bootstrap (parses but
+    // missing fields) would otherwise crash deep inside
+    // renderSegmentGrid / renderFeaturePanel with a useless
+    // "undefined is not iterable" message, freezing the page
+    // before the loading overlay can hide. Failing the check here
+    // returns false; bootPyodide takes the bridge-driven path
+    // instead, and the user gets a normal cold-load experience.
+    if (!_isValidBootstrap(info)) {
+        // eslint-disable-next-line no-console
+        console.error("bootstrap shape invalid; falling back to bridge", info);
+        return false;
+    }
     state.inventory_name = info.name;
     state.segments = info.segments;
     state.features = info.features;
     renderSegmentGrid(info.groups, info.vowel_chart);
     renderFeaturePanel(info.feature_groups);
+    return true;
+}
+
+function _isValidBootstrap(info) {
+    if (!info || typeof info !== "object") return false;
+    if (typeof info.name !== "string") return false;
+    if (!Array.isArray(info.segments)) return false;
+    if (!Array.isArray(info.features)) return false;
+    if (!Array.isArray(info.groups)) return false;
+    if (!Array.isArray(info.feature_groups)) return false;
+    if (!info.vowel_chart || typeof info.vowel_chart !== "object") return false;
+    if (!Array.isArray(info.vowel_chart.cells)) return false;
     return true;
 }
 
@@ -1152,11 +1176,8 @@ function runSegToFeat(token) {
     if (_isStaleToken(token)) return;
     nodes.analysisContent.innerHTML = result.analysis_html;
 
-    // Compute each button's state from the SELECTED + SUGGESTED
-    // sets directly. Like the desktop's _update_seg_to_feat, this
-    // can't produce a ghost "default" for a button that's drifted
-    // out of sync with the engine -- every button gets exactly one
-    // state from this decision tree.
+    // Per-button SEG state: derive from selected + suggested sets,
+    // not from a dict that might be missing keys. Mirrors desktop.
     const selectedSet = new Set(state.selected_segments);
     const suggestedSet = new Set(result.suggested || []);
     _applySegmentStates((seg) =>
@@ -1165,15 +1186,36 @@ function runSegToFeat(token) {
         : "default"
     );
 
-    // Feature row display still comes from the dict (a feat
-    // missing from feature_display falls back to neutral, which
-    // is the correct rendering for "no info about this feature").
+    // Per-row feature state: same desktop pattern, three explicit
+    // buckets (contrastive / shared-with-value / neutral) decided
+    // inline from `common` and `contrastive`. No dict-fallback,
+    // every row in state.feat_rows gets exactly one bucket.
+    // Mirrors desktop's _update_seg_to_feat row loop:
+    //   if feat in common AND value is +/-: shared display
+    //   elif feat in contrastive: contrastive display
+    //   else: neutral (includes "0" / missing values)
+    const common = result.common || {};
+    const contrastiveSet = new Set(result.contrastive || []);
     for (const [feat, rec] of state.feat_rows) {
-        const info = result.feature_display[feat] || { value: "", shared: false };
-        rec.row.dataset.value = info.value || "";
-        rec.row.dataset.shared = info.shared ? "true" : "false";
-        rec.row.dataset.contrastive = info.contrastive ? "true" : "false";
-        rec.badge.textContent = info.value || "·";
+        const v = common[feat];                    // "+", "-", "", "0", or undefined
+        const isDisplayable = v === "+" || v === "-";
+        const isContrastive = contrastiveSet.has(feat);
+        if (isDisplayable) {
+            rec.row.dataset.value = v;
+            rec.row.dataset.shared = "true";
+            rec.row.dataset.contrastive = "false";
+            rec.badge.textContent = v;
+        } else if (isContrastive) {
+            rec.row.dataset.value = "";
+            rec.row.dataset.shared = "false";
+            rec.row.dataset.contrastive = "true";
+            rec.badge.textContent = "±";      // ± matches desktop
+        } else {
+            rec.row.dataset.value = "";
+            rec.row.dataset.shared = "false";
+            rec.row.dataset.contrastive = "false";
+            rec.badge.textContent = "·";      // · neutral dot
+        }
     }
 }
 
@@ -1428,12 +1470,22 @@ function wireSegmentSpilloverResize() {
 // local cache, dropping boot from ~5 s to under 1 s.
 function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
-    window.addEventListener("load", () => {
+    const register = () => {
         navigator.serviceWorker
             .register("./sw.js", { scope: "./" })
             // eslint-disable-next-line no-console
             .catch((e) => console.warn("SW registration failed:", e));
-    });
+    };
+    // Defer to after first load so the registration request
+    // doesn't compete with critical-path fetches. But if main.js
+    // parsed slowly enough that window.load already fired, the
+    // listener would never trigger; explicitly check readyState
+    // to cover that edge case.
+    if (document.readyState === "complete") {
+        register();
+    } else {
+        window.addEventListener("load", register, { once: true });
+    }
 }
 
 async function main() {
