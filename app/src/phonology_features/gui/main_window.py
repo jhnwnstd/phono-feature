@@ -36,7 +36,6 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QToolBar,
-    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -70,14 +69,12 @@ from phonology_features.gui.mode_controller import Mode, _ModeController
 from phonology_features.gui.palette import (
     C,
     detect_system_theme,
-    get_theme_name,
     set_theme,
 )
 from phonology_features.gui.style_utils import (
-    apply_app_palette,
-    apply_tooltip_palette,
     set_css,
 )
+from phonology_features.gui.theme_controller import _ThemeController
 from phonology_features.gui.themed_widgets import (
     _BrandedStatusBar,
     _clear_btn_style,
@@ -158,6 +155,9 @@ class MainWindow(QMainWindow):
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(150)
         self._debounce.timeout.connect(self._run_pending_update)
+        # Theme controller built before ``_build_ui`` because the
+        # toolbar wires its toggle into the theme button click signal.
+        self._theme = _ThemeController(self)
         self._build_ui()
         # Inventory-dir controller owns the file watcher, MRU, and
         # dropdown population. Constructed AFTER _build_ui because it
@@ -183,66 +183,17 @@ class MainWindow(QMainWindow):
         """
         self._mode_ctrl.set_mode(mode)
 
-    # UI construction
-    @staticmethod
-    def _nav_btn_style() -> str:
-        """Toolbar nav-button stylesheet, evaluated against the active
-        palette. Shared between construction and theme re-styling.
-        """
-        return f"""
-            QPushButton {{
-                background: {C["bg"]};
-                color: {C["text"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-                padding: 0 12px;
-            }}
-            QPushButton:hover {{
-                background: {C["accent_light"]};
-                border: 1.5px solid {C["accent"]};
-                color: {C["accent"]};
-            }}
-        """
-
-    @staticmethod
-    def _combo_style() -> str:
-        """Inventory dropdown QSS. Styles the box to look button-like
-        (so it visibly invites a click) and themes the popup list.
-        The Fusion native arrow is suppressed by any QComboBox rule
-        without a paired down-arrow image asset; that's a known
-        trade-off we accept since the box-as-button styling reads as
-        a dropdown affordance on its own.
-        """
-        return f"""
-            QComboBox {{
-                background: {C["bg"]};
-                color: {C["text"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-                padding: 0 10px;
-            }}
-            QComboBox:hover {{
-                border: 1.5px solid {C["accent"]};
-            }}
-            QComboBox QAbstractItemView {{
-                background: {C["panel"]};
-                color: {C["text"]};
-                border: 1px solid {C["border"]};
-                selection-background-color: {C["accent_light"]};
-                selection-color: {C["accent"]};
-                outline: none;
-            }}
-        """
-
     def _build_ui(self) -> None:
         self._build_toolbar()
         self._build_central()
         self._build_status_bar()
 
     def _build_toolbar(self) -> None:
-        """Build the top toolbar. Every widget gets a parent at
-        construction; a parent-less QToolBar would take the Qt.Tool
-        window flag and flash as a transient floating window on Wayland.
+        """Build the top toolbar.
+
+        Every widget gets a parent at construction; a parent-less
+        :class:`QToolBar` would take the ``Qt.Tool`` window flag and
+        flash as a transient floating window on Wayland.
         """
         self._toolbar = QToolBar(self)
         self._toolbar.setMovable(False)
@@ -253,9 +204,9 @@ class MainWindow(QMainWindow):
         self.inventory_combo.setFont(QFont("Noto Sans", 10))
         self.inventory_combo.setFixedHeight(32)
         self.inventory_combo.setMinimumWidth(176)
-        set_css(self.inventory_combo, self._combo_style())
-        # Dropdown is populated by _InventoryDirController.__init__,
-        # which runs after _build_ui completes (it needs the
+        set_css(self.inventory_combo, _ThemeController.combo_style())
+        # Dropdown is populated by ``_InventoryDirController.__init__``,
+        # which runs after ``_build_ui`` completes (it needs the
         # inventory_combo widget). The toolbar shows an empty combo
         # for the few microseconds between toolbar build and
         # controller construction; visually unobservable.
@@ -280,13 +231,14 @@ class MainWindow(QMainWindow):
         )
         set_css(spacer, "background: transparent;")
         toolbar.addWidget(spacer)
-        # Theme button text and tooltip are set by ``_apply_theme_btn``.
+        # Theme button text and tooltip are set later by
+        # :py:meth:`_ThemeController.apply_theme_btn`.
         self._theme_btn = QPushButton("", toolbar)
         self._theme_btn.setFont(QFont("Noto Sans", 12))
         self._theme_btn.setFixedSize(32, 32)
-        self._theme_btn.clicked.connect(self._toggle_theme)
+        self._theme_btn.clicked.connect(self._theme.toggle)
         toolbar.addWidget(self._theme_btn)
-        self._restyle_toolbar()
+        self._theme._restyle_toolbar()
 
     def _build_central(self) -> None:
         """Build the central widget: horizontal split (seg | feat) over
@@ -642,214 +594,6 @@ class MainWindow(QMainWindow):
             idx = self.inventory_combo.count() - 1
         self.inventory_combo.setCurrentIndex(idx)
         self._load_path(path)
-
-    def _toggle_theme(self) -> None:
-        """Switch between light and dark theme in place. Geometry,
-        splitter sizes, selections, and the widget tree are all
-        preserved; only stylesheet strings change.
-        """
-        new_theme = "dark" if get_theme_name() == "light" else "light"
-        _log.info("theme toggle: %s", new_theme)
-        set_theme(new_theme)
-        self._settings.setValue("theme", new_theme)
-        self._apply_theme()
-
-    def _apply_theme(self) -> None:
-        """Re-style every palette-dependent widget in place. Calls
-        ``apply_theme`` on each widget that owns palette state, then
-        forces a panel-chrome polish so the active-mode border picks
-        up the new accent color, then re-runs the active analysis so
-        ``set_display``-painted badges and matched/unmatched segment
-        styling refresh against the new palette.
-        """
-        QToolTip.hideText()
-        # The builder caches palette-dependent button stylesheets at
-        # construction and never re-styles. Drop the cached instance
-        # here so the next ``_open_builder`` builds against the new
-        # palette. Modality prevents the builder from being open at
-        # this point, so this never destroys an in-use window.
-        if self._builder is not None:
-            self._builder.deleteLater()
-            self._builder = None
-        with self._batched_updates():
-            # Skip pool entries detached from the layout (orphans from
-            # prior inventories). _get_or_create_seg_button calls
-            # apply_theme on re-attachment so a stale orphan picks up
-            # the new palette before it becomes visible.
-            for btn in self._seg_button_pool.values():
-                if btn.parent() is None:
-                    continue
-                btn.apply_theme()
-            # Iterate every FeatureRow we own, not just the pool: the
-            # "Other" card in inventories with non-FEATURE_ORDER features
-            # (for example general_features.json) creates rows that live
-            # in ``_feat_rows`` but NOT in ``_feat_row_pool``. Missing
-            # them leaves their name and +/- buttons styled with the
-            # old palette. In dark mode after starting from light, the
-            # name label's text color stays light against the dark bg,
-            # making the name appear "unpopulated".
-            for row in self._feat_row_pool.values():
-                row.apply_theme()
-            for feat, row in self._feat_rows.items():
-                if feat not in self._feat_row_pool:
-                    row.apply_theme()
-            self._restyle_chrome()
-            # Refresh the panel-chrome QSS rules then re-polish so the
-            # active-mode border picks up the new accent color.
-            for panel in (self.seg_panel, self.feat_panel):
-                set_css(
-                    panel, _ModeController.panel_chrome_qss(panel.objectName())
-                )
-                panel.setProperty("active", None)
-            self._mode_ctrl.apply_panel_chrome()
-            self._mode_ctrl.refresh_analysis()
-
-    def _restyle_chrome(self) -> None:
-        """Re-apply every chrome stylesheet that depends on the palette.
-        Each helper touches one logical group of widgets in place.
-        """
-        # Tooltip colors refresh via the shared QToolTip palette,
-        # NOT via app.setStyleSheet. The latter would re-polish every
-        # widget in the tree and turn theme toggle into a hundred-
-        # millisecond stall on populated inventories.
-        # The shape rules (border, radius, padding) were applied
-        # once at startup in app_qss() and don't change with theme.
-        apply_tooltip_palette()
-        # QApplication palette governs widgets that don't go through
-        # our set_css discipline: dialogs (QDialog/QFileDialog/
-        # QMessageBox/QInputDialog), default QPushButton chrome,
-        # QLineEdit text colors, etc. Without this refresh, dark mode
-        # would leave file-dialog text black on dark background.
-        apply_app_palette()
-        set_css(self, f"background-color: {C['bg']};")
-        self._restyle_toolbar()
-        self._repaint_splitter_handles()
-        self._restyle_panel_chrome_widgets()
-        self._restyle_feature_cards()
-        self.seg_grid_widget.apply_theme()
-        self.vowel_chart_widget.apply_theme()
-        self.analysis.apply_theme()
-        self.status.apply_theme()
-
-    def _restyle_toolbar(self) -> None:
-        set_css(
-            self._toolbar,
-            f"""
-            QToolBar {{
-                background: {C["panel"]};
-                border-bottom: 1px solid {C["border"]};
-                padding: 4px 8px;
-                spacing: 6px;
-            }}
-        """,
-        )
-        set_css(
-            self.inventory_combo,
-            f"""
-            QComboBox {{
-                background: {C["panel"]};
-                color: {C["text"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-                padding: 0 10px;
-            }}
-            QComboBox:hover {{
-                border: 1.5px solid {C["accent"]};
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                padding-right: 8px;
-            }}
-            QComboBox QAbstractItemView {{
-                background: {C["panel"]};
-                color: {C["text"]};
-                border: 1px solid {C["border"]};
-                selection-background-color: {C["accent_light"]};
-                selection-color: {C["accent"]};
-                outline: none;
-            }}
-        """,
-        )
-        nav_style = self._nav_btn_style()
-        for btn in self._nav_buttons:
-            set_css(btn, nav_style)
-        self._apply_theme_btn()
-
-    def _apply_theme_btn(self) -> None:
-        """Set the theme-button text, tooltip, and styling. The symbol
-        shows the OPPOSITE of the active theme: clicking switches to that.
-        """
-        is_dark = get_theme_name() == "dark"
-        self._theme_btn.setText("☼" if is_dark else "☾")
-        self._theme_btn.setToolTip(
-            "Switch to light mode" if is_dark else "Switch to dark mode"
-        )
-        set_css(
-            self._theme_btn,
-            f"""
-            QPushButton {{
-                background: transparent;
-                color: {C["text_dim"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-            }}
-            QPushButton:hover {{
-                color: {C["accent"]};
-                border: 1.5px solid {C["accent"]};
-            }}
-        """,
-        )
-
-    def _repaint_splitter_handles(self) -> None:
-        """Force splitter handles to repaint with the live palette.
-
-        ``_ThemedHandle.paintEvent`` reads ``C`` on each paint, but
-        the handles don't automatically know the palette changed.
-        One ``update()`` per handle is essentially free (no polish
-        cascade, just queues a single paint).
-        """
-        for splitter in (self._hsplit, self._vsplit):
-            for i in range(splitter.count()):
-                handle = splitter.handle(i)
-                if handle is not None:
-                    handle.update()
-
-    def _restyle_panel_chrome_widgets(self) -> None:
-        """Re-style panel-child widgets with palette-dependent stylesheets:
-        clear buttons, scroll bars, the seg hint. Scrollbar styles go
-        directly on each ``QScrollBar`` widget (not the scroll area)
-        so the cascade doesn't invalidate every panel descendant.
-        Panel container backgrounds / borders are handled separately
-        by ``_apply_panel_chrome`` via property-selector polish.
-        """
-        set_css(self.clear_seg_btn, _clear_btn_style())
-        set_css(self.clear_feat_btn, _clear_btn_style())
-        sb_qss = scrollbar_style()
-        for scroll in (self._seg_scroll, self._feat_scroll):
-            for bar in (
-                scroll.verticalScrollBar(),
-                scroll.horizontalScrollBar(),
-            ):
-                if bar is not None:
-                    set_css(bar, sb_qss)
-        set_css(self.seg_hint, f"color: {C['text_dim']};")
-
-    def _restyle_feature_cards(self) -> None:
-        """Refresh each group card and its title.
-
-        Cards are ``_ThemedCard`` instances that paint themselves from
-        the live palette; one ``update()`` per card queues a single
-        repaint (no polish cascade). Title color lives in QPalette so
-        re-applying it is cheap and doesn't cascade either.
-        """
-        cards: list[QFrame] = [card for card, _ in self._feat_cards]
-        if self._other_card is not None:
-            cards.append(self._other_card)
-        for card in cards:
-            card.update()
-            title = card.findChild(QLabel)
-            if title is not None:
-                self._apply_title_palette(title)
 
     def _open_builder(self) -> None:
         """Open (or raise) the Builder window. Edits the current
