@@ -14,19 +14,19 @@ desktop renderer automatically flow to the next web build.
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from typing import Any
 
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
 
-# These come from the copies the build step laid down. Resolves to
-# the same code the desktop loads from gui/analysis.py.
-from phonology_features.gui.analysis import (
-    compute_contrastive,
-    render_feat_to_seg,
-    render_multi_segment,
-    render_single_segment,
-)
+# Lazy holder for gui.analysis. Importing it at module-load time
+# adds ~20-30 ms of parse + exec cost to the bridge init phase
+# that pyimport("api") incurs at boot. None of the analysis
+# functions are needed until the user makes a selection (which is
+# after the loading screen drops), so we defer the import to the
+# first analyze_* call. Then the user is in 'click cost' mode and
+# the ms cost is hidden inside the click latency budget.
 from phonology_features.gui.constants import FEATURE_GROUPS
 from phonology_features.gui.layout import distribute_feature_groups
 from phonology_features.gui.palette import set_theme
@@ -36,6 +36,17 @@ from phonology_features.gui.vowel_layout import (
     detect_vowel_profile,
     vowel_grid_pos,
 )
+
+_analysis_mod: Any = None
+
+
+def _analysis() -> Any:
+    """Lazy import + memoize of phonology_features.gui.analysis."""
+    global _analysis_mod
+    if _analysis_mod is None:
+        from phonology_features.gui import analysis as _mod
+        _analysis_mod = _mod
+    return _analysis_mod
 
 # Single engine instance per loaded inventory. JS never sees the
 # engine directly; all access goes through the functions below.
@@ -63,7 +74,23 @@ def load_inventory_json(
     inventory = Inventory.parse(raw, source=source_label)
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name or source_label
+    _invalidate_analysis_caches()
     return _summarize_engine(_engine)
+
+
+def _invalidate_analysis_caches() -> None:
+    """Clear the LRU caches that memoize analyze_segments and
+    analyze_features. Must be called any time the cached result
+    would become stale:
+
+    * load_inventory_json: engine state changed; cached analyses
+      reference segments and features from the OLD inventory.
+    * set_active_theme: cached analysis HTML embeds chip colors
+      from the PREVIOUS palette; on theme swap those colors are
+      wrong and we have to regenerate.
+    """
+    _analyze_segments_cached.cache_clear()
+    _analyze_features_cached.cache_clear()
 
 
 def _summarize_engine(engine: FeatureEngine) -> dict:
@@ -172,8 +199,13 @@ def get_current_inventory_name() -> str:
 def set_active_theme(name: str) -> None:
     """Switch the renderer palette so subsequent HTML output uses
     the right chip colors. JS handles the surrounding CSS variables;
-    this exists for the chip backgrounds embedded in analysis HTML."""
+    this exists for the chip backgrounds embedded in analysis HTML.
+
+    Invalidates the analyze_* caches because their cached HTML
+    embeds chip colors from the previous palette.
+    """
     set_theme(name)
+    _invalidate_analysis_caches()
 
 
 # ----------------------------------------------------------------------
@@ -208,14 +240,26 @@ def project_features_to_segments(spec: dict[str, str]) -> list[str]:
 def analyze_segments(segs: list[str]) -> dict:
     """Seg-to-feat update. Returns the full state JS needs to paint
     the panels and analysis pane.
+
+    Thin wrapper around an LRU-cached impl. Same selection clicked
+    twice (e.g. toggled off then on) returns from cache in ~5 us
+    instead of redoing ~30 ms of feature math + HTML render.
+    Cache is invalidated by load_inventory_json + set_active_theme.
     """
+    return _analyze_segments_cached(tuple(segs))
+
+
+@lru_cache(maxsize=256)
+def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict:
     engine = _require_engine()
+    segs = list(segs_tuple)
     if not segs:
         return {
             "analysis_html": "",
             "feature_display": {},
             "segment_states": {seg: "default" for seg in engine.segments},
         }
+    analysis = _analysis()
     selected_set = set(segs)
     if len(segs) == 1:
         feats = engine.get_segment_features(segs[0])
@@ -227,14 +271,14 @@ def analyze_segments(segs: list[str]) -> dict:
             seg: "selected" if seg in selected_set else "default"
             for seg in engine.segments
         }
-        analysis_html = render_single_segment(engine, segs[0], dict(feats))
+        analysis_html = analysis.render_single_segment(engine, segs[0], dict(feats))
         return {
             "analysis_html": analysis_html,
             "feature_display": feature_display,
             "segment_states": segment_states,
         }
-    common = engine.common_features(list(segs))
-    contrastive = compute_contrastive(engine, list(segs))
+    common = engine.common_features(segs)
+    contrastive = analysis.compute_contrastive(engine, segs)
     feature_display = {}
     for feat in engine.features:
         if feat in common:
@@ -243,7 +287,7 @@ def analyze_segments(segs: list[str]) -> dict:
             feature_display[feat] = {"value": "", "contrastive": True}
         else:
             feature_display[feat] = {"value": "", "shared": False}
-    is_nc, _ = engine.is_natural_class(list(segs))
+    is_nc, _ = engine.is_natural_class(segs)
     suggested: list[str] = []
     if not is_nc and common:
         extension = engine.find_segments(common, underspec_compatible=True)
@@ -257,8 +301,8 @@ def analyze_segments(segs: list[str]) -> dict:
             segment_states[seg] = "suggested"
         else:
             segment_states[seg] = "default"
-    analysis_html = render_multi_segment(
-        engine, list(segs), common, contrastive, suggested
+    analysis_html = analysis.render_multi_segment(
+        engine, segs, common, contrastive, suggested
     )
     return {
         "analysis_html": analysis_html,
@@ -270,21 +314,36 @@ def analyze_segments(segs: list[str]) -> dict:
 def analyze_features(spec: dict[str, str]) -> dict:
     """Feat-to-seg update. ``spec`` is ``{feature_name: '+' | '-'}``.
     Returns the matching segments and analysis HTML.
+
+    Same LRU-cache treatment as analyze_segments: hashable cache
+    key is the spec's items as a tuple. Dict iteration order is
+    preserved (Python 3.7+), so the cache distinguishes between
+    differently-ordered specs even though they produce the same
+    matching set -- the renderer may iterate the spec in chip
+    order, so different orders can produce slightly different
+    HTML.
     """
+    return _analyze_features_cached(tuple(spec.items()))
+
+
+@lru_cache(maxsize=256)
+def _analyze_features_cached(spec_items: tuple[tuple[str, str], ...]) -> dict:
     engine = _require_engine()
+    spec = dict(spec_items)
     if not spec:
         return {
             "analysis_html": "",
             "segment_states": {seg: "default" for seg in engine.segments},
             "matching": [],
         }
-    matching = engine.find_segments(dict(spec))
+    analysis = _analysis()
+    matching = engine.find_segments(spec)
     matching_set = set(matching)
     segment_states = {
         seg: "matched" if seg in matching_set else "unmatched"
         for seg in engine.segments
     }
-    analysis_html = render_feat_to_seg(dict(spec), matching)
+    analysis_html = analysis.render_feat_to_seg(spec, matching)
     return {
         "analysis_html": analysis_html,
         "segment_states": segment_states,

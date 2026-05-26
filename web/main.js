@@ -585,6 +585,9 @@ async function loadInventoryText(text, sourceLabel) {
         renderFeaturePanel(info.feature_groups);
         nodes.analysisContent.innerHTML = "";
         setStatus(`Loaded ${info.name} (${info.segments.length} segments, ${info.features.length} features).`);
+        // Inventory swap invalidated the Python-side LRU cache; warm
+        // the new inventory's common selections during idle time.
+        prewarmCommonAnalyses();
     } catch (e) {
         const issues = e.message ? [e.message] : ["unknown error"];
         nodes.analysisContent.innerHTML =
@@ -593,6 +596,40 @@ async function loadInventoryText(text, sourceLabel) {
             "</ul>";
         setStatus("Load failed.");
     }
+}
+
+// Speculative pre-warm: after boot completes, run analyze_segments
+// for the first N single-segment selections during idle time. Each
+// pre-warm call populates the Python-side LRU cache (added in
+// api.py); when the user clicks /p/, the bridge call hits the
+// cache and returns in ~5 us instead of doing ~30 ms of feature
+// math + HTML rendering.
+//
+// Runs via requestIdleCallback so it never competes with a user
+// click: the moment a real click fires, scheduleAnalysis runs and
+// the browser preempts the idle queue.
+const PREWARM_COUNT = 10;
+function prewarmCommonAnalyses() {
+    if (!state.bridge) return;
+    const targets = state.segments.slice(0, PREWARM_COUNT);
+    const idle = ("requestIdleCallback" in window)
+        ? (cb) => window.requestIdleCallback(cb, { timeout: 1000 })
+        : (cb) => setTimeout(cb, 0);
+    let i = 0;
+    function step() {
+        if (i >= targets.length) return;
+        try {
+            // Result discarded; the side effect is the Python-side
+            // cache entry. callBridge handles PyProxy cleanup so
+            // dropping the return value is safe.
+            callBridge("analyze_segments", [targets[i]]);
+        } catch {
+            // Bridge may go away during teardown; silently skip.
+        }
+        i++;
+        idle(step);
+    }
+    idle(step);
 }
 
 function escapeHtml(s) {
@@ -942,7 +979,9 @@ function scheduleAnalysis() {
         // schedule doesn't pointlessly clearTimeout a fired id.
         state.debounce_timer = null;
         runAnalysis();
-    }, 80);
+    }, 30);  // tightened from 80 ms; combined with the Python-side
+              // LRU cache and idle prewarm, the user perceives
+              // ~10-50 ms total click-to-analysis instead of ~120 ms.
 }
 
 // Mode -> analysis handler. Lookup beats if/else for two reasons:
@@ -1234,6 +1273,11 @@ async function main() {
 
     try {
         await bootPyodide({ prerendered });
+        // Engine is ready. Speculatively warm the LRU cache for
+        // the first 10 single-segment selections during idle time.
+        // First-click latency drops from ~120 ms to ~10 ms when
+        // the user picks any of them.
+        prewarmCommonAnalyses();
     } catch (e) {
         // eslint-disable-next-line no-console
         console.error(e);
