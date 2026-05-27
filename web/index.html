@@ -141,8 +141,11 @@
     cycle, 1/2/3/0 set value, Esc clear) fire reliably. The table
     is not natively focusable.
   -->
-  <div class="editor-grid-scroll" id="editor-grid-scroll" tabindex="0">
-    <table class="editor-grid" id="editor-grid"></table>
+  <div class="editor-grid-frame" id="editor-grid-scroll" tabindex="0">
+    <div class="editor-grid-pane editor-grid-pane-corner" id="editor-grid-corner"></div>
+    <div class="editor-grid-pane editor-grid-pane-cols" id="editor-grid-cols"></div>
+    <div class="editor-grid-pane editor-grid-pane-rows" id="editor-grid-rows"></div>
+    <div class="editor-grid-pane editor-grid-pane-data" id="editor-grid-data"></div>
   </div>
   <footer class="editor-status" id="editor-status" aria-live="polite">
   </footer>

@@ -824,18 +824,29 @@ progress {
   font-size: var(--font-size-meta);
   padding: 0 var(--space-sm);
 }
-/* Scroll wrapper so the grid can be wider than the viewport without
-   blowing out the editor frame. The grid itself uses native table
-   layout so the desktop and web visuals stay aligned without a CSS
-   grid reimplementation. */
-.editor-grid-scroll {
-  overflow: auto;
+/* Four-pane frozen-header layout mirroring Qt's QTableWidget:
+   corner / column-headers / row-headers / data each live in their
+   own pane so the headers can't overlay the data the way CSS sticky
+   does. Only the data pane scrolls; the header panes have their
+   scrollLeft/scrollTop driven from the data pane via JS so columns
+   and rows stay aligned. */
+.editor-grid-frame {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  grid-template-rows: max-content 1fr;
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
   background: var(--panel);
 }
-.editor-grid-scroll:focus-visible {
+.editor-grid-frame:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
+.editor-grid-pane-corner { grid-column: 1; grid-row: 1; }
+.editor-grid-pane-cols   { grid-column: 2; grid-row: 1; overflow: hidden; }
+.editor-grid-pane-rows   { grid-column: 1; grid-row: 2; overflow: hidden; }
+.editor-grid-pane-data   { grid-column: 2; grid-row: 2; overflow: auto; }
 .editor-grid {
   border-collapse: collapse;
   font-family: var(--mono-family, ui-monospace, monospace);
@@ -846,19 +857,16 @@ progress {
   padding: 4px 8px;
   min-width: 32px;
   text-align: center;
+  box-sizing: border-box;
+  white-space: nowrap;
 }
-.editor-grid td {
-  background: var(--panel);
-}
+.editor-grid td { background: var(--panel); }
 .editor-grid th {
   background: var(--bg);
   color: var(--text);
   font-weight: bold;
-  position: sticky;
 }
-.editor-grid thead th { top: 0; z-index: 2; }
-.editor-grid tbody th { left: 0; z-index: 1; text-align: right; }
-.editor-grid thead th[data-corner] { left: 0; z-index: 3; }
+.editor-grid-pane-rows .editor-grid th { text-align: right; }
 /* Cell value styling. Same semantics as the desktop's
    _cell_brushes: + on green, minus on red, 0 on a dim neutral.
    Read-only this iteration; the click-to-cycle wiring lands next. */

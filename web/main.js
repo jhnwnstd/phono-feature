@@ -51,8 +51,11 @@ const NODE_IDS = Object.freeze({
     editorRemoveFeatBtn: "editor-remove-feat-btn",
     editorNameInput: "editor-name-input",
     editorFileLabel: "editor-file-label",
-    editorGrid: "editor-grid",
     editorGridScroll: "editor-grid-scroll",
+    editorGridCorner: "editor-grid-corner",
+    editorGridCols: "editor-grid-cols",
+    editorGridRows: "editor-grid-rows",
+    editorGridData: "editor-grid-data",
     editorStatus: "editor-status",
     labelPromptDialog: "label-prompt-dialog",
     labelPromptForm: "label-prompt-form",
@@ -1542,10 +1545,17 @@ function wireBuilderEditor(setupDialog) {
         );
     });
 
-    // Single bubbled handler at the table root. Resolves the target
-    // (<td>, column <th>, row <th>, corner) inside.
-    nodes.editorGrid.addEventListener("mousedown", onGridMouseDown);
+    // Single bubbled handler at the frame root. Resolves the target
+    // (<td>, column <th>, row <th>, corner) inside any of the four panes.
+    nodes.editorGridScroll.addEventListener("mousedown", onGridMouseDown);
     nodes.editorGridScroll.addEventListener("keydown", onGridKeyDown);
+    // Scroll sync: the data pane is the scroll source; the column-
+    // and row-header panes mirror its scrollLeft/scrollTop so the
+    // headers track the viewport without overlaying the data.
+    nodes.editorGridData.addEventListener("scroll", () => {
+        nodes.editorGridCols.scrollLeft = nodes.editorGridData.scrollLeft;
+        nodes.editorGridRows.scrollTop = nodes.editorGridData.scrollTop;
+    });
 
     // +/− Segment / Feature buttons.
     nodes.editorAddSegBtn.addEventListener("click", () => {
@@ -1627,9 +1637,7 @@ function refreshEditorFromCurrent() {
  * bubbled click handler can resolve them without DOM walking.
  */
 function renderEditorGrid() {
-    const table = nodes.editorGrid;
     const { features, segments, cells } = editorState;
-    table.innerHTML = "";
     _cellNodes = [];
     _lastPaintedSelection = new Set();
     // Re-render discards previous DOM nodes; the cached focus
@@ -1637,31 +1645,59 @@ function renderEditorGrid() {
     // does not try to remove a class from a detached node.
     _lastFocusedCell = null;
 
-    const thead = document.createElement("thead");
-    const headerRow = document.createElement("tr");
-    const corner = document.createElement("th");
-    corner.dataset.corner = "true";
-    corner.setAttribute("aria-label", "Select all");
-    headerRow.appendChild(corner);
+    // Corner pane: single-cell select-all toggle. Always rendered
+    // so the pane reserves its grid track even when the grid is empty.
+    const cornerTable = document.createElement("table");
+    cornerTable.className = "editor-grid";
+    const cornerBody = document.createElement("tbody");
+    const cornerRow = document.createElement("tr");
+    const cornerCell = document.createElement("th");
+    cornerCell.dataset.corner = "true";
+    cornerCell.setAttribute("aria-label", "Select all");
+    cornerRow.appendChild(cornerCell);
+    cornerBody.appendChild(cornerRow);
+    cornerTable.appendChild(cornerBody);
+    nodes.editorGridCorner.replaceChildren(cornerTable);
+
+    // Column headers pane.
+    const colsTable = document.createElement("table");
+    colsTable.className = "editor-grid";
+    const colsBody = document.createElement("tbody");
+    const colsRow = document.createElement("tr");
     for (let c = 0; c < segments.length; c++) {
         const th = document.createElement("th");
         th.scope = "col";
         th.textContent = segments[c];
         th.dataset.col = String(c);
-        headerRow.appendChild(th);
+        colsRow.appendChild(th);
     }
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
+    colsBody.appendChild(colsRow);
+    colsTable.appendChild(colsBody);
+    nodes.editorGridCols.replaceChildren(colsTable);
 
-    const tbody = document.createElement("tbody");
+    // Row headers pane.
+    const rowsTable = document.createElement("table");
+    rowsTable.className = "editor-grid";
+    const rowsBody = document.createElement("tbody");
+    for (let r = 0; r < features.length; r++) {
+        const tr = document.createElement("tr");
+        const th = document.createElement("th");
+        th.scope = "row";
+        th.textContent = features[r];
+        th.dataset.row = String(r);
+        tr.appendChild(th);
+        rowsBody.appendChild(tr);
+    }
+    rowsTable.appendChild(rowsBody);
+    nodes.editorGridRows.replaceChildren(rowsTable);
+
+    // Data pane.
+    const dataTable = document.createElement("table");
+    dataTable.className = "editor-grid";
+    const dataBody = document.createElement("tbody");
     for (let r = 0; r < features.length; r++) {
         const rowNodes = [];
         const tr = document.createElement("tr");
-        const rowHeader = document.createElement("th");
-        rowHeader.scope = "row";
-        rowHeader.textContent = features[r];
-        rowHeader.dataset.row = String(r);
-        tr.appendChild(rowHeader);
         for (let c = 0; c < segments.length; c++) {
             const td = document.createElement("td");
             td.dataset.row = String(r);
@@ -1670,10 +1706,38 @@ function renderEditorGrid() {
             tr.appendChild(td);
             rowNodes.push(td);
         }
-        tbody.appendChild(tr);
+        dataBody.appendChild(tr);
         _cellNodes.push(rowNodes);
     }
-    table.appendChild(tbody);
+    dataTable.appendChild(dataBody);
+    nodes.editorGridData.replaceChildren(dataTable);
+
+    // Match header column widths to data column widths and header
+    // row heights to data row heights. Cell content drives the data
+    // pane's natural sizing; the column-headers and row-headers
+    // panes get explicit pixel sizes so they line up with it.
+    _alignHeaderPanesToData();
+}
+
+/** Copy the data pane's column widths to the column-headers pane
+ *  and its row heights to the row-headers pane so all four panes
+ *  align on the same grid lines. Called after each render. */
+function _alignHeaderPanesToData() {
+    const dataTable = nodes.editorGridData.querySelector("table");
+    if (!dataTable) return;
+    const firstRow = dataTable.querySelector("tr");
+    if (firstRow) {
+        const colHeaders = nodes.editorGridCols.querySelectorAll("th");
+        const dataCells = firstRow.querySelectorAll("td");
+        for (let c = 0; c < colHeaders.length && c < dataCells.length; c++) {
+            colHeaders[c].style.width = `${dataCells[c].offsetWidth}px`;
+        }
+    }
+    const rowHeaders = nodes.editorGridRows.querySelectorAll("tr");
+    const dataRows = dataTable.querySelectorAll("tr");
+    for (let r = 0; r < rowHeaders.length && r < dataRows.length; r++) {
+        rowHeaders[r].style.height = `${dataRows[r].offsetHeight}px`;
+    }
 }
 
 /** Paint a single cell from its raw value (display or serialized
@@ -1996,15 +2060,10 @@ function redo() {
 function onGridMouseDown(ev) {
     if (ev.button !== 0) return;
     const target = ev.target;
-    if (target instanceof HTMLElement && target.dataset.corner) {
-        ev.preventDefault();
-        onCornerClicked();
-        return;
-    }
-    const th = target instanceof HTMLElement
-        ? target.closest("thead th, tbody th")
-        : null;
-    if (th !== null && nodes.editorGrid.contains(th)) {
+    if (!(target instanceof HTMLElement)) return;
+    if (!nodes.editorGridScroll.contains(target)) return;
+    const th = target.closest("th");
+    if (th !== null) {
         ev.preventDefault();
         if (th.dataset.corner) {
             onCornerClicked();
@@ -2022,10 +2081,8 @@ function onGridMouseDown(ev) {
         }
         return;
     }
-    const td = target instanceof HTMLElement
-        ? target.closest("td")
-        : null;
-    if (td === null || !nodes.editorGrid.contains(td)) return;
+    const td = target.closest("td");
+    if (td === null) return;
     const r = Number.parseInt(td.dataset.row, 10);
     const c = Number.parseInt(td.dataset.col, 10);
     if (Number.isNaN(r) || Number.isNaN(c)) return;
@@ -2231,7 +2288,9 @@ function moveFocused([dr, dc]) {
     if (target === null) return;
     editorState.focused = target;
     repaintFocused();
-    _scrollCellPastStickyHeaders(cellNode(target.r, target.c));
+    cellNode(target.r, target.c)?.scrollIntoView({
+        block: "nearest", inline: "nearest",
+    });
 }
 
 /** Shift+Arrow extension: move the focused cell by ``(dr, dc)``
@@ -2251,33 +2310,9 @@ function extendSelectionInDirection([dr, dc]) {
         editorState.anchor = seed;
     }
     extendSelectionTo(target.r, target.c);
-    _scrollCellPastStickyHeaders(cellNode(target.r, target.c));
-}
-
-/** ``scrollIntoView`` only honors the viewport edges, not the sticky
- *  row/column headers that overlay them — so naive scrolling parks
- *  the focused cell underneath the feature labels or segment headers.
- *  Manually nudge ``scrollLeft``/``scrollTop`` so the cell clears the
- *  corner's bounding rectangle on both axes. */
-function _scrollCellPastStickyHeaders(cell) {
-    if (!cell) return;
-    const scroll = document.getElementById(ids.editorGridScroll);
-    if (!scroll) return;
-    const corner = scroll.querySelector("thead th[data-corner]");
-    const cellRect = cell.getBoundingClientRect();
-    const scrollRect = scroll.getBoundingClientRect();
-    const stickyLeft = corner ? corner.getBoundingClientRect().right : scrollRect.left;
-    const stickyTop = corner ? corner.getBoundingClientRect().bottom : scrollRect.top;
-    if (cellRect.left < stickyLeft) {
-        scroll.scrollLeft -= stickyLeft - cellRect.left;
-    } else if (cellRect.right > scrollRect.right) {
-        scroll.scrollLeft += cellRect.right - scrollRect.right;
-    }
-    if (cellRect.top < stickyTop) {
-        scroll.scrollTop -= stickyTop - cellRect.top;
-    } else if (cellRect.bottom > scrollRect.bottom) {
-        scroll.scrollTop += cellRect.bottom - scrollRect.bottom;
-    }
+    cellNode(target.r, target.c)?.scrollIntoView({
+        block: "nearest", inline: "nearest",
+    });
 }
 
 /** Resolve the (dr, dc) step into a clamped (r, c) target, or
