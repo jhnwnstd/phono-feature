@@ -847,14 +847,18 @@ progress {
   min-width: 32px;
   text-align: center;
 }
+.editor-grid td {
+  background: var(--panel);
+}
 .editor-grid th {
   background: var(--bg);
   color: var(--text);
   font-weight: bold;
   position: sticky;
 }
-.editor-grid thead th { top: 0; }
-.editor-grid tbody th { left: 0; text-align: right; }
+.editor-grid thead th { top: 0; z-index: 2; }
+.editor-grid tbody th { left: 0; z-index: 1; text-align: right; }
+.editor-grid thead th[data-corner] { left: 0; z-index: 3; }
 /* Cell value styling. Same semantics as the desktop's
    _cell_brushes: + on green, minus on red, 0 on a dim neutral.
    Read-only this iteration; the click-to-cycle wiring lands next. */
