@@ -446,7 +446,12 @@ dialog input[type="text"]:focus-visible {
   /* Column 1: row labels. Columns 2-7 pair unrounded + rounded
      per backness (front, central, back). */
   grid-template-columns: minmax(60px, auto) repeat(6, minmax(28px, 1fr));
-  grid-auto-rows: var(--control-h-sm);
+  /* Min height keeps single-button rows compact; auto lets a row
+     expand to fit a tall collision-cell stack (e.g. ə / ɜ / ɚ all
+     landing in open-mid central for the General inventory).
+     Mirrors the desktop's QGridLayout, where the row height grows
+     to fit its tallest cell. */
+  grid-auto-rows: minmax(var(--control-h-sm), auto);
   column-gap: var(--space-xs);
   row-gap: 2px;
   padding: var(--space-xs) 2px;

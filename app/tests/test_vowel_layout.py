@@ -26,6 +26,7 @@ import pytest
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory
 from phonology_features.gui.vowel_layout import (
+    VowelProfile,
     compute_placements,
     detect_vowel_profile,
     vowel_grid_pos,
@@ -148,3 +149,166 @@ def test_compute_placements_orders_by_confidence_desc():
         assert confidences == sorted(confidences, reverse=True), (
             f"cell {key} not sorted by confidence desc: {confidences}"
         )
+
+
+# Constants: immutability
+
+def test_module_constants_are_tuples():
+    """ROW_LABELS / COL_LABELS / VOWEL_HEIGHT are exported as
+    tuples so importers cannot mutate the shared singletons."""
+    import phonology_features.gui.vowel_layout as vl
+
+    assert isinstance(vl.ROW_LABELS, tuple)
+    assert isinstance(vl.COL_LABELS, tuple)
+    assert isinstance(vl.VOWEL_HEIGHT, tuple)
+    # Spot-check shape so a future re-shape is a deliberate break.
+    assert len(vl.ROW_LABELS) == 6
+    assert vl.COL_LABELS == ("Front", "Central", "Back")
+
+
+# PascalCase normalization
+
+def test_pascal_case_feats_match_lowercase(profile):
+    """The placement code accepts either PascalCase or lowercase
+    keys; both must produce identical results so callers passing
+    raw inventory feats are not silently routed to the default
+    cell."""
+    pascal = vowel_grid_pos(
+        {"High": "+", "Low": "-", "Front": "+", "Round": "-"},
+        profile,
+    )
+    lower = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "+", "round": "-"},
+        profile,
+    )
+    assert pascal == lower
+
+
+# compute_placements: sort order within a collision cell
+
+def test_compute_placements_sort_segment_ascending_within_tier(profile):
+    """Within a confidence tier, segments sort in ASCENDING string
+    order so collision-cell ordering is stable and predictable.
+    The prior implementation used ``reverse=True`` on the whole
+    sort tuple, which silently reversed segment order too."""
+    # Three vowels at the same placement, same confidence: alphabetical
+    # ASCending order must come out of compute_placements.
+    feats = {
+        "a": {"high": "-", "low": "+"},   # Open central
+        "b": {"high": "-", "low": "+"},
+        "c": {"high": "-", "low": "+"},
+    }
+    occupied, _placements = compute_placements(
+        ["c", "a", "b"], profile, feats
+    )
+    # All three should land in the same cell.
+    [cell] = occupied.values()
+    assert cell == ["a", "b", "c"], (
+        f"expected alphabetical ASC within tier, got {cell}"
+    )
+
+
+# _infer_rounding: distinct reasons for [-round] vs no round
+
+
+def test_inferred_rounding_reason_distinguishes_explicit_negative(profile):
+    """An explicit ``[-round]`` should produce a different reason
+    string than an entirely absent Round feature, so audits / UI
+    tooltips can tell the difference between "explicitly unrounded"
+    and "unspecified for rounding"."""
+    explicit_neg = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "+", "round": "-"},
+        profile,
+    )
+    no_round = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "+"},
+        profile,
+    )
+    assert "[-round]" in explicit_neg.reason
+    assert "no round specified" in no_round.reason
+    assert explicit_neg.reason != no_round.reason
+
+
+# _infer_backness: explicit [-front] handling
+
+
+def test_negative_front_with_no_back_marks_low_confidence(profile):
+    """``[-front]`` alone is ambiguous between central and back.
+    Conservative default to central with LOW confidence and a
+    reason that surfaces the ambiguity, matching the documented
+    chart-placement policy."""
+    placement = vowel_grid_pos(
+        {"high": "-", "low": "-", "front": "-"},
+        profile,
+    )
+    assert "[-front]" in placement.reason
+    # Either "unresolved" or "ambiguous" wording; the test names
+    # the policy intent rather than the exact string.
+    assert "unresolved" in placement.reason or "ambiguous" in placement.reason
+
+
+def test_negative_front_with_negative_back_is_more_confident_than_front_alone(profile):
+    """``[-front, -back]`` is the canonical central spec; ``[-front]``
+    alone is genuinely ambiguous between central and back. Pin
+    height unambiguously so the overall placement confidence
+    reflects only the backness inference."""
+    both = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "-", "back": "-"},
+        profile,
+    )
+    front_only = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "-"},
+        profile,
+    )
+    assert both.confidence > front_only.confidence
+    # And the explicit-both case lands at central (col 2), not back.
+    assert both.col == 2
+
+
+# _height_split_value: tense/ATR conflict handling
+
+
+def test_tense_atr_agreement_uses_either(profile):
+    """When tense and ATR are both present and agree, the close
+    placement applies and the reason notes the source."""
+    p_tense = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "+", "tense": "+"},
+        profile,
+    )
+    p_atr = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "+", "atr": "+"},
+        profile,
+    )
+    p_both = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "+", "tense": "+", "atr": "+"},
+        profile,
+    )
+    # All three land at Close (row 0).
+    assert p_tense.row == p_atr.row == p_both.row == 0
+
+
+def test_tense_overrides_conflicting_atr(profile):
+    """When tense and ATR disagree, tense wins (a documented
+    inventory-policy choice) and the reason string records the
+    override so the choice is auditable."""
+    placement = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "+", "tense": "+", "atr": "-"},
+        profile,
+    )
+    # tense=+, atr=- -> tense wins -> Close (row 0)
+    assert placement.row == 0
+    assert "overrides" in placement.reason
+
+
+@pytest.fixture
+def profile():
+    """Default profile with every feature considered active. Tests
+    that don't care about the fallback gating can use this."""
+    return VowelProfile(
+        has_front=True,
+        has_round=True,
+        has_labial=True,
+        has_atr=True,
+        has_tense=True,
+        has_coronal=True,
+    )
