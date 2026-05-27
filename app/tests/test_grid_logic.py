@@ -442,3 +442,124 @@ def test_grid_to_inventory_preserves_feature_order():
         cells=[["+"], ["+"]],
     )
     assert inv.features == ("Z_first", "A_second")
+
+
+# classify_selection: shared selection-shape classifier
+
+
+def test_classify_selection_empty():
+    from phonology_features.gui.grid_logic import (
+        SELECTION_SHAPE_EMPTY,
+        classify_selection,
+    )
+    s = classify_selection([], 5, 5)
+    assert s.kind == SELECTION_SHAPE_EMPTY
+    assert s.row is None and s.column is None
+
+
+def test_classify_selection_single_cell():
+    from phonology_features.gui.grid_logic import (
+        SELECTION_SHAPE_SINGLE_CELL,
+        classify_selection,
+    )
+    s = classify_selection([(2, 3)], 5, 5)
+    assert s.kind == SELECTION_SHAPE_SINGLE_CELL
+    assert s.row == 2 and s.column == 3
+
+
+def test_classify_selection_single_column():
+    from phonology_features.gui.grid_logic import (
+        SELECTION_SHAPE_SINGLE_COLUMN,
+        classify_selection,
+    )
+    # All rows of column 2.
+    s = classify_selection([(r, 2) for r in range(5)], 5, 5)
+    assert s.kind == SELECTION_SHAPE_SINGLE_COLUMN
+    assert s.column == 2
+    assert s.row is None
+
+
+def test_classify_selection_single_row():
+    from phonology_features.gui.grid_logic import (
+        SELECTION_SHAPE_SINGLE_ROW,
+        classify_selection,
+    )
+    s = classify_selection([(1, c) for c in range(5)], 5, 5)
+    assert s.kind == SELECTION_SHAPE_SINGLE_ROW
+    assert s.row == 1
+    assert s.column is None
+
+
+def test_classify_selection_full_grid():
+    from phonology_features.gui.grid_logic import (
+        SELECTION_SHAPE_FULL_GRID,
+        classify_selection,
+    )
+    cells = [(r, c) for r in range(3) for c in range(4)]
+    s = classify_selection(cells, 3, 4)
+    assert s.kind == SELECTION_SHAPE_FULL_GRID
+
+
+def test_classify_selection_rectangle():
+    from phonology_features.gui.grid_logic import (
+        SELECTION_SHAPE_RECTANGLE,
+        classify_selection,
+    )
+    cells = [(r, c) for r in range(2, 4) for c in range(1, 3)]
+    s = classify_selection(cells, 5, 5)
+    assert s.kind == SELECTION_SHAPE_RECTANGLE
+
+
+def test_classify_selection_irregular():
+    """An L-shape is not a rectangle and not a single column/row."""
+    from phonology_features.gui.grid_logic import (
+        SELECTION_SHAPE_IRREGULAR,
+        classify_selection,
+    )
+    cells = [(0, 0), (0, 1), (0, 2), (1, 0), (2, 0)]
+    s = classify_selection(cells, 5, 5)
+    assert s.kind == SELECTION_SHAPE_IRREGULAR
+
+
+def test_classify_selection_partial_column_is_not_single_column():
+    """Same column but missing some rows should NOT be single_column;
+    that distinction is what the desktop's ``- Segment`` enable rule
+    keys on."""
+    from phonology_features.gui.grid_logic import (
+        SELECTION_SHAPE_IRREGULAR,
+        SELECTION_SHAPE_RECTANGLE,
+        classify_selection,
+    )
+    # 3 of 5 rows in column 2: not full column.
+    s = classify_selection([(0, 2), (1, 2), (2, 2)], 5, 5)
+    # Three contiguous cells in one column form a 3x1 rectangle.
+    assert s.kind in (
+        SELECTION_SHAPE_RECTANGLE,
+        SELECTION_SHAPE_IRREGULAR,
+    )
+    assert s.kind != "single_column"
+
+
+def test_remove_target_for_shape():
+    from phonology_features.gui.grid_logic import (
+        SELECTION_SHAPE_FULL_GRID,
+        SELECTION_SHAPE_RECTANGLE,
+        SELECTION_SHAPE_SINGLE_CELL,
+        SELECTION_SHAPE_SINGLE_COLUMN,
+        SELECTION_SHAPE_SINGLE_ROW,
+        SelectionShape,
+        remove_target_for_shape,
+    )
+    assert remove_target_for_shape(
+        SelectionShape(kind=SELECTION_SHAPE_SINGLE_COLUMN, column=2)
+    ) == "segment"
+    assert remove_target_for_shape(
+        SelectionShape(kind=SELECTION_SHAPE_SINGLE_ROW, row=2)
+    ) == "feature"
+    # All other shapes return None.
+    for kind in (
+        SELECTION_SHAPE_SINGLE_CELL,
+        SELECTION_SHAPE_RECTANGLE,
+        SELECTION_SHAPE_FULL_GRID,
+    ):
+        assert remove_target_for_shape(SelectionShape(kind=kind)) is None

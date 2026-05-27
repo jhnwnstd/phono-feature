@@ -1808,39 +1808,87 @@ function repaintSelection() {
     updateRemoveButtonStates();
 }
 
-/** Compute whether the current selection is exactly one full
- *  column. Returns the column index, or null if the selection has
- *  any other shape. Matches the desktop's enable rule for the
- *  ``− Segment`` button in :py:meth:`_on_selection_changed`. */
-function getSingleSelectedColumn() {
+/**
+ * Classify the current selection by shape. Mirrors the shared
+ * Python :py:func:`grid_logic.classify_selection`; both editors
+ * must produce the same shape for the same selection so the
+ * ``− Segment`` / ``− Feature`` enable rules stay in lockstep.
+ *
+ * Inlined in JS rather than called via the bridge because every
+ * selection change (shift+drag, header click) fires this; a
+ * per-call Pyodide bridge hop would add visible lag on rapid drags.
+ * The Python tests in app/tests/test_grid_logic.py pin the shape
+ * contract; if a desktop / web divergence ever surfaces it would
+ * land here.
+ *
+ * Returns ``"empty" | "single_cell" | "single_column" |
+ *           "single_row" | "full_grid" | "rectangle" | "irregular"``
+ * along with the row / column indices when the shape names one.
+ */
+function classifyEditorSelection() {
     const numRows = editorState.features.length;
-    if (numRows === 0) return null;
-    if (editorState.selected.size !== numRows) return null;
-    let theCol = null;
-    for (const key of editorState.selected) {
-        const { c } = parseCellKey(key);
-        if (theCol === null) theCol = c;
-        else if (c !== theCol) return null;
+    const numCols = editorState.segments.length;
+    const sel = editorState.selected;
+    const n = sel.size;
+    if (n === 0) return { kind: "empty" };
+    if (n === 1) {
+        const { r, c } = parseCellKey(sel.values().next().value);
+        return { kind: "single_cell", row: r, column: c };
     }
-    return theCol;
+    let theCol = null;
+    let theRow = null;
+    let sameCol = true;
+    let sameRow = true;
+    let rMin = Infinity, rMax = -Infinity, cMin = Infinity, cMax = -Infinity;
+    for (const key of sel) {
+        const { r, c } = parseCellKey(key);
+        if (theCol === null) theCol = c;
+        else if (c !== theCol) sameCol = false;
+        if (theRow === null) theRow = r;
+        else if (r !== theRow) sameRow = false;
+        if (r < rMin) rMin = r;
+        if (r > rMax) rMax = r;
+        if (c < cMin) cMin = c;
+        if (c > cMax) cMax = c;
+    }
+    if (numRows > 0 && sameCol && n === numRows) {
+        return { kind: "single_column", column: theCol };
+    }
+    if (numCols > 0 && sameRow && n === numCols) {
+        return { kind: "single_row", row: theRow };
+    }
+    if (numRows > 0 && numCols > 0 && n === numRows * numCols) {
+        return { kind: "full_grid" };
+    }
+    const rectSize = (rMax - rMin + 1) * (cMax - cMin + 1);
+    if (n === rectSize) return { kind: "rectangle" };
+    return { kind: "irregular" };
 }
 
-function getSingleSelectedRow() {
-    const numCols = editorState.segments.length;
-    if (numCols === 0) return null;
-    if (editorState.selected.size !== numCols) return null;
-    let theRow = null;
-    for (const key of editorState.selected) {
-        const { r } = parseCellKey(key);
-        if (theRow === null) theRow = r;
-        else if (r !== theRow) return null;
-    }
-    return theRow;
+/** Resolve the column / row indices for the "single column" /
+ *  "single row" shapes so the remove handlers can grab them. */
+function getSingleSelectedColumn() {
+    const shape = classifyEditorSelection();
+    return shape.kind === "single_column" ? shape.column : null;
 }
+function getSingleSelectedRow() {
+    const shape = classifyEditorSelection();
+    return shape.kind === "single_row" ? shape.row : null;
+}
+
+/** Map a selection shape to which remove button (if any) should
+ *  be enabled. Mirrors the shared Python
+ *  :py:data:`SELECTION_SHAPE_REMOVE_TARGET` table. */
+const SELECTION_SHAPE_REMOVE_TARGET = Object.freeze({
+    "single_column": "segment",
+    "single_row": "feature",
+});
 
 function updateRemoveButtonStates() {
-    nodes.editorRemoveSegBtn.disabled = getSingleSelectedColumn() === null;
-    nodes.editorRemoveFeatBtn.disabled = getSingleSelectedRow() === null;
+    const shape = classifyEditorSelection();
+    const target = SELECTION_SHAPE_REMOVE_TARGET[shape.kind] ?? null;
+    nodes.editorRemoveSegBtn.disabled = target !== "segment";
+    nodes.editorRemoveFeatBtn.disabled = target !== "feature";
 }
 
 // Keyboard focus indicator -------------------------------------------
@@ -1963,11 +2011,13 @@ function onGridMouseDown(ev) {
             return;
         }
         if (th.dataset.col !== undefined) {
-            onColumnHeaderClicked(Number.parseInt(th.dataset.col, 10));
+            const col = Number.parseInt(th.dataset.col, 10);
+            onColumnHeaderClicked(col, ev);
             return;
         }
         if (th.dataset.row !== undefined) {
-            onRowHeaderClicked(Number.parseInt(th.dataset.row, 10));
+            const row = Number.parseInt(th.dataset.row, 10);
+            onRowHeaderClicked(row, ev);
             return;
         }
         return;
@@ -2021,7 +2071,16 @@ function selectionTargets() {
  *  ``_on_col_header_clicked``: first click selects the column,
  *  second click on the same column clears.
  */
-function onColumnHeaderClicked(c) {
+function onColumnHeaderClicked(c, ev) {
+    // Shift+click extends the column selection from the anchor's
+    // column to the clicked one (full columns inclusive). Mirrors
+    // Qt's QTableWidget native shift-on-header behavior the
+    // desktop gets for free.
+    if (ev?.shiftKey && editorState.anchor !== null) {
+        extendSelectionToColumn(c);
+        return;
+    }
+    // Plain click on the already-selected column: toggle off.
     const numRows = editorState.features.length;
     const isAlreadyColumn = editorState.selected.size === numRows
         && [...editorState.selected].every((k) => {
@@ -2035,7 +2094,11 @@ function onColumnHeaderClicked(c) {
     selectColumn(c);
 }
 
-function onRowHeaderClicked(r) {
+function onRowHeaderClicked(r, ev) {
+    if (ev?.shiftKey && editorState.anchor !== null) {
+        extendSelectionToRow(r);
+        return;
+    }
     const numCols = editorState.segments.length;
     const isAlreadyRow = editorState.selected.size === numCols
         && [...editorState.selected].every((k) => {
@@ -2047,6 +2110,47 @@ function onRowHeaderClicked(r) {
         return;
     }
     selectRow(r);
+}
+
+/** Extend the selection to span full columns from the anchor's
+ *  column to ``targetCol``. New selection = every cell in those
+ *  columns. Focus / anchor move to ``targetCol`` so subsequent
+ *  shift+click extends from there.
+ */
+function extendSelectionToColumn(targetCol) {
+    const numRows = editorState.features.length;
+    if (numRows === 0) return;
+    const anchorCol = editorState.anchor?.c ?? targetCol;
+    const c0 = Math.min(anchorCol, targetCol);
+    const c1 = Math.max(anchorCol, targetCol);
+    editorState.selected.clear();
+    for (let c = c0; c <= c1; c++) {
+        for (let r = 0; r < numRows; r++) {
+            editorState.selected.add(cellKey(r, c));
+        }
+    }
+    editorState.anchor = { r: 0, c: anchorCol };
+    editorState.focused = { r: 0, c: targetCol };
+    repaintSelection();
+    repaintFocused();
+}
+
+function extendSelectionToRow(targetRow) {
+    const numCols = editorState.segments.length;
+    if (numCols === 0) return;
+    const anchorRow = editorState.anchor?.r ?? targetRow;
+    const r0 = Math.min(anchorRow, targetRow);
+    const r1 = Math.max(anchorRow, targetRow);
+    editorState.selected.clear();
+    for (let r = r0; r <= r1; r++) {
+        for (let c = 0; c < numCols; c++) {
+            editorState.selected.add(cellKey(r, c));
+        }
+    }
+    editorState.anchor = { r: anchorRow, c: 0 };
+    editorState.focused = { r: targetRow, c: 0 };
+    repaintSelection();
+    repaintFocused();
 }
 
 /** Desktop ``_on_corner_clicked``: select-all when nothing is fully

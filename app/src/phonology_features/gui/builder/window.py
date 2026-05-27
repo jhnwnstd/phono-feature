@@ -66,14 +66,18 @@ from phonology_features.gui.grid_logic import (
     MOVE_KEYS as _SHARED_MOVE_KEYS,
 )
 from phonology_features.gui.grid_logic import (
-    VALUE_KEYS as _SHARED_VALUE_KEYS,
-)
-from phonology_features.gui.grid_logic import (
+    SELECTION_SHAPE_SINGLE_COLUMN,
+    SELECTION_SHAPE_SINGLE_ROW,
+    classify_selection,
     confirm_remove_feature_prompt,
     confirm_remove_segment_prompt,
     grid_to_inventory,
+    remove_target_for_shape,
     validate_new_feature_label,
     validate_new_segment_label,
+)
+from phonology_features.gui.grid_logic import (
+    VALUE_KEYS as _SHARED_VALUE_KEYS,
 )
 from phonology_features.gui.palette import C
 
@@ -923,23 +927,31 @@ class InventoryBuilder(QMainWindow):
         if viewport is not None:
             viewport.repaint(leaked)
         self._last_selection_region = new_region
-        sel_cols = sel_model.selectedColumns()
-        sel_rows = sel_model.selectedRows()
-        if len(sel_cols) == 1 and len(sel_rows) == 0:
-            self._selected_remove_col = sel_cols[0].column()
+        # Classify the current selection via the shared
+        # :py:func:`classify_selection` so the desktop and the web
+        # editor agree on what counts as a "single column" /
+        # "single row" selection. Walks the selectedIndexes once
+        # to materialize the (row, col) iterable the classifier
+        # expects; for typical inventories this is microseconds.
+        cells = ((idx.row(), idx.column())
+                 for idx in sel_model.selectedIndexes())
+        shape = classify_selection(
+            cells,
+            self._table.rowCount(),
+            self._table.columnCount(),
+        )
+        target = remove_target_for_shape(shape)
+        if shape.kind == SELECTION_SHAPE_SINGLE_COLUMN:
+            self._selected_remove_col = shape.column
             self._selected_remove_row = None
-            self._set_rm_seg_enabled(True)
-            self._set_rm_feat_enabled(False)
-        elif len(sel_rows) == 1 and len(sel_cols) == 0:
-            self._selected_remove_row = sel_rows[0].row()
+        elif shape.kind == SELECTION_SHAPE_SINGLE_ROW:
+            self._selected_remove_row = shape.row
             self._selected_remove_col = None
-            self._set_rm_seg_enabled(False)
-            self._set_rm_feat_enabled(True)
         else:
             self._selected_remove_col = None
             self._selected_remove_row = None
-            self._set_rm_seg_enabled(False)
-            self._set_rm_feat_enabled(False)
+        self._set_rm_seg_enabled(target == "segment")
+        self._set_rm_feat_enabled(target == "feature")
 
     # Add / remove segments and features
     def _add_segment(self) -> None:

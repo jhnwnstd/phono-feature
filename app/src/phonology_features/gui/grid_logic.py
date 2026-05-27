@@ -24,7 +24,8 @@ rule land in both UIs on the next build.
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from types import MappingProxyType
 
 from phonology_engine.inventory import Inventory
@@ -273,3 +274,111 @@ def grid_to_inventory(
         features=list(features),
         segments=segments_dict,
     )
+
+
+# Selection shape -----------------------------------------------------
+
+# Discrete shape names a cell selection can take. Used by both
+# frontends to decide which remove-button to enable and to keep the
+# "what counts as a single-column selection" rule in one place. The
+# enum-style strings are stable; do not rename without also updating
+# the JS-side classifier and the SELECTION_SHAPE_REMOVE_TARGET table
+# below.
+SELECTION_SHAPE_EMPTY: str = "empty"
+SELECTION_SHAPE_SINGLE_CELL: str = "single_cell"
+SELECTION_SHAPE_SINGLE_COLUMN: str = "single_column"
+SELECTION_SHAPE_SINGLE_ROW: str = "single_row"
+SELECTION_SHAPE_FULL_GRID: str = "full_grid"
+SELECTION_SHAPE_RECTANGLE: str = "rectangle"
+SELECTION_SHAPE_IRREGULAR: str = "irregular"
+
+
+@dataclass(frozen=True)
+class SelectionShape:
+    """Classification of a cell selection's structural shape.
+
+    ``kind`` is one of the ``SELECTION_SHAPE_*`` constants.
+    ``row`` and ``column`` are populated when the shape names a
+    specific index (``single_cell``, ``single_column``,
+    ``single_row``); they are ``None`` otherwise.
+    """
+
+    kind: str
+    row: int | None = None
+    column: int | None = None
+
+
+def classify_selection(
+    cells: Iterable[tuple[int, int]],
+    num_rows: int,
+    num_cols: int,
+) -> SelectionShape:
+    """Classify a set of ``(row, col)`` cells by structural shape.
+
+    The contract:
+
+    * No cells: ``empty``.
+    * Exactly one cell: ``single_cell`` with ``row`` and ``column``.
+    * Every cell in a single column (count == ``num_rows``):
+      ``single_column`` with ``column``.
+    * Every cell in a single row (count == ``num_cols``):
+      ``single_row`` with ``row``.
+    * Every cell in the grid: ``full_grid``.
+    * A contiguous rectangle of more than one row AND more than
+      one column: ``rectangle``.
+    * Anything else: ``irregular``.
+
+    Pure-Python and consumed by:
+
+    * The desktop ``_on_selection_changed`` which uses the result
+      to enable / disable the ``- Segment`` / ``- Feature`` buttons.
+    * The web editor's selection helpers which mirror the same
+      rules locally (per-click bridge calls would be too expensive
+      on rapid shift+drag); the JS implementation must agree with
+      this function. Test cases verify the contract here.
+    """
+    cells_set = set(cells)
+    n = len(cells_set)
+    if n == 0:
+        return SelectionShape(kind=SELECTION_SHAPE_EMPTY)
+    if n == 1:
+        (r, c), = cells_set
+        return SelectionShape(
+            kind=SELECTION_SHAPE_SINGLE_CELL, row=r, column=c
+        )
+    cols = {c for _, c in cells_set}
+    rows = {r for r, _ in cells_set}
+    if num_rows > 0 and len(cols) == 1 and n == num_rows:
+        return SelectionShape(
+            kind=SELECTION_SHAPE_SINGLE_COLUMN, column=next(iter(cols))
+        )
+    if num_cols > 0 and len(rows) == 1 and n == num_cols:
+        return SelectionShape(
+            kind=SELECTION_SHAPE_SINGLE_ROW, row=next(iter(rows))
+        )
+    if num_rows > 0 and num_cols > 0 and n == num_rows * num_cols:
+        return SelectionShape(kind=SELECTION_SHAPE_FULL_GRID)
+    # Contiguous rectangle?
+    r0, r1 = min(rows), max(rows)
+    c0, c1 = min(cols), max(cols)
+    expected = (r1 - r0 + 1) * (c1 - c0 + 1)
+    if n == expected:
+        return SelectionShape(kind=SELECTION_SHAPE_RECTANGLE)
+    return SelectionShape(kind=SELECTION_SHAPE_IRREGULAR)
+
+
+# Which remove button (if any) a given selection shape should
+# enable. ``None`` means "no remove available". Shared with the web
+# editor so a future shape (e.g. ``single_column`` allowing
+# multi-column remove) lands once and propagates to both UIs.
+SELECTION_SHAPE_REMOVE_TARGET: Mapping[str, str | None] = MappingProxyType({
+    SELECTION_SHAPE_SINGLE_COLUMN: "segment",
+    SELECTION_SHAPE_SINGLE_ROW: "feature",
+})
+
+
+def remove_target_for_shape(shape: SelectionShape) -> str | None:
+    """Return ``"segment"``, ``"feature"``, or ``None`` for the
+    given selection shape, per :py:data:`SELECTION_SHAPE_REMOVE_TARGET`.
+    """
+    return SELECTION_SHAPE_REMOVE_TARGET.get(shape.kind)
