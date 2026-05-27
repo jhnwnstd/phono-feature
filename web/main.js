@@ -1754,6 +1754,11 @@ function selectColumn(c) {
     editorState.anchor = { r: 0, c };
     editorState.focused = { r: 0, c };
     repaintSelection();
+    // Update the focus indicator so the dashed outline lands on a
+    // cell in the new column (the anchor for subsequent shift+arrow
+    // extension). Without this the previously-focused cell would
+    // keep its outline even though logical focus moved here.
+    repaintFocused();
 }
 
 function selectRow(r) {
@@ -1765,6 +1770,7 @@ function selectRow(r) {
     editorState.anchor = { r, c: 0 };
     editorState.focused = { r, c: 0 };
     repaintSelection();
+    repaintFocused();
 }
 
 function selectAll() {
@@ -1779,6 +1785,7 @@ function selectAll() {
     editorState.anchor = { r: 0, c: 0 };
     editorState.focused = { r: 0, c: 0 };
     repaintSelection();
+    repaintFocused();
 }
 
 /** Diff-based selection repaint: toggle .is-selected only on cells

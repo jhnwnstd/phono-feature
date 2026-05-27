@@ -874,10 +874,6 @@ progress {
 .editor-grid td.is-selected {
   box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 100px var(--accent-light);
 }
-.editor-grid td.is-anchor {
-  box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 100px var(--accent-light),
-              inset 0 0 0 4px var(--panel);
-}
 /* Keyboard focus indicator. A dashed inset outline so it reads as
    "cursor here" without competing with the solid-outline selection
    highlight. Applied independently of is-selected so a selected
