@@ -2231,9 +2231,7 @@ function moveFocused([dr, dc]) {
     if (target === null) return;
     editorState.focused = target;
     repaintFocused();
-    cellNode(target.r, target.c)?.scrollIntoView({
-        block: "nearest", inline: "nearest",
-    });
+    _scrollCellPastStickyHeaders(cellNode(target.r, target.c));
 }
 
 /** Shift+Arrow extension: move the focused cell by ``(dr, dc)``
@@ -2253,9 +2251,33 @@ function extendSelectionInDirection([dr, dc]) {
         editorState.anchor = seed;
     }
     extendSelectionTo(target.r, target.c);
-    cellNode(target.r, target.c)?.scrollIntoView({
-        block: "nearest", inline: "nearest",
-    });
+    _scrollCellPastStickyHeaders(cellNode(target.r, target.c));
+}
+
+/** ``scrollIntoView`` only honors the viewport edges, not the sticky
+ *  row/column headers that overlay them — so naive scrolling parks
+ *  the focused cell underneath the feature labels or segment headers.
+ *  Manually nudge ``scrollLeft``/``scrollTop`` so the cell clears the
+ *  corner's bounding rectangle on both axes. */
+function _scrollCellPastStickyHeaders(cell) {
+    if (!cell) return;
+    const scroll = document.getElementById(ids.editorGridScroll);
+    if (!scroll) return;
+    const corner = scroll.querySelector("thead th[data-corner]");
+    const cellRect = cell.getBoundingClientRect();
+    const scrollRect = scroll.getBoundingClientRect();
+    const stickyLeft = corner ? corner.getBoundingClientRect().right : scrollRect.left;
+    const stickyTop = corner ? corner.getBoundingClientRect().bottom : scrollRect.top;
+    if (cellRect.left < stickyLeft) {
+        scroll.scrollLeft -= stickyLeft - cellRect.left;
+    } else if (cellRect.right > scrollRect.right) {
+        scroll.scrollLeft += cellRect.right - scrollRect.right;
+    }
+    if (cellRect.top < stickyTop) {
+        scroll.scrollTop -= stickyTop - cellRect.top;
+    } else if (cellRect.bottom > scrollRect.bottom) {
+        scroll.scrollTop += cellRect.bottom - scrollRect.bottom;
+    }
 }
 
 /** Resolve the (dr, dc) step into a clamped (r, c) target, or
