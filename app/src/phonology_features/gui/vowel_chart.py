@@ -27,10 +27,10 @@ from phonology_features.gui.vowel_layout import (
     VowelProfile,
 )
 from phonology_features.gui.vowel_layout import (
-    detect_vowel_profile as _detect_vowel_profile,
+    compute_placements as _compute_placements_shared,
 )
 from phonology_features.gui.vowel_layout import (
-    vowel_grid_pos as _vowel_grid_pos,
+    detect_vowel_profile as _detect_vowel_profile,
 )
 
 # Re-exports preserved for any external importer that read these
@@ -51,18 +51,18 @@ _ROW_LABELS = ROW_LABELS
 class VowelChartWidget(QWidget):
     """Displays vowels in an IPA-style grid: height x backness x rounding."""
 
-    _COL_HEADERS: ClassVar[list[str]] = [
+    _COL_HEADERS: ClassVar[tuple[str, ...]] = (
         "Front",
         "Central",
         "Back",
-    ]
-    _ROW_HEADERS: ClassVar[list[str]] = _ROW_LABELS
+    )
+    _ROW_HEADERS: ClassVar[tuple[str, ...]] = tuple(_ROW_LABELS)
 
     def __init__(self, parent=None, *, btn_gap: int = 4):
         super().__init__(parent)
-        self._buttons: dict = {}
-        self._header_labels: list = []
-        self._cell_containers: list = []
+        self._buttons: dict[str, QWidget] = {}
+        self._header_labels: list[tuple[QLabel, bool]] = []
+        self._cell_containers: list[QWidget] = []
         self._grid = QGridLayout(self)
         self._grid.setSpacing(btn_gap)
         self._grid.setContentsMargins(0, 0, 8, 0)
@@ -119,7 +119,10 @@ class VowelChartWidget(QWidget):
             btn.setParent(None)
         self._buttons.clear()
         while self._grid.count():
-            self._grid.takeAt(0)
+            item = self._grid.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
         for lbl, _ in self._header_labels:
             lbl.deleteLater()
         self._header_labels.clear()
@@ -167,23 +170,15 @@ class VowelChartWidget(QWidget):
     def _compute_placements(
         segs: list, profile: VowelProfile, norm_feats: dict
     ) -> tuple[dict, dict]:
-        """Return (occupied, placements). ``occupied[(row, col)]`` is the
-        list of segments mapping to that cell, sorted by descending
-        placement confidence (so the higher-confidence vowel ends up
-        on top when a cell collides).
+        """Thin wrapper over the shared
+        :py:func:`vowel_layout.compute_placements`.
+
+        Kept as a staticmethod for the existing call site inside
+        :py:meth:`set_vowels`; the canonical implementation lives in
+        the shared module so the web bridge can use the same
+        cell-grouping rule. Returns ``(occupied, placements)``.
         """
-        occupied: dict = {}
-        placements: dict = {}
-        for seg in segs:
-            placement = _vowel_grid_pos(norm_feats.get(seg, {}), profile)
-            placements[seg] = placement
-            occupied.setdefault((placement.row, placement.col), []).append(seg)
-        for key in occupied:
-            occupied[key].sort(
-                key=lambda s: (placements[s].confidence, s),
-                reverse=True,
-            )
-        return occupied, placements
+        return _compute_placements_shared(segs, profile, norm_feats)
 
     def _lay_out_rows(self, occupied: dict, placements: dict) -> None:
         """For each height tier that has at least one vowel, add a row
@@ -233,12 +228,18 @@ class VowelChartWidget(QWidget):
         vbox = QVBoxLayout(cell)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(1)
+        added = False
         for seg in cell_segs:
             btn = self._buttons.get(seg)
             if btn:
                 self._prep_button(btn, seg, placements[seg])
                 vbox.addWidget(btn)
-        self._grid.addWidget(cell, grid_row, 1 + ci)
+                added = True
+        if added:
+            self._grid.addWidget(cell, grid_row, 1 + ci)
+        else:
+            self._cell_containers.remove(cell)
+            cell.deleteLater()
 
     @staticmethod
     def _prep_button(btn, seg: str, placement: VowelPlacement) -> None:
@@ -248,3 +249,4 @@ class VowelChartWidget(QWidget):
             f"  {placement.reason}"
         )
         btn.show()
+        

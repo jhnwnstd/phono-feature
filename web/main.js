@@ -540,6 +540,14 @@ function _isValidBootstrap(info) {
     if (!Array.isArray(info.feature_groups)) return false;
     if (!info.vowel_chart || typeof info.vowel_chart !== "object") return false;
     if (!Array.isArray(info.vowel_chart.cells)) return false;
+    // Cell shape is ``{row, col, segs: [{seg, ...}]}`` since the
+    // collision-grouping refactor. An older cached bootstrap would
+    // have the flat shape and silently render empty vowels; reject
+    // it here so the bridge path takes over.
+    if (info.vowel_chart.cells.length > 0) {
+        const c0 = info.vowel_chart.cells[0];
+        if (!Array.isArray(c0?.segs)) return false;
+    }
     return true;
 }
 
@@ -768,17 +776,51 @@ function _buildVowelChart(chart) {
     });
 
     for (const cell of chart.cells) {
-        const btn = _buildSegmentButton(cell.seg, {
-            title: `/${cell.seg}/  [${cell.confidence}]  ${cell.reason}`,
-        });
-        btn.classList.add("vowel-chart-cell");
-        btn.style.gridRow = cell.row + 2;
-        btn.style.gridColumn = cell.col + 2;
-        chartEl.appendChild(btn);
+        // Multiple vowels can map to the same chart cell (the
+        // classic case is ə / ɜ / ɚ all landing in open-mid central
+        // for the General inventory). The bridge groups them into
+        // ``cell.segs``, sorted by descending placement confidence.
+        // We render them stacked in a vertical container so each
+        // button is independently visible and clickable, matching
+        // the desktop's :py:class:`QVBoxLayout` collision handling.
+        const segs = cell.segs;
+        if (!Array.isArray(segs) || segs.length === 0) continue;
+        const target = segs.length === 1
+            ? _buildVowelCellButton(segs[0])
+            : _buildVowelCellStack(segs);
+        target.style.gridRow = cell.row + 2;
+        target.style.gridColumn = cell.col + 2;
+        chartEl.appendChild(target);
     }
 
     groupEl.appendChild(chartEl);
     return groupEl;
+}
+
+/** Build a single vowel-cell button. ``segEntry`` carries
+ *  ``{seg, confidence, reason}`` from the bridge. */
+function _buildVowelCellButton(segEntry) {
+    const btn = _buildSegmentButton(segEntry.seg, {
+        title:
+            `/${segEntry.seg}/  [${segEntry.confidence}]  `
+            + `${segEntry.reason}`,
+    });
+    btn.classList.add("vowel-chart-cell");
+    return btn;
+}
+
+/** Build a stacked vertical container for a vowel-chart cell that
+ *  holds multiple vowels. Mirrors the desktop's
+ *  :py:meth:`VowelChartWidget._place_cell` collision-cell handling:
+ *  the entries arrive sorted by descending placement confidence,
+ *  so the highest-confidence vowel sits on top. */
+function _buildVowelCellStack(segEntries) {
+    const cell = document.createElement("div");
+    cell.className = "vowel-chart-cell vowel-chart-cell-stack";
+    for (const entry of segEntries) {
+        cell.appendChild(_buildVowelCellButton(entry));
+    }
+    return cell;
 }
 
 function onSegmentClicked(seg) {

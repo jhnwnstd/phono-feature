@@ -1,20 +1,61 @@
-"""Pure-Python vowel-placement logic shared by the desktop GUI and
-the web app.
+"""Chart-placement policy for vowel segments.
 
-Nothing in this module imports Qt or anything browser-specific. The
-desktop's ``VowelChartWidget`` (in ``vowel_chart.py``) reads it
-directly; the web app picks it up via the build script's renderer
-relay (the file is copied into the Pyodide bundle and api.py exposes
-it through the JS bridge).
+Pure-Python, shared by the desktop :py:class:`VowelChartWidget` and
+the web app's vowel chart renderer (relayed into the Pyodide bundle
+by the web build).
 
-Single source of truth for "given a vowel's feature bundle, which
-cell of the IPA chart does it land in?" Edits to the placement
-rules (fallback heuristics for inventories that omit ATR/Tense,
-CORONAL-as-frontness backstop, etc.) propagate to both UIs.
+**Scope.** This module is *chart placement policy*, not phonological
+theory. Given a vowel's feature bundle, it decides which cell of the
+IPA chart to render the vowel in. The categories (height tiers,
+front/central/back columns, rounded/unrounded split) are real
+phonological dimensions, but several of the placement rules below
+are inventory-conventional heuristics, not universally agreed
+phonological inferences. The :py:class:`VowelProfile` gates each
+fallback on whether the relevant feature is actually used by the
+inventory, so an inventory that has no Coronal or no Labial does
+not get tagged with the corresponding fallback semantics.
+
+**Theory-neutrality limits.**
+
+* ``[+high, -low]`` -> close / near-close, ``[-high, -low]`` -> mid,
+  ``[-high, +low]`` -> open / near-open. Standard binary-feature
+  decomposition of vowel height.
+* ``[+back]`` -> back, ``[+front]`` -> front. Direct read.
+* ``[+round]`` -> rounded. Direct read.
+* ``[-back]`` with no ``[front]`` -> inferred front. Defensible in
+  most feature systems where ``front == not back`` is a working
+  approximation for chart display.
+* ``[-front]`` alone with no ``[back]`` -> defaults to central. In
+  feature systems where ``[-front, -back]`` means central and
+  ``[-front, +back]`` means back, ``[-front]`` alone is genuinely
+  ambiguous; central is the conservative default and we mark the
+  confidence LOW so the UI can surface the uncertainty.
+* ``[+labial]`` -> rounded when ``[round]`` is absent. Inventory
+  convention, not a universal phonological inference: some feature
+  geometries (Sagey) place ``[round]`` under Labial, but other
+  systems treat all vowels and glides as ``[+labial]``, which would
+  overgenerate rounded vowels under this fallback. We only enable
+  it when the inventory has ``Labial`` AND lacks ``Round``.
+* ``[+coronal]`` -> front. Not standard phonology (Coronal is
+  typically a consonant place node); enabled only when the
+  inventory has ``Coronal`` AND lacks ``Front``, and tagged with
+  LOW confidence so callers know it is a backstop. Real
+  phonological analysis would not use this rule.
+* ``[tense]`` vs ``[ATR]``. Some traditions treat these as the same
+  feature; there is no settled consensus. When both are present and
+  disagree, this module prefers ``tense`` and the reason string
+  records the override so the choice is auditable. Inventories that
+  use only one of the two are unaffected.
+
+**Underspecification** lands at "Open-mid Central" with LOW
+confidence. The UI uses ``confidence`` and ``reason`` to expose this
+to the user; the default is a placement choice, not a claim that the
+vowel is genuinely open-mid central.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import IntEnum
 
@@ -22,20 +63,20 @@ from enum import IntEnum
 # is (label, +high, +low, +tense-or-atr): the feature bundle that
 # canonically populates the row. Used by the chart widget to label
 # rows and by tests to spot-check that placement maps correctly.
-VOWEL_HEIGHT: list[tuple[str, str, str, str | None]] = [
+# Immutable so importers cannot mutate the shared singleton.
+VOWEL_HEIGHT: tuple[tuple[str, str, str, str | None], ...] = (
     ("Close", "+", "-", "+"),
     ("Near-close", "+", "-", "-"),
     ("Close-mid", "-", "-", "+"),
     ("Open-mid", "-", "-", "-"),
     ("Near-open", "-", "+", "-"),
     ("Open", "-", "+", None),
-]
-ROW_LABELS: list[str] = [label for label, *_ in VOWEL_HEIGHT]
+)
+ROW_LABELS: tuple[str, ...] = tuple(label for label, *_ in VOWEL_HEIGHT)
 
-# Column labels in display order. The cells alternate
-# (unrounded, rounded) per place-of-articulation triplet, so the
-# rendered chart is 6 columns wide.
-COL_LABELS: list[str] = ["Front", "Central", "Back"]
+# Column labels in display order. The rendered chart is 6 columns
+# wide because each place alternates (unrounded, rounded).
+COL_LABELS: tuple[str, ...] = ("Front", "Central", "Back")
 
 
 class Confidence(IntEnum):
@@ -54,9 +95,9 @@ class Confidence(IntEnum):
 class VowelProfile:
     """Which vowel-relevant features are actively used in this inventory.
 
-    Only fields actually consumed by the placement decisions are
-    carried. Earlier versions tracked more (``has_back``, etc.) but
-    nothing read them.
+    The placement code reads these to decide whether an
+    inventory-conventional fallback applies. Fields are kept
+    minimal: only what the placement decisions actually consume.
     """
 
     has_front: bool
@@ -68,17 +109,27 @@ class VowelProfile:
 
     @property
     def use_coronal_front_fallback(self) -> bool:
-        """Use CORONAL as a proxy for frontness only when Front is absent."""
+        """Use ``[+coronal]`` as evidence for frontness only when
+        the inventory has no ``Front`` feature. An engineering
+        backstop, not standard phonology; see the module docstring.
+        """
         return self.has_coronal and not self.has_front
 
     @property
     def has_height_sub_distinction(self) -> bool:
-        """True if the inventory uses ATR or Tense to split height tiers."""
+        """True if the inventory uses ATR or Tense to split height
+        tiers (the difference between Close and Near-close, or
+        Close-mid and Open-mid).
+        """
         return self.has_atr or self.has_tense
 
     @property
     def use_labial_round_fallback(self) -> bool:
-        """Use LABIAL as a rounding proxy only when Round is absent."""
+        """Use ``[+labial]`` as evidence for rounding only when the
+        inventory has no ``Round`` feature. An inventory convention
+        following the Sagey feature geometry tradition; see the
+        module docstring for when this can overgenerate.
+        """
         return self.has_labial and not self.has_round
 
 
@@ -95,22 +146,24 @@ class VowelPlacement:
     reason: str
 
 
-def _normalize_feat_keys(feats: dict) -> dict:
+def _normalize_feat_keys(feats: Mapping[str, str]) -> dict[str, str]:
     """Lowercase every key in ``feats`` so downstream lookups by
-    canonical IPA-feature name (``high``, ``low``, ``front``, etc.)
-    work regardless of whether the caller passed raw PascalCase
+    canonical name (``high``, ``low``, ``front``, etc.) work
+    regardless of whether the caller passed raw PascalCase
     inventory keys or pre-normalized lowercase keys.
 
     The placement code is the only consumer that mandates canonical
     case (segment_grouper uses a similar convention); doing the
-    lowercase pass HERE means call sites can't accidentally pass
+    lowercase pass HERE means call sites cannot accidentally pass
     raw inventory feats and silently get every vowel placed in the
-    "Open-mid Central" default cell.
+    Open-mid Central default cell.
     """
     return {k.lower(): v for k, v in feats.items()}
 
 
-def detect_vowel_profile(segs: list[str], seg_feats: dict) -> VowelProfile:
+def detect_vowel_profile(
+    segs: list[str], seg_feats: Mapping[str, Mapping[str, str]]
+) -> VowelProfile:
     """Scan the vowel segments to determine which features are in play.
 
     ``seg_feats`` maps each segment to its feature bundle. Keys
@@ -133,7 +186,7 @@ def detect_vowel_profile(segs: list[str], seg_feats: dict) -> VowelProfile:
     )
 
 
-def _fv(feats: dict, key: str) -> str:
+def _fv(feats: Mapping[str, str], key: str) -> str:
     """Feature value, defaulting to '0'."""
     return feats.get(key, "0")
 
@@ -147,39 +200,90 @@ def _nonzero(val: str | None) -> str | None:
     return None
 
 
+def _height_split_value(
+    feats: Mapping[str, str],
+) -> tuple[str | None, str]:
+    """Resolve the tense/ATR split that distinguishes adjacent
+    height tiers (Close vs Near-close, Close-mid vs Open-mid).
+
+    Returns ``(value, source)`` where ``value`` is ``"+"``,
+    ``"-"``, or ``None`` (no specification), and ``source`` names
+    which feature supplied the value. The two features sometimes
+    co-occur in an inventory; this helper makes the resolution
+    explicit:
+
+    * Only one specified: use it.
+    * Both specified and agree: use it, note both as the source.
+    * Both specified and disagree: prefer ``tense``, the reason
+      string records "tense overrides ATR" so callers can audit
+      the choice. Phonological theory does not settle whether
+      tense and ATR are the same feature; this is a policy choice.
+    * Neither specified: ``None``, source is "none".
+    """
+    tense = _nonzero(feats.get("tense"))
+    atr = _nonzero(feats.get("atr"))
+    if tense is not None and atr is not None:
+        if tense == atr:
+            return tense, "tense/ATR"
+        return tense, "tense (overrides conflicting ATR)"
+    if tense is not None:
+        return tense, "tense"
+    if atr is not None:
+        return atr, "ATR"
+    return None, "none"
+
+
 def _infer_height(
-    feats: dict, profile: VowelProfile
+    feats: Mapping[str, str], profile: VowelProfile
 ) -> tuple[int, Confidence, str]:
     """Return row, confidence, and reason."""
     hi = _fv(feats, "high")
     lo = _fv(feats, "low")
-    tense_value = _nonzero(feats.get("tense"))
-    atr_value = _nonzero(feats.get("atr"))
-    atr_tn = tense_value or atr_value
+    split_value, split_source = _height_split_value(feats)
     is_high_vowel = hi == "+" and lo == "-"
     is_low_vowel = hi == "-" and lo == "+"
     is_mid_vowel = hi == "-" and lo == "-"
     if is_high_vowel:
-        is_near_close = profile.has_height_sub_distinction and atr_tn == "-"
+        is_near_close = (
+            profile.has_height_sub_distinction and split_value == "-"
+        )
         if is_near_close:
             return (
                 1,
                 Confidence.MEDIUM,
-                "Near-close: [+high, -low, -tense/ATR]",
+                f"Near-close: [+high, -low, -{split_source}]",
             )
-        if atr_tn == "+":
-            return 0, Confidence.HIGH, "Close: [+high, -low, +tense/ATR]"
+        if split_value == "+":
+            return (
+                0,
+                Confidence.HIGH,
+                f"Close: [+high, -low, +{split_source}]",
+            )
         return 0, Confidence.HIGH, "Close: [+high, -low]"
     if is_low_vowel:
-        is_near_open = profile.has_height_sub_distinction and atr_tn == "-"
+        is_near_open = (
+            profile.has_height_sub_distinction and split_value == "-"
+        )
         if is_near_open:
-            return 4, Confidence.MEDIUM, "Near-open: [-high, +low, -tense/ATR]"
+            return (
+                4,
+                Confidence.MEDIUM,
+                f"Near-open: [-high, +low, -{split_source}]",
+            )
         return 5, Confidence.HIGH, "Open: [-high, +low]"
     if is_mid_vowel:
-        if atr_tn == "+":
-            return 2, Confidence.MEDIUM, "Close-mid: [-high, -low, +tense/ATR]"
-        if atr_tn == "-":
-            return 3, Confidence.MEDIUM, "Open-mid: [-high, -low, -tense/ATR]"
+        if split_value == "+":
+            return (
+                2,
+                Confidence.MEDIUM,
+                f"Close-mid: [-high, -low, +{split_source}]",
+            )
+        if split_value == "-":
+            return (
+                3,
+                Confidence.MEDIUM,
+                f"Open-mid: [-high, -low, -{split_source}]",
+            )
         return (
             3,
             Confidence.LOW,
@@ -189,7 +293,7 @@ def _infer_height(
 
 
 def _infer_backness(
-    feats: dict, profile: VowelProfile
+    feats: Mapping[str, str], profile: VowelProfile
 ) -> tuple[str, Confidence, str]:
     """Return place, confidence, and reason."""
     fr = _nonzero(feats.get("front"))
@@ -206,6 +310,18 @@ def _infer_backness(
     has_negative_back = bk == "-"
     if has_no_front_value and has_negative_back:
         return "front", Confidence.MEDIUM, "Front (inferred): [-back]"
+    # Explicit [-front] with [-back]: standard central spec.
+    if fr == "-" and bk == "-":
+        return "central", Confidence.HIGH, "Central: [-front, -back]"
+    # Explicit [-front] alone: genuinely ambiguous between central
+    # and back. Conservative default to central with LOW confidence
+    # and a reason that surfaces the ambiguity to the UI.
+    if fr == "-" and bk is None:
+        return (
+            "central",
+            Confidence.LOW,
+            "Central or back unresolved from [-front] alone",
+        )
     if profile.use_coronal_front_fallback:
         cor = _nonzero(feats.get("coronal"))
         ant = feats.get("anterior", "0")
@@ -215,7 +331,7 @@ def _infer_backness(
             return (
                 "front",
                 Confidence.LOW,
-                "Front (inferred): CORONAL fallback",
+                "Front (inferred): CORONAL fallback (inventory convention)",
             )
     return (
         "central",
@@ -224,18 +340,65 @@ def _infer_backness(
     )
 
 
-def _infer_rounding(feats: dict, profile: VowelProfile) -> tuple[bool, str]:
-    has_rounding = _fv(feats, "round") == "+"
-    if has_rounding:
+def _infer_rounding(
+    feats: Mapping[str, str], profile: VowelProfile
+) -> tuple[bool, str]:
+    rnd = _nonzero(feats.get("round"))
+    if rnd == "+":
         return True, "Rounded: [+round]"
     can_use_labial_fallback = profile.use_labial_round_fallback
     has_labial = _fv(feats, "labial") == "+"
     if can_use_labial_fallback and has_labial:
-        return True, "Rounded (inferred): LABIAL fallback"
-    return False, "Unrounded"
+        return True, "Rounded (inferred): LABIAL fallback (inventory convention)"
+    if rnd == "-":
+        return False, "Unrounded: [-round]"
+    return False, "Unrounded: no round specified"
 
 
-def vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
+def compute_placements(
+    segs: list[str],
+    profile: VowelProfile,
+    norm_feats: Mapping[str, Mapping[str, str]],
+) -> tuple[dict[tuple[int, int], list[str]], dict[str, VowelPlacement]]:
+    """Place every vowel and group by (row, col) cell.
+
+    Returns ``(occupied, placements)``:
+
+    * ``occupied[(row, col)]`` is the list of segments mapping to
+      that chart cell, sorted by descending placement confidence
+      so the highest-confidence vowel ends up first. Ties on
+      confidence are broken by ascending segment-string order so
+      collision-cell ordering is stable and predictable.
+    * ``placements[seg]`` is the full :py:class:`VowelPlacement`
+      for that vowel.
+
+    Pure-Python and shared between the desktop's
+    :py:class:`VowelChartWidget` and the web bridge's chart builder,
+    so cell collisions (typical case: ə, ɜ, ɚ all landing in the
+    open-mid central cell of the General inventory) are grouped the
+    same way on both frontends.
+    """
+    occupied: dict[tuple[int, int], list[str]] = {}
+    placements: dict[str, VowelPlacement] = {}
+    for seg in segs:
+        placement = vowel_grid_pos(norm_feats.get(seg, {}), profile)
+        placements[seg] = placement
+        occupied.setdefault((placement.row, placement.col), []).append(seg)
+    # Confidence DESCENDING (via negated int), segment ASCENDING
+    # within the same confidence tier. A single ``reverse=True`` on
+    # the tuple would also flip the segment direction, so we negate
+    # the confidence component instead to keep secondary order
+    # predictable.
+    for key in occupied:
+        occupied[key].sort(
+            key=lambda s: (-int(placements[s].confidence), s)
+        )
+    return occupied, placements
+
+
+def vowel_grid_pos(
+    feats: Mapping[str, str], profile: VowelProfile
+) -> VowelPlacement:
     """Return a VowelPlacement for a single vowel.
 
     Columns 0-5 map to (front-unr, front-rnd, central-unr,
@@ -246,10 +409,10 @@ def vowel_grid_pos(feats: dict, profile: VowelProfile) -> VowelPlacement:
     feats (PascalCase keys like ``"High"``) or pre-normalized
     lowercase feats; both produce identical results.
     """
-    feats = _normalize_feat_keys(feats)
-    row, h_conf, h_reason = _infer_height(feats, profile)
-    place, p_conf, p_reason = _infer_backness(feats, profile)
-    rounded, r_reason = _infer_rounding(feats, profile)
+    normalized = _normalize_feat_keys(feats)
+    row, h_conf, h_reason = _infer_height(normalized, profile)
+    place, p_conf, p_reason = _infer_backness(normalized, profile)
+    rounded, r_reason = _infer_rounding(normalized, profile)
     place_to_column = {"front": 0, "central": 2, "back": 4}
     base_col = place_to_column[place]
     col = base_col + 1 if rounded else base_col

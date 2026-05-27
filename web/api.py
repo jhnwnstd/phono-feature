@@ -45,8 +45,8 @@ from phonology_features.gui.palette import set_theme
 from phonology_features.gui.vowel_layout import COL_LABELS as VOWEL_COL_LABELS
 from phonology_features.gui.vowel_layout import ROW_LABELS as VOWEL_ROW_LABELS
 from phonology_features.gui.vowel_layout import (
+    compute_placements,
     detect_vowel_profile,
-    vowel_grid_pos,
 )
 
 _analysis_mod: Any = None
@@ -135,25 +135,39 @@ def _vowel_chart(
     engine: FeatureEngine,
     vowel_segs: list[str],
 ) -> dict[str, Any]:
-    """Compute the IPA vowel trapezoid layout.
+    """Compute the IPA vowel trapezoid layout, grouped by cell.
 
     Returns ``{rows, cols, cells}`` where ``cells`` is a list of
-    ``{seg, row, col, confidence, reason}`` per vowel. JS uses
-    this to mount each vowel button into the right CSS-grid cell.
-    Placement runs through ``gui.vowel_layout.vowel_grid_pos`` so
-    the chart matches the desktop's VowelChartWidget exactly.
+    ``{row, col, segs}`` per OCCUPIED cell. Each ``segs`` entry is
+    a list of ``{seg, confidence, reason}`` sorted by descending
+    placement confidence, mirroring the desktop's
+    :py:meth:`VowelChartWidget._compute_placements` shape.
+
+    Grouping at the bridge prevents the web from layering multiple
+    buttons in the same CSS-grid cell (the bug where ə, ɜ, ɚ in
+    the General inventory all map to (3, 2) and visually
+    overlapped). The JS renderer stacks the segs in each cell
+    inside a vertical container, matching the desktop's
+    :py:class:`QVBoxLayout` collision handling.
     """
     seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)
+    occupied, placements = compute_placements(
+        list(vowel_segs), profile, seg_feats
+    )
     cells: list[dict] = []
-    for seg in vowel_segs:
-        placement = vowel_grid_pos(seg_feats[seg], profile)
+    for (row, col), segs_in_cell in occupied.items():
         cells.append({
-            "seg": seg,
-            "row": placement.row,
-            "col": placement.col,
-            "confidence": placement.confidence.name.lower(),
-            "reason": placement.reason,
+            "row": row,
+            "col": col,
+            "segs": [
+                {
+                    "seg": s,
+                    "confidence": placements[s].confidence.name.lower(),
+                    "reason": placements[s].reason,
+                }
+                for s in segs_in_cell
+            ],
         })
     return {
         "rows": list(VOWEL_ROW_LABELS),
