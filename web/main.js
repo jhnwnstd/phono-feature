@@ -2104,7 +2104,11 @@ function onGridKeyDown(ev) {
     }
     if (moveKeys !== null && Object.hasOwn(moveKeys, ev.key)) {
         ev.preventDefault();
-        moveFocused(moveKeys[ev.key]);
+        if (ev.shiftKey) {
+            extendSelectionInDirection(moveKeys[ev.key]);
+        } else {
+            moveFocused(moveKeys[ev.key]);
+        }
     }
 }
 
@@ -2112,16 +2116,48 @@ function onGridKeyDown(ev) {
  *  edges. Matches the desktop's clamped navigation in
  *  :py:meth:`_handle_table_key`. */
 function moveFocused([dr, dc]) {
+    const target = _clampMoveTarget(dr, dc);
+    if (target === null) return;
+    editorState.focused = target;
+    repaintFocused();
+    cellNode(target.r, target.c)?.scrollIntoView({
+        block: "nearest", inline: "nearest",
+    });
+}
+
+/** Shift+Arrow extension: move the focused cell by ``(dr, dc)``
+ *  and grow the selection rectangle from the anchor to the new
+ *  focused cell. Mirrors Qt's QTableWidget shift+arrow handling
+ *  which the desktop delegates to natively. The web side reaches
+ *  the same end state by routing through :py:func:`extendSelectionTo`. */
+function extendSelectionInDirection([dr, dc]) {
+    const target = _clampMoveTarget(dr, dc);
+    if (target === null) return;
+    // First shift+arrow with no prior anchor: treat the current
+    // focused cell as the anchor so the rectangle has somewhere to
+    // grow from. Matches Qt's "no current selection -> start one"
+    // behavior on shift+arrow.
+    if (editorState.anchor === null) {
+        const seed = editorState.focused ?? { r: 0, c: 0 };
+        editorState.anchor = seed;
+    }
+    extendSelectionTo(target.r, target.c);
+    cellNode(target.r, target.c)?.scrollIntoView({
+        block: "nearest", inline: "nearest",
+    });
+}
+
+/** Resolve the (dr, dc) step into a clamped (r, c) target, or
+ *  null if the grid is empty. Shared by plain-move and
+ *  shift-extend so both clamp identically. */
+function _clampMoveTarget(dr, dc) {
     const numRows = editorState.features.length;
     const numCols = editorState.segments.length;
-    if (numRows === 0 || numCols === 0) return;
+    if (numRows === 0 || numCols === 0) return null;
     const cur = editorState.focused ?? { r: 0, c: 0 };
     const r = Math.max(0, Math.min(numRows - 1, cur.r + dr));
     const c = Math.max(0, Math.min(numCols - 1, cur.c + dc));
-    editorState.focused = { r, c };
-    repaintFocused();
-    // Bring the newly-focused cell into view if it scrolled out.
-    cellNode(r, c)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    return { r, c };
 }
 
 /** Compute the next value from the focused cell (or anchor as

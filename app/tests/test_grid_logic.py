@@ -145,19 +145,30 @@ def test_value_keys_is_read_only():
 
 
 def test_move_keys_cover_all_four_directions():
-    """One Vim and one numpad entry per direction. Documents the
-    contract so changing the binding scheme breaks this test."""
+    """One Vim, one numpad, and one arrow entry per direction.
+    Documents the contract so changing the binding scheme breaks
+    this test."""
     directions = {tuple(step) for step in MOVE_KEYS.values()}
     assert directions == {(-1, 0), (1, 0), (0, -1), (0, 1)}
 
 
-def test_move_keys_vim_and_numpad_pairs_match():
-    """h/4 = left, j/5 = down, k/8 = up, l/6 = right. Pairs share
-    a step so users on either input habit see the same behavior."""
-    assert MOVE_KEYS["h"] == MOVE_KEYS["4"] == (0, -1)
-    assert MOVE_KEYS["j"] == MOVE_KEYS["5"] == (1, 0)
-    assert MOVE_KEYS["k"] == MOVE_KEYS["8"] == (-1, 0)
-    assert MOVE_KEYS["l"] == MOVE_KEYS["6"] == (0, 1)
+def test_move_keys_vim_numpad_arrow_pairs_match():
+    """Each direction has a Vim, a numpad, AND an arrow binding
+    that produce the same (dr, dc) step. Users on any of the three
+    input vocabularies see identical behavior."""
+    assert MOVE_KEYS["h"] == MOVE_KEYS["4"] == MOVE_KEYS["ArrowLeft"] == (0, -1)
+    assert MOVE_KEYS["j"] == MOVE_KEYS["5"] == MOVE_KEYS["ArrowDown"] == (1, 0)
+    assert MOVE_KEYS["k"] == MOVE_KEYS["8"] == MOVE_KEYS["ArrowUp"] == (-1, 0)
+    assert MOVE_KEYS["l"] == MOVE_KEYS["6"] == MOVE_KEYS["ArrowRight"] == (0, 1)
+
+
+def test_move_keys_arrow_names_use_js_event_key_format():
+    """The arrow entries use the same string format JS reports as
+    ``event.key`` so the web handler can match without translation.
+    The desktop translates these to ``Qt.Key.Key_<X>`` via the
+    ``_ARROW_NAME_TO_QT`` table in builder/window.py."""
+    for name in ("ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"):
+        assert name in MOVE_KEYS, f"missing arrow binding: {name}"
 
 
 def test_move_keys_is_read_only():

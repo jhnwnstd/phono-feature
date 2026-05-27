@@ -68,19 +68,39 @@ VALUE_KEYS: Mapping[str, str] = MappingProxyType({
     "0": "0",
 })
 
-# Cell-cursor navigation. Maps the typed character to a (dr, dc)
-# step in the grid. Vim conventions on h/j/k/l plus the numpad
-# directions on 4/5/6/8 give users a choice without leaving the
-# home row or the numpad. Shared with the web editor.
+# Cell-cursor navigation. Maps a logical key name to a (dr, dc)
+# step in the grid. Three vocabularies are supported so users on
+# different input habits all get a binding:
+#
+# * Arrow keys: ``ArrowUp`` / ``ArrowDown`` / ``ArrowLeft`` /
+#   ``ArrowRight``. These match the JS ``event.key`` values
+#   directly; the desktop translates them to ``Qt.Key.Key_Up``
+#   etc. via the wrapper in ``builder/window.py``.
+# * Vim: h / j / k / l. Single chars; translate uppercase to the
+#   matching ``Qt.Key.Key_<X>`` constant on the desktop.
+# * Numpad: 4 / 5 / 6 / 8. Same translation rule.
+#
+# The desktop used to delegate arrow-key handling to Qt's built-in
+# ``QTableWidget`` navigation; the web had no equivalent and arrow
+# keys did nothing in the editor. Putting all three vocabularies in
+# the shared mapping keeps both frontends in lockstep and means a
+# new binding (e.g. PageUp / PageDown) lands once and propagates.
 MOVE_KEYS: Mapping[str, tuple[int, int]] = MappingProxyType({
-    "8": (-1, 0),
-    "k": (-1, 0),
-    "5": (1, 0),
-    "j": (1, 0),
-    "4": (0, -1),
+    # Arrows.
+    "ArrowUp": (-1, 0),
+    "ArrowDown": (1, 0),
+    "ArrowLeft": (0, -1),
+    "ArrowRight": (0, 1),
+    # Vim.
     "h": (0, -1),
-    "6": (0, 1),
+    "j": (1, 0),
+    "k": (-1, 0),
     "l": (0, 1),
+    # Numpad.
+    "4": (0, -1),
+    "5": (1, 0),
+    "6": (0, 1),
+    "8": (-1, 0),
 })
 
 # Maximum depth of the undo / redo stack. A typical editing session

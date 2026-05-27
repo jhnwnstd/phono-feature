@@ -80,6 +80,32 @@ from phonology_features.gui.palette import C
 _log = get_logger(__name__)
 
 
+# Translate JS-native key-name vocabulary (the format
+# :py:data:`gui.grid_logic.MOVE_KEYS` uses) into ``Qt.Key`` constants.
+# Arrow keys are named (``ArrowUp`` etc.); single-character keys
+# (``h``, ``4``) fall through to the ``Key_<X>`` getattr rule.
+# Defined at module level rather than inside the class body so the
+# class-body comprehension that builds ``_MOVE_KEYS`` can reference
+# them.
+_ARROW_NAME_TO_QT: dict[str, Qt.Key] = {
+    "ArrowUp": Qt.Key.Key_Up,
+    "ArrowDown": Qt.Key.Key_Down,
+    "ArrowLeft": Qt.Key.Key_Left,
+    "ArrowRight": Qt.Key.Key_Right,
+}
+
+
+def _move_key_to_qt(name: str) -> Qt.Key:
+    """Resolve a logical key name from the shared MOVE_KEYS to a
+    Qt key constant. Arrow names use the explicit table; everything
+    else (h/j/k/l, 4/5/6/8) uses the ``Key_<X>`` upper-case
+    convention.
+    """
+    if name in _ARROW_NAME_TO_QT:
+        return _ARROW_NAME_TO_QT[name]
+    return getattr(Qt.Key, f"Key_{name.upper()}")
+
+
 class InventoryBuilder(QMainWindow):
     """Grid editor for creating phonological feature inventories."""
 
@@ -517,13 +543,25 @@ class InventoryBuilder(QMainWindow):
         getattr(Qt.Key, f"Key_{char}"): value
         for char, value in _SHARED_VALUE_KEYS.items()
     }
-    # Numpad and Vim cell navigation. Derived from the shared
-    # :py:data:`MOVE_KEYS` constant so the desktop and the web
-    # editor stay in lockstep on which key moves which direction.
+    # Arrow / Vim / numpad cell navigation. Derived from the
+    # shared :py:data:`MOVE_KEYS` constant so the desktop and the
+    # web editor stay in lockstep on which key moves which
+    # direction. The translation tables that turn the shared
+    # JS-native key names into ``Qt.Key`` constants live at module
+    # level (class-body comprehensions cannot see sibling class
+    # attributes during evaluation).
     _MOVE_KEYS: ClassVar[dict] = {
-        getattr(Qt.Key, f"Key_{char.upper()}"): step
-        for char, step in _SHARED_MOVE_KEYS.items()
+        _move_key_to_qt(name): step
+        for name, step in _SHARED_MOVE_KEYS.items()
     }
+    # ``Shift+Arrow`` extends the QTableWidget's native selection;
+    # the handler below returns False on that case so Qt's native
+    # extend runs. Plain-arrow handling is identical to Qt's
+    # setCurrentCell, so taking it over is safe and keeps both
+    # frontends going through the same Python movement primitive.
+    _ARROW_QT_KEYS: ClassVar[frozenset] = frozenset(
+        _ARROW_NAME_TO_QT.values()
+    )
 
     def eventFilter(self, obj, event):
         if obj is self._table and event.type() == event.Type.KeyPress:
@@ -566,6 +604,15 @@ class InventoryBuilder(QMainWindow):
                 return True
         move = self._MOVE_KEYS.get(key)
         if move is not None and self._table.rowCount() > 0:
+            # Shift+Arrow extends the QTableWidget's native
+            # selection; defer to Qt for that case. The shared
+            # MOVE_KEYS handler only owns plain (no-shift)
+            # navigation so the web's parity shift+arrow code path
+            # can mirror it without needing to reimplement Qt's
+            # selection model.
+            shift_held = bool(mods & Qt.KeyboardModifier.ShiftModifier)
+            if shift_held and key in self._ARROW_QT_KEYS:
+                return False
             dr, dc = move
             start_row = row if row >= 0 else 0
             start_col = col if col >= 0 else 0
