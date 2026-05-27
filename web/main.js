@@ -1738,20 +1738,6 @@ function _alignHeaderPanesToData() {
     for (let r = 0; r < rowHeaders.length && r < dataRows.length; r++) {
         rowHeaders[r].style.height = `${dataRows[r].offsetHeight}px`;
     }
-    // Stretch the corner cell so it fills its grid track: its width
-    // matches the row-headers pane (max feature-label width) and its
-    // height matches the column-headers pane (one header row).
-    const cornerCell = nodes.editorGridCorner.querySelector("th");
-    const rowHeaderCell = nodes.editorGridRows.querySelector("th");
-    const colHeaderCell = nodes.editorGridCols.querySelector("th");
-    if (cornerCell) {
-        if (rowHeaderCell) {
-            cornerCell.style.width = `${rowHeaderCell.offsetWidth}px`;
-        }
-        if (colHeaderCell) {
-            cornerCell.style.height = `${colHeaderCell.offsetHeight}px`;
-        }
-    }
 }
 
 /** Paint a single cell from its raw value (display or serialized

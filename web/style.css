@@ -844,6 +844,7 @@ progress {
   outline-offset: -2px;
 }
 .editor-grid-pane-corner { grid-column: 1; grid-row: 1; }
+.editor-grid-pane-corner > table { width: 100%; height: 100%; }
 .editor-grid-pane-cols   { grid-column: 2; grid-row: 1; overflow: hidden; }
 .editor-grid-pane-rows   { grid-column: 1; grid-row: 2; overflow: hidden; }
 .editor-grid-pane-data   { grid-column: 2; grid-row: 2; overflow: auto; }
