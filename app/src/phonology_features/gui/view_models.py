@@ -122,7 +122,7 @@ def summarize_segment_selection(
     common = dict(engine.common_features(segs))
     contrastive = compute_contrastive(engine, segs)
     suggested = list(engine.suggest_natural_class_extension(segs))
-    row_states = _default_feature_rows(engine)
+    row_states: dict[str, dict[str, Any]] = {}
     for feat in engine.features:
         if feat in common:
             row_states[feat] = _feature_row_state(
@@ -131,14 +131,18 @@ def summarize_segment_selection(
             )
         elif feat in contrastive:
             row_states[feat] = _feature_row_state(contrastive=True)
-    seg_states = _default_segment_states(engine)
+        else:
+            row_states[feat] = _feature_row_state()
     selected = set(segs)
     suggested_set = set(suggested)
+    seg_states: dict[str, str] = {}
     for seg in engine.segments:
         if seg in selected:
             seg_states[seg] = "selected"
         elif seg in suggested_set:
             seg_states[seg] = "suggested"
+        else:
+            seg_states[seg] = "default"
     return {
         "analysis_html": render_multi_segment(
             engine,

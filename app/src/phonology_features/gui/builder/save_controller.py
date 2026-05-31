@@ -157,33 +157,37 @@ class _SaveController(QObject):
         self._status.showMessage(f"Saving {basename}...")
 
         def worker() -> None:
+            # ``err`` defaults to a non-empty failure string so that if
+            # a BaseException subclass propagates past the inner
+            # ``except Exception`` (KeyboardInterrupt, SystemExit, or
+            # any future BaseException-derived class), the ``finally``
+            # below still emits a *failure* completion — the main
+            # thread clears ``save_in_flight`` and the user is not
+            # told "saved" when the file was not written. The string
+            # is cleared to "" only on the success path inside try.
+            err: str = "save interrupted unexpectedly"
             try:
                 inventory.write_atomic(path)
-                err: str = ""
+                err = ""
             except Exception as e:
-                # Catch ordinary exceptions from the worker so a
-                # failed save still reports back and clears the
-                # in-flight state. We deliberately leave
-                # BaseException subclasses (KeyboardInterrupt,
-                # SystemExit) alone.
                 err = f"{type(e).__name__}: {e}"
                 _log.exception("save worker failed: %s", basename)
-            try:
-                self.save_finished.emit(path, err)
-            except RuntimeError:
-                # The window was destroyed while we were still
-                # running (close drain timed out, Qt deleted the
-                # C++ widget). PyQt raises "wrapped C/C++ object
-                # has been deleted" on the daemon thread.
-                # Functionally fine (the app is already shutting
-                # down) but logging it avoids the silent thread
-                # death the Exception catch above was added to
-                # prevent in the first place.
-                _log.debug(
-                    "save worker: receiver destroyed before completion "
-                    "emit: %s",
-                    basename,
-                )
+            finally:
+                try:
+                    self.save_finished.emit(path, err)
+                except RuntimeError:
+                    # The window was destroyed while we were still
+                    # running (close drain timed out, Qt deleted the
+                    # C++ widget). PyQt raises "wrapped C/C++ object
+                    # has been deleted" on the daemon thread.
+                    # Functionally fine (the app is already shutting
+                    # down) but logging it avoids the silent thread
+                    # death the finally block was added to prevent.
+                    _log.debug(
+                        "save worker: receiver destroyed before "
+                        "completion emit: %s",
+                        basename,
+                    )
 
         threading.Thread(target=worker, daemon=True).start()
 

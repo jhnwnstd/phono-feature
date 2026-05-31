@@ -78,3 +78,34 @@ def test_summarize_feature_query_matches_engine() -> None:
     assert "+Voice" in summary["analysis_html"]
     assert summary["segment_states"]["b"] == "matched"
     assert summary["segment_states"]["p"] == "unmatched"
+
+
+def test_segment_state_payload_strings_match_enum() -> None:
+    """The desktop coerces ``segment_states`` strings into the
+    ``SegmentState`` StrEnum via ``SegmentState(state)``. If the enum
+    drifts from the strings produced here, the desktop silently raises
+    ``ValueError`` on every paint. Pin every payload string at the
+    enum so a rename surfaces here, not in the UI.
+    """
+    from phonology_features.gui.widgets import SegmentState
+
+    enum_values = {member.value for member in SegmentState}
+    assert {"default", "selected", "suggested", "matched", "unmatched"} <= (
+        enum_values
+    )
+
+    engine = _engine("hayes_features.json")
+    seg_list = list(engine.segments)
+    seen: set[str] = set()
+    seen.update(summarize_segment_selection(engine, [])["segment_states"].values())
+    seen.update(
+        summarize_segment_selection(engine, seg_list[:1])["segment_states"].values()
+    )
+    seen.update(
+        summarize_segment_selection(engine, seg_list[:3])["segment_states"].values()
+    )
+    seen.update(summarize_feature_query(engine, {})["segment_states"].values())
+    seen.update(
+        summarize_feature_query(engine, {"Voice": "+"})["segment_states"].values()
+    )
+    assert seen <= enum_values, f"Unknown segment states: {seen - enum_values}"

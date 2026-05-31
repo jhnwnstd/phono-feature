@@ -946,7 +946,7 @@ function onFeatureClicked(feat, polarity) {
     scheduleAnalysis();
 }
 
-function fallbackModeSwitch(mode) {
+function fallbackModeSwitch() {
     if (state.mode === MODE.SEG_TO_FEAT) {
         return {
             saved_seg_state: state.selected_segments.slice(),
@@ -981,7 +981,7 @@ function activateMode(mode) {
             state.selected_segments,
             state.selected_features,
         )
-        : fallbackModeSwitch(mode);
+        : fallbackModeSwitch();
 
     state.saved_seg_state = transition.saved_seg_state.slice();
     state.saved_feat_state = cloneFeatureSpec(transition.saved_feat_state);
