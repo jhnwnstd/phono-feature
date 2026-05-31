@@ -26,7 +26,10 @@ from phonology_features.gui.constants import (
     MONO_FAMILIES,
     scrollbar_style,
 )
-from phonology_features.gui.layout import partition_groups_for_spillover
+from phonology_features.gui.layout import (
+    best_segment_n_cols,
+    partition_groups_for_spillover,
+)
 from phonology_features.gui.palette import C
 from phonology_features.gui.style_utils import (
     _LAST_HTML_ATTR,
@@ -829,14 +832,25 @@ class SegmentGridWidget(QWidget):
             while self._grid.count():
                 self._grid.takeAt(0)
             return
+        # Per-group column counts. ``best_segment_n_cols`` picks the
+        # largest n_cols (up to the pane's max) that leaves no row
+        # holding just one orphan button — so groups like Plosives
+        # (21 segments) and Affricates (13) get balanced rows instead
+        # of "row of 12 + row of 1". Shared with the web via the same
+        # ``layout`` module.
+        group_cols_main = [
+            best_segment_n_cols(len(segs), n_cols) for _, segs in groups_items
+        ]
         # Decide which groups fall through to the spillover area.
         # The desktop and the web both call this same partition fn
-        # (``phonology_features.gui.layout``), so the threshold for
-        # rearranging into 2 columns is identical across frontends.
+        # so the threshold for rearranging into 2 columns is identical
+        # across frontends.
         per_btn_row = _SEG_BTN_H + BTN_GAP
         main_heights = [
-            _SEG_HEADER_H + math.ceil(len(segs) / max(n_cols, 1)) * per_btn_row
-            for _, segs in groups_items
+            _SEG_HEADER_H + math.ceil(len(segs) / max(g_cols, 1)) * per_btn_row
+            for (_, segs), g_cols in zip(
+                groups_items, group_cols_main, strict=True
+            )
         ]
         main_count = partition_groups_for_spillover(
             main_heights,
@@ -862,20 +876,28 @@ class SegmentGridWidget(QWidget):
 
         grid_row = 0
         hdr_iter = iter(self._headers)
-        # Main flow: header spans the full ``n_cols`` row; buttons
-        # wrap at ``n_cols``.
-        for _manner, segs in groups_items[:main_count]:
+        # Main flow: header spans the full ``n_cols`` row so headers
+        # align across groups; each group's BUTTONS wrap at the
+        # per-group ``group_cols_main`` count, which avoids one-button
+        # orphan rows. Header span is intentionally ``n_cols`` (not
+        # the per-group count) so the manner-class titles line up
+        # along the same left edge.
+        for (_manner, segs), g_cols in zip(
+            groups_items[:main_count],
+            group_cols_main[:main_count],
+            strict=True,
+        ):
             hdr = next(hdr_iter)
             self._grid.addWidget(hdr, grid_row, 0, 1, n_cols)
             hdr.show()
             grid_row += 1
             for col_i, seg in enumerate(segs):
                 btn = self._buttons[seg]
-                button_row = grid_row + col_i // n_cols
-                button_col = col_i % n_cols
+                button_row = grid_row + col_i // g_cols
+                button_col = col_i % g_cols
                 self._grid.addWidget(btn, button_row, button_col)
                 btn.show()
-            grid_row += math.ceil(len(segs) / n_cols)
+            grid_row += math.ceil(len(segs) / g_cols)
 
         # Spillover: pair-by-pair, each group gets a half-width slot.
         # Slot 0 occupies cols ``[0, slot_cols)``; col ``slot_cols`` is
@@ -884,7 +906,9 @@ class SegmentGridWidget(QWidget):
         # ~33 px); slot 1 occupies ``[slot_cols + 1, 2 * slot_cols + 1)``.
         # Same QGridLayout as the main flow — no per-resize QWidget
         # creation, which is what tanked startup the last time we tried
-        # a nested-container version.
+        # a nested-container version. Each group again picks its own
+        # column count within the slot via ``best_segment_n_cols`` so
+        # spillover rows also avoid orphans.
         slot_cols = max(1, (n_cols - 1) // 2)
         spill = groups_items[main_count:]
         for pair_start in range(0, len(spill), 2):
@@ -894,15 +918,21 @@ class SegmentGridWidget(QWidget):
                 col_start = slot * (slot_cols + 1)
                 self._grid.addWidget(hdr, grid_row, col_start, 1, slot_cols)
                 hdr.show()
+            pair_cols = [
+                best_segment_n_cols(len(segs), slot_cols) for _, segs in pair
+            ]
             max_btn_rows = max(
-                math.ceil(len(segs) / slot_cols) for _, segs in pair
+                math.ceil(len(segs) / g_cols)
+                for (_, segs), g_cols in zip(pair, pair_cols, strict=True)
             )
-            for slot, (_, segs) in enumerate(pair):
+            for slot, ((_, segs), g_cols) in enumerate(
+                zip(pair, pair_cols, strict=True)
+            ):
                 col_start = slot * (slot_cols + 1)
                 for col_i, seg in enumerate(segs):
                     btn = self._buttons[seg]
-                    br = grid_row + 1 + col_i // slot_cols
-                    bc = col_start + (col_i % slot_cols)
+                    br = grid_row + 1 + col_i // g_cols
+                    bc = col_start + (col_i % g_cols)
                     self._grid.addWidget(btn, br, bc)
                     btn.show()
             grid_row += 1 + max_btn_rows

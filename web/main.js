@@ -659,12 +659,70 @@ function renderSegmentGrid(groups, vowelChart) {
     for (const group of groups) {
         grid.appendChild(_buildConsonantGroup(group));
     }
-    // Defer to next frame so layout has flushed before we measure.
+    // Defer to next frame so layout has flushed before we measure
+    // either spillover heights or per-group column counts.
     if ("requestAnimationFrame" in window) {
-        window.requestAnimationFrame(rebalanceSegmentSpillover);
+        window.requestAnimationFrame(() => {
+            applyPerGroupSegmentColumns();
+            rebalanceSegmentSpillover();
+        });
     } else {
+        applyPerGroupSegmentColumns();
         rebalanceSegmentSpillover();
     }
+}
+
+/** Pick a column count per consonant group that avoids one-button
+ *  orphan rows. Mirrors the desktop's per-group ``best_segment_n_cols``
+ *  pass in ``SegmentGridWidget._do_relayout`` — same Python helper, two
+ *  call sites. Inline ``grid-template-columns`` per ``.seg-row``
+ *  switches that row from the default ``flex-wrap`` to a grid with the
+ *  computed count; default CSS still applies between layout passes for
+ *  the brief window before this runs. */
+function applyPerGroupSegmentColumns() {
+    const grid = nodes.segGrid;
+    if (!grid) return;
+    const rows = [...grid.querySelectorAll(".seg-row")];
+    if (rows.length === 0) return;
+    const sample = rows[0].querySelector(".seg-btn");
+    if (!sample) return;
+    const btnW = sample.offsetWidth || 33;
+    const gapPx = 4;
+    // Consonant rows wrap around the floated vowel chart; use the
+    // narrower "alongside vowels" width as the conservative ceiling
+    // so groups above the float don't overflow horizontally.
+    const vowelsEl = grid.querySelector(".seg-vowels");
+    const vowelsW = vowelsEl ? vowelsEl.offsetWidth + 16 : 0;
+    const consonantW = Math.max(btnW, grid.clientWidth - vowelsW);
+    const maxCols = Math.max(
+        1,
+        Math.floor((consonantW + gapPx) / (btnW + gapPx)),
+    );
+    const sizes = rows.map(
+        (r) => r.querySelectorAll(".seg-btn").length,
+    );
+    const groupCols = state.bridge
+        ? callBridge("best_segment_n_cols_for_groups", sizes, maxCols)
+        : sizes.map((n) => _fallbackBestNCols(n, maxCols));
+    for (let i = 0; i < rows.length; i++) {
+        rows[i].style.display = "grid";
+        rows[i].style.gridTemplateColumns =
+            `repeat(${groupCols[i]}, minmax(${btnW}px, max-content))`;
+    }
+}
+
+/** Local mirror of ``best_segment_n_cols`` for the pre-bridge window.
+ *  Once Pyodide is live the Python implementation is the only source
+ *  of truth; this keeps the algorithm identical for the brief gap. */
+function _fallbackBestNCols(groupSize, maxCols) {
+    if (groupSize <= 0) return 1;
+    if (maxCols <= 1) return 1;
+    if (groupSize <= maxCols) return groupSize;
+    for (let n = maxCols; n > 1; n--) {
+        const r = groupSize % n;
+        if (r === 0 || r >= 2) return n;
+    }
+    return maxCols;
 }
 
 /**
@@ -2842,13 +2900,16 @@ function wireFeatureDelegation() {
 
 const SPILLOVER_RESIZE_DEBOUNCE_MS = 80;
 
-/** Re-run the spillover rebalance on viewport resize. */
+/** Re-run the per-group column pass + spillover rebalance on
+ *  viewport resize. Both passes share one debounced handler so the
+ *  user dragging the window doesn't trigger duplicate layouts. */
 function wireSegmentSpilloverResize() {
     let timer = 0;
     window.addEventListener("resize", () => {
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
             timer = 0;
+            applyPerGroupSegmentColumns();
             rebalanceSegmentSpillover();
         }, SPILLOVER_RESIZE_DEBOUNCE_MS);
     });

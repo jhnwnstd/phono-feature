@@ -49,9 +49,8 @@ from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features._logging import get_logger
 from phonology_features._settings import safe_read_setting
+from phonology_features.gui import layout
 from phonology_features.gui.constants import (
-    BTN_GAP,
-    BTN_W,
     FEATURE_GROUPS,
     FEATURE_ORDER,
     SETTINGS_APP,
@@ -85,7 +84,7 @@ from phonology_features.gui.view_models import (
     summarize_feature_query,
     summarize_segment_selection,
 )
-from phonology_features.gui.vowel_chart import VOWEL_LABEL_W, VowelChartWidget
+from phonology_features.gui.vowel_chart import VowelChartWidget
 from phonology_features.gui.widgets import (
     AnalysisPanel,
     FeatureRow,
@@ -266,20 +265,31 @@ class MainWindow(QMainWindow):
         self.seg_panel.installEventFilter(self)
         self.feat_panel.installEventFilter(self)
         self._hsplit = splitter
-        # Balanced default; _fit_to_content overrides after an
-        # inventory loads. Stretch factors keep the seg panel at its
-        # natural content width and let feat absorb extra horizontal room.
-        splitter.setSizes([500, 400])
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
+        # Initial split. ``apply_splitter_sizes`` reroutes through the
+        # shared ``layout.distribute_pane_widths`` on the first
+        # inventory load and from then on; this seed is what users
+        # see for the ~50 ms between window paint and inventory mount.
+        initial_seg, initial_feat = layout.distribute_pane_widths(
+            900, seg_content_w=500, feat_content_w=380
+        )
+        splitter.setSizes([initial_seg, initial_feat])
+        # Stretch policy: seg pane absorbs extra horizontal width on
+        # resize (more room for segments → more columns → less
+        # crowded). Feat pane stays at its content-driven width
+        # (kept "relatively consistent" per the user's request).
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
         self.analysis = AnalysisPanel(central)
         self._vsplit = _ThemedSplitter(Qt.Orientation.Vertical, central)
         self._vsplit.setHandleWidth(4)
         self._vsplit.addWidget(splitter)
         self._vsplit.addWidget(self.analysis)
         self._vsplit.setSizes([700, 220])
-        self._vsplit.setStretchFactor(0, 1)
-        self._vsplit.setStretchFactor(1, 0)
+        # Vertical stretch: extra height goes to the analysis pane
+        # (user explicitly asked for this). The top panels keep their
+        # content-driven height; analysis grows for the rest.
+        self._vsplit.setStretchFactor(0, 0)
+        self._vsplit.setStretchFactor(1, 1)
         # Splitter widgets exist now: build the geometry controller
         # that owns sizing policy + ownership flags. Everything below
         # routes through it.
@@ -299,6 +309,11 @@ class MainWindow(QMainWindow):
         # one). The flag is initialized in _restore_settings.
         self._hsplit.splitterMoved.connect(self._geom.mark_splitter_owned)
         self._vsplit.splitterMoved.connect(self._geom.mark_splitter_owned)
+        # User drag of the horizontal splitter changes the seg-pane
+        # width. Push the new width into the seg-pane internals so
+        # the vowel chart resizes and stack-vs-side-by-side mode
+        # flips at the shared ``VOWEL_STACK_W`` threshold.
+        self._hsplit.splitterMoved.connect(self._on_hsplit_moved)
         # Analysis pane maximize/restore wiring. Stash the pre-expand
         # vsplit sizes so the restore returns the user to exactly the
         # split they had, not a hardcoded default. A user-drag during
@@ -364,9 +379,17 @@ class MainWindow(QMainWindow):
         )
         seg_content = QWidget(self._seg_scroll)
         set_css(seg_content, "background: transparent;")
-        seg_content_layout = QHBoxLayout(seg_content)
+        # VBox root so the vowel chart can move between the "beside
+        # consonants" slot (inside ``_seg_h_pair``) and the "below
+        # consonants" slot (directly under the pair) when the seg
+        # pane is narrow. ``_on_seg_pane_width_changed`` flips
+        # between modes at the shared ``VOWEL_STACK_W`` threshold.
+        seg_content_layout = QVBoxLayout(seg_content)
         seg_content_layout.setContentsMargins(0, 0, 0, 0)
         seg_content_layout.setSpacing(12)
+        self._seg_h_pair = QHBoxLayout()
+        self._seg_h_pair.setContentsMargins(0, 0, 0, 0)
+        self._seg_h_pair.setSpacing(12)
         left_wrap = QWidget(seg_content)
         set_css(left_wrap, "background: transparent;")
         left_lay = QVBoxLayout(left_wrap)
@@ -377,18 +400,29 @@ class MainWindow(QMainWindow):
         left_lay.addStretch()
         self.vowel_chart_widget = VowelChartWidget(seg_content)
         self.vowel_chart_widget.hide()
-        self.vowel_chart_widget.setFixedWidth(
-            VOWEL_LABEL_W + 6 * (BTN_W + BTN_GAP)
+        # Seed with the per-pane width default. ``apply_splitter_sizes``
+        # (and the splitter-drag callback) push the adapted value in
+        # later via :py:meth:`_on_seg_pane_width_changed`. We can't
+        # consult ``self._hsplit`` here — this method runs while it's
+        # still being constructed.
+        self.vowel_chart_widget.set_target_width(
+            layout.vowel_chart_width(layout.SEG_MIN_W)
         )
-        # stretch=0 on both so consonants and vowels keep their natural
-        # widths. Extra horizontal space goes to feat_panel via the
-        # outer splitter's stretch factor.
-        seg_content_layout.addWidget(left_wrap, stretch=0)
-        seg_content_layout.addWidget(
+        # Consonants take stretch so they fan out across whatever
+        # width the seg pane has; vowels stay at their target width.
+        self._seg_h_pair.addWidget(left_wrap, stretch=1)
+        self._seg_h_pair.addWidget(
             self.vowel_chart_widget,
             stretch=0,
             alignment=Qt.AlignmentFlag.AlignTop,
         )
+        seg_content_layout.addLayout(self._seg_h_pair)
+        seg_content_layout.addStretch()
+        # Tracks whether the chart is currently in the bottom-stacked
+        # slot (True) or the right-side slot (False). Flipped by
+        # ``_on_seg_pane_width_changed``.
+        self._seg_vowels_stacked: bool = False
+        self._seg_content_layout = seg_content_layout
         self._seg_scroll.setWidget(seg_content)
         vp = self._seg_scroll.viewport()
         assert vp is not None
@@ -1019,19 +1053,19 @@ class MainWindow(QMainWindow):
         """Empty both column layouts. Card widgets stay alive (held by
         ``_feat_cards`` / ``_other_card``); spacer items get released.
         """
-        for layout in (self._feat_left_layout, self._feat_right_layout):
-            while layout.count():
-                layout.takeAt(0)
+        for col_layout in (self._feat_left_layout, self._feat_right_layout):
+            while col_layout.count():
+                col_layout.takeAt(0)
 
     @staticmethod
     def _card_title(card: QFrame) -> str:
         """Read the title text from a feature-group card. The card's
         first child is always a QLabel(title) per ``_build_feature_group``.
         """
-        layout = card.layout()
-        if layout is None or layout.count() == 0:
+        card_layout = card.layout()
+        if card_layout is None or card_layout.count() == 0:
             return ""
-        item = layout.itemAt(0)
+        item = card_layout.itemAt(0)
         if item is None:
             return ""
         first = item.widget()
@@ -1054,6 +1088,63 @@ class MainWindow(QMainWindow):
             self._batched_depth -= 1
             if self._batched_depth == 0:
                 self.setUpdatesEnabled(True)
+
+    def _on_hsplit_moved(self, *_args: object) -> None:
+        """Splitter-drag callback. Re-runs the seg-pane layout rules
+        (vowel chart width + stack-vs-side-by-side) using the new
+        seg-pane width. The widgets themselves don't re-measure on
+        resize — width is pushed in from here, so a drag is one
+        cheap layout invalidation instead of the per-pixel widget
+        churn an earlier attempt produced.
+        """
+        sizes = self._hsplit.sizes()
+        if not sizes:
+            return
+        self._on_seg_pane_width_changed(sizes[0])
+
+    def _on_seg_pane_width_changed(self, seg_pane_w: int) -> None:
+        """Apply the shared layout rules to the seg pane internals
+        whenever the seg-pane width changes (initial layout,
+        splitter drag, or inventory-load fit). Pure-Python decisions
+        come from ``phonology_features.gui.layout``; this method
+        just wires the results into Qt.
+
+        Decisions delegated:
+          * ``vowel_chart_width(seg_pane_w)`` → push into the chart
+            via ``set_target_width``.
+          * ``should_stack_vowels(seg_pane_w)`` → flip the chart
+            between the side-by-side slot (right of consonants) and
+            the bottom-stacked slot (under consonants). Run at most
+            once per threshold crossing so a continuous drag doesn't
+            churn the layout.
+        """
+        target_w = layout.vowel_chart_width(seg_pane_w)
+        self.vowel_chart_widget.set_target_width(target_w)
+        should_stack = layout.should_stack_vowels(seg_pane_w)
+        if should_stack == self._seg_vowels_stacked:
+            return
+        self._seg_vowels_stacked = should_stack
+        # Move the chart between the two slots. ``QLayout.removeWidget``
+        # detaches without reparenting; we re-add to the new container,
+        # which is owned by the same parent widget either way.
+        if should_stack:
+            self._seg_h_pair.removeWidget(self.vowel_chart_widget)
+            # Insert at index 1 — directly under the consonants pair,
+            # before the trailing stretch.
+            self._seg_content_layout.insertWidget(
+                1,
+                self.vowel_chart_widget,
+                stretch=0,
+                alignment=Qt.AlignmentFlag.AlignLeft
+                | Qt.AlignmentFlag.AlignTop,
+            )
+        else:
+            self._seg_content_layout.removeWidget(self.vowel_chart_widget)
+            self._seg_h_pair.addWidget(
+                self.vowel_chart_widget,
+                stretch=0,
+                alignment=Qt.AlignmentFlag.AlignTop,
+            )
 
     def _toggle_analysis_expanded(self) -> None:
         """Maximize the analysis pane to ~80% of the vsplit height

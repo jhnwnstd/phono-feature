@@ -39,7 +39,10 @@ from phonology_features.gui.inventory_setup import (
     suggest_filename,
     validate_setup,
 )
-from phonology_features.gui.layout import partition_groups_for_spillover
+from phonology_features.gui.layout import (
+    best_segment_n_cols,
+    partition_groups_for_spillover,
+)
 from phonology_features.gui.mode_logic import (
     mode_status_text,
     project_mode_transition,
@@ -410,6 +413,20 @@ def partition_segment_spillover(
     threshold change lands on both UIs at once.
     """
     return partition_groups_for_spillover(heights, available, n_spillover_cols)
+
+
+def best_segment_n_cols_for_groups(
+    group_sizes: list[int],
+    max_cols: int,
+) -> list[int]:
+    """Vectorised JS bridge to ``best_segment_n_cols``. JS hands in
+    each consonant group's segment count + the pane's max column
+    count; gets back the best per-group column count to use for its
+    ``grid-template-columns`` rule. Same algorithm desktop runs in
+    :py:meth:`SegmentGridWidget._do_relayout`, so a group with 13
+    segments lays out as 2+11 or 3+5+5 — never 12+1 — on either UI.
+    """
+    return [best_segment_n_cols(n, max_cols) for n in group_sizes]
 
 
 def analyze_segments(segs: list[str]) -> dict[str, Any]:

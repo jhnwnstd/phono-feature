@@ -156,3 +156,161 @@ def partition_groups_for_spillover(
     while main_count > 0 and not fits(main_count):
         main_count -= 1
     return main_count
+
+
+# ---------------------------------------------------------------------------
+# Adaptive window layout — single source of truth for both frontends.
+#
+# Every layout decision below is consumed by:
+#   * the desktop, by calling these functions directly from
+#     ``geometry_controller`` / ``main_window``.
+#   * the web, by ``web/scripts/build.py:generate_layout_css`` baking the
+#     constants into a CSS custom-property file (``dist/layout.css``)
+#     that ``style.css`` then references.
+#
+# Drift between the two UIs is impossible without breaking the parity
+# test in ``app/tests/test_pane_distribution.py``.
+# ---------------------------------------------------------------------------
+
+# Below this seg-pane width the layout collapses (vowel chart stacks
+# below consonants). The seg pane never shrinks past this floor on
+# either UI.
+SEG_MIN_W: int = 480
+# Floor for the feature pane. ``distribute_pane_widths`` lifts this when
+# the inventory's natural feature-pane content asks for more.
+FEAT_MIN_W: int = 380
+# Extra pixels beyond ``feat_content_w`` so feature cards don't sit
+# flush against the splitter handle / panel edge.
+FEAT_CUSHION_PX: int = 40
+# Absolute minimum vowel chart width regardless of seg-pane size; the
+# 7-column IPA grid needs roughly this to read.
+VOWEL_MIN_W: int = 240
+# Vowel chart never claims more than this fraction of the seg pane.
+# Matches the web's pre-existing ``max-width: 55%`` rule.
+VOWEL_MAX_FRAC: float = 0.55
+# Below this seg-pane width, the chart drops below the consonants
+# instead of floating beside them. Picked so a 3-column-of-buttons
+# consonant area still fits next to a min-width chart.
+VOWEL_STACK_W: int = 620
+# Total-viewport threshold below which the page-level grid collapses to
+# a single column (web ``@media (max-width: ...)`` matches this). The
+# media query is hardcoded; a unit test pins it to this constant.
+COLLAPSE_W: int = 900
+# First-launch window-size floor. Above this, the OS-screen-fraction
+# rule decides; below this the floor kicks in so tiny screens still
+# get a workable starting size.
+MIN_FIRST_LAUNCH_W: int = 1400
+MIN_FIRST_LAUNCH_H: int = 900
+# Fresh-install window size = this fraction of the primary screen's
+# available geometry, floored at ``MIN_FIRST_LAUNCH_*``.
+DEFAULT_SCREEN_FRACTION: float = 0.75
+
+
+def distribute_pane_widths(
+    total_w: int,
+    *,
+    seg_content_w: int,
+    feat_content_w: int,
+) -> tuple[int, int]:
+    """Decide ``(seg_w, feat_w)`` splitter / grid widths for a total
+    available width.
+
+    Policy: the feature pane gets ``max(FEAT_MIN_W, feat_content_w
+    + FEAT_CUSHION_PX)`` — content-driven, so it stays "relatively
+    consistent" as the user requested. The segments pane absorbs the
+    rest above ``SEG_MIN_W`` (or its own content width, whichever is
+    larger). On wide screens this means segments fan out instead of
+    leaving dead space.
+
+    Both UIs honor the same rule: desktop calls this from
+    ``geometry_controller.apply_splitter_sizes``; web encodes it via
+    the CSS ``grid-template-columns: minmax(var(--seg-min-w), 1fr)
+    max-content``.
+    """
+    feat_w = max(FEAT_MIN_W, feat_content_w + FEAT_CUSHION_PX)
+    seg_floor = max(SEG_MIN_W, seg_content_w)
+    seg_w = max(seg_floor, total_w - feat_w)
+    return seg_w, feat_w
+
+
+def vowel_chart_width(seg_pane_w: int) -> int:
+    """Vowel-chart natural width inside its containing seg pane.
+
+    Clamped to ``[VOWEL_MIN_W, VOWEL_MAX_FRAC * seg_pane_w]``. Returns
+    a hard ``VOWEL_MIN_W`` floor even when the seg pane is too narrow
+    for the fraction rule, so the chart's internal grid stays
+    readable; the caller is expected to consult
+    :py:func:`should_stack_vowels` to decide whether the chart still
+    fits beside the consonants at that floor, and if not to stack
+    below instead.
+    """
+    if seg_pane_w <= 0:
+        return VOWEL_MIN_W
+    fraction_w = int(seg_pane_w * VOWEL_MAX_FRAC)
+    return max(VOWEL_MIN_W, fraction_w)
+
+
+def should_stack_vowels(seg_pane_w: int) -> bool:
+    """True when the seg pane is too narrow to host the vowel chart
+    beside the consonants. Both UIs drop the chart below the
+    consonants at the same threshold.
+    """
+    return seg_pane_w < VOWEL_STACK_W
+
+
+def should_collapse_single_column(total_w: int) -> bool:
+    """True when the whole window is too narrow for side-by-side
+    panes; the page collapses to a single vertical column. The web
+    matches this via ``@media (max-width: COLLAPSE_W px)``; the
+    desktop has no analogue today but the helper is here so a
+    future narrow-window code path can use the same threshold.
+    """
+    return total_w < COLLAPSE_W
+
+
+def recommended_initial_window_size(
+    screen_w: int, screen_h: int
+) -> tuple[int, int]:
+    """Window size for a fresh install: ``DEFAULT_SCREEN_FRACTION`` of
+    the primary screen, floored at
+    ``(MIN_FIRST_LAUNCH_W, MIN_FIRST_LAUNCH_H)``. The caller still
+    clamps to the actual screen so the resize never overshoots
+    (``geometry_controller.clamp_size_to_screen``).
+    """
+    w = max(MIN_FIRST_LAUNCH_W, int(screen_w * DEFAULT_SCREEN_FRACTION))
+    h = max(MIN_FIRST_LAUNCH_H, int(screen_h * DEFAULT_SCREEN_FRACTION))
+    return w, h
+
+
+def best_segment_n_cols(group_size: int, max_cols: int) -> int:
+    """Pick a column count for laying out one manner-class group's
+    segment buttons that avoids a last row with a single orphan.
+
+    For ``group_size <= max_cols`` the whole group fits in one row,
+    so we return ``group_size`` (no orphan possible). Otherwise the
+    final row carries ``group_size % n_cols`` buttons. A remainder
+    of 1 is the worst case — one button on a line by itself — so
+    we step ``n_cols`` down from ``max_cols`` until the remainder
+    is either 0 (rows exactly fill) or at least 2 (no orphan).
+
+    Lower columns mean more rows; we prefer the largest n_cols that
+    avoids the orphan so the group stays compact vertically. Both
+    UIs call this on every group: desktop in
+    :py:class:`SegmentGridWidget._do_relayout`, web in
+    ``renderSegmentGrid`` via the ``best_segment_n_cols`` bridge.
+    """
+    if group_size <= 0:
+        return 1
+    if max_cols <= 1:
+        return 1
+    if group_size <= max_cols:
+        return group_size
+    for n_cols in range(max_cols, 1, -1):
+        remainder = group_size % n_cols
+        if remainder == 0 or remainder >= 2:
+            return n_cols
+    # Theoretical fallback — every remainder was 1 somehow.
+    # ``group_size % 2`` is 0 or 1, so n_cols=2 above already covers
+    # every group_size > 2; we only reach here for group_size in
+    # {2, 3} where the loop short-circuits anyway.
+    return max_cols

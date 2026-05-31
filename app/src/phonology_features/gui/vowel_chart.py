@@ -92,6 +92,17 @@ class VowelChartWidget(QWidget):
         self._rebuild_style_cache()
         self._last_headers_active = None
 
+    def set_target_width(self, w: int) -> None:
+        """Push the chart's width from the outside (the seg-pane
+        controller in ``main_window``) instead of pulling via
+        ``setFixedWidth`` once at construction. Width is decided by
+        the shared :py:func:`layout.vowel_chart_width`; the chart
+        itself doesn't re-measure on resize, which keeps the layout
+        pass cheap when the user drags the splitter.
+        """
+        self.setMinimumWidth(w)
+        self.setMaximumWidth(w)
+
     def set_headers_active(self, active: bool) -> None:
         # Dedup is safe: clear() (called by set_vowels on
         # every inventory swap) resets ``_last_headers_active`` to None

@@ -12,17 +12,18 @@ Pipeline:
 3. ``relay_renderer_sources``    desktop GUI relayed sources ->
                                   dist/render/
 4. ``generate_theme_css``        palette.py -> dist/theme.css
-5. ``copy_inventories``          app/inventories/*.json -> dist/
+5. ``generate_layout_css``       layout.py -> dist/layout.css
+6. ``copy_inventories``          app/inventories/*.json -> dist/
                                   inventories/ + dist/inventories.json
-6. ``write_python_bundle``       dist/{engine,render}/* + dist/api.py
+7. ``write_python_bundle``       dist/{engine,render}/* + dist/api.py
                                   -> dist/python_bundle.zip
                                   (removes the loose copies)
-7. ``write_bootstrap``           default inventory's render summary
+8. ``write_bootstrap``           default inventory's render summary
                                   -> dist/bootstrap.json
-8. ``hash_assets``               content-hash filenames + asset
+9. ``hash_assets``               content-hash filenames + asset
                                   manifest + index.html rewrite
-9. ``write_service_worker``      sw.js template -> dist/sw.js
-10. ``write_pages_no_jekyll``    dist/.nojekyll
+10. ``write_service_worker``     sw.js template -> dist/sw.js
+11. ``write_pages_no_jekyll``    dist/.nojekyll
 
 Both ``engine/`` and ``render/`` are copies of canonical sources
 (``packages/phonology-engine/`` and ``app/src/phonology_features/
@@ -216,6 +217,47 @@ def _load_palette_module() -> ModuleType:
     return module
 
 
+def _load_layout_module() -> ModuleType:
+    """Same trick as ``_load_palette_module`` for ``layout.py``. Used
+    by ``generate_layout_css`` to bake the adaptive-layout constants
+    into a CSS custom-property file the stylesheet then references.
+    """
+    layout_path = DESKTOP_GUI / "layout.py"
+    spec = importlib.util.spec_from_file_location("_layout", layout_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load {layout_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def generate_layout_css() -> None:
+    """Emit ``layout.css`` from the constants in
+    ``phonology_features.gui.layout`` so the same numbers drive both
+    the desktop's Qt splitter / chart sizing and the web's CSS grid.
+    Edits to the shared constants propagate to both on the next build.
+    Mirrors the ``generate_theme_css`` pattern.
+    """
+    print("Generating layout.css from layout.py...")
+    mod = _load_layout_module()
+    lines: list[str] = [
+        "/* AUTO-GENERATED from app/src/phonology_features/gui/layout.py",
+        " * by web/scripts/build.py. Do not edit by hand. */",
+        ":root {",
+        f"  --seg-min-w: {mod.SEG_MIN_W}px;",
+        f"  --feat-min-w: {mod.FEAT_MIN_W}px;",
+        f"  --feat-cushion: {mod.FEAT_CUSHION_PX}px;",
+        f"  --vowel-min-w: {mod.VOWEL_MIN_W}px;",
+        f"  --vowel-max-frac: {mod.VOWEL_MAX_FRAC};",
+        f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
+        f"  --collapse-w: {mod.COLLAPSE_W}px;",
+        "}",
+        "",
+    ]
+    (DIST / "layout.css").write_text("\n".join(lines))
+    print("  7 layout tokens")
+
+
 def write_python_bundle() -> None:
     """Pack engine + relayed renderer + api.py into
     ``python_bundle.zip`` and mount via zipimport at runtime.
@@ -356,7 +398,7 @@ def hash_assets() -> None:
     full_map["python_bundle.zip"] = new_py_bundle
 
     # 4. CSS files referenced from index.html.
-    for css in ("theme.css", "style.css"):
+    for css in ("theme.css", "layout.css", "style.css"):
         path = DIST / css
         new_name = _hashed_name(path)
         path.rename(DIST / new_name)
@@ -375,6 +417,10 @@ def hash_assets() -> None:
     html = html.replace(
         '<link rel="stylesheet" href="theme.css">',
         f'<link rel="stylesheet" href="{full_map["theme.css"]}">',
+    )
+    html = html.replace(
+        '<link rel="stylesheet" href="layout.css">',
+        f'<link rel="stylesheet" href="{full_map["layout.css"]}">',
     )
     html = html.replace(
         '<link rel="stylesheet" href="style.css">',
@@ -478,6 +524,7 @@ def main() -> int:
     copy_static_assets()
     relay_renderer_sources()
     generate_theme_css()
+    generate_layout_css()
     copy_inventories()
     write_python_bundle()
     write_bootstrap()

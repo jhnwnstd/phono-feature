@@ -266,7 +266,13 @@ dialog input[type="text"]:focus-visible {
 
 .grid {
   display: grid;
-  grid-template-columns: minmax(420px, 3fr) minmax(380px, 2fr);
+  /* Adaptive panes — single source of truth in layout.py, baked
+     into layout.css as custom properties at build time. The seg
+     pane absorbs extra horizontal space (1fr); the feat pane stays
+     at its content width (`max-content`) so it varies "some, not
+     dramatically" with the inventory. ``--seg-min-w`` floors the
+     seg pane on narrow windows. */
+  grid-template-columns: minmax(var(--seg-min-w), 1fr) max-content;
   gap: var(--space-md);
   padding: var(--space-md);
   min-height: 0;
@@ -287,9 +293,11 @@ dialog input[type="text"]:focus-visible {
   justify-content: start;
 }
 
+/* Narrow-window collapse. The 900px literal must match
+   ``layout.COLLAPSE_W`` — a unit test pins this. CSS media queries
+   can't read custom properties, so the value lives in two places
+   with a test to keep them in sync. */
 @media (max-width: 900px) {
-  /* Narrow screens stack vertically; the spillover's 2 columns
-     would just split the already-narrow pane. */
   .grid {
     grid-template-columns: 1fr;
     overflow: auto;
@@ -372,8 +380,29 @@ dialog input[type="text"]:focus-visible {
 .seg-vowels {
   float: right;
   margin: 0 0 var(--space-md) var(--space-xl);
-  /* Cap the chart so consonants always have room to wrap left. */
-  max-width: 55%;
+  /* Chart width clamp — both bounds come from layout.py via
+     layout.css. ``--vowel-min-w`` is the absolute floor, the
+     ``calc(...)`` cap matches the desktop's ``vowel_chart_width``
+     fraction-of-pane rule. */
+  min-width: var(--vowel-min-w);
+  max-width: calc(var(--vowel-max-frac) * 100%);
+}
+
+/* Below ``--vowel-stack-w``, the chart drops below the consonants
+   instead of floating beside them. Mirrors
+   ``layout.should_stack_vowels`` on the desktop, expressed as a
+   container query on the segments panel so it triggers from the
+   pane's actual width (not the whole window) — that way the user
+   can shrink just the seg side of the splitter and the chart
+   reflows like it does on a small screen. */
+.panel:has(#seg-grid) { container-type: inline-size; }
+@container (max-width: 620px) {
+  .seg-vowels {
+    float: none;
+    margin: var(--space-md) 0 0 0;
+    max-width: 100%;
+    min-width: 0;
+  }
 }
 .seg-group {
   margin-bottom: var(--space-md);

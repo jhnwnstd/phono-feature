@@ -30,6 +30,7 @@ from PyQt6.QtGui import QScreen
 from PyQt6.QtWidgets import QApplication
 
 from phonology_features._settings import safe_read_setting
+from phonology_features.gui import layout
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QSettings
@@ -49,14 +50,11 @@ class _GeometryController:
     MIN_ANALYSIS_H: ClassVar[int] = 220
     # First-launch floor: the content-derived width can come out
     # around 900-1100 px depending on the inventory, which leaves the
-    # analysis pane visibly cramped on a fresh install. Clamping the
-    # initial size up to these floors gives the analysis pane real
-    # breathing room on first open without overriding the user's
-    # saved size on subsequent launches. ``clamp_size_to_screen``
-    # still caps at the actual screen, so smaller displays remain
-    # usable.
-    MIN_FIRST_LAUNCH_W: ClassVar[int] = 1400
-    MIN_FIRST_LAUNCH_H: ClassVar[int] = 900
+    # analysis pane visibly cramped on a fresh install. The floor
+    # lives in ``phonology_features.gui.layout`` so the web bundle
+    # picks up the same value via ``generate_layout_css``.
+    MIN_FIRST_LAUNCH_W: ClassVar[int] = layout.MIN_FIRST_LAUNCH_W
+    MIN_FIRST_LAUNCH_H: ClassVar[int] = layout.MIN_FIRST_LAUNCH_H
 
     def __init__(
         self,
@@ -118,23 +116,19 @@ class _GeometryController:
         )
 
     def default_window_size(self) -> tuple[int, int]:
-        """Fresh-install window size: 75% of the primary screen's
-        available geometry, with ``MIN_FIRST_LAUNCH_W`` × H as the
-        floor so a small laptop screen still opens to a usable
-        starting layout and a 4K display doesn't open to a tiny
-        1200-px shell.
-
-        Used by ``_restore_settings`` when no ``window_size`` is in
-        QSettings yet — i.e. the very first launch, or after the
-        user wiped their config. Always clamped to fit inside the
-        actual screen so the resize never overshoots.
+        """Fresh-install window size. Delegates the policy to the
+        Qt-free :py:func:`layout.recommended_initial_window_size` so
+        the same fraction-of-screen rule applies on both desktop and
+        web. The result is then clamped to the actual screen so the
+        resize never overshoots.
         """
         screen = self.target_screen()
         if screen is None:
             return self.MIN_FIRST_LAUNCH_W, self.MIN_FIRST_LAUNCH_H
         avail = screen.availableGeometry()
-        w = max(self.MIN_FIRST_LAUNCH_W, int(avail.width() * 0.75))
-        h = max(self.MIN_FIRST_LAUNCH_H, int(avail.height() * 0.75))
+        w, h = layout.recommended_initial_window_size(
+            avail.width(), avail.height()
+        )
         return self.clamp_size_to_screen(w, h)
 
     def ensure_visible_on_screen(self) -> None:
@@ -345,24 +339,37 @@ class _GeometryController:
     def apply_splitter_sizes(
         self, seg_need_w: int, feat_need_w: int, top_need_h: int
     ) -> None:
-        """Size the seg pane to its content; let the feature pane
-        absorb the rest. Rebalances the vertical splitter so the
-        analysis pane keeps its minimum height.
+        """Distribute splitter sizes via the shared
+        :py:func:`layout.distribute_pane_widths` policy. The feat
+        pane lands at ``feat_need_w + cushion`` (content-driven, kept
+        relatively consistent); the seg pane absorbs the rest so it
+        fans out on wide screens. Vertical splitter then leaves the
+        analysis pane its ``min_analysis_h`` floor.
 
-        Called from ``fit_to_content`` which may run BEFORE the
-        window is laid out (sync path when an inventory is auto
+        Called from ``fit_to_content``, which may run BEFORE the
+        window is laid out (sync path when an inventory is auto-
         loaded from settings during ``__init__``). In that case
-        ``vsplit.height()`` is 0 and we can't compute a sensible
-        top height; the horizontal axis still applies, but
+        ``vsplit.height()`` is 0 and we can't compute a sensible top
+        height; the horizontal axis still applies, but
         ``mark_splitter_owned`` flips ``has_saved_splitter`` and
-        blocks any future re-attempt. Schedule a one-shot retry
-        for after the post-show layout pass so the vertical
-        splitter still gets sized once before the user sees the
-        analysis pane at the constructor default.
+        blocks any future re-attempt. Schedule a one-shot retry for
+        after the post-show layout pass so the vertical splitter
+        still gets sized once before the user sees the analysis
+        pane at the constructor default.
         """
         available = self._hsplit.width() or (seg_need_w + feat_need_w)
-        feat_w = max(feat_need_w, available - seg_need_w)
-        self._hsplit.setSizes([seg_need_w, feat_w])
+        seg_w, feat_w = layout.distribute_pane_widths(
+            available,
+            seg_content_w=seg_need_w,
+            feat_content_w=feat_need_w,
+        )
+        self._hsplit.setSizes([seg_w, feat_w])
+        # Notify the seg-pane internals (vowel chart sizing /
+        # stack-vs-side-by-side) that the seg width changed. The
+        # callback is a no-op pre-build_central; we guard for that.
+        notify = getattr(self._w, "_on_seg_pane_width_changed", None)
+        if callable(notify):
+            notify(seg_w)
         total = self._vsplit.height()
         if total > 0:
             top_h = min(top_need_h, total - self.min_analysis_h)
