@@ -67,7 +67,7 @@ def _make_controller(
     parent = QWidget()
     status = QStatusBar()
     controller = _SaveController(
-        parent, status, snapshot=lambda: _ExplodingInventory()  # type: ignore[arg-type, return-value]
+        parent, status, snapshot=lambda: _ExplodingInventory()  # type: ignore[arg-type]
     )
     return controller, parent
 

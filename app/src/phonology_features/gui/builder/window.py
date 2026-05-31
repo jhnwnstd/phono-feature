@@ -66,9 +66,6 @@ from phonology_features.gui.grid_logic import MOVE_KEYS as _SHARED_MOVE_KEYS
 from phonology_features.gui.grid_logic import (
     SELECTION_SHAPE_SINGLE_COLUMN,
     SELECTION_SHAPE_SINGLE_ROW,
-)
-from phonology_features.gui.grid_logic import VALUE_KEYS as _SHARED_VALUE_KEYS
-from phonology_features.gui.grid_logic import (
     classify_selection,
     confirm_remove_feature_prompt,
     confirm_remove_segment_prompt,
@@ -77,6 +74,7 @@ from phonology_features.gui.grid_logic import (
     validate_new_feature_label,
     validate_new_segment_label,
 )
+from phonology_features.gui.grid_logic import VALUE_KEYS as _SHARED_VALUE_KEYS
 from phonology_features.gui.palette import C
 
 _log = get_logger(__name__)

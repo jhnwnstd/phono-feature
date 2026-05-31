@@ -700,6 +700,15 @@ dialog input[type="text"]:focus-visible {
   padding: var(--space-sm) var(--space-lg);
   font-size: var(--font-size-meta);
   color: var(--text-dim);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-lg);
+}
+.statusbar-brand {
+  font-style: italic;
+  color: var(--text-dim);
+  white-space: nowrap;
 }
 
 /* ---------- loading overlay ---------- */
