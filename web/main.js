@@ -693,14 +693,43 @@ function rebalanceSegmentSpillover() {
     const available = grid.clientHeight;
     if (grid.scrollHeight <= available) return;
 
-    grid.appendChild(spillover);
-    const consonants = grid.querySelectorAll(
+    const consonants = [...grid.querySelectorAll(
         ":scope > .seg-group:not(.vowel-chart-group)",
-    );
-    for (let i = consonants.length - 1; i >= 0; i--) {
-        spillover.insertBefore(consonants[i], spillover.firstChild);
-        if (grid.scrollHeight <= available) break;
+    )];
+    if (consonants.length === 0) return;
+    // Single source of truth for the partition decision: the desktop
+    // and web both call ``partition_groups_for_spillover`` in
+    // ``phonology_features.gui.layout``. JS measures the heights and
+    // available area; the bridge function computes ``main_count``.
+    const heights = consonants.map((el) => el.offsetHeight);
+    const mainCount = state.bridge
+        ? callBridge("partition_segment_spillover", heights, available)
+        : _fallbackPartitionSpillover(heights, available);
+    if (mainCount >= consonants.length) return;
+    grid.appendChild(spillover);
+    for (let i = mainCount; i < consonants.length; i++) {
+        spillover.appendChild(consonants[i]);
     }
+}
+
+/** Local mirror of ``partition_groups_for_spillover`` for the brief
+ *  window between first paint and bridge bootstrap. Once the bridge
+ *  is live, ``callBridge`` is the canonical source. */
+function _fallbackPartitionSpillover(heights, available, nCols = 2) {
+    const n = heights.length;
+    if (n === 0 || available <= 0) return n;
+    const fits = (mainCount) => {
+        let h = 0;
+        for (let i = 0; i < mainCount; i++) h += heights[i];
+        const spill = heights.slice(mainCount);
+        for (let i = 0; i < spill.length; i += nCols) {
+            h += Math.max(...spill.slice(i, i + nCols));
+        }
+        return h <= available;
+    };
+    let mainCount = n;
+    while (mainCount > 0 && !fits(mainCount)) mainCount -= 1;
+    return mainCount;
 }
 
 function _buildConsonantGroup(group) {

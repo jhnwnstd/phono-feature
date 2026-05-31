@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import html
 import os
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6.QtCore import (
     QEvent,
+    QObject,
     QPoint,
     QSettings,
     QSize,
@@ -19,11 +21,14 @@ from PyQt6.QtCore import (
     QTimer,
 )
 from PyQt6.QtGui import (
+    QCloseEvent,
     QColor,
     QFont,
     QKeySequence,
+    QMoveEvent,
     QPalette,
     QShortcut,
+    QShowEvent,
 )
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -59,7 +64,8 @@ from phonology_features.gui.inventory_dir_controller import (
     _InventoryDirController,
 )
 from phonology_features.gui.layout import distribute_feature_groups
-from phonology_features.gui.mode_controller import Mode, _ModeController
+from phonology_features.gui.mode_controller import _ModeController
+from phonology_features.gui.mode_logic import Mode
 from phonology_features.gui.palette import (
     C,
     detect_system_theme,
@@ -101,7 +107,7 @@ _QEVENT_MOUSE_BUTTON_PRESS = QEvent.Type.MouseButtonPress
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, startup_path: str | None = None):
+    def __init__(self, startup_path: str | None = None) -> None:
         super().__init__()
         self.engine: FeatureEngine | None = None
         # Mode controller owns ``mode``, ``saved_seg_state``, and
@@ -109,14 +115,14 @@ class MainWindow(QMainWindow):
         # call sites; do not add forwarding properties here.
         self._mode_ctrl = _ModeController(self)
         # segment -> SegmentButton for the active inventory
-        self._seg_buttons: dict = {}
+        self._seg_buttons: dict[str, SegmentButton] = {}
         # Cross-inventory pool keyed by segment symbol. Reused across
         # loads since /p t k m n s/ etc. are nearly universal; avoids
         # the QPushButton + setStyleSheet cost on every swap.
         self._seg_button_pool: dict[str, SegmentButton] = {}
-        self._feat_rows: dict = {}  # feature -> FeatureRow, active subset
-        self._selected_segments: list = []
-        self._selected_features: dict = {}  # feature -> '+'/'-'
+        self._feat_rows: dict[str, FeatureRow] = {}  # active subset
+        self._selected_segments: list[str] = []
+        self._selected_features: dict[str, str] = {}  # feature -> '+'/'-'
         self._current_path: str | None = None
         # Watcher, MRU, dropdown population, and delete-fallback all
         # live in the InventoryDirController, built after _build_ui
@@ -211,7 +217,7 @@ class MainWindow(QMainWindow):
         self.inventory_combo.activated.connect(self._on_inventory_selected)
         toolbar.addWidget(self.inventory_combo)
 
-        def add_nav(label: str, slot) -> QPushButton:
+        def add_nav(label: str, slot: Callable[[], object]) -> QPushButton:
             btn = QPushButton(label, toolbar)
             btn.setFont(QFont("Noto Sans", 10))
             btn.setFixedHeight(32)
@@ -316,7 +322,7 @@ class MainWindow(QMainWindow):
             "Select an inventory from the dropdown to begin."
         )
 
-    def _build_segment_panel(self, parent=None) -> QFrame:
+    def _build_segment_panel(self, parent: QWidget | None = None) -> QFrame:
         """Build the left (segment) panel: title, Clear button, scroll
         area containing the consonant grid + vowel chart side by side.
         The container's stylesheet has both active and inactive rules
@@ -395,7 +401,7 @@ class MainWindow(QMainWindow):
         vlay.addWidget(self.seg_hint)
         return container
 
-    def _build_feature_panel(self, parent=None) -> QFrame:
+    def _build_feature_panel(self, parent: QWidget | None = None) -> QFrame:
         container = QFrame(parent)
         container.setObjectName("feat_panel")
         set_css(container, _ModeController.panel_chrome_qss("feat_panel"))
@@ -446,20 +452,20 @@ class MainWindow(QMainWindow):
         vlay.addWidget(self._feat_scroll, stretch=1)
         return container
 
-    def showEvent(self, event) -> None:
+    def showEvent(self, event: QShowEvent | None) -> None:
         super().showEvent(event)
         if not self._did_first_show:
             self._did_first_show = True
             QTimer.singleShot(0, self._geom.ensure_visible_on_screen)
 
-    def moveEvent(self, event) -> None:
+    def moveEvent(self, event: QMoveEvent | None) -> None:
         """Forward to the geometry controller so it can update its
         anchor (only on user-initiated moves; programmatic geometry
         changes are guarded inside the controller)."""
         super().moveEvent(event)
         self._geom.on_user_move(self.pos())
 
-    def _read_setting(self, key: str, default=None):
+    def _read_setting(self, key: str, default: Any = None) -> Any:
         """Defensive QSettings read. Thin wrapper around the
         shared ``safe_read_setting`` helper; kept as an instance
         method so call sites don't have to plumb ``self._settings``."""
@@ -487,14 +493,26 @@ class MainWindow(QMainWindow):
         pos = safe_read_setting(
             self._settings, "window_pos", None, expected_type=QPoint
         )
-        self._geom.has_saved_size = size is not None
         screen = self._geom.target_screen()
         if size is not None:
-            self.resize(
-                *self._geom.clamp_size_to_screen(size.width(), size.height())
-            )
+            # Enforce the MIN_FIRST_LAUNCH floor even on previously-
+            # saved sizes: a stale 1200x800 from an old fallback or a
+            # crashed mid-resize would otherwise stick forever, and
+            # the user opens to a cramped layout they didn't choose.
+            # Floor is below the launch default, so deliberate user
+            # resizes above the floor still round-trip unchanged.
+            w = max(size.width(), self._geom.MIN_FIRST_LAUNCH_W)
+            h = max(size.height(), self._geom.MIN_FIRST_LAUNCH_H)
+            self.resize(*self._geom.clamp_size_to_screen(w, h))
+            self._geom.has_saved_size = True
         else:
-            self.resize(*self._geom.clamp_size_to_screen(1200, 900))
+            # Fresh install (no saved geometry): open at 75% of the
+            # primary screen, never smaller than MIN_FIRST_LAUNCH.
+            # Mark the size as "owned" so the inventory load below
+            # doesn't immediately shrink the window back to the
+            # content-derived MIN_FIRST_LAUNCH floor in fit_to_content.
+            self.resize(*self._geom.default_window_size())
+            self._geom.has_saved_size = True
         if pos is not None:
             self.move(pos)
         elif screen is not None:
@@ -518,13 +536,26 @@ class MainWindow(QMainWindow):
             if idx >= 0:
                 self.inventory_combo.setCurrentIndex(idx)
             self._load_path(path)
+        else:
+            # Fresh install: no startup arg, no saved last_inventory.
+            # Auto-pick the first bundled .json (skip the disabled
+            # "Select inventory…" placeholder at index 0) so the user
+            # opens to a populated UI instead of a blank shell. Falls
+            # through silently if the inventories dir is empty —
+            # the placeholder stays visible.
+            for idx in range(1, self.inventory_combo.count()):
+                auto_path = self.inventory_combo.itemData(idx)
+                if auto_path and os.path.isfile(auto_path):
+                    self.inventory_combo.setCurrentIndex(idx)
+                    self._load_path(auto_path)
+                    break
         # Mode stored as a plain string so it survives package renames
         # that would invalidate a pickled enum.
         saved_mode = self._read_setting_str("mode", Mode.SEG_TO_FEAT.value)
         if saved_mode in (Mode.SEG_TO_FEAT.value, Mode.FEAT_TO_SEG.value):
             self._set_mode(Mode(saved_mode))
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent | None) -> None:
         # If the builder is open with unsaved changes, give it the
         # chance to prompt. Without this, Qt's parent-child cleanup
         # destroys the builder when the main window dies, bypassing
@@ -534,7 +565,8 @@ class MainWindow(QMainWindow):
         # the unsaved dialog we abort the main window close too.
         if self._builder is not None and self._builder.isVisible():
             if not self._builder.close():
-                event.ignore()
+                if event is not None:
+                    event.ignore()
                 return
         self._settings.remove("geometry")
         if self.isMaximized() or self.isFullScreen():
@@ -560,7 +592,7 @@ class MainWindow(QMainWindow):
         self._settings.sync()
         super().closeEvent(event)
 
-    def _on_inventory_selected(self, index: int):
+    def _on_inventory_selected(self, index: int) -> None:
         """Load the inventory chosen from the dropdown."""
         path = self.inventory_combo.itemData(index)
         if path:
@@ -655,7 +687,7 @@ class MainWindow(QMainWindow):
             )
             self._load_path(path)
 
-    def _load_path(self, path: str):
+    def _load_path(self, path: str) -> None:
         """Load an inventory JSON. Shared by the dropdown, Browse, and
         the file-system watcher's auto-reload path. One try/except
         handles every failure mode because ``Inventory.load`` wraps
@@ -725,7 +757,7 @@ class MainWindow(QMainWindow):
         else:
             self._geom.fit_to_content()
 
-    def _populate_segments(self):
+    def _populate_segments(self) -> None:
         """Populate the seg grid + vowel chart from the active engine.
         Reuses pooled SegmentButtons where possible; detaches pool
         entries not in the current inventory.
@@ -747,12 +779,12 @@ class MainWindow(QMainWindow):
             None,
         )
         vowel_segs = groups.pop(vowel_key, []) if vowel_key else []
-        consonant_buttons: dict = {}
+        consonant_buttons: dict[str, SegmentButton] = {}
         for segs in groups.values():
             for seg in segs:
                 consonant_buttons[seg] = self._get_or_create_seg_button(seg)
         self.seg_grid_widget.set_groups(groups, consonant_buttons)
-        vowel_buttons: dict = {}
+        vowel_buttons: dict[str, SegmentButton] = {}
         if vowel_segs:
             for seg in vowel_segs:
                 vowel_buttons[seg] = self._get_or_create_seg_button(seg)
@@ -773,7 +805,7 @@ class MainWindow(QMainWindow):
                 btn.hide()
                 btn.setParent(None)
 
-    def _get_or_create_seg_button(self, seg: str):
+    def _get_or_create_seg_button(self, seg: str) -> SegmentButton:
         """Return a SegmentButton for ``seg``, creating it on first use.
         Reused buttons get reset to DEFAULT since the previous inventory
         may have left them checked or styled.
@@ -797,7 +829,7 @@ class MainWindow(QMainWindow):
         return btn
 
     def _build_feature_group(
-        self, title: str, features: list
+        self, title: str, features: list[str]
     ) -> QFrame | None:
         """Build one labelled group card. Returns None if no features
         in this group are active in the current inventory. Parented to
@@ -873,7 +905,7 @@ class MainWindow(QMainWindow):
         """
         if self.engine is None:
             return
-        active_feature_set: set = set()
+        active_feature_set: set[str] = set()
         for seg_feats in self.engine.segments.values():
             for f, v in seg_feats.items():
                 if v != "0":
@@ -1008,7 +1040,7 @@ class MainWindow(QMainWindow):
         return ""
 
     @contextmanager
-    def _batched_updates(self):
+    def _batched_updates(self) -> Iterator[None]:
         """Suspend Qt paint events for the duration. Depth-aware so
         nested scopes share one setUpdatesEnabled(False/True) pair,
         which prevents an inner exit from re-enabling paint mid-rebuild.
@@ -1052,7 +1084,7 @@ class MainWindow(QMainWindow):
             self.analysis.set_expanded(False)
         self._geom.has_saved_splitter = True
 
-    def _on_vsplit_user_moved(self, *_args) -> None:
+    def _on_vsplit_user_moved(self, *_args: object) -> None:
         """A user-initiated drag while expanded invalidates the
         stashed restore sizes: the user has overridden them, so the
         next button click should toggle relative to the new state,
@@ -1062,7 +1094,7 @@ class MainWindow(QMainWindow):
             self._pre_expand_vsplit_sizes = None
             self.analysis.set_expanded(False)
 
-    def eventFilter(self, a0, a1):
+    def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
         """Activate the clicked panel on a press in its empty area.
         Installed on ``seg_panel`` / ``feat_panel`` only, so ``a0`` is
         always one of the two. Clicks on child widgets switch mode via
@@ -1079,7 +1111,7 @@ class MainWindow(QMainWindow):
         return False
 
     # State changes are immediate; analysis is debounced via _debounce.
-    def _on_segment_clicked(self, segment: str, checked: bool):
+    def _on_segment_clicked(self, segment: str, checked: bool) -> None:
         if self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             # Real mouse clicks switch mode via _on_segment_pressed
             # before the clicked signal fires; this branch protects
@@ -1104,7 +1136,7 @@ class MainWindow(QMainWindow):
         if self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             self._set_mode(Mode.SEG_TO_FEAT)
 
-    def _on_feature_changed(self, feature: str, value: str):
+    def _on_feature_changed(self, feature: str, value: str) -> None:
         if self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
             return
         if value:
@@ -1172,11 +1204,11 @@ class MainWindow(QMainWindow):
         for row in self._feat_rows.values():
             row.reset()
 
-    def _clear_segments(self, silent=False):
+    def _clear_segments(self, silent: bool = False) -> None:
         """Either Clear button wipes both panes. See ``_reset_both_sides``."""
         self._reset_both_sides(silent)
 
-    def _clear_features(self, silent=False):
+    def _clear_features(self, silent: bool = False) -> None:
         """Either Clear button wipes both panes. See ``_reset_both_sides``."""
         self._reset_both_sides(silent)
 

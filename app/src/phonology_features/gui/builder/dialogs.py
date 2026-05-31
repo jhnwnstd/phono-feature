@@ -3,7 +3,7 @@
 from typing import ClassVar
 
 from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QFont, QPainter, QTextCursor
+from PyQt6.QtGui import QFont, QPainter, QPaintEvent, QTextCursor
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from phonology_engine.limits import MAX_NAME_LENGTH
@@ -56,7 +57,7 @@ class _AutofillTextEdit(QPlainTextEdit):
 
     DEFAULT_FILL: str = ""  # subclasses override
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setTabChangesFocus(True)
         # Stored separately from Qt's placeholderText so our paintEvent
@@ -101,7 +102,7 @@ class _AutofillTextEdit(QPlainTextEdit):
         """
         return infer_split(self.toPlainText())
 
-    def paintEvent(self, e):
+    def paintEvent(self, e: QPaintEvent | None) -> None:
         super().paintEvent(e)
         if self.toPlainText() or not self.placeholderText():
             return
@@ -164,7 +165,7 @@ class FeatureTextEdit(_AutofillTextEdit):
     DEFAULT_FILL = DEFAULT_FEATURES
 
 
-def center_on_parent(dialog, parent):
+def center_on_parent(dialog: QWidget, parent: QWidget | None) -> None:
     """Move dialog to the center of parent's screen."""
     if parent is None:
         return
@@ -177,7 +178,13 @@ def center_on_parent(dialog, parent):
     dialog.move(dialog_frame.topLeft())
 
 
-def ask_question(parent, title: str, text: str, buttons=None, default=None):
+def ask_question(
+    parent: QWidget | None,
+    title: str,
+    text: str,
+    buttons: QMessageBox.StandardButton | None = None,
+    default: QMessageBox.StandardButton | None = None,
+) -> int:
     """Show a question dialog centered on parent's screen."""
     if buttons is None:
         buttons = (
@@ -197,7 +204,7 @@ def ask_question(parent, title: str, text: str, buttons=None, default=None):
     return box.exec()
 
 
-def show_warning(parent, title: str, text: str):
+def show_warning(parent: QWidget | None, title: str, text: str) -> None:
     """Show a warning dialog centered on parent's screen."""
     box = QMessageBox(
         QMessageBox.Icon.Warning,
@@ -213,7 +220,7 @@ def show_warning(parent, title: str, text: str):
 class InputDialog(QDialog):
     """Dialog for entering segments and features before opening the grid."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("New Inventory Setup")
         self.setMinimumSize(500, 500)
@@ -327,7 +334,7 @@ class InputDialog(QDialog):
         row.addWidget(ok_btn)
         return row
 
-    def _on_preset_changed(self, name: str):
+    def _on_preset_changed(self, name: str) -> None:
         features = FEATURE_PRESETS.get(name, [])
         if features:
             self.feat_edit.setPlainText("\n".join(features))
@@ -336,10 +343,10 @@ class InputDialog(QDialog):
         self.feat_edit.clear()
         self.feat_edit.setReadOnly(False)
 
-    def get_segments(self) -> list:
+    def get_segments(self) -> list[str]:
         return self.seg_edit.entries()
 
-    def get_features(self) -> list:
+    def get_features(self) -> list[str]:
         return self.feat_edit.entries()
 
     def get_name(self) -> str:

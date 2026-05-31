@@ -190,7 +190,8 @@ def test_accept_with_empty_segments_does_not_dismiss(dialog, mocker):
     warn.assert_called_once()
     args = warn.call_args.args
     assert args[1] == "No segments found"
-    # Dialog must remain in its pre-accept state; Accepted is QDialog.DialogCode.Accepted == 1
+    # Dialog must remain in its pre-accept state;
+    # QDialog.DialogCode.Accepted == 1.
     assert dialog.result() != QDialog.DialogCode.Accepted
 
 

@@ -20,15 +20,27 @@ window file focused on state and lifecycle.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import ClassVar
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QBrush, QColor, QPainter, QPalette, QPen
+from PyQt6.QtCore import QModelIndex, QRect, Qt
+from PyQt6.QtGui import (
+    QBrush,
+    QColor,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPalette,
+    QPen,
+)
 from PyQt6.QtWidgets import (
     QHeaderView,
     QStyle,
     QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTableWidget,
+    QTableWidgetItem,
+    QWidget,
 )
 
 from phonology_features.gui.palette import C
@@ -60,15 +72,21 @@ class _ToggleHeaderView(QHeaderView):
     so there's nothing to lose by repurposing the doubleclick path.
     """
 
-    def __init__(self, orientation, parent=None):
+    def __init__(
+        self,
+        orientation: Qt.Orientation,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(orientation, parent)
         # QTableWidget's default header has sectionsClickable=True;
         # a fresh QHeaderView defaults to False. Without this, no
         # sectionClicked signals fire at all.
         self.setSectionsClickable(True)
 
-    def mouseDoubleClickEvent(self, e):
+    def mouseDoubleClickEvent(self, e: QMouseEvent | None) -> None:
         # Coordinate space: x for horizontal headers, y for vertical.
+        if e is None:
+            return
         if self.orientation() == Qt.Orientation.Horizontal:
             section = self.logicalIndexAt(e.pos().x())
         else:
@@ -95,15 +113,20 @@ class _BulkCycleTable(QTableWidget):
        above everything.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._bulk_cycle_cb = None
+        self._bulk_cycle_cb: Callable[[QTableWidgetItem], None] | None = None
 
-    def set_bulk_cycle_callback(self, cb):
+    def set_bulk_cycle_callback(
+        self, cb: Callable[[QTableWidgetItem], None]
+    ) -> None:
         """Builder hands us a function ``(QTableWidgetItem) -> None``."""
         self._bulk_cycle_cb = cb
 
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:
+        if event is None:
+            super().mousePressEvent(event)
+            return
         if (
             event.button() == Qt.MouseButton.LeftButton
             and not event.modifiers()
@@ -127,7 +150,7 @@ class _BulkCycleTable(QTableWidget):
                     return
         super().mousePressEvent(event)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent | None) -> None:
         super().paintEvent(event)
         sel_model = self.selectionModel()
         model = self.model()
@@ -228,7 +251,7 @@ class _BulkCycleTable(QTableWidget):
                 )
         painter.end()
 
-    def _draw_outline_rect(self, rect):
+    def _draw_outline_rect(self, rect: QRect) -> None:
         """Draw a 2 px outline around ``rect`` on the viewport. Used
         by the full-row / full-column / full-table fast paths."""
         if not rect.isValid():
@@ -264,7 +287,12 @@ class _SelectionFillDelegate(QStyledItemDelegate):
     # at runtime so caching at class load is safe.
     _SELECTED_FLAG: ClassVar = QStyle.StateFlag.State_Selected
 
-    def paint(self, painter, option, index):
+    def paint(
+        self,
+        painter: QPainter | None,
+        option: QStyleOptionViewItem,
+        index: QModelIndex,
+    ) -> None:
         if option.state & self._SELECTED_FLAG:
             # parent() is typed QObject | None; in practice it's the
             # QTableWidget that owns this delegate. ``hasattr`` keeps

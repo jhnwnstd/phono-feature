@@ -38,7 +38,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-mock>=3.12", "mypy>=1.8", "ruff>=0.4", "build>=1"]
+# Local + CI lint / type / test stack matches the user's preferred
+# command chain: ``isort . --profile black``, ``black -l 79 .``,
+# ``flake8 .``, ``mypy``. flake8-bugbear gives us B-rules including
+# the B950 line-length-with-10%-slack check that .flake8 selects.
+dev = [
+    "pytest>=7",
+    "pytest-mock>=3.12",
+    "mypy>=1.8",
+    "isort>=5",
+    "black>=24",
+    "flake8>=7",
+    "flake8-bugbear>=24",
+    "build>=1",
+]
 
 [project.scripts]
 phonology-features = "phonology_features.__main__:main"
@@ -50,63 +63,10 @@ Issues = "https://github.com/jhnwnstd/phono-feature/issues"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.ruff]
-line-length = 88
-target-version = "py311"
-extend-exclude = [".venv", "build", "dist"]
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "RUF"]
-ignore = [
-    "E501",
-    # RUF001/002/003 flag "ambiguous Unicode characters" -- the
-    # default policy treats e.g. ɡ (U+0261 LATIN SMALL LETTER SCRIPT
-    # G) as suspicious because it resembles g (U+0067). For a
-    # phonology engine these characters are the WHOLE POINT: IPA
-    # notation deliberately uses script g, modifier letter
-    # apostrophe (ʼ), length mark (ː), etc. Suppressing here keeps
-    # the substantive RUF checks (RUF012 mutable class default,
-    # RUF013 implicit Optional, etc.) active.
-    "RUF001",  # ambiguous-unicode-character-string
-    "RUF002",  # ambiguous-unicode-character-docstring
-    "RUF003",  # ambiguous-unicode-character-comment
-]
-# Preserve noqa codes that target external tools (flake8 E402 in
-# conftest.py is real: the QT_QPA_PLATFORM env var must be set
-# before any PyQt6 import). Ruff itself doesn't fire those rules
-# but other linters do; treat them as intentional, not stale.
-external = ["E402"]
-
-[tool.ruff.lint.isort]
-# Our two monorepo packages. Without this, ruff's isort plugin
-# treats them as third-party and reorders against PyQt6 imports,
-# which conflicts with what ``isort --profile black`` produces.
-# Listed here so both tools agree on grouping.
-known-first-party = ["phonology_engine", "phonology_features"]
-
-[tool.mypy]
-python_version = "3.11"
-strict_optional = true
-warn_redundant_casts = true
-# Skip the setuptools build artifact directory. ``python -m build``
-# (run by the web app's build step and occasionally locally) lays
-# down ``build/lib/phonology_features/`` which is a verbatim copy of
-# ``src/phonology_features/``. With both on the mypy search path the
-# duplicate-module error blocks the rest of the type check. The
-# directory is gitignored; nothing in CI publishes it.
-exclude = "^(app/)?build/"
-# Surface ``# type: ignore`` comments that are no longer needed (Qt
-# stubs or our own annotations have caught up). Without this dead
-# ignores accumulate and silently hide real errors that move under
-# them later.
-warn_unused_ignores = true
-# Without this, function bodies that lack annotations on the def
-# itself (the common Qt-override pattern in this codebase) are
-# silently skipped -- mypy reports them as "annotation-unchecked"
-# notes. Enabling means the actual statements inside those bodies
-# are type-checked, which catches real bugs.
-check_untyped_defs = true
-ignore_missing_imports = true
+# mypy config lives in the workspace-root pyproject.toml so a single
+# ``mypy`` invocation from the repo root drives every member package.
+# Running mypy from inside ``app/`` falls back to its parent's config
+# via the standard pyproject discovery walk.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

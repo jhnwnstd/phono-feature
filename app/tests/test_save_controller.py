@@ -18,7 +18,9 @@ from PyQt6.QtWidgets import QStatusBar, QWidget
 
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory
-from phonology_features.gui.builder import save_controller as save_controller_module
+from phonology_features.gui.builder import (
+    save_controller as save_controller_module,
+)
 from phonology_features.gui.builder.save_controller import _SaveController
 
 INVENTORIES_DIR = Path(__file__).resolve().parents[1] / "inventories"

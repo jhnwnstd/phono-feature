@@ -8,6 +8,7 @@ surface as tooltips on the buttons.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import ClassVar
 
 from PyQt6.QtCore import Qt
@@ -58,7 +59,9 @@ class VowelChartWidget(QWidget):
     )
     _ROW_HEADERS: ClassVar[tuple[str, ...]] = tuple(_ROW_LABELS)
 
-    def __init__(self, parent=None, *, btn_gap: int = 4):
+    def __init__(
+        self, parent: QWidget | None = None, *, btn_gap: int = 4
+    ) -> None:
         super().__init__(parent)
         self._buttons: dict[str, QWidget] = {}
         self._header_labels: list[tuple[QLabel, bool]] = []
@@ -89,7 +92,7 @@ class VowelChartWidget(QWidget):
         self._rebuild_style_cache()
         self._last_headers_active = None
 
-    def set_headers_active(self, active: bool):
+    def set_headers_active(self, active: bool) -> None:
         # Dedup is safe: clear() (called by set_vowels on
         # every inventory swap) resets ``_last_headers_active`` to None
         # when fresh labels replace the cached ones.
@@ -133,10 +136,15 @@ class VowelChartWidget(QWidget):
             container.deleteLater()
         self._cell_containers.clear()
 
-    def set_vowels(self, segs: list, buttons: dict, norm_feats: dict):
+    def set_vowels(
+        self,
+        segs: list[str],
+        buttons: Mapping[str, QWidget],
+        norm_feats: Mapping[str, Mapping[str, str]],
+    ) -> None:
         """Lay out vowel buttons in the IPA chart grid."""
         self.clear()
-        self._buttons = buttons
+        self._buttons = dict(buttons)
         profile = _detect_vowel_profile(segs, norm_feats)
         self._add_top_headers()
         occupied, placements = self._compute_placements(
@@ -170,8 +178,13 @@ class VowelChartWidget(QWidget):
 
     @staticmethod
     def _compute_placements(
-        segs: list, profile: VowelProfile, norm_feats: dict
-    ) -> tuple[dict, dict]:
+        segs: list[str],
+        profile: VowelProfile,
+        norm_feats: Mapping[str, Mapping[str, str]],
+    ) -> tuple[
+        dict[tuple[int, int], list[str]],
+        dict[str, VowelPlacement],
+    ]:
         """Thin wrapper over the shared
         :py:func:`vowel_layout.compute_placements`.
 
@@ -182,7 +195,11 @@ class VowelChartWidget(QWidget):
         """
         return _compute_placements_shared(segs, profile, norm_feats)
 
-    def _lay_out_rows(self, occupied: dict, placements: dict) -> None:
+    def _lay_out_rows(
+        self,
+        occupied: dict[tuple[int, int], list[str]],
+        placements: dict[str, VowelPlacement],
+    ) -> None:
         """For each height tier that has at least one vowel, add a row
         header on the left and place each cell's buttons in the grid."""
         grid_row = 2
@@ -208,7 +225,11 @@ class VowelChartWidget(QWidget):
         self._header_labels.append((lbl, True))
 
     def _place_cell(
-        self, cell_segs: list, placements: dict, grid_row: int, ci: int
+        self,
+        cell_segs: list[str],
+        placements: dict[str, VowelPlacement],
+        grid_row: int,
+        ci: int,
     ) -> None:
         """Place one cell's button(s) in the grid. Single vowel: button
         goes straight in. Multiple vowels at the same (row, col): stack
@@ -244,7 +265,9 @@ class VowelChartWidget(QWidget):
             cell.deleteLater()
 
     @staticmethod
-    def _prep_button(btn, seg: str, placement: VowelPlacement) -> None:
+    def _prep_button(
+        btn: QWidget, seg: str, placement: VowelPlacement
+    ) -> None:
         """Set the tooltip + show. Shared by single + collision cells."""
         btn.setToolTip(
             f"/{seg}/  [{placement.confidence.name.lower()}]"

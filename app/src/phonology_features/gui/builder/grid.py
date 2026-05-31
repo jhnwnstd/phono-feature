@@ -88,7 +88,7 @@ def make_cell(value: str = "0") -> QTableWidgetItem:
     return item
 
 
-def style_cell(item: QTableWidgetItem, value: str):
+def style_cell(item: QTableWidgetItem, value: str) -> None:
     """Apply color and font to a cell based on its value."""
     fg, bg = _cell_brushes(value)
     item.setForeground(fg)

@@ -2063,6 +2063,13 @@ def test_main_viewer_loads_freshly_saved_builder_inventory(
     QSettings(SETTINGS_ORG, SETTINGS_APP).remove("last_inventory")
 
     w = MainWindow()
+    # Fresh-install MainWindow now auto-loads the first bundled
+    # inventory so the user opens to a populated UI. This test exercises
+    # the "no current inventory" save flow specifically, so undo the
+    # auto-load and put the viewer back into the blank state the test
+    # was written to exercise.
+    w._current_path = None
+    w.engine = None
     # Spawn a builder the same way _open_builder does for the
     # no-current-inventory case, including the save-finished wiring.
     builder = InventoryBuilder(parent=w)

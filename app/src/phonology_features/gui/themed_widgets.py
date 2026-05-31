@@ -14,14 +14,15 @@ swap).
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtCore import QEvent, QRectF, Qt
+from PyQt6.QtGui import QColor, QEnterEvent, QFont, QPainter, QPaintEvent, QPen
 from PyQt6.QtWidgets import (
     QFrame,
     QLabel,
     QSplitter,
     QSplitterHandle,
     QStatusBar,
+    QWidget,
 )
 
 from phonology_features.gui.palette import C
@@ -57,7 +58,7 @@ class _BrandedStatusBar(QStatusBar):
     # descenders don't push the bar taller than non-italic text would.
     _BAR_HEIGHT = 22
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setSizeGripEnabled(False)
         self.setFixedHeight(self._BAR_HEIGHT)
@@ -111,21 +112,21 @@ class _ThemedHandle(QSplitterHandle):
     cascade cost ~65 ms.
     """
 
-    def __init__(self, orientation, parent):
+    def __init__(self, orientation: Qt.Orientation, parent: QSplitter) -> None:
         super().__init__(orientation, parent)
         self._hover = False
 
-    def enterEvent(self, event):
+    def enterEvent(self, event: QEnterEvent | None) -> None:
         self._hover = True
         self.update()
         super().enterEvent(event)
 
-    def leaveEvent(self, event):
+    def leaveEvent(self, event: QEvent | None) -> None:
         self._hover = False
         self.update()
         super().leaveEvent(event)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent | None) -> None:
         # Resting state blends with neighbouring panel chrome via
         # ``border``. Hover state uses ``splitter_hover``, a neutral
         # grey, NOT the accent blue. Accent is reserved for "active /
@@ -143,7 +144,7 @@ class _ThemedSplitter(QSplitter):
     """``QSplitter`` whose handles are ``_ThemedHandle`` (live palette,
     no stylesheet). Cursor is still set automatically by the base."""
 
-    def createHandle(self):
+    def createHandle(self) -> QSplitterHandle | None:
         return _ThemedHandle(self.orientation(), self)
 
 
@@ -154,7 +155,7 @@ class _ThemedCard(QFrame):
     theme toggle (6-7 cards = the cost behind _restyle_feature_cards).
     """
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent | None) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         pen = QPen(QColor(C["border"]))

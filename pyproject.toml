@@ -35,30 +35,6 @@ known_first_party = ["phonology_engine", "phonology_features"]
 line-length = 79
 target-version = ["py311"]
 
-[tool.ruff]
-line-length = 88
-target-version = "py311"
-extend-exclude = [
-    "app/.venv",
-    "app/build",
-    "app/dist",
-    "web/dist",
-]
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "RUF"]
-ignore = [
-    "E501",
-    # IPA-heavy sources legitimately use characters like ɡ, ʼ, and ː.
-    "RUF001",
-    "RUF002",
-    "RUF003",
-]
-external = ["E402"]
-
-[tool.ruff.lint.isort]
-known-first-party = ["phonology_engine", "phonology_features"]
-
 [tool.mypy]
 python_version = "3.11"
 files = [
@@ -67,13 +43,15 @@ files = [
     "web/api.py",
     "web/scripts/build.py",
 ]
-strict_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-check_untyped_defs = true
-warn_return_any = true
-warn_unreachable = true
-strict_equality = true
-no_implicit_optional = true
+# Strict mode: turns on every disallow_* / warn_* / check_* mypy
+# offers (untyped defs, partial defs, untyped decorators, generic
+# Any, implicit reexport, etc.). The extras below are not part of
+# the ``strict`` bundle and are added explicitly: PyQt6 has no
+# stubs so we silence the import-resolution misses;
+# warn_unreachable surfaces dead branches; no_implicit_optional
+# matches PEP 484 modern defaults.
+strict = true
 ignore_missing_imports = true
+warn_unreachable = true
+no_implicit_optional = true
 exclude = "^(app/)?build/|^web/dist/"

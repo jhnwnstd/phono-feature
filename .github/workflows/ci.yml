@@ -83,24 +83,22 @@ jobs:
           fi
           python -m pip install --quiet -e ".[dev]"
 
-      - name: Run ruff in the launcher's venv
+      - name: Run isort + black + flake8 + mypy in the launcher's venv
         # Lint runs ONCE on Linux -- the rules are platform-agnostic and
         # running on every matrix entry would triple the CI minutes for
-        # zero coverage gain.
+        # zero coverage gain. The four-tool chain matches the user's
+        # local invocation (``isort . --profile black; black -l 79 .;
+        # flake8 .; mypy``) so anything green locally is green in CI.
         if: runner.os == 'Linux'
-        working-directory: app
+        working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          source .venv/bin/activate
-          ruff check src tests
-
-      - name: Run mypy in the launcher's venv
-        if: runner.os == 'Linux'
-        working-directory: app
-        shell: bash
-        run: |
-          source .venv/bin/activate
-          mypy src tests
+          source app/.venv/bin/activate
+          python -m pip install --quiet isort black flake8 flake8-bugbear
+          isort . --profile black --check-only
+          black -l 79 --check .
+          flake8 .
+          mypy
 
       - name: Run pytest in the launcher's venv
         working-directory: app

@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import ClassVar
 
 from PyQt6.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QResizeEvent
 from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -26,12 +26,21 @@ from phonology_features.gui.constants import (
     MONO_FAMILIES,
     scrollbar_style,
 )
+from phonology_features.gui.layout import partition_groups_for_spillover
 from phonology_features.gui.palette import C
 from phonology_features.gui.style_utils import (
     _LAST_HTML_ATTR,
     set_css,
     set_html,
 )
+
+# Per-button vertical stride used by ``SegmentGridWidget`` to estimate
+# group natural heights ahead of Qt's own layout pass. The fixed values
+# match what ``SegmentButton`` sets via ``setFixedSize(33, 26)`` and the
+# 4-px row gap, plus the empirical 22-px header. Tweak together with
+# the button / header style if either changes.
+_SEG_BTN_H = 26
+_SEG_HEADER_H = 22
 
 
 class SegmentState(StrEnum):
@@ -52,10 +61,10 @@ class SegmentButton(QPushButton):
     """
 
     # theme name -> styles dict, shared across instances.
-    _styles_cache: ClassVar[dict[str, dict]] = {}
+    _styles_cache: ClassVar[dict[str, dict[SegmentState, str]]] = {}
 
     @classmethod
-    def _styles_for_active_theme(cls) -> dict:
+    def _styles_for_active_theme(cls) -> dict[SegmentState, str]:
         from phonology_features.gui.palette import get_theme_name
 
         theme = get_theme_name()
@@ -65,7 +74,7 @@ class SegmentButton(QPushButton):
             cls._styles_cache[theme] = cached
         return cached
 
-    def __init__(self, segment: str, parent=None):
+    def __init__(self, segment: str, parent: QWidget | None = None) -> None:
         super().__init__(segment, parent)
         self.segment = segment
         self._state: SegmentState = SegmentState.DEFAULT
@@ -202,7 +211,9 @@ class FeatureRow(QWidget):
             cls._styles_cache[theme] = cached
         return cached
 
-    def __init__(self, feature_name: str, parent=None):
+    def __init__(
+        self, feature_name: str, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self.feature = feature_name
         self._current_value = ""
@@ -349,7 +360,7 @@ class FeatureRow(QWidget):
             set_css(self, self._ROW_NEUTRAL)
             self._reset_for_panel = self._panel_active
 
-    def _style_btn(self, btn: QPushButton, polarity: str):
+    def _style_btn(self, btn: QPushButton, polarity: str) -> None:
         is_plus = polarity == "+"
         active_bg = C["plus_bg"] if is_plus else C["minus_bg"]
         active_text = C["plus"] if is_plus else C["minus"]
@@ -377,7 +388,7 @@ class FeatureRow(QWidget):
         """,
         )
 
-    def _on_click(self, polarity: str):
+    def _on_click(self, polarity: str) -> None:
         clicked_current_value = self._current_value == polarity
         if clicked_current_value:
             self._current_value = ""
@@ -412,7 +423,7 @@ class FeatureRow(QWidget):
         set_css(self, self._ROW_NEUTRAL)
         set_css(self.name_label, name_style)
 
-    def set_interactive(self, yes: bool):
+    def set_interactive(self, yes: bool) -> None:
         # No need to stash ``yes`` on the instance: the +/- buttons'
         # visibility IS the source of truth for "interactive mode".
         # Anything that needs to query the state can check
@@ -421,7 +432,9 @@ class FeatureRow(QWidget):
         self.minus_btn.setVisible(yes)
         self.badge.setVisible(not yes)
 
-    def set_display(self, value: str, shared: bool, contrastive: bool = False):
+    def set_display(
+        self, value: str, shared: bool, contrastive: bool = False
+    ) -> None:
         """Display a feature value in seg-to-feat mode.
 
         Args:
@@ -458,14 +471,14 @@ class FeatureRow(QWidget):
             set_css(self.badge, self._BADGE_MINUS)
             set_css(self, self._ROW_MINUS)
 
-    def restore_value(self, value: str):
+    def restore_value(self, value: str) -> None:
         """Silently restore a saved plus or minus value."""
         self._current_value = value
         self.plus_btn.setChecked(value == "+")
         self.minus_btn.setChecked(value == "-")
         self._apply_query_style(value)
 
-    def set_panel_active(self, active: bool):
+    def set_panel_active(self, active: bool) -> None:
         self._panel_active = active
 
     def reset(self) -> None:
@@ -532,7 +545,7 @@ class _CopyableTextEdit(QTextEdit):
         }
     )
 
-    def createMimeDataFromSelection(self):
+    def createMimeDataFromSelection(self) -> QMimeData | None:
         original = super().createMimeDataFromSelection()
         if original is None:
             return original
@@ -561,7 +574,7 @@ class AnalysisPanel(QWidget):
 
     expand_toggled = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.title = QLabel("Analysis", self)
         self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
@@ -652,7 +665,7 @@ class AnalysisPanel(QWidget):
             """ + scrollbar_style(),
         )
 
-    def set_html(self, html: str):
+    def set_html(self, html: str) -> None:
         set_html(self.content, html)
 
     def clear(self) -> None:
@@ -674,11 +687,11 @@ class SegmentGridWidget(QWidget):
 
     MAX_COLS = 12
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._groups: dict = {}
-        self._buttons: dict = {}
-        self._headers: list = []
+        self._groups: dict[str, list[str]] = {}
+        self._buttons: dict[str, SegmentButton] = {}
+        self._headers: list[QLabel] = []
         # Last value ``set_headers_active`` styled the headers with;
         # cached so mode toggles short-circuit. Reset whenever fresh
         # header labels replace the old ones.
@@ -703,8 +716,18 @@ class SegmentGridWidget(QWidget):
         # flag flips True after the first sync relayout; subsequent
         # resizes (live drag) keep the debounce.
         self._needs_sync_relayout = True
+        # Cache so _do_relayout short-circuits when nothing layout-
+        # relevant has changed. Saves the QGridLayout rebuild +
+        # ~140 button setParent/show on every resize tick when the
+        # spillover partition stays the same.
+        self._last_available_height: int = -1
+        self._last_main_count: int = -1
 
-    def set_groups(self, groups: dict, buttons: dict):
+    def set_groups(
+        self,
+        groups: dict[str, list[str]],
+        buttons: dict[str, SegmentButton],
+    ) -> None:
         """Replace all content.
 
         Old buttons are detached (not destroyed) since they belong to
@@ -744,7 +767,7 @@ class SegmentGridWidget(QWidget):
         """
         self._last_headers_active = None
 
-    def set_headers_active(self, active: bool):
+    def set_headers_active(self, active: bool) -> None:
         """Style headers for the given active state. Skips re-applying
         if the cached state matches; ``set_groups`` and ``apply_theme``
         both clear the cache to force a re-style.
@@ -775,7 +798,7 @@ class SegmentGridWidget(QWidget):
         natural_w = cols * BTN_W + (cols - 1) * BTN_GAP if cols > 0 else 0
         return QSize(natural_w, super().sizeHint().height())
 
-    def resizeEvent(self, a0):
+    def resizeEvent(self, a0: QResizeEvent | None) -> None:
         super().resizeEvent(a0)
         if self._needs_sync_relayout:
             self._needs_sync_relayout = False
@@ -797,14 +820,51 @@ class SegmentGridWidget(QWidget):
 
     def _do_relayout(self) -> None:
         n_cols = self._compute_n_cols()
-        if n_cols == self._n_cols:
+        available = self._available_pane_height()
+        groups_items = list(self._groups.items())
+        if not groups_items:
+            self._n_cols = n_cols
+            self._last_available_height = available
+            self._last_main_count = 0
+            while self._grid.count():
+                self._grid.takeAt(0)
+            return
+        # Decide which groups fall through to the spillover area.
+        # The desktop and the web both call this same partition fn
+        # (``phonology_features.gui.layout``), so the threshold for
+        # rearranging into 2 columns is identical across frontends.
+        per_btn_row = _SEG_BTN_H + BTN_GAP
+        main_heights = [
+            _SEG_HEADER_H + math.ceil(len(segs) / max(n_cols, 1)) * per_btn_row
+            for _, segs in groups_items
+        ]
+        main_count = partition_groups_for_spillover(
+            main_heights,
+            available,
+            n_spillover_cols=2,
+        )
+        # Short-circuit: identical column count + same partition decision
+        # means the previous layout is still valid. ``available`` jitter
+        # of a few pixels (Wayland CSD nudges, scroll-bar appear/disappear)
+        # commonly leaves main_count unchanged — skipping the rebuild
+        # keeps live window-drags cheap.
+        if (
+            n_cols == self._n_cols
+            and main_count == self._last_main_count
+            and available == self._last_available_height
+        ):
             return
         self._n_cols = n_cols
+        self._last_available_height = available
+        self._last_main_count = main_count
         while self._grid.count():
             self._grid.takeAt(0)
+
         grid_row = 0
         hdr_iter = iter(self._headers)
-        for segs in self._groups.values():
+        # Main flow: header spans the full ``n_cols`` row; buttons
+        # wrap at ``n_cols``.
+        for _manner, segs in groups_items[:main_count]:
             hdr = next(hdr_iter)
             self._grid.addWidget(hdr, grid_row, 0, 1, n_cols)
             hdr.show()
@@ -815,5 +875,56 @@ class SegmentGridWidget(QWidget):
                 button_col = col_i % n_cols
                 self._grid.addWidget(btn, button_row, button_col)
                 btn.show()
-            group_rows = math.ceil(len(segs) / n_cols)
-            grid_row += group_rows
+            grid_row += math.ceil(len(segs) / n_cols)
+
+        # Spillover: pair-by-pair, each group gets a half-width slot.
+        # Slot 0 occupies cols ``[0, slot_cols)``; col ``slot_cols`` is
+        # left empty in spillover rows as the visible gap between the
+        # two groups (its width matches a main-flow button column,
+        # ~33 px); slot 1 occupies ``[slot_cols + 1, 2 * slot_cols + 1)``.
+        # Same QGridLayout as the main flow — no per-resize QWidget
+        # creation, which is what tanked startup the last time we tried
+        # a nested-container version.
+        slot_cols = max(1, (n_cols - 1) // 2)
+        spill = groups_items[main_count:]
+        for pair_start in range(0, len(spill), 2):
+            pair = spill[pair_start : pair_start + 2]
+            for slot, _ in enumerate(pair):
+                hdr = next(hdr_iter)
+                col_start = slot * (slot_cols + 1)
+                self._grid.addWidget(hdr, grid_row, col_start, 1, slot_cols)
+                hdr.show()
+            max_btn_rows = max(
+                math.ceil(len(segs) / slot_cols) for _, segs in pair
+            )
+            for slot, (_, segs) in enumerate(pair):
+                col_start = slot * (slot_cols + 1)
+                for col_i, seg in enumerate(segs):
+                    btn = self._buttons[seg]
+                    br = grid_row + 1 + col_i // slot_cols
+                    bc = col_start + (col_i % slot_cols)
+                    self._grid.addWidget(btn, br, bc)
+                    btn.show()
+            grid_row += 1 + max_btn_rows
+
+    def _available_pane_height(self) -> int:
+        """Viewport height of the QScrollArea ancestor — the budget the
+        spillover partition treats as ``available``. Anything taller
+        than this means the old all-in-one-column layout would force
+        a scrollbar; the partition picks groups to pack into the
+        2-col spillover instead.
+
+        Returns 0 (and skips spillover) before the widget is parented
+        under a QScrollArea (tests, early __init__ ticks) — the
+        partition function returns ``n`` for ``available_height <= 0``,
+        so all groups stay in the main flow.
+        """
+        from PyQt6.QtWidgets import QScrollArea
+
+        node = self.parent()
+        while node is not None:
+            if isinstance(node, QScrollArea):
+                vp = node.viewport()
+                return vp.height() if vp is not None else 0
+            node = node.parent()
+        return 0

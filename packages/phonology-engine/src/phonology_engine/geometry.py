@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from collections import defaultdict
 from math import comb
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from phonology_engine.feature_engine import FeatureEngine
 
 
 def _hypergeom_sf(k: int, n: int, big_k: int, m: int) -> float:
-    """Right-tail survival function ``P(X >= k)`` for ``X ~ Hypergeometric(n, big_k, m)``."""
+    """Right-tail ``P(X >= k)`` for ``X ~ Hypergeometric(n, big_k, m)``."""
     if k <= 0:
         return 1.0
     upper = min(m, big_k)
@@ -51,7 +51,7 @@ class GeometryNode:
         if self not in sibling.siblings:
             sibling.siblings.append(self)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "feature": self.feature,
             "confidence": self.confidence,
@@ -76,7 +76,7 @@ class GeometryAnalyzer:
 
     def __init__(self, engine: FeatureEngine) -> None:
         self.engine = engine
-        self.dependencies: dict = {}
+        self.dependencies: dict[str, Any] = {}
         self.geometry_tree: GeometryNode | None = None
 
     def analyze(self) -> GeometryNode:
@@ -118,7 +118,8 @@ class GeometryAnalyzer:
                 }
 
     def _compute_coverage(self, parent_feat: str, child_feat: str) -> float:
-        """Fraction of segments where ``child`` specified implies ``parent`` specified."""
+        """Fraction of segs where ``child`` specified implies ``parent``
+        specified."""
         spec = self.engine.spec_segs
         spec_child = spec[child_feat]
         if not spec_child:
@@ -198,7 +199,7 @@ class GeometryAnalyzer:
                 root._add_child(nodes[feat])
         return root
 
-    def get_dependency_summary(self) -> list[dict]:
+    def get_dependency_summary(self) -> list[dict[str, Any]]:
         """Discovered dependencies sorted by confidence, then coverage."""
         summary = [
             {

@@ -39,6 +39,7 @@ from phonology_features.gui.inventory_setup import (
     suggest_filename,
     validate_setup,
 )
+from phonology_features.gui.layout import partition_groups_for_spillover
 from phonology_features.gui.mode_logic import (
     mode_status_text,
     project_mode_transition,
@@ -395,6 +396,20 @@ def project_mode_switch(
 def get_mode_status_text(mode: str) -> str:
     """Per-mode helper text shared with the desktop status bar."""
     return mode_status_text(mode, has_engine=_engine is not None)
+
+
+def partition_segment_spillover(
+    heights: list[int],
+    available: int,
+    n_spillover_cols: int = 2,
+) -> int:
+    """JS bridge to the shared spillover partition. JS measures each
+    consonant group's natural height + the pane's clientHeight, hands
+    them here, and applies the returned main-flow count to the DOM.
+    Same function the desktop calls during ``set_groups`` so a
+    threshold change lands on both UIs at once.
+    """
+    return partition_groups_for_spillover(heights, available, n_spillover_cols)
 
 
 def analyze_segments(segs: list[str]) -> dict[str, Any]:

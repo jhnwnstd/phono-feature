@@ -95,7 +95,8 @@ def main() -> int:
                 "Last loading status: "
                 + str(
                     page.evaluate(
-                        "() => document.getElementById('loading-status')?.textContent",
+                        "() => document.getElementById("
+                        "'loading-status')?.textContent",
                     )
                 ),
                 file=sys.stderr,

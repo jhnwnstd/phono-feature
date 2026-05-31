@@ -100,3 +100,59 @@ def distribute_feature_groups(
             right.append(name)
             right_height += c
     return left, right
+
+
+def partition_groups_for_spillover(
+    group_heights: Sequence[int],
+    available_height: int,
+    n_spillover_cols: int = 2,
+) -> int:
+    """Decide how many segment groups stay in the main single-column
+    flow vs. fall into a horizontal spillover at the bottom of the
+    pane.
+
+    The segments pane in both frontends stacks manner-class groups as
+    a single vertical flow. With wide inventories (General IPA being
+    the canonical case), that flow overshoots the visible area.
+    Instead of forcing the user to scroll, the bottom groups get
+    rearranged into ``n_spillover_cols`` columns at the bottom — the
+    pair sits side-by-side, so the saved vertical space lets the
+    remaining single-column groups fit comfortably above.
+
+    ``group_heights`` is the natural per-group height (header + button
+    rows) at the current pane width, in display units (px on web,
+    QGridLayout-row heights on desktop — they're both monotonic, so
+    the algorithm doesn't care which). ``available_height`` is the
+    pane's clientHeight on web / scroll-viewport height on desktop.
+
+    Returns ``main_count``: the number of groups (from the front of
+    ``group_heights``) that stay in the main flow. Indexes
+    ``[main_count:]`` get the spillover. Iteratively shrinks
+    ``main_count`` until the combined height of the main flow plus
+    the row-packed spillover fits in ``available_height``.
+
+    The spillover's height per row is the tallest group in that row
+    (groups in a row are different manner-classes with different
+    segment counts; their button grids align to the row's top so the
+    row's height is dominated by the tallest member).
+
+    Same algorithm runs in both UIs so the rearrangement happens at
+    the same threshold regardless of which frontend the user is on.
+    """
+    n = len(group_heights)
+    if n == 0 or available_height <= 0:
+        return n
+
+    def fits(main_count: int) -> bool:
+        main_h = sum(group_heights[:main_count])
+        spillover = group_heights[main_count:]
+        spillover_h = 0
+        for i in range(0, len(spillover), n_spillover_cols):
+            row = spillover[i : i + n_spillover_cols]
+            spillover_h += max(row)
+        return (main_h + spillover_h) <= available_height
+
+    main_count = n
+    while main_count > 0 and not fits(main_count):
+        main_count -= 1
+    return main_count

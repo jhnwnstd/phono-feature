@@ -117,6 +117,26 @@ class _GeometryController:
             min(h, max(480, avail.height() - deco_h)),
         )
 
+    def default_window_size(self) -> tuple[int, int]:
+        """Fresh-install window size: 75% of the primary screen's
+        available geometry, with ``MIN_FIRST_LAUNCH_W`` × H as the
+        floor so a small laptop screen still opens to a usable
+        starting layout and a 4K display doesn't open to a tiny
+        1200-px shell.
+
+        Used by ``_restore_settings`` when no ``window_size`` is in
+        QSettings yet — i.e. the very first launch, or after the
+        user wiped their config. Always clamped to fit inside the
+        actual screen so the resize never overshoots.
+        """
+        screen = self.target_screen()
+        if screen is None:
+            return self.MIN_FIRST_LAUNCH_W, self.MIN_FIRST_LAUNCH_H
+        avail = screen.availableGeometry()
+        w = max(self.MIN_FIRST_LAUNCH_W, int(avail.width() * 0.75))
+        h = max(self.MIN_FIRST_LAUNCH_H, int(avail.height() * 0.75))
+        return self.clamp_size_to_screen(w, h)
+
     def ensure_visible_on_screen(self) -> None:
         """Run after first show. Leaves the window alone when it's a
         reasonable size and intersects any screen; only recenters when
@@ -152,7 +172,7 @@ class _GeometryController:
         if self._programmatic_geom_depth == 0:
             self.anchor_pos = pos
 
-    def mark_splitter_owned(self, *_args) -> None:
+    def mark_splitter_owned(self, *_args: object) -> None:
         """Promoted to user-owned the first time a splitter handle
         moves under user input. Subsequent inventory loads then
         leave both splitters alone. Wired to splitterMoved by
@@ -219,7 +239,9 @@ class _GeometryController:
             if not self.has_saved_splitter:
                 self.apply_splitter_sizes(seg_need_w, feat_need_w, top_need_h)
 
-    def fit_window_to_size(self, screen, need_w: int, need_h: int) -> None:
+    def fit_window_to_size(
+        self, screen: QScreen | None, need_w: int, need_h: int
+    ) -> None:
         """Resize the window to ``(need_w, need_h)`` and anchor it
         in place.
 
@@ -267,7 +289,7 @@ class _GeometryController:
         finally:
             self._programmatic_geom_depth -= 1
 
-    def decoration_padding(self, old_pos) -> tuple[int, int, int, int]:
+    def decoration_padding(self, old_pos: QPoint) -> tuple[int, int, int, int]:
         """Return ``(deco_w, deco_h, left_pad, top_pad)`` for the
         current frame.
 

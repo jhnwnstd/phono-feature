@@ -1,7 +1,8 @@
 """InventoryBuilder: grid editor for creating or editing inventories."""
 
 import os
-from typing import TYPE_CHECKING, ClassVar, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_engine.limits import (
@@ -17,9 +18,11 @@ if TYPE_CHECKING:
     # is pure cost (PyQt6.QtGui.QRegion drags in extra Qt symbols).
     from PyQt6.QtGui import QRegion
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QEvent, QModelIndex, QObject, Qt
 from PyQt6.QtGui import (
+    QCloseEvent,
     QFont,
+    QKeyEvent,
 )
 from PyQt6.QtWidgets import (
     QAbstractButton,
@@ -66,6 +69,9 @@ from phonology_features.gui.grid_logic import MOVE_KEYS as _SHARED_MOVE_KEYS
 from phonology_features.gui.grid_logic import (
     SELECTION_SHAPE_SINGLE_COLUMN,
     SELECTION_SHAPE_SINGLE_ROW,
+)
+from phonology_features.gui.grid_logic import VALUE_KEYS as _SHARED_VALUE_KEYS
+from phonology_features.gui.grid_logic import (
     classify_selection,
     confirm_remove_feature_prompt,
     confirm_remove_segment_prompt,
@@ -74,7 +80,6 @@ from phonology_features.gui.grid_logic import (
     validate_new_feature_label,
     validate_new_segment_label,
 )
-from phonology_features.gui.grid_logic import VALUE_KEYS as _SHARED_VALUE_KEYS
 from phonology_features.gui.palette import C
 
 _log = get_logger(__name__)
@@ -109,12 +114,16 @@ def _move_key_to_qt(name: str) -> Qt.Key:
 class InventoryBuilder(QMainWindow):
     """Grid editor for creating phonological feature inventories."""
 
-    def __init__(self, parent=None, load_path: str | None = None):
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        load_path: str | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Inventory Builder")
         self.setMinimumSize(800, 500)
-        self._segments: list = []
-        self._features: list = []
+        self._segments: list[str] = []
+        self._features: list[str] = []
         self._inv_name: str = "Untitled Inventory"
         self._current_path: str | None = None
         self._selected_remove_col: int | None = None
@@ -247,7 +256,12 @@ class InventoryBuilder(QMainWindow):
             }}
         """
 
-        def make_btn(label: str, slot, *, style: str = btn_style):
+        def make_btn(
+            label: str,
+            slot: Callable[[], object],
+            *,
+            style: str = btn_style,
+        ) -> QPushButton:
             """Add a 32 px Noto Sans 10 button to the toolbar with the
             given label, slot, and style.
             """
@@ -456,7 +470,8 @@ class InventoryBuilder(QMainWindow):
         self._rebuild_table()
         self._update_title()
         self._status.showMessage(
-            f"Created grid: {len(segments)} segments \u00d7 {len(features)} features. "
+            f"Created grid: {len(segments)} segments "
+            f"\u00d7 {len(features)} features. "
             "Click cells to cycle through +/\u2212/0."
         )
         return True
@@ -539,7 +554,7 @@ class InventoryBuilder(QMainWindow):
     # and web editor stay in lockstep on which key sets which value.
     # Translation step here: shared dict is char -> value; Qt's
     # KeyPress events carry the Qt.Key.Key_<char> constant.
-    _VALUE_KEYS: ClassVar[dict] = {
+    _VALUE_KEYS: ClassVar[dict[int, str]] = {
         getattr(Qt.Key, f"Key_{char}"): value
         for char, value in _SHARED_VALUE_KEYS.items()
     }
@@ -550,7 +565,7 @@ class InventoryBuilder(QMainWindow):
     # JS-native key names into ``Qt.Key`` constants live at module
     # level (class-body comprehensions cannot see sibling class
     # attributes during evaluation).
-    _MOVE_KEYS: ClassVar[dict] = {
+    _MOVE_KEYS: ClassVar[dict[int, tuple[int, int]]] = {
         _move_key_to_qt(name): step for name, step in _SHARED_MOVE_KEYS.items()
     }
     # ``Shift+Arrow`` extends the QTableWidget's native selection;
@@ -558,15 +573,21 @@ class InventoryBuilder(QMainWindow):
     # extend runs. Plain-arrow handling is identical to Qt's
     # setCurrentCell, so taking it over is safe and keeps both
     # frontends going through the same Python movement primitive.
-    _ARROW_QT_KEYS: ClassVar[frozenset] = frozenset(_ARROW_NAME_TO_QT.values())
+    _ARROW_QT_KEYS: ClassVar[frozenset[int]] = frozenset(
+        _ARROW_NAME_TO_QT.values()
+    )
 
-    def eventFilter(self, obj, event):
-        if obj is self._table and event.type() == event.Type.KeyPress:
-            if self._handle_table_key(event):
+    def eventFilter(self, obj: QObject | None, event: QEvent | None) -> bool:
+        if (
+            obj is self._table
+            and event is not None
+            and event.type() == event.Type.KeyPress
+        ):
+            if self._handle_table_key(cast(QKeyEvent, event)):
                 return True
         return super().eventFilter(obj, event)
 
-    def _handle_table_key(self, event) -> bool:
+    def _handle_table_key(self, event: QKeyEvent) -> bool:
         """Keyboard shortcuts on the table. Returns True if consumed.
 
         Ctrl+Z / Ctrl+Shift+Z = undo, Ctrl+Y = redo. Scoped to the
@@ -680,7 +701,9 @@ class InventoryBuilder(QMainWindow):
                 return
         self._set_cell_value(fallback_row, fallback_col, value)
 
-    def _apply_value_to_indexes(self, indexes, value: str) -> None:
+    def _apply_value_to_indexes(
+        self, indexes: list[QModelIndex], value: str
+    ) -> None:
         """Bulk-write ``value`` to every cell in ``indexes``, skipping
         any that already match. Records the whole batch as one
         undoable edit.
@@ -808,7 +831,7 @@ class InventoryBuilder(QMainWindow):
             viewport.update()
 
     # Header selection / remove button state
-    def _on_col_header_clicked(self, col: int):
+    def _on_col_header_clicked(self, col: int) -> None:
         """Toggle segment-column highlight; second click clears it.
 
         Compares against ``_user_clicked_col`` (a separate sticky
@@ -831,7 +854,7 @@ class InventoryBuilder(QMainWindow):
             # didn't actually set it (e.g. clicked-while-modifier).
             self._table.selectColumn(col)
 
-    def _on_row_header_clicked(self, row: int):
+    def _on_row_header_clicked(self, row: int) -> None:
         """Toggle feature-row highlight; second click clears it."""
         if self._user_clicked_row == row:
             self._user_clicked_row = None
@@ -842,7 +865,7 @@ class InventoryBuilder(QMainWindow):
             self._user_clicked_col = None
             self._table.selectRow(row)
 
-    def _on_corner_clicked(self):
+    def _on_corner_clicked(self) -> None:
         """Toggle select-all when the table corner is clicked."""
         rows = self._table.rowCount()
         cols = self._table.columnCount()
@@ -881,7 +904,7 @@ class InventoryBuilder(QMainWindow):
             self._btn_style_enabled if enabled else self._btn_style_disabled
         )
 
-    def _on_selection_changed(self):
+    def _on_selection_changed(self) -> None:
         """Single source of truth for everything that derives from the
         current Qt selection: sticky vars, rm-button enabled state,
         and the targeted viewport invalidation.
@@ -1123,13 +1146,13 @@ class InventoryBuilder(QMainWindow):
         self._save_ctrl.draining_save = value
 
     @property
-    def _save_finished(self):
+    def _save_finished(self) -> Any:
         """Signal alias for back-compat. External callers do
         ``builder._save_finished.connect(...)``."""
         return self._save_ctrl.save_finished
 
     @property
-    def _save_drained(self):
+    def _save_drained(self) -> Any:
         return self._save_ctrl.save_drained
 
     # ------------------------------------------------------------------
@@ -1262,7 +1285,7 @@ class InventoryBuilder(QMainWindow):
         if path:
             self._load_existing(path)
 
-    def _load_existing(self, path: str):
+    def _load_existing(self, path: str) -> None:
         """Load an existing JSON inventory into the grid for editing.
 
         Routes through ``Inventory.load`` so the builder enforces the
@@ -1298,7 +1321,9 @@ class InventoryBuilder(QMainWindow):
         )
 
     # Unsaved changes guard
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent | None) -> None:
+        if event is None:
+            return
         if not self._check_unsaved():
             event.ignore()
             return

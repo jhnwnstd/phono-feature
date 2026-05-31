@@ -97,15 +97,23 @@ def test_segment_state_payload_strings_match_enum() -> None:
     engine = _engine("hayes_features.json")
     seg_list = list(engine.segments)
     seen: set[str] = set()
-    seen.update(summarize_segment_selection(engine, [])["segment_states"].values())
     seen.update(
-        summarize_segment_selection(engine, seg_list[:1])["segment_states"].values()
+        summarize_segment_selection(engine, [])["segment_states"].values()
     )
     seen.update(
-        summarize_segment_selection(engine, seg_list[:3])["segment_states"].values()
+        summarize_segment_selection(engine, seg_list[:1])[
+            "segment_states"
+        ].values()
+    )
+    seen.update(
+        summarize_segment_selection(engine, seg_list[:3])[
+            "segment_states"
+        ].values()
     )
     seen.update(summarize_feature_query(engine, {})["segment_states"].values())
     seen.update(
-        summarize_feature_query(engine, {"Voice": "+"})["segment_states"].values()
+        summarize_feature_query(engine, {"Voice": "+"})[
+            "segment_states"
+        ].values()
     )
     assert seen <= enum_values, f"Unknown segment states: {seen - enum_values}"

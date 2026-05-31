@@ -133,7 +133,7 @@ DARK = {
 }
 
 # Active palette, mutated in place by set_theme.
-C: dict = dict(LIGHT)
+C: dict[str, str] = dict(LIGHT)
 
 # Monotonic counter bumped on every theme change. Caches that
 # depend on palette colors key on this integer; on miss they

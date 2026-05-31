@@ -241,9 +241,9 @@ _SORT_KEYS: list[tuple[str, dict[str, int]]] = [
 ]
 
 
-def _segment_sort_key(feats: dict[str, str]) -> tuple:
+def _segment_sort_key(feats: dict[str, str]) -> tuple[int, ...]:
     """Full feature-based sort key for a segment."""
-    key: list = [_ipa_place(feats)]
+    key: list[int] = [_ipa_place(feats)]
     for feat, ordering in _SORT_KEYS:
         key.append(ordering.get(feats.get(feat, "0"), 2))
     return tuple(key)
