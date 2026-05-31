@@ -47,6 +47,12 @@ def test_summarize_segment_selection_single_maps_zero_to_empty() -> None:
     assert summary["common"]["Voice"] == "+"
     assert summary["common"]["Back"] == ""
     assert "/b/" in summary["analysis_html"]
+    assert summary["segment_states"]["b"] == "selected"
+    assert summary["segment_states"]["d"] == "default"
+    assert summary["feature_rows"]["Voice"]["value"] == "+"
+    assert summary["feature_rows"]["Voice"]["shared"] is True
+    assert summary["feature_rows"]["Back"]["value"] == ""
+    assert summary["feature_rows"]["Back"]["shared"] is False
 
 
 def test_summarize_segment_selection_multi_matches_engine() -> None:
@@ -57,6 +63,11 @@ def test_summarize_segment_selection_multi_matches_engine() -> None:
     assert summary["common"]["Voice"] == "+"
     assert "LABIAL" in summary["contrastive"]
     assert summary["suggested"] == engine.suggest_natural_class_extension(segs)
+    assert summary["segment_states"]["b"] == "selected"
+    assert summary["feature_rows"]["Voice"]["value"] == "+"
+    assert summary["feature_rows"]["Voice"]["shared"] is True
+    assert summary["feature_rows"]["LABIAL"]["contrastive"] is True
+    assert summary["feature_rows"]["LABIAL"]["badge"] == "±"
 
 
 def test_summarize_feature_query_matches_engine() -> None:
@@ -65,3 +76,5 @@ def test_summarize_feature_query_matches_engine() -> None:
     summary = summarize_feature_query(engine, spec)
     assert summary["matching"] == engine.find_segments(spec)
     assert "+Voice" in summary["analysis_html"]
+    assert summary["segment_states"]["b"] == "matched"
+    assert summary["segment_states"]["p"] == "unmatched"

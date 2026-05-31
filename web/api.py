@@ -39,6 +39,10 @@ from phonology_features.gui.inventory_setup import (
     suggest_filename,
     validate_setup,
 )
+from phonology_features.gui.mode_logic import (
+    mode_status_text,
+    project_mode_transition,
+)
 from phonology_features.gui.palette import set_theme
 from phonology_features.gui.view_models import (
     build_inventory_summary,
@@ -360,6 +364,37 @@ def project_features_to_segments(spec: dict[str, str]) -> list[str]:
     if not spec:
         return []
     return engine.find_segments(dict(spec))
+
+
+def project_mode_switch(
+    current_mode: str,
+    target_mode: str,
+    selected_segments: list[str],
+    selected_features: dict[str, str],
+) -> dict[str, Any]:
+    """Full top-level mode-transition projection shared with desktop.
+
+    Returns the remembered cross-mode state PLUS the state that should
+    be active immediately after the switch in the target mode.
+    """
+    transition = project_mode_transition(
+        current_mode,
+        target_mode,
+        selected_segments=list(selected_segments),
+        selected_features=dict(selected_features),
+        engine=_require_engine(),
+    )
+    return {
+        "saved_seg_state": transition.saved_seg_state,
+        "saved_feat_state": transition.saved_feat_state,
+        "selected_segments": transition.selected_segments,
+        "selected_features": transition.selected_features,
+    }
+
+
+def get_mode_status_text(mode: str) -> str:
+    """Per-mode helper text shared with the desktop status bar."""
+    return mode_status_text(mode, has_engine=_engine is not None)
 
 
 def analyze_segments(segs: list[str]) -> dict[str, Any]:

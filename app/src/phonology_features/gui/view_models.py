@@ -10,6 +10,7 @@ Current responsibilities:
 * SEG-mode analysis summaries (shared/contrastive features,
   suggested extensions, pre-rendered analysis HTML).
 * FEAT-mode analysis summaries (matching segments + HTML).
+* Explicit segment-button and feature-row visual state payloads.
 
 The desktop still owns actual widget mutation. This module only turns
 engine state into plain dict/list payloads that either frontend can
@@ -82,7 +83,11 @@ def summarize_segment_selection(
       Single-segment selections map ``"0"`` to ``""`` so callers can
       treat underspecified rows as visually neutral.
     * ``contrastive``: feature names that split the selection.
+    * ``segment_states``: ``{seg: state}`` for every segment button.
+    * ``feature_rows``: per-feature visual-state payloads.
     """
+    default_seg_states = _default_segment_states(engine)
+    default_feat_rows = _default_feature_rows(engine)
     if not segs:
         return {
             "analysis_html": "",
@@ -90,9 +95,18 @@ def summarize_segment_selection(
             "suggested": [],
             "common": {},
             "contrastive": [],
+            "segment_states": default_seg_states,
+            "feature_rows": default_feat_rows,
         }
     if len(segs) == 1:
         feats = engine.get_segment_features(segs[0])
+        row_states = _default_feature_rows(engine)
+        for feat in engine.features:
+            value = feats.get(feat, "0")
+            if value in ("+", "-"):
+                row_states[feat] = _feature_row_state(value=value, shared=True)
+        seg_states = _default_segment_states(engine)
+        seg_states[segs[0]] = "selected"
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
         return {
             "analysis_html": render_single_segment(engine, segs[0], dict(feats)),
@@ -100,10 +114,28 @@ def summarize_segment_selection(
             "suggested": [],
             "common": common,
             "contrastive": [],
+            "segment_states": seg_states,
+            "feature_rows": row_states,
         }
     common = dict(engine.common_features(segs))
     contrastive = compute_contrastive(engine, segs)
     suggested = list(engine.suggest_natural_class_extension(segs))
+    row_states = _default_feature_rows(engine)
+    for feat in engine.features:
+        if feat in common:
+            row_states[feat] = _feature_row_state(
+                value=common[feat], shared=True,
+            )
+        elif feat in contrastive:
+            row_states[feat] = _feature_row_state(contrastive=True)
+    seg_states = _default_segment_states(engine)
+    selected = set(segs)
+    suggested_set = set(suggested)
+    for seg in engine.segments:
+        if seg in selected:
+            seg_states[seg] = "selected"
+        elif seg in suggested_set:
+            seg_states[seg] = "suggested"
     return {
         "analysis_html": render_multi_segment(
             engine, segs, common, contrastive, suggested,
@@ -112,6 +144,8 @@ def summarize_segment_selection(
         "suggested": suggested,
         "common": common,
         "contrastive": list(contrastive),
+        "segment_states": seg_states,
+        "feature_rows": row_states,
     }
 
 
@@ -120,16 +154,52 @@ def summarize_feature_query(
     spec: dict[str, str],
 ) -> dict[str, Any]:
     """FEAT-mode analysis payload shared by desktop and web."""
+    segment_states = _default_segment_states(engine)
     if not spec:
         return {
             "analysis_html": "",
             "matching": [],
+            "segment_states": segment_states,
         }
     matching = engine.find_segments(spec)
+    matching_set = set(matching)
+    for seg in engine.segments:
+        segment_states[seg] = "matched" if seg in matching_set else "unmatched"
     return {
         "analysis_html": render_feat_to_seg(spec, matching),
         "matching": matching,
+        "segment_states": segment_states,
     }
+
+
+def _feature_row_state(
+    *,
+    value: str = "",
+    shared: bool = False,
+    contrastive: bool = False,
+) -> dict[str, Any]:
+    if contrastive:
+        badge = "±"
+    elif value:
+        badge = value
+    else:
+        badge = "·"
+    return {
+        "value": value,
+        "shared": shared,
+        "contrastive": contrastive,
+        "badge": badge,
+    }
+
+
+def _default_segment_states(engine: FeatureEngine) -> dict[str, str]:
+    return {seg: "default" for seg in engine.segments}
+
+
+def _default_feature_rows(
+    engine: FeatureEngine,
+) -> dict[str, dict[str, Any]]:
+    return {feat: _feature_row_state() for feat in engine.features}
 
 
 def _vowel_chart_summary(

@@ -241,6 +241,12 @@ const STATUS_TEXT = Object.freeze({
         "Toggle feature values (+/−) to find matching segments.",
 });
 
+function statusTextForMode(mode) {
+    return state.bridge
+        ? callBridge("get_mode_status_text", mode)
+        : STATUS_TEXT[mode];
+}
+
 /**
  * Feature-spec maps use a null prototype because feature names come
  * from user-uploaded inventories: a hostile key like "__proto__"
@@ -420,7 +426,7 @@ async function bootPyodide({ prerendered = false } = {}) {
     // Idempotent: prerendered path hid the overlay early; the
     // non-prerendered path hides it here once the DOM is ready.
     nodes.loadingOverlay.classList.add("hidden");
-    setStatus(STATUS_TEXT[state.mode]);
+    setStatus(statusTextForMode(state.mode));
 
     mark("boot:end");
     measure("Manifest fetch", "manifest:start", "manifest:end");
@@ -940,6 +946,23 @@ function onFeatureClicked(feat, polarity) {
     scheduleAnalysis();
 }
 
+function fallbackModeSwitch(mode) {
+    if (state.mode === MODE.SEG_TO_FEAT) {
+        return {
+            saved_seg_state: state.selected_segments.slice(),
+            saved_feat_state: emptyFeatureSpec(),
+            selected_segments: [],
+            selected_features: emptyFeatureSpec(),
+        };
+    }
+    return {
+        saved_seg_state: [],
+        saved_feat_state: cloneFeatureSpec(state.selected_features),
+        selected_segments: [],
+        selected_features: emptyFeatureSpec(),
+    };
+}
+
 /**
  * Switch top-level mode, projecting the outgoing mode's state
  * into the incoming one (mirrors desktop's _ModeController.
@@ -950,24 +973,18 @@ function onFeatureClicked(feat, polarity) {
  */
 function activateMode(mode) {
     if (state.mode === mode) return;
+    const transition = state.bridge
+        ? callBridge(
+            "project_mode_switch",
+            state.mode,
+            mode,
+            state.selected_segments,
+            state.selected_features,
+        )
+        : fallbackModeSwitch(mode);
 
-    if (state.mode === MODE.SEG_TO_FEAT) {
-        state.saved_seg_state = state.selected_segments.slice();
-        // cloneFeatureSpec re-homes the bridge result on a null
-        // prototype to neutralize hostile "__proto__" / similar
-        // feature keys.
-        state.saved_feat_state = state.bridge
-            ? cloneFeatureSpec(callBridge(
-                "project_segments_to_features",
-                state.selected_segments,
-            ))
-            : emptyFeatureSpec();
-    } else {
-        state.saved_feat_state = cloneFeatureSpec(state.selected_features);
-        state.saved_seg_state = state.bridge
-            ? callBridge("project_features_to_segments", state.selected_features)
-            : [];
-    }
+    state.saved_seg_state = transition.saved_seg_state.slice();
+    state.saved_feat_state = cloneFeatureSpec(transition.saved_feat_state);
 
     state.mode = mode;
     const isS2F = mode === MODE.SEG_TO_FEAT;
@@ -975,8 +992,8 @@ function activateMode(mode) {
     nodes.featPanel.dataset.active = isS2F ? "false" : "true";
 
     if (isS2F) {
-        state.selected_segments = state.saved_seg_state.slice();
-        state.selected_features = emptyFeatureSpec();
+        state.selected_segments = transition.selected_segments.slice();
+        state.selected_features = cloneFeatureSpec(transition.selected_features);
         for (const rec of state.feat_rows.values()) {
             rec.plus.dataset.active = "false";
             rec.minus.dataset.active = "false";
@@ -989,8 +1006,8 @@ function activateMode(mode) {
             btn.setAttribute("aria-pressed", isSelected ? "true" : "false");
         }
     } else {
-        state.selected_features = cloneFeatureSpec(state.saved_feat_state);
-        state.selected_segments = [];
+        state.selected_features = cloneFeatureSpec(transition.selected_features);
+        state.selected_segments = transition.selected_segments.slice();
         for (const btn of state.seg_buttons.values()) {
             if (btn.dataset.state === "selected") {
                 btn.dataset.state = "default";
@@ -1006,7 +1023,7 @@ function activateMode(mode) {
         }
     }
 
-    setStatus(STATUS_TEXT[mode]);
+    setStatus(statusTextForMode(mode));
 
     if (state.bridge) scheduleAnalysis();
     else nodes.analysisContent.innerHTML = "";
@@ -1064,59 +1081,36 @@ function _applySegmentStates(stateFor) {
     }
 }
 
+function _applySegmentStateMap(segmentStates) {
+    _applySegmentStates((seg) => segmentStates?.[seg] ?? "default");
+}
+
+function _applyFeatureRowStates(featureRows) {
+    for (const [feat, rec] of state.feat_rows) {
+        const rowState = featureRows?.[feat];
+        const value = rowState?.value ?? "";
+        const shared = rowState?.shared === true;
+        const contrastive = rowState?.contrastive === true;
+        rec.row.dataset.value = value;
+        rec.row.dataset.shared = shared ? "true" : "false";
+        rec.row.dataset.contrastive = contrastive ? "true" : "false";
+        rec.badge.textContent = rowState?.badge ?? "·";
+    }
+}
+
 function runSegToFeat(token) {
     const result = callBridge("analyze_segments", state.selected_segments);
     if (_isStaleToken(token)) return;
     nodes.analysisContent.innerHTML = result.analysis_html;
-
-    const selectedSet = new Set(state.selected_segments);
-    const suggestedSet = new Set(result.suggested || []);
-    _applySegmentStates((seg) =>
-        selectedSet.has(seg) ? "selected"
-            : suggestedSet.has(seg) ? "suggested"
-            : "default"
-    );
-
-    // Per-row feature display: three explicit buckets matching the
-    // desktop's _update_seg_to_feat. "0" / missing values fall to
-    // neutral (NOT shared) so the row name doesn't render bold.
-    const common = result.common || {};
-    const contrastiveSet = new Set(result.contrastive || []);
-    for (const [feat, rec] of state.feat_rows) {
-        const v = common[feat];
-        const isDisplayable = v === "+" || v === "-";
-        const isContrastive = contrastiveSet.has(feat);
-        if (isDisplayable) {
-            rec.row.dataset.value = v;
-            rec.row.dataset.shared = "true";
-            rec.row.dataset.contrastive = "false";
-            rec.badge.textContent = v;
-        } else if (isContrastive) {
-            rec.row.dataset.value = "";
-            rec.row.dataset.shared = "false";
-            rec.row.dataset.contrastive = "true";
-            rec.badge.textContent = "±";
-        } else {
-            rec.row.dataset.value = "";
-            rec.row.dataset.shared = "false";
-            rec.row.dataset.contrastive = "false";
-            rec.badge.textContent = "·";
-        }
-    }
+    _applySegmentStateMap(result.segment_states);
+    _applyFeatureRowStates(result.feature_rows);
 }
 
 function runFeatToSeg(token) {
     const result = callBridge("analyze_features", state.selected_features);
     if (_isStaleToken(token)) return;
     nodes.analysisContent.innerHTML = result.analysis_html;
-
-    const matchingSet = new Set(result.matching || []);
-    const hasQuery = Object.keys(state.selected_features).length > 0;
-    _applySegmentStates((seg) =>
-        !hasQuery ? "default"
-            : matchingSet.has(seg) ? "matched"
-            : "unmatched"
-    );
+    _applySegmentStateMap(result.segment_states);
 }
 
 // Inventories are typically 10-50 KB. 5 MB is ~100x the typical
@@ -2659,7 +2653,7 @@ function clearAll() {
         delete rec.row.dataset.queryValue;
     }
     nodes.analysisContent.innerHTML = "";
-    setStatus(STATUS_TEXT[state.mode]);
+    setStatus(statusTextForMode(state.mode));
 }
 
 /** Clicks in empty panel space activate that panel's mode. */

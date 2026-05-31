@@ -1134,25 +1134,20 @@ class MainWindow(QMainWindow):
             self.analysis.clear()
             return
         summary = summarize_segment_selection(self.engine, segs)
-        selected_set = set(segs)
-        common = summary["common"]
-        contrastive = set(summary["contrastive"])
+        feature_rows = summary["feature_rows"]
         for feat, row in self._feat_rows.items():
-            if feat in common:
-                row.set_display(common[feat], shared=True)
-            elif feat in contrastive:
-                row.set_display("", shared=False, contrastive=True)
-            else:
+            state = feature_rows.get(feat)
+            if state is None:
                 row.set_display("", shared=False)
-        suggested_set = set(summary["suggested"])
-        for seg, btn in self._seg_buttons.items():
-            if seg in selected_set:
                 continue
-            btn.set_state(
-                SegmentState.SUGGESTED
-                if seg in suggested_set
-                else SegmentState.DEFAULT
+            row.set_display(
+                state["value"],
+                bool(state["shared"]),
+                contrastive=bool(state["contrastive"]),
             )
+        segment_states = summary["segment_states"]
+        for seg, btn in self._seg_buttons.items():
+            btn.set_state(segment_states.get(seg, SegmentState.DEFAULT.value))
         self.analysis.set_html(summary["analysis_html"])
 
     def _update_feat_to_seg(self) -> None:
@@ -1165,13 +1160,9 @@ class MainWindow(QMainWindow):
             self.analysis.clear()
             return
         summary = summarize_feature_query(self.engine, selected_feats)
-        matching_set = set(summary["matching"])
+        segment_states = summary["segment_states"]
         for seg, btn in self._seg_buttons.items():
-            btn.set_state(
-                SegmentState.MATCHED
-                if seg in matching_set
-                else SegmentState.UNMATCHED
-            )
+            btn.set_state(segment_states.get(seg, SegmentState.DEFAULT.value))
         self.analysis.set_html(summary["analysis_html"])
 
     def _reset_feature_display(self) -> None:

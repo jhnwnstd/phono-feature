@@ -25,9 +25,13 @@ that the saved state matches the pre-transition selection.
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from phonology_features.gui.mode_logic import (
+    Mode,
+    mode_status_text,
+    project_mode_transition,
+)
 from phonology_features.gui.palette import C
 from phonology_features.gui.widgets import SegmentState
 
@@ -35,15 +39,6 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QWidget
 
     from phonology_features.gui.main_window import MainWindow
-
-
-class Mode(StrEnum):
-    """Top-level UI mode. StrEnum so members compare equal to their
-    string values for QSettings round-tripping.
-    """
-
-    SEG_TO_FEAT = "seg_to_feat"
-    FEAT_TO_SEG = "feat_to_seg"
 
 
 class _ModeController:
@@ -69,7 +64,7 @@ class _ModeController:
         mode = Mode(mode)
         if mode == self.mode:
             return
-        self.save_outgoing_state()
+        self.save_outgoing_state(mode)
         self.mode = mode
         self.apply_phases()
 
@@ -83,35 +78,20 @@ class _ModeController:
             self.refresh_analysis()
             self.update_status_message()
 
-    def save_outgoing_state(self) -> None:
+    def save_outgoing_state(self, target_mode: Mode | str) -> None:
         """Snapshot the current mode's exact state and project it into
         the opposite mode's saved state. Called only when the mode is
         actually changing.
         """
-        engine = self._w.engine
-        if self.mode == Mode.SEG_TO_FEAT:
-            # Preserve exact seg selection so toggling back restores it.
-            self.saved_seg_state = list(self._w._selected_segments)
-            # Project into feat mode: shared (non-contradictory) features.
-            # ``project_segments_to_features`` is the canonical engine
-            # method; the web bridge calls the same method so both UIs
-            # produce identical pre-filled states on mode toggle.
-            if self._w._selected_segments and engine:
-                self.saved_feat_state = engine.project_segments_to_features(
-                    self._w._selected_segments
-                )
-            else:
-                self.saved_feat_state = {}
-        else:
-            # Preserve exact feat query so toggling back restores it.
-            self.saved_feat_state = dict(self._w._selected_features)
-            # Project into seg mode: segments matched by current query.
-            if self._w._selected_features and engine:
-                self.saved_seg_state = list(
-                    engine.find_segments(self._w._selected_features)
-                )
-            else:
-                self.saved_seg_state = []
+        transition = project_mode_transition(
+            self.mode,
+            target_mode,
+            selected_segments=list(self._w._selected_segments),
+            selected_features=dict(self._w._selected_features),
+            engine=self._w.engine,
+        )
+        self.saved_seg_state = transition.saved_seg_state
+        self.saved_feat_state = transition.saved_feat_state
 
     # ------------------------------------------------------------------
     # Phase implementations
@@ -233,16 +213,6 @@ class _ModeController:
 
     def update_status_message(self) -> None:
         """Show the per-mode helper text in the status bar."""
-        is_s2f = self.mode == Mode.SEG_TO_FEAT
-        if not self._w.engine:
-            self._w.status.showMessage(
-                "Select an inventory from the dropdown to begin."
-            )
-        elif is_s2f:
-            self._w.status.showMessage(
-                "Click a segment to inspect its features."
-            )
-        else:
-            self._w.status.showMessage(
-                "Toggle feature values (+/−) to find matching segments."
-            )
+        self._w.status.showMessage(
+            mode_status_text(self.mode, has_engine=self._w.engine is not None)
+        )

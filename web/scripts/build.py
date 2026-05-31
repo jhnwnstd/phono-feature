@@ -58,6 +58,7 @@ RELAYED_SOURCES = [
     "constants.py",
     "analysis.py",
     "view_models.py",
+    "mode_logic.py",
     "layout.py",
     "vowel_layout.py",
     "inventory_setup.py",
