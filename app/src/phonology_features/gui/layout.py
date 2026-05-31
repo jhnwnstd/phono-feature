@@ -182,12 +182,13 @@ FEAT_MIN_W: int = 380
 # Extra pixels beyond ``feat_content_w`` so feature cards don't sit
 # flush against the splitter handle / panel edge.
 FEAT_CUSHION_PX: int = 40
-# Absolute minimum vowel chart width regardless of seg-pane size; the
-# 7-column IPA grid needs roughly this to read.
-VOWEL_MIN_W: int = 240
-# Vowel chart never claims more than this fraction of the seg pane.
-# Matches the web's pre-existing ``max-width: 55%`` rule.
-VOWEL_MAX_FRAC: float = 0.55
+# Vowel chart natural display width: row-label gutter + 6 button
+# columns (BTN_W=33, BTN_GAP=4) + a few pixels of buffer for the
+# longest IPA-chart row labels ("Near-close", "Close-mid") so they
+# never clip. The chart is a fixed phonetic visualisation, not a
+# fluid grid, so it keeps the same width regardless of seg-pane
+# size — extra horizontal space goes to consonants instead.
+VOWEL_NATURAL_W: int = 320
 # Below this seg-pane width, the chart drops below the consonants
 # instead of floating beside them. Picked so a 3-column-of-buttons
 # consonant area still fits next to a min-width chart.
@@ -234,20 +235,21 @@ def distribute_pane_widths(
 
 
 def vowel_chart_width(seg_pane_w: int) -> int:
-    """Vowel-chart natural width inside its containing seg pane.
+    """The vowel chart's natural display width. The IPA chart is a
+    fixed visualisation (one row-label column + six button columns)
+    so it doesn't grow with ``seg_pane_w`` — that would just put
+    empty space around the buttons and steal width from the
+    consonant flow. Always returns ``VOWEL_NATURAL_W``; the
+    parameter is kept for signature symmetry with
+    :py:func:`should_stack_vowels` and so future per-pane growth
+    rules can land here without a call-site change.
 
-    Clamped to ``[VOWEL_MIN_W, VOWEL_MAX_FRAC * seg_pane_w]``. Returns
-    a hard ``VOWEL_MIN_W`` floor even when the seg pane is too narrow
-    for the fraction rule, so the chart's internal grid stays
-    readable; the caller is expected to consult
-    :py:func:`should_stack_vowels` to decide whether the chart still
-    fits beside the consonants at that floor, and if not to stack
-    below instead.
+    When the seg pane is too narrow to host the chart beside the
+    consonants, the caller drops to :py:func:`should_stack_vowels`
+    and lays the chart out underneath instead.
     """
-    if seg_pane_w <= 0:
-        return VOWEL_MIN_W
-    fraction_w = int(seg_pane_w * VOWEL_MAX_FRAC)
-    return max(VOWEL_MIN_W, fraction_w)
+    del seg_pane_w  # intentionally unused
+    return VOWEL_NATURAL_W
 
 
 def should_stack_vowels(seg_pane_w: int) -> bool:

@@ -256,9 +256,18 @@ class MainWindow(QMainWindow):
         splitter = _ThemedSplitter(Qt.Orientation.Horizontal, central)
         splitter.setHandleWidth(4)
         self.seg_panel = self._build_segment_panel(splitter)
+        # Floors so the user can't drag a pane to zero. Below
+        # SEG_MIN_W the segments grid + vowel chart genuinely can't
+        # render; below FEAT_MIN_W feature card titles clip.
+        self.seg_panel.setMinimumWidth(layout.SEG_MIN_W)
         splitter.addWidget(self.seg_panel)
         self.feat_panel = self._build_feature_panel(splitter)
+        self.feat_panel.setMinimumWidth(layout.FEAT_MIN_W)
         splitter.addWidget(self.feat_panel)
+        # And prevent the splitter from collapsing either child even
+        # if the user double-clicks the handle.
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
         # Filter installed on each panel directly (not the QApplication)
         # so it only fires on empty-area clicks; clicks on child buttons
         # / rows trigger mode-switch via their own pressed handlers.
@@ -299,7 +308,12 @@ class MainWindow(QMainWindow):
         # Hard floor; without it the splitter can collapse the
         # analysis pane to 0 when apply_splitter_sizes runs before
         # the window is shown.
-        self.analysis.setMinimumHeight(self._geom.min_analysis_h)
+        # Hard floor so the splitter can squeeze analysis down to its
+        # title bar + a line of text when the feature pane needs the
+        # vertical room. The preferred 220-px height still wins on
+        # comfortable-size windows because ``apply_splitter_sizes``
+        # gives analysis whatever's left after ``top_need_h``.
+        self.analysis.setMinimumHeight(self._geom.HARD_MIN_ANALYSIS_H)
         self._vsplit.setCollapsible(1, False)
         root.addWidget(self._vsplit)
         # User-drag is also "user owns the ratio". Without this, a
@@ -1104,10 +1118,10 @@ class MainWindow(QMainWindow):
 
     def _on_seg_pane_width_changed(self, seg_pane_w: int) -> None:
         """Apply the shared layout rules to the seg pane internals
-        whenever the seg-pane width changes (initial layout,
-        splitter drag, or inventory-load fit). Pure-Python decisions
-        come from ``phonology_features.gui.layout``; this method
-        just wires the results into Qt.
+        whenever the seg-pane width changes (initial layout, splitter
+        drag, window resize, or inventory-load fit). Pure-Python
+        decisions come from ``phonology_features.gui.layout``; this
+        method just wires the results into Qt.
 
         Decisions delegated:
           * ``vowel_chart_width(seg_pane_w)`` → push into the chart
@@ -1117,7 +1131,14 @@ class MainWindow(QMainWindow):
             the bottom-stacked slot (under consonants). Run at most
             once per threshold crossing so a continuous drag doesn't
             churn the layout.
+
+        Idempotent on same-width calls — the resize event filter
+        fires this on every resizeEvent, including Qt's own internal
+        layout passes; the early-return below keeps that cheap.
         """
+        if seg_pane_w == getattr(self, "_last_seg_pane_w", -1):
+            return
+        self._last_seg_pane_w = seg_pane_w
         target_w = layout.vowel_chart_width(seg_pane_w)
         self.vowel_chart_widget.set_target_width(target_w)
         should_stack = layout.should_stack_vowels(seg_pane_w)
@@ -1186,12 +1207,27 @@ class MainWindow(QMainWindow):
             self.analysis.set_expanded(False)
 
     def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
-        """Activate the clicked panel on a press in its empty area.
+        """Activate the clicked panel on a press in its empty area,
+        and keep the seg-pane-dependent layout state (vowel chart
+        width, stack-vs-side-by-side flag) in sync whenever the seg
+        panel changes width — not only on splitter drag.
+
         Installed on ``seg_panel`` / ``feat_panel`` only, so ``a0`` is
-        always one of the two. Clicks on child widgets switch mode via
-        their own pressed handlers.
+        always one of the two.
         """
-        if a1 is None or a1.type() != _QEVENT_MOUSE_BUTTON_PRESS:
+        if a1 is None:
+            return False
+        # Width-change hook: any time the seg panel is resized (window
+        # drag, splitter drag, programmatic resize, even the initial
+        # show event), re-run the shared layout policy so the vowel
+        # chart and stack flag stay aligned with the seg pane's
+        # actual width. QSplitter's ``splitterMoved`` only fires on
+        # user-drag, not on automatic stretch-factor redistribution,
+        # so we hook the widget's own resize instead.
+        if a0 is self.seg_panel and a1.type() == QEvent.Type.Resize:
+            self._on_seg_pane_width_changed(self.seg_panel.width())
+            return False
+        if a1.type() != _QEVENT_MOUSE_BUTTON_PRESS:
             return False
         if a0 is self.seg_panel and self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             self._set_mode(Mode.SEG_TO_FEAT)

@@ -47,7 +47,17 @@ class _GeometryController:
     # inventory swaps even when Qt thinks frame == widget.
     MIN_DECO_W: ClassVar[int] = 8
     MIN_DECO_H: ClassVar[int] = 32
+    # Preferred analysis-pane height when the feature pane already
+    # fits its content. On short windows where the features need more
+    # height than they'd get with this floor, ``apply_splitter_sizes``
+    # gives priority to fitting the feature pane and lets the analysis
+    # pane shrink past this (down to ``HARD_MIN_ANALYSIS_H``). The
+    # rationale: features are primary inspection surface, analysis
+    # text reflows comfortably to whatever room is left.
     MIN_ANALYSIS_H: ClassVar[int] = 220
+    # Absolute floor so analysis is at least its title bar + a line
+    # of text on the worst-case window size.
+    HARD_MIN_ANALYSIS_H: ClassVar[int] = 60
     # First-launch floor: the content-derived width can come out
     # around 900-1100 px depending on the inventory, which leaves the
     # analysis pane visibly cramped on a fresh install. The floor
@@ -196,6 +206,7 @@ class _GeometryController:
         # the splitter), not to dead space after the vowels.
         seg_content = self._w._seg_scroll.widget()
         seg_content_w = seg_content.sizeHint().width() if seg_content else 400
+        seg_content_h = seg_content.sizeHint().height() if seg_content else 400
         seg_chrome = 28 + 6  # panel margins (14 * 2) + scrollbar
         seg_need_w = seg_content_w + seg_chrome
         feat_content = self._w._feat_scroll.widget()
@@ -210,6 +221,22 @@ class _GeometryController:
         )
         feat_v_padding = 20
         top_need_h = feat_content_h + 80 + feat_v_padding
+        # Lock each panel's vertical minimum to its actual content
+        # height. Without this, the vsplit's stretch policy (top=0,
+        # analysis=1) lets the top section shrink when the window
+        # shrinks past the analysis floor, but never restores it
+        # when the window grows back — Qt's stretch factor only
+        # distributes EXTRA space, so anything the top "gave up"
+        # stays lost. Setting a content-driven minimum on each panel
+        # turns those givebacks into reversible operations: when the
+        # window grows again, Qt honors the minimum and analysis
+        # absorbs only what's beyond it.
+        seg_panel_chrome_v = 24 + 30  # top/bottom padding + header row
+        feat_panel_chrome_v = 24 + 30
+        self._w.seg_panel.setMinimumHeight(seg_content_h + seg_panel_chrome_v)
+        self._w.feat_panel.setMinimumHeight(
+            feat_content_h + feat_panel_chrome_v
+        )
         analysis_h = self.min_analysis_h
         toolbar_h = 50
         total_need_h = top_need_h + analysis_h + toolbar_h + 30
@@ -372,11 +399,22 @@ class _GeometryController:
             notify(seg_w)
         total = self._vsplit.height()
         if total > 0:
-            top_h = min(top_need_h, total - self.min_analysis_h)
-            top_h = max(top_h, 200)
+            top_h = self._top_height_for_content(top_need_h, total)
             self._vsplit.setSizes([top_h, total - top_h])
             return
         QTimer.singleShot(0, lambda: self.fit_vsplit_after_layout(top_need_h))
+
+    def _top_height_for_content(self, top_need_h: int, total: int) -> int:
+        """Vertical split policy: feat content height wins over the
+        analysis pane's preferred minimum. On a comfortable-sized
+        window both fit; on a short window we squeeze analysis down
+        to ``HARD_MIN_ANALYSIS_H`` rather than truncate features.
+        Caps at ``total - HARD_MIN_ANALYSIS_H`` so analysis is at
+        least its title bar; floors at 200 so a tiny window doesn't
+        end up with a 50-pixel feature pane either.
+        """
+        top_h = min(top_need_h, total - self.HARD_MIN_ANALYSIS_H)
+        return max(top_h, 200)
 
     def fit_vsplit_after_layout(self, top_need_h: int) -> None:
         """Vertical-only fallback for the case in
@@ -387,6 +425,5 @@ class _GeometryController:
         total = self._vsplit.height()
         if total <= 0:
             return
-        top_h = min(top_need_h, total - self.min_analysis_h)
-        top_h = max(top_h, 200)
+        top_h = self._top_height_for_content(top_need_h, total)
         self._vsplit.setSizes([top_h, total - top_h])

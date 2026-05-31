@@ -247,15 +247,14 @@ def generate_layout_css() -> None:
         f"  --seg-min-w: {mod.SEG_MIN_W}px;",
         f"  --feat-min-w: {mod.FEAT_MIN_W}px;",
         f"  --feat-cushion: {mod.FEAT_CUSHION_PX}px;",
-        f"  --vowel-min-w: {mod.VOWEL_MIN_W}px;",
-        f"  --vowel-max-frac: {mod.VOWEL_MAX_FRAC};",
+        f"  --vowel-natural-w: {mod.VOWEL_NATURAL_W}px;",
         f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
         f"  --collapse-w: {mod.COLLAPSE_W}px;",
         "}",
         "",
     ]
     (DIST / "layout.css").write_text("\n".join(lines))
-    print("  7 layout tokens")
+    print("  6 layout tokens")
 
 
 def write_python_bundle() -> None:

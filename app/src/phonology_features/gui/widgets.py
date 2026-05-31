@@ -688,7 +688,14 @@ class SegmentGridWidget(QWidget):
     the current widget width on resize.
     """
 
-    MAX_COLS = 12
+    # Upper bound on segment-grid column count, regardless of how
+    # wide the seg pane is. Picked above the largest manner-class
+    # group in any bundled inventory (General-IPA Plosives = 21,
+    # Hayes Plosives = ~16) so every group can fit in one row when
+    # the pane is wide enough. The cap keeps custom inventories
+    # with absurd group sizes from producing 50-button rows that
+    # don't read as a coherent class.
+    MAX_COLS = 30
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)

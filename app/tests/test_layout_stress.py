@@ -1,0 +1,132 @@
+"""Layout-stress regression tests.
+
+Drives the main window through adversarial resizes, splitter drags,
+and collapse attempts, then asserts that the dependent layout state
+(vowel chart width, stack flag, splitter sizes, feature panel
+height) stays consistent with the shared decisions in
+:py:mod:`phonology_features.gui.layout`.
+
+Pins the invariants that broke when the user reported "segments
+expand but never collapse" and "analysis grows but segments don't
+return to where they were": the seg-panel resize event filter, the
+content-driven panel minimum heights, and the splitter
+collapse-protection.
+"""
+
+from __future__ import annotations
+
+from PyQt6.QtCore import QSettings
+
+from phonology_features.gui import layout
+from phonology_features.gui.constants import SETTINGS_APP, SETTINGS_ORG
+
+
+def _wipe_settings() -> None:
+    QSettings(SETTINGS_ORG, SETTINGS_APP).clear()
+
+
+def _drain(qapp, times: int = 4) -> None:
+    for _ in range(times):
+        qapp.processEvents()
+
+
+def test_seg_panel_cannot_collapse_below_min(qapp) -> None:
+    """Manual splitter drag to seg=0 must clamp at SEG_MIN_W —
+    ``setMinimumWidth`` + ``setCollapsible(False)`` enforces it."""
+    _wipe_settings()
+    from phonology_features.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show()
+    _drain(qapp)
+    w.resize(1366, 768)
+    _drain(qapp)
+    total = sum(w._hsplit.sizes())
+    w._hsplit.setSizes([0, total])
+    w._hsplit.splitterMoved.emit(0, 0)
+    _drain(qapp)
+    assert (
+        w.seg_panel.width() >= layout.SEG_MIN_W
+    ), f"seg pane collapsed: {w.seg_panel.width()} < {layout.SEG_MIN_W}"
+    w.close()
+
+
+def test_feat_panel_cannot_collapse_below_min(qapp) -> None:
+    """Same guard on the other side — feat content has hard min."""
+    _wipe_settings()
+    from phonology_features.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show()
+    _drain(qapp)
+    w.resize(1366, 768)
+    _drain(qapp)
+    total = sum(w._hsplit.sizes())
+    w._hsplit.setSizes([total, 0])
+    w._hsplit.splitterMoved.emit(total, 0)
+    _drain(qapp)
+    assert w.feat_panel.width() >= layout.FEAT_MIN_W
+    w.close()
+
+
+def test_vowel_stack_recovers_after_widening(qapp) -> None:
+    """User drags the seg pane below ``VOWEL_STACK_W`` → vowels
+    stack below. User widens the window again → vowels recover
+    beside consonants. Previously the ``splitterMoved`` signal was
+    the only update path, so a window-resize back to wide left the
+    stack flag stuck True. Now an event filter on the seg panel
+    catches every resize, regardless of cause.
+    """
+    _wipe_settings()
+    from phonology_features.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show()
+    _drain(qapp)
+    w.resize(1600, 900)
+    _drain(qapp)
+    total = sum(w._hsplit.sizes())
+    w._hsplit.setSizes([500, total - 500])
+    w._hsplit.splitterMoved.emit(500, 0)
+    _drain(qapp)
+    assert w._seg_vowels_stacked is True
+    # Resize the WINDOW so the seg pane auto-grows past the
+    # threshold — splitterMoved doesn't fire on auto-redistribution.
+    w.resize(2400, 900)
+    _drain(qapp)
+    assert w.seg_panel.width() > layout.VOWEL_STACK_W
+    assert w._seg_vowels_stacked is False, (
+        "stack flag stuck True after seg pane widened back past "
+        f"VOWEL_STACK_W ({layout.VOWEL_STACK_W}); seg pane is now "
+        f"{w.seg_panel.width()} wide"
+    )
+    w.close()
+
+
+def test_feat_panel_recovers_after_shrink_and_grow(qapp) -> None:
+    """Symmetric height recovery. Shrinking the window drives the
+    vsplit's analysis pane to its floor, which forces the top
+    section to give up height. Growing the window back has to
+    restore the feat pane to its content-derived minimum — without
+    the content-driven ``setMinimumHeight`` on each panel, Qt's
+    stretch policy (analysis=1, top=0) gave all the new space to
+    analysis and left feat squeezed.
+    """
+    _wipe_settings()
+    from phonology_features.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show()
+    _drain(qapp)
+    w.resize(1366, 900)
+    _drain(qapp)
+    feat_h_initial = w.feat_panel.height()
+    w.resize(1366, 480)
+    _drain(qapp)
+    w.resize(1366, 900)
+    _drain(qapp)
+    assert w.feat_panel.height() >= feat_h_initial - 5, (
+        "feat pane didn't recover height after shrink/grow: "
+        f"initial={feat_h_initial}, after={w.feat_panel.height()}"
+    )
+    w.close()

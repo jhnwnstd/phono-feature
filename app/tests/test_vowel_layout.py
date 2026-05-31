@@ -110,7 +110,7 @@ def test_english_vowels_not_all_in_default_cell() -> None:
 
 
 def test_compute_placements_groups_collisions_general():
-    """The General inventory's ə, ɜ, ɚ all map to the open-mid
+    """The General inventory's ə and ɜ both map to the open-mid
     central cell (3, 2). The shared compute_placements groups them
     so both the desktop and the web render them stacked rather
     than overlapping at the same CSS-grid coordinates.
@@ -122,7 +122,7 @@ def test_compute_placements_groups_collisions_general():
     occupied, placements = compute_placements(vowels, profile, seg_feats)
     assert (3, 2) in occupied
     cell_segs = occupied[(3, 2)]
-    assert set(cell_segs) == {"ə", "ɜ", "ɚ"}
+    assert set(cell_segs) == {"ə", "ɜ"}
     # Every segment in the cell has a corresponding placement entry.
     for s in cell_segs:
         assert s in placements

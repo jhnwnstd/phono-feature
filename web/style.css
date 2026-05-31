@@ -380,12 +380,10 @@ dialog input[type="text"]:focus-visible {
 .seg-vowels {
   float: right;
   margin: 0 0 var(--space-md) var(--space-xl);
-  /* Chart width clamp — both bounds come from layout.py via
-     layout.css. ``--vowel-min-w`` is the absolute floor, the
-     ``calc(...)`` cap matches the desktop's ``vowel_chart_width``
-     fraction-of-pane rule. */
-  min-width: var(--vowel-min-w);
-  max-width: calc(var(--vowel-max-frac) * 100%);
+  /* Pinned at the chart's natural width — matches the desktop's
+     ``layout.VOWEL_NATURAL_W`` (baked from Python into layout.css).
+     Extra horizontal space in the seg pane goes to consonants. */
+  width: var(--vowel-natural-w);
 }
 
 /* Below ``--vowel-stack-w``, the chart drops below the consonants

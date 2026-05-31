@@ -71,31 +71,22 @@ def test_distribute_seg_content_overrides_min() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_vowel_clamped_to_min_when_seg_too_narrow() -> None:
-    # Below the min, the function still returns the floor — caller
-    # uses should_stack_vowels to decide whether to host it at all.
-    assert layout.vowel_chart_width(100) == layout.VOWEL_MIN_W
+def test_vowel_width_is_constant_natural() -> None:
+    # The chart is a fixed phonetic visualisation; it returns its
+    # natural width regardless of pane width. Extra horizontal space
+    # in the seg pane goes to consonants, not to padding around the
+    # vowel buttons.
+    for seg_pane_w in (0, 100, 480, 1200, 3840):
+        assert layout.vowel_chart_width(seg_pane_w) == layout.VOWEL_NATURAL_W
 
 
-def test_vowel_clamped_to_max_frac_when_seg_wide() -> None:
-    seg_pane_w = 2000
-    assert layout.vowel_chart_width(seg_pane_w) <= int(
-        seg_pane_w * layout.VOWEL_MAX_FRAC
-    )
-
-
-def test_vowel_monotonic_in_seg_pane_width() -> None:
-    # Wider seg pane → at-least-as-wide chart. The function is
-    # piecewise: flat at the floor, then linear in seg_pane_w.
-    widths = [layout.vowel_chart_width(w) for w in (300, 600, 900, 1500, 2400)]
-    assert widths == sorted(widths)
-
-
-def test_vowel_zero_or_negative_returns_min() -> None:
-    # Defensive: pre-show seg-pane width can be 0. Caller still gets
-    # a sensible value so downstream code doesn't divide by zero.
-    assert layout.vowel_chart_width(0) == layout.VOWEL_MIN_W
-    assert layout.vowel_chart_width(-50) == layout.VOWEL_MIN_W
+def test_vowel_natural_width_fits_label_column() -> None:
+    # The chart's natural width has to clear: 6 button columns
+    # (BTN_W + BTN_GAP each) + a label-column gutter wide enough
+    # for the longest row label ("Near-close" at ~60 px in
+    # Noto Sans 7pt). 320 covers that with breathing room.
+    btn_strip = 6 * (33 + 4)  # six button cols + five gaps + trailing
+    assert layout.VOWEL_NATURAL_W >= btn_strip + 64
 
 
 # ---------------------------------------------------------------------------
