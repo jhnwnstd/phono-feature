@@ -1500,10 +1500,17 @@ function wireBuilderEditor(setupDialog) {
             moveKeys = callBridge("get_move_keys");
             maxUndoDepth = callBridge("get_max_undo_depth");
         }
-        refreshEditorFromCurrent();
+        // Reveal the view BEFORE we render & measure. The alignment
+        // pass at the end of renderEditorGrid reads offsetWidth on the
+        // four panes; while the view is ``hidden`` everything inside
+        // it has zero width, so colgroup widths would be computed as
+        // 0 and the grid would render flat. Both operations run
+        // synchronously, so the user never sees a flash of the empty
+        // pre-render frame.
         editorState.open = true;
         nodes.editorView.hidden = false;
         setMainChromeInert(true);
+        refreshEditorFromCurrent();
         nodes.editorGridScroll.focus();
     };
     const closeEditor = () => {
@@ -1713,24 +1720,84 @@ function renderEditorGrid() {
     _alignHeaderPanesToData();
 }
 
-/** Copy the data pane's column widths to the column-headers pane
- *  and its row heights to the row-headers pane so all four panes
- *  align on the same grid lines. Called after each render. */
+/** Make all four panes share one grid. Each column gets the max of
+ *  (data column natural width, header column natural width); we
+ *  install a ``<colgroup>`` of explicit widths on BOTH the cols-pane
+ *  and data-pane tables and switch them to ``table-layout: fixed``,
+ *  which is the only reliable way to make two separate tables share
+ *  column widths — setting ``style.width`` on individual cells is
+ *  treated as a hint and ignored when other cells in the column are
+ *  narrower. Without this, an IPA digraph like ``t͡ʃ`` expands its
+ *  header cell past the 32px min-width while the data cell below
+ *  stays at 32px, drifting every subsequent column out of alignment.
+ *  Row heights are simpler — explicit ``<tr>.style.height`` works in
+ *  both layout modes. Called after each render. */
 function _alignHeaderPanesToData() {
     const dataTable = nodes.editorGridData.querySelector("table");
     if (!dataTable) return;
+    const colsTable = nodes.editorGridCols.querySelector("table");
+    // Tear down any prior colgroup / fixed layout so we re-measure
+    // natural widths after a segment add / remove / rename.
+    dataTable.style.tableLayout = "";
+    if (colsTable) colsTable.style.tableLayout = "";
+    dataTable.querySelectorAll("colgroup").forEach((c) => c.remove());
+    colsTable?.querySelectorAll("colgroup").forEach((c) => c.remove());
+    void dataTable.offsetWidth;
+
     const firstRow = dataTable.querySelector("tr");
-    if (firstRow) {
-        const colHeaders = nodes.editorGridCols.querySelectorAll("th");
-        const dataCells = firstRow.querySelectorAll("td");
-        for (let c = 0; c < colHeaders.length && c < dataCells.length; c++) {
-            colHeaders[c].style.width = `${dataCells[c].offsetWidth}px`;
+    const colHeaders = nodes.editorGridCols.querySelectorAll("th");
+    const dataCells = firstRow ? firstRow.querySelectorAll("td") : [];
+    const widths = [];
+    const n = Math.min(colHeaders.length, dataCells.length);
+    for (let c = 0; c < n; c++) {
+        widths.push(Math.max(dataCells[c].offsetWidth, colHeaders[c].offsetWidth));
+    }
+    const makeColgroup = () => {
+        const cg = document.createElement("colgroup");
+        for (const w of widths) {
+            const col = document.createElement("col");
+            col.style.width = `${w}px`;
+            cg.appendChild(col);
+        }
+        return cg;
+    };
+    if (widths.length) {
+        dataTable.insertBefore(makeColgroup(), dataTable.firstChild);
+        if (colsTable) {
+            colsTable.insertBefore(makeColgroup(), colsTable.firstChild);
+        }
+        // ``table-layout: fixed`` honors colgroup widths only when the
+        // table itself has an explicit width; without one Chrome falls
+        // back to the cells' min-width floor and the colgroup is
+        // ignored. Set the table width to the column-sum so both
+        // tables resolve to the same pixel grid.
+        const totalWidth = widths.reduce((a, b) => a + b, 0);
+        dataTable.style.tableLayout = "fixed";
+        dataTable.style.width = `${totalWidth}px`;
+        if (colsTable) {
+            colsTable.style.tableLayout = "fixed";
+            colsTable.style.width = `${totalWidth}px`;
+        }
+        // Belt-and-braces: also stamp the width on the first row's
+        // cells so any caller that re-measures cell widths gets the
+        // post-alignment value, not the min-width floor.
+        for (let c = 0; c < widths.length; c++) {
+            const px = `${widths[c]}px`;
+            if (dataCells[c]) dataCells[c].style.width = px;
+            if (colHeaders[c]) colHeaders[c].style.width = px;
         }
     }
+
     const rowHeaders = nodes.editorGridRows.querySelectorAll("tr");
     const dataRows = dataTable.querySelectorAll("tr");
+    for (const tr of rowHeaders) tr.style.height = "";
+    for (const tr of dataRows) tr.style.height = "";
+    void dataTable.offsetHeight;
     for (let r = 0; r < rowHeaders.length && r < dataRows.length; r++) {
-        rowHeaders[r].style.height = `${dataRows[r].offsetHeight}px`;
+        const h = Math.max(dataRows[r].offsetHeight, rowHeaders[r].offsetHeight);
+        const px = `${h}px`;
+        rowHeaders[r].style.height = px;
+        dataRows[r].style.height = px;
     }
 }
 
