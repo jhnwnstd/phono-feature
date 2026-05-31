@@ -1557,6 +1557,26 @@ function wireBuilderEditor(setupDialog) {
         nodes.editorGridCols.scrollLeft = nodes.editorGridData.scrollLeft;
         nodes.editorGridRows.scrollTop = nodes.editorGridData.scrollTop;
     });
+    // The data pane has overflow:auto (so it shows scrollbars when
+    // content overflows). The col/row-header panes are overflow:hidden
+    // (no scrollbars). On platforms with classic scrollbars (Windows,
+    // most Linux), the data pane's vertical scrollbar eats ~15px from
+    // its viewport while the cols pane keeps the full width — so at
+    // max horizontal scroll cols.scrollLeft is clamped 15px short of
+    // data.scrollLeft and the segment headers shift relative to their
+    // data columns. Equalize the two panes' ``clientWidth`` by giving
+    // the cols/rows panes a transparent border equal to the measured
+    // scrollbar gutter. ``clientWidth`` excludes borders but includes
+    // padding, so border (not padding) is the lever that actually
+    // matches the data pane's scrollbar-reduced viewport. Zero on
+    // overlay-scrollbar platforms (macOS default, headless Chromium).
+    const sbw = _measureScrollbarWidth();
+    if (sbw > 0) {
+        nodes.editorGridCols.style.borderRight =
+            `${sbw}px solid transparent`;
+        nodes.editorGridRows.style.borderBottom =
+            `${sbw}px solid transparent`;
+    }
 
     // +/− Segment / Feature buttons.
     nodes.editorAddSegBtn.addEventListener("click", () => {
@@ -1718,6 +1738,20 @@ function renderEditorGrid() {
     // pane's natural sizing; the column-headers and row-headers
     // panes get explicit pixel sizes so they line up with it.
     _alignHeaderPanesToData();
+}
+
+/** Probe the rendered scrollbar width once. Returns 0 on platforms
+ *  that use overlay scrollbars (macOS default, headless Chromium),
+ *  positive pixel value on classic-scrollbar platforms. */
+function _measureScrollbarWidth() {
+    const probe = document.createElement("div");
+    probe.style.cssText =
+        "position:absolute;top:-9999px;left:-9999px;width:100px;"
+        + "height:100px;overflow:scroll;visibility:hidden";
+    document.body.appendChild(probe);
+    const w = probe.offsetWidth - probe.clientWidth;
+    probe.remove();
+    return w;
 }
 
 /** Make all four panes share one grid. Each column gets the max of
@@ -2343,12 +2377,16 @@ function onGridKeyDown(ev) {
 
 /** Move the focused cell by ``(dr, dc)``, clamping at the grid
  *  edges. Matches the desktop's clamped navigation in
- *  :py:meth:`_handle_table_key`. */
+ *  :py:meth:`_handle_table_key`, which routes through
+ *  ``QTableWidget.setCurrentCell`` — that call clears the prior
+ *  selection and selects the new cell alone. Without the
+ *  ``selectSingleCell`` here, a row/column selected via header click
+ *  would persist while arrow keys moved focus, leaving the user with
+ *  a stale highlighted band the desktop never shows. */
 function moveFocused([dr, dc]) {
     const target = _clampMoveTarget(dr, dc);
     if (target === null) return;
-    editorState.focused = target;
-    repaintFocused();
+    selectSingleCell(target.r, target.c);
     cellNode(target.r, target.c)?.scrollIntoView({
         block: "nearest", inline: "nearest",
     });
