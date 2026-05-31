@@ -2376,18 +2376,31 @@ function onGridKeyDown(ev) {
 }
 
 /** Move the focused cell by ``(dr, dc)``, clamping at the grid
- *  edges. Matches the desktop's clamped navigation in
- *  :py:meth:`_handle_table_key`, which routes through
- *  ``QTableWidget.setCurrentCell`` — that call clears the prior
- *  selection and selects the new cell alone. Without the
- *  ``selectSingleCell`` here, a row/column selected via header click
- *  would persist while arrow keys moved focus, leaving the user with
- *  a stale highlighted band the desktop never shows. */
+ *  edges. Arrowing past the top edge selects the current column;
+ *  past the left edge selects the current row — same hit as clicking
+ *  the corresponding header. Within the cell grid, mirrors the
+ *  desktop's clamped navigation in :py:meth:`_handle_table_key`,
+ *  which routes through ``QTableWidget.setCurrentCell`` and that
+ *  call clears the prior selection and selects the new cell alone. */
 function moveFocused([dr, dc]) {
-    const target = _clampMoveTarget(dr, dc);
-    if (target === null) return;
-    selectSingleCell(target.r, target.c);
-    cellNode(target.r, target.c)?.scrollIntoView({
+    const numRows = editorState.features.length;
+    const numCols = editorState.segments.length;
+    if (numRows === 0 || numCols === 0) return;
+    const cur = editorState.focused ?? { r: 0, c: 0 };
+    const r = cur.r + dr;
+    const c = cur.c + dc;
+    if (r < 0 && c >= 0 && c < numCols) {
+        selectColumn(c);
+        return;
+    }
+    if (c < 0 && r >= 0 && r < numRows) {
+        selectRow(r);
+        return;
+    }
+    const newR = Math.max(0, Math.min(numRows - 1, r));
+    const newC = Math.max(0, Math.min(numCols - 1, c));
+    selectSingleCell(newR, newC);
+    cellNode(newR, newC)?.scrollIntoView({
         block: "nearest", inline: "nearest",
     });
 }

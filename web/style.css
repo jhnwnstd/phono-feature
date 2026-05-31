@@ -839,10 +839,11 @@ progress {
   min-width: 0;
   background: var(--panel);
 }
-.editor-grid-frame:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
+/* The grid frame is keyboard-focusable so it can receive shortcuts,
+   but a frame-wide outline competes visually with the per-cell focus
+   indicator on every arrow press. The focused cell's own ring is the
+   accessibility hint; no need for a second one around the whole grid. */
+.editor-grid-frame:focus { outline: none; }
 .editor-grid-pane-corner { grid-column: 1; grid-row: 1; }
 .editor-grid-pane-corner > table { width: 100%; height: 100%; }
 .editor-grid-pane-cols   { grid-column: 2; grid-row: 1; overflow: hidden; }

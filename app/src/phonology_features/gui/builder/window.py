@@ -615,10 +615,22 @@ class InventoryBuilder(QMainWindow):
             dr, dc = move
             start_row = row if row >= 0 else 0
             start_col = col if col >= 0 else 0
-            new_row = max(0, min(start_row + dr, self._table.rowCount() - 1))
-            new_col = max(
-                0, min(start_col + dc, self._table.columnCount() - 1)
-            )
+            target_row = start_row + dr
+            target_col = start_col + dc
+            rows = self._table.rowCount()
+            cols = self._table.columnCount()
+            # Arrowing past the top edge selects the current column as
+            # if its header had been clicked; past the left edge
+            # selects the row. Mirrors the same behavior in the web
+            # editor's ``moveFocused``.
+            if target_row < 0 and 0 <= target_col < cols:
+                self._table.selectColumn(target_col)
+                return True
+            if target_col < 0 and 0 <= target_row < rows:
+                self._table.selectRow(target_row)
+                return True
+            new_row = max(0, min(target_row, rows - 1))
+            new_col = max(0, min(target_col, cols - 1))
             self._table.setCurrentCell(new_row, new_col)
             return True
         return False
