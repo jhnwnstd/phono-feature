@@ -14,6 +14,7 @@ on the next build.
 |---|---|---|
 | Engine logic (Inventory, FeatureEngine, geometry) | `packages/phonology-engine/src/phonology_engine/*.py` | Desktop + web (engine wheel rebuilt on every build) |
 | HTML chip / table rendering shown in Analysis pane | `app/src/phonology_features/gui/analysis.py` | Desktop + web (relayed into build) |
+| Inventory summary shaping and seg/feat analysis payloads | `app/src/phonology_features/gui/view_models.py` | Desktop + web (relayed into build) |
 | Theme colors (light / dark palette tokens) | `app/src/phonology_features/gui/palette.py` | Desktop (Qt) + web (`theme.css` generated from it) |
 | Feature display order, chip box model, mono font chain | `app/src/phonology_features/gui/constants.py` | Desktop + web (relayed into build) |
 | Bundled inventories shown in the dropdown | Add / edit JSON in `app/inventories/` | Desktop + web (auto-discovered, label from `metadata.name`) |
@@ -32,7 +33,7 @@ deployed verbatim by `.github/workflows/pages.yml`.
 |---|---|
 | `dist/theme.css` | `app/src/phonology_features/gui/palette.py` (LIGHT + DARK dicts → CSS variables) |
 | `dist/inventories.json` | `app/inventories/*.json` (manifest with file paths + display labels) |
-| `dist/render/phonology_features/gui/{palette,constants,analysis}.py` | Copies of the canonical desktop sources |
+| `dist/render/phonology_features/gui/{palette,constants,analysis,view_models,layout,vowel_layout,inventory_setup,grid_logic}.py` | Copies of the canonical desktop sources |
 | `dist/wheels/phonology_engine-*.whl` | Built from `packages/phonology-engine/` |
 | `dist/inventories/*.json` | Copies of `app/inventories/*.json` |
 

@@ -21,7 +21,6 @@ from typing import Any
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_engine.limits import MAX_FEATURES, MAX_SEGMENTS
-from phonology_features.gui.constants import FEATURE_GROUPS
 from phonology_features.gui.grid_logic import (
     CYCLE_LADDER,
     MAX_UNDO_DEPTH,
@@ -40,32 +39,12 @@ from phonology_features.gui.inventory_setup import (
     suggest_filename,
     validate_setup,
 )
-from phonology_features.gui.layout import distribute_feature_groups
 from phonology_features.gui.palette import set_theme
-from phonology_features.gui.vowel_layout import COL_LABELS as VOWEL_COL_LABELS
-from phonology_features.gui.vowel_layout import ROW_LABELS as VOWEL_ROW_LABELS
-from phonology_features.gui.vowel_layout import (
-    compute_placements,
-    detect_vowel_profile,
+from phonology_features.gui.view_models import (
+    build_inventory_summary,
+    summarize_feature_query,
+    summarize_segment_selection,
 )
-
-_analysis_mod: Any = None
-
-
-def _analysis() -> Any:
-    """Lazy-load ``phonology_features.gui.analysis``.
-
-    Importing it at module load adds ~20-30 ms to the bridge-init
-    phase that ``pyimport("api")`` incurs. None of its functions
-    are needed until the user makes a selection, so defer the cost
-    into the first click where it's hidden under the click latency
-    budget.
-    """
-    global _analysis_mod
-    if _analysis_mod is None:
-        from phonology_features.gui import analysis as _mod
-        _analysis_mod = _mod
-    return _analysis_mod
 
 
 _engine: FeatureEngine | None = None
@@ -94,7 +73,7 @@ def load_inventory_json(
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name or source_label
     _invalidate_analysis_caches()
-    return _summarize_engine(_engine)
+    return build_inventory_summary(_engine, _inventory_name)
 
 
 def _invalidate_analysis_caches() -> None:
@@ -107,106 +86,6 @@ def _invalidate_analysis_caches() -> None:
     """
     _analyze_segments_cached.cache_clear()
     _analyze_features_cached.cache_clear()
-
-
-def _summarize_engine(engine: FeatureEngine) -> dict[str, Any]:
-    """Shape the inventory summary JS needs for first paint."""
-    grouped = engine.grouped_segments
-    # Split the manner-class buckets: "vowels" renders as the IPA
-    # trapezoid, everything else as the consonant flow-grid.
-    consonant_groups: list[dict] = []
-    vowel_segs: list[str] = []
-    for manner, segs in grouped.items():
-        if manner.lower() == "vowels":
-            vowel_segs = list(segs)
-        else:
-            consonant_groups.append({"name": manner, "segments": list(segs)})
-    return {
-        "name": _inventory_name,
-        "segments": list(engine.segments),
-        "features": list(engine.features),
-        "groups": consonant_groups,
-        "feature_groups": _grouped_features(list(engine.features)),
-        "vowel_chart": _vowel_chart(engine, vowel_segs),
-    }
-
-
-def _vowel_chart(
-    engine: FeatureEngine,
-    vowel_segs: list[str],
-) -> dict[str, Any]:
-    """Compute the IPA vowel trapezoid layout, grouped by cell.
-
-    Returns ``{rows, cols, cells}`` where ``cells`` is a list of
-    ``{row, col, segs}`` per OCCUPIED cell. Each ``segs`` entry is
-    a list of ``{seg, confidence, reason}`` sorted by descending
-    placement confidence, mirroring the desktop's
-    :py:meth:`VowelChartWidget._compute_placements` shape.
-
-    Grouping at the bridge prevents the web from layering multiple
-    buttons in the same CSS-grid cell (the bug where ə, ɜ, ɚ in
-    the General inventory all map to (3, 2) and visually
-    overlapped). The JS renderer stacks the segs in each cell
-    inside a vertical container, matching the desktop's
-    :py:class:`QVBoxLayout` collision handling.
-    """
-    seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
-    profile = detect_vowel_profile(vowel_segs, seg_feats)
-    occupied, placements = compute_placements(
-        list(vowel_segs), profile, seg_feats
-    )
-    cells: list[dict] = []
-    for (row, col), segs_in_cell in occupied.items():
-        cells.append({
-            "row": row,
-            "col": col,
-            "segs": [
-                {
-                    "seg": s,
-                    "confidence": placements[s].confidence.name.lower(),
-                    "reason": placements[s].reason,
-                }
-                for s in segs_in_cell
-            ],
-        })
-    return {
-        "rows": list(VOWEL_ROW_LABELS),
-        "cols": list(VOWEL_COL_LABELS),
-        "cells": cells,
-    }
-
-
-def _grouped_features(features: list[str]) -> list[dict[str, Any]]:
-    """Bucket the inventory's features into named cards matching
-    the desktop's feature-panel layout (Major Class, Laryngeal,
-    Manner, Place, etc.). Features that don't fit any group land
-    in an "Other" bucket at the end.
-
-    Cards are pre-distributed into left/right columns by
-    ``gui.layout.distribute_feature_groups`` so the web renderer
-    just mounts each card into the column it advertises.
-    """
-    present = set(features)
-    cards: list[dict] = []
-    placed: set[str] = set()
-    for group_name, group_feats in FEATURE_GROUPS:
-        in_inv = [f for f in group_feats if f in present]
-        if in_inv:
-            cards.append({"name": group_name, "features": in_inv})
-            placed.update(in_inv)
-    leftovers = [f for f in features if f not in placed]
-    if leftovers:
-        cards.append({"name": "Other", "features": leftovers})
-    sizes = {c["name"]: len(c["features"]) for c in cards}
-    group_order = [c["name"] for c in cards]
-    left_names, right_names = distribute_feature_groups(
-        sizes, group_order=group_order,
-    )
-    column_of = {name: 0 for name in left_names}
-    column_of.update({name: 1 for name in right_names})
-    for card in cards:
-        card["column"] = column_of.get(card["name"], 0)
-    return cards
 
 
 def serialize_current_inventory() -> str:
@@ -283,7 +162,7 @@ def create_new_inventory(
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name
     _invalidate_analysis_caches()
-    return _summarize_engine(_engine)
+    return build_inventory_summary(_engine, _inventory_name)
 
 
 def get_cycle_ladder() -> dict[str, str]:
@@ -423,7 +302,7 @@ def commit_inventory_from_grid(
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name
     _invalidate_analysis_caches()
-    return _summarize_engine(_engine)
+    return build_inventory_summary(_engine, _inventory_name)
 
 
 def rename_current_inventory(new_name: str) -> dict[str, Any]:
@@ -498,63 +377,9 @@ def analyze_segments(segs: list[str]) -> dict[str, Any]:
 
 @lru_cache(maxsize=256)
 def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict[str, Any]:
-    """SEG analysis result. Keys returned to JS:
-
-    * ``analysis_html``: pre-rendered HTML for the analysis pane.
-    * ``selected``: input list, echoed back.
-    * ``suggested``: natural-class extension suggestions (empty
-      for single-seg selections or genuine natural classes).
-    * ``common``: ``{feat: value}`` for features where every
-      selected segment shares the same value. Values include
-      ``"0"`` / ``""``; JS decides which to display as a +/- chip
-      vs. neutral.
-    * ``contrastive``: feature names that split cleanly across
-      the selection.
-
-    No precomputed ``feature_display`` dict: a dict-with-fallback
-    pattern silently produced neutral-state ghosts whenever a feat
-    was missing. JS now derives each row's state inline from
-    ``common`` and ``contrastive``, matching the desktop pattern.
-    """
+    """SEG analysis result; computed by the shared desktop helpers."""
     engine = _require_engine()
-    segs = list(segs_tuple)
-    if not segs:
-        return {
-            "analysis_html": "",
-            "selected": [],
-            "suggested": [],
-            "common": {},
-            "contrastive": [],
-        }
-    analysis = _analysis()
-    if len(segs) == 1:
-        feats = engine.get_segment_features(segs[0])
-        # Map "0" to "" so JS sees a neutral slot for unspecified
-        # features (desktop set_display("", shared=True) -> neutral).
-        common = {feat: v if v != "0" else "" for feat, v in feats.items()}
-        analysis_html = analysis.render_single_segment(
-            engine, segs[0], dict(feats),
-        )
-        return {
-            "analysis_html": analysis_html,
-            "selected": list(segs),
-            "suggested": [],
-            "common": common,
-            "contrastive": [],
-        }
-    common_raw = engine.common_features(segs)
-    contrastive_raw = analysis.compute_contrastive(engine, segs)
-    suggested = engine.suggest_natural_class_extension(segs)
-    analysis_html = analysis.render_multi_segment(
-        engine, segs, common_raw, contrastive_raw, suggested,
-    )
-    return {
-        "analysis_html": analysis_html,
-        "selected": list(segs),
-        "suggested": list(suggested),
-        "common": dict(common_raw),
-        "contrastive": list(contrastive_raw),
-    }
+    return summarize_segment_selection(engine, list(segs_tuple))
 
 
 def analyze_features(spec: dict[str, str]) -> dict[str, Any]:
@@ -570,19 +395,7 @@ def _analyze_features_cached(
     spec_items: tuple[tuple[str, str], ...],
 ) -> dict[str, Any]:
     engine = _require_engine()
-    spec = dict(spec_items)
-    if not spec:
-        return {
-            "analysis_html": "",
-            "matching": [],
-        }
-    analysis = _analysis()
-    matching = engine.find_segments(spec)
-    analysis_html = analysis.render_feat_to_seg(spec, matching)
-    return {
-        "analysis_html": analysis_html,
-        "matching": matching,
-    }
+    return summarize_feature_query(engine, dict(spec_items))
 
 
 def validation_issues_from_error(exc: Any) -> list[str]:

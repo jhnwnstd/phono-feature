@@ -57,6 +57,7 @@ RELAYED_SOURCES = [
     "palette.py",
     "constants.py",
     "analysis.py",
+    "view_models.py",
     "layout.py",
     "vowel_layout.py",
     "inventory_setup.py",

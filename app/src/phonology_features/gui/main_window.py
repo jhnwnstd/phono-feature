@@ -44,12 +44,6 @@ from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features._logging import get_logger
 from phonology_features._settings import safe_read_setting
-from phonology_features.gui.analysis import (
-    compute_contrastive,
-    render_feat_to_seg,
-    render_multi_segment,
-    render_single_segment,
-)
 from phonology_features.gui.constants import (
     BTN_GAP,
     BTN_W,
@@ -80,6 +74,10 @@ from phonology_features.gui.themed_widgets import (
     _clear_btn_style,
     _ThemedCard,
     _ThemedSplitter,
+)
+from phonology_features.gui.view_models import (
+    summarize_feature_query,
+    summarize_segment_selection,
 )
 from phonology_features.gui.vowel_chart import VOWEL_LABEL_W, VowelChartWidget
 from phonology_features.gui.widgets import (
@@ -1135,42 +1133,27 @@ class MainWindow(QMainWindow):
                 btn.set_state(SegmentState.DEFAULT)
             self.analysis.clear()
             return
+        summary = summarize_segment_selection(self.engine, segs)
         selected_set = set(segs)
-        if len(segs) == 1:
-            feats = self.engine.get_segment_features(segs[0])
-            for feat, row in self._feat_rows.items():
-                v = feats.get(feat, "0")
-                row.set_display("" if v == "0" else v, shared=True)
-            for seg, btn in self._seg_buttons.items():
-                if seg not in selected_set:
-                    btn.set_state(SegmentState.DEFAULT)
-            self.analysis.set_html(
-                render_single_segment(self.engine, segs[0], feats)
+        common = summary["common"]
+        contrastive = set(summary["contrastive"])
+        for feat, row in self._feat_rows.items():
+            if feat in common:
+                row.set_display(common[feat], shared=True)
+            elif feat in contrastive:
+                row.set_display("", shared=False, contrastive=True)
+            else:
+                row.set_display("", shared=False)
+        suggested_set = set(summary["suggested"])
+        for seg, btn in self._seg_buttons.items():
+            if seg in selected_set:
+                continue
+            btn.set_state(
+                SegmentState.SUGGESTED
+                if seg in suggested_set
+                else SegmentState.DEFAULT
             )
-        else:
-            common = self.engine.common_features(segs)
-            contrastive = compute_contrastive(self.engine, segs)
-            for feat, row in self._feat_rows.items():
-                if feat in common:
-                    row.set_display(common[feat], shared=True)
-                elif feat in contrastive:
-                    row.set_display("", shared=False, contrastive=True)
-                else:
-                    row.set_display("", shared=False)
-            suggested = self.engine.suggest_natural_class_extension(segs)
-            suggested_set = set(suggested)
-            for seg, btn in self._seg_buttons.items():
-                if seg not in selected_set:
-                    btn.set_state(
-                        SegmentState.SUGGESTED
-                        if seg in suggested_set
-                        else SegmentState.DEFAULT
-                    )
-            self.analysis.set_html(
-                render_multi_segment(
-                    self.engine, segs, common, contrastive, suggested
-                )
-            )
+        self.analysis.set_html(summary["analysis_html"])
 
     def _update_feat_to_seg(self) -> None:
         if not self.engine:
@@ -1181,15 +1164,15 @@ class MainWindow(QMainWindow):
                 btn.set_state(SegmentState.DEFAULT)
             self.analysis.clear()
             return
-        matching = self.engine.find_segments(selected_feats)
-        matching_set = set(matching)
+        summary = summarize_feature_query(self.engine, selected_feats)
+        matching_set = set(summary["matching"])
         for seg, btn in self._seg_buttons.items():
             btn.set_state(
                 SegmentState.MATCHED
                 if seg in matching_set
                 else SegmentState.UNMATCHED
             )
-        self.analysis.set_html(render_feat_to_seg(selected_feats, matching))
+        self.analysis.set_html(summary["analysis_html"])
 
     def _reset_feature_display(self) -> None:
         for row in self._feat_rows.values():

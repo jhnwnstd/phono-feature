@@ -1,0 +1,188 @@
+"""Qt-free view-model helpers shared by desktop and web frontends.
+
+This module keeps pure presentation-state derivation in the desktop
+source tree so the web build can relay it directly instead of
+re-implementing the same logic inside ``web/api.py`` or ``main.js``.
+
+Current responsibilities:
+
+* Inventory summary shaping for the web app's initial paint.
+* SEG-mode analysis summaries (shared/contrastive features,
+  suggested extensions, pre-rendered analysis HTML).
+* FEAT-mode analysis summaries (matching segments + HTML).
+
+The desktop still owns actual widget mutation. This module only turns
+engine state into plain dict/list payloads that either frontend can
+consume.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from phonology_features.gui.analysis import (
+    compute_contrastive,
+    render_feat_to_seg,
+    render_multi_segment,
+    render_single_segment,
+)
+from phonology_features.gui.constants import FEATURE_GROUPS
+from phonology_features.gui.layout import distribute_feature_groups
+from phonology_features.gui.vowel_layout import COL_LABELS as VOWEL_COL_LABELS
+from phonology_features.gui.vowel_layout import ROW_LABELS as VOWEL_ROW_LABELS
+from phonology_features.gui.vowel_layout import (
+    compute_placements,
+    detect_vowel_profile,
+)
+
+if TYPE_CHECKING:
+    from phonology_engine.feature_engine import FeatureEngine
+
+
+def build_inventory_summary(
+    engine: FeatureEngine,
+    inventory_name: str,
+) -> dict[str, Any]:
+    """Shape the inventory summary both frontends need after a load.
+
+    Returns the plain dict payload the web bridge exposes to JS. The
+    structure is also useful to the desktop when we want a canonical,
+    serializable snapshot of the current engine-backed layout state.
+    """
+    grouped = engine.grouped_segments
+    consonant_groups: list[dict[str, Any]] = []
+    vowel_segs: list[str] = []
+    for manner, segs in grouped.items():
+        if manner.lower() == "vowels":
+            vowel_segs = list(segs)
+        else:
+            consonant_groups.append({"name": manner, "segments": list(segs)})
+    return {
+        "name": inventory_name,
+        "segments": list(engine.segments),
+        "features": list(engine.features),
+        "groups": consonant_groups,
+        "feature_groups": _grouped_features(list(engine.features)),
+        "vowel_chart": _vowel_chart_summary(engine, vowel_segs),
+    }
+
+
+def summarize_segment_selection(
+    engine: FeatureEngine,
+    segs: list[str],
+) -> dict[str, Any]:
+    """SEG-mode analysis payload shared by desktop and web.
+
+    Keys:
+
+    * ``analysis_html``: pre-rendered HTML for the analysis pane.
+    * ``selected``: echoed selection list.
+    * ``suggested``: natural-class extension suggestions.
+    * ``common``: ``{feat: value}`` display state for shared rows.
+      Single-segment selections map ``"0"`` to ``""`` so callers can
+      treat underspecified rows as visually neutral.
+    * ``contrastive``: feature names that split the selection.
+    """
+    if not segs:
+        return {
+            "analysis_html": "",
+            "selected": [],
+            "suggested": [],
+            "common": {},
+            "contrastive": [],
+        }
+    if len(segs) == 1:
+        feats = engine.get_segment_features(segs[0])
+        common = {feat: v if v != "0" else "" for feat, v in feats.items()}
+        return {
+            "analysis_html": render_single_segment(engine, segs[0], dict(feats)),
+            "selected": list(segs),
+            "suggested": [],
+            "common": common,
+            "contrastive": [],
+        }
+    common = dict(engine.common_features(segs))
+    contrastive = compute_contrastive(engine, segs)
+    suggested = list(engine.suggest_natural_class_extension(segs))
+    return {
+        "analysis_html": render_multi_segment(
+            engine, segs, common, contrastive, suggested,
+        ),
+        "selected": list(segs),
+        "suggested": suggested,
+        "common": common,
+        "contrastive": list(contrastive),
+    }
+
+
+def summarize_feature_query(
+    engine: FeatureEngine,
+    spec: dict[str, str],
+) -> dict[str, Any]:
+    """FEAT-mode analysis payload shared by desktop and web."""
+    if not spec:
+        return {
+            "analysis_html": "",
+            "matching": [],
+        }
+    matching = engine.find_segments(spec)
+    return {
+        "analysis_html": render_feat_to_seg(spec, matching),
+        "matching": matching,
+    }
+
+
+def _vowel_chart_summary(
+    engine: FeatureEngine,
+    vowel_segs: list[str],
+) -> dict[str, Any]:
+    """Compute the grouped vowel-chart payload used by the web UI."""
+    seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
+    profile = detect_vowel_profile(vowel_segs, seg_feats)
+    occupied, placements = compute_placements(
+        list(vowel_segs), profile, seg_feats
+    )
+    cells: list[dict[str, Any]] = []
+    for (row, col), segs_in_cell in occupied.items():
+        cells.append({
+            "row": row,
+            "col": col,
+            "segs": [
+                {
+                    "seg": seg,
+                    "confidence": placements[seg].confidence.name.lower(),
+                    "reason": placements[seg].reason,
+                }
+                for seg in segs_in_cell
+            ],
+        })
+    return {
+        "rows": list(VOWEL_ROW_LABELS),
+        "cols": list(VOWEL_COL_LABELS),
+        "cells": cells,
+    }
+
+
+def _grouped_features(features: list[str]) -> list[dict[str, Any]]:
+    """Bucket active features into named cards + left/right columns."""
+    present = set(features)
+    cards: list[dict[str, Any]] = []
+    placed: set[str] = set()
+    for group_name, group_feats in FEATURE_GROUPS:
+        in_inventory = [feat for feat in group_feats if feat in present]
+        if in_inventory:
+            cards.append({"name": group_name, "features": in_inventory})
+            placed.update(in_inventory)
+    leftovers = [feat for feat in features if feat not in placed]
+    if leftovers:
+        cards.append({"name": "Other", "features": leftovers})
+    sizes = {card["name"]: len(card["features"]) for card in cards}
+    group_order = [card["name"] for card in cards]
+    left_names, right_names = distribute_feature_groups(
+        sizes, group_order=group_order,
+    )
+    column_of = {name: 0 for name in left_names}
+    column_of.update({name: 1 for name in right_names})
+    for card in cards:
+        card["column"] = column_of.get(card["name"], 0)
+    return cards
