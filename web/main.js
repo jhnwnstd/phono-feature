@@ -22,7 +22,13 @@ const NODE_IDS = Object.freeze({
     segClearBtn: "seg-clear-btn",
     featClearBtn: "feat-clear-btn",
     analysisPane: "analysis-pane",
-    analysisContent: "analysis-content",
+    analysisSelection: "analysis-selection",
+    analysisTabClass: "analysis-tab-class",
+    analysisTabFeatures: "analysis-tab-features",
+    analysisTabContrasts: "analysis-tab-contrasts",
+    analysisContentClass: "analysis-content-class",
+    analysisContentFeatures: "analysis-content-features",
+    analysisContentContrasts: "analysis-content-contrasts",
     expandBtn: "expand-btn",
     themeBtn: "theme-btn",
     renameDialog: "rename-dialog",
@@ -578,7 +584,7 @@ function applyInventoryInfo(info) {
     state.selected_features = emptyFeatureSpec();
     renderSegmentGrid(info.groups, info.vowel_chart);
     renderFeaturePanel(info.feature_groups);
-    nodes.analysisContent.innerHTML = "";
+    clearAnalysisTabs();
 }
 
 async function loadInventoryText(text, sourceLabel) {
@@ -592,10 +598,18 @@ async function loadInventoryText(text, sourceLabel) {
         prewarmCommonAnalyses();
     } catch (e) {
         const issues = e.message ? [e.message] : ["unknown error"];
-        nodes.analysisContent.innerHTML =
-            "<p><b>Could not load inventory:</b></p><ul>"
+        const errorHtml = "<p><b>Could not load inventory:</b></p><ul>"
             + issues.map((i) => `<li>${escapeHtml(i)}</li>`).join("")
             + "</ul>";
+        // Route load errors to the Class tab — same place users
+        // expect to see the primary analytical output.
+        setAnalysisTabs({
+            selection: "",
+            class: errorHtml,
+            features: "",
+            contrasts: "",
+            contrasts_enabled: false,
+        });
         setStatus("Load failed.");
     }
 }
@@ -1113,7 +1127,7 @@ function activateMode(mode) {
     setStatus(statusTextForMode(mode));
 
     if (state.bridge) scheduleAnalysis();
-    else nodes.analysisContent.innerHTML = "";
+    else clearAnalysisTabs();
 }
 
 const ANALYSIS_DEBOUNCE_MS = 30;
@@ -1188,7 +1202,7 @@ function _applyFeatureRowStates(featureRows) {
 function runSegToFeat(token) {
     const result = callBridge("analyze_segments", state.selected_segments);
     if (_isStaleToken(token)) return;
-    nodes.analysisContent.innerHTML = result.analysis_html;
+    setAnalysisTabs(result.analysis_tabs);
     _applySegmentStateMap(result.segment_states);
     _applyFeatureRowStates(result.feature_rows);
 }
@@ -1196,8 +1210,85 @@ function runSegToFeat(token) {
 function runFeatToSeg(token) {
     const result = callBridge("analyze_features", state.selected_features);
     if (_isStaleToken(token)) return;
-    nodes.analysisContent.innerHTML = result.analysis_html;
+    setAnalysisTabs(result.analysis_tabs);
     _applySegmentStateMap(result.segment_states);
+}
+
+/** Push the shared view-model's per-tab payload into the analysis
+ *  pane. Mirrors the desktop ``AnalysisPanel.set_sections`` — same
+ *  Python source, both UIs render the same three tabs.
+ *
+ *  Payload keys:
+ *    selection         html for the persistent header above the tabs
+ *                      (empty → header hidden; query in FEAT mode is
+ *                      explicit in the Features tab, so no need to
+ *                      repeat it here)
+ *    class             html for the Class tab body
+ *    features          html for the Features tab body
+ *    contrasts         html for the Contrasts tab body
+ *    contrasts_enabled false → grey the Contrasts tab + snap back
+ *                      to Class if it was active
+ *    class_state       "natural" | "not_natural" | "neutral" — colour
+ *                      cue on the Class tab itself, replaces the
+ *                      old "Natural class: Yes/No" text
+ */
+function setAnalysisTabs(tabs) {
+    if (!tabs) {
+        clearAnalysisTabs();
+        return;
+    }
+    const selectionHtml = tabs.selection || "";
+    nodes.analysisSelection.innerHTML = selectionHtml;
+    nodes.analysisSelection.hidden = selectionHtml.length === 0;
+    nodes.analysisContentClass.innerHTML = tabs["class"] || "";
+    nodes.analysisContentFeatures.innerHTML = tabs.features || "";
+    nodes.analysisContentContrasts.innerHTML = tabs.contrasts || "";
+    const contrastsEnabled = tabs.contrasts_enabled !== false;
+    nodes.analysisTabContrasts.disabled = !contrastsEnabled;
+    nodes.analysisTabContrasts.setAttribute(
+        "aria-disabled", contrastsEnabled ? "false" : "true",
+    );
+    // If the user has the Contrasts tab open but the new payload
+    // disables it, snap back to Class so they land on real content.
+    if (
+        !contrastsEnabled
+        && nodes.analysisTabContrasts.getAttribute("aria-selected") === "true"
+    ) {
+        activateAnalysisTab("class");
+    }
+    nodes.analysisTabClass.dataset.classState = tabs.class_state || "neutral";
+}
+
+/** Empty the entire analysis pane (selection header + all three tab
+ *  bodies). Used on inventory swap and mode reset. */
+function clearAnalysisTabs() {
+    nodes.analysisSelection.innerHTML = "";
+    nodes.analysisSelection.hidden = true;
+    nodes.analysisContentClass.innerHTML = "";
+    nodes.analysisContentFeatures.innerHTML = "";
+    nodes.analysisContentContrasts.innerHTML = "";
+    nodes.analysisTabContrasts.disabled = false;
+    nodes.analysisTabContrasts.removeAttribute("aria-disabled");
+    nodes.analysisTabClass.dataset.classState = "neutral";
+}
+
+/** Switch the visible tab. Updates aria-selected on the tab buttons
+ *  and the ``hidden`` attribute on the tab panels. */
+function activateAnalysisTab(name) {
+    const buttons = [
+        ["class", nodes.analysisTabClass, nodes.analysisContentClass],
+        ["features", nodes.analysisTabFeatures, nodes.analysisContentFeatures],
+        [
+            "contrasts",
+            nodes.analysisTabContrasts,
+            nodes.analysisContentContrasts,
+        ],
+    ];
+    for (const [tabName, btn, panel] of buttons) {
+        const active = tabName === name;
+        btn.setAttribute("aria-selected", active ? "true" : "false");
+        panel.hidden = !active;
+    }
 }
 
 // Inventories are typically 10-50 KB. 5 MB is ~100x the typical
@@ -2828,6 +2919,25 @@ function wireExpandButton() {
     });
 }
 
+/** Wire the three analysis-tab buttons. Click-to-activate, with a
+ *  no-op when the user clicks the already-active or a disabled tab.
+ *  Tab content and the contrasts-enabled flag come from the shared
+ *  Python view-model; this is purely the click-routing layer. */
+function wireAnalysisTabs() {
+    const targets = [
+        ["class", nodes.analysisTabClass],
+        ["features", nodes.analysisTabFeatures],
+        ["contrasts", nodes.analysisTabContrasts],
+    ];
+    for (const [name, btn] of targets) {
+        btn.addEventListener("click", () => {
+            if (btn.disabled) return;
+            if (btn.getAttribute("aria-selected") === "true") return;
+            activateAnalysisTab(name);
+        });
+    }
+}
+
 function wireClearButtons() {
     nodes.segClearBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -2857,7 +2967,7 @@ function clearAll() {
         rec.minus.dataset.active = "false";
         delete rec.row.dataset.queryValue;
     }
-    nodes.analysisContent.innerHTML = "";
+    clearAnalysisTabs();
     setStatus(statusTextForMode(state.mode));
 }
 
@@ -2950,6 +3060,7 @@ async function main() {
     wireLabelPrompt();
     wireBuilderEditor(setupDialog);
     wireExpandButton();
+    wireAnalysisTabs();
     wireClearButtons();
     wirePanelClickMode();
     wireSegmentDelegation();

@@ -415,3 +415,201 @@ def _render_natural_class_verdict(
     else:
         verdict = f"<p><b>Natural class:</b> {_yes_no(False)}</p>"
     return verdict, ""
+
+
+# ---------------------------------------------------------------------------
+# Per-tab renderers — one HTML string per analysis tab in the UI.
+#
+# The single-blob ``render_*`` functions above are still used (the web's
+# legacy ``analysis_html`` payload reads them) but the desktop's tabbed
+# analysis panel and the matching web layout consume these per-tab
+# variants so each tab gets exactly its section. Splitting the
+# rendering at this layer keeps the desktop and web in lockstep — both
+# read the same Python output via ``view_models``.
+# ---------------------------------------------------------------------------
+
+
+def render_selection_summary_seg(segs: list[str]) -> str:
+    """Persistent header content for SEG-mode selections.
+
+    Returns ``"Selected: chip chip"``-style HTML that sits above the
+    tabs and doesn't move when the user switches tabs. Empty
+    selection renders an italic placeholder so the header reserves
+    its space and the surrounding chrome doesn't reflow on first
+    click.
+    """
+    if not segs:
+        return _muted_italic_p("Click a segment to inspect.")
+    chips = " ".join(_segment_chip(seg) for seg in segs)
+    return f"<p><b>Selected ({len(segs)}):</b> {chips}</p>"
+
+
+def render_selection_summary_feat(feature_dict: dict[str, str]) -> str:
+    """Persistent header content for FEAT-mode queries."""
+    if not feature_dict:
+        return _muted_italic_p("Toggle feature values to query the inventory.")
+    chips = " ".join(
+        _signed_feature_chip(value, feature)
+        for feature, value in sort_spec(feature_dict).items()
+    )
+    return f"<p><b>Query:</b> {chips}</p>"
+
+
+def render_class_tab_seg(
+    engine: FeatureEngine,
+    segs: list[str],
+    suggested: list[str],
+) -> str:
+    """Class tab content for SEG mode.
+
+    The "is this a natural class?" verdict is no longer shown as
+    Yes/No text — the surrounding tab colour conveys that (driven
+    by ``analysis_tabs.class_state``). The body now carries only
+    the substantive answer:
+
+    * Natural class → the minimal feature specifications.
+    * Not a natural class but completable → "N segments needed
+      for natural class:" followed by the chips that would
+      complete it.
+    * Not a natural class and not completable from the current
+      inventory → a muted italic note.
+    """
+    if not segs:
+        return _muted_italic_p("Select one or more segments.")
+    if len(segs) == 1:
+        seg = segs[0]
+        feats = engine.get_segment_features(seg)
+        is_nc, specs = engine.is_natural_class([seg])
+        if not is_nc:
+            non_zero = {feat: val for feat, val in feats.items() if val != "0"}
+            equiv = engine.find_segments(non_zero, underspec_compatible=True)
+            if len(equiv) > 1:
+                is_nc, specs = engine.is_natural_class(equiv)
+        if is_nc and specs:
+            return _render_spec_list(specs)
+        return _muted_italic_p("Not uniquely characterizable.")
+    is_nc, specs = engine.is_natural_class(segs)
+    if is_nc:
+        if not specs or not specs[0]:
+            return (
+                f"<p><b>Minimal specification:</b>"
+                f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"
+            )
+        return _render_spec_list(specs)
+    if suggested:
+        chips = " ".join(
+            _segment_chip(seg, TagColor.NEUTRAL) for seg in suggested
+        )
+        n = len(suggested)
+        return (
+            f"<p><b>{n} {_plural(n, 'segment')} needed for natural"
+            f" class:</b></p>"
+            f"<p>{chips}</p>"
+        )
+    return _muted_italic_p("No natural-class completion from this inventory.")
+
+
+def render_class_tab_feat(
+    feature_dict: dict[str, str],
+    matching: list[str],
+) -> str:
+    """Class tab content for FEAT mode: list of matching segments
+    (the result of the query) + count. The query itself is in the
+    persistent header above the tabs, so this tab is purely the
+    answer.
+    """
+    if not feature_dict:
+        return _muted_italic_p(
+            "Set + or − on features in the feature pane "
+            "to see matching segments."
+        )
+    if not matching:
+        return f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
+    n = len(matching)
+    chips = " ".join(_segment_chip(seg) for seg in matching)
+    return (
+        f"<p><b>Matching {_plural(n, 'segment')} ({n}):</b></p>"
+        f"<p>{chips}</p>"
+    )
+
+
+def render_features_tab_seg(
+    engine: FeatureEngine,
+    segs: list[str],
+    common: dict[str, str],
+) -> str:
+    """Features tab content for SEG mode: full feature bundle for a
+    single segment, or the shared features (intersection) for a
+    multi-segment selection.
+    """
+    if not segs:
+        return _muted_italic_p("Select one or more segments.")
+    if len(segs) == 1:
+        seg = segs[0]
+        feats = engine.get_segment_features(seg)
+        plus_feats = sort_features(
+            [feature for feature, value in feats.items() if value == "+"]
+        )
+        minus_feats = sort_features(
+            [feature for feature, value in feats.items() if value == "-"]
+        )
+        plus_tags = " ".join(
+            _signed_feature_chip("+", feature) for feature in plus_feats
+        )
+        minus_tags = " ".join(
+            _signed_feature_chip("-", feature) for feature in minus_feats
+        )
+        return (
+            f"<p><b>Feature bundle for /{html.escape(seg)}/:</b></p>"
+            f"<p>{plus_tags}</p>"
+            f"<p>{minus_tags}</p>"
+        )
+    return _render_shared_features(common)
+
+
+def render_features_tab_feat(feature_dict: dict[str, str]) -> str:
+    """Features tab content for FEAT mode: the active query
+    visualised as chips, plus the count. Lighter than the desktop's
+    feature pane (which has the interactive +/- buttons); this tab
+    is for at-a-glance "what am I querying?" review.
+    """
+    if not feature_dict:
+        return _muted_italic_p("No features in the current query.")
+    chips = " ".join(
+        _signed_feature_chip(value, feature)
+        for feature, value in sort_spec(feature_dict).items()
+    )
+    n = len(feature_dict)
+    return (
+        f"<p><b>Active query ({n} {_plural(n, 'feature')}):</b></p>"
+        f"<p>{chips}</p>"
+    )
+
+
+def render_contrasts_tab_seg(
+    engine: FeatureEngine,
+    segs: list[str],
+    contrastive: dict[str, dict[str, list[str]]],
+) -> str:
+    """Contrasts tab content for SEG mode: feature-by-feature
+    breakdown of how the selection splits. Only meaningful for
+    multi-segment selections; for fewer than 2 segments the tab
+    explains why it's empty.
+    """
+    if len(segs) < 2:
+        return _muted_italic_p(
+            "Select two or more segments to see contrasting features."
+        )
+    return _render_contrast_section(engine, segs, contrastive)
+
+
+def render_contrasts_tab_feat() -> str:
+    """Contrasts tab in FEAT mode is not meaningful — the user is
+    asking which segments match a feature spec, not how segments
+    differ. Renders a stable placeholder so the tab still exists
+    and the user isn't left wondering whether they broke something.
+    """
+    return _muted_italic_p(
+        "Switch to segment-mode and select two or more segments "
+        "to compare features across them."
+    )

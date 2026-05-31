@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizePolicy,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -577,6 +578,15 @@ class AnalysisPanel(QWidget):
 
     expand_toggled = pyqtSignal()
 
+    # Index in ``self.tabs`` for the Contrasts tab — kept as a class
+    # constant so ``set_sections`` can enable/disable it cleanly. Order
+    # also matches the user's chosen reading order: Class first (the
+    # analytical conclusion), then Features (raw spec), then Contrasts
+    # (only meaningful for multi-segment SEG mode).
+    _TAB_CLASS_IDX = 0
+    _TAB_FEATURES_IDX = 1
+    _TAB_CONTRASTS_IDX = 2
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.title = QLabel("Analysis", self)
@@ -590,17 +600,41 @@ class AnalysisPanel(QWidget):
         self.expand_btn.setToolTip("Maximize analysis pane")
         self.expand_btn.clicked.connect(self.expand_toggled.emit)
         self._is_expanded = False
-        self.content = _CopyableTextEdit(self)
-        self.content.setReadOnly(True)
-        # Explicit family chain rather than ``QFont("Noto Sans Mono")``:
-        # Noto Sans Mono isn't on every system, and QFont's single-family
-        # constructor silently falls back to the platform default (which
-        # may have poor IPA / combining-mark coverage). ``setFamilies``
-        # gives Qt an ordered list to try.
+        # Persistent header content: "Selected: /a/ /b/" or
+        # "Query: +Voice −Nasal". Stays visible regardless of which
+        # tab is active so the user always sees what they selected.
+        self.selection_label = _CopyableTextEdit(self)
+        self.selection_label.setReadOnly(True)
+        self.selection_label.setFixedHeight(38)
         mono_font = QFont()
         mono_font.setFamilies(MONO_FAMILIES)
         mono_font.setPointSize(10)
-        self.content.setFont(mono_font)
+        self.selection_label.setFont(mono_font)
+        # The three analysis tabs. Each contains its own
+        # ``_CopyableTextEdit`` so tab swaps are cheap (no re-render)
+        # and the cached-HTML short-circuit in ``set_html`` still
+        # applies per tab. The Contrasts tab gets disabled (greyed
+        # out, not removed) when the current selection has nothing
+        # to compare.
+        self.tabs = QTabWidget(self)
+        self._tab_class = _CopyableTextEdit(self.tabs)
+        self._tab_features = _CopyableTextEdit(self.tabs)
+        self._tab_contrasts = _CopyableTextEdit(self.tabs)
+        for tab_widget in (
+            self._tab_class,
+            self._tab_features,
+            self._tab_contrasts,
+        ):
+            tab_widget.setReadOnly(True)
+            tab_widget.setFont(mono_font)
+        self.tabs.addTab(self._tab_class, "Class")
+        self.tabs.addTab(self._tab_features, "Features")
+        self.tabs.addTab(self._tab_contrasts, "Contrasts")
+        # Back-compat alias so the existing ``self.analysis.content``
+        # references in tests + other code keep working; the Class
+        # tab carries the most prominent analytical output so
+        # ``.content`` lands there.
+        self.content = self._tab_class
         self.content.setMinimumHeight(60)
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
@@ -609,10 +643,20 @@ class AnalysisPanel(QWidget):
         header_row.addStretch(1)
         header_row.addWidget(self.expand_btn)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(8)
+        # Tight margins + spacing so the tabs sit close to the
+        # "Analysis" header. Every pixel saved here goes to the
+        # tab content area below — the user explicitly asked for
+        # this redistribution.
+        layout.setContentsMargins(16, 6, 16, 8)
+        layout.setSpacing(2)
         layout.addLayout(header_row)
-        layout.addWidget(self.content)
+        layout.addWidget(self.selection_label)
+        layout.addWidget(self.tabs)
+        # Selection label starts hidden — empty selection / FEAT
+        # mode shouldn't reserve its strip of space. ``set_sections``
+        # toggles visibility based on whether the html payload
+        # actually carries chips.
+        self.selection_label.setVisible(False)
         self.apply_theme()
 
     def set_expanded(self, expanded: bool) -> None:
@@ -655,9 +699,7 @@ class AnalysisPanel(QWidget):
             QPushButton:hover {{ color: {C['text']}; }}
             """,
         )
-        set_css(
-            self.content,
-            f"""
+        text_edit_css = f"""
             QTextEdit {{
                 background: {C["panel"]};
                 color: {C["text"]};
@@ -665,22 +707,146 @@ class AnalysisPanel(QWidget):
                 border-radius: 6px;
                 padding: 8px;
             }}
-            """ + scrollbar_style(),
+            """ + scrollbar_style()
+        for tab in (self._tab_class, self._tab_features, self._tab_contrasts):
+            set_css(tab, text_edit_css)
+        # Persistent selection header: same colour palette as the
+        # tab bodies but no border (it sits flush above the tabs).
+        set_css(
+            self.selection_label,
+            f"""
+            QTextEdit {{
+                background: transparent;
+                color: {C["text"]};
+                border: none;
+                padding: 0 2px;
+            }}
+            """,
+        )
+        set_css(
+            self.tabs,
+            f"""
+            QTabWidget::pane {{
+                border: 1px solid {C["border"]};
+                border-radius: 6px;
+                top: -1px;
+            }}
+            QTabBar::tab {{
+                background: {C["bg"]};
+                color: {C["text_dim"]};
+                border: 1px solid {C["border"]};
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                padding: 4px 14px;
+                margin-right: 2px;
+            }}
+            QTabBar::tab:selected {{
+                background: {C["panel"]};
+                color: {C["text"]};
+                font-weight: bold;
+            }}
+            QTabBar::tab:hover:!selected {{
+                color: {C["text"]};
+            }}
+            QTabBar::tab:disabled {{
+                color: {C["border"]};
+            }}
+            """,
         )
 
     def set_html(self, html: str) -> None:
-        set_html(self.content, html)
+        """Legacy single-blob entry point. Routes the whole HTML to
+        the Class tab so anything still calling this from outside the
+        view-model layer keeps working. New call sites should use
+        :py:meth:`set_sections` so the three tabs each carry their
+        own content."""
+        set_html(self._tab_class, html)
+        self.selection_label.setHtml("")
+        set_html(self._tab_features, "")
+        set_html(self._tab_contrasts, "")
+
+    def set_sections(
+        self,
+        selection_html: str,
+        class_html: str,
+        features_html: str,
+        contrasts_html: str,
+        *,
+        contrasts_enabled: bool = True,
+        class_state: str = "neutral",
+    ) -> None:
+        """Push the four analysis sections produced by the shared
+        view-model into the persistent selection header + three tabs.
+
+        ``contrasts_enabled=False`` greys out the Contrasts tab and
+        prevents activation — used for single-segment SEG selections
+        and for FEAT mode, where contrasts aren't meaningful. If the
+        currently-active tab is the disabled one, focus jumps back
+        to the Class tab so the user lands on real content instead
+        of a placeholder explaining why the tab is empty.
+
+        ``class_state`` colours the Class tab text: ``"natural"`` →
+        palette ``plus`` (green), ``"not_natural"`` → palette
+        ``minus`` (red), anything else → default text colour. The
+        coloured tab replaces the previous "Natural class: Yes/No"
+        text in the tab body.
+
+        Empty ``selection_html`` hides the persistent selection
+        label entirely (no reserved strip of space) — used in FEAT
+        mode where the query is already explicit in the Features
+        tab.
+        """
+        if selection_html:
+            self.selection_label.setHtml(selection_html)
+            self.selection_label.setVisible(True)
+        else:
+            self.selection_label.clear()
+            self.selection_label.setVisible(False)
+        set_html(self._tab_class, class_html)
+        set_html(self._tab_features, features_html)
+        set_html(self._tab_contrasts, contrasts_html)
+        self.tabs.setTabEnabled(self._TAB_CONTRASTS_IDX, contrasts_enabled)
+        if (
+            not contrasts_enabled
+            and self.tabs.currentIndex() == self._TAB_CONTRASTS_IDX
+        ):
+            self.tabs.setCurrentIndex(self._TAB_CLASS_IDX)
+        self._apply_class_state(class_state)
+
+    def _apply_class_state(self, state: str) -> None:
+        """Colour the Class tab text per the natural-class verdict.
+
+        Uses ``QTabBar.setTabTextColor`` rather than a global
+        stylesheet so the colour change is local to the one tab.
+        Importing QColor lazily because the import only matters
+        once anyone actually loads an inventory.
+        """
+        from PyQt6.QtGui import QColor
+
+        bar = self.tabs.tabBar()
+        if bar is None:
+            return
+        if state == "natural":
+            colour = QColor(C["plus"])
+        elif state == "not_natural":
+            colour = QColor(C["minus"])
+        else:
+            colour = QColor(C["text"])
+        bar.setTabTextColor(self._TAB_CLASS_IDX, colour)
 
     def clear(self) -> None:
-        self.content.clear()
-        # set_html caches the last HTML string on the widget and
-        # short-circuits duplicate calls. clear() resets the widget
-        # but not the cache, so a later set_html(X) where X matches
-        # the pre-clear value would no-op and leave the pane blank.
-        # Invalidate the cache here so the next set_html always
-        # re-paints.
-        if hasattr(self.content, _LAST_HTML_ATTR):
-            delattr(self.content, _LAST_HTML_ATTR)
+        self.selection_label.clear()
+        for tab in (self._tab_class, self._tab_features, self._tab_contrasts):
+            tab.clear()
+            # set_html caches the last HTML string on the widget and
+            # short-circuits duplicate calls. clear() resets the widget
+            # but not the cache, so a later set_html(X) where X matches
+            # the pre-clear value would no-op and leave the pane blank.
+            if hasattr(tab, _LAST_HTML_ATTR):
+                delattr(tab, _LAST_HTML_ATTR)
+        if hasattr(self.selection_label, _LAST_HTML_ATTR):
+            delattr(self.selection_label, _LAST_HTML_ATTR)
 
 
 class SegmentGridWidget(QWidget):

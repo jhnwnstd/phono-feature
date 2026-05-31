@@ -80,6 +80,69 @@ def test_summarize_feature_query_matches_engine() -> None:
     assert summary["segment_states"]["p"] == "unmatched"
 
 
+# ---------------------------------------------------------------------------
+# analysis_tabs payload — shared contract between the desktop's
+# ``AnalysisPanel.set_sections`` and the web's ``setAnalysisTabs``.
+# Both consume the same keys; these tests pin the keys + invariants
+# so a rename / drop on either side breaks the build here, not later
+# at runtime in one UI but not the other.
+# ---------------------------------------------------------------------------
+
+
+def _assert_tabs_shape(tabs: dict[str, object]) -> None:
+    for key in ("selection", "class", "features", "contrasts"):
+        assert key in tabs, f"missing tab key: {key}"
+        assert isinstance(tabs[key], str)
+    assert "contrasts_enabled" in tabs
+    assert isinstance(tabs["contrasts_enabled"], bool)
+
+
+def test_analysis_tabs_seg_single_disables_contrasts() -> None:
+    """Single-segment SEG selection: Contrasts tab has nothing to
+    show, so the payload signals the UI to grey out / disable it.
+    """
+    engine = _engine("hayes_features.json")
+    tabs = summarize_segment_selection(engine, ["b"])["analysis_tabs"]
+    _assert_tabs_shape(tabs)
+    assert tabs["contrasts_enabled"] is False
+    # Class tab carries the natural-class verdict / specs.
+    assert "+Voice" in tabs["features"]
+    # Selection header has the chip for /b/.
+    assert "/b/" in tabs["selection"]
+
+
+def test_analysis_tabs_seg_multi_enables_contrasts() -> None:
+    """Multi-segment SEG: contrasting features go in the Contrasts
+    tab; the flag is on."""
+    engine = _engine("hayes_features.json")
+    segs = ["b", "d", "ɡ"]
+    tabs = summarize_segment_selection(engine, segs)["analysis_tabs"]
+    _assert_tabs_shape(tabs)
+    assert tabs["contrasts_enabled"] is True
+    assert "Contrasting features" in tabs["contrasts"]
+
+
+def test_analysis_tabs_feat_disables_contrasts() -> None:
+    """FEAT mode: contrasts aren't meaningful for a feature query,
+    so the flag stays off regardless of how many matches there are.
+    """
+    engine = _engine("hayes_features.json")
+    tabs = summarize_feature_query(engine, {"Voice": "+"})["analysis_tabs"]
+    _assert_tabs_shape(tabs)
+    assert tabs["contrasts_enabled"] is False
+    # The Class tab is where matching segments land in FEAT mode.
+    assert "Matching" in tabs["class"]
+
+
+def test_analysis_tabs_empty_selection_safe_shape() -> None:
+    """Empty SEG selection still produces a well-formed payload —
+    the UI can call setSections without checking for nulls."""
+    engine = _engine("hayes_features.json")
+    tabs = summarize_segment_selection(engine, [])["analysis_tabs"]
+    _assert_tabs_shape(tabs)
+    assert tabs["contrasts_enabled"] is False
+
+
 def test_segment_state_payload_strings_match_enum() -> None:
     """The desktop coerces ``segment_states`` strings into the
     ``SegmentState`` StrEnum via ``SegmentState(state)``. If the enum

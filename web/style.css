@@ -669,7 +669,10 @@ dialog input[type="text"]:focus-visible {
 .analysis {
   background: var(--analysis-bg);
   border-top: var(--border-thin) solid var(--border);
-  padding: var(--space-lg) var(--space-xl);
+  /* Tight vertical padding (top 6, bottom 10) so the tab content
+     area gets the headroom that used to sit between the ANALYSIS
+     label and the tabs. */
+  padding: 6px var(--space-xl) 10px;
   display: flex;
   flex-direction: column;
   min-height: 220px;
@@ -699,11 +702,83 @@ dialog input[type="text"]:focus-visible {
   cursor: pointer;
 }
 #expand-btn:hover { color: var(--text); }
+/* Persistent selection header above the tabs (SEG mode only).
+   FEAT mode sets ``hidden`` via JS so the strip doesn't reserve
+   space when the query is already explicit in the Features tab. */
+.analysis-selection {
+  margin-top: 2px;
+  padding: 0 var(--space-xs);
+  font-size: var(--font-size-control);
+  color: var(--text);
+}
+.analysis-selection[hidden] { display: none; }
+.analysis-selection p { margin: 0; }
+.analysis-selection b { color: var(--text); }
+
+/* Tab strip — Class / Features / Contrasts. Mirrors the desktop's
+   QTabBar styling: bottom-flush tabs with the active tab merged
+   into the content card via ``border-bottom`` colour matching.
+   ``margin-top`` is intentionally tiny so the tabs sit right under
+   the ANALYSIS header — the dead space the user complained about
+   has gone to the content area below. */
+.analysis-tabs {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+  border-bottom: var(--border-thin) solid var(--border);
+}
+.analysis-tab {
+  appearance: none;
+  background: var(--bg);
+  color: var(--text-dim);
+  border: var(--border-thin) solid var(--border);
+  border-bottom: none;
+  border-top-left-radius: var(--radius-sm);
+  border-top-right-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-lg);
+  font: inherit;
+  font-size: var(--font-size-control);
+  cursor: pointer;
+}
+.analysis-tab:hover:not([aria-selected="true"]):not(:disabled) {
+  color: var(--text);
+}
+.analysis-tab[aria-selected="true"] {
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 600;
+  /* Pull the active tab over the container's top border so the
+     two visually merge — matches the QTabWidget appearance. */
+  margin-bottom: -1px;
+  border-bottom: var(--border-thin) solid var(--panel);
+}
+.analysis-tab:disabled {
+  color: var(--border);
+  cursor: not-allowed;
+}
+/* Class-tab colour cues — replaces the previous "Natural class:
+   Yes/No" body text. The state attribute is set by JS from the
+   shared ``analysis_tabs.class_state`` field, so desktop and web
+   agree on when each colour applies. ``font-weight`` on the
+   coloured states keeps the cue legible on the unselected
+   greyed-text background. */
+.analysis-tab[data-class-state="natural"] {
+  color: var(--plus);
+}
+.analysis-tab[data-class-state="not_natural"] {
+  color: var(--minus);
+}
+.analysis-tab[data-class-state="natural"][aria-selected="true"],
+.analysis-tab[data-class-state="not_natural"][aria-selected="true"] {
+  font-weight: 600;
+}
+
 .analysis-content {
-  margin-top: var(--space-md);
+  margin-top: 0;
   background: var(--panel);
   border: var(--border-thin) solid var(--border);
-  border-radius: var(--radius-md);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
   padding: var(--space-md) var(--space-lg);
   overflow: auto;
   scrollbar-gutter: stable;
@@ -714,6 +789,7 @@ dialog input[type="text"]:focus-visible {
      they don't reflow the panels or status bar. */
   contain: layout style;
 }
+.analysis-content[hidden] { display: none; }
 .analysis-content p { margin: 0 0 var(--space-md); }
 .analysis-content b { color: var(--text); }
 .analysis-content table { border-collapse: collapse; }

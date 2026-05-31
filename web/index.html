@@ -102,7 +102,37 @@
     <span class="analysis-title">ANALYSIS</span>
     <button id="expand-btn" type="button" aria-label="Maximize analysis pane">⤢</button>
   </header>
-  <div class="analysis-content" id="analysis-content"></div>
+  <!--
+    Persistent selection header — sits above the tabs so the user
+    always sees "Selected: …" / "Query: …" regardless of which tab
+    they have active. Content is set by main.js from the shared
+    Python ``analysis_tabs.selection`` field.
+  -->
+  <div class="analysis-selection" id="analysis-selection"></div>
+  <!--
+    Three-tab interface mirroring the desktop's AnalysisPanel.
+    Tab labels and content keys are pinned: Class / Features /
+    Contrasts. The view-model returns one HTML string per tab so
+    both UIs render the same partition without re-implementing the
+    split logic on either side.
+  -->
+  <div class="analysis-tabs" id="analysis-tabs" role="tablist">
+    <button class="analysis-tab" id="analysis-tab-class"
+            type="button" role="tab" aria-controls="analysis-content-class"
+            data-tab="class" aria-selected="true">Class</button>
+    <button class="analysis-tab" id="analysis-tab-features"
+            type="button" role="tab" aria-controls="analysis-content-features"
+            data-tab="features" aria-selected="false">Features</button>
+    <button class="analysis-tab" id="analysis-tab-contrasts"
+            type="button" role="tab" aria-controls="analysis-content-contrasts"
+            data-tab="contrasts" aria-selected="false">Contrasts</button>
+  </div>
+  <div class="analysis-content" id="analysis-content-class"
+       role="tabpanel" aria-labelledby="analysis-tab-class"></div>
+  <div class="analysis-content" id="analysis-content-features"
+       role="tabpanel" aria-labelledby="analysis-tab-features" hidden></div>
+  <div class="analysis-content" id="analysis-content-contrasts"
+       role="tabpanel" aria-labelledby="analysis-tab-contrasts" hidden></div>
 </section>
 
 <footer class="statusbar" aria-live="polite">

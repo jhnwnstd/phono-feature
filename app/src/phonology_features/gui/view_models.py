@@ -23,8 +23,16 @@ from typing import TYPE_CHECKING, Any
 
 from phonology_features.gui.analysis import (
     compute_contrastive,
+    render_class_tab_feat,
+    render_class_tab_seg,
+    render_contrasts_tab_feat,
+    render_contrasts_tab_seg,
     render_feat_to_seg,
+    render_features_tab_feat,
+    render_features_tab_seg,
     render_multi_segment,
+    render_selection_summary_feat,
+    render_selection_summary_seg,
     render_single_segment,
 )
 from phonology_features.gui.constants import FEATURE_GROUPS
@@ -91,6 +99,7 @@ def summarize_segment_selection(
     if not segs:
         return {
             "analysis_html": "",
+            "analysis_tabs": _seg_tabs(engine, [], {}, {}, []),
             "selected": [],
             "suggested": [],
             "common": {},
@@ -112,6 +121,7 @@ def summarize_segment_selection(
             "analysis_html": render_single_segment(
                 engine, segs[0], dict(feats)
             ),
+            "analysis_tabs": _seg_tabs(engine, segs, common, {}, []),
             "selected": list(segs),
             "suggested": [],
             "common": common,
@@ -151,6 +161,9 @@ def summarize_segment_selection(
             contrastive,
             suggested,
         ),
+        "analysis_tabs": _seg_tabs(
+            engine, segs, common, contrastive, suggested
+        ),
         "selected": list(segs),
         "suggested": suggested,
         "common": common,
@@ -169,6 +182,7 @@ def summarize_feature_query(
     if not spec:
         return {
             "analysis_html": "",
+            "analysis_tabs": _feat_tabs({}, []),
             "matching": [],
             "segment_states": segment_states,
         }
@@ -178,8 +192,65 @@ def summarize_feature_query(
         segment_states[seg] = "matched" if seg in matching_set else "unmatched"
     return {
         "analysis_html": render_feat_to_seg(spec, matching),
+        "analysis_tabs": _feat_tabs(spec, matching),
         "matching": matching,
         "segment_states": segment_states,
+    }
+
+
+def _seg_tabs(
+    engine: FeatureEngine,
+    segs: list[str],
+    common: dict[str, str],
+    contrastive: dict[str, dict[str, list[str]]],
+    suggested: list[str],
+) -> dict[str, Any]:
+    """Build the per-tab HTML payload for the SEG-mode analysis pane.
+
+    Keys map to the three tabs the desktop and web render —
+    ``"class"``, ``"features"``, ``"contrasts"`` — plus a
+    ``"selection"`` line for the persistent header above the tabs,
+    a ``"contrasts_enabled"`` flag that dims the third tab when
+    there's nothing to compare (single-segment selection), and a
+    ``"class_state"`` that colours the Class tab itself: green
+    ``"natural"`` when the selection forms a natural class, red
+    ``"not_natural"`` when it doesn't, ``"neutral"`` for the empty
+    selection. Colouring the tab replaces the previous "Natural
+    class: Yes/No" body text — same information, less visual noise.
+    """
+    if segs:
+        is_nc, _ = engine.is_natural_class(segs)
+        class_state = "natural" if is_nc else "not_natural"
+    else:
+        class_state = "neutral"
+    return {
+        "selection": render_selection_summary_seg(segs),
+        "class": render_class_tab_seg(engine, segs, suggested),
+        "features": render_features_tab_seg(engine, segs, common),
+        "contrasts": render_contrasts_tab_seg(engine, segs, contrastive),
+        "contrasts_enabled": len(segs) >= 2,
+        "class_state": class_state,
+    }
+
+
+def _feat_tabs(
+    spec: dict[str, str],
+    matching: list[str],
+) -> dict[str, Any]:
+    """Same shape as :py:func:`_seg_tabs` but for FEAT mode. The
+    Contrasts tab is never meaningful for a feature query, so
+    ``contrasts_enabled`` is always False — the UI greys it out.
+    The selection header is intentionally empty: the query is
+    already explicit in the Features tab below, so duplicating
+    it above the tabs would just waste vertical room.
+    """
+    return {
+        "selection": "",
+        "class": render_class_tab_feat(spec, matching),
+        "features": render_features_tab_feat(spec),
+        "contrasts": render_contrasts_tab_feat(),
+        "contrasts_enabled": False,
+        "class_state": "neutral",
     }
 
 

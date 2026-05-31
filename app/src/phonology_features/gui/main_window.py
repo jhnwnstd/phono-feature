@@ -1310,7 +1310,7 @@ class MainWindow(QMainWindow):
         segment_states = summary["segment_states"]
         for seg, btn in self._seg_buttons.items():
             btn.set_state(segment_states.get(seg, SegmentState.DEFAULT.value))
-        self.analysis.set_html(summary["analysis_html"])
+        self._apply_analysis_tabs(summary["analysis_tabs"])
 
     def _update_feat_to_seg(self) -> None:
         if not self.engine:
@@ -1325,7 +1325,24 @@ class MainWindow(QMainWindow):
         segment_states = summary["segment_states"]
         for seg, btn in self._seg_buttons.items():
             btn.set_state(segment_states.get(seg, SegmentState.DEFAULT.value))
-        self.analysis.set_html(summary["analysis_html"])
+        self._apply_analysis_tabs(summary["analysis_tabs"])
+
+    def _apply_analysis_tabs(self, tabs: dict[str, Any]) -> None:
+        """Route the shared view-model's per-tab payload into the
+        ``AnalysisPanel``. Centralised so SEG and FEAT update paths
+        both flow through the same call site — keeps the contract
+        for tab keys (`selection`, `class`, `features`, `contrasts`,
+        `contrasts_enabled`, `class_state`) tied to one Python
+        function.
+        """
+        self.analysis.set_sections(
+            tabs["selection"],
+            tabs["class"],
+            tabs["features"],
+            tabs["contrasts"],
+            contrasts_enabled=bool(tabs.get("contrasts_enabled", True)),
+            class_state=str(tabs.get("class_state", "neutral")),
+        )
 
     def _reset_feature_display(self) -> None:
         for row in self._feat_rows.values():
