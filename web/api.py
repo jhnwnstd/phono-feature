@@ -50,7 +50,6 @@ from phonology_features.gui.view_models import (
     summarize_segment_selection,
 )
 
-
 _engine: FeatureEngine | None = None
 _inventory_name: str = ""
 
@@ -96,7 +95,9 @@ def serialize_current_inventory() -> str:
     """Round-trip the active inventory to JSON for download."""
     engine = _require_engine()
     return json.dumps(
-        engine.inventory.to_json_dict(), indent=2, ensure_ascii=False,
+        engine.inventory.to_json_dict(),
+        indent=2,
+        ensure_ascii=False,
     )
 
 
@@ -127,7 +128,9 @@ def get_setup_defaults() -> dict[str, Any]:
     return {
         "default_segments": DEFAULT_SEGMENTS,
         "default_features": DEFAULT_FEATURES,
-        "presets": {name: list(feats) for name, feats in FEATURE_PRESETS.items()},
+        "presets": {
+            name: list(feats) for name, feats in FEATURE_PRESETS.items()
+        },
     }
 
 
@@ -152,9 +155,7 @@ def create_new_inventory(
     global _engine, _inventory_name
     result = validate_setup(raw_name, segments_text, features_text)
     if not result.ok:
-        raise ValidationError(
-            tuple(issue.message for issue in result.issues)
-        )
+        raise ValidationError(tuple(issue.message for issue in result.issues))
     grid = {
         seg: dict.fromkeys(result.features, "0") for seg in result.segments
     }
@@ -212,8 +213,7 @@ def get_confirm_remove_segment_prompt(seg: str) -> str:
 
 
 def get_confirm_remove_feature_prompt(feat: str) -> str:
-    """Return the confirmation prompt text for removing a feature.
-    """
+    """Return the confirmation prompt text for removing a feature."""
     return confirm_remove_feature_prompt(feat)
 
 

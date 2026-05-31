@@ -109,7 +109,9 @@ def summarize_segment_selection(
         seg_states[segs[0]] = "selected"
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
         return {
-            "analysis_html": render_single_segment(engine, segs[0], dict(feats)),
+            "analysis_html": render_single_segment(
+                engine, segs[0], dict(feats)
+            ),
             "selected": list(segs),
             "suggested": [],
             "common": common,
@@ -124,7 +126,8 @@ def summarize_segment_selection(
     for feat in engine.features:
         if feat in common:
             row_states[feat] = _feature_row_state(
-                value=common[feat], shared=True,
+                value=common[feat],
+                shared=True,
             )
         elif feat in contrastive:
             row_states[feat] = _feature_row_state(contrastive=True)
@@ -138,7 +141,11 @@ def summarize_segment_selection(
             seg_states[seg] = "suggested"
     return {
         "analysis_html": render_multi_segment(
-            engine, segs, common, contrastive, suggested,
+            engine,
+            segs,
+            common,
+            contrastive,
+            suggested,
         ),
         "selected": list(segs),
         "suggested": suggested,
@@ -214,18 +221,20 @@ def _vowel_chart_summary(
     )
     cells: list[dict[str, Any]] = []
     for (row, col), segs_in_cell in occupied.items():
-        cells.append({
-            "row": row,
-            "col": col,
-            "segs": [
-                {
-                    "seg": seg,
-                    "confidence": placements[seg].confidence.name.lower(),
-                    "reason": placements[seg].reason,
-                }
-                for seg in segs_in_cell
-            ],
-        })
+        cells.append(
+            {
+                "row": row,
+                "col": col,
+                "segs": [
+                    {
+                        "seg": seg,
+                        "confidence": placements[seg].confidence.name.lower(),
+                        "reason": placements[seg].reason,
+                    }
+                    for seg in segs_in_cell
+                ],
+            }
+        )
     return {
         "rows": list(VOWEL_ROW_LABELS),
         "cols": list(VOWEL_COL_LABELS),
@@ -249,7 +258,8 @@ def _grouped_features(features: list[str]) -> list[dict[str, Any]]:
     sizes = {card["name"]: len(card["features"]) for card in cards}
     group_order = [card["name"] for card in cards]
     left_names, right_names = distribute_feature_groups(
-        sizes, group_order=group_order,
+        sizes,
+        group_order=group_order,
     )
     column_of = {name: 0 for name in left_names}
     column_of.update({name: 1 for name in right_names})

@@ -29,6 +29,7 @@ from phonology_features.gui.grid_logic import (
 
 # Constants
 
+
 def test_minus_constants_are_the_distinct_characters_we_expect():
     """The display form is U+2212 MATHEMATICAL MINUS SIGN; the
     serialized form is ASCII U+002D HYPHEN-MINUS. They must be
@@ -156,10 +157,14 @@ def test_move_keys_vim_numpad_arrow_pairs_match():
     """Each direction has a Vim, a numpad, AND an arrow binding
     that produce the same (dr, dc) step. Users on any of the three
     input vocabularies see identical behavior."""
-    assert MOVE_KEYS["h"] == MOVE_KEYS["4"] == MOVE_KEYS["ArrowLeft"] == (0, -1)
+    assert (
+        MOVE_KEYS["h"] == MOVE_KEYS["4"] == MOVE_KEYS["ArrowLeft"] == (0, -1)
+    )
     assert MOVE_KEYS["j"] == MOVE_KEYS["5"] == MOVE_KEYS["ArrowDown"] == (1, 0)
     assert MOVE_KEYS["k"] == MOVE_KEYS["8"] == MOVE_KEYS["ArrowUp"] == (-1, 0)
-    assert MOVE_KEYS["l"] == MOVE_KEYS["6"] == MOVE_KEYS["ArrowRight"] == (0, 1)
+    assert (
+        MOVE_KEYS["l"] == MOVE_KEYS["6"] == MOVE_KEYS["ArrowRight"] == (0, 1)
+    )
 
 
 def test_move_keys_arrow_names_use_js_event_key_format():
@@ -193,7 +198,9 @@ def test_max_undo_depth_re_exported_by_builder_edits():
     through the bridge."""
     from phonology_features.gui.builder.edits import _MAX_UNDO_DEPTH
 
-    assert _MAX_UNDO_DEPTH is MAX_UNDO_DEPTH or _MAX_UNDO_DEPTH == MAX_UNDO_DEPTH
+    assert (
+        _MAX_UNDO_DEPTH is MAX_UNDO_DEPTH or _MAX_UNDO_DEPTH == MAX_UNDO_DEPTH
+    )
 
 
 # validate_new_segment_label / validate_new_feature_label
@@ -281,7 +288,9 @@ def test_validate_new_segment_label_enforces_cap_when_provided():
 def test_validate_new_feature_label_enforces_cap_when_provided():
     with pytest.raises(ValueError, match="limit of 2 reached"):
         validate_new_feature_label(
-            "C", ["A", "B"], max_features=2,
+            "C",
+            ["A", "B"],
+            max_features=2,
         )
 
 
@@ -295,9 +304,7 @@ def test_confirm_remove_segment_prompt_quotes_the_label():
 
 
 def test_confirm_remove_feature_prompt_quotes_the_label():
-    assert (
-        confirm_remove_feature_prompt("Voice") == "Remove feature 'Voice'?"
-    )
+    assert confirm_remove_feature_prompt("Voice") == "Remove feature 'Voice'?"
 
 
 # normalize_minus: display -> serialized form
@@ -338,8 +345,8 @@ def simple_grid():
         "segments": ["b", "d", "m"],
         # cells[feature_index][segment_index]
         "cells": [
-            ["+", "+", "+"],     # Voice
-            ["0", "0", "+"],     # Nasal
+            ["+", "+", "+"],  # Voice
+            ["0", "0", "+"],  # Nasal
         ],
     }
 
@@ -452,6 +459,7 @@ def test_classify_selection_empty():
         SELECTION_SHAPE_EMPTY,
         classify_selection,
     )
+
     s = classify_selection([], 5, 5)
     assert s.kind == SELECTION_SHAPE_EMPTY
     assert s.row is None and s.column is None
@@ -462,6 +470,7 @@ def test_classify_selection_single_cell():
         SELECTION_SHAPE_SINGLE_CELL,
         classify_selection,
     )
+
     s = classify_selection([(2, 3)], 5, 5)
     assert s.kind == SELECTION_SHAPE_SINGLE_CELL
     assert s.row == 2 and s.column == 3
@@ -472,6 +481,7 @@ def test_classify_selection_single_column():
         SELECTION_SHAPE_SINGLE_COLUMN,
         classify_selection,
     )
+
     # All rows of column 2.
     s = classify_selection([(r, 2) for r in range(5)], 5, 5)
     assert s.kind == SELECTION_SHAPE_SINGLE_COLUMN
@@ -484,6 +494,7 @@ def test_classify_selection_single_row():
         SELECTION_SHAPE_SINGLE_ROW,
         classify_selection,
     )
+
     s = classify_selection([(1, c) for c in range(5)], 5, 5)
     assert s.kind == SELECTION_SHAPE_SINGLE_ROW
     assert s.row == 1
@@ -495,6 +506,7 @@ def test_classify_selection_full_grid():
         SELECTION_SHAPE_FULL_GRID,
         classify_selection,
     )
+
     cells = [(r, c) for r in range(3) for c in range(4)]
     s = classify_selection(cells, 3, 4)
     assert s.kind == SELECTION_SHAPE_FULL_GRID
@@ -505,6 +517,7 @@ def test_classify_selection_rectangle():
         SELECTION_SHAPE_RECTANGLE,
         classify_selection,
     )
+
     cells = [(r, c) for r in range(2, 4) for c in range(1, 3)]
     s = classify_selection(cells, 5, 5)
     assert s.kind == SELECTION_SHAPE_RECTANGLE
@@ -516,6 +529,7 @@ def test_classify_selection_irregular():
         SELECTION_SHAPE_IRREGULAR,
         classify_selection,
     )
+
     cells = [(0, 0), (0, 1), (0, 2), (1, 0), (2, 0)]
     s = classify_selection(cells, 5, 5)
     assert s.kind == SELECTION_SHAPE_IRREGULAR
@@ -530,6 +544,7 @@ def test_classify_selection_partial_column_is_not_single_column():
         SELECTION_SHAPE_RECTANGLE,
         classify_selection,
     )
+
     # 3 of 5 rows in column 2: not full column.
     s = classify_selection([(0, 2), (1, 2), (2, 2)], 5, 5)
     # Three contiguous cells in one column form a 3x1 rectangle.
@@ -550,12 +565,19 @@ def test_remove_target_for_shape():
         SelectionShape,
         remove_target_for_shape,
     )
-    assert remove_target_for_shape(
-        SelectionShape(kind=SELECTION_SHAPE_SINGLE_COLUMN, column=2)
-    ) == "segment"
-    assert remove_target_for_shape(
-        SelectionShape(kind=SELECTION_SHAPE_SINGLE_ROW, row=2)
-    ) == "feature"
+
+    assert (
+        remove_target_for_shape(
+            SelectionShape(kind=SELECTION_SHAPE_SINGLE_COLUMN, column=2)
+        )
+        == "segment"
+    )
+    assert (
+        remove_target_for_shape(
+            SelectionShape(kind=SELECTION_SHAPE_SINGLE_ROW, row=2)
+        )
+        == "feature"
+    )
     # All other shapes return None.
     for kind in (
         SELECTION_SHAPE_SINGLE_CELL,

@@ -8,7 +8,7 @@ from __future__ import annotations
 import html
 import os
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import (
     QEvent,
@@ -743,7 +743,8 @@ class MainWindow(QMainWindow):
         # "VOWELS" still gets routed to the IPA chart. Matches the
         # web bridge's _summarize_engine behaviour.
         vowel_key = next(
-            (k for k in groups if k.lower() == "vowels"), None,
+            (k for k in groups if k.lower() == "vowels"),
+            None,
         )
         vowel_segs = groups.pop(vowel_key, []) if vowel_key else []
         consonant_buttons: dict = {}
@@ -1003,7 +1004,7 @@ class MainWindow(QMainWindow):
             return ""
         first = item.widget()
         if first is not None and hasattr(first, "text"):
-            return first.text()
+            return cast(str, first.text())
         return ""
 
     @contextmanager
@@ -1071,7 +1072,9 @@ class MainWindow(QMainWindow):
             return False
         if a0 is self.seg_panel and self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             self._set_mode(Mode.SEG_TO_FEAT)
-        elif a0 is self.feat_panel and self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
+        elif (
+            a0 is self.feat_panel and self._mode_ctrl.mode != Mode.FEAT_TO_SEG
+        ):
             self._set_mode(Mode.FEAT_TO_SEG)
         return False
 

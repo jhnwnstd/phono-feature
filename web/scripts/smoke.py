@@ -41,7 +41,10 @@ def main() -> int:
         {
             "__init__": lambda self, *a, **k: (
                 http.server.SimpleHTTPRequestHandler.__init__(
-                    self, *a, directory=str(DIST), **k,
+                    self,
+                    *a,
+                    directory=str(DIST),
+                    **k,
                 )
             ),
             "log_message": lambda *a, **k: None,
@@ -89,9 +92,12 @@ def main() -> int:
         except Exception as e:
             print(f"FAIL: bridge never booted: {e}", file=sys.stderr)
             print(
-                "Last loading status: " + str(page.evaluate(
-                    "() => document.getElementById('loading-status')?.textContent",
-                )),
+                "Last loading status: "
+                + str(
+                    page.evaluate(
+                        "() => document.getElementById('loading-status')?.textContent",
+                    )
+                ),
                 file=sys.stderr,
             )
             _dump_errors(console_errors, page_errors)
@@ -149,7 +155,9 @@ def main() -> int:
             browser.close()
             return 1
 
-        print("OK: bridge boots, panels render, analysis populates, no errors.")
+        print(
+            "OK: bridge boots, panels render, analysis populates, no errors."
+        )
         rc = 0
         browser.close()
 

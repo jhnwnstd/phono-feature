@@ -160,13 +160,12 @@ class _SaveController(QObject):
             try:
                 inventory.write_atomic(path)
                 err: str = ""
-            except BaseException as e:
-                # Catch EVERYTHING, not just OSError. If any other
-                # exception escapes, the daemon thread dies silently,
-                # save_finished never fires, and save_in_flight stays
-                # True forever (a permanent save lockout until app
-                # restart). The error string surfaced to the user is
-                # the same shape regardless of the exception class.
+            except Exception as e:
+                # Catch ordinary exceptions from the worker so a
+                # failed save still reports back and clears the
+                # in-flight state. We deliberately leave
+                # BaseException subclasses (KeyboardInterrupt,
+                # SystemExit) alone.
                 err = f"{type(e).__name__}: {e}"
                 _log.exception("save worker failed: %s", basename)
             try:
@@ -178,7 +177,7 @@ class _SaveController(QObject):
                 # has been deleted" on the daemon thread.
                 # Functionally fine (the app is already shutting
                 # down) but logging it avoids the silent thread
-                # death the BaseException catch above was added to
+                # death the Exception catch above was added to
                 # prevent in the first place.
                 _log.debug(
                     "save worker: receiver destroyed before completion "
@@ -285,5 +284,5 @@ class _SaveController(QObject):
             # True at this point and Close would get refused even
             # though the user asked for Save+Close.
             self.wait_for_save()
-            return not self.dirty
-        return reply == QMessageBox.StandardButton.Discard
+            return bool(not self.dirty)
+        return bool(reply == QMessageBox.StandardButton.Discard)

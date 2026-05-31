@@ -247,13 +247,9 @@ def validate_setup(
     features = infer_split(features_text)
 
     if not segments:
-        issues.append(
-            SetupIssue("segments", "empty", _MSG_NO_SEGMENTS)
-        )
+        issues.append(SetupIssue("segments", "empty", _MSG_NO_SEGMENTS))
     if not features:
-        issues.append(
-            SetupIssue("features", "empty", _MSG_NO_FEATURES)
-        )
+        issues.append(SetupIssue("features", "empty", _MSG_NO_FEATURES))
 
     # Per-entry length cap. The desktop dialog short-circuits on the
     # first offender per field; we collect every offending field so

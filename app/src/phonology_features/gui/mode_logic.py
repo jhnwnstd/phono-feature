@@ -67,7 +67,9 @@ def project_mode_transition(
     else:
         saved_feat_state = dict(selected_features)
         if selected_features and engine is not None:
-            saved_seg_state = list(engine.find_segments(dict(selected_features)))
+            saved_seg_state = list(
+                engine.find_segments(dict(selected_features))
+            )
         else:
             saved_seg_state = []
 

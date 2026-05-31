@@ -47,11 +47,13 @@ MINUS_SERIALIZED: str = "-"
 # web JS uses when looking up a cell with a drift-induced unknown
 # value. Wrapped in :py:class:`MappingProxyType` so callers cannot
 # mutate the singleton.
-CYCLE_LADDER: Mapping[str, str] = MappingProxyType({
-    "0": "+",
-    "+": MINUS_DISPLAY,
-    MINUS_DISPLAY: "0",
-})
+CYCLE_LADDER: Mapping[str, str] = MappingProxyType(
+    {
+        "0": "+",
+        "+": MINUS_DISPLAY,
+        MINUS_DISPLAY: "0",
+    }
+)
 
 # Direct-entry keyboard shortcuts. Maps the typed character (the
 # logical key, not a platform-specific scancode) to the cell value
@@ -62,12 +64,14 @@ CYCLE_LADDER: Mapping[str, str] = MappingProxyType({
 # ``"0"`` is accepted alongside ``"3"`` because the zero key sits
 # in the natural "zero" slot on most keyboards, and ``0`` reads as
 # "underspecified" intuitively. Both produce the same cell value.
-VALUE_KEYS: Mapping[str, str] = MappingProxyType({
-    "1": "+",
-    "2": MINUS_DISPLAY,
-    "3": "0",
-    "0": "0",
-})
+VALUE_KEYS: Mapping[str, str] = MappingProxyType(
+    {
+        "1": "+",
+        "2": MINUS_DISPLAY,
+        "3": "0",
+        "0": "0",
+    }
+)
 
 # Cell-cursor navigation. Maps a logical key name to a (dr, dc)
 # step in the grid. Three vocabularies are supported so users on
@@ -86,23 +90,25 @@ VALUE_KEYS: Mapping[str, str] = MappingProxyType({
 # keys did nothing in the editor. Putting all three vocabularies in
 # the shared mapping keeps both frontends in lockstep and means a
 # new binding (e.g. PageUp / PageDown) lands once and propagates.
-MOVE_KEYS: Mapping[str, tuple[int, int]] = MappingProxyType({
-    # Arrows.
-    "ArrowUp": (-1, 0),
-    "ArrowDown": (1, 0),
-    "ArrowLeft": (0, -1),
-    "ArrowRight": (0, 1),
-    # Vim.
-    "h": (0, -1),
-    "j": (1, 0),
-    "k": (-1, 0),
-    "l": (0, 1),
-    # Numpad.
-    "4": (0, -1),
-    "5": (1, 0),
-    "6": (0, 1),
-    "8": (-1, 0),
-})
+MOVE_KEYS: Mapping[str, tuple[int, int]] = MappingProxyType(
+    {
+        # Arrows.
+        "ArrowUp": (-1, 0),
+        "ArrowDown": (1, 0),
+        "ArrowLeft": (0, -1),
+        "ArrowRight": (0, 1),
+        # Vim.
+        "h": (0, -1),
+        "j": (1, 0),
+        "k": (-1, 0),
+        "l": (0, 1),
+        # Numpad.
+        "4": (0, -1),
+        "5": (1, 0),
+        "6": (0, 1),
+        "8": (-1, 0),
+    }
+)
 
 # Maximum depth of the undo / redo stack. A typical editing session
 # does not exceed a few dozen batches; the cap is generous enough
@@ -342,7 +348,7 @@ def classify_selection(
     if n == 0:
         return SelectionShape(kind=SELECTION_SHAPE_EMPTY)
     if n == 1:
-        (r, c), = cells_set
+        ((r, c),) = cells_set
         return SelectionShape(
             kind=SELECTION_SHAPE_SINGLE_CELL, row=r, column=c
         )
@@ -371,10 +377,12 @@ def classify_selection(
 # enable. ``None`` means "no remove available". Shared with the web
 # editor so a future shape (e.g. ``single_column`` allowing
 # multi-column remove) lands once and propagates to both UIs.
-SELECTION_SHAPE_REMOVE_TARGET: Mapping[str, str | None] = MappingProxyType({
-    SELECTION_SHAPE_SINGLE_COLUMN: "segment",
-    SELECTION_SHAPE_SINGLE_ROW: "feature",
-})
+SELECTION_SHAPE_REMOVE_TARGET: Mapping[str, str | None] = MappingProxyType(
+    {
+        SELECTION_SHAPE_SINGLE_COLUMN: "segment",
+        SELECTION_SHAPE_SINGLE_ROW: "feature",
+    }
+)
 
 
 def remove_target_for_shape(shape: SelectionShape) -> str | None:

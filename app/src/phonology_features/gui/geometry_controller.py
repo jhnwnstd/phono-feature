@@ -312,10 +312,12 @@ class _GeometryController:
             expected_type=QByteArray,
         )
         restored = False
-        if h_state is not None and self._hsplit.restoreState(h_state):
-            restored = True
-        if v_state is not None and self._vsplit.restoreState(v_state):
-            restored = True
+        if h_state is not None:
+            if self._hsplit.restoreState(h_state):
+                restored = True
+        if v_state is not None:
+            if self._vsplit.restoreState(v_state):
+                restored = True
         return restored
 
     def apply_splitter_sizes(

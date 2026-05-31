@@ -1,7 +1,7 @@
 """InventoryBuilder: grid editor for creating or editing inventories."""
 
 import os
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_engine.limits import (
@@ -62,12 +62,13 @@ from phonology_features.gui.builder.table import (
     _SelectionFillDelegate,
     _ToggleHeaderView,
 )
-from phonology_features.gui.grid_logic import (
-    MOVE_KEYS as _SHARED_MOVE_KEYS,
-)
+from phonology_features.gui.grid_logic import MOVE_KEYS as _SHARED_MOVE_KEYS
 from phonology_features.gui.grid_logic import (
     SELECTION_SHAPE_SINGLE_COLUMN,
     SELECTION_SHAPE_SINGLE_ROW,
+)
+from phonology_features.gui.grid_logic import VALUE_KEYS as _SHARED_VALUE_KEYS
+from phonology_features.gui.grid_logic import (
     classify_selection,
     confirm_remove_feature_prompt,
     confirm_remove_segment_prompt,
@@ -75,9 +76,6 @@ from phonology_features.gui.grid_logic import (
     remove_target_for_shape,
     validate_new_feature_label,
     validate_new_segment_label,
-)
-from phonology_features.gui.grid_logic import (
-    VALUE_KEYS as _SHARED_VALUE_KEYS,
 )
 from phonology_features.gui.palette import C
 
@@ -107,7 +105,7 @@ def _move_key_to_qt(name: str) -> Qt.Key:
     """
     if name in _ARROW_NAME_TO_QT:
         return _ARROW_NAME_TO_QT[name]
-    return getattr(Qt.Key, f"Key_{name.upper()}")
+    return cast(Qt.Key, getattr(Qt.Key, f"Key_{name.upper()}"))
 
 
 class InventoryBuilder(QMainWindow):
@@ -555,17 +553,14 @@ class InventoryBuilder(QMainWindow):
     # level (class-body comprehensions cannot see sibling class
     # attributes during evaluation).
     _MOVE_KEYS: ClassVar[dict] = {
-        _move_key_to_qt(name): step
-        for name, step in _SHARED_MOVE_KEYS.items()
+        _move_key_to_qt(name): step for name, step in _SHARED_MOVE_KEYS.items()
     }
     # ``Shift+Arrow`` extends the QTableWidget's native selection;
     # the handler below returns False on that case so Qt's native
     # extend runs. Plain-arrow handling is identical to Qt's
     # setCurrentCell, so taking it over is safe and keeps both
     # frontends going through the same Python movement primitive.
-    _ARROW_QT_KEYS: ClassVar[frozenset] = frozenset(
-        _ARROW_NAME_TO_QT.values()
-    )
+    _ARROW_QT_KEYS: ClassVar[frozenset] = frozenset(_ARROW_NAME_TO_QT.values())
 
     def eventFilter(self, obj, event):
         if obj is self._table and event.type() == event.Type.KeyPress:
@@ -933,8 +928,9 @@ class InventoryBuilder(QMainWindow):
         # "single row" selection. Walks the selectedIndexes once
         # to materialize the (row, col) iterable the classifier
         # expects; for typical inventories this is microseconds.
-        cells = ((idx.row(), idx.column())
-                 for idx in sel_model.selectedIndexes())
+        cells = (
+            (idx.row(), idx.column()) for idx in sel_model.selectedIndexes()
+        )
         shape = classify_selection(
             cells,
             self._table.rowCount(),

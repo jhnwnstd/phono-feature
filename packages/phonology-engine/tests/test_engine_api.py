@@ -126,9 +126,9 @@ def test_project_round_trips_to_natural_class(
     seed = ["b", "d", "ɡ"]
     spec = engine.project_segments_to_features(seed)
     matched = set(engine.find_segments(spec))
-    assert set(seed).issubset(matched), (
-        f"round-trip lost segments: spec={spec}, matched={matched}"
-    )
+    assert set(seed).issubset(
+        matched
+    ), f"round-trip lost segments: spec={spec}, matched={matched}"
 
 
 # ----------------------------------------------------------------------
@@ -172,19 +172,17 @@ def test_natural_class_bundle_round_trip(
     if bundle is None:
         common = engine.common_features(segments)
         wider = set(engine.find_segments(common, underspec_compatible=True))
-        assert set(segments).issubset(wider), (
-            "common-feature bundle must at least cover the inputs"
-        )
-        assert wider > set(segments), (
-            f"engine returned None but no superset exists: {segments}"
-        )
+        assert set(segments).issubset(
+            wider
+        ), "common-feature bundle must at least cover the inputs"
+        assert wider > set(
+            segments
+        ), f"engine returned None but no superset exists: {segments}"
         return
-    recovered = set(
-        engine.find_segments(bundle, underspec_compatible=True)
-    )
-    assert set(segments).issubset(recovered), (
-        f"bundle {dict(bundle)} did not recover {segments}: got {recovered}"
-    )
+    recovered = set(engine.find_segments(bundle, underspec_compatible=True))
+    assert set(segments).issubset(
+        recovered
+    ), f"bundle {dict(bundle)} did not recover {segments}: got {recovered}"
 
 
 # ----------------------------------------------------------------------
@@ -217,9 +215,9 @@ def test_suggest_natural_class_extension_completes_partial(
     selected = ["b", "d", "ɡ"]
     suggested = engine.suggest_natural_class_extension(selected)
     assert suggested, "expected non-empty extension for a partial class"
-    assert not set(suggested) & set(selected), (
-        "suggestion must not re-include selected segments"
-    )
+    assert not set(suggested) & set(
+        selected
+    ), "suggestion must not re-include selected segments"
 
 
 def test_suggest_natural_class_extension_empty_input(

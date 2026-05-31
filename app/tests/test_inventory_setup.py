@@ -211,9 +211,7 @@ def test_suggest_filename_basic_lowercase_underscores():
 
 def test_suggest_filename_preserves_existing_features_suffix():
     """An already-slugged name does not get a doubled suffix."""
-    assert (
-        suggest_filename("hayes_features") == "hayes_features.json"
-    )
+    assert suggest_filename("hayes_features") == "hayes_features.json"
 
 
 def test_suggest_filename_strips_punctuation_and_parens():

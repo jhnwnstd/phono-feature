@@ -140,10 +140,7 @@ def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
     if not chip_rows:
         return ""
     if len(chip_rows) == 1:
-        return (
-            f"<p><b>Minimal specification:</b></p>"
-            f"<p>{chip_rows[0]}</p>"
-        )
+        return f"<p><b>Minimal specification:</b></p>" f"<p>{chip_rows[0]}</p>"
     numbered = "<br>".join(
         f"<span style='color:{C['text_dim']}'>{i + 1}.</span> {row}"
         for i, row in enumerate(chip_rows)
@@ -218,9 +215,7 @@ def render_single_segment(
     is_nc, specs = engine.is_natural_class([seg])
     if not is_nc:
         non_zero = {
-            feature: value
-            for feature, value in feats.items()
-            if value != "0"
+            feature: value for feature, value in feats.items() if value != "0"
         }
         equiv = engine.find_segments(non_zero, underspec_compatible=True)
         if len(equiv) > 1:

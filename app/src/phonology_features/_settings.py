@@ -25,9 +25,37 @@ should still be able to launch the app.
 
 from __future__ import annotations
 
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast, overload
 
 T = TypeVar("T")
+U = TypeVar("U")
+
+
+@overload
+def safe_read_setting(
+    settings: Any,
+    key: str,
+    default: T,
+    expected_type: None = None,
+) -> T: ...
+
+
+@overload
+def safe_read_setting(
+    settings: Any,
+    key: str,
+    default: None,
+    expected_type: type[U] | tuple[type[U], ...],
+) -> U | None: ...
+
+
+@overload
+def safe_read_setting(
+    settings: Any,
+    key: str,
+    default: T,
+    expected_type: type[Any] | tuple[type[Any], ...],
+) -> T: ...
 
 
 def safe_read_setting(
@@ -47,4 +75,4 @@ def safe_read_setting(
         return default
     if expected_type is not None and not isinstance(value, expected_type):
         return default
-    return value
+    return cast(T, value)

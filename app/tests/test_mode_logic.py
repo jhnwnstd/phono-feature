@@ -53,7 +53,9 @@ def test_project_mode_transition_feat_to_seg() -> None:
     )
     assert transition.saved_feat_state == spec
     assert transition.selected_features == {}
-    assert set(engine.find_segments(spec)).issuperset(transition.selected_segments)
+    assert set(engine.find_segments(spec)).issuperset(
+        transition.selected_segments
+    )
 
 
 def test_project_mode_transition_without_engine_degrades_cleanly() -> None:

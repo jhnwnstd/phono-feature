@@ -349,7 +349,10 @@ def _infer_rounding(
     can_use_labial_fallback = profile.use_labial_round_fallback
     has_labial = _fv(feats, "labial") == "+"
     if can_use_labial_fallback and has_labial:
-        return True, "Rounded (inferred): LABIAL fallback (inventory convention)"
+        return (
+            True,
+            "Rounded (inferred): LABIAL fallback (inventory convention)",
+        )
     if rnd == "-":
         return False, "Unrounded: [-round]"
     return False, "Unrounded: no round specified"
@@ -390,9 +393,7 @@ def compute_placements(
     # the confidence component instead to keep secondary order
     # predictable.
     for key in occupied:
-        occupied[key].sort(
-            key=lambda s: (-int(placements[s].confidence), s)
-        )
+        occupied[key].sort(key=lambda s: (-int(placements[s].confidence), s))
     return occupied, placements
 
 

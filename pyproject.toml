@@ -34,3 +34,46 @@ known_first_party = ["phonology_engine", "phonology_features"]
 [tool.black]
 line-length = 79
 target-version = ["py311"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = [
+    "app/.venv",
+    "app/build",
+    "app/dist",
+    "web/dist",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "RUF"]
+ignore = [
+    "E501",
+    # IPA-heavy sources legitimately use characters like ɡ, ʼ, and ː.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+external = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["phonology_engine", "phonology_features"]
+
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "app/src",
+    "packages/phonology-engine/src",
+    "web/api.py",
+    "web/scripts/build.py",
+]
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unreachable = true
+strict_equality = true
+no_implicit_optional = true
+ignore_missing_imports = true
+exclude = "^(app/)?build/|^web/dist/"

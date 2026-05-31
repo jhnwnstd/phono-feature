@@ -32,9 +32,7 @@ from phonology_features.gui.vowel_layout import (
     vowel_grid_pos,
 )
 
-INVENTORIES_DIR = (
-    Path(__file__).resolve().parents[1] / "inventories"
-)
+INVENTORIES_DIR = Path(__file__).resolve().parents[1] / "inventories"
 
 
 def _engine(name: str) -> FeatureEngine:
@@ -47,8 +45,7 @@ def _engine(name: str) -> FeatureEngine:
 
 def _vowel_segs(engine: FeatureEngine) -> list[str]:
     return [
-        s for s in engine.segments
-        if engine.segments[s].get("Syllabic") == "+"
+        s for s in engine.segments if engine.segments[s].get("Syllabic") == "+"
     ]
 
 
@@ -82,9 +79,9 @@ def test_vowel_placement_case_insensitive(inv_filename: str) -> None:
     for seg in vowels:
         raw_p = vowel_grid_pos(raw_feats[seg], raw_profile)
         lower_p = vowel_grid_pos(lower_feats[seg], lower_profile)
-        assert raw_p == lower_p, (
-            f"/{seg}/ placement differs: raw={raw_p}, lower={lower_p}"
-        )
+        assert (
+            raw_p == lower_p
+        ), f"/{seg}/ placement differs: raw={raw_p}, lower={lower_p}"
 
 
 def test_english_vowels_not_all_in_default_cell() -> None:
@@ -98,9 +95,7 @@ def test_english_vowels_not_all_in_default_cell() -> None:
     assert vowels, "English should have vowels"
     seg_feats = {s: dict(engine.segments[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
-    placements = [
-        vowel_grid_pos(seg_feats[s], profile) for s in vowels
-    ]
+    placements = [vowel_grid_pos(seg_feats[s], profile) for s in vowels]
     unique_cells = {(p.row, p.col) for p in placements}
     # English has ~13 vowels spanning ~9 cells in the IPA chart.
     # Anything under 4 unique cells means the case-sensitivity bug
@@ -112,6 +107,7 @@ def test_english_vowels_not_all_in_default_cell() -> None:
 
 
 # compute_placements: shared cell-grouping helper
+
 
 def test_compute_placements_groups_collisions_general():
     """The General inventory's ə, ɜ, ɚ all map to the open-mid
@@ -146,12 +142,13 @@ def test_compute_placements_orders_by_confidence_desc():
             continue
         confidences = [placements[s].confidence for s in segs_in_cell]
         # Sorted in DESCENDING confidence order.
-        assert confidences == sorted(confidences, reverse=True), (
-            f"cell {key} not sorted by confidence desc: {confidences}"
-        )
+        assert confidences == sorted(
+            confidences, reverse=True
+        ), f"cell {key} not sorted by confidence desc: {confidences}"
 
 
 # Constants: immutability
+
 
 def test_module_constants_are_tuples():
     """ROW_LABELS / COL_LABELS / VOWEL_HEIGHT are exported as
@@ -167,6 +164,7 @@ def test_module_constants_are_tuples():
 
 
 # PascalCase normalization
+
 
 def test_pascal_case_feats_match_lowercase(profile):
     """The placement code accepts either PascalCase or lowercase
@@ -186,6 +184,7 @@ def test_pascal_case_feats_match_lowercase(profile):
 
 # compute_placements: sort order within a collision cell
 
+
 def test_compute_placements_sort_segment_ascending_within_tier(profile):
     """Within a confidence tier, segments sort in ASCENDING string
     order so collision-cell ordering is stable and predictable.
@@ -194,18 +193,18 @@ def test_compute_placements_sort_segment_ascending_within_tier(profile):
     # Three vowels at the same placement, same confidence: alphabetical
     # ASCending order must come out of compute_placements.
     feats = {
-        "a": {"high": "-", "low": "+"},   # Open central
+        "a": {"high": "-", "low": "+"},  # Open central
         "b": {"high": "-", "low": "+"},
         "c": {"high": "-", "low": "+"},
     }
-    occupied, _placements = compute_placements(
-        ["c", "a", "b"], profile, feats
-    )
+    occupied, _placements = compute_placements(["c", "a", "b"], profile, feats)
     # All three should land in the same cell.
     [cell] = occupied.values()
-    assert cell == ["a", "b", "c"], (
-        f"expected alphabetical ASC within tier, got {cell}"
-    )
+    assert cell == [
+        "a",
+        "b",
+        "c",
+    ], f"expected alphabetical ASC within tier, got {cell}"
 
 
 # _infer_rounding: distinct reasons for [-round] vs no round
@@ -247,7 +246,9 @@ def test_negative_front_with_no_back_marks_low_confidence(profile):
     assert "unresolved" in placement.reason or "ambiguous" in placement.reason
 
 
-def test_negative_front_with_negative_back_is_more_confident_than_front_alone(profile):
+def test_negative_front_with_negative_back_is_more_confident_than_front_alone(
+    profile,
+):
     """``[-front, -back]`` is the canonical central spec; ``[-front]``
     alone is genuinely ambiguous between central and back. Pin
     height unambiguously so the overall placement confidence

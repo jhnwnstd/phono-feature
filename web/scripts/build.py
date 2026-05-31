@@ -127,10 +127,12 @@ def copy_inventories() -> None:
             skipped.append(inv.name)
             continue
         shutil.copy(inv, out / inv.name)
-        manifest.append({
-            "file": f"inventories/{inv.name}",
-            "label": _inventory_label(inv),
-        })
+        manifest.append(
+            {
+                "file": f"inventories/{inv.name}",
+                "label": _inventory_label(inv),
+            }
+        )
     (DIST / "inventories.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False),
     )
@@ -243,7 +245,10 @@ def write_python_bundle() -> None:
     entries.append(("api.py", DIST / "api.py"))
 
     with zipfile.ZipFile(
-        out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9,
+        out,
+        "w",
+        compression=zipfile.ZIP_DEFLATED,
+        compresslevel=9,
     ) as zf:
         for zip_path, src in entries:
             zf.write(src, arcname=zip_path)
@@ -251,7 +256,9 @@ def write_python_bundle() -> None:
     shutil.rmtree(DIST / "engine", ignore_errors=True)
     shutil.rmtree(DIST / "render", ignore_errors=True)
     raw = sum(p.stat().st_size for _, p in entries if p.exists())
-    print(f"  {len(entries)} files, {out.stat().st_size} bytes zip ({raw} raw)")
+    print(
+        f"  {len(entries)} files, {out.stat().st_size} bytes zip ({raw} raw)"
+    )
 
 
 def write_bootstrap() -> None:
