@@ -228,9 +228,28 @@ class _GeometryController:
                 for manner, segs in engine.grouped_segments.items()
                 if manner.lower() != "vowels"
             ]
-            n_cols = layout.seg_pane_n_cols(
-                self._w.seg_panel.width() or layout.SEG_MIN_W
+            # Predict the EVENTUAL seg pane width (post-splitter) so
+            # ``seg_pane_n_cols`` picks the column count the grid
+            # will actually paint at. Neither ``seg_panel.width()``
+            # nor ``hsplit.width()`` is reliable here — on the
+            # first-launch synchronous path they're constructor
+            # defaults (480 and 100 px respectively). The WINDOW
+            # width is reliable because the caller resizes the
+            # window before showing it. Derive the hsplit-available
+            # width from window.width(); ``distribute_pane_widths``
+            # is then a pure function that yields the eventual seg
+            # pane width.
+            available_w = max(
+                self._w.width(),
+                seg_need_w + feat_need_w + 1,
+                self.MIN_FIRST_LAUNCH_W,
             )
+            seg_pane_w, _ = layout.distribute_pane_widths(
+                available_w,
+                seg_content_w=seg_need_w,
+                feat_content_w=feat_need_w,
+            )
+            n_cols = layout.seg_pane_n_cols(seg_pane_w)
             seg_content_h = layout.seg_grid_natural_height(cons_groups, n_cols)
             from phonology_features.gui.constants import FEATURE_GROUPS
 
