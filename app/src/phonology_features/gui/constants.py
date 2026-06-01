@@ -79,11 +79,7 @@ def tag_palettes() -> dict[TagColor, tuple[str, str]]:
         TagColor.SEGMENT: (C["tag_blue"], C["tag_blue_text"]),
         TagColor.PLUS: (C["tag_green"], C["tag_green_text"]),
         TagColor.MINUS: (C["tag_red"], C["tag_red_text"]),
-        # ``tag_purple`` is gray in the standard palettes (no visible
-        # change) and the user's purple in the colorblind palettes,
-        # where green is reused for "+" and a distinct neutral colour
-        # is needed to keep the underspec / mixed bucket legible.
-        TagColor.NEUTRAL: (C["tag_purple"], C["tag_purple_text"]),
+        TagColor.NEUTRAL: (C["tag_gray"], C["tag_gray_text"]),
     }
 
 

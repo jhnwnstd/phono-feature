@@ -342,8 +342,8 @@ class FeatureRow(QWidget):
         from the ``neutral`` slot so colorblind mode can swap blue
         (which it reuses for "+") for purple without losing the
         familiar blue tint in standard mode (standard maps ``neutral``
-        to the accent slot). Underspec badges read from ``tag_purple``
-        for the same reason.
+        to the accent slot). The empty-state ``·`` badge stays gray
+        in both modes; only the contrastive state changes hue.
         """
         return {
             "BADGE_CONTRASTIVE": (
@@ -355,8 +355,7 @@ class FeatureRow(QWidget):
                 f"background: {C['neutral_bg']}; border-radius: 6px;"
             ),
             "BADGE_NEUTRAL": (
-                f"background: {C['tag_purple']};"
-                f" color: {C['tag_purple_text']};"
+                f"background: {C['tag_gray']}; color: {C['text_dim']};"
                 " border-radius: 4px;"
             ),
             "NAME_DIM": f"color: {C['text_dim']};",

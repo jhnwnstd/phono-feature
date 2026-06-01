@@ -182,6 +182,38 @@ class MainWindow(QMainWindow):
         # Apply chrome directly to wire up the freshly-built widgets.
         self._mode_ctrl.apply_phases()
         self._restore_settings(startup_path)
+        # Pre-warm Qt's style polishing infrastructure for the
+        # alternate palette mode. The very first PaletteChange event
+        # after a palette-mode swap triggers a full polish cascade,
+        # which can momentarily shift widget geometry by sub-pixel
+        # amounts (visible as a slight "shake" on the user's first
+        # colorblind toggle). Running one synthetic round-trip here,
+        # after the window is fully built but before the user can
+        # interact, lets Qt finish that work invisibly.
+        self._warm_palette_cache()
+
+    def _warm_palette_cache(self) -> None:
+        """Cycle the active palette mode once to pre-build cached
+        style strings and exercise Qt's PaletteChange path for both
+        modes. The intermediate state is never shown because
+        ``setUpdatesEnabled(False)`` is held for the whole pair of
+        toggles. Idempotent: calling twice does no extra work since
+        the second pass is a cache hit.
+        """
+        from phonology_features.gui.palette import (
+            get_palette_mode,
+            set_palette_mode,
+        )
+
+        original = get_palette_mode()
+        alternate = (
+            "colorblind" if original == "standard" else "standard"
+        )
+        with self._batched_updates():
+            set_palette_mode(alternate)
+            self._theme.apply()
+            set_palette_mode(original)
+            self._theme.apply()
 
     def _set_mode(self, mode: Mode | str) -> None:
         """Thin wrapper around the mode-controller transition.

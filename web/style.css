@@ -646,8 +646,8 @@ dialog input[type="text"]:focus-visible {
   justify-content: center;
   border-radius: var(--radius-sm);
   font-weight: bold;
-  background: var(--tag-purple);
-  color: var(--tag-purple-text);
+  background: var(--tag-gray);
+  color: var(--text-dim);
 }
 .feat-row[data-shared="true"][data-value="+"] .feat-badge {
   background: var(--plus-bg); color: var(--plus);

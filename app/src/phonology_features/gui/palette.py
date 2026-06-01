@@ -89,15 +89,23 @@ LIGHT = {
 }
 
 COLORBLIND_LIGHT = {
-    # Neutrals
+    # Mapping rule (applied uniformly to every slot):
+    #   blue  -> purple  (selected / neutral / accent)
+    #   green -> blue    (positive / "+")
+    #   red   -> orange  (negative / "-")
+    #   gray  stays gray (default / inactive)
+    # Wong-derived hues so the four families are perceptually
+    # distinct under deuteranopia, protanopia, and tritanopia.
     "bg": "#F7F7F7",
     "panel": "#FFFFFF",
     "border": "#DADCE0",
     "text": "#202124",
     "text_dim": "#5F6368",
-    # Accent
-    "accent": "#0072B2",
-    "accent_light": "#D6E8FF",
+    # Accent (was blue -> now purple). Same hex as ``seg_selected``
+    # so the brand colour and the "this segment is selected" colour
+    # stay visually unified.
+    "accent": "#CC79A7",
+    "accent_light": "#F3D6E8",
     # Segment-button states
     "seg_default": "#F2F3F5",
     "seg_selected": "#CC79A7",
@@ -112,10 +120,10 @@ COLORBLIND_LIGHT = {
     "neutral_bg": "#F3D6E8",
     "shared_plus": "#D6E8FF",
     "shared_minus": "#FFE8B5",
-    # Buttons
-    "btn_primary": "#0072B2",
+    # Buttons (was blue -> now purple; danger stays orange).
+    "btn_primary": "#CC79A7",
     "btn_primary_text": "#FFFFFF",
-    "btn_primary_hover": "#005A8C",
+    "btn_primary_hover": "#9A4F7F",
     "btn_primary_hover_text": "#FFFFFF",
     "btn_danger": "#E69F00",
     "btn_danger_text": "#202124",
@@ -125,11 +133,15 @@ COLORBLIND_LIGHT = {
     "btn_disabled_text": "#9AA0A6",
     "btn_disabled_border": "#E2E4E7",
     "splitter_hover": "#9AA0A6",
-    # Analysis panel and tag chips
+    # Analysis panel and tag chips. ``tag_blue`` (segment slot) is
+    # purple because "selected/matched" maps to purple under the new
+    # rule; ``tag_green`` (positive slot) is blue; ``tag_red``
+    # (negative slot) is orange; ``tag_gray`` and ``tag_purple``
+    # stay distinct (gray for default/inactive, purple for the
+    # underspec / mixed neutral state).
     "analysis_bg": "#F2F3F5",
-    "tag_blue": "#D6E8FF",
-    "tag_blue_text": "#0072B2",
-    # Green slot reuses blue so contrast survives deuteranopia.
+    "tag_blue": "#F3D6E8",
+    "tag_blue_text": "#9A4F7F",
     "tag_green": "#D6E8FF",
     "tag_green_text": "#0072B2",
     "tag_red": "#FFE8B5",
@@ -141,16 +153,17 @@ COLORBLIND_LIGHT = {
 }
 
 COLORBLIND_DARK = {
-    # Neutrals
+    # Same mapping rule as COLORBLIND_LIGHT (blue -> purple,
+    # green -> blue, red -> orange, gray stays gray) applied to
+    # the dark-theme value set.
     "bg": "#181818",
     "panel": "#202020",
     "border": "#3A3A3A",
     "text": "#E8EAED",
     "text_dim": "#B8B8B8",
-    # Accent
-    "accent": "#56B4E9",
-    "accent_light": "#16384D",
-    # Segment-button states
+    # Accent (was pale blue -> pale purple, matching seg_selected).
+    "accent": "#D7A0D3",
+    "accent_light": "#43243F",
     "seg_default": "#262626",
     "seg_selected": "#D7A0D3",
     "seg_matched": "#D7A0D3",
@@ -164,10 +177,12 @@ COLORBLIND_DARK = {
     "neutral_bg": "#43243F",
     "shared_plus": "#16384D",
     "shared_minus": "#4A3100",
-    # Buttons
-    "btn_primary": "#0072B2",
+    # Buttons. Mirrors the standard-DARK pattern: saturated default
+    # (mid-tone purple), pale hover that "lifts" against the dark bg.
+    # Was deep blue / pale blue -> deep purple / pale purple.
+    "btn_primary": "#9A4F7F",
     "btn_primary_text": "#FFFFFF",
-    "btn_primary_hover": "#56B4E9",
+    "btn_primary_hover": "#D7A0D3",
     "btn_primary_hover_text": "#181818",
     "btn_danger": "#A46300",
     "btn_danger_text": "#FFFFFF",
@@ -177,10 +192,12 @@ COLORBLIND_DARK = {
     "btn_disabled_text": "#555555",
     "btn_disabled_border": "#161616",
     "splitter_hover": "#6A6A6A",
-    # Analysis panel and tag chips
+    # Analysis panel and tag chips. ``tag_blue`` (segment slot) is
+    # purple under the new rule; ``tag_green`` (positive) is blue;
+    # ``tag_red`` (negative) is orange.
     "analysis_bg": "#262626",
-    "tag_blue": "#16384D",
-    "tag_blue_text": "#56B4E9",
+    "tag_blue": "#43243F",
+    "tag_blue_text": "#D7A0D3",
     "tag_green": "#16384D",
     "tag_green_text": "#56B4E9",
     "tag_red": "#4A3100",
