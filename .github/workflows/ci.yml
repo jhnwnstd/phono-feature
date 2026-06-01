@@ -45,6 +45,21 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
               libgl1 libegl1 libxkbcommon0 libdbus-1-3 libfontconfig1
 
+      - name: Check uv.lock stays in sync with pyproject.toml
+        # uv.lock is committed for reproducibility; this gate fails the
+        # build when pyproject.toml's deps change without a matching
+        # ``uv lock`` run. The launcher install path still uses pip
+        # because that's what end users run; the lockfile is a
+        # secondary integrity check, not the primary install method.
+        if: runner.os == 'Linux'
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Verify uv.lock is fresh
+        if: runner.os == 'Linux'
+        run: uv lock --check
+
       - name: Smoke-test launcher (Linux)
         if: runner.os == 'Linux'
         run: ./RUN-Linux.sh --help

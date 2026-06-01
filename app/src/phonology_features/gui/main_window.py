@@ -164,7 +164,9 @@ class MainWindow(QMainWindow):
         # Restore the user's standard/colorblind palette choice so chrome
         # built before ``apply()`` runs picks up the right hues from
         # ``C`` directly (avoids a one-frame flash of standard colors).
-        saved_mode = self._read_setting_str(SettingsKey.PALETTE_MODE, "standard")
+        saved_mode = self._read_setting_str(
+            SettingsKey.PALETTE_MODE, "standard"
+        )
         set_palette_mode(saved_mode)
         set_css(self, f"background-color: {C['bg']};")
         # 150 ms debounce for selection-change analysis.
@@ -698,7 +700,9 @@ class MainWindow(QMainWindow):
                     break
         # Mode stored as a plain string so it survives package renames
         # that would invalidate a pickled enum.
-        saved_mode = self._read_setting_str(SettingsKey.MODE, Mode.SEG_TO_FEAT.value)
+        saved_mode = self._read_setting_str(
+            SettingsKey.MODE, Mode.SEG_TO_FEAT.value
+        )
         if saved_mode in (Mode.SEG_TO_FEAT.value, Mode.FEAT_TO_SEG.value):
             self._set_mode(Mode(saved_mode))
 
@@ -718,8 +722,12 @@ class MainWindow(QMainWindow):
         self._settings.remove("geometry")
         if self.isMaximized() or self.isFullScreen():
             normal = self.normalGeometry()
-            write_setting(self._settings, SettingsKey.WINDOW_POS, normal.topLeft())
-            write_setting(self._settings, SettingsKey.WINDOW_SIZE, normal.size())
+            write_setting(
+                self._settings, SettingsKey.WINDOW_POS, normal.topLeft()
+            )
+            write_setting(
+                self._settings, SettingsKey.WINDOW_SIZE, normal.size()
+            )
         else:
             write_setting(self._settings, SettingsKey.WINDOW_POS, self.pos())
             write_setting(self._settings, SettingsKey.WINDOW_SIZE, self.size())

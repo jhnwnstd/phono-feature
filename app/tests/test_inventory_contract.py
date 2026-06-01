@@ -884,9 +884,9 @@ def test_load_rejects_non_finite_json_constants(
     )
     with pytest.raises(ValidationError) as ex:
         Inventory.load(str(bad))
-    assert any(token in i for i in ex.value.issues), (
-        f"expected ValidationError mentioning {token!r}, got {ex.value.issues}"
-    )
+    assert any(
+        token in i for i in ex.value.issues
+    ), f"expected ValidationError mentioning {token!r}, got {ex.value.issues}"
 
 
 def test_engine_requires_inventory_not_raw_dict() -> None:

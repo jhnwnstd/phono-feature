@@ -268,9 +268,7 @@ def _build_status_text_payload() -> dict[str, str]:
 
     mode_logic_path = DESKTOP_GUI / "mode_logic.py"
     module_name = "_build_mode_logic"
-    spec = importlib.util.spec_from_file_location(
-        module_name, mode_logic_path
-    )
+    spec = importlib.util.spec_from_file_location(module_name, mode_logic_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {mode_logic_path}")
     module = importlib.util.module_from_spec(spec)

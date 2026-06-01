@@ -157,9 +157,7 @@ def _js_partition_spillover(
 
 @pytest.mark.parametrize("group_size", list(range(0, 30)))
 @pytest.mark.parametrize("max_cols", list(range(1, 16)))
-def test_best_n_cols_js_matches_python(
-    group_size: int, max_cols: int
-) -> None:
+def test_best_n_cols_js_matches_python(group_size: int, max_cols: int) -> None:
     """``_fallbackBestNCols`` must match ``layout.best_segment_n_cols``
     for every (group_size, max_cols) pair the UI can ask about. Range
     chosen to cover the largest bundled inventory's manner-class

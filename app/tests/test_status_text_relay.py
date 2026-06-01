@@ -69,7 +69,7 @@ def _extract_status_payload(index_html: Path) -> dict[str, str]:
     contents = index_html.read_text(encoding="utf-8")
     match = INLINE_JSON_RE.search(contents)
     assert match is not None, (
-        "no <script id=\"status-text\"> block in dist/index.html; "
+        'no <script id="status-text"> block in dist/index.html; '
         "verify build.py:hash_assets emits the inline status block"
     )
     return json.loads(match.group("payload"))

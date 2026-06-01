@@ -60,9 +60,7 @@ class SettingsKey(StrEnum):
     LAST_INVENTORY = "last_inventory"
 
 
-def write_setting(
-    settings: Any, key: SettingsKey, value: Any
-) -> None:
+def write_setting(settings: Any, key: SettingsKey, value: Any) -> None:
     """Typed wrapper around ``QSettings.setValue`` that enforces a
     :py:class:`SettingsKey` member as the key.
 

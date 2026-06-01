@@ -647,6 +647,122 @@ def _validate_features(
     return tuple(valid), seen
 
 
+def _canonicalize_segment_key(
+    seg_name: Any,
+    issues: list[str],
+    prefix: str,
+) -> str | None:
+    """Run the canonicalisation + invisible-character + length
+    checks for one segment key. Returns the canonical key on
+    success or ``None`` on failure (after appending the
+    appropriate issue text). Splits the per-key checks out of
+    :py:func:`_validate_segments` so each one is independently
+    testable and the driver loop stays scannable.
+    """
+    if not isinstance(seg_name, str) or not seg_name:
+        issues.append(
+            f"{prefix}segment key {seg_name!r} must be a non-empty string"
+        )
+        return None
+    if len(seg_name) > MAX_NAME_LENGTH:
+        issues.append(
+            f"{prefix}segment key {seg_name!r} is {len(seg_name)} "
+            f"chars; max is {MAX_NAME_LENGTH}"
+        )
+        return None
+    canonical_seg = _canonicalize_name(seg_name)
+    if not canonical_seg:
+        issues.append(
+            f"{prefix}segment key {seg_name!r} is empty after "
+            f"canonicalization"
+        )
+        return None
+    # Domain-specific identity folding (ASCII g->ɡ, '->ʼ) runs
+    # AFTER NFC canonicalization but BEFORE the collision check so
+    # an inventory containing both "g" and "ɡ" is detected as a
+    # duplicate rather than silently kept as two distinct keys.
+    canonical_seg = _ipa_normalize_segment(canonical_seg)
+    invisible = _invisible_format_chars(canonical_seg)
+    if invisible:
+        issues.append(
+            f"{prefix}segment key {seg_name!r} contains invisible "
+            f"format character(s): {invisible}; these would create "
+            f"a distinct segment that looks identical to another"
+        )
+        return None
+    return canonical_seg
+
+
+def _validate_segment_bundle(
+    canonical_seg: str,
+    seg_feats: Any,
+    declared: set[str],
+    issues: list[str],
+    prefix: str,
+) -> Mapping[str, str] | None:
+    """Validate one segment's feature bundle. Returns a read-only
+    inner dict on success or ``None`` if the bundle isn't even a
+    dict (skipping the segment entirely). Per-feature-key issues
+    are appended and the offending entry is dropped; the bundle
+    keeps the surviving features.
+    """
+    if not isinstance(seg_feats, dict):
+        issues.append(
+            f"{prefix}segment {canonical_seg!r}: bundle must be an "
+            f"object, got {type(seg_feats).__name__}"
+        )
+        return None
+    inner: dict[str, str] = {}
+    for feat_name, feat_val in seg_feats.items():
+        if not isinstance(feat_name, str) or not feat_name:
+            issues.append(
+                f"{prefix}segment {canonical_seg!r}: feature key "
+                f"{feat_name!r} must be a non-empty string"
+            )
+            continue
+        if len(feat_name) > MAX_NAME_LENGTH:
+            issues.append(
+                f"{prefix}segment {canonical_seg!r}: feature key "
+                f"{feat_name!r} is {len(feat_name)} chars; max is "
+                f"{MAX_NAME_LENGTH}"
+            )
+            continue
+        canonical_feat = _canonicalize_name(feat_name)
+        if not canonical_feat:
+            issues.append(
+                f"{prefix}segment {canonical_seg!r}: feature key "
+                f"{feat_name!r} is empty after canonicalization"
+            )
+            continue
+        # No ``if declared and ...`` short-circuit. An inventory
+        # with ``features=[]`` AND per-segment feature keys would
+        # otherwise be silently accepted, storing ghost data that
+        # :py:meth:`Inventory.feature_value` can never reach.
+        # Always cross-check so the contract holds at every count.
+        if canonical_feat not in declared:
+            issues.append(
+                f"{prefix}segment {canonical_seg!r}: feature "
+                f"{feat_name!r} is not declared in 'features'"
+            )
+            continue
+        if not isinstance(feat_val, str):
+            issues.append(
+                f"{prefix}segment {canonical_seg!r}."
+                f"{canonical_feat!r}: value must be a string, got "
+                f"{type(feat_val).__name__} ({feat_val!r})"
+            )
+            continue
+        if feat_val not in VALID_VALUES:
+            issues.append(
+                f"{prefix}segment {canonical_seg!r}."
+                f"{canonical_feat!r}: invalid value {feat_val!r} "
+                f"(expected one of {sorted(VALID_VALUES)})"
+            )
+            continue
+        inner[canonical_feat] = feat_val
+    return MappingProxyType(inner)
+
+
 def _validate_segments(
     segments_raw: Any,
     declared: set[str],
@@ -657,6 +773,12 @@ def _validate_segments(
     keys (NFC + stripped). Appends issues. ``declared`` must already
     contain canonical feature names so per-bundle feature keys can be
     matched against it after canonicalization.
+
+    Composes two single-concern helpers
+    (:py:func:`_canonicalize_segment_key` and
+    :py:func:`_validate_segment_bundle`) so the driver loop reads
+    as "for each segment: canonicalise the key, check for
+    collisions, validate the bundle".
     """
     if not isinstance(segments_raw, dict):
         issues.append(
@@ -675,36 +797,8 @@ def _validate_segments(
     result: dict[str, Mapping[str, str]] = {}
     canonical_origin: dict[str, str] = {}
     for seg_name, seg_feats in segments_raw.items():
-        if not isinstance(seg_name, str) or not seg_name:
-            issues.append(
-                f"{prefix}segment key {seg_name!r} must be a non-empty string"
-            )
-            continue
-        if len(seg_name) > MAX_NAME_LENGTH:
-            issues.append(
-                f"{prefix}segment key {seg_name!r} is {len(seg_name)} "
-                f"chars; max is {MAX_NAME_LENGTH}"
-            )
-            continue
-        canonical_seg = _canonicalize_name(seg_name)
-        if not canonical_seg:
-            issues.append(
-                f"{prefix}segment key {seg_name!r} is empty after "
-                f"canonicalization"
-            )
-            continue
-        # Domain-specific identity folding (ASCII g->ɡ, '->ʼ) runs
-        # AFTER NFC canonicalization but BEFORE the collision check so
-        # an inventory containing both "g" and "ɡ" is detected as a
-        # duplicate rather than silently kept as two distinct keys.
-        canonical_seg = _ipa_normalize_segment(canonical_seg)
-        invisible = _invisible_format_chars(canonical_seg)
-        if invisible:
-            issues.append(
-                f"{prefix}segment key {seg_name!r} contains invisible "
-                f"format character(s): {invisible}; these would create "
-                f"a distinct segment that looks identical to another"
-            )
+        canonical_seg = _canonicalize_segment_key(seg_name, issues, prefix)
+        if canonical_seg is None:
             continue
         if canonical_seg in result:
             prior = canonical_origin[canonical_seg]
@@ -719,61 +813,12 @@ def _validate_segments(
                     f"({canonical_seg!r}); rename or remove one"
                 )
             continue
-        if not isinstance(seg_feats, dict):
-            issues.append(
-                f"{prefix}segment {canonical_seg!r}: bundle must be an "
-                f"object, got {type(seg_feats).__name__}"
-            )
+        inner = _validate_segment_bundle(
+            canonical_seg, seg_feats, declared, issues, prefix
+        )
+        if inner is None:
             continue
-        inner: dict[str, str] = {}
-        for feat_name, feat_val in seg_feats.items():
-            if not isinstance(feat_name, str) or not feat_name:
-                issues.append(
-                    f"{prefix}segment {canonical_seg!r}: feature key "
-                    f"{feat_name!r} must be a non-empty string"
-                )
-                continue
-            if len(feat_name) > MAX_NAME_LENGTH:
-                issues.append(
-                    f"{prefix}segment {canonical_seg!r}: feature key "
-                    f"{feat_name!r} is {len(feat_name)} chars; max is "
-                    f"{MAX_NAME_LENGTH}"
-                )
-                continue
-            canonical_feat = _canonicalize_name(feat_name)
-            if not canonical_feat:
-                issues.append(
-                    f"{prefix}segment {canonical_seg!r}: feature key "
-                    f"{feat_name!r} is empty after canonicalization"
-                )
-                continue
-            # No ``if declared and ...`` short-circuit. An inventory
-            # with ``features=[]`` AND per-segment feature keys would
-            # otherwise be silently accepted, storing ghost data that
-            # :py:meth:`Inventory.feature_value` can never reach.
-            # Always cross-check so the contract holds at every count.
-            if canonical_feat not in declared:
-                issues.append(
-                    f"{prefix}segment {canonical_seg!r}: feature "
-                    f"{feat_name!r} is not declared in 'features'"
-                )
-                continue
-            if not isinstance(feat_val, str):
-                issues.append(
-                    f"{prefix}segment {canonical_seg!r}."
-                    f"{canonical_feat!r}: value must be a string, got "
-                    f"{type(feat_val).__name__} ({feat_val!r})"
-                )
-                continue
-            if feat_val not in VALID_VALUES:
-                issues.append(
-                    f"{prefix}segment {canonical_seg!r}."
-                    f"{canonical_feat!r}: invalid value {feat_val!r} "
-                    f"(expected one of {sorted(VALID_VALUES)})"
-                )
-                continue
-            inner[canonical_feat] = feat_val
-        result[canonical_seg] = MappingProxyType(inner)
+        result[canonical_seg] = inner
         canonical_origin[canonical_seg] = seg_name
     return MappingProxyType(result)
 
