@@ -13,6 +13,7 @@ next launch / next web build.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 
 # Pins are conventional in IPA chart layouts: place-of-articulation
@@ -176,9 +177,14 @@ def partition_groups_for_spillover(
 # below consonants). The seg pane never shrinks past this floor on
 # either UI.
 SEG_MIN_W: int = 480
-# Floor for the feature pane. ``distribute_pane_widths`` lifts this when
-# the inventory's natural feature-pane content asks for more.
-FEAT_MIN_W: int = 380
+# Floor for the feature pane. Sized so each of the two card columns
+# inside the pane gets at least ``MIN_FEAT_CARD_W`` (220 px) after
+# subtracting outer margins (28 px) and the inter-card gutter (12 px).
+# Formula: 2 × 220 + 28 + 12 = 480. ``distribute_pane_widths`` lifts
+# this when the inventory's natural feature-pane content asks for
+# more. Earlier value of 380 caused titles like "TONGUE-ROOT /
+# PHARYNGEAL" to wrap to two lines.
+FEAT_MIN_W: int = 480
 # Extra pixels beyond ``feat_content_w`` so feature cards don't sit
 # flush against the splitter handle / panel edge.
 FEAT_CUSHION_PX: int = 40
@@ -215,12 +221,51 @@ MIN_ANALYSIS_H: int = 220
 # Absolute floor so analysis is at least its title bar + a line of
 # text on the worst-case window size.
 HARD_MIN_ANALYSIS_H: int = 60
-# Floor for the top (seg / feat) pane in ``top_pane_height``. On
-# very short windows we squeeze analysis rather than starve the
-# features, but the top pane still gets at least this much room
-# so the feature cards have a usable height even when the user has
-# the window cropped tiny.
+# Defensive floor for the top (seg / feat) pane in
+# ``top_pane_height``. The actual minimum heights are content-driven:
+# ``geometry_controller.fit_to_content`` calls the new
+# ``seg_grid_natural_height`` / ``feature_panel_natural_height``
+# helpers below to size each panel's ``setMinimumHeight`` against
+# its real inventory content. This floor is just degenerate-case
+# protection (e.g. an empty inventory whose ``sizeHint`` reports 0)
+# so the top pane doesn't fully collapse. The analysis pane
+# absorbs everything above the content-driven need by default —
+# the user's stated preference of "analysis as tall as it can be".
 MIN_TOP_PANE_H: int = 200
+
+# ---------------------------------------------------------------------------
+# RAW DIMENSIONS — per-row / per-card pixel measurements shared by
+# desktop (Qt) and web (CSS). These are the single source of truth
+# both UIs consume; height-computation helpers below build everything
+# else from them. Centralised so the per-row stride doesn't drift
+# between widgets.py, geometry_controller.py, and the web stylesheet.
+# ---------------------------------------------------------------------------
+
+# Per-segment-button: fixed size set by ``widgets.SegmentButton``.
+SEG_BTN_H: int = 26
+# One row of the segment grid: button + ``BTN_GAP`` from constants.py.
+# Imported lazily inside the helper to avoid the cross-module dep at
+# module-load time.
+SEG_BTN_ROW_H: int = 30  # SEG_BTN_H (26) + BTN_GAP (4)
+# Manner-class group header strip above each consonant group.
+SEG_GROUP_HEADER_H: int = 22
+
+# Per-feature-row: ``FeatureRow`` is 30 px (24-px buttons + 3+3 margins)
+# with 1 px inter-row spacing. Sum is the stride for height math.
+FEAT_ROW_H: int = 31
+# Feature card chrome: card top margin (6) + title (14) + bottom (6).
+FEAT_CARD_CHROME_H: int = 26
+
+# Outer panel chrome (top + bottom margins + the clear-button header
+# strip). Same on seg and feat panels. Used as the additive overhead
+# when sizing a panel's minimum height from its content.
+PANEL_CHROME_V: int = 54
+
+# Minimum width per feature card column inside the feature panel.
+# Sized so the longest group title ("TONGUE-ROOT / PHARYNGEAL", at
+# the card's 8pt Bold font) renders on a single line. Drives the
+# new ``FEAT_MIN_W`` derivation below.
+MIN_FEAT_CARD_W: int = 220
 
 # ---------------------------------------------------------------------------
 # RATIO HELPERS
@@ -409,3 +454,96 @@ def best_segment_n_cols(group_size: int, max_cols: int) -> int:
     # every group_size > 2; we only reach here for group_size in
     # {2, 3} where the loop short-circuits anyway.
     return max_cols
+
+
+# ---------------------------------------------------------------------------
+# Content-driven height helpers — predict the natural height each top
+# pane will take BEFORE Qt lays it out. Lets ``geometry_controller``
+# pick the right ``setMinimumHeight`` values from inventory metadata
+# alone, and lets the cross-product test prove that no bundled
+# inventory triggers an internal scrollbar above the 720p floor.
+# ---------------------------------------------------------------------------
+
+
+def seg_pane_n_cols(seg_pane_w: int) -> int:
+    """Column count the segment grid uses at the given pane width.
+
+    Mirrors ``widgets.SegmentGridWidget._compute_n_cols`` so height
+    computation here predicts the same layout Qt will actually run.
+    Both UIs base their grid on this single function: the web's
+    container-query CSS uses the same numbers via the relay.
+    """
+    from phonology_features.gui.constants import BTN_GAP, BTN_W
+
+    # Per-button stride is button width plus the inter-button gap.
+    cols = (seg_pane_w + BTN_GAP) // (BTN_W + BTN_GAP)
+    # The widget's own MAX_COLS=30 cap; replicated here so this
+    # function is the canonical answer even when the widget is not
+    # available (web build, headless tests).
+    return max(1, min(int(cols), 30))
+
+
+def seg_grid_natural_height(
+    consonant_group_sizes: Sequence[int],
+    cols: int,
+) -> int:
+    """Pixel height the consonant grid wants when laid out at
+    ``cols`` columns per group.
+
+    Each manner-class group contributes ``SEG_GROUP_HEADER_H``
+    (22 px) plus ``ceil(N / best_n_cols) × SEG_BTN_ROW_H`` (30 px)
+    for its button rows, where ``best_n_cols`` is the orphan-avoiding
+    column count from ``best_segment_n_cols(N, cols)``. Caller passes
+    the per-group counts; this helper sums them.
+
+    Used by desktop ``geometry_controller.fit_to_content`` to set the
+    seg-pane ``setMinimumHeight`` and by the web's seg-pane CSS
+    via the constants relay.
+    """
+    total = 0
+    for size in consonant_group_sizes:
+        if size <= 0:
+            continue
+        n_cols = best_segment_n_cols(size, cols)
+        rows = math.ceil(size / n_cols)
+        total += SEG_GROUP_HEADER_H + rows * SEG_BTN_ROW_H
+    return total
+
+
+def feature_panel_natural_height(
+    card_row_counts: Sequence[int],
+    *,
+    group_order: Sequence[str] | None = None,
+    group_names: Sequence[str] | None = None,
+) -> int:
+    """Pixel height the two-column feature panel wants given a list
+    of card row counts.
+
+    Uses ``distribute_feature_groups`` to balance left vs right
+    column, then returns the taller column's height plus
+    ``PANEL_CHROME_V``. Each card contributes
+    ``FEAT_CARD_CHROME_H + rows × FEAT_ROW_H``.
+
+    Caller can pass ``group_names`` to honour the LEFT_PINS /
+    RIGHT_PINS convention; if omitted, falls back to greedy
+    distribution by row count alone.
+    """
+    if not card_row_counts:
+        return PANEL_CHROME_V
+    if group_names is None:
+        # Fallback: name the groups numerically; LPT distribution
+        # by row count, no pins.
+        group_names = [f"_g{i}" for i in range(len(card_row_counts))]
+    sizes: dict[str, int] = dict(
+        zip(group_names, card_row_counts, strict=True)
+    )
+    left_names, right_names = distribute_feature_groups(
+        sizes, group_order=group_order
+    )
+
+    def column_h(names: Sequence[str]) -> int:
+        return sum(
+            FEAT_CARD_CHROME_H + sizes[name] * FEAT_ROW_H for name in names
+        )
+
+    return max(column_h(left_names), column_h(right_names)) + PANEL_CHROME_V

@@ -362,14 +362,14 @@ def test_seg_pane_stays_at_min_at_low_end_laptop() -> None:
 
 def test_feat_floor_binds_when_content_is_small() -> None:
     """``FEAT_MIN_W`` wins when ``feat_content_w + cushion`` is
-    below the minimum. Pins the ``max(FEAT_MIN_W, …)`` branch the
-    9-resolution matrix never hits (its 500 + 40 = 540 always
-    exceeds the 380 floor)."""
+    below the minimum. With FEAT_MIN_W = 480 (bumped from 380 so
+    long card titles fit), feat_content_w=200 + cushion 40 = 240
+    is well below 480 → floor wins."""
     seg_w, feat_w = layout.distribute_pane_widths(
         1400, seg_content_w=500, feat_content_w=200
     )
-    assert feat_w == layout.FEAT_MIN_W == 380
-    assert seg_w == 1400 - 380
+    assert feat_w == 480  # FEAT_MIN_W literal
+    assert seg_w == 1400 - 480
 
 
 def test_seg_floor_binds_when_window_is_narrow() -> None:
@@ -404,13 +404,13 @@ def test_seg_min_floor_binds_when_no_content_pressure() -> None:
     seg_w, feat_w = layout.distribute_pane_widths(
         1400, seg_content_w=100, feat_content_w=100
     )
-    assert feat_w == layout.FEAT_MIN_W == 380
-    assert seg_w == 1400 - 380 == 1020
+    assert feat_w == 480  # FEAT_MIN_W literal
+    assert seg_w == 1400 - 480 == 920
     # Even with extreme content compression, seg floor holds.
     seg_w, _ = layout.distribute_pane_widths(
         400, seg_content_w=0, feat_content_w=0
     )
-    assert seg_w >= layout.SEG_MIN_W == 480
+    assert seg_w >= 480  # SEG_MIN_W literal
 
 
 # ---------------------------------------------------------------------------
@@ -554,30 +554,46 @@ def test_top_pane_height_keeps_min_top_pane_floor(
 def test_top_pane_height_caps_at_total_minus_analysis_floor() -> None:
     """When the features want more height than the splitter can
     deliver, the policy caps the top pane so the analysis pane
-    still keeps its 60-px floor. Pins literal numbers so a bump
-    to HARD_MIN_ANALYSIS_H trips the test."""
-    # Features want 800 px; vsplit only has 600 px total.
+    still keeps its 60-px floor. Pins literal 60 so a bump to
+    HARD_MIN_ANALYSIS_H trips."""
+    # Features want 800 px; vsplit has 600 px total. Cap path wins.
     top_h = layout.top_pane_height(top_need_h=800, total=600)
-    assert top_h == 600 - 60  # total minus HARD_MIN_ANALYSIS_H
+    assert top_h == 600 - 60
     assert top_h == 540
-
-
-def test_top_pane_height_floors_when_total_is_tiny() -> None:
-    """On a tiny vsplit total (e.g. user dragged the window very
-    short), the policy still gives the top pane at least
-    ``MIN_TOP_PANE_H``, intentionally overshooting the splitter
-    so the splitter machinery clamps afterward."""
-    # 250 - 60 = 190, which is BELOW MIN_TOP_PANE_H (200).
-    top_h = layout.top_pane_height(top_need_h=500, total=250)
-    assert top_h == 200  # MIN_TOP_PANE_H floor wins
 
 
 def test_top_pane_height_passes_through_when_room_to_spare() -> None:
     """When the vsplit is comfortably tall, the top pane gets
-    exactly its content-driven need. Pins the simple no-clamp
-    branch with a literal."""
+    exactly its content-driven need. Analysis gets the leftover
+    — the user's stated "as tall as it can be" preference."""
     top_h = layout.top_pane_height(top_need_h=540, total=900)
     assert top_h == 540
+    analysis_h = 900 - top_h
+    assert analysis_h == 360  # analysis absorbs the slack
+
+
+def test_top_pane_height_defensive_floor_for_degenerate_input() -> None:
+    """``MIN_TOP_PANE_H`` is a defensive floor: when the caller
+    passes a content need below the floor (e.g. empty inventory
+    whose sizeHint returns 0), the top pane still gets at least
+    200 px so it doesn't fully collapse. Real inventories never
+    trigger this branch because their content is always > 200."""
+    top_h = layout.top_pane_height(top_need_h=0, total=900)
+    assert top_h == 200  # MIN_TOP_PANE_H literal
+
+
+def test_top_pane_height_does_not_over_allocate_for_small_inventories() -> (
+    None
+):
+    """REGRESSION: an English-sized inventory (top_need ≈ 470 px)
+    on a typical screen (vsplit ~800 px) should get exactly 470 px
+    for the top pane, leaving 330 px for the analysis. A floor that
+    forces top_pane up to 600+ would shrink analysis below its
+    natural share."""
+    top_h = layout.top_pane_height(top_need_h=470, total=800)
+    assert top_h == 470
+    analysis_h = 800 - top_h
+    assert analysis_h == 330
 
 
 # ---------------------------------------------------------------------------
@@ -685,6 +701,108 @@ def test_inventory_has_features_within_reasonable_bound(
     assert isinstance(features, list)
     n = len(features)
     assert 0 < n <= 50, f"{name}: feature count {n} outside [1, 50]"
+
+
+# ---------------------------------------------------------------------------
+# Cross product: 9 resolutions × 4 bundled inventories. At every pair
+# above the 720p floor, neither the segment grid nor the feature panel
+# should need an internal scrollbar. The 720p floor is the documented
+# exception: vsplit is too short to fit the worst-case bundled inventory
+# alongside the analysis-pane floor.
+# ---------------------------------------------------------------------------
+
+
+def _consonant_group_sizes(name: str) -> list[int]:
+    """Per-manner-class consonant counts for an inventory, excluding
+    the ``vowels`` group. Mirrors the data the segment grid actually
+    lays out (vowels go to the separate chart, not the grid)."""
+    from phonology_engine.feature_engine import FeatureEngine
+    from phonology_engine.inventory import Inventory
+
+    data = _load_inventory(f"{name}_features")
+    inv = Inventory.parse(data)
+    engine = FeatureEngine(inv)
+    return [
+        len(segs)
+        for manner, segs in engine.grouped_segments.items()
+        if manner.lower() != "vowels"
+    ]
+
+
+def _feature_card_rows(name: str) -> tuple[list[str], list[int]]:
+    """Per-card row counts for an inventory's feature panel,
+    bucketed via the FEATURE_GROUPS constant the way
+    ``view_models._grouped_features`` does it."""
+    from phonology_engine.feature_engine import FeatureEngine
+    from phonology_engine.inventory import Inventory
+    from phonology_features.gui.constants import FEATURE_GROUPS
+
+    data = _load_inventory(f"{name}_features")
+    inv = Inventory.parse(data)
+    engine = FeatureEngine(inv)
+    present = set(engine.features)
+    placed: set[str] = set()
+    names: list[str] = []
+    counts: list[int] = []
+    for group_name, group_feats in FEATURE_GROUPS:
+        in_inv = [f for f in group_feats if f in present]
+        if in_inv:
+            names.append(group_name)
+            counts.append(len(in_inv))
+            placed.update(in_inv)
+    leftovers = [f for f in engine.features if f not in placed]
+    if leftovers:
+        names.append("Other")
+        counts.append(len(leftovers))
+    return names, counts
+
+
+@pytest.mark.parametrize("res", RESOLUTIONS, ids=lambda r: r.label)
+@pytest.mark.parametrize("inv_name", INVENTORIES)
+def test_top_panes_fit_without_scroll(res: Resolution, inv_name: str) -> None:
+    """At every (resolution, inventory) pair above the 720p floor,
+    both the segment grid and the feature panel fit inside the top
+    pane's allotted height. The 720p floor is the documented
+    exception: vsplit is too short to fit Hayes' 648-px consonant
+    grid or General's 587-px feature panel alongside the
+    analysis-pane floor. Test skips strict assertions there.
+
+    A failure of this test means a real user on that monitor with
+    that inventory would see an internal scrollbar.
+    """
+    win_w, win_h = layout.recommended_initial_window_size(
+        res.width, res.height
+    )
+    seg_pane_w, _ = layout.distribute_pane_widths(
+        win_w,
+        seg_content_w=SEG_CONTENT_W,
+        feat_content_w=FEAT_CONTENT_W,
+    )
+    n_cols = layout.seg_pane_n_cols(seg_pane_w)
+    cons_groups = _consonant_group_sizes(inv_name)
+    seg_h = layout.seg_grid_natural_height(cons_groups, n_cols)
+    card_names, card_counts = _feature_card_rows(inv_name)
+    feat_h = layout.feature_panel_natural_height(
+        card_counts, group_names=card_names
+    )
+
+    # vsplit total = window height minus toolbar (50) + status (25)
+    # + a few px of vertical padding around them.
+    vsplit_total = win_h - 100
+    available_top = vsplit_total - layout.HARD_MIN_ANALYSIS_H
+
+    # 720p exception: documented as unavoidable.
+    if win_h <= 720:
+        return
+
+    assert seg_h <= available_top, (
+        f"{res.label} / {inv_name}: seg grid {seg_h}px exceeds "
+        f"available top {available_top}px (would scroll)"
+    )
+    assert feat_h <= available_top, (
+        f"{res.label} / {inv_name}: feat panel {feat_h}px exceeds "
+        f"available top {available_top}px (would scroll)"
+    )
 
 
 # ---------------------------------------------------------------------------

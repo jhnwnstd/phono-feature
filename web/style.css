@@ -541,7 +541,11 @@ dialog input[type="text"]:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
-  min-width: 0;
+  /* Sized so long group titles ("TONGUE-ROOT / PHARYNGEAL") render
+     on a single line. ``--min-feat-card-w`` is the canonical floor
+     in ``layout.py`` so desktop (Qt sizing) and web (this rule)
+     stay in lockstep. */
+  min-width: var(--min-feat-card-w);
 }
 @media (max-width: 600px) {
   #feat-list { flex-direction: column; }
@@ -555,7 +559,10 @@ dialog input[type="text"]:focus-visible {
   letter-spacing: 0.5px;
   color: var(--text-dim);
   padding: var(--space-xs) 2px var(--space-sm);
-  overflow-wrap: anywhere;
+  /* Titles fit at ``--min-feat-card-w``; ``overflow-wrap: normal``
+     so the line stays whole when room permits. */
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 .panel[data-active="true"] .feat-group-header {
   color: var(--text);

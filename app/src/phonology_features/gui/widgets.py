@@ -27,6 +27,7 @@ from phonology_features.gui.constants import (
     MONO_FAMILIES,
     scrollbar_style,
 )
+from phonology_features.gui import layout as layout_mod
 from phonology_features.gui.layout import (
     best_segment_n_cols,
     partition_groups_for_spillover,
@@ -1038,10 +1039,12 @@ class SegmentGridWidget(QWidget):
         self._resize_timer.start()
 
     def _compute_n_cols(self) -> int:
-        stride = BTN_W + BTN_GAP
-        width_slots = (self.width() + BTN_GAP) // stride
-        width_slots = max(1, width_slots)
-        max_possible = min(width_slots, self.MAX_COLS)
+        # Width-to-cols delegated to the shared layout helper so the
+        # web's grid uses the same formula. The local cap-at-group-
+        # size step stays here because it depends on the widget's
+        # in-memory groups, which the pure-Python layout module
+        # doesn't see.
+        max_possible = layout_mod.seg_pane_n_cols(self.width())
         if not self._groups:
             return max_possible
         max_N = max(len(segs) for segs in self._groups.values())

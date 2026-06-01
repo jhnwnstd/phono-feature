@@ -244,17 +244,28 @@ def generate_layout_css() -> None:
         "/* AUTO-GENERATED from app/src/phonology_features/gui/layout.py",
         " * by web/scripts/build.py. Do not edit by hand. */",
         ":root {",
+        # Pane-width thresholds.
         f"  --seg-min-w: {mod.SEG_MIN_W}px;",
         f"  --feat-min-w: {mod.FEAT_MIN_W}px;",
         f"  --feat-cushion: {mod.FEAT_CUSHION_PX}px;",
+        f"  --min-feat-card-w: {mod.MIN_FEAT_CARD_W}px;",
         f"  --vowel-natural-w: {mod.VOWEL_NATURAL_W}px;",
         f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
         f"  --collapse-w: {mod.COLLAPSE_W}px;",
+        # Per-row / per-card heights — single source of truth for
+        # consonant-grid and feature-card height math in the web.
+        f"  --seg-btn-h: {mod.SEG_BTN_H}px;",
+        f"  --seg-btn-row-h: {mod.SEG_BTN_ROW_H}px;",
+        f"  --seg-group-header-h: {mod.SEG_GROUP_HEADER_H}px;",
+        f"  --feat-row-h: {mod.FEAT_ROW_H}px;",
+        f"  --feat-card-chrome-h: {mod.FEAT_CARD_CHROME_H}px;",
+        f"  --panel-chrome-v: {mod.PANEL_CHROME_V}px;",
+        f"  --min-top-pane-h: {mod.MIN_TOP_PANE_H}px;",
         "}",
         "",
     ]
     (DIST / "layout.css").write_text("\n".join(lines))
-    print("  6 layout tokens")
+    print("  14 layout tokens")
 
 
 def write_python_bundle() -> None:

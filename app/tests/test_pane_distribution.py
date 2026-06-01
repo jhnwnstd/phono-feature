@@ -32,8 +32,10 @@ def test_distribute_feat_clamped_to_min_when_content_tiny() -> None:
     seg_w, feat_w = layout.distribute_pane_widths(
         1440, seg_content_w=500, feat_content_w=100
     )
-    assert feat_w == 380  # FEAT_MIN_W
-    assert seg_w == 1060
+    # FEAT_MIN_W = 480 (bumped from 380 so long card titles fit
+    # on one line in the two-column feature panel).
+    assert feat_w == 480
+    assert seg_w == 1440 - 480
 
 
 def test_distribute_seg_respects_floor_on_narrow_window() -> None:
@@ -206,3 +208,42 @@ def test_vowel_stack_w_matches_css_container_query() -> None:
         f"layout.VOWEL_STACK_W={layout.VOWEL_STACK_W}; expected literal "
         f"{expected_rule!r}"
     )
+
+
+def test_layout_css_emits_all_height_constants() -> None:
+    """The generated ``dist/layout.css`` must emit every height-
+    related constant the desktop uses, so the web grid can apply
+    the same numbers via ``var(--*)``. A new constant in
+    ``layout.py`` without a corresponding emission in
+    ``generate_layout_css`` would cause the two UIs to drift.
+    Read the ``build.py`` source as a syntactic check (no need
+    to actually run the build for this test).
+    """
+    from pathlib import Path
+
+    build_py = (
+        Path(__file__).resolve().parents[2] / "web" / "scripts" / "build.py"
+    )
+    contents = build_py.read_text(encoding="utf-8")
+    # Every layout-module height constant we expect emitted as a
+    # CSS variable. New constants must be appended here AND emitted
+    # in ``generate_layout_css``.
+    for var_name, py_name in [
+        ("--seg-btn-h", "SEG_BTN_H"),
+        ("--seg-btn-row-h", "SEG_BTN_ROW_H"),
+        ("--seg-group-header-h", "SEG_GROUP_HEADER_H"),
+        ("--feat-row-h", "FEAT_ROW_H"),
+        ("--feat-card-chrome-h", "FEAT_CARD_CHROME_H"),
+        ("--panel-chrome-v", "PANEL_CHROME_V"),
+        ("--min-top-pane-h", "MIN_TOP_PANE_H"),
+        ("--min-feat-card-w", "MIN_FEAT_CARD_W"),
+    ]:
+        assert var_name in contents, (
+            f"build.py:generate_layout_css does not emit {var_name}; "
+            f'add a line like ``f"  {var_name}: {{mod.{py_name}}}px;"``'
+        )
+        assert f"mod.{py_name}" in contents, (
+            f"build.py:generate_layout_css does not reference "
+            f"layout.{py_name}; the {var_name} variable cannot be "
+            f"derived without it"
+        )

@@ -231,11 +231,16 @@ class _GeometryController:
         # turns those givebacks into reversible operations: when the
         # window grows again, Qt honors the minimum and analysis
         # absorbs only what's beyond it.
-        seg_panel_chrome_v = 24 + 30  # top/bottom padding + header row
-        feat_panel_chrome_v = 24 + 30
-        self._w.seg_panel.setMinimumHeight(seg_content_h + seg_panel_chrome_v)
+        #
+        # The chrome constant lives in ``layout`` so both UIs apply
+        # the same overhead: panel outer padding + header strip
+        # (clear button row) = ``PANEL_CHROME_V``. Was previously
+        # the duplicated literal ``24 + 30`` here.
+        self._w.seg_panel.setMinimumHeight(
+            seg_content_h + layout.PANEL_CHROME_V
+        )
         self._w.feat_panel.setMinimumHeight(
-            feat_content_h + feat_panel_chrome_v
+            feat_content_h + layout.PANEL_CHROME_V
         )
         analysis_h = self.min_analysis_h
         toolbar_h = 50
