@@ -863,7 +863,16 @@ class AnalysisPanel(QWidget):
         """
 
     def clear(self) -> None:
+        """Reset the analysis pane to its post-construction state.
+
+        Canonical full-reset sink. After this returns, every observable
+        visual cue (tab bodies, tab colour, tab enable, active tab,
+        chips strip) is back to its empty baseline. Any new display
+        cue added later must reset here too, so a future regression
+        breaks ``test_analysis_panel_clear`` instead of the UI.
+        """
         self.selection_label.clear()
+        self.selection_label.setVisible(False)
         for tab in (self._tab_class, self._tab_features, self._tab_contrasts):
             tab.clear()
             # set_html caches the last HTML string on the widget and
@@ -874,6 +883,9 @@ class AnalysisPanel(QWidget):
                 delattr(tab, _LAST_HTML_ATTR)
         if hasattr(self.selection_label, _LAST_HTML_ATTR):
             delattr(self.selection_label, _LAST_HTML_ATTR)
+        self._apply_class_state("neutral")
+        self.tabs.setTabEnabled(self._TAB_CONTRASTS_IDX, True)
+        self.tabs.setCurrentIndex(self._TAB_CLASS_IDX)
 
 
 class SegmentGridWidget(QWidget):

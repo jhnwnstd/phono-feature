@@ -1259,8 +1259,11 @@ function setAnalysisTabs(tabs) {
     nodes.analysisTabClass.dataset.classState = tabs.class_state || "neutral";
 }
 
-/** Empty the entire analysis pane (selection header + all three tab
- *  bodies). Used on inventory swap and mode reset. */
+/** Canonical full-reset sink for the analysis pane. After this
+ *  returns, every observable visual cue (tab bodies, tab colour
+ *  cue, tab enable, active tab, chips strip) is back to its empty
+ *  baseline. Any new display cue added later must reset here too,
+ *  so a regression breaks the invariant test instead of the UI. */
 function clearAnalysisTabs() {
     nodes.analysisSelection.innerHTML = "";
     nodes.analysisSelection.hidden = true;
@@ -1270,6 +1273,7 @@ function clearAnalysisTabs() {
     nodes.analysisTabContrasts.disabled = false;
     nodes.analysisTabContrasts.removeAttribute("aria-disabled");
     nodes.analysisTabClass.dataset.classState = "neutral";
+    activateAnalysisTab("class");
 }
 
 /** Switch the visible tab. Updates aria-selected on the tab buttons
@@ -2939,21 +2943,26 @@ function wireAnalysisTabs() {
 }
 
 function wireClearButtons() {
+    // Wipe state synchronously before triggering the mode switch so
+    // the user never sees a flash of prior analysis content during
+    // the debounced reanalysis window.
     nodes.segClearBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        activateMode(MODE.SEG_TO_FEAT);
         clearAll();
+        activateMode(MODE.SEG_TO_FEAT);
     });
     nodes.featClearBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        activateMode(MODE.FEAT_TO_SEG);
         clearAll();
+        activateMode(MODE.FEAT_TO_SEG);
     });
 }
 
 function clearAll() {
     state.selected_segments = [];
     state.selected_features = emptyFeatureSpec();
+    state.saved_seg_state = [];
+    state.saved_feat_state = emptyFeatureSpec();
     for (const btn of state.seg_buttons.values()) {
         btn.dataset.state = "default";
         btn.setAttribute("aria-pressed", "false");

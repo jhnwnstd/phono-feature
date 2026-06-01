@@ -112,7 +112,7 @@
     they have active. Content is set by main.js from the shared
     Python ``analysis_tabs.selection`` field.
   -->
-  <div class="analysis-selection" id="analysis-selection"></div>
+  <div class="analysis-selection" id="analysis-selection" hidden></div>
   <!--
     Three-tab interface mirroring the desktop's AnalysisPanel.
     Tab labels and content keys are pinned: Class / Features /
@@ -123,7 +123,8 @@
   <div class="analysis-tabs" id="analysis-tabs" role="tablist">
     <button class="analysis-tab" id="analysis-tab-class"
             type="button" role="tab" aria-controls="analysis-content-class"
-            data-tab="class" aria-selected="true">Class</button>
+            data-tab="class" data-class-state="neutral"
+            aria-selected="true">Class</button>
     <button class="analysis-tab" id="analysis-tab-features"
             type="button" role="tab" aria-controls="analysis-content-features"
             data-tab="features" aria-selected="false">Features</button>

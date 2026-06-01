@@ -97,16 +97,17 @@ def _assert_tabs_shape(tabs: dict[str, object]) -> None:
     assert isinstance(tabs["contrasts_enabled"], bool)
 
 
-def test_analysis_tabs_seg_single_disables_contrasts() -> None:
-    """Single-segment SEG selection: Contrasts tab has nothing to
-    show, so the payload signals the UI to grey out / disable it.
-    The Class tab stays NEUTRAL (white). Every singleton is
-    trivially a natural class of itself, so colouring it green
-    would just add visual noise on every click."""
+def test_analysis_tabs_seg_single_keeps_contrasts_enabled() -> None:
+    """Tab enable/disable is MODE-driven, not selection-driven. SEG
+    mode keeps Contrasts clickable regardless of selection count;
+    the tab body carries a 'select two or more segments' hint when
+    the user lands there with fewer than two segments. The Class
+    tab stays NEUTRAL (white) since a single segment is trivially
+    a natural class of itself."""
     engine = _engine("hayes_features.json")
     tabs = summarize_segment_selection(engine, ["b"])["analysis_tabs"]
     _assert_tabs_shape(tabs)
-    assert tabs["contrasts_enabled"] is False
+    assert tabs["contrasts_enabled"] is True
     assert tabs["class_state"] == "neutral"
     # Class tab carries the natural-class verdict / specs.
     assert "+Voice" in tabs["features"]
@@ -155,13 +156,19 @@ def test_analysis_tabs_feat_disables_contrasts() -> None:
 
 
 def test_analysis_tabs_empty_selection_safe_shape() -> None:
-    """Empty SEG selection still produces a well-formed payload —
-    the UI can call setSections without checking for nulls."""
+    """Empty SEG selection still produces a well-formed payload, so
+    the UI can call setSections without checking for nulls. Tab
+    enablement is mode-driven (SEG → Contrasts clickable), but the
+    Class tab cue stays neutral and the body strings collapse to
+    the empty string so neither frontend paints a stale message."""
     engine = _engine("hayes_features.json")
     tabs = summarize_segment_selection(engine, [])["analysis_tabs"]
     _assert_tabs_shape(tabs)
-    assert tabs["contrasts_enabled"] is False
+    assert tabs["contrasts_enabled"] is True
     assert tabs["class_state"] == "neutral"
+    assert tabs["selection"] == ""
+    assert tabs["class"] == ""
+    assert tabs["features"] == ""
 
 
 def test_segment_state_payload_strings_match_enum() -> None:

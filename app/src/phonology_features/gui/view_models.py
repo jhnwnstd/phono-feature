@@ -209,8 +209,9 @@ def _seg_tabs(
     Keys map to the three tabs the desktop and web render:
     ``"class"``, ``"features"``, ``"contrasts"``. Plus a
     ``"selection"`` line for the persistent header above the tabs,
-    a ``"contrasts_enabled"`` flag that dims the third tab when
-    there's nothing to compare (single-segment selection), and a
+    a ``"contrasts_enabled"`` flag that is mode-driven (True for
+    SEG mode, False for FEAT) so tab availability tracks the active
+    pane rather than specific selection contents, and a
     ``"class_state"`` that colours the Class tab itself: green
     ``"natural"`` when the selection forms a natural class, red
     ``"not_natural"`` when it doesn't, ``"neutral"`` for the empty
@@ -232,7 +233,11 @@ def _seg_tabs(
         "class": render_class_tab_seg(engine, segs, suggested),
         "features": render_features_tab_seg(engine, segs, common),
         "contrasts": render_contrasts_tab_seg(engine, segs, contrastive),
-        "contrasts_enabled": len(segs) >= 2,
+        # Tab enable/disable is mode-driven, not selection-driven. SEG
+        # mode always lets the user click Contrasts; the tab body
+        # carries the "select two or more segments" hint when the
+        # selection isn't large enough yet.
+        "contrasts_enabled": True,
         "class_state": class_state,
     }
 
