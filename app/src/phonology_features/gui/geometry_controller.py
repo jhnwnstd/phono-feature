@@ -206,7 +206,6 @@ class _GeometryController:
         # the splitter), not to dead space after the vowels.
         seg_content = self._w._seg_scroll.widget()
         seg_content_w = seg_content.sizeHint().width() if seg_content else 400
-        seg_content_h = seg_content.sizeHint().height() if seg_content else 400
         seg_chrome = 28 + 6  # panel margins (14 * 2) + scrollbar
         seg_need_w = seg_content_w + seg_chrome
         feat_content = self._w._feat_scroll.widget()
@@ -216,9 +215,49 @@ class _GeometryController:
         feat_chrome = 28 + 6
         feat_padding = 40
         feat_need_w = feat_content_w + feat_chrome + feat_padding
-        feat_content_h = (
-            feat_content.sizeHint().height() if feat_content else 400
-        )
+        # Heights come from the shared layout helpers, not Qt's
+        # ``sizeHint`` — the helpers compute from inventory data
+        # directly so we don't have to wait for Qt's reflow, and so
+        # the same numbers appear on the web bundle via the CSS-
+        # variable relay. Falls back to ``sizeHint`` if the engine
+        # isn't ready yet (e.g. early startup before _populate runs).
+        engine = self._w.engine
+        if engine is not None:
+            cons_groups = [
+                len(segs)
+                for manner, segs in engine.grouped_segments.items()
+                if manner.lower() != "vowels"
+            ]
+            n_cols = layout.seg_pane_n_cols(
+                self._w.seg_panel.width() or layout.SEG_MIN_W
+            )
+            seg_content_h = layout.seg_grid_natural_height(cons_groups, n_cols)
+            from phonology_features.gui.constants import FEATURE_GROUPS
+
+            present = set(engine.features)
+            placed: set[str] = set()
+            card_names: list[str] = []
+            card_counts: list[int] = []
+            for group_name, group_feats in FEATURE_GROUPS:
+                in_inv = [f for f in group_feats if f in present]
+                if in_inv:
+                    card_names.append(group_name)
+                    card_counts.append(len(in_inv))
+                    placed.update(in_inv)
+            leftovers = [f for f in engine.features if f not in placed]
+            if leftovers:
+                card_names.append("Other")
+                card_counts.append(len(leftovers))
+            feat_content_h = layout.feature_panel_natural_height(
+                card_counts, group_names=card_names
+            )
+        else:
+            seg_content_h = (
+                seg_content.sizeHint().height() if seg_content else 400
+            )
+            feat_content_h = (
+                feat_content.sizeHint().height() if feat_content else 400
+            )
         feat_v_padding = 20
         top_need_h = feat_content_h + 80 + feat_v_padding
         # Lock each panel's vertical minimum to its actual content
@@ -252,18 +291,41 @@ class _GeometryController:
             # First-launch only: claim a sensible window size from
             # the first inventory's content. Subsequent loads skip
             # this and rely on the splitter to absorb width changes.
+            # Width policy is content-driven with TWO floors:
+            #   * absolute floor (``MIN_FIRST_LAUNCH_W`` = 1120):
+            #     keeps the layout safe before any inventory loads.
+            #   * vowel-safe floor: per-inventory, ensures the seg
+            #     pane gets ``>= VOWEL_STACK_W`` so the vowel chart
+            #     stays beside the consonants. The user's stated
+            #     "default startup width should be the minimum
+            #     needed so vowels don't display under the consonant
+            #     segments" preference.
             if not self.has_saved_size:
+                vowel_safe_w = layout.min_vowel_safe_window_w(feat_content_w)
+                target_w = max(
+                    seg_need_w + feat_need_w + 1,
+                    vowel_safe_w,
+                    self.MIN_FIRST_LAUNCH_W,
+                )
                 self.fit_window_to_size(
                     screen,
-                    max(seg_need_w + feat_need_w + 1, self.MIN_FIRST_LAUNCH_W),
+                    target_w,
                     max(total_need_h, self.MIN_FIRST_LAUNCH_H),
                 )
-            # Same rule for the panel boundary: once the user has
-            # a restored or manually-dragged splitter ratio, leave
-            # it alone on inventory swap. Only the first launch
-            # (no saved state) gets a content-derived ratio.
+            # The hsplit ratio (left/right between seg and feat) is
+            # user-draggable, so once they've established a width
+            # preference we leave it alone on inventory swap. Only
+            # the first launch gets a content-derived hsplit ratio.
+            # The vsplit (top vs analysis) is NOT user-draggable —
+            # the handle is disabled — so we always re-fit it to the
+            # new content. Otherwise loading a smaller inventory
+            # would leave the analysis pane at its old size instead
+            # of growing to absorb the freed space (the user's
+            # "analysis as tall as it can be" preference).
             if not self.has_saved_splitter:
                 self.apply_splitter_sizes(seg_need_w, feat_need_w, top_need_h)
+            else:
+                self.apply_vsplit_to_content(top_need_h)
 
     def fit_window_to_size(
         self, screen: QScreen | None, need_w: int, need_h: int
@@ -417,6 +479,25 @@ class _GeometryController:
         instance-method call sites untouched.
         """
         return layout.top_pane_height(top_need_h, total)
+
+    def apply_vsplit_to_content(self, top_need_h: int) -> None:
+        """Re-fit JUST the vsplit (top vs analysis) to the current
+        inventory's content height. Called on every inventory swap
+        AFTER the first launch (when ``has_saved_splitter`` is True
+        and we keep the user's hsplit drag preference). The vsplit
+        is not user-draggable, so re-fitting here is safe — and
+        necessary, because the user's "analysis as tall as it can
+        be" preference requires the top pane to shrink when a smaller
+        inventory loads, freeing vertical room for analysis.
+        """
+        total = self._vsplit.height()
+        if total <= 0:
+            QTimer.singleShot(
+                0, lambda: self.fit_vsplit_after_layout(top_need_h)
+            )
+            return
+        top_h = self._top_height_for_content(top_need_h, total)
+        self._vsplit.setSizes([top_h, total - top_h])
 
     def fit_vsplit_after_layout(self, top_need_h: int) -> None:
         """Vertical-only fallback for the case in

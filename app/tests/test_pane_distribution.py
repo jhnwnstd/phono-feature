@@ -116,8 +116,9 @@ def test_should_collapse_single_column_at_threshold() -> None:
 def test_initial_size_floored_on_small_screen() -> None:
     # Below the floor (e.g. 1366×768 laptop), the function returns
     # the floor; ``clamp_size_to_screen`` will then trim down to fit.
+    # Width floor is now 1120 (vowel-safe minimum) instead of 1400.
     w, h = layout.recommended_initial_window_size(1366, 768)
-    assert w == 1400  # MIN_FIRST_LAUNCH_W
+    assert w == 1120  # MIN_FIRST_LAUNCH_W (vowel-safe floor)
     assert h == 900  # MIN_FIRST_LAUNCH_H
 
 

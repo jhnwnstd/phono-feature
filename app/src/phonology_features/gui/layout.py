@@ -203,10 +203,17 @@ VOWEL_STACK_W: int = 620
 # a single column (web ``@media (max-width: ...)`` matches this). The
 # media query is hardcoded; a unit test pins it to this constant.
 COLLAPSE_W: int = 900
-# First-launch window-size floor. Above this, the OS-screen-fraction
-# rule decides; below this the floor kicks in so tiny screens still
-# get a workable starting size.
-MIN_FIRST_LAUNCH_W: int = 1400
+# First-launch window-size floor. The width is the minimum needed to
+# keep the vowel chart alongside (not stacked below) the consonant
+# grid: ``VOWEL_STACK_W`` (620 px floor for the seg pane to host the
+# chart side-by-side) plus the minimum feat-pane width (480 px) plus
+# the splitter handle and a few pixels of safety margin = 1120 px.
+# At this floor, ``distribute_pane_widths`` gives the seg pane just
+# enough room for vowels-alongside; anything narrower would force
+# the chart to stack. Bigger inventories get a content-driven size
+# above this floor via ``fit_to_content``; smaller inventories sit
+# at the floor so vowels still display correctly.
+MIN_FIRST_LAUNCH_W: int = VOWEL_STACK_W + FEAT_MIN_W + 20
 MIN_FIRST_LAUNCH_H: int = 900
 # Fresh-install window size = this fraction of the primary screen's
 # available geometry, floored at ``MIN_FIRST_LAUNCH_*``. 80% gives
@@ -397,6 +404,27 @@ def recommended_initial_window_size(
     w = max(MIN_FIRST_LAUNCH_W, int(screen_w * DEFAULT_SCREEN_FRACTION))
     h = max(MIN_FIRST_LAUNCH_H, int(screen_h * DEFAULT_SCREEN_FRACTION))
     return w, h
+
+
+def min_vowel_safe_window_w(feat_content_w: int) -> int:
+    """Smallest window width that keeps the vowel chart side-by-side
+    with the consonant grid for a given feat content size.
+
+    The seg pane needs at least ``VOWEL_STACK_W`` (620 px) to host the
+    chart alongside; below that the chart stacks under consonants.
+    The feat pane's width is content-driven via ``distribute_pane_widths``
+    (``max(FEAT_MIN_W, feat_content_w + FEAT_CUSHION_PX)``), so the
+    minimum window width that satisfies the vowel-alongside constraint
+    is ``VOWEL_STACK_W + feat_pane_w + chrome``. Plus a small safety
+    margin (20 px) for splitter handle and rounding.
+
+    Used by ``geometry_controller.fit_to_content`` to size the
+    first-launch window so the user's stated "minimum width needed
+    so vowels don't display under consonants" preference holds for
+    whichever inventory is loaded.
+    """
+    feat_pane_w = max(FEAT_MIN_W, feat_content_w + FEAT_CUSHION_PX)
+    return VOWEL_STACK_W + feat_pane_w + 20
 
 
 def top_pane_height(top_need_h: int, total: int) -> int:
