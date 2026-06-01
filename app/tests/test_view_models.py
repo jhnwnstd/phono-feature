@@ -81,7 +81,7 @@ def test_summarize_feature_query_matches_engine() -> None:
 
 
 # ---------------------------------------------------------------------------
-# analysis_tabs payload — shared contract between the desktop's
+# analysis_tabs payload: shared contract between the desktop's
 # ``AnalysisPanel.set_sections`` and the web's ``setAnalysisTabs``.
 # Both consume the same keys; these tests pin the keys + invariants
 # so a rename / drop on either side breaks the build here, not later
@@ -100,7 +100,7 @@ def _assert_tabs_shape(tabs: dict[str, object]) -> None:
 def test_analysis_tabs_seg_single_disables_contrasts() -> None:
     """Single-segment SEG selection: Contrasts tab has nothing to
     show, so the payload signals the UI to grey out / disable it.
-    The Class tab stays NEUTRAL (white) — every singleton is
+    The Class tab stays NEUTRAL (white). Every singleton is
     trivially a natural class of itself, so colouring it green
     would just add visual noise on every click."""
     engine = _engine("hayes_features.json")

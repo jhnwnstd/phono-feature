@@ -206,8 +206,8 @@ def _seg_tabs(
 ) -> dict[str, Any]:
     """Build the per-tab HTML payload for the SEG-mode analysis pane.
 
-    Keys map to the three tabs the desktop and web render —
-    ``"class"``, ``"features"``, ``"contrasts"`` — plus a
+    Keys map to the three tabs the desktop and web render:
+    ``"class"``, ``"features"``, ``"contrasts"``. Plus a
     ``"selection"`` line for the persistent header above the tabs,
     a ``"contrasts_enabled"`` flag that dims the third tab when
     there's nothing to compare (single-segment selection), and a
@@ -215,10 +215,10 @@ def _seg_tabs(
     ``"natural"`` when the selection forms a natural class, red
     ``"not_natural"`` when it doesn't, ``"neutral"`` for the empty
     selection. Colouring the tab replaces the previous "Natural
-    class: Yes/No" body text — same information, less visual noise.
+    class: Yes/No" body text (same information, less visual noise).
     """
     # Class-tab background colour cue. Single-segment selections stay
-    # neutral (white) — every singleton is trivially a "natural class"
+    # neutral (white). Every singleton is trivially a "natural class"
     # of itself, so colouring it green would be true but uninformative
     # and just adds visual noise on every click. The cue lives on the
     # multi-segment verdict where the answer is genuinely useful.
@@ -243,7 +243,7 @@ def _feat_tabs(
 ) -> dict[str, Any]:
     """Same shape as :py:func:`_seg_tabs` but for FEAT mode. The
     Contrasts tab is never meaningful for a feature query, so
-    ``contrasts_enabled`` is always False — the UI greys it out.
+    ``contrasts_enabled`` is always False (the UI greys it out).
     The selection header is intentionally empty: the query is
     already explicit in the Features tab below, so duplicating
     it above the tabs would just waste vertical room.

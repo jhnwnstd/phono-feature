@@ -571,8 +571,8 @@ class _CopyableTextEdit(QTextEdit):
 
 class AnalysisPanel(QWidget):
     """Analysis output pane. The tab labels (Class / Features /
-    Contrasts) carry their own naming, so there's no top heading
-    — the maximize/restore toggle lives in the tab bar's top-right
+    Contrasts) carry their own naming, so there's no top heading.
+    The maximize/restore toggle lives in the tab bar's top-right
     corner via ``QTabWidget.setCornerWidget`` to keep the pane
     height available for content. The toggle emits
     ``expand_toggled``; MainWindow owns the vsplit and handles the
@@ -581,7 +581,7 @@ class AnalysisPanel(QWidget):
 
     expand_toggled = pyqtSignal()
 
-    # Index in ``self.tabs`` for the Contrasts tab — kept as a class
+    # Index in ``self.tabs`` for the Contrasts tab, kept as a class
     # constant so ``set_sections`` can enable/disable it cleanly. Order
     # also matches the user's chosen reading order: Class first (the
     # analytical conclusion), then Features (raw spec), then Contrasts
@@ -594,8 +594,9 @@ class AnalysisPanel(QWidget):
         super().__init__(parent)
         # Expand/restore toggle. Text glyphs (not emoji) so the button
         # honors the active font and palette. Installed as the tab
-        # bar's top-right corner widget below — no dedicated header
-        # row, so the pane's full height goes to tab content.
+        # bar's top-right corner widget below, so there's no
+        # dedicated header row and the pane's full height goes to
+        # tab content.
         self.expand_btn = QPushButton("⤢", self)
         self.expand_btn.setFlat(True)
         self.expand_btn.setFixedSize(24, 20)
@@ -634,8 +635,8 @@ class AnalysisPanel(QWidget):
         self.tabs.addTab(self._tab_features, "Features")
         self.tabs.addTab(self._tab_contrasts, "Contrasts")
         # Slip the expand button into the tab bar's top-right corner
-        # so it costs zero extra vertical real estate — same row as
-        # the tab labels.
+        # so it costs zero extra vertical real estate (same row as
+        # the tab labels).
         self.tabs.setCornerWidget(self.expand_btn, Qt.Corner.TopRightCorner)
         # Back-compat alias so the existing ``self.analysis.content``
         # references in tests + other code keep working; the Class
@@ -644,7 +645,7 @@ class AnalysisPanel(QWidget):
         self.content = self._tab_class
         self.content.setMinimumHeight(60)
         layout = QVBoxLayout(self)
-        # No top heading — the tab labels (Class / Features /
+        # No top heading. The tab labels (Class / Features /
         # Contrasts) describe their own contents. Top margin is
         # small (2 px) so the chips strip / tab bar sits flush with
         # the pane's top border; every saved pixel goes to the tab
@@ -653,7 +654,7 @@ class AnalysisPanel(QWidget):
         layout.setSpacing(2)
         layout.addWidget(self.selection_label)
         layout.addWidget(self.tabs)
-        # Selection label starts hidden — empty selection / FEAT
+        # Selection label starts hidden. Empty selection / FEAT
         # mode shouldn't reserve its strip of space. ``set_sections``
         # toggles visibility based on whether the html payload
         # actually carries chips.
@@ -751,20 +752,20 @@ class AnalysisPanel(QWidget):
         view-model into the persistent selection header + three tabs.
 
         ``contrasts_enabled=False`` greys out the Contrasts tab and
-        prevents activation — used for single-segment SEG selections
+        prevents activation. Used for single-segment SEG selections
         and for FEAT mode, where contrasts aren't meaningful. If the
         currently-active tab is the disabled one, focus jumps back
         to the Class tab so the user lands on real content instead
         of a placeholder explaining why the tab is empty.
 
-        ``class_state`` colours the Class tab text: ``"natural"`` →
-        palette ``plus`` (green), ``"not_natural"`` → palette
-        ``minus`` (red), anything else → default text colour. The
-        coloured tab replaces the previous "Natural class: Yes/No"
-        text in the tab body.
+        ``class_state`` colours the Class tab text: ``"natural"``
+        maps to palette ``plus`` (green), ``"not_natural"`` maps to
+        palette ``minus`` (red), anything else uses the default text
+        colour. The coloured tab replaces the previous "Natural
+        class: Yes/No" text in the tab body.
 
         Empty ``selection_html`` hides the persistent selection
-        label entirely (no reserved strip of space) — used in FEAT
+        label entirely (no reserved strip of space). Used in FEAT
         mode where the query is already explicit in the Features
         tab.
         """
@@ -1033,7 +1034,7 @@ class SegmentGridWidget(QWidget):
             return
         # Per-group column counts. ``best_segment_n_cols`` picks the
         # largest n_cols (up to the pane's max) that leaves no row
-        # holding just one orphan button — so groups like Plosives
+        # holding just one orphan button, so groups like Plosives
         # (21 segments) and Affricates (13) get balanced rows instead
         # of "row of 12 + row of 1". Shared with the web via the same
         # ``layout`` module.
@@ -1059,7 +1060,7 @@ class SegmentGridWidget(QWidget):
         # Short-circuit: identical column count + same partition decision
         # means the previous layout is still valid. ``available`` jitter
         # of a few pixels (Wayland CSD nudges, scroll-bar appear/disappear)
-        # commonly leaves main_count unchanged — skipping the rebuild
+        # commonly leaves main_count unchanged, and skipping the rebuild
         # keeps live window-drags cheap.
         if (
             n_cols == self._n_cols
@@ -1103,11 +1104,11 @@ class SegmentGridWidget(QWidget):
         # left empty in spillover rows as the visible gap between the
         # two groups (its width matches a main-flow button column,
         # ~33 px); slot 1 occupies ``[slot_cols + 1, 2 * slot_cols + 1)``.
-        # Same QGridLayout as the main flow — no per-resize QWidget
-        # creation, which is what tanked startup the last time we tried
-        # a nested-container version. Each group again picks its own
-        # column count within the slot via ``best_segment_n_cols`` so
-        # spillover rows also avoid orphans.
+        # Same QGridLayout as the main flow, so there's no per-resize
+        # QWidget creation, which is what tanked startup the last time
+        # we tried a nested-container version. Each group again picks
+        # its own column count within the slot via
+        # ``best_segment_n_cols`` so spillover rows also avoid orphans.
         slot_cols = max(1, (n_cols - 1) // 2)
         spill = groups_items[main_count:]
         for pair_start in range(0, len(spill), 2):
@@ -1137,14 +1138,14 @@ class SegmentGridWidget(QWidget):
             grid_row += 1 + max_btn_rows
 
     def _available_pane_height(self) -> int:
-        """Viewport height of the QScrollArea ancestor — the budget the
+        """Viewport height of the QScrollArea ancestor: the budget the
         spillover partition treats as ``available``. Anything taller
         than this means the old all-in-one-column layout would force
         a scrollbar; the partition picks groups to pack into the
         2-col spillover instead.
 
         Returns 0 (and skips spillover) before the widget is parented
-        under a QScrollArea (tests, early __init__ ticks) — the
+        under a QScrollArea (tests, early __init__ ticks). The
         partition function returns ``n`` for ``available_height <= 0``,
         so all groups stay in the main flow.
         """

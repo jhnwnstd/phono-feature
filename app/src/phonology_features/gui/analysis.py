@@ -418,13 +418,13 @@ def _render_natural_class_verdict(
 
 
 # ---------------------------------------------------------------------------
-# Per-tab renderers — one HTML string per analysis tab in the UI.
+# Per-tab renderers: one HTML string per analysis tab in the UI.
 #
 # The single-blob ``render_*`` functions above are still used (the web's
 # legacy ``analysis_html`` payload reads them) but the desktop's tabbed
 # analysis panel and the matching web layout consume these per-tab
 # variants so each tab gets exactly its section. Splitting the
-# rendering at this layer keeps the desktop and web in lockstep — both
+# rendering at this layer keeps the desktop and web in lockstep: both
 # read the same Python output via ``view_models``.
 # ---------------------------------------------------------------------------
 
@@ -434,12 +434,13 @@ def render_selection_summary_seg(segs: list[str]) -> str:
 
     Returns ``"Selected: chip chip"``-style HTML that sits above the
     tabs and doesn't move when the user switches tabs. Empty
-    selection renders an italic placeholder so the header reserves
-    its space and the surrounding chrome doesn't reflow on first
-    click.
+    selection returns the empty string. The surrounding chrome
+    hides the strip entirely (desktop ``setVisible(False)`` / web
+    ``hidden`` attribute), so we don't repeat what the status bar
+    already says.
     """
     if not segs:
-        return _muted_italic_p("Click a segment to inspect.")
+        return ""
     chips = " ".join(_segment_chip(seg) for seg in segs)
     return f"<p><b>Selected ({len(segs)}):</b> {chips}</p>"
 
@@ -463,19 +464,22 @@ def render_class_tab_seg(
     """Class tab content for SEG mode.
 
     The "is this a natural class?" verdict is no longer shown as
-    Yes/No text — the surrounding tab colour conveys that (driven
+    Yes/No text. The surrounding tab colour conveys that (driven
     by ``analysis_tabs.class_state``). The body now carries only
     the substantive answer:
 
-    * Natural class → the minimal feature specifications.
-    * Not a natural class but completable → "N segments needed
+    * Natural class: the minimal feature specifications.
+    * Not a natural class but completable: "N segments needed
       for natural class:" followed by the chips that would
       complete it.
     * Not a natural class and not completable from the current
-      inventory → a muted italic note.
+      inventory: a muted italic note.
     """
     if not segs:
-        return _muted_italic_p("Select one or more segments.")
+        # Empty body. The status bar already tells the user what to
+        # do ("Click a segment to inspect its features."), so the tab
+        # stays quiet instead of echoing that prompt.
+        return ""
     if len(segs) == 1:
         seg = segs[0]
         feats = engine.get_segment_features(seg)
@@ -543,7 +547,10 @@ def render_features_tab_seg(
     multi-segment selection.
     """
     if not segs:
-        return _muted_italic_p("Select one or more segments.")
+        # Empty body, same reasoning as the Class tab: the status
+        # bar carries the "click a segment" prompt, so this tab
+        # doesn't repeat it.
+        return ""
     if len(segs) == 1:
         seg = segs[0]
         feats = engine.get_segment_features(seg)
@@ -604,7 +611,7 @@ def render_contrasts_tab_seg(
 
 
 def render_contrasts_tab_feat() -> str:
-    """Contrasts tab in FEAT mode is not meaningful — the user is
+    """Contrasts tab in FEAT mode is not meaningful: the user is
     asking which segments match a feature spec, not how segments
     differ. Renders a stable placeholder so the tab still exists
     and the user isn't left wondering whether they broke something.
