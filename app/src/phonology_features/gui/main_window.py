@@ -206,9 +206,7 @@ class MainWindow(QMainWindow):
         )
 
         original = get_palette_mode()
-        alternate = (
-            "colorblind" if original == "standard" else "standard"
-        )
+        alternate = "colorblind" if original == "standard" else "standard"
         with self._batched_updates():
             set_palette_mode(alternate)
             self._theme.apply()

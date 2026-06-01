@@ -128,9 +128,7 @@ class _ThemeController:
         Same in-place re-style path as :py:meth:`toggle`.
         """
         new_mode = (
-            "colorblind"
-            if get_palette_mode() == "standard"
-            else "standard"
+            "colorblind" if get_palette_mode() == "standard" else "standard"
         )
         _log.info("palette mode toggle: %s", new_mode)
         set_palette_mode(new_mode)
@@ -301,7 +299,7 @@ class _ThemeController:
         """
         is_cb = get_palette_mode() == "colorblind"
         btn: QPushButton = self._main._cb_btn
-        btn.setText("\U0001F441")
+        btn.setText("\U0001f441")
         btn.setToolTip(
             "Switch to standard palette"
             if is_cb
