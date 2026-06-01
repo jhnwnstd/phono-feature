@@ -859,17 +859,18 @@ dialog input[type="text"]:focus-visible {
    to blend into the statusbar; hover dims the surrounding text. */
 .statusbar-bug-btn {
   background: transparent;
-  border: none;
-  padding: 0 var(--space-xs);
+  border: var(--border-std) solid var(--border);
+  padding: 0 var(--space-sm);
   font-size: var(--font-size-meta);
   line-height: 1;
   cursor: pointer;
-  color: var(--text-dim);
+  color: var(--text);
   border-radius: 4px;
 }
 .statusbar-bug-btn:hover {
   background: var(--bg);
-  color: var(--text);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .statusbar-bug-btn:focus-visible {
   outline: 2px solid var(--accent);
