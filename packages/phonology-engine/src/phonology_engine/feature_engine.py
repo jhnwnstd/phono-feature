@@ -525,14 +525,46 @@ class FeatureEngine:
     def suggest_natural_class_extension(
         self, segments: list[str]
     ) -> list[str]:
-        """Segments that, added to ``segments``, would complete it
-        into a natural class.
+        """The smallest set of segments that, added to ``segments``,
+        completes it into a natural class.
 
         Returns ``[]`` when ``segments`` is already a natural class
         or has no shared +/- features to extend by. Single source of
-        truth for the "natural-class completion" UX hint used by both
-        the desktop and the web bridge.
+        truth for the "N segments needed for natural class" UX hint
+        used by both the desktop and the web bridge.
+
+        Algorithm: candidates are the segments that share the
+        ``common_features`` of the selection (under-spec compatible)
+        but aren't selected. The MAXIMAL completion ``S ∪ candidates``
+        is always a natural class (characterised by ``common``), so a
+        completion exists. We search by ascending subset size and
+        return the first subset where ``is_natural_class(S ∪ subset)``
+        holds. This is the MINIMAL completion size.
+
+        Why this matters: ``common_features`` uses strict-shared
+        matching (all selected segments must have the same explicit
+        value), so it misses features where one of the selected
+        segments has ``'0'`` (underspecified). ``is_natural_class``
+        uses ``find_all_minimal_bundles`` which understands underspec
+        as a wildcard, so it can find tighter bundles that match the
+        selection plus a SUBSET of the candidates. The maximal
+        completion overestimates how many more segments are needed.
+
+        Example (Blevins): selecting /b͡v/ /d͡z/ /t͡s/ shares only
+        ``{-ConstrGl, +DelRel, -Lateral}``, giving 7 candidate
+        affricates. But adding just /p͡f/ alone makes the union a
+        natural class via the bundle
+        ``{-DORSAL, -Sonorant, +DelRel, +Strident, +Anterior,
+        -Distributed, -Lateral}`` — underspec wildcards on /b͡v/
+        and /p͡f/ for Anterior let this tighter spec match. The
+        minimal completion is ``[p͡f]``, not all 7 candidates.
+
+        Search budget: caps at ``MAX_SEARCH_CALLS`` so a pathological
+        candidate pool (rare in real inventories) doesn't hang the
+        UI; falls back to the full extension in that case.
         """
+        from itertools import combinations
+
         is_nc, _ = self.is_natural_class(segments)
         if is_nc:
             return []
@@ -540,8 +572,32 @@ class FeatureEngine:
         if not common:
             return []
         selected = set(segments)
-        extension = self.find_segments(common, underspec_compatible=True)
-        return [s for s in extension if s not in selected]
+        candidates = [
+            s
+            for s in self.find_segments(common, underspec_compatible=True)
+            if s not in selected
+        ]
+        if not candidates:
+            return []
+        # Ascending subset size; first valid combination wins. The
+        # full ``candidates`` set is always valid (characterised by
+        # ``common``), so the loop always returns before the
+        # fallback below.
+        max_search_calls = 2000
+        calls = 0
+        for k in range(1, len(candidates) + 1):
+            for combo in combinations(candidates, k):
+                calls += 1
+                if calls > max_search_calls:
+                    # Pathological pool; fall back to the full
+                    # extension. The "N needed" hint becomes
+                    # conservative (overestimate) but never wrong.
+                    return list(candidates)
+                if self.is_natural_class(list(segments) + list(combo))[0]:
+                    return list(combo)
+        # Unreachable in practice — the full extension is always a
+        # valid completion — but return it for safety.
+        return list(candidates)
 
     def is_natural_class(
         self, segments: list[str]

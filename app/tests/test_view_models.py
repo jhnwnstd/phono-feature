@@ -62,27 +62,67 @@ def test_summarize_segment_selection_multi_matches_engine() -> None:
     assert summary["selected"] == segs
     assert summary["common"]["Voice"] == "+"
     assert "LABIAL" in summary["contrastive"]
-    # ``suggested`` lists the segments that would round out the
-    # natural class. For /b/ /d/ /ɡ/ in the Hayes inventory, the
-    # engine returns these specific voiced-obstruent IPA segments
-    # (digraphs + ejectives + retroflex). Pinned as a literal list
-    # so any change to the engine's algorithm trips here.
-    assert summary["suggested"] == [
-        "b͡d",
-        "ɉ",
-        "ɖ",
-        "ɡ+",
-        "ɡ̠",
-        "ɡ͡b",
-        "ɢ",
-    ]
+    # ``suggested`` is now the MINIMAL completion (the smallest
+    # subset of candidates that, when added, makes the union a
+    # natural class). For /b/ /d/ /ɡ/ in Hayes the minimum k is 2
+    # — the algorithm returns one valid 2-segment completion (the
+    # lex-first by candidate order). Pin the size + the closure
+    # invariant rather than a specific pair, since multiple valid
+    # pairs may exist and the algorithm picks one.
+    suggested = summary["suggested"]
+    assert isinstance(suggested, list)
+    assert (
+        len(suggested) == 2
+    ), f"expected a 2-segment minimal completion, got {suggested!r}"
+    # Closure: adding the suggestion to the selection must produce
+    # a natural class. This is the round-trip invariant.
+    is_nc, _ = engine.is_natural_class(segs + suggested)
+    assert is_nc, (
+        f"engine.suggest_natural_class_extension({segs}) returned "
+        f"{suggested}, but {segs + suggested} is not a natural class"
+    )
     # Selection itself is never in the suggested list.
-    assert not set(segs) & set(summary["suggested"])
+    assert not set(segs) & set(suggested)
     assert summary["segment_states"]["b"] == "selected"
     assert summary["feature_rows"]["Voice"]["value"] == "+"
     assert summary["feature_rows"]["Voice"]["shared"] is True
     assert summary["feature_rows"]["LABIAL"]["contrastive"] is True
     assert summary["feature_rows"]["LABIAL"]["badge"] == "±"
+
+
+def test_suggest_natural_class_blevins_affricate_regression() -> None:
+    """Regression for the user-reported bug: selecting /b͡v/ /d͡z/
+    /t͡s/ in Blevins used to report "7 segments needed for natural
+    class" when in fact adding any one of /p͡f/ alone completes
+    the class. The fix is to search for the MINIMUM-size completion
+    via ``is_natural_class`` (which uses underspec-compatible
+    matching) instead of returning the full strict-common
+    extension.
+
+    Pin the exact case so the bug can't silently come back. Skipped
+    in CI when ``blevins_features.json`` is gitignored.
+    """
+    import pytest
+
+    blevins_path = INVENTORIES_DIR / "blevins_features.json"
+    if not blevins_path.exists():
+        pytest.skip("blevins_features.json not present (gitignored in CI)")
+    engine = _engine("blevins_features.json")
+    selected = ["b͡v", "d͡z", "t͡s"]
+    assert all(s in engine.segments for s in selected)
+    # Before: not a natural class.
+    assert not engine.is_natural_class(selected)[0]
+    suggested = engine.suggest_natural_class_extension(selected)
+    # Minimum completion is 1 segment, not 7.
+    assert len(suggested) == 1, (
+        f"expected k=1 minimal completion for Blevins affricates, "
+        f"got {len(suggested)} segments: {suggested!r}"
+    )
+    # And that single segment is /p͡f/ — the only k=1 candidate
+    # whose addition closes the natural class.
+    assert suggested == ["p͡f"]
+    # Round-trip invariant: selection + suggestion is a natural class.
+    assert engine.is_natural_class(selected + suggested)[0]
 
 
 def test_summarize_feature_query_matches_engine() -> None:

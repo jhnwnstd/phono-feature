@@ -227,6 +227,81 @@ def test_suggest_natural_class_extension_empty_input(
     assert engine.suggest_natural_class_extension([]) == []
 
 
+def test_suggest_natural_class_extension_completes_to_natural_class(
+    engine: FeatureEngine,
+) -> None:
+    """**Round-trip invariant**: for any non-natural-class selection,
+    the suggested extension MUST actually complete the selection
+    into a natural class. Previously the algorithm returned the
+    maximal extension (segments sharing the strict ``common_features``),
+    but ``is_natural_class`` uses underspec-compatible matching that
+    can find tighter bundles closing the class with a SMALLER subset.
+    The function now searches for the minimum subset and returns it;
+    this test pins that adding the suggestion always closes the class.
+    """
+    cases = [
+        ["b", "d", "ɡ"],
+        ["p", "t", "k"],
+        ["m", "n"],
+    ]
+    for selected in cases:
+        # Skip cases where any segment is missing from the test
+        # inventory (the fixture inventory varies in conftest).
+        if any(s not in engine.segments for s in selected):
+            continue
+        is_nc_before, _ = engine.is_natural_class(selected)
+        if is_nc_before:
+            continue
+        suggested = engine.suggest_natural_class_extension(selected)
+        assert suggested, f"{selected}: no suggestion but not a natural class"
+        union = selected + list(suggested)
+        is_nc_after, _ = engine.is_natural_class(union)
+        assert is_nc_after, (
+            f"{selected} + suggested {suggested} = {union}; "
+            f"is_natural_class still returns False — algorithm is "
+            f"inconsistent"
+        )
+
+
+def test_suggest_natural_class_extension_is_minimal(
+    engine: FeatureEngine,
+) -> None:
+    """**Minimality invariant**: the suggested extension must be a
+    minimum-size completion. No PROPER subset of the suggestion
+    should also close the natural class. Pins that the algorithm
+    doesn't over-suggest.
+    """
+    from itertools import combinations
+
+    cases = [
+        ["b", "d", "ɡ"],
+        ["p", "t", "k"],
+    ]
+    for selected in cases:
+        if any(s not in engine.segments for s in selected):
+            continue
+        if engine.is_natural_class(selected)[0]:
+            continue
+        suggested = engine.suggest_natural_class_extension(selected)
+        if not suggested:
+            continue
+        # No PROPER subset of the suggestion should also close the
+        # class. (Subsets of size |suggested| - 1.)
+        if len(suggested) <= 1:
+            # k=1 is trivially minimal; nothing to check.
+            continue
+        smaller_size = len(suggested) - 1
+        for subset in combinations(suggested, smaller_size):
+            union = selected + list(subset)
+            is_nc, _ = engine.is_natural_class(union)
+            assert not is_nc, (
+                f"{selected}: returned {suggested} of size "
+                f"{len(suggested)}, but the smaller subset {list(subset)} "
+                f"already completes the natural class — algorithm is "
+                f"not minimal"
+            )
+
+
 # ----------------------------------------------------------------------
 # Distance / nearest neighbors
 # ----------------------------------------------------------------------

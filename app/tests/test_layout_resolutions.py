@@ -660,10 +660,15 @@ def test_recommended_window_size_independent_of_device_pixel_ratio(
 
 
 def _load_inventory(name: str) -> dict[str, object]:
+    """Load a bundled inventory JSON. Skips the test when the file
+    is missing (some inventories like ``blevins`` are gitignored in
+    CI, matching the pattern in ``test_inventory_contract.py``)."""
     import json
     from pathlib import Path
 
     path = Path(__file__).resolve().parents[1] / "inventories" / f"{name}.json"
+    if not path.exists():
+        pytest.skip(f"{path.name} not present (gitignored in CI)")
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
