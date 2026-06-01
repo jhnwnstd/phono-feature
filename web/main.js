@@ -31,6 +31,8 @@ const NODE_IDS = Object.freeze({
     analysisContentContrasts: "analysis-content-contrasts",
     expandBtn: "expand-btn",
     themeBtn: "theme-btn",
+    bugBtn: "bug-btn",
+    statusbarBrand: "statusbar-brand",
     renameDialog: "rename-dialog",
     renameForm: "rename-form",
     renameInput: "rename-input",
@@ -655,6 +657,63 @@ function escapeHtml(s) {
 }
 
 /**
+ * Rasterize ``text`` as a canvas-alpha mask and return a data URL
+ * plus the natural (CSS-px) width and height.
+ *
+ * Drawn at devicePixelRatio for crisp rendering on HiDPI screens.
+ * Uses solid black on transparent so the result is purely an alpha
+ * mask; the displaying element supplies the actual colour via
+ * ``background-color: currentColor``. The literal text passed in
+ * is what gets drawn — no normalisation — so segments come through
+ * with their original Unicode code points (IPA ɡ U+0261, not ASCII
+ * g U+0067, etc.).
+ */
+function rasterizeText(text, font) {
+    const measure = document.createElement("canvas").getContext("2d");
+    measure.font = font;
+    const m = measure.measureText(text);
+    const ascent = m.actualBoundingBoxAscent ?? 10;
+    const descent = m.actualBoundingBoxDescent ?? 2;
+    // 2-px padding all around so antialias edges aren't clipped.
+    const w = Math.max(1, Math.ceil(m.width) + 4);
+    const h = Math.max(1, Math.ceil(ascent + descent) + 4);
+    const dpr = window.devicePixelRatio || 1;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(w * dpr);
+    canvas.height = Math.ceil(h * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    ctx.font = font;
+    ctx.fillStyle = "#000";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.fillText(text, w / 2, h / 2);
+    return { dataUrl: canvas.toDataURL(), width: w, height: h };
+}
+
+/**
+ * Create a non-copyable, theme-reactive label element for the
+ * given text. Returns a ``<span class="rasterized-text">`` whose
+ * mask-image encodes the glyph shape; the actual paint colour
+ * comes from ``currentColor`` so the parent's theme cascade
+ * handles dark/light swaps without re-rendering the canvas.
+ *
+ * The text never appears in the DOM, so drag-select-and-copy
+ * yields nothing. Screen readers fall back to the host element's
+ * ``aria-label`` (this span carries ``aria-hidden="true"``).
+ */
+function createRasterizedLabel(text, font) {
+    const { dataUrl, width, height } = rasterizeText(text, font);
+    const span = document.createElement("span");
+    span.className = "rasterized-text";
+    span.setAttribute("aria-hidden", "true");
+    span.style.width = width + "px";
+    span.style.height = height + "px";
+    span.style.setProperty("--mask-url", `url("${dataUrl}")`);
+    return span;
+}
+
+/**
  * Render the segments pane. Vowel chart is a floated trapezoid in
  * the top-right; consonant groups stack below as flow content. If
  * the pane would overflow after layout settles, rebalance moves
@@ -833,7 +892,13 @@ function _buildSegmentButton(seg, extraAttrs) {
     btn.dataset.state = "default";
     btn.setAttribute("aria-pressed", "false");
     btn.setAttribute("aria-label", `/${seg}/`);
-    btn.textContent = seg;
+    // Rasterize the glyph as a canvas-alpha mask: the literal
+    // codepoint passed in (IPA ɡ U+0261 etc.) is what gets drawn,
+    // and the result lives in CSS-mask space rather than the DOM
+    // text content — so drag-select-and-copy yields nothing.
+    btn.appendChild(
+        createRasterizedLabel(seg, '14px "Noto Sans Mono", monospace')
+    );
     if (extraAttrs) {
         for (const [k, v] of Object.entries(extraAttrs)) {
             if (k.startsWith("data-")) btn.setAttribute(k, v);
@@ -1002,11 +1067,17 @@ function _buildFeatureRow(feat) {
     row.dataset.feat = feat;
     const name = document.createElement("div");
     name.className = "feat-name";
-    name.textContent = feat;
+    name.setAttribute("aria-label", feat);
+    name.appendChild(
+        createRasterizedLabel(feat, '12px "Noto Sans", sans-serif')
+    );
     row.appendChild(name);
     const badge = document.createElement("div");
     badge.className = "feat-badge";
-    badge.textContent = "·";
+    badge.setAttribute("aria-label", "·");
+    badge.appendChild(
+        createRasterizedLabel("·", '12px "Noto Sans", sans-serif')
+    );
     row.appendChild(badge);
     const polarityButtons = {};
     for (const polarity of ["+", "−"]) {
@@ -1015,7 +1086,10 @@ function _buildFeatureRow(feat) {
         btn.type = "button";
         const code = polarity === "+" ? "+" : "-";
         btn.dataset.polarity = code;
-        btn.textContent = polarity;
+        btn.setAttribute("aria-label", polarity);
+        btn.appendChild(
+            createRasterizedLabel(polarity, '13px "Noto Sans", sans-serif')
+        );
         row.appendChild(btn);
         polarityButtons[code] = btn;
     }
@@ -1195,8 +1269,17 @@ function _applyFeatureRowStates(featureRows) {
         rec.row.dataset.value = value;
         rec.row.dataset.shared = shared ? "true" : "false";
         rec.row.dataset.contrastive = contrastive ? "true" : "false";
-        rec.badge.textContent = rowState?.badge ?? "·";
+        const badgeText = rowState?.badge ?? "·";
+        _setRasterizedBadge(rec.badge, badgeText);
     }
+}
+
+/** Swap a feat-row badge's rasterized label in place. */
+function _setRasterizedBadge(badgeEl, text) {
+    badgeEl.setAttribute("aria-label", text);
+    badgeEl.replaceChildren(
+        createRasterizedLabel(text, '12px "Noto Sans", sans-serif')
+    );
 }
 
 function runSegToFeat(token) {
@@ -2866,6 +2949,39 @@ function normalizeTheme(value) {
     return value === THEME.DARK ? THEME.DARK : THEME.LIGHT;
 }
 
+/**
+ * Render the statusbar's "Language Doodad" brand as a rasterized
+ * (non-copyable) label. Same canvas-mask trick as the segment
+ * buttons: the literal text is in ``aria-label`` for screen
+ * readers, but the on-screen glyphs come from a CSS mask so
+ * drag-select-copy doesn't pick anything up.
+ */
+function wireStatusbarBrand() {
+    if (!nodes.statusbarBrand) return;
+    nodes.statusbarBrand.replaceChildren(
+        createRasterizedLabel(
+            "Language Doodad", 'italic 13px "Noto Sans", sans-serif'
+        )
+    );
+}
+
+/**
+ * Open the project's GitHub Issues "new issue" page in a new
+ * tab. The bug-report URL is the canonical place to file
+ * reproducible problems; no in-app capture is attempted because
+ * the user knows their environment best.
+ */
+function wireBugButton() {
+    if (!nodes.bugBtn) return;
+    nodes.bugBtn.addEventListener("click", () => {
+        window.open(
+            "https://github.com/jhnwnstd/features/issues/new",
+            "_blank",
+            "noopener,noreferrer"
+        );
+    });
+}
+
 function wireThemeToggle() {
     const stored = normalizeTheme(localStorage.getItem("theme"));
     if (stored === THEME.DARK) {
@@ -2971,7 +3087,7 @@ function clearAll() {
         rec.row.dataset.value = "";
         rec.row.dataset.shared = "false";
         rec.row.dataset.contrastive = "false";
-        rec.badge.textContent = "·";
+        _setRasterizedBadge(rec.badge, "·");
         rec.plus.dataset.active = "false";
         rec.minus.dataset.active = "false";
         delete rec.row.dataset.queryValue;
@@ -3058,6 +3174,8 @@ function registerServiceWorker() {
 
 async function main() {
     initNodes();
+    wireStatusbarBrand();
+    wireBugButton();
     wireThemeToggle();
     wireInventoryPicker();
     wireUploadDownload();

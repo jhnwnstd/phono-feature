@@ -836,6 +836,50 @@ dialog input[type="text"]:focus-visible {
   font-style: italic;
   color: var(--text-dim);
   white-space: nowrap;
+  user-select: none;
+}
+
+/* ---------- Rasterized text labels ----------
+   A canvas-rendered glyph mask used to display segment / feature
+   / brand labels as image-shaped masks instead of selectable
+   DOM text. The text codepoint is encoded as the canvas alpha
+   channel and applied as a CSS mask; the actual paint colour
+   comes from ``background-color: currentColor`` so the parent's
+   theme-driven colour cascades through automatically. The text
+   string never lives in the DOM — drag-select / copy / "view
+   source" yields nothing — but accessibility is preserved via
+   the host element's ``aria-label`` (the rasterized span carries
+   ``aria-hidden``).
+*/
+.rasterized-text {
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-image: var(--mask-url);
+  mask-image: var(--mask-url);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+  vertical-align: middle;
+}
+
+/* Segment + feature controls have no selectable text now that
+   their labels are rasterized — but they still get the explicit
+   user-select rule so the surrounding button chrome (padding,
+   focus ring) doesn't accidentally pick up a drag-select either. */
+.seg-btn,
+.feat-row,
+.feat-btn,
+.feat-name,
+.feat-badge,
+.panel-title {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ---------- loading overlay ---------- */

@@ -75,6 +75,8 @@
   <button id="builder-btn" type="button" disabled>Builder</button>
   <button id="download-btn" type="button" disabled>Save as…</button>
   <div class="toolbar-spacer"></div>
+  <button id="bug-btn" type="button"
+          aria-label="Report a bug" title="Report a bug">🐛</button>
   <button id="theme-btn" type="button" aria-label="Toggle theme">☾</button>
 </header>
 
@@ -142,7 +144,8 @@
 
 <footer class="statusbar" aria-live="polite">
   <span id="statusbar" class="statusbar-message">Select an inventory from the dropdown to begin.</span>
-  <span class="statusbar-brand">Language Doodad</span>
+  <span class="statusbar-brand" id="statusbar-brand"
+        aria-label="Language Doodad"></span>
 </footer>
 
 <!--
