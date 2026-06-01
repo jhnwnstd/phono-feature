@@ -1231,7 +1231,7 @@ class MainWindow(QMainWindow):
         self._hsplit.setMinimumHeight(0)
         self.seg_panel.setMinimumHeight(0)
         self.feat_panel.setMinimumHeight(0)
-        new_analysis = int(0.55 * total)
+        new_analysis = layout.analysis_expand_target(total)
         self._vsplit.setSizes([total - new_analysis, new_analysis])
         self.analysis.set_expanded(True)
         self._geom.has_saved_splitter = True

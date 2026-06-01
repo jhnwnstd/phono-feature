@@ -203,8 +203,10 @@ COLLAPSE_W: int = 900
 MIN_FIRST_LAUNCH_W: int = 1400
 MIN_FIRST_LAUNCH_H: int = 900
 # Fresh-install window size = this fraction of the primary screen's
-# available geometry, floored at ``MIN_FIRST_LAUNCH_*``.
-DEFAULT_SCREEN_FRACTION: float = 0.75
+# available geometry, floored at ``MIN_FIRST_LAUNCH_*``. 80% gives
+# the app a comfortable claim on the primary screen on first launch
+# without filling it edge-to-edge; the user can resize from there.
+DEFAULT_SCREEN_FRACTION: float = 0.80
 # Preferred analysis-pane height when the feature pane already fits
 # its content. On short windows where the features need more height,
 # ``top_pane_height`` lets analysis shrink past this floor down to
@@ -219,6 +221,60 @@ HARD_MIN_ANALYSIS_H: int = 60
 # so the feature cards have a usable height even when the user has
 # the window cropped tiny.
 MIN_TOP_PANE_H: int = 200
+
+# ---------------------------------------------------------------------------
+# RATIO HELPERS
+#
+# Convention for layout decisions in this codebase:
+#
+# * **Content-driven floors** are expressed in pixels (e.g.
+#   ``SEG_MIN_W = 480``). The segment grid needs ~480 px to render its
+#   widest manner group regardless of screen size; making that a ratio
+#   would either clip on small screens or leave dead space on large
+#   ones.
+#
+# * **Proportional decisions** are expressed as ratios in this section
+#   and applied via the helpers below. Anything that asks "what fraction
+#   of the available space should this take" belongs here, not as a
+#   scattered ``int(0.55 * total)`` in a widget. The ratios get a
+#   single canonical name; pixel values fall out of multiplying by
+#   the live window/screen dimensions.
+#
+# When reworking display or content logic, default to a ratio helper.
+# Reach for a pixel constant only when the value is content-driven
+# (the floor for a fixed-resolution chart, the natural width of a
+# button), not when it's a "this much of the window" decision.
+# ---------------------------------------------------------------------------
+
+# Vertical-split target for the ⤢ expand toggle: the analysis pane
+# grows to this fraction of the vsplit total when the user clicks ⤢.
+# Mirrors the web ``.analysis.expanded { min-height: 55vh }`` rule.
+ANALYSIS_EXPAND_RATIO: float = 0.55
+
+# Vertical-split safety cap: the analysis pane never grows beyond
+# this fraction of the vsplit total via any code path. The expand
+# toggle uses ``ANALYSIS_EXPAND_RATIO``; user splitter drags are
+# bounded by per-pane minimums; this constant exists for any future
+# auto-grow path that wants a single canonical ceiling.
+ANALYSIS_MAX_RATIO: float = 0.80
+
+
+def analysis_expand_target(vsplit_total: int) -> int:
+    """The analysis-pane height the expand toggle should set, given
+    the vsplit's current total height. Centralised so the desktop
+    splitter swap and any future web equivalent share one source.
+    """
+    return int(vsplit_total * ANALYSIS_EXPAND_RATIO)
+
+
+def initial_window_fraction(screen_dimension: int) -> int:
+    """The proportional component of ``recommended_initial_window_size``
+    on a single axis (the caller composes it with the
+    ``MIN_FIRST_LAUNCH_*`` floor). Exposed so other display-sizing
+    code paths can ask "what fraction of the screen does the app
+    claim" without re-stating ``DEFAULT_SCREEN_FRACTION`` inline.
+    """
+    return int(screen_dimension * DEFAULT_SCREEN_FRACTION)
 
 
 def distribute_pane_widths(

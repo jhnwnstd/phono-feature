@@ -119,11 +119,11 @@ def test_initial_size_floored_on_small_screen() -> None:
     assert h == 900  # MIN_FIRST_LAUNCH_H
 
 
-def test_initial_size_at_75_percent_on_large_screen() -> None:
+def test_initial_size_at_default_fraction_on_large_screen() -> None:
     w, h = layout.recommended_initial_window_size(3840, 2160)
-    # 75 % of 3840 = 2880; 75 % of 2160 = 1620 — both well above floor.
-    assert w == 2880
-    assert h == 1620
+    # 80 % of 3840 = 3072; 80 % of 2160 = 1728 — both well above floor.
+    assert w == 3072
+    assert h == 1728
 
 
 def test_best_n_cols_single_row_when_group_fits() -> None:
@@ -158,10 +158,10 @@ def test_best_n_cols_floors_at_1() -> None:
 
 
 def test_initial_size_picks_floor_when_fraction_smaller() -> None:
-    # 1920×1080 monitor: 75% = 1440×810. Width floor 1400 doesn't
-    # bind; height floor 900 binds because 810 < 900.
+    # 1920×1080 monitor: 80% = 1536×864. Width floor 1400 doesn't
+    # bind (1536 > 1400); height floor 900 binds because 864 < 900.
     w, h = layout.recommended_initial_window_size(1920, 1080)
-    assert w == 1440
+    assert w == 1536
     assert h == 900  # MIN_FIRST_LAUNCH_H
 
 

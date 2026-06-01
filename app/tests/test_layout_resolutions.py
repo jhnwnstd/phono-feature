@@ -80,15 +80,16 @@ FEAT_CONTENT_W = 500
 # tweak to either constant trips the assertion instead of silently
 # moving the comparand to match.
 EXPECTED_WINDOW_SIZES: dict[str, tuple[int, int]] = {
-    "1920x1080": (1440, 900),
-    "1280x1200": (1400, 900),
-    "1536x864": (1400, 900),
+    # max(MIN_FIRST_LAUNCH_W=1400, 0.80×W) × max(MIN_FIRST_LAUNCH_H=900, 0.80×H)
+    "1920x1080": (1536, 900),  # 1920×0.8=1536; 1080×0.8=864 < 900 floor
+    "1280x1200": (1400, 960),  # 1280×0.8=1024 < 1400 floor; 1200×0.8=960
+    "1536x864": (1400, 900),  # both below floor
     "1366x768": (1400, 900),
     "1280x720": (1400, 900),
     "1440x900": (1400, 900),
-    "1600x900": (1400, 900),
-    "2560x1440": (1920, 1080),
-    "3840x2160": (2880, 1620),
+    "1600x900": (1400, 900),  # 1600×0.8=1280 < 1400 floor
+    "2560x1440": (2048, 1152),  # 2560×0.8=2048; 1440×0.8=1152
+    "3840x2160": (3072, 1728),  # 3840×0.8=3072; 2160×0.8=1728
 }
 
 
@@ -271,36 +272,36 @@ def test_vowel_chart_keeps_natural_width(res: Resolution) -> None:
 
 
 def test_4k_window_uses_screen_fraction_not_floor() -> None:
-    """At 4K (3840×2160), the 0.75 fraction wins over the
-    MIN_FIRST_LAUNCH_W floor: 0.75 × 3840 = 2880, well above
+    """At 4K (3840×2160), the 0.80 fraction wins over the
+    MIN_FIRST_LAUNCH_W floor: 0.80 × 3840 = 3072, well above
     1400. Literal numbers so a bump to ``DEFAULT_SCREEN_FRACTION``
     or ``MIN_FIRST_LAUNCH_*`` is caught here."""
     w, h = layout.recommended_initial_window_size(3840, 2160)
-    assert w == 2880
-    assert h == 1620
+    assert w == 3072
+    assert h == 1728
 
 
 def test_qhd_window_uses_screen_fraction_not_floor() -> None:
-    """At QHD (2560×1440), the 0.75 fraction wins: 0.75 × 2560
-    = 1920."""
+    """At QHD (2560×1440), the 0.80 fraction wins: 0.80 × 2560
+    = 2048."""
     w, h = layout.recommended_initial_window_size(2560, 1440)
-    assert w == 1920
-    assert h == 1080
+    assert w == 2048
+    assert h == 1152
 
 
 def test_full_hd_window_uses_screen_fraction_not_floor() -> None:
-    """At 1920×1080, the 0.75 fraction wins on the width axis
-    (0.75 × 1920 = 1440 ≥ 1400) but the height floor wins
-    (0.75 × 1080 = 810 < 900). Literal 900 so a bump to
+    """At 1920×1080, the 0.80 fraction wins on the width axis
+    (0.80 × 1920 = 1536 ≥ 1400) but the height floor wins
+    (0.80 × 1080 = 864 < 900). Literal 900 so a bump to
     ``MIN_FIRST_LAUNCH_H`` (e.g. 900 → 1000) trips this test."""
     w, h = layout.recommended_initial_window_size(1920, 1080)
-    assert w == 1440
+    assert w == 1536
     assert h == 900
 
 
 def test_low_end_laptop_window_falls_back_to_floor() -> None:
-    """At 1366×768, both axes are below the floor: 0.75 × 1366
-    = 1024 < 1400, and 0.75 × 768 = 576 < 900. The floor wins on
+    """At 1366×768, both axes are below the floor: 0.80 × 1366
+    = 1092 < 1400, and 0.80 × 768 = 614 < 900. The floor wins on
     both axes; geometry_controller clamps the result back to the
     actual screen after the fact. Literal numbers so a bump to
     either floor constant is caught here."""
@@ -321,10 +322,10 @@ def test_smallest_targeted_resolution_floor_overshoots_screen() -> None:
 
 
 def test_seg_pane_fans_out_at_4k() -> None:
-    """At 4K, the window is 2880 px wide. Feat lands at 540 px
-    (FEAT_CONTENT_W 500 + FEAT_CUSHION_PX 40); seg gets the
-    remaining 2340 px — the explicit "wide screens fan segments
-    out" contract."""
+    """At 4K, the window is 3072 px wide (0.80 × 3840). Feat
+    lands at 540 px (FEAT_CONTENT_W 500 + FEAT_CUSHION_PX 40);
+    seg gets the remaining 2532 px — the explicit "wide screens
+    fan segments out" contract."""
     win_w, _ = layout.recommended_initial_window_size(3840, 2160)
     seg_w, feat_w = layout.distribute_pane_widths(
         win_w,
@@ -332,7 +333,7 @@ def test_seg_pane_fans_out_at_4k() -> None:
         feat_content_w=FEAT_CONTENT_W,
     )
     assert feat_w == 540
-    assert seg_w == 2340
+    assert seg_w == 2532
 
 
 def test_seg_pane_stays_at_min_at_low_end_laptop() -> None:
@@ -431,8 +432,12 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
     # Pinning these as literals catches a bump to
     # ``DEFAULT_SCREEN_FRACTION`` even when the partition itself
     # is preserved.
-    fraction_widths = {"1920x1080": 1440, "2560x1440": 1920, "3840x2160": 2880}
-    fraction_heights = {"2560x1440": 1080, "3840x2160": 1620}
+    fraction_widths = {"1920x1080": 1536, "2560x1440": 2048, "3840x2160": 3072}
+    fraction_heights = {
+        "1280x1200": 960,
+        "2560x1440": 1152,
+        "3840x2160": 1728,
+    }
     floor_driven_w = set()
     fraction_driven_w = set()
     for res in RESOLUTIONS:
@@ -442,7 +447,7 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
         else:
             assert w == fraction_widths[res.label]
             fraction_driven_w.add(res.label)
-    # Floor-driven width: 0.75 × screen < 1400, i.e. screen < 1867.
+    # Floor-driven width: 0.80 × screen < 1400, i.e. screen < 1750.
     assert floor_driven_w == {
         "1280x1200",
         "1536x864",
@@ -451,7 +456,9 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
         "1440x900",
         "1600x900",
     }
-    # Fraction-driven width: screen ≥ 1867.
+    # Fraction-driven width: screen ≥ 1750. Same partition as 0.75
+    # because all "fraction-driven" screens are well above the 1750
+    # cutoff and all "floor-driven" screens are well below.
     assert fraction_driven_w == {"1920x1080", "2560x1440", "3840x2160"}
 
     floor_driven_h = set()
@@ -465,32 +472,32 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
         else:
             assert h == fraction_heights[res.label]
             fraction_driven_h.add(res.label)
-    # Floor-driven height: 0.75 × screen ≤ 900, i.e. screen ≤ 1200.
-    # 1280×1200 ties exactly (0.75 × 1200 = 900 = floor), so it lands
-    # in the floor bucket.
+    # Floor-driven height: 0.80 × screen < 900, i.e. screen < 1125.
+    # 1280×1200 moves to the fraction-driven bucket (0.80 × 1200 = 960
+    # exceeds the 900 floor) — at 80% the fraction begins to bind one
+    # resolution earlier than at 75%.
     assert floor_driven_h == {
         "1920x1080",
-        "1280x1200",
         "1536x864",
         "1366x768",
         "1280x720",
         "1440x900",
         "1600x900",
     }
-    # Fraction-driven height: screen > 1200.
-    assert fraction_driven_h == {"2560x1440", "3840x2160"}
+    # Fraction-driven height: screen ≥ 1125.
+    assert fraction_driven_h == {"1280x1200", "2560x1440", "3840x2160"}
 
 
 def test_tall_narrow_1280x1200_intentional_horizontal_overshoot() -> None:
     """1280×1200 is a non-16:9 aspect (taller than wide for
     desktop). The recommended window width (1400, floor-driven)
     exceeds the screen width (1280) by 120 px — INTENTIONAL: the
-    geometry controller clamps afterward. Height is
-    fraction-driven (0.75 × 1200 = 900, exactly the floor).
+    geometry controller clamps afterward. Height is fraction-driven
+    at 80% (0.80 × 1200 = 960 above the 900 floor).
     """
     w, h = layout.recommended_initial_window_size(1280, 1200)
     assert w == 1400 > 1280  # horizontal overshoot, clamp afterward
-    assert h == 900  # fraction equals floor exactly
+    assert h == 960  # 0.80 × 1200, above the floor
 
 
 # ---------------------------------------------------------------------------
@@ -678,3 +685,80 @@ def test_inventory_has_features_within_reasonable_bound(
     assert isinstance(features, list)
     n = len(features)
     assert 0 < n <= 50, f"{name}: feature count {n} outside [1, 50]"
+
+
+# ---------------------------------------------------------------------------
+# Ratio helpers: proportional decisions that scale with the display.
+# These exercise the convention that "fraction of available space"
+# decisions live in ``layout.py`` as ratios applied to live dimensions,
+# not as pixel constants frozen to one monitor size.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("res", RESOLUTIONS, ids=lambda r: r.label)
+def test_analysis_expand_target_scales_with_vsplit(
+    res: Resolution,
+) -> None:
+    """The ⤢ expand-toggle target is a fraction of the vsplit
+    total, not a fixed pixel value. At every resolution the
+    analysis pane after expand should be ``ANALYSIS_EXPAND_RATIO ×
+    vsplit_total``. Literal 0.55 so a bump to
+    ``ANALYSIS_EXPAND_RATIO`` trips here."""
+    _, win_h = layout.recommended_initial_window_size(res.width, res.height)
+    # Approximate vsplit total = window height minus toolbar + status.
+    vsplit_total = max(win_h - 100, 100)
+    target = layout.analysis_expand_target(vsplit_total)
+    expected = int(vsplit_total * 0.55)
+    assert target == expected
+    # Target must be at least HARD_MIN_ANALYSIS_H so the user
+    # always gets a usable expand even on tiny screens.
+    assert target >= layout.HARD_MIN_ANALYSIS_H
+
+
+def test_analysis_expand_target_at_fixed_vsplit_is_literal() -> None:
+    """Pin the literal ratio: 0.55 × 1000 = 550. A bump to
+    ``ANALYSIS_EXPAND_RATIO`` (0.55 → 0.6) trips this assertion
+    rather than silently reshaping every call site."""
+    assert layout.analysis_expand_target(1000) == 550
+    assert layout.analysis_expand_target(820) == 451
+    assert layout.analysis_expand_target(0) == 0
+
+
+@pytest.mark.parametrize("res", RESOLUTIONS, ids=lambda r: r.label)
+def test_initial_window_fraction_scales_with_screen(
+    res: Resolution,
+) -> None:
+    """``initial_window_fraction`` exposes the proportional
+    component of ``recommended_initial_window_size`` for either
+    axis. A 4K screen's fraction is strictly larger than a 720p
+    screen's; pinned with literals against the screen dimension."""
+    assert layout.initial_window_fraction(res.width) == int(res.width * 0.80)
+    assert layout.initial_window_fraction(res.height) == int(res.height * 0.80)
+
+
+def test_analysis_expand_ratio_in_canonical_range() -> None:
+    """The expand-target ratio sits between the 50% default-feel
+    and the 80% safety cap. Pins both ends so a bump that would
+    make analysis too small or overflow the top pane trips here."""
+    assert 0.5 <= layout.ANALYSIS_EXPAND_RATIO <= layout.ANALYSIS_MAX_RATIO
+    assert layout.ANALYSIS_MAX_RATIO <= 0.9  # leave room for top pane
+
+
+def test_ratios_are_float_not_int() -> None:
+    """Ratios must be floats so multiplication doesn't lose
+    precision via integer truncation. Pins the type contract."""
+    assert isinstance(layout.DEFAULT_SCREEN_FRACTION, float)
+    assert isinstance(layout.ANALYSIS_EXPAND_RATIO, float)
+    assert isinstance(layout.ANALYSIS_MAX_RATIO, float)
+
+
+def test_expand_target_scales_proportionally_across_resolutions() -> None:
+    """The whole point of using a ratio is that the expand target
+    grows with the display. Pins the ordering: 4K window → bigger
+    expand than QHD → bigger than 1080p → bigger than 720p."""
+    smallest = layout.analysis_expand_target(720)
+    laptop = layout.analysis_expand_target(900)
+    full_hd = layout.analysis_expand_target(1080)
+    qhd = layout.analysis_expand_target(1440)
+    uhd = layout.analysis_expand_target(2160)
+    assert smallest < laptop < full_hd < qhd < uhd
