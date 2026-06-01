@@ -570,10 +570,13 @@ class _CopyableTextEdit(QTextEdit):
 
 
 class AnalysisPanel(QWidget):
-    """Analysis output pane. Header row carries the title and a
-    maximize/restore toggle (RStudio-style "Zoom Plot"). The toggle
-    just emits ``expand_toggled``; MainWindow owns the vsplit and
-    handles the actual resize.
+    """Analysis output pane. The tab labels (Class / Features /
+    Contrasts) carry their own naming, so there's no top heading
+    — the maximize/restore toggle lives in the tab bar's top-right
+    corner via ``QTabWidget.setCornerWidget`` to keep the pane
+    height available for content. The toggle emits
+    ``expand_toggled``; MainWindow owns the vsplit and handles the
+    actual resize.
     """
 
     expand_toggled = pyqtSignal()
@@ -589,10 +592,10 @@ class AnalysisPanel(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.title = QLabel("Analysis", self)
-        self.title.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
         # Expand/restore toggle. Text glyphs (not emoji) so the button
-        # honors the active font and palette.
+        # honors the active font and palette. Installed as the tab
+        # bar's top-right corner widget below — no dedicated header
+        # row, so the pane's full height goes to tab content.
         self.expand_btn = QPushButton("⤢", self)
         self.expand_btn.setFlat(True)
         self.expand_btn.setFixedSize(24, 20)
@@ -630,26 +633,24 @@ class AnalysisPanel(QWidget):
         self.tabs.addTab(self._tab_class, "Class")
         self.tabs.addTab(self._tab_features, "Features")
         self.tabs.addTab(self._tab_contrasts, "Contrasts")
+        # Slip the expand button into the tab bar's top-right corner
+        # so it costs zero extra vertical real estate — same row as
+        # the tab labels.
+        self.tabs.setCornerWidget(self.expand_btn, Qt.Corner.TopRightCorner)
         # Back-compat alias so the existing ``self.analysis.content``
         # references in tests + other code keep working; the Class
         # tab carries the most prominent analytical output so
         # ``.content`` lands there.
         self.content = self._tab_class
         self.content.setMinimumHeight(60)
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header_row.setSpacing(0)
-        header_row.addWidget(self.title)
-        header_row.addStretch(1)
-        header_row.addWidget(self.expand_btn)
         layout = QVBoxLayout(self)
-        # Tight margins + spacing so the tabs sit close to the
-        # "Analysis" header. Every pixel saved here goes to the
-        # tab content area below — the user explicitly asked for
-        # this redistribution.
-        layout.setContentsMargins(16, 6, 16, 8)
+        # No top heading — the tab labels (Class / Features /
+        # Contrasts) describe their own contents. Top margin is
+        # small (2 px) so the chips strip / tab bar sits flush with
+        # the pane's top border; every saved pixel goes to the tab
+        # content area.
+        layout.setContentsMargins(16, 2, 16, 8)
         layout.setSpacing(2)
-        layout.addLayout(header_row)
         layout.addWidget(self.selection_label)
         layout.addWidget(self.tabs)
         # Selection label starts hidden — empty selection / FEAT
@@ -685,10 +686,6 @@ class AnalysisPanel(QWidget):
             self,
             f"background: {C['analysis_bg']};"
             f" border-top: 1px solid {C['border']};",
-        )
-        set_css(
-            self.title,
-            f"color: {C['text_dim']}; letter-spacing: 1px;",
         )
         set_css(
             self.expand_btn,

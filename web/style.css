@@ -669,10 +669,15 @@ dialog input[type="text"]:focus-visible {
 .analysis {
   background: var(--analysis-bg);
   border-top: var(--border-thin) solid var(--border);
-  /* Tight vertical padding (top 6, bottom 10) so the tab content
-     area gets the headroom that used to sit between the ANALYSIS
-     label and the tabs. */
-  padding: 6px var(--space-xl) 10px;
+  /* No top heading — the tab labels carry their own naming, so
+     the pane starts immediately with either the chips strip
+     (SEG mode) or the tab bar (FEAT mode). Top padding is 2 px so
+     the first row sits flush with the pane's top border; saved
+     pixels go to the tab content area below.
+     ``position: relative`` anchors the absolutely-positioned
+     ``#expand-btn`` at the top-right corner. */
+  position: relative;
+  padding: 2px var(--space-xl) 10px;
   display: flex;
   flex-direction: column;
   min-height: 220px;
@@ -682,17 +687,15 @@ dialog input[type="text"]:focus-visible {
   min-height: 55vh;
   min-height: 55dvh;
 }
-.analysis-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  font-size: var(--font-size-label);
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  color: var(--text-dim);
-}
-.analysis-title { flex: 1; }
+/* Maximize/restore toggle in the analysis pane's top-right corner.
+   Absolutely positioned so it doesn't reserve a horizontal row
+   above the tabs — mirrors the desktop's
+   ``QTabWidget.setCornerWidget`` placement. ``z-index`` keeps the
+   button above the chips strip / tab bar in case of overlap. */
 #expand-btn {
+  position: absolute;
+  top: 4px;
+  right: var(--space-xl);
   width: var(--feat-btn-h);
   height: 20px;
   background: transparent;
@@ -700,14 +703,17 @@ dialog input[type="text"]:focus-visible {
   color: var(--text-dim);
   font-size: var(--font-size-base);
   cursor: pointer;
+  z-index: 2;
 }
 #expand-btn:hover { color: var(--text); }
 /* Persistent selection header above the tabs (SEG mode only).
    FEAT mode sets ``hidden`` via JS so the strip doesn't reserve
-   space when the query is already explicit in the Features tab. */
+   space when the query is already explicit in the Features tab.
+   ``padding-right`` reserves room for the absolutely-positioned
+   ``#expand-btn`` so a long chip line doesn't slide under it. */
 .analysis-selection {
-  margin-top: 2px;
-  padding: 0 var(--space-xs);
+  margin-top: 0;
+  padding: 0 calc(var(--feat-btn-h) + var(--space-sm)) 0 var(--space-xs);
   font-size: var(--font-size-control);
   color: var(--text);
 }
@@ -718,13 +724,13 @@ dialog input[type="text"]:focus-visible {
 /* Tab strip — Class / Features / Contrasts. Mirrors the desktop's
    QTabBar styling: bottom-flush tabs with the active tab merged
    into the content card via ``border-bottom`` colour matching.
-   ``margin-top`` is intentionally tiny so the tabs sit right under
-   the ANALYSIS header — the dead space the user complained about
-   has gone to the content area below. */
+   ``padding-right`` reserves room for the absolutely-positioned
+   ``#expand-btn`` so the rightmost tab can't slide under it. */
 .analysis-tabs {
   display: flex;
   gap: 2px;
-  margin-top: 2px;
+  margin-top: 0;
+  padding-right: calc(var(--feat-btn-h) + var(--space-sm));
   border-bottom: var(--border-thin) solid var(--border);
 }
 .analysis-tab {
