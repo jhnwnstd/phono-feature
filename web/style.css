@@ -610,7 +610,7 @@ dialog input[type="text"]:focus-visible {
   background: var(--shared-minus);
 }
 #feat-panel:not([data-active="true"]) .feat-row[data-contrastive="true"] {
-  background: var(--accent-light);
+  background: var(--neutral-bg);
 }
 #feat-panel[data-active="true"] .feat-row[data-query-value="+"] {
   background: var(--shared-plus);
@@ -627,7 +627,7 @@ dialog input[type="text"]:focus-visible {
   overflow-wrap: anywhere;
 }
 #feat-panel:not([data-active="true"]) .feat-row[data-contrastive="true"] .feat-name {
-  color: var(--accent);
+  color: var(--neutral);
   font-weight: bold;
 }
 #feat-panel:not([data-active="true"]) .feat-row[data-shared="true"] .feat-name {
@@ -646,8 +646,8 @@ dialog input[type="text"]:focus-visible {
   justify-content: center;
   border-radius: var(--radius-sm);
   font-weight: bold;
-  background: var(--tag-gray);
-  color: var(--text-dim);
+  background: var(--tag-purple);
+  color: var(--tag-purple-text);
 }
 .feat-row[data-shared="true"][data-value="+"] .feat-badge {
   background: var(--plus-bg); color: var(--plus);
@@ -656,7 +656,7 @@ dialog input[type="text"]:focus-visible {
   background: var(--minus-bg); color: var(--minus);
 }
 .feat-row[data-contrastive="true"] .feat-badge {
-  background: var(--accent-light); color: var(--accent);
+  background: var(--neutral-bg); color: var(--neutral);
 }
 
 .feat-btn {

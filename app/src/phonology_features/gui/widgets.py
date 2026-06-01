@@ -121,18 +121,22 @@ class SegmentButton(QPushButton):
     are a cache hit.
     """
 
-    # theme name -> styles dict, shared across instances.
-    _styles_cache: ClassVar[dict[str, dict[SegmentState, str]]] = {}
+    # ``palette.theme_version`` -> styles dict, shared across
+    # instances. Keying on the monotonic version (not just the theme
+    # name) lets the perpendicular standard/colorblind axis invalidate
+    # the cache too; otherwise a CB toggle would hit a stale "dark"
+    # entry and the new buttons would keep the old hues.
+    _styles_cache: ClassVar[dict[int, dict[SegmentState, str]]] = {}
 
     @classmethod
     def _styles_for_active_theme(cls) -> dict[SegmentState, str]:
-        from phonology_features.gui.palette import get_theme_name
+        from phonology_features.gui import palette as _palette
 
-        theme = get_theme_name()
-        cached = cls._styles_cache.get(theme)
+        version = _palette.theme_version
+        cached = cls._styles_cache.get(version)
         if cached is None:
             cached = cls._build_styles()
-            cls._styles_cache[theme] = cached
+            cls._styles_cache[version] = cached
         return cached
 
     def __init__(self, segment: str, parent: QWidget | None = None) -> None:
@@ -242,8 +246,11 @@ class FeatureRow(QWidget):
     """
 
     value_changed = pyqtSignal(str, str)
-    # theme name -> styles dict (BADGE_*, ROW_*, NAME_*).
-    _styles_cache: ClassVar[dict[str, dict[str, str]]] = {}
+    # ``palette.theme_version`` -> styles dict (BADGE_*, ROW_*, NAME_*).
+    # Same rationale as SegmentButton._styles_cache: key on the
+    # monotonic version so the (theme, mode) product invalidates the
+    # cache, not just the theme axis.
+    _styles_cache: ClassVar[dict[int, dict[str, str]]] = {}
     # Instance attrs populated by ``_build_styles`` via setattr from
     # the cached theme dict; declared here so mypy sees them.
     _BADGE_CONTRASTIVE: str = ""
@@ -263,13 +270,13 @@ class FeatureRow(QWidget):
 
     @classmethod
     def _styles_for_active_theme(cls) -> dict[str, str]:
-        from phonology_features.gui.palette import get_theme_name
+        from phonology_features.gui import palette as _palette
 
-        theme = get_theme_name()
-        cached = cls._styles_cache.get(theme)
+        version = _palette.theme_version
+        cached = cls._styles_cache.get(version)
         if cached is None:
             cached = cls._compute_styles()
-            cls._styles_cache[theme] = cached
+            cls._styles_cache[version] = cached
         return cached
 
     def __init__(
@@ -331,21 +338,25 @@ class FeatureRow(QWidget):
         """Build all stylesheet strings against the *current* palette.
 
         Called once per theme; results are cached at class level
-        (``_styles_cache``). ``text_dim`` for the neutral badge text
-        (not ``tag_gray_text``) so the badge matches the dim feature
-        name and the inactive +/- button text on the same row.
+        (``_styles_cache``). The contrastive (``±``) badge reads
+        from the ``neutral`` slot so colorblind mode can swap blue
+        (which it reuses for "+") for purple without losing the
+        familiar blue tint in standard mode (standard maps ``neutral``
+        to the accent slot). Underspec badges read from ``tag_purple``
+        for the same reason.
         """
         return {
             "BADGE_CONTRASTIVE": (
-                f"background: {C['accent_light']}; color: {C['accent']};"
+                f"background: {C['neutral_bg']}; color: {C['neutral']};"
                 " border-radius: 4px; font-weight: bold;"
             ),
-            "NAME_CONTRASTIVE": f"color: {C['accent']}; font-weight: bold;",
+            "NAME_CONTRASTIVE": f"color: {C['neutral']}; font-weight: bold;",
             "ROW_CONTRASTIVE": (
-                f"background: {C['accent_light']}; border-radius: 6px;"
+                f"background: {C['neutral_bg']}; border-radius: 6px;"
             ),
             "BADGE_NEUTRAL": (
-                f"background: {C['tag_gray']}; color: {C['text_dim']};"
+                f"background: {C['tag_purple']};"
+                f" color: {C['tag_purple_text']};"
                 " border-radius: 4px;"
             ),
             "NAME_DIM": f"color: {C['text_dim']};",

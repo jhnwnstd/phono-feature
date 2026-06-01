@@ -28,6 +28,14 @@ LIGHT = {
     "plus_bg": "#DCFCE7",
     "minus": "#B91C1C",
     "minus_bg": "#FEE2E2",
+    # Neutral / contrastive cue. In standard mode this re-uses the
+    # accent slot (so contrastive rows keep their familiar blue
+    # tint); the colorblind palette overrides both keys with a
+    # distinct purple so "neither + nor -" no longer collides with
+    # the positive blue. Added here so the key set is uniform across
+    # palettes and consumers can ``C["neutral"]`` unconditionally.
+    "neutral": "#2563EB",
+    "neutral_bg": "#D6E8FF",
     "shared_plus": "#DCFCE7",
     "shared_minus": "#FEE2E2",
     # Primary-action and destructive-action buttons (Save / Delete /
@@ -72,6 +80,12 @@ LIGHT = {
     "tag_red_text": "#B91C1C",
     "tag_gray": "#F1F3F4",
     "tag_gray_text": "#5F6368",
+    # Neutral-chip slot. Mirrors tag_gray in standard mode so existing
+    # rendering is unchanged; the colorblind palette overrides it with
+    # a distinct purple to separate "underspec / mixed" from the
+    # default-gray "not interactive" cue.
+    "tag_purple": "#F1F3F4",
+    "tag_purple_text": "#5F6368",
 }
 
 COLORBLIND_LIGHT = {
@@ -197,6 +211,11 @@ DARK = {
     "plus_bg": "#14532D",
     "minus": "#FCA5A5",
     "minus_bg": "#7F1D1D",
+    # See LIGHT.neutral comment: re-uses accent slot in standard mode;
+    # colorblind overrides with purple. Both keys exist in every
+    # palette so consumers can read them unconditionally.
+    "neutral": "#60A5FA",
+    "neutral_bg": "#2F4F6F",
     "shared_plus": "#14532D",
     "shared_minus": "#7F1D1D",
     # See LIGHT.btn_primary comment: in dark mode the saturated deep
@@ -233,6 +252,9 @@ DARK = {
     "tag_red_text": "#FCA5A5",
     "tag_gray": "#2A2A2A",
     "tag_gray_text": "#B8B8B8",
+    # See LIGHT.tag_purple comment.
+    "tag_purple": "#2A2A2A",
+    "tag_purple_text": "#B8B8B8",
 }
 
 # Active palette, mutated in place by set_theme / set_palette_mode.
