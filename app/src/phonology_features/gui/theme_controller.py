@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtWidgets import QLabel, QPushButton, QToolTip
 
 from phonology_features._logging import get_logger
+from phonology_features._settings import SettingsKey, write_setting
 from phonology_features.gui.constants import scrollbar_style
 from phonology_features.gui.mode_controller import _ModeController
 from phonology_features.gui.palette import (
@@ -118,7 +119,7 @@ class _ThemeController:
         new_theme = "dark" if get_theme_name() == "light" else "light"
         _log.info("theme toggle: %s", new_theme)
         set_theme(new_theme)
-        self._main._settings.setValue("theme", new_theme)
+        write_setting(self._main._settings, SettingsKey.THEME, new_theme)
         self.apply()
 
     def toggle_palette_mode(self) -> None:
@@ -132,7 +133,7 @@ class _ThemeController:
         )
         _log.info("palette mode toggle: %s", new_mode)
         set_palette_mode(new_mode)
-        self._main._settings.setValue("palette_mode", new_mode)
+        write_setting(self._main._settings, SettingsKey.PALETTE_MODE, new_mode)
         self.apply()
 
     def apply(self) -> None:

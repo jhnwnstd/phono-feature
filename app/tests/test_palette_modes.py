@@ -179,19 +179,18 @@ def _classify(hex_str: str) -> str:
 
 @pytest.fixture(autouse=True)
 def _isolate_settings(tmp_path) -> Iterator[None]:
-    """Pin QSettings to a per-test directory and pin both NativeFormat
-    and IniFormat paths so MainWindow's QSettings constructor (which
-    uses the default native format on Linux) doesn't pick up leftover
-    keys from a previous test. Also resets the runtime palette to
-    the canonical starting state so test order doesn't matter.
+    """Pin QSettings to a per-test directory so MainWindow's
+    QSettings reads can't see leftover keys from a previous test.
+
+    Palette-state reset lives in the session-wide
+    ``_reset_palette_module_state`` autouse fixture in
+    ``conftest.py``; we don't repeat it here.
     """
     settings_dir = tmp_path / "qsettings"
     settings_dir.mkdir()
     QSettings.setDefaultFormat(QSettings.Format.IniFormat)
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, str(settings_dir))
-    set_theme("light")
-    set_palette_mode("standard")
     yield
 
 

@@ -22,6 +22,34 @@ from PyQt6.QtCore import QSettings  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _reset_palette_module_state() -> None:
+    """Pin module-level palette state to (light, standard) before
+    each test.
+
+    :py:mod:`phonology_features.gui.palette` keeps ``_active_theme``,
+    ``_active_mode``, ``C``, and ``theme_version`` at module scope so
+    a test that mutates them leaks into the next test's view of the
+    palette. Today the suite happens to pass anyway because most
+    tests reset implicitly via MainWindow construction, but the
+    invariant is fragile: a future test that constructs widgets
+    directly (no MainWindow) inherits whatever the previous test
+    left behind.
+
+    Resetting in an autouse fixture removes the order dependency
+    without forcing every test to import the palette module just to
+    clean up after itself. Yield-less form because the reset has no
+    cleanup; one-call-per-test is enough.
+    """
+    from phonology_features.gui.palette import (
+        set_palette_mode,
+        set_theme,
+    )
+
+    set_theme("light")
+    set_palette_mode("standard")
+
+
 @pytest.fixture(scope="session")
 def qapp(tmp_path_factory: pytest.TempPathFactory) -> QApplication:
     """Single QApplication for the whole session.

@@ -30,6 +30,7 @@ from PyQt6.QtCore import QFileSystemWatcher, QTimer
 from PyQt6.QtGui import QStandardItemModel
 
 from phonology_features._logging import get_logger
+from phonology_features._settings import SettingsKey, write_setting
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QSettings
@@ -211,7 +212,7 @@ class _InventoryDirController:
         idx = self._combo.findData(path)
         if idx >= 0:
             self._combo.setCurrentIndex(idx)
-        self._settings.setValue("last_inventory", path)
+        write_setting(self._settings, SettingsKey.LAST_INVENTORY, path)
         # Push to MRU front for delete-fallback. Dedup so a repeated
         # load doesn't push the same path twice. Cap so the list
         # doesn't grow unbounded over a long session.
@@ -295,7 +296,7 @@ class _InventoryDirController:
             _log.info("current inventory deleted on disk: %s", fname)
             fallback = self.pick_fallback_after_delete(deleted)
             self._w._current_path = None
-            self._settings.remove("last_inventory")
+            self._settings.remove(str(SettingsKey.LAST_INVENTORY))
             if fallback is not None:
                 _log.info("falling back to: %s", os.path.basename(fallback))
                 self._w._load_path(fallback)

@@ -250,16 +250,29 @@ const MODE = Object.freeze({
     FEAT_TO_SEG: "feat_to_seg",
 });
 
-const STATUS_TEXT = Object.freeze({
-    [MODE.SEG_TO_FEAT]: "Click a segment to inspect its features.",
-    [MODE.FEAT_TO_SEG]:
-        "Toggle feature values (+/−) to find matching segments.",
-});
+/** Baked at build time from ``mode_logic.mode_status_text`` so the
+ *  pre-bridge fallback can't drift from the canonical Python.
+ *  ``web/scripts/build.py:_build_status_text_payload`` writes the
+ *  inline ``<script id="status-text">`` block consumed here. The
+ *  freeze keeps the object immutable so a future bug can't reach
+ *  back and edit a string in place. */
+const STATUS_TEXT = Object.freeze(readInlineJson("status-text", {}));
+
+function readInlineJson(elementId, fallback) {
+    const el = document.getElementById(elementId);
+    if (!el) return fallback;
+    try {
+        return JSON.parse(el.textContent || "null") ?? fallback;
+    } catch (e) {
+        console.warn(`inline JSON ${elementId} parse failed:`, e);
+        return fallback;
+    }
+}
 
 function statusTextForMode(mode) {
     return state.bridge
         ? callBridge("get_mode_status_text", mode)
-        : STATUS_TEXT[mode];
+        : (STATUS_TEXT[mode] || STATUS_TEXT.no_engine || "");
 }
 
 /**
@@ -1696,8 +1709,7 @@ let moveKeys = null;
 let maxUndoDepth = 200;  // sane default; overwritten on first open
 const ZERO_VALUE = "0";
 
-const PLUS_DISPLAY = "+";
-const MINUS_DISPLAY = "−";   // U+2212 MATHEMATICAL MINUS SIGN
+const MINUS_DISPLAY = "−"; // U+2212 MATHEMATICAL MINUS SIGN
 const MINUS_SERIALIZED = "-"; // ASCII U+002D HYPHEN-MINUS
 
 // Cached cell <td> nodes keyed by row index. Populated by
@@ -2956,6 +2968,31 @@ function normalizeTheme(value) {
     return value === THEME.DARK ? THEME.DARK : THEME.LIGHT;
 }
 
+/** Best-effort localStorage write. Persistence is a "nice to have";
+ *  a quota-exceeded or storage-blocked browser (private window,
+ *  iframe with storage disabled, Safari ITP eviction) must not
+ *  crash the toggle. The catch logs a warning so the failure mode
+ *  is observable in devtools without surfacing to the user. */
+function safeStorageSet(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch (e) {
+        console.warn(`localStorage write failed for ${key}:`, e);
+    }
+}
+
+/** Best-effort localStorage read. Some browsers (Safari Lockdown
+ *  Mode, embedded contexts) throw on getItem too; treat that as
+ *  "no stored value" and return null. */
+function safeStorageGet(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch (e) {
+        console.warn(`localStorage read failed for ${key}:`, e);
+        return null;
+    }
+}
+
 /**
  * Render the statusbar's "Language Doodad" brand as a rasterized
  * (non-copyable) label. Same canvas-mask trick as the segment
@@ -3012,7 +3049,7 @@ function normalizePaletteMode(value) {
  */
 function wireColorblindToggle() {
     if (!nodes.cbBtn) return;
-    const stored = normalizePaletteMode(localStorage.getItem("palette_mode"));
+    const stored = normalizePaletteMode(safeStorageGet("palette_mode"));
     if (stored === PALETTE_MODE.COLORBLIND) {
         document.documentElement.dataset.cb = "on";
         nodes.cbBtn.setAttribute("aria-pressed", "true");
@@ -3036,7 +3073,7 @@ function wireColorblindToggle() {
         nodes.cbBtn.title = next === PALETTE_MODE.COLORBLIND
             ? "Switch to standard palette"
             : "Switch to colorblind-friendly palette";
-        localStorage.setItem("palette_mode", next);
+        safeStorageSet("palette_mode", next);
         if (state.bridge) {
             callBridge("set_active_palette_mode", next);
             const hasSelection =
@@ -3048,7 +3085,7 @@ function wireColorblindToggle() {
 }
 
 function wireThemeToggle() {
-    const stored = normalizeTheme(localStorage.getItem("theme"));
+    const stored = normalizeTheme(safeStorageGet("theme"));
     if (stored === THEME.DARK) {
         document.documentElement.dataset.theme = THEME.DARK;
         nodes.themeBtn.textContent = "☀";
@@ -3058,7 +3095,7 @@ function wireThemeToggle() {
         const next = cur === THEME.DARK ? THEME.LIGHT : THEME.DARK;
         document.documentElement.dataset.theme = next;
         nodes.themeBtn.textContent = next === THEME.DARK ? "☀" : "☾";
-        localStorage.setItem("theme", next);
+        safeStorageSet("theme", next);
         if (state.bridge) {
             callBridge("set_active_theme", next);
             // Re-run only if a selection is active; an empty pane

@@ -50,7 +50,11 @@ from PyQt6.QtWidgets import (
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory, ValidationError
 from phonology_features._logging import get_logger
-from phonology_features._settings import safe_read_setting
+from phonology_features._settings import (
+    SettingsKey,
+    safe_read_setting,
+    write_setting,
+)
 from phonology_features.gui import layout
 from phonology_features.gui.constants import (
     FEATURE_GROUPS,
@@ -153,12 +157,14 @@ class MainWindow(QMainWindow):
         # Apply theme BEFORE the window background so its own bg picks
         # up the right palette. First launch follows the OS scheme;
         # subsequent launches honour the user's last manual toggle.
-        saved_theme = self._read_setting_str("theme", detect_system_theme())
+        saved_theme = self._read_setting_str(
+            SettingsKey.THEME, detect_system_theme()
+        )
         set_theme(saved_theme)
         # Restore the user's standard/colorblind palette choice so chrome
         # built before ``apply()`` runs picks up the right hues from
         # ``C`` directly (avoids a one-frame flash of standard colors).
-        saved_mode = self._read_setting_str("palette_mode", "standard")
+        saved_mode = self._read_setting_str(SettingsKey.PALETTE_MODE, "standard")
         set_palette_mode(saved_mode)
         set_css(self, f"background-color: {C['bg']};")
         # 150 ms debounce for selection-change analysis.
@@ -629,10 +635,10 @@ class MainWindow(QMainWindow):
         # Without the check ``size.width()`` would AttributeError-crash
         # startup; with the check the bad value falls back to default.
         size = safe_read_setting(
-            self._settings, "window_size", None, expected_type=QSize
+            self._settings, SettingsKey.WINDOW_SIZE, None, expected_type=QSize
         )
         pos = safe_read_setting(
-            self._settings, "window_pos", None, expected_type=QPoint
+            self._settings, SettingsKey.WINDOW_POS, None, expected_type=QPoint
         )
         screen = self._geom.target_screen()
         if size is not None:
@@ -670,7 +676,7 @@ class MainWindow(QMainWindow):
         # first-launch sizing.
         self._geom.has_saved_splitter = self._geom.restore_splitter_state()
         path = startup_path or safe_read_setting(
-            self._settings, "last_inventory", None, expected_type=str
+            self._settings, SettingsKey.LAST_INVENTORY, None, expected_type=str
         )
         if path and os.path.isfile(path):
             idx = self.inventory_combo.findData(path)
@@ -692,7 +698,7 @@ class MainWindow(QMainWindow):
                     break
         # Mode stored as a plain string so it survives package renames
         # that would invalidate a pickled enum.
-        saved_mode = self._read_setting_str("mode", Mode.SEG_TO_FEAT.value)
+        saved_mode = self._read_setting_str(SettingsKey.MODE, Mode.SEG_TO_FEAT.value)
         if saved_mode in (Mode.SEG_TO_FEAT.value, Mode.FEAT_TO_SEG.value):
             self._set_mode(Mode(saved_mode))
 
@@ -712,20 +718,28 @@ class MainWindow(QMainWindow):
         self._settings.remove("geometry")
         if self.isMaximized() or self.isFullScreen():
             normal = self.normalGeometry()
-            self._settings.setValue("window_pos", normal.topLeft())
-            self._settings.setValue("window_size", normal.size())
+            write_setting(self._settings, SettingsKey.WINDOW_POS, normal.topLeft())
+            write_setting(self._settings, SettingsKey.WINDOW_SIZE, normal.size())
         else:
-            self._settings.setValue("window_pos", self.pos())
-            self._settings.setValue("window_size", self.size())
+            write_setting(self._settings, SettingsKey.WINDOW_POS, self.pos())
+            write_setting(self._settings, SettingsKey.WINDOW_SIZE, self.size())
         # Persist splitter state so reopening + inventory swaps don't
         # snap the panel boundary back to the content-derived ratio.
         # Stored as the Qt-native QByteArray from ``saveState`` so the
         # round-trip matches Qt's internal format exactly.
-        self._settings.setValue("hsplit_state", self._hsplit.saveState())
-        self._settings.setValue("vsplit_state", self._vsplit.saveState())
-        self._settings.setValue("mode", self._mode_ctrl.mode.value)
+        write_setting(
+            self._settings, SettingsKey.HSPLIT_STATE, self._hsplit.saveState()
+        )
+        write_setting(
+            self._settings, SettingsKey.VSPLIT_STATE, self._vsplit.saveState()
+        )
+        write_setting(
+            self._settings, SettingsKey.MODE, self._mode_ctrl.mode.value
+        )
         if self._current_path:
-            self._settings.setValue("last_inventory", self._current_path)
+            write_setting(
+                self._settings, SettingsKey.LAST_INVENTORY, self._current_path
+            )
         # Flush settings to disk synchronously. Without sync(), a hard
         # process exit between the setValue calls and QSettings'
         # destructor can lose the last update (window geometry,

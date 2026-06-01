@@ -29,7 +29,7 @@ from PyQt6.QtCore import QByteArray, QPoint, QTimer
 from PyQt6.QtGui import QScreen
 from PyQt6.QtWidgets import QApplication
 
-from phonology_features._settings import safe_read_setting
+from phonology_features._settings import SettingsKey, safe_read_setting
 from phonology_features.gui import layout
 
 if TYPE_CHECKING:
@@ -430,13 +430,13 @@ class _GeometryController:
         # guard falls back cleanly to the unrestored case.
         h_state = safe_read_setting(
             self._settings,
-            "hsplit_state",
+            SettingsKey.HSPLIT_STATE,
             None,
             expected_type=QByteArray,
         )
         v_state = safe_read_setting(
             self._settings,
-            "vsplit_state",
+            SettingsKey.VSPLIT_STATE,
             None,
             expected_type=QByteArray,
         )

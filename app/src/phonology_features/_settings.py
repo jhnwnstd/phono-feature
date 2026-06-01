@@ -25,10 +25,54 @@ should still be able to launch the app.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any, TypeVar, cast, overload
 
 T = TypeVar("T")
 U = TypeVar("U")
+
+
+class SettingsKey(StrEnum):
+    """Canonical registry of every QSettings key the app reads or
+    writes.
+
+    Defining each key once eliminates the typo class of bug where a
+    write to ``"pallete_mode"`` (typo) silently creates an orphan
+    key that no read path ever matches. The values are the existing
+    literal strings, so an upgrade is a non-event for existing user
+    settings files: the round-trip is byte-identical.
+
+    Use with :py:func:`safe_read_setting` and :py:func:`write_setting`
+    so every QSettings access goes through one of the two typed
+    wrappers. Keep the enum and the helpers in this module so
+    ``from phonology_features._settings import SettingsKey,
+    write_setting, safe_read_setting`` is the single import every
+    caller needs.
+    """
+
+    WINDOW_POS = "window_pos"
+    WINDOW_SIZE = "window_size"
+    HSPLIT_STATE = "hsplit_state"
+    VSPLIT_STATE = "vsplit_state"
+    THEME = "theme"
+    PALETTE_MODE = "palette_mode"
+    MODE = "mode"
+    LAST_INVENTORY = "last_inventory"
+
+
+def write_setting(
+    settings: Any, key: SettingsKey, value: Any
+) -> None:
+    """Typed wrapper around ``QSettings.setValue`` that enforces a
+    :py:class:`SettingsKey` member as the key.
+
+    Catches the "stringly-typed key" class of bug at mypy time: a
+    raw string literal that isn't a ``SettingsKey`` member fails
+    type-checking. The value type is intentionally ``Any`` because
+    QSettings stores arbitrary serialisable objects (``QSize``,
+    ``QPoint``, ``QByteArray``, ``str``, ``int``, ...).
+    """
+    settings.setValue(str(key), value)
 
 
 @overload

@@ -172,6 +172,38 @@ def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return seen
 
 
+class _NonFiniteJSONValue(ValueError):
+    """Raised by :py:func:`_reject_non_finite` when ``json.load`` sees
+    ``NaN`` / ``Infinity`` / ``-Infinity``. Inventory feature values
+    are strings (``"+"`` / ``"-"`` / ``"0"``), never numeric, so a
+    non-finite literal in user-supplied JSON is always malformed
+    input. Caught at the :py:meth:`Inventory.load` boundary and
+    rewrapped as :py:class:`ValidationError` so the error UX is the
+    same as any other parse failure.
+    """
+
+    def __init__(self, token: str) -> None:
+        self.token = token
+        super().__init__(
+            f"non-finite JSON numeric literal {token!r}; inventory "
+            f"feature values must be strings"
+        )
+
+
+def _reject_non_finite(token: str) -> float:
+    """``parse_constant`` hook for :py:func:`json.load`.
+
+    The default ``parse_constant`` is :py:func:`float`, which
+    happily accepts ``NaN`` and ``+/-Infinity``. Those would flow
+    into :py:meth:`Inventory.parse` and either crash an isinstance
+    check or, worse, silently propagate as ``float('nan')`` through
+    feature comparisons (where ``nan != nan`` breaks set semantics).
+    Reject them at decode time so the error attaches to the file
+    path the user gave us.
+    """
+    raise _NonFiniteJSONValue(token)
+
+
 # On-disk format version. Bumped when the shape changes in a way old
 # readers cannot understand. Files written by this version always
 # include ``schema_version`` at the top level. Files written before
@@ -426,13 +458,26 @@ class Inventory:
                 # object_pairs_hook intercepts each JSON object literal
                 # before dict construction so a duplicate key (which
                 # plain json.load would silently collapse) is reported.
-                raw = json.load(f, object_pairs_hook=_no_duplicate_keys)
+                # parse_constant rejects non-finite numeric literals
+                # (NaN / Infinity / -Infinity) which would otherwise
+                # flow into the parser as Python ``float('nan')`` and
+                # break feature-set comparisons silently.
+                raw = json.load(
+                    f,
+                    object_pairs_hook=_no_duplicate_keys,
+                    parse_constant=_reject_non_finite,
+                )
         except FileNotFoundError as e:
             _log.warning("inventory load failed: %s: file not found", basename)
             raise ValidationError((f"{path}: file not found",)) from e
         except _DuplicateJSONKey as e:
             _log.warning(
                 "inventory load failed: %s: duplicate JSON key(s)", basename
+            )
+            raise ValidationError((f"{path}: {e}",)) from e
+        except _NonFiniteJSONValue as e:
+            _log.warning(
+                "inventory load failed: %s: non-finite JSON value", basename
             )
             raise ValidationError((f"{path}: {e}",)) from e
         except json.JSONDecodeError as e:

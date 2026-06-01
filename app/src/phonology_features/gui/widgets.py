@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from phonology_features.gui import layout as layout_mod
+from phonology_features.gui._themed_style_cache import styles_for_active_theme
 from phonology_features.gui.constants import (
     BTN_GAP,
     BTN_W,
@@ -123,22 +124,14 @@ class SegmentButton(QPushButton):
     """
 
     # ``palette.theme_version`` -> styles dict, shared across
-    # instances. Keying on the monotonic version (not just the theme
-    # name) lets the perpendicular standard/colorblind axis invalidate
-    # the cache too; otherwise a CB toggle would hit a stale "dark"
-    # entry and the new buttons would keep the old hues.
+    # instances. Cache rebuild semantics live in
+    # :py:func:`_themed_style_cache.styles_for_active_theme`; see
+    # that module for the invalidation contract.
     _styles_cache: ClassVar[dict[int, dict[SegmentState, str]]] = {}
 
     @classmethod
     def _styles_for_active_theme(cls) -> dict[SegmentState, str]:
-        from phonology_features.gui import palette as _palette
-
-        version = _palette.theme_version
-        cached = cls._styles_cache.get(version)
-        if cached is None:
-            cached = cls._build_styles()
-            cls._styles_cache[version] = cached
-        return cached
+        return styles_for_active_theme(cls._styles_cache, cls._build_styles)
 
     def __init__(self, segment: str, parent: QWidget | None = None) -> None:
         super().__init__(segment, parent)
@@ -254,10 +247,9 @@ class FeatureRow(QWidget):
     """
 
     value_changed = pyqtSignal(str, str)
-    # ``palette.theme_version`` -> styles dict (BADGE_*, ROW_*, NAME_*).
-    # Same rationale as SegmentButton._styles_cache: key on the
-    # monotonic version so the (theme, mode) product invalidates the
-    # cache, not just the theme axis.
+    # ``palette.theme_version`` -> styles dict (BADGE_*, ROW_*,
+    # NAME_*). Shared invalidation contract with SegmentButton via
+    # :py:func:`_themed_style_cache.styles_for_active_theme`.
     _styles_cache: ClassVar[dict[int, dict[str, str]]] = {}
     # Instance attrs populated by ``_build_styles`` via setattr from
     # the cached theme dict; declared here so mypy sees them.
@@ -278,14 +270,7 @@ class FeatureRow(QWidget):
 
     @classmethod
     def _styles_for_active_theme(cls) -> dict[str, str]:
-        from phonology_features.gui import palette as _palette
-
-        version = _palette.theme_version
-        cached = cls._styles_cache.get(version)
-        if cached is None:
-            cached = cls._compute_styles()
-            cls._styles_cache[version] = cached
-        return cached
+        return styles_for_active_theme(cls._styles_cache, cls._compute_styles)
 
     def __init__(
         self, feature_name: str, parent: QWidget | None = None

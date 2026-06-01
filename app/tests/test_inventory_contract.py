@@ -865,6 +865,30 @@ def test_load_invalid_json_raises_validation_error(tmp_path: Path) -> None:
     assert any("invalid JSON" in i for i in ex.value.issues)
 
 
+@pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity"])
+def test_load_rejects_non_finite_json_constants(
+    tmp_path: Path, token: str
+) -> None:
+    """``json.load``'s default ``parse_constant`` is :py:func:`float`,
+    which silently accepts ``NaN`` / ``Infinity`` / ``-Infinity``.
+    Inventory feature values are strings, never numeric; a non-finite
+    literal in the JSON text is always malformed input. The
+    ``parse_constant`` hook in :py:func:`Inventory.load` rejects each
+    token at decode time so the error attaches to the file the user
+    gave us.
+    """
+    bad = tmp_path / "non_finite.json"
+    bad.write_text(
+        f'{{ "features": ["Voice"], "segments": {{ "p": {{ "Voice": {token} }} }} }}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError) as ex:
+        Inventory.load(str(bad))
+    assert any(token in i for i in ex.value.issues), (
+        f"expected ValidationError mentioning {token!r}, got {ex.value.issues}"
+    )
+
+
 def test_engine_requires_inventory_not_raw_dict() -> None:
     """The engine's old load_inventory_data accepted raw dicts and
     could be more lenient than the validator. New engine refuses raw

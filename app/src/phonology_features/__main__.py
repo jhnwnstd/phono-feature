@@ -142,10 +142,10 @@ def _run_gui(argv: list[str]) -> int:
     # AND wrong-type values; without it a corrupt theme value would
     # crash startup BEFORE MainWindow's own ``_read_setting`` guard
     # ever ran, leaving the user with no in-app way to recover.
-    from phonology_features._settings import safe_read_setting
+    from phonology_features._settings import SettingsKey, safe_read_setting
 
     _seed_theme = safe_read_setting(
-        _settings, "theme", detect_system_theme(), expected_type=str
+        _settings, SettingsKey.THEME, detect_system_theme(), expected_type=str
     )
     set_theme(_seed_theme)
     from phonology_features.gui.style_utils import (

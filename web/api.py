@@ -19,7 +19,12 @@ from functools import lru_cache
 from typing import Any
 
 from phonology_engine.feature_engine import FeatureEngine
-from phonology_engine.inventory import Inventory, ValidationError
+from phonology_engine.inventory import (
+    Inventory,
+    ValidationError,
+    _NonFiniteJSONValue,
+    _reject_non_finite,
+)
 from phonology_engine.limits import MAX_FEATURES, MAX_SEGMENTS
 from phonology_features.gui.grid_logic import (
     CYCLE_LADDER,
@@ -75,7 +80,17 @@ def load_inventory_json(
     ``Inventory.load`` so JS can surface the issues list.
     """
     global _engine, _inventory_name
-    raw = json.loads(json_text)
+    # ``parse_constant`` rejects ``NaN`` / ``Infinity`` / ``-Infinity``
+    # so a malformed uploaded JSON gets the same ``ValidationError``
+    # path as a duplicate key, instead of silently producing
+    # ``float('nan')`` values that break downstream feature-set
+    # comparisons. Shares the helper with ``Inventory.load`` in the
+    # engine package so both web and desktop reject the same set of
+    # tokens.
+    try:
+        raw = json.loads(json_text, parse_constant=_reject_non_finite)
+    except _NonFiniteJSONValue as e:
+        raise ValidationError((f"{source_label}: {e}",)) from e
     inventory = Inventory.parse(raw, source=source_label)
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name or source_label

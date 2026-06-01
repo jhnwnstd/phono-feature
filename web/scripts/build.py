@@ -250,6 +250,49 @@ def _load_layout_module() -> ModuleType:
     return module
 
 
+def _build_status_text_payload() -> dict[str, str]:
+    """Bake the status-bar messages for every :py:class:`Mode` from
+    ``mode_logic.mode_status_text`` into a flat dict.
+
+    The web app's pre-bridge fallback (and the post-bridge cache)
+    both consume this payload, so the Python helper is the single
+    source of truth and the JS literal ``STATUS_TEXT`` it replaces
+    can no longer drift.
+
+    Registers the module in ``sys.modules`` before iterating
+    ``Mode`` because :py:class:`enum.StrEnum`'s iteration helpers
+    look up the defining module by name and would otherwise hit
+    ``AttributeError`` on the temporary spec-loaded module.
+    """
+    import sys
+
+    mode_logic_path = DESKTOP_GUI / "mode_logic.py"
+    module_name = "_build_mode_logic"
+    spec = importlib.util.spec_from_file_location(
+        module_name, mode_logic_path
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load {mode_logic_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+        payload: dict[str, str] = {
+            str(member): module.mode_status_text(member, has_engine=True)
+            for member in module.Mode
+        }
+        # ``no_engine`` is the message shown before any inventory
+        # loads; the bridge isn't even attached yet so the web
+        # definitely needs it baked at build time. Keyed separately
+        # so JS reads it without ambiguity with the per-mode keys.
+        payload["no_engine"] = module.mode_status_text(
+            module.Mode.SEG_TO_FEAT, has_engine=False
+        )
+        return payload
+    finally:
+        sys.modules.pop(module_name, None)
+
+
 def generate_layout_css() -> None:
     """Emit ``layout.css`` from the constants in
     ``phonology_features.gui.layout`` so the same numbers drive both
@@ -472,6 +515,19 @@ def hash_assets() -> None:
         + json.dumps(runtime_map, separators=(",", ":"))
         + "</script>"
     )
+    # Bake the mode status-bar messages from ``mode_logic.py``
+    # straight into the HTML so the JS pre-bridge fallback reads
+    # the canonical Python output instead of carrying a literal
+    # that can drift.
+    status_block = (
+        '<script id="status-text" type="application/json">'
+        + json.dumps(
+            _build_status_text_payload(),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        + "</script>"
+    )
     bootstrap_block = ""
     bootstrap_path = DIST / "bootstrap.json"
     if bootstrap_path.exists():
@@ -492,6 +548,7 @@ def hash_assets() -> None:
         '<script type="module" src="main.js"></script>',
         (
             f"{runtime_block}\n"
+            + f"{status_block}\n"
             + (f"{bootstrap_block}\n" if bootstrap_block else "")
             + f'<script type="module" src="{full_map["main.js"]}"></script>'
         ),
