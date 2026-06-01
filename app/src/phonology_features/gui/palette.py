@@ -74,6 +74,109 @@ LIGHT = {
     "tag_gray_text": "#5F6368",
 }
 
+COLORBLIND_LIGHT = {
+    # Neutrals
+    "bg": "#F7F7F7",
+    "panel": "#FFFFFF",
+    "border": "#DADCE0",
+    "text": "#202124",
+    "text_dim": "#5F6368",
+    # Accent
+    "accent": "#0072B2",
+    "accent_light": "#D6E8FF",
+    # Segment-button states
+    "seg_default": "#F2F3F5",
+    "seg_selected": "#CC79A7",
+    "seg_matched": "#CC79A7",
+    "seg_unmatched": "#E2E8F0",
+    # Feature value semantics: plus=blue, minus=orange, neutral=purple
+    "plus": "#0072B2",
+    "plus_bg": "#D6E8FF",
+    "minus": "#E69F00",
+    "minus_bg": "#FFE8B5",
+    "neutral": "#CC79A7",
+    "neutral_bg": "#F3D6E8",
+    "shared_plus": "#D6E8FF",
+    "shared_minus": "#FFE8B5",
+    # Buttons
+    "btn_primary": "#0072B2",
+    "btn_primary_text": "#FFFFFF",
+    "btn_primary_hover": "#005A8C",
+    "btn_primary_hover_text": "#FFFFFF",
+    "btn_danger": "#E69F00",
+    "btn_danger_text": "#202124",
+    "btn_danger_hover": "#B87900",
+    "btn_danger_hover_text": "#FFFFFF",
+    "btn_disabled_bg": "#E2E4E7",
+    "btn_disabled_text": "#9AA0A6",
+    "btn_disabled_border": "#E2E4E7",
+    "splitter_hover": "#9AA0A6",
+    # Analysis panel and tag chips
+    "analysis_bg": "#F2F3F5",
+    "tag_blue": "#D6E8FF",
+    "tag_blue_text": "#0072B2",
+    # Green slot reuses blue so contrast survives deuteranopia.
+    "tag_green": "#D6E8FF",
+    "tag_green_text": "#0072B2",
+    "tag_red": "#FFE8B5",
+    "tag_red_text": "#A46300",
+    "tag_purple": "#F3D6E8",
+    "tag_purple_text": "#9A4F7F",
+    "tag_gray": "#F1F3F4",
+    "tag_gray_text": "#5F6368",
+}
+
+COLORBLIND_DARK = {
+    # Neutrals
+    "bg": "#181818",
+    "panel": "#202020",
+    "border": "#3A3A3A",
+    "text": "#E8EAED",
+    "text_dim": "#B8B8B8",
+    # Accent
+    "accent": "#56B4E9",
+    "accent_light": "#16384D",
+    # Segment-button states
+    "seg_default": "#262626",
+    "seg_selected": "#D7A0D3",
+    "seg_matched": "#D7A0D3",
+    "seg_unmatched": "#3A3A3A",
+    # Feature value semantics
+    "plus": "#56B4E9",
+    "plus_bg": "#16384D",
+    "minus": "#F0A202",
+    "minus_bg": "#4A3100",
+    "neutral": "#D7A0D3",
+    "neutral_bg": "#43243F",
+    "shared_plus": "#16384D",
+    "shared_minus": "#4A3100",
+    # Buttons
+    "btn_primary": "#0072B2",
+    "btn_primary_text": "#FFFFFF",
+    "btn_primary_hover": "#56B4E9",
+    "btn_primary_hover_text": "#181818",
+    "btn_danger": "#A46300",
+    "btn_danger_text": "#FFFFFF",
+    "btn_danger_hover": "#F0A202",
+    "btn_danger_hover_text": "#181818",
+    "btn_disabled_bg": "#161616",
+    "btn_disabled_text": "#555555",
+    "btn_disabled_border": "#161616",
+    "splitter_hover": "#6A6A6A",
+    # Analysis panel and tag chips
+    "analysis_bg": "#262626",
+    "tag_blue": "#16384D",
+    "tag_blue_text": "#56B4E9",
+    "tag_green": "#16384D",
+    "tag_green_text": "#56B4E9",
+    "tag_red": "#4A3100",
+    "tag_red_text": "#F0A202",
+    "tag_purple": "#43243F",
+    "tag_purple_text": "#D7A0D3",
+    "tag_gray": "#2A2A2A",
+    "tag_gray_text": "#B8B8B8",
+}
+
 DARK = {
     # Neutrals (true dark gray, not deep navy)
     "bg": "#181818",
@@ -132,10 +235,16 @@ DARK = {
     "tag_gray_text": "#B8B8B8",
 }
 
-# Active palette, mutated in place by set_theme.
+# Active palette, mutated in place by set_theme / set_palette_mode.
 C: dict[str, str] = dict(LIGHT)
 
-# Monotonic counter bumped on every theme change. Caches that
+# Active light/dark name and standard/colorblind mode. ``C`` is the
+# product of these two axes; storing them separately means a mode
+# flip preserves the user's light/dark choice and vice versa.
+_active_theme: str = "light"
+_active_mode: str = "standard"
+
+# Monotonic counter bumped on every palette change. Caches that
 # depend on palette colors key on this integer; on miss they
 # rebuild from the current ``C`` and store the new version.
 # Lets callers cache derived objects (for example QBrush triples)
@@ -143,18 +252,50 @@ C: dict[str, str] = dict(LIGHT)
 theme_version: int = 0
 
 
-def set_theme(name: str) -> None:
-    """Switch the active palette to "light" or "dark"."""
+def _resolve(theme: str, mode: str) -> dict[str, str]:
+    """Return the palette dict for the given (theme, mode) pair."""
+    if mode == "colorblind":
+        return COLORBLIND_DARK if theme == "dark" else COLORBLIND_LIGHT
+    return DARK if theme == "dark" else LIGHT
+
+
+def _refresh_active() -> None:
+    """Repopulate ``C`` from the current (_active_theme, _active_mode)
+    pair and bump ``theme_version`` so cached derivatives invalidate.
+    """
     global theme_version
-    target = DARK if name == "dark" else LIGHT
+    target = _resolve(_active_theme, _active_mode)
     C.clear()
     C.update(target)
     theme_version += 1
 
 
+def set_theme(name: str) -> None:
+    """Switch the active palette to "light" or "dark", preserving the
+    current standard/colorblind mode.
+    """
+    global _active_theme
+    _active_theme = "dark" if name == "dark" else "light"
+    _refresh_active()
+
+
+def set_palette_mode(mode: str) -> None:
+    """Switch the active palette between "standard" and "colorblind",
+    preserving the current light/dark theme.
+    """
+    global _active_mode
+    _active_mode = "colorblind" if mode == "colorblind" else "standard"
+    _refresh_active()
+
+
+def get_palette_mode() -> str:
+    """Return "standard" or "colorblind" for the active palette."""
+    return _active_mode
+
+
 def get_theme_name() -> str:
     """Return "light" or "dark" for the currently active palette."""
-    return "dark" if C.get("bg") == DARK["bg"] else "light"
+    return _active_theme
 
 
 def detect_system_theme(default: str = "light") -> str:

@@ -47,7 +47,7 @@ from phonology_features.gui.mode_logic import (
     mode_status_text,
     project_mode_transition,
 )
-from phonology_features.gui.palette import set_theme
+from phonology_features.gui.palette import set_palette_mode, set_theme
 from phonology_features.gui.view_models import (
     build_inventory_summary,
     summarize_feature_query,
@@ -346,6 +346,15 @@ def set_active_theme(name: str) -> None:
     their cached HTML embeds colors from the previous palette.
     """
     set_theme(name)
+    _invalidate_analysis_caches()
+
+
+def set_active_palette_mode(mode: str) -> None:
+    """Switch between standard and colorblind palettes. Mirrors
+    ``set_active_theme`` for the perpendicular axis; analysis HTML
+    embeds chip colors so cached output must regenerate.
+    """
+    set_palette_mode(mode)
     _invalidate_analysis_caches()
 
 

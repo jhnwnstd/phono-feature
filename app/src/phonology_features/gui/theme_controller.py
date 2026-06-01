@@ -27,7 +27,9 @@ from phonology_features.gui.constants import scrollbar_style
 from phonology_features.gui.mode_controller import _ModeController
 from phonology_features.gui.palette import (
     C,
+    get_palette_mode,
     get_theme_name,
+    set_palette_mode,
     set_theme,
 )
 from phonology_features.gui.style_utils import (
@@ -117,6 +119,22 @@ class _ThemeController:
         _log.info("theme toggle: %s", new_theme)
         set_theme(new_theme)
         self._main._settings.setValue("theme", new_theme)
+        self.apply()
+
+    def toggle_palette_mode(self) -> None:
+        """Flip between standard and colorblind palettes in place.
+
+        The light/dark axis is preserved; only the hue family changes.
+        Same in-place re-style path as :py:meth:`toggle`.
+        """
+        new_mode = (
+            "colorblind"
+            if get_palette_mode() == "standard"
+            else "standard"
+        )
+        _log.info("palette mode toggle: %s", new_mode)
+        set_palette_mode(new_mode)
+        self._main._settings.setValue("palette_mode", new_mode)
         self.apply()
 
     def apply(self) -> None:
@@ -242,6 +260,7 @@ class _ThemeController:
         for btn in m._nav_buttons:
             set_css(btn, nav_style)
         self.apply_theme_btn()
+        self.apply_cb_btn()
 
     def apply_theme_btn(self) -> None:
         """Set the theme-button text, tooltip, and styling.
@@ -270,6 +289,52 @@ class _ThemeController:
             }}
         """,
         )
+
+    def apply_cb_btn(self) -> None:
+        """Set the colorblind-toggle text, tooltip, and styling.
+
+        Uses the eye-glyph (U+1F441) so the icon reads as "vision
+        mode" rather than "theme". The button fill switches to the
+        accent when colorblind mode is on so the active state is
+        visible at a glance, matching the toolbar nav buttons'
+        hover affordance.
+        """
+        is_cb = get_palette_mode() == "colorblind"
+        btn: QPushButton = self._main._cb_btn
+        btn.setText("\U0001F441")
+        btn.setToolTip(
+            "Switch to standard palette"
+            if is_cb
+            else "Switch to colorblind-friendly palette"
+        )
+        if is_cb:
+            qss = f"""
+                QPushButton {{
+                    background: {C["accent_light"]};
+                    color: {C["accent"]};
+                    border: 1.5px solid {C["accent"]};
+                    border-radius: 6px;
+                }}
+                QPushButton:hover {{
+                    background: {C["accent"]};
+                    color: {C["btn_primary_text"]};
+                    border: 1.5px solid {C["accent"]};
+                }}
+            """
+        else:
+            qss = f"""
+                QPushButton {{
+                    background: transparent;
+                    color: {C["text_dim"]};
+                    border: 1.5px solid {C["border"]};
+                    border-radius: 6px;
+                }}
+                QPushButton:hover {{
+                    color: {C["accent"]};
+                    border: 1.5px solid {C["accent"]};
+                }}
+            """
+        set_css(btn, qss)
 
     def _repaint_splitter_handles(self) -> None:
         """Force splitter handles to repaint with the live palette.

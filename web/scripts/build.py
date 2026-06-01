@@ -173,29 +173,48 @@ def _inventory_label(path: Path) -> str:
 
 
 def generate_theme_css() -> None:
-    """Emit ``theme.css`` from palette.LIGHT / palette.DARK so the
-    same color values drive both desktop chrome and web CSS
-    variables. Edits to palette.py propagate to both on the next
-    build.
+    """Emit ``theme.css`` from palette.LIGHT / palette.DARK / COLORBLIND_*
+    so the same color values drive both desktop chrome and web CSS
+    variables. Edits to palette.py propagate to both on the next build.
+
+    Two perpendicular axes drive variant selection:
+      * ``html[data-theme="dark"]`` — dark theme overrides.
+      * ``html[data-cb="on"]``      — colorblind-friendly palette.
+    The colorblind-dark variant is keyed on both attributes so the
+    most-specific selector wins regardless of attribute order.
     """
     print("Generating theme.css from palette.py...")
     palette = _load_palette_module()
+
+    def block(selector: str, table: dict[str, str]) -> list[str]:
+        out = [f"{selector} {{"]
+        for key, value in table.items():
+            out.append(f"  --{_css_var_name(key)}: {value};")
+        out.append("}")
+        return out
+
     lines: list[str] = [
         "/* AUTO-GENERATED from app/src/phonology_features/gui/palette.py",
         " * by web/scripts/build.py. Do not edit by hand. */",
-        ":root {",
     ]
-    for key, value in palette.LIGHT.items():
-        lines.append(f"  --{_css_var_name(key)}: {value};")
-    lines.append("}")
+    lines.extend(block(":root", palette.LIGHT))
     lines.append("")
-    lines.append('html[data-theme="dark"] {')
-    for key, value in palette.DARK.items():
-        lines.append(f"  --{_css_var_name(key)}: {value};")
-    lines.append("}")
+    lines.extend(block('html[data-theme="dark"]', palette.DARK))
+    lines.append("")
+    lines.extend(block('html[data-cb="on"]', palette.COLORBLIND_LIGHT))
+    lines.append("")
+    lines.extend(
+        block(
+            'html[data-cb="on"][data-theme="dark"]',
+            palette.COLORBLIND_DARK,
+        )
+    )
     lines.append("")
     (DIST / "theme.css").write_text("\n".join(lines))
-    print(f"  {len(palette.LIGHT)} tokens per theme")
+    print(
+        f"  {len(palette.LIGHT)} standard tokens, "
+        f"{len(palette.COLORBLIND_LIGHT)} colorblind tokens per theme"
+    )
 
 
 def _css_var_name(palette_key: str) -> str:

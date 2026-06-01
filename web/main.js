@@ -31,6 +31,7 @@ const NODE_IDS = Object.freeze({
     analysisContentContrasts: "analysis-content-contrasts",
     expandBtn: "expand-btn",
     themeBtn: "theme-btn",
+    cbBtn: "cb-btn",
     bugBtn: "bug-btn",
     statusbarBrand: "statusbar-brand",
     renameDialog: "rename-dialog",
@@ -2982,6 +2983,64 @@ function wireBugButton() {
     });
 }
 
+const PALETTE_MODE = Object.freeze({
+    STANDARD: "standard",
+    COLORBLIND: "colorblind",
+});
+
+/** localStorage is external input: anything other than the
+ *  colorblind sentinel reads as standard. */
+function normalizePaletteMode(value) {
+    return value === PALETTE_MODE.COLORBLIND
+        ? PALETTE_MODE.COLORBLIND
+        : PALETTE_MODE.STANDARD;
+}
+
+/**
+ * Bind the colorblind-palette toggle. The active mode lives on
+ * ``html[data-cb]`` so theme.css can override the standard
+ * variables under that selector; ``aria-pressed`` doubles as the
+ * styling hook for the button's accented "on" state. The Python
+ * renderer is told via ``set_palette_mode`` so analysis-chip HTML
+ * regenerates with matching colors.
+ */
+function wireColorblindToggle() {
+    if (!nodes.cbBtn) return;
+    const stored = normalizePaletteMode(localStorage.getItem("palette_mode"));
+    if (stored === PALETTE_MODE.COLORBLIND) {
+        document.documentElement.dataset.cb = "on";
+        nodes.cbBtn.setAttribute("aria-pressed", "true");
+        nodes.cbBtn.title = "Switch to standard palette";
+    }
+    nodes.cbBtn.addEventListener("click", () => {
+        const cur = document.documentElement.dataset.cb === "on"
+            ? PALETTE_MODE.COLORBLIND
+            : PALETTE_MODE.STANDARD;
+        const next = cur === PALETTE_MODE.COLORBLIND
+            ? PALETTE_MODE.STANDARD
+            : PALETTE_MODE.COLORBLIND;
+        if (next === PALETTE_MODE.COLORBLIND) {
+            document.documentElement.dataset.cb = "on";
+        } else {
+            delete document.documentElement.dataset.cb;
+        }
+        nodes.cbBtn.setAttribute(
+            "aria-pressed", next === PALETTE_MODE.COLORBLIND ? "true" : "false"
+        );
+        nodes.cbBtn.title = next === PALETTE_MODE.COLORBLIND
+            ? "Switch to standard palette"
+            : "Switch to colorblind-friendly palette";
+        localStorage.setItem("palette_mode", next);
+        if (state.bridge) {
+            callBridge("set_active_palette_mode", next);
+            const hasSelection =
+                state.selected_segments.length > 0
+                || Object.keys(state.selected_features).length > 0;
+            if (hasSelection) runAnalysis();
+        }
+    });
+}
+
 function wireThemeToggle() {
     const stored = normalizeTheme(localStorage.getItem("theme"));
     if (stored === THEME.DARK) {
@@ -3177,6 +3236,7 @@ async function main() {
     wireStatusbarBrand();
     wireBugButton();
     wireThemeToggle();
+    wireColorblindToggle();
     wireInventoryPicker();
     wireUploadDownload();
     wireRename();

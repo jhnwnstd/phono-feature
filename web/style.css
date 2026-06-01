@@ -132,6 +132,27 @@ body {
   padding: 0;
   font-size: 16px;
 }
+/* Colorblind toggle. Sits just before the theme button with a small
+   gutter so the two icon buttons read as a paired chrome cluster
+   instead of one widget. ``aria-pressed`` flips when active and the
+   selector below repaints the button with the accent fill so the
+   active state is visible at a glance. */
+#cb-btn {
+  width: var(--control-h-md);
+  padding: 0;
+  font-size: 14px;
+  margin-right: 8px;
+}
+#cb-btn[aria-pressed="true"] {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#cb-btn[aria-pressed="true"]:hover {
+  background: var(--accent);
+  color: var(--btn-primary-text);
+  border-color: var(--accent);
+}
 /* Pencil-icon rename button. Sized like #theme-btn so square-icon
    buttons share one footprint. Sits next to the picker so the
    "edit the displayed inventory" affordance is local to its target. */

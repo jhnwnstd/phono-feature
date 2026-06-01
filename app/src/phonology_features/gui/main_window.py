@@ -69,6 +69,7 @@ from phonology_features.gui.mode_logic import Mode
 from phonology_features.gui.palette import (
     C,
     detect_system_theme,
+    set_palette_mode,
     set_theme,
 )
 from phonology_features.gui.style_utils import (
@@ -153,6 +154,11 @@ class MainWindow(QMainWindow):
         # subsequent launches honour the user's last manual toggle.
         saved_theme = self._read_setting_str("theme", detect_system_theme())
         set_theme(saved_theme)
+        # Restore the user's standard/colorblind palette choice so chrome
+        # built before ``apply()`` runs picks up the right hues from
+        # ``C`` directly (avoids a one-frame flash of standard colors).
+        saved_mode = self._read_setting_str("palette_mode", "standard")
+        set_palette_mode(saved_mode)
         set_css(self, f"background-color: {C['bg']};")
         # 150 ms debounce for selection-change analysis.
         self._debounce = QTimer(self)
@@ -235,6 +241,19 @@ class MainWindow(QMainWindow):
         )
         set_css(spacer, "background: transparent;")
         toolbar.addWidget(spacer)
+        # Colorblind-mode toggle: lives just left of the theme button
+        # with a small fixed gap so the two icon buttons read as a
+        # paired chrome cluster rather than one widget. Text, tooltip,
+        # and styling are set by :py:meth:`_ThemeController.apply_cb_btn`.
+        self._cb_btn = QPushButton("", toolbar)
+        self._cb_btn.setFont(QFont("Noto Sans", 12))
+        self._cb_btn.setFixedSize(32, 32)
+        self._cb_btn.clicked.connect(self._theme.toggle_palette_mode)
+        toolbar.addWidget(self._cb_btn)
+        cb_gap = QWidget(toolbar)
+        cb_gap.setFixedWidth(8)
+        set_css(cb_gap, "background: transparent;")
+        toolbar.addWidget(cb_gap)
         # Theme button text and tooltip are set later by
         # :py:meth:`_ThemeController.apply_theme_btn`.
         self._theme_btn = QPushButton("", toolbar)
