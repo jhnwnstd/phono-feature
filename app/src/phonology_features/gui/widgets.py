@@ -7,9 +7,10 @@ import math
 from enum import StrEnum
 from typing import ClassVar
 
-from PyQt6.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QMimeData, QRect, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QResizeEvent
 from PyQt6.QtWidgets import (
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -886,6 +887,109 @@ class AnalysisPanel(QWidget):
         self._apply_class_state("neutral")
         self.tabs.setTabEnabled(self._TAB_CONTRASTS_IDX, True)
         self.tabs.setCurrentIndex(self._TAB_CLASS_IDX)
+
+
+class AnalysisPeekPopup(QFrame):
+    """Transient magnifier for the analysis pane's active tab.
+
+    Floats above the segment and feature panes as a regular child
+    of the central widget; toggling it does NOT resize the splitter
+    or move any other pane. The popup's bottom edge anchors at the
+    analysis pane's bottom edge so it grows upward only, by the
+    height the active tab's content actually needs, capped at a
+    caller-supplied maximum.
+
+    Snapshot semantics: ``show_for`` copies the panel's current
+    active-tab HTML and chips strip into the popup once. If the
+    user changes selection while the popup is open, the popup keeps
+    showing the snapshot. Dismiss and reopen to refresh.
+    """
+
+    MIN_HEIGHT: ClassVar[int] = 80
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 6, 16, 8)
+        layout.setSpacing(2)
+        self._chips = _CopyableTextEdit(self)
+        self._chips.setReadOnly(True)
+        self._chips.setFixedHeight(38)
+        mono_font = QFont()
+        mono_font.setFamilies(MONO_FAMILIES)
+        mono_font.setPointSize(10)
+        self._chips.setFont(mono_font)
+        self._content = _CopyableTextEdit(self)
+        self._content.setReadOnly(True)
+        self._content.setFont(mono_font)
+        layout.addWidget(self._chips)
+        layout.addWidget(self._content, stretch=1)
+        self.hide()
+        self.apply_theme()
+
+    def apply_theme(self) -> None:
+        set_css(
+            self,
+            f"background: {C['analysis_bg']};"
+            f" border: 1px solid {C['border']};"
+            f" border-radius: 6px;",
+        )
+        text_edit_css = f"""
+            QTextEdit {{
+                background: {C['panel']};
+                color: {C['text']};
+                border: 1px solid {C['border']};
+                border-radius: 6px;
+                padding: 8px;
+            }}
+            """ + scrollbar_style()
+        set_css(self._content, text_edit_css)
+        set_css(self._chips, "border: none; padding: 0 2px;")
+
+    def show_for(
+        self,
+        panel: "AnalysisPanel",
+        max_height: int,
+        target_rect: QRect,
+    ) -> None:
+        """Populate from ``panel``, size to fit content (capped at
+        ``max_height``), position with bottom edge at
+        ``target_rect.bottom()`` and top edge growing upward.
+        """
+        chips_visible = panel.selection_label.isVisible()
+        if chips_visible:
+            self._chips.setHtml(panel.selection_label.toHtml())
+        self._chips.setVisible(chips_visible)
+        idx = panel.tabs.currentIndex()
+        active_tab = (
+            panel._tab_class,
+            panel._tab_features,
+            panel._tab_contrasts,
+        )[idx]
+        self._content.setHtml(active_tab.toHtml())
+        chips_height = (38 + 2) if chips_visible else 0
+        margins = 6 + 8
+        spacing = 2
+        # ``document().size().height()`` is the rendered content
+        # height. We add the QTextEdit's internal 8 px padding (top
+        # and bottom) so short content doesn't get an internal
+        # scrollbar.
+        doc_h = int(self._content.document().size().height()) + 16 + 2
+        wanted = chips_height + margins + spacing + doc_h
+        height = min(max_height, max(self.MIN_HEIGHT, wanted))
+        x = target_rect.x()
+        width = target_rect.width()
+        # ``QRect.bottom()`` is inclusive (y + h - 1). Use the
+        # exclusive form so the popup's bottom edge lines up
+        # exactly with ``target_rect``'s bottom edge.
+        y = target_rect.y() + target_rect.height() - height
+        self.setGeometry(x, y, width, height)
+        self.show()
+        self.raise_()
+
+    def dismiss(self) -> None:
+        self.hide()
 
 
 class SegmentGridWidget(QWidget):

@@ -15,6 +15,7 @@ from PyQt6.QtCore import (
     QEvent,
     QObject,
     QPoint,
+    QRect,
     QSettings,
     QSize,
     Qt,
@@ -27,6 +28,7 @@ from PyQt6.QtGui import (
     QKeySequence,
     QMoveEvent,
     QPalette,
+    QResizeEvent,
     QShortcut,
     QShowEvent,
 )
@@ -87,6 +89,7 @@ from phonology_features.gui.view_models import (
 from phonology_features.gui.vowel_chart import VowelChartWidget
 from phonology_features.gui.widgets import (
     AnalysisPanel,
+    AnalysisPeekPopup,
     FeatureRow,
     SegmentButton,
     SegmentGridWidget,
@@ -328,18 +331,22 @@ class MainWindow(QMainWindow):
         # the vowel chart resizes and stack-vs-side-by-side mode
         # flips at the shared ``VOWEL_STACK_W`` threshold.
         self._hsplit.splitterMoved.connect(self._on_hsplit_moved)
-        # Analysis pane maximize/restore wiring. Stash the pre-expand
-        # vsplit sizes so the restore returns the user to exactly the
-        # split they had, not a hardcoded default. A user-drag during
-        # the expanded state invalidates the stash (handled by
-        # _on_vsplit_user_moved).
-        self._pre_expand_vsplit_sizes: list[int] | None = None
-        self.analysis.expand_toggled.connect(self._toggle_analysis_expanded)
-        self._vsplit.splitterMoved.connect(self._on_vsplit_user_moved)
-        # Ctrl+Shift+M (mnemonic: Maximize) mirrors the header button
+        # Analysis-pane "peek" popup. A transient overlay that
+        # magnifies the active tab's content over the segment /
+        # feature panes without resizing them or moving the
+        # splitter. Lives as a child of the central widget so it
+        # paints above the splitters via raise_().
+        self._analysis_peek = AnalysisPeekPopup(self.centralWidget())
+        self.analysis.expand_toggled.connect(self._toggle_analysis_peek)
+        # Dismiss the peek on any splitter drag: the popup's
+        # geometry was computed against the splitter sizes at open
+        # time and is now stale.
+        self._vsplit.splitterMoved.connect(self._dismiss_analysis_peek)
+        self._hsplit.splitterMoved.connect(self._dismiss_analysis_peek)
+        # Ctrl+Shift+M (mnemonic: Magnify) mirrors the header button
         # so power users can toggle without the mouse.
         _expand_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
-        _expand_shortcut.activated.connect(self._toggle_analysis_expanded)
+        _expand_shortcut.activated.connect(self._toggle_analysis_peek)
 
     def _build_status_bar(self) -> None:
         self.status = _BrandedStatusBar(self)
@@ -512,6 +519,14 @@ class MainWindow(QMainWindow):
         changes are guarded inside the controller)."""
         super().moveEvent(event)
         self._geom.on_user_move(self.pos())
+
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
+        """Dismiss the analysis peek popup on window resize. Its
+        geometry was computed against the splitter sizes at open
+        time and would otherwise drift off the analysis pane."""
+        super().resizeEvent(event)
+        if hasattr(self, "_analysis_peek"):
+            self._dismiss_analysis_peek()
 
     def _read_setting(self, key: str, default: Any = None) -> Any:
         """Defensive QSettings read. Thin wrapper around the
@@ -1167,43 +1182,35 @@ class MainWindow(QMainWindow):
                 alignment=Qt.AlignmentFlag.AlignTop,
             )
 
-    def _toggle_analysis_expanded(self) -> None:
-        """Maximize the analysis pane to ~80% of the vsplit height
-        or restore it to whatever ratio the user had before. Pure
-        toggle: clicking again returns to the stashed sizes.
-
-        Marks the splitter as user-owned so inventory loads after
-        the expand don't reset the ratio via fit_to_content.
+    def _toggle_analysis_peek(self) -> None:
+        """Show or hide the analysis peek popup. The popup floats
+        above the segment / feature panes; toggling it never
+        resizes the splitter or moves any other widget. The
+        popup's height fits the active tab's content and is
+        capped at 80 percent of the central widget's height, which
+        matches the maximum the old splitter-swap expand reached.
         """
-        total = sum(self._vsplit.sizes())
-        if self._pre_expand_vsplit_sizes is None:
-            # Currently restored: capture sizes and expand.
-            self._pre_expand_vsplit_sizes = list(self._vsplit.sizes())
-            top = max(120, total // 5)  # ~20% for seg/feat top
-            self._vsplit.setSizes([top, total - top])
-            self.analysis.set_expanded(True)
-        else:
-            # Currently expanded: restore. Sum may differ from when
-            # we stashed (window was resized while expanded), so
-            # scale the stashed ratio rather than re-applying the
-            # raw pixel sizes.
-            old_top, old_bot = self._pre_expand_vsplit_sizes
-            old_total = old_top + old_bot
-            if old_total > 0:
-                top = round(total * old_top / old_total)
-                self._vsplit.setSizes([top, total - top])
-            self._pre_expand_vsplit_sizes = None
+        if self._analysis_peek.isVisible():
+            self._analysis_peek.dismiss()
             self.analysis.set_expanded(False)
-        self._geom.has_saved_splitter = True
+            return
+        central = self.centralWidget()
+        if central is None:
+            return
+        max_height = int(0.8 * central.height())
+        pane = self.analysis
+        top_left = pane.mapTo(central, QPoint(0, 0))
+        target = QRect(top_left.x(), top_left.y(), pane.width(), pane.height())
+        self._analysis_peek.show_for(pane, max_height, target)
+        self.analysis.set_expanded(True)
 
-    def _on_vsplit_user_moved(self, *_args: object) -> None:
-        """A user-initiated drag while expanded invalidates the
-        stashed restore sizes: the user has overridden them, so the
-        next button click should toggle relative to the new state,
-        not snap back to a stale stash.
+    def _dismiss_analysis_peek(self, *_args: object) -> None:
+        """Hide the peek popup and reset the button glyph. Called
+        on splitter drags and window resizes, where the popup's
+        cached geometry would otherwise be stale.
         """
-        if self._pre_expand_vsplit_sizes is not None:
-            self._pre_expand_vsplit_sizes = None
+        if self._analysis_peek.isVisible():
+            self._analysis_peek.dismiss()
             self.analysis.set_expanded(False)
 
     def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
