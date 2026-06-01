@@ -58,14 +58,16 @@ def test_clear_reenables_contrasts_tab(panel: AnalysisPanel) -> None:
 
 def test_clear_returns_to_class_tab(panel: AnalysisPanel) -> None:
     """Clear must drop the active tab back to Class so the user
-    doesn't land on an empty Features/Contrasts body."""
+    doesn't land on an empty Features/Contrasts body. Pins literal
+    indices (Class=0, Features=1) so reshuffling the tab order
+    surfaces here rather than silently passing."""
     panel.set_sections(
         "<p>x</p>", "<p>y</p>", "<p>z</p>", "<p>w</p>", contrasts_enabled=True
     )
-    panel.tabs.setCurrentIndex(panel._TAB_FEATURES_IDX)
-    assert panel.tabs.currentIndex() == panel._TAB_FEATURES_IDX
+    panel.tabs.setCurrentIndex(1)  # Features
+    assert panel.tabs.currentIndex() == 1
     panel.clear()
-    assert panel.tabs.currentIndex() == panel._TAB_CLASS_IDX
+    assert panel.tabs.currentIndex() == 0  # Class
 
 
 def test_clear_hides_selection_strip(panel: AnalysisPanel) -> None:

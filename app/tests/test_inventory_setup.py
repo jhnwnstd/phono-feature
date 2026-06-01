@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import pytest
 
-from phonology_engine.limits import MAX_NAME_LENGTH
 from phonology_features.gui.inventory_setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
@@ -142,18 +141,19 @@ def test_validate_setup_collects_all_problems():
 def test_validate_setup_per_entry_length_cap():
     """A pasted wall of prose with no recognized delimiter parses
     to one over-long entry; the cap catches it before it reaches
-    the inventory parser.
-    """
-    long_seg = "x" * (MAX_NAME_LENGTH + 1)
+    the inventory parser. Literal 257 (= 256 + 1) so a change to
+    ``MAX_NAME_LENGTH`` trips the test rather than silently
+    re-deriving the input length to match."""
+    long_seg = "x" * 257
     result = validate_setup("X", long_seg, "Voice")
     assert not result.ok
     issue = next(i for i in result.issues if i.field == "segments")
     assert issue.code == "too_long"
-    assert str(MAX_NAME_LENGTH) in issue.message
+    assert "256" in issue.message  # error mentions the literal cap
 
 
 def test_validate_setup_length_cap_applies_to_features_too():
-    long_feat = "x" * (MAX_NAME_LENGTH + 1)
+    long_feat = "x" * 257  # 1 over the 256-char MAX_NAME_LENGTH
     result = validate_setup("X", "p", long_feat)
     assert not result.ok
     issue = next(i for i in result.issues if i.field == "features")
@@ -161,8 +161,9 @@ def test_validate_setup_length_cap_applies_to_features_too():
 
 
 def test_validate_setup_exact_cap_is_accepted():
-    """The cap is inclusive: MAX_NAME_LENGTH-long entries pass."""
-    at_cap = "x" * MAX_NAME_LENGTH
+    """The cap is inclusive: MAX_NAME_LENGTH-long (256-char)
+    entries pass. Literal 256 pins the cap so a bump trips here."""
+    at_cap = "x" * 256
     result = validate_setup("X", at_cap, "Voice")
     assert result.ok
 

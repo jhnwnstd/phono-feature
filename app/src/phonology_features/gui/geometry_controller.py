@@ -54,10 +54,10 @@ class _GeometryController:
     # pane shrink past this (down to ``HARD_MIN_ANALYSIS_H``). The
     # rationale: features are primary inspection surface, analysis
     # text reflows comfortably to whatever room is left.
-    MIN_ANALYSIS_H: ClassVar[int] = 220
+    MIN_ANALYSIS_H: ClassVar[int] = layout.MIN_ANALYSIS_H
     # Absolute floor so analysis is at least its title bar + a line
     # of text on the worst-case window size.
-    HARD_MIN_ANALYSIS_H: ClassVar[int] = 60
+    HARD_MIN_ANALYSIS_H: ClassVar[int] = layout.HARD_MIN_ANALYSIS_H
     # First-launch floor: the content-derived width can come out
     # around 900-1100 px depending on the inventory, which leaves the
     # analysis pane visibly cramped on a fresh install. The floor
@@ -405,16 +405,13 @@ class _GeometryController:
         QTimer.singleShot(0, lambda: self.fit_vsplit_after_layout(top_need_h))
 
     def _top_height_for_content(self, top_need_h: int, total: int) -> int:
-        """Vertical split policy: feat content height wins over the
-        analysis pane's preferred minimum. On a comfortable-sized
-        window both fit; on a short window we squeeze analysis down
-        to ``HARD_MIN_ANALYSIS_H`` rather than truncate features.
-        Caps at ``total - HARD_MIN_ANALYSIS_H`` so analysis is at
-        least its title bar; floors at 200 so a tiny window doesn't
-        end up with a 50-pixel feature pane either.
+        """Vertical split policy. Delegates to
+        :py:func:`layout.top_pane_height` so the shared layout
+        module owns the rule (and the web bundle can pick it up via
+        the same constants). The wrapper here keeps the
+        instance-method call sites untouched.
         """
-        top_h = min(top_need_h, total - self.HARD_MIN_ANALYSIS_H)
-        return max(top_h, 200)
+        return layout.top_pane_height(top_need_h, total)
 
     def fit_vsplit_after_layout(self, top_need_h: int) -> None:
         """Vertical-only fallback for the case in

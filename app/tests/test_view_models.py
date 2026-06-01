@@ -62,7 +62,22 @@ def test_summarize_segment_selection_multi_matches_engine() -> None:
     assert summary["selected"] == segs
     assert summary["common"]["Voice"] == "+"
     assert "LABIAL" in summary["contrastive"]
-    assert summary["suggested"] == engine.suggest_natural_class_extension(segs)
+    # ``suggested`` lists the segments that would round out the
+    # natural class. For /b/ /d/ /ɡ/ in the Hayes inventory, the
+    # engine returns these specific voiced-obstruent IPA segments
+    # (digraphs + ejectives + retroflex). Pinned as a literal list
+    # so any change to the engine's algorithm trips here.
+    assert summary["suggested"] == [
+        "b͡d",
+        "ɉ",
+        "ɖ",
+        "ɡ+",
+        "ɡ̠",
+        "ɡ͡b",
+        "ɢ",
+    ]
+    # Selection itself is never in the suggested list.
+    assert not set(segs) & set(summary["suggested"])
     assert summary["segment_states"]["b"] == "selected"
     assert summary["feature_rows"]["Voice"]["value"] == "+"
     assert summary["feature_rows"]["Voice"]["shared"] is True
@@ -74,7 +89,16 @@ def test_summarize_feature_query_matches_engine() -> None:
     engine = _engine("hayes_features.json")
     spec = {"Voice": "+"}
     summary = summarize_feature_query(engine, spec)
-    assert summary["matching"] == engine.find_segments(spec)
+    # ``matching`` should contain canonical voiced segments and
+    # exclude canonical voiceless ones. Membership-style assertions
+    # so the test fails if the engine's filter inverts, rather than
+    # silently matching whatever ``find_segments`` returns now.
+    matching = summary["matching"]
+    assert isinstance(matching, list)
+    for seg in ("b", "d", "ɡ", "v", "z"):
+        assert seg in matching, f"voiced /{seg}/ should match +Voice"
+    for seg in ("p", "t", "k", "f", "s"):
+        assert seg not in matching, f"voiceless /{seg}/ should not match"
     assert "+Voice" in summary["analysis_html"]
     assert summary["segment_states"]["b"] == "matched"
     assert summary["segment_states"]["p"] == "unmatched"

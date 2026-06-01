@@ -19,20 +19,21 @@ from phonology_features.gui import layout
 
 def test_distribute_seg_absorbs_extra_width_at_typical_desktop() -> None:
     # Typical 1920×1080 workspace, ~1440 px window. Feat pane should
-    # land at content + cushion; seg gets the rest.
+    # land at content + cushion; seg gets the rest. Literal numbers
+    # so a bump to FEAT_CUSHION_PX (40 -> something else) trips here.
     seg_w, feat_w = layout.distribute_pane_widths(
         1440, seg_content_w=500, feat_content_w=600
     )
-    assert feat_w == 600 + layout.FEAT_CUSHION_PX
-    assert seg_w == 1440 - feat_w
+    assert feat_w == 640  # 600 + FEAT_CUSHION_PX (40)
+    assert seg_w == 800
 
 
 def test_distribute_feat_clamped_to_min_when_content_tiny() -> None:
     seg_w, feat_w = layout.distribute_pane_widths(
         1440, seg_content_w=500, feat_content_w=100
     )
-    assert feat_w == layout.FEAT_MIN_W
-    assert seg_w == 1440 - feat_w
+    assert feat_w == 380  # FEAT_MIN_W
+    assert seg_w == 1060
 
 
 def test_distribute_seg_respects_floor_on_narrow_window() -> None:
@@ -52,7 +53,7 @@ def test_distribute_segments_get_almost_all_4k_extra() -> None:
     seg_w, feat_w = layout.distribute_pane_widths(
         3000, seg_content_w=500, feat_content_w=700
     )
-    assert feat_w == 700 + layout.FEAT_CUSHION_PX
+    assert feat_w == 740  # 700 + FEAT_CUSHION_PX (40)
     # Seg should be much larger than feat at this width.
     assert seg_w > 2 * feat_w
 
@@ -73,11 +74,10 @@ def test_distribute_seg_content_overrides_min() -> None:
 
 def test_vowel_width_is_constant_natural() -> None:
     # The chart is a fixed phonetic visualisation; it returns its
-    # natural width regardless of pane width. Extra horizontal space
-    # in the seg pane goes to consonants, not to padding around the
-    # vowel buttons.
+    # natural width regardless of pane width. Literal 320 so a bump
+    # to VOWEL_NATURAL_W is caught here.
     for seg_pane_w in (0, 100, 480, 1200, 3840):
-        assert layout.vowel_chart_width(seg_pane_w) == layout.VOWEL_NATURAL_W
+        assert layout.vowel_chart_width(seg_pane_w) == 320
 
 
 def test_vowel_natural_width_fits_label_column() -> None:
@@ -115,15 +115,15 @@ def test_initial_size_floored_on_small_screen() -> None:
     # Below the floor (e.g. 1366×768 laptop), the function returns
     # the floor; ``clamp_size_to_screen`` will then trim down to fit.
     w, h = layout.recommended_initial_window_size(1366, 768)
-    assert w == layout.MIN_FIRST_LAUNCH_W
-    assert h == layout.MIN_FIRST_LAUNCH_H
+    assert w == 1400  # MIN_FIRST_LAUNCH_W
+    assert h == 900  # MIN_FIRST_LAUNCH_H
 
 
 def test_initial_size_at_75_percent_on_large_screen() -> None:
     w, h = layout.recommended_initial_window_size(3840, 2160)
     # 75 % of 3840 = 2880; 75 % of 2160 = 1620 — both well above floor.
-    assert w == int(3840 * layout.DEFAULT_SCREEN_FRACTION)
-    assert h == int(2160 * layout.DEFAULT_SCREEN_FRACTION)
+    assert w == 2880
+    assert h == 1620
 
 
 def test_best_n_cols_single_row_when_group_fits() -> None:
@@ -161,8 +161,8 @@ def test_initial_size_picks_floor_when_fraction_smaller() -> None:
     # 1920×1080 monitor: 75% = 1440×810. Width floor 1400 doesn't
     # bind; height floor 900 binds because 810 < 900.
     w, h = layout.recommended_initial_window_size(1920, 1080)
-    assert w == int(1920 * layout.DEFAULT_SCREEN_FRACTION)
-    assert h == layout.MIN_FIRST_LAUNCH_H
+    assert w == 1440
+    assert h == 900  # MIN_FIRST_LAUNCH_H
 
 
 # ---------------------------------------------------------------------------

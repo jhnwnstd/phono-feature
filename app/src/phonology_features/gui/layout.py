@@ -205,6 +205,20 @@ MIN_FIRST_LAUNCH_H: int = 900
 # Fresh-install window size = this fraction of the primary screen's
 # available geometry, floored at ``MIN_FIRST_LAUNCH_*``.
 DEFAULT_SCREEN_FRACTION: float = 0.75
+# Preferred analysis-pane height when the feature pane already fits
+# its content. On short windows where the features need more height,
+# ``top_pane_height`` lets analysis shrink past this floor down to
+# ``HARD_MIN_ANALYSIS_H``.
+MIN_ANALYSIS_H: int = 220
+# Absolute floor so analysis is at least its title bar + a line of
+# text on the worst-case window size.
+HARD_MIN_ANALYSIS_H: int = 60
+# Floor for the top (seg / feat) pane in ``top_pane_height``. On
+# very short windows we squeeze analysis rather than starve the
+# features, but the top pane still gets at least this much room
+# so the feature cards have a usable height even when the user has
+# the window cropped tiny.
+MIN_TOP_PANE_H: int = 200
 
 
 def distribute_pane_widths(
@@ -282,6 +296,29 @@ def recommended_initial_window_size(
     w = max(MIN_FIRST_LAUNCH_W, int(screen_w * DEFAULT_SCREEN_FRACTION))
     h = max(MIN_FIRST_LAUNCH_H, int(screen_h * DEFAULT_SCREEN_FRACTION))
     return w, h
+
+
+def top_pane_height(top_need_h: int, total: int) -> int:
+    """Decide the top (seg / feat) pane height inside the vertical
+    splitter for the given content-driven need and the vsplit's
+    current total height.
+
+    Policy:
+
+    * Cap at ``total - HARD_MIN_ANALYSIS_H`` so the analysis pane
+      always keeps at least its title-bar / one-line floor, no
+      matter how tall the features want to be.
+    * Floor at ``MIN_TOP_PANE_H`` so a tiny window still leaves the
+      feature cards a usable height, even when the cap above would
+      otherwise let them shrink to nothing.
+
+    Both UIs honour this. Desktop calls it from
+    ``geometry_controller.apply_splitter_sizes``; web encodes the
+    same constants via the generated ``layout.css`` properties so
+    the policy can't drift between frontends.
+    """
+    top_h = min(top_need_h, total - HARD_MIN_ANALYSIS_H)
+    return max(top_h, MIN_TOP_PANE_H)
 
 
 def best_segment_n_cols(group_size: int, max_cols: int) -> int:

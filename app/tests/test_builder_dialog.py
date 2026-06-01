@@ -52,13 +52,13 @@ def _tab(widget) -> None:
 def test_tab_on_empty_fills_default(seg_edit):
     assert seg_edit.toPlainText() == ""
     _tab(seg_edit)
-    assert seg_edit.toPlainText() == SegmentTextEdit.DEFAULT_FILL
+    assert seg_edit.toPlainText() == "p b t d k ɡ "
 
 
 def test_tab_on_whitespace_only_still_fills(seg_edit):
     seg_edit.setPlainText("   \n  \t\n")
     _tab(seg_edit)
-    assert seg_edit.toPlainText() == SegmentTextEdit.DEFAULT_FILL
+    assert seg_edit.toPlainText() == "p b t d k ɡ "
 
 
 def test_tab_on_existing_content_leaves_it_alone(seg_edit):
@@ -94,7 +94,7 @@ def test_tab_on_empty_fills_but_keeps_focus(qapp):
     # First Tab on empty; fills, keeps focus.
     QTest.keyClick(seg, Qt.Key.Key_Tab)  # type: ignore[call-overload]
     qapp.processEvents()
-    assert seg.toPlainText() == SegmentTextEdit.DEFAULT_FILL
+    assert seg.toPlainText() == "p b t d k ɡ "
     assert seg.hasFocus(), (
         "Tab on empty must NOT advance focus; it only fills. "
         "Pressing Tab again advances normally."

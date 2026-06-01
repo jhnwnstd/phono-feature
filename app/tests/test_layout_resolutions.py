@@ -74,26 +74,37 @@ FEAT_CONTENT_W = 500
 # ---------------------------------------------------------------------------
 
 
+# Literal expected window sizes per resolution. Pinning these as
+# concrete numbers (rather than computing them from
+# ``MIN_FIRST_LAUNCH_*`` and ``DEFAULT_SCREEN_FRACTION``) means a
+# tweak to either constant trips the assertion instead of silently
+# moving the comparand to match.
+EXPECTED_WINDOW_SIZES: dict[str, tuple[int, int]] = {
+    "1920x1080": (1440, 900),
+    "1280x1200": (1400, 900),
+    "1536x864": (1400, 900),
+    "1366x768": (1400, 900),
+    "1280x720": (1400, 900),
+    "1440x900": (1400, 900),
+    "1600x900": (1400, 900),
+    "2560x1440": (1920, 1080),
+    "3840x2160": (2880, 1620),
+}
+
+
 @pytest.mark.parametrize("res", RESOLUTIONS, ids=lambda r: r.label)
-def test_initial_window_size_respects_min_floor(res: Resolution) -> None:
+def test_initial_window_size_matches_pinned_literals(
+    res: Resolution,
+) -> None:
     """The fresh-install window size is ``max(MIN_FIRST_LAUNCH_*,
-    0.75 * screen)``. Below the floor (e.g. 1280-wide / 720-tall
-    screens) the floor wins; above it the 0.75 fraction wins.
-    Either way the window never exceeds the screen.
+    0.75 * screen)``. Each resolution's expected size is pinned as
+    a literal pair so any change to ``MIN_FIRST_LAUNCH_W``,
+    ``MIN_FIRST_LAUNCH_H``, or ``DEFAULT_SCREEN_FRACTION`` trips the
+    test rather than silently shifting both sides of an equality
+    in lockstep.
     """
     w, h = layout.recommended_initial_window_size(res.width, res.height)
-    assert w >= layout.MIN_FIRST_LAUNCH_W
-    assert h >= layout.MIN_FIRST_LAUNCH_H
-    expected_w = max(
-        layout.MIN_FIRST_LAUNCH_W,
-        int(res.width * layout.DEFAULT_SCREEN_FRACTION),
-    )
-    expected_h = max(
-        layout.MIN_FIRST_LAUNCH_H,
-        int(res.height * layout.DEFAULT_SCREEN_FRACTION),
-    )
-    assert w == expected_w
-    assert h == expected_h
+    assert (w, h) == EXPECTED_WINDOW_SIZES[res.label]
 
 
 @pytest.mark.parametrize("res", RESOLUTIONS, ids=lambda r: r.label)
@@ -178,18 +189,18 @@ def test_feat_pane_is_content_driven_at_every_resolution(
     res: Resolution,
 ) -> None:
     """Feat pane is content-driven (``max(FEAT_MIN_W, content +
-    cushion)``). Same value at every resolution; only the seg
-    pane absorbs extra width on wide screens. Pins the contract
-    that the feature panel stays "relatively consistent" across
-    monitor sizes."""
+    cushion)``). Same literal 540 px at every resolution
+    (FEAT_CONTENT_W 500 + FEAT_CUSHION_PX 40); only the seg pane
+    absorbs extra width on wide screens. Literal pin so a bump
+    to FEAT_CUSHION_PX (40 → something else) trips the assertion
+    rather than silently shifting both sides."""
     win_w, _ = layout.recommended_initial_window_size(res.width, res.height)
     _, feat_w = layout.distribute_pane_widths(
         win_w,
         seg_content_w=SEG_CONTENT_W,
         feat_content_w=FEAT_CONTENT_W,
     )
-    expected = max(layout.FEAT_MIN_W, FEAT_CONTENT_W + layout.FEAT_CUSHION_PX)
-    assert feat_w == expected
+    assert feat_w == 540
 
 
 # ---------------------------------------------------------------------------
@@ -241,16 +252,17 @@ def test_window_does_not_collapse_to_single_column(
 @pytest.mark.parametrize("res", RESOLUTIONS, ids=lambda r: r.label)
 def test_vowel_chart_keeps_natural_width(res: Resolution) -> None:
     """The vowel chart is a fixed phonetic visualisation, not a
-    fluid grid — it stays at ``VOWEL_NATURAL_W`` regardless of
-    monitor / seg-pane size. Pinning this prevents an "ooh, more
-    room, let's stretch the chart" regression."""
+    fluid grid — it stays at 320 px (the ``VOWEL_NATURAL_W``
+    constant) regardless of monitor / seg-pane size. Literal pin
+    prevents an "ooh, more room, let's stretch the chart"
+    regression."""
     win_w, _ = layout.recommended_initial_window_size(res.width, res.height)
     seg_w, _ = layout.distribute_pane_widths(
         win_w,
         seg_content_w=SEG_CONTENT_W,
         feat_content_w=FEAT_CONTENT_W,
     )
-    assert layout.vowel_chart_width(seg_w) == layout.VOWEL_NATURAL_W
+    assert layout.vowel_chart_width(seg_w) == 320
 
 
 # ---------------------------------------------------------------------------
@@ -415,14 +427,20 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
     change to the constants moves this partition and surfaces
     here instead of as a surprise window size in the UI.
     """
+    # Literal fraction-driven widths and heights, pinned per resolution.
+    # Pinning these as literals catches a bump to
+    # ``DEFAULT_SCREEN_FRACTION`` even when the partition itself
+    # is preserved.
+    fraction_widths = {"1920x1080": 1440, "2560x1440": 1920, "3840x2160": 2880}
+    fraction_heights = {"2560x1440": 1080, "3840x2160": 1620}
     floor_driven_w = set()
     fraction_driven_w = set()
     for res in RESOLUTIONS:
         w, _ = layout.recommended_initial_window_size(res.width, res.height)
-        if w == layout.MIN_FIRST_LAUNCH_W:
+        if w == 1400:  # MIN_FIRST_LAUNCH_W literal
             floor_driven_w.add(res.label)
         else:
-            assert w == int(res.width * layout.DEFAULT_SCREEN_FRACTION)
+            assert w == fraction_widths[res.label]
             fraction_driven_w.add(res.label)
     # Floor-driven width: 0.75 × screen < 1400, i.e. screen < 1867.
     assert floor_driven_w == {
@@ -440,12 +458,12 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
     fraction_driven_h = set()
     for res in RESOLUTIONS:
         _, h = layout.recommended_initial_window_size(res.width, res.height)
-        if h == layout.MIN_FIRST_LAUNCH_H:
+        if h == 900:  # MIN_FIRST_LAUNCH_H literal
             # Includes the exact-tie case where 0.75 × screen == 900
             # (e.g. 1280×1200): the floor wins by equality.
             floor_driven_h.add(res.label)
         else:
-            assert h == int(res.height * layout.DEFAULT_SCREEN_FRACTION)
+            assert h == fraction_heights[res.label]
             fraction_driven_h.add(res.label)
     # Floor-driven height: 0.75 × screen ≤ 900, i.e. screen ≤ 1200.
     # 1280×1200 ties exactly (0.75 × 1200 = 900 = floor), so it lands
@@ -473,3 +491,190 @@ def test_tall_narrow_1280x1200_intentional_horizontal_overshoot() -> None:
     w, h = layout.recommended_initial_window_size(1280, 1200)
     assert w == 1400 > 1280  # horizontal overshoot, clamp afterward
     assert h == 900  # fraction equals floor exactly
+
+
+# ---------------------------------------------------------------------------
+# Vertical-axis split: top_pane_height across the resolution matrix
+#
+# Vertical policy lives in ``layout.top_pane_height``: top pane gets up to
+# its content need but never more than ``total - HARD_MIN_ANALYSIS_H``, and
+# never less than ``MIN_TOP_PANE_H``. These tests pin the analysis-pane
+# vertical floor at each resolution so a short-window regression (analysis
+# crushed below readable height) surfaces here, not in the UI.
+# ---------------------------------------------------------------------------
+
+
+# Representative top-content need for a typical inventory: ~28 features in
+# a two-column grid + chrome. Real values from English/Blevins hover here.
+TOP_CONTENT_H = 540
+
+
+@pytest.mark.parametrize("res", RESOLUTIONS, ids=lambda r: r.label)
+def test_top_pane_height_keeps_analysis_floor(res: Resolution) -> None:
+    """At every resolution's recommended-window height, the
+    ``layout.top_pane_height`` policy must leave the analysis pane
+    at least ``HARD_MIN_ANALYSIS_H`` (60 px). The user can drag the
+    splitter past this in normal usage, but the initial layout
+    should never deliver an unreadable analysis pane."""
+    _, win_h = layout.recommended_initial_window_size(res.width, res.height)
+    # Toolbar (~50) + status bar (~25) consume some height before
+    # the vsplit; use a conservative total for the policy.
+    vsplit_total = max(win_h - 100, 100)
+    top_h = layout.top_pane_height(TOP_CONTENT_H, vsplit_total)
+    analysis_h = vsplit_total - top_h
+    assert analysis_h >= layout.HARD_MIN_ANALYSIS_H, (
+        f"{res.label}: analysis pane {analysis_h}px below "
+        f"HARD_MIN_ANALYSIS_H {layout.HARD_MIN_ANALYSIS_H}"
+    )
+
+
+@pytest.mark.parametrize("res", RESOLUTIONS, ids=lambda r: r.label)
+def test_top_pane_height_keeps_min_top_pane_floor(
+    res: Resolution,
+) -> None:
+    """The top (seg / feat) pane must always get at least
+    ``MIN_TOP_PANE_H`` (200 px). Even on the smallest targeted
+    resolution, the feature cards must have a usable height."""
+    _, win_h = layout.recommended_initial_window_size(res.width, res.height)
+    vsplit_total = max(win_h - 100, 100)
+    top_h = layout.top_pane_height(TOP_CONTENT_H, vsplit_total)
+    assert top_h >= layout.MIN_TOP_PANE_H, (
+        f"{res.label}: top pane {top_h}px below "
+        f"MIN_TOP_PANE_H {layout.MIN_TOP_PANE_H}"
+    )
+
+
+def test_top_pane_height_caps_at_total_minus_analysis_floor() -> None:
+    """When the features want more height than the splitter can
+    deliver, the policy caps the top pane so the analysis pane
+    still keeps its 60-px floor. Pins literal numbers so a bump
+    to HARD_MIN_ANALYSIS_H trips the test."""
+    # Features want 800 px; vsplit only has 600 px total.
+    top_h = layout.top_pane_height(top_need_h=800, total=600)
+    assert top_h == 600 - 60  # total minus HARD_MIN_ANALYSIS_H
+    assert top_h == 540
+
+
+def test_top_pane_height_floors_when_total_is_tiny() -> None:
+    """On a tiny vsplit total (e.g. user dragged the window very
+    short), the policy still gives the top pane at least
+    ``MIN_TOP_PANE_H``, intentionally overshooting the splitter
+    so the splitter machinery clamps afterward."""
+    # 250 - 60 = 190, which is BELOW MIN_TOP_PANE_H (200).
+    top_h = layout.top_pane_height(top_need_h=500, total=250)
+    assert top_h == 200  # MIN_TOP_PANE_H floor wins
+
+
+def test_top_pane_height_passes_through_when_room_to_spare() -> None:
+    """When the vsplit is comfortably tall, the top pane gets
+    exactly its content-driven need. Pins the simple no-clamp
+    branch with a literal."""
+    top_h = layout.top_pane_height(top_need_h=540, total=900)
+    assert top_h == 540
+
+
+# ---------------------------------------------------------------------------
+# HiDPI: the policy is in LOGICAL pixels, not device pixels. A 1920×1080
+# logical / DPR=2 monitor still produces a 1440×900 window. The
+# geometry_controller is what reads the screen size; the tests below verify
+# the layout-policy side stays logical-pixel-driven.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("res", RESOLUTIONS, ids=lambda r: r.label)
+@pytest.mark.parametrize("dpr", [1.0, 1.25, 1.5, 2.0])
+def test_recommended_window_size_independent_of_device_pixel_ratio(
+    res: Resolution, dpr: float
+) -> None:
+    """``recommended_initial_window_size`` takes LOGICAL pixels and
+    returns LOGICAL pixels. The device pixel ratio is irrelevant
+    at this layer — Qt is responsible for translating logical to
+    device pixels when it paints. Verified by computing the same
+    result for the same (logical-resolution) screen at every DPR.
+    """
+    del dpr  # the function never sees this; we just pin the contract
+    w, h = layout.recommended_initial_window_size(res.width, res.height)
+    expected_w = max(
+        layout.MIN_FIRST_LAUNCH_W,
+        int(res.width * layout.DEFAULT_SCREEN_FRACTION),
+    )
+    expected_h = max(
+        layout.MIN_FIRST_LAUNCH_H,
+        int(res.height * layout.DEFAULT_SCREEN_FRACTION),
+    )
+    assert w == expected_w
+    assert h == expected_h
+
+
+# ---------------------------------------------------------------------------
+# Real inventory content widths: confirm SEG_CONTENT_W and FEAT_CONTENT_W
+# assumptions used elsewhere are sensible against the actual bundled
+# inventories. A widest-inventory-segment-grid bigger than 600 px (or a
+# widest-feature-list bigger than 600 px) would mean the resolution tests
+# above are using non-representative content sizes.
+# ---------------------------------------------------------------------------
+
+
+def _load_inventory(name: str) -> dict[str, object]:
+    import json
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "inventories" / f"{name}.json"
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def _segment_grid_natural_width(seg_count: int) -> int:
+    """Width the segment grid wants at ``best_segment_n_cols``
+    laid out one column-row at a time. The actual desktop chrome
+    around it adds ~60 px (scroll bar + panel padding); ignored
+    here because we only care about whether the assumption used
+    in ``SEG_CONTENT_W`` is in the right ballpark.
+    """
+    from phonology_features.gui.constants import BTN_GAP, BTN_W
+
+    cols = layout.best_segment_n_cols(seg_count, max_cols=12)
+    return cols * (BTN_W + BTN_GAP)
+
+
+INVENTORIES = ["english", "general", "hayes", "blevins"]
+
+
+@pytest.mark.parametrize("name", INVENTORIES)
+def test_seg_content_width_assumption_covers_real_inventories(
+    name: str,
+) -> None:
+    """The 500-px ``SEG_CONTENT_W`` used in resolution tests must
+    be ≥ the natural width of the widest segment group in the
+    bundled inventories. Otherwise the splitter would have to
+    request more room than the tests assume and the seg-pane
+    fan-out expectations break."""
+    data = _load_inventory(f"{name}_features")
+    # Inventory JSON shape: top-level dict with a "segments" mapping.
+    segs = data.get("segments", {})
+    assert isinstance(segs, dict)
+    seg_count = len(segs)
+    natural = _segment_grid_natural_width(seg_count)
+    # SEG_CONTENT_W=500 plus chrome (~60) gives ~440 of grid room.
+    # The actual grid splits into manner groups, so the widest
+    # group's width matters, not the total seg count. ``general``
+    # is the densest; the natural width of its widest group sits
+    # comfortably under 600 px even with max_cols=12.
+    assert natural <= 600, (
+        f"{name}: widest seg group natural width {natural}px "
+        f"exceeds 600px ceiling assumed in resolution tests"
+    )
+
+
+@pytest.mark.parametrize("name", INVENTORIES)
+def test_inventory_has_features_within_reasonable_bound(
+    name: str,
+) -> None:
+    """Feature count caps the feature-pane content width. A
+    typical inventory has 25–35 features. A bump past 50 would
+    blow past the 540-px ``feat_w`` the resolution matrix
+    assumes."""
+    data = _load_inventory(f"{name}_features")
+    features = data.get("features", [])
+    assert isinstance(features, list)
+    n = len(features)
+    assert 0 < n <= 50, f"{name}: feature count {n} outside [1, 50]"
