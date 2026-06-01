@@ -59,7 +59,6 @@ def _class_state_stylesheet(class_state: str) -> str:
         QTabWidget::pane {{
             border: 1px solid {C["border"]};
             border-radius: 6px;
-            top: -1px;
         }}
         QTabBar::tab {{
             background: {C["bg"]};
@@ -691,10 +690,6 @@ class AnalysisPanel(QWidget):
         self.tabs.addTab(self._tab_class, "Class")
         self.tabs.addTab(self._tab_features, "Features")
         self.tabs.addTab(self._tab_contrasts, "Contrasts")
-        # Slip the expand button into the tab bar's top-right corner
-        # so it costs zero extra vertical real estate (same row as
-        # the tab labels).
-        self.tabs.setCornerWidget(self.expand_btn, Qt.Corner.TopRightCorner)
         # Back-compat alias so the existing ``self.analysis.content``
         # references in tests + other code keep working; the Class
         # tab carries the most prominent analytical output so
@@ -721,6 +716,17 @@ class AnalysisPanel(QWidget):
         # stylesheet so a theme swap mid-session keeps the cue.
         self._class_state: str = "neutral"
         self.apply_theme()
+        # The expand toggle is a free-floating child of the
+        # AnalysisPanel, NOT a corner widget of the QTabWidget.
+        # ``QTabWidget.setCornerWidget`` puts the button inside the
+        # QTabBar's paint region, where it gets painted over each
+        # time Qt re-polishes the tab bar (every panel resize /
+        # toggle). Parenting directly to the AnalysisPanel and
+        # raising once leaves the button in its own paint layer
+        # above every QTabWidget child, immune to tab-bar polish.
+        # ``resizeEvent`` keeps it pinned to the panel's top-right.
+        self.expand_btn.raise_()
+        self._reposition_expand_btn()
 
     def set_expanded(self, expanded: bool) -> None:
         """Update the toggle's visual state. MainWindow calls this
@@ -737,6 +743,16 @@ class AnalysisPanel(QWidget):
         self.expand_btn.setToolTip(
             "Restore analysis pane" if expanded else "Maximize analysis pane"
         )
+
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
+        super().resizeEvent(event)
+        self._reposition_expand_btn()
+
+    def _reposition_expand_btn(self) -> None:
+        """Pin the free-floating expand button at the panel's top-
+        right corner, inside the 16-px right margin. Called on
+        every resize so the button tracks panel width changes."""
+        self.expand_btn.move(self.width() - 24 - 16, 6)
 
     def apply_theme(self) -> None:
         """Re-apply palette-dependent styles. Called on theme toggle."""
