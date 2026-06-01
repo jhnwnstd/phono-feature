@@ -15,7 +15,6 @@ from PyQt6.QtCore import (
     QEvent,
     QObject,
     QPoint,
-    QRect,
     QSettings,
     QSize,
     Qt,
@@ -89,7 +88,6 @@ from phonology_features.gui.view_models import (
 from phonology_features.gui.vowel_chart import VowelChartWidget
 from phonology_features.gui.widgets import (
     AnalysisPanel,
-    AnalysisPeekPopup,
     FeatureRow,
     SegmentButton,
     SegmentGridWidget,
@@ -293,10 +291,30 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 0)
         self.analysis = AnalysisPanel(central)
         self._vsplit = _ThemedSplitter(Qt.Orientation.Vertical, central)
-        self._vsplit.setHandleWidth(4)
         self._vsplit.addWidget(splitter)
         self._vsplit.addWidget(self.analysis)
         self._vsplit.setSizes([700, 220])
+        # Vertical handle is not user-draggable. The split is fully
+        # driven by the panels' own minimum heights (top panels get
+        # their content height, analysis absorbs the rest) plus the
+        # ⤢ expand toggle. The AnalysisPanel's own ``border-top``
+        # provides the visual separator between top panes and the
+        # analysis pane.
+        #
+        # Qt resets the splitter's ``handleWidth`` property when
+        # children are added and again on style polish, so just
+        # calling ``setHandleWidth(0)`` does not stick. Instead we
+        # disable the handle widget (no mouse-press / drag) AND
+        # clamp its max height to 0 so it takes zero vertical
+        # space regardless of what the splitter thinks its handle
+        # width should be. ``setEnabled(False)`` also kills the
+        # split-cursor hover affordance.
+        handle = self._vsplit.handle(1)
+        if handle is not None:
+            handle.setEnabled(False)
+            handle.setCursor(Qt.CursorShape.ArrowCursor)
+            handle.setMaximumHeight(0)
+            handle.setMinimumHeight(0)
         # Vertical stretch: extra height goes to the analysis pane
         # (user explicitly asked for this). The top panels keep their
         # content-driven height; analysis grows for the rest.
@@ -331,37 +349,20 @@ class MainWindow(QMainWindow):
         # the vowel chart resizes and stack-vs-side-by-side mode
         # flips at the shared ``VOWEL_STACK_W`` threshold.
         self._hsplit.splitterMoved.connect(self._on_hsplit_moved)
-        # Analysis-pane "peek" popup. A transient overlay that
-        # magnifies the active tab's content over the segment /
-        # feature panes without resizing them or moving the
-        # splitter. Lives as a child of the central widget so it
-        # paints above the splitters via raise_(). ``central`` is
-        # the same QWidget created at the top of this method, but
-        # mypy narrowed its type back to ``QWidget | None`` through
-        # ``self.centralWidget()`` so the assert here re-narrows
-        # it for the popup's stricter parent signature.
-        peek_parent = self.centralWidget()
-        assert (
-            peek_parent is not None
-        ), "_build_central must run before peek wiring"
-        self._analysis_peek = AnalysisPeekPopup(peek_parent)
-        self.analysis.expand_toggled.connect(self._toggle_analysis_peek)
-        # The popup overlay covers the underlying ⤢ button, so its
-        # own ⤣ close button is the only thing the user can click
-        # to toggle back. Wire it to the same dismiss path so the
-        # button glyph below also flips back to ⤢.
-        self._analysis_peek.dismiss_requested.connect(
-            self._dismiss_analysis_peek
-        )
-        # Dismiss the peek on any splitter drag: the popup's
-        # geometry was computed against the splitter sizes at open
-        # time and is now stale.
-        self._vsplit.splitterMoved.connect(self._dismiss_analysis_peek)
-        self._hsplit.splitterMoved.connect(self._dismiss_analysis_peek)
-        # Ctrl+Shift+M (mnemonic: Magnify) mirrors the header button
-        # so power users can toggle without the mouse.
+        # Analysis-pane expand/restore toggle. Click ⤢: stash the
+        # current vsplit sizes plus the top pane's minimum height,
+        # then relax that minimum and resize so the analysis pane
+        # gets ~55 percent of the vsplit total (matching the web
+        # ``.analysis.expanded`` rule). The chips strip + Class /
+        # Features / Contrasts tabs all stay visible because they
+        # ARE the pane that's growing. Click ⤣: restore both the
+        # stashed sizes and the top-pane minimum.
+        self._pre_expand_vsplit_sizes: list[int] | None = None
+        self._pre_expand_min_heights: tuple[int, int, int] = (0, 0, 0)
+        self.analysis.expand_toggled.connect(self._toggle_analysis_expand)
+        # Ctrl+Shift+M (mnemonic: Magnify) mirrors the header button.
         _expand_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
-        _expand_shortcut.activated.connect(self._toggle_analysis_peek)
+        _expand_shortcut.activated.connect(self._toggle_analysis_expand)
 
     def _build_status_bar(self) -> None:
         self.status = _BrandedStatusBar(self)
@@ -536,12 +537,10 @@ class MainWindow(QMainWindow):
         self._geom.on_user_move(self.pos())
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:
-        """Dismiss the analysis peek popup on window resize. Its
-        geometry was computed against the splitter sizes at open
-        time and would otherwise drift off the analysis pane."""
+        """Default resize handling. The vsplit absorbs any extra
+        height via its own stretch factors; nothing for MainWindow
+        to do beyond delegating."""
         super().resizeEvent(event)
-        if hasattr(self, "_analysis_peek"):
-            self._dismiss_analysis_peek()
 
     def _read_setting(self, key: str, default: Any = None) -> Any:
         """Defensive QSettings read. Thin wrapper around the
@@ -1197,41 +1196,67 @@ class MainWindow(QMainWindow):
                 alignment=Qt.AlignmentFlag.AlignTop,
             )
 
-    def _toggle_analysis_peek(self) -> None:
-        """Show or hide the analysis peek popup. The popup floats
-        above the segment / feature panes; toggling it never
-        resizes the splitter or moves any other widget. The
-        popup's height fits the active tab's content and is
-        capped at 80 percent of the central widget's height, which
-        matches the maximum the old splitter-swap expand reached.
+    def _toggle_analysis_expand(self) -> None:
+        """Toggle the analysis pane between its baseline split and
+        an expanded split that gives it ~55 percent of the vsplit
+        total. Mirrors the web version (``.analysis.expanded`` →
+        ``min-height: 55vh``).
 
-        Uses ``isHidden`` rather than ``isVisible`` because the
-        latter only flips once the widget actually paints on
-        screen, which makes the toggle un-clickable on platforms
-        that delay showEvents (and in offscreen tests).
+        The "hard barrier" stopping the analysis pane from growing
+        is ``geometry_controller.fit_to_content`` setting each top
+        panel's ``minimumHeight`` to its content size hint (~597 px
+        for the feature panel). Qt's splitter respects per-child
+        minimums, so without dropping those the splitter literally
+        cannot compress the top block. Expand stashes the original
+        minimums on hsplit + seg_panel + feat_panel and zeroes
+        them; collapse restores all three.
         """
-        if not self._analysis_peek.isHidden():
-            self._analysis_peek.dismiss()
-            self.analysis.set_expanded(False)
+        if self._pre_expand_vsplit_sizes is not None:
+            self._restore_analysis_expand()
             return
-        central = self.centralWidget()
-        if central is None:
+        sizes = self._vsplit.sizes()
+        total = sum(sizes)
+        if total <= 0:
             return
-        max_height = int(0.8 * central.height())
-        pane = self.analysis
-        top_left = pane.mapTo(central, QPoint(0, 0))
-        target = QRect(top_left.x(), top_left.y(), pane.width(), pane.height())
-        self._analysis_peek.show_for(pane, max_height, target)
+        self._pre_expand_vsplit_sizes = list(sizes)
+        # Stash every minimum-height constraint we'll need to relax
+        # so collapse can restore the exact floor the user (or
+        # ``fit_to_content``) set up. Drop all three to zero so the
+        # splitter is free to give the analysis pane its 55 percent.
+        self._pre_expand_min_heights = (
+            self._hsplit.minimumHeight(),
+            self.seg_panel.minimumHeight(),
+            self.feat_panel.minimumHeight(),
+        )
+        self._hsplit.setMinimumHeight(0)
+        self.seg_panel.setMinimumHeight(0)
+        self.feat_panel.setMinimumHeight(0)
+        new_analysis = int(0.55 * total)
+        self._vsplit.setSizes([total - new_analysis, new_analysis])
         self.analysis.set_expanded(True)
+        self._geom.has_saved_splitter = True
 
-    def _dismiss_analysis_peek(self, *_args: object) -> None:
-        """Hide the peek popup and reset the button glyph. Called
-        on splitter drags and window resizes, where the popup's
-        cached geometry would otherwise be stale.
+    def _restore_analysis_expand(self) -> None:
+        """Restore the vsplit sizes and every relaxed minimum that
+        was active when the pane was expanded. Idempotent and safe
+        to call from non-expand paths (Clear, mode swap) so the
+        pane never lingers expanded after the state that motivated
+        the expand goes away.
         """
-        if not self._analysis_peek.isHidden():
-            self._analysis_peek.dismiss()
-            self.analysis.set_expanded(False)
+        if self._pre_expand_vsplit_sizes is None:
+            return
+        old_top, old_bot = self._pre_expand_vsplit_sizes
+        old_total = old_top + old_bot
+        total = sum(self._vsplit.sizes())
+        if old_total > 0 and total > 0:
+            new_top = round(total * old_top / old_total)
+            self._vsplit.setSizes([new_top, total - new_top])
+        hsplit_min, seg_min, feat_min = self._pre_expand_min_heights
+        self._hsplit.setMinimumHeight(hsplit_min)
+        self.seg_panel.setMinimumHeight(seg_min)
+        self.feat_panel.setMinimumHeight(feat_min)
+        self._pre_expand_vsplit_sizes = None
+        self.analysis.set_expanded(False)
 
     def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
         """Activate the clicked panel on a press in its empty area,
@@ -1357,7 +1382,7 @@ class MainWindow(QMainWindow):
     def _apply_analysis_tabs(self, tabs: dict[str, Any]) -> None:
         """Route the shared view-model's per-tab payload into the
         ``AnalysisPanel``. Centralised so SEG and FEAT update paths
-        both flow through the same call site — keeps the contract
+        both flow through the same call site, keeping the contract
         for tab keys (`selection`, `class`, `features`, `contrasts`,
         `contrasts_enabled`, `class_state`) tied to one Python
         function.
@@ -1402,6 +1427,8 @@ class MainWindow(QMainWindow):
         """Reset segments and features to their neutral state. Shared
         implementation behind both Clear buttons. "Clear means clear":
         the two panes are wired together, so each Clear wipes both.
+        The peek popup also dismisses, since it was a magnified view
+        of state that no longer exists.
         """
         self._selected_segments.clear()
         self._selected_features.clear()
@@ -1415,3 +1442,7 @@ class MainWindow(QMainWindow):
             self._mode_ctrl.saved_seg_state = []
             self._mode_ctrl.saved_feat_state = {}
             self.analysis.clear()
+        # Clear undoes the expand too: a magnified view of state
+        # that no longer exists would just be stale.
+        if self._pre_expand_vsplit_sizes is not None:
+            self._restore_analysis_expand()

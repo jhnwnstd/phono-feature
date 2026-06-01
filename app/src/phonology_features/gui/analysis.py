@@ -600,13 +600,12 @@ def render_contrasts_tab_seg(
 ) -> str:
     """Contrasts tab content for SEG mode: feature-by-feature
     breakdown of how the selection splits. Only meaningful for
-    multi-segment selections; for fewer than 2 segments the tab
-    explains why it's empty.
+    multi-segment selections; the under-two-segments case returns
+    an empty body so the tab stays quiet rather than echoing the
+    status-bar prompt.
     """
     if len(segs) < 2:
-        return _muted_italic_p(
-            "Select two or more segments to see contrasting features."
-        )
+        return ""
     return _render_contrast_section(engine, segs, contrastive)
 
 

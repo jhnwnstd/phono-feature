@@ -7,10 +7,9 @@ import math
 from enum import StrEnum
 from typing import ClassVar
 
-from PyQt6.QtCore import QMimeData, QRect, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QResizeEvent, QTextDocument
+from PyQt6.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont, QResizeEvent
 from PyQt6.QtWidgets import (
-    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -46,6 +45,63 @@ from phonology_features.gui.style_utils import (
 # the button / header style if either changes.
 _SEG_BTN_H = 26
 _SEG_HEADER_H = 22
+
+
+def _class_state_stylesheet(class_state: str) -> str:
+    """Compose the analysis pane's QTabBar stylesheet with an
+    optional ``QTabBar::tab:first`` override that paints the Class
+    tab green / red per the natural-class verdict. Shared by
+    :py:class:`AnalysisPanel` and :py:class:`AnalysisPeekPopup` so
+    both surfaces show the cue identically; previously they each
+    had their own private copy and drifted on theme swaps.
+    """
+    base = f"""
+        QTabWidget::pane {{
+            border: 1px solid {C["border"]};
+            border-radius: 6px;
+            top: -1px;
+        }}
+        QTabBar::tab {{
+            background: {C["bg"]};
+            color: {C["text_dim"]};
+            border: 1px solid {C["border"]};
+            border-bottom: none;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+            padding: 4px 14px;
+            margin-right: 2px;
+        }}
+        QTabBar::tab:selected {{
+            background: {C["panel"]};
+            color: {C["text"]};
+            font-weight: bold;
+        }}
+        QTabBar::tab:hover:!selected {{
+            color: {C["text"]};
+        }}
+        QTabBar::tab:disabled {{
+            color: {C["border"]};
+        }}
+    """
+    if class_state == "natural":
+        bg = C["plus_bg"]
+        fg = C["plus"]
+    elif class_state == "not_natural":
+        bg = C["minus_bg"]
+        fg = C["minus"]
+    else:
+        return base
+    return base + f"""
+        QTabBar::tab:first {{
+            background: {bg};
+            color: {fg};
+        }}
+        QTabBar::tab:first:selected {{
+            background: {bg};
+            color: {fg};
+            font-weight: bold;
+        }}
+    """
 
 
 class SegmentState(StrEnum):
@@ -804,64 +860,7 @@ class AnalysisPanel(QWidget):
         set_css(self.tabs, self._tabs_stylesheet(state))
 
     def _tabs_stylesheet(self, class_state: str) -> str:
-        """Compose the QTabBar stylesheet. Splitting this out (vs
-        baking it into ``apply_theme`` inline) lets
-        :py:meth:`_apply_class_state` rebuild only the bits it owns
-        without losing the theme's base styling, and keeps the
-        first-tab override in one place.
-        """
-        base = f"""
-            QTabWidget::pane {{
-                border: 1px solid {C["border"]};
-                border-radius: 6px;
-                top: -1px;
-            }}
-            QTabBar::tab {{
-                background: {C["bg"]};
-                color: {C["text_dim"]};
-                border: 1px solid {C["border"]};
-                border-bottom: none;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-                padding: 4px 14px;
-                margin-right: 2px;
-            }}
-            QTabBar::tab:selected {{
-                background: {C["panel"]};
-                color: {C["text"]};
-                font-weight: bold;
-            }}
-            QTabBar::tab:hover:!selected {{
-                color: {C["text"]};
-            }}
-            QTabBar::tab:disabled {{
-                color: {C["border"]};
-            }}
-        """
-        if class_state == "natural":
-            bg = C["plus_bg"]
-            fg = C["plus"]
-        elif class_state == "not_natural":
-            bg = C["minus_bg"]
-            fg = C["minus"]
-        else:
-            return base
-        # ``:first`` targets the Class tab regardless of selection
-        # state; the compound ``:first:selected`` keeps the colour
-        # cue when the user has the tab active. CSS specificity
-        # (more pseudo-states = higher) is what makes the override
-        # win over the unprefixed ``:selected`` rule above.
-        return base + f"""
-            QTabBar::tab:first {{
-                background: {bg};
-                color: {fg};
-            }}
-            QTabBar::tab:first:selected {{
-                background: {bg};
-                color: {fg};
-                font-weight: bold;
-            }}
-        """
+        return _class_state_stylesheet(class_state)
 
     def clear(self) -> None:
         """Reset the analysis pane to its post-construction state.
@@ -887,167 +886,6 @@ class AnalysisPanel(QWidget):
         self._apply_class_state("neutral")
         self.tabs.setTabEnabled(self._TAB_CONTRASTS_IDX, True)
         self.tabs.setCurrentIndex(self._TAB_CLASS_IDX)
-
-
-class AnalysisPeekPopup(QFrame):
-    """Transient magnifier for the analysis pane's active tab.
-
-    Floats above the segment and feature panes as a regular child
-    of the central widget; toggling it does NOT resize the splitter
-    or move any other pane. The popup's bottom edge anchors at the
-    analysis pane's bottom edge so it grows upward only, by the
-    height the active tab's content actually needs, capped at a
-    caller-supplied maximum.
-
-    Carries its own ⤣ dismiss button at the top-right corner. The
-    overlay covers the original ⤢ in the underlying tab bar, so
-    without an in-popup button the user has no way to toggle back.
-
-    Snapshot semantics: ``show_for`` copies the panel's current
-    active-tab HTML and chips strip into the popup once. If the
-    user changes selection while the popup is open, the popup keeps
-    showing the snapshot. Dismiss and reopen to refresh.
-    """
-
-    MIN_HEIGHT: ClassVar[int] = 80
-    dismiss_requested = pyqtSignal()
-
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self.setFrameShape(QFrame.Shape.NoFrame)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 6, 16, 8)
-        layout.setSpacing(2)
-        self._chips = _CopyableTextEdit(self)
-        self._chips.setReadOnly(True)
-        self._chips.setFixedHeight(38)
-        mono_font = QFont()
-        mono_font.setFamilies(MONO_FAMILIES)
-        mono_font.setPointSize(10)
-        self._chips.setFont(mono_font)
-        self._content = _CopyableTextEdit(self)
-        self._content.setReadOnly(True)
-        self._content.setFont(mono_font)
-        layout.addWidget(self._chips)
-        layout.addWidget(self._content, stretch=1)
-        # Dismiss button. Floating child (not in the layout) so it
-        # paints over the content's top-right corner, mirroring the
-        # ⤢ position on the underlying AnalysisPanel. Repositioned
-        # on every resize.
-        self.close_btn = QPushButton("⤣", self)
-        self.close_btn.setFlat(True)
-        self.close_btn.setFixedSize(24, 20)
-        self.close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.close_btn.setToolTip("Restore analysis pane")
-        self.close_btn.clicked.connect(self.dismiss_requested.emit)
-        self.hide()
-        self.apply_theme()
-
-    def resizeEvent(self, event: QResizeEvent | None) -> None:
-        super().resizeEvent(event)
-        # Pin the close button to the popup's top-right inside the
-        # 16-px right margin. Stays clickable because the popup is
-        # raised to the top of the central widget's child stack.
-        self.close_btn.move(self.width() - 24 - 16, 6)
-        self.close_btn.raise_()
-
-    def apply_theme(self) -> None:
-        set_css(
-            self,
-            f"background: {C['analysis_bg']};"
-            f" border: 1px solid {C['border']};"
-            f" border-radius: 6px;",
-        )
-        text_edit_css = f"""
-            QTextEdit {{
-                background: {C['panel']};
-                color: {C['text']};
-                border: 1px solid {C['border']};
-                border-radius: 6px;
-                padding: 8px;
-            }}
-            """ + scrollbar_style()
-        set_css(self._content, text_edit_css)
-        set_css(self._chips, "border: none; padding: 0 2px;")
-        set_css(
-            self.close_btn,
-            f"""
-            QPushButton {{
-                color: {C['text_dim']};
-                background: transparent;
-                border: none;
-                font-size: 14px;
-                padding: 0;
-            }}
-            QPushButton:hover {{ color: {C['text']}; }}
-            """,
-        )
-
-    def show_for(
-        self,
-        panel: "AnalysisPanel",
-        max_height: int,
-        target_rect: QRect,
-    ) -> None:
-        """Populate from ``panel``, size to fit content (capped at
-        ``max_height``), position with bottom edge at
-        ``target_rect.bottom()`` and top edge growing upward.
-        """
-        chips_visible = panel.selection_label.isVisible()
-        if chips_visible:
-            self._chips.setHtml(panel.selection_label.toHtml())
-        self._chips.setVisible(chips_visible)
-        idx = panel.tabs.currentIndex()
-        active_tab = (
-            panel._tab_class,
-            panel._tab_features,
-            panel._tab_contrasts,
-        )[idx]
-        self._content.setHtml(active_tab.toHtml())
-        chips_height = (38 + 2) if chips_visible else 0
-        margins = 6 + 8
-        spacing = 2
-        # Measure content height in a fresh QTextDocument rather
-        # than via ``self._content.document().size()``. The live
-        # document's ``size()`` returns the value from whichever
-        # layout pass last completed, which lags behind
-        # ``setTextWidth`` and produced an inconsistent first-vs-
-        # subsequent measurement when the widget hadn't been
-        # painted yet. A throwaway document with the same font and
-        # an explicit ``setTextWidth`` always returns the natural
-        # height at that width.
-        content_w = max(120, target_rect.width() - 2 * 16 - 2 * 9)
-        measure_doc = QTextDocument()
-        measure_doc.setDefaultFont(self._content.font())
-        measure_doc.setTextWidth(content_w)
-        measure_doc.setHtml(active_tab.toHtml())
-        doc_h = int(measure_doc.size().height()) + 16 + 2
-        height_for_content = chips_height + margins + spacing + doc_h
-        # Popup must NEVER be smaller than the analysis pane it
-        # temporarily overrides; that would leave the bottom of the
-        # pane visible underneath, which looks broken. Grow upward
-        # only when the content actually needs it, and never above
-        # the caller-supplied cap.
-        height = min(max_height, max(target_rect.height(), height_for_content))
-        x = target_rect.x()
-        width = target_rect.width()
-        # ``QRect.bottom()`` is inclusive (y + h - 1). Use the
-        # exclusive form so the popup's bottom edge lines up
-        # exactly with ``target_rect``'s bottom edge.
-        y = target_rect.y() + target_rect.height() - height
-        self.setGeometry(x, y, width, height)
-        # Pin close button immediately. ``resizeEvent`` would
-        # eventually fire from setGeometry and do the same, but
-        # the deferred event leaves the button at (0, 0) for any
-        # caller that inspects geometry between show_for and the
-        # next event-loop tick.
-        self.close_btn.move(width - 24 - 16, 6)
-        self.close_btn.raise_()
-        self.show()
-        self.raise_()
-
-    def dismiss(self) -> None:
-        self.hide()
 
 
 class SegmentGridWidget(QWidget):
