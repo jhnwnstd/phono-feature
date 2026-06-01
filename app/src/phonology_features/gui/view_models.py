@@ -31,7 +31,6 @@ from phonology_features.gui.analysis import (
     render_features_tab_feat,
     render_features_tab_seg,
     render_multi_segment,
-    render_selection_summary_feat,
     render_selection_summary_seg,
     render_single_segment,
 )
@@ -218,7 +217,12 @@ def _seg_tabs(
     selection. Colouring the tab replaces the previous "Natural
     class: Yes/No" body text — same information, less visual noise.
     """
-    if segs:
+    # Class-tab background colour cue. Single-segment selections stay
+    # neutral (white) — every singleton is trivially a "natural class"
+    # of itself, so colouring it green would be true but uninformative
+    # and just adds visual noise on every click. The cue lives on the
+    # multi-segment verdict where the answer is genuinely useful.
+    if len(segs) >= 2:
         is_nc, _ = engine.is_natural_class(segs)
         class_state = "natural" if is_nc else "not_natural"
     else:

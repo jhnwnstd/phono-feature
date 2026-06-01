@@ -758,19 +758,30 @@ dialog input[type="text"]:focus-visible {
 }
 /* Class-tab colour cues — replaces the previous "Natural class:
    Yes/No" body text. The state attribute is set by JS from the
-   shared ``analysis_tabs.class_state`` field, so desktop and web
-   agree on when each colour applies. ``font-weight`` on the
-   coloured states keeps the cue legible on the unselected
-   greyed-text background. */
+   shared ``analysis_tabs.class_state`` field. Tab BACKGROUND
+   carries the cue (green / red), which stays readable for users
+   with reduced colour vision and matches the desktop's
+   ``QTabBar::tab:first { background: ... }`` styling. Singleton
+   selections keep ``class_state="neutral"`` so the tab stays
+   white — every singleton is trivially a natural class of itself,
+   so colouring it would just be visual noise on every click. */
 .analysis-tab[data-class-state="natural"] {
+  background: var(--plus-bg);
   color: var(--plus);
 }
 .analysis-tab[data-class-state="not_natural"] {
+  background: var(--minus-bg);
   color: var(--minus);
 }
 .analysis-tab[data-class-state="natural"][aria-selected="true"],
 .analysis-tab[data-class-state="not_natural"][aria-selected="true"] {
+  /* Keep the coloured background even when the tab is active —
+     the cue is more useful than the active-tab's panel colour. */
+  background: var(--plus-bg);
   font-weight: 600;
+}
+.analysis-tab[data-class-state="not_natural"][aria-selected="true"] {
+  background: var(--minus-bg);
 }
 
 .analysis-content {

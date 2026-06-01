@@ -100,25 +100,44 @@ def _assert_tabs_shape(tabs: dict[str, object]) -> None:
 def test_analysis_tabs_seg_single_disables_contrasts() -> None:
     """Single-segment SEG selection: Contrasts tab has nothing to
     show, so the payload signals the UI to grey out / disable it.
-    """
+    The Class tab stays NEUTRAL (white) — every singleton is
+    trivially a natural class of itself, so colouring it green
+    would just add visual noise on every click."""
     engine = _engine("hayes_features.json")
     tabs = summarize_segment_selection(engine, ["b"])["analysis_tabs"]
     _assert_tabs_shape(tabs)
     assert tabs["contrasts_enabled"] is False
+    assert tabs["class_state"] == "neutral"
     # Class tab carries the natural-class verdict / specs.
     assert "+Voice" in tabs["features"]
     # Selection header has the chip for /b/.
     assert "/b/" in tabs["selection"]
 
 
+def test_analysis_tabs_seg_multi_natural_class() -> None:
+    """Multi-segment SEG selection that IS a natural class: tab
+    state goes ``"natural"`` so the UI paints the Class tab green.
+    Picking every voiced obstruent in Hayes — voiced stops + voiced
+    fricatives — yields a real natural class definable by the
+    feature ``+Voice``."""
+    engine = _engine("hayes_features.json")
+    voiced = engine.find_segments({"Voice": "+"})
+    tabs = summarize_segment_selection(engine, voiced)["analysis_tabs"]
+    _assert_tabs_shape(tabs)
+    assert tabs["class_state"] == "natural"
+
+
 def test_analysis_tabs_seg_multi_enables_contrasts() -> None:
     """Multi-segment SEG: contrasting features go in the Contrasts
-    tab; the flag is on."""
+    tab; the flag is on. /b/ /d/ /ɡ/ aren't a natural class on
+    their own in Hayes (the other voiced stops would need to be in
+    the selection too), so ``class_state == "not_natural"``."""
     engine = _engine("hayes_features.json")
     segs = ["b", "d", "ɡ"]
     tabs = summarize_segment_selection(engine, segs)["analysis_tabs"]
     _assert_tabs_shape(tabs)
     assert tabs["contrasts_enabled"] is True
+    assert tabs["class_state"] == "not_natural"
     assert "Contrasting features" in tabs["contrasts"]
 
 
@@ -130,6 +149,7 @@ def test_analysis_tabs_feat_disables_contrasts() -> None:
     tabs = summarize_feature_query(engine, {"Voice": "+"})["analysis_tabs"]
     _assert_tabs_shape(tabs)
     assert tabs["contrasts_enabled"] is False
+    assert tabs["class_state"] == "neutral"
     # The Class tab is where matching segments land in FEAT mode.
     assert "Matching" in tabs["class"]
 
@@ -141,6 +161,7 @@ def test_analysis_tabs_empty_selection_safe_shape() -> None:
     tabs = summarize_segment_selection(engine, [])["analysis_tabs"]
     _assert_tabs_shape(tabs)
     assert tabs["contrasts_enabled"] is False
+    assert tabs["class_state"] == "neutral"
 
 
 def test_segment_state_payload_strings_match_enum() -> None:

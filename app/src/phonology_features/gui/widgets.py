@@ -657,6 +657,10 @@ class AnalysisPanel(QWidget):
         # toggles visibility based on whether the html payload
         # actually carries chips.
         self.selection_label.setVisible(False)
+        # Class-tab background-colour state (natural / not_natural /
+        # neutral). ``apply_theme`` reads this when composing the
+        # stylesheet so a theme swap mid-session keeps the cue.
+        self._class_state: str = "neutral"
         self.apply_theme()
 
     def set_expanded(self, expanded: bool) -> None:
@@ -723,37 +727,7 @@ class AnalysisPanel(QWidget):
             }}
             """,
         )
-        set_css(
-            self.tabs,
-            f"""
-            QTabWidget::pane {{
-                border: 1px solid {C["border"]};
-                border-radius: 6px;
-                top: -1px;
-            }}
-            QTabBar::tab {{
-                background: {C["bg"]};
-                color: {C["text_dim"]};
-                border: 1px solid {C["border"]};
-                border-bottom: none;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-                padding: 4px 14px;
-                margin-right: 2px;
-            }}
-            QTabBar::tab:selected {{
-                background: {C["panel"]};
-                color: {C["text"]};
-                font-weight: bold;
-            }}
-            QTabBar::tab:hover:!selected {{
-                color: {C["text"]};
-            }}
-            QTabBar::tab:disabled {{
-                color: {C["border"]};
-            }}
-            """,
-        )
+        set_css(self.tabs, self._tabs_stylesheet(self._class_state))
 
     def set_html(self, html: str) -> None:
         """Legacy single-blob entry point. Routes the whole HTML to
@@ -815,25 +789,80 @@ class AnalysisPanel(QWidget):
         self._apply_class_state(class_state)
 
     def _apply_class_state(self, state: str) -> None:
-        """Colour the Class tab text per the natural-class verdict.
+        """Colour the first tab (Class) per the natural-class verdict.
 
-        Uses ``QTabBar.setTabTextColor`` rather than a global
-        stylesheet so the colour change is local to the one tab.
-        Importing QColor lazily because the import only matters
-        once anyone actually loads an inventory.
+        Re-applies the full tab-bar stylesheet with a state-specific
+        ``QTabBar::tab:first`` rule appended. Background colour is
+        the cue (palette ``plus_bg`` for natural, ``minus_bg`` for
+        not-natural, default for neutral); using background instead
+        of text colour stays readable for users with reduced colour
+        vision and is consistent with the web's ``data-class-state``
+        styling.
         """
-        from PyQt6.QtGui import QColor
-
-        bar = self.tabs.tabBar()
-        if bar is None:
+        if state == self._class_state:
             return
-        if state == "natural":
-            colour = QColor(C["plus"])
-        elif state == "not_natural":
-            colour = QColor(C["minus"])
+        self._class_state = state
+        set_css(self.tabs, self._tabs_stylesheet(state))
+
+    def _tabs_stylesheet(self, class_state: str) -> str:
+        """Compose the QTabBar stylesheet. Splitting this out (vs
+        baking it into ``apply_theme`` inline) lets
+        :py:meth:`_apply_class_state` rebuild only the bits it owns
+        without losing the theme's base styling, and keeps the
+        first-tab override in one place.
+        """
+        base = f"""
+            QTabWidget::pane {{
+                border: 1px solid {C["border"]};
+                border-radius: 6px;
+                top: -1px;
+            }}
+            QTabBar::tab {{
+                background: {C["bg"]};
+                color: {C["text_dim"]};
+                border: 1px solid {C["border"]};
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                padding: 4px 14px;
+                margin-right: 2px;
+            }}
+            QTabBar::tab:selected {{
+                background: {C["panel"]};
+                color: {C["text"]};
+                font-weight: bold;
+            }}
+            QTabBar::tab:hover:!selected {{
+                color: {C["text"]};
+            }}
+            QTabBar::tab:disabled {{
+                color: {C["border"]};
+            }}
+        """
+        if class_state == "natural":
+            bg = C["plus_bg"]
+            fg = C["plus"]
+        elif class_state == "not_natural":
+            bg = C["minus_bg"]
+            fg = C["minus"]
         else:
-            colour = QColor(C["text"])
-        bar.setTabTextColor(self._TAB_CLASS_IDX, colour)
+            return base
+        # ``:first`` targets the Class tab regardless of selection
+        # state; the compound ``:first:selected`` keeps the colour
+        # cue when the user has the tab active. CSS specificity
+        # (more pseudo-states = higher) is what makes the override
+        # win over the unprefixed ``:selected`` rule above.
+        return base + f"""
+            QTabBar::tab:first {{
+                background: {bg};
+                color: {fg};
+            }}
+            QTabBar::tab:first:selected {{
+                background: {bg};
+                color: {fg};
+                font-weight: bold;
+            }}
+        """
 
     def clear(self) -> None:
         self.selection_label.clear()
