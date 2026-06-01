@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import ClassVar
 
 from PyQt6.QtCore import QMimeData, QRect, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QResizeEvent
+from PyQt6.QtGui import QFont, QResizeEvent, QTextDocument
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -899,6 +899,10 @@ class AnalysisPeekPopup(QFrame):
     height the active tab's content actually needs, capped at a
     caller-supplied maximum.
 
+    Carries its own ⤣ dismiss button at the top-right corner. The
+    overlay covers the original ⤢ in the underlying tab bar, so
+    without an in-popup button the user has no way to toggle back.
+
     Snapshot semantics: ``show_for`` copies the panel's current
     active-tab HTML and chips strip into the popup once. If the
     user changes selection while the popup is open, the popup keeps
@@ -906,6 +910,7 @@ class AnalysisPeekPopup(QFrame):
     """
 
     MIN_HEIGHT: ClassVar[int] = 80
+    dismiss_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
@@ -925,8 +930,26 @@ class AnalysisPeekPopup(QFrame):
         self._content.setFont(mono_font)
         layout.addWidget(self._chips)
         layout.addWidget(self._content, stretch=1)
+        # Dismiss button. Floating child (not in the layout) so it
+        # paints over the content's top-right corner, mirroring the
+        # ⤢ position on the underlying AnalysisPanel. Repositioned
+        # on every resize.
+        self.close_btn = QPushButton("⤣", self)
+        self.close_btn.setFlat(True)
+        self.close_btn.setFixedSize(24, 20)
+        self.close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.close_btn.setToolTip("Restore analysis pane")
+        self.close_btn.clicked.connect(self.dismiss_requested.emit)
         self.hide()
         self.apply_theme()
+
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
+        super().resizeEvent(event)
+        # Pin the close button to the popup's top-right inside the
+        # 16-px right margin. Stays clickable because the popup is
+        # raised to the top of the central widget's child stack.
+        self.close_btn.move(self.width() - 24 - 16, 6)
+        self.close_btn.raise_()
 
     def apply_theme(self) -> None:
         set_css(
@@ -946,6 +969,19 @@ class AnalysisPeekPopup(QFrame):
             """ + scrollbar_style()
         set_css(self._content, text_edit_css)
         set_css(self._chips, "border: none; padding: 0 2px;")
+        set_css(
+            self.close_btn,
+            f"""
+            QPushButton {{
+                color: {C['text_dim']};
+                background: transparent;
+                border: none;
+                font-size: 14px;
+                padding: 0;
+            }}
+            QPushButton:hover {{ color: {C['text']}; }}
+            """,
+        )
 
     def show_for(
         self,
@@ -971,13 +1007,28 @@ class AnalysisPeekPopup(QFrame):
         chips_height = (38 + 2) if chips_visible else 0
         margins = 6 + 8
         spacing = 2
-        # ``document().size().height()`` is the rendered content
-        # height. We add the QTextEdit's internal 8 px padding (top
-        # and bottom) so short content doesn't get an internal
-        # scrollbar.
-        doc_h = int(self._content.document().size().height()) + 16 + 2
-        wanted = chips_height + margins + spacing + doc_h
-        height = min(max_height, max(self.MIN_HEIGHT, wanted))
+        # Measure content height in a fresh QTextDocument rather
+        # than via ``self._content.document().size()``. The live
+        # document's ``size()`` returns the value from whichever
+        # layout pass last completed, which lags behind
+        # ``setTextWidth`` and produced an inconsistent first-vs-
+        # subsequent measurement when the widget hadn't been
+        # painted yet. A throwaway document with the same font and
+        # an explicit ``setTextWidth`` always returns the natural
+        # height at that width.
+        content_w = max(120, target_rect.width() - 2 * 16 - 2 * 9)
+        measure_doc = QTextDocument()
+        measure_doc.setDefaultFont(self._content.font())
+        measure_doc.setTextWidth(content_w)
+        measure_doc.setHtml(active_tab.toHtml())
+        doc_h = int(measure_doc.size().height()) + 16 + 2
+        height_for_content = chips_height + margins + spacing + doc_h
+        # Popup must NEVER be smaller than the analysis pane it
+        # temporarily overrides; that would leave the bottom of the
+        # pane visible underneath, which looks broken. Grow upward
+        # only when the content actually needs it, and never above
+        # the caller-supplied cap.
+        height = min(max_height, max(target_rect.height(), height_for_content))
         x = target_rect.x()
         width = target_rect.width()
         # ``QRect.bottom()`` is inclusive (y + h - 1). Use the

@@ -335,9 +335,24 @@ class MainWindow(QMainWindow):
         # magnifies the active tab's content over the segment /
         # feature panes without resizing them or moving the
         # splitter. Lives as a child of the central widget so it
-        # paints above the splitters via raise_().
-        self._analysis_peek = AnalysisPeekPopup(self.centralWidget())
+        # paints above the splitters via raise_(). ``central`` is
+        # the same QWidget created at the top of this method, but
+        # mypy narrowed its type back to ``QWidget | None`` through
+        # ``self.centralWidget()`` so the assert here re-narrows
+        # it for the popup's stricter parent signature.
+        peek_parent = self.centralWidget()
+        assert (
+            peek_parent is not None
+        ), "_build_central must run before peek wiring"
+        self._analysis_peek = AnalysisPeekPopup(peek_parent)
         self.analysis.expand_toggled.connect(self._toggle_analysis_peek)
+        # The popup overlay covers the underlying ⤢ button, so its
+        # own ⤣ close button is the only thing the user can click
+        # to toggle back. Wire it to the same dismiss path so the
+        # button glyph below also flips back to ⤢.
+        self._analysis_peek.dismiss_requested.connect(
+            self._dismiss_analysis_peek
+        )
         # Dismiss the peek on any splitter drag: the popup's
         # geometry was computed against the splitter sizes at open
         # time and is now stale.
@@ -1189,8 +1204,13 @@ class MainWindow(QMainWindow):
         popup's height fits the active tab's content and is
         capped at 80 percent of the central widget's height, which
         matches the maximum the old splitter-swap expand reached.
+
+        Uses ``isHidden`` rather than ``isVisible`` because the
+        latter only flips once the widget actually paints on
+        screen, which makes the toggle un-clickable on platforms
+        that delay showEvents (and in offscreen tests).
         """
-        if self._analysis_peek.isVisible():
+        if not self._analysis_peek.isHidden():
             self._analysis_peek.dismiss()
             self.analysis.set_expanded(False)
             return
@@ -1209,7 +1229,7 @@ class MainWindow(QMainWindow):
         on splitter drags and window resizes, where the popup's
         cached geometry would otherwise be stale.
         """
-        if self._analysis_peek.isVisible():
+        if not self._analysis_peek.isHidden():
             self._analysis_peek.dismiss()
             self.analysis.set_expanded(False)
 
