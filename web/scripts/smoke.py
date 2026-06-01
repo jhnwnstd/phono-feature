@@ -125,27 +125,51 @@ def main() -> int:
             " return null; }",
         )
         print(f"  clicked: /{clicked}/")
+        # The analysis pane is now a tabbed widget: the persistent
+        # selection chip strip (#analysis-selection) plus three tab
+        # bodies (#analysis-content-class / -features / -contrasts).
+        # The single-element #analysis-content the smoke test used
+        # to poll no longer exists; wait on the chip strip + Features
+        # tab instead, which together cover the same boot-path
+        # assertion (selection rendered and a per-segment feature
+        # bundle produced).
         page.wait_for_function(
-            "() => document.getElementById('analysis-content')"
-            ".innerHTML.length > 0",
+            "() => {"
+            " const sel = document.getElementById('analysis-selection');"
+            " const feat = document.getElementById"
+            "('analysis-content-features');"
+            " return sel && feat && sel.innerHTML.length > 0"
+            " && feat.innerHTML.length > 0;"
+            "}",
             timeout=10_000,
         )
-        analysis_html = page.evaluate(
-            "() => document.getElementById('analysis-content').innerHTML",
+        selection_html = page.evaluate(
+            "() => document.getElementById('analysis-selection').innerHTML",
         )
-        if (
-            "feature bundle" not in analysis_html
-            and "Selected" not in analysis_html
-        ):
+        features_html = page.evaluate(
+            "() => document.getElementById"
+            "('analysis-content-features').innerHTML",
+        )
+        if "Selected" not in selection_html:
             print(
-                "FAIL: analysis pane filled but doesn't look like an "
-                f"analysis result. Length={len(analysis_html)}, first "
-                f"200 chars: {analysis_html[:200]!r}",
+                "FAIL: selection chip strip missing 'Selected' label. "
+                f"First 200 chars: {selection_html[:200]!r}",
                 file=sys.stderr,
             )
             browser.close()
             return 1
-        print(f"  analysis pane: {len(analysis_html)} bytes of HTML")
+        if "feature bundle" not in features_html.lower():
+            print(
+                "FAIL: Features tab missing 'feature bundle' content. "
+                f"First 200 chars: {features_html[:200]!r}",
+                file=sys.stderr,
+            )
+            browser.close()
+            return 1
+        print(
+            f"  analysis pane: selection={len(selection_html)} bytes,"
+            f" features tab={len(features_html)} bytes"
+        )
 
         if console_errors or page_errors:
             print(

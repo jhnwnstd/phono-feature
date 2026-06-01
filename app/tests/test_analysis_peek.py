@@ -120,3 +120,32 @@ def test_peek_does_not_touch_panel_geometry(
     peek.show_for(panel, max_height=400, target_rect=QRect(0, 580, 1200, 220))
     peek.dismiss()
     assert panel.geometry() == before
+
+
+def test_close_button_emits_dismiss_signal(
+    peek: AnalysisPeekPopup, panel: AnalysisPanel
+) -> None:
+    """The popup carries its own ⤣ close button. Without it, the
+    overlay covers the underlying AnalysisPanel's ⤢ button and
+    the user has no way to toggle back. Clicking the popup's
+    close button must emit ``dismiss_requested`` so MainWindow
+    can hide the popup AND flip the underlying button glyph."""
+    panel.set_sections("<p>x</p>", "<p>y</p>", "<p>z</p>", "<p>w</p>")
+    peek.show_for(panel, max_height=400, target_rect=QRect(0, 580, 1200, 220))
+    received: list[bool] = []
+    peek.dismiss_requested.connect(lambda: received.append(True))
+    peek.close_btn.click()
+    assert received == [True]
+
+
+def test_close_button_pinned_to_top_right(
+    peek: AnalysisPeekPopup, panel: AnalysisPanel
+) -> None:
+    """Close button sits at the popup's top-right corner inside
+    the 16-px right margin, so it doesn't clip when the popup
+    grows."""
+    panel.set_sections("<p>x</p>", "<p>y</p>", "<p>z</p>", "<p>w</p>")
+    peek.show_for(panel, max_height=400, target_rect=QRect(0, 580, 1200, 220))
+    btn = peek.close_btn
+    assert btn.x() + btn.width() <= peek.width()
+    assert btn.x() >= peek.width() - 24 - 16 - 5  # within tolerance of pin

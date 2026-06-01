@@ -1036,6 +1036,13 @@ class AnalysisPeekPopup(QFrame):
         # exactly with ``target_rect``'s bottom edge.
         y = target_rect.y() + target_rect.height() - height
         self.setGeometry(x, y, width, height)
+        # Pin close button immediately. ``resizeEvent`` would
+        # eventually fire from setGeometry and do the same, but
+        # the deferred event leaves the button at (0, 0) for any
+        # caller that inspects geometry between show_for and the
+        # next event-loop tick.
+        self.close_btn.move(width - 24 - 16, 6)
+        self.close_btn.raise_()
         self.show()
         self.raise_()
 
