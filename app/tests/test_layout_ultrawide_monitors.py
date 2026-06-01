@@ -48,12 +48,8 @@ def test_content_max_w_never_below_min_first_launch() -> None:
     smaller than ``MIN_FIRST_LAUNCH_W``; that floor exists so the
     vowel chart can sit beside the consonants.
     """
-    assert (
-        layout.content_max_w(640) >= layout.MIN_FIRST_LAUNCH_W
-    )
-    assert (
-        layout.content_max_w(100) >= layout.MIN_FIRST_LAUNCH_W
-    )
+    assert layout.content_max_w(640) >= layout.MIN_FIRST_LAUNCH_W
+    assert layout.content_max_w(100) >= layout.MIN_FIRST_LAUNCH_W
 
 
 @pytest.mark.parametrize(

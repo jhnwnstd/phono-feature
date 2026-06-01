@@ -40,7 +40,11 @@ BOOT_TIMEOUT_MS = 120_000
 # Browsers to sweep. Each entry's first value is the human label
 # used in log lines; the second is the attribute name on the
 # Playwright ``p`` object that returns the BrowserType.
-BROWSERS = (("chromium", "chromium"), ("firefox", "firefox"), ("webkit", "webkit"))
+BROWSERS = (
+    ("chromium", "chromium"),
+    ("firefox", "firefox"),
+    ("webkit", "webkit"),
+)
 
 # Extra viewports beyond the 1280x720 baseline. Each tuple is
 # (label, width, height, check_callable_name) where the callable
@@ -272,18 +276,39 @@ def run_narrow_checks(page, label: str) -> int:
         " el.title = el.textContent;"
         " } }"
     )
-    brand_visible = page.evaluate(
+    brand_info = page.evaluate(
         "() => {"
         " const b = document.querySelector('.statusbar-brand');"
-        " if (!b) return false;"
-        " const r = b.getBoundingClientRect();"
-        " return r.width > 0 && r.right <= window.innerWidth + 0.5;"
+        " const sb = document.querySelector('.statusbar');"
+        " const msg = document.getElementById('statusbar');"
+        " const body = document.body;"
+        " const html = document.documentElement;"
+        " if (!b || !sb) return null;"
+        " const cs = getComputedStyle(sb);"
+        " return {"
+        "   brand_right: b.getBoundingClientRect().right,"
+        "   bar_w: sb.getBoundingClientRect().width,"
+        "   bar_cs: {"
+        "     minWidth: cs.minWidth,"
+        "     width: cs.width,"
+        "     gridTemplateColumns: cs.gridTemplateColumns,"
+        "     padding: cs.padding,"
+        "   },"
+        "   msg_w: msg.getBoundingClientRect().width,"
+        "   body_w: body.getBoundingClientRect().width,"
+        "   body_scroll_w: body.scrollWidth,"
+        "   html_scroll_w: html.scrollWidth,"
+        "   vw: window.innerWidth,"
+        " };"
         "}"
     )
-    if not brand_visible:
+    if brand_info is None:
+        print("  FAIL: statusbar elements missing", file=sys.stderr)
+        return 1
+    if brand_info["brand_right"] > brand_info["vw"] + 0.5:
         print(
             "  FAIL: long status message pushed the brand off the"
-            " viewport; ellipsis is not working",
+            f" viewport; details={brand_info}",
             file=sys.stderr,
         )
         return 1

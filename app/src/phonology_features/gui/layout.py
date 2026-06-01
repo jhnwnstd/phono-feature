@@ -223,8 +223,12 @@ DEFAULT_SCREEN_FRACTION: float = 0.80
 # Preferred analysis-pane height when the feature pane already fits
 # its content. On short windows where the features need more height,
 # ``top_pane_height`` lets analysis shrink past this floor down to
-# ``HARD_MIN_ANALYSIS_H``.
-MIN_ANALYSIS_H: int = 220
+# ``HARD_MIN_ANALYSIS_H``. Sized so the resting (non-expanded)
+# analysis pane shows at least four minimal feature specification
+# rows comfortably (selection chip strip ~30 px + tab bar ~30 px +
+# four chip rows at ~30 px each + outer padding ~30 px), so the
+# user doesn't need the expand button just to read a small bundle.
+MIN_ANALYSIS_H: int = 280
 # Absolute floor so analysis is at least its title bar + a line of
 # text on the worst-case window size.
 HARD_MIN_ANALYSIS_H: int = 60

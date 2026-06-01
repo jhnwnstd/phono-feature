@@ -58,7 +58,7 @@ def test_scaled_handle_w_grows_monotonically() -> None:
     last = 0
     for dpr in (1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0):
         cur = layout.scaled_handle_w(dpr)
-        assert cur >= last, (
-            f"handle width dropped at dpr={dpr}: {last} -> {cur}"
-        )
+        assert (
+            cur >= last
+        ), f"handle width dropped at dpr={dpr}: {last} -> {cur}"
         last = cur

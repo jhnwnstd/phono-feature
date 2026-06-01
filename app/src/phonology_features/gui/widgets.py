@@ -25,6 +25,7 @@ from phonology_features.gui import layout as layout_mod
 from phonology_features.gui.constants import (
     BTN_GAP,
     BTN_W,
+    MINUS_SIGN,
     MONO_FAMILIES,
     scrollbar_style,
 )
@@ -540,7 +541,11 @@ class FeatureRow(QWidget):
             set_css(self.name_label, self._NAME_DIM)
             set_css(self, self._ROW_TRANSPARENT)
             return
-        self.badge.setText(value)
+        # ``value`` is the engine's ASCII ``-``; the visible badge
+        # must show the U+2212 MINUS SIGN so the glyph matches the
+        # ``minus_btn`` (also U+2212) and the analysis-pane chips,
+        # regardless of whether the feat pane is the active mode.
+        self.badge.setText("+" if value == "+" else MINUS_SIGN)
         set_css(self.name_label, self._NAME_BOLD)
         if value == "+":
             set_css(self.badge, self._BADGE_PLUS)

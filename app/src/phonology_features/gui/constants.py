@@ -10,9 +10,12 @@ SETTINGS_APP = "SegFeatureEngine"
 
 # Unicode minus (U+2212), not ASCII hyphen-minus (U+002D). Used
 # wherever we render the negative-feature symbol so it visually
-# matches the width and stroke weight of ``+``. Named constant
-# rather than ``chr(8722)`` so readers don't have to look it up.
-MINUS_SIGN: str = "−"
+# matches the width and stroke weight of ``+``. Defined via the
+# explicit ``−`` codepoint escape so a future editor doesn't
+# accidentally replace the literal with a hyphen (U+002D), an
+# en-dash (U+2013), or an em-dash (U+2014) which all look similar
+# in some fonts.
+MINUS_SIGN: str = "\u2212"
 
 
 class TagColor(StrEnum):

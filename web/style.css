@@ -126,6 +126,18 @@ body {
   color: var(--text);
   font: inherit;
   cursor: pointer;
+  /* Cap controls at the viewport width so a long inventory label
+     in the picker doesn't force the toolbar wider than the
+     viewport (which would cascade body scrollbars and drag the
+     statusbar / analysis-pane off the right edge on a 360 px
+     phone). The cap is viewport-relative (not parent-relative)
+     because the parent flex container can grow alongside the
+     child unless one of them is anchored to the viewport. The
+     ``calc(100vw - ...)`` term subtracts the toolbar's own
+     horizontal padding so the cap matches what would actually
+     fit. */
+  min-width: 0;
+  max-width: calc(100vw - var(--space-lg) * 2);
 }
 .toolbar select:hover,
 .toolbar button:hover {
@@ -896,23 +908,28 @@ dialog input[type="text"]:focus-visible {
   color: var(--text-dim);
   /* Three-column grid (left | centre | right): the centre track
      auto-sizes to its content and is bar-centred, independent of
-     the side items' widths. Flex ``justify-content: space-between``
-     centres the middle item in the LEFTOVER space, which drifts as
-     the message wraps or the brand changes — the grid keeps the bug
-     button visually anchored. */
+     the side items' widths. The ``minmax(0, 1fr)`` form (not
+     plain ``1fr``) lets the side tracks shrink below their
+     min-content; without it a ``white-space: nowrap`` status
+     message blows the bar wider than the viewport, dragging the
+     brand off-screen on narrow phones. */
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-lg);
 }
 .statusbar > .statusbar-message {
   justify-self: start;
-  /* Without ``min-width: 0`` the message track ignores the grid's
-     ``1fr`` and grows to its content width, squeezing the brand
-     out of the right track. The ellipsis is the visible-failure
-     mode; the full string is on the element's ``title`` attribute
-     for hover, set by ``setStatusMessage`` in main.js. */
+  /* Grid + ellipsis pattern: the track is ``minmax(0, 1fr)`` (so
+     the track can shrink below min-content) and the item is
+     ``max-width: 100%`` with overflow + nowrap. Without the
+     ``max-width: 100%`` the span's content width still expands
+     the cell beyond its track allocation, pushing the brand off
+     the right edge on a 360 px viewport. The full string lives
+     on the element's ``title`` attribute for hover, set by
+     ``setStatus`` in main.js. */
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
