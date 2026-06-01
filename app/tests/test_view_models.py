@@ -22,7 +22,11 @@ INVENTORIES_DIR = Path(__file__).resolve().parents[1] / "inventories"
 
 
 def _engine(name: str) -> FeatureEngine:
+    import pytest
+
     path = INVENTORIES_DIR / name
+    if not path.exists():
+        pytest.skip(f"{name} not present (gitignored in CI)")
     raw = json.loads(path.read_text(encoding="utf-8-sig"))
     return FeatureEngine(Inventory.parse(raw, source=str(path)))
 
