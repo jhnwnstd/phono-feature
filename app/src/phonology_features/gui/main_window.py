@@ -32,6 +32,7 @@ from PyQt6.QtGui import (
     QShowEvent,
 )
 from PyQt6.QtWidgets import (
+    QApplication,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -242,7 +243,11 @@ class MainWindow(QMainWindow):
         self._nav_buttons: list[QPushButton] = []
         self.inventory_combo = QComboBox(toolbar)
         self.inventory_combo.setFont(QFont("Noto Sans", 10))
-        self.inventory_combo.setFixedHeight(32)
+        # ``setMinimumHeight`` (not ``setFixedHeight``) so the combo
+        # can grow with font metrics on a 200% / 300% scaled display
+        # without clipping the text. The 32 floor matches the
+        # toolbar's historic baseline at 1x scale.
+        self.inventory_combo.setMinimumHeight(32)
         self.inventory_combo.setMinimumWidth(176)
         set_css(self.inventory_combo, _ThemeController.combo_style())
         # Dropdown is populated by ``_InventoryDirController.__init__``,
@@ -256,7 +261,10 @@ class MainWindow(QMainWindow):
         def add_nav(label: str, slot: Callable[[], object]) -> QPushButton:
             btn = QPushButton(label, toolbar)
             btn.setFont(QFont("Noto Sans", 10))
-            btn.setFixedHeight(32)
+            # Floor at 32px (the historic 1x baseline); Qt grows the
+            # button when the font scales up on a hi-DPI display so
+            # glyphs don't clip at 200% / 300% OS scaling.
+            btn.setMinimumHeight(32)
             btn.clicked.connect(slot)
             toolbar.addWidget(btn)
             self._nav_buttons.append(btn)
@@ -304,7 +312,14 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         splitter = _ThemedSplitter(Qt.Orientation.Horizontal, central)
-        splitter.setHandleWidth(4)
+        # DPR-scaled so the handle stays the same physical size on
+        # Windows 125%/150%/200% scaling and Linux fractional-scale
+        # compositors. ``primaryScreen()`` is set by the time we
+        # reach _build_central; fall back to 1.0 only if Qt reports
+        # no screen (headless tests).
+        primary = QApplication.primaryScreen()
+        dpr = primary.devicePixelRatio() if primary is not None else 1.0
+        splitter.setHandleWidth(layout.scaled_handle_w(dpr))
         self.seg_panel = self._build_segment_panel(splitter)
         # Floors so the user can't drag a pane to zero. Below
         # SEG_MIN_W the segments grid + vowel chart genuinely can't

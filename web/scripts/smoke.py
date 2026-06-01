@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 """End-to-end smoke test for the built web app.
 
-Serves ``web/dist/`` from a local HTTP server, opens it in
-headless Chromium via Playwright, and asserts:
+Serves ``web/dist/`` from a local HTTP server, opens it across
+Chromium / Firefox / WebKit via Playwright (each one skipped
+cleanly if its driver binary is not installed), and asserts:
 
 * Pyodide boots and the bridge attaches.
 * The default inventory renders segment buttons and feature rows.
 * Clicking a segment populates the analysis pane.
 * No console / page errors during boot.
+
+After the baseline check at 1280x720 the same page is resized to
+two extra viewports (360x640 and 3440x1440) where additional
+assertions run:
+
+* The narrow viewport must keep the statusbar brand visible
+  even when the message text is artificially long, and the
+  single-column collapse must engage.
+* The ultrawide viewport must keep ``main.grid`` capped under
+  ``--content-max-w`` so the page doesn't fan out edge-to-edge.
 
 Designed for CI: the build workflow produces ``web/dist/``, this
 smokes it, regressions fail the deploy. Exit 0 on success, 1 on
@@ -25,6 +36,19 @@ from pathlib import Path
 DIST = Path(__file__).resolve().parents[1] / "dist"
 PORT = 8920
 BOOT_TIMEOUT_MS = 120_000
+
+# Browsers to sweep. Each entry's first value is the human label
+# used in log lines; the second is the attribute name on the
+# Playwright ``p`` object that returns the BrowserType.
+BROWSERS = (("chromium", "chromium"), ("firefox", "firefox"), ("webkit", "webkit"))
+
+# Extra viewports beyond the 1280x720 baseline. Each tuple is
+# (label, width, height, check_callable_name) where the callable
+# is one of the run_* functions below.
+EXTRA_VIEWPORTS = (
+    ("narrow-mobile", 360, 640, "run_narrow_checks"),
+    ("ultrawide", 3440, 1440, "run_ultrawide_checks"),
+)
 
 
 def main() -> int:
@@ -50,8 +74,6 @@ def main() -> int:
             "log_message": lambda *a, **k: None,
         },
     )
-    # Allow address reuse so a previous run killed mid-test doesn't
-    # block the next run with EADDRINUSE.
     socketserver.TCPServer.allow_reuse_address = True
     httpd = socketserver.TCPServer(("127.0.0.1", PORT), handler_cls)
     server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -61,133 +83,267 @@ def main() -> int:
         from playwright.sync_api import sync_playwright
     except ImportError:
         print("FAIL: playwright not installed", file=sys.stderr)
+        httpd.shutdown()
         return 1
 
-    rc = 1
+    overall_rc = 0
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        ctx = browser.new_context(viewport={"width": 1280, "height": 720})
-        page = ctx.new_page()
+        any_browser_ran = False
+        for label, attr in BROWSERS:
+            browser_type = getattr(p, attr, None)
+            if browser_type is None:
+                print(f"SKIP: {label}: Playwright BrowserType not found")
+                continue
+            try:
+                exe = browser_type.executable_path
+            except Exception:
+                exe = ""
+            if not exe or not Path(exe).exists():
+                print(f"SKIP: {label}: driver not installed at {exe!r}")
+                continue
+            any_browser_ran = True
+            print(f"\n=== {label} ===")
+            rc = run_for_browser(browser_type, label)
+            if rc != 0:
+                overall_rc = rc
 
-        console_errors: list[str] = []
-        page_errors: list[str] = []
-        page.on(
-            "console",
-            lambda m: (
-                console_errors.append(m.text) if m.type == "error" else None
-            ),
-        )
-        page.on("pageerror", lambda e: page_errors.append(str(e)))
-
-        url = f"http://127.0.0.1:{PORT}/"
-        print(f"Opening {url} ...")
-        page.goto(url, wait_until="domcontentloaded")
-
-        print("Waiting for the bridge to finish booting...")
-        try:
-            page.wait_for_function(
-                "() => document.querySelectorAll('.seg-btn').length > 0",
-                timeout=BOOT_TIMEOUT_MS,
-            )
-        except Exception as e:
-            print(f"FAIL: bridge never booted: {e}", file=sys.stderr)
+        if not any_browser_ran:
             print(
-                "Last loading status: "
-                + str(
-                    page.evaluate(
-                        "() => document.getElementById("
-                        "'loading-status')?.textContent",
-                    )
-                ),
+                "FAIL: no Playwright driver installed; "
+                "run 'playwright install' to bootstrap one of "
+                "chromium / firefox / webkit",
                 file=sys.stderr,
             )
-            _dump_errors(console_errors, page_errors)
-            browser.close()
-            return 1
-
-        seg_count = page.evaluate(
-            "() => document.querySelectorAll('.seg-btn').length",
-        )
-        feat_count = page.evaluate(
-            "() => document.querySelectorAll('.feat-row').length",
-        )
-        print(f"  segments rendered: {seg_count}")
-        print(f"  feature rows:      {feat_count}")
-        if seg_count == 0 or feat_count == 0:
-            print("FAIL: empty panels after boot", file=sys.stderr)
-            browser.close()
-            return 1
-
-        print("Clicking a segment to drive the analysis pipeline...")
-        clicked = page.evaluate(
-            "() => { for (const b of document.querySelectorAll('.seg-btn'))"
-            " { if (b.dataset.seg) { b.click(); return b.dataset.seg; } }"
-            " return null; }",
-        )
-        print(f"  clicked: /{clicked}/")
-        # The analysis pane is now a tabbed widget: the persistent
-        # selection chip strip (#analysis-selection) plus three tab
-        # bodies (#analysis-content-class / -features / -contrasts).
-        # The single-element #analysis-content the smoke test used
-        # to poll no longer exists; wait on the chip strip + Features
-        # tab instead, which together cover the same boot-path
-        # assertion (selection rendered and a per-segment feature
-        # bundle produced).
-        page.wait_for_function(
-            "() => {"
-            " const sel = document.getElementById('analysis-selection');"
-            " const feat = document.getElementById"
-            "('analysis-content-features');"
-            " return sel && feat && sel.innerHTML.length > 0"
-            " && feat.innerHTML.length > 0;"
-            "}",
-            timeout=10_000,
-        )
-        selection_html = page.evaluate(
-            "() => document.getElementById('analysis-selection').innerHTML",
-        )
-        features_html = page.evaluate(
-            "() => document.getElementById"
-            "('analysis-content-features').innerHTML",
-        )
-        if "Selected" not in selection_html:
-            print(
-                "FAIL: selection chip strip missing 'Selected' label. "
-                f"First 200 chars: {selection_html[:200]!r}",
-                file=sys.stderr,
-            )
-            browser.close()
-            return 1
-        if "feature bundle" not in features_html.lower():
-            print(
-                "FAIL: Features tab missing 'feature bundle' content. "
-                f"First 200 chars: {features_html[:200]!r}",
-                file=sys.stderr,
-            )
-            browser.close()
-            return 1
-        print(
-            f"  analysis pane: selection={len(selection_html)} bytes,"
-            f" features tab={len(features_html)} bytes"
-        )
-
-        if console_errors or page_errors:
-            print(
-                "FAIL: console / page errors fired during boot",
-                file=sys.stderr,
-            )
-            _dump_errors(console_errors, page_errors)
-            browser.close()
-            return 1
-
-        print(
-            "OK: bridge boots, panels render, analysis populates, no errors."
-        )
-        rc = 0
-        browser.close()
+            overall_rc = 1
 
     httpd.shutdown()
-    return rc
+    return overall_rc
+
+
+def run_for_browser(browser_type, label: str) -> int:
+    """Boot the app in this browser at 1280x720, run the baseline
+    smoke, then resize through the extra viewports and run the
+    follow-up assertions. One page session per browser keeps the
+    Pyodide boot cost amortised.
+    """
+    browser = browser_type.launch(headless=True)
+    ctx = browser.new_context(viewport={"width": 1280, "height": 720})
+    page = ctx.new_page()
+
+    console_errors: list[str] = []
+    page_errors: list[str] = []
+    page.on(
+        "console",
+        lambda m: (
+            console_errors.append(m.text) if m.type == "error" else None
+        ),
+    )
+    page.on("pageerror", lambda e: page_errors.append(str(e)))
+
+    url = f"http://127.0.0.1:{PORT}/"
+    print(f"  open {url}")
+    page.goto(url, wait_until="domcontentloaded")
+
+    try:
+        page.wait_for_function(
+            "() => document.querySelectorAll('.seg-btn').length > 0",
+            timeout=BOOT_TIMEOUT_MS,
+        )
+    except Exception as e:
+        print(f"  FAIL: bridge never booted: {e}", file=sys.stderr)
+        _dump_errors(console_errors, page_errors)
+        browser.close()
+        return 1
+
+    rc = run_baseline_checks(page, label)
+    if rc != 0:
+        browser.close()
+        return rc
+
+    for vp_label, w, h, check_name in EXTRA_VIEWPORTS:
+        print(f"  resize -> {vp_label} ({w}x{h})")
+        page.set_viewport_size({"width": w, "height": h})
+        check_fn = globals()[check_name]
+        rc = check_fn(page, vp_label)
+        if rc != 0:
+            browser.close()
+            return rc
+
+    if console_errors or page_errors:
+        print(
+            "  FAIL: console / page errors fired during run",
+            file=sys.stderr,
+        )
+        _dump_errors(console_errors, page_errors)
+        browser.close()
+        return 1
+
+    print(f"  OK ({label})")
+    browser.close()
+    return 0
+
+
+def run_baseline_checks(page, label: str) -> int:
+    """Original 1280x720 happy-path assertions: segments render,
+    features render, clicking a segment populates the analysis pane.
+    """
+    seg_count = page.evaluate(
+        "() => document.querySelectorAll('.seg-btn').length",
+    )
+    feat_count = page.evaluate(
+        "() => document.querySelectorAll('.feat-row').length",
+    )
+    print(f"  segments={seg_count}, feature rows={feat_count}")
+    if seg_count == 0 or feat_count == 0:
+        print("  FAIL: empty panels after boot", file=sys.stderr)
+        return 1
+
+    clicked = page.evaluate(
+        "() => { for (const b of document.querySelectorAll('.seg-btn'))"
+        " { if (b.dataset.seg) { b.click(); return b.dataset.seg; } }"
+        " return null; }",
+    )
+    print(f"  click seg /{clicked}/")
+    page.wait_for_function(
+        "() => {"
+        " const sel = document.getElementById('analysis-selection');"
+        " const feat = document.getElementById"
+        "('analysis-content-features');"
+        " return sel && feat && sel.innerHTML.length > 0"
+        " && feat.innerHTML.length > 0;"
+        "}",
+        timeout=10_000,
+    )
+    selection_html = page.evaluate(
+        "() => document.getElementById('analysis-selection').innerHTML",
+    )
+    features_html = page.evaluate(
+        "() => document.getElementById"
+        "('analysis-content-features').innerHTML",
+    )
+    if "Selected" not in selection_html:
+        print(
+            "  FAIL: selection chip strip missing 'Selected' label. "
+            f"First 200 chars: {selection_html[:200]!r}",
+            file=sys.stderr,
+        )
+        return 1
+    if "feature bundle" not in features_html.lower():
+        print(
+            "  FAIL: Features tab missing 'feature bundle' content. "
+            f"First 200 chars: {features_html[:200]!r}",
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        f"  analysis: selection={len(selection_html)}B,"
+        f" features={len(features_html)}B"
+    )
+    return 0
+
+
+def run_narrow_checks(page, label: str) -> int:
+    """At a 360x640 viewport: the single-column collapse should
+    engage, the statusbar should clip a long message via ellipsis
+    instead of pushing the brand out of view, and dialogs should
+    fit inside the viewport.
+    """
+    # Single-column collapse: grid-template-columns is "1fr" below
+    # the COLLAPSE_W threshold. We check for the resolved single-
+    # track form rather than parsing the raw value.
+    grid_cols = page.evaluate(
+        "() => getComputedStyle(document.querySelector('main.grid'))"
+        ".gridTemplateColumns"
+    )
+    if " " in grid_cols.strip():
+        print(
+            "  FAIL: at 360 wide the grid did not collapse to a"
+            f" single column; got {grid_cols!r}",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Statusbar must keep the brand visible when the message is long.
+    page.evaluate(
+        "() => {"
+        " const el = document.getElementById('statusbar');"
+        " if (el) {"
+        " el.textContent = 'A ' + 'very-long-status-message '.repeat(20);"
+        " el.title = el.textContent;"
+        " } }"
+    )
+    brand_visible = page.evaluate(
+        "() => {"
+        " const b = document.querySelector('.statusbar-brand');"
+        " if (!b) return false;"
+        " const r = b.getBoundingClientRect();"
+        " return r.width > 0 && r.right <= window.innerWidth + 0.5;"
+        "}"
+    )
+    if not brand_visible:
+        print(
+            "  FAIL: long status message pushed the brand off the"
+            " viewport; ellipsis is not working",
+            file=sys.stderr,
+        )
+        return 1
+
+    # No element should overflow the viewport on the right side.
+    # ``overflow: hidden`` on body would mask, but the audit found
+    # dialogs in particular as the risk; check toolbar too.
+    overflow = page.evaluate(
+        "() => {"
+        " const w = window.innerWidth;"
+        " const offenders = [];"
+        " for (const sel of ['header.toolbar', 'main.grid',"
+        " 'footer.statusbar']) {"
+        "   const el = document.querySelector(sel);"
+        "   if (!el) continue;"
+        "   const r = el.getBoundingClientRect();"
+        "   if (r.right > w + 0.5) offenders.push(sel + '@' + r.right);"
+        " }"
+        " return offenders;"
+        "}"
+    )
+    if overflow:
+        print(
+            f"  FAIL: elements overflow 360 viewport: {overflow}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("  narrow checks ok")
+    return 0
+
+
+def run_ultrawide_checks(page, label: str) -> int:
+    """At 3440x1440: ``main.grid`` should be capped by
+    ``--content-max-w`` (composed with ``calc(100vw * RATIO)``) and
+    centred via ``margin-inline: auto``. No element should overflow.
+    """
+    grid_w = page.evaluate(
+        "() => document.querySelector('main.grid').getBoundingClientRect()"
+        ".width"
+    )
+    body_w = page.evaluate("() => window.innerWidth")
+    if grid_w >= body_w - 1:
+        print(
+            "  FAIL: grid is not capped at ultrawide;"
+            f" grid={grid_w}px, viewport={body_w}px",
+            file=sys.stderr,
+        )
+        return 1
+    # The cap is the smaller of CONTENT_MAX_W_ABS (2400) and
+    # 0.75 * viewport (= 2580). On 3440 wide the absolute cap
+    # should win; allow a 2-px tolerance for sub-pixel rendering.
+    if grid_w > 2400 + 2:
+        print(
+            f"  FAIL: grid exceeds 2400 cap at ultrawide: {grid_w}px",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"  ultrawide grid capped at {int(grid_w)}px (viewport {body_w}px)")
+    return 0
 
 
 def _dump_errors(

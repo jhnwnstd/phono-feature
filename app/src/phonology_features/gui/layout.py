@@ -310,6 +310,19 @@ ANALYSIS_EXPAND_RATIO: float = 0.55
 # auto-grow path that wants a single canonical ceiling.
 ANALYSIS_MAX_RATIO: float = 0.80
 
+# Content-width cap (ultrawide). On 3440 / 3840 / 5120 px monitors
+# the segment pane would otherwise absorb every extra pixel and the
+# consonant grid would fan out to 25+ columns of useless horizontal
+# eye-travel. ``CONTENT_MAX_W_ABS`` is the absolute ceiling; below
+# it the layout is unaffected (the existing
+# ``DEFAULT_SCREEN_FRACTION`` rule still chooses the first-launch
+# width). Above it the desktop window's first-launch size stops
+# growing and the web's ``main.grid`` is capped via ``max-width``
+# then centred with ``margin-inline: auto``. Chosen so 1920p and
+# 2560p monitors are unaffected (their 80% windows fall well under
+# 2400 px) but 3440p+ ultrawides see the cap bite.
+CONTENT_MAX_W_ABS: int = 2400
+
 
 def analysis_expand_target(vsplit_total: int) -> int:
     """The analysis-pane height the expand toggle should set, given
@@ -327,6 +340,35 @@ def initial_window_fraction(screen_dimension: int) -> int:
     claim" without re-stating ``DEFAULT_SCREEN_FRACTION`` inline.
     """
     return int(screen_dimension * DEFAULT_SCREEN_FRACTION)
+
+
+def content_max_w(screen_w: int) -> int:
+    """Cap on the overall content width for the given screen.
+
+    Returns the smaller of ``CONTENT_MAX_W_ABS`` and the screen
+    width, floored at ``MIN_FIRST_LAUNCH_W`` so the cap never
+    returns less than the vowel-safe first-launch floor. Below the
+    absolute ceiling the cap is just the screen width (the cap
+    doesn't bite); above the ceiling it stops growing. Both UIs
+    honour the same number: desktop composes it inside
+    ``recommended_initial_window_size``, web encodes it via the
+    ``--content-max-w`` CSS variable and a ``max-width`` rule on
+    ``main.grid``.
+    """
+    capped = min(CONTENT_MAX_W_ABS, screen_w)
+    return max(MIN_FIRST_LAUNCH_W, capped)
+
+
+def scaled_handle_w(dpr: float) -> int:
+    """Splitter-handle pixel width scaled by the device pixel ratio.
+
+    At 1.0× the handle stays at 4 px (the historical value). At 2.0×
+    it grows to 8 px, at 3.0× to 12, so the grab target remains the
+    same physical size regardless of OS scaling. Clamped to a floor
+    of 4 px so a misreported sub-1.0 DPR never shrinks the handle.
+    """
+    effective = max(1.0, dpr)
+    return max(4, round(4 * effective))
 
 
 def distribute_pane_widths(
@@ -397,11 +439,16 @@ def recommended_initial_window_size(
 ) -> tuple[int, int]:
     """Window size for a fresh install: ``DEFAULT_SCREEN_FRACTION`` of
     the primary screen, floored at
-    ``(MIN_FIRST_LAUNCH_W, MIN_FIRST_LAUNCH_H)``. The caller still
-    clamps to the actual screen so the resize never overshoots
+    ``(MIN_FIRST_LAUNCH_W, MIN_FIRST_LAUNCH_H)`` and capped at the
+    width by ``content_max_w`` so a fresh launch on an ultrawide
+    monitor doesn't open the window past the useful content cap.
+    The user can still drag the window wider; the cap only governs
+    the recommended first-launch size. The caller still clamps to
+    the actual screen so the resize never overshoots
     (``geometry_controller.clamp_size_to_screen``).
     """
     w = max(MIN_FIRST_LAUNCH_W, int(screen_w * DEFAULT_SCREEN_FRACTION))
+    w = min(w, content_max_w(screen_w))
     h = max(MIN_FIRST_LAUNCH_H, int(screen_h * DEFAULT_SCREEN_FRACTION))
     return w, h
 

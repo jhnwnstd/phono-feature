@@ -90,7 +90,13 @@ function initNodes() {
     }
 }
 
-const setStatus = (msg) => { nodes.statusbar.textContent = msg; };
+const setStatus = (msg) => {
+    // Mirror the message into ``title`` so the full string is
+    // hoverable when the grid clips the visible text via
+    // ``text-overflow: ellipsis`` on a narrow viewport.
+    nodes.statusbar.textContent = msg;
+    nodes.statusbar.title = msg;
+};
 const setLoadingStatus = (msg) => { nodes.loadingStatus.textContent = msg; };
 
 const mark = (name) => performance.mark(name);

@@ -104,7 +104,14 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
+  /* Wrap on narrow viewports so the icon buttons (theme, cb, bug)
+     never push past the right edge on a 360 px phone or split-
+     screen tablet. The ``gap`` shorthand sets both axes; the
+     row-gap override after it keeps the wrapped second row tight
+     against the first. */
+  flex-wrap: wrap;
   gap: var(--space-md);
+  row-gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
   background: var(--panel);
   border-bottom: var(--border-thin) solid var(--border);
@@ -169,8 +176,11 @@ dialog {
   background: var(--panel);
   color: var(--text);
   padding: 20px 24px;
-  min-width: 320px;
-  max-width: 480px;
+  /* Cap the natural min/max against the live viewport so a 360px
+     phone never overflows the dialog horizontally. ``--space-xl``
+     reserves a comfortable inset on both sides. */
+  min-width: min(320px, calc(100vw - var(--space-xl) * 2));
+  max-width: min(480px, calc(100vw - var(--space-xl) * 2));
   font: inherit;
 }
 dialog::backdrop {
@@ -244,8 +254,10 @@ dialog input[type="text"]:focus-visible {
    the segments and features textareas need horizontal room for a
    typical 30+-entry feature list to read comfortably. */
 .setup-dialog {
-  min-width: 520px;
-  max-width: 720px;
+  /* Same viewport cap pattern as the base dialog so the wider
+     setup dialog never overflows a phone viewport. */
+  min-width: min(520px, calc(100vw - var(--space-xl) * 2));
+  max-width: min(720px, calc(100vw - var(--space-xl) * 2));
 }
 .setup-dialog textarea {
   width: 100%;
@@ -298,6 +310,14 @@ dialog input[type="text"]:focus-visible {
   padding: var(--space-md);
   min-height: 0;
   overflow: hidden;
+  /* Ultrawide cap. Below the cap the grid fills the viewport
+     normally; above it the grid stops growing and centres so the
+     consonant area doesn't fan out to 25+ columns of empty
+     horizontal eye-travel. The cap value comes from
+     ``layout.CONTENT_MAX_W_ABS`` via the relay. */
+  max-width: var(--content-max-w);
+  margin-inline: auto;
+  width: 100%;
 }
 
 /* Spillover for consonant groups that don't fit in the segments
@@ -341,6 +361,19 @@ dialog input[type="text"]:focus-visible {
 .panel[data-active="true"] {
   background: var(--panel);
   border-color: var(--accent);
+}
+/* Mirror the desktop's feat-pane floor (``layout.FEAT_MIN_W``) so the
+   features panel never shrinks below the width needed to host two
+   ``MIN_FEAT_CARD_W`` columns with chrome. Only applies in the two-
+   pane layout; the single-column collapse below ``COLLAPSE_W``
+   relaxes this so the page stays scrollable on narrow viewports. */
+#feat-panel {
+  min-width: var(--feat-min-w);
+}
+@media (max-width: 900px) {
+  #feat-panel {
+    min-width: 0;
+  }
 }
 .panel-header {
   display: flex;
@@ -413,8 +446,17 @@ dialog input[type="text"]:focus-visible {
    container query on the segments panel so it triggers from the
    pane's actual width (not the whole window) — that way the user
    can shrink just the seg side of the splitter and the chart
-   reflows like it does on a small screen. */
-.panel:has(#seg-grid) { container-type: inline-size; }
+   reflows like it does on a small screen.
+   The id-keyed fallback below opts the seg panel into a container
+   on every browser. Modern engines (Safari 16.4+, Chrome 105+,
+   Firefox 121+) additionally route via ``:has()`` inside the
+   ``@supports`` block to keep the selector path the same as
+   before. Older iOS Safari now also reflows the chart correctly
+   instead of leaving it pinned right at every width. */
+#seg-panel { container-type: inline-size; }
+@supports selector(:has(*)) {
+  .panel:has(#seg-grid) { container-type: inline-size; }
+}
 @container (max-width: 620px) {
   .seg-vowels {
     float: none;
@@ -708,12 +750,16 @@ dialog input[type="text"]:focus-visible {
   padding: 2px var(--space-xl) 10px;
   display: flex;
   flex-direction: column;
-  min-height: 220px;
-  max-height: 220px;
+  /* Locked height in the resting state. Both bounds are equal on
+     purpose so the splitter ratio between the top panes and the
+     analysis pane is stable across inventory loads; the user-
+     facing way to grow this surface is the ⤢ toggle below. */
+  min-height: var(--min-analysis-h);
+  max-height: var(--min-analysis-h);
 }
 .analysis.expanded {
-  min-height: 55vh;
-  min-height: 55dvh;
+  min-height: calc(var(--analysis-expand-ratio) * 100vh);
+  min-height: calc(var(--analysis-expand-ratio) * 100dvh);
 }
 /* Maximize/restore toggle in the analysis pane's top-right corner.
    Absolutely positioned so it doesn't reserve a horizontal row
@@ -861,6 +907,15 @@ dialog input[type="text"]:focus-visible {
 }
 .statusbar > .statusbar-message {
   justify-self: start;
+  /* Without ``min-width: 0`` the message track ignores the grid's
+     ``1fr`` and grows to its content width, squeezing the brand
+     out of the right track. The ellipsis is the visible-failure
+     mode; the full string is on the element's ``title`` attribute
+     for hover, set by ``setStatusMessage`` in main.js. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .statusbar > .statusbar-brand {
   justify-self: end;

@@ -266,7 +266,6 @@ def generate_layout_css() -> None:
         # Pane-width thresholds.
         f"  --seg-min-w: {mod.SEG_MIN_W}px;",
         f"  --feat-min-w: {mod.FEAT_MIN_W}px;",
-        f"  --feat-cushion: {mod.FEAT_CUSHION_PX}px;",
         f"  --min-feat-card-w: {mod.MIN_FEAT_CARD_W}px;",
         f"  --vowel-natural-w: {mod.VOWEL_NATURAL_W}px;",
         f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
@@ -280,11 +279,22 @@ def generate_layout_css() -> None:
         f"  --feat-card-chrome-h: {mod.FEAT_CARD_CHROME_H}px;",
         f"  --panel-chrome-v: {mod.PANEL_CHROME_V}px;",
         f"  --min-top-pane-h: {mod.MIN_TOP_PANE_H}px;",
+        # Analysis-pane sizing. Both UIs consume these via CSS vars
+        # so the desktop's Qt math (``layout.analysis_expand_target``,
+        # ``HARD_MIN_ANALYSIS_H``) and the web's ``.analysis`` /
+        # ``.analysis.expanded`` rules can never drift.
+        f"  --min-analysis-h: {mod.MIN_ANALYSIS_H}px;",
+        f"  --analysis-expand-ratio: {mod.ANALYSIS_EXPAND_RATIO};",
+        # Hard cap on overall content width (ultrawide). Above this
+        # pixel ceiling ``main.grid`` stops growing and centres via
+        # ``margin-inline: auto``; below it the grid fills the
+        # available width normally.
+        f"  --content-max-w: {mod.CONTENT_MAX_W_ABS}px;",
         "}",
         "",
     ]
     (DIST / "layout.css").write_text("\n".join(lines))
-    print("  14 layout tokens")
+    print(f"  {len(lines) - 4} layout tokens")
 
 
 def write_python_bundle() -> None:

@@ -145,7 +145,14 @@ class SegmentButton(QPushButton):
         self._state: SegmentState = SegmentState.DEFAULT
         self.setCheckable(True)
         self.setFixedSize(33, 26)
-        self.setFont(QFont("Noto Sans", 9))
+        # Apply the IPA-coverage font chain (same as the analysis pane)
+        # so combining marks like the tie bar in d͡ʒ and ejectives
+        # like pʼ render with the same glyphs everywhere they appear.
+        # Using ``setFamilies`` keeps Qt's substitution rule intact;
+        # the 9pt size matches the historic button typography.
+        btn_font = QFont("Noto Sans", 9)
+        btn_font.setFamilies(MONO_FAMILIES)
+        self.setFont(btn_font)
         self._styles = self._styles_for_active_theme()
         set_css(self, self._styles[SegmentState.DEFAULT])
 

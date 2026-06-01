@@ -61,7 +61,11 @@ class _BrandedStatusBar(QStatusBar):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setSizeGripEnabled(False)
-        self.setFixedHeight(self._BAR_HEIGHT)
+        # ``setMinimumHeight`` (not ``setFixedHeight``) so the bar
+        # grows with font metrics on a high-DPI display rather than
+        # clipping the message glyphs at 200% / 300% scale. The 22-px
+        # floor preserves the historic toolbar-baseline alignment.
+        self.setMinimumHeight(self._BAR_HEIGHT)
         self._message_label = QLabel("", self)
         self._message_label.setFont(self._FONT)
         self._message_label.setAlignment(

@@ -89,7 +89,10 @@ EXPECTED_WINDOW_SIZES: dict[str, tuple[int, int]] = {
     "1440x900": (1152, 900),  # 1440×0.8=1152 > 1120 floor
     "1600x900": (1280, 900),  # 1600×0.8=1280 > 1120 floor
     "2560x1440": (2048, 1152),  # 2560×0.8=2048; 1440×0.8=1152
-    "3840x2160": (3072, 1728),  # 3840×0.8=3072; 2160×0.8=1728
+    # 3840×0.8=3072 would exceed the new ``CONTENT_MAX_W_ABS``
+    # ultrawide cap of 2400; first-launch width stops at 2400.
+    # Height keeps the 0.8 fraction (vertical eye-travel is fine).
+    "3840x2160": (2400, 1728),
 }
 
 
@@ -281,13 +284,14 @@ def test_vowel_chart_keeps_natural_width(res: Resolution) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_4k_window_uses_screen_fraction_not_floor() -> None:
-    """At 4K (3840×2160), the 0.80 fraction wins over the
-    MIN_FIRST_LAUNCH_W floor: 0.80 × 3840 = 3072, well above
-    1400. Literal numbers so a bump to ``DEFAULT_SCREEN_FRACTION``
-    or ``MIN_FIRST_LAUNCH_*`` is caught here."""
+def test_4k_window_capped_by_ultrawide_content_max() -> None:
+    """At 4K (3840×2160), the 0.80 fraction (3072) exceeds the
+    ultrawide content cap (``CONTENT_MAX_W_ABS = 2400``); the cap
+    wins on width. Height stays uncapped (0.80 × 2160 = 1728).
+    Literal numbers so a bump to ``CONTENT_MAX_W_ABS`` or
+    ``DEFAULT_SCREEN_FRACTION`` is caught here."""
     w, h = layout.recommended_initial_window_size(3840, 2160)
-    assert w == 3072
+    assert w == 2400
     assert h == 1728
 
 
@@ -332,10 +336,11 @@ def test_smallest_targeted_resolution_width_fits_screen() -> None:
 
 
 def test_seg_pane_fans_out_at_4k() -> None:
-    """At 4K, the window is 3072 px wide (0.80 × 3840). Feat
-    lands at 540 px (FEAT_CONTENT_W 500 + FEAT_CUSHION_PX 40);
-    seg gets the remaining 2532 px — the explicit "wide screens
-    fan segments out" contract."""
+    """At 4K, the recommended window is capped at 2400 px wide
+    (``CONTENT_MAX_W_ABS``). Feat lands at 540 px (FEAT_CONTENT_W
+    500 + FEAT_CUSHION_PX 40); seg gets the remaining 1860 px —
+    the cap stops the fan-out from going past the useful-content
+    width even though the screen has room to spare."""
     win_w, _ = layout.recommended_initial_window_size(3840, 2160)
     seg_w, feat_w = layout.distribute_pane_widths(
         win_w,
@@ -343,7 +348,7 @@ def test_seg_pane_fans_out_at_4k() -> None:
         feat_content_w=FEAT_CONTENT_W,
     )
     assert feat_w == 540
-    assert seg_w == 2532
+    assert seg_w == 1860
 
 
 def test_seg_pane_stays_at_min_at_low_end_laptop() -> None:
@@ -447,13 +452,15 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
     # Vowel-safe floor (1120) is lower than the previous 1400, so
     # more screens are now fraction-driven. Pinned literals catch a
     # bump to either constant.
+    # 3840×0.80=3072 exceeds the new ultrawide cap
+    # (``CONTENT_MAX_W_ABS = 2400``); pin the post-cap value.
     fraction_widths = {
         "1536x864": 1228,
         "1440x900": 1152,
         "1600x900": 1280,
         "1920x1080": 1536,
         "2560x1440": 2048,
-        "3840x2160": 3072,
+        "3840x2160": 2400,
     }
     fraction_heights = {
         "1280x1200": 960,
@@ -638,9 +645,17 @@ def test_recommended_window_size_independent_of_device_pixel_ratio(
     """
     del dpr  # the function never sees this; we just pin the contract
     w, h = layout.recommended_initial_window_size(res.width, res.height)
-    expected_w = max(
-        layout.MIN_FIRST_LAUNCH_W,
-        int(res.width * layout.DEFAULT_SCREEN_FRACTION),
+    # First-launch width is 80% of the screen, floored at
+    # ``MIN_FIRST_LAUNCH_W`` and capped at ``content_max_w`` so the
+    # window doesn't claim the whole ultrawide. Both axes of the
+    # cap are logical-pixel; the device pixel ratio is still
+    # irrelevant.
+    expected_w = min(
+        layout.content_max_w(res.width),
+        max(
+            layout.MIN_FIRST_LAUNCH_W,
+            int(res.width * layout.DEFAULT_SCREEN_FRACTION),
+        ),
     )
     expected_h = max(
         layout.MIN_FIRST_LAUNCH_H,

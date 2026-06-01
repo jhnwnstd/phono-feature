@@ -124,8 +124,11 @@ def test_initial_size_floored_on_small_screen() -> None:
 
 def test_initial_size_at_default_fraction_on_large_screen() -> None:
     w, h = layout.recommended_initial_window_size(3840, 2160)
-    # 80 % of 3840 = 3072; 80 % of 2160 = 1728 — both well above floor.
-    assert w == 3072
+    # 80 % of 3840 = 3072 exceeds the ultrawide cap
+    # (CONTENT_MAX_W_ABS = 2400) so the cap wins on the width axis.
+    # Height stays at 80 % of 2160 = 1728 (vertical eye-travel
+    # is fine; only the horizontal axis gets capped).
+    assert w == 2400
     assert h == 1728
 
 
@@ -238,6 +241,12 @@ def test_layout_css_emits_all_height_constants() -> None:
         ("--panel-chrome-v", "PANEL_CHROME_V"),
         ("--min-top-pane-h", "MIN_TOP_PANE_H"),
         ("--min-feat-card-w", "MIN_FEAT_CARD_W"),
+        # Analysis-pane sizing and ultrawide cap constants. Pinned
+        # so the web ``.analysis`` rules and ``main.grid`` cap stay
+        # in sync with ``layout.py`` after future edits.
+        ("--min-analysis-h", "MIN_ANALYSIS_H"),
+        ("--analysis-expand-ratio", "ANALYSIS_EXPAND_RATIO"),
+        ("--content-max-w", "CONTENT_MAX_W_ABS"),
     ]:
         assert var_name in contents, (
             f"build.py:generate_layout_css does not emit {var_name}; "
@@ -248,3 +257,26 @@ def test_layout_css_emits_all_height_constants() -> None:
             f"layout.{py_name}; the {var_name} variable cannot be "
             f"derived without it"
         )
+
+
+def test_style_css_has_no_hardcoded_analysis_height() -> None:
+    """The locked analysis-pane height used to be ``220px`` literal
+    twice in ``.analysis``. After the relay it lives in
+    ``--min-analysis-h``; this test pins that the literal no longer
+    appears so a future drift between Python and CSS fails loudly.
+    """
+    from pathlib import Path
+
+    style_css = Path(__file__).resolve().parents[2] / "web" / "style.css"
+    contents = style_css.read_text(encoding="utf-8")
+    # The ``.analysis`` selector must reference the var, not the
+    # historic 220 literal. We grep for the rule directly.
+    assert "min-height: var(--min-analysis-h)" in contents, (
+        "web/style.css `.analysis` no longer reads "
+        "--min-analysis-h; it must consume the relayed value, "
+        "not hardcode the pixel literal"
+    )
+    assert "min-height: 220px" not in contents, (
+        "web/style.css still contains a literal `min-height: 220px`;"
+        " the relayed --min-analysis-h must be the only source"
+    )
