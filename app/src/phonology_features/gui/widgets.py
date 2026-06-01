@@ -21,13 +21,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from phonology_features.gui import layout as layout_mod
 from phonology_features.gui.constants import (
     BTN_GAP,
     BTN_W,
     MONO_FAMILIES,
     scrollbar_style,
 )
-from phonology_features.gui import layout as layout_mod
 from phonology_features.gui.layout import (
     best_segment_n_cols,
     partition_groups_for_spillover,
