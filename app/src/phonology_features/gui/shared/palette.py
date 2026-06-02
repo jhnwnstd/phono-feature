@@ -86,6 +86,13 @@ LIGHT = {
     # default-gray "not interactive" cue.
     "tag_purple": "#F1F3F4",
     "tag_purple_text": "#5F6368",
+    # Tooltip surface. Floats above the active panel as a high-contrast
+    # popover so hover text reads clearly even when the underlying
+    # surface is light. Kept dark in BOTH light and dark themes so the
+    # tooltip presentation is consistent across themes (the dark-theme
+    # tooltip is the visual reference the light theme matches).
+    "tooltip_bg": "#202124",
+    "tooltip_text": "#F7F7F7",
 }
 
 COLORBLIND_LIGHT = {
@@ -150,6 +157,10 @@ COLORBLIND_LIGHT = {
     "tag_purple_text": "#9A4F7F",
     "tag_gray": "#F1F3F4",
     "tag_gray_text": "#5F6368",
+    # See LIGHT.tooltip_bg comment. Same dark-on-light tooltip in
+    # colorblind light so hover popovers stay consistent across modes.
+    "tooltip_bg": "#202124",
+    "tooltip_text": "#F7F7F7",
 }
 
 COLORBLIND_DARK = {
@@ -206,6 +217,11 @@ COLORBLIND_DARK = {
     "tag_purple_text": "#D7A0D3",
     "tag_gray": "#2A2A2A",
     "tag_gray_text": "#B8B8B8",
+    # See LIGHT.tooltip_bg comment. Dark theme keeps its current
+    # tooltip look (dark panel + light text) so the cross-theme
+    # reference stays consistent.
+    "tooltip_bg": "#202020",
+    "tooltip_text": "#E8EAED",
 }
 
 DARK = {
@@ -272,6 +288,10 @@ DARK = {
     # See LIGHT.tag_purple comment.
     "tag_purple": "#2A2A2A",
     "tag_purple_text": "#B8B8B8",
+    # See LIGHT.tooltip_bg comment. Dark theme's tooltip is the
+    # cross-theme visual reference: dark surface, light text.
+    "tooltip_bg": "#202020",
+    "tooltip_text": "#E8EAED",
 }
 
 # Active palette, mutated in place by set_theme / set_palette_mode.

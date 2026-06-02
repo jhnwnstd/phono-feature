@@ -537,9 +537,11 @@ dialog input[type="text"]:focus-visible {
 /* Palette-aware tooltip for vowel-chart buttons. Replaces the
    browser-native ``title`` attribute (which picks up the host OS
    theme: a dark GTK / KDE setting renders dark-on-dark even when
-   the app is in lightmode). The pseudo-element uses ``--panel``
-   for background and ``--text`` for foreground so contrast tracks
-   the active theme. ``pointer-events: none`` keeps the tooltip
+   the app is in lightmode). The dedicated ``--tooltip-bg`` /
+   ``--tooltip-text`` tokens stay dark-surface + light-text in both
+   light and dark themes so the tooltip presentation is consistent
+   across themes (dark-theme tooltips are the visual reference the
+   light theme matches). ``pointer-events: none`` keeps the tooltip
    from intercepting clicks; positioning is absolute relative to
    the button (the button is ``position: relative`` via the
    vowel-chart-cell class). */
@@ -553,9 +555,9 @@ dialog input[type="text"]:focus-visible {
   left: 50%;
   bottom: calc(100% + 4px);
   transform: translateX(-50%);
-  background: var(--panel);
-  color: var(--text);
-  border: var(--border-thin) solid var(--border);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  border: var(--border-thin) solid var(--tooltip-bg);
   border-radius: var(--radius-sm);
   padding: 4px 8px;
   font-size: var(--font-size-meta);

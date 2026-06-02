@@ -68,8 +68,11 @@ def apply_tooltip_palette() -> None:
     from PyQt6.QtWidgets import QToolTip
 
     pal = QToolTip.palette()
-    pal.setColor(QPalette.ColorRole.ToolTipBase, QColor(C["panel"]))
-    pal.setColor(QPalette.ColorRole.ToolTipText, QColor(C["text"]))
+    # Dedicated tooltip tokens stay dark-on-light in both themes so
+    # the popover stays high-contrast against the active surface (and
+    # matches the web ``.seg-btn[data-tooltip]`` rule).
+    pal.setColor(QPalette.ColorRole.ToolTipBase, QColor(C["tooltip_bg"]))
+    pal.setColor(QPalette.ColorRole.ToolTipText, QColor(C["tooltip_text"]))
     QToolTip.setPalette(pal)
 
 
