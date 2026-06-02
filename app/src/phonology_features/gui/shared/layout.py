@@ -686,7 +686,11 @@ def feature_panel_natural_height(
 # ---------------------------------------------------------------------------
 
 OverflowStrategy = Literal[
-    "clip", "scroll", "shrink-font", "reflow", "hide",
+    "clip",
+    "scroll",
+    "shrink-font",
+    "reflow",
+    "hide",
 ]
 
 
@@ -708,12 +712,15 @@ class RegionConstraint:
     overflow: OverflowStrategy
 
 
-# Imported lazily inside the dict expression to avoid a cyclic
-# module-load between constants.py and layout.py at the test layer.
-def _btn_w() -> int:
-    from phonology_features.gui.shared.constants import BTN_W
-
-    return BTN_W
+# The seg_btn width literal is duplicated from
+# ``constants.BTN_W`` because the alternative -- importing BTN_W
+# here at module load -- breaks ``web/scripts/build.py`` when it
+# side-loads ``layout.py`` against a bare interpreter where
+# ``phonology_features`` is not on the import path. Drift between
+# this literal and ``constants.BTN_W`` is caught by
+# ``test_region_constraints_match_constants`` in
+# ``app/tests/test_pane_distribution.py``.
+_SEG_BTN_W: int = 33
 
 
 REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
@@ -721,9 +728,9 @@ REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
     # downscales wide glyphs (k+͡x+, ɡ+͡ɣ+) so they fit inside the
     # 33×26 outline without expanding it.
     "seg_btn": RegionConstraint(
-        min_w=_btn_w(),
-        pref_w=_btn_w(),
-        max_w=_btn_w(),
+        min_w=_SEG_BTN_W,
+        pref_w=_SEG_BTN_W,
+        max_w=_SEG_BTN_W,
         min_h=SEG_BTN_H,
         pref_h=SEG_BTN_H,
         max_h=SEG_BTN_H,
@@ -811,7 +818,9 @@ REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
 
 
 def would_overflow(
-    container_w: int, children_natural_w: Sequence[int], gap: int = 0,
+    container_w: int,
+    children_natural_w: Sequence[int],
+    gap: int = 0,
 ) -> bool:
     """True when laying the children out in one row would exceed
     ``container_w``. Used to decide whether to reflow / spillover /
@@ -831,7 +840,9 @@ def would_overflow(
     """
     if not children_natural_w:
         return False
-    needed = sum(children_natural_w) + max(0, len(children_natural_w) - 1) * gap
+    needed = (
+        sum(children_natural_w) + max(0, len(children_natural_w) - 1) * gap
+    )
     return needed > max(0, container_w)
 
 
@@ -864,7 +875,10 @@ def font_below_min(
 
 
 def aspect_out_of_range(
-    w: int, h: int, lo: float, hi: float,
+    w: int,
+    h: int,
+    lo: float,
+    hi: float,
 ) -> bool:
     """True when the ``w/h`` aspect ratio falls outside ``[lo, hi]``.
 

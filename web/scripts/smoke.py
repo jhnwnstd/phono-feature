@@ -257,7 +257,10 @@ def run_baseline_checks(page, label: str) -> int:
 
 
 def _assert_no_overlap_js(
-    page, selector_a: str, selector_b: str, label: str,
+    page,
+    selector_a: str,
+    selector_b: str,
+    label: str,
 ) -> int:
     """Pairwise non-overlap assertion runnable from any smoke check.
 

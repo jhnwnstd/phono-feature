@@ -279,7 +279,8 @@ def _load_constants_module() -> ModuleType:
     """
     constants_path = DESKTOP_GUI / "shared" / "constants.py"
     spec = importlib.util.spec_from_file_location(
-        "_constants", constants_path,
+        "_constants",
+        constants_path,
     )
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {constants_path}")
@@ -412,17 +413,19 @@ def generate_layout_css() -> None:
     # rules read these so a future ladder revision is one Python
     # constant edit, not a sweep of every ``font-size:`` declaration.
     constants_mod = _load_constants_module()
-    lines.extend([
-        "  /* Font-size ladder (from constants.py). */",
-        f"  --font-size-base: {constants_mod.FONT_SIZE_BASE_PX}px;",
-        f"  --font-size-control: {constants_mod.FONT_SIZE_CONTROL_PX}px;",
-        f"  --font-size-meta: {constants_mod.FONT_SIZE_META_PX}px;",
-        f"  --font-size-label: {constants_mod.FONT_SIZE_LABEL_PX}px;",
-        f"  --font-size-micro: {constants_mod.FONT_SIZE_MICRO_PX}px;",
-        # ``rasterizeText`` reads this floor so the JS-side font-shrink
-        # loop's lower bound stays in lockstep with the Python one.
-        f"  --font-size-min-px: {constants_mod.FONT_SIZE_MIN_PX}px;",
-    ])
+    lines.extend(
+        [
+            "  /* Font-size ladder (from constants.py). */",
+            f"  --font-size-base: {constants_mod.FONT_SIZE_BASE_PX}px;",
+            f"  --font-size-control: {constants_mod.FONT_SIZE_CONTROL_PX}px;",
+            f"  --font-size-meta: {constants_mod.FONT_SIZE_META_PX}px;",
+            f"  --font-size-label: {constants_mod.FONT_SIZE_LABEL_PX}px;",
+            f"  --font-size-micro: {constants_mod.FONT_SIZE_MICRO_PX}px;",
+            # ``rasterizeText`` reads this floor so the JS-side font-shrink
+            # loop's lower bound stays in lockstep with the Python one.
+            f"  --font-size-min-px: {constants_mod.FONT_SIZE_MIN_PX}px;",
+        ]
+    )
     # Per-region size contract emitted as ``--<key>-min-w/max-w/
     # min-h/max-h`` plus ``--<key>-overflow`` for the documented
     # strategy. Web style.css rules consume these via ``var(--seg-btn-

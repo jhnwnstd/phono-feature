@@ -61,7 +61,10 @@ def _shrink(rect: QRect, by: int = 1) -> QRect:
 
 
 def _assert_no_overlap(
-    rect_a: QRect, rect_b: QRect, label: str, tolerance: int = 1,
+    rect_a: QRect,
+    rect_b: QRect,
+    label: str,
+    tolerance: int = 1,
 ) -> None:
     a = _shrink(rect_a, tolerance)
     b = _shrink(rect_b, tolerance)
@@ -103,7 +106,10 @@ def window(qapp):
 
 @pytest.mark.parametrize("width,height", _RESOLUTIONS)
 def test_seg_panel_and_feat_panel_do_not_overlap(
-    window, qapp, width: int, height: int,
+    window,
+    qapp,
+    width: int,
+    height: int,
 ) -> None:
     """The horizontal splitter places these side by side; their
     geometries must not intersect at any representative resolution.
@@ -119,7 +125,10 @@ def test_seg_panel_and_feat_panel_do_not_overlap(
 
 @pytest.mark.parametrize("width,height", _RESOLUTIONS)
 def test_analysis_panel_does_not_overlap_top_split(
-    window, qapp, width: int, height: int,
+    window,
+    qapp,
+    width: int,
+    height: int,
 ) -> None:
     """The vertical splitter places the analysis pane below the
     seg/feat split. Vertically the analysis-pane top must be at or
@@ -141,7 +150,10 @@ def test_analysis_panel_does_not_overlap_top_split(
 
 @pytest.mark.parametrize("width,height", _RESOLUTIONS)
 def test_expand_button_does_not_overlap_tabs(
-    window, qapp, width: int, height: int,
+    window,
+    qapp,
+    width: int,
+    height: int,
 ) -> None:
     """Inside ``AnalysisPanel``, the expand toggle (row 0 of the
     QGridLayout) must not overlap the tab area (row 1). Phase B

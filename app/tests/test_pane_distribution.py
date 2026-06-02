@@ -270,6 +270,24 @@ def test_layout_css_emits_all_height_constants() -> None:
         )
 
 
+def test_region_constraints_match_constants() -> None:
+    """The ``seg_btn`` constraint inlines the BTN_W literal (33)
+    because the lazy-import alternative breaks the bare-interpreter
+    build in ``web/scripts/build.py``. Pin the agreement so a
+    future bump to ``constants.BTN_W`` can't silently leave the
+    constraint table at the stale value.
+    """
+    from phonology_features.gui.shared.constants import BTN_W
+
+    seg_btn = layout.REGION_CONSTRAINTS["seg_btn"]
+    assert seg_btn.min_w == BTN_W, (
+        f"REGION_CONSTRAINTS['seg_btn'].min_w={seg_btn.min_w}"
+        f" but constants.BTN_W={BTN_W}; update layout._SEG_BTN_W"
+    )
+    assert seg_btn.pref_w == BTN_W
+    assert seg_btn.max_w == BTN_W
+
+
 def test_region_constraints_internally_consistent() -> None:
     """Every ``RegionConstraint`` must satisfy
     ``min_w <= pref_w <= max_w`` (and the same for heights), with
@@ -279,29 +297,29 @@ def test_region_constraints_internally_consistent() -> None:
     """
     for key, region in layout.REGION_CONSTRAINTS.items():
         if region.pref_w is not None:
-            assert region.min_w <= region.pref_w, (
-                f"{key}: min_w={region.min_w} > pref_w={region.pref_w}"
-            )
+            assert (
+                region.min_w <= region.pref_w
+            ), f"{key}: min_w={region.min_w} > pref_w={region.pref_w}"
         if region.max_w is not None:
-            assert region.min_w <= region.max_w, (
-                f"{key}: min_w={region.min_w} > max_w={region.max_w}"
-            )
+            assert (
+                region.min_w <= region.max_w
+            ), f"{key}: min_w={region.min_w} > max_w={region.max_w}"
             if region.pref_w is not None:
-                assert region.pref_w <= region.max_w, (
-                    f"{key}: pref_w={region.pref_w} > max_w={region.max_w}"
-                )
+                assert (
+                    region.pref_w <= region.max_w
+                ), f"{key}: pref_w={region.pref_w} > max_w={region.max_w}"
         if region.pref_h is not None:
-            assert region.min_h <= region.pref_h, (
-                f"{key}: min_h={region.min_h} > pref_h={region.pref_h}"
-            )
+            assert (
+                region.min_h <= region.pref_h
+            ), f"{key}: min_h={region.min_h} > pref_h={region.pref_h}"
         if region.max_h is not None:
-            assert region.min_h <= region.max_h, (
-                f"{key}: min_h={region.min_h} > max_h={region.max_h}"
-            )
+            assert (
+                region.min_h <= region.max_h
+            ), f"{key}: min_h={region.min_h} > max_h={region.max_h}"
             if region.pref_h is not None:
-                assert region.pref_h <= region.max_h, (
-                    f"{key}: pref_h={region.pref_h} > max_h={region.max_h}"
-                )
+                assert (
+                    region.pref_h <= region.max_h
+                ), f"{key}: pref_h={region.pref_h} > max_h={region.max_h}"
 
 
 def test_region_constraints_relay_into_layout_css() -> None:
@@ -348,9 +366,9 @@ def test_font_size_ladder_relays_into_layout_css() -> None:
         ("--font-size-micro", "FONT_SIZE_MICRO_PX"),
         ("--font-size-min-px", "FONT_SIZE_MIN_PX"),
     ]:
-        assert var_name in contents, (
-            f"build.py:generate_layout_css does not emit {var_name}"
-        )
+        assert (
+            var_name in contents
+        ), f"build.py:generate_layout_css does not emit {var_name}"
         assert f"FONT_SIZE_{py_name.split('FONT_SIZE_')[1]}" in dir(
             constants,
         ), f"constants.py is missing {py_name}"

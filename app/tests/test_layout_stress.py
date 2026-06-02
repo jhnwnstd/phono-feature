@@ -183,9 +183,7 @@ def test_would_overflow_monotonic_in_container_w() -> None:
         if not is_over:
             seen_false = True
         else:
-            assert not seen_false, (
-                f"non-monotonic at container_w={w}"
-            )
+            assert not seen_false, f"non-monotonic at container_w={w}"
 
 
 def test_should_stack_vowels_agrees_with_would_overflow_at_threshold() -> None:
@@ -200,18 +198,24 @@ def test_should_stack_vowels_agrees_with_would_overflow_at_threshold() -> None:
     consonant_floor = layout.VOWEL_STACK_W - layout.VOWEL_NATURAL_W
     # Just above threshold: do not stack; predicate says fits.
     assert layout.should_stack_vowels(layout.VOWEL_STACK_W) is False
-    assert layout.would_overflow(
-        layout.VOWEL_STACK_W,
-        [consonant_floor, layout.VOWEL_NATURAL_W],
-        gap=0,
-    ) is False
+    assert (
+        layout.would_overflow(
+            layout.VOWEL_STACK_W,
+            [consonant_floor, layout.VOWEL_NATURAL_W],
+            gap=0,
+        )
+        is False
+    )
     # Just below: stack; predicate says overflows.
     assert layout.should_stack_vowels(layout.VOWEL_STACK_W - 1) is True
-    assert layout.would_overflow(
-        layout.VOWEL_STACK_W - 1,
-        [consonant_floor, layout.VOWEL_NATURAL_W],
-        gap=0,
-    ) is True
+    assert (
+        layout.would_overflow(
+            layout.VOWEL_STACK_W - 1,
+            [consonant_floor, layout.VOWEL_NATURAL_W],
+            gap=0,
+        )
+        is True
+    )
 
 
 def test_font_below_min_basic() -> None:
