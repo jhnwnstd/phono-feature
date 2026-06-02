@@ -51,6 +51,17 @@ ENGINE_PKG = ROOT / "packages" / "phonology-engine"
 DESKTOP_GUI = ROOT / "app" / "src" / "phonology_features" / "gui"
 INVENTORIES = ROOT / "app" / "inventories"
 
+# Make the desktop source tree importable as a normal package so the
+# ``spec_from_file_location`` side-loads below can transitively
+# import their siblings (``constants.py`` does
+# ``from phonology_features.gui.shared.palette import C`` at the top;
+# without ``app/src`` on the path that top-import raises
+# ``ModuleNotFoundError`` against CI's bare interpreter, even though
+# it succeeds locally where the package is installed in the venv).
+_APP_SRC = str(ROOT / "app" / "src")
+if _APP_SRC not in sys.path:
+    sys.path.insert(0, _APP_SRC)
+
 # Desktop GUI files relayed verbatim into the web bundle. Each one
 # is pure Python with no module-level Qt imports (palette.py wraps
 # its Qt imports in a function), so they run unchanged in Pyodide.
