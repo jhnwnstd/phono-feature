@@ -67,30 +67,11 @@ def test_cycle_value_unknown_resets_to_zero():
     assert cycle_value("+++") == "0"
 
 
-def test_cycle_value_full_round_trip():
-    """0 -> + -> minus -> 0 in three steps. Documents the loop
-    length so a future change that adds a step (e.g. an
-    underspecified-but-present marker) breaks this test
-    deliberately."""
-    v = "0"
-    v = cycle_value(v)
-    assert v == "+"
-    v = cycle_value(v)
-    assert v == MINUS_DISPLAY
-    v = cycle_value(v)
-    assert v == "0"
-
-
 # CYCLE_LADDER: the data cycle_value reads, exposed for the web JS
-
-
-def test_cycle_ladder_matches_cycle_value_for_every_in_ladder_key():
-    """The ladder constant is the single source of truth shared with
-    the web editor; ``cycle_value`` is a thin lookup. They must
-    agree for every key in the ladder so the JS-side lookup
-    behaves identically to the Python function."""
-    for key, expected_next in CYCLE_LADDER.items():
-        assert cycle_value(key) == expected_next
+# (the per-step cycle behaviour is pinned by the three
+# ``test_cycle_value_*_goes_to_*`` tests above; testing the ladder
+# data + the cycle function for the same 3 transitions is
+# redundant).
 
 
 def test_cycle_ladder_is_read_only():

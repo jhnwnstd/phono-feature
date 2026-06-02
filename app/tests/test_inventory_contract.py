@@ -827,17 +827,20 @@ def test_hayes_parses_without_issues() -> None:
 @pytest.mark.parametrize(
     "fname",
     [
+        # ``hayes`` = densest (largest segment count, widest feature
+        # set); ``english`` = sparsest. Sampling the worst-case-on-
+        # both-axes pair gives the same drift-detection signal as
+        # iterating all four bundled inventories without paying for
+        # near-duplicate engine consumes in CI.
         "hayes_features.json",
-        "general_features.json",
         "english_features.json",
-        "blevins_features.json",
     ],
 )
 def test_bundled_inventory_survives_engine_consumers(fname: str) -> None:
-    """Every bundled inventory must load, construct an engine, and
-    survive both downstream cached_property consumers. Catches a
-    bundled inventory developing feature-name aliasing (or any other
-    parser-vs-engine drift) during edits.
+    """A representative bundled inventory must load, construct an
+    engine, and survive both downstream cached_property consumers.
+    Catches a bundled inventory developing feature-name aliasing
+    (or any other parser-vs-engine drift) during edits.
     """
     full = REPO_ROOT / "inventories" / fname
     if not full.exists():

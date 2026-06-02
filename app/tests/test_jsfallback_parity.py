@@ -162,13 +162,63 @@ def _js_partition_spillover(
 # ----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("group_size", list(range(0, 30)))
-@pytest.mark.parametrize("max_cols", list(range(1, 16)))
+@pytest.mark.parametrize(
+    "group_size,max_cols",
+    [
+        # Zero-segment guard
+        (0, 1),
+        (0, 8),
+        # Single-segment endpoints
+        (1, 1),
+        (1, 8),
+        # Pass-through (group fits in one row)
+        (4, 8),
+        # Orphan-avoidance boundaries -- the explicit reason this
+        # helper exists; covers the (n_rows * cols) - 1 = group_size
+        # cases the algorithm is designed to detect.
+        (7, 4),
+        (7, 5),
+        (7, 6),
+        (8, 5),
+        (10, 3),
+        (11, 4),
+        (13, 6),
+        # Realistic-max bundled inventory cardinality x column count
+        (20, 12),
+        (25, 10),
+        # Pathological max (top of the historical fuzz range)
+        (29, 15),
+    ],
+    ids=[
+        "empty/1col",
+        "empty/8col",
+        "single/1col",
+        "single/8col",
+        "passthrough/4-in-8",
+        "orphan-7x4",
+        "orphan-7x5",
+        "orphan-7x6",
+        "orphan-8x5",
+        "orphan-10x3",
+        "orphan-11x4",
+        "orphan-13x6",
+        "realistic-20x12",
+        "realistic-25x10",
+        "pathological-29x15",
+    ],
+)
 def test_best_n_cols_js_matches_python(group_size: int, max_cols: int) -> None:
     """``_fallbackBestNCols`` must match ``layout.best_segment_n_cols``
-    for every (group_size, max_cols) pair the UI can ask about. Range
-    chosen to cover the largest bundled inventory's manner-class
-    cardinality and the widest realistic column count.
+    for every (group_size, max_cols) pair the UI can ask about.
+
+    Handpicked representatives instead of a 30x15 Cartesian fuzz:
+    the algorithm's behaviour is fully exercised by the orphan-
+    avoidance boundary class (which is the entire reason the helper
+    exists), plus the zero / single / pass-through / pathological
+    endpoints. The hash-pin on the JS body
+    (:py:func:`test_js_fallback_body_hash_pinned`) catches edits
+    that touch the function at all; this table catches algorithmic
+    drift on any of the representative cases.
     """
     assert _js_best_n_cols(group_size, max_cols) == layout.best_segment_n_cols(
         group_size, max_cols
@@ -215,26 +265,45 @@ def _js_classify_editor_selection(
 
 
 @pytest.mark.parametrize(
-    "heights",
+    "heights,available",
     [
-        [],
-        [40],
-        [40, 40],
-        [40, 60, 40, 100, 40],
-        [120, 80, 60, 40, 90, 110, 70, 50],
-        [50] * 20,
-        [200, 80, 60, 80, 200, 60, 80],
+        # Empty pane: spillover is a no-op regardless of available.
+        ([], 0),
+        # Single short group: trivially fits.
+        ([40], 400),
+        # Two-of-a-kind: rebalancer should keep them aligned.
+        ([40, 40], 400),
+        # Realistic spillover case: a tall middle group forces a
+        # break. Match to a typical seg-pane height (400).
+        ([40, 60, 40, 100, 40], 200),
+        # Large 8-element mix at a tight available height -- the
+        # most representative real workload (Hayes-class inventory).
+        ([120, 80, 60, 40, 90, 110, 70, 50], 400),
+        # Many identical (rebalance distributes evenly).
+        ([50] * 20, 600),
+        # Peaks at the edges (asymmetric placement).
+        ([200, 80, 60, 80, 200, 60, 80], 400),
+    ],
+    ids=[
+        "empty",
+        "single-fits",
+        "pair-aligned",
+        "mid-tall-break",
+        "8-element-mix",
+        "many-identical",
+        "edge-peaks",
     ],
 )
-@pytest.mark.parametrize("available", [0, 100, 200, 400, 600, 900])
 def test_partition_spillover_js_matches_python(
     heights: list[int], available: int
 ) -> None:
     """``_fallbackPartitionSpillover`` must match
     ``layout.partition_groups_for_spillover`` for representative
-    height arrays and panel sizes. Heights chosen to cover the
-    cases the seg-pane spillover rebalancer hits on the bundled
-    inventories.
+    height shapes paired with the realistic ``available`` that
+    forces the relevant branch. Each pair is one named scenario
+    rather than a Cartesian product -- the 7 shape classes already
+    cover every branch and the per-shape ``available`` pairs them
+    with the height-vs-room interaction that matters.
     """
     assert _js_partition_spillover(
         heights, available

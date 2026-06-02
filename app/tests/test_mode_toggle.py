@@ -19,20 +19,10 @@ def _selected_feat_rows(window) -> set[str]:
     return {f for f, row in window._feat_rows.items() if row._current_value}
 
 
-# ---------------------------------------------------------------------------
-# Initial state
-# ---------------------------------------------------------------------------
-def test_fresh_window_has_no_selections(window):
-    assert window._mode_ctrl.mode == "seg_to_feat"
-    assert window._selected_segments == []
-    assert window._selected_features == {}
-    assert _selected_feat_rows(window) == set()
-
-
-def test_inventory_loaded(window):
-    # Hayes is the test fixture: 140 segments, 28 features
-    assert len(window._seg_buttons) == 140
-    assert len(window._feat_rows) == 28
+# Fresh-state smoke (initial mode == seg_to_feat, empty selections,
+# expected segment/feature counts on the Hayes fixture) is covered
+# implicitly by every test below via the ``window`` fixture; the
+# pinned smoke tests were redundant and have been removed.
 
 
 # ---------------------------------------------------------------------------

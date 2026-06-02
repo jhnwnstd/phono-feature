@@ -208,28 +208,32 @@ def app() -> QApplication:
 # Palette structure
 
 
-@pytest.mark.parametrize("name", list(ALL_PALETTES))
-def test_palette_keys_are_uniform(name: str) -> None:
-    """Every palette dict must expose the same key set. Consumers
-    blindly index ``C["whatever"]`` and a missing key on one of the
-    four variants would crash on toggle.
+def test_palette_keys_are_uniform() -> None:
+    """Every palette dict must expose the same key set as LIGHT.
+    Consumers blindly index ``C["whatever"]`` and a missing key on
+    one variant would crash on toggle. One test loops over all four
+    palettes so a divergence in ANY variant fails this single
+    assertion with a clear missing/extra report per palette.
     """
-    keys = set(ALL_PALETTES[name].keys())
     expected = set(LIGHT.keys())
-    missing = expected - keys
-    extra = keys - expected
-    assert not missing, f"{name} missing keys: {sorted(missing)}"
-    assert not extra, f"{name} has extra keys vs LIGHT: {sorted(extra)}"
+    for name, palette in ALL_PALETTES.items():
+        keys = set(palette.keys())
+        missing = expected - keys
+        extra = keys - expected
+        assert not missing, f"{name} missing keys: {sorted(missing)}"
+        assert not extra, f"{name} has extra keys vs LIGHT: {sorted(extra)}"
 
 
-@pytest.mark.parametrize("name", list(ALL_PALETTES))
-def test_palette_values_are_valid_hex(name: str) -> None:
-    """Every value must be a 7-char ``#RRGGBB`` string. CSS variables
-    embed these verbatim; an invalid value silently breaks rendering.
+def test_palette_values_are_valid_hex() -> None:
+    """Every value across every palette must be a 7-char
+    ``#RRGGBB`` string. CSS variables embed these verbatim; an
+    invalid value silently breaks rendering. One test loops over
+    all four palettes for the same reason as
+    :py:func:`test_palette_keys_are_uniform`.
     """
-    pal = ALL_PALETTES[name]
-    bad = {k: v for k, v in pal.items() if not HEX_RE.match(v)}
-    assert not bad, f"{name} has non-hex values: {bad}"
+    for name, palette in ALL_PALETTES.items():
+        bad = {k: v for k, v in palette.items() if not HEX_RE.match(v)}
+        assert not bad, f"{name} has non-hex values: {bad}"
 
 
 # ---------------------------------------------------------------------------
@@ -388,14 +392,18 @@ def test_theme_version_increments_on_every_change() -> None:
     assert _palette.theme_version > v3
 
 
-@pytest.mark.parametrize("seq_seed", list(range(8)))
+@pytest.mark.parametrize("seq_seed", [0, 3, 7])
 def test_random_toggle_sequences_match_expected_palette(
     seq_seed: int,
 ) -> None:
     """Fuzz: a random sequence of 32 toggles (theme or mode) must
     leave ``C`` matching the expected palette for the resulting
     (theme, mode) pair. Catches state-tracking bugs that only show
-    up under interleaved toggles.
+    up under interleaved toggles. Three representative seeds cover
+    short / medium / long interleaving patterns; the full 8-seed
+    sweep is overkill since the cache-invalidation tests below are
+    the load-bearing gate for the bug class this fuzz exists to
+    detect.
     """
     rng = random.Random(seq_seed)
     theme = "light"

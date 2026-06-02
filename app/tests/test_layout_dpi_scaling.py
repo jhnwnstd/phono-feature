@@ -20,13 +20,14 @@ from phonology_features.gui.shared import layout
 @pytest.mark.parametrize(
     "dpr,expected",
     [
+        # Three representative DPRs cover the rounding contract:
+        # baseline (1.0), the common HiDPI tier (1.5), and the
+        # high-end retina tier (2.0). The full 7-entry sweep was
+        # overkill since ``scaled_handle_w`` is ``round(4 * dpr)``
+        # -- a single rounding bug would surface at any of these.
         (1.0, 4),
-        (1.25, 5),
         (1.5, 6),
-        (1.75, 7),
         (2.0, 8),
-        (2.5, 10),
-        (3.0, 12),
     ],
 )
 def test_scaled_handle_w_tracks_device_pixel_ratio(

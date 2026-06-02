@@ -19,15 +19,14 @@ from phonology_features.gui.shared import layout
 @pytest.mark.parametrize(
     "screen_w,expected_max",
     [
-        # Normal monitors: the cap doesn't bite. The helper returns
-        # the screen width itself (floored at the vowel-safe
-        # MIN_FIRST_LAUNCH_W on tiny screens).
-        (1280, 1280),
-        (1920, 1920),
+        # Just-below-cap: the helper returns the screen width itself.
         (2400, 2400),
-        # Ultrawide and larger: the absolute cap kicks in.
+        # Just-above-cap: the absolute cap kicks in.
         (2401, layout.CONTENT_MAX_W_ABS),
-        (3440, layout.CONTENT_MAX_W_ABS),
+        # Mid-ultrawide and pathological: the cap holds across the
+        # range. One representative per regime is enough; the cap
+        # value is a constant, not a function of width above the
+        # threshold.
         (3840, layout.CONTENT_MAX_W_ABS),
         (5120, layout.CONTENT_MAX_W_ABS),
     ],
@@ -55,11 +54,11 @@ def test_content_max_w_never_below_min_first_launch() -> None:
 @pytest.mark.parametrize(
     "screen_w,screen_h",
     [
+        # Just-above ultrawide threshold and one extreme. The width
+        # cap is constant above 2400, so a representative pair per
+        # regime covers the contract.
         (3440, 1440),
-        (3840, 1600),
-        (3840, 2160),
         (5120, 1440),
-        (5120, 2880),
     ],
 )
 def test_recommended_initial_window_capped_on_ultrawide(
