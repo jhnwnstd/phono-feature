@@ -1,5 +1,14 @@
 @echo off
-setlocal
+REM Intentionally NOT using ``setlocal``. The caller (RUN-Windows.bat)
+REM invokes this script via ``call`` and then runs ``phonology-features``,
+REM which lives at ``<venv>\Scripts\phonology-features.exe`` and is only
+REM reachable when the venv's ``activate.bat`` has prepended that
+REM directory to PATH. ``setlocal`` would scope the activation's env
+REM changes to this script and revert them on exit, leaving PATH
+REM without the Scripts dir and the caller's ``phonology-features``
+REM call failing with "not recognized as an internal or external
+REM command" (exit code 9009). This mirrors the bash launchers, which
+REM ``source`` install.sh so its env changes are visible to the caller.
 
 set "PLATFORM=%~1"
 set "SCRIPT_DIR=%~dp0"
