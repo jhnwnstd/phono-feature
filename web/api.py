@@ -463,6 +463,8 @@ def project_mode_switch(
     target_mode: str,
     selected_segments: list[str],
     selected_features: dict[str, str],
+    feature_query_origin: str = "typed",
+    prior_saved_seg_state: list[str] | None = None,
 ) -> dict[str, Any]:
     """Full top-level mode-transition projection shared with desktop.
 
@@ -473,6 +475,13 @@ def project_mode_switch(
     that raises ``ValueError`` on a typo); the decorator translates
     that to ``ValidationError`` so JS gets a clean error path on a
     bad mode string instead of a raw stack trace in the console.
+
+    ``feature_query_origin`` / ``prior_saved_seg_state`` thread the
+    SEG→FEAT→SEG round-trip preservation: when the user did not
+    edit a previously-projected FEAT query, the original seg
+    selection is restored on return to SEG rather than recomputed
+    from the (possibly-expanded) strict match set. See
+    :py:func:`project_mode_transition` for the contract.
     """
     # ``project_mode_transition`` calls ``Mode(...)`` internally;
     # the decorator translates the ``ValueError`` for a bad string.
@@ -482,17 +491,18 @@ def project_mode_switch(
         selected_segments=list(selected_segments),
         selected_features=dict(selected_features),
         engine=_require_engine(),
+        feature_query_origin=feature_query_origin,
+        prior_saved_seg_state=(
+            list(prior_saved_seg_state)
+            if prior_saved_seg_state is not None
+            else None
+        ),
     )
     return {
         "saved_seg_state": transition.saved_seg_state,
         "saved_feat_state": transition.saved_feat_state,
         "selected_segments": transition.selected_segments,
         "selected_features": transition.selected_features,
-        # JS reads this to decide whether the next analyze_features
-        # call should pass ``projected_segments`` (preserving the
-        # original seg set as the displayed matches) or do a strict
-        # re-query. It flips to ``"typed"`` the first time the user
-        # toggles a feature in FEAT mode.
         "feature_query_origin": transition.feature_query_origin,
     }
 
@@ -567,10 +577,7 @@ def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict[str, Any]:
 
 
 @_translate_engine_errors
-def analyze_features(
-    spec: dict[str, str],
-    projected_segments: list[str] | None = None,
-) -> dict[str, Any]:
+def analyze_features(spec: dict[str, str]) -> dict[str, Any]:
     """FEAT-mode analysis. Returns ``analysis_html`` + the
     matching segment list. JS derives matched/unmatched state per
     button inline (mirroring _update_feat_to_seg).
@@ -580,14 +587,14 @@ def analyze_features(
     / "0"``. Same boundary-hardening as
     :py:func:`analyze_segments`.
 
-    ``projected_segments`` is the round-trip override: when the
-    FEAT query was auto-projected from a prior SEG selection (the
-    ``project_mode_switch`` payload's ``feature_query_origin ==
-    "projected"``), the JS passes the original seg list here so
-    the analysis preserves the user's selection instead of doing
-    a strict re-query that would drop members with ``'0'`` cells
-    on the projected features. JS clears this argument the moment
-    the user toggles any feature.
+    **Display invariant:** ``matching`` always equals
+    ``engine.find_segments(spec)``, so the highlighted segments
+    in the segment pane always form a strict natural class
+    characterised by the active query. The SEG→FEAT
+    seg-selection round-trip is preserved by
+    :py:func:`project_mode_switch` via the
+    ``feature_query_origin`` plumbing; it never alters the
+    matches this function returns.
     """
     engine = _require_engine()
     bad_keys = [
@@ -607,33 +614,15 @@ def analyze_features(
                 f"of {sorted(_VALID_FEATURE_VALUES)}",
             )
         )
-    # When projected_segments is supplied, validate membership but
-    # don't fail on segments missing from the inventory -- a stale
-    # projection from a different inventory may silently drop a
-    # member, which is the lesser of two surprises (better than
-    # ValidationError mid-mode-switch). The shared layer applies
-    # the same filter.
-    proj_tuple = (
-        tuple(projected_segments) if projected_segments is not None else None
-    )
-    return _analyze_features_cached(tuple(spec.items()), proj_tuple)
+    return _analyze_features_cached(tuple(spec.items()))
 
 
 @lru_cache(maxsize=256)
 def _analyze_features_cached(
     spec_items: tuple[tuple[str, str], ...],
-    projected_segments: tuple[str, ...] | None,
 ) -> dict[str, Any]:
     engine = _require_engine()
-    return summarize_feature_query(
-        engine,
-        dict(spec_items),
-        projected_segments=(
-            list(projected_segments)
-            if projected_segments is not None
-            else None
-        ),
-    )
+    return summarize_feature_query(engine, dict(spec_items))
 
 
 def validation_issues_from_error(exc: Any) -> list[str]:

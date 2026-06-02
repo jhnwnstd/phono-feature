@@ -96,6 +96,8 @@ class ModeController:
             selected_segments=list(self._w._selected_segments),
             selected_features=dict(self._w._selected_features),
             engine=self._w.engine,
+            feature_query_origin=self.feature_query_origin,
+            prior_saved_seg_state=list(self.saved_seg_state),
         )
         self.saved_seg_state = transition.saved_seg_state
         self.saved_feat_state = transition.saved_feat_state
@@ -104,8 +106,11 @@ class ModeController:
     def mark_feature_query_typed(self) -> None:
         """Called by MainWindow when the user toggles any feature in
         FEAT mode. Drops the ``"projected"`` provenance so the next
-        analysis run does a strict ``find_segments`` query instead of
-        showing the seg set carried over from a prior SEG selection.
+        FEAT→SEG transition recomputes the seg state from
+        ``find_segments(query)`` instead of restoring the original
+        seg selection. (The FEAT-mode highlighted segments always
+        come from ``find_segments(query)`` -- this flag only
+        affects what the seg state becomes on mode-switch return.)
         """
         self.feature_query_origin = "typed"
 

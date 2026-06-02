@@ -1227,19 +1227,25 @@ function activateMode(mode) {
             mode,
             state.selected_segments,
             state.selected_features,
+            // ``feature_query_origin`` lets the projection decide
+            // whether to restore the prior seg selection (when the
+            // user never touched a projected query) or recompute
+            // from ``find_segments``. ``saved_seg_state`` is the
+            // prior seg list that may be restored.
+            state.feature_query_origin,
+            state.saved_seg_state,
         )
         : fallbackModeSwitch();
 
     state.saved_seg_state = transition.saved_seg_state.slice();
     state.saved_feat_state = cloneFeatureSpec(transition.saved_feat_state);
-    // ``feature_query_origin`` flows from the shared mode-logic
-    // projection. After SEG→FEAT with a non-empty selection the
-    // bridge reports ``"projected"``; everything else is ``"typed"``.
-    // The flag is read by ``runFeatToSeg`` to pick whether to pass
-    // ``projected_segments`` into ``analyze_features``. The fallback
-    // (no bridge) treats every transition as ``"typed"`` -- the
-    // pre-Pyodide analysis is approximate enough that preserving
-    // the projection is not worth special-casing.
+    // The bridge marks a SEG→FEAT transition with a non-empty
+    // selection as ``"projected"``; the controller flips back to
+    // ``"typed"`` the moment the user toggles any feature.
+    // The FEAT-mode highlighted segments always come from
+    // ``find_segments(query)`` -- the seg-selection round-trip is
+    // handled by the projection itself via the saved-seg-state
+    // restore on FEAT→SEG return when origin stays "projected".
     state.feature_query_origin = transition.feature_query_origin || "typed";
 
     state.mode = mode;
@@ -1380,20 +1386,15 @@ function runSegToFeat(token) {
 function runFeatToSeg(token) {
     let result;
     try {
-        // When the FEAT query was auto-projected from a prior SEG
-        // selection (provenance = "projected"), pass the original
-        // seg list so the matches display preserves the user's
-        // selection. Once any feature toggle drops origin to
-        // "typed", we pass null so the bridge does a strict
-        // find_segments. Mirrors the desktop's
-        // ``_update_feat_to_seg`` projected_segments branch.
-        const projected =
-            state.feature_query_origin === "projected"
-                ? state.saved_seg_state
-                : null;
-        result = callBridge(
-            "analyze_features", state.selected_features, projected,
-        );
+        // FEAT-mode display invariant: the highlighted segments
+        // are always ``find_segments(query)`` and therefore form
+        // a strict natural class characterised by the active
+        // query. The seg-selection round-trip across mode
+        // switches is preserved by the bridge's
+        // ``project_mode_switch`` projection via the
+        // ``feature_query_origin`` plumbing; analyze_features
+        // never alters which segments match.
+        result = callBridge("analyze_features", state.selected_features);
     } catch (e) {
         _surfaceBridgeFailure("analyze_features", e);
         return;

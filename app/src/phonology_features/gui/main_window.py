@@ -1491,20 +1491,14 @@ class MainWindow(QMainWindow):
                 btn.set_state(SegmentState.DEFAULT)
             self.analysis.clear()
             return
-        # If the FEAT query came from a SEG→FEAT projection (the user
-        # hasn't toggled a feature yet), preserve the original seg
-        # selection as the displayed matches. ``saved_seg_state`` is
-        # the snapshot the mode-switch captured. Once any feature is
-        # toggled, ``feature_query_origin`` flips to ``"typed"`` and
-        # this branch falls through to a strict ``find_segments``.
-        projected = (
-            self._mode_ctrl.saved_seg_state
-            if self._mode_ctrl.feature_query_origin == "projected"
-            else None
-        )
-        summary = summarize_feature_query(
-            self.engine, selected_feats, projected_segments=projected
-        )
+        # FEAT-mode display invariant: highlighted segments always
+        # come from ``find_segments(query)`` -- the strict matches
+        # of the active query. The seg-selection round-trip across
+        # mode switches is preserved by ``ModeController`` via the
+        # ``feature_query_origin`` flag and the saved-seg-state
+        # restore in ``mode_logic.project_mode_transition``; the
+        # analysis output never lies about which segments match.
+        summary = summarize_feature_query(self.engine, selected_feats)
         segment_states = summary["segment_states"]
         for seg, btn in self._seg_buttons.items():
             btn.set_state(segment_states.get(seg, SegmentState.DEFAULT.value))
