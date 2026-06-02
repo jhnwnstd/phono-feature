@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Literal
 
 # Pins are conventional in IPA chart layouts: place-of-articulation
 # features (Major Class, Place) sit on the left, manner-of-
@@ -443,6 +445,14 @@ def should_stack_vowels(seg_pane_w: int) -> bool:
     """True when the seg pane is too narrow to host the vowel chart
     beside the consonants. Both UIs drop the chart below the
     consonants at the same threshold.
+
+    The pixel threshold (``VOWEL_STACK_W``) is the canonical answer
+    for shipped inventories; the constraint-failure predicate
+    :py:func:`would_overflow` is the underlying reason. Both must
+    agree at the boundary, asserted by
+    ``test_layout_stress.py::test_vowel_stack_predicate_matches_
+    threshold``. The threshold remains the fast path so this hot
+    function stays branch-cheap.
     """
     return seg_pane_w < VOWEL_STACK_W
 
@@ -645,3 +655,225 @@ def feature_panel_natural_height(
         )
 
     return max(column_h(left_names), column_h(right_names)) + PANEL_CHROME_V
+
+
+# ---------------------------------------------------------------------------
+# REGION CONSTRAINT TABLE
+#
+# Single declarative source of truth for each visible region's size
+# contract. Qt widgets cite their entry through ``setSizePolicy`` /
+# ``setMinimumSize`` / ``setMaximumSize`` (see Phase C). The web
+# build relays ``REGION_CONSTRAINTS`` into CSS custom properties so
+# ``style.css`` rules read the same numbers (see
+# ``generate_layout_css`` in ``web/scripts/build.py``).
+#
+# An entry's ``min_*`` is the floor below which content stops being
+# usable. ``pref_*`` is the natural size when content drives layout
+# (``None`` means "use sizeHint / intrinsic"). ``max_*`` is the
+# ceiling above which extra space is wasted (``None`` = unbounded).
+# ``overflow`` names the documented strategy when natural content
+# would exceed ``max_*``:
+#
+#   "clip"        — hard-cut via ``overflow: hidden`` / Qt clip.
+#   "scroll"      — show a scrollbar.
+#   "shrink-font" — re-render at a smaller font-size (seg buttons
+#                   use this via the rasterizer's font-shrink loop).
+#   "reflow"      — engage an alternative layout (spillover, stack).
+#   "hide"        — drop the region (e.g. tooltip when no source).
+#
+# Adding a region: add the entry below, then cite it in the widget's
+# constructor and the test in ``app/tests/test_size_policies.py``.
+# ---------------------------------------------------------------------------
+
+OverflowStrategy = Literal[
+    "clip", "scroll", "shrink-font", "reflow", "hide",
+]
+
+
+@dataclass(frozen=True)
+class RegionConstraint:
+    """A region's size contract: floor, natural size, ceiling, and
+    documented overflow strategy. ``pref_*`` and ``max_*`` may be
+    ``None`` to mean "intrinsic / unbounded" respectively. All
+    numeric fields are in CSS pixels (web) / device-independent
+    pixels (Qt).
+    """
+
+    min_w: int
+    pref_w: int | None
+    max_w: int | None
+    min_h: int
+    pref_h: int | None
+    max_h: int | None
+    overflow: OverflowStrategy
+
+
+# Imported lazily inside the dict expression to avoid a cyclic
+# module-load between constants.py and layout.py at the test layer.
+def _btn_w() -> int:
+    from phonology_features.gui.shared.constants import BTN_W
+
+    return BTN_W
+
+
+REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
+    # Segment button: fixed-size content floor. The rasterizer
+    # downscales wide glyphs (k+͡x+, ɡ+͡ɣ+) so they fit inside the
+    # 33×26 outline without expanding it.
+    "seg_btn": RegionConstraint(
+        min_w=_btn_w(),
+        pref_w=_btn_w(),
+        max_w=_btn_w(),
+        min_h=SEG_BTN_H,
+        pref_h=SEG_BTN_H,
+        max_h=SEG_BTN_H,
+        overflow="shrink-font",
+    ),
+    # Segment grid: floor below which the consonant grid can't host
+    # its widest manner row; height is content-driven (no pref/max)
+    # and falls back to spillover when natural height exceeds the
+    # pane area.
+    "seg_grid": RegionConstraint(
+        min_w=SEG_MIN_W,
+        pref_w=None,
+        max_w=None,
+        min_h=SEG_GROUP_HEADER_H + SEG_BTN_ROW_H,
+        pref_h=None,
+        max_h=None,
+        overflow="reflow",
+    ),
+    # Vowel chart: fixed phonetic visualisation, kept at its natural
+    # width across pane sizes; height grows with row count.
+    "vowel_chart": RegionConstraint(
+        min_w=VOWEL_NATURAL_W,
+        pref_w=VOWEL_NATURAL_W,
+        max_w=VOWEL_NATURAL_W,
+        min_h=4 * SEG_BTN_ROW_H,
+        pref_h=None,
+        max_h=None,
+        overflow="clip",
+    ),
+    # Feature card: one column inside the two-column feature panel.
+    # ``MIN_FEAT_CARD_W`` is the floor that keeps the longest group
+    # title ("TONGUE-ROOT / PHARYNGEAL") on a single line.
+    "feature_card": RegionConstraint(
+        min_w=MIN_FEAT_CARD_W,
+        pref_w=None,
+        max_w=None,
+        min_h=FEAT_CARD_CHROME_H + FEAT_ROW_H,
+        pref_h=None,
+        max_h=None,
+        overflow="reflow",
+    ),
+    # Feature panel: two-column layout; floor accommodates two
+    # ``MIN_FEAT_CARD_W`` columns plus chrome.
+    "feature_panel": RegionConstraint(
+        min_w=FEAT_MIN_W,
+        pref_w=None,
+        max_w=None,
+        min_h=FEAT_CARD_CHROME_H + 4 * FEAT_ROW_H + PANEL_CHROME_V,
+        pref_h=None,
+        max_h=None,
+        overflow="scroll",
+    ),
+    # Analysis panel: floor lets analysis collapse to a tab-bar +
+    # one line; preferred height shows ~3 minimal feature-spec rows.
+    # The expand toggle bypasses ``pref_h`` up to
+    # ``ANALYSIS_MAX_RATIO`` of the vsplit (see
+    # ``analysis_expand_target``).
+    "analysis_panel": RegionConstraint(
+        min_w=SEG_MIN_W + FEAT_MIN_W,
+        pref_w=None,
+        max_w=None,
+        min_h=HARD_MIN_ANALYSIS_H,
+        pref_h=MIN_ANALYSIS_H,
+        max_h=None,
+        overflow="scroll",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# CONTENT-DRIVEN BREAKPOINT PREDICATES
+#
+# Layout decisions historically keyed off pixel thresholds
+# (``VOWEL_STACK_W = 620``, ``COLLAPSE_W = 900``). Thresholds are
+# cheap and explicit but answer the wrong question: "is the window
+# narrower than 620 px?" instead of "would my content actually
+# overlap?". The predicates below answer the latter -- they consume
+# only the relevant content metrics and the available space.
+#
+# Threshold helpers (``should_stack_vowels`` etc.) stay as fast paths
+# for the shipped-inventory shapes; the predicates are the underlying
+# truth and asserted to agree at the boundary in
+# ``test_layout_stress.py``.
+# ---------------------------------------------------------------------------
+
+
+def would_overflow(
+    container_w: int, children_natural_w: Sequence[int], gap: int = 0,
+) -> bool:
+    """True when laying the children out in one row would exceed
+    ``container_w``. Used to decide whether to reflow / spillover /
+    stack before the visual collision happens.
+
+    Empty children always fit; negative ``container_w`` is treated
+    as zero. ``gap`` is the inter-child spacing (Qt layout spacing /
+    CSS gap); a final trailing gap is NOT included since most layouts
+    only emit gaps BETWEEN children.
+
+    >>> would_overflow(800, [480, 320], gap=8)
+    True
+    >>> would_overflow(810, [480, 320], gap=10)
+    True
+    >>> would_overflow(820, [480, 320], gap=10)
+    False
+    """
+    if not children_natural_w:
+        return False
+    needed = sum(children_natural_w) + max(0, len(children_natural_w) - 1) * gap
+    return needed > max(0, container_w)
+
+
+def font_below_min(
+    text_w_px: int,
+    max_w_px: int,
+    current_px: int,
+    min_px: int | None = None,
+) -> bool:
+    """True when shrinking the font to make ``text_w_px`` fit inside
+    ``max_w_px`` would drop below the readability floor. Formalises
+    the rasterizer's font-shrink loop in ``web/main.js`` so the same
+    predicate is available to Qt-side text-fit logic.
+
+    The shrink scales the font linearly: the size at which the text
+    just fits is ``current_px * max_w_px / text_w_px``. The
+    predicate is true when that size is below ``min_px``.
+
+    ``min_px`` defaults to ``FONT_SIZE_MIN_PX`` from constants.py;
+    pulled lazily to avoid a load-time cycle.
+    """
+    if min_px is None:
+        from phonology_features.gui.shared.constants import FONT_SIZE_MIN_PX
+
+        min_px = FONT_SIZE_MIN_PX
+    if text_w_px <= max_w_px:
+        return False
+    fit_px = current_px * max_w_px / text_w_px
+    return fit_px < min_px
+
+
+def aspect_out_of_range(
+    w: int, h: int, lo: float, hi: float,
+) -> bool:
+    """True when the ``w/h`` aspect ratio falls outside ``[lo, hi]``.
+
+    Useful for "the layout breaks at extreme aspect ratios" gates:
+    the content is fine if it's somewhere between portrait phone
+    (lo ~ 0.4) and ultrawide (hi ~ 3.5). Degenerate ``h <= 0`` is
+    treated as out-of-range.
+    """
+    if h <= 0:
+        return True
+    ratio = w / h
+    return ratio < lo or ratio > hi

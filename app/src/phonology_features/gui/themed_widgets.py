@@ -19,12 +19,14 @@ from PyQt6.QtGui import QColor, QEnterEvent, QFont, QPainter, QPaintEvent, QPen
 from PyQt6.QtWidgets import (
     QFrame,
     QLabel,
+    QSizePolicy,
     QSplitter,
     QSplitterHandle,
     QStatusBar,
     QWidget,
 )
 
+from phonology_features.gui.shared.layout import REGION_CONSTRAINTS
 from phonology_features.gui.shared.palette import C
 from phonology_features.gui.style_utils import set_css
 
@@ -157,7 +159,22 @@ class _ThemedCard(QFrame):
     the live palette. Replaces a per-card setStyleSheet that previously
     triggered a polish cascade through ~5 FeatureRow children every
     theme toggle (6-7 cards = the cost behind _restyle_feature_cards).
+
+    Min-width pulled from ``REGION_CONSTRAINTS['feature_card']`` so the
+    floor that keeps the longest group title on one line is declared
+    once and inherited by both the Qt card and the web's
+    ``--feature-card-min-w`` rule.
     """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        _c = REGION_CONSTRAINTS["feature_card"]
+        self.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Preferred,
+        )
+        self.setMinimumWidth(_c.min_w)
+        self.setMinimumHeight(_c.min_h)
 
     def paintEvent(self, event: QPaintEvent | None) -> None:
         painter = QPainter(self)

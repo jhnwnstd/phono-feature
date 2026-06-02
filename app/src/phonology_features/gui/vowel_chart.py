@@ -16,11 +16,13 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QGridLayout,
     QLabel,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from phonology_features.gui.shared.layout import (
+    REGION_CONSTRAINTS,
     VOWEL_PAIR_GAP_PX,
     VOWEL_PAIR_SEPARATOR_PX,
 )
@@ -84,6 +86,16 @@ class VowelChartWidget(QWidget):
         self, parent: QWidget | None = None, *, btn_gap: int = 4
     ) -> None:
         super().__init__(parent)
+        # Width is externally clamped by ``set_target_width`` to the
+        # constraint table's fixed value; height grows with row count.
+        # Declaring the policy makes the contract explicit alongside
+        # the existing ``setMinimumWidth`` / ``setMaximumWidth`` clamp.
+        _constraint = REGION_CONSTRAINTS["vowel_chart"]
+        self.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Preferred,
+        )
+        self.setMinimumHeight(_constraint.min_h)
         self._buttons: dict[str, QWidget] = {}
         self._header_labels: list[tuple[QLabel, bool]] = []
         self._cell_containers: list[QWidget] = []

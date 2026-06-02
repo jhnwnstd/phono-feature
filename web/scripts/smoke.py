@@ -164,6 +164,16 @@ def run_for_browser(browser_type, label: str) -> int:
         browser.close()
         return rc
 
+    rc = run_pane_toggle_no_overlap_checks(page, label)
+    if rc != 0:
+        browser.close()
+        return rc
+
+    rc = run_critical_pair_no_overlap_checks(page, label)
+    if rc != 0:
+        browser.close()
+        return rc
+
     for vp_label, w, h, check_name in EXTRA_VIEWPORTS:
         print(f"  resize -> {vp_label} ({w}x{h})")
         page.set_viewport_size({"width": w, "height": h})
@@ -243,6 +253,158 @@ def run_baseline_checks(page, label: str) -> int:
         f"  analysis: selection={len(selection_html)}B,"
         f" features={len(features_html)}B"
     )
+    return 0
+
+
+def _assert_no_overlap_js(
+    page, selector_a: str, selector_b: str, label: str,
+) -> int:
+    """Pairwise non-overlap assertion runnable from any smoke check.
+
+    Returns 0 if no element matching ``selector_a`` intersects any
+    element matching ``selector_b`` (1-px tolerance to absorb sub-
+    pixel boundary touches), 1 otherwise with details to stderr.
+    Skips pairs where one side is empty -- the panel may simply not
+    contain that selector at the current viewport.
+    """
+    overlaps = page.evaluate(
+        "(args) => {"
+        " const [selA, selB] = args;"
+        " const inside = (r, p) => !("
+        "   r.right <= p.left + 0.5 ||"
+        "   r.left >= p.right - 0.5 ||"
+        "   r.bottom <= p.top + 0.5 ||"
+        "   r.top >= p.bottom - 0.5"
+        " );"
+        " const as = [...document.querySelectorAll(selA)];"
+        " const bs = [...document.querySelectorAll(selB)];"
+        " const out = [];"
+        " for (const a of as) {"
+        "   if (bs.some(b => a === b || a.contains(b) || b.contains(a)))"
+        "     continue;"
+        "   const ra = a.getBoundingClientRect();"
+        "   for (const b of bs) {"
+        "     if (a === b || a.contains(b) || b.contains(a)) continue;"
+        "     const rb = b.getBoundingClientRect();"
+        "     if (inside(ra, rb)) {"
+        "       out.push({a: selA, b: selB,"
+        "                 ra: [ra.left, ra.top, ra.right, ra.bottom],"
+        "                 rb: [rb.left, rb.top, rb.right, rb.bottom]});"
+        "       break;"
+        "     }"
+        "   }"
+        "   if (out.length >= 3) break;"
+        " }"
+        " return out;"
+        "}",
+        [selector_a, selector_b],
+    )
+    if overlaps:
+        print(
+            f"  FAIL ({label}): {selector_a} overlaps {selector_b}:"
+            f" {overlaps}",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def run_pane_toggle_no_overlap_checks(page, label: str) -> int:
+    """Activate the Features pane and back; assert the toggle does
+    not INTRODUCE new vowel-chart overlap that wasn't there before.
+
+    Phase A wires ``relayoutSegments`` into the pane-activation
+    path so any future CSS rule that changes pane width on toggle
+    will retrigger the per-group column computation. The current
+    CSS only changes ``data-active`` color, so the pane width is
+    invariant under toggle; this check captures that invariant by
+    diffing the pre- and post-toggle overlap sets.
+
+    The check is a delta, not an absolute, so pre-existing
+    spillover-vs-float overlap (a separate bug) doesn't shadow
+    Phase A's invariant.
+    """
+
+    overlap_set_js = (
+        "() => {"
+        " const vowels = document.querySelector('.seg-vowels');"
+        " if (!vowels) return [];"
+        " const v = vowels.getBoundingClientRect();"
+        " const out = [];"
+        " for (const btn of"
+        " document.querySelectorAll('#seg-grid .seg-btn')) {"
+        "   if (btn.closest('.seg-vowels')) continue;"
+        "   const r = btn.getBoundingClientRect();"
+        "   const intersects = !("
+        "     r.right <= v.left + 0.5 ||"
+        "     r.left >= v.right - 0.5 ||"
+        "     r.bottom <= v.top + 0.5 ||"
+        "     r.top >= v.bottom - 0.5"
+        "   );"
+        "   if (intersects) out.push(btn.dataset.seg);"
+        " }"
+        " return out.sort();"
+        "}"
+    )
+
+    page.wait_for_timeout(120)
+    baseline = page.evaluate(overlap_set_js)
+
+    print("  toggle to Features pane")
+    page.evaluate("() => document.getElementById('feat-panel').click()")
+    page.wait_for_timeout(120)
+    after_feat = page.evaluate(overlap_set_js)
+    new_overlaps = sorted(set(after_feat) - set(baseline))
+    if new_overlaps:
+        print(
+            "  FAIL (Features active): toggle introduced new"
+            f" vowel-overlap segments: {new_overlaps}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("  toggle back to Segments pane")
+    page.evaluate("() => document.getElementById('seg-panel').click()")
+    page.wait_for_timeout(120)
+    after_seg = page.evaluate(overlap_set_js)
+    new_overlaps = sorted(set(after_seg) - set(baseline))
+    if new_overlaps:
+        print(
+            "  FAIL (Segments active again): toggle introduced new"
+            f" vowel-overlap segments: {new_overlaps}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("  pane-toggle introduces no new overlap")
+    return 0
+
+
+def run_critical_pair_no_overlap_checks(page, label: str) -> int:
+    """Structural pairwise non-overlap invariants for the document
+    skeleton. Pins the principle that the toolbar, main grid, and
+    statusbar are stacked siblings: each must occupy a distinct
+    vertical band. A future ``position: absolute`` or
+    ``z-index``-shuffle that visually overlays them gets caught
+    here instead of as a hand-eye-test regression.
+
+    The seg/feat/analysis trio is handled by the CSS grid template
+    columns + rows; this check pins that they don't drift into each
+    other's space (e.g. via a future ``transform`` or negative
+    margin).
+    """
+    page.wait_for_timeout(60)
+    for sel_a, sel_b, pair_label in [
+        ("header.toolbar", "main.grid", "toolbar vs grid"),
+        ("main.grid", "footer.statusbar", "grid vs statusbar"),
+        ("#seg-panel", "#feat-panel", "seg-panel vs feat-panel"),
+        ("#analysis", "#seg-panel", "analysis vs seg-panel"),
+        ("#analysis", "#feat-panel", "analysis vs feat-panel"),
+    ]:
+        rc = _assert_no_overlap_js(page, sel_a, sel_b, pair_label)
+        if rc != 0:
+            return rc
+    print("  critical-pair no-overlap ok")
     return 0
 
 

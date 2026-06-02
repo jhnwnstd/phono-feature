@@ -270,6 +270,92 @@ def test_layout_css_emits_all_height_constants() -> None:
         )
 
 
+def test_region_constraints_internally_consistent() -> None:
+    """Every ``RegionConstraint`` must satisfy
+    ``min_w <= pref_w <= max_w`` (and the same for heights), with
+    ``None`` treated as "no constraint at this end". A pref_w of 0
+    or a max_w below min_w would silently produce sub-min content
+    floors; pin the invariant so future edits can't sneak that in.
+    """
+    for key, region in layout.REGION_CONSTRAINTS.items():
+        if region.pref_w is not None:
+            assert region.min_w <= region.pref_w, (
+                f"{key}: min_w={region.min_w} > pref_w={region.pref_w}"
+            )
+        if region.max_w is not None:
+            assert region.min_w <= region.max_w, (
+                f"{key}: min_w={region.min_w} > max_w={region.max_w}"
+            )
+            if region.pref_w is not None:
+                assert region.pref_w <= region.max_w, (
+                    f"{key}: pref_w={region.pref_w} > max_w={region.max_w}"
+                )
+        if region.pref_h is not None:
+            assert region.min_h <= region.pref_h, (
+                f"{key}: min_h={region.min_h} > pref_h={region.pref_h}"
+            )
+        if region.max_h is not None:
+            assert region.min_h <= region.max_h, (
+                f"{key}: min_h={region.min_h} > max_h={region.max_h}"
+            )
+            if region.pref_h is not None:
+                assert region.pref_h <= region.max_h, (
+                    f"{key}: pref_h={region.pref_h} > max_h={region.max_h}"
+                )
+
+
+def test_region_constraints_relay_into_layout_css() -> None:
+    """Each ``REGION_CONSTRAINTS`` entry must produce its ``--*-min-w``
+    / ``--*-min-h`` (and ``--*-max-*`` when set) CSS custom property
+    in ``generate_layout_css``. Catches the next "added a region but
+    forgot to extend the build" drift.
+    """
+    from pathlib import Path
+
+    build_py = (
+        Path(__file__).resolve().parents[2] / "web" / "scripts" / "build.py"
+    )
+    contents = build_py.read_text(encoding="utf-8")
+    # The build iterates REGION_CONSTRAINTS at emission time; verify
+    # the iteration is present so a refactor that hard-codes the list
+    # is caught here.
+    assert "for key, region in mod.REGION_CONSTRAINTS.items()" in contents, (
+        "build.py:generate_layout_css no longer iterates "
+        "REGION_CONSTRAINTS; adding a region would silently fail to "
+        "emit its CSS variables"
+    )
+
+
+def test_font_size_ladder_relays_into_layout_css() -> None:
+    """The FONT_SIZE_* ladder from constants.py drives the web's CSS
+    font-size variables. Each constant must be emitted so a future
+    "make body text larger" Python edit reaches the browser without
+    a parallel CSS sweep.
+    """
+    from pathlib import Path
+
+    from phonology_features.gui.shared import constants
+
+    build_py = (
+        Path(__file__).resolve().parents[2] / "web" / "scripts" / "build.py"
+    )
+    contents = build_py.read_text(encoding="utf-8")
+    for var_name, py_name in [
+        ("--font-size-base", "FONT_SIZE_BASE_PX"),
+        ("--font-size-control", "FONT_SIZE_CONTROL_PX"),
+        ("--font-size-meta", "FONT_SIZE_META_PX"),
+        ("--font-size-label", "FONT_SIZE_LABEL_PX"),
+        ("--font-size-micro", "FONT_SIZE_MICRO_PX"),
+        ("--font-size-min-px", "FONT_SIZE_MIN_PX"),
+    ]:
+        assert var_name in contents, (
+            f"build.py:generate_layout_css does not emit {var_name}"
+        )
+        assert f"FONT_SIZE_{py_name.split('FONT_SIZE_')[1]}" in dir(
+            constants,
+        ), f"constants.py is missing {py_name}"
+
+
 def test_style_css_has_no_hardcoded_analysis_height() -> None:
     """The locked analysis-pane height used to be ``220px`` literal
     twice in ``.analysis``. After the relay it lives in

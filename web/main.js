@@ -723,7 +723,15 @@ function rasterizeText(text, font, maxWidth) {
         if (sizeMatch) {
             const origSize = parseFloat(sizeMatch[1]);
             const rest = sizeMatch[2];
-            const MIN_SIZE = 8;
+            // Pulled from the Python-driven CSS variable so the
+            // JS-side font-shrink floor and the Python predicate
+            // ``font_below_min`` consult the same number. Falls back
+            // to 8 if the CSS variable is absent (pre-bridge boot
+            // window before layout.css attaches).
+            const cssMin = getComputedStyle(
+                document.documentElement,
+            ).getPropertyValue("--font-size-min-px").trim();
+            const MIN_SIZE = parseFloat(cssMin) || 8;
             for (let size = origSize; size >= MIN_SIZE; size -= 0.5) {
                 measure.font = `${size}px ${rest}`;
                 const probe = measure.measureText(text);
@@ -738,21 +746,43 @@ function rasterizeText(text, font, maxWidth) {
     }
     measure.font = activeFont;
     const m = measure.measureText(text);
-    const ascent = m.actualBoundingBoxAscent ?? 10;
-    const descent = m.actualBoundingBoxDescent ?? 2;
-    // Width has to account for combining marks (the tie bar in
-    // affricates like t͡ʃ / d͡ʒ, the ejective ʼ above ejectives) that
-    // carry zero advance width but a non-zero visual bounding box.
-    // ``m.width`` is the advance only; ``actualBoundingBoxLeft`` /
-    // ``Right`` measure the painted-pixel extent from the text
-    // origin. Take the larger of the two metrics so the canvas is
-    // wide enough to contain every painted pixel; without this an
-    // affricate's tie-bar would clip off the right edge.
+    // ---- Optical (ink-bounding-box) centering ---------------------
+    //
+    // The canvas wraps the glyph's PAINTED bounding box (the "ink
+    // bbox") plus a small antialias margin on all four sides. The
+    // glyph is drawn so the ink bbox sits dead-centre in the
+    // canvas. Because the span inherits the canvas dimensions and
+    // the seg button flex-centres the span, the ink centre lines up
+    // with the button centre for every glyph -- regardless of
+    // whether the glyph has a descender (``p``), an ascender (``t``),
+    // a tie-bar combining mark (``t͡ʃ``), or neither (``o``).
+    //
+    // This is the IPA-chart-cell / icon-font convention: each cell
+    // is a self-contained symbol, not a character in running text,
+    // so optical centering reads more even than baseline alignment
+    // across cells. The trade-off (no shared baseline across
+    // adjacent buttons) is the right trade for this surface.
+    //
+    // Measurement notes:
+    // ``actualBoundingBoxLeft/Right`` are distances from the text
+    // origin to the painted-pixel edges (positive = away from
+    // origin; ``Left`` going left, ``Right`` going right). For
+    // ``textAlign = "left"`` the origin is at the start of advance,
+    // and the painted area runs from (origin - left) to
+    // (origin + right) horizontally. ``actualBoundingBoxAscent/
+    // Descent`` are analogous vertical distances from the baseline.
     const left = m.actualBoundingBoxLeft ?? 0;
     const right = m.actualBoundingBoxRight ?? m.width;
-    const naturalW = Math.max(m.width, left + right);
-    const w = Math.max(1, Math.ceil(naturalW) + AA_PAD);
-    const h = Math.max(1, Math.ceil(ascent + descent) + 4);
+    const ascent = m.actualBoundingBoxAscent ?? 10;
+    const descent = m.actualBoundingBoxDescent ?? 2;
+    const inkW = left + right;
+    const inkH = ascent + descent;
+    // Canvas wraps the ink bbox with ``AA_HALF`` padding all around.
+    // (``AA_PAD`` from the font-shrink section is the TOTAL extra
+    // dimension; half on each side here.)
+    const AA_HALF = AA_PAD / 2;
+    const w = Math.max(1, Math.ceil(inkW) + AA_PAD);
+    const h = Math.max(1, Math.ceil(inkH) + AA_PAD);
     const dpr = window.devicePixelRatio || 1;
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil(w * dpr);
@@ -761,9 +791,18 @@ function rasterizeText(text, font, maxWidth) {
     ctx.scale(dpr, dpr);
     ctx.font = activeFont;
     ctx.fillStyle = "#000";
-    ctx.textBaseline = "middle";
-    ctx.textAlign = "center";
-    ctx.fillText(text, w / 2, h / 2);
+    ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+    // Origin chosen so the painted area exactly fills
+    // ``[AA_HALF, w - AA_HALF]`` horizontally and
+    // ``[AA_HALF, h - AA_HALF]`` vertically. Painted area:
+    //   horizontal: [xOrigin - left, xOrigin + right]
+    //   vertical:   [yBaseline - ascent, yBaseline + descent]
+    // Setting ``xOrigin = AA_HALF + left`` makes the left painted
+    // edge exactly ``AA_HALF`` (= padding) from the canvas's left
+    // edge; the right edge falls at ``AA_HALF + inkW`` = canvas
+    // right edge minus ``AA_HALF``. Same on the vertical axis.
+    ctx.fillText(text, AA_HALF + left, AA_HALF + ascent);
     return { dataUrl: canvas.toDataURL(), width: w, height: h };
 }
 
@@ -808,16 +847,46 @@ function renderSegmentGrid(groups, vowelChart) {
     for (const group of groups) {
         grid.appendChild(_buildConsonantGroup(group));
     }
-    // Defer to next frame so layout has flushed before we measure
-    // either spillover heights or per-group column counts.
-    if ("requestAnimationFrame" in window) {
-        window.requestAnimationFrame(() => {
-            applyPerGroupSegmentColumns();
-            rebalanceSegmentSpillover();
-        });
-    } else {
+    relayoutSegments();
+}
+
+// Cached signature of the last successful relayout pass. When the
+// grid width, vowel-chart width, row count, and per-row segment
+// counts are all unchanged, the math below would produce the same
+// answer -- we early-return. Catches: (a) double-firing at startup
+// (renderSegmentGrid + the initial resize listener), (b) idempotent
+// re-runs on pane activation when width didn't actually change.
+let _lastRelayoutKey = "";
+
+/** Single entry point for any code path that changes the segments
+ *  pane width or contents: re-runs the per-group column pass and
+ *  the spillover rebalance. Always defers to the next frame so
+ *  layout has flushed before measuring; same-state calls early-
+ *  return via ``_lastRelayoutKey`` so call-site centralisation
+ *  doesn't multiply startup work. */
+function relayoutSegments() {
+    const grid = nodes.segGrid;
+    if (!grid) return;
+    const run = () => {
+        const vowelsEl = grid.querySelector(".seg-vowels");
+        const rows = [...grid.querySelectorAll(".seg-row")];
+        const key = [
+            grid.clientWidth,
+            vowelsEl ? vowelsEl.offsetWidth : 0,
+            rows.length,
+            rows.map(
+                (r) => r.querySelectorAll(".seg-btn").length,
+            ).join(","),
+        ].join("|");
+        if (key === _lastRelayoutKey) return;
+        _lastRelayoutKey = key;
         applyPerGroupSegmentColumns();
         rebalanceSegmentSpillover();
+    };
+    if ("requestAnimationFrame" in window) {
+        window.requestAnimationFrame(run);
+    } else {
+        run();
     }
 }
 
@@ -1329,6 +1398,14 @@ function activateMode(mode) {
     // already changed -- the source of the flicker users see.
     if (state.bridge) runAnalysis();
     else clearAnalysisTabs();
+
+    // Pane activation may change the segments-pane width via CSS
+    // rules keyed off ``data-active``. Re-run the column + spillover
+    // layout so the fixed-width grid tracks match the new available
+    // width instead of the stale pre-toggle one. ``relayoutSegments``
+    // defers to rAF and early-returns when nothing actually changed,
+    // so this is safe to call unconditionally.
+    relayoutSegments();
 }
 
 const ANALYSIS_DEBOUNCE_MS = 30;
@@ -3593,16 +3670,16 @@ function wireFeatureDelegation() {
 const SPILLOVER_RESIZE_DEBOUNCE_MS = 80;
 
 /** Re-run the per-group column pass + spillover rebalance on
- *  viewport resize. Both passes share one debounced handler so the
- *  user dragging the window doesn't trigger duplicate layouts. */
+ *  viewport resize. Debounced so a window drag doesn't trigger
+ *  duplicate layouts. Delegates to ``relayoutSegments`` which
+ *  handles the rAF defer + same-state early-return. */
 function wireSegmentSpilloverResize() {
     let timer = 0;
     window.addEventListener("resize", () => {
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
             timer = 0;
-            applyPerGroupSegmentColumns();
-            rebalanceSegmentSpillover();
+            relayoutSegments();
         }, SPILLOVER_RESIZE_DEBOUNCE_MS);
     });
 }

@@ -44,6 +44,25 @@ CHIP_PADDING_CSS: str = "2px 7px"
 CHIP_MARGIN_PX: int = 2
 CHIP_FONT_SIZE_PT: int = 10
 
+# Web-side font-size ladder. The web stylesheet picks values from
+# this ladder so a future "make everything one notch larger" change
+# is one constant adjustment rather than a CSS sweep. The desktop
+# manages its own per-widget point sizing (Qt's QFont API) and only
+# references ``FONT_SIZE_MIN_PX`` below to enforce a shared floor
+# for the segment-button rasterizer's font-shrink loop. CSS variable
+# names mirror these tokens (``--font-size-base`` etc.).
+FONT_SIZE_BASE_PX: int = 14
+FONT_SIZE_CONTROL_PX: int = 13
+FONT_SIZE_META_PX: int = 12
+FONT_SIZE_LABEL_PX: int = 11
+FONT_SIZE_MICRO_PX: int = 10
+# Lower bound on the rasterizer's font-shrink search (see
+# ``rasterizeText`` in ``web/main.js``) and any future Qt-side
+# text-fit logic. Below this point glyphs become illegible at the
+# 33-px segment-button outline. Pixel-only because the rasterizer
+# walks the CSS ``font-size`` string in px steps.
+FONT_SIZE_MIN_PX: int = 8
+
 # Monospace font fallback chain for IPA-heavy text (analysis-pane
 # chips, anything rendering segment symbols / feature values). Order:
 # most-IPA-coverage first, then per-OS defaults that are usually

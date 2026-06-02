@@ -264,6 +264,27 @@ def _load_layout_module() -> ModuleType:
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {layout_path}")
     module = importlib.util.module_from_spec(spec)
+    # ``@dataclass`` introspects via ``sys.modules[cls.__module__]``;
+    # register the module before exec so ``RegionConstraint`` can
+    # validate its annotated fields at class creation.
+    sys.modules["_layout"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_constants_module() -> ModuleType:
+    """Side-load ``constants.py`` so ``generate_layout_css`` can read
+    the FONT_SIZE_* ladder without requiring the engine package to be
+    installed (this script runs against a bare interpreter in CI).
+    """
+    constants_path = DESKTOP_GUI / "shared" / "constants.py"
+    spec = importlib.util.spec_from_file_location(
+        "_constants", constants_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load {constants_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["_constants"] = module
     spec.loader.exec_module(module)
     return module
 
@@ -386,9 +407,38 @@ def generate_layout_css() -> None:
         # ``margin-inline: auto``; below it the grid fills the
         # available width normally.
         f"  --content-max-w: {mod.CONTENT_MAX_W_ABS}px;",
-        "}",
-        "",
     ]
+    # Web font-size ladder, relayed from ``constants.py``. Web CSS
+    # rules read these so a future ladder revision is one Python
+    # constant edit, not a sweep of every ``font-size:`` declaration.
+    constants_mod = _load_constants_module()
+    lines.extend([
+        "  /* Font-size ladder (from constants.py). */",
+        f"  --font-size-base: {constants_mod.FONT_SIZE_BASE_PX}px;",
+        f"  --font-size-control: {constants_mod.FONT_SIZE_CONTROL_PX}px;",
+        f"  --font-size-meta: {constants_mod.FONT_SIZE_META_PX}px;",
+        f"  --font-size-label: {constants_mod.FONT_SIZE_LABEL_PX}px;",
+        f"  --font-size-micro: {constants_mod.FONT_SIZE_MICRO_PX}px;",
+        # ``rasterizeText`` reads this floor so the JS-side font-shrink
+        # loop's lower bound stays in lockstep with the Python one.
+        f"  --font-size-min-px: {constants_mod.FONT_SIZE_MIN_PX}px;",
+    ])
+    # Per-region size contract emitted as ``--<key>-min-w/max-w/
+    # min-h/max-h`` plus ``--<key>-overflow`` for the documented
+    # strategy. Web style.css rules consume these via ``var(--seg-btn-
+    # min-w)`` etc. so the relay is symmetric with the Qt-side
+    # ``setMinimumSize`` calls in Phase C.
+    lines.append("  /* Region constraints (from layout.py). */")
+    for key, region in mod.REGION_CONSTRAINTS.items():
+        css_key = key.replace("_", "-")
+        lines.append(f"  --{css_key}-min-w: {region.min_w}px;")
+        if region.max_w is not None:
+            lines.append(f"  --{css_key}-max-w: {region.max_w}px;")
+        lines.append(f"  --{css_key}-min-h: {region.min_h}px;")
+        if region.max_h is not None:
+            lines.append(f"  --{css_key}-max-h: {region.max_h}px;")
+        lines.append(f"  --{css_key}-overflow: {region.overflow};")
+    lines.extend(["}", ""])
     (DIST / "layout.css").write_text("\n".join(lines))
     print(f"  {len(lines) - 4} layout tokens")
 

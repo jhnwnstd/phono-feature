@@ -22,15 +22,12 @@
   --control-h-md: 32px;   /* toolbar buttons / selects */
   --control-h-sm: 26px;   /* segment buttons */
   --control-h-xs: 22px;   /* panel clear button */
-  --seg-btn-min-w: 33px;
+  /* Note: --seg-btn-min-w and the --font-size-* ladder are sourced
+     from layout.css (auto-generated from shared/layout.py and
+     shared/constants.py respectively). Don't redeclare them here. */
   --feat-btn-w: 28px;
   --feat-btn-h: 24px;     /* also feat-badge height */
   --feat-badge-w: 30px;
-  --font-size-base: 14px;
-  --font-size-control: 13px;
-  --font-size-meta: 12px;
-  --font-size-label: 11px;
-  --font-size-micro: 10px;
   /* `system-ui` and `ui-monospace` map to the OS's native UI fonts
      on modern browsers (SF Pro on macOS, Segoe UI Variable on
      Windows 11, Roboto on Android). The named fallbacks cover older

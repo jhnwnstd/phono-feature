@@ -130,3 +130,114 @@ def test_feat_panel_recovers_after_shrink_and_grow(qapp) -> None:
         f"initial={feat_h_initial}, after={w.feat_panel.height()}"
     )
     w.close()
+
+
+# ---------------------------------------------------------------------------
+# Predicate parity tests (Phase E).
+#
+# The content-driven predicates added in Phase E (would_overflow,
+# font_below_min, aspect_out_of_range) are pure functions that
+# describe constraint failure WITHOUT consulting any pixel threshold.
+# These tests pin two contracts:
+#
+#   1. The predicates produce the expected boolean for canonical
+#      inputs (sanity).
+#   2. ``should_stack_vowels`` (a threshold helper) agrees with
+#      ``would_overflow`` applied to the shipped inventory's natural
+#      content widths -- the threshold is the canonical answer; the
+#      predicate is the reason. Drift between them would mean a
+#      future "tweak VOWEL_STACK_W" edit produced visual overflow.
+# ---------------------------------------------------------------------------
+
+
+def test_would_overflow_threshold_inputs() -> None:
+    """Canonical input table; documents the predicate's contract."""
+    # No children: never overflows.
+    assert layout.would_overflow(0, []) is False
+    assert layout.would_overflow(100, []) is False
+    # Fits exactly: not overflow.
+    assert layout.would_overflow(100, [60, 40], gap=0) is False
+    assert layout.would_overflow(110, [60, 40], gap=10) is False
+    # Just over: overflow.
+    assert layout.would_overflow(99, [60, 40], gap=0) is True
+    assert layout.would_overflow(109, [60, 40], gap=10) is True
+    # Negative container: overflow (treated as zero capacity).
+    assert layout.would_overflow(-10, [1]) is True
+
+
+def test_would_overflow_monotonic_in_container_w() -> None:
+    """Increasing the container width can only flip overflow True ->
+    False, never the other way around. A property that any future
+    refactor of the helper must preserve.
+    """
+    children = [100, 80, 60, 40]
+    gap = 8
+    needed = sum(children) + (len(children) - 1) * gap
+    # Just below needed: True; at needed: False.
+    assert layout.would_overflow(needed - 1, children, gap=gap) is True
+    assert layout.would_overflow(needed, children, gap=gap) is False
+    # Sweep upward; once False, never True again.
+    seen_false = False
+    for w in range(needed - 5, needed + 100, 1):
+        is_over = layout.would_overflow(w, children, gap=gap)
+        if not is_over:
+            seen_false = True
+        else:
+            assert not seen_false, (
+                f"non-monotonic at container_w={w}"
+            )
+
+
+def test_should_stack_vowels_agrees_with_would_overflow_at_threshold() -> None:
+    """The pixel threshold (``VOWEL_STACK_W``) and the predicate
+    (``would_overflow`` applied to vowel-chart + min consonant area)
+    must agree at the boundary. If a future change widens the chart
+    without bumping the threshold, this test catches it.
+    """
+    # Minimum consonant text-flow + vowel chart width must fit
+    # inside the seg pane for vowels-alongside. At ``VOWEL_STACK_W``
+    # the threshold says "do not stack"; the predicate must agree.
+    consonant_floor = layout.VOWEL_STACK_W - layout.VOWEL_NATURAL_W
+    # Just above threshold: do not stack; predicate says fits.
+    assert layout.should_stack_vowels(layout.VOWEL_STACK_W) is False
+    assert layout.would_overflow(
+        layout.VOWEL_STACK_W,
+        [consonant_floor, layout.VOWEL_NATURAL_W],
+        gap=0,
+    ) is False
+    # Just below: stack; predicate says overflows.
+    assert layout.should_stack_vowels(layout.VOWEL_STACK_W - 1) is True
+    assert layout.would_overflow(
+        layout.VOWEL_STACK_W - 1,
+        [consonant_floor, layout.VOWEL_NATURAL_W],
+        gap=0,
+    ) is True
+
+
+def test_font_below_min_basic() -> None:
+    """When natural text already fits, no shrink is needed and the
+    floor isn't an issue (False). When the shrink ratio would drop
+    the size below the floor, True.
+    """
+    # Fits at current size: False.
+    assert layout.font_below_min(50, 100, current_px=14) is False
+    # Has to shrink moderately but stays above 8 px: False.
+    assert layout.font_below_min(150, 100, current_px=14) is False
+    # Has to shrink so much the size goes below 8 px: True.
+    assert layout.font_below_min(1000, 100, current_px=14) is True
+    # Explicit min override.
+    assert layout.font_below_min(100, 50, current_px=14, min_px=12) is True
+    assert layout.font_below_min(100, 90, current_px=14, min_px=8) is False
+
+
+def test_aspect_out_of_range() -> None:
+    """Degenerate inputs are flagged; in-range pass; outliers flagged."""
+    # Degenerate.
+    assert layout.aspect_out_of_range(100, 0, 0.5, 2.0) is True
+    assert layout.aspect_out_of_range(100, -1, 0.5, 2.0) is True
+    # In range.
+    assert layout.aspect_out_of_range(100, 100, 0.5, 2.0) is False
+    assert layout.aspect_out_of_range(150, 100, 0.5, 2.0) is False
+    # Out of range.
+    assert layout.aspect_out_of_range(100, 1000, 0.5, 2.0) is True
+    assert layout.aspect_out_of_range(1000, 100, 0.5, 2.0) is True

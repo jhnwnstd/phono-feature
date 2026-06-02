@@ -548,6 +548,18 @@ class MainWindow(QMainWindow):
         container = QFrame(parent)
         container.setObjectName("feat_panel")
         set_css(container, ModeController.panel_chrome_qss("feat_panel"))
+        # Width floor + stretch policy from the constraint table. The
+        # hsplit applies the panel's ``FEAT_MIN_W`` separately (at the
+        # splitter-add site) so a future ``setMinimumWidth(0)`` reset
+        # for a drag operation doesn't silently let cards crush; the
+        # policy keeps the panel "Preferred" so it absorbs leftover
+        # width up to the splitter handle.
+        _fp = layout.REGION_CONSTRAINTS["feature_panel"]
+        container.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Preferred,
+        )
+        container.setMinimumHeight(_fp.min_h)
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)

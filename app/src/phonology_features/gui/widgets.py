@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QTabWidget,
     QTextEdit,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -31,6 +30,7 @@ from phonology_features.gui.shared.constants import (
     scrollbar_style,
 )
 from phonology_features.gui.shared.layout import (
+    REGION_CONSTRAINTS,
     best_segment_n_cols,
     partition_groups_for_spillover,
 )
@@ -144,7 +144,21 @@ class SegmentButton(QPushButton):
         self.segment = segment
         self._state: SegmentState = SegmentState.DEFAULT
         self.setCheckable(True)
-        self.setFixedSize(33, 26)
+        # Fixed dimensions are sourced from the constraint table so the
+        # web (CSS ``--seg-btn-min-w`` / ``--seg-btn-min-h``) and the
+        # desktop (here) pull from one entry. ``setSizePolicy(Fixed)``
+        # is documentary: ``setFixedSize`` already pins both policies
+        # to Fixed internally, but the explicit call makes the size
+        # contract visible alongside the constraint citation.
+        _seg_btn = REGION_CONSTRAINTS["seg_btn"]
+        self.setFixedSize(
+            _seg_btn.pref_w or _seg_btn.min_w,
+            _seg_btn.pref_h or _seg_btn.min_h,
+        )
+        self.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Fixed,
+        )
         # Apply the IPA-coverage font chain (same as the analysis pane)
         # so combining marks like the tie bar in d͡ʒ and ejectives
         # like pʼ render with the same glyphs everywhere they appear.
@@ -659,11 +673,24 @@ class _CopyableTextEdit(QTextEdit):
 class AnalysisPanel(QWidget):
     """Analysis output pane. The tab labels (Class / Features /
     Contrasts) carry their own naming, so there's no top heading.
-    The maximize/restore toggle lives in the tab bar's top-right
-    corner via ``QTabWidget.setCornerWidget`` to keep the pane
-    height available for content. The toggle emits
-    ``expand_toggled``; MainWindow owns the vsplit and handles the
-    actual resize.
+
+    Layout (single ``QGridLayout``):
+
+    - Row 0, col 0 hosts the persistent selection label AND the
+      expand/restore toggle in the same cell. The toggle uses
+      ``AlignTop | AlignRight`` so it overlays the label's top-
+      right corner; the label fills the cell normally. A reserved
+      row minimum height keeps the toggle's pinning constant when
+      the selection label is hidden (FEAT mode), so the visual
+      ``y`` of the toggle does not depend on whether chips are
+      currently displayed. The previous implementation positioned
+      the toggle via ``resizeEvent`` + manual ``move()``; the cell-
+      overlay form gives the same visual placement with explicit
+      layout ownership.
+    - Row 1 hosts the tab widget; it absorbs all vertical stretch.
+
+    The toggle emits ``expand_toggled``; MainWindow owns the vsplit
+    and handles the actual resize.
     """
 
     expand_toggled = pyqtSignal()
@@ -677,13 +704,25 @@ class AnalysisPanel(QWidget):
     _TAB_FEATURES_IDX = 1
     _TAB_CONTRASTS_IDX = 2
 
+    # Reserved height for the top row (selection label + overlaid
+    # toggle). 26 px = the 20-px button plus the 6-px top inset of
+    # its previous manual position, so the toggle's ``y`` matches
+    # the historical placement even when the selection label is
+    # hidden and row 0 collapses to this minimum.
+    _SELECTION_ROW_MIN_H = 26
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        # Pane absorbs leftover vertical space inside the vsplit and
+        # stretches with the window horizontally. ``minimumSizeHint``
+        # below pins the floor; ``REGION_CONSTRAINTS['analysis_panel']``
+        # is the single source for both ends.
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         # Expand/restore toggle. Text glyphs (not emoji) so the button
-        # honors the active font and palette. Installed as the tab
-        # bar's top-right corner widget below, so there's no
-        # dedicated header row and the pane's full height goes to
-        # tab content.
+        # honors the active font and palette.
         self.expand_btn = QPushButton("⤢", self)
         self.expand_btn.setFlat(True)
         self.expand_btn.setFixedSize(24, 20)
@@ -727,37 +766,34 @@ class AnalysisPanel(QWidget):
         # ``.content`` lands there.
         self.content = self._tab_class
         self.content.setMinimumHeight(60)
-        layout = QVBoxLayout(self)
-        # No top heading. The tab labels (Class / Features /
-        # Contrasts) describe their own contents. Top margin is
-        # small (2 px) so the chips strip / tab bar sits flush with
-        # the pane's top border; every saved pixel goes to the tab
-        # content area.
+        layout = QGridLayout(self)
         layout.setContentsMargins(16, 2, 16, 8)
-        layout.setSpacing(2)
-        layout.addWidget(self.selection_label)
-        layout.addWidget(self.tabs)
+        layout.setHorizontalSpacing(0)
+        layout.setVerticalSpacing(2)
+        # Row 0: selection label + overlaid expand toggle (same cell,
+        # different alignments). The reserved minimum height keeps
+        # the toggle anchored even when the label hides in FEAT mode.
+        layout.setRowMinimumHeight(0, self._SELECTION_ROW_MIN_H)
+        layout.addWidget(self.selection_label, 0, 0)
+        layout.addWidget(
+            self.expand_btn,
+            0,
+            0,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
+        )
+        layout.addWidget(self.tabs, 1, 0)
+        layout.setRowStretch(1, 1)
         # Selection label starts hidden. Empty selection / FEAT
-        # mode shouldn't reserve its strip of space. ``set_sections``
-        # toggles visibility based on whether the html payload
-        # actually carries chips.
+        # mode shouldn't render chips. ``set_sections`` toggles
+        # visibility based on whether the html payload actually
+        # carries chips. The row 0 minimum height keeps the toggle
+        # anchored when the label is gone.
         self.selection_label.setVisible(False)
         # Class-tab background-colour state (natural / not_natural /
         # neutral). ``apply_theme`` reads this when composing the
         # stylesheet so a theme swap mid-session keeps the cue.
         self._class_state: str = "neutral"
         self.apply_theme()
-        # The expand toggle is a free-floating child of the
-        # AnalysisPanel, NOT a corner widget of the QTabWidget.
-        # ``QTabWidget.setCornerWidget`` puts the button inside the
-        # QTabBar's paint region, where it gets painted over each
-        # time Qt re-polishes the tab bar (every panel resize /
-        # toggle). Parenting directly to the AnalysisPanel and
-        # raising once leaves the button in its own paint layer
-        # above every QTabWidget child, immune to tab-bar polish.
-        # ``resizeEvent`` keeps it pinned to the panel's top-right.
-        self.expand_btn.raise_()
-        self._reposition_expand_btn()
 
     def set_expanded(self, expanded: bool) -> None:
         """Update the toggle's visual state. MainWindow calls this
@@ -775,15 +811,14 @@ class AnalysisPanel(QWidget):
             "Restore analysis pane" if expanded else "Maximize analysis pane"
         )
 
-    def resizeEvent(self, event: QResizeEvent | None) -> None:
-        super().resizeEvent(event)
-        self._reposition_expand_btn()
-
-    def _reposition_expand_btn(self) -> None:
-        """Pin the free-floating expand button at the panel's top-
-        right corner, inside the 16-px right margin. Called on
-        every resize so the button tracks panel width changes."""
-        self.expand_btn.move(self.width() - 24 - 16, 6)
+    def minimumSizeHint(self) -> QSize:
+        """Sourced from ``REGION_CONSTRAINTS['analysis_panel']``. The
+        Qt splitter and the vsplit fitting code consult this when
+        deciding how much room the analysis pane can yield under
+        resize pressure; the entry pins the bottom edge so future
+        ``setMinimumHeight(0)`` paths can't silently collapse it."""
+        constraint = REGION_CONSTRAINTS["analysis_panel"]
+        return QSize(constraint.min_w, constraint.min_h)
 
     def apply_theme(self) -> None:
         """Re-apply palette-dependent styles. Called on theme toggle."""
@@ -964,6 +999,17 @@ class SegmentGridWidget(QWidget):
         self._grid.setContentsMargins(0, 0, 0, 0)
         self._grid.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
+        # Grid widget itself can shrink (it lives inside a panel whose
+        # minimum width is the real floor); the policy declares the
+        # stretch behaviour so a parent layout knows it can grow but
+        # doesn't demand more than its ``sizeHint``. See
+        # ``REGION_CONSTRAINTS['seg_grid']`` for the contract; the
+        # min height pin is the SEG_GROUP_HEADER_H + SEG_BTN_ROW_H
+        # combination the table encodes.
+        self.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Preferred,
         )
         self.setMinimumWidth(0)
         self._resize_timer = QTimer(self)
