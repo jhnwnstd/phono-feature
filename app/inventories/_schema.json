@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/jhnwnstd/phono-feature/blob/main/docs/inventory-schema.json",
+  "$id": "https://github.com/jhnwnstd/phono-feature/blob/main/app/inventories/_schema.json",
   "title": "Phonology Inventory",
   "description": "Schema for inventory JSON files consumed by the phonology-engine package. This is a declarative companion to the runtime validation in Inventory.parse; the parser enforces additional constraints (NFC normalization of segment names, duplicate-key detection, IPA-confusable advisories) that JSON Schema cannot express directly.",
   "type": "object",

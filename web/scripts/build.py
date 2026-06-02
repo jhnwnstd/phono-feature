@@ -130,10 +130,18 @@ def copy_inventories() -> None:
     out = DIST / "inventories"
     out.mkdir(parents=True, exist_ok=True)
     manifest: list[dict[str, str]] = []
-    skipped: list[str] = []
+    skipped_private: list[str] = []
+    skipped_gitignored: list[str] = []
     for inv in sorted(INVENTORIES.glob("*.json")):
+        # Underscore-prefixed siblings (e.g. ``_schema.json``) are
+        # metadata that lives alongside the inventories but isn't
+        # itself an inventory; the desktop dropdown applies the same
+        # filter in ``InventoryDirController``.
+        if inv.name.startswith("_"):
+            skipped_private.append(inv.name)
+            continue
         if _is_gitignored(inv):
-            skipped.append(inv.name)
+            skipped_gitignored.append(inv.name)
             continue
         shutil.copy(inv, out / inv.name)
         manifest.append(
@@ -146,8 +154,10 @@ def copy_inventories() -> None:
         json.dumps(manifest, indent=2, ensure_ascii=False),
     )
     print(f"  manifest: {len(manifest)} inventories")
-    if skipped:
-        print(f"  skipped (gitignored): {', '.join(skipped)}")
+    if skipped_private:
+        print(f"  skipped (private): {', '.join(skipped_private)}")
+    if skipped_gitignored:
+        print(f"  skipped (gitignored): {', '.join(skipped_gitignored)}")
 
 
 def _is_gitignored(path: Path) -> bool:

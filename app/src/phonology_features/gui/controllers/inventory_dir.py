@@ -55,6 +55,19 @@ _RELOAD_DEBOUNCE_MS: int = 600
 _TMP_FILE_STALE_SECONDS: int = 3600
 
 
+def _is_visible_inventory_file(fname: str) -> bool:
+    """True for files that should appear in the dropdown.
+
+    Skips dotfiles (.tmp_inv_*.json side-files from atomic writes,
+    editor swap files), non-JSON, and underscore-prefixed siblings
+    used for schema or other metadata that lives alongside the
+    inventories but isn't itself an inventory.
+    """
+    if fname.startswith(".") or fname.startswith("_"):
+        return False
+    return fname.endswith(".json")
+
+
 class InventoryDirController:
     """Owns the inventory-directory watcher, dropdown, and MRU
     fallback. MainWindow forwards inventory load/register calls
@@ -239,7 +252,7 @@ class InventoryDirController:
         inv_dir = self.get_inventories_dir()
         if os.path.isdir(inv_dir):
             for fname in sorted(os.listdir(inv_dir)):
-                if fname.startswith(".") or not fname.endswith(".json"):
+                if not _is_visible_inventory_file(fname):
                     continue
                 return os.path.join(inv_dir, fname)
         return None

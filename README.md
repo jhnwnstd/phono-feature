@@ -46,6 +46,8 @@ You can add and build inventories through **New Inventory** in the app.
 
 The engine is pure Python in `packages/phonology-engine/`. The desktop GUI in `app/` uses PyQt6 and depends on the engine. The browser version in `web/` reuses the same engine via Pyodide.
 
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the relay system, the three-tier `gui/` layout, how the launchers are wired, and where the tests live. [web/README.md](web/README.md) covers the web build internals and what gets relayed from the desktop sources.
+
 The launcher creates `app/.venv/` and installs both packages editable. Activate it to run the tests:
 
 ```bash

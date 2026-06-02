@@ -1,7 +1,9 @@
 """Drive the GUI through representative states and save PNGs.
 
 Run from anywhere; uses ``QT_QPA_PLATFORM=offscreen`` so no display is
-needed. Outputs to ``docs/screenshots/`` at the repo root.
+needed. Outputs to ``.github/screenshots/`` at the repo root (used by
+the README and PR templates so the images travel with the repo, not
+in a separate docs tree).
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ sys.path.insert(0, str(SRC_DIR))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 INVENTORIES = sorted((APP_DIR / "inventories").glob("*.json"))
-OUT_DIR = REPO_ROOT / "docs" / "screenshots"
+OUT_DIR = REPO_ROOT / ".github" / "screenshots"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 WIN_W, WIN_H = 1600, 1050
