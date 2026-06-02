@@ -58,21 +58,10 @@ RESOLUTIONS: list[Resolution] = [
     Resolution(9, "3840x2160", 3840, 2160),
 ]
 
-# Subset used by every "invariant across screens" test. Three
-# representatives: low-end laptop (the floor regime), FHD baseline
-# (the typical case), and 4K ultrawide (the cap regime). The
-# pinned-literals gate (``test_initial_window_size_matches_pinned_literals``)
-# still uses the full ``RESOLUTIONS`` list; gap-regime regressions
-# are caught by the named single-resolution tests later in the
-# file (e.g. ``test_qhd_window_uses_screen_fraction_not_floor``,
-# ``test_low_end_laptop_window_falls_back_to_floor``,
-# ``test_tall_narrow_1280x1200_fits_screen_width``,
-# ``test_seg_pane_fans_out_at_4k``).
-REPRESENTATIVE_RESOLUTIONS: list[Resolution] = [
-    Resolution(4, "1366x768", 1366, 768),
-    Resolution(1, "1920x1080", 1920, 1080),
-    Resolution(9, "3840x2160", 3840, 2160),
-]
+# Three representatives for "invariant across screens" tests:
+# low-end laptop / FHD / 4K. Named single-resolution tests below
+# cover the gap regimes.
+_REPS = [RESOLUTIONS[3], RESOLUTIONS[0], RESOLUTIONS[8]]
 
 # Representative content widths for a typical inventory. ``seg_content_w``
 # is the consonant grid + vowel chart natural width; ``feat_content_w``
@@ -127,9 +116,7 @@ def test_initial_window_size_matches_pinned_literals(
     assert (w, h) == EXPECTED_WINDOW_SIZES[res.label]
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_initial_window_size_does_not_overflow_screen(
     res: Resolution,
 ) -> None:
@@ -157,9 +144,7 @@ def test_initial_window_size_does_not_overflow_screen(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_pane_widths_meet_minimums(res: Resolution) -> None:
     """Both panes must be at least their minimum width at the
     fresh-install window size. Below those minimums the panel
@@ -178,9 +163,7 @@ def test_pane_widths_meet_minimums(res: Resolution) -> None:
     ), f"{res.label}: feat pane {feat_w} < FEAT_MIN_W {layout.FEAT_MIN_W}"
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_pane_widths_sum_to_window_width(res: Resolution) -> None:
     """``distribute_pane_widths`` should hand out the full window
     width when both content sizes are below their minimum-driven
@@ -210,9 +193,7 @@ def test_pane_widths_sum_to_window_width(res: Resolution) -> None:
         assert seg_w + feat_w == minimal_sum
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_feat_pane_is_content_driven_at_every_resolution(
     res: Resolution,
 ) -> None:
@@ -236,9 +217,7 @@ def test_feat_pane_is_content_driven_at_every_resolution(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_vowel_chart_layout_decision(res: Resolution) -> None:
     """At every supported resolution the seg pane is wide enough
     to host the vowel chart beside the consonants — when the
@@ -267,9 +246,7 @@ def test_vowel_chart_layout_decision(res: Resolution) -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_window_does_not_collapse_to_single_column(
     res: Resolution,
 ) -> None:
@@ -291,9 +268,7 @@ def test_window_does_not_collapse_to_single_column(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_vowel_chart_keeps_natural_width(res: Resolution) -> None:
     """The vowel chart is a fixed phonetic visualisation, not a
     fluid grid — it stays at 320 px (the ``VOWEL_NATURAL_W``
@@ -574,9 +549,7 @@ def test_tall_narrow_1280x1200_fits_screen_width() -> None:
 TOP_CONTENT_H = 540
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_top_pane_height_keeps_analysis_floor(res: Resolution) -> None:
     """At every resolution's recommended-window height, the
     ``layout.top_pane_height`` policy must leave the analysis pane
@@ -595,9 +568,7 @@ def test_top_pane_height_keeps_analysis_floor(res: Resolution) -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_top_pane_height_keeps_min_top_pane_floor(
     res: Resolution,
 ) -> None:
@@ -666,9 +637,7 @@ def test_top_pane_height_does_not_over_allocate_for_small_inventories() -> (
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 @pytest.mark.parametrize("dpr", [1.0, 1.25, 1.5, 2.0])
 def test_recommended_window_size_independent_of_device_pixel_ratio(
     res: Resolution, dpr: float
@@ -738,12 +707,8 @@ def _segment_grid_natural_width(seg_count: int) -> int:
 
 INVENTORIES = ["english", "general", "hayes", "blevins"]
 
-# Subset used by per-resolution layout sweeps that don't need to
-# enumerate every bundled inventory -- ``hayes`` is the densest
-# (largest segment count, widest natural width) and ``english`` is
-# the sparsest, so the worst-case-on-both-axes pair is preserved
-# even with the matrix size cut in half.
-REPRESENTATIVE_INVENTORIES = ["english", "hayes"]
+# Densest + sparsest pair for worst-case-on-both-axes coverage.
+_REP_INV = ["english", "hayes"]
 
 
 @pytest.mark.parametrize("name", INVENTORIES)
@@ -841,10 +806,8 @@ def _feature_card_rows(name: str) -> tuple[list[str], list[int]]:
     return names, counts
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
-@pytest.mark.parametrize("inv_name", REPRESENTATIVE_INVENTORIES)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
+@pytest.mark.parametrize("inv_name", _REP_INV)
 def test_top_panes_fit_without_scroll(res: Resolution, inv_name: str) -> None:
     """At every (resolution, inventory) pair above the 720p floor,
     both the segment grid and the feature panel fit inside the top
@@ -899,9 +862,7 @@ def test_top_panes_fit_without_scroll(res: Resolution, inv_name: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_analysis_expand_target_scales_with_vsplit(
     res: Resolution,
 ) -> None:
@@ -930,9 +891,7 @@ def test_analysis_expand_target_at_fixed_vsplit_is_literal() -> None:
     assert layout.analysis_expand_target(0) == 0
 
 
-@pytest.mark.parametrize(
-    "res", REPRESENTATIVE_RESOLUTIONS, ids=lambda r: r.label
-)
+@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_initial_window_fraction_scales_with_screen(
     res: Resolution,
 ) -> None:
