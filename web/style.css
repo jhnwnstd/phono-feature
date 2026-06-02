@@ -534,6 +534,39 @@ dialog input[type="text"]:focus-visible {
   border: var(--border-std) dashed var(--accent);
 }
 
+/* Palette-aware tooltip for vowel-chart buttons. Replaces the
+   browser-native ``title`` attribute (which picks up the host OS
+   theme: a dark GTK / KDE setting renders dark-on-dark even when
+   the app is in lightmode). The pseudo-element uses ``--panel``
+   for background and ``--text`` for foreground so contrast tracks
+   the active theme. ``pointer-events: none`` keeps the tooltip
+   from intercepting clicks; positioning is absolute relative to
+   the button (the button is ``position: relative`` via the
+   vowel-chart-cell class). */
+.seg-btn[data-tooltip] {
+  position: relative;
+}
+.seg-btn[data-tooltip]:hover::after,
+.seg-btn[data-tooltip]:focus-visible::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+  background: var(--panel);
+  color: var(--text);
+  border: var(--border-thin) solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: var(--font-size-meta);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  /* Subtle drop so the tooltip reads as floating above the chart
+     instead of merging into the next row's button. */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
 /* ---------- IPA vowel trapezoid ----------
    6 height rows × 6 backness-rounding columns. Placement comes
    from Python (gui.vowel_layout.vowel_grid_pos) so the chart
@@ -680,16 +713,23 @@ dialog input[type="text"]:focus-visible {
      on any character rather than blowing out the row. */
   overflow-wrap: anywhere;
 }
+/* Emphasis cues on feature-name labels use ``text-shadow`` rather
+   than ``font-weight: bold`` because the bold glyphs measure
+   slightly wider; toggling the active pane (which flips which
+   rows get the emphasis) would otherwise nudge the feat panel's
+   ``max-content`` column by a couple of pixels and visibly shift
+   the seg pane. The double-shadow trick fattens the strokes
+   without changing the intrinsic width. */
 #feat-panel:not([data-active="true"]) .feat-row[data-contrastive="true"] .feat-name {
   color: var(--neutral);
-  font-weight: bold;
+  text-shadow: 0 0 0.55px currentColor, 0 0 0.55px currentColor;
 }
 #feat-panel:not([data-active="true"]) .feat-row[data-shared="true"] .feat-name {
-  font-weight: bold;
+  text-shadow: 0 0 0.55px currentColor, 0 0 0.55px currentColor;
 }
 #feat-panel[data-active="true"] .feat-row[data-query-value="+"] .feat-name,
 #feat-panel[data-active="true"] .feat-row[data-query-value="-"] .feat-name {
-  font-weight: bold;
+  text-shadow: 0 0 0.55px currentColor, 0 0 0.55px currentColor;
 }
 
 .feat-badge {
@@ -784,24 +824,41 @@ dialog input[type="text"]:focus-visible {
   right: var(--space-xl);
   width: var(--feat-btn-h);
   height: 20px;
-  background: transparent;
+  /* Solid background (not transparent) so a stray chip rendered
+     under the absolutely-positioned button can't bleed through.
+     Combined with the higher z-index and the renderer-level
+     truncation in :py:func:`analysis.render_selection_summary_seg`,
+     this is the third defence against large selections covering
+     or pushing the expand control. */
+  background: var(--panel);
   border: none;
   color: var(--text-dim);
   font-size: var(--font-size-base);
   cursor: pointer;
-  z-index: 2;
+  z-index: 5;
 }
 #expand-btn:hover { color: var(--text); }
 /* Persistent selection header above the tabs (SEG mode only).
    FEAT mode sets ``hidden`` via JS so the strip doesn't reserve
    space when the query is already explicit in the Features tab.
    ``padding-right`` reserves room for the absolutely-positioned
-   ``#expand-btn`` so a long chip line doesn't slide under it. */
+   ``#expand-btn`` so a long chip line doesn't slide under it.
+   The shared Python renderer
+   (:py:func:`render_selection_summary_seg`) truncates the visible
+   chip list past ``SELECTION_HEADER_MAX_CHIPS`` so this strip
+   never grows tall enough to push the tabs down. The
+   ``max-height`` + ``overflow: hidden`` here is a CSS-level
+   safety net for that contract: even a future renderer bug, a
+   bespoke inventory, or a downstream consumer that bypasses the
+   truncation can never grow the strip beyond two rows of chips
+   or cover / push the expand button. */
 .analysis-selection {
   margin-top: 0;
   padding: 0 calc(var(--feat-btn-h) + var(--space-sm)) 0 var(--space-xs);
   font-size: var(--font-size-control);
   color: var(--text);
+  max-height: calc(var(--feat-btn-h) * 2 + var(--space-xs));
+  overflow: hidden;
 }
 .analysis-selection[hidden] { display: none; }
 .analysis-selection p { margin: 0; }

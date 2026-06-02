@@ -14,7 +14,6 @@ const NODE_IDS = Object.freeze({
     renameBtn: "rename-btn",
     uploadBtn: "upload-btn",
     uploadInput: "upload-input",
-    downloadBtn: "download-btn",
     segPanel: "seg-panel",
     featPanel: "feat-panel",
     segGrid: "seg-grid",
@@ -432,6 +431,19 @@ async function bootPyodide({ prerendered = false } = {}) {
     state.bridge = pyodide.pyimport("api");
     mark("bridge:end");
 
+    // Sync the Python palette state with what the page restored
+    // from localStorage. The CSS-vars layer (data-theme / data-cb
+    // on <html>) is restored by wireThemeToggle / wireColorblindToggle
+    // BEFORE the bridge attaches, so segment buttons and borders
+    // pick up the right colours on first paint. The bridge,
+    // however, defaults to (light, standard) in Python; without
+    // this sync the analysis HTML (which Python renders with
+    // ``C['accent']`` etc. baked in) would use the default palette
+    // even though the rest of the page is in colorblind / dark
+    // mode. Pyodide hasn't cached any analysis yet (we're pre-
+    // inventory-load) so no invalidation is needed beyond the call.
+    _syncBridgePaletteToStoredState();
+
     enableBridgeGatedControls();
     setLoadingStatus("Loading default inventory…");
     mark("inventory:start");
@@ -523,7 +535,6 @@ function validatePythonBundleBytes(bytes) {
 const BRIDGE_GATED_NODES = [
     "inventoryPicker",
     "uploadBtn",
-    "downloadBtn",
     "renameBtn",
     "builderBtn",
 ];
@@ -694,8 +705,22 @@ function rasterizeText(text, font) {
     const m = measure.measureText(text);
     const ascent = m.actualBoundingBoxAscent ?? 10;
     const descent = m.actualBoundingBoxDescent ?? 2;
-    // 2-px padding all around so antialias edges aren't clipped.
-    const w = Math.max(1, Math.ceil(m.width) + 4);
+    // Width has to account for combining marks (the tie bar in
+    // affricates like t͡ʃ / d͡ʒ, the ejective ʼ above ejectives) that
+    // carry zero advance width but a non-zero visual bounding box.
+    // ``m.width`` is the advance only; ``actualBoundingBoxLeft`` /
+    // ``Right`` measure the painted-pixel extent from the text
+    // origin. Take the larger of the two metrics so the canvas
+    // (and the host span) is wide enough to contain every painted
+    // pixel. Without this an affricate's tie-bar would be clipped
+    // off the right edge of the canvas and the span ended up too
+    // narrow for the button to grow around it.
+    const left = m.actualBoundingBoxLeft ?? 0;
+    const right = m.actualBoundingBoxRight ?? m.width;
+    const naturalW = Math.max(m.width, left + right);
+    // 3-px padding all around so antialias edges + accent marks
+    // aren't clipped on either side.
+    const w = Math.max(1, Math.ceil(naturalW) + 6);
     const h = Math.max(1, Math.ceil(ascent + descent) + 4);
     const dpr = window.devicePixelRatio || 1;
     const canvas = document.createElement("canvas");
@@ -922,7 +947,16 @@ function _buildSegmentButton(seg, extraAttrs) {
     if (extraAttrs) {
         for (const [k, v] of Object.entries(extraAttrs)) {
             if (k.startsWith("data-")) btn.setAttribute(k, v);
-            else if (k === "title") btn.title = v;
+            else if (k === "title") {
+                // Use a CSS-controlled tooltip via data-tooltip rather
+                // than the native ``title`` attribute. Native tooltips
+                // pick up the host OS theme (Linux dark-GTK shows
+                // dark-on-dark even in app lightmode); the CSS variant
+                // honours the app palette. ``aria-label`` is left as
+                // the canonical label so screen readers still get the
+                // pronunciation; the tooltip extends it.
+                btn.setAttribute("data-tooltip", v);
+            }
         }
     }
     state.seg_buttons.set(seg, btn);
@@ -1461,7 +1495,8 @@ function wireUploadDownload() {
         await loadInventoryText(text, file.name);
         ev.target.value = "";
     });
-    nodes.downloadBtn.addEventListener("click", downloadCurrentInventory);
+    // Save-as lives on the editor toolbar only; the main toolbar
+    // is for selecting and viewing inventories, not exporting them.
 }
 
 /**
@@ -1909,21 +1944,14 @@ function wireBuilderEditor(setupDialog) {
     // (no scrollbars). On platforms with classic scrollbars (Windows,
     // most Linux), the data pane's vertical scrollbar eats ~15px from
     // its viewport while the cols pane keeps the full width — so at
-    // max horizontal scroll cols.scrollLeft is clamped 15px short of
-    // data.scrollLeft and the segment headers shift relative to their
-    // data columns. Equalize the two panes' ``clientWidth`` by giving
-    // the cols/rows panes a transparent border equal to the measured
-    // scrollbar gutter. ``clientWidth`` excludes borders but includes
-    // padding, so border (not padding) is the lever that actually
-    // matches the data pane's scrollbar-reduced viewport. Zero on
-    // overlay-scrollbar platforms (macOS default, headless Chromium).
-    const sbw = _measureScrollbarWidth();
-    if (sbw > 0) {
-        nodes.editorGridCols.style.borderRight =
-            `${sbw}px solid transparent`;
-        nodes.editorGridRows.style.borderBottom =
-            `${sbw}px solid transparent`;
-    }
+    // Scrollbar-gutter compensation: when the data pane shows a
+    // scrollbar, the header panes need a matching transparent
+    // border to keep their viewport aligned. The actual
+    // application happens per-render in ``_alignHeaderPanesToData``
+    // (gated on observed scrollbar presence) so the rows pane
+    // doesn't carry a phantom bottom border when no horizontal
+    // scrollbar is visible — that border was clipping the last
+    // row label with a panel-coloured stripe.
 
     // +/− Segment / Feature buttons.
     nodes.editorAddSegBtn.addEventListener("click", () => {
@@ -2180,6 +2208,25 @@ function _alignHeaderPanesToData() {
         rowHeaders[r].style.height = px;
         dataRows[r].style.height = px;
     }
+
+    // Apply scrollbar-gutter compensation conditionally on the
+    // data pane's ACTUAL scrollbar visibility. The previous
+    // implementation stamped both borders unconditionally at
+    // ``wireBuilderEditor`` time, leaving a phantom panel-coloured
+    // stripe at the bottom of the rows pane that clipped the last
+    // row label whenever no horizontal scrollbar was visible.
+    // Recomputed after every render because adding / removing a
+    // segment can flip either scrollbar's visibility.
+    const sbw = _measureScrollbarWidth();
+    const dp = nodes.editorGridData;
+    const hasVScroll = sbw > 0 && dp.scrollHeight > dp.clientHeight;
+    const hasHScroll = sbw > 0 && dp.scrollWidth > dp.clientWidth;
+    nodes.editorGridCols.style.borderRight = hasVScroll
+        ? `${sbw}px solid transparent`
+        : "";
+    nodes.editorGridRows.style.borderBottom = hasHScroll
+        ? `${sbw}px solid transparent`
+        : "";
 }
 
 /** Paint a single cell from its raw value (display or serialized
@@ -3110,6 +3157,25 @@ function normalizePaletteMode(value) {
  * renderer is told via ``set_palette_mode`` so analysis-chip HTML
  * regenerates with matching colors.
  */
+/** Push the user's restored theme + palette-mode (set by
+ *  wireThemeToggle / wireColorblindToggle before the bridge
+ *  attached) into Python. Without this, the analysis HTML renders
+ *  with the default ``(light, standard)`` palette baked in, even
+ *  though the CSS-vars layer is showing dark / colorblind. The
+ *  desktop equivalent is the same constructor-time
+ *  ``set_theme(saved_theme) + set_palette_mode(saved_mode)`` pair
+ *  in :py:meth:`MainWindow.__init__`. */
+function _syncBridgePaletteToStoredState() {
+    const theme = normalizeTheme(safeStorageGet("theme"));
+    const mode = normalizePaletteMode(safeStorageGet("palette_mode"));
+    try {
+        callBridge("set_active_theme", theme);
+        callBridge("set_active_palette_mode", mode);
+    } catch (e) {
+        console.warn("palette sync to bridge failed:", e);
+    }
+}
+
 function wireColorblindToggle() {
     if (!nodes.cbBtn) return;
     const stored = normalizePaletteMode(safeStorageGet("palette_mode"));

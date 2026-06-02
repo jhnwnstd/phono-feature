@@ -429,20 +429,45 @@ def _render_natural_class_verdict(
 # ---------------------------------------------------------------------------
 
 
+#: Maximum chip count rendered inline in the persistent selection
+#: header. Past this, the header truncates and appends a "+N more"
+#: muted indicator. The full selection is still available via the
+#: per-tab content below; this just keeps the persistent header
+#: from bloating the analysis pane on selections like General-IPA's
+#: "all 97 consonants", which would otherwise wrap to many rows,
+#: push the tabs / content down, and collide with the expand
+#: button at the top-right.
+SELECTION_HEADER_MAX_CHIPS: int = 24
+
+
 def render_selection_summary_seg(segs: list[str]) -> str:
     """Persistent header content for SEG-mode selections.
 
-    Returns ``"Selected: chip chip"``-style HTML that sits above the
-    tabs and doesn't move when the user switches tabs. Empty
-    selection returns the empty string. The surrounding chrome
-    hides the strip entirely (desktop ``setVisible(False)`` / web
-    ``hidden`` attribute), so we don't repeat what the status bar
-    already says.
+    Returns ``"Selected (N): chip chip"``-style HTML that sits
+    above the tabs and doesn't move when the user switches tabs.
+    Empty selection returns the empty string. The surrounding
+    chrome hides the strip entirely (desktop ``setVisible(False)``
+    / web ``hidden`` attribute), so we don't repeat what the
+    status bar already says.
+
+    When the selection exceeds :py:data:`SELECTION_HEADER_MAX_CHIPS`,
+    only the first N chips render inline and a muted ``"+M more"``
+    indicator stands in for the rest. The full count stays in the
+    header label so the user can always see how many segments are
+    in play; the truncation only governs the chip rendering.
     """
     if not segs:
         return ""
-    chips = " ".join(_segment_chip(seg) for seg in segs)
-    return f"<p><b>Selected ({len(segs)}):</b> {chips}</p>"
+    count = len(segs)
+    if count <= SELECTION_HEADER_MAX_CHIPS:
+        chips = " ".join(_segment_chip(seg) for seg in segs)
+    else:
+        head = " ".join(
+            _segment_chip(seg) for seg in segs[:SELECTION_HEADER_MAX_CHIPS]
+        )
+        more = count - SELECTION_HEADER_MAX_CHIPS
+        chips = f"{head} {_muted_italic_span(f'+{more} more')}"
+    return f"<p><b>Selected ({count}):</b> {chips}</p>"
 
 
 def render_selection_summary_feat(feature_dict: dict[str, str]) -> str:
