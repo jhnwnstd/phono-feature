@@ -1234,19 +1234,38 @@ function activateMode(mode) {
             rec.minus.dataset.active = "false";
             delete rec.row.dataset.queryValue;
         }
-        const selectedSet = new Set(state.selected_segments);
-        for (const [seg, btn] of state.seg_buttons) {
-            const isSelected = selectedSet.has(seg);
-            btn.dataset.state = isSelected ? "selected" : "default";
-            btn.setAttribute("aria-pressed", isSelected ? "true" : "false");
+        // FEAT→SEG: segment-button states are also painted by the
+        // subsequent runAnalysis pass below (with ``suggested``
+        // decoration on extension candidates). Skip the per-button
+        // write here when the bridge will repaint to avoid a
+        // brief flash through the intermediate ``default``/``selected``
+        // state. The seg states will be canonical after runAnalysis.
+        if (!state.bridge || !state.selected_segments.length) {
+            const selectedSet = new Set(state.selected_segments);
+            for (const [seg, btn] of state.seg_buttons) {
+                const isSelected = selectedSet.has(seg);
+                btn.dataset.state = isSelected ? "selected" : "default";
+                btn.setAttribute(
+                    "aria-pressed", isSelected ? "true" : "false",
+                );
+            }
         }
     } else {
         state.selected_features = cloneFeatureSpec(transition.selected_features);
         state.selected_segments = transition.selected_segments.slice();
-        for (const btn of state.seg_buttons.values()) {
-            if (btn.dataset.state === "selected") {
-                btn.dataset.state = "default";
-                btn.setAttribute("aria-pressed", "false");
+        // SEG→FEAT: when the bridge will repaint segments as
+        // matched/unmatched via the analysis pass below, skip the
+        // intermediate ``selected → default`` write that produces
+        // a visible flicker on previously-selected segments. The
+        // analysis pass writes the canonical state in one paint.
+        // Only do the reset when there's no query to follow up
+        // with (analysis is a no-op for empty queries).
+        if (!state.bridge || !Object.keys(state.selected_features).length) {
+            for (const btn of state.seg_buttons.values()) {
+                if (btn.dataset.state === "selected") {
+                    btn.dataset.state = "default";
+                    btn.setAttribute("aria-pressed", "false");
+                }
             }
         }
         for (const [feat, rec] of state.feat_rows) {
@@ -1260,7 +1279,12 @@ function activateMode(mode) {
 
     setStatus(statusTextForMode(mode));
 
-    if (state.bridge) scheduleAnalysis();
+    // Mode switch is a discrete one-off event; bypass the 30 ms
+    // click-burst debounce and paint the new mode's segment states
+    // in a single synchronous pass. Without this, segments would
+    // sit at their pre-switch state for 30 ms after the chrome
+    // already changed -- the source of the flicker users see.
+    if (state.bridge) runAnalysis();
     else clearAnalysisTabs();
 }
 
