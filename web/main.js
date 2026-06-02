@@ -3357,6 +3357,141 @@ function wireSegmentDelegation() {
         const seg = btn.dataset.seg;
         if (seg) onSegmentClicked(seg);
     });
+    // Right-click copies the segment symbol. Mirrors the desktop
+    // ``SegmentButton.contextMenuEvent`` -> MainWindow handler.
+    // Gated to SEG_TO_FEAT mode because in FEAT_TO_SEG the buttons
+    // are display-only and a copy would be surprising. ev.preventDefault
+    // suppresses the browser context menu so the user doesn't see a
+    // phantom menu after the copy.
+    nodes.segGrid.addEventListener("contextmenu", (ev) => {
+        const btn = ev.target.closest(".seg-btn");
+        if (!btn || !nodes.segGrid.contains(btn)) return;
+        const seg = btn.dataset.seg;
+        if (!seg || state.mode !== MODE.SEG_TO_FEAT) return;
+        ev.preventDefault();
+        copySegmentToClipboard(seg);
+    });
+    // Tooltip on vowel-chart buttons. The CSS-only ``:hover::after``
+    // pattern would render the tooltip inside the seg-pane's
+    // ``overflow: auto`` clip rect; for top-row vowels (close /i/y/...)
+    // that meant the tooltip popped above the visible area and the
+    // pane added a phantom scroll. We instead drive a single
+    // body-level fixed-position element from ``mouseover`` /
+    // ``mouseout`` (these bubble, unlike mouseenter/mouseleave), with
+    // a show-delay matching native title-tip behaviour.
+    nodes.segGrid.addEventListener("mouseover", (ev) => {
+        const btn = ev.target.closest(".seg-btn[data-tooltip]");
+        if (!btn || !nodes.segGrid.contains(btn)) return;
+        _scheduleVowelTooltip(btn);
+    });
+    nodes.segGrid.addEventListener("mouseout", (ev) => {
+        const btn = ev.target.closest(".seg-btn[data-tooltip]");
+        if (!btn || !nodes.segGrid.contains(btn)) return;
+        // ``relatedTarget`` is where the pointer is heading. If it's
+        // still inside the same button (e.g. into its rasterized-label
+        // span), keep the tooltip; ignore the mouseout.
+        const next = ev.relatedTarget;
+        if (next instanceof Node && btn.contains(next)) return;
+        _hideVowelTooltip();
+    });
+}
+
+/** Show delay in ms before the vowel tooltip appears on hover.
+ *  Matches the rough cadence of native ``title`` attribute tooltips
+ *  so a quick mouse traversal across vowels doesn't flash a tooltip
+ *  trail. */
+const VOWEL_TOOLTIP_SHOW_DELAY_MS = 500;
+
+const _tooltipState = {
+    el: null,
+    showTimer: 0,
+    activeBtn: null,
+};
+
+function _ensureVowelTooltip() {
+    if (_tooltipState.el) return _tooltipState.el;
+    const el = document.createElement("div");
+    el.className = "vowel-tooltip";
+    el.setAttribute("role", "tooltip");
+    document.body.appendChild(el);
+    _tooltipState.el = el;
+    return el;
+}
+
+function _scheduleVowelTooltip(btn) {
+    if (_tooltipState.activeBtn === btn) return;
+    _hideVowelTooltip();
+    _tooltipState.activeBtn = btn;
+    _tooltipState.showTimer = window.setTimeout(() => {
+        _tooltipState.showTimer = 0;
+        if (_tooltipState.activeBtn !== btn) return;
+        _showVowelTooltip(btn);
+    }, VOWEL_TOOLTIP_SHOW_DELAY_MS);
+}
+
+function _showVowelTooltip(btn) {
+    const text = btn.getAttribute("data-tooltip");
+    if (!text) return;
+    const el = _ensureVowelTooltip();
+    el.textContent = text;
+    // Position above the button, horizontally centred. Measure after
+    // assigning text so the tooltip's own width reflects the content;
+    // clamp to the viewport so a wide tooltip near the right edge
+    // doesn't run off-screen.
+    const r = btn.getBoundingClientRect();
+    el.style.top = "0px";
+    el.style.left = "0px";
+    el.classList.add("show");
+    const tr = el.getBoundingClientRect();
+    let left = r.left + r.width / 2 - tr.width / 2;
+    const max = window.innerWidth - tr.width - 4;
+    if (left < 4) left = 4;
+    if (left > max) left = max;
+    const top = r.top - tr.height - 4;
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+}
+
+function _hideVowelTooltip() {
+    if (_tooltipState.showTimer) {
+        clearTimeout(_tooltipState.showTimer);
+        _tooltipState.showTimer = 0;
+    }
+    _tooltipState.activeBtn = null;
+    if (_tooltipState.el) _tooltipState.el.classList.remove("show");
+}
+
+/** Copy a segment symbol to the OS clipboard with status-bar
+ *  feedback. Uses the async Clipboard API where available (HTTPS
+ *  + permission grant); falls back to the document.execCommand
+ *  path on older browsers / file:// contexts where the async API
+ *  is blocked. Either way the user gets a status message so the
+ *  copy isn't silent.
+ */
+function copySegmentToClipboard(seg) {
+    const onOk = () => setStatus(`Copied /${seg}/ to clipboard`);
+    const onFail = () => setStatus(`Could not copy /${seg}/`);
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(seg).then(onOk, onFail);
+        return;
+    }
+    // Legacy fallback: stage the text in a transient textarea,
+    // select it, exec the copy command, remove the textarea.
+    const stage = document.createElement("textarea");
+    stage.value = seg;
+    stage.setAttribute("readonly", "");
+    stage.style.position = "fixed";
+    stage.style.opacity = "0";
+    document.body.appendChild(stage);
+    stage.select();
+    try {
+        const ok = document.execCommand("copy");
+        ok ? onOk() : onFail();
+    } catch {
+        onFail();
+    } finally {
+        stage.remove();
+    }
 }
 
 function wireFeatureDelegation() {

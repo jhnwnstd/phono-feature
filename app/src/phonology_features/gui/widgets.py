@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import ClassVar
 
 from PyQt6.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QResizeEvent
+from PyQt6.QtGui import QContextMenuEvent, QFont, QResizeEvent
 from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -122,6 +122,12 @@ class SegmentButton(QPushButton):
     only does the f-string work once per theme; subsequent swaps back
     are a cache hit.
     """
+
+    #: Emitted on right-click. MainWindow connects this to a clipboard
+    #: copy handler so users can grab a segment symbol out of the grid
+    #: without going through select-to-copy. Argument is ``self.segment``
+    #: (the IPA string).
+    right_clicked = pyqtSignal(str)
 
     # ``palette.theme_version`` -> styles dict, shared across
     # instances. Cache rebuild semantics live in
@@ -237,6 +243,23 @@ class SegmentButton(QPushButton):
             return
         self._state = new_state
         set_css(self, self._styles[new_state])
+
+    def contextMenuEvent(self, event: QContextMenuEvent | None) -> None:
+        """Emit ``right_clicked`` with the segment string. MainWindow
+        decides whether to copy (only in SEG_TO_FEAT mode); doing the
+        gating there keeps this button widget agnostic of the active
+        UI mode.
+
+        Overriding ``contextMenuEvent`` (rather than ``mousePressEvent``
+        with a ``RightButton`` check) is the Qt-idiomatic way to react
+        to right-click and additionally covers the keyboard /
+        accessibility context-menu key. ``event.accept()`` suppresses
+        the default no-op QPushButton context menu so the user doesn't
+        see a phantom empty menu after the copy.
+        """
+        if event is not None:
+            event.accept()
+        self.right_clicked.emit(self.segment)
 
 
 class FeatureRow(QWidget):

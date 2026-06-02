@@ -534,27 +534,25 @@ dialog input[type="text"]:focus-visible {
   border: var(--border-std) dashed var(--accent);
 }
 
-/* Palette-aware tooltip for vowel-chart buttons. Replaces the
-   browser-native ``title`` attribute (which picks up the host OS
-   theme: a dark GTK / KDE setting renders dark-on-dark even when
-   the app is in lightmode). The dedicated ``--tooltip-bg`` /
-   ``--tooltip-text`` tokens stay dark-surface + light-text in both
-   light and dark themes so the tooltip presentation is consistent
-   across themes (dark-theme tooltips are the visual reference the
-   light theme matches). ``pointer-events: none`` keeps the tooltip
-   from intercepting clicks; positioning is absolute relative to
-   the button (the button is ``position: relative`` via the
-   vowel-chart-cell class). */
-.seg-btn[data-tooltip] {
-  position: relative;
-}
-.seg-btn[data-tooltip]:hover::after,
-.seg-btn[data-tooltip]:focus-visible::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 4px);
-  transform: translateX(-50%);
+/* Palette-aware tooltip for vowel-chart buttons. The element is a
+   single shared ``#vowel-tooltip`` appended to ``<body>`` (see
+   ``main.js:_ensureVowelTooltip``) and positioned via
+   ``getBoundingClientRect()`` so it escapes the seg-pane's
+   ``overflow: auto`` containment -- otherwise a tooltip above a
+   top-row vowel like /i/ would push the pane's scroll range and
+   trigger a phantom vertical scrollbar.
+
+   The dedicated ``--tooltip-bg`` / ``--tooltip-text`` tokens stay
+   dark-surface + light-text in both light and dark themes so the
+   tooltip presentation is consistent across themes (dark-theme
+   tooltips are the visual reference the light theme matches).
+   ``pointer-events: none`` keeps the tooltip from intercepting
+   clicks. The opacity transition gives the same gentle fade as a
+   native OS tooltip; the show-delay (matching native title-tip
+   behaviour) lives in JS so quick mouse traversals don't trigger
+   a tooltip flash. */
+.vowel-tooltip {
+  position: fixed;
   background: var(--tooltip-bg);
   color: var(--tooltip-text);
   border: var(--border-thin) solid var(--tooltip-bg);
@@ -563,10 +561,19 @@ dialog input[type="text"]:focus-visible {
   font-size: var(--font-size-meta);
   white-space: nowrap;
   pointer-events: none;
-  z-index: 10;
-  /* Subtle drop so the tooltip reads as floating above the chart
-     instead of merging into the next row's button. */
+  z-index: 9999;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  /* Hidden until JS positions + shows it. ``top``/``left`` are
+     written inline by ``_showVowelTooltip``; the initial -9999px
+     keeps the unmounted-but-not-yet-positioned tooltip off-screen
+     so a stale fade-out can't flash at viewport origin. */
+  top: -9999px;
+  left: -9999px;
+}
+.vowel-tooltip.show {
+  opacity: 1;
 }
 
 /* ---------- IPA vowel trapezoid ----------

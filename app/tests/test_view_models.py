@@ -94,6 +94,31 @@ def test_summarize_segment_selection_multi_matches_engine() -> None:
     assert summary["feature_rows"]["LABIAL"]["badge"] == "±"
 
 
+def test_feature_row_badge_uses_unicode_minus_for_shared_negative() -> None:
+    """A feature shared as ``-`` across the selection must surface in
+    the row's ``badge`` as U+2212 (MINUS SIGN), not ASCII U+002D
+    (HYPHEN-MINUS). The web frontend renders the badge text via
+    canvas rasterisation; the visible mate of the ``-`` polarity
+    button (also U+2212) must use the same glyph so the two read as
+    the same symbol. Desktop already does this translation inside
+    ``FeatureRow.set_display``; the shared layer is the single
+    source of truth so both UIs inherit it.
+    """
+    engine = _engine("hayes_features.json")
+    # Pick a selection where some feature is shared-negative. /m/
+    # /n/ are both [-Continuant], among many shared values.
+    summary = summarize_segment_selection(engine, ["m", "n"])
+    cont = summary["feature_rows"].get("Continuant")
+    assert cont is not None, "Hayes inventory exposes a 'Continuant' feature"
+    assert cont["value"] == "-"
+    assert cont["shared"] is True
+    assert cont["badge"] == "−"
+    # Positive badges stay ASCII ``+`` (no display-only character).
+    voice = summary["feature_rows"]["Voice"]
+    assert voice["value"] == "+"
+    assert voice["badge"] == "+"
+
+
 def test_suggest_natural_class_blevins_affricate_regression() -> None:
     """Regression for the user-reported bug: selecting /b͡v/ /d͡z/
     /t͡s/ in Blevins used to report "7 segments needed for natural

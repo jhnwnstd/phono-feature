@@ -980,6 +980,7 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(
                 lambda checked, s=seg: self._on_segment_clicked(s, checked)
             )
+            btn.right_clicked.connect(self._on_segment_right_clicked)
             self._seg_button_pool[seg] = btn
             return btn
         # Refresh theme on pool reuse: theme toggles skip orphaned
@@ -1393,6 +1394,31 @@ class MainWindow(QMainWindow):
             if segment in self._selected_segments:
                 self._selected_segments.remove(segment)
         self._debounce.start()
+
+    def _on_segment_right_clicked(self, segment: str) -> None:
+        """Copy the segment symbol to the clipboard when the user
+        right-clicks a segment button. Gated to ``Mode.SEG_TO_FEAT``
+        because that's when the segments pane drives interaction; in
+        FEAT_TO_SEG mode the buttons are display-only (matched /
+        unmatched paint) and a right-click "copy" would surprise.
+
+        Status-bar feedback confirms the copy so the user gets the
+        same affordance they'd see from a Qt-style "Copied X" toast
+        without us pulling in a transient overlay widget.
+        """
+        if self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
+            return
+        from PyQt6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if not isinstance(app, QApplication):
+            return
+        clipboard = app.clipboard()
+        status = self.statusBar()
+        if clipboard is None or status is None:
+            return
+        clipboard.setText(segment)
+        status.showMessage(f"Copied /{segment}/ to clipboard", 0)
 
     def _on_segment_pressed(self) -> None:
         """Mouse press on a segment button: switch to seg mode before

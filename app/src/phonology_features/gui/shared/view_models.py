@@ -34,7 +34,10 @@ from phonology_features.gui.shared.analysis import (
     render_selection_summary_seg,
     render_single_segment,
 )
-from phonology_features.gui.shared.constants import FEATURE_GROUPS
+from phonology_features.gui.shared.constants import (
+    FEATURE_GROUPS,
+    MINUS_SIGN,
+)
 from phonology_features.gui.shared.layout import distribute_feature_groups
 from phonology_features.gui.shared.vowel_layout import (
     COL_LABELS as VOWEL_COL_LABELS,
@@ -276,7 +279,14 @@ def _feature_row_state(
     if contrastive:
         badge = "±"
     elif value:
-        badge = value
+        # Engine values are ASCII ("+", "-", "0"); the badge that
+        # surfaces in the UI must use U+2212 MINUS SIGN so the glyph
+        # matches the polarity buttons (also U+2212) and the chips in
+        # the analysis pane. Doing the translation here means both
+        # desktop (FeatureRow.set_display) and web (main.js
+        # _setRasterizedBadge) get the right glyph without each
+        # implementing its own ASCII -> U+2212 fix.
+        badge = MINUS_SIGN if value == "-" else value
     else:
         badge = "·"
     return {
