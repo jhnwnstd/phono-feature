@@ -187,13 +187,13 @@ class InventoryDirController:
             if os.path.isdir(inventories_dir):
                 self.sweep_stale_tmp_files(inventories_dir)
                 for fname in sorted(os.listdir(inventories_dir)):
-                    # Skip hidden files and the .tmp_inv_*.json side
-                    # files atomic writes create momentarily between
-                    # mkstemp and os.replace; the directory watcher
-                    # can fire on the tmp create and we don't want
-                    # it to show up in the dropdown for that ~ms
-                    # window.
-                    if fname.startswith(".") or not fname.endswith(".json"):
+                    # Skip dotfiles (.tmp_inv_*.json side files from
+                    # atomic writes are visible to the watcher for
+                    # ~ms between mkstemp and os.replace; editor swap
+                    # files); skip underscore-prefixed siblings like
+                    # ``_schema.json`` that live alongside inventories
+                    # but aren't loadable themselves.
+                    if not _is_visible_inventory_file(fname):
                         continue
                     path = os.path.join(inventories_dir, fname)
                     pretty = fname[:-5].replace("_", " ").title()
