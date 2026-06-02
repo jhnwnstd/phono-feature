@@ -179,7 +179,7 @@ def run_session(only: str | None = None) -> None:
     def theme_toggle_burst() -> None:
         assert win is not None
         for _ in range(6):
-            win._toggle_theme()
+            win._theme.toggle()
             app.processEvents()
 
     def open_builder() -> None:
