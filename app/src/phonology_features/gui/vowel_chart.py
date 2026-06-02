@@ -20,6 +20,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from phonology_features.gui.shared.layout import (
+    VOWEL_PAIR_GAP_PX,
+    VOWEL_PAIR_SEPARATOR_PX,
+)
 from phonology_features.gui.shared.palette import C
 from phonology_features.gui.shared.vowel_layout import (
     ROW_LABELS,
@@ -49,6 +53,23 @@ VOWEL_LABEL_W = 72
 _ROW_LABELS = ROW_LABELS
 
 
+def _logical_col_to_grid_col(col: int) -> int:
+    """Translate a logical placement column (0..5) to its physical
+    ``QGridLayout`` column.
+
+    Logical columns are front-unr, front-rnd, central-unr,
+    central-rnd, back-unr, back-rnd (0..5). The grid prepends a row-
+    label gutter at column 0 and splices spacer columns between
+    pairs at physical columns 3 and 6, so the mapping is::
+
+        logical:  0  1  2  3  4  5
+        physical: 1  2  4  5  7  8
+
+    Same shape as ``main.js:_buildVowelChart`` for parity.
+    """
+    return 1 + col + (col >> 1)
+
+
 class VowelChartWidget(QWidget):
     """Displays vowels in an IPA-style grid: height x backness x rounding."""
 
@@ -67,7 +88,19 @@ class VowelChartWidget(QWidget):
         self._header_labels: list[tuple[QLabel, bool]] = []
         self._cell_containers: list[QWidget] = []
         self._grid = QGridLayout(self)
-        self._grid.setSpacing(btn_gap)
+        # Asymmetric column spacing: the horizontal gap is the tight
+        # within-pair value, and the two spacer columns (3, 6) get
+        # the inter-pair separator as a minimum width. Vertical gap
+        # stays at ``btn_gap`` so row-to-row breathing room matches
+        # the consonant grid.
+        self._grid.setHorizontalSpacing(VOWEL_PAIR_GAP_PX)
+        self._grid.setVerticalSpacing(btn_gap)
+        # Spacer columns between front<->central and central<->back
+        # pairs. Logical columns 0..5 from the placement code map to
+        # physical grid columns 1, 2, 4, 5, 7, 8 (with row labels at
+        # column 0 and spacers at columns 3, 6).
+        self._grid.setColumnMinimumWidth(3, VOWEL_PAIR_SEPARATOR_PX)
+        self._grid.setColumnMinimumWidth(6, VOWEL_PAIR_SEPARATOR_PX)
         self._grid.setContentsMargins(0, 0, 8, 0)
         # Cached header styles, rebuilt by apply_theme each toggle.
         self._HDR_ACTIVE = ""
@@ -174,17 +207,21 @@ class VowelChartWidget(QWidget):
             f"color: {C['text_dim']}; letter-spacing: 1px;"
             " padding: 2px 2px 0 2px;"
         )
-        # Span the data columns only (skip col 0, the row-label gutter)
+        # Span every data column (including the two spacer columns)
         # so the title sits flush with the vowel cells, not the row
-        # labels.
-        self._grid.addWidget(title, 0, 1, 1, 6)
+        # labels. Physical columns: 1..8 (front 1-2, spacer 3,
+        # central 4-5, spacer 6, back 7-8).
+        self._grid.addWidget(title, 0, 1, 1, 8)
         self._header_labels.append((title, False))
         for ci, label in enumerate(self._COL_HEADERS):
             lbl = QLabel(label, self)
             lbl.setFont(QFont("Noto Sans", 7))
             lbl.setStyleSheet(f"color: {C['text_dim']};")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._grid.addWidget(lbl, 1, 1 + ci * 2, 1, 2)
+            # Each backness header straddles its pair: ci=0 (Front)
+            # at col 1 span 2, ci=1 (Central) at col 4 span 2,
+            # ci=2 (Back) at col 7 span 2.
+            self._grid.addWidget(lbl, 1, 1 + ci * 3, 1, 2)
             self._header_labels.append((lbl, False))
 
     @staticmethod
@@ -251,7 +288,9 @@ class VowelChartWidget(QWidget):
             btn = self._buttons.get(seg)
             if btn:
                 self._prep_button(btn, seg, placements[seg])
-                self._grid.addWidget(btn, grid_row, 1 + ci)
+                self._grid.addWidget(
+                    btn, grid_row, _logical_col_to_grid_col(ci)
+                )
             return
         # Parented at construction so the container is never a
         # transient top-level widget during the brief gap before
@@ -270,7 +309,7 @@ class VowelChartWidget(QWidget):
                 vbox.addWidget(btn)
                 added = True
         if added:
-            self._grid.addWidget(cell, grid_row, 1 + ci)
+            self._grid.addWidget(cell, grid_row, _logical_col_to_grid_col(ci))
         else:
             self._cell_containers.remove(cell)
             cell.deleteLater()

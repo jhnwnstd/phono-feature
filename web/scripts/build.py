@@ -278,19 +278,24 @@ def _build_limits_payload() -> dict[str, int]:
     Pyodide with a confusing generic error). Same drift-prevention
     pattern as the status-text bake: emit once from Python, read
     once in JS, no hand-maintained literal.
-    """
-    from phonology_engine.limits import (
-        MAX_FEATURES,
-        MAX_INVENTORY_FILE_BYTES,
-        MAX_NAME_LENGTH,
-        MAX_SEGMENTS,
-    )
 
+    Loads ``limits.py`` directly from the engine source tree (same
+    pattern as ``_load_palette_module``/``_load_layout_module``) so
+    the build script doesn't depend on the engine being installed
+    as a package. CI runs ``python web/scripts/build.py`` against a
+    bare interpreter; only the standard library is available.
+    """
+    limits_path = ENGINE_PKG / "src" / "phonology_engine" / "limits.py"
+    spec = importlib.util.spec_from_file_location("_limits", limits_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load {limits_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
     return {
-        "max_features": MAX_FEATURES,
-        "max_segments": MAX_SEGMENTS,
-        "max_name_length": MAX_NAME_LENGTH,
-        "max_inventory_file_bytes": MAX_INVENTORY_FILE_BYTES,
+        "max_features": module.MAX_FEATURES,
+        "max_segments": module.MAX_SEGMENTS,
+        "max_name_length": module.MAX_NAME_LENGTH,
+        "max_inventory_file_bytes": module.MAX_INVENTORY_FILE_BYTES,
     }
 
 
@@ -354,6 +359,8 @@ def generate_layout_css() -> None:
         f"  --min-feat-card-w: {mod.MIN_FEAT_CARD_W}px;",
         f"  --vowel-natural-w: {mod.VOWEL_NATURAL_W}px;",
         f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
+        f"  --vowel-pair-gap: {mod.VOWEL_PAIR_GAP_PX}px;",
+        f"  --vowel-pair-separator: {mod.VOWEL_PAIR_SEPARATOR_PX}px;",
         f"  --collapse-w: {mod.COLLAPSE_W}px;",
         # Per-row / per-card heights — single source of truth for
         # consonant-grid and feature-card height math in the web.

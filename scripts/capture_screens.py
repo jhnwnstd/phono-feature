@@ -39,6 +39,7 @@ def _isolate_qsettings() -> None:
 
 def main() -> int:
     _isolate_qsettings()
+    from PyQt6.QtCore import QEventLoop, QTimer
     from PyQt6.QtWidgets import QApplication
 
     from phonology_features.gui.main_window import MainWindow, Mode
@@ -49,7 +50,15 @@ def main() -> int:
     win.show()
     app.processEvents()
 
-    def settle() -> None:
+    def settle(ms: int = 0) -> None:
+        for _ in range(4):
+            app.processEvents()
+
+        if ms > 0:
+            loop = QEventLoop()
+            QTimer.singleShot(ms, loop.quit)
+            loop.exec()
+
         for _ in range(4):
             app.processEvents()
 
@@ -60,7 +69,7 @@ def main() -> int:
         settle()
 
     def grab(name: str, widget=None) -> None:
-        settle()
+        settle(1000)
         target = widget or win
         pix = target.grab()
         path = OUT_DIR / f"{name}.png"

@@ -195,6 +195,17 @@ FEAT_CUSHION_PX: int = 40
 # fluid grid, so it keeps the same width regardless of seg-pane
 # size — extra horizontal space goes to consonants instead.
 VOWEL_NATURAL_W: int = 320
+# Within each backness (front, central, back), the unrounded/rounded
+# vowel pair sits in two grid columns. ``VOWEL_PAIR_GAP_PX`` is the
+# gap between the two mates -- small enough to read as a pair, not as
+# unrelated symbols. ``VOWEL_PAIR_SEPARATOR_PX`` is the extra width
+# inserted between adjacent pairs (front-rnd <-> central-unr,
+# central-rnd <-> back-unr) so the boundary between backness columns
+# stays visually distinct. Both UIs consume these via the relay; the
+# placement code in ``vowel_layout.py`` still emits a 6-column index
+# (0..5) and the renderers translate to physical grid columns.
+VOWEL_PAIR_GAP_PX: int = 2
+VOWEL_PAIR_SEPARATOR_PX: int = 14
 # Below this seg-pane width, the chart drops below the consonants
 # instead of floating beside them. Picked so a 3-column-of-buttons
 # consonant area still fits next to a min-width chart.

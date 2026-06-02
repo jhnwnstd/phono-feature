@@ -247,6 +247,12 @@ def test_layout_css_emits_all_height_constants() -> None:
         ("--min-analysis-h", "MIN_ANALYSIS_H"),
         ("--analysis-expand-ratio", "ANALYSIS_EXPAND_RATIO"),
         ("--content-max-w", "CONTENT_MAX_W_ABS"),
+        # Vowel-pair spacing: tighter gap inside a rounded/unrounded
+        # mate pair and a wider separator between backness columns.
+        # Both UIs consume these via the relay; drift would re-introduce
+        # the equal-spacing problem.
+        ("--vowel-pair-gap", "VOWEL_PAIR_GAP_PX"),
+        ("--vowel-pair-separator", "VOWEL_PAIR_SEPARATOR_PX"),
     ]:
         assert var_name in contents, (
             f"build.py:generate_layout_css does not emit {var_name}; "

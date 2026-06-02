@@ -578,16 +578,34 @@ dialog input[type="text"]:focus-visible {
 }
 .vowel-chart {
   display: grid;
-  /* Column 1: row labels. Columns 2-7 pair unrounded + rounded
-     per backness (front, central, back). */
-  grid-template-columns: minmax(60px, auto) repeat(6, minmax(28px, 1fr));
+  /* Column 1: row labels. Backness pairs (front, central, back)
+     each occupy two adjacent columns -- unrounded then rounded --
+     joined by ``column-gap: var(--vowel-pair-gap)``. Between pairs
+     we splice fixed spacer tracks of ``--vowel-pair-separator`` so
+     paired vowels read as bonded mates and adjacent pairs stay
+     visually distinct. Track layout:
+       1 row-label
+       2-3 front-unr / front-rnd
+       4   spacer
+       5-6 central-unr / central-rnd
+       7   spacer
+       8-9 back-unr / back-rnd
+     ``main.js:_buildVowelChart`` maps placement.col 0..5 to these
+     physical columns. */
+  grid-template-columns:
+    minmax(60px, auto)
+    minmax(28px, 1fr) minmax(28px, 1fr)
+    var(--vowel-pair-separator)
+    minmax(28px, 1fr) minmax(28px, 1fr)
+    var(--vowel-pair-separator)
+    minmax(28px, 1fr) minmax(28px, 1fr);
   /* Min height keeps single-button rows compact; auto lets a row
      expand to fit a tall collision-cell stack (e.g. ə / ɜ / ɚ all
      landing in open-mid central for the General inventory).
      Mirrors the desktop's QGridLayout, where the row height grows
      to fit its tallest cell. */
   grid-auto-rows: minmax(var(--control-h-sm), auto);
-  column-gap: var(--space-xs);
+  column-gap: var(--vowel-pair-gap);
   row-gap: 2px;
   padding: var(--space-xs) 2px;
   align-items: center;

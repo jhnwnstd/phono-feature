@@ -991,7 +991,10 @@ function _buildVowelChart(chart) {
         colHeader.className = "vowel-chart-col-label";
         colHeader.textContent = label;
         // Each backness label spans its unrounded + rounded pair.
-        colHeader.style.gridColumn = `${i * 2 + 2} / span 2`;
+        // Physical columns: front 2-3, central 5-6, back 8-9 (cols
+        // 4 and 7 are spacer tracks; see ``.vowel-chart`` in
+        // style.css). Header starts at ``2 + i * 3`` and spans 2.
+        colHeader.style.gridColumn = `${2 + i * 3} / span 2`;
         chartEl.appendChild(colHeader);
     });
 
@@ -1018,7 +1021,10 @@ function _buildVowelChart(chart) {
             ? _buildVowelCellButton(segs[0])
             : _buildVowelCellStack(segs);
         target.style.gridRow = cell.row + 2;
-        target.style.gridColumn = cell.col + 2;
+        // Translate logical col 0..5 to physical grid columns
+        // (skipping spacer tracks 4 and 7). Pair index = col >> 1;
+        // physical column = 2 + col + pair_index.
+        target.style.gridColumn = 2 + cell.col + (cell.col >> 1);
         chartEl.appendChild(target);
     }
 
