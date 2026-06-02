@@ -514,9 +514,8 @@ class FeatureEngine:
         excludes_by: dict[str, frozenset[str]] = {}
         for feat, val in candidates.items():
             excludes_by[feat] = (
-                (minus_segs[feat] if val == "+" else plus_segs[feat])
-                & outside_set
-            )
+                minus_segs[feat] if val == "+" else plus_segs[feat]
+            ) & outside_set
         for seg in outside:
             exc_feats = [
                 feat
@@ -761,9 +760,7 @@ class FeatureEngine:
         # (depending on whether combo turns out to be uniformly + or
         # uniformly -). Storing both costs O(F) extra memory but
         # avoids two membership lookups per combo per zero feature.
-        zero_feats: list[
-            tuple[str, frozenset[str], frozenset[str]]
-        ] = []
+        zero_feats: list[tuple[str, frozenset[str], frozenset[str]]] = []
         for feat in self._inventory.features:
             ps = plus_segs[feat]
             ms = minus_segs[feat]
@@ -774,9 +771,7 @@ class FeatureEngine:
             elif has_minus and not has_plus:
                 base_minus_candidates.append((feat, ps & base_outside))
             elif not has_plus and not has_minus:
-                zero_feats.append(
-                    (feat, ms & base_outside, ps & base_outside)
-                )
+                zero_feats.append((feat, ms & base_outside, ps & base_outside))
 
         # Ascending subset size; first valid combination wins. The
         # full ``candidates`` set is always valid (characterised by
