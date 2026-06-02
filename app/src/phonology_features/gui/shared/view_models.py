@@ -41,13 +41,7 @@ from phonology_features.gui.shared.constants import (
 )
 from phonology_features.gui.shared.layout import distribute_feature_groups
 from phonology_features.gui.shared.vowel_layout import (
-    COL_LABELS as VOWEL_COL_LABELS,
-)
-from phonology_features.gui.shared.vowel_layout import (
-    ROW_LABELS as VOWEL_ROW_LABELS,
-)
-from phonology_features.gui.shared.vowel_layout import (
-    compute_placements,
+    build_vowel_chart_geometry,
     detect_vowel_profile,
 )
 
@@ -350,32 +344,56 @@ def _vowel_chart_summary(
     engine: FeatureEngine,
     vowel_segs: list[str],
 ) -> dict[str, Any]:
-    """Compute the grouped vowel-chart payload used by the web UI."""
+    """Serialize the render-ready vowel chart geometry for both UIs.
+
+    Delegates the placement, collision-grouping, tooltip formatting,
+    and physical-coordinate decisions to
+    :py:func:`build_vowel_chart_geometry`; this function only
+    flattens the dataclass tree into a JSON-shaped dict for the
+    bridge. Both the Qt widget and the web renderer consume the
+    same fields.
+
+    ``rows`` lists only POPULATED height tiers (empty rows omitted).
+    ``cells`` carries per-cell logical + physical coordinates plus
+    fully-baked tooltip strings on every entry; the web renderer
+    adds 1 to the ``grid_*`` fields when assigning CSS grid lines
+    (which are 1-indexed) and the Qt renderer uses them directly.
+    """
     seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)
-    occupied, placements = compute_placements(
-        list(vowel_segs), profile, seg_feats
+    geometry = build_vowel_chart_geometry(
+        list(vowel_segs),
+        profile,
+        seg_feats,
     )
-    cells: list[dict[str, Any]] = []
-    for (row, col), segs_in_cell in occupied.items():
-        cells.append(
+    return {
+        "cols": list(geometry.cols),
+        "rows": [
             {
-                "row": row,
-                "col": col,
+                "logical_row": row.logical_row,
+                "label": row.label,
+                "grid_row": row.grid_row,
+            }
+            for row in geometry.rows
+        ],
+        "cells": [
+            {
+                "row": cell.row,
+                "col": cell.col,
+                "grid_row": cell.grid_row,
+                "grid_col": cell.grid_col,
                 "segs": [
                     {
-                        "seg": seg,
-                        "confidence": placements[seg].confidence.name.lower(),
-                        "reason": placements[seg].reason,
+                        "seg": entry.seg,
+                        "confidence": entry.confidence,
+                        "reason": entry.reason,
+                        "tooltip": entry.tooltip,
                     }
-                    for seg in segs_in_cell
+                    for entry in cell.entries
                 ],
             }
-        )
-    return {
-        "rows": list(VOWEL_ROW_LABELS),
-        "cols": list(VOWEL_COL_LABELS),
-        "cells": cells,
+            for cell in geometry.cells
+        ],
     }
 
 

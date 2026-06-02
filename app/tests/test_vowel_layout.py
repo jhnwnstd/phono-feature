@@ -313,3 +313,126 @@ def profile():
         has_tense=True,
         has_coronal=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# Render-ready geometry tests (Phase: vowel surface refactor).
+#
+# These pin the contract that the shared
+# :py:func:`build_vowel_chart_geometry` produces a payload both
+# Qt and the web bridge can iterate without re-deriving placement,
+# tooltip text, or physical coordinates.
+# ---------------------------------------------------------------------------
+
+
+def test_logical_col_offset_skips_spacer_tracks() -> None:
+    """``logical_col_offset(c)`` for c in 0..5 must never land on
+    the spacer-track columns 3 or 6. The Qt-physical column
+    (= VOWEL_LABEL_GRID_COL + offset = 0 + offset) is exactly the
+    offset; the resulting set is {1, 2, 4, 5, 7, 8}.
+    """
+    from phonology_features.gui.shared.vowel_layout import (
+        VOWEL_LABEL_GRID_COL,
+        logical_col_offset,
+    )
+
+    physicals = {
+        VOWEL_LABEL_GRID_COL + logical_col_offset(c) for c in range(6)
+    }
+    assert physicals == {1, 2, 4, 5, 7, 8}
+
+
+def test_vowel_tooltip_format_pinned() -> None:
+    """One source of truth for the per-vowel tooltip string. A
+    future tweak (extra whitespace, different brackets) propagates
+    to both UIs from one edit, so this test pins the current
+    format.
+    """
+    from phonology_features.gui.shared.vowel_layout import vowel_tooltip
+
+    assert vowel_tooltip("i", "high", "Close: [+high, -low]") == (
+        "/i/  [high]  Close: [+high, -low]"
+    )
+
+
+def test_chart_geometry_omits_empty_rows() -> None:
+    """``build_vowel_chart_geometry`` skips height tiers that have
+    no occupied cell. Without this, the web renderer would emit a
+    "Close" row label for an inventory with no close vowels.
+    """
+    from phonology_features.gui.shared.vowel_layout import (
+        build_vowel_chart_geometry,
+    )
+
+    engine = _engine("english_features.json")
+    vowel_segs = _vowel_segs(engine)
+    seg_feats = {s: dict(engine.segments[s]) for s in vowel_segs}
+    profile = detect_vowel_profile(vowel_segs, seg_feats)
+    geometry = build_vowel_chart_geometry(vowel_segs, profile, seg_feats)
+
+    populated_in_cells = {cell.row for cell in geometry.cells}
+    rows_in_geometry = {row.logical_row for row in geometry.rows}
+    assert populated_in_cells == rows_in_geometry, (
+        "geometry.rows must match the set of logical rows that"
+        " appear in geometry.cells; an empty row would mislead the"
+        " renderer into emitting a stray row label"
+    )
+    # Rows are listed in ascending logical-row order with
+    # contiguous grid_row values starting at VOWEL_FIRST_DATA_GRID_ROW.
+    from phonology_features.gui.shared.vowel_layout import (
+        VOWEL_FIRST_DATA_GRID_ROW,
+    )
+
+    expected_grid_rows = [
+        VOWEL_FIRST_DATA_GRID_ROW + i for i in range(len(geometry.rows))
+    ]
+    assert [r.grid_row for r in geometry.rows] == expected_grid_rows
+
+
+def test_chart_geometry_bakes_tooltip_per_entry() -> None:
+    """Every cell entry must carry the prebaked tooltip string so the
+    web bridge can attach it verbatim without re-formatting.
+    """
+    from phonology_features.gui.shared.vowel_layout import (
+        build_vowel_chart_geometry,
+        vowel_tooltip,
+    )
+
+    engine = _engine("hayes_features.json")
+    vowel_segs = _vowel_segs(engine)
+    seg_feats = {s: dict(engine.segments[s]) for s in vowel_segs}
+    profile = detect_vowel_profile(vowel_segs, seg_feats)
+    geometry = build_vowel_chart_geometry(vowel_segs, profile, seg_feats)
+
+    for cell in geometry.cells:
+        for entry in cell.entries:
+            assert entry.tooltip == vowel_tooltip(
+                entry.seg, entry.confidence, entry.reason
+            ), f"tooltip drift on /{entry.seg}/: got {entry.tooltip!r}"
+            assert entry.tooltip.startswith(f"/{entry.seg}/"), (
+                f"tooltip for /{entry.seg}/ does not lead with the"
+                f" slash-bracketed segment: {entry.tooltip!r}"
+            )
+
+
+def test_chart_geometry_cell_grid_col_avoids_spacer_tracks() -> None:
+    """Every cell's ``grid_col`` must be a non-spacer track (1, 2,
+    4, 5, 7, or 8). A regression that maps a logical col onto a
+    spacer would silently render the button under a hidden track
+    in CSS and overlap a spacer label in Qt.
+    """
+    from phonology_features.gui.shared.vowel_layout import (
+        build_vowel_chart_geometry,
+    )
+
+    engine = _engine("general_features.json")
+    vowel_segs = _vowel_segs(engine)
+    seg_feats = {s: dict(engine.segments[s]) for s in vowel_segs}
+    profile = detect_vowel_profile(vowel_segs, seg_feats)
+    geometry = build_vowel_chart_geometry(vowel_segs, profile, seg_feats)
+
+    for cell in geometry.cells:
+        assert cell.grid_col in {1, 2, 4, 5, 7, 8}, (
+            f"cell at logical ({cell.row}, {cell.col}) landed on"
+            f" spacer column {cell.grid_col}"
+        )

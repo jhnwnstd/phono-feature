@@ -388,6 +388,196 @@ def compute_placements(
     return occupied, placements
 
 
+# ---------------------------------------------------------------------------
+# Render-ready chart geometry.
+#
+# The dataclasses and ``build_vowel_chart_geometry`` below are the
+# single source of truth that both the desktop Qt widget and the web
+# Pyodide bridge consume. After the geometry is built, each renderer
+# is a thin walk of the structure: emit a label per row, a button per
+# cell entry, attach the prebaked tooltip string. No frontend
+# duplicates placement decisions, tooltip formatting, or physical-
+# coordinate arithmetic.
+# ---------------------------------------------------------------------------
+
+# Grid-coordinate constants. Both UIs lay out the chart as:
+#   row 0 = "VOWELS" title spanning every data column
+#   row 1 = Front / Central / Back column headers
+#   row 2..  = data rows (only populated ones, in display order)
+# and:
+#   col 0 = row labels (Close, Near-close, ...)
+#   cols 1..8 = the six logical columns interleaved with two
+#               spacer tracks at physical cols 3 and 6.
+# The numbers are 0-based (Qt convention); CSS-side renderers add 1
+# when assigning ``grid-row`` / ``grid-column`` (1-indexed).
+VOWEL_TITLE_GRID_ROW: int = 0
+VOWEL_COL_HEADER_GRID_ROW: int = 1
+VOWEL_FIRST_DATA_GRID_ROW: int = 2
+VOWEL_LABEL_GRID_COL: int = 0
+# First grid column after the row-label gutter; each backness pair
+# (unr/rnd) occupies two consecutive tracks; a one-track spacer
+# separates each pair from the next.
+VOWEL_FIRST_DATA_GRID_COL: int = VOWEL_LABEL_GRID_COL + 1
+
+
+def logical_col_offset(col: int) -> int:
+    """Offset of a logical column 0..5 from the row-label column.
+
+    Logical 0..5 maps to physical offsets 1, 2, 4, 5, 7, 8 from the
+    row-label column (the spacer tracks at offsets 3 and 6 are
+    skipped). Add ``VOWEL_LABEL_GRID_COL + col_offset`` to land on
+    the physical Qt grid column; CSS renderers further add 1 to
+    translate to 1-indexed ``grid-column`` lines.
+    """
+    return col + (col >> 1) + 1
+
+
+def vowel_tooltip(seg: str, confidence_name: str, reason: str) -> str:
+    """One-line tooltip string used on every vowel-chart button.
+
+    ``confidence_name`` is the lowercased ``Confidence.name``
+    (``"high"`` / ``"medium"`` / ``"low"``). Both frontends consume
+    the same string; baking the format here means a future tweak
+    (extra whitespace, different brackets, an icon glyph) flows to
+    both UIs from one edit.
+    """
+    return f"/{seg}/  [{confidence_name}]  {reason}"
+
+
+@dataclass(frozen=True)
+class VowelChartCellEntry:
+    """One vowel inside a chart cell, fully resolved.
+
+    The ``tooltip`` field is the prebaked output of
+    :py:func:`vowel_tooltip` so renderers attach it verbatim.
+    """
+
+    seg: str
+    confidence: str  # lowercased Confidence.name
+    reason: str
+    tooltip: str
+
+
+@dataclass(frozen=True)
+class VowelChartCell:
+    """A populated chart cell with its position resolved.
+
+    ``row`` / ``col`` are the logical placement (0..5 each). ``grid_row``
+    and ``grid_col`` are the Qt 0-based physical coordinates the
+    renderer drops the cell into; CSS-side code adds 1 to each.
+    ``entries`` is ordered by descending placement confidence (ties
+    broken by ascending segment string).
+    """
+
+    row: int
+    col: int
+    grid_row: int
+    grid_col: int
+    entries: tuple[VowelChartCellEntry, ...]
+
+
+@dataclass(frozen=True)
+class VowelChartRow:
+    """A row to render. ``logical_row`` indexes into ``ROW_LABELS``;
+    ``grid_row`` is the Qt 0-based physical row the renderer drops the
+    row label into."""
+
+    logical_row: int
+    label: str
+    grid_row: int
+
+
+@dataclass(frozen=True)
+class VowelChartGeometry:
+    """Complete render-ready description of a vowel chart.
+
+    Both Qt and the web bridge consume this verbatim: emit one row
+    label per :py:attr:`rows` entry, one cell per :py:attr:`cells`
+    entry, and one button per cell entry with the prebaked tooltip.
+
+    Empty rows (no vowels in any column at that height tier) are
+    OMITTED from :py:attr:`rows`; renderers iterate the list as-is
+    without a "is this row populated" check.
+    """
+
+    cols: tuple[str, ...]
+    rows: tuple[VowelChartRow, ...]
+    cells: tuple[VowelChartCell, ...]
+
+
+def build_vowel_chart_geometry(
+    segs: list[str],
+    profile: VowelProfile,
+    norm_feats: Mapping[str, Mapping[str, str]],
+) -> VowelChartGeometry:
+    """End-to-end: compute placements and produce a render-ready
+    chart geometry for both UIs.
+
+    Steps:
+      1. Delegate to :py:func:`compute_placements` for the per-vowel
+         cell + collision-grouping decision.
+      2. For each populated cell, build a :py:class:`VowelChartCell`
+         with prebaked tooltip strings on every entry.
+      3. For each populated height tier, build a
+         :py:class:`VowelChartRow` with the assigned physical grid
+         row.
+
+    Renderers attach the result directly: no placement decisions,
+    no string formatting, no coordinate arithmetic happens at the
+    UI layer.
+    """
+    occupied, placements = compute_placements(segs, profile, norm_feats)
+
+    populated_logical_rows = sorted({row for (row, _) in occupied})
+    logical_row_to_grid_row = {
+        ri: VOWEL_FIRST_DATA_GRID_ROW + display_index
+        for display_index, ri in enumerate(populated_logical_rows)
+    }
+
+    rows = tuple(
+        VowelChartRow(
+            logical_row=ri,
+            label=ROW_LABELS[ri],
+            grid_row=logical_row_to_grid_row[ri],
+        )
+        for ri in populated_logical_rows
+    )
+
+    cells: list[VowelChartCell] = []
+    for ri, ci in sorted(occupied):
+        entries: list[VowelChartCellEntry] = []
+        for seg in occupied[(ri, ci)]:
+            placement = placements[seg]
+            confidence_name = placement.confidence.name.lower()
+            entries.append(
+                VowelChartCellEntry(
+                    seg=seg,
+                    confidence=confidence_name,
+                    reason=placement.reason,
+                    tooltip=vowel_tooltip(
+                        seg,
+                        confidence_name,
+                        placement.reason,
+                    ),
+                )
+            )
+        cells.append(
+            VowelChartCell(
+                row=ri,
+                col=ci,
+                grid_row=logical_row_to_grid_row[ri],
+                grid_col=VOWEL_LABEL_GRID_COL + logical_col_offset(ci),
+                entries=tuple(entries),
+            )
+        )
+
+    return VowelChartGeometry(
+        cols=COL_LABELS,
+        rows=rows,
+        cells=tuple(cells),
+    )
+
+
 def vowel_grid_pos(
     feats: Mapping[str, str], profile: VowelProfile
 ) -> VowelPlacement:

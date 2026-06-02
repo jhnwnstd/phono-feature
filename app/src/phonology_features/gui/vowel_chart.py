@@ -1,9 +1,15 @@
-"""IPA-style vowel trapezoid chart. Maps vowel segments onto a
-height x backness x rounding grid using normalised phonological
-features. A VowelProfile is computed per inventory so fallback logic
-only fires when the inventory actually lacks the direct feature.
-Each placement carries a confidence level and a reason string that
-surface as tooltips on the buttons.
+"""Qt thin shell that renders the shared vowel chart geometry.
+
+All placement decisions, collision grouping, tooltip formatting,
+and physical-coordinate arithmetic live in
+:py:mod:`phonology_features.gui.shared.vowel_layout`. This module
+walks the pre-built :py:class:`~vowel_layout.VowelChartGeometry`
+and emits Qt widgets: labels for headers + rows, buttons (single
+cells) or vbox stacks (collision cells) for the data cells.
+
+The web counterpart (``web/main.js:_buildVowelChart``) is the
+analogous thin shell on the browser side; both consume the same
+geometry object from the bridge.
 """
 
 from __future__ import annotations
@@ -28,21 +34,22 @@ from phonology_features.gui.shared.layout import (
 )
 from phonology_features.gui.shared.palette import C
 from phonology_features.gui.shared.vowel_layout import (
+    COL_LABELS,
     ROW_LABELS,
     Confidence,
+    VowelChartCell,
+    VowelChartCellEntry,
+    VowelChartGeometry,
+    VowelChartRow,
     VowelPlacement,
     VowelProfile,
-)
-from phonology_features.gui.shared.vowel_layout import (
-    compute_placements as _compute_placements_shared,
-)
-from phonology_features.gui.shared.vowel_layout import (
-    detect_vowel_profile as _detect_vowel_profile,
+    build_vowel_chart_geometry,
+    detect_vowel_profile,
 )
 
 # Re-exports preserved for any external importer that read these
 # from vowel_chart directly. Canonical definitions live in
-# gui.vowel_layout so the web app sees the same values.
+# vowel_layout.py so the web app sees the same values.
 __all__ = [
     "VOWEL_LABEL_W",
     "Confidence",
@@ -51,36 +58,23 @@ __all__ = [
     "VowelProfile",
 ]
 
+# Width floor for the row-label gutter. Qt-only; the web sets its
+# row-label column via CSS ``minmax(60px, auto)``.
 VOWEL_LABEL_W = 72
-_ROW_LABELS = ROW_LABELS
-
-
-def _logical_col_to_grid_col(col: int) -> int:
-    """Translate a logical placement column (0..5) to its physical
-    ``QGridLayout`` column.
-
-    Logical columns are front-unr, front-rnd, central-unr,
-    central-rnd, back-unr, back-rnd (0..5). The grid prepends a row-
-    label gutter at column 0 and splices spacer columns between
-    pairs at physical columns 3 and 6, so the mapping is::
-
-        logical:  0  1  2  3  4  5
-        physical: 1  2  4  5  7  8
-
-    Same shape as ``main.js:_buildVowelChart`` for parity.
-    """
-    return 1 + col + (col >> 1)
 
 
 class VowelChartWidget(QWidget):
-    """Displays vowels in an IPA-style grid: height x backness x rounding."""
+    """Renders the shared :py:class:`VowelChartGeometry` as Qt
+    widgets.
 
-    _COL_HEADERS: ClassVar[tuple[str, ...]] = (
-        "Front",
-        "Central",
-        "Back",
-    )
-    _ROW_HEADERS: ClassVar[tuple[str, ...]] = tuple(_ROW_LABELS)
+    The widget owns its row-label / header QLabels and any
+    collision-cell containers it creates; segment buttons are
+    detached on :py:meth:`clear` because they belong to the
+    caller's button pool.
+    """
+
+    _COL_HEADERS: ClassVar[tuple[str, ...]] = COL_LABELS
+    _ROW_HEADERS: ClassVar[tuple[str, ...]] = ROW_LABELS
 
     def __init__(
         self, parent: QWidget | None = None, *, btn_gap: int = 4
@@ -88,8 +82,6 @@ class VowelChartWidget(QWidget):
         super().__init__(parent)
         # Width is externally clamped by ``set_target_width`` to the
         # constraint table's fixed value; height grows with row count.
-        # Declaring the policy makes the contract explicit alongside
-        # the existing ``setMinimumWidth`` / ``setMaximumWidth`` clamp.
         _constraint = REGION_CONSTRAINTS["vowel_chart"]
         self.setSizePolicy(
             QSizePolicy.Policy.Fixed,
@@ -108,9 +100,9 @@ class VowelChartWidget(QWidget):
         self._grid.setHorizontalSpacing(VOWEL_PAIR_GAP_PX)
         self._grid.setVerticalSpacing(btn_gap)
         # Spacer columns between front<->central and central<->back
-        # pairs. Logical columns 0..5 from the placement code map to
-        # physical grid columns 1, 2, 4, 5, 7, 8 (with row labels at
-        # column 0 and spacers at columns 3, 6).
+        # pairs. Logical 0..5 from the placement code map to physical
+        # grid columns 1, 2, 4, 5, 7, 8 (with row labels at column 0
+        # and spacers at columns 3, 6).
         self._grid.setColumnMinimumWidth(3, VOWEL_PAIR_SEPARATOR_PX)
         self._grid.setColumnMinimumWidth(6, VOWEL_PAIR_SEPARATOR_PX)
         self._grid.setContentsMargins(0, 0, 8, 0)
@@ -149,8 +141,8 @@ class VowelChartWidget(QWidget):
         self.setMaximumWidth(w)
 
     def set_headers_active(self, active: bool) -> None:
-        # Dedup is safe: clear() (called by set_vowels on
-        # every inventory swap) resets ``_last_headers_active`` to None
+        # Dedup is safe: clear() (called by set_vowels on every
+        # inventory swap) resets ``_last_headers_active`` to None
         # when fresh labels replace the cached ones.
         if self._last_headers_active == active:
             return
@@ -169,10 +161,10 @@ class VowelChartWidget(QWidget):
 
     def clear(self) -> None:
         """Remove all buttons, labels, and collision containers.
-        Buttons are detached (not destroyed) since they belong to the
-        caller's pool. Detaching them BEFORE deleting cell containers
-        is essential; otherwise destroying the container would take
-        the children with it.
+        Buttons are detached (not destroyed) since they belong to
+        the caller's pool. Detaching them BEFORE deleting cell
+        containers is essential; otherwise destroying the container
+        would take the children with it.
         """
         for btn in self._buttons.values():
             btn.setParent(None)
@@ -198,20 +190,36 @@ class VowelChartWidget(QWidget):
         buttons: Mapping[str, QWidget],
         norm_feats: Mapping[str, Mapping[str, str]],
     ) -> None:
-        """Lay out vowel buttons in the IPA chart grid."""
+        """Build the shared geometry, then render it as Qt widgets.
+
+        The geometry pass (placement, collision grouping, tooltip
+        formatting, physical-coordinate arithmetic) all happens in
+        :py:mod:`vowel_layout`; this method only translates the
+        result into widget calls.
+        """
         self.clear()
         self._buttons = dict(buttons)
-        profile = _detect_vowel_profile(segs, norm_feats)
-        self._add_top_headers()
-        occupied, placements = self._compute_placements(
-            segs, profile, norm_feats
-        )
-        self._lay_out_rows(occupied, placements)
+        profile = detect_vowel_profile(segs, norm_feats)
+        geometry = build_vowel_chart_geometry(segs, profile, norm_feats)
+        self._render_geometry(geometry)
 
-    def _add_top_headers(self) -> None:
-        """VOWELS title (spanning all columns) + Front/Central/Back
-        labels. Labels are parented at construction so they're never
-        transient top-level widgets.
+    def _render_geometry(self, geometry: VowelChartGeometry) -> None:
+        """Walk the geometry and emit one Qt widget per item.
+
+        Order: title row, col headers, then per row a row label
+        followed by per-cell buttons (or a vbox stack for collision
+        cells).
+        """
+        self._add_title_and_col_headers(geometry.cols)
+        for row in geometry.rows:
+            self._add_row_header(row)
+        for cell in geometry.cells:
+            self._add_cell(cell)
+
+    def _add_title_and_col_headers(self, cols: tuple[str, ...]) -> None:
+        """VOWELS title (spanning all data columns) + Front /
+        Central / Back labels. Parented at construction so they're
+        never transient top-level widgets.
         """
         title = QLabel("VOWELS", self)
         title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
@@ -225,7 +233,7 @@ class VowelChartWidget(QWidget):
         # central 4-5, spacer 6, back 7-8).
         self._grid.addWidget(title, 0, 1, 1, 8)
         self._header_labels.append((title, False))
-        for ci, label in enumerate(self._COL_HEADERS):
+        for ci, label in enumerate(cols):
             lbl = QLabel(label, self)
             lbl.setFont(QFont("Noto Sans", 7))
             lbl.setStyleSheet(f"color: {C['text_dim']};")
@@ -236,103 +244,53 @@ class VowelChartWidget(QWidget):
             self._grid.addWidget(lbl, 1, 1 + ci * 3, 1, 2)
             self._header_labels.append((lbl, False))
 
-    @staticmethod
-    def _compute_placements(
-        segs: list[str],
-        profile: VowelProfile,
-        norm_feats: Mapping[str, Mapping[str, str]],
-    ) -> tuple[
-        dict[tuple[int, int], list[str]],
-        dict[str, VowelPlacement],
-    ]:
-        """Thin wrapper over the shared
-        :py:func:`vowel_layout.compute_placements`.
-
-        Kept as a staticmethod for the existing call site inside
-        :py:meth:`set_vowels`; the canonical implementation lives in
-        the shared module so the web bridge can use the same
-        cell-grouping rule. Returns ``(occupied, placements)``.
-        """
-        return _compute_placements_shared(segs, profile, norm_feats)
-
-    def _lay_out_rows(
-        self,
-        occupied: dict[tuple[int, int], list[str]],
-        placements: dict[str, VowelPlacement],
-    ) -> None:
-        """For each height tier that has at least one vowel, add a row
-        header on the left and place each cell's buttons in the grid."""
-        grid_row = 2
-        for ri, label in enumerate(self._ROW_HEADERS):
-            if not any((ri, col) in occupied for col in range(6)):
-                continue
-            self._add_row_header(label, grid_row)
-            for ci in range(6):
-                cell_segs = occupied.get((ri, ci), [])
-                if cell_segs:
-                    self._place_cell(cell_segs, placements, grid_row, ci)
-            grid_row += 1
-
-    def _add_row_header(self, label: str, grid_row: int) -> None:
-        lbl = QLabel(label, self)
+    def _add_row_header(self, row: VowelChartRow) -> None:
+        lbl = QLabel(row.label, self)
         lbl.setFont(QFont("Noto Sans", 7))
         lbl.setStyleSheet(f"color: {C['text_dim']}; padding-right: 4px;")
         lbl.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
         lbl.setMinimumWidth(VOWEL_LABEL_W - 4)
-        self._grid.addWidget(lbl, grid_row, 0)
+        self._grid.addWidget(lbl, row.grid_row, 0)
         self._header_labels.append((lbl, True))
 
-    def _place_cell(
-        self,
-        cell_segs: list[str],
-        placements: dict[str, VowelPlacement],
-        grid_row: int,
-        ci: int,
-    ) -> None:
-        """Place one cell's button(s) in the grid. Single vowel: button
-        goes straight in. Multiple vowels at the same (row, col): stack
-        them in a transparent vbox container that we own.
-        """
-        if len(cell_segs) == 1:
-            seg = cell_segs[0]
-            btn = self._buttons.get(seg)
+    def _add_cell(self, cell: VowelChartCell) -> None:
+        """Single entry: button straight in. Multiple entries:
+        stack them in a transparent vbox container."""
+        if len(cell.entries) == 1:
+            entry = cell.entries[0]
+            btn = self._buttons.get(entry.seg)
             if btn:
-                self._prep_button(btn, seg, placements[seg])
-                self._grid.addWidget(
-                    btn, grid_row, _logical_col_to_grid_col(ci)
-                )
+                self._prep_button(btn, entry)
+                self._grid.addWidget(btn, cell.grid_row, cell.grid_col)
             return
         # Parented at construction so the container is never a
         # transient top-level widget during the brief gap before
         # ``self._grid.addWidget`` re-parents it.
-        cell = QWidget(self)
-        cell.setStyleSheet("background: transparent;")
-        self._cell_containers.append(cell)
-        vbox = QVBoxLayout(cell)
+        container = QWidget(self)
+        container.setStyleSheet("background: transparent;")
+        self._cell_containers.append(container)
+        vbox = QVBoxLayout(container)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(1)
         added = False
-        for seg in cell_segs:
-            btn = self._buttons.get(seg)
+        for entry in cell.entries:
+            btn = self._buttons.get(entry.seg)
             if btn:
-                self._prep_button(btn, seg, placements[seg])
+                self._prep_button(btn, entry)
                 vbox.addWidget(btn)
                 added = True
         if added:
-            self._grid.addWidget(cell, grid_row, _logical_col_to_grid_col(ci))
+            self._grid.addWidget(container, cell.grid_row, cell.grid_col)
         else:
-            self._cell_containers.remove(cell)
-            cell.deleteLater()
+            self._cell_containers.remove(container)
+            container.deleteLater()
 
     @staticmethod
-    def _prep_button(
-        btn: QWidget, seg: str, placement: VowelPlacement
-    ) -> None:
-        """Set the tooltip + show. Shared by single + collision cells."""
-        btn.setToolTip(
-            f"/{seg}/  [{placement.confidence.name.lower()}]"
-            f"  {placement.reason}"
-        )
+    def _prep_button(btn: QWidget, entry: VowelChartCellEntry) -> None:
+        """Attach the prebaked tooltip + show. The tooltip string is
+        formatted by the shared :py:func:`vowel_layout.vowel_tooltip`
+        so the desktop and web read the same text."""
+        btn.setToolTip(entry.tooltip)
         btn.show()

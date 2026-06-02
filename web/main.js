@@ -1110,14 +1110,18 @@ function _buildVowelChart(chart) {
         chartEl.appendChild(colHeader);
     });
 
-    chart.rows.forEach((label, r) => {
+    // ``chart.rows`` is now a list of populated rows with prebaked
+    // grid_row positions (Qt 0-based; +1 for CSS). Empty rows are
+    // omitted upstream, so this is a straight walk -- no "is this
+    // row populated" check at the render site.
+    for (const row of chart.rows) {
         const rowLabel = document.createElement("div");
         rowLabel.className = "vowel-chart-row-label";
-        rowLabel.textContent = label;
-        rowLabel.style.gridRow = r + 2;
+        rowLabel.textContent = row.label;
+        rowLabel.style.gridRow = row.grid_row + 1;
         rowLabel.style.gridColumn = 1;
         chartEl.appendChild(rowLabel);
-    });
+    }
 
     for (const cell of chart.cells) {
         // Multiple vowels can map to the same chart cell (the
@@ -1132,11 +1136,10 @@ function _buildVowelChart(chart) {
         const target = segs.length === 1
             ? _buildVowelCellButton(segs[0])
             : _buildVowelCellStack(segs);
-        target.style.gridRow = cell.row + 2;
-        // Translate logical col 0..5 to physical grid columns
-        // (skipping spacer tracks 4 and 7). Pair index = col >> 1;
-        // physical column = 2 + col + pair_index.
-        target.style.gridColumn = 2 + cell.col + (cell.col >> 1);
+        // ``grid_row`` / ``grid_col`` are baked by the bridge as Qt
+        // 0-based; +1 converts to CSS 1-indexed grid lines.
+        target.style.gridRow = cell.grid_row + 1;
+        target.style.gridColumn = cell.grid_col + 1;
         chartEl.appendChild(target);
     }
 
@@ -1145,12 +1148,13 @@ function _buildVowelChart(chart) {
 }
 
 /** Build a single vowel-cell button. ``segEntry`` carries
- *  ``{seg, confidence, reason}`` from the bridge. */
+ *  ``{seg, confidence, reason, tooltip}`` from the bridge; the
+ *  tooltip string is preformatted by the shared
+ *  ``vowel_layout.vowel_tooltip`` helper so both UIs render the
+ *  same text. */
 function _buildVowelCellButton(segEntry) {
     const btn = _buildSegmentButton(segEntry.seg, {
-        title:
-            `/${segEntry.seg}/  [${segEntry.confidence}]  `
-            + `${segEntry.reason}`,
+        title: segEntry.tooltip,
     });
     btn.classList.add("vowel-chart-cell");
     return btn;
