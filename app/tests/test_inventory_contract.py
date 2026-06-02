@@ -2026,6 +2026,26 @@ def test_mainwindow_construction_survives_corrupt_window_size(
     w.close()
 
 
+def test_visible_inventory_filter_rejects_underscore_and_dot_prefixes() -> (
+    None
+):
+    """``_schema.json`` lives in ``app/inventories/`` next to real
+    inventories but isn't itself loadable. The dropdown filter must
+    reject both underscore-prefixed siblings and dotfiles; bare
+    ``foo_features.json`` must pass."""
+    from phonology_features.gui.controllers.inventory_dir import (
+        _is_visible_inventory_file,
+    )
+
+    assert _is_visible_inventory_file("hayes_features.json")
+    assert _is_visible_inventory_file("user_custom.json")
+    assert not _is_visible_inventory_file("_schema.json")
+    assert not _is_visible_inventory_file("_private.json")
+    assert not _is_visible_inventory_file(".tmp_inv_abc.json")
+    assert not _is_visible_inventory_file(".DS_Store")
+    assert not _is_visible_inventory_file("README.md")
+
+
 def test_stale_tmp_files_swept_on_dropdown_populate(tmp_path: Path) -> None:
     """A save killed between mkstemp and os.replace leaves a
     ``.tmp_inv_*.json`` orphan in the inventories dir. They're
