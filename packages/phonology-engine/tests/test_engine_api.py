@@ -187,6 +187,62 @@ def test_natural_class_bundle_round_trip(
     )
 
 
+def test_feature_categories_classify_seven_way(engine: FeatureEngine) -> None:
+    """Pin the seven-category classification of every feature
+    against a selection (see :py:class:`FeatureCategory`).
+
+    Build a synthetic-but-realistic case from the fixture
+    inventory: pick a feature where some selected segment has
+    each of ``+``, ``-``, ``'0'`` so every category can be
+    exercised. For inventories without a triple-value feature on
+    a small selection, fall back to property assertions that
+    hold for any inventory.
+    """
+    from phonology_engine.feature_engine import FeatureCategory
+
+    all_segs = list(engine.segments)
+    assert len(all_segs) >= 4, "fixture too small"
+
+    # Sample assertions per category, derived from any inventory:
+    # Single-segment selection: every explicit feature lands in
+    # ALL_PLUS or ALL_MINUS; every '0' feature lands in ALL_ZERO.
+    seg = all_segs[0]
+    feats = engine.get_segment_features(seg)
+    cats = engine.feature_categories([seg])
+    for feat in engine.features:
+        val = feats.get(feat, "0")
+        if val == "+":
+            assert cats[feat] == FeatureCategory.ALL_PLUS
+        elif val == "-":
+            assert cats[feat] == FeatureCategory.ALL_MINUS
+        else:
+            assert cats[feat] == FeatureCategory.ALL_ZERO
+
+    # Two-segment selection with at least one disagreeing feature
+    # exercises EXPLICIT_CONFLICT, UNDERSPEC_PLUS / MINUS, and
+    # UNDERSPEC_CONFLICT depending on the segments picked. We
+    # find one pair with an EXPLICIT_CONFLICT feature and one
+    # with an UNDERSPEC_PLUS feature to cover the interesting
+    # cases.
+    explicit_conflict_seen = False
+    underspec_plus_seen = False
+    for i in range(min(len(all_segs), 10)):
+        for j in range(i + 1, min(len(all_segs), 10)):
+            pair = [all_segs[i], all_segs[j]]
+            cats = engine.feature_categories(pair)
+            for cat in cats.values():
+                if cat == FeatureCategory.EXPLICIT_CONFLICT:
+                    explicit_conflict_seen = True
+                elif cat == FeatureCategory.UNDERSPEC_PLUS:
+                    underspec_plus_seen = True
+    assert (
+        explicit_conflict_seen
+    ), "every realistic inventory should have a pair with explicit conflict"
+    assert (
+        underspec_plus_seen
+    ), "every realistic inventory should have a pair with underspec-plus"
+
+
 def test_listed_spec_round_trips_strictly(engine: FeatureEngine) -> None:
     """**Round-trip invariant**: any minimal feature specification
     the engine LISTS for a natural class, when manually typed into

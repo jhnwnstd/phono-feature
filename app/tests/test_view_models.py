@@ -106,6 +106,40 @@ def test_summarize_segment_selection_multi_matches_engine() -> None:
     assert summary["feature_rows"]["LABIAL"]["badge"] == "±"
 
 
+def test_feature_categories_for_english_j_i_capital_ɪ() -> None:
+    """User-reported scenario, pinned: selecting /j/ /i/ /ɪ/ in
+    English. Tense's values across the selection are ``+`` (/i/),
+    ``-`` (/ɪ/), and ``'0'`` (/j/) -- the canonical
+    ``UNDERSPEC_CONFLICT`` case. Front and High are both ``+`` on
+    all three -- ``ALL_PLUS``. The feature-row state surfaces the
+    category so renderers can show
+    underspec-conflict distinctly from explicit-conflict.
+    """
+    engine = _engine("english_features.json")
+    summary = summarize_segment_selection(engine, ["j", "i", "ɪ"])
+    # Tense: +, -, 0 across the three -> UNDERSPEC_CONFLICT
+    tense = summary["feature_rows"]["Tense"]
+    assert tense["category"] == "underspec_conflict"
+    assert tense["contrastive"] is True
+    assert tense["shared"] is False
+    # Front: all three are + -> ALL_PLUS
+    front = summary["feature_rows"]["Front"]
+    assert front["category"] == "all_plus"
+    assert front["shared"] is True
+    # High: all three are + -> ALL_PLUS
+    assert summary["feature_rows"]["High"]["category"] == "all_plus"
+    # /j i ɪ/ is a STRICT natural class via the {Front:+, High:+}
+    # bundle (the only features categorically ALL_PLUS that are
+    # also discriminating). Round-trip via strict find_segments.
+    is_nc, bundles = engine.is_natural_class(["j", "i", "ɪ"])
+    assert is_nc
+    assert bundles
+    for b in bundles:
+        assert sorted(engine.find_segments(dict(b))) == sorted(
+            ["j", "i", "ɪ"]
+        )
+
+
 def test_feature_row_badge_uses_unicode_minus_for_shared_negative() -> None:
     """A feature shared as ``-`` across the selection must surface in
     the row's ``badge`` as U+2212 (MINUS SIGN), not ASCII U+002D

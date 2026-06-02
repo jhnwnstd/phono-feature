@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from enum import StrEnum
 from functools import cached_property
 from types import MappingProxyType
 from typing import Any
@@ -42,6 +43,52 @@ _log = logging.getLogger(__name__)
 # is the same object; callers cannot mutate it, and there is no
 # per-call allocation.
 _EMPTY_BUNDLE: Mapping[str, str] = MappingProxyType({})
+
+
+class FeatureCategory(StrEnum):
+    """Semantic classification of one feature against a selected set.
+
+    The seven categories capture every possible mix of ``+``/``-``/``'0'``
+    values across the selection. They are the single source of truth
+    for what "shared" and "contrastive" mean and which features can
+    contribute to a natural-class specification:
+
+    * ``ALL_PLUS`` / ``ALL_MINUS``: every selected segment has the
+      same explicit value. The feature contributes to a STRICT
+      minimal specification.
+    * ``ALL_ZERO``: every selected segment is ``'0'``. The feature
+      carries no information about the selection; it cannot
+      contribute to any spec.
+    * ``EXPLICIT_CONFLICT``: some selected segments are ``'+'`` and
+      others are ``'-'``; none is ``'0'``. The feature explicitly
+      splits the selection; cannot contribute to a shared spec.
+    * ``UNDERSPEC_PLUS`` / ``UNDERSPEC_MINUS``: some selected
+      segments have the explicit value, the rest are ``'0'``. The
+      feature could contribute to a strictly-underspec-tolerant
+      spec but NOT to a strict spec (which requires every member
+      to have the explicit value). The user-facing analysis pane
+      reports this as "shared under underspecification".
+    * ``UNDERSPEC_CONFLICT``: ``+``, ``-``, and ``'0'`` all appear.
+      The conflict cannot be erased by underspecification: any
+      strict-and-underspec spec including this feature would
+      contradict at least one selected segment. The feature is
+      contrastive AND involves underspecification; UI may render
+      it distinctly from ``EXPLICIT_CONFLICT``.
+
+    Strict natural-class detection (the contract the round-trip
+    invariant rests on) only considers ``ALL_PLUS`` and ``ALL_MINUS``
+    features as bundle candidates -- this is what ensures any spec
+    the engine LISTS round-trips exactly through
+    :py:meth:`find_segments`.
+    """
+
+    ALL_PLUS = "all_plus"
+    ALL_MINUS = "all_minus"
+    ALL_ZERO = "all_zero"
+    EXPLICIT_CONFLICT = "explicit_conflict"
+    UNDERSPEC_PLUS = "underspec_plus"
+    UNDERSPEC_MINUS = "underspec_minus"
+    UNDERSPEC_CONFLICT = "underspec_conflict"
 
 
 class FeatureEngine:
@@ -582,6 +629,55 @@ class FeatureEngine:
         :py:attr:`contrastive_features` tuple in new code.
         """
         return list(self.contrastive_features)
+
+    def feature_categories(
+        self, segments: list[str]
+    ) -> dict[str, FeatureCategory]:
+        """Classify every feature against the selected segment set
+        into one of seven categories (see
+        :py:class:`FeatureCategory`).
+
+        Single source of truth for what "shared", "contrastive",
+        and "underspecified" mean. View-models read this once per
+        analysis and surface the category in the per-feature row
+        state so renderers can show distinct visuals (e.g.
+        ``UNDERSPEC_CONFLICT`` rendered differently from
+        ``EXPLICIT_CONFLICT``) without inventing their own
+        classification logic.
+
+        Empty selection returns an empty dict (no selection => no
+        categorisation).
+        """
+        if not segments:
+            return {}
+        selected: frozenset[str] = frozenset(segments)
+        plus_segs = self.plus_segs
+        minus_segs = self.minus_segs
+        spec_segs = self.spec_segs
+        n = len(selected)
+        out: dict[str, FeatureCategory] = {}
+        for feat in self._inventory.features:
+            plus_hit = len(selected & plus_segs[feat])
+            minus_hit = len(selected & minus_segs[feat])
+            spec_hit = len(selected & spec_segs[feat])
+            all_specified = spec_hit == n
+            if all_specified:
+                if plus_hit == n:
+                    out[feat] = FeatureCategory.ALL_PLUS
+                elif minus_hit == n:
+                    out[feat] = FeatureCategory.ALL_MINUS
+                else:
+                    out[feat] = FeatureCategory.EXPLICIT_CONFLICT
+                continue
+            if plus_hit == 0 and minus_hit == 0:
+                out[feat] = FeatureCategory.ALL_ZERO
+            elif plus_hit > 0 and minus_hit == 0:
+                out[feat] = FeatureCategory.UNDERSPEC_PLUS
+            elif minus_hit > 0 and plus_hit == 0:
+                out[feat] = FeatureCategory.UNDERSPEC_MINUS
+            else:
+                out[feat] = FeatureCategory.UNDERSPEC_CONFLICT
+        return out
 
     def common_features(self, segments: list[str]) -> dict[str, str]:
         """Features whose ``'+'`` or ``'-'`` value is shared by every

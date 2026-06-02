@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from phonology_engine.feature_engine import FeatureCategory
+
 from phonology_features.gui.shared.analysis import (
     compute_contrastive,
     render_class_tab_feat,
@@ -115,11 +117,15 @@ def summarize_segment_selection(
         }
     if len(segs) == 1:
         feats = engine.get_segment_features(segs[0])
+        categories = engine.feature_categories(segs)
         row_states = _default_feature_rows(engine)
         for feat in engine.features:
             value = feats.get(feat, "0")
+            cat = categories.get(feat, FeatureCategory.ALL_ZERO)
             if value in ("+", "-"):
-                row_states[feat] = _feature_row_state(value=value, shared=True)
+                row_states[feat] = _feature_row_state(
+                    value=value, shared=True, category=cat,
+                )
         seg_states = _default_segment_states(engine)
         seg_states[segs[0]] = "selected"
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
@@ -138,17 +144,25 @@ def summarize_segment_selection(
     common = dict(engine.common_features(segs))
     contrastive = compute_contrastive(engine, segs)
     suggested = list(engine.suggest_natural_class_extension(segs))
+    # Seven-way classification per feature (single source of truth
+    # for the semantic state -- see ``FeatureCategory``). The view-
+    # model surfaces the category on every row so renderers can
+    # distinguish ``UNDERSPEC_CONFLICT`` from ``EXPLICIT_CONFLICT``
+    # etc. without reinventing the classification.
+    categories = engine.feature_categories(segs)
     row_states = {}
     for feat in engine.features:
+        cat = categories.get(feat, FeatureCategory.ALL_ZERO)
         if feat in common:
             row_states[feat] = _feature_row_state(
-                value=common[feat],
-                shared=True,
+                value=common[feat], shared=True, category=cat,
             )
         elif feat in contrastive:
-            row_states[feat] = _feature_row_state(contrastive=True)
+            row_states[feat] = _feature_row_state(
+                contrastive=True, category=cat,
+            )
         else:
-            row_states[feat] = _feature_row_state()
+            row_states[feat] = _feature_row_state(category=cat)
     selected = set(segs)
     suggested_set = set(suggested)
     seg_states = {}
@@ -297,7 +311,19 @@ def _feature_row_state(
     value: str = "",
     shared: bool = False,
     contrastive: bool = False,
+    category: FeatureCategory = FeatureCategory.ALL_ZERO,
 ) -> dict[str, Any]:
+    """Per-row visual payload + the semantic category from the
+    engine (see :py:class:`FeatureCategory`). The ``category`` is
+    the authoritative semantic state; ``shared`` / ``contrastive``
+    are derived presentation flags kept for backward compatibility
+    with renderers that don't yet read the category.
+
+    Renderers should prefer ``category`` over the older flags when
+    they need to distinguish underspec-involved states from purely
+    explicit ones (e.g. ``UNDERSPEC_CONFLICT`` vs
+    ``EXPLICIT_CONFLICT``).
+    """
     if contrastive:
         badge = "±"
     elif value:
@@ -315,6 +341,7 @@ def _feature_row_state(
         "value": value,
         "shared": shared,
         "contrastive": contrastive,
+        "category": str(category),
         "badge": badge,
     }
 
