@@ -699,9 +699,44 @@ function escapeHtml(s) {
  * with their original Unicode code points (IPA ɡ U+0261, not ASCII
  * g U+0067, etc.).
  */
-function rasterizeText(text, font) {
+// Span-width ceiling for segment-button labels. Matches the
+// ``--seg-btn-min-w`` token in style.css (33px button outline,
+// minus 3px of internal breathing room). Wide glyphs are rendered
+// at a smaller font size so they sit inside the button instead of
+// pushing the grid out of alignment.
+const SEG_LABEL_MAX_W = 30;
+
+function rasterizeText(text, font, maxWidth) {
     const measure = document.createElement("canvas").getContext("2d");
-    measure.font = font;
+    // 3-px padding all around so antialias edges + accent marks
+    // aren't clipped on either side. Drives both the canvas size
+    // and the ``maxWidth`` fit check below.
+    const AA_PAD = 6;
+    let activeFont = font;
+    // When the caller passes ``maxWidth`` (seg-buttons do; feature
+    // labels don't), pick the largest font size at which the
+    // glyph's natural rendered width fits within the box. Wide
+    // segments like /k+͡x+/ go down a few points; ordinary /p/
+    // /tʃ/ pass through untouched.
+    if (maxWidth != null) {
+        const sizeMatch = font.match(/(\d+(?:\.\d+)?)px\s+(.+)/);
+        if (sizeMatch) {
+            const origSize = parseFloat(sizeMatch[1]);
+            const rest = sizeMatch[2];
+            const MIN_SIZE = 8;
+            for (let size = origSize; size >= MIN_SIZE; size -= 0.5) {
+                measure.font = `${size}px ${rest}`;
+                const probe = measure.measureText(text);
+                const pLeft = probe.actualBoundingBoxLeft ?? 0;
+                const pRight = probe.actualBoundingBoxRight
+                    ?? probe.width;
+                const natW = Math.max(probe.width, pLeft + pRight);
+                activeFont = `${size}px ${rest}`;
+                if (natW + AA_PAD <= maxWidth) break;
+            }
+        }
+    }
+    measure.font = activeFont;
     const m = measure.measureText(text);
     const ascent = m.actualBoundingBoxAscent ?? 10;
     const descent = m.actualBoundingBoxDescent ?? 2;
@@ -710,17 +745,13 @@ function rasterizeText(text, font) {
     // carry zero advance width but a non-zero visual bounding box.
     // ``m.width`` is the advance only; ``actualBoundingBoxLeft`` /
     // ``Right`` measure the painted-pixel extent from the text
-    // origin. Take the larger of the two metrics so the canvas
-    // (and the host span) is wide enough to contain every painted
-    // pixel. Without this an affricate's tie-bar would be clipped
-    // off the right edge of the canvas and the span ended up too
-    // narrow for the button to grow around it.
+    // origin. Take the larger of the two metrics so the canvas is
+    // wide enough to contain every painted pixel; without this an
+    // affricate's tie-bar would clip off the right edge.
     const left = m.actualBoundingBoxLeft ?? 0;
     const right = m.actualBoundingBoxRight ?? m.width;
     const naturalW = Math.max(m.width, left + right);
-    // 3-px padding all around so antialias edges + accent marks
-    // aren't clipped on either side.
-    const w = Math.max(1, Math.ceil(naturalW) + 6);
+    const w = Math.max(1, Math.ceil(naturalW) + AA_PAD);
     const h = Math.max(1, Math.ceil(ascent + descent) + 4);
     const dpr = window.devicePixelRatio || 1;
     const canvas = document.createElement("canvas");
@@ -728,7 +759,7 @@ function rasterizeText(text, font) {
     canvas.height = Math.ceil(h * dpr);
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
-    ctx.font = font;
+    ctx.font = activeFont;
     ctx.fillStyle = "#000";
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
@@ -747,8 +778,8 @@ function rasterizeText(text, font) {
  * yields nothing. Screen readers fall back to the host element's
  * ``aria-label`` (this span carries ``aria-hidden="true"``).
  */
-function createRasterizedLabel(text, font) {
-    const { dataUrl, width, height } = rasterizeText(text, font);
+function createRasterizedLabel(text, font, maxWidth) {
+    const { dataUrl, width, height } = rasterizeText(text, font, maxWidth);
     const span = document.createElement("span");
     span.className = "rasterized-text";
     span.setAttribute("aria-hidden", "true");
@@ -824,8 +855,12 @@ function applyPerGroupSegmentColumns() {
         : sizes.map((n) => _fallbackBestNCols(n, maxCols));
     for (let i = 0; i < rows.length; i++) {
         rows[i].style.display = "grid";
+        // Fixed tracks (not minmax-to-max-content): all seg-buttons
+        // are the same width by design; wide glyphs shrink via the
+        // rasterizer rather than letting their column expand and
+        // breaking the matrix alignment.
         rows[i].style.gridTemplateColumns =
-            `repeat(${groupCols[i]}, minmax(${btnW}px, max-content))`;
+            `repeat(${groupCols[i]}, ${btnW}px)`;
     }
 }
 
@@ -941,8 +976,16 @@ function _buildSegmentButton(seg, extraAttrs) {
     // codepoint passed in (IPA ɡ U+0261 etc.) is what gets drawn,
     // and the result lives in CSS-mask space rather than the DOM
     // text content — so drag-select-and-copy yields nothing.
+    // ``SEG_LABEL_MAX_W`` matches ``--seg-btn-min-w`` in style.css
+    // minus a small breathing margin. The rasterizer downscales the
+    // font when the glyph's natural width would overflow the
+    // fixed-width button (the consonant grid wants uniform cells).
     btn.appendChild(
-        createRasterizedLabel(seg, '14px "Noto Sans Mono", monospace')
+        createRasterizedLabel(
+            seg,
+            '14px "Noto Sans Mono", monospace',
+            SEG_LABEL_MAX_W,
+        ),
     );
     if (extraAttrs) {
         for (const [k, v] of Object.entries(extraAttrs)) {

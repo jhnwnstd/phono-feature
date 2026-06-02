@@ -498,9 +498,20 @@ dialog input[type="text"]:focus-visible {
   gap: var(--space-xs);
 }
 .seg-btn {
-  min-width: var(--seg-btn-min-w);
+  /* Uniform fixed dimensions so the consonant grid reads as a tidy
+     monospaced matrix instead of a jagged bar of variable-width
+     pills. Wide segments (affricates with tie bars, modified
+     consonants like /k+͡x+/) keep the same outline as /p/; the
+     rasterizer downscales the glyph to fit (see ``rasterizeText``
+     ``maxWidth`` in main.js). */
+  width: var(--seg-btn-min-w);
   height: var(--control-h-sm);
-  padding: 0 var(--space-sm);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  overflow: hidden;
   border-radius: var(--radius-lg);
   border: var(--border-std) solid var(--border);
   background: var(--seg-default);
@@ -508,8 +519,6 @@ dialog input[type="text"]:focus-visible {
   font-family: var(--font-ipa);
   font-size: var(--font-size-control);
   cursor: pointer;
-  /* Multi-character segments like /tʃ/, /dʒ/, /aɪ/ stay on one
-     line; the button widens instead. */
   white-space: nowrap;
 }
 .seg-btn:hover {
