@@ -37,10 +37,14 @@ call "%VENV_DIR%\Scripts\activate.bat" || goto :venv_fail
 
 if not exist "%STAMP%" goto :install
 
-for %%F in ("%APP_PYPROJECT%") do set "PYPROJECT_TIME=%%~tF"
-for %%F in ("%STAMP%") do set "STAMP_TIME=%%~tF"
-
-if "%APP_PYPROJECT%" newer "%STAMP%" goto :install
+REM No reliable "is newer than" operator in cmd.exe: ``IF`` only
+REM supports ``EXIST`` / ``==`` / ``LSS|GTR|EQU|LEQ|GEQ|NEQ``.
+REM Workarounds (xcopy /D, forfiles, powershell) are either locale-
+REM dependent or pull in a slow second process. The bash launchers'
+REM ``-nt`` test has no clean cmd equivalent, so the Windows
+REM launcher only triggers a reinstall when the stamp is missing.
+REM Manual override: ``del app\.venv\.installed`` to force the next
+REM run to reinstall.
 
 exit /b 0
 

@@ -1058,9 +1058,12 @@ def test_engine_seg_value_tuples_lazy() -> None:
 # GeometryAnalyzer: state must not leak across analyze() calls
 # ---------------------------------------------------------------------------
 def test_find_all_minimal_bundles_bitmask_matches_naive() -> None:
-    """The bitmask hitting-set search must produce the same bundles
-    as a brute-force reference implementation for a handful of
-    inputs. Catches off-by-one in the bit numbering."""
+    """The bitmask hitting-set search must produce bundles that
+    strictly round-trip via the default ``find_segments``. Catches
+    off-by-one in the bit numbering and (since the engine moved to
+    strict-only natural-class semantics) confirms the round-trip
+    invariant on every returned bundle.
+    """
     eng = FeatureEngine.from_path(HAYES)
     seg_lists = (
         ["b", "d", "ɡ"],
@@ -1073,11 +1076,11 @@ def test_find_all_minimal_bundles_bitmask_matches_naive() -> None:
     )
     for segs in seg_lists:
         bundles = eng.find_all_minimal_bundles(segs)
-        # Every returned bundle must characterise S exactly.
+        # Every returned bundle must STRICTLY characterise S
+        # exactly (default ``find_segments`` -- the round-trip
+        # invariant the analysis-pane spec rendering rests on).
         for bundle in bundles:
-            recovered = set(
-                eng.find_segments(bundle, underspec_compatible=True)
-            )
+            recovered = set(eng.find_segments(bundle))
             assert recovered == set(
                 segs
             ), f"bundle {bundle} for {segs} recovered {recovered}"
