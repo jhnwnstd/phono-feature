@@ -361,6 +361,10 @@ def generate_layout_css() -> None:
         f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
         f"  --vowel-pair-gap: {mod.VOWEL_PAIR_GAP_PX}px;",
         f"  --vowel-pair-separator: {mod.VOWEL_PAIR_SEPARATOR_PX}px;",
+        # Tooltip wake-up delay. Emitted unitless (raw integer) so
+        # JS can ``parseInt`` it once at boot without stripping a
+        # ``ms`` suffix; CSS rules don't consume it directly.
+        f"  --vowel-tooltip-show-delay-ms: {mod.VOWEL_TOOLTIP_SHOW_DELAY_MS};",
         f"  --collapse-w: {mod.COLLAPSE_W}px;",
         # Per-row / per-card heights — single source of truth for
         # consonant-grid and feature-card height math in the web.

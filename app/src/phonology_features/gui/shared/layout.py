@@ -206,6 +206,14 @@ VOWEL_NATURAL_W: int = 320
 # (0..5) and the renderers translate to physical grid columns.
 VOWEL_PAIR_GAP_PX: int = 2
 VOWEL_PAIR_SEPARATOR_PX: int = 14
+# Hover-tooltip wake-up delay for vowel-chart segment buttons, in ms.
+# Single source of truth for both UIs. The web reads this from the
+# baked layout.css custom property; the desktop reads it from
+# ``QApplication.styleHints()`` via the ``_TooltipDelayStyle``
+# QProxyStyle that wraps the system style at startup. Drift between
+# the two surfaces is exactly the kind of UI-behavior split this
+# repo's relay architecture exists to prevent.
+VOWEL_TOOLTIP_SHOW_DELAY_MS: int = 1000
 # Below this seg-pane width, the chart drops below the consonants
 # instead of floating beside them. Picked so a 3-column-of-buttons
 # consonant area still fits next to a min-width chart.

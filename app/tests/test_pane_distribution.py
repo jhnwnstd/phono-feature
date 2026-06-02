@@ -253,6 +253,11 @@ def test_layout_css_emits_all_height_constants() -> None:
         # the equal-spacing problem.
         ("--vowel-pair-gap", "VOWEL_PAIR_GAP_PX"),
         ("--vowel-pair-separator", "VOWEL_PAIR_SEPARATOR_PX"),
+        # Vowel tooltip wake-up delay. Web reads the CSS custom
+        # property; desktop reads the same Python constant via a
+        # QProxyStyle override. Pinned so a future "just bump the
+        # JS literal" diff fails CI and forces the shared edit.
+        ("--vowel-tooltip-show-delay-ms", "VOWEL_TOOLTIP_SHOW_DELAY_MS"),
     ]:
         assert var_name in contents, (
             f"build.py:generate_layout_css does not emit {var_name}; "

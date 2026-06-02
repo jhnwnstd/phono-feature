@@ -3397,12 +3397,18 @@ function wireSegmentDelegation() {
 }
 
 /** Show delay in ms before the vowel tooltip appears on hover.
- *  A second of dwell time before the popover materialises -- long
- *  enough that mousing across the vowel chart on the way to a
- *  consonant target doesn't trigger a tooltip trail, short enough
- *  that a deliberate hover surfaces the placement reason without
- *  feeling stuck. */
-const VOWEL_TOOLTIP_SHOW_DELAY_MS = 1000;
+ *  Read once at boot from the ``--vowel-tooltip-show-delay-ms`` CSS
+ *  custom property that ``web/scripts/build.py`` bakes from
+ *  ``layout.VOWEL_TOOLTIP_SHOW_DELAY_MS`` (the single source of
+ *  truth, also consumed by the desktop's QProxyStyle override). The
+ *  fallback only fires if layout.css somehow failed to load. */
+const VOWEL_TOOLTIP_SHOW_DELAY_MS = (() => {
+    const raw = getComputedStyle(document.documentElement)
+        .getPropertyValue("--vowel-tooltip-show-delay-ms")
+        .trim();
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : 1000;
+})();
 
 const _tooltipState = {
     el: null,
@@ -3420,9 +3426,20 @@ function _ensureVowelTooltip() {
     return el;
 }
 
+/** Start (or restart) the hover delay for ``btn``. Always clears any
+ *  pending timer and any currently-shown tooltip so each hover gets
+ *  the full ``VOWEL_TOOLTIP_SHOW_DELAY_MS`` countdown. Previously the
+ *  "same button" early-return preserved an in-flight timer, which
+ *  was correct, but the post-show path left the tooltip's CSS state
+ *  in a way that made the next button's mouseover trip a near-instant
+ *  reveal. Hiding+rescheduling unconditionally per hover removes that
+ *  state ambiguity. */
 function _scheduleVowelTooltip(btn) {
-    if (_tooltipState.activeBtn === btn) return;
-    _hideVowelTooltip();
+    if (_tooltipState.showTimer) {
+        clearTimeout(_tooltipState.showTimer);
+        _tooltipState.showTimer = 0;
+    }
+    if (_tooltipState.el) _tooltipState.el.classList.remove("show");
     _tooltipState.activeBtn = btn;
     _tooltipState.showTimer = window.setTimeout(() => {
         _tooltipState.showTimer = 0;
@@ -3436,14 +3453,13 @@ function _showVowelTooltip(btn) {
     if (!text) return;
     const el = _ensureVowelTooltip();
     el.textContent = text;
-    // Position above the button, horizontally centred. Measure after
-    // assigning text so the tooltip's own width reflects the content;
-    // clamp to the viewport so a wide tooltip near the right edge
-    // doesn't run off-screen.
-    const r = btn.getBoundingClientRect();
-    el.style.top = "0px";
-    el.style.left = "0px";
+    // Position off-screen first so the about-to-be-shown tooltip
+    // doesn't flash at the previous position during the
+    // measure-then-place dance.
+    el.style.top = "-9999px";
+    el.style.left = "-9999px";
     el.classList.add("show");
+    const r = btn.getBoundingClientRect();
     const tr = el.getBoundingClientRect();
     let left = r.left + r.width / 2 - tr.width / 2;
     const max = window.innerWidth - tr.width - 4;
