@@ -85,7 +85,7 @@ def main() -> int:
             win._on_segment_clicked(s, True)
     # _on_segment_clicked schedules the analysis through a 150 ms debounce
     # timer; bypass it so the screenshot doesn't catch an empty pane.
-    win._refresh_analysis_for_mode()
+    win._mode_ctrl.refresh_analysis()
     settle()
     force_size()
     grab("02_voiced_stops")
@@ -100,7 +100,7 @@ def main() -> int:
     for f in ("Nasal", "Sonorant"):
         if f in win._feat_rows:
             win._feat_rows[f]._on_click("+")
-    win._refresh_analysis_for_mode()
+    win._mode_ctrl.refresh_analysis()
     settle()
     force_size()
     grab("03_nasal_query")

@@ -2026,6 +2026,28 @@ def test_mainwindow_construction_survives_corrupt_window_size(
     w.close()
 
 
+def test_inventories_dir_resolves_to_bundled_dir() -> None:
+    """``InventoryDirController.get_inventories_dir`` walks up from
+    the controller's own ``__file__`` to ``app/inventories``. Any
+    package-layout change that moves the controller deeper or
+    shallower must update the ``..`` count, or the dropdown silently
+    populates from an empty / wrong directory. Regression for the
+    ``gui/`` -> ``gui/controllers/`` move that left the old three-up
+    walk landing inside ``app/src/`` instead of ``app/``.
+    """
+    from phonology_features.gui.controllers.inventory_dir import (
+        InventoryDirController,
+    )
+
+    inv_dir = Path(InventoryDirController.get_inventories_dir())
+    assert inv_dir.is_dir(), f"resolved path does not exist: {inv_dir}"
+    assert inv_dir.name == "inventories"
+    assert inv_dir.parent.name == "app"
+    bundled = {p.name for p in inv_dir.glob("*.json")}
+    assert "hayes_features.json" in bundled
+    assert "_schema.json" in bundled  # present on disk but filter-excluded
+
+
 def test_visible_inventory_filter_rejects_underscore_and_dot_prefixes() -> (
     None
 ):
