@@ -23,6 +23,7 @@ from typing import Any, TypeVar, cast
 from phonology_engine import (
     MAX_FEATURES,
     MAX_SEGMENTS,
+    VALID_VALUES,
     FeatureEngine,
     Inventory,
     ValidationError,
@@ -71,10 +72,6 @@ _inventory_name: str = ""
 # the membership check is a literal set.
 _ALLOWED_THEMES: frozenset[str] = frozenset({"light", "dark"})
 _ALLOWED_PALETTE_MODES: frozenset[str] = frozenset({"standard", "colorblind"})
-# Allowed values for a feature-query polarity. The engine accepts
-# the same set in ``Inventory.parse``; mirror it here so the
-# bridge rejects junk values before they reach the engine.
-_VALID_FEATURE_VALUES: frozenset[str] = frozenset({"+", "-", "0"})
 
 
 def _require_engine() -> FeatureEngine:
@@ -584,14 +581,12 @@ def analyze_features(spec: dict[str, str]) -> dict[str, Any]:
         raise ValidationError(
             (f"unknown feature(s) in current inventory: {bad_keys!r}",)
         )
-    bad_values = {
-        k: v for k, v in spec.items() if v not in _VALID_FEATURE_VALUES
-    }
+    bad_values = {k: v for k, v in spec.items() if v not in VALID_VALUES}
     if bad_values:
         raise ValidationError(
             (
                 f"invalid feature value(s) {bad_values!r}; expected one "
-                f"of {sorted(_VALID_FEATURE_VALUES)}",
+                f"of {sorted(VALID_VALUES)}",
             )
         )
     return _analyze_features_cached(tuple(spec.items()))

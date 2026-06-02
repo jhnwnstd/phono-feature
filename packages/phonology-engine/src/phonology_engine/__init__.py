@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import (
+    VALID_VALUES,
     Inventory,
     ValidationError,
     canonicalize_feature_label,
@@ -35,6 +36,7 @@ __all__ = [
     "FeatureEngine",
     "Inventory",
     "ValidationError",
+    "VALID_VALUES",
     # Parsing + canonicalisation helpers shared with the GUI
     # validators (NFC + IPA fold for segments, NFC only for
     # features) so add-time and save-time use the same identity

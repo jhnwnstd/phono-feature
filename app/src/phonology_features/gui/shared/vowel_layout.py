@@ -186,18 +186,9 @@ def detect_vowel_profile(
     )
 
 
-def _fv(feats: Mapping[str, str], key: str) -> str:
-    """Feature value, defaulting to '0'."""
-    return feats.get(key, "0")
-
-
 def _nonzero(val: str | None) -> str | None:
-    """Return val only if it carries real feature information."""
-    has_value = bool(val)
-    is_unspecified = val == "0"
-    if has_value and not is_unspecified:
-        return val
-    return None
+    """``val`` if it carries real feature information, else ``None``."""
+    return val if val and val != "0" else None
 
 
 def _height_split_value(
@@ -237,8 +228,8 @@ def _infer_height(
     feats: Mapping[str, str], profile: VowelProfile
 ) -> tuple[int, Confidence, str]:
     """Return row, confidence, and reason."""
-    hi = _fv(feats, "high")
-    lo = _fv(feats, "low")
+    hi = feats.get("high", "0")
+    lo = feats.get("low", "0")
     split_value, split_source = _height_split_value(feats)
     is_high_vowel = hi == "+" and lo == "-"
     is_low_vowel = hi == "-" and lo == "+"
@@ -347,7 +338,7 @@ def _infer_rounding(
     if rnd == "+":
         return True, "Rounded: [+round]"
     can_use_labial_fallback = profile.use_labial_round_fallback
-    has_labial = _fv(feats, "labial") == "+"
+    has_labial = feats.get("labial", "0") == "+"
     if can_use_labial_fallback and has_labial:
         return (
             True,

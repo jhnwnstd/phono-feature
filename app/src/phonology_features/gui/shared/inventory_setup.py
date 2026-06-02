@@ -209,11 +209,7 @@ _MSG_NO_FEATURES = (
 )
 
 
-def _too_long_message(field: str, offender: str) -> str:
-    """Per-entry length-cap error message. Names the field, the
-    offending length, and the cap, then explains the most common
-    cause so the user knows where to look.
-    """
+def _too_long(field: str, offender: str) -> str:
     return (
         f"One of the {field} is {len(offender)} characters long, "
         f"longer than the {MAX_NAME_LENGTH}-character limit. This "
@@ -262,7 +258,7 @@ def validate_setup(
             SetupIssue(
                 "segments",
                 "too_long",
-                _too_long_message("segments", seg_offender),
+                _too_long("segments", seg_offender),
             )
         )
     feat_offender = next(
@@ -273,7 +269,7 @@ def validate_setup(
             SetupIssue(
                 "features",
                 "too_long",
-                _too_long_message("features", feat_offender),
+                _too_long("features", feat_offender),
             )
         )
 
