@@ -182,8 +182,23 @@ def summarize_segment_selection(
 def summarize_feature_query(
     engine: FeatureEngine,
     spec: dict[str, str],
+    *,
+    projected_segments: list[str] | None = None,
 ) -> dict[str, Any]:
-    """FEAT-mode analysis payload shared by desktop and web."""
+    """FEAT-mode analysis payload shared by desktop and web.
+
+    ``projected_segments`` is the round-trip override: when the FEAT
+    query was auto-projected from a prior seg selection (see
+    :py:class:`mode_logic.ModeTransition`'s
+    ``feature_query_origin == "projected"``), pass the original seg
+    list here. The analysis then displays those exact segments as
+    the matches, preserving the user's selection across the SEG→FEAT
+    switch instead of doing a strict ``find_segments`` re-query that
+    would silently drop members with ``'0'`` cells on the projected
+    features. The flag flips to ``"typed"`` -- and this argument
+    drops to ``None`` -- the first time the user toggles a feature
+    in FEAT mode.
+    """
     segment_states = _default_segment_states(engine)
     if not spec:
         return {
@@ -192,7 +207,14 @@ def summarize_feature_query(
             "matching": [],
             "segment_states": segment_states,
         }
-    matching = engine.find_segments(spec)
+    if projected_segments is not None:
+        # Preserve the user's seg selection across the mode switch.
+        # We still validate against the engine's segment set so a
+        # stale projection from a different inventory doesn't paint
+        # a state with names the engine doesn't recognise.
+        matching = [s for s in projected_segments if s in engine.segments]
+    else:
+        matching = engine.find_segments(spec)
     matching_set = set(matching)
     for seg in engine.segments:
         segment_states[seg] = "matched" if seg in matching_set else "unmatched"

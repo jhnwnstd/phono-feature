@@ -243,7 +243,10 @@ def render_multi_segment(
     """
     seg_tags = " ".join(_segment_chip(seg) for seg in segs)
     is_nc, specs = engine.is_natural_class(segs)
-    is_universal = is_nc and (not specs or not specs[0])
+    # Universal class = a single empty bundle in specs; it gets the
+    # single-column layout because the spec column reduces to one
+    # line. Everything else stays two-column.
+    is_universal = bool(specs) and not specs[0]
     nc_html, spec_html = _render_natural_class_verdict(engine, segs, suggested)
     common_html = _render_shared_features(common)
     contrast_html = _render_contrast_section(engine, segs, contrastive)
@@ -393,8 +396,11 @@ def _render_natural_class_verdict(
     is_nc, specs = engine.is_natural_class(segs)
     if is_nc:
         verdict = f"<p><b>Natural class:</b> {_yes_no(True)}</p>"
-        is_universal = not specs or not specs[0]
-        if is_universal:
+        # Under strict semantics, is_nc == True iff specs is
+        # non-empty. The only sub-case that needs special handling
+        # is the universal class, where specs == (EMPTY_BUNDLE,)
+        # and specs[0] is the empty mapping.
+        if not specs[0]:
             spec_html = (
                 f"<p><b>Minimal specification:</b>"
                 f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"
@@ -519,7 +525,7 @@ def render_class_tab_seg(
         return _muted_italic_p("Not uniquely characterizable.")
     is_nc, specs = engine.is_natural_class(segs)
     if is_nc:
-        if not specs or not specs[0]:
+        if not specs[0]:
             return (
                 f"<p><b>Minimal specification:</b>"
                 f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"

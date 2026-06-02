@@ -156,22 +156,23 @@ NATURAL_CLASS_CANDIDATES = [
 def test_natural_class_bundle_round_trip(
     engine: FeatureEngine, segments: list[str]
 ) -> None:
-    """Round-trip invariant for :py:meth:`compute_natural_class`.
-
-    Two valid outcomes:
+    """**Strict round-trip invariant** for
+    :py:meth:`compute_natural_class`:
 
     * a bundle is returned: feeding it back through
-      :py:meth:`find_segments` (underspec-compatible) must recover
-      every input segment.
-    * ``None`` is returned: the engine determined the segments are
-      not a natural class. The cross-check is that the common-feature
-      bundle matches strictly more segments than the input, which
-      proves the input fails to characterise a unique set.
+      :py:meth:`find_segments` (default strict equality) returns
+      EXACTLY the input set. This is the contract the analysis
+      pane's bundle display rests on -- any spec the engine lists
+      must round-trip when manually typed into the feat→seg pane.
+    * ``None`` is returned: the input is not a natural class. The
+      cross-check is that no strict bundle exists; equivalently,
+      every potential strict bundle (the common-feature subset)
+      matches more segments than the input.
     """
     bundle = engine.compute_natural_class(segments)
     if bundle is None:
         common = engine.common_features(segments)
-        wider = set(engine.find_segments(common, underspec_compatible=True))
+        wider = set(engine.find_segments(common))
         assert set(segments).issubset(
             wider
         ), "common-feature bundle must at least cover the inputs"
@@ -179,10 +180,49 @@ def test_natural_class_bundle_round_trip(
             segments
         ), f"engine returned None but no superset exists: {segments}"
         return
-    recovered = set(engine.find_segments(bundle, underspec_compatible=True))
-    assert set(segments).issubset(
-        recovered
-    ), f"bundle {dict(bundle)} did not recover {segments}: got {recovered}"
+    recovered = engine.find_segments(bundle)
+    assert sorted(recovered) == sorted(segments), (
+        f"strict round-trip broken: bundle {dict(bundle)} returned "
+        f"{recovered}, expected {sorted(segments)}"
+    )
+
+
+def test_listed_spec_round_trips_strictly(engine: FeatureEngine) -> None:
+    """**Round-trip invariant**: any minimal feature specification
+    the engine LISTS for a natural class, when manually typed into
+    the feat pane (strict ``find_segments``), returns exactly the
+    segments that generated it. This is the contract the analysis
+    pane's bundle rendering rests on; a regression here means the
+    Class tab can show a spec that doesn't behave as displayed.
+
+    Stress: iterate over every singleton, pair, and triple of
+    segments in the fixture inventory and assert every bundle in
+    every ``is_natural_class`` response strictly round-trips. If
+    the bundle list is empty, the verdict must be False.
+    """
+    from itertools import combinations
+
+    all_segs = list(engine.segments)
+    triples_to_check = (
+        list(combinations(all_segs, 1))
+        + list(combinations(all_segs, 2))
+        + list(combinations(all_segs[:40], 3))
+    )
+    for combo in triples_to_check:
+        segs = list(combo)
+        is_nc, bundles = engine.is_natural_class(segs)
+        if not is_nc:
+            assert (
+                bundles == ()
+            ), f"{segs}: is_nc=False but bundles non-empty: {bundles!r}"
+            continue
+        assert bundles, f"{segs}: is_nc=True but no bundles returned"
+        for b in bundles:
+            recovered = engine.find_segments(dict(b))
+            assert sorted(recovered) == sorted(segs), (
+                f"{segs}: bundle {dict(b)} does not strictly round-"
+                f"trip; recovered={recovered}"
+            )
 
 
 # ----------------------------------------------------------------------

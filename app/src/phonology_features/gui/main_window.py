@@ -1430,6 +1430,12 @@ class MainWindow(QMainWindow):
     def _on_feature_changed(self, feature: str, value: str) -> None:
         if self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
             return
+        # User-initiated feature toggle: drop the ``"projected"``
+        # provenance so the analysis stops carrying over the prior
+        # seg selection and re-queries strictly. Cheap and idempotent
+        # -- the flag is already ``"typed"`` once the first toggle
+        # lands, so subsequent toggles no-op this call.
+        self._mode_ctrl.mark_feature_query_typed()
         if value:
             self._selected_features[feature] = value
         else:
@@ -1485,7 +1491,20 @@ class MainWindow(QMainWindow):
                 btn.set_state(SegmentState.DEFAULT)
             self.analysis.clear()
             return
-        summary = summarize_feature_query(self.engine, selected_feats)
+        # If the FEAT query came from a SEG→FEAT projection (the user
+        # hasn't toggled a feature yet), preserve the original seg
+        # selection as the displayed matches. ``saved_seg_state`` is
+        # the snapshot the mode-switch captured. Once any feature is
+        # toggled, ``feature_query_origin`` flips to ``"typed"`` and
+        # this branch falls through to a strict ``find_segments``.
+        projected = (
+            self._mode_ctrl.saved_seg_state
+            if self._mode_ctrl.feature_query_origin == "projected"
+            else None
+        )
+        summary = summarize_feature_query(
+            self.engine, selected_feats, projected_segments=projected
+        )
         segment_states = summary["segment_states"]
         for seg, btn in self._seg_buttons.items():
             btn.set_state(segment_states.get(seg, SegmentState.DEFAULT.value))

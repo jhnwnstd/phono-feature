@@ -31,12 +31,31 @@ class Mode(StrEnum):
 
 @dataclass(frozen=True)
 class ModeTransition:
-    """Projection result for one mode switch."""
+    """Projection result for one mode switch.
+
+    ``feature_query_origin`` carries provenance for the resulting FEAT
+    query:
+
+    * ``"projected"``: the query was auto-derived from the outgoing
+      seg selection (a SEG→FEAT transition with a non-empty selection).
+      The FEAT-mode analysis should display the **original seg set**
+      as the matches, not a strict re-query of the projected spec.
+      Otherwise the round-trip silently drops segments whose values
+      became ``'0'`` on the projected features.
+    * ``"typed"``: the query reflects user input in FEAT mode (or an
+      empty starting state). Matches use the strict ``find_segments``
+      default, which is what the user expects when typing.
+
+    The caller is responsible for flipping origin to ``"typed"`` the
+    first time the user toggles a feature in FEAT mode after a
+    projected transition.
+    """
 
     saved_seg_state: list[str]
     saved_feat_state: dict[str, str]
     selected_segments: list[str]
     selected_features: dict[str, str]
+    feature_query_origin: str = "typed"
 
 
 def project_mode_transition(
@@ -52,9 +71,16 @@ def project_mode_transition(
     ``saved_*`` means "state remembered from the mode we just left".
     ``selected_*`` means "state that should be active immediately after
     the switch in the target mode".
+
+    Origin tracking: a SEG→FEAT switch with a non-empty seg selection
+    yields ``feature_query_origin="projected"`` and the saved seg
+    state survives the transition so the FEAT-mode analysis can show
+    those exact segments as the matches. All other transitions are
+    ``"typed"``.
     """
     current = Mode(current_mode)
     target = Mode(target_mode)
+    feature_query_origin = "typed"
 
     if current == Mode.SEG_TO_FEAT:
         saved_seg_state = list(selected_segments)
@@ -62,6 +88,12 @@ def project_mode_transition(
             saved_feat_state = dict(
                 engine.project_segments_to_features(selected_segments)
             )
+            # Mark the resulting FEAT query as projected so the
+            # analysis displays the original seg set; the round-trip
+            # invariant ``SEG /b i j/ → FEAT → SEG → /b i j/`` depends
+            # on this flag flowing through to ``summarize_feature_query``.
+            if target == Mode.FEAT_TO_SEG and saved_feat_state:
+                feature_query_origin = "projected"
         else:
             saved_feat_state = {}
     else:
@@ -85,6 +117,7 @@ def project_mode_transition(
         saved_feat_state=saved_feat_state,
         selected_segments=next_selected_segments,
         selected_features=next_selected_features,
+        feature_query_origin=feature_query_origin,
     )
 
 

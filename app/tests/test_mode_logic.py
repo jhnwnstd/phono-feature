@@ -39,6 +39,29 @@ def test_project_mode_transition_seg_to_feat() -> None:
     assert transition.selected_segments == []
     assert transition.saved_feat_state == transition.selected_features
     assert transition.saved_feat_state["Voice"] == "+"
+    # SEG→FEAT with a non-empty selection marks the projected FEAT
+    # query as ``"projected"`` so the FEAT-mode analysis preserves
+    # the original seg set rather than doing a strict re-query that
+    # would drop members whose values became '0' on the projected
+    # features.
+    assert transition.feature_query_origin == "projected"
+
+
+def test_seg_to_feat_with_empty_selection_stays_typed() -> None:
+    """No selection => no projection. ``feature_query_origin``
+    stays ``"typed"`` so the FEAT-mode analysis behaves like a
+    fresh, user-typed query."""
+    engine = _engine("hayes_features.json")
+    transition = project_mode_transition(
+        Mode.SEG_TO_FEAT,
+        Mode.FEAT_TO_SEG,
+        selected_segments=[],
+        selected_features={},
+        engine=engine,
+    )
+    assert transition.feature_query_origin == "typed"
+    assert transition.saved_seg_state == []
+    assert transition.saved_feat_state == {}
 
 
 def test_project_mode_transition_feat_to_seg() -> None:
@@ -56,6 +79,9 @@ def test_project_mode_transition_feat_to_seg() -> None:
     assert set(engine.find_segments(spec)).issuperset(
         transition.selected_segments
     )
+    # FEAT→SEG never marks the (next-mode's) FEAT query as
+    # projected: we're leaving FEAT, not entering it.
+    assert transition.feature_query_origin == "typed"
 
 
 def test_project_mode_transition_without_engine_degrades_cleanly() -> None:

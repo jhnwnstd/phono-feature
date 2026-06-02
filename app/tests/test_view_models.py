@@ -66,25 +66,37 @@ def test_summarize_segment_selection_multi_matches_engine() -> None:
     assert summary["selected"] == segs
     assert summary["common"]["Voice"] == "+"
     assert "LABIAL" in summary["contrastive"]
-    # ``suggested`` is now the MINIMAL completion (the smallest
-    # subset of candidates that, when added, makes the union a
-    # natural class). For /b/ /d/ /ɡ/ in Hayes the minimum k is 2
-    # — the algorithm returns one valid 2-segment completion (the
-    # lex-first by candidate order). Pin the size + the closure
-    # invariant rather than a specific pair, since multiple valid
-    # pairs may exist and the algorithm picks one.
+    # Under strict natural-class semantics, ``suggested`` is the
+    # smallest set of segments whose addition makes the union a
+    # strict natural class -- i.e. a class for which some feature
+    # bundle round-trips exactly via ``find_segments``. For
+    # /b/ /d/ /ɡ/ in Hayes the union with the suggestion must be
+    # a strict natural class. Pin the size > 0 condition and the
+    # round-trip invariant rather than the specific completion,
+    # since multiple equivalent completions may exist.
     suggested = summary["suggested"]
     assert isinstance(suggested, list)
-    assert (
-        len(suggested) == 2
-    ), f"expected a 2-segment minimal completion, got {suggested!r}"
+    assert suggested, (
+        f"/b d ɡ/ is not a strict natural class on its own; a"
+        f" non-empty completion should be suggested, got {suggested!r}"
+    )
     # Closure: adding the suggestion to the selection must produce
-    # a natural class. This is the round-trip invariant.
-    is_nc, _ = engine.is_natural_class(segs + suggested)
+    # a strict natural class. This is the round-trip invariant the
+    # whole engine semantics rests on.
+    is_nc, bundles = engine.is_natural_class(segs + suggested)
     assert is_nc, (
         f"engine.suggest_natural_class_extension({segs}) returned "
         f"{suggested}, but {segs + suggested} is not a natural class"
     )
+    # Strict round-trip: every returned bundle returns exactly the
+    # union of selection + suggestion under default-strict
+    # ``find_segments``.
+    for b in bundles:
+        recovered = engine.find_segments(dict(b))
+        assert sorted(recovered) == sorted(segs + suggested), (
+            f"bundle {dict(b)} does not strictly round-trip: "
+            f"got {recovered}, expected {sorted(segs + suggested)}"
+        )
     # Selection itself is never in the suggested list.
     assert not set(segs) & set(suggested)
     assert summary["segment_states"]["b"] == "selected"
@@ -119,17 +131,26 @@ def test_feature_row_badge_uses_unicode_minus_for_shared_negative() -> None:
     assert voice["badge"] == "+"
 
 
-def test_suggest_natural_class_blevins_affricate_regression() -> None:
-    """Regression for the user-reported bug: selecting /b͡v/ /d͡z/
-    /t͡s/ in Blevins used to report "7 segments needed for natural
-    class" when in fact adding any one of /p͡f/ alone completes
-    the class. The fix is to search for the MINIMUM-size completion
-    via ``is_natural_class`` (which uses underspec-compatible
-    matching) instead of returning the full strict-common
-    extension.
+def test_suggest_natural_class_blevins_affricate_strict_closure() -> None:
+    """Pinning: under strict natural-class semantics,
+    ``suggest_natural_class_extension([b͡v, d͡z, t͡s])`` returns
+    a completion that, when added, makes the union a STRICT
+    natural class -- i.e. some feature bundle strictly round-trips
+    to it via the default ``find_segments``.
 
-    Pin the exact case so the bug can't silently come back. Skipped
-    in CI when ``blevins_features.json`` is gitignored.
+    Historical note: a previous version of the engine used
+    wildcard (underspec-compatible) matching for both the natural-
+    class verdict and the suggestion algorithm. Under that scheme
+    /b͡v d͡z t͡s/ + /p͡f/ formed a wildcard natural class, so the
+    suggestion was a single segment. Strict semantics requires
+    every member of the union to have an explicit value on every
+    bundle feature, so the completion includes more segments
+    (typically the full strict-common matchers minus the
+    selection). The trade is the round-trip invariant: the bundle
+    the engine reports for the completed set, when typed into
+    feat→seg, returns exactly that set.
+
+    Skipped in CI when ``blevins_features.json`` is gitignored.
     """
     import pytest
 
@@ -139,19 +160,55 @@ def test_suggest_natural_class_blevins_affricate_regression() -> None:
     engine = _engine("blevins_features.json")
     selected = ["b͡v", "d͡z", "t͡s"]
     assert all(s in engine.segments for s in selected)
-    # Before: not a natural class.
+    # /b͡v d͡z t͡s/ is not a STRICT natural class on its own (some
+    # member has '0' on a discriminating feature).
     assert not engine.is_natural_class(selected)[0]
     suggested = engine.suggest_natural_class_extension(selected)
-    # Minimum completion is 1 segment, not 7.
-    assert len(suggested) == 1, (
-        f"expected k=1 minimal completion for Blevins affricates, "
-        f"got {len(suggested)} segments: {suggested!r}"
+    assert suggested, "expected a non-empty completion"
+    # Closure: the union forms a STRICT natural class and every
+    # returned bundle round-trips exactly via find_segments.
+    is_nc, bundles = engine.is_natural_class(selected + suggested)
+    assert is_nc
+    assert bundles
+    for b in bundles:
+        recovered = engine.find_segments(dict(b))
+        assert sorted(recovered) == sorted(selected + suggested), (
+            f"bundle {dict(b)} does not strictly round-trip: "
+            f"got {recovered}"
+        )
+    # Selection itself is never in the suggestion.
+    assert not set(selected) & set(suggested)
+
+
+def test_summarize_feature_query_projected_preserves_seg_set() -> None:
+    """**Mode-switch round-trip invariant**: when the FEAT query
+    came from a SEG→FEAT projection, the analysis matches must
+    equal the original seg set exactly -- not a strict re-query
+    of the projected spec (which would silently expand to other
+    segments that happen to share the common features).
+
+    Pinned with /j/ /i/ in English. Strict
+    ``find_segments(common(/j i/))`` returns ``[i, j, ɪ]`` (a
+    superset). The projection override must instead return
+    exactly ``[j, i]`` so the user's selection survives the mode
+    switch intact.
+    """
+    engine = _engine("english_features.json")
+    seg_selection = ["j", "i"]
+    spec = engine.project_segments_to_features(seg_selection)
+    # Without the projection override, find_segments expands.
+    strict_match = engine.find_segments(spec)
+    assert (
+        "ɪ" in strict_match
+    ), "test premise: the strict projection expands beyond /j i/"
+    # With the override, the matches preserve the original seg set.
+    summary = summarize_feature_query(
+        engine, spec, projected_segments=seg_selection
     )
-    # And that single segment is /p͡f/ — the only k=1 candidate
-    # whose addition closes the natural class.
-    assert suggested == ["p͡f"]
-    # Round-trip invariant: selection + suggestion is a natural class.
-    assert engine.is_natural_class(selected + suggested)[0]
+    assert summary["matching"] == seg_selection
+    assert summary["segment_states"]["j"] == "matched"
+    assert summary["segment_states"]["i"] == "matched"
+    assert summary["segment_states"]["ɪ"] == "unmatched"
 
 
 def test_summarize_feature_query_matches_engine() -> None:
