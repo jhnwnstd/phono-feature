@@ -14,17 +14,20 @@ truth for analysis output.
 
 from __future__ import annotations
 
+import functools
 import json
+from collections.abc import Callable
 from functools import lru_cache
-from typing import Any
+from typing import Any, TypeVar, cast
 
-from phonology_engine.feature_engine import FeatureEngine
-from phonology_engine.inventory import (
+from phonology_engine import (
+    MAX_FEATURES,
+    MAX_SEGMENTS,
+    FeatureEngine,
     Inventory,
     ValidationError,
     parse_inventory_json_text,
 )
-from phonology_engine.limits import MAX_FEATURES, MAX_SEGMENTS
 from phonology_features.gui.grid_logic import (
     CYCLE_LADDER,
     MAX_UNDO_DEPTH,
@@ -61,11 +64,53 @@ from phonology_features.gui.view_models import (
 _engine: FeatureEngine | None = None
 _inventory_name: str = ""
 
+# Allowed values for the two-axis palette state. Kept here (not in
+# palette.py) so the bridge validators can reject bad strings at
+# the boundary without importing internal palette state. Both axes
+# round-trip as plain strings through QSettings + localStorage so
+# the membership check is a literal set.
+_ALLOWED_THEMES: frozenset[str] = frozenset({"light", "dark"})
+_ALLOWED_PALETTE_MODES: frozenset[str] = frozenset({"standard", "colorblind"})
+# Allowed values for a feature-query polarity. The engine accepts
+# the same set in ``Inventory.parse``; mirror it here so the
+# bridge rejects junk values before they reach the engine.
+_VALID_FEATURE_VALUES: frozenset[str] = frozenset({"+", "-", "0"})
+
 
 def _require_engine() -> FeatureEngine:
     if _engine is None:
-        raise RuntimeError("no inventory loaded")
+        raise ValidationError(("no inventory loaded; load one first",))
     return _engine
+
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _translate_engine_errors(fn: F) -> F:
+    """Decorator: convert raw engine exceptions to ``ValidationError``.
+
+    The pyodide bridge passes JS-supplied arguments straight through
+    to engine methods that historically raised bare ``KeyError`` /
+    ``ValueError`` / ``TypeError`` on bad input. Those exceptions
+    don't carry the ``.issues`` shape the JS error path expects, and
+    they leak into the JS event loop as unhandled runtime errors
+    (no statusbar message, no recovery). The decorator wraps every
+    public bridge function so the JS caller sees the same
+    ``ValidationError`` shape regardless of which layer rejected
+    the input. Functions that explicitly raise ``ValidationError``
+    pass through unchanged.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return fn(*args, **kwargs)
+        except ValidationError:
+            raise
+        except (KeyError, ValueError, TypeError) as e:
+            raise ValidationError((f"{fn.__name__}: {e}",)) from e
+
+    return cast(F, wrapper)
 
 
 def load_inventory_json(
@@ -349,24 +394,47 @@ def rename_current_inventory(new_name: str) -> dict[str, Any]:
     return {"name": inventory.name}
 
 
+@_translate_engine_errors
 def set_active_theme(name: str) -> None:
     """Switch the renderer palette so subsequent HTML output uses
     the new chip colors. Invalidates the analyze_* caches because
     their cached HTML embeds colors from the previous palette.
+
+    Rejects unknown theme strings with ``ValidationError`` so a
+    JS-side typo can't put the palette module into an undefined
+    state and silently render with stale colours.
     """
+    if name not in _ALLOWED_THEMES:
+        raise ValidationError(
+            (
+                f"unknown theme {name!r}; expected one of "
+                f"{sorted(_ALLOWED_THEMES)}",
+            )
+        )
     set_theme(name)
     _invalidate_analysis_caches()
 
 
+@_translate_engine_errors
 def set_active_palette_mode(mode: str) -> None:
     """Switch between standard and colorblind palettes. Mirrors
     ``set_active_theme`` for the perpendicular axis; analysis HTML
     embeds chip colors so cached output must regenerate.
+
+    Same allow-list validation as :py:func:`set_active_theme`.
     """
+    if mode not in _ALLOWED_PALETTE_MODES:
+        raise ValidationError(
+            (
+                f"unknown palette mode {mode!r}; expected one of "
+                f"{sorted(_ALLOWED_PALETTE_MODES)}",
+            )
+        )
     set_palette_mode(mode)
     _invalidate_analysis_caches()
 
 
+@_translate_engine_errors
 def project_segments_to_features(segs: list[str]) -> dict[str, str]:
     """Mode-switch projection (SEG -> FEAT): the feature query
     that represents the current segment selection. Empty list maps
@@ -378,6 +446,7 @@ def project_segments_to_features(segs: list[str]) -> dict[str, str]:
     return engine.project_segments_to_features(list(segs))
 
 
+@_translate_engine_errors
 def project_features_to_segments(spec: dict[str, str]) -> list[str]:
     """Mode-switch projection (FEAT -> SEG): the segments matching
     the current feature query. Empty dict maps to empty list.
@@ -388,6 +457,7 @@ def project_features_to_segments(spec: dict[str, str]) -> list[str]:
     return engine.find_segments(dict(spec))
 
 
+@_translate_engine_errors
 def project_mode_switch(
     current_mode: str,
     target_mode: str,
@@ -398,7 +468,14 @@ def project_mode_switch(
 
     Returns the remembered cross-mode state PLUS the state that should
     be active immediately after the switch in the target mode.
+
+    Mode strings are validated through :py:class:`Mode` (a StrEnum
+    that raises ``ValueError`` on a typo); the decorator translates
+    that to ``ValidationError`` so JS gets a clean error path on a
+    bad mode string instead of a raw stack trace in the console.
     """
+    # ``project_mode_transition`` calls ``Mode(...)`` internally;
+    # the decorator translates the ``ValueError`` for a bad string.
     transition = project_mode_transition(
         current_mode,
         target_mode,
@@ -447,6 +524,7 @@ def best_segment_n_cols_for_groups(
     return [best_segment_n_cols(n, max_cols) for n in group_sizes]
 
 
+@_translate_engine_errors
 def analyze_segments(segs: list[str]) -> dict[str, Any]:
     """SEG-mode analysis. Returns ``analysis_html`` + the inputs
     JS needs to derive each row/button's state inline (mirroring
@@ -456,7 +534,22 @@ def analyze_segments(segs: list[str]) -> dict[str, Any]:
     selection takes ~30 ms for the feature math + HTML render.
     Cache is invalidated by ``load_inventory_json`` and
     ``set_active_theme``.
+
+    Validates that every entry of ``segs`` is a string present in
+    the active inventory. A stale segment (selected before an
+    inventory swap), a typo, or a non-string element gets rejected
+    here so the engine never sees garbage. Without this guard a
+    stale segment raises ``KeyError`` inside the engine and surfaces
+    in JS as a raw runtime error.
     """
+    engine = _require_engine()
+    bad = [
+        s for s in segs if not isinstance(s, str) or s not in engine.segments
+    ]
+    if bad:
+        raise ValidationError(
+            (f"unknown segment(s) in current inventory: {bad!r}",)
+        )
     return _analyze_segments_cached(tuple(segs))
 
 
@@ -467,11 +560,35 @@ def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict[str, Any]:
     return summarize_segment_selection(engine, list(segs_tuple))
 
 
+@_translate_engine_errors
 def analyze_features(spec: dict[str, str]) -> dict[str, Any]:
     """FEAT-mode analysis. Returns ``analysis_html`` + the
     matching segment list. JS derives matched/unmatched state per
     button inline (mirroring _update_feat_to_seg).
+
+    Validates that every key in ``spec`` is a feature present in
+    the active inventory and every value is one of ``"+" / "-"
+    / "0"``. Same boundary-hardening as
+    :py:func:`analyze_segments`.
     """
+    engine = _require_engine()
+    bad_keys = [
+        k for k in spec if not isinstance(k, str) or k not in engine.features
+    ]
+    if bad_keys:
+        raise ValidationError(
+            (f"unknown feature(s) in current inventory: {bad_keys!r}",)
+        )
+    bad_values = {
+        k: v for k, v in spec.items() if v not in _VALID_FEATURE_VALUES
+    }
+    if bad_values:
+        raise ValidationError(
+            (
+                f"invalid feature value(s) {bad_values!r}; expected one "
+                f"of {sorted(_VALID_FEATURE_VALUES)}",
+            )
+        )
     return _analyze_features_cached(tuple(spec.items()))
 
 

@@ -1303,7 +1303,13 @@ function _setRasterizedBadge(badgeEl, text) {
 }
 
 function runSegToFeat(token) {
-    const result = callBridge("analyze_segments", state.selected_segments);
+    let result;
+    try {
+        result = callBridge("analyze_segments", state.selected_segments);
+    } catch (e) {
+        _surfaceBridgeFailure("analyze_segments", e);
+        return;
+    }
     if (_isStaleToken(token)) return;
     setAnalysisTabs(result.analysis_tabs);
     _applySegmentStateMap(result.segment_states);
@@ -1311,10 +1317,29 @@ function runSegToFeat(token) {
 }
 
 function runFeatToSeg(token) {
-    const result = callBridge("analyze_features", state.selected_features);
+    let result;
+    try {
+        result = callBridge("analyze_features", state.selected_features);
+    } catch (e) {
+        _surfaceBridgeFailure("analyze_features", e);
+        return;
+    }
     if (_isStaleToken(token)) return;
     setAnalysisTabs(result.analysis_tabs);
     _applySegmentStateMap(result.segment_states);
+}
+
+/** Surface a bridge-call failure to the user instead of letting it
+ *  halt the JS event loop with no feedback. The bridge raises
+ *  ``ValidationError`` for bad inputs (validated at api.py); for
+ *  any other exception the catch path here still keeps the UI
+ *  responsive. The console line carries the full error for
+ *  developer triage; the statusbar shows the friendlier summary.
+ */
+function _surfaceBridgeFailure(callName, err) {
+    const msg = err && err.message ? err.message : String(err);
+    console.error(`bridge ${callName} failed:`, err);
+    setStatus(`Analysis failed: ${msg.split("\n")[0]}`);
 }
 
 /** Push the shared view-model's per-tab payload into the analysis
@@ -1398,11 +1423,24 @@ function activateAnalysisTab(name) {
     }
 }
 
-// Inventories are typically 10-50 KB. 5 MB is ~100x the typical
-// size: enough headroom for legitimate large inventories but
-// catches accidentally-selected huge files before we freeze the
-// tab reading them.
-const MAX_INVENTORY_BYTES = 5 * 1024 * 1024;
+// Inventory upload cap shared with the engine's post-check via the
+// inline ``<script id="limits">`` block baked by build.py. Reading
+// the cap from the bake guarantees JS and Python agree on which
+// files are out of bounds; without this a 20 MB file would pass
+// the JS gate then fail in Pyodide with a confusing generic error.
+// ``MAX_INVENTORY_BYTES`` is the resolved value used by the upload
+// handler; the fallback below survives a missing inline block (e.g.
+// dev server serving a stale build) so the cap is at worst stale,
+// never absent.
+const LIMITS = Object.freeze(
+    readInlineJson("limits", {
+        max_inventory_file_bytes: 5 * 1024 * 1024,
+        max_features: 40,
+        max_segments: 200,
+        max_name_length: 256,
+    }),
+);
+const MAX_INVENTORY_BYTES = LIMITS.max_inventory_file_bytes;
 
 function wireUploadDownload() {
     nodes.uploadBtn.addEventListener("click", () => nodes.uploadInput.click());

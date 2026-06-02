@@ -250,6 +250,32 @@ def _load_layout_module() -> ModuleType:
     return module
 
 
+def _build_limits_payload() -> dict[str, int]:
+    """Bake the engine's hard caps into a flat dict the web JS
+    consumes pre-bridge.
+
+    The web upload pre-check at ``main.js`` needs the same
+    ``MAX_INVENTORY_FILE_BYTES`` the engine enforces post-bridge
+    (otherwise a 20 MB file would pass the JS gate then fail in
+    Pyodide with a confusing generic error). Same drift-prevention
+    pattern as the status-text bake: emit once from Python, read
+    once in JS, no hand-maintained literal.
+    """
+    from phonology_engine.limits import (
+        MAX_FEATURES,
+        MAX_INVENTORY_FILE_BYTES,
+        MAX_NAME_LENGTH,
+        MAX_SEGMENTS,
+    )
+
+    return {
+        "max_features": MAX_FEATURES,
+        "max_segments": MAX_SEGMENTS,
+        "max_name_length": MAX_NAME_LENGTH,
+        "max_inventory_file_bytes": MAX_INVENTORY_FILE_BYTES,
+    }
+
+
 def _build_status_text_payload() -> dict[str, str]:
     """Bake the status-bar messages for every :py:class:`Mode` from
     ``mode_logic.mode_status_text`` into a flat dict.
@@ -526,6 +552,14 @@ def hash_assets() -> None:
         )
         + "</script>"
     )
+    # Same inline-JSON pattern as the status block. JS reads
+    # ``LIMITS.max_inventory_file_bytes`` for the upload pre-check
+    # so the cap matches the engine's post-check at every build.
+    limits_block = (
+        '<script id="limits" type="application/json">'
+        + json.dumps(_build_limits_payload(), separators=(",", ":"))
+        + "</script>"
+    )
     bootstrap_block = ""
     bootstrap_path = DIST / "bootstrap.json"
     if bootstrap_path.exists():
@@ -547,6 +581,7 @@ def hash_assets() -> None:
         (
             f"{runtime_block}\n"
             + f"{status_block}\n"
+            + f"{limits_block}\n"
             + (f"{bootstrap_block}\n" if bootstrap_block else "")
             + f'<script type="module" src="{full_map["main.js"]}"></script>'
         ),

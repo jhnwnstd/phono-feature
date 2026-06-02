@@ -49,6 +49,24 @@ class FeatureEngine:
 
     Construct with ``FeatureEngine(inventory)`` or, for the common
     load-from-disk path, ``FeatureEngine.from_path(filepath)``.
+
+    **Immutability contract.** Both :py:class:`FeatureEngine` and
+    its backing :py:class:`Inventory` are immutable after
+    construction. Every expensive derivation
+    (``contrastive_features``, ``grouped_segments``,
+    ``normalized_segment_feats``, the per-segment value tuples) is
+    a :py:func:`functools.cached_property` whose invalidation
+    boundary is the constructor itself: there is no "edit the
+    inventory in place" path, so caches can never go stale. To
+    replace the inventory, construct a new engine; do not add an
+    in-place edit method without also writing the matching cache-
+    clear logic.
+
+    The bridge in ``web/api.py`` rebinds the module-level
+    ``_engine`` to a fresh ``FeatureEngine`` on every
+    ``load_inventory_json`` call and invalidates its own LRU
+    caches via ``_invalidate_analysis_caches``; the desktop
+    constructs a new engine per inventory load too.
     """
 
     def __init__(self, inventory: Inventory) -> None:

@@ -24,10 +24,19 @@ MAX_FEATURES: int = 40
 MAX_SEGMENTS: int = 200
 
 # A bundled inventory at MAX_SEGMENTS x MAX_FEATURES with realistic
-# value tokens lands around 40 KB serialized. 50 MB is ~1250x the
-# largest legitimate file, so this rejects a paste-the-wrong-file
-# accident or malicious payload before json.load can OOM the process.
-MAX_FILE_BYTES: int = 50 * 1024 * 1024
+# value tokens lands around 40 KB serialized. 5 MB is ~125x the
+# largest legitimate file, well above any real inventory yet small
+# enough that Pyodide's wasm linear-memory budget on the web side
+# parses it without pressure. Shared by the desktop loader and the
+# web upload pre-check (baked into the inline LIMITS JSON in
+# index.html at build time) so the two surfaces agree on which
+# files are out of bounds.
+MAX_INVENTORY_FILE_BYTES: int = 5 * 1024 * 1024
+# Backwards-compat alias for in-engine callers; new code should
+# use ``MAX_INVENTORY_FILE_BYTES``. Kept so a downstream test that
+# pins the old name doesn't break, but the value is now the
+# shared 5 MB cap.
+MAX_FILE_BYTES: int = MAX_INVENTORY_FILE_BYTES
 
 # Soft thresholds. Sit above the largest bundled inventory (Hayes 140
 # segments, General 30 features) but below the hard caps so the
