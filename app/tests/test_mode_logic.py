@@ -84,6 +84,61 @@ def test_project_mode_transition_feat_to_seg() -> None:
     assert transition.feature_query_origin == "typed"
 
 
+def test_feat_to_seg_projection_is_always_a_natural_class() -> None:
+    """**Cross-mode display invariant**: in FEAT mode the matched
+    segments highlighted in the segment grid are by construction
+    a natural class characterised by the active query. Switching
+    to SEG mode must therefore land on a selection that the SEG
+    analysis reports as a natural class -- otherwise the display
+    contradicts the engine.
+
+    Pinned across a fan of representative queries so a future
+    drift between ``project_mode_transition`` (which derives the
+    seg selection via ``find_segments``) and
+    :py:meth:`is_natural_class` fails loudly.
+    """
+    from phonology_engine.feature_engine import (
+        FeatureEngine,  # noqa: F401  (kept for type clarity)
+    )
+
+    engine = _engine("hayes_features.json")
+    queries = [
+        {"Voice": "+"},
+        {"Nasal": "+"},
+        {"Voice": "-", "Continuant": "-"},
+        {"Voice": "+", "Sonorant": "+"},
+        {"Continuant": "+", "Voice": "-"},
+    ]
+    for spec in queries:
+        transition = project_mode_transition(
+            Mode.FEAT_TO_SEG,
+            Mode.SEG_TO_FEAT,
+            selected_segments=[],
+            selected_features=spec,
+            engine=engine,
+        )
+        landed = transition.selected_segments
+        if not landed:
+            continue
+        is_nc, bundles = engine.is_natural_class(landed)
+        assert is_nc, (
+            f"FEAT→SEG landed on {landed} (from query {spec}) and "
+            f"the SEG analysis reports NOT a natural class. The "
+            f"display in FEAT mode says these segments form a "
+            f"class; the SEG analysis must agree."
+        )
+        # Strict round-trip: at least one bundle (typically the
+        # query itself, modulo redundancy) round-trips to ``landed``.
+        assert bundles
+        for b in bundles:
+            assert sorted(engine.find_segments(dict(b))) == sorted(
+                landed
+            ), (
+                f"FEAT→SEG round-trip broken: bundle {dict(b)} for "
+                f"{landed} did not strictly round-trip."
+            )
+
+
 def test_project_mode_transition_without_engine_degrades_cleanly() -> None:
     transition = project_mode_transition(
         Mode.SEG_TO_FEAT,

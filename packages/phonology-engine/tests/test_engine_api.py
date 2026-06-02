@@ -281,6 +281,58 @@ def test_listed_spec_round_trips_strictly(engine: FeatureEngine) -> None:
             )
 
 
+def test_feature_query_match_is_always_natural_class(
+    engine: FeatureEngine,
+) -> None:
+    """**FEAT-mode invariant**: for any non-empty feature-query
+    spec ``Q``, the set ``find_segments(Q)`` is by construction a
+    strict natural class characterised by ``Q`` itself. The
+    display in FEAT mode (matched/unmatched paint on the segment
+    buttons) is therefore always showing a natural class, and the
+    SEG-mode analysis after a FEAT→SEG mode switch must agree:
+    ``is_natural_class(find_segments(Q))`` must be ``True`` for
+    every ``Q`` that returns at least one segment.
+
+    Stress: every single-feature query (``+`` and ``-`` per
+    feature), plus 200 random 2--5-feature queries, must satisfy
+    the invariant. Catches any future drift between
+    :py:meth:`find_segments` and
+    :py:meth:`is_natural_class` (e.g. if one started using
+    different matching semantics than the other).
+    """
+    import random
+
+    features = list(engine.features)
+    random.seed(0xFEA70F)
+    queries: list[dict[str, str]] = []
+    for f in features:
+        queries.append({f: "+"})
+        queries.append({f: "-"})
+    for _ in range(200):
+        spec: dict[str, str] = {}
+        for _ in range(random.randint(2, 5)):
+            spec[random.choice(features)] = random.choice(["+", "-"])
+        queries.append(spec)
+
+    for spec in queries:
+        matches = engine.find_segments(spec)
+        if not matches:
+            continue
+        is_nc, bundles = engine.is_natural_class(matches)
+        assert is_nc, (
+            f"FEAT-mode invariant broken: query {spec} matches "
+            f"{matches} but is_natural_class returned False. "
+            f"By construction the match set is characterised by "
+            f"the query itself; the disagreement means "
+            f"find_segments and is_natural_class are using "
+            f"different matching semantics."
+        )
+        assert bundles, (
+            f"FEAT-mode invariant broken: query {spec} matches "
+            f"{matches}, is_nc True, but bundles is empty."
+        )
+
+
 # ----------------------------------------------------------------------
 # Natural-class extension suggestions
 # ----------------------------------------------------------------------
