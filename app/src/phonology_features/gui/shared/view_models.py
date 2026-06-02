@@ -22,7 +22,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from phonology_engine.feature_engine import FeatureCategory
-
 from phonology_features.gui.shared.analysis import (
     compute_contrastive,
     render_class_tab_feat,
@@ -124,7 +123,9 @@ def summarize_segment_selection(
             cat = categories.get(feat, FeatureCategory.ALL_ZERO)
             if value in ("+", "-"):
                 row_states[feat] = _feature_row_state(
-                    value=value, shared=True, category=cat,
+                    value=value,
+                    shared=True,
+                    category=cat,
                 )
         seg_states = _default_segment_states(engine)
         seg_states[segs[0]] = "selected"
@@ -155,11 +156,14 @@ def summarize_segment_selection(
         cat = categories.get(feat, FeatureCategory.ALL_ZERO)
         if feat in common:
             row_states[feat] = _feature_row_state(
-                value=common[feat], shared=True, category=cat,
+                value=common[feat],
+                shared=True,
+                category=cat,
             )
         elif feat in contrastive:
             row_states[feat] = _feature_row_state(
-                contrastive=True, category=cat,
+                contrastive=True,
+                category=cat,
             )
         else:
             row_states[feat] = _feature_row_state(category=cat)

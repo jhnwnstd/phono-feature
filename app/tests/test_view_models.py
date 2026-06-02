@@ -135,9 +135,7 @@ def test_feature_categories_for_english_j_i_capital_ɪ() -> None:
     assert is_nc
     assert bundles
     for b in bundles:
-        assert sorted(engine.find_segments(dict(b))) == sorted(
-            ["j", "i", "ɪ"]
-        )
+        assert sorted(engine.find_segments(dict(b))) == sorted(["j", "i", "ɪ"])
 
 
 def test_feature_row_badge_uses_unicode_minus_for_shared_negative() -> None:
