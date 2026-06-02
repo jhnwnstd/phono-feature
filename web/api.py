@@ -574,11 +574,7 @@ def analyze_features(spec: dict[str, str]) -> dict[str, Any]:
     **Display invariant:** ``matching`` always equals
     ``engine.find_segments(spec)``, so the highlighted segments
     in the segment pane always form a strict natural class
-    characterised by the active query. The SEG→FEAT
-    seg-selection round-trip is preserved by
-    :py:func:`project_mode_switch` via the
-    ``feature_query_origin`` plumbing; it never alters the
-    matches this function returns.
+    characterised by the active query.
     """
     engine = _require_engine()
     bad_keys = [
