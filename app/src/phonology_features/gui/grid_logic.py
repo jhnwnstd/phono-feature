@@ -23,12 +23,15 @@ rule land in both UIs on the next build.
 
 from __future__ import annotations
 
-import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from phonology_engine.inventory import Inventory
+from phonology_engine.inventory import (
+    Inventory,
+    canonicalize_feature_label,
+    canonicalize_segment_label,
+)
 
 # Display form of the negative cell value. U+2212 MATHEMATICAL MINUS
 # SIGN, chosen for typographic symmetry with the plus glyph. The grid
@@ -133,23 +136,22 @@ def normalize_minus(value: str) -> str:
     return MINUS_SERIALIZED if value == MINUS_DISPLAY else value
 
 
-def _canonicalize_label(label: str) -> str:
-    """Trim, then NFC-normalize. Mirrors the inventory parser's
-    name canonicalization path (NFC + strip). Doing it here surfaces
-    NFC-equivalent duplicates at add-time rather than at save-time,
-    where the error message would land far from the offending input.
-    """
-    return unicodedata.normalize("NFC", label.strip())
-
-
 def validate_new_segment_label(
     label: str,
     existing: Sequence[str],
     *,
     max_segments: int | None = None,
 ) -> str:
-    """Return the canonical (NFC-normalized, trimmed) form of
-    ``label`` after validating it for use as a new segment column.
+    """Return the canonical form of ``label`` after validating it
+    for use as a new segment column.
+
+    Canonical form is the same composition the inventory parser
+    applies to incoming segment keys: NFC + strip + IPA folding
+    (ASCII ``g``->``ɡ``, ``'``->``ʼ``). Both the candidate AND
+    every entry in ``existing`` get canonicalised before the
+    membership check; asymmetric normalisation lets add-time
+    accept what save-time then rejects, with the error landing
+    far from the offending input.
 
     Catches the failure modes the desktop user used to hit only at
     save time:
@@ -157,19 +159,23 @@ def validate_new_segment_label(
     * Empty after trim.
     * Duplicate of an existing segment after NFC normalization
       (e.g. "Café" precomposed vs "Café" decomposed).
-    * Inventory has reached ``max_segments`` (per :py:data:`limits.
-      MAX_SEGMENTS`); caller passes the cap so this module stays
-      independent of the limits module.
+    * Duplicate of an existing segment after IPA folding
+      (ASCII ``"g"`` vs IPA ``"ɡ"``).
+    * Inventory has reached ``max_segments`` (per
+      :py:data:`limits.MAX_SEGMENTS`); caller passes the cap so this
+      module stays independent of the limits module.
 
     Raises :py:class:`ValueError` with user-facing wording. Shared
     with the web editor so both frontends produce identical
     error messages.
     """
-    trimmed = label.strip()
-    if not trimmed:
+    if not label.strip():
         raise ValueError("Segment label is empty.")
-    canonical = unicodedata.normalize("NFC", trimmed)
-    if canonical in existing:
+    canonical = canonicalize_segment_label(label)
+    if not canonical:
+        raise ValueError("Segment label is empty.")
+    existing_canonical = {canonicalize_segment_label(e) for e in existing}
+    if canonical in existing_canonical:
         raise ValueError(f"Segment '{canonical}' already exists.")
     if max_segments is not None and len(existing) >= max_segments:
         raise ValueError(
@@ -184,17 +190,25 @@ def validate_new_feature_label(
     *,
     max_features: int | None = None,
 ) -> str:
-    """Return the canonical (NFC-normalized, trimmed) form of
-    ``label`` after validating it for use as a new feature row.
+    """Return the canonical form of ``label`` after validating it
+    for use as a new feature row.
 
-    Same shape as :py:func:`validate_new_segment_label`; catches
-    empty, NFC-duplicate, and over-cap inputs at add-time.
+    Canonical form is NFC + strip; no IPA folding (features are
+    typographic labels, not phonetic symbols). Both candidate and
+    existing are canonicalised before the membership check, same
+    as :py:func:`validate_new_segment_label`.
+
+    Catches empty, NFC-duplicate, and over-cap inputs at add-time
+    so the error message lands at the input field rather than at
+    save-time.
     """
-    trimmed = label.strip()
-    if not trimmed:
+    if not label.strip():
         raise ValueError("Feature label is empty.")
-    canonical = unicodedata.normalize("NFC", trimmed)
-    if canonical in existing:
+    canonical = canonicalize_feature_label(label)
+    if not canonical:
+        raise ValueError("Feature label is empty.")
+    existing_canonical = {canonicalize_feature_label(e) for e in existing}
+    if canonical in existing_canonical:
         raise ValueError(f"Feature '{canonical}' already exists.")
     if max_features is not None and len(existing) >= max_features:
         raise ValueError(

@@ -1672,6 +1672,31 @@ function wireSetupDialog() {
     return { open: openDialog };
 }
 
+// ----------------------------------------------------------------------
+// Builder / editor: web-side state machine.
+//
+// This section (~main.js:1675-3000) is the second large state machine
+// in the file and mirrors the desktop's ``InventoryBuilder``
+// (``app/src/phonology_features/gui/builder/window.py``). Strategy:
+//
+//  * **Pure logic lives in Python** (``grid_logic.py``,
+//    ``inventory_setup.py``) and is consumed via the bridge or via
+//    constants fetched once at editor open (cycle ladder, value
+//    keys, move keys, undo depth cap, add-label validators, remove
+//    prompts, max-segments / max-features caps).
+//
+//  * **DOM mutation, event wiring, selection painting, keyboard
+//    dispatch, and undo/redo state live in JS** because per-event
+//    bridge hops would lag on rapid shift-drag and keyboard repeat.
+//
+//  * **Two surfaces that mirror Python logic locally** are
+//    parity-tested in ``app/tests/test_jsfallback_parity.py``:
+//      - ``classifyEditorSelection`` mirrors
+//        ``grid_logic.classify_selection``
+//      - ``SELECTION_SHAPE_REMOVE_TARGET`` mirrors
+//        ``grid_logic.SELECTION_SHAPE_REMOVE_TARGET``
+//    Edit either side and the parity tests catch the drift.
+//
 // In-memory edit state for the builder editor. Mirrors the desktop
 // ``InventoryBuilder``'s ``_segments`` / ``_features`` / table-item
 // values, plus selection state, anchor for shift-click range

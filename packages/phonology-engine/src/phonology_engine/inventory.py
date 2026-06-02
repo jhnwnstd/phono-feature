@@ -67,6 +67,33 @@ def _ipa_normalize_segment(canonical: str) -> str:
     return canonical.translate(_IPA_TRANSLATION_TABLE)
 
 
+def canonicalize_segment_label(label: str) -> str:
+    """Public canonicalisation used by add-segment validators in
+    both UIs.
+
+    Same composition the inventory parser applies to incoming
+    segment keys: NFC + strip via :py:func:`_canonicalize_name`,
+    then the IPA folding (ASCII ``g``->``ɡ``, ``'``->``ʼ``, etc.)
+    via :py:func:`_ipa_normalize_segment`. Exposed so the GUI's
+    ``validate_new_segment_label`` can canonicalise candidate AND
+    existing labels symmetrically before its duplicate-check;
+    asymmetric normalisation lets add-time accept what save-time
+    rejects, with the error landing far from the input.
+    """
+    return _ipa_normalize_segment(_canonicalize_name(label))
+
+
+def canonicalize_feature_label(label: str) -> str:
+    """Public canonicalisation used by add-feature validators.
+
+    Same NFC + strip the parser applies to feature names. No IPA
+    folding (features are typographic labels, not phonetic
+    symbols). Exposed for the same reason as
+    :py:func:`canonicalize_segment_label`.
+    """
+    return _canonicalize_name(label)
+
+
 def _ipa_confusable_notes(canonical_seg: str) -> list[str]:
     """Return advisory notes for IPA-confusable characters in the
     segment label. Never an error; surfaces likely paste mistakes.
@@ -202,6 +229,39 @@ def _reject_non_finite(token: str) -> float:
     path the user gave us.
     """
     raise _NonFiniteJSONValue(token)
+
+
+def parse_inventory_json_text(text: str, source: str) -> Any:
+    """Decode inventory JSON text with the canonical safety guards.
+
+    Single entry-point so the desktop file loader
+    (:py:meth:`Inventory.load`) and the web upload bridge both
+    enforce the same contract: duplicate keys are rejected
+    (silent merge would lose user data), ``NaN`` / ``Infinity``
+    literals are rejected (non-finite floats break feature-set
+    semantics), and JSON syntax errors come back as
+    :py:class:`ValidationError` with a user-facing line number so
+    the UI surfacing path is the same on both frontends.
+
+    ``source`` is prepended to every issue message so the user can
+    tell which file (or which upload) the error came from. Returns
+    the parsed JSON object on success; callers still pass it
+    through :py:meth:`Inventory.parse` for schema validation.
+    """
+    try:
+        return json.loads(
+            text,
+            object_pairs_hook=_no_duplicate_keys,
+            parse_constant=_reject_non_finite,
+        )
+    except _DuplicateJSONKey as e:
+        raise ValidationError((f"{source}: {e}",)) from e
+    except _NonFiniteJSONValue as e:
+        raise ValidationError((f"{source}: {e}",)) from e
+    except json.JSONDecodeError as e:
+        raise ValidationError(
+            (f"{source}: invalid JSON ({e.msg} on line {e.lineno})",)
+        ) from e
 
 
 # On-disk format version. Bumped when the shape changes in a way old
@@ -455,44 +515,26 @@ class Inventory:
             # that tells a linguist nothing actionable. The codec
             # behaves identically to utf-8 for files without a BOM.
             with open(path, encoding="utf-8-sig") as f:
-                # object_pairs_hook intercepts each JSON object literal
-                # before dict construction so a duplicate key (which
-                # plain json.load would silently collapse) is reported.
-                # parse_constant rejects non-finite numeric literals
-                # (NaN / Infinity / -Infinity) which would otherwise
-                # flow into the parser as Python ``float('nan')`` and
-                # break feature-set comparisons silently.
-                raw = json.load(
-                    f,
-                    object_pairs_hook=_no_duplicate_keys,
-                    parse_constant=_reject_non_finite,
-                )
+                text = f.read()
         except FileNotFoundError as e:
             _log.warning("inventory load failed: %s: file not found", basename)
             raise ValidationError((f"{path}: file not found",)) from e
-        except _DuplicateJSONKey as e:
-            _log.warning(
-                "inventory load failed: %s: duplicate JSON key(s)", basename
-            )
-            raise ValidationError((f"{path}: {e}",)) from e
-        except _NonFiniteJSONValue as e:
-            _log.warning(
-                "inventory load failed: %s: non-finite JSON value", basename
-            )
-            raise ValidationError((f"{path}: {e}",)) from e
-        except json.JSONDecodeError as e:
-            _log.warning(
-                "inventory load failed: %s: invalid JSON (%s line %d)",
-                basename,
-                e.msg,
-                e.lineno,
-            )
-            raise ValidationError(
-                (f"{path}: invalid JSON ({e.msg} on line {e.lineno})",)
-            ) from e
         except OSError as e:
             _log.warning("inventory load failed: %s: %s", basename, e)
             raise ValidationError((f"{path}: {e}",)) from e
+        # All JSON-level guards (duplicate keys, non-finite literals,
+        # syntax errors) flow through one helper so the desktop
+        # loader and the web upload bridge enforce the same contract.
+        try:
+            raw = parse_inventory_json_text(text, path)
+        except ValidationError as e:
+            # ValidationError already carries the path; log a one-line
+            # summary at WARNING for ops while preserving the
+            # exception for the GUI caller.
+            _log.warning(
+                "inventory load failed: %s: %s", basename, e.issues[0]
+            )
+            raise
         try:
             inv = cls.parse(raw, source=path)
         except ValidationError as e:

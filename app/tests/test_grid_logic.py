@@ -274,6 +274,82 @@ def test_validate_new_feature_label_catches_nfc_duplicates():
         validate_new_feature_label(decomposed, [precomposed])
 
 
+def test_validate_new_segment_label_catches_existing_in_non_canonical_form():
+    """The previous implementation NFC-normalised the candidate but
+    checked against ``existing`` raw, so a non-canonical entry in
+    the in-flight grid (NFD paste, mixed-case label, etc.) silently
+    let an NFC-equivalent duplicate slip past add-time and only
+    fail at save-time, where the error lands far from the input.
+    Both candidate and existing must canonicalise the same way.
+    """
+    import unicodedata as ud
+
+    precomposed = ud.normalize("NFC", "é")
+    decomposed = ud.normalize("NFD", "é")
+    # Existing is the decomposed (non-canonical) form; candidate is
+    # the precomposed (canonical) form. Validator must still detect
+    # the duplicate.
+    with pytest.raises(ValueError, match="already exists"):
+        validate_new_segment_label(precomposed, [decomposed])
+
+
+@pytest.mark.parametrize(
+    "existing,candidate",
+    [
+        # ASCII g typed against an existing IPA voiced velar stop.
+        # The inventory parser folds them together; the validator
+        # must too so the duplicate is caught at add-time.
+        (["ɡ"], "g"),
+        # Reverse direction.
+        (["g"], "ɡ"),
+        # Ejective: ASCII apostrophe vs the IPA modifier letter.
+        (["pʼ"], "p'"),
+        (["p'"], "pʼ"),
+    ],
+    ids=[
+        "ipa-g-vs-ascii-g",
+        "ascii-g-vs-ipa-g",
+        "ipa-ej-vs-ascii",
+        "ascii-ej-vs-ipa",
+    ],
+)
+def test_validate_new_segment_label_applies_ipa_folding(
+    existing: list[str], candidate: str
+) -> None:
+    """The inventory parser applies IPA folding (ASCII ``g`` -> IPA
+    ``ɡ``, ASCII ``'`` -> IPA ``ʼ``) when canonicalising segment
+    keys. The add-time validator must apply the same folding so
+    users get the duplicate warning at the input field, not at
+    save-time after the parser collapses them together.
+    """
+    with pytest.raises(ValueError, match="already exists"):
+        validate_new_segment_label(candidate, existing)
+
+
+def test_validate_new_feature_label_catches_existing_in_non_canonical_form():
+    """Same symmetric-canonicalisation issue as the segment
+    validator, but features only use NFC (no IPA folding).
+    """
+    import unicodedata as ud
+
+    precomposed = ud.normalize("NFC", "Café")
+    decomposed = ud.normalize("NFD", "Café")
+    with pytest.raises(ValueError, match="already exists"):
+        validate_new_feature_label(precomposed, [decomposed])
+
+
+def test_validate_new_feature_label_does_not_apply_ipa_folding():
+    """Features are typographic labels, not phonetic symbols; the
+    IPA folding the segment validator applies (``g`` -> ``ɡ``) must
+    NOT happen here. ``"g"`` and ``"ɡ"`` as feature names are
+    distinct labels, not the same segment.
+    """
+    # Should NOT raise: ASCII g and IPA ɡ are different feature
+    # labels at the typographic level.
+    assert validate_new_feature_label("g", ["ɡ"]) == "g"
+    assert validate_new_feature_label("ɡ", ["g"]) == "ɡ"
+
+
 def test_validate_new_segment_label_enforces_cap_when_provided():
     """When ``max_segments`` is passed the validator refuses adds
     that would exceed the cap. The desktop and web wrappers always

@@ -44,6 +44,13 @@ EXPECTED_BODY_HASHES = {
     "_fallbackPartitionSpillover": (
         "50af36a8c3916cb6b61cdd2b9cab4e39387324364a448b8c61a5479a14c83ef3"
     ),
+    # ``classifyEditorSelection`` mirrors ``grid_logic.classify_selection``
+    # so the editor's ``- Segment`` / ``- Feature`` enable rules
+    # match the desktop. Running through the bridge per shift-drag
+    # would lag; the parity-tested local mirror is the trade-off.
+    "classifyEditorSelection": (
+        "5a54ebca4044fdd6e95e91dcf8fe3b2f1750821f156e0b3ba7bf52461b617086"
+    ),
 }
 
 
@@ -168,6 +175,45 @@ def test_best_n_cols_js_matches_python(group_size: int, max_cols: int) -> None:
     )
 
 
+def _js_classify_editor_selection(
+    cells: list[tuple[int, int]], num_rows: int, num_cols: int
+) -> dict[str, object]:
+    """Python translation of ``classifyEditorSelection`` in main.js.
+
+    Returns the same shape the JS function returns (``{kind, row,
+    column}`` where ``row`` / ``column`` may be absent for shapes
+    that don't name a single index). Kept here next to the hash
+    pin so a JS edit forces a corresponding update; the fuzz
+    parametrisation below then proves both agree with
+    ``grid_logic.classify_selection``.
+    """
+    sel = list(set(cells))
+    n = len(sel)
+    if n == 0:
+        return {"kind": "empty"}
+    if n == 1:
+        r, c = sel[0]
+        return {"kind": "single_cell", "row": r, "column": c}
+    cols = {c for _, c in sel}
+    rows = {r for r, _ in sel}
+    the_col = next(iter(cols)) if len(cols) == 1 else None
+    the_row = next(iter(rows)) if len(rows) == 1 else None
+    r_min = min(r for r, _ in sel)
+    r_max = max(r for r, _ in sel)
+    c_min = min(c for _, c in sel)
+    c_max = max(c for _, c in sel)
+    if num_rows > 0 and the_col is not None and n == num_rows:
+        return {"kind": "single_column", "column": the_col}
+    if num_cols > 0 and the_row is not None and n == num_cols:
+        return {"kind": "single_row", "row": the_row}
+    if num_rows > 0 and num_cols > 0 and n == num_rows * num_cols:
+        return {"kind": "full_grid"}
+    rect_size = (r_max - r_min + 1) * (c_max - c_min + 1)
+    if n == rect_size:
+        return {"kind": "rectangle"}
+    return {"kind": "irregular"}
+
+
 @pytest.mark.parametrize(
     "heights",
     [
@@ -193,3 +239,167 @@ def test_partition_spillover_js_matches_python(
     assert _js_partition_spillover(
         heights, available
     ) == layout.partition_groups_for_spillover(heights, available)
+
+
+# ----------------------------------------------------------------------
+# Editor selection-shape classifier parity.
+# ``classifyEditorSelection`` (main.js) mirrors
+# ``grid_logic.classify_selection`` so the editor's remove-button
+# enable rules stay in lockstep with the desktop. Bridge calls per
+# shift-drag would lag; the parity check below is what keeps the
+# two sides aligned.
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name,num_rows,num_cols,cells,expected_kind",
+    [
+        ("empty", 4, 3, [], "empty"),
+        ("single-cell", 4, 3, [(1, 1)], "single_cell"),
+        (
+            "single-column-fills",
+            3,
+            3,
+            [(0, 1), (1, 1), (2, 1)],
+            "single_column",
+        ),
+        # A 3-cell contiguous run inside a 4x3 grid is a 3x1
+        # rectangle, NOT single_column (single_column requires
+        # selection.count == num_rows, i.e. the entire column).
+        (
+            "rectangle-3-tall-1-wide",
+            4,
+            3,
+            [(0, 1), (1, 1), (2, 1)],
+            "rectangle",
+        ),
+        (
+            "single-row-fills",
+            3,
+            3,
+            [(0, 0), (0, 1), (0, 2)],
+            "single_row",
+        ),
+        # A 3-cell horizontal run inside a 3x4 grid covers 3 of 4
+        # columns, so it's a 1x3 rectangle, NOT single_row.
+        (
+            "rectangle-1-tall-3-wide",
+            3,
+            4,
+            [(0, 0), (0, 1), (0, 2)],
+            "rectangle",
+        ),
+        (
+            "full-grid-2x2",
+            2,
+            2,
+            [(0, 0), (0, 1), (1, 0), (1, 1)],
+            "full_grid",
+        ),
+        (
+            "rectangle-2x3-in-4x4",
+            4,
+            4,
+            [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (2, 3)],
+            "rectangle",
+        ),
+        (
+            "irregular-L-shape",
+            4,
+            4,
+            [(0, 0), (1, 0), (2, 0), (3, 0), (3, 1), (3, 2)],
+            "irregular",
+        ),
+        (
+            "irregular-diagonal",
+            3,
+            3,
+            [(0, 0), (1, 1), (2, 2)],
+            "irregular",
+        ),
+        # Degenerate 1-row grid: cells fill the entire grid; the
+        # single_column check needs len(cols)==1 which is false
+        # here, so single_row wins. Mirrors the JS body's check
+        # order; both surfaces agree because the python-translation
+        # follows the same condition sequence.
+        ("degenerate-1x3", 1, 3, [(0, 0), (0, 1), (0, 2)], "single_row"),
+        ("degenerate-3x1", 3, 1, [(0, 0), (1, 0), (2, 0)], "single_column"),
+    ],
+)
+def test_classify_selection_js_python_canonical_three_way_agreement(
+    name: str,
+    num_rows: int,
+    num_cols: int,
+    cells: list[tuple[int, int]],
+    expected_kind: str,
+) -> None:
+    """The JS classifier, its Python translation, and the canonical
+    Python helper must all agree on every representative shape. A
+    drift in any one surface trips this test before users see a
+    desktop / web disagreement on the remove-button enable rules.
+    """
+    from phonology_features.gui.grid_logic import classify_selection
+
+    canonical = classify_selection(cells, num_rows, num_cols)
+    js_translation = _js_classify_editor_selection(cells, num_rows, num_cols)
+    assert canonical.kind == expected_kind, (
+        f"{name}: canonical Python returned {canonical.kind!r}, "
+        f"expected {expected_kind!r}"
+    )
+    assert js_translation["kind"] == canonical.kind, (
+        f"{name}: JS translation returned {js_translation['kind']!r}, "
+        f"canonical Python returned {canonical.kind!r}"
+    )
+    # When the shape names a single index, both surfaces must agree
+    # on which row / column.
+    if canonical.row is not None:
+        assert js_translation.get("row") == canonical.row, (
+            f"{name}: row mismatch: JS={js_translation.get('row')!r}, "
+            f"canonical={canonical.row!r}"
+        )
+    if canonical.column is not None:
+        assert js_translation.get("column") == canonical.column, (
+            f"{name}: column mismatch: JS={js_translation.get('column')!r}, "
+            f"canonical={canonical.column!r}"
+        )
+
+
+def test_selection_shape_remove_target_js_matches_python() -> None:
+    """The JS ``SELECTION_SHAPE_REMOVE_TARGET`` literal (an
+    ``Object.freeze({...})`` in main.js) maps each shape kind to
+    ``"segment"`` or ``"feature"`` (or absent for "no remove
+    available"). The desktop's
+    ``grid_logic.SELECTION_SHAPE_REMOVE_TARGET`` is the canonical
+    source; if either side gains a new shape mapping, this test
+    forces the other side to follow.
+    """
+    from phonology_features.gui.grid_logic import (
+        SELECTION_SHAPE_REMOVE_TARGET,
+    )
+
+    src = MAIN_JS.read_text(encoding="utf-8")
+    match = re.search(
+        r"const SELECTION_SHAPE_REMOVE_TARGET\s*=\s*Object\.freeze\(\s*"
+        r"\{(?P<body>.+?)\}\s*\)\s*;",
+        src,
+        re.DOTALL,
+    )
+    assert match is not None, (
+        "SELECTION_SHAPE_REMOVE_TARGET literal not found in main.js; "
+        "if the literal was renamed, update this test's regex"
+    )
+    body = match.group("body")
+    # Parse the simple key: value pairs (quoted strings on both
+    # sides). The literal is small and stable; a real JS parser
+    # would be overkill.
+    pair_re = re.compile(r'"(?P<k>[^"]+)"\s*:\s*"(?P<v>[^"]+)"')
+    js_table = {m.group("k"): m.group("v") for m in pair_re.finditer(body)}
+    py_table = dict(SELECTION_SHAPE_REMOVE_TARGET)
+    # Filter out None-valued shapes from the Python side: the JS
+    # literal only enumerates the "enables a remove button" cases
+    # and treats absent keys as None via ``?? null`` at lookup time.
+    py_table = {k: v for k, v in py_table.items() if v is not None}
+    assert js_table == py_table, (
+        f"SELECTION_SHAPE_REMOVE_TARGET drift: JS={js_table!r}, "
+        f"Python={py_table!r}"
+    )

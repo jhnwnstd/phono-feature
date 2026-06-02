@@ -865,6 +865,62 @@ def test_load_invalid_json_raises_validation_error(tmp_path: Path) -> None:
     assert any("invalid JSON" in i for i in ex.value.issues)
 
 
+@pytest.mark.parametrize(
+    "text,kind,must_contain",
+    [
+        # Duplicate segment key: the desktop loader catches this at
+        # decode time via the shared helper; the web upload path now
+        # goes through the same helper so this case is symmetric.
+        (
+            '{"features": ["V"], '
+            '"segments": {"p": {"V": "+"}, "p": {"V": "-"}}}',
+            "duplicate-key",
+            "duplicate",
+        ),
+        # NaN as a feature value: a hostile or careless JSON producer
+        # could emit this; ``parse_constant`` rejects it so it doesn't
+        # silently propagate as ``float('nan')`` into feature compare.
+        (
+            '{"features": ["V"], "segments": {"p": {"V": NaN}}}',
+            "non-finite",
+            "NaN",
+        ),
+        # Syntax error: the helper wraps the raw ``JSONDecodeError``
+        # so callers (desktop file dialog, web upload status) get a
+        # uniform ``ValidationError`` shape with the source label and
+        # a line number.
+        (
+            "{ not valid json",
+            "syntax",
+            "invalid JSON",
+        ),
+    ],
+    ids=["duplicate-key", "non-finite", "syntax"],
+)
+def test_parse_inventory_json_text_uniform_contract(
+    text: str, kind: str, must_contain: str
+) -> None:
+    """The single shared decode entry-point used by both the desktop
+    file loader and the web upload bridge must reject duplicate keys,
+    non-finite numeric literals, and syntax errors with a uniform
+    ``ValidationError`` carrying the source label. Without this the
+    web upload silently accepted duplicate keys (last-write-wins data
+    loss) while the desktop rejected the same file.
+    """
+    from phonology_engine.inventory import parse_inventory_json_text
+
+    with pytest.raises(ValidationError) as ex:
+        parse_inventory_json_text(text, source=f"<{kind}>")
+    body = " ".join(ex.value.issues)
+    assert f"<{kind}>" in body, (
+        "source label must be prepended to the issue text so the GUI "
+        f"can attribute the error; got {body!r}"
+    )
+    assert (
+        must_contain in body
+    ), f"expected error to mention {must_contain!r}, got {body!r}"
+
+
 @pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity"])
 def test_load_rejects_non_finite_json_constants(
     tmp_path: Path, token: str
