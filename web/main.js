@@ -3397,10 +3397,12 @@ function wireSegmentDelegation() {
 }
 
 /** Show delay in ms before the vowel tooltip appears on hover.
- *  Matches the rough cadence of native ``title`` attribute tooltips
- *  so a quick mouse traversal across vowels doesn't flash a tooltip
- *  trail. */
-const VOWEL_TOOLTIP_SHOW_DELAY_MS = 500;
+ *  A second of dwell time before the popover materialises -- long
+ *  enough that mousing across the vowel chart on the way to a
+ *  consonant target doesn't trigger a tooltip trail, short enough
+ *  that a deliberate hover surfaces the placement reason without
+ *  feeling stuck. */
+const VOWEL_TOOLTIP_SHOW_DELAY_MS = 1000;
 
 const _tooltipState = {
     el: null,
