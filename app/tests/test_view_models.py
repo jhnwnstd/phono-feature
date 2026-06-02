@@ -1,4 +1,4 @@
-"""Tests for :py:mod:`phonology_features.gui.view_models`.
+"""Tests for :py:mod:`phonology_features.gui.shared.view_models`.
 
 The module is pure-Python and is relayed into the web bundle, so
 these tests lock in the shared payload shapes without needing Qt or
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory
-from phonology_features.gui.view_models import (
+from phonology_features.gui.shared.view_models import (
     build_inventory_summary,
     summarize_feature_query,
     summarize_segment_selection,

@@ -55,8 +55,14 @@ from phonology_features._settings import (
     safe_read_setting,
     write_setting,
 )
-from phonology_features.gui import layout
-from phonology_features.gui.constants import (
+from phonology_features.gui.controllers.geometry import GeometryController
+from phonology_features.gui.controllers.inventory_dir import (
+    InventoryDirController,
+)
+from phonology_features.gui.controllers.mode import ModeController
+from phonology_features.gui.controllers.theme import ThemeController
+from phonology_features.gui.shared import layout
+from phonology_features.gui.shared.constants import (
     FEATURE_GROUPS,
     FEATURE_ORDER,
     SETTINGS_APP,
@@ -64,32 +70,26 @@ from phonology_features.gui.constants import (
     scrollbar_style,
     sort_features,
 )
-from phonology_features.gui.geometry_controller import _GeometryController
-from phonology_features.gui.inventory_dir_controller import (
-    _InventoryDirController,
-)
-from phonology_features.gui.layout import distribute_feature_groups
-from phonology_features.gui.mode_controller import _ModeController
-from phonology_features.gui.mode_logic import Mode
-from phonology_features.gui.palette import (
+from phonology_features.gui.shared.layout import distribute_feature_groups
+from phonology_features.gui.shared.mode_logic import Mode
+from phonology_features.gui.shared.palette import (
     C,
     detect_system_theme,
     set_palette_mode,
     set_theme,
 )
+from phonology_features.gui.shared.view_models import (
+    summarize_feature_query,
+    summarize_segment_selection,
+)
 from phonology_features.gui.style_utils import (
     set_css,
 )
-from phonology_features.gui.theme_controller import _ThemeController
 from phonology_features.gui.themed_widgets import (
     _BrandedStatusBar,
     _clear_btn_style,
     _ThemedCard,
     _ThemedSplitter,
-)
-from phonology_features.gui.view_models import (
-    summarize_feature_query,
-    summarize_segment_selection,
 )
 from phonology_features.gui.vowel_chart import VowelChartWidget
 from phonology_features.gui.widgets import (
@@ -119,7 +119,7 @@ class MainWindow(QMainWindow):
         # Mode controller owns ``mode``, ``saved_seg_state``, and
         # ``saved_feat_state``. Reach through ``self._mode_ctrl`` at
         # call sites; do not add forwarding properties here.
-        self._mode_ctrl = _ModeController(self)
+        self._mode_ctrl = ModeController(self)
         # segment -> SegmentButton for the active inventory
         self._seg_buttons: dict[str, SegmentButton] = {}
         # Cross-inventory pool keyed by segment symbol. Reused across
@@ -133,7 +133,7 @@ class MainWindow(QMainWindow):
         # Watcher, MRU, dropdown population, and delete-fallback all
         # live in the InventoryDirController, built after _build_ui
         # because it needs the combobox widget.
-        self._inv_dir: _InventoryDirController  # populated below
+        self._inv_dir: InventoryDirController  # populated below
         self._did_first_show = False
         self._builder: InventoryBuilder | None = None
         # Pool of every FeatureRow ever created (FEATURE_ORDER plus any
@@ -150,7 +150,7 @@ class MainWindow(QMainWindow):
         # _build_central once the splitter widgets exist. Holds the
         # anchor_pos, programmatic_geom flag, and the sizing rules
         # that previously lived inline as MainWindow methods.
-        self._geom: _GeometryController  # populated in _build_central
+        self._geom: GeometryController  # populated in _build_central
         self.setWindowTitle("Feature visualizer")
         self.setMinimumSize(640, 480)
         self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
@@ -176,7 +176,7 @@ class MainWindow(QMainWindow):
         self._debounce.timeout.connect(self._run_pending_update)
         # Theme controller built before ``_build_ui`` because the
         # toolbar wires its toggle into the theme button click signal.
-        self._theme = _ThemeController(self)
+        self._theme = ThemeController(self)
         self._build_ui()
         # Inventory-dir controller owns the file watcher, MRU, and
         # dropdown population. Constructed AFTER _build_ui because it
@@ -184,7 +184,7 @@ class MainWindow(QMainWindow):
         # It also starts watching the bundled inventories directory in
         # its own __init__, so the previous inline addPath call is
         # gone.
-        self._inv_dir = _InventoryDirController(
+        self._inv_dir = InventoryDirController(
             self, self._settings, self.inventory_combo
         )
         # Initial mode is already SEG_TO_FEAT, so _set_mode would no-op.
@@ -209,7 +209,7 @@ class MainWindow(QMainWindow):
         toggles. Idempotent: calling twice does no extra work since
         the second pass is a cache hit.
         """
-        from phonology_features.gui.palette import (
+        from phonology_features.gui.shared.palette import (
             get_palette_mode,
             set_palette_mode,
         )
@@ -257,8 +257,8 @@ class MainWindow(QMainWindow):
         # toolbar's historic baseline at 1x scale.
         self.inventory_combo.setMinimumHeight(32)
         self.inventory_combo.setMinimumWidth(176)
-        set_css(self.inventory_combo, _ThemeController.combo_style())
-        # Dropdown is populated by ``_InventoryDirController.__init__``,
+        set_css(self.inventory_combo, ThemeController.combo_style())
+        # Dropdown is populated by ``InventoryDirController.__init__``,
         # which runs after ``_build_ui`` completes (it needs the
         # inventory_combo widget). The toolbar shows an empty combo
         # for the few microseconds between toolbar build and
@@ -290,7 +290,7 @@ class MainWindow(QMainWindow):
         # Colorblind-mode toggle: lives just left of the theme button
         # with a small fixed gap so the two icon buttons read as a
         # paired chrome cluster rather than one widget. Text, tooltip,
-        # and styling are set by :py:meth:`_ThemeController.apply_cb_btn`.
+        # and styling are set by :py:meth:`ThemeController.apply_cb_btn`.
         self._cb_btn = QPushButton("", toolbar)
         self._cb_btn.setFont(QFont("Noto Sans", 12))
         self._cb_btn.setFixedSize(32, 32)
@@ -301,7 +301,7 @@ class MainWindow(QMainWindow):
         set_css(cb_gap, "background: transparent;")
         toolbar.addWidget(cb_gap)
         # Theme button text and tooltip are set later by
-        # :py:meth:`_ThemeController.apply_theme_btn`.
+        # :py:meth:`ThemeController.apply_theme_btn`.
         self._theme_btn = QPushButton("", toolbar)
         self._theme_btn.setFont(QFont("Noto Sans", 12))
         self._theme_btn.setFixedSize(32, 32)
@@ -395,7 +395,7 @@ class MainWindow(QMainWindow):
         # Splitter widgets exist now: build the geometry controller
         # that owns sizing policy + ownership flags. Everything below
         # routes through it.
-        self._geom = _GeometryController(
+        self._geom = GeometryController(
             self, self._hsplit, self._vsplit, self._settings
         )
         # Hard floor; without it the splitter can collapse the
@@ -455,7 +455,7 @@ class MainWindow(QMainWindow):
         """
         container = QFrame(parent)
         container.setObjectName("seg_panel")
-        set_css(container, _ModeController.panel_chrome_qss("seg_panel"))
+        set_css(container, ModeController.panel_chrome_qss("seg_panel"))
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -547,7 +547,7 @@ class MainWindow(QMainWindow):
     def _build_feature_panel(self, parent: QWidget | None = None) -> QFrame:
         container = QFrame(parent)
         container.setObjectName("feat_panel")
-        set_css(container, _ModeController.panel_chrome_qss("feat_panel"))
+        set_css(container, ModeController.panel_chrome_qss("feat_panel"))
         vlay = QVBoxLayout(container)
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
@@ -1131,8 +1131,8 @@ class MainWindow(QMainWindow):
     # dropped into whichever column is shorter at placement time (LPT
     # scheduling). Packs columns as close to equal height as the active
     # counts allow.
-    # Pin / overhead constants moved to gui/layout.py so the web app
-    # can use the same values via the renderer relay.
+    # Pin / overhead constants moved to gui/shared/layout.py so the web
+    # app can use the same values via the renderer relay.
 
     def _redistribute_feature_cards(self, active: set[str]) -> None:
         """Place cards in left/right columns using soft pins + LPT.
@@ -1235,7 +1235,7 @@ class MainWindow(QMainWindow):
         """Apply the shared layout rules to the seg pane internals
         whenever the seg-pane width changes (initial layout, splitter
         drag, window resize, or inventory-load fit). Pure-Python
-        decisions come from ``phonology_features.gui.layout``; this
+        decisions come from ``phonology_features.gui.shared.layout``; this
         method just wires the results into Qt.
 
         Decisions delegated:

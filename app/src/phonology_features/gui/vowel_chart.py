@@ -20,17 +20,17 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_features.gui.palette import C
-from phonology_features.gui.vowel_layout import (
+from phonology_features.gui.shared.palette import C
+from phonology_features.gui.shared.vowel_layout import (
     ROW_LABELS,
     Confidence,
     VowelPlacement,
     VowelProfile,
 )
-from phonology_features.gui.vowel_layout import (
+from phonology_features.gui.shared.vowel_layout import (
     compute_placements as _compute_placements_shared,
 )
-from phonology_features.gui.vowel_layout import (
+from phonology_features.gui.shared.vowel_layout import (
     detect_vowel_profile as _detect_vowel_profile,
 )
 

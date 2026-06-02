@@ -14,7 +14,7 @@ debounce dispatch) stay on MainWindow.
 Back-reference to MainWindow is honest, not a coupling smell: the
 controller IS conceptually part of MainWindow and frequently needs
 ``self._w.engine``, ``self._w._feat_rows``, ``self._w.analysis``,
-etc. Same pattern as ``_GeometryController`` and ``_SaveController``.
+etc. Same pattern as ``GeometryController`` and ``_SaveController``.
 
 Save/restore semantics: ``save_outgoing_state`` runs BEFORE ``mode``
 is updated (it captures the state of the mode being LEFT, projected
@@ -27,12 +27,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from phonology_features.gui.mode_logic import (
+from phonology_features.gui.shared.mode_logic import (
     Mode,
     mode_status_text,
     project_mode_transition,
 )
-from phonology_features.gui.palette import C
+from phonology_features.gui.shared.palette import C
 from phonology_features.gui.widgets import SegmentState
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from phonology_features.gui.main_window import MainWindow
 
 
-class _ModeController:
+class ModeController:
     """Mode-toggle state machine + cross-mode state projection."""
 
     def __init__(self, window: MainWindow) -> None:

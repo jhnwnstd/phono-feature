@@ -131,8 +131,11 @@ def _run_gui(argv: list[str]) -> int:
     # theme here keeps this in sync with whatever MainWindow will pick.
     from PyQt6.QtCore import QSettings
 
-    from phonology_features.gui.constants import SETTINGS_APP, SETTINGS_ORG
-    from phonology_features.gui.palette import (
+    from phonology_features.gui.shared.constants import (
+        SETTINGS_APP,
+        SETTINGS_ORG,
+    )
+    from phonology_features.gui.shared.palette import (
         detect_system_theme,
         set_theme,
     )

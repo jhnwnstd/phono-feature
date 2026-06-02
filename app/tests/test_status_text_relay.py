@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from phonology_features.gui.mode_logic import Mode, mode_status_text
+from phonology_features.gui.shared.mode_logic import Mode, mode_status_text
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_SCRIPT = REPO_ROOT / "web" / "scripts" / "build.py"

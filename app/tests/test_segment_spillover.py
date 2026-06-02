@@ -11,7 +11,7 @@ the boundary cases.
 
 from __future__ import annotations
 
-from phonology_features.gui.layout import partition_groups_for_spillover
+from phonology_features.gui.shared.layout import partition_groups_for_spillover
 
 
 def test_everything_fits_keeps_all_groups_in_main() -> None:

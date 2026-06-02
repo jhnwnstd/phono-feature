@@ -5,7 +5,7 @@ zipped engine + renderer bundle has been mounted on sys.path.
 JS calls the module-level functions; their return values are
 Pyodide-converted into plain JS dicts/lists/strings.
 
-The HTML renderers live in ``phonology_features.gui.analysis``
+The HTML renderers live in ``phonology_features.gui.shared.analysis``
 (the desktop's source tree). The web build copies those files
 into the bundle at the same package path so imports resolve
 identically here and on the desktop, keeping one source of
@@ -28,7 +28,7 @@ from phonology_engine import (
     ValidationError,
     parse_inventory_json_text,
 )
-from phonology_features.gui.grid_logic import (
+from phonology_features.gui.shared.grid_logic import (
     CYCLE_LADDER,
     MAX_UNDO_DEPTH,
     MOVE_KEYS,
@@ -39,23 +39,23 @@ from phonology_features.gui.grid_logic import (
     validate_new_feature_label,
     validate_new_segment_label,
 )
-from phonology_features.gui.inventory_setup import (
+from phonology_features.gui.shared.inventory_setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
     FEATURE_PRESETS,
     suggest_filename,
     validate_setup,
 )
-from phonology_features.gui.layout import (
+from phonology_features.gui.shared.layout import (
     best_segment_n_cols,
     partition_groups_for_spillover,
 )
-from phonology_features.gui.mode_logic import (
+from phonology_features.gui.shared.mode_logic import (
     mode_status_text,
     project_mode_transition,
 )
-from phonology_features.gui.palette import set_palette_mode, set_theme
-from phonology_features.gui.view_models import (
+from phonology_features.gui.shared.palette import set_palette_mode, set_theme
+from phonology_features.gui.shared.view_models import (
     build_inventory_summary,
     summarize_feature_query,
     summarize_segment_selection,
@@ -179,7 +179,7 @@ def get_setup_defaults() -> dict[str, Any]:
     web setup modal needs to populate its UI.
 
     Shared with the desktop builder via
-    :py:mod:`phonology_features.gui.inventory_setup` so both
+    :py:mod:`phonology_features.gui.shared.inventory_setup` so both
     frontends offer the same Tab-autofill strings and the same
     named presets in the dropdown.
     """

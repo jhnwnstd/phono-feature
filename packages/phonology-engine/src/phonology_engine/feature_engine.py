@@ -527,7 +527,7 @@ class FeatureEngine:
 
         Single source of truth for the seg-to-feat side of the GUI's
         mode-switch projection: the desktop's
-        ``_ModeController.save_outgoing_state`` and the web bridge
+        ``ModeController.save_outgoing_state`` and the web bridge
         both call this, so both frontends produce identical
         pre-filled states on toggle.
 

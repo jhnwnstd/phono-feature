@@ -24,9 +24,9 @@ from PyQt6.QtWidgets import QLabel, QPushButton, QToolTip
 
 from phonology_features._logging import get_logger
 from phonology_features._settings import SettingsKey, write_setting
-from phonology_features.gui.constants import scrollbar_style
-from phonology_features.gui.mode_controller import _ModeController
-from phonology_features.gui.palette import (
+from phonology_features.gui.controllers.mode import ModeController
+from phonology_features.gui.shared.constants import scrollbar_style
+from phonology_features.gui.shared.palette import (
     C,
     get_palette_mode,
     get_theme_name,
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 _log = get_logger(__name__)
 
 
-class _ThemeController:
+class ThemeController:
     """Theme toggle and palette-driven chrome restyle for MainWindow.
 
     Construct after ``_build_ui`` has finished so the controller can
@@ -180,7 +180,7 @@ class _ThemeController:
             for panel in (m.seg_panel, m.feat_panel):
                 set_css(
                     panel,
-                    _ModeController.panel_chrome_qss(panel.objectName()),
+                    ModeController.panel_chrome_qss(panel.objectName()),
                 )
                 panel.setProperty("active", None)
             m._mode_ctrl.apply_panel_chrome()

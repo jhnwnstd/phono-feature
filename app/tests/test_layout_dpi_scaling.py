@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from phonology_features.gui import layout
+from phonology_features.gui.shared import layout
 
 
 @pytest.mark.parametrize(

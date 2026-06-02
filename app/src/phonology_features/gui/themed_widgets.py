@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_features.gui.palette import C
+from phonology_features.gui.shared.palette import C
 from phonology_features.gui.style_utils import set_css
 
 
@@ -111,7 +111,7 @@ class _ThemedHandle(QSplitterHandle):
     Avoids the prior ``QSplitter::handle`` subcontrol stylesheet,
     which forced a polish cascade through every descendant of the
     splitter on each theme toggle (the biggest cost in
-    :py:meth:`_ThemeController.apply`).
+    :py:meth:`ThemeController.apply`).
     Reading ``C`` per paintEvent costs microseconds; the polish
     cascade cost ~65 ms.
     """

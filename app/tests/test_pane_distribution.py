@@ -1,5 +1,5 @@
 """Tests for the adaptive-window-layout helpers in
-:py:mod:`phonology_features.gui.layout`.
+:py:mod:`phonology_features.gui.shared.layout`.
 
 These functions are the single source of truth that both the desktop
 (Qt splitter sizing in ``geometry_controller``) and the web (CSS
@@ -10,7 +10,7 @@ without breaking these assertions.
 
 from __future__ import annotations
 
-from phonology_features.gui import layout
+from phonology_features.gui.shared import layout
 
 # ---------------------------------------------------------------------------
 # distribute_pane_widths

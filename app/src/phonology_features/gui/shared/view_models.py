@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from phonology_features.gui.analysis import (
+from phonology_features.gui.shared.analysis import (
     compute_contrastive,
     render_class_tab_feat,
     render_class_tab_seg,
@@ -34,11 +34,15 @@ from phonology_features.gui.analysis import (
     render_selection_summary_seg,
     render_single_segment,
 )
-from phonology_features.gui.constants import FEATURE_GROUPS
-from phonology_features.gui.layout import distribute_feature_groups
-from phonology_features.gui.vowel_layout import COL_LABELS as VOWEL_COL_LABELS
-from phonology_features.gui.vowel_layout import ROW_LABELS as VOWEL_ROW_LABELS
-from phonology_features.gui.vowel_layout import (
+from phonology_features.gui.shared.constants import FEATURE_GROUPS
+from phonology_features.gui.shared.layout import distribute_feature_groups
+from phonology_features.gui.shared.vowel_layout import (
+    COL_LABELS as VOWEL_COL_LABELS,
+)
+from phonology_features.gui.shared.vowel_layout import (
+    ROW_LABELS as VOWEL_ROW_LABELS,
+)
+from phonology_features.gui.shared.vowel_layout import (
     compute_placements,
     detect_vowel_profile,
 )

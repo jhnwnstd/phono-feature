@@ -1090,8 +1090,8 @@ def test_cell_brushes_cached_until_theme_changes() -> None:
     """The brush triple cache must return the SAME QBrush object
     across calls within one theme epoch, then a fresh one after
     ``set_theme`` bumps ``theme_version``."""
-    from phonology_features.gui import palette
     from phonology_features.gui.builder.grid import _cell_brushes
+    from phonology_features.gui.shared import palette
 
     palette.set_theme("light")
     fg_a, bg_a = _cell_brushes("+")
@@ -1362,8 +1362,8 @@ def test_analysis_tag_escapes_html_in_text() -> None:
     layout. The ``_tag`` chip is the only path through which
     inventory text reaches the HTML output, so escaping there is
     sufficient."""
-    from phonology_features.gui.analysis import _tag
-    from phonology_features.gui.constants import TagColor
+    from phonology_features.gui.shared.analysis import _tag
+    from phonology_features.gui.shared.constants import TagColor
 
     out = _tag("<b>oops</b>", TagColor.PLUS)
     assert "<b>oops</b>" not in out
@@ -1375,7 +1375,7 @@ def test_analysis_render_single_segment_escapes_symbol() -> None:
     outside the tag chip, so it has its own escape call."""
     from typing import ClassVar
 
-    from phonology_features.gui.analysis import render_single_segment
+    from phonology_features.gui.shared.analysis import render_single_segment
 
     class _FakeEngine:
         features: tuple[str, ...] = ("Voice",)
@@ -2004,7 +2004,10 @@ def test_mainwindow_construction_survives_corrupt_window_size(
     QApplication.instance() or QApplication([])
 
     # Pre-populate corrupt settings BEFORE the window is constructed.
-    from phonology_features.gui.constants import SETTINGS_APP, SETTINGS_ORG
+    from phonology_features.gui.shared.constants import (
+        SETTINGS_APP,
+        SETTINGS_ORG,
+    )
 
     settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
     settings.setValue("window_size", "1200x900-not-a-qsize")
@@ -2045,11 +2048,11 @@ def test_stale_tmp_files_swept_on_dropdown_populate(tmp_path: Path) -> None:
     old_t = _time.time() - 7200
     os.utime(stale, (old_t, old_t))
 
-    from phonology_features.gui.inventory_dir_controller import (
-        _InventoryDirController,
+    from phonology_features.gui.controllers.inventory_dir import (
+        InventoryDirController,
     )
 
-    _InventoryDirController.sweep_stale_tmp_files(str(inv_dir))
+    InventoryDirController.sweep_stale_tmp_files(str(inv_dir))
 
     assert (
         not stale.exists()
@@ -2139,8 +2142,11 @@ def test_main_viewer_loads_freshly_saved_builder_inventory(
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
     from phonology_features.gui.builder import InventoryBuilder
-    from phonology_features.gui.constants import SETTINGS_APP, SETTINGS_ORG
     from phonology_features.gui.main_window import MainWindow
+    from phonology_features.gui.shared.constants import (
+        SETTINGS_APP,
+        SETTINGS_ORG,
+    )
 
     # On macOS/Windows, QSettings.setPath may not redirect an already-
     # initialized backing store, so a prior test's persisted

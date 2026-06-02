@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from phonology_engine.limits import MAX_NAME_LENGTH
-from phonology_features.gui.inventory_setup import (
+from phonology_features.gui.shared.inventory_setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
     FEATURE_PRESETS,
@@ -26,7 +26,7 @@ from phonology_features.gui.inventory_setup import (
     normalize_setup_name,
     validate_setup,
 )
-from phonology_features.gui.palette import C
+from phonology_features.gui.shared.palette import C
 
 
 class _AutofillTextEdit(QPlainTextEdit):

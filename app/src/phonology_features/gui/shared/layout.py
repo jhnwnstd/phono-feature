@@ -552,7 +552,7 @@ def seg_pane_n_cols(seg_pane_w: int) -> int:
     Both UIs base their grid on this single function: the web's
     container-query CSS uses the same numbers via the relay.
     """
-    from phonology_features.gui.constants import BTN_GAP, BTN_W
+    from phonology_features.gui.shared.constants import BTN_GAP, BTN_W
 
     # Per-button stride is button width plus the inter-button gap.
     cols = (seg_pane_w + BTN_GAP) // (BTN_W + BTN_GAP)

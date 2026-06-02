@@ -96,17 +96,25 @@ def copy_static_assets() -> None:
 
 def relay_renderer_sources() -> None:
     """Copy desktop renderer files into the package path api.py
-    imports from at runtime."""
+    imports from at runtime.
+
+    The relayed modules live in ``app/.../gui/shared/`` on disk and
+    are imported in the web as ``phonology_features.gui.shared.X``,
+    so we mirror the ``shared/`` subdir into the dist tree.
+    """
     print("Relaying renderer sources from desktop GUI...")
     target = DIST / "render" / "phonology_features" / "gui"
-    target.mkdir(parents=True, exist_ok=True)
+    shared = target / "shared"
+    shared.mkdir(parents=True, exist_ok=True)
     (DIST / "render" / "phonology_features" / "__init__.py").write_text("")
     (target / "__init__.py").write_text("")
+    (shared / "__init__.py").write_text("")
+    src_shared = DESKTOP_GUI / "shared"
     for name in RELAYED_SOURCES:
-        src = DESKTOP_GUI / name
+        src = src_shared / name
         if not src.exists():
             raise RuntimeError(f"missing desktop source: {src}")
-        shutil.copy(src, target / name)
+        shutil.copy(src, shared / name)
 
 
 def copy_inventories() -> None:
@@ -194,7 +202,7 @@ def generate_theme_css() -> None:
         return out
 
     lines: list[str] = [
-        "/* AUTO-GENERATED from app/src/phonology_features/gui/palette.py",
+        "/* AUTO-GENERATED from app/src/phonology_features/gui/shared/palette.py",
         " * by web/scripts/build.py. Do not edit by hand. */",
     ]
     lines.extend(block(":root", palette.LIGHT))
@@ -227,7 +235,7 @@ def _load_palette_module() -> ModuleType:
     of the desktop GUI package (the build runs outside the package
     layout, so a normal import would fail).
     """
-    palette_path = DESKTOP_GUI / "palette.py"
+    palette_path = DESKTOP_GUI / "shared" / "palette.py"
     spec = importlib.util.spec_from_file_location("_palette", palette_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {palette_path}")
@@ -241,7 +249,7 @@ def _load_layout_module() -> ModuleType:
     by ``generate_layout_css`` to bake the adaptive-layout constants
     into a CSS custom-property file the stylesheet then references.
     """
-    layout_path = DESKTOP_GUI / "layout.py"
+    layout_path = DESKTOP_GUI / "shared" / "layout.py"
     spec = importlib.util.spec_from_file_location("_layout", layout_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {layout_path}")
@@ -292,7 +300,7 @@ def _build_status_text_payload() -> dict[str, str]:
     """
     import sys
 
-    mode_logic_path = DESKTOP_GUI / "mode_logic.py"
+    mode_logic_path = DESKTOP_GUI / "shared" / "mode_logic.py"
     module_name = "_build_mode_logic"
     spec = importlib.util.spec_from_file_location(module_name, mode_logic_path)
     if spec is None or spec.loader is None:
@@ -319,7 +327,7 @@ def _build_status_text_payload() -> dict[str, str]:
 
 def generate_layout_css() -> None:
     """Emit ``layout.css`` from the constants in
-    ``phonology_features.gui.layout`` so the same numbers drive both
+    ``phonology_features.gui.shared.layout`` so the same numbers drive both
     the desktop's Qt splitter / chart sizing and the web's CSS grid.
     Edits to the shared constants propagate to both on the next build.
     Mirrors the ``generate_theme_css`` pattern.
@@ -327,7 +335,7 @@ def generate_layout_css() -> None:
     print("Generating layout.css from layout.py...")
     mod = _load_layout_module()
     lines: list[str] = [
-        "/* AUTO-GENERATED from app/src/phonology_features/gui/layout.py",
+        "/* AUTO-GENERATED from app/src/phonology_features/gui/shared/layout.py",
         " * by web/scripts/build.py. Do not edit by hand. */",
         ":root {",
         # Pane-width thresholds.
@@ -379,7 +387,7 @@ def write_python_bundle() -> None:
         phonology_engine/__init__.py
         phonology_engine/inventory.py
         ...
-        phonology_features/gui/analysis.py
+        phonology_features/gui/shared/analysis.py
         ...
         api.py
     """

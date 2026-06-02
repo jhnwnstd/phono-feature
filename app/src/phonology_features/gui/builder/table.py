@@ -43,7 +43,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_features.gui.palette import C
+from phonology_features.gui.shared.palette import C
 
 
 class _ToggleHeaderView(QHeaderView):
@@ -323,7 +323,7 @@ _highlight_brush: QBrush | None = None
 def _get_highlight_brush() -> QBrush:
     """Return the cached highlight QBrush, rebuilding if theme changed."""
     global _highlight_brush, _highlight_brush_version
-    from phonology_features.gui import palette as _palette
+    from phonology_features.gui.shared import palette as _palette
 
     if (
         _highlight_brush is None

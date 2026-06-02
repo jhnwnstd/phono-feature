@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QTextEdit, QWidget
 
-from phonology_features.gui.palette import C
+from phonology_features.gui.shared.palette import C
 
 
 def set_css(widget: QWidget, css: str) -> bool:

@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from enum import StrEnum
 
-from phonology_features.gui.palette import C
+from phonology_features.gui.shared.palette import C
 
 SETTINGS_ORG = "features"
 SETTINGS_APP = "SegFeatureEngine"

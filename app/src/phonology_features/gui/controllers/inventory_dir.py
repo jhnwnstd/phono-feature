@@ -55,7 +55,7 @@ _RELOAD_DEBOUNCE_MS: int = 600
 _TMP_FILE_STALE_SECONDS: int = 3600
 
 
-class _InventoryDirController:
+class InventoryDirController:
     """Owns the inventory-directory watcher, dropdown, and MRU
     fallback. MainWindow forwards inventory load/register calls
     through this controller."""

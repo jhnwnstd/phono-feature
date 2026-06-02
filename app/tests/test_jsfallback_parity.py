@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-from phonology_features.gui import layout
+from phonology_features.gui.shared import layout
 
 MAIN_JS = Path(__file__).resolve().parents[2] / "web" / "main.js"
 
@@ -338,7 +338,7 @@ def test_classify_selection_js_python_canonical_three_way_agreement(
     drift in any one surface trips this test before users see a
     desktop / web disagreement on the remove-button enable rules.
     """
-    from phonology_features.gui.grid_logic import classify_selection
+    from phonology_features.gui.shared.grid_logic import classify_selection
 
     canonical = classify_selection(cells, num_rows, num_cols)
     js_translation = _js_classify_editor_selection(cells, num_rows, num_cols)
@@ -373,7 +373,7 @@ def test_selection_shape_remove_target_js_matches_python() -> None:
     source; if either side gains a new shape mapping, this test
     forces the other side to follow.
     """
-    from phonology_features.gui.grid_logic import (
+    from phonology_features.gui.shared.grid_logic import (
         SELECTION_SHAPE_REMOVE_TARGET,
     )
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QScrollArea
 
-from phonology_features.gui.constants import BTN_GAP, BTN_W
+from phonology_features.gui.shared.constants import BTN_GAP, BTN_W
 from phonology_features.gui.widgets import SegmentButton, SegmentGridWidget
 
 

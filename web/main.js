@@ -290,7 +290,7 @@ const state = {
     selected_features: emptyFeatureSpec(),
     // Cross-mode projections: snapshot the outgoing mode's state on
     // every mode toggle so flipping back restores it. Mirrors the
-    // desktop's _ModeController.saved_seg_state / saved_feat_state.
+    // desktop's ModeController.saved_seg_state / saved_feat_state.
     saved_seg_state: [],
     saved_feat_state: emptyFeatureSpec(),
     inventory_name: "",
@@ -875,7 +875,7 @@ function rebalanceSegmentSpillover() {
     if (consonants.length === 0) return;
     // Single source of truth for the partition decision: the desktop
     // and web both call ``partition_groups_for_spillover`` in
-    // ``phonology_features.gui.layout``. JS measures the heights and
+    // ``phonology_features.gui.shared.layout``. JS measures the heights and
     // available area; the bridge function computes ``main_count``.
     const heights = consonants.map((el) => el.offsetHeight);
     const mainCount = state.bridge
@@ -1194,7 +1194,7 @@ function fallbackModeSwitch() {
 
 /**
  * Switch top-level mode, projecting the outgoing mode's state
- * into the incoming one (mirrors desktop's _ModeController.
+ * into the incoming one (mirrors desktop's ModeController.
  * save_outgoing_state).
  *
  *   seg→feat: feat_state := common +/- features of the selection

@@ -25,7 +25,7 @@ import pytest
 
 from phonology_engine.feature_engine import FeatureEngine
 from phonology_engine.inventory import Inventory
-from phonology_features.gui.vowel_layout import (
+from phonology_features.gui.shared.vowel_layout import (
     VowelProfile,
     compute_placements,
     detect_vowel_profile,
@@ -153,7 +153,7 @@ def test_compute_placements_orders_by_confidence_desc():
 def test_module_constants_are_tuples():
     """ROW_LABELS / COL_LABELS / VOWEL_HEIGHT are exported as
     tuples so importers cannot mutate the shared singletons."""
-    import phonology_features.gui.vowel_layout as vl
+    import phonology_features.gui.shared.vowel_layout as vl
 
     assert isinstance(vl.ROW_LABELS, tuple)
     assert isinstance(vl.COL_LABELS, tuple)

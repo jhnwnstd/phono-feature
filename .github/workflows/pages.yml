@@ -11,9 +11,7 @@ on:
     paths:
       - web/**
       - packages/phonology-engine/**
-      - app/src/phonology_features/gui/palette.py
-      - app/src/phonology_features/gui/constants.py
-      - app/src/phonology_features/gui/analysis.py
+      - app/src/phonology_features/gui/shared/**
       - app/inventories/**
       - .github/workflows/pages.yml
   workflow_dispatch:

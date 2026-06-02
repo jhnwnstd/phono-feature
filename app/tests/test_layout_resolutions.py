@@ -1,7 +1,7 @@
 """Layout-policy tests at the nine most common desktop resolutions.
 
 Each resolution is exercised through the shared layout module
-(``phonology_features.gui.layout``) so the policy decisions are
+(``phonology_features.gui.shared.layout``) so the policy decisions are
 deterministic and identical across the desktop and web frontends.
 A failure here means a real user on that monitor would see broken
 chrome (panes too narrow, vowel chart in the wrong place, fresh-
@@ -36,7 +36,7 @@ from typing import NamedTuple
 
 import pytest
 
-from phonology_features.gui import layout
+from phonology_features.gui.shared import layout
 
 
 class Resolution(NamedTuple):
@@ -694,7 +694,7 @@ def _segment_grid_natural_width(seg_count: int) -> int:
     here because we only care about whether the assumption used
     in ``SEG_CONTENT_W`` is in the right ballpark.
     """
-    from phonology_features.gui.constants import BTN_GAP, BTN_W
+    from phonology_features.gui.shared.constants import BTN_GAP, BTN_W
 
     cols = layout.best_segment_n_cols(seg_count, max_cols=12)
     return cols * (BTN_W + BTN_GAP)
@@ -776,7 +776,7 @@ def _feature_card_rows(name: str) -> tuple[list[str], list[int]]:
     ``view_models._grouped_features`` does it."""
     from phonology_engine.feature_engine import FeatureEngine
     from phonology_engine.inventory import Inventory
-    from phonology_features.gui.constants import FEATURE_GROUPS
+    from phonology_features.gui.shared.constants import FEATURE_GROUPS
 
     data = _load_inventory(f"{name}_features")
     inv = Inventory.parse(data)

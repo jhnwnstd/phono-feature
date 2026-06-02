@@ -14,7 +14,7 @@ be bright), reload it, and assert the headers are still bright.
 
 from __future__ import annotations
 
-from phonology_features.gui.palette import C
+from phonology_features.gui.shared.palette import C
 
 
 def _is_bright_color(stylesheet: str) -> bool:

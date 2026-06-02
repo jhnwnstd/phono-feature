@@ -1,4 +1,4 @@
-"""Tests for :py:mod:`phonology_features.gui.grid_logic`.
+"""Tests for :py:mod:`phonology_features.gui.shared.grid_logic`.
 
 The module is pure-Python and consumed by both the desktop builder
 (``_BulkCycleTable``, ``InventoryBuilder._to_inventory``) and the
@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from phonology_engine.inventory import Inventory, ValidationError
-from phonology_features.gui.grid_logic import (
+from phonology_features.gui.shared.grid_logic import (
     CYCLE_LADDER,
     MAX_UNDO_DEPTH,
     MINUS_DISPLAY,
@@ -531,7 +531,7 @@ def test_grid_to_inventory_preserves_feature_order():
 
 
 def test_classify_selection_empty():
-    from phonology_features.gui.grid_logic import (
+    from phonology_features.gui.shared.grid_logic import (
         SELECTION_SHAPE_EMPTY,
         classify_selection,
     )
@@ -542,7 +542,7 @@ def test_classify_selection_empty():
 
 
 def test_classify_selection_single_cell():
-    from phonology_features.gui.grid_logic import (
+    from phonology_features.gui.shared.grid_logic import (
         SELECTION_SHAPE_SINGLE_CELL,
         classify_selection,
     )
@@ -553,7 +553,7 @@ def test_classify_selection_single_cell():
 
 
 def test_classify_selection_single_column():
-    from phonology_features.gui.grid_logic import (
+    from phonology_features.gui.shared.grid_logic import (
         SELECTION_SHAPE_SINGLE_COLUMN,
         classify_selection,
     )
@@ -566,7 +566,7 @@ def test_classify_selection_single_column():
 
 
 def test_classify_selection_single_row():
-    from phonology_features.gui.grid_logic import (
+    from phonology_features.gui.shared.grid_logic import (
         SELECTION_SHAPE_SINGLE_ROW,
         classify_selection,
     )
@@ -578,7 +578,7 @@ def test_classify_selection_single_row():
 
 
 def test_classify_selection_full_grid():
-    from phonology_features.gui.grid_logic import (
+    from phonology_features.gui.shared.grid_logic import (
         SELECTION_SHAPE_FULL_GRID,
         classify_selection,
     )
@@ -589,7 +589,7 @@ def test_classify_selection_full_grid():
 
 
 def test_classify_selection_rectangle():
-    from phonology_features.gui.grid_logic import (
+    from phonology_features.gui.shared.grid_logic import (
         SELECTION_SHAPE_RECTANGLE,
         classify_selection,
     )
@@ -601,7 +601,7 @@ def test_classify_selection_rectangle():
 
 def test_classify_selection_irregular():
     """An L-shape is not a rectangle and not a single column/row."""
-    from phonology_features.gui.grid_logic import (
+    from phonology_features.gui.shared.grid_logic import (
         SELECTION_SHAPE_IRREGULAR,
         classify_selection,
     )
@@ -615,7 +615,7 @@ def test_classify_selection_partial_column_is_not_single_column():
     """Same column but missing some rows should NOT be single_column;
     that distinction is what the desktop's ``- Segment`` enable rule
     keys on."""
-    from phonology_features.gui.grid_logic import (
+    from phonology_features.gui.shared.grid_logic import (
         SELECTION_SHAPE_IRREGULAR,
         SELECTION_SHAPE_RECTANGLE,
         classify_selection,
@@ -632,7 +632,7 @@ def test_classify_selection_partial_column_is_not_single_column():
 
 
 def test_remove_target_for_shape():
-    from phonology_features.gui.grid_logic import (
+    from phonology_features.gui.shared.grid_logic import (
         SELECTION_SHAPE_FULL_GRID,
         SELECTION_SHAPE_RECTANGLE,
         SELECTION_SHAPE_SINGLE_CELL,

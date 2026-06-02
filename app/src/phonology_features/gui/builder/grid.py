@@ -4,17 +4,17 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import QTableWidgetItem
 
-from phonology_features.gui import palette
-from phonology_features.gui.grid_logic import (
+from phonology_features.gui.shared import palette
+from phonology_features.gui.shared.grid_logic import (
     MINUS_DISPLAY,
     MINUS_SERIALIZED,
     cycle_value,
 )
-from phonology_features.gui.palette import C
+from phonology_features.gui.shared.palette import C
 
 # Re-export so existing ``from .grid import cycle_value`` call sites
 # in the builder continue to resolve. The canonical home is
-# :py:mod:`phonology_features.gui.grid_logic`.
+# :py:mod:`phonology_features.gui.shared.grid_logic`.
 __all__ = [
     "MINUS_DISPLAY",
     "MINUS_SERIALIZED",

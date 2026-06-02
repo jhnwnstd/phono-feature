@@ -97,7 +97,7 @@ def test_find_segments_unknown_feature_raises(engine: FeatureEngine) -> None:
 
 
 # ----------------------------------------------------------------------
-# Mode-switch projection: shared by the desktop's _ModeController and
+# Mode-switch projection: shared by the desktop's ModeController and
 # the web bridge so toggling modes produces identical pre-filled
 # states across both UIs.
 # ----------------------------------------------------------------------
