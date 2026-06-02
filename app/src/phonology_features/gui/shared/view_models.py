@@ -209,14 +209,6 @@ def summarize_feature_query(
     class characterised by the query itself; the FEAT-mode
     display contract requires every highlighted segment to belong
     to that natural class.
-
-    The SEG→FEAT seg-selection round-trip is preserved in
-    ``mode_logic.project_mode_transition`` via the
-    ``feature_query_origin`` / ``prior_saved_seg_state``
-    plumbing, NOT by altering the FEAT-mode matches here. An
-    earlier "projected_segments" override displayed segments
-    that the strict query wouldn't return, which silently
-    violated the invariant; it is no longer permitted.
     """
     segment_states = _default_segment_states(engine)
     if not spec:

@@ -39,29 +39,6 @@ def test_project_mode_transition_seg_to_feat() -> None:
     assert transition.selected_segments == []
     assert transition.saved_feat_state == transition.selected_features
     assert transition.saved_feat_state["Voice"] == "+"
-    # SEG→FEAT with a non-empty selection marks the projected FEAT
-    # query as ``"projected"`` so the FEAT-mode analysis preserves
-    # the original seg set rather than doing a strict re-query that
-    # would drop members whose values became '0' on the projected
-    # features.
-    assert transition.feature_query_origin == "projected"
-
-
-def test_seg_to_feat_with_empty_selection_stays_typed() -> None:
-    """No selection => no projection. ``feature_query_origin``
-    stays ``"typed"`` so the FEAT-mode analysis behaves like a
-    fresh, user-typed query."""
-    engine = _engine("hayes_features.json")
-    transition = project_mode_transition(
-        Mode.SEG_TO_FEAT,
-        Mode.FEAT_TO_SEG,
-        selected_segments=[],
-        selected_features={},
-        engine=engine,
-    )
-    assert transition.feature_query_origin == "typed"
-    assert transition.saved_seg_state == []
-    assert transition.saved_feat_state == {}
 
 
 def test_project_mode_transition_feat_to_seg() -> None:
@@ -76,71 +53,35 @@ def test_project_mode_transition_feat_to_seg() -> None:
     )
     assert transition.saved_feat_state == spec
     assert transition.selected_features == {}
-    assert set(engine.find_segments(spec)).issuperset(
-        transition.selected_segments
+    # FEAT→SEG carries the natural class (the strict matches of
+    # the query) over as the new SEG selection. The user sees in
+    # SEG the same segments they were just inspecting in FEAT.
+    assert sorted(transition.selected_segments) == sorted(
+        engine.find_segments(spec)
     )
-    # FEAT→SEG never marks the (next-mode's) FEAT query as
-    # projected: we're leaving FEAT, not entering it.
-    assert transition.feature_query_origin == "typed"
 
 
-def test_seg_to_feat_to_seg_round_trip_preserves_selection_via_origin() -> (
-    None
-):
-    """**Mode-switch round-trip invariant**: SEG selection →
-    FEAT (no user edits) → SEG returns the original selection
-    exactly, even when the selection is NOT a natural class.
-
-    The mechanism: the FEAT-mode display always shows
-    ``find_segments(query)`` (preserving the FEAT-mode "highlighted
-    segments form a natural class" invariant). The round-trip is
-    preserved by ``project_mode_transition``: when the user never
-    edits the projected FEAT query, the FEAT→SEG transition
-    restores ``saved_seg_state`` directly instead of recomputing
-    from ``find_segments``.
-
-    Pinned with /j i/ in English (not a strict natural class).
+def test_feat_to_seg_carries_natural_class_over() -> None:
+    """**FEAT→SEG carry-over invariant**: switching from FEAT to
+    SEG sets the SEG selection to the natural class the FEAT
+    query picked out -- the same segments that were highlighted
+    in FEAT mode.
     """
     engine = _engine("english_features.json")
-    original = ["j", "i"]
-    # SEG → FEAT
-    t1 = project_mode_transition(
-        Mode.SEG_TO_FEAT,
-        Mode.FEAT_TO_SEG,
-        selected_segments=original,
-        selected_features={},
-        engine=engine,
-    )
-    assert t1.saved_seg_state == original
-    assert t1.feature_query_origin == "projected"
-    assert t1.selected_features  # non-empty (the projected query)
-
-    # FEAT → SEG with origin=projected and prior seg state passed
-    t2 = project_mode_transition(
-        Mode.FEAT_TO_SEG,
-        Mode.SEG_TO_FEAT,
-        selected_segments=[],  # SEG state is empty while in FEAT
-        selected_features=t1.selected_features,
-        engine=engine,
-        feature_query_origin=t1.feature_query_origin,
-        prior_saved_seg_state=t1.saved_seg_state,
-    )
-    # Round trip: the seg selection should be exactly the original,
-    # not the strict find_segments expansion (which would include /ɪ/).
-    assert t2.selected_segments == original
-
-    # Sanity check: without the origin/prior plumbing we get the
-    # historical strict expansion, which is what we're protecting
-    # against.
-    t2_typed = project_mode_transition(
+    spec = {"High": "+", "Front": "+"}
+    transition = project_mode_transition(
         Mode.FEAT_TO_SEG,
         Mode.SEG_TO_FEAT,
         selected_segments=[],
-        selected_features=t1.selected_features,
+        selected_features=spec,
         engine=engine,
     )
-    assert "ɪ" in t2_typed.selected_segments
-    assert sorted(t2_typed.selected_segments) != sorted(original)
+    expected = engine.find_segments(spec)
+    assert sorted(transition.selected_segments) == sorted(expected)
+    # And what FEAT was showing as the highlighted natural class is
+    # exactly what SEG is now showing as the selection.
+    is_nc, _ = engine.is_natural_class(transition.selected_segments)
+    assert is_nc
 
 
 def test_feat_to_seg_projection_is_always_a_natural_class() -> None:

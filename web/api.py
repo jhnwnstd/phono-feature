@@ -463,8 +463,6 @@ def project_mode_switch(
     target_mode: str,
     selected_segments: list[str],
     selected_features: dict[str, str],
-    feature_query_origin: str = "typed",
-    prior_saved_seg_state: list[str] | None = None,
 ) -> dict[str, Any]:
     """Full top-level mode-transition projection shared with desktop.
 
@@ -475,13 +473,6 @@ def project_mode_switch(
     that raises ``ValueError`` on a typo); the decorator translates
     that to ``ValidationError`` so JS gets a clean error path on a
     bad mode string instead of a raw stack trace in the console.
-
-    ``feature_query_origin`` / ``prior_saved_seg_state`` thread the
-    SEG→FEAT→SEG round-trip preservation: when the user did not
-    edit a previously-projected FEAT query, the original seg
-    selection is restored on return to SEG rather than recomputed
-    from the (possibly-expanded) strict match set. See
-    :py:func:`project_mode_transition` for the contract.
     """
     # ``project_mode_transition`` calls ``Mode(...)`` internally;
     # the decorator translates the ``ValueError`` for a bad string.
@@ -491,19 +482,12 @@ def project_mode_switch(
         selected_segments=list(selected_segments),
         selected_features=dict(selected_features),
         engine=_require_engine(),
-        feature_query_origin=feature_query_origin,
-        prior_saved_seg_state=(
-            list(prior_saved_seg_state)
-            if prior_saved_seg_state is not None
-            else None
-        ),
     )
     return {
         "saved_seg_state": transition.saved_seg_state,
         "saved_feat_state": transition.saved_feat_state,
         "selected_segments": transition.selected_segments,
         "selected_features": transition.selected_features,
-        "feature_query_origin": transition.feature_query_origin,
     }
 
 

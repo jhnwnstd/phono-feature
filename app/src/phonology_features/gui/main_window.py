@@ -1430,12 +1430,6 @@ class MainWindow(QMainWindow):
     def _on_feature_changed(self, feature: str, value: str) -> None:
         if self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
             return
-        # User-initiated feature toggle: drop the ``"projected"``
-        # provenance so the analysis stops carrying over the prior
-        # seg selection and re-queries strictly. Cheap and idempotent
-        # -- the flag is already ``"typed"`` once the first toggle
-        # lands, so subsequent toggles no-op this call.
-        self._mode_ctrl.mark_feature_query_typed()
         if value:
             self._selected_features[feature] = value
         else:
@@ -1491,13 +1485,6 @@ class MainWindow(QMainWindow):
                 btn.set_state(SegmentState.DEFAULT)
             self.analysis.clear()
             return
-        # FEAT-mode display invariant: highlighted segments always
-        # come from ``find_segments(query)`` -- the strict matches
-        # of the active query. The seg-selection round-trip across
-        # mode switches is preserved by ``ModeController`` via the
-        # ``feature_query_origin`` flag and the saved-seg-state
-        # restore in ``mode_logic.project_mode_transition``; the
-        # analysis output never lies about which segments match.
         summary = summarize_feature_query(self.engine, selected_feats)
         segment_states = summary["segment_states"]
         for seg, btn in self._seg_buttons.items():
