@@ -84,6 +84,65 @@ def test_project_mode_transition_feat_to_seg() -> None:
     assert transition.feature_query_origin == "typed"
 
 
+def test_seg_to_feat_to_seg_round_trip_preserves_selection_via_origin() -> (
+    None
+):
+    """**Mode-switch round-trip invariant**: SEG selection →
+    FEAT (no user edits) → SEG returns the original selection
+    exactly, even when the selection is NOT a natural class.
+
+    The mechanism: the FEAT-mode display always shows
+    ``find_segments(query)`` (preserving the FEAT-mode "highlighted
+    segments form a natural class" invariant). The round-trip is
+    preserved by ``project_mode_transition``: when the user never
+    edits the projected FEAT query, the FEAT→SEG transition
+    restores ``saved_seg_state`` directly instead of recomputing
+    from ``find_segments``.
+
+    Pinned with /j i/ in English (not a strict natural class).
+    """
+    engine = _engine("english_features.json")
+    original = ["j", "i"]
+    # SEG → FEAT
+    t1 = project_mode_transition(
+        Mode.SEG_TO_FEAT,
+        Mode.FEAT_TO_SEG,
+        selected_segments=original,
+        selected_features={},
+        engine=engine,
+    )
+    assert t1.saved_seg_state == original
+    assert t1.feature_query_origin == "projected"
+    assert t1.selected_features  # non-empty (the projected query)
+
+    # FEAT → SEG with origin=projected and prior seg state passed
+    t2 = project_mode_transition(
+        Mode.FEAT_TO_SEG,
+        Mode.SEG_TO_FEAT,
+        selected_segments=[],  # SEG state is empty while in FEAT
+        selected_features=t1.selected_features,
+        engine=engine,
+        feature_query_origin=t1.feature_query_origin,
+        prior_saved_seg_state=t1.saved_seg_state,
+    )
+    # Round trip: the seg selection should be exactly the original,
+    # not the strict find_segments expansion (which would include /ɪ/).
+    assert t2.selected_segments == original
+
+    # Sanity check: without the origin/prior plumbing we get the
+    # historical strict expansion, which is what we're protecting
+    # against.
+    t2_typed = project_mode_transition(
+        Mode.FEAT_TO_SEG,
+        Mode.SEG_TO_FEAT,
+        selected_segments=[],
+        selected_features=t1.selected_features,
+        engine=engine,
+    )
+    assert "ɪ" in t2_typed.selected_segments
+    assert sorted(t2_typed.selected_segments) != sorted(original)
+
+
 def test_feat_to_seg_projection_is_always_a_natural_class() -> None:
     """**Cross-mode display invariant**: in FEAT mode the matched
     segments highlighted in the segment grid are by construction
@@ -97,10 +156,6 @@ def test_feat_to_seg_projection_is_always_a_natural_class() -> None:
     seg selection via ``find_segments``) and
     :py:meth:`is_natural_class` fails loudly.
     """
-    from phonology_engine.feature_engine import (
-        FeatureEngine,  # noqa: F401  (kept for type clarity)
-    )
-
     engine = _engine("hayes_features.json")
     queries = [
         {"Voice": "+"},
@@ -131,9 +186,7 @@ def test_feat_to_seg_projection_is_always_a_natural_class() -> None:
         # query itself, modulo redundancy) round-trips to ``landed``.
         assert bundles
         for b in bundles:
-            assert sorted(engine.find_segments(dict(b))) == sorted(
-                landed
-            ), (
+            assert sorted(engine.find_segments(dict(b))) == sorted(landed), (
                 f"FEAT→SEG round-trip broken: bundle {dict(b)} for "
                 f"{landed} did not strictly round-trip."
             )

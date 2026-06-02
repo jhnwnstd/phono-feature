@@ -212,35 +212,35 @@ def test_suggest_natural_class_blevins_affricate_strict_closure() -> None:
     assert not set(selected) & set(suggested)
 
 
-def test_summarize_feature_query_projected_preserves_seg_set() -> None:
-    """**Mode-switch round-trip invariant**: when the FEAT query
-    came from a SEG→FEAT projection, the analysis matches must
-    equal the original seg set exactly -- not a strict re-query
-    of the projected spec (which would silently expand to other
-    segments that happen to share the common features).
+def test_summarize_feature_query_always_returns_find_segments() -> None:
+    """**FEAT-mode display invariant**: the matches returned by
+    ``summarize_feature_query`` are always exactly
+    ``engine.find_segments(spec)`` -- the strict matches of the
+    active query. The set returned therefore always forms a
+    strict natural class characterised by the query itself.
 
-    Pinned with /j/ /i/ in English. Strict
-    ``find_segments(common(/j i/))`` returns ``[i, j, ɪ]`` (a
-    superset). The projection override must instead return
-    exactly ``[j, i]`` so the user's selection survives the mode
-    switch intact.
+    The SEG→FEAT seg-selection round-trip is preserved by
+    ``mode_logic.project_mode_transition`` (origin flag +
+    saved-seg-state restore on FEAT→SEG return), NOT by altering
+    the FEAT-mode matches. An earlier "projected_segments"
+    override violated this invariant on non-natural-class seg
+    selections (e.g. SEG /j i/ → FEAT showed /j i/ highlighted
+    even though /j i/ are not a natural class) and is no longer
+    permitted.
     """
     engine = _engine("english_features.json")
-    seg_selection = ["j", "i"]
-    spec = engine.project_segments_to_features(seg_selection)
-    # Without the projection override, find_segments expands.
+    # Projection from a non-natural-class seg selection: the
+    # FEAT query strictly matches a superset, and the highlighted
+    # segments in FEAT mode must reflect that superset, not the
+    # original seg selection.
+    spec = engine.project_segments_to_features(["j", "i"])
     strict_match = engine.find_segments(spec)
-    assert (
-        "ɪ" in strict_match
-    ), "test premise: the strict projection expands beyond /j i/"
-    # With the override, the matches preserve the original seg set.
-    summary = summarize_feature_query(
-        engine, spec, projected_segments=seg_selection
-    )
-    assert summary["matching"] == seg_selection
+    assert "ɪ" in strict_match
+    summary = summarize_feature_query(engine, spec)
+    assert summary["matching"] == strict_match
     assert summary["segment_states"]["j"] == "matched"
     assert summary["segment_states"]["i"] == "matched"
-    assert summary["segment_states"]["ɪ"] == "unmatched"
+    assert summary["segment_states"]["ɪ"] == "matched"
 
 
 def test_summarize_feature_query_matches_engine() -> None:
