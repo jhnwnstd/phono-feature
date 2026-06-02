@@ -71,19 +71,33 @@ MONO_FAMILY_CSS: str = ", ".join(
 )
 
 
+_tag_palettes_cache: tuple[int, dict[TagColor, tuple[str, str]]] | None = None
+
+
 def tag_palettes() -> dict[TagColor, tuple[str, str]]:
     """Inline-chip ``(background, foreground)`` palette keyed by
     :class:`TagColor`.
 
-    A function (not a module constant) so it re-reads ``C`` on every
-    call; theme swaps would otherwise bake in the import-time palette.
+    Memoised on :py:data:`phonology_features.gui.shared.palette.theme_version`
+    so the analysis pane's chip rendering (which calls this thousands
+    of times per click via :py:func:`_tag`) doesn't pay for eight
+    dict lookups + a fresh dict + four fresh tuples per call. A
+    theme toggle bumps ``theme_version`` and invalidates the cache.
     """
-    return {
+    from phonology_features.gui.shared import palette as _palette
+
+    global _tag_palettes_cache
+    version = _palette.theme_version
+    if _tag_palettes_cache is not None and _tag_palettes_cache[0] == version:
+        return _tag_palettes_cache[1]
+    built: dict[TagColor, tuple[str, str]] = {
         TagColor.SEGMENT: (C["tag_blue"], C["tag_blue_text"]),
         TagColor.PLUS: (C["tag_green"], C["tag_green_text"]),
         TagColor.MINUS: (C["tag_red"], C["tag_red_text"]),
         TagColor.NEUTRAL: (C["tag_gray"], C["tag_gray_text"]),
     }
+    _tag_palettes_cache = (version, built)
+    return built
 
 
 BTN_W = 33

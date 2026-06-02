@@ -263,6 +263,42 @@ def test_suggest_natural_class_extension_completes_to_natural_class(
         )
 
 
+def test_suggest_natural_class_extension_perf_floor(
+    engine: FeatureEngine,
+) -> None:
+    """Perf-regression guard for the fast path in
+    :py:meth:`suggest_natural_class_extension`. Before the fast path
+    a 50-segment selection on Hayes ran at ~330 ms; the precomputed
+    incremental candidate filter brings it to single-digit ms. The
+    floor here is generous (50 ms on desktop CPython) so it catches
+    a 10x regression while staying noise-tolerant. Skipped if the
+    Hayes inventory isn't present.
+    """
+    import time
+
+    segs = list(engine.segments)
+    if len(segs) < 50:
+        import pytest
+
+        pytest.skip("fixture inventory too small for the perf floor")
+    # Warm up: load Python bytecode + populate any one-time caches.
+    engine.suggest_natural_class_extension(segs[:5])
+    # Take the best-of-3 to dodge interpreter / GC jitter; the
+    # measurement is interactive responsiveness, not steady-state
+    # throughput.
+    best = float("inf")
+    for _ in range(3):
+        engine._bundle_cache.clear()
+        t0 = time.perf_counter()
+        engine.suggest_natural_class_extension(segs[:50])
+        best = min(best, (time.perf_counter() - t0) * 1000)
+    assert best < 50.0, (
+        f"suggest_natural_class_extension(N=50) took {best:.1f} ms; "
+        f"perf floor is 50 ms (pre-fast-path baseline was ~330 ms). "
+        f"A regression here means each user click in seg-mode will lag."
+    )
+
+
 def test_suggest_natural_class_extension_is_minimal(
     engine: FeatureEngine,
 ) -> None:

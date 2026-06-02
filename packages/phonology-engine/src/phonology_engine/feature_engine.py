@@ -137,6 +137,87 @@ class FeatureEngine:
         treated as a wildcard."""
         return seg_val == spec_val or seg_val == "0"
 
+    def _is_natural_class_bool(self, segments: list[str]) -> bool:
+        """Fast boolean: does ``segments`` form a natural class?
+
+        Skips the minimal-bundle enumeration that
+        :py:meth:`find_all_minimal_bundles` performs and answers the
+        decision question directly using the precomputed membership
+        sets (``plus_segs`` / ``minus_segs``). Complexity is
+        ``O(F + O*C)`` where F = features, O = outside segments,
+        C = candidate (feature, value) pairs -- never exponential,
+        no backtracking. The hot consumer is
+        :py:meth:`suggest_natural_class_extension` which probes up to
+        2000 hypothetical segment unions per user click; calling the
+        full enumeration there made selection lag perceptible in
+        Pyodide on inventories of ~140 segments.
+
+        Theory: a set S is a natural class iff there exists a feature
+        bundle B such that ``find_segments(B, underspec_compatible)``
+        equals S exactly. Such a B exists iff the "candidates" of S
+        (features where every selected segment agrees on one
+        non-zero value, treating '0' as wildcard) collectively
+        exclude every outside segment. If they do, taking ALL
+        candidates yields a valid characterising bundle; if they
+        don't, no subset does either. The full bundle enumeration is
+        only needed to PRESENT minimal bundles in the UI; the
+        natural-class predicate itself only needs the existence
+        check.
+        """
+        if not segments:
+            return True
+        selected: frozenset[str] = frozenset(segments)
+        # Cheap cache hit: if find_all_minimal_bundles has been called
+        # on this set, the cached tuple already encodes the answer
+        # (empty == not a natural class, populated == natural class).
+        cached = self._bundle_cache.get(selected)
+        if cached is not None:
+            return len(cached) > 0
+        # Validate input: a stray segment name silently returning False
+        # would be misleading. Cheap because selected is a small set.
+        all_segments = self._all_segments
+        if not selected <= all_segments:
+            bad = next(iter(selected - all_segments))
+            raise ValueError(f"Segment '{bad}' not in inventory")
+        outside = all_segments - selected
+        # Empty outside => the selection is the entire inventory, which
+        # is the universal class (characterised by the empty bundle).
+        if not outside:
+            return True
+        # Plus / minus candidates, in two separate lists so the
+        # "covered" union can be computed by indexing into the right
+        # membership set (positive candidates exclude segments with
+        # value '-', negative candidates exclude segments with '+').
+        plus_segs = self.plus_segs
+        minus_segs = self.minus_segs
+        plus_candidate_feats: list[str] = []
+        minus_candidate_feats: list[str] = []
+        for feat in self._inventory.features:
+            ps = plus_segs[feat]
+            ms = minus_segs[feat]
+            has_plus = bool(selected & ps)
+            has_minus = bool(selected & ms)
+            if has_plus and not has_minus:
+                plus_candidate_feats.append(feat)
+            elif has_minus and not has_plus:
+                minus_candidate_feats.append(feat)
+            # has both -> selection is mixed on this feature; not a
+            # candidate. neither -> no information; not a candidate.
+        # Outside coverage. ``covered`` is the set of outside segments
+        # that some (feature, value) candidate excludes. Built as a
+        # union of frozenset intersections so we stay in set algebra
+        # the whole way and don't pay for a Python-level inner loop.
+        covered: set[str] = set()
+        for feat in plus_candidate_feats:
+            covered |= minus_segs[feat] & outside
+            if covered == outside:
+                return True
+        for feat in minus_candidate_feats:
+            covered |= plus_segs[feat] & outside
+            if covered == outside:
+                return True
+        return covered == outside
+
     def _find_segments_unsorted(
         self,
         feature_spec: Mapping[str, str],
@@ -184,6 +265,15 @@ class FeatureEngine:
         self.spec_segs = {f: frozenset(s) for f, s in spec.items()}
         self.plus_segs = {f: frozenset(s) for f, s in plus.items()}
         self.minus_segs = {f: frozenset(s) for f, s in minus.items()}
+        # Universe of segment names. Held as a frozenset because the
+        # natural-class fast path repeatedly computes
+        # ``all_segments - selected_subset``; on each call that would
+        # otherwise rebuild a fresh set from the segments mapping.
+        # Frozen because the inventory (and therefore this universe)
+        # never changes after construction.
+        self._all_segments: frozenset[str] = frozenset(
+            self._inventory.segments
+        )
 
     @cached_property
     def _seg_value_tuples(self) -> dict[str, tuple[str, ...]]:
@@ -351,24 +441,50 @@ class FeatureEngine:
         """
         if not segments:
             return (_EMPTY_BUNDLE,)
+        # Bind property reads to locals: a single descriptor lookup
+        # instead of one per (segment, feature) cell. The pre-bind
+        # cleared ~30% of cumulative time on a 50-segment selection
+        # because the property's __get__ was hit millions of times in
+        # the candidate-collection and excluder-collection loops.
+        seg_map = self._inventory.segments
+        features_tuple = self._inventory.features
+        plus_segs = self.plus_segs
+        minus_segs = self.minus_segs
+        all_segments = self._all_segments
         for seg in segments:
-            if seg not in self.segments:
+            if seg not in seg_map:
                 raise ValueError(f"Segment '{seg}' not in inventory")
         cache_key = frozenset(segments)
         cached = self._bundle_cache.get(cache_key)
         if cached is not None:
             return cached
-        segment_set = set(segments)
+        # Candidate collection via the precomputed plus/minus sets.
+        # The old loop did ``self.segments[seg].get(feature, "0")`` for
+        # every (selected_seg, feature) pair and built an intermediate
+        # values-set per feature. Now we ask the engine's bitmask
+        # caches directly: a feature is a candidate iff the selection
+        # touches exactly one of its plus / minus sets. O(F) frozenset
+        # intersections instead of O(F * |selection|) dict lookups.
         candidates: dict[str, str] = {}
-        for feature in self.features:
-            values = {self.segments[seg].get(feature, "0") for seg in segments}
-            specified = values - {"0"}
-            if len(specified) == 1:
-                candidates[feature] = specified.pop()
-        outside = [s for s in self.segments if s not in segment_set]
-        if not outside:
+        for feature in features_tuple:
+            ps = plus_segs[feature]
+            ms = minus_segs[feature]
+            has_plus = bool(cache_key & ps)
+            has_minus = bool(cache_key & ms)
+            if has_plus and not has_minus:
+                candidates[feature] = "+"
+            elif has_minus and not has_plus:
+                candidates[feature] = "-"
+        outside_set = all_segments - cache_key
+        if not outside_set:
             self._bundle_cache[cache_key] = (_EMPTY_BUNDLE,)
             return self._bundle_cache[cache_key]
+        # Preserve the historical iteration order of ``outside`` so
+        # ``raw_excluders`` lines up with ``outside`` indices the same
+        # way the old code did. Iterating ``seg_map`` (an insertion-
+        # ordered dict) gives a stable order matching the inventory
+        # declaration.
+        outside = [s for s in seg_map if s in outside_set]
 
         # Hitting-set search via bitmask. Each candidate feature gets
         # a bit index 0..N-1; the chosen set, the still-available set,
@@ -388,11 +504,24 @@ class FeatureEngine:
         excluder_bits: list[int] = []
         counts: dict[str, int] = dict.fromkeys(candidates, 0)
         raw_excluders: list[list[str]] = []
+        # Excluder collection also via bitmask sets. For each
+        # candidate (f, v), the segments excluded by it are exactly
+        # ``minus_segs[f]`` if v == '+' else ``plus_segs[f]``. Invert
+        # the loop: precompute ``excludes_by[feat] = frozenset of
+        # outside segments excluded by this candidate``, then a single
+        # membership test per (outside_seg, feature) instead of
+        # ``segments[seg].get(feature, "0")`` + comparison.
+        excludes_by: dict[str, frozenset[str]] = {}
+        for feat, val in candidates.items():
+            excludes_by[feat] = (
+                (minus_segs[feat] if val == "+" else plus_segs[feat])
+                & outside_set
+            )
         for seg in outside:
             exc_feats = [
                 feat
-                for feat, val in candidates.items()
-                if not self._feat_match(self.segments[seg].get(feat, "0"), val)
+                for feat, excluded in excludes_by.items()
+                if seg in excluded
             ]
             if not exc_feats:
                 self._bundle_cache[cache_key] = ()
@@ -583,13 +712,16 @@ class FeatureEngine:
         """
         from itertools import combinations
 
-        is_nc, _ = self.is_natural_class(segments)
-        if is_nc:
+        # Fast path #1: boolean check, skips the exponential-worst-case
+        # minimal-bundle enumeration that ``find_all_minimal_bundles``
+        # would otherwise run. Multi-hundred-millisecond Pyodide lag
+        # on 10+ segment selections originated here.
+        if self._is_natural_class_bool(segments):
             return []
         common = self.common_features(segments)
         if not common:
             return []
-        selected = set(segments)
+        selected: frozenset[str] = frozenset(segments)
         candidates = [
             s
             for s in self.find_segments(common, underspec_compatible=True)
@@ -597,10 +729,58 @@ class FeatureEngine:
         ]
         if not candidates:
             return []
+
+        # Fast path #2: precompute the S-dependent state once. Every
+        # combo probe below operates on the same base selection, so
+        # the "candidates of S" (features where S agrees on +/-) and
+        # "outside of S" are stable across combos. The per-combo cost
+        # then collapses to set algebra over precomputed members.
+        #
+        # Features classify into four kinds wrt S:
+        #   plus_cand:  S has + somewhere, never -. Survives as a +
+        #               candidate of S ∪ combo as long as combo
+        #               doesn't introduce a -.
+        #   minus_cand: dual.
+        #   zero_feat:  S has neither + nor -. Combo can PROMOTE this
+        #               to a fresh candidate (either + or -) iff combo
+        #               itself is uniform on the feature.
+        #   mixed:      S already has both + and -. Cannot become a
+        #               candidate at any combo; ignored entirely.
+        # The minimality bug in an earlier rewrite came from skipping
+        # the zero_feat category: combos can introduce features that
+        # weren't candidates of S alone but become candidates of the
+        # union and finish closing the natural class.
+        plus_segs = self.plus_segs
+        minus_segs = self.minus_segs
+        base_outside = self._all_segments - selected
+        base_plus_candidates: list[tuple[str, frozenset[str]]] = []
+        base_minus_candidates: list[tuple[str, frozenset[str]]] = []
+        # zero_feats: (feature, minus_ex_for_plus, plus_ex_for_minus).
+        # The two stored exclusion sets are precomputed for the two
+        # ways combo can promote this feature into a candidate
+        # (depending on whether combo turns out to be uniformly + or
+        # uniformly -). Storing both costs O(F) extra memory but
+        # avoids two membership lookups per combo per zero feature.
+        zero_feats: list[
+            tuple[str, frozenset[str], frozenset[str]]
+        ] = []
+        for feat in self._inventory.features:
+            ps = plus_segs[feat]
+            ms = minus_segs[feat]
+            has_plus = bool(selected & ps)
+            has_minus = bool(selected & ms)
+            if has_plus and not has_minus:
+                base_plus_candidates.append((feat, ms & base_outside))
+            elif has_minus and not has_plus:
+                base_minus_candidates.append((feat, ps & base_outside))
+            elif not has_plus and not has_minus:
+                zero_feats.append(
+                    (feat, ms & base_outside, ps & base_outside)
+                )
+
         # Ascending subset size; first valid combination wins. The
         # full ``candidates`` set is always valid (characterised by
-        # ``common``), so the loop always returns before the
-        # fallback below.
+        # ``common``), so the loop always returns before the fallback.
         max_search_calls = 2000
         calls = 0
         for k in range(1, len(candidates) + 1):
@@ -611,11 +791,89 @@ class FeatureEngine:
                     # extension. The "N needed" hint becomes
                     # conservative (overestimate) but never wrong.
                     return list(candidates)
-                if self.is_natural_class(list(segments) + list(combo))[0]:
+                if self._combo_completes_class(
+                    combo,
+                    base_outside,
+                    base_plus_candidates,
+                    base_minus_candidates,
+                    zero_feats,
+                    plus_segs,
+                    minus_segs,
+                ):
                     return list(combo)
         # Unreachable in practice — the full extension is always a
         # valid completion — but return it for safety.
         return list(candidates)
+
+    @staticmethod
+    def _combo_completes_class(
+        combo: tuple[str, ...],
+        base_outside: frozenset[str],
+        base_plus_candidates: list[tuple[str, frozenset[str]]],
+        base_minus_candidates: list[tuple[str, frozenset[str]]],
+        zero_feats: list[tuple[str, frozenset[str], frozenset[str]]],
+        plus_segs: dict[str, frozenset[str]],
+        minus_segs: dict[str, frozenset[str]],
+    ) -> bool:
+        """Inner test for :py:meth:`suggest_natural_class_extension`.
+
+        ``True`` iff ``S ∪ combo`` is a natural class given precomputed
+        per-S state. Inline-equivalent to
+        ``_is_natural_class_bool(S + combo)`` but reuses the work that
+        depends only on S — the candidate (feature, value) pairs and
+        the outside set — across thousands of combo probes per call.
+        Static so the closure isn't re-bound per outer call.
+
+        See :py:meth:`suggest_natural_class_extension` for the
+        four-way feature classification (plus_cand / minus_cand /
+        zero_feat / mixed) and why zero_feat is load-bearing for
+        minimality.
+        """
+        combo_set = frozenset(combo)
+        union_outside = base_outside - combo_set
+        if not union_outside:
+            return True  # combo absorbs the entire outside
+        covered: set[str] = set()
+        # Plus candidate f: invalidated when some combo seg has f='-';
+        # otherwise still excludes ``ex`` minus the part of ``ex`` that
+        # the combo itself absorbed into the selection.
+        for feat, ex in base_plus_candidates:
+            if combo_set & minus_segs[feat]:
+                continue
+            new = ex - combo_set
+            if new:
+                covered |= new
+                if covered >= union_outside:
+                    return True
+        for feat, ex in base_minus_candidates:
+            if combo_set & plus_segs[feat]:
+                continue
+            new = ex - combo_set
+            if new:
+                covered |= new
+                if covered >= union_outside:
+                    return True
+        # Zero feature: S is silent. Combo can promote this into a
+        # candidate iff combo itself is uniform on the feature.
+        # Skipping this category was the source of a minimality bug
+        # (the algorithm returned a valid but non-minimal completion
+        # because new candidates from combo were never considered).
+        for feat, minus_ex, plus_ex in zero_feats:
+            cps = combo_set & plus_segs[feat]
+            cms = combo_set & minus_segs[feat]
+            if cps and not cms:
+                new = minus_ex - combo_set
+                if new:
+                    covered |= new
+                    if covered >= union_outside:
+                        return True
+            elif cms and not cps:
+                new = plus_ex - combo_set
+                if new:
+                    covered |= new
+                    if covered >= union_outside:
+                        return True
+        return covered >= union_outside
 
     def is_natural_class(
         self, segments: list[str]
