@@ -27,6 +27,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import QTimer
+
 from phonology_features.gui.shared.mode_logic import (
     Mode,
     mode_status_text,
@@ -69,14 +71,50 @@ class ModeController:
         self.apply_phases()
 
     def apply_phases(self) -> None:
-        """Run every mode-aware UI update against the current mode."""
+        """Run every mode-aware UI update against the current mode.
+
+        Split into two stages so the mode-toggle click feels snappy:
+
+        * **Visible stage** -- panel chrome, row interactivity,
+          segment-button states, feature-row states, status text.
+          Everything that paints the new mode's framing. Held inside
+          a single ``setUpdatesEnabled(False/True)`` so the user sees
+          one clean swap, not a flicker as each piece changes.
+        * **Deferred stage** -- ``refresh_analysis``, which re-renders
+          the analysis pane (heavy ``setHtml`` work, ~30 ms on the
+          slower direction). Posted to the next event-loop tick via
+          ``QTimer.singleShot(0, ...)``. The user sees the mode swap
+          repaint first; the analysis content fills in one frame
+          later, so the perceived transition is two short steps
+          instead of one long blocking one.
+
+        The deferral is safe because the analysis pane was already
+        cleared by the visible stage's ``apply_panel_chrome`` chain
+        (its tab content is wiped before the new content arrives,
+        so there's no stale-content window).
+        """
         with self._w._batched_updates():
             self.apply_panel_chrome()
             self.apply_row_interactivity()
             self.restore_segment_selection()
             self.restore_feature_selection()
-            self.refresh_analysis()
+            # Clear the analysis pane synchronously so the deferred
+            # refresh doesn't briefly show stale content from the
+            # outgoing mode while the new mode's chrome is already in
+            # place.
+            self._w.analysis.clear()
             self.update_status_message()
+        QTimer.singleShot(0, self._deferred_refresh_analysis)
+
+    def _deferred_refresh_analysis(self) -> None:
+        """Re-run the active mode's analysis after the visible mode-
+        switch frame has already painted. See :py:meth:`apply_phases`
+        for the staging rationale. The mode may have flipped again
+        between scheduling and firing (rapid toggles); the
+        ``refresh_analysis`` body already reads the live mode and
+        selections so this is safe to call unconditionally.
+        """
+        self.refresh_analysis()
 
     def save_outgoing_state(self, target_mode: Mode | str) -> None:
         """Snapshot the current mode's exact state and project it into
@@ -154,13 +192,35 @@ class ModeController:
 
     def restore_segment_selection(self) -> None:
         """Set each segment button to its final state for the new mode.
-        Seg mode restores from ``saved_seg_state``; feat mode clears
-        the visual selection (matched/unmatched styling is applied
-        later by ``refresh_analysis``).
+
+        Two short-circuits keep the per-button cost minimal during a
+        mode switch -- the dominant flash budget in the visible stage:
+
+        1. **Skip the no-op case.** When transitioning into FEAT
+           mode AND the projected query is non-empty, the deferred
+           ``refresh_analysis`` will momentarily re-style every
+           button as MATCHED / UNMATCHED. The intermediate trip
+           through DEFAULT for previously-SELECTED buttons is wasted
+           ``setStyleSheet`` work; skip it. Only the data-state
+           reset (``setChecked``, ``_selected_segments.clear()``)
+           runs here so the button's checked semantics stay correct.
+        2. **Don't re-set identical visual states.** ``set_state``
+           already short-circuits on no-change, but doing the
+           comparison here saves the Python call overhead too.
         """
         is_s2f = self.mode == Mode.SEG_TO_FEAT
         restore_segs = set(self.saved_seg_state) if is_s2f else set()
         self._w._selected_segments.clear()
+        if not is_s2f and self.saved_feat_state:
+            # FEAT mode with a non-empty query: defer all visual
+            # restyle to the upcoming ``_update_feat_to_seg`` pass.
+            # We still need to drop the checked state on previously-
+            # selected buttons so the underlying QPushButton model
+            # is consistent.
+            for btn in self._w._seg_buttons.values():
+                if btn.isChecked():
+                    btn.setChecked(False)
+            return
         for seg, btn in self._w._seg_buttons.items():
             if seg in restore_segs:
                 self._w._selected_segments.append(seg)
