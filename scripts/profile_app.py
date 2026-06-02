@@ -11,8 +11,8 @@ cumulative and tottime.
 Run from anywhere; the script puts ``app/src/`` on sys.path and uses the
 offscreen Qt platform plugin so no display is needed:
 
-    python app/tools/profile_app.py
-    python app/tools/profile_app.py --section seg_toggle  # one phase only
+    python scripts/profile_app.py
+    python scripts/profile_app.py --section seg_toggle  # one phase only
 """
 
 from __future__ import annotations
@@ -29,7 +29,8 @@ from pathlib import Path
 # --- bootstrap ----------------------------------------------------------------
 
 HERE = Path(__file__).resolve()
-APP_DIR = HERE.parent.parent  # app/
+REPO_ROOT = HERE.parent.parent  # one level up from scripts/
+APP_DIR = REPO_ROOT / "app"
 SRC_DIR = APP_DIR / "src"  # app/src/
 sys.path.insert(0, str(SRC_DIR))
 

@@ -12,9 +12,9 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve()
-APP_DIR = HERE.parent.parent
+REPO_ROOT = HERE.parent.parent
+APP_DIR = REPO_ROOT / "app"
 SRC_DIR = APP_DIR / "src"
-REPO_ROOT = APP_DIR.parent
 sys.path.insert(0, str(SRC_DIR))
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

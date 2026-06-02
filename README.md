@@ -84,11 +84,15 @@ pip install -e packages/phonology-engine -e "app[dev]"
 │   ├── main.js
 │   ├── style.css
 │   └── scripts/build.py
-└── packages/
-    └── phonology-engine/   # shared pure-Python engine
-        ├── pyproject.toml
-        ├── src/phonology_engine/
-        └── tests/
+├── packages/
+│   └── phonology-engine/   # shared pure-Python engine
+│       ├── pyproject.toml
+│       ├── src/phonology_engine/
+│       └── tests/
+└── scripts/                # developer tooling + shared launcher bootstrap
+    ├── install.sh
+    ├── capture_screens.py
+    └── profile_app.py
 ```
 
 ## License
