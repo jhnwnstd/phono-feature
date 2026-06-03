@@ -253,14 +253,21 @@ def test_negative_front_with_negative_back_is_more_confident_than_front_alone(
 ):
     """``[-front, -back]`` is the canonical central spec; ``[-front]``
     alone is genuinely ambiguous between central and back. Pin
-    height unambiguously so the overall placement confidence
-    reflects only the backness inference."""
+    height AND rounding unambiguously so the overall placement
+    confidence reflects only the backness inference (top-level
+    confidence is min(height, backness, rounding))."""
     both = vowel_grid_pos(
-        {"high": "+", "low": "-", "front": "-", "back": "-"},
+        {
+            "high": "+",
+            "low": "-",
+            "front": "-",
+            "back": "-",
+            "round": "-",
+        },
         profile,
     )
     front_only = vowel_grid_pos(
-        {"high": "+", "low": "-", "front": "-"},
+        {"high": "+", "low": "-", "front": "-", "round": "-"},
         profile,
     )
     assert both.confidence > front_only.confidence
@@ -309,11 +316,16 @@ def profile():
     that don't care about the fallback gating can use this."""
     return VowelProfile(
         has_front=True,
+        has_back=True,
+        has_high=True,
+        has_low=True,
         has_round=True,
         has_labial=True,
         has_atr=True,
         has_tense=True,
         has_coronal=True,
+        has_syllabic=True,
+        has_consonantal=True,
     )
 
 
@@ -438,3 +450,220 @@ def test_chart_geometry_cell_grid_col_avoids_spacer_tracks() -> None:
             f"cell at logical ({cell.row}, {cell.col}) landed on"
             f" spacer column {cell.grid_col}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Paper-recommended semantic hardening:
+# four-state values, tightened fallbacks, per-axis evidence, flag-based
+# disambiguation between conflict-anchor, default-anchor, and direct spec.
+# ---------------------------------------------------------------------------
+
+
+def test_feature_state_distinguishes_zero_from_absent() -> None:
+    """Hayes (2009) treats ``"0"`` as a deliberate "don't care" value
+    distinct from a missing key. The shared four-state model must
+    preserve that distinction.
+    """
+    from phonology_shared.render.vowel_layout import (
+        FeatureState,
+        _feature_state,
+    )
+
+    assert _feature_state({"front": "+"}, "front") is FeatureState.POS
+    assert _feature_state({"front": "-"}, "front") is FeatureState.NEG
+    assert _feature_state({"front": "0"}, "front") is FeatureState.ZERO
+    assert _feature_state({}, "front") is FeatureState.ABSENT
+
+
+def test_back_minus_falls_back_to_front_only_when_inventory_lacks_front(
+    profile,
+):
+    """The paper's diagnosed bug: the prior ``[-back]`` rule fired
+    whenever the SEGMENT lacked ``front``, even on inventories that
+    use ``front`` elsewhere. Now the fallback only fires when the
+    INVENTORY has no ``front`` feature at all; with ``front`` in the
+    profile, ``[-back]`` alone anchors central with
+    ``UNDERSPECIFIED``.
+    """
+    from phonology_shared.render.vowel_layout import (
+        PlacementFlag,
+        VowelProfile,
+    )
+
+    # Inventory uses front: -back alone should NOT promote to front.
+    has_front_profile = profile  # full active profile
+    p1 = vowel_grid_pos(
+        {"high": "+", "low": "-", "back": "-", "round": "-"},
+        has_front_profile,
+    )
+    assert p1.backness is not None
+    assert p1.backness.value == "central"
+    assert PlacementFlag.UNDERSPECIFIED in p1.flags
+    assert PlacementFlag.DEFAULT_ANCHOR in p1.flags
+
+    # Inventory truly lacks front: now the fallback is honest.
+    no_front_profile = VowelProfile(
+        has_front=False,
+        has_back=True,
+        has_high=True,
+        has_low=True,
+        has_round=True,
+    )
+    p2 = vowel_grid_pos(
+        {"high": "+", "low": "-", "back": "-", "round": "-"},
+        no_front_profile,
+    )
+    assert p2.backness is not None
+    assert p2.backness.value == "front"
+    assert PlacementFlag.FALLBACK in p2.flags
+    assert PlacementFlag.PROFILE_GATED in p2.flags
+
+
+def test_central_by_spec_vs_conflict_vs_anchor_carry_distinct_flags(
+    profile,
+):
+    """The three "central" outcomes anchor at the same screen cell
+    but mean different things. Flags let downstream code distinguish
+    them without parsing the free-text reason.
+    """
+    from phonology_shared.render.vowel_layout import PlacementFlag
+
+    by_spec = vowel_grid_pos(
+        {"high": "-", "low": "-", "front": "-", "back": "-", "round": "-"},
+        profile,
+    )
+    by_conflict = vowel_grid_pos(
+        {"high": "-", "low": "-", "front": "+", "back": "+", "round": "-"},
+        profile,
+    )
+    by_anchor = vowel_grid_pos(
+        {"high": "-", "low": "-", "round": "-"},
+        profile,
+    )
+    assert by_spec.backness is not None and by_spec.backness.value == "central"
+    assert (
+        by_conflict.backness is not None
+        and by_conflict.backness.value == "central"
+    )
+    assert (
+        by_anchor.backness is not None
+        and by_anchor.backness.value == "central"
+    )
+    assert PlacementFlag.DIRECT in by_spec.backness.flags
+    assert PlacementFlag.CONFLICT in by_conflict.backness.flags
+    assert PlacementFlag.DEFAULT_ANCHOR in by_conflict.backness.flags
+    assert PlacementFlag.UNDERSPECIFIED in by_anchor.backness.flags
+    assert PlacementFlag.DEFAULT_ANCHOR in by_anchor.backness.flags
+
+
+def test_coronal_front_fallback_off_by_default(profile):
+    """The paper recommends ``coronal -> front`` defaults off. The
+    profile fixture has both ``has_coronal`` and ``has_front`` so
+    today's gating already blocks it; flip ``has_front`` off and
+    confirm the policy default still blocks the fallback.
+    """
+    from phonology_shared.render.vowel_layout import (
+        PlacementPolicy,
+        VowelProfile,
+    )
+
+    no_front_profile = VowelProfile(
+        has_front=False, has_coronal=True, has_round=True
+    )
+    feats = {"high": "+", "low": "-", "coronal": "+", "round": "-"}
+    default = vowel_grid_pos(feats, no_front_profile)
+    assert default.backness is not None
+    assert default.backness.value != "front"  # default OFF -> central
+
+    # Opt-in via policy still works for callers who want it.
+    opted_in = vowel_grid_pos(
+        feats,
+        no_front_profile,
+        PlacementPolicy(allow_coronal_front_fallback=True),
+    )
+    assert opted_in.backness is not None
+    assert opted_in.backness.value == "front"
+
+
+def test_atr_tense_divergence_flag_fires_on_disagreement(profile):
+    """When tense and ATR disagree, the placement carries the
+    ``ATR_TENSE_DIVERGENCE`` flag so a renderer can surface the
+    contention without text parsing.
+    """
+    from phonology_shared.render.vowel_layout import PlacementFlag
+
+    agreeing = vowel_grid_pos(
+        {
+            "high": "+",
+            "low": "-",
+            "front": "+",
+            "tense": "+",
+            "atr": "+",
+            "round": "-",
+        },
+        profile,
+    )
+    diverging = vowel_grid_pos(
+        {
+            "high": "+",
+            "low": "-",
+            "front": "+",
+            "tense": "+",
+            "atr": "-",
+            "round": "-",
+        },
+        profile,
+    )
+    assert PlacementFlag.ATR_TENSE_DIVERGENCE not in agreeing.flags
+    assert PlacementFlag.ATR_TENSE_DIVERGENCE in diverging.flags
+
+
+def test_per_axis_evidence_exposes_height_backness_rounding(profile):
+    """Every placement carries the per-axis :py:class:`AxisEvidence`
+    so renderers can read source, confidence, and flags per axis
+    without parsing the joined reason string.
+    """
+    from phonology_shared.render.vowel_layout import (
+        AxisEvidence,
+        PlacementFlag,
+    )
+
+    p = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "+", "round": "+"},
+        profile,
+    )
+    assert isinstance(p.height, AxisEvidence)
+    assert isinstance(p.backness, AxisEvidence)
+    assert isinstance(p.rounding, AxisEvidence)
+    assert p.height.value == "Close"
+    assert p.backness.value == "front"
+    assert p.rounding.value == "rounded"
+    # Direct specs carry the DIRECT flag on each axis.
+    assert PlacementFlag.DIRECT in p.height.flags
+    assert PlacementFlag.DIRECT in p.backness.flags
+    assert PlacementFlag.DIRECT in p.rounding.flags
+
+
+def test_split_low_by_tense_policy_knob(profile):
+    """``policy.split_low_by_tense`` toggles whether ``[-tense]``
+    low vowels render as Near-open or stay at Open. Default is True
+    to preserve historical placements; the paper's recommended
+    stricter default is False.
+    """
+    from phonology_shared.render.vowel_layout import PlacementPolicy
+
+    feats = {
+        "high": "-",
+        "low": "+",
+        "front": "-",
+        "back": "-",
+        "tense": "-",
+        "round": "-",
+    }
+    default = vowel_grid_pos(feats, profile)
+    paper_strict = vowel_grid_pos(
+        feats, profile, PlacementPolicy(split_low_by_tense=False)
+    )
+    # Default: Near-open (row 4). Strict: Open (row 5).
+    assert default.row == 4
+    assert paper_strict.row == 5

@@ -56,8 +56,8 @@ vowel is genuinely open-mid central.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
-from enum import IntEnum
+from dataclasses import dataclass, field
+from enum import IntEnum, StrEnum
 
 # The six height tiers of the IPA vowel chart, in row order. Tuple
 # is (label, +high, +low, +tense-or-atr): the feature bundle that
@@ -91,29 +91,68 @@ class Confidence(IntEnum):
     HIGH = 3
 
 
-@dataclass(frozen=True)
-class VowelProfile:
-    """Which vowel-relevant features are actively used in this inventory.
+class FeatureState(StrEnum):
+    """Four-state value model for a feature on a segment.
 
-    The placement code reads these to decide whether an
-    inventory-conventional fallback applies. Fields are kept
-    minimal: only what the placement decisions actually consume.
+    Hayes (2009) treats ``"0"`` as a deliberate "don't care" value,
+    distinct from a missing key (feature not in the inventory or
+    not supplied for this segment). Collapsing the two erases the
+    author's intent on underspecification. Inference paths that
+    need the distinction route through :py:func:`_feature_state`;
+    paths that only care about "any explicit value" still get away
+    with ``feats.get(key, "0")``.
     """
 
-    has_front: bool
-    has_round: bool
-    has_labial: bool
-    has_atr: bool
-    has_tense: bool
-    has_coronal: bool
+    POS = "+"
+    NEG = "-"
+    ZERO = "0"
+    ABSENT = "absent"
 
-    @property
-    def use_coronal_front_fallback(self) -> bool:
-        """Use ``[+coronal]`` as evidence for frontness only when
-        the inventory has no ``Front`` feature. An engineering
-        backstop, not standard phonology; see the module docstring.
-        """
-        return self.has_coronal and not self.has_front
+
+class PlacementFlag(StrEnum):
+    """Tags on a placement decision that the renderer (or a tooltip
+    formatter) can read without parsing the free-text reason string.
+
+    The four anchor-related flags are how the placement code keeps
+    "central by ``[-front, -back]`` specification" distinct from
+    "central as a conflict anchor" distinct from "central because no
+    usable evidence existed". Same screen position, three different
+    semantics; the flags let downstream code surface that honestly.
+    """
+
+    DIRECT = "direct"
+    FALLBACK = "fallback"
+    PROFILE_GATED = "profile_gated"
+    UNDERSPECIFIED = "underspecified"
+    CONFLICT = "conflict"
+    DEFAULT_ANCHOR = "default_anchor"
+    NONSTANDARD = "nonstandard"
+    ATR_TENSE_DIVERGENCE = "atr_tense_divergence"
+
+
+@dataclass(frozen=True)
+class VowelProfile:
+    """Which vowel-relevant features are actively used in this
+    inventory. Pure inventory facts; theory-laden choices live on
+    :py:class:`PlacementPolicy`.
+
+    Fields default ``False`` so existing call sites that construct
+    a partial profile (most test fixtures predate the expansion)
+    keep working; :py:func:`detect_vowel_profile` populates the
+    full set from real inventory data.
+    """
+
+    has_front: bool = False
+    has_back: bool = False
+    has_high: bool = False
+    has_low: bool = False
+    has_round: bool = False
+    has_labial: bool = False
+    has_atr: bool = False
+    has_tense: bool = False
+    has_coronal: bool = False
+    has_syllabic: bool = False
+    has_consonantal: bool = False
 
     @property
     def has_height_sub_distinction(self) -> bool:
@@ -123,14 +162,50 @@ class VowelProfile:
         """
         return self.has_atr or self.has_tense
 
-    @property
-    def use_labial_round_fallback(self) -> bool:
-        """Use ``[+labial]`` as evidence for rounding only when the
-        inventory has no ``Round`` feature. An inventory convention
-        following the Sagey feature geometry tradition; see the
-        module docstring for when this can overgenerate.
-        """
-        return self.has_labial and not self.has_round
+
+@dataclass(frozen=True)
+class PlacementPolicy:
+    """Knobs for theory-laden inference decisions.
+
+    Defaults preserve the module's pre-policy behavior so existing
+    inventories keep their placements; per-inventory overrides let
+    callers opt into the paper-recommended stricter defaults
+    (``allow_coronal_front_fallback=False``,
+    ``split_low_by_tense=False``).
+    """
+
+    #: Allow ``[+labial]`` to infer rounding when the inventory has
+    #: no ``Round`` feature. Sagey-tradition fallback; tagged
+    #: ``FALLBACK | PROFILE_GATED`` on the rounding evidence.
+    allow_labial_round_fallback: bool = True
+    #: Allow ``[+coronal]`` to infer frontness when the inventory
+    #: has no ``Front`` feature. Last-resort backstop the paper
+    #: recommends keeping off; tagged ``NONSTANDARD`` when fired.
+    allow_coronal_front_fallback: bool = False
+    #: Apply the ATR/tense split to low vowels (Near-open vs Open).
+    #: Hayes treats low vowels as ``[0tense]`` and notes the
+    #: ATR-vs-tense identification is unsettled; the paper
+    #: recommends defaulting off. Kept True here to preserve
+    #: pre-policy placements on bundled inventories.
+    split_low_by_tense: bool = True
+
+
+@dataclass(frozen=True)
+class AxisEvidence:
+    """One axis's contribution to a placement: the resolved value
+    plus the evidence that produced it.
+
+    Three of these (height, backness, rounding) feed
+    :py:class:`VowelPlacement`. The renderer reads ``flags`` to
+    decide visual affordances (badges, opacity, etc.) without
+    re-parsing the free-text reason string.
+    """
+
+    value: str
+    confidence: Confidence
+    source: str
+    reason: str
+    flags: frozenset[PlacementFlag] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True)
@@ -138,12 +213,47 @@ class VowelPlacement:
     """A vowel's cell in the IPA chart. ``row`` is the height tier
     (index into ``ROW_LABELS``); ``col`` is the 6-column index
     (front-unr, front-rnd, central-unr, central-rnd, back-unr,
-    back-rnd, 0-5)."""
+    back-rnd, 0-5).
+
+    Per-axis ``height`` / ``backness`` / ``rounding`` carry the
+    evidence each placement decision was made from. The top-level
+    ``confidence`` and ``reason`` are derived summaries kept for
+    backward compatibility with existing consumers.
+    """
 
     row: int
     col: int
     confidence: Confidence
     reason: str
+    height: AxisEvidence | None = None
+    backness: AxisEvidence | None = None
+    rounding: AxisEvidence | None = None
+    flags: frozenset[PlacementFlag] = field(default_factory=frozenset)
+
+
+def _feature_state(feats: Mapping[str, str], key: str) -> FeatureState:
+    """Resolve ``feats[key]`` into the four-state value model.
+    ``ABSENT`` is distinct from ``ZERO``: the former means the
+    feature is not in this bundle (typically inventory does not use
+    it), the latter is an explicit "don't care" the author marked.
+    Any unrecognised string value is folded to ZERO defensively.
+    """
+    if key not in feats:
+        return FeatureState.ABSENT
+    raw = feats[key]
+    if raw == "+":
+        return FeatureState.POS
+    if raw == "-":
+        return FeatureState.NEG
+    return FeatureState.ZERO
+
+
+#: Reverse of ``ROW_LABELS`` so axis evidence carrying a row label
+#: ("Close", "Open-mid", ...) can be turned back into a row index
+#: without an O(n) scan on every placement.
+_ROW_LABEL_TO_INDEX: dict[str, int] = {
+    label: i for i, label in enumerate(ROW_LABELS)
+}
 
 
 def _normalize_feat_keys(feats: Mapping[str, str]) -> dict[str, str]:
@@ -178,11 +288,16 @@ def detect_vowel_profile(
                 active.add(feat.lower())
     return VowelProfile(
         has_front="front" in active,
+        has_back="back" in active,
+        has_high="high" in active,
+        has_low="low" in active,
         has_round="round" in active,
         has_labial="labial" in active,
         has_atr="atr" in active,
         has_tense="tense" in active,
         has_coronal="coronal" in active,
+        has_syllabic="syllabic" in active,
+        has_consonantal="consonantal" in active,
     )
 
 
@@ -193,196 +308,345 @@ def _nonzero(val: str | None) -> str | None:
 
 def _height_split_value(
     feats: Mapping[str, str],
-) -> tuple[str | None, str]:
+) -> tuple[str | None, str, bool]:
     """Resolve the tense/ATR split that distinguishes adjacent
     height tiers (Close vs Near-close, Close-mid vs Open-mid).
 
-    Returns ``(value, source)`` where ``value`` is ``"+"``,
-    ``"-"``, or ``None`` (no specification), and ``source`` names
-    which feature supplied the value. The two features sometimes
-    co-occur in an inventory; this helper makes the resolution
-    explicit:
+    Returns ``(value, source, divergent)`` where ``value`` is
+    ``"+"``, ``"-"``, or ``None`` (no specification), ``source``
+    names which feature supplied the value, and ``divergent``
+    is True when both ``tense`` and ``atr`` were specified but
+    disagreed (so the placement object can attach the
+    ``ATR_TENSE_DIVERGENCE`` flag).
 
-    * Only one specified: use it.
-    * Both specified and agree: use it, note both as the source.
-    * Both specified and disagree: prefer ``tense``, the reason
-      string records "tense overrides ATR" so callers can audit
-      the choice. Phonological theory does not settle whether
-      tense and ATR are the same feature; this is a policy choice.
-    * Neither specified: ``None``, source is "none".
+    Resolution policy: when both specified and agree, take it.
+    When both specified and disagree, prefer ``tense`` and surface
+    the conflict in the source string. When only one is specified,
+    use it. When neither is specified, return ``None``.
     """
     tense = _nonzero(feats.get("tense"))
     atr = _nonzero(feats.get("atr"))
     if tense is not None and atr is not None:
         if tense == atr:
-            return tense, "tense/ATR"
-        return tense, "tense (overrides conflicting ATR)"
+            return tense, "tense/ATR", False
+        return tense, "tense (overrides conflicting ATR)", True
     if tense is not None:
-        return tense, "tense"
+        return tense, "tense", False
     if atr is not None:
-        return atr, "ATR"
-    return None, "none"
+        return atr, "ATR", False
+    return None, "none", False
 
 
 def _infer_height(
-    feats: Mapping[str, str], profile: VowelProfile
-) -> tuple[int, Confidence, str]:
-    """Return row, confidence, and reason."""
+    feats: Mapping[str, str],
+    profile: VowelProfile,
+    policy: PlacementPolicy,
+) -> AxisEvidence:
+    """Resolve the vowel's height tier to a row label and confidence.
+
+    The returned :py:class:`AxisEvidence` carries a row-label
+    ``value`` (one of :py:data:`ROW_LABELS`) plus flags marking the
+    placement as direct, conflicted, or default-anchored. The
+    caller maps the label back to a row index via
+    :py:data:`_ROW_LABEL_TO_INDEX`.
+    """
     hi = feats.get("high", "0")
     lo = feats.get("low", "0")
-    split_value, split_source = _height_split_value(feats)
+    split_value, split_source, atr_tense_divergent = _height_split_value(feats)
+    base_flags: frozenset[PlacementFlag] = (
+        frozenset({PlacementFlag.ATR_TENSE_DIVERGENCE})
+        if atr_tense_divergent
+        else frozenset()
+    )
     is_high_vowel = hi == "+" and lo == "-"
     is_low_vowel = hi == "-" and lo == "+"
     is_mid_vowel = hi == "-" and lo == "-"
     if is_high_vowel:
-        is_near_close = (
-            profile.has_height_sub_distinction and split_value == "-"
-        )
-        if is_near_close:
-            return (
-                1,
+        if profile.has_height_sub_distinction and split_value == "-":
+            return AxisEvidence(
+                "Near-close",
                 Confidence.MEDIUM,
+                "height",
                 f"Near-close: [+high, -low, -{split_source}]",
+                base_flags | {PlacementFlag.DIRECT},
             )
         if split_value == "+":
-            return (
-                0,
+            return AxisEvidence(
+                "Close",
                 Confidence.HIGH,
+                "height",
                 f"Close: [+high, -low, +{split_source}]",
+                base_flags | {PlacementFlag.DIRECT},
             )
-        return 0, Confidence.HIGH, "Close: [+high, -low]"
-    if is_low_vowel:
-        is_near_open = (
-            profile.has_height_sub_distinction and split_value == "-"
+        return AxisEvidence(
+            "Close",
+            Confidence.HIGH,
+            "height",
+            "Close: [+high, -low]",
+            base_flags | {PlacementFlag.DIRECT},
         )
-        if is_near_open:
-            return (
-                4,
+    if is_low_vowel:
+        near_open = (
+            policy.split_low_by_tense
+            and profile.has_height_sub_distinction
+            and split_value == "-"
+        )
+        if near_open:
+            return AxisEvidence(
+                "Near-open",
                 Confidence.MEDIUM,
+                "height",
                 f"Near-open: [-high, +low, -{split_source}]",
+                base_flags | {PlacementFlag.DIRECT},
             )
-        return 5, Confidence.HIGH, "Open: [-high, +low]"
+        return AxisEvidence(
+            "Open",
+            Confidence.HIGH,
+            "height",
+            "Open: [-high, +low]",
+            base_flags | {PlacementFlag.DIRECT},
+        )
     if is_mid_vowel:
         if split_value == "+":
-            return (
-                2,
+            return AxisEvidence(
+                "Close-mid",
                 Confidence.MEDIUM,
+                "height",
                 f"Close-mid: [-high, -low, +{split_source}]",
+                base_flags | {PlacementFlag.DIRECT},
             )
         if split_value == "-":
-            return (
-                3,
+            return AxisEvidence(
+                "Open-mid",
                 Confidence.MEDIUM,
+                "height",
                 f"Open-mid: [-high, -low, -{split_source}]",
+                base_flags | {PlacementFlag.DIRECT},
             )
-        return (
-            3,
+        return AxisEvidence(
+            "Open-mid",
             Confidence.LOW,
+            "default",
             "Open-mid (default): [-high, -low], no tense/ATR",
+            base_flags
+            | {PlacementFlag.UNDERSPECIFIED, PlacementFlag.DEFAULT_ANCHOR},
         )
-    return 3, Confidence.LOW, "Open-mid (default): underspecified height"
+    return AxisEvidence(
+        "Open-mid",
+        Confidence.LOW,
+        "default",
+        "Open-mid (default): underspecified height",
+        base_flags
+        | {PlacementFlag.UNDERSPECIFIED, PlacementFlag.DEFAULT_ANCHOR},
+    )
 
 
 def _infer_backness(
-    feats: Mapping[str, str], profile: VowelProfile
-) -> tuple[str, Confidence, str]:
-    """Return place, confidence, and reason."""
+    feats: Mapping[str, str],
+    profile: VowelProfile,
+    policy: PlacementPolicy,
+) -> AxisEvidence:
+    """Resolve the vowel's place (front/central/back).
+
+    The paper-recommended tightening: ``[-back]`` only infers front
+    when the inventory has no ``Front`` feature at all. When the
+    inventory uses ``Front`` elsewhere but this segment leaves it
+    absent, anchor central with ``UNDERSPECIFIED`` rather than
+    pretending ``[-back]`` is sufficient evidence on its own.
+    """
+    fr_state = _feature_state(feats, "front")
+    bk_state = _feature_state(feats, "back")
     fr = _nonzero(feats.get("front"))
     bk = _nonzero(feats.get("back"))
-    has_positive_front = fr == "+"
-    has_positive_back = bk == "+"
-    if has_positive_front and not has_positive_back:
-        return "front", Confidence.HIGH, "Front: [+front]"
-    if has_positive_back and not has_positive_front:
-        return "back", Confidence.HIGH, "Back: [+back]"
-    if has_positive_front and has_positive_back:
-        return "central", Confidence.LOW, "Central (conflict): [+front, +back]"
-    has_no_front_value = fr is None
-    has_negative_back = bk == "-"
-    if has_no_front_value and has_negative_back:
-        return "front", Confidence.MEDIUM, "Front (inferred): [-back]"
-    # Explicit [-front] with [-back]: standard central spec.
-    if fr == "-" and bk == "-":
-        return "central", Confidence.HIGH, "Central: [-front, -back]"
-    # Explicit [-front] alone: genuinely ambiguous between central
-    # and back. Conservative default to central with LOW confidence
-    # and a reason that surfaces the ambiguity to the UI.
-    if fr == "-" and bk is None:
-        return (
+    if fr == "+" and bk != "+":
+        return AxisEvidence(
+            "front",
+            Confidence.HIGH,
+            "front",
+            "Front: [+front]",
+            frozenset({PlacementFlag.DIRECT}),
+        )
+    if bk == "+" and fr != "+":
+        return AxisEvidence(
+            "back",
+            Confidence.HIGH,
+            "back",
+            "Back: [+back]",
+            frozenset({PlacementFlag.DIRECT}),
+        )
+    if fr == "+" and bk == "+":
+        return AxisEvidence(
             "central",
             Confidence.LOW,
-            "Central or back unresolved from [-front] alone",
+            "conflict",
+            "Central (conflict): [+front, +back]",
+            frozenset({PlacementFlag.CONFLICT, PlacementFlag.DEFAULT_ANCHOR}),
         )
-    if profile.use_coronal_front_fallback:
+    # Explicit [-front] with [-back]: standard central spec.
+    if fr == "-" and bk == "-":
+        return AxisEvidence(
+            "central",
+            Confidence.HIGH,
+            "front/back",
+            "Central: [-front, -back]",
+            frozenset({PlacementFlag.DIRECT}),
+        )
+    # Front-absent + [-back]: only fire the fallback when the
+    # INVENTORY has no Front feature at all. When Front exists
+    # elsewhere, treat this segment's missing Front as honest
+    # underspecification and anchor central. This was the paper's
+    # diagnosed bug: the old rule fired on segment-level absence,
+    # which over-infers Front on sparse inventories.
+    if fr_state == FeatureState.ABSENT and bk == "-":
+        if not profile.has_front:
+            return AxisEvidence(
+                "front",
+                Confidence.MEDIUM,
+                "back-fallback",
+                "Front inferred from [-back] in inventory lacking [front]",
+                frozenset(
+                    {PlacementFlag.FALLBACK, PlacementFlag.PROFILE_GATED}
+                ),
+            )
+        return AxisEvidence(
+            "central",
+            Confidence.LOW,
+            "default",
+            "Central anchor: [-back] alone, but inventory has [front]",
+            frozenset(
+                {
+                    PlacementFlag.UNDERSPECIFIED,
+                    PlacementFlag.DEFAULT_ANCHOR,
+                }
+            ),
+        )
+    # Explicit [-front] alone: ambiguous between central and back;
+    # conservative central anchor with the ambiguity surfaced.
+    if fr == "-" and bk_state == FeatureState.ABSENT:
+        return AxisEvidence(
+            "central",
+            Confidence.LOW,
+            "default",
+            "Central or back unresolved from [-front] alone",
+            frozenset(
+                {
+                    PlacementFlag.UNDERSPECIFIED,
+                    PlacementFlag.DEFAULT_ANCHOR,
+                }
+            ),
+        )
+    if (
+        policy.allow_coronal_front_fallback
+        and profile.has_coronal
+        and not profile.has_front
+    ):
         cor = _nonzero(feats.get("coronal"))
         ant = feats.get("anterior", "0")
         is_coronal = cor == "+"
         is_retroflex_or_rhotic = ant == "-"
         if is_coronal and not is_retroflex_or_rhotic:
-            return (
+            return AxisEvidence(
                 "front",
                 Confidence.LOW,
+                "coronal-fallback",
                 "Front (inferred): CORONAL fallback (inventory convention)",
+                frozenset(
+                    {
+                        PlacementFlag.FALLBACK,
+                        PlacementFlag.PROFILE_GATED,
+                        PlacementFlag.NONSTANDARD,
+                    }
+                ),
             )
-    return (
+    return AxisEvidence(
         "central",
         Confidence.LOW,
+        "default",
         "Central (default): no front/back specified",
+        frozenset(
+            {PlacementFlag.UNDERSPECIFIED, PlacementFlag.DEFAULT_ANCHOR}
+        ),
     )
 
 
 def _infer_rounding(
-    feats: Mapping[str, str], profile: VowelProfile
-) -> tuple[bool, str]:
+    feats: Mapping[str, str],
+    profile: VowelProfile,
+    policy: PlacementPolicy,
+) -> AxisEvidence:
+    """Resolve rounding. ``value`` is ``"rounded"`` or ``"unrounded"``
+    so renderers can switch on it without re-reading the reason
+    string; column math reads the same fact via ``value == "rounded"``.
+    """
     rnd = _nonzero(feats.get("round"))
     if rnd == "+":
-        return True, "Rounded: [+round]"
-    can_use_labial_fallback = profile.use_labial_round_fallback
+        return AxisEvidence(
+            "rounded",
+            Confidence.HIGH,
+            "round",
+            "Rounded: [+round]",
+            frozenset({PlacementFlag.DIRECT}),
+        )
+    can_use_labial_fallback = (
+        policy.allow_labial_round_fallback
+        and profile.has_labial
+        and not profile.has_round
+    )
     has_labial = feats.get("labial", "0") == "+"
     if can_use_labial_fallback and has_labial:
-        return (
-            True,
+        return AxisEvidence(
+            "rounded",
+            Confidence.MEDIUM,
+            "labial-fallback",
             "Rounded (inferred): LABIAL fallback (inventory convention)",
+            frozenset({PlacementFlag.FALLBACK, PlacementFlag.PROFILE_GATED}),
         )
     if rnd == "-":
-        return False, "Unrounded: [-round]"
-    return False, "Unrounded: no round specified"
+        return AxisEvidence(
+            "unrounded",
+            Confidence.HIGH,
+            "round",
+            "Unrounded: [-round]",
+            frozenset({PlacementFlag.DIRECT}),
+        )
+    return AxisEvidence(
+        "unrounded",
+        Confidence.LOW,
+        "default",
+        "Unrounded: no round specified",
+        frozenset(
+            {PlacementFlag.UNDERSPECIFIED, PlacementFlag.DEFAULT_ANCHOR}
+        ),
+    )
 
 
 def compute_placements(
     segs: list[str],
     profile: VowelProfile,
     norm_feats: Mapping[str, Mapping[str, str]],
+    policy: PlacementPolicy | None = None,
 ) -> tuple[dict[tuple[int, int], list[str]], dict[str, VowelPlacement]]:
     """Place every vowel and group by (row, col) cell.
 
-    Returns ``(occupied, placements)``:
+    ``policy`` defaults to :py:class:`PlacementPolicy` with the
+    module-level defaults; pass one explicitly to enable the
+    paper-recommended stricter settings (``coronal_front``
+    disabled, low-vowel split off, etc.).
 
-    * ``occupied[(row, col)]`` is the list of segments mapping to
-      that chart cell, sorted by descending placement confidence
-      so the highest-confidence vowel ends up first. Ties on
-      confidence are broken by ascending segment-string order so
-      collision-cell ordering is stable and predictable.
-    * ``placements[seg]`` is the full :py:class:`VowelPlacement`
-      for that vowel.
-
-    Pure-Python and shared between the desktop's
-    :py:class:`VowelChartWidget` and the web bridge's chart builder,
-    so cell collisions (typical case: ə, ɜ, ɚ all landing in the
-    open-mid central cell of the General inventory) are grouped the
-    same way on both frontends.
+    Returns ``(occupied, placements)``. Cells are sorted by
+    descending placement confidence (highest first); ties break on
+    ascending segment string for stable ordering.
     """
+    policy = policy or PlacementPolicy()
     occupied: dict[tuple[int, int], list[str]] = {}
     placements: dict[str, VowelPlacement] = {}
     for seg in segs:
-        placement = vowel_grid_pos(norm_feats.get(seg, {}), profile)
+        placement = vowel_grid_pos(norm_feats.get(seg, {}), profile, policy)
         placements[seg] = placement
         occupied.setdefault((placement.row, placement.col), []).append(seg)
     # Confidence DESCENDING (via negated int), segment ASCENDING
-    # within the same confidence tier. A single ``reverse=True`` on
-    # the tuple would also flip the segment direction, so we negate
-    # the confidence component instead to keep secondary order
-    # predictable.
+    # within the same confidence tier. A single ``reverse=True``
+    # would also flip the segment direction.
     for key in occupied:
         occupied[key].sort(key=lambda s: (-int(placements[s].confidence), s))
     return occupied, placements
@@ -531,6 +795,7 @@ def build_vowel_chart_geometry(
     segs: list[str],
     profile: VowelProfile,
     norm_feats: Mapping[str, Mapping[str, str]],
+    policy: PlacementPolicy | None = None,
 ) -> VowelChartGeometry:
     """End-to-end: compute placements and produce a render-ready
     chart geometry for both UIs.
@@ -548,7 +813,9 @@ def build_vowel_chart_geometry(
     no string formatting, no coordinate arithmetic happens at the
     UI layer.
     """
-    occupied, placements = compute_placements(segs, profile, norm_feats)
+    occupied, placements = compute_placements(
+        segs, profile, norm_feats, policy
+    )
 
     populated_logical_rows = sorted({row for (row, _) in occupied})
     logical_row_to_grid_row = {
@@ -612,29 +879,51 @@ def build_vowel_chart_geometry(
 
 
 def vowel_grid_pos(
-    feats: Mapping[str, str], profile: VowelProfile
+    feats: Mapping[str, str],
+    profile: VowelProfile,
+    policy: PlacementPolicy | None = None,
 ) -> VowelPlacement:
-    """Return a VowelPlacement for a single vowel.
+    """Return a :py:class:`VowelPlacement` for a single vowel.
 
     Columns 0-5 map to (front-unr, front-rnd, central-unr,
-    central-rnd, back-unr, back-rnd). Rows 0-5 map to ``ROW_LABELS``.
+    central-rnd, back-unr, back-rnd). Rows 0-5 map to
+    :py:data:`ROW_LABELS`. ``feats`` keys are case-normalized
+    internally so the caller may pass raw inventory feats
+    (PascalCase) or pre-normalized lowercase feats; both produce
+    identical results.
 
-    ``feats`` is a single segment's feature bundle. Keys are
-    case-normalized internally, so the caller may pass raw inventory
-    feats (PascalCase keys like ``"High"``) or pre-normalized
-    lowercase feats; both produce identical results.
+    Top-level ``confidence`` and ``reason`` are derived summaries
+    over the per-axis evidence. ``flags`` is the union of every
+    axis's flag set so a renderer can short-circuit on the presence
+    of (for example) ``CONFLICT`` without inspecting each axis.
     """
+    policy = policy or PlacementPolicy()
     normalized = _normalize_feat_keys(feats)
-    row, h_conf, h_reason = _infer_height(normalized, profile)
-    place, p_conf, p_reason = _infer_backness(normalized, profile)
-    rounded, r_reason = _infer_rounding(normalized, profile)
+    height = _infer_height(normalized, profile, policy)
+    backness = _infer_backness(normalized, profile, policy)
+    rounding = _infer_rounding(normalized, profile, policy)
+
+    row = _ROW_LABEL_TO_INDEX[height.value]
     place_to_column = {"front": 0, "central": 2, "back": 4}
-    base_col = place_to_column[place]
-    col = base_col + 1 if rounded else base_col
-    # IntEnum orders by underlying int, so min picks the weaker
-    # signal directly; no lookup table needed.
-    confidence = min(h_conf, p_conf)
-    reason = f"{h_reason}; {p_reason}; {r_reason}"
+    base_col = place_to_column[backness.value]
+    col = base_col + 1 if rounding.value == "rounded" else base_col
+
+    # IntEnum orders by int; min picks the weakest of the three
+    # axes. Including rounding here is more honest than the prior
+    # height-and-backness-only summary: a vowel with unspecified
+    # rounding shouldn't read as HIGH confidence overall.
+    confidence = min(
+        height.confidence, backness.confidence, rounding.confidence
+    )
+    reason = f"{height.reason}; {backness.reason}; {rounding.reason}"
+    flags = height.flags | backness.flags | rounding.flags
     return VowelPlacement(
-        row=row, col=col, confidence=confidence, reason=reason
+        row=row,
+        col=col,
+        confidence=confidence,
+        reason=reason,
+        height=height,
+        backness=backness,
+        rounding=rounding,
+        flags=flags,
     )
