@@ -34,6 +34,7 @@ from phonology_features.gui.shared.layout import (
     best_segment_n_cols,
     partition_groups_for_spillover,
 )
+from phonology_features.gui.shared.mode_logic import expand_button_tooltip
 from phonology_features.gui.shared.palette import C
 from phonology_features.gui.style_utils import (
     _LAST_HTML_ATTR,
@@ -727,7 +728,7 @@ class AnalysisPanel(QWidget):
         self.expand_btn.setFlat(True)
         self.expand_btn.setFixedSize(24, 20)
         self.expand_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.expand_btn.setToolTip("Maximize analysis pane")
+        self.expand_btn.setToolTip(expand_button_tooltip(is_expanded=False))
         self.expand_btn.clicked.connect(self.expand_toggled.emit)
         self._is_expanded = False
         # Persistent header content: "Selected: /a/ /b/" or
@@ -807,9 +808,7 @@ class AnalysisPanel(QWidget):
         # U+2922 (diagonal arrows out) = expand, U+2923 (diagonal
         # arrows in) = restore.
         self.expand_btn.setText("⤣" if expanded else "⤢")
-        self.expand_btn.setToolTip(
-            "Restore analysis pane" if expanded else "Maximize analysis pane"
-        )
+        self.expand_btn.setToolTip(expand_button_tooltip(is_expanded=expanded))
 
     def minimumSizeHint(self) -> QSize:
         """Sourced from ``REGION_CONSTRAINTS['analysis_panel']``. The

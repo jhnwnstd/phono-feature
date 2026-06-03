@@ -302,6 +302,21 @@ def _load_constants_module() -> ModuleType:
     return module
 
 
+def _load_inventory_setup_module() -> ModuleType:
+    """Side-load ``inventory_setup.py`` so the HTML-bake step can
+    substitute shared dialog strings (``SETUP_DIALOG_TITLE``,
+    ``SETUP_NAME_PLACEHOLDER``) into ``index.html``.
+    """
+    path = DESKTOP_GUI / "shared" / "inventory_setup.py"
+    spec = importlib.util.spec_from_file_location("_inv_setup", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["_inv_setup"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _build_limits_payload() -> dict[str, int]:
     """Bake the engine's hard caps into a flat dict the web JS
     consumes pre-bridge.
@@ -368,6 +383,19 @@ def _build_status_text_payload() -> dict[str, str]:
         # so JS reads it without ambiguity with the per-mode keys.
         payload["no_engine"] = module.mode_status_text(
             module.Mode.SEG_TO_FEAT, has_engine=False
+        )
+        # Other user-visible strings the JS would otherwise
+        # hardcode. Each one is the exact value the desktop renders
+        # via its own ``mode_logic`` call; baking here makes the
+        # Python helper the single source.
+        payload["expand_maximize"] = module.expand_button_tooltip(
+            is_expanded=False
+        )
+        payload["expand_restore"] = module.expand_button_tooltip(
+            is_expanded=True
+        )
+        payload["clipboard_copy_template"] = (
+            module.CLIPBOARD_COPY_MESSAGE_TEMPLATE
         )
         return payload
     finally:
@@ -681,6 +709,41 @@ def hash_assets() -> None:
         statusbar_marker + status_text_payload["no_engine"] + "</span>",
         html,
         count=1,
+    )
+
+    # Bake the setup-dialog title + name placeholder from
+    # ``shared/inventory_setup.py`` so the desktop dialog and the
+    # web modal cannot drift on these strings.
+    inv_setup = _load_inventory_setup_module()
+
+    def _bake(label: str, pattern: str, replacement: str) -> None:
+        nonlocal html
+        new_html, n = re.subn(pattern, replacement, html, count=1)
+        if n != 1:
+            raise RuntimeError(
+                f"index.html bake for {label!r} matched {n} sites"
+                " (expected 1); the source HTML structure has drifted"
+                " from the regex in build.py. Update build.py to match."
+            )
+        html = new_html
+
+    _bake(
+        "setup-dialog-title",
+        r'(<div class="dialog-title" id="setup-dialog-title">)[^<]*(</div>)',
+        r"\1" + inv_setup.SETUP_DIALOG_TITLE + r"\2",
+    )
+    _bake(
+        "setup-name-placeholder",
+        r'(id="setup-name-input"[^>]*?placeholder=")[^"]*(")',
+        r"\1" + inv_setup.SETUP_NAME_PLACEHOLDER + r"\2",
+    )
+    # Expand button aria-label comes from
+    # ``mode_logic.expand_button_tooltip(is_expanded=False)`` (the
+    # initial state). JS swaps to the restore label on toggle.
+    _bake(
+        "expand-btn-aria-label",
+        r'(id="expand-btn"[^>]*?aria-label=")[^"]*(")',
+        r"\1" + status_text_payload["expand_maximize"] + r"\2",
     )
     # Same inline-JSON pattern as the status block. JS reads
     # ``LIMITS.max_inventory_file_bytes`` for the upload pre-check

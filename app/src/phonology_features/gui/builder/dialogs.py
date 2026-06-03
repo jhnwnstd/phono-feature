@@ -22,6 +22,8 @@ from phonology_features.gui.shared.inventory_setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
     FEATURE_PRESETS,
+    SETUP_DIALOG_TITLE,
+    SETUP_NAME_PLACEHOLDER,
     infer_split,
     normalize_setup_name,
     validate_setup,
@@ -222,7 +224,7 @@ class InputDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("New Inventory Setup")
+        self.setWindowTitle(SETUP_DIALOG_TITLE)
         self.setMinimumSize(500, 500)
         self.setWindowModality(Qt.WindowModality.WindowModal)
         layout = QVBoxLayout(self)
@@ -241,7 +243,7 @@ class InputDialog(QDialog):
         # accepted in the field, and only get the error at save. With
         # it, the field itself stops accepting input at the limit.
         self.name_edit.setMaxLength(MAX_NAME_LENGTH)
-        self.name_edit.setPlaceholderText("e.g. My Language Inventory")
+        self.name_edit.setPlaceholderText(SETUP_NAME_PLACEHOLDER)
         row.addWidget(self.name_edit)
         return row
 

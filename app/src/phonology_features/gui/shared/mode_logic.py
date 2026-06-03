@@ -118,3 +118,27 @@ def mode_status_text(mode: Mode | str, *, has_engine: bool) -> str:
     if Mode(mode) == Mode.SEG_TO_FEAT:
         return "Click a segment to inspect its features."
     return "Toggle feature values (+/−) to find matching segments."
+
+
+def expand_button_tooltip(*, is_expanded: bool) -> str:
+    """Tooltip on the analysis pane's ⤢ / ⤣ button. Toggles
+    between "Maximize" and "Restore" depending on current state.
+    Both UIs render the same labels.
+    """
+    return "Restore analysis pane" if is_expanded else "Maximize analysis pane"
+
+
+#: Portable template for the clipboard-copy status message.
+#: ``{seg}`` is the segment glyph the user copied. Python uses
+#: ``.format(seg=...)``; the web's main.js does the same substitution
+#: via ``String.prototype.replace`` so both UIs surface identical
+#: wording without round-tripping the bridge on every copy.
+CLIPBOARD_COPY_MESSAGE_TEMPLATE: str = "Copied /{seg}/ to clipboard"
+
+
+def clipboard_copy_message(seg: str) -> str:
+    """Status-bar message after a segment is copied to the clipboard
+    via the segment button's right-click action. Both UIs surface
+    the same wording from :py:data:`CLIPBOARD_COPY_MESSAGE_TEMPLATE`.
+    """
+    return CLIPBOARD_COPY_MESSAGE_TEMPLATE.format(seg=seg)

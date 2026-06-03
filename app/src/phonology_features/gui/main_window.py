@@ -71,7 +71,11 @@ from phonology_features.gui.shared.constants import (
     sort_features,
 )
 from phonology_features.gui.shared.layout import distribute_feature_groups
-from phonology_features.gui.shared.mode_logic import Mode, mode_status_text
+from phonology_features.gui.shared.mode_logic import (
+    Mode,
+    clipboard_copy_message,
+    mode_status_text,
+)
 from phonology_features.gui.shared.palette import (
     ALLOWED_PALETTE_MODES,
     ALLOWED_THEMES,
@@ -1445,7 +1449,7 @@ class MainWindow(QMainWindow):
         if clipboard is None or status is None:
             return
         clipboard.setText(segment)
-        status.showMessage(f"Copied /{segment}/ to clipboard", 0)
+        status.showMessage(clipboard_copy_message(segment), 0)
 
     def _on_segment_pressed(self) -> None:
         """Mouse press on a segment button: switch to seg mode before

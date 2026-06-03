@@ -52,6 +52,13 @@ DEFAULT_SEGMENTS: str = "p b t d k ɡ "
 # is available via the dropdown.
 DEFAULT_FEATURES: str = "Syllabic\nConsonantal\n"
 
+# Shared dialog strings. Both UIs render the same setup modal/
+# dialog; previously each carried its own copy of these literals
+# (desktop ``dialogs.py``, web ``index.html``) which let them drift
+# ("New Inventory Setup" vs "New inventory" was the surface form).
+SETUP_DIALOG_TITLE: str = "New inventory"
+SETUP_NAME_PLACEHOLDER: str = "e.g. My Language Inventory"
+
 # Named feature presets. Keys are the dropdown labels, values are
 # the feature lists. "Custom" is the no-fill option.
 FEATURE_PRESETS: Mapping[str, list[str]] = {

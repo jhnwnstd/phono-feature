@@ -3430,6 +3430,15 @@ function wireExpandButton() {
         const pane = nodes.analysisPane;
         const expanded = pane.classList.toggle("expanded");
         nodes.expandBtn.textContent = expanded ? "⤣" : "⤢";
+        // Keep the tooltip / aria-label in lockstep with the toggle
+        // state, matching the desktop's ``AnalysisPanel.set_expanded``.
+        // Strings come from ``STATUS_TEXT`` (baked from shared
+        // ``mode_logic.expand_button_tooltip``).
+        const tip = expanded
+            ? (STATUS_TEXT.expand_restore || "Restore analysis pane")
+            : (STATUS_TEXT.expand_maximize || "Maximize analysis pane");
+        nodes.expandBtn.setAttribute("aria-label", tip);
+        nodes.expandBtn.title = tip;
     });
 }
 
@@ -3644,7 +3653,13 @@ function _hideVowelTooltip() {
  *  copy isn't silent.
  */
 function copySegmentToClipboard(seg) {
-    const onOk = () => setStatus(`Copied /${seg}/ to clipboard`);
+    // Source the success message from STATUS_TEXT.clipboard_copy_template
+    // (baked from mode_logic.CLIPBOARD_COPY_MESSAGE_TEMPLATE) so it
+    // stays in lockstep with the desktop. The failure message is
+    // web-only so it stays inline.
+    const tpl = STATUS_TEXT.clipboard_copy_template
+        || "Copied /{seg}/ to clipboard";
+    const onOk = () => setStatus(tpl.replace("{seg}", seg));
     const onFail = () => setStatus(`Could not copy /${seg}/`);
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(seg).then(onOk, onFail);
