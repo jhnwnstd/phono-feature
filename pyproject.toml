@@ -6,8 +6,8 @@ requires-python = ">=3.11"
 
 # Workspace marker. uv (and other tools that respect it) install all
 # member packages in editable mode against each other; pip users can
-# run ``pip install -e packages/phonology-engine -e app`` to achieve
-# the same result without uv.
+# run ``pip install -e shared -e desktop -e web`` to achieve the
+# same result without uv.
 [tool.uv.workspace]
 members = ["shared", "desktop", "web"]
 

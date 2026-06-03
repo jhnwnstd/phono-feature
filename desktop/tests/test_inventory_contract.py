@@ -2540,18 +2540,3 @@ def test_builder_save_omits_zero_cells_to_preserve_omission(
         f"{serialized['segments']['m']}"
     )
     close_builder_silent(b)
-
-
-def test_validation_report_html_escapes_issue_text() -> None:
-    """The validation-report HTML interpolates raw issue strings; if
-    one of those quotes back inventory data containing tag characters
-    we must not let it break out of the <p>."""
-    from phonology_features.gui.main_window import MainWindow
-
-    issues = (
-        "segment '<script>': bad",
-        "feature '\"oops\"': bad",
-    )
-    out = MainWindow._validation_report_html(issues)
-    assert "<script>" not in out
-    assert "&lt;script&gt;" in out

@@ -900,7 +900,7 @@ class MainWindow(QMainWindow):
             self.status.showMessage(
                 inventory_load_failure_message(fname=fname, issue=e.issues[0])
             )
-            self.analysis.set_html(self._validation_report_html(e.issues))
+            self.analysis.set_html(render_validation_report(e.issues))
             return
         # Swap engines: grouping/normalization caches live on the
         # engine (cached_property), so a new engine = fresh caches.
@@ -925,15 +925,6 @@ class MainWindow(QMainWindow):
             self.status.showMessage(base_msg)
         self._inv_dir.register_loaded_path(path)
         self._populate_after_load()
-
-    @staticmethod
-    def _validation_report_html(issues: tuple[str, ...]) -> str:
-        """Render validation issues as HTML. Thin wrapper over the
-        shared renderer so the desktop pane and the web Class tab
-        produce byte-identical markup. The shared function escapes
-        every interpolated issue.
-        """
-        return render_validation_report(issues)
 
     def _populate_after_load(self) -> None:
         """Rebuild segment + feature widgets for the freshly-loaded engine.
