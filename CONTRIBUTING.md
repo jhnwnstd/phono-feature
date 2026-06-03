@@ -10,57 +10,75 @@ one place doesn't silently rot another.
 The desktop app (PyQt6) and the browser app (Pyodide) are two
 front-ends over the same engine and the same renderer. The pattern:
 
-1. Pure-Python modules live in `app/src/phonology_features/gui/shared/`.
-   They have **no module-level Qt imports** (the few Qt classes used
-   inside `palette.py` are imported lazily inside functions).
-2. `web/scripts/build.py:RELAYED_SOURCES` lists each shared module by
-   filename. The build script copies them into
-   `web/dist/render/phonology_features/gui/shared/`.
-3. The web bridge (`web/api.py`) imports from
-   `phonology_features.gui.shared.<name>` at runtime inside Pyodide,
-   so any change you make in `shared/` reaches both UIs on the next
-   `python web/scripts/build.py`.
+1. Pure-Python modules live in `shared/src/phonology_shared/`. The
+   `engine/` subpackage is the framework-agnostic computation core;
+   the `render/` subpackage holds UI-agnostic render and view-model
+   helpers. Neither has Qt or DOM imports at module scope.
+2. `web/scripts/build.py:RELAYED_SOURCES` lists each render module
+   by filename. The build copies them into
+   `web/dist/render/phonology_shared/render/` plus the engine into
+   `web/dist/engine/phonology_shared/engine/`, then bundles both
+   into `python_bundle.zip` which Pyodide mounts via zipimport.
+3. The web bridge (`web/src/phonology_web/api.py`) imports from
+   `phonology_shared.{engine,render}.<name>` at runtime inside
+   Pyodide, so any change you make in `shared/` reaches both UIs
+   on the next `python web/scripts/build.py`.
 
 In addition to the source relay, two CSS files are generated at
 build time from the same Python constants the desktop reads:
 
-* `dist/theme.css` from `shared/palette.py` (LIGHT, DARK, COLORBLIND_*
-  dicts).
-* `dist/layout.css` from `shared/layout.py` (pane-width thresholds,
-  per-row heights, analysis-pane sizing).
+* `dist/theme.css` from `shared/.../render/palette.py` (LIGHT,
+  DARK, COLORBLIND_* dicts).
+* `dist/layout.css` from `shared/.../render/layout.py` (pane-width
+  thresholds, per-row heights, analysis-pane sizing).
 
-If you find yourself adding a number to `web/style.css` that already
-exists in `shared/layout.py`, route it through the generator instead
-and consume the CSS variable. Parity tests in `app/tests/` will fail
-loudly if a layout literal in CSS disagrees with the Python source.
+If you find yourself adding a number to `web/style.css` that
+already exists in `render/layout.py`, route it through the
+generator instead and consume the CSS variable. Parity tests in
+`shared/tests/` fail loudly if a layout literal in CSS disagrees
+with the Python source.
 
-## Three-tier `gui/` layout
+## Repo layout
 
 ```
-app/src/phonology_features/gui/
-├── shared/         relayed to the web; no Qt at import time
-├── controllers/    desktop-only orchestration objects MainWindow owns
-├── builder/        Inventory Builder window and helpers
-└── *.py            desktop Qt widgets (MainWindow, widgets, vowel_chart,
-                    themed_widgets, style_utils, _themed_style_cache)
+phono-feature/
+├── desktop/                 PyQt6 application + tests + inventory data.
+│   ├── src/phonology_features/
+│   │   ├── _logging.py      Pure Python; desktop owns this.
+│   │   ├── _settings.py     QSettings; Qt-only.
+│   │   └── gui/
+│   │       ├── builder/     Inventory Builder window and helpers.
+│   │       ├── controllers/ Desktop orchestrators (mode, theme, etc).
+│   │       └── *.py         Qt widgets (MainWindow, widgets, etc).
+│   ├── inventories/         Canonical JSON inventories.
+│   └── tests/               Qt-dependent tests.
+├── shared/                  Framework-agnostic Python both UIs use.
+│   └── src/phonology_shared/
+│       ├── engine/          Computation core (formerly phonology_engine).
+│       └── render/          UI-agnostic render + view-model helpers.
+├── web/                     Pyodide bridge + browser surface.
+│   ├── src/phonology_web/api.py  JS-to-Python bridge.
+│   ├── index.html, main.js, style.css, sw.js
+│   ├── scripts/             build.py, smoke.py
+│   └── tests/               Bridge validation tests.
+└── tools/                   Dev tooling (capture_screens, install.sh, ...).
 ```
 
 The boundary rules:
 
-* `shared/` is the only place web-relayed code lives. Anything that
-  imports `PyQt6.QtWidgets` at module scope belongs in `gui/` proper,
-  not `shared/`.
-* `controllers/` holds the four desktop-only orchestrators
+* `shared/` is the only place web-consumed Python lives. Anything
+  that imports `PyQt6.QtWidgets` at module scope belongs in
+  `desktop/src/phonology_features/gui/` proper.
+* The engine never imports anything UI-shaped. `render` may
+  import from `engine`; the reverse is forbidden.
+* `controllers/` holds desktop-only orchestrators
   (`GeometryController`, `ModeController`, `ThemeController`,
-  `InventoryDirController`). They are constructed and owned by
-  `MainWindow` and have no module-private (`_`-prefixed) class
-  prefix because they are no longer module-internal.
-* `builder/` is self-contained and uses `shared/` for its grid-logic
-  helpers.
+  `InventoryDirController`).
 
-When you add a new module, the first question is "would the web need
-this too?" If yes, it goes in `shared/` and the build relay needs
-the filename appended to `RELAYED_SOURCES`.
+When you add a new module, the first question is "would the web
+need this too?" If yes, it goes in `shared/`. Render-side
+additions also need the filename appended to `RELAYED_SOURCES`
+in `web/scripts/build.py`.
 
 ## Launchers and the install bootstrap
 
@@ -76,40 +94,44 @@ Each launcher delegates to a shared bootstrap in `tools/`:
   `phono_install`;
 * the Windows launcher `call`s `tools\install.bat`.
 
-Both bootstraps pick a Python 3.11+ interpreter, create `app/.venv/`
-on first run, install the engine and the app in editable mode, and
-stamp `app/.venv/.installed` so subsequent runs skip the install
-step unless `pyproject.toml` changes.
+Both bootstraps pick a Python 3.11+ interpreter, create
+`desktop/.venv/` on first run, install `phonology-shared`,
+`phonology-features`, and `phonology-web` in editable mode, and
+stamp `desktop/.venv/.installed` so subsequent runs skip the
+install step unless `pyproject.toml` changes.
 
-If you change the launcher contract (Python version, install flags,
-venv location), change `tools/install.sh` and `tools/install.bat`
-together so the three launchers stay in lockstep.
+If you change the launcher contract (Python version, install
+flags, venv location), change `tools/install.sh` and
+`tools/install.bat` together so the three launchers stay in
+lockstep.
 
 ## Where tests live
 
-| Suite                              | What it covers                                |
-|------------------------------------|-----------------------------------------------|
-| `packages/phonology-engine/tests/` | Pure-Python engine: Inventory, FeatureEngine, geometry. No Qt. |
-| `app/tests/`                       | Desktop GUI + integration. Boots PyQt6 under `QT_QPA_PLATFORM=offscreen`. |
-| `app/tests/test_jsfallback_parity.py`, `test_status_text_relay.py` | Pin the web's pre-bridge JS mirrors and the build-time JSON bake against the Python source they shadow. |
-| `web/scripts/smoke.py`             | Playwright end-to-end: boots the built site through Pyodide, drives the bridge, and asserts the analysis pane populates. |
+| Suite                | What it covers |
+|----------------------|---|
+| `shared/tests/`      | Pure-Python engine + render: Inventory, FeatureEngine, geometry, layout, mode_logic, view_models. No Qt. |
+| `desktop/tests/`     | Desktop GUI + integration. Boots PyQt6 under `QT_QPA_PLATFORM=offscreen`. |
+| `web/tests/`         | Bridge-boundary validation: every `api.py` entry rejects bad input as `ValidationError`. |
+| `shared/tests/test_jsfallback_parity.py`, `test_status_text_relay.py` | Pin the web's pre-bridge JS mirrors and the build-time JSON bake against the Python source they shadow. |
+| `web/scripts/smoke.py` | Playwright end-to-end: boots the built site through Pyodide, drives the bridge, asserts the analysis pane populates. |
 
 ## Lint and verification chain
 
-The CI pipeline runs the lint chain from the repo root and the test
-suites from each package:
+The CI pipeline runs the lint chain from the repo root and the
+test suites from each package:
 
 ```bash
-app/.venv/bin/python -m isort . --profile black --check-only
-app/.venv/bin/python -m black -l 79 --check .
-app/.venv/bin/python -m flake8 app/ packages/ web/scripts/
-app/.venv/bin/python -m mypy
+desktop/.venv/bin/python -m isort . --profile black --check-only
+desktop/.venv/bin/python -m black -l 79 --check .
+desktop/.venv/bin/python -m flake8 .
+desktop/.venv/bin/python -m mypy
 
-app/.venv/bin/python -m pytest packages/phonology-engine -q
-app/.venv/bin/python -m pytest app/tests -q
+desktop/.venv/bin/python -m pytest shared/tests -q
+desktop/.venv/bin/python -m pytest desktop/tests -q
+desktop/.venv/bin/python -m pytest web/tests -q
 
-app/.venv/bin/python web/scripts/build.py
-app/.venv/bin/python web/scripts/smoke.py
+desktop/.venv/bin/python web/scripts/build.py
+desktop/.venv/bin/python web/scripts/smoke.py
 ```
 
 `uv.lock` is committed; `uv lock --check` should pass before any
@@ -117,19 +139,20 @@ dependency-touching change lands.
 
 ## Tooling scripts
 
-`scripts/` holds developer tooling that isn't part of the runtime:
+`tools/` holds developer tooling that isn't part of the runtime:
 
-* `install.sh` -- shared launcher bootstrap (sourced by RUN-Linux /
-  RUN-Mac).
+* `install.sh` -- shared launcher bootstrap (sourced by RUN-Linux
+  / RUN-Mac).
 * `install.bat` -- Windows equivalent (called by RUN-Windows.bat).
-* `capture_screens.py` -- drives the offscreen Qt build through the
-  scripted demo states and saves PNGs to `.github/screenshots/`.
+* `capture_screens.py` -- drives the offscreen Qt build through
+  the scripted demo states and saves PNGs to `.github/screenshots/`.
 * `profile_app.py` -- cold-start cProfile of the full session,
   walking through every bundled inventory and every mode.
 
-`app/inventories/_schema.json` is the JSON Schema for inventory
-files. The leading underscore tells both the desktop dropdown and
-the web build to skip it (it's metadata, not a loadable inventory).
+`desktop/inventories/_schema.json` is the JSON Schema for
+inventory files. The leading underscore tells both the desktop
+dropdown and the web build to skip it (it's metadata, not a
+loadable inventory).
 
 ## More
 

@@ -12,16 +12,16 @@ on the next build.
 
 | If you want to change... | Edit this... | Picked up by |
 |---|---|---|
-| Engine logic (Inventory, FeatureEngine, geometry) | `packages/phonology-engine/src/phonology_engine/*.py` | Desktop + web (engine wheel rebuilt on every build) |
-| HTML chip / table rendering shown in Analysis pane | `app/src/phonology_features/gui/shared/analysis.py` | Desktop + web (relayed into build) |
-| Inventory summary shaping and seg/feat analysis payloads | `app/src/phonology_features/gui/shared/view_models.py` | Desktop + web (relayed into build) |
-| Mode-switch projection rules and per-mode helper text | `app/src/phonology_features/gui/shared/mode_logic.py` | Desktop + web (relayed into build) |
-| Theme colors (light / dark palette tokens) | `app/src/phonology_features/gui/shared/palette.py` | Desktop (Qt) + web (`theme.css` generated from it) |
-| Feature display order, chip box model, mono font chain | `app/src/phonology_features/gui/shared/constants.py` | Desktop + web (relayed into build) |
-| Bundled inventories shown in the dropdown | Add / edit JSON in `app/inventories/` | Desktop + web (auto-discovered, label from `metadata.name`) |
+| Engine logic (Inventory, FeatureEngine, geometry) | `shared/src/phonology_shared/engine/*.py` | Desktop + web (bundled into `python_bundle.zip` on every build) |
+| HTML chip / table rendering shown in Analysis pane | `shared/src/phonology_shared/render/analysis.py` | Desktop + web (relayed into build) |
+| Inventory summary shaping and seg/feat analysis payloads | `shared/src/phonology_shared/render/view_models.py` | Desktop + web (relayed into build) |
+| Mode-switch projection rules and per-mode helper text | `shared/src/phonology_shared/render/mode_logic.py` | Desktop + web (relayed into build) |
+| Theme colors (light / dark palette tokens) | `shared/src/phonology_shared/render/palette.py` | Desktop (Qt) + web (`theme.css` generated from it) |
+| Feature display order, chip box model, mono font chain | `shared/src/phonology_shared/render/constants.py` | Desktop + web (relayed into build) |
+| Bundled inventories shown in the dropdown | Add / edit JSON in `desktop/inventories/` | Desktop + web (auto-discovered, label from `metadata.name`) |
 | Web-only layout (panel structure, toolbar, loading screen) | `web/index.html`, `web/style.css` | Web only |
 | Web-only event wiring (clicks, mode toggle, upload) | `web/main.js` | Web only |
-| Bridge between JS and Python (what gets exposed) | `web/api.py` | Web only |
+| Bridge between JS and Python (what gets exposed) | `web/src/phonology_web/api.py` | Web only |
 | Build script (rarely) | `web/scripts/build.py` | Build tooling |
 
 The `web/dist/` directory is the build output. Never edit it
@@ -32,11 +32,11 @@ deployed verbatim by `.github/workflows/pages.yml`.
 
 | File | Generated from |
 |---|---|
-| `dist/theme.css` | `app/src/phonology_features/gui/shared/palette.py` (LIGHT + DARK dicts → CSS variables) |
-| `dist/inventories.json` | `app/inventories/*.json` (manifest with file paths + display labels) |
-| `dist/render/phonology_features/gui/shared/{palette,constants,analysis,view_models,mode_logic,layout,vowel_layout,inventory_setup,grid_logic}.py` | Copies of the canonical desktop sources |
-| `dist/wheels/phonology_engine-*.whl` | Built from `packages/phonology-engine/` |
-| `dist/inventories/*.json` | Copies of `app/inventories/*.json` |
+| `dist/theme.css` | `shared/src/phonology_shared/render/palette.py` (LIGHT + DARK dicts -> CSS variables) |
+| `dist/layout.css` | `shared/src/phonology_shared/render/layout.py` + `constants.py` (pane widths, row heights, font ladder, region constraints) |
+| `dist/inventories.json` | `desktop/inventories/*.json` (manifest with file paths + display labels) |
+| `dist/python_bundle.zip` | `shared/src/phonology_shared/{engine,render}/*.py` + `web/src/phonology_web/api.py` (mounted into Pyodide via zipimport) |
+| `dist/inventories/*.json` | Copies of `desktop/inventories/*.json` |
 
 ## Local testing
 
