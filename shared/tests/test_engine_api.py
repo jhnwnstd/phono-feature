@@ -19,21 +19,21 @@ from phonology_shared.engine.geometry import GeometryAnalyzer
 def _find_repo_root() -> Path:
     """Walk up from this file until we find the workspace root.
 
-    The bundled inventories currently ship with the desktop app at
-    ``app/inventories/``; the engine package is at
-    ``packages/phonology-engine/``. From either depth, the workspace
-    root is the first ancestor that contains both ``app`` and
-    ``packages`` directories.
+    The bundled inventories ship with the desktop app at
+    ``desktop/inventories/``; the shared sources live at
+    ``shared/src/phonology_shared/``. The workspace root is the
+    first ancestor that contains both ``desktop`` and ``shared``
+    directories.
     """
     for ancestor in Path(__file__).resolve().parents:
-        if (ancestor / "app").is_dir() and (ancestor / "packages").is_dir():
+        if (ancestor / "desktop").is_dir() and (ancestor / "shared").is_dir():
             return ancestor
     raise RuntimeError("could not locate workspace root from test file")
 
 
 REPO_ROOT = _find_repo_root()
 HAYES_INVENTORY = str(
-    REPO_ROOT / "app" / "inventories" / "hayes_features.json"
+    REPO_ROOT / "desktop" / "inventories" / "hayes_features.json"
 )
 
 

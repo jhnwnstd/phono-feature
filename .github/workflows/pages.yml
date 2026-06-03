@@ -11,17 +11,15 @@ on:
     branches: [main]
     paths:
       - web/**
-      - packages/phonology-engine/**
-      - app/src/phonology_features/gui/shared/**
-      - app/inventories/**
+      - shared/**
+      - desktop/inventories/**
       - .github/workflows/pages.yml
   pull_request:
     branches: [main]
     paths:
       - web/**
-      - packages/phonology-engine/**
-      - app/src/phonology_features/gui/shared/**
-      - app/inventories/**
+      - shared/**
+      - desktop/inventories/**
       - .github/workflows/pages.yml
   workflow_dispatch:
 

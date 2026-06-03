@@ -14,7 +14,7 @@ Pipeline:
                                   dist/render/
 4. ``generate_theme_css``        palette.py -> dist/theme.css
 5. ``generate_layout_css``       layout.py -> dist/layout.css
-6. ``copy_inventories``          app/inventories/*.json -> dist/
+6. ``copy_inventories``          desktop/inventories/*.json -> dist/
                                   inventories/ + dist/inventories.json
 7. ``write_python_bundle``       dist/{engine,render}/* + dist/api.py
                                   -> dist/python_bundle.zip
@@ -52,7 +52,7 @@ DIST = WEB_DIR / "dist"
 SHARED_SRC = ROOT / "shared" / "src"
 ENGINE_DIR = SHARED_SRC / "phonology_shared" / "engine"
 RENDER_DIR = SHARED_SRC / "phonology_shared" / "render"
-INVENTORIES = ROOT / "app" / "inventories"
+INVENTORIES = ROOT / "desktop" / "inventories"
 
 # Make the shared source tree importable as a normal package so the
 # ``spec_from_file_location`` side-loads below can transitively
@@ -136,9 +136,9 @@ def relay_renderer_sources() -> None:
 
 
 def copy_inventories() -> None:
-    """Bundle every inventory found in ``app/inventories/`` and
+    """Bundle every inventory found in ``desktop/inventories/`` and
     emit a manifest. Both are read by main.js at runtime; adding a
-    new JSON to ``app/inventories/`` makes it appear in the dropdown
+    new JSON to ``desktop/inventories/`` makes it appear in the dropdown
     on the next build.
 
     Files ``.gitignore`` excludes are skipped so local-only test

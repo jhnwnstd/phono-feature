@@ -13,7 +13,7 @@ REM ``source`` install.sh so its env changes are visible to the caller.
 set "PLATFORM=%~1"
 set "SCRIPT_DIR=%~dp0"
 set "ROOT_DIR=%SCRIPT_DIR%.."
-set "APP_DIR=%ROOT_DIR%\app"
+set "APP_DIR=%ROOT_DIR%\desktop"
 set "SHARED_DIR=%ROOT_DIR%\shared"
 set "WEB_DIR=%ROOT_DIR%\web"
 set "VENV_DIR=%APP_DIR%\.venv"

@@ -7,9 +7,9 @@ exclude =
     .mypy_cache,
     .pytest_cache,
     .ruff_cache,
-    app/.venv,
-    app/build,
-    app/dist,
+    desktop/.venv,
+    desktop/build,
+    desktop/dist,
     web/dist
 per-file-ignores =
-    app/tests/conftest.py:E402
+    desktop/tests/conftest.py:E402

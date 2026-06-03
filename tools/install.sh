@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Shared install bootstrap for the desktop launchers (sourced, not
-# executed). Defines phono_install, which creates app/.venv on first
-# call and refreshes the editable install when either pyproject.toml
-# is newer than the marker stamp. Leaves the venv activated for the
-# calling shell so the launcher can exec phonology-features directly.
+# executed). Defines phono_install, which creates desktop/.venv on
+# first call and refreshes the editable install when either
+# pyproject.toml is newer than the marker stamp. Leaves the venv
+# activated for the calling shell so the launcher can exec
+# phonology-features directly.
 #
 # Usage from a launcher:
 #     source "$REPO_ROOT/tools/install.sh"
 #     phono_install "macOS"     # or "Linux"
 #     exec phonology-features "$@"
 
-# Minimum Python version. Bump together with app/pyproject.toml's
+# Minimum Python version. Bump together with desktop/pyproject.toml's
 # requires-python; the pick_python check guards both.
 PHONO_MIN_PY="3.11"
 
@@ -33,7 +34,7 @@ phono_install() {
     local platform_name="${1:-this platform}"
     local repo_root
     repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-    cd "$repo_root/app"
+    cd "$repo_root/desktop"
 
     local venv_dir=".venv"
     local stamp="$venv_dir/.installed"

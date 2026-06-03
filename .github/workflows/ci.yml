@@ -49,8 +49,9 @@ jobs:
           python-version: '3.11'
           cache: pip
           cache-dependency-path: |
-            app/pyproject.toml
-            packages/phonology-engine/pyproject.toml
+            desktop/pyproject.toml
+            shared/pyproject.toml
+            web/pyproject.toml
 
       - name: Install Qt runtime dependencies (Linux)
         if: runner.os == 'Linux'
@@ -90,15 +91,15 @@ jobs:
         # every downstream step that runs against the launcher's venv.
         shell: bash
         run: |
-          if [[ -d app/.venv/bin ]]; then
-              echo "$GITHUB_WORKSPACE/app/.venv/bin" >> "$GITHUB_PATH"
+          if [[ -d desktop/.venv/bin ]]; then
+              echo "$GITHUB_WORKSPACE/desktop/.venv/bin" >> "$GITHUB_PATH"
           else
-              echo "$GITHUB_WORKSPACE/app/.venv/Scripts" >> "$GITHUB_PATH"
+              echo "$GITHUB_WORKSPACE/desktop/.venv/Scripts" >> "$GITHUB_PATH"
           fi
-          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/app/.venv" >> "$GITHUB_ENV"
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/desktop/.venv" >> "$GITHUB_ENV"
 
       - name: Install dev dependencies into the launcher's venv
-        working-directory: app
+        working-directory: desktop
         shell: bash
         run: python -m pip install --quiet -e ".[dev]"
 
@@ -122,16 +123,22 @@ jobs:
           node --check web/sw.js
 
       - name: Run pytest in the launcher's venv
-        working-directory: app
+        working-directory: desktop
         shell: bash
         run: pytest -v
 
-      - name: Run engine-package pytest in the same venv
-        # Engine is the single source of truth shared with the web build,
-        # so a regression here breaks both downstream consumers; run on
-        # every OS because inventory I/O touches platform-divergent paths
-        # (atomic-replace semantics, BOM handling, line endings).
-        working-directory: packages/phonology-engine
+      - name: Run shared-package pytest in the same venv
+        # Engine + render are the single source of truth shared
+        # with the web build; a regression here breaks both
+        # downstream consumers. Runs on every OS because inventory
+        # I/O touches platform-divergent paths (atomic-replace
+        # semantics, BOM handling, line endings).
+        working-directory: shared
+        shell: bash
+        run: pytest -v
+
+      - name: Run web bridge pytest in the same venv
+        working-directory: web
         shell: bash
         run: pytest -v
 

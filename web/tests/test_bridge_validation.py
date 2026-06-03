@@ -27,7 +27,7 @@ from phonology_shared.engine import (
 from phonology_web import api as bridge
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-HAYES = str(REPO_ROOT / "app" / "inventories" / "hayes_features.json")
+HAYES = str(REPO_ROOT / "desktop" / "inventories" / "hayes_features.json")
 
 
 @pytest.fixture(autouse=True)

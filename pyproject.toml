@@ -9,7 +9,7 @@ requires-python = ">=3.11"
 # run ``pip install -e packages/phonology-engine -e app`` to achieve
 # the same result without uv.
 [tool.uv.workspace]
-members = ["shared", "app", "web"]
+members = ["shared", "desktop", "web"]
 
 [tool.uv.sources]
 # Desktop and web depend on phonology-shared. In the workspace,
@@ -37,7 +37,7 @@ target-version = ["py311"]
 [tool.mypy]
 python_version = "3.11"
 files = [
-    "app/src",
+    "desktop/src",
     "shared/src",
     "web/src",
     "web/scripts/build.py",
@@ -53,4 +53,4 @@ strict = true
 ignore_missing_imports = true
 warn_unreachable = true
 no_implicit_optional = true
-exclude = "^(app/)?build/|^web/dist/"
+exclude = "^(desktop/)?build/|^web/dist/"
