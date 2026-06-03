@@ -62,6 +62,13 @@ INVENTORIES = ROOT / "app" / "inventories"
 _APP_SRC = str(ROOT / "app" / "src")
 if _APP_SRC not in sys.path:
     sys.path.insert(0, _APP_SRC)
+# Same trick for the engine package -- ``inventory_setup.py`` imports
+# ``phonology_engine.limits.MAX_NAME_LENGTH`` at module load, which
+# our side-load helpers transitively trigger when reading shared
+# dialog strings for the HTML bake.
+_ENGINE_SRC = str(ROOT / "packages" / "phonology-engine" / "src")
+if _ENGINE_SRC not in sys.path:
+    sys.path.insert(0, _ENGINE_SRC)
 
 # Desktop GUI files relayed verbatim into the web bundle. Each one
 # is pure Python with no module-level Qt imports (palette.py wraps

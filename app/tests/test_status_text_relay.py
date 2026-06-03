@@ -113,10 +113,16 @@ def test_no_engine_status_matches_python(
 
 
 def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
-    """The payload must contain exactly the keys the JS reads:
-    every ``Mode`` value plus ``no_engine``. Extra keys mean the
-    payload grew without the test catching it; missing keys mean
-    the bake step regressed.
+    """The payload must contain exactly the keys the JS reads. Extra
+    keys mean the payload grew without the test catching it; missing
+    keys mean the bake step regressed.
     """
-    expected_keys = {str(m) for m in Mode} | {"no_engine"}
+    expected_keys = {str(m) for m in Mode} | {
+        "no_engine",
+        # Other shared UI strings the web reads from STATUS_TEXT
+        # instead of hardcoding inline.
+        "expand_maximize",
+        "expand_restore",
+        "clipboard_copy_template",
+    }
     assert set(status_payload.keys()) == expected_keys
