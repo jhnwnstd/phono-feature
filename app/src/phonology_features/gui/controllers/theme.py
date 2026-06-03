@@ -26,6 +26,10 @@ from phonology_features._logging import get_logger
 from phonology_features._settings import SettingsKey, write_setting
 from phonology_features.gui.controllers.mode import ModeController
 from phonology_features.gui.shared.constants import scrollbar_style
+from phonology_features.gui.shared.mode_logic import (
+    palette_toggle_tooltip,
+    theme_toggle_tooltip,
+)
 from phonology_features.gui.shared.palette import (
     C,
     get_palette_mode,
@@ -270,9 +274,7 @@ class ThemeController:
         is_dark = get_theme_name() == "dark"
         btn: QPushButton = self._main._theme_btn
         btn.setText("☼" if is_dark else "☾")
-        btn.setToolTip(
-            "Switch to light mode" if is_dark else "Switch to dark mode"
-        )
+        btn.setToolTip(theme_toggle_tooltip(is_dark=is_dark))
         set_css(
             btn,
             f"""
@@ -301,11 +303,7 @@ class ThemeController:
         is_cb = get_palette_mode() == "colorblind"
         btn: QPushButton = self._main._cb_btn
         btn.setText("\U0001f441")
-        btn.setToolTip(
-            "Switch to standard palette"
-            if is_cb
-            else "Switch to colorblind-friendly palette"
-        )
+        btn.setToolTip(palette_toggle_tooltip(is_colorblind=is_cb))
         if is_cb:
             qss = f"""
                 QPushButton {{

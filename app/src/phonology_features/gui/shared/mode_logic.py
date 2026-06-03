@@ -142,3 +142,54 @@ def clipboard_copy_message(seg: str) -> str:
     the same wording from :py:data:`CLIPBOARD_COPY_MESSAGE_TEMPLATE`.
     """
     return CLIPBOARD_COPY_MESSAGE_TEMPLATE.format(seg=seg)
+
+
+def inventory_loaded_message(
+    *, name: str, n_segments: int, n_features: int
+) -> str:
+    """Status-bar text after a successful inventory load. Both UIs
+    render identical wording.
+    """
+    return f"{name}: {n_segments} segments, {n_features} features."
+
+
+#: Template for the load-failure status message. ``{fname}`` and
+#: ``{issue}`` are substituted by each UI in its own runtime; the
+#: web build relays this template through ``STATUS_TEXT`` so JS
+#: can do the substitution without round-tripping the bridge.
+LOAD_FAILED_TEMPLATE: str = "Cannot load {fname}: {issue}"
+
+
+def inventory_load_failure_message(*, fname: str, issue: str) -> str:
+    """Status-bar text after a failed inventory load. The filename
+    is load-bearing: background paths (filesystem watcher auto-reload,
+    startup auto-restore) can fail without a user-initiated pick, so
+    dropping it would leave failures unanchored.
+    """
+    return LOAD_FAILED_TEMPLATE.format(fname=fname, issue=issue)
+
+
+#: Heading above the validation-issue list shown in the analysis
+#: pane (desktop) and the Class tab (web) after a failed load.
+#: Names the engine's actual exception category so the user can
+#: tell schema failure from I/O failure.
+VALIDATION_REPORT_HEADING: str = "Validation errors:"
+
+
+def theme_toggle_tooltip(*, is_dark: bool) -> str:
+    """Tooltip / aria-label on the theme button. Names the
+    destination of clicking (the opposite of the active theme).
+    """
+    return "Switch to light mode" if is_dark else "Switch to dark mode"
+
+
+def palette_toggle_tooltip(*, is_colorblind: bool) -> str:
+    """Tooltip / aria-label on the colorblind-palette button.
+    Names the destination palette. ``-friendly`` is retained:
+    it disambiguates intent (palette FOR colorblind users, not
+    AS colorblind) and the no-dashes house rule targets sentence
+    punctuation only, not compound modifiers.
+    """
+    if is_colorblind:
+        return "Switch to standard palette"
+    return "Switch to colorblind-friendly palette"

@@ -72,8 +72,11 @@ from phonology_features.gui.shared.constants import (
 )
 from phonology_features.gui.shared.layout import distribute_feature_groups
 from phonology_features.gui.shared.mode_logic import (
+    VALIDATION_REPORT_HEADING,
     Mode,
     clipboard_copy_message,
+    inventory_load_failure_message,
+    inventory_loaded_message,
     mode_status_text,
 )
 from phonology_features.gui.shared.palette import (
@@ -895,7 +898,11 @@ class MainWindow(QMainWindow):
             # Inventory.load already logged the failure category; here
             # we just record what the GUI did about it.
             _log.info("surfacing validation error to user: %s", fname)
-            self.status.showMessage(f"Cannot load {fname}: {e.issues[0]}")
+            self.status.showMessage(
+                inventory_load_failure_message(
+                    fname=fname, issue=e.issues[0]
+                )
+            )
             self.analysis.set_html(self._validation_report_html(e.issues))
             return
         # Swap engines: grouping/normalization caches live on the
@@ -903,10 +910,10 @@ class MainWindow(QMainWindow):
         # No manual invalidation needed.
         self.engine = FeatureEngine(inventory)
         name = inventory.name
-        base_msg = (
-            f"{name}: "
-            f"{len(self.engine.segments)} segments, "
-            f"{len(self.engine.features)} features."
+        base_msg = inventory_loaded_message(
+            name=name,
+            n_segments=len(self.engine.segments),
+            n_features=len(self.engine.features),
         )
         if inventory.advisories:
             # Show the first advisory inline; the rest go to the log so
@@ -928,7 +935,8 @@ class MainWindow(QMainWindow):
         inventory data is interpolated into messages and we don't want
         a malformed feature name like ``"<b>oops"`` to break layout."""
         parts = [
-            f"<p><b style='color:{C['minus']}'>Validation errors:</b></p>"
+            f"<p><b style='color:{C['minus']}'>"
+            f"{html.escape(VALIDATION_REPORT_HEADING)}</b></p>"
         ]
         parts.extend(f"<p>{html.escape(issue)}</p>" for issue in issues)
         return "".join(parts)

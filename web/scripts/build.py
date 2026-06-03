@@ -404,6 +404,22 @@ def _build_status_text_payload() -> dict[str, str]:
         payload["clipboard_copy_template"] = (
             module.CLIPBOARD_COPY_MESSAGE_TEMPLATE
         )
+        payload["validation_report_heading"] = (
+            module.VALIDATION_REPORT_HEADING
+        )
+        payload["load_failed_template"] = module.LOAD_FAILED_TEMPLATE
+        payload["theme_to_dark"] = module.theme_toggle_tooltip(
+            is_dark=False
+        )
+        payload["theme_to_light"] = module.theme_toggle_tooltip(
+            is_dark=True
+        )
+        payload["palette_to_colorblind"] = module.palette_toggle_tooltip(
+            is_colorblind=False
+        )
+        payload["palette_to_standard"] = module.palette_toggle_tooltip(
+            is_colorblind=True
+        )
         return payload
     finally:
         sys.modules.pop(module_name, None)
@@ -751,6 +767,32 @@ def hash_assets() -> None:
         "expand-btn-aria-label",
         r'(id="expand-btn"[^>]*?aria-label=")[^"]*(")',
         r"\1" + status_text_payload["expand_maximize"] + r"\2",
+    )
+    # Theme + colorblind toggles. Both UIs render identical wording
+    # via ``mode_logic.theme_toggle_tooltip`` /
+    # ``palette_toggle_tooltip``. The HTML carries the initial
+    # (light, standard) labels; ``wireThemeToggle`` /
+    # ``wireColorblindToggle`` swap them on toggle by reading
+    # the same baked STATUS_TEXT keys.
+    _bake(
+        "cb-btn-aria-label",
+        r'(id="cb-btn"[^>]*?aria-label=")[^"]*(")',
+        r"\1" + status_text_payload["palette_to_colorblind"] + r"\2",
+    )
+    _bake(
+        "cb-btn-title",
+        r'(id="cb-btn"[^>]*?title=")[^"]*(")',
+        r"\1" + status_text_payload["palette_to_colorblind"] + r"\2",
+    )
+    _bake(
+        "theme-btn-aria-label",
+        r'(id="theme-btn"[^>]*?aria-label=")[^"]*(")',
+        r"\1" + status_text_payload["theme_to_dark"] + r"\2",
+    )
+    _bake(
+        "theme-btn-title",
+        r'(id="theme-btn"[^>]*?title=")[^"]*(")',
+        r"\1" + status_text_payload["theme_to_dark"] + r"\2",
     )
     # Same inline-JSON pattern as the status block. JS reads
     # ``LIMITS.max_inventory_file_bytes`` for the upload pre-check

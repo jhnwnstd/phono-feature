@@ -626,13 +626,14 @@ async function loadInventoryText(text, sourceLabel) {
         const info = callBridge("load_inventory_json", text, sourceLabel);
         applyInventoryInfo(info);
         setStatus(
-            `Loaded ${info.name} `
-            + `(${info.segments.length} segments, ${info.features.length} features).`
+            `${info.name}: ${info.segments.length} segments, `
+            + `${info.features.length} features.`
         );
         prewarmCommonAnalyses();
     } catch (e) {
         const issues = e.message ? [e.message] : ["unknown error"];
-        const errorHtml = "<p><b>Could not load inventory:</b></p><ul>"
+        const heading = STATUS_TEXT.validation_report_heading;
+        const errorHtml = `<p><b>${escapeHtml(heading)}</b></p><ul>`
             + issues.map((i) => `<li>${escapeHtml(i)}</li>`).join("")
             + "</ul>";
         // Route load errors to the Class tab — same place users
@@ -644,7 +645,11 @@ async function loadInventoryText(text, sourceLabel) {
             contrasts: "",
             contrasts_enabled: false,
         });
-        setStatus("Load failed.");
+        setStatus(
+            STATUS_TEXT.load_failed_template
+                .replace("{fname}", sourceLabel || "inventory")
+                .replace("{issue}", issues[0])
+        );
     }
 }
 
