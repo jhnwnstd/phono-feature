@@ -3,10 +3,19 @@ name: Deploy web app to GitHub Pages
 # Builds web/dist/ on every push to main and publishes it
 # as the GitHub Pages site. The same source files that the desktop
 # app uses (engine + renderer) get bundled into the deploy, so
-# edits land in both places on next push.
+# edits land in both places on next push. PRs run the build + smoke
+# without deploying, so regressions fail pre-merge.
 
 on:
   push:
+    branches: [main]
+    paths:
+      - web/**
+      - packages/phonology-engine/**
+      - app/src/phonology_features/gui/shared/**
+      - app/inventories/**
+      - .github/workflows/pages.yml
+  pull_request:
     branches: [main]
     paths:
       - web/**
@@ -37,22 +46,26 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install build tooling
-        run: python -m pip install --upgrade pip build
-
       - name: Build the deploy artifact
+        # build.py is stdlib-only (zipfile, hashlib, importlib.util); it
+        # does not use the PEP 517 ``build`` package, so no install step.
         run: python web/scripts/build.py
 
-      # End-to-end smoke test in headless Chromium. Boots the built
-      # site through Pyodide and verifies that the bridge mounts, the
-      # default inventory renders, and clicking a segment populates
-      # the analysis pane. Catches Pyodide-version bumps that break
-      # micropip's wheel resolution, engine API changes the bridge
-      # didn't catch up to, and JS regressions that pytest can't see.
+      # Headless browser smoke over the built site; catches Pyodide
+      # micropip wheel-resolution drift, engine API changes the bridge
+      # missed, and JS regressions pytest can't see. See web/scripts/smoke.py
+      # for the asserted coverage.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-v1
+
       - name: Install Playwright + Chromium
         run: |
           python -m pip install playwright
           python -m playwright install chromium
+
       - name: Smoke-test the built site
         run: python web/scripts/smoke.py
 
@@ -64,6 +77,8 @@ jobs:
 
   deploy:
     needs: build
+    # PRs run build + smoke but never publish to Pages.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

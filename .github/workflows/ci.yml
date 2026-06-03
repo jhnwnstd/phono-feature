@@ -12,6 +12,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Cancel superseded PR matrices on force-push; let main-branch pushes
+# run to completion so per-commit history stays intact.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   launcher:
     name: ${{ matrix.os }}
@@ -20,6 +26,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            launcher: ./RUN-Linux.sh
+          - os: macos-latest
+            launcher: ./RUN-Mac.command
+          - os: windows-latest
+            launcher: cmd //c RUN-Windows.bat
 
     env:
       # Qt has no display on the runner; offscreen is the standard headless plugin.
@@ -34,6 +47,10 @@ jobs:
           # Minimum supported. The launcher's pick_python prefers higher
           # versions if available on the runner, so this is the floor.
           python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            app/pyproject.toml
+            packages/phonology-engine/pyproject.toml
 
       - name: Install Qt runtime dependencies (Linux)
         if: runner.os == 'Linux'
@@ -45,101 +62,84 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
               libgl1 libegl1 libxkbcommon0 libdbus-1-3 libfontconfig1
 
-      - name: Check uv.lock stays in sync with pyproject.toml
-        # uv.lock is committed for reproducibility; this gate fails the
+      - name: Install uv (Linux)
+        # uv.lock is committed for reproducibility; the next step fails the
         # build when pyproject.toml's deps change without a matching
         # ``uv lock`` run. The launcher install path still uses pip
         # because that's what end users run; the lockfile is a
         # secondary integrity check, not the primary install method.
         if: runner.os == 'Linux'
         uses: astral-sh/setup-uv@v3
-        with:
-          enable-cache: true
 
       - name: Verify uv.lock is fresh
         if: runner.os == 'Linux'
         run: uv lock --check
 
-      - name: Smoke-test launcher (Linux)
-        if: runner.os == 'Linux'
-        run: ./RUN-Linux.sh --help
-
-      - name: Smoke-test launcher (macOS)
-        if: runner.os == 'macOS'
-        run: ./RUN-Mac.command --help
-
-      - name: Smoke-test launcher (Windows)
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: RUN-Windows.bat --help
+      - name: Smoke-test launcher
+        shell: bash
+        run: ${{ matrix.launcher }} --help
 
       - name: Re-run launcher to confirm cached-install path
         # First run installs; second run must short-circuit on the .installed
         # stamp. Catches regressions where the stamp logic stops working.
         shell: bash
+        run: ${{ matrix.launcher }} --help
+
+      - name: Expose launcher venv on PATH
+        # One PATH/VIRTUAL_ENV export replaces the bin/Scripts branch in
+        # every downstream step that runs against the launcher's venv.
+        shell: bash
         run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-              cmd //c "RUN-Windows.bat --help"
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-              ./RUN-Mac.command --help
+          if [[ -d app/.venv/bin ]]; then
+              echo "$GITHUB_WORKSPACE/app/.venv/bin" >> "$GITHUB_PATH"
           else
-              ./RUN-Linux.sh --help
+              echo "$GITHUB_WORKSPACE/app/.venv/Scripts" >> "$GITHUB_PATH"
           fi
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/app/.venv" >> "$GITHUB_ENV"
 
       - name: Install dev dependencies into the launcher's venv
         working-directory: app
         shell: bash
-        run: |
-          # POSIX shells use bin/, Windows uses Scripts/.
-          if [[ -f .venv/bin/activate ]]; then
-              source .venv/bin/activate
-          else
-              source .venv/Scripts/activate
-          fi
-          python -m pip install --quiet -e ".[dev]"
+        run: python -m pip install --quiet -e ".[dev]"
 
-      - name: Run isort + black + flake8 + mypy in the launcher's venv
+      - name: Run isort + black + flake8 + mypy + node --check in the launcher's venv
         # Lint runs ONCE on Linux -- the rules are platform-agnostic and
         # running on every matrix entry would triple the CI minutes for
         # zero coverage gain. The four-tool chain matches the user's
         # local invocation (``isort . --profile black; black -l 79 .;
         # flake8 .; mypy``) so anything green locally is green in CI.
+        # node ships on ubuntu-latest; the JS gate is a pre-merge syntax
+        # check over the web bundle.
         if: runner.os == 'Linux'
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          source app/.venv/bin/activate
-          python -m pip install --quiet isort black flake8 flake8-bugbear
           isort . --profile black --check-only
           black -l 79 --check .
           flake8 .
           mypy
+          node --check web/main.js
+          node --check web/sw.js
 
       - name: Run pytest in the launcher's venv
         working-directory: app
         shell: bash
-        run: |
-          if [[ -f .venv/bin/activate ]]; then
-              source .venv/bin/activate
-          else
-              source .venv/Scripts/activate
-          fi
-          pytest -v
+        run: pytest -v
 
       - name: Run engine-package pytest in the same venv
-        # Engine tests live with the package (packages/phonology-engine).
-        # The launcher already installed the engine in editable mode,
-        # so we just point pytest at the package's tests directory.
-        # Runs on every OS in the matrix because the engine is the
-        # single source of truth shared with the (future) web build,
-        # and a regression here breaks BOTH downstream consumers.
+        # Engine is the single source of truth shared with the web build,
+        # so a regression here breaks both downstream consumers; run on
+        # every OS because inventory I/O touches platform-divergent paths
+        # (atomic-replace semantics, BOM handling, line endings).
         working-directory: packages/phonology-engine
         shell: bash
-        run: |
-          if [[ -f ../../app/.venv/bin/activate ]]; then
-              source ../../app/.venv/bin/activate
-          else
-              source ../../app/.venv/Scripts/activate
-          fi
-          pytest -v
+        run: pytest -v
 
+      - name: Build web artifact (Linux)
+        # Exercise web/scripts/build.py at PR time so relay-source or
+        # inventory renames fail here instead of leaving main red after
+        # merge. Reuses the launcher's venv; no second install.
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: python web/scripts/build.py
