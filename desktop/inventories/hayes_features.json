@@ -238,7 +238,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "d̠͡ɮ̠": {
+    "d-͡ɮ-": {
       "CORONAL": "+",
       "Consonantal": "+",
       "DelRel": "+",
@@ -612,7 +612,7 @@
       "Trill": "-",
       "Voice": "-"
     },
-    "k̟": {
+    "k+": {
       "DORSAL": "+",
       "Consonantal": "+",
       "Front": "+",
@@ -638,7 +638,7 @@
       "Trill": "-",
       "Voice": "-"
     },
-    "k̟͡x̟": {
+    "k+͡x+": {
       "DORSAL": "+",
       "Consonantal": "+",
       "DelRel": "+",
@@ -664,7 +664,7 @@
       "Trill": "-",
       "Voice": "-"
     },
-    "k̠": {
+    "k-": {
       "DORSAL": "+",
       "Back": "+",
       "Consonantal": "+",
@@ -690,7 +690,7 @@
       "Trill": "-",
       "Voice": "-"
     },
-    "k̠͡x̠": {
+    "k-͡x-": {
       "DORSAL": "+",
       "Back": "+",
       "Consonantal": "+",
@@ -1076,7 +1076,7 @@
       "Trill": "-",
       "Voice": "-"
     },
-    "t̠͡ɬ̠": {
+    "t-͡ɬ-": {
       "CORONAL": "+",
       "Consonantal": "+",
       "DelRel": "+",
@@ -1378,7 +1378,7 @@
       "Trill": "-",
       "Voice": "-"
     },
-    "x̟": {
+    "x+": {
       "DORSAL": "+",
       "Consonantal": "+",
       "Continuant": "+",
@@ -1404,7 +1404,7 @@
       "Trill": "-",
       "Voice": "-"
     },
-    "x̠": {
+    "x-": {
       "DORSAL": "+",
       "Back": "+",
       "Consonantal": "+",
@@ -1635,7 +1635,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "ŋ̟": {
+    "ŋ+": {
       "DORSAL": "+",
       "Consonantal": "+",
       "Front": "+",
@@ -1660,7 +1660,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "ŋ̠": {
+    "ŋ-": {
       "DORSAL": "+",
       "Back": "+",
       "Consonantal": "+",
@@ -2052,7 +2052,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "ɡ̟": {
+    "ɡ+": {
       "DORSAL": "+",
       "Consonantal": "+",
       "Front": "+",
@@ -2078,7 +2078,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "ɡ̟͡ɣ̟": {
+    "ɡ+͡ɣ+": {
       "DORSAL": "+",
       "Consonantal": "+",
       "DelRel": "+",
@@ -2104,7 +2104,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "ɡ̠": {
+    "ɡ-": {
       "DORSAL": "+",
       "Back": "+",
       "Consonantal": "+",
@@ -2130,7 +2130,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "ɡ̠͡ɣ̠": {
+    "ɡ-͡ɣ-": {
       "DORSAL": "+",
       "Back": "+",
       "Consonantal": "+",
@@ -2256,7 +2256,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "ɣ̟": {
+    "ɣ+": {
       "DORSAL": "+",
       "Consonantal": "+",
       "Continuant": "+",
@@ -2282,7 +2282,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "ɣ̠": {
+    "ɣ-": {
       "DORSAL": "+",
       "Back": "+",
       "Consonantal": "+",
@@ -2613,7 +2613,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "ɰ̠": {
+    "ɰ-": {
       "DORSAL": "+",
       "Approximant": "+",
       "Back": "+",
@@ -3443,6 +3443,29 @@
       "Approximant": "+",
       "Consonantal": "+",
       "Continuant": "+",
+      "High": "+",
+      "Lateral": "+",
+      "Sonorant": "+",
+      "Voice": "+",
+      "CORONAL": "-",
+      "LABIAL": "-",
+      "ConstrGl": "-",
+      "Labiodental": "-",
+      "Long": "-",
+      "Low": "-",
+      "Nasal": "-",
+      "Round": "-",
+      "SpreadGl": "-",
+      "Stress": "-",
+      "Syllabic": "-",
+      "Tap": "-",
+      "Trill": "-"
+    },
+    "ʟ+": {
+      "DORSAL": "+",
+      "Approximant": "+",
+      "Consonantal": "+",
+      "Continuant": "+",
       "Front": "+",
       "High": "+",
       "Lateral": "+",
@@ -3463,7 +3486,7 @@
       "Tap": "-",
       "Trill": "-"
     },
-    "ʟ̠": {
+    "ʟ-": {
       "DORSAL": "+",
       "Approximant": "+",
       "Back": "+",

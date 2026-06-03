@@ -57,6 +57,12 @@ VALID_VALUES: frozenset[str] = frozenset({"+", "-", "0"})
 _IPA_SEGMENT_TRANSLATIONS: dict[str, str] = {
     "'": "ʼ",  # APOSTROPHE -> MODIFIER LETTER APOSTROPHE (ejective)
     "g": "ɡ",  # ASCII g -> LATIN SMALL LETTER SCRIPT G (voiced velar)
+    # Hayes-style advanced/retracted markers folded to ASCII so the
+    # label is readable in the GUI and matches the bundled
+    # Hayes (2009) inventory. Upstream kylebgorman/hayes2009 uses
+    # the same convention.
+    "̟": "+",  # COMBINING PLUS SIGN BELOW (advanced) -> ASCII +
+    "̠": "-",  # COMBINING MINUS SIGN BELOW (retracted) -> ASCII -
 }
 _IPA_TRANSLATION_TABLE = str.maketrans(_IPA_SEGMENT_TRANSLATIONS)
 
