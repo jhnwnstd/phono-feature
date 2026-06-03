@@ -686,9 +686,18 @@ class FeatureEngine:
             return {}
         for seg in segments:
             self._validate_segment(seg)
+        seg_dict = self.segments
+        features = self.features
+        # Single-segment fast path skips the per-feature set/pop.
+        if len(segments) == 1:
+            bundle = seg_dict[segments[0]]
+            return {f: v for f in features if (v := bundle.get(f, "0")) != "0"}
+        # Cache inner bundles so the inner loop is one local index
+        # instead of two attribute lookups per (segment, feature).
+        bundles = [seg_dict[seg] for seg in segments]
         result = {}
-        for feature in self.features:
-            values = {self.segments[seg].get(feature, "0") for seg in segments}
+        for feature in features:
+            values = {bundle.get(feature, "0") for bundle in bundles}
             if len(values) == 1:
                 v = values.pop()
                 if v != "0":
