@@ -40,7 +40,14 @@ sys.path.insert(0, str(SHARED_SRC))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 INVENTORIES_DIR = DESKTOP_DIR / "inventories"
-INVENTORIES = sorted(p for p in INVENTORIES_DIR.glob("*.json"))
+# Skip underscore-prefixed siblings (``_schema.json``) and dotfiles
+# (.tmp_inv_*.json side files from atomic writes): same rule the
+# desktop dropdown and ``web/scripts/build.py`` apply.
+INVENTORIES = sorted(
+    p
+    for p in INVENTORIES_DIR.glob("*.json")
+    if not p.name.startswith(("_", "."))
+)
 
 
 def _redirect_qsettings_to_tempdir() -> None:
