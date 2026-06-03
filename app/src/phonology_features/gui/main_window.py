@@ -1464,65 +1464,56 @@ class MainWindow(QMainWindow):
                 self._update_feat_to_seg()
 
     def _update_seg_to_feat(self) -> None:
-        segs = self._selected_segments
-        if not segs or not self.engine:
-            self._reset_feature_display()
-            for btn in self._seg_buttons.values():
-                btn.set_state(SegmentState.DEFAULT)
-            self.analysis.clear()
+        """Apply the SEG-mode summary to the panels. The shared
+        ``summarize_segment_selection`` returns a total payload --
+        every segment in ``segment_states``, every feature in
+        ``feature_rows`` -- so the empty-selection case needs no
+        special branch here; it's just the payload returned for an
+        empty ``segs`` list. The web bridge path is the same shape.
+        """
+        if not self.engine:
             return
-        summary = summarize_segment_selection(self.engine, segs)
-        feature_rows = summary["feature_rows"]
+        summary = summarize_segment_selection(
+            self.engine, self._selected_segments
+        )
         for feat, row in self._feat_rows.items():
-            state = feature_rows.get(feat)
-            if state is None:
-                row.set_display("", shared=False)
-                continue
+            state = summary["feature_rows"][feat]
             row.set_display(
                 state["value"],
                 bool(state["shared"]),
                 contrastive=bool(state["contrastive"]),
             )
-        segment_states = summary["segment_states"]
         for seg, btn in self._seg_buttons.items():
-            btn.set_state(segment_states.get(seg, SegmentState.DEFAULT.value))
+            btn.set_state(summary["segment_states"][seg])
         self._apply_analysis_tabs(summary["analysis_tabs"])
 
     def _update_feat_to_seg(self) -> None:
+        """Apply the FEAT-mode summary to the panels. Like
+        :py:meth:`_update_seg_to_feat`, the shared helper returns a
+        total payload for any input (including the empty spec), so
+        there is no separate empty-selection branch."""
         if not self.engine:
             return
-        selected_feats = self._selected_features
-        if not selected_feats:
-            for btn in self._seg_buttons.values():
-                btn.set_state(SegmentState.DEFAULT)
-            self.analysis.clear()
-            return
-        summary = summarize_feature_query(self.engine, selected_feats)
-        segment_states = summary["segment_states"]
+        summary = summarize_feature_query(self.engine, self._selected_features)
         for seg, btn in self._seg_buttons.items():
-            btn.set_state(segment_states.get(seg, SegmentState.DEFAULT.value))
+            btn.set_state(summary["segment_states"][seg])
         self._apply_analysis_tabs(summary["analysis_tabs"])
 
     def _apply_analysis_tabs(self, tabs: dict[str, Any]) -> None:
-        """Route the shared view-model's per-tab payload into the
-        ``AnalysisPanel``. Centralised so SEG and FEAT update paths
-        both flow through the same call site, keeping the contract
-        for tab keys (`selection`, `class`, `features`, `contrasts`,
-        `contrasts_enabled`, `class_state`) tied to one Python
-        function.
+        """Unpack the shared view-model's ``analysis_tabs`` payload
+        into :py:meth:`AnalysisPanel.set_sections`. Required because
+        the payload key ``"class"`` is a Python keyword and can't be
+        used with ``**`` unpacking; otherwise this would be a
+        one-liner.
         """
         self.analysis.set_sections(
             tabs["selection"],
             tabs["class"],
             tabs["features"],
             tabs["contrasts"],
-            contrasts_enabled=bool(tabs.get("contrasts_enabled", True)),
-            class_state=str(tabs.get("class_state", "neutral")),
+            contrasts_enabled=tabs["contrasts_enabled"],
+            class_state=tabs["class_state"],
         )
-
-    def _reset_feature_display(self) -> None:
-        for row in self._feat_rows.values():
-            row.reset()
 
     def _clear_segments(self, silent: bool = False) -> None:
         """Either Clear button wipes both panes. See ``_reset_both_sides``."""

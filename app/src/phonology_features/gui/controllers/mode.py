@@ -245,23 +245,18 @@ class ModeController:
                 row.reset()
 
     def refresh_analysis(self) -> None:
-        """Re-run the active mode's analysis if there's something to
-        analyze; otherwise reset the analysis pane.
-
-        ``_update_*`` end in :py:meth:`AnalysisPanel.set_sections`,
-        which preserves the user's active tab (the snap-back only
-        fires when Contrasts becomes disabled while active). The
-        empty-selection branch falls through to
-        :py:meth:`AnalysisPanel.clear`, which is the documented
-        full-reset sink and deliberately forces Class.
+        """Apply the active mode's summary to the panels. The shared
+        view-model returns a total payload for any input (including
+        empty selection), so this is a straight dispatch -- no
+        special empty-state branch. The user-pressed-Clear path
+        still goes through :py:meth:`AnalysisPanel.clear` (the
+        documented full-reset sink that forces the Class tab); the
+        steady-state refresh here preserves the user's active tab.
         """
-        is_s2f = self.mode == Mode.SEG_TO_FEAT
-        if is_s2f and self._w._selected_segments:
+        if self.mode == Mode.SEG_TO_FEAT:
             self._w._update_seg_to_feat()
-        elif not is_s2f and self._w._selected_features:
-            self._w._update_feat_to_seg()
         else:
-            self._w.analysis.clear()
+            self._w._update_feat_to_seg()
 
     def apply_to_new_widgets(self) -> None:
         """Set interactivity on freshly-populated rows + headers for the
