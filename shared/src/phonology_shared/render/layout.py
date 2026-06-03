@@ -179,7 +179,7 @@ def partition_groups_for_spillover(
 #     that ``style.css`` then references.
 #
 # Drift between the two UIs is impossible without breaking the parity
-# test in ``app/tests/test_pane_distribution.py``.
+# test in ``desktop/tests/test_pane_distribution.py``.
 # ---------------------------------------------------------------------------
 
 # Below this seg-pane width the layout collapses (vowel chart stacks
@@ -687,7 +687,7 @@ def feature_panel_natural_height(
 #   "hide"        — drop the region (e.g. tooltip when no source).
 #
 # Adding a region: add the entry below, then cite it in the widget's
-# constructor and the test in ``app/tests/test_size_policies.py``.
+# constructor and the test in ``desktop/tests/test_size_policies.py``.
 # ---------------------------------------------------------------------------
 
 OverflowStrategy = Literal[

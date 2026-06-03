@@ -15,13 +15,15 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve()
 REPO_ROOT = HERE.parent.parent
-APP_DIR = REPO_ROOT / "app"
-SRC_DIR = APP_DIR / "src"
+DESKTOP_DIR = REPO_ROOT / "desktop"
+SRC_DIR = DESKTOP_DIR / "src"
+SHARED_SRC = REPO_ROOT / "shared" / "src"
 sys.path.insert(0, str(SRC_DIR))
+sys.path.insert(0, str(SHARED_SRC))
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-INVENTORIES = sorted((APP_DIR / "inventories").glob("*.json"))
+INVENTORIES = sorted((DESKTOP_DIR / "inventories").glob("*.json"))
 OUT_DIR = REPO_ROOT / ".github" / "screenshots"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

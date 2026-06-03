@@ -65,7 +65,7 @@ where = ["src"]
 
 # mypy config lives in the workspace-root pyproject.toml so a single
 # ``mypy`` invocation from the repo root drives every member package.
-# Running mypy from inside ``app/`` falls back to its parent's config
+# Running mypy from inside ``desktop/`` falls back to its parent's config
 # via the standard pyproject discovery walk.
 
 [tool.pytest.ini_options]

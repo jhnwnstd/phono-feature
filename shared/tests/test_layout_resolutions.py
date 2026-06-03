@@ -686,7 +686,12 @@ def _load_inventory(name: str) -> dict[str, object]:
     import json
     from pathlib import Path
 
-    path = Path(__file__).resolve().parents[2] / "desktop" / "inventories" / f"{name}.json"
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "desktop"
+        / "inventories"
+        / f"{name}.json"
+    )
     if not path.exists():
         pytest.skip(f"{path.name} not present (gitignored in CI)")
     return json.loads(path.read_text(encoding="utf-8-sig"))

@@ -115,7 +115,7 @@ class InventoryDirController:
     def get_inventories_dir() -> str:
         """Absolute path to the bundled ``inventories/`` directory.
         Resolves four levels up from this file
-        (``app/src/phonology_features/gui/controllers/``) to ``app/``.
+        (``desktop/src/phonology_features/gui/controllers/``) to ``desktop/``.
         """
         return os.path.normpath(
             os.path.join(

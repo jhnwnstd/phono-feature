@@ -16,7 +16,9 @@ from phonology_shared.render.mode_logic import (
     project_mode_transition,
 )
 
-INVENTORIES_DIR = Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+INVENTORIES_DIR = (
+    Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+)
 
 
 def _engine(name: str) -> FeatureEngine:

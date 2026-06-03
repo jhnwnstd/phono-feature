@@ -8,8 +8,9 @@ toggle the theme, and open the Builder. Each phase is wrapped in its
 own cProfile run, then the combined stats are printed sorted by
 cumulative and tottime.
 
-Run from anywhere; the script puts ``app/src/`` on sys.path and uses the
-offscreen Qt platform plugin so no display is needed:
+Run from anywhere; the script puts ``desktop/src/`` and ``shared/src/``
+on sys.path and uses the offscreen Qt platform plugin so no display
+is needed:
 
     python tools/profile_app.py
     python tools/profile_app.py --section seg_toggle  # one phase only
@@ -29,14 +30,16 @@ from pathlib import Path
 # --- bootstrap ----------------------------------------------------------------
 
 HERE = Path(__file__).resolve()
-REPO_ROOT = HERE.parent.parent  # one level up from scripts/
-APP_DIR = REPO_ROOT / "app"
-SRC_DIR = APP_DIR / "src"  # app/src/
+REPO_ROOT = HERE.parent.parent  # one level up from tools/
+DESKTOP_DIR = REPO_ROOT / "desktop"
+SRC_DIR = DESKTOP_DIR / "src"  # desktop/src/
+SHARED_SRC = REPO_ROOT / "shared" / "src"  # shared/src/
 sys.path.insert(0, str(SRC_DIR))
+sys.path.insert(0, str(SHARED_SRC))
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-INVENTORIES_DIR = APP_DIR / "inventories"
+INVENTORIES_DIR = DESKTOP_DIR / "inventories"
 INVENTORIES = sorted(p for p in INVENTORIES_DIR.glob("*.json"))
 
 

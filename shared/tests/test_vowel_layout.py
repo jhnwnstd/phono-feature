@@ -32,7 +32,9 @@ from phonology_shared.render.vowel_layout import (
     vowel_grid_pos,
 )
 
-INVENTORIES_DIR = Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+INVENTORIES_DIR = (
+    Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+)
 
 
 def _engine(name: str) -> FeatureEngine:

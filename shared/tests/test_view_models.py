@@ -18,7 +18,9 @@ from phonology_shared.render.view_models import (
     summarize_segment_selection,
 )
 
-INVENTORIES_DIR = Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+INVENTORIES_DIR = (
+    Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+)
 
 
 def _engine(name: str) -> FeatureEngine:

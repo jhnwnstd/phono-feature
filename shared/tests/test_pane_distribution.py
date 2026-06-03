@@ -280,7 +280,7 @@ def test_region_constraints_match_constants() -> None:
     """The ``seg_btn`` constraint now imports BTN_W directly at
     module load (the lazy-import / inline-literal workaround was
     removed in Stage 4 once ``web/scripts/build.py`` started
-    putting ``app/src`` on ``sys.path`` before side-loading).
+    putting ``desktop/src`` on ``sys.path`` before side-loading).
     Pin the agreement so any future re-introduction of an inline
     literal trips here.
     """

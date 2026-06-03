@@ -18,7 +18,7 @@ members = ["shared", "desktop", "web"]
 phonology-shared = { workspace = true }
 
 # Isort config. Lives at the repo root so ``isort .`` from any cwd
-# picks it up. Mirrors the ruff isort config in app/pyproject.toml
+# picks it up. Mirrors the ruff isort config in desktop/pyproject.toml
 # so the two tools produce identical orderings; without this isort
 # auto-detects ``phonology_features`` as third-party (it's pip-
 # installed in the venv) and orders it BEFORE PyQt6, which ruff

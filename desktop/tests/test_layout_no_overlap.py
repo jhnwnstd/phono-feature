@@ -1,6 +1,6 @@
 """Pairwise non-overlap invariants for the desktop GUI layout.
 
-Existing layout tests under ``app/tests/test_layout_*.py`` pin pixel
+Existing layout tests under ``desktop/tests/test_layout_*.py`` pin pixel
 sizes and content-driven thresholds. None of them assert "widget A's
 geometry does not intersect widget B's geometry". This file fills
 that gap: at a representative set of window resolutions, every

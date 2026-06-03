@@ -1,6 +1,6 @@
 """Pin the explicit ``setSizePolicy`` declarations added in Phase C.
 
-Each ``QWidget`` subclass under ``app/src/phonology_features/gui/``
+Each ``QWidget`` subclass under ``desktop/src/phonology_features/gui/``
 that the constraint table covers must declare an explicit size
 policy aligned to its stretch role and inherit its width / height
 floors from ``REGION_CONSTRAINTS``. The previous state relied on Qt
