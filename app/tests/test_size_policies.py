@@ -17,7 +17,6 @@ from __future__ import annotations
 import pytest
 from PyQt6.QtWidgets import QApplication, QSizePolicy
 
-from phonology_shared.render.layout import REGION_CONSTRAINTS
 from phonology_features.gui.themed_widgets import _ThemedCard
 from phonology_features.gui.vowel_chart import VowelChartWidget
 from phonology_features.gui.widgets import (
@@ -25,6 +24,7 @@ from phonology_features.gui.widgets import (
     SegmentButton,
     SegmentGridWidget,
 )
+from phonology_shared.render.layout import REGION_CONSTRAINTS
 
 
 @pytest.fixture()

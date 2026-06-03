@@ -21,6 +21,11 @@ from PyQt6.QtWidgets import (
 )
 
 from phonology_features.gui._themed_style_cache import styles_for_active_theme
+from phonology_features.gui.style_utils import (
+    _LAST_HTML_ATTR,
+    set_css,
+    set_html,
+)
 from phonology_shared.render import layout as layout_mod
 from phonology_shared.render.constants import (
     BTN_GAP,
@@ -36,11 +41,6 @@ from phonology_shared.render.layout import (
 )
 from phonology_shared.render.mode_logic import expand_button_tooltip
 from phonology_shared.render.palette import C
-from phonology_features.gui.style_utils import (
-    _LAST_HTML_ATTR,
-    set_css,
-    set_html,
-)
 
 # Per-button vertical stride used by ``SegmentGridWidget`` to estimate
 # group natural heights ahead of Qt's own layout pass. The fixed values

@@ -31,12 +31,12 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
+from phonology_features._logging import get_logger
+from phonology_features.gui.builder.dialogs import ask_question, show_warning
 from phonology_shared.engine.inventory import (
     Inventory,
     ValidationError,
 )
-from phonology_features._logging import get_logger
-from phonology_features.gui.builder.dialogs import ask_question, show_warning
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QStatusBar

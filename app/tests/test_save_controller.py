@@ -16,12 +16,12 @@ from typing import Any
 import pytest
 from PyQt6.QtWidgets import QStatusBar, QWidget
 
-from phonology_shared.engine.feature_engine import FeatureEngine
-from phonology_shared.engine.inventory import Inventory
 from phonology_features.gui.builder import (
     save_controller as save_controller_module,
 )
 from phonology_features.gui.builder.save_controller import _SaveController
+from phonology_shared.engine.feature_engine import FeatureEngine
+from phonology_shared.engine.inventory import Inventory
 
 INVENTORIES_DIR = Path(__file__).resolve().parents[1] / "inventories"
 

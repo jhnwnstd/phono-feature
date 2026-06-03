@@ -47,8 +47,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_shared.engine.feature_engine import FeatureEngine
-from phonology_shared.engine.inventory import Inventory, ValidationError
 from phonology_features._logging import get_logger
 from phonology_features._settings import (
     SettingsKey,
@@ -61,6 +59,25 @@ from phonology_features.gui.controllers.inventory_dir import (
 )
 from phonology_features.gui.controllers.mode import ModeController
 from phonology_features.gui.controllers.theme import ThemeController
+from phonology_features.gui.style_utils import (
+    set_css,
+)
+from phonology_features.gui.themed_widgets import (
+    _BrandedStatusBar,
+    _clear_btn_style,
+    _ThemedCard,
+    _ThemedSplitter,
+)
+from phonology_features.gui.vowel_chart import VowelChartWidget
+from phonology_features.gui.widgets import (
+    AnalysisPanel,
+    FeatureRow,
+    SegmentButton,
+    SegmentGridWidget,
+    SegmentState,
+)
+from phonology_shared.engine.feature_engine import FeatureEngine
+from phonology_shared.engine.inventory import Inventory, ValidationError
 from phonology_shared.render import layout
 from phonology_shared.render.constants import (
     FEATURE_GROUPS,
@@ -90,23 +107,6 @@ from phonology_shared.render.palette import (
 from phonology_shared.render.view_models import (
     summarize_feature_query,
     summarize_segment_selection,
-)
-from phonology_features.gui.style_utils import (
-    set_css,
-)
-from phonology_features.gui.themed_widgets import (
-    _BrandedStatusBar,
-    _clear_btn_style,
-    _ThemedCard,
-    _ThemedSplitter,
-)
-from phonology_features.gui.vowel_chart import VowelChartWidget
-from phonology_features.gui.widgets import (
-    AnalysisPanel,
-    FeatureRow,
-    SegmentButton,
-    SegmentGridWidget,
-    SegmentState,
 )
 
 if TYPE_CHECKING:

@@ -25,6 +25,12 @@ from PyQt6.QtWidgets import QLabel, QPushButton, QToolTip
 from phonology_features._logging import get_logger
 from phonology_features._settings import SettingsKey, write_setting
 from phonology_features.gui.controllers.mode import ModeController
+from phonology_features.gui.style_utils import (
+    apply_app_palette,
+    apply_tooltip_palette,
+    set_css,
+)
+from phonology_features.gui.themed_widgets import _clear_btn_style
 from phonology_shared.render.constants import scrollbar_style
 from phonology_shared.render.mode_logic import (
     palette_toggle_tooltip,
@@ -37,12 +43,6 @@ from phonology_shared.render.palette import (
     set_palette_mode,
     set_theme,
 )
-from phonology_features.gui.style_utils import (
-    apply_app_palette,
-    apply_tooltip_palette,
-    set_css,
-)
-from phonology_features.gui.themed_widgets import _clear_btn_style
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QFrame

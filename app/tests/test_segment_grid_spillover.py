@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QScrollArea
 
-from phonology_shared.render.constants import BTN_GAP, BTN_W
 from phonology_features.gui.widgets import SegmentButton, SegmentGridWidget
+from phonology_shared.render.constants import BTN_GAP, BTN_W
 
 
 def _make_groups(count: int, segs_per: int = 3) -> tuple[dict, dict]:

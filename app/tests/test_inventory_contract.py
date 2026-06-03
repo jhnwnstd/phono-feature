@@ -1675,9 +1675,9 @@ def test_worker_non_oserror_clears_save_in_flight(
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_shared.engine.inventory import Inventory
     from phonology_features.gui.builder import InventoryBuilder
     from phonology_features.gui.builder import save_controller as _sc
+    from phonology_shared.engine.inventory import Inventory
 
     # Stub modal warning so the error path doesn't deadlock the test.
     monkeypatch.setattr(_sc, "show_warning", lambda *a, **k: None)
@@ -1811,8 +1811,8 @@ def test_edit_during_in_flight_save_preserves_dirty(
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_shared.engine.inventory import Inventory
     from phonology_features.gui.builder import InventoryBuilder
+    from phonology_shared.engine.inventory import Inventory
 
     # Stall the worker so the main thread has time to mutate the grid
     # between snapshot and completion.
@@ -1870,9 +1870,9 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_shared.engine.inventory import Inventory
     from phonology_features.gui.builder import InventoryBuilder
     from phonology_features.gui.builder import save_controller as _sc
+    from phonology_shared.engine.inventory import Inventory
 
     monkeypatch.setattr(_sc, "show_warning", lambda *a, **k: None)
     monkeypatch.setattr(
