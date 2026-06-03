@@ -85,9 +85,7 @@ def test_clear_restores_an_expanded_pane(
     window.analysis.expand_btn.click()
     qapp.processEvents()
     assert window._pre_expand_vsplit_sizes is not None
-    from phonology_features.gui.shared.mode_logic import ClearScope
-
-    window._reset_both_sides(ClearScope.USER_INITIATED)
+    window._reset_both_sides(silent=False)
     qapp.processEvents()
     assert window._pre_expand_vsplit_sizes is None
     assert window.analysis.expand_btn.text() == "⤢"

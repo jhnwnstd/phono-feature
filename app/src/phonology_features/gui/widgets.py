@@ -34,10 +34,6 @@ from phonology_features.gui.shared.layout import (
     best_segment_n_cols,
     partition_groups_for_spillover,
 )
-from phonology_features.gui.shared.mode_logic import (
-    AnalysisTabId,
-    preserved_analysis_tab,
-)
 from phonology_features.gui.shared.palette import C
 from phonology_features.gui.style_utils import (
     _LAST_HTML_ATTR,
@@ -921,42 +917,13 @@ class AnalysisPanel(QWidget):
         set_html(self._tab_class, class_html)
         set_html(self._tab_features, features_html)
         set_html(self._tab_contrasts, contrasts_html)
-        # Capture the user-active tab BEFORE we call setTabEnabled:
-        # disabling the currently-selected tab causes Qt to auto-
-        # switch to the next enabled tab as a side effect, which
-        # would defeat the snap rule (we'd preserve the auto-pick,
-        # not the user's original choice).
-        active_before_enable_change = self._current_tab_id()
         self.tabs.setTabEnabled(self._TAB_CONTRASTS_IDX, contrasts_enabled)
-        # Preserve the user's active tab unless the new state makes
-        # it invalid. The shared rule lives in
-        # ``mode_logic.preserved_analysis_tab`` so the web's
-        # ``setAnalysisTabs`` evaluates the same predicate; that
-        # parity is what fixed the desktop-only "Class snap on mode
-        # toggle" regression.
-        target = preserved_analysis_tab(
-            active_before_enable_change,
-            contrasts_enabled=contrasts_enabled,
-        )
-        target_idx = self._tab_idx_for(target)
-        if self.tabs.currentIndex() != target_idx:
-            self.tabs.setCurrentIndex(target_idx)
+        if (
+            not contrasts_enabled
+            and self.tabs.currentIndex() == self._TAB_CONTRASTS_IDX
+        ):
+            self.tabs.setCurrentIndex(self._TAB_CLASS_IDX)
         self._apply_class_state(class_state)
-
-    def _current_tab_id(self) -> AnalysisTabId:
-        idx = self.tabs.currentIndex()
-        if idx == self._TAB_FEATURES_IDX:
-            return AnalysisTabId.FEATURES
-        if idx == self._TAB_CONTRASTS_IDX:
-            return AnalysisTabId.CONTRASTS
-        return AnalysisTabId.CLASS
-
-    def _tab_idx_for(self, tab: AnalysisTabId) -> int:
-        if tab is AnalysisTabId.FEATURES:
-            return self._TAB_FEATURES_IDX
-        if tab is AnalysisTabId.CONTRASTS:
-            return self._TAB_CONTRASTS_IDX
-        return self._TAB_CLASS_IDX
 
     def _apply_class_state(self, state: str) -> None:
         """Colour the first tab (Class) per the natural-class verdict.
@@ -982,15 +949,6 @@ class AnalysisPanel(QWidget):
         chips strip) is back to its empty baseline. Any new display
         cue added later must reset here too, so a future regression
         breaks ``test_analysis_panel_clear`` instead of the UI.
-
-        Distinct from :py:meth:`set_sections`: ``clear()`` deliberately
-        forces the Class tab via the final ``setCurrentIndex`` below.
-        ``set_sections()`` consults :py:func:`mode_logic.preserved_analysis_tab`
-        and preserves the user's active tab whenever it remains
-        valid. The two methods correspond to two distinct user-
-        visible actions: ``clear()`` is the documented "user pressed
-        Clear" sink; ``set_sections()`` is the steady-state refresh
-        on every selection change or mode toggle.
         """
         self.selection_label.clear()
         self.selection_label.setVisible(False)

@@ -71,11 +71,7 @@ from phonology_features.gui.shared.constants import (
     sort_features,
 )
 from phonology_features.gui.shared.layout import distribute_feature_groups
-from phonology_features.gui.shared.mode_logic import (
-    ClearScope,
-    Mode,
-    clear_semantics_for,
-)
+from phonology_features.gui.shared.mode_logic import Mode
 from phonology_features.gui.shared.palette import (
     C,
     detect_system_theme,
@@ -1528,65 +1524,50 @@ class MainWindow(QMainWindow):
         for row in self._feat_rows.values():
             row.reset()
 
-    def _clear_segments(
-        self, scope: ClearScope = ClearScope.USER_INITIATED
-    ) -> None:
+    def _clear_segments(self, silent: bool = False) -> None:
         """Either Clear button wipes both panes. See ``_reset_both_sides``."""
-        self._reset_both_sides(scope)
+        self._reset_both_sides(silent)
 
-    def _clear_features(
-        self, scope: ClearScope = ClearScope.USER_INITIATED
-    ) -> None:
+    def _clear_features(self, silent: bool = False) -> None:
         """Either Clear button wipes both panes. See ``_reset_both_sides``."""
-        self._reset_both_sides(scope)
+        self._reset_both_sides(silent)
 
     def _clear_then_activate_segs(self) -> None:
         """Clear button handler: wipe both panes, then activate seg mode.
         Reversing the order would flash the new mode's colors for a
         frame before the wipe lands.
         """
-        self._reset_both_sides(ClearScope.USER_INITIATED)
+        self._reset_both_sides(silent=False)
         if self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             self._set_mode(Mode.SEG_TO_FEAT)
 
     def _clear_then_activate_feats(self) -> None:
         """See ``_clear_then_activate_segs``."""
-        self._reset_both_sides(ClearScope.USER_INITIATED)
+        self._reset_both_sides(silent=False)
         if self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
             self._set_mode(Mode.FEAT_TO_SEG)
 
-    def _reset_both_sides(self, scope: ClearScope) -> None:
+    def _reset_both_sides(self, silent: bool) -> None:
         """Reset segments and features to their neutral state. Shared
-        implementation behind both Clear buttons and the inventory-
-        load path.
-
-        The actual side effects -- whether to clear saved cross-mode
-        state, whether to wipe the analysis pane, whether to collapse
-        an expanded analysis -- come from
-        :py:func:`shared.mode_logic.clear_semantics_for`. The desktop
-        widget code only knows HOW to apply each effect; the
-        shared module decides WHICH effects apply per scope. Web
-        :py:func:`clearAll` reads the same record (for the
-        ``USER_INITIATED`` scope, which is the only one the web has
-        today).
+        implementation behind both Clear buttons. "Clear means clear":
+        the two panes are wired together, so each Clear wipes both.
+        ``silent=True`` is the inventory-load path: visible selection
+        resets but saved cross-mode state, analysis pane, and expand
+        all survive (the user did not press Clear).
         """
-        semantics = clear_semantics_for(scope)
-        if semantics.reset_active_selection:
-            self._selected_segments.clear()
-            self._selected_features.clear()
-            for btn in self._seg_buttons.values():
-                if btn._state != SegmentState.DEFAULT:
-                    btn.set_state(SegmentState.DEFAULT)
-                    btn.setChecked(False)
-            for row in self._feat_rows.values():
-                row.reset()
-        if semantics.reset_saved_state:
+        self._selected_segments.clear()
+        self._selected_features.clear()
+        for btn in self._seg_buttons.values():
+            if btn._state != SegmentState.DEFAULT:
+                btn.set_state(SegmentState.DEFAULT)
+                btn.setChecked(False)
+        for row in self._feat_rows.values():
+            row.reset()
+        if not silent:
             self._mode_ctrl.saved_seg_state = []
             self._mode_ctrl.saved_feat_state = {}
-        if semantics.reset_analysis_pane:
             self.analysis.clear()
-        if (
-            semantics.collapse_expanded_analysis
-            and self._pre_expand_vsplit_sizes is not None
-        ):
+        # Clear undoes the expand too: a magnified view of state
+        # that no longer exists would just be stale.
+        if self._pre_expand_vsplit_sizes is not None:
             self._restore_analysis_expand()

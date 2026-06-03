@@ -1573,43 +1573,15 @@ function setAnalysisTabs(tabs) {
     nodes.analysisTabContrasts.setAttribute(
         "aria-disabled", contrastsEnabled ? "false" : "true",
     );
-    // Mirror of ``mode_logic.preserved_analysis_tab``: keep the
-    // active tab if it's still valid for the new state, otherwise
-    // fall back to "class". The Python helper is the canonical
-    // source; this is the same predicate by hand so the web's
-    // hot path doesn't need to round-trip the bridge.
-    const target = preservedAnalysisTab(
-        currentActiveAnalysisTab(),
-        contrastsEnabled,
-    );
-    if (target !== currentActiveAnalysisTab()) {
-        activateAnalysisTab(target);
+    // If the user has the Contrasts tab open but the new payload
+    // disables it, snap back to Class so they land on real content.
+    if (
+        !contrastsEnabled
+        && nodes.analysisTabContrasts.getAttribute("aria-selected") === "true"
+    ) {
+        activateAnalysisTab("class");
     }
     nodes.analysisTabClass.dataset.classState = tabs.class_state || "neutral";
-}
-
-/** Mirror of ``mode_logic.preserved_analysis_tab``. The Python
- *  helper is the single source of truth; this is the JS-side
- *  duplicate the renderer can call inline. A future contract
- *  change in mode_logic must update this function as well; the
- *  parity test (test_preserved_analysis_tab) anchors the
- *  Python rule and the web smoke checks the runtime effect. */
-function preservedAnalysisTab(current, contrastsEnabled) {
-    if (current === "contrasts" && !contrastsEnabled) return "class";
-    return current;
-}
-
-/** Which analysis tab is currently active. Reads aria-selected
- *  rather than tracking a local cache so the rule and the DOM
- *  cannot drift. */
-function currentActiveAnalysisTab() {
-    if (nodes.analysisTabFeatures.getAttribute("aria-selected") === "true") {
-        return "features";
-    }
-    if (nodes.analysisTabContrasts.getAttribute("aria-selected") === "true") {
-        return "contrasts";
-    }
-    return "class";
 }
 
 /** Canonical full-reset sink for the analysis pane. After this
@@ -3496,49 +3468,25 @@ function wireClearButtons() {
     });
 }
 
-/** Mirror of ``mode_logic.clear_semantics_for(USER_INITIATED)``.
- *  The web has no analogue of the desktop's ``SILENT_LOAD`` scope
- *  today (no equivalent web inventory-load path that wants to
- *  preserve cross-mode saved state), so the rule is hardcoded for
- *  the user-pressed-Clear case. If the web grows a SILENT_LOAD
- *  surface, this constant should grow a corresponding record and
- *  ``clearAll`` should accept a scope argument; the Python factory
- *  in
- *  ``app/src/phonology_features/gui/shared/mode_logic.py``
- *  is the source of truth. */
-const CLEAR_SEMANTICS_USER_INITIATED = Object.freeze({
-    reset_active_selection: true,
-    reset_saved_state: true,
-    reset_analysis_pane: true,
-    collapse_expanded_analysis: true,
-});
-
 function clearAll() {
-    const semantics = CLEAR_SEMANTICS_USER_INITIATED;
-    if (semantics.reset_active_selection) {
-        state.selected_segments = [];
-        state.selected_features = emptyFeatureSpec();
-        for (const btn of state.seg_buttons.values()) {
-            btn.dataset.state = "default";
-            btn.setAttribute("aria-pressed", "false");
-        }
-        for (const rec of state.feat_rows.values()) {
-            rec.row.dataset.value = "";
-            rec.row.dataset.shared = "false";
-            rec.row.dataset.contrastive = "false";
-            _setRasterizedBadge(rec.badge, "·");
-            rec.plus.dataset.active = "false";
-            rec.minus.dataset.active = "false";
-            delete rec.row.dataset.queryValue;
-        }
+    state.selected_segments = [];
+    state.selected_features = emptyFeatureSpec();
+    state.saved_seg_state = [];
+    state.saved_feat_state = emptyFeatureSpec();
+    for (const btn of state.seg_buttons.values()) {
+        btn.dataset.state = "default";
+        btn.setAttribute("aria-pressed", "false");
     }
-    if (semantics.reset_saved_state) {
-        state.saved_seg_state = [];
-        state.saved_feat_state = emptyFeatureSpec();
+    for (const rec of state.feat_rows.values()) {
+        rec.row.dataset.value = "";
+        rec.row.dataset.shared = "false";
+        rec.row.dataset.contrastive = "false";
+        _setRasterizedBadge(rec.badge, "·");
+        rec.plus.dataset.active = "false";
+        rec.minus.dataset.active = "false";
+        delete rec.row.dataset.queryValue;
     }
-    if (semantics.reset_analysis_pane) {
-        clearAnalysisTabs();
-    }
+    clearAnalysisTabs();
     setStatus(statusTextForMode(state.mode));
 }
 

@@ -30,7 +30,6 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QTimer
 
 from phonology_features.gui.shared.mode_logic import (
-    ClearScope,
     Mode,
     mode_status_text,
     project_mode_transition,
@@ -89,13 +88,12 @@ class ModeController:
           later, so the perceived transition is two short steps
           instead of one long blocking one.
 
-        No ``analysis.clear()`` call here: the deferred refresh ends
-        in ``AnalysisPanel.set_sections`` which overwrites tab
-        bodies AND consults
-        :py:func:`mode_logic.preserved_analysis_tab` to decide
-        whether the active tab survives. Calling ``clear()`` would
-        defeat that preservation by snapping back to Class on every
-        toggle (the historical desktop-only regression).
+        No ``analysis.clear()`` call here. The deferred refresh ends
+        in :py:meth:`AnalysisPanel.set_sections`, which overwrites the
+        tab bodies and only snaps the active tab when Contrasts
+        becomes disabled while active. Calling ``clear()`` here would
+        force the Class tab on every toggle (the user-visible
+        regression this branch fixed).
         """
         with self._w._batched_updates():
             self.apply_panel_chrome()
@@ -248,16 +246,14 @@ class ModeController:
 
     def refresh_analysis(self) -> None:
         """Re-run the active mode's analysis if there's something to
-        analyze; otherwise reset the analysis pane to its empty
-        baseline.
+        analyze; otherwise reset the analysis pane.
 
-        Calls to ``_update_*`` end in
-        :py:meth:`AnalysisPanel.set_sections`, which consults
-        :py:func:`mode_logic.preserved_analysis_tab` to keep the
-        user's active tab when it remains valid. The empty-selection
-        branch uses :py:meth:`AnalysisPanel.clear` (the documented
-        full-reset sink), which deliberately forces the Class tab:
-        there is no selection to anchor a preserved tab to.
+        ``_update_*`` end in :py:meth:`AnalysisPanel.set_sections`,
+        which preserves the user's active tab (the snap-back only
+        fires when Contrasts becomes disabled while active). The
+        empty-selection branch falls through to
+        :py:meth:`AnalysisPanel.clear`, which is the documented
+        full-reset sink and deliberately forces Class.
         """
         is_s2f = self.mode == Mode.SEG_TO_FEAT
         if is_s2f and self._w._selected_segments:
@@ -277,8 +273,8 @@ class ModeController:
         for row in self._w._feat_rows.values():
             row.set_panel_active(not is_s2f)
             row.set_interactive(not is_s2f)
-        self._w._clear_segments(ClearScope.SILENT_LOAD)
-        self._w._clear_features(ClearScope.SILENT_LOAD)
+        self._w._clear_segments(silent=True)
+        self._w._clear_features(silent=True)
 
     def update_status_message(self) -> None:
         """Show the per-mode helper text in the status bar."""

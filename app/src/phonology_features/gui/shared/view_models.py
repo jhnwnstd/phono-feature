@@ -15,30 +15,11 @@ Current responsibilities:
 The desktop still owns actual widget mutation. This module only turns
 engine state into plain dict/list payloads that either frontend can
 consume.
-
-Bridge contracts owned here:
-
-* :py:data:`AnalysisTabsPayload` -- the four-tab analysis payload
-  the desktop's ``AnalysisPanel.set_sections`` and the web's
-  ``setAnalysisTabs`` both consume. Required keys are pinned by
-  :py:data:`ANALYSIS_TABS_REQUIRED_KEYS`; valid ``class_state``
-  values are pinned by :py:data:`ANALYSIS_TABS_VALID_CLASS_STATES`.
-  ``test_view_models`` enforces both for SEG and FEAT modes on
-  every shipped inventory.
-* :py:func:`validate_analysis_tabs_payload` -- the runtime guard
-  the web bridge calls in ``web/api.py:analyze_segments`` and
-  ``analyze_features``. A future shared-module refactor that
-  drops or renames a key raises a structured ``ValueError`` at
-  the bridge boundary instead of producing silent ``undefined``
-  reads on the JS side.
-* ``contrasts_enabled`` is mode-driven, not selection-driven: True
-  for SEG mode, False for FEAT mode. Pinned by
-  ``test_analysis_tabs_contrasts_enabled_is_mode_driven``.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any
 
 from phonology_engine.feature_engine import FeatureCategory
 from phonology_features.gui.shared.analysis import (
@@ -243,150 +224,13 @@ def summarize_feature_query(
     }
 
 
-# ---------------------------------------------------------------------------
-# ANALYSIS-PANE PAYLOAD CONTRACT (Stage 3)
-#
-# The four-tab analysis payload is the single thing the web bridge
-# carries across the Pyodide boundary AND the desktop ``AnalysisPanel``
-# consumes via ``set_sections``. The shape was previously a free
-# ``dict[str, Any]`` with the keys documented in comments only;
-# Stage 3 promotes the comment to executable types so a future
-# refactor that drops or renames a key fails CI rather than the UI.
-#
-# ``AnalysisTabsPayload`` is a TypedDict (not a frozen dataclass)
-# because the ``class`` key collides with the Python keyword --
-# dataclasses can't have a ``class`` field, but a TypedDict can via
-# the functional syntax. The web bridge also consumes the payload as
-# a plain dict in JS; the typed alias just describes the shape we
-# already had.
-# ---------------------------------------------------------------------------
-
-
-#: Class-tab background-colour cue. ``"natural"`` paints green when
-#: the selection is a strict natural class; ``"not_natural"`` paints
-#: red when it isn't; ``"neutral"`` is the empty / single-segment
-#: default. The desktop and the web read the same three-value string.
-ClassState = Literal["natural", "not_natural", "neutral"]
-
-
-AnalysisTabsPayload = TypedDict(
-    "AnalysisTabsPayload",
-    {
-        # HTML for the persistent header above the tabs. Empty string
-        # means "hide the header"; the desktop's ``set_sections``
-        # uses that as the visibility signal.
-        "selection": str,
-        # HTML for each of the three tab bodies. ``class`` is a
-        # Python keyword so the TypedDict uses the functional syntax
-        # to keep the key name JSON-bridge friendly.
-        "class": str,
-        "features": str,
-        "contrasts": str,
-        # Tab enable/disable is MODE-driven, not selection-driven:
-        # SEG always lets the user click Contrasts (the body carries
-        # the "select two or more segments" hint when needed); FEAT
-        # never does. Asserted by ``_seg_tabs`` and ``_feat_tabs``.
-        "contrasts_enabled": bool,
-        # Class-tab background colour cue (see ``ClassState``).
-        "class_state": ClassState,
-    },
-)
-
-
-#: Frozen reference set of keys both UIs read. Used by parity tests
-#: and by the bridge-side validator to fail loudly when an upstream
-#: refactor drops or renames a key.
-ANALYSIS_TABS_REQUIRED_KEYS: frozenset[str] = frozenset(
-    {
-        "selection",
-        "class",
-        "features",
-        "contrasts",
-        "contrasts_enabled",
-        "class_state",
-    }
-)
-
-
-#: Valid values for ``AnalysisTabsPayload["class_state"]``. Frozen
-#: tuple so importers can't append to it.
-ANALYSIS_TABS_VALID_CLASS_STATES: tuple[ClassState, ...] = (
-    "natural",
-    "not_natural",
-    "neutral",
-)
-
-
-def validate_analysis_tabs_payload(
-    payload: object,
-) -> AnalysisTabsPayload:
-    """Cross-boundary structural validator for the analysis-pane
-    payload.
-
-    Raises ``ValueError`` with a precise message on shape drift; on
-    success, returns the payload cast to
-    :py:class:`AnalysisTabsPayload`. The web bridge calls this on the
-    way out of ``analyze_segments`` / ``analyze_features`` so a
-    desktop-only refactor that drops or renames a key surfaces as
-    a structured Pyodide error rather than silent ``undefined``
-    reads on the JS side.
-
-    The desktop does NOT need to call this on every refresh -- mypy
-    catches shape drift at type-check time. The validator exists to
-    bridge the Python -> JS gap where the type checker can't see the
-    consumer.
-    """
-    if not isinstance(payload, dict):
-        raise ValueError(
-            f"analysis_tabs payload must be a dict, got"
-            f" {type(payload).__name__}"
-        )
-    missing = ANALYSIS_TABS_REQUIRED_KEYS - payload.keys()
-    if missing:
-        raise ValueError(
-            f"analysis_tabs payload missing required keys:"
-            f" {sorted(missing)}"
-        )
-    extra = payload.keys() - ANALYSIS_TABS_REQUIRED_KEYS
-    if extra:
-        # An extra key is not a hard failure today (it would just be
-        # ignored by both UIs), but the schema is the contract -- log
-        # via ValueError so an upstream refactor that adds a field
-        # has to explicitly extend ANALYSIS_TABS_REQUIRED_KEYS too.
-        raise ValueError(
-            f"analysis_tabs payload carries unexpected keys:"
-            f" {sorted(extra)} (extend ANALYSIS_TABS_REQUIRED_KEYS"
-            f" if these are intentional)"
-        )
-    cs = payload["class_state"]
-    if cs not in ANALYSIS_TABS_VALID_CLASS_STATES:
-        raise ValueError(
-            f"analysis_tabs class_state must be one of"
-            f" {ANALYSIS_TABS_VALID_CLASS_STATES}, got {cs!r}"
-        )
-    if not isinstance(payload["contrasts_enabled"], bool):
-        raise ValueError(
-            f"analysis_tabs contrasts_enabled must be bool, got"
-            f" {type(payload['contrasts_enabled']).__name__}"
-        )
-    for html_key in ("selection", "class", "features", "contrasts"):
-        if not isinstance(payload[html_key], str):
-            raise ValueError(
-                f"analysis_tabs {html_key!r} must be str, got"
-                f" {type(payload[html_key]).__name__}"
-            )
-    # Runtime-validated cast: payload now satisfies the TypedDict
-    # shape; mypy cannot prove that from the structural checks above.
-    return payload  # type: ignore[return-value]
-
-
 def _seg_tabs(
     engine: FeatureEngine,
     segs: list[str],
     common: dict[str, str],
     contrastive: dict[str, dict[str, list[str]]],
     suggested: list[str],
-) -> AnalysisTabsPayload:
+) -> dict[str, Any]:
     """Build the per-tab HTML payload for the SEG-mode analysis pane.
 
     Keys map to the three tabs the desktop and web render:
@@ -406,13 +250,12 @@ def _seg_tabs(
     # of itself, so colouring it green would be true but uninformative
     # and just adds visual noise on every click. The cue lives on the
     # multi-segment verdict where the answer is genuinely useful.
-    class_state: ClassState
     if len(segs) >= 2:
         is_nc, _ = engine.is_natural_class(segs)
         class_state = "natural" if is_nc else "not_natural"
     else:
         class_state = "neutral"
-    payload: AnalysisTabsPayload = {
+    return {
         "selection": render_selection_summary_seg(segs),
         "class": render_class_tab_seg(engine, segs, suggested),
         "features": render_features_tab_seg(engine, segs, common),
@@ -424,13 +267,12 @@ def _seg_tabs(
         "contrasts_enabled": True,
         "class_state": class_state,
     }
-    return payload
 
 
 def _feat_tabs(
     spec: dict[str, str],
     matching: list[str],
-) -> AnalysisTabsPayload:
+) -> dict[str, Any]:
     """Same shape as :py:func:`_seg_tabs` but for FEAT mode. The
     Contrasts tab is never meaningful for a feature query, so
     ``contrasts_enabled`` is always False (the UI greys it out).
@@ -438,7 +280,7 @@ def _feat_tabs(
     already explicit in the Features tab below, so duplicating
     it above the tabs would just waste vertical room.
     """
-    payload: AnalysisTabsPayload = {
+    return {
         "selection": "",
         "class": render_class_tab_feat(spec, matching),
         "features": render_features_tab_feat(spec),
@@ -446,7 +288,6 @@ def _feat_tabs(
         "contrasts_enabled": False,
         "class_state": "neutral",
     }
-    return payload
 
 
 def _feature_row_state(
