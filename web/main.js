@@ -625,14 +625,19 @@ async function loadInventoryText(text, sourceLabel) {
     try {
         const info = callBridge("load_inventory_json", text, sourceLabel);
         applyInventoryInfo(info);
+        const loadedTpl = STATUS_TEXT.inventory_loaded_template
+            || "{name}: {n_segments} segments, {n_features} features.";
         setStatus(
-            `${info.name}: ${info.segments.length} segments, `
-            + `${info.features.length} features.`
+            loadedTpl
+                .replace("{name}", info.name)
+                .replace("{n_segments}", String(info.segments.length))
+                .replace("{n_features}", String(info.features.length))
         );
         prewarmCommonAnalyses();
     } catch (e) {
         const issues = e.message ? [e.message] : ["unknown error"];
-        const heading = STATUS_TEXT.validation_report_heading;
+        const heading = STATUS_TEXT.validation_report_heading
+            || "Validation errors:";
         const errorHtml = `<p><b>${escapeHtml(heading)}</b></p><ul>`
             + issues.map((i) => `<li>${escapeHtml(i)}</li>`).join("")
             + "</ul>";
@@ -645,8 +650,10 @@ async function loadInventoryText(text, sourceLabel) {
             contrasts: "",
             contrasts_enabled: false,
         });
+        const failTpl = STATUS_TEXT.load_failed_template
+            || "Cannot load {fname}: {issue}";
         setStatus(
-            STATUS_TEXT.load_failed_template
+            failTpl
                 .replace("{fname}", sourceLabel || "inventory")
                 .replace("{issue}", issues[0])
         );
@@ -3349,8 +3356,9 @@ function wireColorblindToggle() {
     // aria-label and title share one source so SRs (which prefer
     // aria-label) and hover tooltips can never drift apart.
     const labelFor = (mode) => mode === PALETTE_MODE.COLORBLIND
-        ? STATUS_TEXT.palette_to_standard
-        : STATUS_TEXT.palette_to_colorblind;
+        ? (STATUS_TEXT.palette_to_standard || "Switch to standard palette")
+        : (STATUS_TEXT.palette_to_colorblind
+            || "Switch to colorblind-friendly palette");
     const applyLabel = (mode) => {
         const text = labelFor(mode);
         nodes.cbBtn.title = text;
@@ -3395,8 +3403,8 @@ function wireThemeToggle() {
     // aria-label and title share one source so SRs (which prefer
     // aria-label) and hover tooltips can never drift apart.
     const labelFor = (theme) => theme === THEME.DARK
-        ? STATUS_TEXT.theme_to_light
-        : STATUS_TEXT.theme_to_dark;
+        ? (STATUS_TEXT.theme_to_light || "Switch to light mode")
+        : (STATUS_TEXT.theme_to_dark || "Switch to dark mode");
     const applyLabel = (theme) => {
         const text = labelFor(theme);
         nodes.themeBtn.title = text;

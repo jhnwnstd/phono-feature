@@ -144,13 +144,24 @@ def clipboard_copy_message(seg: str) -> str:
     return CLIPBOARD_COPY_MESSAGE_TEMPLATE.format(seg=seg)
 
 
+#: Template for the load-success status message. Relayed through
+#: ``STATUS_TEXT`` so the web can substitute locally and stay
+#: byte-identical to the desktop's rendering of the same load.
+INVENTORY_LOADED_TEMPLATE: str = (
+    "{name}: {n_segments} segments, {n_features} features."
+)
+
+
 def inventory_loaded_message(
     *, name: str, n_segments: int, n_features: int
 ) -> str:
     """Status-bar text after a successful inventory load. Both UIs
-    render identical wording.
+    render identical wording from
+    :py:data:`INVENTORY_LOADED_TEMPLATE`.
     """
-    return f"{name}: {n_segments} segments, {n_features} features."
+    return INVENTORY_LOADED_TEMPLATE.format(
+        name=name, n_segments=n_segments, n_features=n_features
+    )
 
 
 #: Template for the load-failure status message. ``{fname}`` and

@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from phonology_features.gui.shared.mode_logic import (
+    INVENTORY_LOADED_TEMPLATE,
     LOAD_FAILED_TEMPLATE,
     VALIDATION_REPORT_HEADING,
     Mode,
@@ -133,6 +134,7 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         "clipboard_copy_template",
         "validation_report_heading",
         "load_failed_template",
+        "inventory_loaded_template",
         "theme_to_dark",
         "theme_to_light",
         "palette_to_colorblind",
@@ -163,6 +165,19 @@ def test_load_failed_template_matches_python(
     both UIs.
     """
     assert status_payload.get("load_failed_template") == LOAD_FAILED_TEMPLATE
+
+
+def test_inventory_loaded_template_matches_python(
+    status_payload: dict[str, str],
+) -> None:
+    """The success-path template the web substitutes into must
+    equal :py:data:`INVENTORY_LOADED_TEMPLATE`, so a future wording
+    edit propagates to both UIs instead of silently drifting on web.
+    """
+    assert (
+        status_payload.get("inventory_loaded_template")
+        == INVENTORY_LOADED_TEMPLATE
+    )
 
 
 def test_theme_tooltips_match_python(
