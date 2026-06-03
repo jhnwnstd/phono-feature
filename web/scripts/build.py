@@ -193,19 +193,23 @@ def _is_gitignored(path: Path) -> bool:
 
 
 def _inventory_label(path: Path) -> str:
-    """Display label for the dropdown. Prefers ``metadata.name``
-    from the JSON; falls back to a title-cased filename.
+    """Display label for the dropdown. Reads ``metadata.name`` (or
+    top-level ``name``) from the JSON, then delegates to the shared
+    helper so desktop runtime and web build agree byte-for-byte.
     """
+    metadata_name: str | None = None
     try:
         raw = json.loads(path.read_text(encoding="utf-8-sig"))
         meta = raw.get("metadata", {})
-        name = meta.get("name") or raw.get("name")
-        if isinstance(name, str) and name.strip():
-            return name.strip()
+        candidate = meta.get("name") or raw.get("name")
+        if isinstance(candidate, str):
+            metadata_name = candidate
     except (json.JSONDecodeError, OSError):
         pass
-    stem = path.stem.removesuffix("_features").replace("_", " ")
-    return stem.title()
+    label = _load_inventory_setup_module().inventory_display_label(
+        fname=path.name, metadata_name=metadata_name
+    )
+    return str(label)
 
 
 def generate_theme_css() -> None:
@@ -408,12 +412,24 @@ def _build_status_text_payload() -> dict[str, str]:
         payload["inventory_loaded_template"] = module.INVENTORY_LOADED_TEMPLATE
         payload["theme_to_dark"] = module.theme_toggle_tooltip(is_dark=False)
         payload["theme_to_light"] = module.theme_toggle_tooltip(is_dark=True)
+        payload["theme_glyph_dark"] = module.theme_toggle_glyph(is_dark=True)
+        payload["theme_glyph_light"] = module.theme_toggle_glyph(is_dark=False)
         payload["palette_to_colorblind"] = module.palette_toggle_tooltip(
             is_colorblind=False
         )
         payload["palette_to_standard"] = module.palette_toggle_tooltip(
             is_colorblind=True
         )
+        # Builder status templates. JS substitutes {seg}/{feat}/{n}/
+        # {plural} locally because those values originate in JS state.
+        payload["undo_nothing_message"] = module.UNDO_NOTHING_MESSAGE
+        payload["redo_nothing_message"] = module.REDO_NOTHING_MESSAGE
+        payload["undid_template"] = module.UNDID_TEMPLATE
+        payload["redid_template"] = module.REDID_TEMPLATE
+        payload["added_segment_template"] = module.ADDED_SEGMENT_TEMPLATE
+        payload["removed_segment_template"] = module.REMOVED_SEGMENT_TEMPLATE
+        payload["added_feature_template"] = module.ADDED_FEATURE_TEMPLATE
+        payload["removed_feature_template"] = module.REMOVED_FEATURE_TEMPLATE
         return payload
     finally:
         sys.modules.pop(module_name, None)
