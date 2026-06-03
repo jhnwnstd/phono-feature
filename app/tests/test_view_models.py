@@ -339,18 +339,20 @@ def test_analysis_tabs_feat_disables_contrasts() -> None:
 
 def test_analysis_tabs_empty_selection_safe_shape() -> None:
     """Empty SEG selection still produces a well-formed payload, so
-    the UI can call setSections without checking for nulls. Tab
-    enablement is mode-driven (SEG → Contrasts clickable), but the
-    Class tab cue stays neutral and the body strings collapse to
-    the empty string so neither frontend paints a stale message."""
+    the UI can call setSections without checking for nulls. The
+    selection-strip stays hidden (empty ``selection``) and the Class
+    cue is neutral; the tab bodies now carry short next-step hints
+    instead of empty strings so the user isn't staring at blank
+    tabs wondering whether the app is alive."""
     engine = _engine("hayes_features.json")
     tabs = summarize_segment_selection(engine, [])["analysis_tabs"]
     _assert_tabs_shape(tabs)
     assert tabs["contrasts_enabled"] is True
     assert tabs["class_state"] == "neutral"
     assert tabs["selection"] == ""
-    assert tabs["class"] == ""
-    assert tabs["features"] == ""
+    assert "Click a segment" in tabs["class"]
+    assert "Click a segment" in tabs["features"]
+    assert "Select" in tabs["contrasts"]
 
 
 def test_segment_state_payload_strings_match_enum() -> None:

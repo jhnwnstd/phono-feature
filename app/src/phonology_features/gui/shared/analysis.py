@@ -507,10 +507,7 @@ def render_class_tab_seg(
       inventory: a muted italic note.
     """
     if not segs:
-        # Empty body. The status bar already tells the user what to
-        # do ("Click a segment to inspect its features."), so the tab
-        # stays quiet instead of echoing that prompt.
-        return ""
+        return _muted_italic_p("Click a segment to inspect it.")
     if len(segs) == 1:
         seg = segs[0]
         feats = engine.get_segment_features(seg)
@@ -555,8 +552,7 @@ def render_class_tab_feat(
     """
     if not feature_dict:
         return _muted_italic_p(
-            "Set + or − on features in the feature pane "
-            "to see matching segments."
+            "Set + or − on a feature to find matching segments."
         )
     if not matching:
         return f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
@@ -578,10 +574,7 @@ def render_features_tab_seg(
     multi-segment selection.
     """
     if not segs:
-        # Empty body, same reasoning as the Class tab: the status
-        # bar carries the "click a segment" prompt, so this tab
-        # doesn't repeat it.
-        return ""
+        return _muted_italic_p("Click a segment to view its features.")
     if len(segs) == 1:
         seg = segs[0]
         feats = engine.get_segment_features(seg)
@@ -612,7 +605,7 @@ def render_features_tab_feat(feature_dict: dict[str, str]) -> str:
     is for at-a-glance "what am I querying?" review.
     """
     if not feature_dict:
-        return _muted_italic_p("No features in the current query.")
+        return _muted_italic_p("No features set yet.")
     chips = " ".join(
         _signed_feature_chip(value, feature)
         for feature, value in sort_spec(feature_dict).items()
@@ -631,22 +624,22 @@ def render_contrasts_tab_seg(
 ) -> str:
     """Contrasts tab content for SEG mode: feature-by-feature
     breakdown of how the selection splits. Only meaningful for
-    multi-segment selections; the under-two-segments case returns
-    an empty body so the tab stays quiet rather than echoing the
-    status-bar prompt.
+    multi-segment selections; the under-two-segments case shows a
+    short hint pointing the user at the next step.
     """
+    if not segs:
+        return _muted_italic_p("Select two or more segments to compare.")
     if len(segs) < 2:
-        return ""
+        return _muted_italic_p("Select another segment to compare.")
     return _render_contrast_section(engine, segs, contrastive)
 
 
 def render_contrasts_tab_feat() -> str:
     """Contrasts tab in FEAT mode is not meaningful: the user is
     asking which segments match a feature spec, not how segments
-    differ. Renders a stable placeholder so the tab still exists
-    and the user isn't left wondering whether they broke something.
+    differ. Stable placeholder so the tab still exists and the user
+    isn't left wondering whether they broke something.
     """
     return _muted_italic_p(
-        "Switch to segment-mode and select two or more segments "
-        "to compare features across them."
+        "Switch to segment mode to compare segments."
     )
