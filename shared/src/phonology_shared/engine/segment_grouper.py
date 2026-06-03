@@ -82,12 +82,16 @@ _MIN_POSITIVE: dict[str, int] = {
 DERIVED_BREAKOUTS: list[tuple[str, str, dict[str, str]]] = [
     ("Sibilants", "Fricatives", {"strident": "+", "coronal": "+"}),
     ("Lateral Fricatives", "Fricatives", {"lateral": "+"}),
+    ("Sibilant Affricates", "Affricates", {"strident": "+", "coronal": "+"}),
     ("Lateral Affricates", "Affricates", {"lateral": "+"}),
+    ("Lateral Flaps", "Taps & Flaps", {"lateral": "+"}),
 ]
 _MERGE_PARENT: dict[str, str] = {
+    "Sibilant Affricates": "Affricates",
     "Lateral Affricates": "Affricates",
     "Sibilants": "Fricatives",
     "Lateral Fricatives": "Fricatives",
+    "Lateral Flaps": "Taps & Flaps",
     "Trills": "Central Approximants",
     "Taps & Flaps": "Central Approximants",
 }
@@ -100,11 +104,13 @@ DISPLAY_ORDER: list[str] = [
     "Sibilants",
     "Lateral Fricatives",
     "Affricates",
+    "Sibilant Affricates",
     "Lateral Affricates",
     "Nasals",
     "Vibrants",
     "Trills",
     "Taps & Flaps",
+    "Lateral Flaps",
     "Rhotics",
     "Lateral Approximants",
     "Liquids",
@@ -391,12 +397,15 @@ def group_segments(
         return max(matches, key=lambda x: (x[1], x[2]))[0]
 
     def fallback_assignment(seg_feats: dict[str, str]) -> str:
-        """Best-fit group by fewest contradictions, then most matches.
+        """Best-fit group by fewest mismatches, then most matches.
 
+        Mismatch counts disagreement against a display-class spec,
+        not phonological invalidity: the system is permissive and
+        treats every spec as an inclination rather than a rule.
         On ties the earlier group in ``PRIMARY_GROUPS`` wins.
         """
         best_name = ""
-        best_contras = float("inf")
+        best_mismatches = float("inf")
         best_matches = -1
         for name, spec in PRIMARY_GROUPS:
             if name in _FROZEN_GROUPS:
@@ -404,7 +413,7 @@ def group_segments(
             relevant = [f for f in spec if f in active_features]
             if not relevant:
                 continue
-            contras = 0
+            mismatches = 0
             matched = 0
             for feat in relevant:
                 val = seg_feats.get(feat, "0")
@@ -413,11 +422,13 @@ def group_segments(
                 if val == spec[feat]:
                     matched += 1
                 else:
-                    contras += 1
-            if contras < best_contras or (
-                contras == best_contras and matched > best_matches
+                    mismatches += 1
+            if mismatches < best_mismatches or (
+                mismatches == best_mismatches and matched > best_matches
             ):
-                best_name, best_contras, best_matches = name, contras, matched
+                best_name = name
+                best_mismatches = mismatches
+                best_matches = matched
         return best_name
 
     assignment: dict[str, list[str]] = defaultdict(list)
