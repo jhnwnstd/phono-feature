@@ -3346,11 +3346,23 @@ function _syncBridgePaletteToStoredState() {
 
 function wireColorblindToggle() {
     if (!nodes.cbBtn) return;
+    // aria-label and title share one source so SRs (which prefer
+    // aria-label) and hover tooltips can never drift apart.
+    const labelFor = (mode) => mode === PALETTE_MODE.COLORBLIND
+        ? STATUS_TEXT.palette_to_standard
+        : STATUS_TEXT.palette_to_colorblind;
+    const applyLabel = (mode) => {
+        const text = labelFor(mode);
+        nodes.cbBtn.title = text;
+        nodes.cbBtn.setAttribute("aria-label", text);
+    };
     const stored = normalizePaletteMode(safeStorageGet("palette_mode"));
     if (stored === PALETTE_MODE.COLORBLIND) {
         document.documentElement.dataset.cb = "on";
         nodes.cbBtn.setAttribute("aria-pressed", "true");
-        nodes.cbBtn.title = "Switch to standard palette";
+        applyLabel(PALETTE_MODE.COLORBLIND);
+    } else {
+        applyLabel(PALETTE_MODE.STANDARD);
     }
     nodes.cbBtn.addEventListener("click", () => {
         const cur = document.documentElement.dataset.cb === "on"
@@ -3367,9 +3379,7 @@ function wireColorblindToggle() {
         nodes.cbBtn.setAttribute(
             "aria-pressed", next === PALETTE_MODE.COLORBLIND ? "true" : "false"
         );
-        nodes.cbBtn.title = next === PALETTE_MODE.COLORBLIND
-            ? "Switch to standard palette"
-            : "Switch to colorblind-friendly palette";
+        applyLabel(next);
         safeStorageSet("palette_mode", next);
         if (state.bridge) {
             callBridge("set_active_palette_mode", next);
