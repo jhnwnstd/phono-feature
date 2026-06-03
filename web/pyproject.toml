@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phonology-web"
+version = "0.1.0"
+description = "Pyodide-side bridge for the Phonology Segment & Feature Engine web app."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "John Winstead" }]
+# Pure-Python bridge. Engine + render helpers come from
+# phonology-engine + phonology-features at editable-install time
+# (workspace members). No runtime deps the wheel itself needs.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
