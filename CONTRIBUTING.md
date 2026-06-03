@@ -154,9 +154,4 @@ inventory files. The leading underscore tells both the desktop
 dropdown and the web build to skip it (it's metadata, not a
 loadable inventory).
 
-## More
-
-* Web build internals and the relay contract in detail:
-  [web/README.md](web/README.md).
-* High-level project overview, run instructions, and repo layout:
-  [README.md](README.md).
+Web build internals live in [web/README.md](web/README.md).

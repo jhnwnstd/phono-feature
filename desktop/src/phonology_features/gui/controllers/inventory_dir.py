@@ -1,23 +1,10 @@
-"""Filesystem watcher, dropdown population, and delete-fallback
-logic for MainWindow's inventory directory.
-
-Owns:
-
-* the QFileSystemWatcher that fires on inventory file / dir changes
-* the 600 ms debounce timer that coalesces editor delete-then-write
-  patterns into a single reload
-* the MRU list of recently-opened paths used to choose a fallback
-  when the currently-loaded file is deleted under us
-* the dropdown population logic, including the stale-tmp-file sweep
-  that prevents orphaned ``.tmp_inv_*.json`` accumulation
-
-MainWindow constructs one instance and routes inventory loads
-through it (``register_loaded_path``, ``populate_dropdown``,
-``pick_fallback_after_delete``). The watcher's signal handlers
-call back into ``self._w._load_path`` because the load path
-itself stays on MainWindow (touches engine state, status bar,
-analysis pane). The controller is the boundary between "files
-changed on disk" and "load this path."
+"""Inventory-directory ownership for :class:`MainWindow`:
+filesystem watcher with a 600 ms debounce, MRU list for the
+delete-fallback path, and dropdown population (with a stale-
+tmp-file sweep). The boundary between "files changed on disk"
+and "load this path". The actual load stays on MainWindow
+because it touches engine state, the status bar, and the
+analysis pane.
 """
 
 from __future__ import annotations

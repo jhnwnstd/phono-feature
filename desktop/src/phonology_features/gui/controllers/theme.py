@@ -1,19 +1,9 @@
-"""Theme toggle and chrome restyle for :class:`MainWindow`.
+"""Theme + colorblind-palette toggle for :class:`MainWindow`.
 
-Owns every code path that runs when the active palette changes.
-
-The controller does not own widgets; it only owns the *policy* of how
-to repaint them when the theme changes. Widgets remain MainWindow
-state. The controller reaches through ``self._main`` for both the
-widget tree and the small handful of static style helpers
-(``_apply_title_palette``) that still live on MainWindow.
-
-Split rationale: theme handling crossed nine inline methods on
-MainWindow and a hundred and fifty lines of code. Centralizing them
-makes the cross-widget polish order explicit (palette before
-property-selector polish, scrollbars before panel chrome) and lets
-:py:meth:`apply` read as a single sequence rather than a chain of
-private helpers.
+Owns the policy of how to repaint widgets when the active palette
+changes (widgets themselves stay on MainWindow). Reaches through
+``self._main`` for the widget tree and the few static style
+helpers still living on MainWindow.
 """
 
 from __future__ import annotations

@@ -194,27 +194,19 @@ class MainWindow(QMainWindow):
         # toolbar wires its toggle into the theme button click signal.
         self._theme = ThemeController(self)
         self._build_ui()
-        # Inventory-dir controller owns the file watcher, MRU, and
-        # dropdown population. Constructed AFTER _build_ui because it
-        # needs the inventory_combo widget that _build_toolbar creates.
-        # It also starts watching the bundled inventories directory in
-        # its own __init__, so the previous inline addPath call is
-        # gone.
+        # Constructed AFTER _build_ui: needs the inventory_combo
+        # widget that _build_toolbar creates.
         self._inv_dir = InventoryDirController(
             self, self._settings, self.inventory_combo
         )
-        # Initial mode is already SEG_TO_FEAT, so _set_mode would no-op.
-        # Apply chrome directly to wire up the freshly-built widgets.
+        # Initial mode is already SEG_TO_FEAT, so _set_mode would no-op;
+        # apply chrome directly.
         self._mode_ctrl.apply_phases()
         self._restore_settings(startup_path)
-        # Pre-warm Qt's style polishing infrastructure for the
-        # alternate palette mode. The very first PaletteChange event
-        # after a palette-mode swap triggers a full polish cascade,
-        # which can momentarily shift widget geometry by sub-pixel
-        # amounts (visible as a slight "shake" on the user's first
-        # colorblind toggle). Running one synthetic round-trip here,
-        # after the window is fully built but before the user can
-        # interact, lets Qt finish that work invisibly.
+        # The first PaletteChange after a palette-mode swap triggers a
+        # full polish cascade that can sub-pixel-shift widgets (visible
+        # as a "shake" on the user's first colorblind toggle). One
+        # synthetic round-trip now lets Qt finish that work invisibly.
         self._warm_palette_cache()
 
     def _warm_palette_cache(self) -> None:
@@ -267,18 +259,13 @@ class MainWindow(QMainWindow):
         self._nav_buttons: list[QPushButton] = []
         self.inventory_combo = QComboBox(toolbar)
         self.inventory_combo.setFont(QFont("Noto Sans", 10))
-        # ``setMinimumHeight`` (not ``setFixedHeight``) so the combo
-        # can grow with font metrics on a 200% / 300% scaled display
-        # without clipping the text. The 32 floor matches the
-        # toolbar's historic baseline at 1x scale.
+        # Minimum (not fixed) height so the combo grows with font
+        # metrics on 200%+ scaled displays without clipping.
         self.inventory_combo.setMinimumHeight(32)
         self.inventory_combo.setMinimumWidth(176)
         set_css(self.inventory_combo, ThemeController.combo_style())
-        # Dropdown is populated by ``InventoryDirController.__init__``,
-        # which runs after ``_build_ui`` completes (it needs the
-        # inventory_combo widget). The toolbar shows an empty combo
-        # for the few microseconds between toolbar build and
-        # controller construction; visually unobservable.
+        # Populated by ``InventoryDirController.__init__``, which
+        # runs after ``_build_ui`` because it needs the combo widget.
         self.inventory_combo.activated.connect(self._on_inventory_selected)
         toolbar.addWidget(self.inventory_combo)
 
@@ -303,10 +290,8 @@ class MainWindow(QMainWindow):
         )
         set_css(spacer, "background: transparent;")
         toolbar.addWidget(spacer)
-        # Colorblind-mode toggle: lives just left of the theme button
-        # with a small fixed gap so the two icon buttons read as a
-        # paired chrome cluster rather than one widget. Text, tooltip,
-        # and styling are set by :py:meth:`ThemeController.apply_cb_btn`.
+        # Colorblind toggle; text/tooltip/styling set by
+        # :py:meth:`ThemeController.apply_cb_btn`.
         self._cb_btn = QPushButton("", toolbar)
         self._cb_btn.setFont(QFont("Noto Sans", 12))
         self._cb_btn.setFixedSize(32, 32)
@@ -336,11 +321,9 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         splitter = _ThemedSplitter(Qt.Orientation.Horizontal, central)
-        # DPR-scaled so the handle stays the same physical size on
-        # Windows 125%/150%/200% scaling and Linux fractional-scale
-        # compositors. ``primaryScreen()`` is set by the time we
-        # reach _build_central; fall back to 1.0 only if Qt reports
-        # no screen (headless tests).
+        # DPR-scaled so the handle stays the same physical size
+        # under fractional/integer OS scaling. Fall back to 1.0
+        # only in headless tests where Qt reports no screen.
         primary = QApplication.primaryScreen()
         dpr = primary.devicePixelRatio() if primary is not None else 1.0
         splitter.setHandleWidth(layout.scaled_handle_w(dpr))
@@ -382,21 +365,11 @@ class MainWindow(QMainWindow):
         self._vsplit.addWidget(splitter)
         self._vsplit.addWidget(self.analysis)
         self._vsplit.setSizes([700, 220])
-        # Vertical handle is not user-draggable. The split is fully
-        # driven by the panels' own minimum heights (top panels get
-        # their content height, analysis absorbs the rest) plus the
-        # ⤢ expand toggle. The AnalysisPanel's own ``border-top``
-        # provides the visual separator between top panes and the
-        # analysis pane.
-        #
-        # Qt resets the splitter's ``handleWidth`` property when
-        # children are added and again on style polish, so just
-        # calling ``setHandleWidth(0)`` does not stick. Instead we
-        # disable the handle widget (no mouse-press / drag) AND
-        # clamp its max height to 0 so it takes zero vertical
-        # space regardless of what the splitter thinks its handle
-        # width should be. ``setEnabled(False)`` also kills the
-        # split-cursor hover affordance.
+        # Vertical handle is not user-draggable; the split is driven
+        # by the panels' minimum heights plus the ⤢ expand toggle.
+        # Qt resets ``handleWidth`` on every style polish, so
+        # ``setHandleWidth(0)`` doesn't stick. Disabling the handle
+        # widget AND clamping its max height to 0 does.
         handle = self._vsplit.handle(1)
         if handle is not None:
             handle.setEnabled(False)
@@ -408,47 +381,31 @@ class MainWindow(QMainWindow):
         # content-driven height; analysis grows for the rest.
         self._vsplit.setStretchFactor(0, 0)
         self._vsplit.setStretchFactor(1, 1)
-        # Splitter widgets exist now: build the geometry controller
-        # that owns sizing policy + ownership flags. Everything below
-        # routes through it.
         self._geom = GeometryController(
             self, self._hsplit, self._vsplit, self._settings
         )
-        # Hard floor; without it the splitter can collapse the
-        # analysis pane to 0 when apply_splitter_sizes runs before
-        # the window is shown.
-        # Hard floor so the splitter can squeeze analysis down to its
-        # title bar + a line of text when the feature pane needs the
-        # vertical room. The preferred 220-px height still wins on
-        # comfortable-size windows because ``apply_splitter_sizes``
-        # gives analysis whatever's left after ``top_need_h``.
+        # Floor lets analysis squeeze down to its title bar + one
+        # line; the preferred 220 px still wins on comfortable
+        # windows because ``apply_splitter_sizes`` gives analysis
+        # whatever's left after the top panes' ``top_need_h``.
         self.analysis.setMinimumHeight(self._geom.HARD_MIN_ANALYSIS_H)
         self._vsplit.setCollapsible(1, False)
         root.addWidget(self._vsplit)
-        # User-drag is also "user owns the ratio". Without this, a
-        # manual drag would survive only until the next inventory
-        # load, when fit_to_content's content-based sizing would
-        # clobber it (the same shape of bug as the window-resize
-        # one). The flag is initialized in _restore_settings.
+        # A manual drag owns the ratio until the next inventory
+        # load; without this flag, ``fit_to_content`` would clobber
+        # it. Initialised in _restore_settings.
         self._hsplit.splitterMoved.connect(self._geom.mark_splitter_owned)
         self._vsplit.splitterMoved.connect(self._geom.mark_splitter_owned)
-        # User drag of the horizontal splitter changes the seg-pane
-        # width. Push the new width into the seg-pane internals so
-        # the vowel chart resizes and stack-vs-side-by-side mode
-        # flips at the shared ``VOWEL_STACK_W`` threshold.
+        # Push horizontal drag into seg-pane internals so the vowel
+        # chart resizes and flips at the ``VOWEL_STACK_W`` threshold.
         self._hsplit.splitterMoved.connect(self._on_hsplit_moved)
-        # Analysis-pane expand/restore toggle. Click ⤢: stash the
-        # current vsplit sizes plus the top pane's minimum height,
-        # then relax that minimum and resize so the analysis pane
-        # gets ~55 percent of the vsplit total (matching the web
-        # ``.analysis.expanded`` rule). The chips strip + Class /
-        # Features / Contrasts tabs all stay visible because they
-        # ARE the pane that's growing. Click ⤣: restore both the
-        # stashed sizes and the top-pane minimum.
+        # ⤢ stashes current sizes + top-pane min height, then resizes
+        # so analysis gets ~55% (matches the web ``.analysis.expanded``
+        # rule). ⤣ restores both.
         self._pre_expand_vsplit_sizes: list[int] | None = None
         self._pre_expand_min_heights: tuple[int, int, int] = (0, 0, 0)
         self.analysis.expand_toggled.connect(self._toggle_analysis_expand)
-        # Ctrl+Shift+M (mnemonic: Magnify) mirrors the header button.
+        # Ctrl+Shift+M (Magnify) mirrors the header button.
         _expand_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
         _expand_shortcut.activated.connect(self._toggle_analysis_expand)
 
@@ -504,11 +461,9 @@ class MainWindow(QMainWindow):
         )
         seg_content = QWidget(self._seg_scroll)
         set_css(seg_content, "background: transparent;")
-        # VBox root so the vowel chart can move between the "beside
-        # consonants" slot (inside ``_seg_h_pair``) and the "below
-        # consonants" slot (directly under the pair) when the seg
-        # pane is narrow. ``_on_seg_pane_width_changed`` flips
-        # between modes at the shared ``VOWEL_STACK_W`` threshold.
+        # VBox root so the vowel chart can move between beside-
+        # and below-consonants slots when the seg pane is narrow.
+        # ``_on_seg_pane_width_changed`` flips at ``VOWEL_STACK_W``.
         seg_content_layout = QVBoxLayout(seg_content)
         seg_content_layout.setContentsMargins(0, 0, 0, 0)
         seg_content_layout.setSpacing(12)
@@ -525,11 +480,9 @@ class MainWindow(QMainWindow):
         left_lay.addStretch()
         self.vowel_chart_widget = VowelChartWidget(seg_content)
         self.vowel_chart_widget.hide()
-        # Seed with the per-pane width default. ``apply_splitter_sizes``
-        # (and the splitter-drag callback) push the adapted value in
-        # later via :py:meth:`_on_seg_pane_width_changed`. We can't
-        # consult ``self._hsplit`` here — this method runs while it's
-        # still being constructed.
+        # Seed with the per-pane width default; the splitter-drag
+        # callback pushes the adapted value in later. We can't read
+        # ``self._hsplit`` here because it's still being built.
         self.vowel_chart_widget.set_target_width(
             layout.vowel_chart_width(layout.SEG_MIN_W)
         )
@@ -677,38 +630,25 @@ class MainWindow(QMainWindow):
         )
         screen = self._geom.target_screen()
         if size is not None:
-            # Enforce the MIN_FIRST_LAUNCH floor even on previously-
-            # saved sizes: a stale 1200x800 from an old fallback or a
-            # crashed mid-resize would otherwise stick forever, and
-            # the user opens to a cramped layout they didn't choose.
-            # Floor is below the launch default, so deliberate user
-            # resizes above the floor still round-trip unchanged.
+            # Floor against MIN_FIRST_LAUNCH so a stale saved size
+            # from a crashed mid-resize doesn't stick forever.
             w = max(size.width(), self._geom.MIN_FIRST_LAUNCH_W)
             h = max(size.height(), self._geom.MIN_FIRST_LAUNCH_H)
             self.resize(*self._geom.clamp_size_to_screen(w, h))
-            self._geom.has_saved_size = True
         else:
-            # Fresh install (no saved geometry): open at 75% of the
-            # primary screen, never smaller than MIN_FIRST_LAUNCH.
-            # Mark the size as "owned" so the inventory load below
-            # doesn't immediately shrink the window back to the
-            # content-derived MIN_FIRST_LAUNCH floor in fit_to_content.
+            # Fresh install: 75% of the primary screen.
             self.resize(*self._geom.default_window_size())
-            self._geom.has_saved_size = True
+        self._geom.has_saved_size = True
         if pos is not None:
             self.move(pos)
         elif screen is not None:
             frame = self.frameGeometry()
             frame.moveCenter(screen.availableGeometry().center())
             self.move(frame.topLeft())
-        # Restore splitter state BEFORE loading an inventory, so the
-        # post-load fit_to_content pass can see the flag and skip
-        # the content-derived sizing. Restore order: horizontal
-        # first (panel ratio), then vertical (top vs analysis).
-        # Both flags default to False; restoreState returns False
-        # if the stored blob is empty or incompatible with the
-        # current splitter children, in which case we fall back to
-        # first-launch sizing.
+        # Restore BEFORE the inventory load so fit_to_content sees
+        # the saved-splitter flag and skips its content-derived
+        # sizing. Returns False on empty/incompatible blob; the
+        # first-launch path picks up.
         self._geom.has_saved_splitter = self._geom.restore_splitter_state()
         path = startup_path or safe_read_setting(
             self._settings, SettingsKey.LAST_INVENTORY, None, expected_type=str
@@ -719,12 +659,9 @@ class MainWindow(QMainWindow):
                 self.inventory_combo.setCurrentIndex(idx)
             self._load_path(path)
         else:
-            # Fresh install: no startup arg, no saved last_inventory.
-            # Auto-pick the first bundled .json (skip the disabled
-            # "Select inventory…" placeholder at index 0) so the user
-            # opens to a populated UI instead of a blank shell. Falls
-            # through silently if the inventories dir is empty —
-            # the placeholder stays visible.
+            # Fresh install: auto-pick the first bundled .json (skip
+            # the disabled placeholder at index 0) so the user opens
+            # to a populated UI instead of a blank shell.
             for idx in range(1, self.inventory_combo.count()):
                 auto_path = self.inventory_combo.itemData(idx)
                 if auto_path and os.path.isfile(auto_path):
@@ -740,13 +677,9 @@ class MainWindow(QMainWindow):
             self._set_mode(Mode(saved_mode))
 
     def closeEvent(self, event: QCloseEvent | None) -> None:
-        # If the builder is open with unsaved changes, give it the
-        # chance to prompt. Without this, Qt's parent-child cleanup
-        # destroys the builder when the main window dies, bypassing
-        # its closeEvent / _check_unsaved and silently dropping any
-        # unsaved grid edits. ``close()`` returns True only if the
-        # builder accepted the close; if the user picked Cancel in
-        # the unsaved dialog we abort the main window close too.
+        # Let the builder prompt for unsaved changes. Without this,
+        # Qt parent-child cleanup destroys it without firing its
+        # closeEvent and unsaved edits are silently dropped.
         if self._builder is not None and self._builder.isVisible():
             if not self._builder.close():
                 if event is not None:
@@ -1144,32 +1077,16 @@ class MainWindow(QMainWindow):
         if self._other_card is not None:
             self._other_card.hide()
 
-    # Layout policy for feature-group cards.
-    #
-    # Soft pins (placed only if the card has any active features in the
-    # current inventory):
-    #   Major Class -> top of left column
-    #   Place       -> under Major Class in left column
-    #   Manner      -> top of right column
-    #
-    # Everything else is sorted by active feature count descending and
-    # dropped into whichever column is shorter at placement time (LPT
-    # scheduling). Packs columns as close to equal height as the active
-    # counts allow.
-    # Pin / overhead constants moved to gui/shared/layout.py so the web
-    # app can use the same values via the renderer relay.
-
     def _redistribute_feature_cards(self, active: set[str]) -> None:
         """Place cards in left/right columns using soft pins + LPT.
-        Re-runs on every inventory load because card heights vary with
-        the active feature count (Tongue-Root has 1 active feature in
-        Hayes but 4 in Blevins).
+        Re-runs on every inventory load because card heights vary
+        with the active feature count.
 
-        The placement decision is delegated to
-        ``gui.layout.distribute_feature_groups`` so the web app can
-        reuse the same algorithm (it runs the same module via
-        Pyodide). This function only does the Qt-specific work:
-        clear/refill the column layouts and toggle card visibility.
+        Placement is delegated to
+        :py:func:`phonology_shared.render.layout.distribute_feature_groups`
+        so the web app uses the same algorithm via Pyodide. This
+        function only does the Qt-specific work: clear and refill
+        the column layouts and toggle card visibility.
         """
         self._take_cards_out_of_columns()
         cards_by_title: dict[str, QFrame] = {}

@@ -985,13 +985,9 @@ class SegmentGridWidget(QWidget):
     the current widget width on resize.
     """
 
-    # Upper bound on segment-grid column count, regardless of how
-    # wide the seg pane is. Picked above the largest manner-class
-    # group in any bundled inventory (General-IPA Plosives = 21,
-    # Hayes Plosives = ~16) so every group can fit in one row when
-    # the pane is wide enough. The cap keeps custom inventories
-    # with absurd group sizes from producing 50-button rows that
-    # don't read as a coherent class.
+    # Upper bound on segment-grid column count. Picked above the
+    # largest manner-class group in any bundled inventory so every
+    # group can fit on one row when the pane is wide enough.
     MAX_COLS = 30
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -1010,13 +1006,8 @@ class SegmentGridWidget(QWidget):
         self._grid.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
         )
-        # Grid widget itself can shrink (it lives inside a panel whose
-        # minimum width is the real floor); the policy declares the
-        # stretch behaviour so a parent layout knows it can grow but
-        # doesn't demand more than its ``sizeHint``. See
-        # ``REGION_CONSTRAINTS['seg_grid']`` for the contract; the
-        # min height pin is the SEG_GROUP_HEADER_H + SEG_BTN_ROW_H
-        # combination the table encodes.
+        # The grid can shrink (its parent panel holds the real floor).
+        # See ``REGION_CONSTRAINTS['seg_grid']`` for the contract.
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Preferred,
@@ -1149,19 +1140,11 @@ class SegmentGridWidget(QWidget):
             while self._grid.count():
                 self._grid.takeAt(0)
             return
-        # Per-group column counts. ``best_segment_n_cols`` picks the
-        # largest n_cols (up to the pane's max) that leaves no row
-        # holding just one orphan button, so groups like Plosives
-        # (21 segments) and Affricates (13) get balanced rows instead
-        # of "row of 12 + row of 1". Shared with the web via the same
-        # ``layout`` module.
+        # ``best_segment_n_cols`` picks the largest column count
+        # that leaves no row holding a single orphan button.
         group_cols_main = [
             best_segment_n_cols(len(segs), n_cols) for _, segs in groups_items
         ]
-        # Decide which groups fall through to the spillover area.
-        # The desktop and the web both call this same partition fn
-        # so the threshold for rearranging into 2 columns is identical
-        # across frontends.
         per_btn_row = _SEG_BTN_H + BTN_GAP
         main_heights = [
             _SEG_HEADER_H + math.ceil(len(segs) / max(g_cols, 1)) * per_btn_row
@@ -1174,11 +1157,9 @@ class SegmentGridWidget(QWidget):
             available,
             n_spillover_cols=2,
         )
-        # Short-circuit: identical column count + same partition decision
-        # means the previous layout is still valid. ``available`` jitter
-        # of a few pixels (Wayland CSD nudges, scroll-bar appear/disappear)
-        # commonly leaves main_count unchanged, and skipping the rebuild
-        # keeps live window-drags cheap.
+        # Short-circuit: same n_cols + partition decision means the
+        # previous layout is still valid; skips the rebuild on the
+        # multi-pixel jitter common during live window drags.
         if (
             n_cols == self._n_cols
             and main_count == self._last_main_count
@@ -1217,15 +1198,11 @@ class SegmentGridWidget(QWidget):
             grid_row += math.ceil(len(segs) / g_cols)
 
         # Spillover: pair-by-pair, each group gets a half-width slot.
-        # Slot 0 occupies cols ``[0, slot_cols)``; col ``slot_cols`` is
-        # left empty in spillover rows as the visible gap between the
-        # two groups (its width matches a main-flow button column,
-        # ~33 px); slot 1 occupies ``[slot_cols + 1, 2 * slot_cols + 1)``.
-        # Same QGridLayout as the main flow, so there's no per-resize
-        # QWidget creation, which is what tanked startup the last time
-        # we tried a nested-container version. Each group again picks
-        # its own column count within the slot via
-        # ``best_segment_n_cols`` so spillover rows also avoid orphans.
+        # Slot 0 in cols ``[0, slot_cols)``; col ``slot_cols`` is the
+        # visible gap; slot 1 in ``[slot_cols + 1, 2 * slot_cols + 1)``.
+        # Same QGridLayout as the main flow (nested-container version
+        # tanked startup). Each group runs ``best_segment_n_cols`` for
+        # its slot so spillover rows also avoid orphan buttons.
         slot_cols = max(1, (n_cols - 1) // 2)
         spill = groups_items[main_count:]
         for pair_start in range(0, len(spill), 2):

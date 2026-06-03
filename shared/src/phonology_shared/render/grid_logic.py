@@ -1,24 +1,8 @@
-"""Portable inventory-builder grid logic.
-
-Shared by the desktop builder (the ``_BulkCycleTable`` and
-``InventoryBuilder._to_inventory`` path) and the web app's editor
-grid (relayed into the Pyodide bundle via
-``web/scripts/build.py:RELAYED_SOURCES``). Nothing here imports Qt
-or the DOM. Both frontends adapt these helpers to their native
-widget vocabulary.
-
-Single source of truth for:
-
-* The cell value-cycle ladder (``0`` -> ``+`` -> minus -> ``0``).
-* The display-vs-serialized form of the minus value (U+2212 vs the
-  ASCII hyphen-minus).
-* The snapshot path that converts grid state into a validated
-  :py:class:`Inventory` via :py:meth:`Inventory.from_grid`.
-
-Extracting these out of the Qt-bound ``builder/`` package keeps the
-two frontends genuinely identical rather than approximately
-identical. Edits to the ladder or to the omit-on-zero serialization
-rule land in both UIs on the next build.
+"""Portable inventory-builder grid logic. Owns the cell value
+ladder (``0`` -> ``+`` -> minus -> ``0``), the display-vs-serialized
+minus form (U+2212 vs ASCII hyphen-minus), and the snapshot path
+that turns grid state into a validated :py:class:`Inventory`.
+Shared by the desktop builder and the web editor.
 """
 
 from __future__ import annotations

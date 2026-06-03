@@ -1,24 +1,11 @@
-"""Window geometry and splitter sizing for MainWindow.
+"""Window geometry and splitter sizing for :class:`MainWindow`.
 
-Owns the policy state that decides whether a load can change the
-window shell, the splitter ratio, or the panel boundary. MainWindow
-constructs one instance, forwards its Qt event overrides
-(``showEvent``, ``moveEvent``) and signal connections
-(``splitterMoved``) into it, and routes all sizing calls through it
-instead of inline methods.
-
-The split is by responsibility, not by line count: every method
-here decides "how big and where" and reads / writes the
-ownership flags (``has_saved_size``, ``has_saved_splitter``,
-``anchor_pos``) that other MainWindow methods previously had to
-reason about inline.
-
-Holds a back reference to the MainWindow because the sizing logic
-needs frequent access to ``self.resize`` / ``self.move`` /
-``self.frameGeometry`` and to the seg / feat scroll widgets
-populated during ``_build_central``. The controller is conceptually
-part of MainWindow, not an independent component, so the back
-reference is honest rather than a coupling smell.
+Owns the policy that decides whether a load can change the window
+shell, the splitter ratio, or the panel boundary. Reads and writes
+the ownership flags (``has_saved_size``, ``has_saved_splitter``,
+``anchor_pos``). Holds a back reference to MainWindow because
+``resize`` / ``move`` / ``frameGeometry`` and the scroll widgets
+all live there.
 """
 
 from __future__ import annotations

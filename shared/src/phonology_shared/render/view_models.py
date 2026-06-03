@@ -1,20 +1,7 @@
-"""Qt-free view-model helpers shared by desktop and web frontends.
-
-This module keeps pure presentation-state derivation in the desktop
-source tree so the web build can relay it directly instead of
-re-implementing the same logic inside ``web/api.py`` or ``main.js``.
-
-Current responsibilities:
-
-* Inventory summary shaping for the web app's initial paint.
-* SEG-mode analysis summaries (shared/contrastive features,
-  suggested extensions, pre-rendered analysis HTML).
-* FEAT-mode analysis summaries (matching segments + HTML).
-* Explicit segment-button and feature-row visual state payloads.
-
-The desktop still owns actual widget mutation. This module only turns
-engine state into plain dict/list payloads that either frontend can
-consume.
+"""Qt-free view-model derivations: engine state -> presentation
+payloads (dicts / lists) both UIs consume. The desktop still owns
+widget mutation; the web bridge relays the same payloads through
+Pyodide.
 """
 
 from __future__ import annotations

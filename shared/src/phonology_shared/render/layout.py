@@ -1,14 +1,7 @@
-"""Pure-Python layout helpers shared by the desktop GUI and the
-web app.
-
-Nothing in this module imports Qt or anything browser-specific. The
-desktop reads it directly; the web app picks it up via the build
-script's renderer relay (web/scripts/build.py copies this file into
-the Pyodide bundle, where api.py exposes it through the JS bridge).
-
-That way: one definition of which group goes in which column. Edits
-to the pin constants or the LPT algorithm propagate to both UIs on
-next launch / next web build.
+"""Pure-Python layout helpers shared by desktop and web. One
+definition of which feature group goes in which column; one
+LPT-balancing algorithm. Edits propagate to both UIs through the
+build relay.
 """
 
 from __future__ import annotations

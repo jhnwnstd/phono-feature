@@ -1,24 +1,7 @@
-"""Portable logic for the New Inventory setup flow.
-
-Shared by the desktop builder dialog (:py:mod:`phonology_features.gui.
-builder.dialogs`) and the web app's setup modal (loaded via the build
-relay into :py:mod:`api`). Nothing in this module imports Qt or
-anything browser-specific. Every function is pure-Python; UI layers
-adapt the results to their native widget vocabulary.
-
-Single source of truth for:
-
-* The delimiter inference rule that turns a textarea into a list.
-* The validation rules that gate creation of a new inventory.
-* The autofill / placeholder seed values shown when the user has
-  not typed anything yet.
-* The named feature presets the dropdown offers.
-
-Edits to these definitions propagate to both UIs on the next build.
-The previous structure had ``_infer_split`` and the ``DEFAULT_FILL``
-strings buried inside Qt widget subclasses, which forced a parallel
-re-implementation in the web. Extracting them keeps the two
-frontends genuinely consistent rather than approximately consistent.
+"""Portable logic for the New Inventory setup flow. Owns the
+delimiter inference, validation rules, autofill seeds, and named
+feature presets the desktop builder dialog and the web setup
+modal share. Pure-Python; UI layers adapt to their native widgets.
 """
 
 from __future__ import annotations

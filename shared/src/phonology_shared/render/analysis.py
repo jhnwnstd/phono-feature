@@ -1,17 +1,7 @@
-"""HTML rendering for the AnalysisPanel.
-
-All public functions return HTML strings and hold no GUI state.
-Every interpolation of inventory-provided text (segment symbols,
-feature names) goes through ``html.escape``; nothing else in the
-project sanitizes them.
-
-Conventions:
-
-* Chip colours are typed (:class:`TagColor`), not magic strings.
-* Chip geometry (border-radius, padding, margin, font size) lives
-  in ``constants.py`` so every chip is identical by construction.
-* Repeated HTML shapes are factored into helpers so the top-level
-  renderers read as a sequence of intent.
+"""HTML rendering for the AnalysisPanel. Returns HTML strings;
+holds no GUI state. Every interpolation of inventory-provided text
+goes through ``html.escape``; nothing else in the project
+sanitizes segment symbols or feature names.
 """
 
 from __future__ import annotations

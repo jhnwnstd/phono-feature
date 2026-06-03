@@ -41,21 +41,12 @@ deployed verbatim by `.github/workflows/pages.yml`.
 ## Local testing
 
 ```bash
-# Build
 python web/scripts/build.py
-
-# Serve and open in a browser
-cd web/dist && python -m http.server 8000
-# then http://localhost:8000
+cd web/dist && python -m http.server 8000   # then http://localhost:8000
 ```
 
-The first browser load fetches Pyodide (~10 MB) from JSDelivr CDN
-and is cached locally; subsequent loads are fast.
+First browser load fetches Pyodide (~10 MB) from JSDelivr CDN and is cached locally.
 
 ## Deploy
 
-`.github/workflows/pages.yml` runs the build script on every push
-to `main` that touches the web app, engine package, renderer
-sources, or bundled inventories. It uploads `dist/` to GitHub
-Pages. Enable Pages in repo Settings → Pages → Source: "GitHub
-Actions" to publish.
+`.github/workflows/pages.yml` builds and uploads `dist/` on every push to `main` that touches the web app, shared sources, or bundled inventories. Enable Pages in repo Settings → Pages → Source: "GitHub Actions" to publish.

@@ -1,26 +1,11 @@
-"""Top-level UI mode state machine for MainWindow.
+"""Top-level UI mode state machine for :class:`MainWindow`. Owns
+the ``mode`` enum, the cross-mode ``saved_seg_state`` /
+``saved_feat_state`` projections, and every method that runs as
+part of a mode transition.
 
-Owns the ``mode`` enum value, the cross-mode ``saved_seg_state`` /
-``saved_feat_state`` projections, and every method that runs as part
-of a mode transition. MainWindow constructs one instance and either
-forwards or replaces its previous inline methods with delegations.
-
-The split is by responsibility: every method here either reads or
-writes one of the controller's three state attributes, or applies
-mode-dependent chrome to widgets MainWindow owns. Methods that
-mutate non-mode state (``_on_segment_clicked``, ``_update_seg_to_feat``,
-debounce dispatch) stay on MainWindow.
-
-Back-reference to MainWindow is honest, not a coupling smell: the
-controller IS conceptually part of MainWindow and frequently needs
-``self._w.engine``, ``self._w._feat_rows``, ``self._w.analysis``,
-etc. Same pattern as ``GeometryController`` and ``_SaveController``.
-
-Save/restore semantics: ``save_outgoing_state`` runs BEFORE ``mode``
-is updated (it captures the state of the mode being LEFT, projected
-into the opposite mode's saved slot). Every other phase runs after
-``mode`` has been set. Tests assert on this ordering by checking
-that the saved state matches the pre-transition selection.
+Ordering: ``save_outgoing_state`` runs BEFORE ``mode`` is updated
+(it captures the leaving-mode state, projected into the opposite
+mode's saved slot). Every other phase runs after ``mode`` is set.
 """
 
 from __future__ import annotations
