@@ -73,6 +73,8 @@ from phonology_features.gui.shared.constants import (
 from phonology_features.gui.shared.layout import distribute_feature_groups
 from phonology_features.gui.shared.mode_logic import Mode
 from phonology_features.gui.shared.palette import (
+    ALLOWED_PALETTE_MODES,
+    ALLOWED_THEMES,
     C,
     detect_system_theme,
     set_palette_mode,
@@ -160,6 +162,12 @@ class MainWindow(QMainWindow):
         saved_theme = self._read_setting_str(
             SettingsKey.THEME, detect_system_theme()
         )
+        # Validate at the trust boundary: a corrupt QSettings value
+        # would crash ``set_theme`` (strict since the silent-coercion
+        # fix), so map unknown values back to the OS default before
+        # calling in.
+        if saved_theme not in ALLOWED_THEMES:
+            saved_theme = detect_system_theme()
         set_theme(saved_theme)
         # Restore the user's standard/colorblind palette choice so chrome
         # built before ``apply()`` runs picks up the right hues from
@@ -167,6 +175,8 @@ class MainWindow(QMainWindow):
         saved_mode = self._read_setting_str(
             SettingsKey.PALETTE_MODE, "standard"
         )
+        if saved_mode not in ALLOWED_PALETTE_MODES:
+            saved_mode = "standard"
         set_palette_mode(saved_mode)
         set_css(self, f"background-color: {C['bg']};")
         # 150 ms debounce for selection-change analysis.

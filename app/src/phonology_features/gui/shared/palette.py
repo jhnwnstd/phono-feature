@@ -329,21 +329,48 @@ def _refresh_active() -> None:
     theme_version += 1
 
 
+#: Accepted ``set_theme`` arguments. Both UIs read this; the web
+#: bridge's ``set_active_theme`` and the desktop's settings-read
+#: validate against it. Frozen so importers can't append to it.
+ALLOWED_THEMES: frozenset[str] = frozenset({"light", "dark"})
+#: Accepted ``set_palette_mode`` arguments. Same shared contract.
+ALLOWED_PALETTE_MODES: frozenset[str] = frozenset({"standard", "colorblind"})
+
+
 def set_theme(name: str) -> None:
     """Switch the active palette to "light" or "dark", preserving the
     current standard/colorblind mode.
+
+    Raises :py:class:`ValueError` on unknown names. Both UIs share
+    this contract: the web bridge wraps the raise into a
+    ``ValidationError``; the desktop validates user-supplied values
+    (e.g. ``QSettings`` reads) at the trust boundary before calling
+    in. The previous silent coercion to "light" hid typos.
     """
+    if name not in ALLOWED_THEMES:
+        raise ValueError(
+            f"unknown theme {name!r}; expected one of"
+            f" {sorted(ALLOWED_THEMES)}"
+        )
     global _active_theme
-    _active_theme = "dark" if name == "dark" else "light"
+    _active_theme = name
     _refresh_active()
 
 
 def set_palette_mode(mode: str) -> None:
     """Switch the active palette between "standard" and "colorblind",
     preserving the current light/dark theme.
+
+    Raises :py:class:`ValueError` on unknown modes. See
+    :py:func:`set_theme` for the rationale.
     """
+    if mode not in ALLOWED_PALETTE_MODES:
+        raise ValueError(
+            f"unknown palette mode {mode!r}; expected one of"
+            f" {sorted(ALLOWED_PALETTE_MODES)}"
+        )
     global _active_mode
-    _active_mode = "colorblind" if mode == "colorblind" else "standard"
+    _active_mode = mode
     _refresh_active()
 
 

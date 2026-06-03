@@ -3056,7 +3056,7 @@ function removeSelectedSegment() {
     const seg = editorState.segments[c];
     // Confirm prompt text comes from the shared Python so the web
     // wording matches the desktop's ``ask_question`` body exactly.
-    const prompt = callBridge("get_confirm_remove_segment_prompt", seg);
+    const prompt = callBridge("confirm_remove_segment_prompt", seg);
     if (!confirm(prompt)) return;
     editorState.segments.splice(c, 1);
     for (const row of editorState.cells) {
@@ -3072,7 +3072,7 @@ function removeSelectedFeature() {
     const r = getSingleSelectedRow();
     if (r === null) return;
     const feat = editorState.features[r];
-    const prompt = callBridge("get_confirm_remove_feature_prompt", feat);
+    const prompt = callBridge("confirm_remove_feature_prompt", feat);
     if (!confirm(prompt)) return;
     editorState.features.splice(r, 1);
     editorState.cells.splice(r, 1);

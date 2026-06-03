@@ -70,8 +70,6 @@ _inventory_name: str = ""
 # the boundary without importing internal palette state. Both axes
 # round-trip as plain strings through QSettings + localStorage so
 # the membership check is a literal set.
-_ALLOWED_THEMES: frozenset[str] = frozenset({"light", "dark"})
-_ALLOWED_PALETTE_MODES: frozenset[str] = frozenset({"standard", "colorblind"})
 
 
 def _require_engine() -> FeatureEngine:
@@ -260,18 +258,6 @@ def validate_feature_label(label: str, existing: list[str]) -> str:
     )
 
 
-def get_confirm_remove_segment_prompt(seg: str) -> str:
-    """Return the confirmation prompt text for removing a segment.
-    Shared with the desktop builder so the wording stays in sync.
-    """
-    return confirm_remove_segment_prompt(seg)
-
-
-def get_confirm_remove_feature_prompt(feat: str) -> str:
-    """Return the confirmation prompt text for removing a feature."""
-    return confirm_remove_feature_prompt(feat)
-
-
 def get_value_keys() -> dict[str, str]:
     """Return the direct-entry keyboard shortcuts.
 
@@ -397,17 +383,10 @@ def set_active_theme(name: str) -> None:
     the new chip colors. Invalidates the analyze_* caches because
     their cached HTML embeds colors from the previous palette.
 
-    Rejects unknown theme strings with ``ValidationError`` so a
-    JS-side typo can't put the palette module into an undefined
-    state and silently render with stale colours.
+    Unknown values raise via shared :py:func:`set_theme` and the
+    ``_translate_engine_errors`` wrapper turns the ``ValueError``
+    into a ``ValidationError`` for JS.
     """
-    if name not in _ALLOWED_THEMES:
-        raise ValidationError(
-            (
-                f"unknown theme {name!r}; expected one of "
-                f"{sorted(_ALLOWED_THEMES)}",
-            )
-        )
     set_theme(name)
     _invalidate_analysis_caches()
 
@@ -417,16 +396,7 @@ def set_active_palette_mode(mode: str) -> None:
     """Switch between standard and colorblind palettes. Mirrors
     ``set_active_theme`` for the perpendicular axis; analysis HTML
     embeds chip colors so cached output must regenerate.
-
-    Same allow-list validation as :py:func:`set_active_theme`.
     """
-    if mode not in _ALLOWED_PALETTE_MODES:
-        raise ValidationError(
-            (
-                f"unknown palette mode {mode!r}; expected one of "
-                f"{sorted(_ALLOWED_PALETTE_MODES)}",
-            )
-        )
     set_palette_mode(mode)
     _invalidate_analysis_caches()
 
