@@ -399,6 +399,14 @@ def generate_layout_css() -> None:
         # ``ms`` suffix; CSS rules don't consume it directly.
         f"  --vowel-tooltip-show-delay-ms: {mod.VOWEL_TOOLTIP_SHOW_DELAY_MS};",
         f"  --collapse-w: {mod.COLLAPSE_W}px;",
+        # Per-button dimensions sourced from
+        # ``constants.BTN_W`` / ``constants.BTN_GAP`` (single source
+        # of truth). main.js reads ``--seg-btn-w`` and
+        # ``--seg-btn-gap`` instead of literal 33 / 4 fallbacks so
+        # the same per-button stride drives the desktop QGridLayout,
+        # the web's container queries, and ``applyPerGroupSegmentColumns``.
+        f"  --seg-btn-w: {mod.BTN_W}px;",
+        f"  --seg-btn-gap: {mod.BTN_GAP}px;",
         # Per-row / per-card heights — single source of truth for
         # consonant-grid and feature-card height math in the web.
         f"  --seg-btn-h: {mod.SEG_BTN_H}px;",

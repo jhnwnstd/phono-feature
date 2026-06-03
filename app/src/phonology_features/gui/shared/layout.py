@@ -18,6 +18,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
+# Module-level imports of the segment-button dimensions. Earlier
+# revisions did this lazily inside helpers to dodge a hypothetical
+# cycle with build.py side-loading; after Phase D's sys.path entry
+# in ``web/scripts/build.py`` (commit 851fca2), no cycle exists and
+# the top-level form is what the rest of the codebase consults.
+from phonology_features.gui.shared.constants import BTN_GAP, BTN_W
+
 # Pins are conventional in IPA chart layouts: place-of-articulation
 # features (Major Class, Place) sit on the left, manner-of-
 # articulation (Manner) on the right. Everything else goes wherever
@@ -581,8 +588,6 @@ def seg_pane_n_cols(seg_pane_w: int) -> int:
     Both UIs base their grid on this single function: the web's
     container-query CSS uses the same numbers via the relay.
     """
-    from phonology_features.gui.shared.constants import BTN_GAP, BTN_W
-
     # Per-button stride is button width plus the inter-button gap.
     cols = (seg_pane_w + BTN_GAP) // (BTN_W + BTN_GAP)
     # The widget's own MAX_COLS=30 cap; replicated here so this
@@ -712,25 +717,15 @@ class RegionConstraint:
     overflow: OverflowStrategy
 
 
-# The seg_btn width literal is duplicated from
-# ``constants.BTN_W`` because the alternative -- importing BTN_W
-# here at module load -- breaks ``web/scripts/build.py`` when it
-# side-loads ``layout.py`` against a bare interpreter where
-# ``phonology_features`` is not on the import path. Drift between
-# this literal and ``constants.BTN_W`` is caught by
-# ``test_region_constraints_match_constants`` in
-# ``app/tests/test_pane_distribution.py``.
-_SEG_BTN_W: int = 33
-
-
 REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
-    # Segment button: fixed-size content floor. The rasterizer
-    # downscales wide glyphs (k+͡x+, ɡ+͡ɣ+) so they fit inside the
-    # 33×26 outline without expanding it.
+    # Segment button: fixed-size content floor sourced directly
+    # from ``constants.BTN_W`` (the single source of truth). The
+    # rasterizer downscales wide glyphs (k+͡x+, ɡ+͡ɣ+) so they fit
+    # inside the 33×26 outline without expanding it.
     "seg_btn": RegionConstraint(
-        min_w=_SEG_BTN_W,
-        pref_w=_SEG_BTN_W,
-        max_w=_SEG_BTN_W,
+        min_w=BTN_W,
+        pref_w=BTN_W,
+        max_w=BTN_W,
         min_h=SEG_BTN_H,
         pref_h=SEG_BTN_H,
         max_h=SEG_BTN_H,

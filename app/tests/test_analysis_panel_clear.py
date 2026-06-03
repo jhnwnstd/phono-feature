@@ -162,3 +162,79 @@ def test_expand_button_no_overlap_with_tabs(panel: AnalysisPanel) -> None:
         f"expand_btn {btn_rect} overlaps tabs {tabs_rect};"
         " row separation in the QGridLayout has been lost"
     )
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: set_sections preserves the user-active tab unless the
+# new state makes it invalid. The full-reset path (clear()) is the
+# only place that forces Class. Pinned here so a future regression
+# breaks the test rather than the UI.
+# ---------------------------------------------------------------------------
+
+
+def test_set_sections_preserves_features_tab_across_refresh(
+    panel: AnalysisPanel,
+) -> None:
+    """User selects the Features tab. A subsequent set_sections
+    (the steady-state refresh path used by every selection change
+    and mode toggle) must leave the Features tab active."""
+    panel.tabs.setCurrentIndex(panel._TAB_FEATURES_IDX)
+    panel.set_sections(
+        "<p>sel</p>",
+        "<p>cls</p>",
+        "<p>feat</p>",
+        "<p>con</p>",
+        contrasts_enabled=True,
+        class_state="natural",
+    )
+    assert panel.tabs.currentIndex() == panel._TAB_FEATURES_IDX, (
+        "set_sections must not snap a valid Features selection back"
+        " to Class on refresh"
+    )
+
+
+def test_set_sections_preserves_contrasts_tab_when_enabled(
+    panel: AnalysisPanel,
+) -> None:
+    """Contrasts tab survives a refresh as long as contrasts_enabled
+    stays True. This is the multi-segment SEG-mode steady state."""
+    panel.tabs.setCurrentIndex(panel._TAB_CONTRASTS_IDX)
+    panel.set_sections(
+        "<p>sel</p>",
+        "<p>cls</p>",
+        "<p>feat</p>",
+        "<p>con</p>",
+        contrasts_enabled=True,
+        class_state="neutral",
+    )
+    assert panel.tabs.currentIndex() == panel._TAB_CONTRASTS_IDX
+
+
+def test_set_sections_snaps_contrasts_to_class_when_disabled(
+    panel: AnalysisPanel,
+) -> None:
+    """The only invalid-tab snap: Contrasts becomes disabled while
+    Contrasts is the active tab. The user lands on Class so they
+    see real content instead of a greyed placeholder."""
+    panel.tabs.setCurrentIndex(panel._TAB_CONTRASTS_IDX)
+    panel.set_sections(
+        "<p>sel</p>",
+        "<p>cls</p>",
+        "<p>feat</p>",
+        "<p>con</p>",
+        contrasts_enabled=False,
+        class_state="neutral",
+    )
+    assert panel.tabs.currentIndex() == panel._TAB_CLASS_IDX
+
+
+def test_clear_forces_class_tab_distinct_from_set_sections(
+    panel: AnalysisPanel,
+) -> None:
+    """The two paths are deliberately distinct: ``set_sections``
+    preserves the user's active tab; ``clear`` forces Class.
+    Pin both behaviors so a future merge of the two methods has
+    to update this test too."""
+    panel.tabs.setCurrentIndex(panel._TAB_FEATURES_IDX)
+    panel.clear()
+    assert panel.tabs.currentIndex() == panel._TAB_CLASS_IDX

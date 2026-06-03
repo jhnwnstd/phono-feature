@@ -486,15 +486,16 @@ async function bootPyodide({ prerendered = false } = {}) {
  * constant since the build hashes filenames for cache-busting.
  */
 function pickDefaultInventory(manifest) {
+    // The build hashes filenames for cache-busting
+    // (``name.116857c74f.json``); strip the hash so the comparison
+    // against the un-hashed ``PREFERRED_DEFAULT_INVENTORY`` constant
+    // works regardless of the bake's current cache key.
+    const ASSET_HASH_RE = /\.[0-9a-f]{10}(\.[^./]+)$/;
     const preferred = manifest.find(
-        (m) => _stripAssetHash(m.file) === PREFERRED_DEFAULT_INVENTORY,
+        (m) => m.file.replace(ASSET_HASH_RE, "$1")
+            === PREFERRED_DEFAULT_INVENTORY,
     );
     return preferred ?? manifest[0];
-}
-
-/** "name.116857c74f.json" -> "name.json" */
-function _stripAssetHash(path) {
-    return path.replace(/\.[0-9a-f]{10}(\.[^./]+)$/, "$1");
 }
 
 const BUNDLE_FS_PATH = "/home/pyodide/python_bundle.zip";
@@ -904,8 +905,20 @@ function applyPerGroupSegmentColumns() {
     if (rows.length === 0) return;
     const sample = rows[0].querySelector(".seg-btn");
     if (!sample) return;
-    const btnW = sample.offsetWidth || 33;
-    const gapPx = 4;
+    // Source of truth for the per-button stride: the CSS variables
+    // baked from ``constants.BTN_W`` / ``constants.BTN_GAP`` by
+    // ``web/scripts/build.py``. The numeric fallbacks are belt-and-
+    // suspenders for the pre-bridge boot window before layout.css
+    // is attached; in steady state the var() read wins.
+    const rootCS = getComputedStyle(document.documentElement);
+    const cssBtnW = parseFloat(
+        rootCS.getPropertyValue("--seg-btn-w"),
+    );
+    const cssGap = parseFloat(
+        rootCS.getPropertyValue("--seg-btn-gap"),
+    );
+    const btnW = sample.offsetWidth || cssBtnW || 33;
+    const gapPx = Number.isFinite(cssGap) ? cssGap : 4;
     // Consonant rows wrap around the floated vowel chart; use the
     // narrower "alongside vowels" width as the conservative ceiling
     // so groups above the float don't overflow horizontally.
@@ -1442,10 +1455,6 @@ function runAnalysis() {
     MODE_HANDLERS[state.mode](++state.analysis_token);
 }
 
-function _isStaleToken(token) {
-    return token !== state.analysis_token;
-}
-
 /**
  * Apply `stateFor(seg)` to every cached segment button. The
  * caller computes the new state inline from the relevant set
@@ -1498,7 +1507,7 @@ function runSegToFeat(token) {
         _surfaceBridgeFailure("analyze_segments", e);
         return;
     }
-    if (_isStaleToken(token)) return;
+    if (token !== state.analysis_token) return;
     setAnalysisTabs(result.analysis_tabs);
     _applySegmentStateMap(result.segment_states);
     _applyFeatureRowStates(result.feature_rows);
@@ -1512,7 +1521,7 @@ function runFeatToSeg(token) {
         _surfaceBridgeFailure("analyze_features", e);
         return;
     }
-    if (_isStaleToken(token)) return;
+    if (token !== state.analysis_token) return;
     setAnalysisTabs(result.analysis_tabs);
     _applySegmentStateMap(result.segment_states);
 }
@@ -1564,15 +1573,43 @@ function setAnalysisTabs(tabs) {
     nodes.analysisTabContrasts.setAttribute(
         "aria-disabled", contrastsEnabled ? "false" : "true",
     );
-    // If the user has the Contrasts tab open but the new payload
-    // disables it, snap back to Class so they land on real content.
-    if (
-        !contrastsEnabled
-        && nodes.analysisTabContrasts.getAttribute("aria-selected") === "true"
-    ) {
-        activateAnalysisTab("class");
+    // Mirror of ``mode_logic.preserved_analysis_tab``: keep the
+    // active tab if it's still valid for the new state, otherwise
+    // fall back to "class". The Python helper is the canonical
+    // source; this is the same predicate by hand so the web's
+    // hot path doesn't need to round-trip the bridge.
+    const target = preservedAnalysisTab(
+        currentActiveAnalysisTab(),
+        contrastsEnabled,
+    );
+    if (target !== currentActiveAnalysisTab()) {
+        activateAnalysisTab(target);
     }
     nodes.analysisTabClass.dataset.classState = tabs.class_state || "neutral";
+}
+
+/** Mirror of ``mode_logic.preserved_analysis_tab``. The Python
+ *  helper is the single source of truth; this is the JS-side
+ *  duplicate the renderer can call inline. A future contract
+ *  change in mode_logic must update this function as well; the
+ *  parity test (test_preserved_analysis_tab) anchors the
+ *  Python rule and the web smoke checks the runtime effect. */
+function preservedAnalysisTab(current, contrastsEnabled) {
+    if (current === "contrasts" && !contrastsEnabled) return "class";
+    return current;
+}
+
+/** Which analysis tab is currently active. Reads aria-selected
+ *  rather than tracking a local cache so the rule and the DOM
+ *  cannot drift. */
+function currentActiveAnalysisTab() {
+    if (nodes.analysisTabFeatures.getAttribute("aria-selected") === "true") {
+        return "features";
+    }
+    if (nodes.analysisTabContrasts.getAttribute("aria-selected") === "true") {
+        return "contrasts";
+    }
+    return "class";
 }
 
 /** Canonical full-reset sink for the analysis pane. After this
@@ -3459,25 +3496,49 @@ function wireClearButtons() {
     });
 }
 
+/** Mirror of ``mode_logic.clear_semantics_for(USER_INITIATED)``.
+ *  The web has no analogue of the desktop's ``SILENT_LOAD`` scope
+ *  today (no equivalent web inventory-load path that wants to
+ *  preserve cross-mode saved state), so the rule is hardcoded for
+ *  the user-pressed-Clear case. If the web grows a SILENT_LOAD
+ *  surface, this constant should grow a corresponding record and
+ *  ``clearAll`` should accept a scope argument; the Python factory
+ *  in
+ *  ``app/src/phonology_features/gui/shared/mode_logic.py``
+ *  is the source of truth. */
+const CLEAR_SEMANTICS_USER_INITIATED = Object.freeze({
+    reset_active_selection: true,
+    reset_saved_state: true,
+    reset_analysis_pane: true,
+    collapse_expanded_analysis: true,
+});
+
 function clearAll() {
-    state.selected_segments = [];
-    state.selected_features = emptyFeatureSpec();
-    state.saved_seg_state = [];
-    state.saved_feat_state = emptyFeatureSpec();
-    for (const btn of state.seg_buttons.values()) {
-        btn.dataset.state = "default";
-        btn.setAttribute("aria-pressed", "false");
+    const semantics = CLEAR_SEMANTICS_USER_INITIATED;
+    if (semantics.reset_active_selection) {
+        state.selected_segments = [];
+        state.selected_features = emptyFeatureSpec();
+        for (const btn of state.seg_buttons.values()) {
+            btn.dataset.state = "default";
+            btn.setAttribute("aria-pressed", "false");
+        }
+        for (const rec of state.feat_rows.values()) {
+            rec.row.dataset.value = "";
+            rec.row.dataset.shared = "false";
+            rec.row.dataset.contrastive = "false";
+            _setRasterizedBadge(rec.badge, "·");
+            rec.plus.dataset.active = "false";
+            rec.minus.dataset.active = "false";
+            delete rec.row.dataset.queryValue;
+        }
     }
-    for (const rec of state.feat_rows.values()) {
-        rec.row.dataset.value = "";
-        rec.row.dataset.shared = "false";
-        rec.row.dataset.contrastive = "false";
-        _setRasterizedBadge(rec.badge, "·");
-        rec.plus.dataset.active = "false";
-        rec.minus.dataset.active = "false";
-        delete rec.row.dataset.queryValue;
+    if (semantics.reset_saved_state) {
+        state.saved_seg_state = [];
+        state.saved_feat_state = emptyFeatureSpec();
     }
-    clearAnalysisTabs();
+    if (semantics.reset_analysis_pane) {
+        clearAnalysisTabs();
+    }
     setStatus(statusTextForMode(state.mode));
 }
 

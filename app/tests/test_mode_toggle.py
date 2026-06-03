@@ -201,3 +201,60 @@ def test_selected_features_keys_match_row_state_in_feat_mode(window):
     window._on_segment_clicked("i", True)
     window._set_mode("feat_to_seg")
     assert set(window._selected_features) == _selected_feat_rows(window)
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: mode toggle must preserve the user's active analysis tab
+# whenever that tab is still valid for the new mode.
+#
+# Pre-fix, the desktop forced the Class tab on every toggle because
+# ``ModeController.apply_phases`` called ``analysis.clear()``
+# unconditionally. The web never did. After Stage 1, both consume
+# the shared ``preserved_analysis_tab`` rule and behave the same.
+# ---------------------------------------------------------------------------
+
+
+def test_mode_switch_preserves_features_tab(window, qapp):
+    """User selects two segments (so the SEG-mode analysis has
+    content), opens the Features tab, then toggles to FEAT mode and
+    back. The Features tab must remain active across both
+    transitions."""
+    window._on_segment_clicked("b", True)
+    window._on_segment_clicked("d", True)
+    qapp.processEvents()
+    window.analysis.tabs.setCurrentIndex(
+        window.analysis._TAB_FEATURES_IDX,
+    )
+    assert window.analysis.tabs.currentIndex() == (
+        window.analysis._TAB_FEATURES_IDX
+    )
+    window._set_mode("feat_to_seg")
+    qapp.processEvents()
+    qapp.processEvents()  # drain the QTimer.singleShot deferred refresh
+    assert window.analysis.tabs.currentIndex() == (
+        window.analysis._TAB_FEATURES_IDX
+    ), "FEAT mode must preserve Features tab"
+    window._set_mode("seg_to_feat")
+    qapp.processEvents()
+    qapp.processEvents()
+    assert window.analysis.tabs.currentIndex() == (
+        window.analysis._TAB_FEATURES_IDX
+    ), "Round-trip back to SEG must still preserve Features tab"
+
+
+def test_mode_switch_to_feat_snaps_contrasts_to_class(window, qapp):
+    """Contrasts is meaningful only for multi-segment SEG selections.
+    Toggling to FEAT mode disables Contrasts; if the user was on
+    Contrasts, the rule snaps to Class."""
+    window._on_segment_clicked("b", True)
+    window._on_segment_clicked("d", True)
+    qapp.processEvents()
+    window.analysis.tabs.setCurrentIndex(
+        window.analysis._TAB_CONTRASTS_IDX,
+    )
+    window._set_mode("feat_to_seg")
+    qapp.processEvents()
+    qapp.processEvents()
+    assert window.analysis.tabs.currentIndex() == (
+        window.analysis._TAB_CLASS_IDX
+    ), "Contrasts is invalid in FEAT mode, must snap to Class"

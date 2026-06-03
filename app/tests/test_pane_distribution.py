@@ -258,6 +258,12 @@ def test_layout_css_emits_all_height_constants() -> None:
         # QProxyStyle override. Pinned so a future "just bump the
         # JS literal" diff fails CI and forces the shared edit.
         ("--vowel-tooltip-show-delay-ms", "VOWEL_TOOLTIP_SHOW_DELAY_MS"),
+        # Per-button stride (BTN_W / BTN_GAP). main.js reads
+        # ``--seg-btn-w`` / ``--seg-btn-gap`` via
+        # ``getComputedStyle`` so the JS-side per-row column math
+        # consumes the same numbers the desktop QGridLayout does.
+        ("--seg-btn-w", "BTN_W"),
+        ("--seg-btn-gap", "BTN_GAP"),
     ]:
         assert var_name in contents, (
             f"build.py:generate_layout_css does not emit {var_name}; "
@@ -271,19 +277,17 @@ def test_layout_css_emits_all_height_constants() -> None:
 
 
 def test_region_constraints_match_constants() -> None:
-    """The ``seg_btn`` constraint inlines the BTN_W literal (33)
-    because the lazy-import alternative breaks the bare-interpreter
-    build in ``web/scripts/build.py``. Pin the agreement so a
-    future bump to ``constants.BTN_W`` can't silently leave the
-    constraint table at the stale value.
+    """The ``seg_btn`` constraint now imports BTN_W directly at
+    module load (the lazy-import / inline-literal workaround was
+    removed in Stage 4 once ``web/scripts/build.py`` started
+    putting ``app/src`` on ``sys.path`` before side-loading).
+    Pin the agreement so any future re-introduction of an inline
+    literal trips here.
     """
     from phonology_features.gui.shared.constants import BTN_W
 
     seg_btn = layout.REGION_CONSTRAINTS["seg_btn"]
-    assert seg_btn.min_w == BTN_W, (
-        f"REGION_CONSTRAINTS['seg_btn'].min_w={seg_btn.min_w}"
-        f" but constants.BTN_W={BTN_W}; update layout._SEG_BTN_W"
-    )
+    assert seg_btn.min_w == BTN_W
     assert seg_btn.pref_w == BTN_W
     assert seg_btn.max_w == BTN_W
 

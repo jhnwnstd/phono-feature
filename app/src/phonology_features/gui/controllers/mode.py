@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QTimer
 
 from phonology_features.gui.shared.mode_logic import (
+    ClearScope,
     Mode,
     mode_status_text,
     project_mode_transition,
@@ -88,21 +89,19 @@ class ModeController:
           later, so the perceived transition is two short steps
           instead of one long blocking one.
 
-        The deferral is safe because the analysis pane was already
-        cleared by the visible stage's ``apply_panel_chrome`` chain
-        (its tab content is wiped before the new content arrives,
-        so there's no stale-content window).
+        No ``analysis.clear()`` call here: the deferred refresh ends
+        in ``AnalysisPanel.set_sections`` which overwrites tab
+        bodies AND consults
+        :py:func:`mode_logic.preserved_analysis_tab` to decide
+        whether the active tab survives. Calling ``clear()`` would
+        defeat that preservation by snapping back to Class on every
+        toggle (the historical desktop-only regression).
         """
         with self._w._batched_updates():
             self.apply_panel_chrome()
             self.apply_row_interactivity()
             self.restore_segment_selection()
             self.restore_feature_selection()
-            # Clear the analysis pane synchronously so the deferred
-            # refresh doesn't briefly show stale content from the
-            # outgoing mode while the new mode's chrome is already in
-            # place.
-            self._w.analysis.clear()
             self.update_status_message()
         QTimer.singleShot(0, self._deferred_refresh_analysis)
 
@@ -248,15 +247,25 @@ class ModeController:
                 row.reset()
 
     def refresh_analysis(self) -> None:
-        """Clear the analysis panel and re-run the active mode's
-        analysis if there's something to analyze.
+        """Re-run the active mode's analysis if there's something to
+        analyze; otherwise reset the analysis pane to its empty
+        baseline.
+
+        Calls to ``_update_*`` end in
+        :py:meth:`AnalysisPanel.set_sections`, which consults
+        :py:func:`mode_logic.preserved_analysis_tab` to keep the
+        user's active tab when it remains valid. The empty-selection
+        branch uses :py:meth:`AnalysisPanel.clear` (the documented
+        full-reset sink), which deliberately forces the Class tab:
+        there is no selection to anchor a preserved tab to.
         """
         is_s2f = self.mode == Mode.SEG_TO_FEAT
-        self._w.analysis.clear()
         if is_s2f and self._w._selected_segments:
             self._w._update_seg_to_feat()
         elif not is_s2f and self._w._selected_features:
             self._w._update_feat_to_seg()
+        else:
+            self._w.analysis.clear()
 
     def apply_to_new_widgets(self) -> None:
         """Set interactivity on freshly-populated rows + headers for the
@@ -268,8 +277,8 @@ class ModeController:
         for row in self._w._feat_rows.values():
             row.set_panel_active(not is_s2f)
             row.set_interactive(not is_s2f)
-        self._w._clear_segments(silent=True)
-        self._w._clear_features(silent=True)
+        self._w._clear_segments(ClearScope.SILENT_LOAD)
+        self._w._clear_features(ClearScope.SILENT_LOAD)
 
     def update_status_message(self) -> None:
         """Show the per-mode helper text in the status bar."""

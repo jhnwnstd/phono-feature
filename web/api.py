@@ -10,6 +10,39 @@ The HTML renderers live in ``phonology_features.gui.shared.analysis``
 into the bundle at the same package path so imports resolve
 identically here and on the desktop, keeping one source of
 truth for analysis output.
+
+Payload schemas exposed to main.js (the JS-side consumers in
+parens):
+
+* :py:func:`load_inventory_json` / :py:func:`active_inventory_info`
+  return the dict shape pinned by
+  ``test_cross_ui_parity.test_inventory_summary_keys_complete``:
+  ``{name, segments, features, groups, feature_groups, vowel_chart}``.
+  (``_validateInfo``, ``renderSegmentGrid``, ``renderFeaturePanel``)
+
+* :py:func:`analyze_segments` returns the
+  :py:func:`summarize_segment_selection` output, whose
+  ``analysis_tabs`` field is the
+  :py:data:`view_models.AnalysisTabsPayload` TypedDict --
+  validated by :py:func:`view_models.validate_analysis_tabs_payload`
+  on the way out so a future shared-module refactor that drops or
+  renames a key raises here instead of producing silent
+  ``undefined`` reads in main.js.
+  (``runSegToFeat`` → ``setAnalysisTabs`` /
+  ``_applySegmentStateMap`` / ``_applyFeatureRowStates``)
+
+* :py:func:`analyze_features` returns the
+  :py:func:`summarize_feature_query` output with the same
+  ``analysis_tabs`` shape and validation. The ``matching`` field is
+  the strict natural class for the query (see
+  ``test_view_models.test_summarize_feature_query_always_returns_find_segments``).
+  (``runFeatToSeg``)
+
+Bridge contracts NOT owned here: tab-preservation rule
+(``mode_logic.preserved_analysis_tab``), clear semantics
+(``mode_logic.clear_semantics_for``), vowel-chart geometry
+(``vowel_layout.build_vowel_chart_geometry``). Those are pure
+data rules; this module just relays their output.
 """
 
 from __future__ import annotations
@@ -60,6 +93,7 @@ from phonology_features.gui.shared.view_models import (
     build_inventory_summary,
     summarize_feature_query,
     summarize_segment_selection,
+    validate_analysis_tabs_payload,
 )
 
 _engine: FeatureEngine | None = None
@@ -547,7 +581,13 @@ def analyze_segments(segs: list[str]) -> dict[str, Any]:
         raise ValidationError(
             (f"unknown segment(s) in current inventory: {bad!r}",)
         )
-    return _analyze_segments_cached(tuple(segs))
+    summary = _analyze_segments_cached(tuple(segs))
+    # Cross-boundary shape check on the analysis_tabs payload before
+    # it reaches JS. A future shared-module refactor that drops or
+    # renames a key now fails here with a structured error rather
+    # than as silent ``undefined`` reads in main.js.
+    validate_analysis_tabs_payload(summary["analysis_tabs"])
+    return summary
 
 
 @lru_cache(maxsize=256)
@@ -589,7 +629,9 @@ def analyze_features(spec: dict[str, str]) -> dict[str, Any]:
                 f"of {sorted(VALID_VALUES)}",
             )
         )
-    return _analyze_features_cached(tuple(spec.items()))
+    summary = _analyze_features_cached(tuple(spec.items()))
+    validate_analysis_tabs_payload(summary["analysis_tabs"])
+    return summary
 
 
 @lru_cache(maxsize=256)

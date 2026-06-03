@@ -485,19 +485,10 @@ class GeometryController:
             notify(seg_w)
         total = self._vsplit.height()
         if total > 0:
-            top_h = self._top_height_for_content(top_need_h, total)
+            top_h = layout.top_pane_height(top_need_h, total)
             self._vsplit.setSizes([top_h, total - top_h])
             return
         QTimer.singleShot(0, lambda: self.fit_vsplit_after_layout(top_need_h))
-
-    def _top_height_for_content(self, top_need_h: int, total: int) -> int:
-        """Vertical split policy. Delegates to
-        :py:func:`layout.top_pane_height` so the shared layout
-        module owns the rule (and the web bundle can pick it up via
-        the same constants). The wrapper here keeps the
-        instance-method call sites untouched.
-        """
-        return layout.top_pane_height(top_need_h, total)
 
     def apply_vsplit_to_content(self, top_need_h: int) -> None:
         """Re-fit JUST the vsplit (top vs analysis) to the current
@@ -515,7 +506,7 @@ class GeometryController:
                 0, lambda: self.fit_vsplit_after_layout(top_need_h)
             )
             return
-        top_h = self._top_height_for_content(top_need_h, total)
+        top_h = layout.top_pane_height(top_need_h, total)
         self._vsplit.setSizes([top_h, total - top_h])
 
     def fit_vsplit_after_layout(self, top_need_h: int) -> None:
@@ -527,5 +518,5 @@ class GeometryController:
         total = self._vsplit.height()
         if total <= 0:
             return
-        top_h = self._top_height_for_content(top_need_h, total)
+        top_h = layout.top_pane_height(top_need_h, total)
         self._vsplit.setSizes([top_h, total - top_h])

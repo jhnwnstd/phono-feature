@@ -139,25 +139,48 @@ def test_clear_buttons_are_symmetric(window):
 
 
 def test_silent_clear_in_inventory_reload_resets_both_sides(window):
-    """The internal silent=True path used by _apply_mode_to_new_widgets must
-    fully reset both data structures and visual state regardless of mode.
-    This is what runs when you switch inventories."""
+    """The SILENT_LOAD scope used by ``apply_to_new_widgets`` must
+    fully reset visible selection but preserve the saved cross-mode
+    state -- a fresh inventory has different segments / features, so
+    the OLD saved state is meaningless, but the user did not press
+    Clear, so the analysis pane and any expand stay as the user left
+    them. See ``mode_logic.clear_semantics_for(SILENT_LOAD)``."""
+    from phonology_features.gui.shared.mode_logic import ClearScope
+
     # Populate state first
     window._on_segment_clicked("b", True)
     window._on_segment_clicked("d", True)
     window._run_pending_update()
     # Simulate the reload path
-    window._clear_segments(silent=True)
-    window._clear_features(silent=True)
+    window._clear_segments(ClearScope.SILENT_LOAD)
+    window._clear_features(ClearScope.SILENT_LOAD)
     assert window._selected_segments == []
     assert window._selected_features == {}
     assert _non_default_seg_buttons(window) == 0
     assert _selected_feat_rows(window) == set()
-    # silent=True must NOT touch saved_*_state (those preserve toggle history)
-    # Set them to known values, then verify they aren't clobbered.
+    # SILENT_LOAD must NOT touch saved_*_state (those preserve toggle
+    # history). Set them to known values, then verify they aren't
+    # clobbered.
     window._mode_ctrl.saved_seg_state = ["sentinel"]
     window._mode_ctrl.saved_feat_state = {"sentinel": "+"}
-    window._clear_segments(silent=True)
-    window._clear_features(silent=True)
+    window._clear_segments(ClearScope.SILENT_LOAD)
+    window._clear_features(ClearScope.SILENT_LOAD)
     assert window._mode_ctrl.saved_seg_state == ["sentinel"]
     assert window._mode_ctrl.saved_feat_state == {"sentinel": "+"}
+
+
+def test_user_initiated_clear_wipes_saved_state(window):
+    """The ``USER_INITIATED`` scope clears EVERYTHING the user could
+    scroll back to, including saved cross-mode state. The web's
+    ``clearAll`` matches this -- there is no SILENT_LOAD path on
+    the web yet."""
+    from phonology_features.gui.shared.mode_logic import ClearScope
+
+    window._on_segment_clicked("b", True)
+    window._run_pending_update()
+    window._mode_ctrl.saved_seg_state = ["sentinel"]
+    window._mode_ctrl.saved_feat_state = {"sentinel": "+"}
+    window._clear_segments(ClearScope.USER_INITIATED)
+    assert window._selected_segments == []
+    assert window._mode_ctrl.saved_seg_state == []
+    assert window._mode_ctrl.saved_feat_state == {}
