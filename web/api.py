@@ -29,7 +29,12 @@ from phonology_engine import (
     ValidationError,
     parse_inventory_json_text,
 )
-from phonology_features.gui.shared.grid_logic import (
+
+# ``confirm_remove_*_prompt`` are re-exported on the api module so
+# main.js can resolve them via ``callBridge("confirm_remove_*", ...)``
+# without a thin wrapper; static linters can't see Pyodide attribute
+# access, so this import block carries a noqa for them.
+from phonology_features.gui.shared.grid_logic import (  # noqa: F401
     CYCLE_LADDER,
     MAX_UNDO_DEPTH,
     MOVE_KEYS,
