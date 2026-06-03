@@ -182,6 +182,28 @@ def suggest_filename(inv_name: str) -> str:
     return f"{slug}.json"
 
 
+def inventory_display_label(*, fname: str, metadata_name: str | None) -> str:
+    """Return the dropdown label for an inventory file.
+
+    Prefers a non-empty ``metadata.name`` from the JSON; falls back
+    to the filename stem with the ``_features`` suffix stripped and
+    underscores spaced. Both UIs delegate so the dropdown reads the
+    same label whether produced at desktop runtime or at web build
+    time.
+
+    The web build precomputes this from each inventory's metadata
+    block; the desktop reads the JSON header once per dropdown
+    refresh.
+    """
+    if metadata_name is not None:
+        cleaned = metadata_name.strip()
+        if cleaned:
+            return cleaned
+    stem = fname[:-5] if fname.endswith(".json") else fname
+    stem = stem.removesuffix("_features").replace("_", " ")
+    return stem.title()
+
+
 def normalize_setup_name(raw: str) -> str:
     """Trim and default the inventory name.
 

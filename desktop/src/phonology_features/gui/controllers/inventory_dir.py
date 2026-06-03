@@ -22,6 +22,7 @@ changed on disk" and "load this path."
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from typing import TYPE_CHECKING
@@ -31,6 +32,7 @@ from PyQt6.QtGui import QStandardItemModel
 
 from phonology_features._logging import get_logger
 from phonology_features._settings import SettingsKey, write_setting
+from phonology_shared.render.inventory_setup import inventory_display_label
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QSettings
@@ -53,6 +55,26 @@ _RELOAD_DEBOUNCE_MS: int = 600
 # Stale tmp-file age threshold. Atomic writes complete in
 # milliseconds; anything older than an hour is from a crashed save.
 _TMP_FILE_STALE_SECONDS: int = 3600
+
+
+def _read_metadata_name(path: str) -> str | None:
+    """Best-effort read of an inventory's ``metadata.name`` (or
+    top-level ``name``) so the dropdown label matches what the web
+    build precomputes. Any parse / IO failure returns ``None`` and
+    the shared helper falls back to a filename-derived label.
+    """
+    try:
+        with open(path, encoding="utf-8-sig") as fh:
+            raw = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    meta = raw.get("metadata") or {}
+    candidate = meta.get("name") if isinstance(meta, dict) else None
+    if candidate is None:
+        candidate = raw.get("name")
+    return candidate if isinstance(candidate, str) else None
 
 
 def _is_visible_inventory_file(fname: str) -> bool:
@@ -197,8 +219,13 @@ class InventoryDirController:
                     if not _is_visible_inventory_file(fname):
                         continue
                     path = os.path.join(inventories_dir, fname)
-                    pretty = fname[:-5].replace("_", " ").title()
-                    self._combo.addItem(pretty, userData=path)
+                    self._combo.addItem(
+                        inventory_display_label(
+                            fname=fname,
+                            metadata_name=_read_metadata_name(path),
+                        ),
+                        userData=path,
+                    )
             idx = self._combo.findData(previous_path) if previous_path else 0
             self._combo.setCurrentIndex(max(idx, 0))
         finally:

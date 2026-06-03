@@ -34,6 +34,7 @@ from phonology_features.gui.themed_widgets import _clear_btn_style
 from phonology_shared.render.constants import scrollbar_style
 from phonology_shared.render.mode_logic import (
     palette_toggle_tooltip,
+    theme_toggle_glyph,
     theme_toggle_tooltip,
 )
 from phonology_shared.render.palette import (
@@ -273,7 +274,7 @@ class ThemeController:
         """
         is_dark = get_theme_name() == "dark"
         btn: QPushButton = self._main._theme_btn
-        btn.setText("☼" if is_dark else "☾")
+        btn.setText(theme_toggle_glyph(is_dark=is_dark))
         btn.setToolTip(theme_toggle_tooltip(is_dark=is_dark))
         set_css(
             btn,

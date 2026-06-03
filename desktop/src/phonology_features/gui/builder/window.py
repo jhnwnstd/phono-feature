@@ -12,6 +12,16 @@ from phonology_shared.engine.limits import (
     MAX_SEGMENTS,
 )
 from phonology_shared.render.inventory_setup import suggest_filename
+from phonology_shared.render.mode_logic import (
+    REDO_NOTHING_MESSAGE,
+    UNDO_NOTHING_MESSAGE,
+    added_feature_message,
+    added_segment_message,
+    redid_message,
+    removed_feature_message,
+    removed_segment_message,
+    undid_message,
+)
 
 if TYPE_CHECKING:
     # Only used in a string-form type annotation; importing at runtime
@@ -771,30 +781,24 @@ class InventoryBuilder(QMainWindow):
     def _undo(self) -> None:
         """Reverse the most recent batch and move it to the redo stack."""
         if not self._undo_stack:
-            self._status.showMessage("Nothing to undo.")
+            self._status.showMessage(UNDO_NOTHING_MESSAGE)
             return
         edit = self._undo_stack.pop()
         self._replay_edit(edit, use_old=True)
         self._redo_stack.append(edit)
         self._dirty = True
-        n = len(edit.cells)
-        self._status.showMessage(
-            f"Undid {n} cell change{'s' if n != 1 else ''}."
-        )
+        self._status.showMessage(undid_message(len(edit.cells)))
 
     def _redo(self) -> None:
         """Re-apply the most recently undone batch."""
         if not self._redo_stack:
-            self._status.showMessage("Nothing to redo.")
+            self._status.showMessage(REDO_NOTHING_MESSAGE)
             return
         edit = self._redo_stack.pop()
         self._replay_edit(edit, use_old=False)
         self._undo_stack.append(edit)
         self._dirty = True
-        n = len(edit.cells)
-        self._status.showMessage(
-            f"Redid {n} cell change{'s' if n != 1 else ''}."
-        )
+        self._status.showMessage(redid_message(len(edit.cells)))
 
     def _replay_edit(self, edit: _BulkEdit, *, use_old: bool) -> None:
         """Apply ``edit`` to the grid (``use_old`` for undo, the
@@ -1014,7 +1018,7 @@ class InventoryBuilder(QMainWindow):
         for r in range(len(self._features)):
             self._table.setItem(r, col, make_cell("0"))
         self._dirty = True
-        self._status.showMessage(f"Added segment '{seg}'.")
+        self._status.showMessage(added_segment_message(seg))
 
     def _add_feature(self) -> None:
         """Prompt for a new feature and add a row.
@@ -1046,7 +1050,7 @@ class InventoryBuilder(QMainWindow):
         for c in range(len(self._segments)):
             self._table.setItem(row, c, make_cell("0"))
         self._dirty = True
-        self._status.showMessage(f"Added feature '{feat}'.")
+        self._status.showMessage(added_feature_message(feat))
 
     def _remove_segment(self) -> None:
         """Remove the header-selected column (segment)."""
@@ -1066,7 +1070,7 @@ class InventoryBuilder(QMainWindow):
         self._table.removeColumn(col)
         self._dirty = True
         self._clear_remove_selection()
-        self._status.showMessage(f"Removed segment '{seg}'.")
+        self._status.showMessage(removed_segment_message(seg))
 
     def _remove_feature(self) -> None:
         """Remove the header-selected row (feature)."""
@@ -1086,7 +1090,7 @@ class InventoryBuilder(QMainWindow):
         self._table.removeRow(row)
         self._dirty = True
         self._clear_remove_selection()
-        self._status.showMessage(f"Removed feature '{feat}'.")
+        self._status.showMessage(removed_feature_message(feat))
 
     # Serialization (save / load)
     def _to_inventory(self) -> Inventory:

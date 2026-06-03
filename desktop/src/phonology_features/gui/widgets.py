@@ -30,7 +30,6 @@ from phonology_shared.render import layout as layout_mod
 from phonology_shared.render.constants import (
     BTN_GAP,
     BTN_W,
-    MINUS_SIGN,
     MONO_FAMILIES,
     scrollbar_style,
 )
@@ -41,6 +40,10 @@ from phonology_shared.render.layout import (
 )
 from phonology_shared.render.mode_logic import expand_button_tooltip
 from phonology_shared.render.palette import C
+from phonology_shared.render.view_models import (
+    NEUTRAL_BADGE,
+    feature_row_badge,
+)
 
 # Per-button vertical stride used by ``SegmentGridWidget`` to estimate
 # group natural heights ahead of Qt's own layout pass. The fixed values
@@ -445,12 +448,19 @@ class FeatureRow(QWidget):
             # State 2: display mode. Replay the last set_display args
             # so the badge picks up the new palette.
             value, shared, contrastive = saved_display
-            self.set_display(value, shared, contrastive=contrastive)
+            self.set_display(
+                value,
+                shared,
+                contrastive=contrastive,
+                badge=feature_row_badge(
+                    value=value, shared=shared, contrastive=contrastive
+                ),
+            )
         else:
             # State 3: neutral. Directly re-apply the neutral styles
             # since neither of the above paths runs.
             set_css(self.badge, self._BADGE_NEUTRAL)
-            self.badge.setText("·")
+            self.badge.setText(NEUTRAL_BADGE)
             set_css(
                 self.name_label,
                 (
@@ -535,7 +545,12 @@ class FeatureRow(QWidget):
         self.badge.setVisible(not yes)
 
     def set_display(
-        self, value: str, shared: bool, contrastive: bool = False
+        self,
+        value: str,
+        shared: bool,
+        contrastive: bool = False,
+        *,
+        badge: str,
     ) -> None:
         """Display a feature value in seg-to-feat mode.
 
@@ -543,6 +558,11 @@ class FeatureRow(QWidget):
             value: "+", "-", or "" (empty when not shared).
             shared: all selected segments share this value.
             contrastive: selected segments split cleanly on this feature.
+            badge: glyph from
+                :py:func:`phonology_shared.render.view_models._feature_row_state`
+                (`\u00b1` / `+` / U+2212 / `\u00b7`). Single source of truth so the
+                desktop and web FeatureRow can never drift; QSS selection
+                stays Qt-only below.
         """
         # Dedup: seg-mode updates re-run through every row even when the
         # state didn't change. Skip 3 setStyleSheet + 1 setText calls.
@@ -551,24 +571,18 @@ class FeatureRow(QWidget):
             return
         self._last_display_state = state
         self._reset_for_panel = None
+        self.badge.setText(badge)
         if contrastive:
-            self.badge.setText("\u00b1")
             set_css(self.badge, self._BADGE_CONTRASTIVE)
             set_css(self.name_label, self._NAME_CONTRASTIVE)
             set_css(self, self._ROW_CONTRASTIVE)
             return
         has_display_value = bool(value)
         if not has_display_value or not shared:
-            self.badge.setText("\u00b7")
             set_css(self.badge, self._BADGE_NEUTRAL)
             set_css(self.name_label, self._NAME_DIM)
             set_css(self, self._ROW_TRANSPARENT)
             return
-        # ``value`` is the engine's ASCII ``-``; the visible badge
-        # must show the U+2212 MINUS SIGN so the glyph matches the
-        # ``minus_btn`` (also U+2212) and the analysis-pane chips,
-        # regardless of whether the feat pane is the active mode.
-        self.badge.setText("+" if value == "+" else MINUS_SIGN)
         set_css(self.name_label, self._NAME_BOLD)
         if value == "+":
             set_css(self.badge, self._BADGE_PLUS)
@@ -614,7 +628,7 @@ class FeatureRow(QWidget):
         self._last_display_state = None
         self.plus_btn.setChecked(False)
         self.minus_btn.setChecked(False)
-        self.badge.setText("\u00b7")
+        self.badge.setText(NEUTRAL_BADGE)
         set_css(self.badge, self._BADGE_NEUTRAL)
         name_style = (
             self._NAME_ACTIVE if self._panel_active else self._NAME_INACTIVE

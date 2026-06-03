@@ -137,8 +137,19 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         "inventory_loaded_template",
         "theme_to_dark",
         "theme_to_light",
+        "theme_glyph_dark",
+        "theme_glyph_light",
         "palette_to_colorblind",
         "palette_to_standard",
+        # Builder status templates (undo / redo / add / remove).
+        "undo_nothing_message",
+        "redo_nothing_message",
+        "undid_template",
+        "redid_template",
+        "added_segment_template",
+        "removed_segment_template",
+        "added_feature_template",
+        "removed_feature_template",
     }
     assert set(status_payload.keys()) == expected_keys
 

@@ -418,6 +418,14 @@ VOWEL_LABEL_GRID_COL: int = 0
 # (unr/rnd) occupies two consecutive tracks; a one-track spacer
 # separates each pair from the next.
 VOWEL_FIRST_DATA_GRID_COL: int = VOWEL_LABEL_GRID_COL + 1
+#: Title shown above the chart on both UIs. Centralised so a
+#: future rename (e.g. localisation) touches one constant.
+VOWEL_CHART_TITLE: str = "VOWELS"
+#: How many physical grid tracks the title spans (covers every
+#: data column plus the two spacer tracks).
+VOWEL_TITLE_GRID_COL_SPAN: int = 8
+#: Each backness header straddles its pair (unrounded + rounded).
+VOWEL_COL_HEADER_GRID_COL_SPAN: int = 2
 
 
 def logical_col_offset(col: int) -> int:
@@ -488,6 +496,18 @@ class VowelChartRow:
 
 
 @dataclass(frozen=True)
+class VowelChartColHeader:
+    """A backness column header (Front / Central / Back) with its
+    physical placement already resolved. Both renderers consume the
+    grid coordinates verbatim; web adds 1 for CSS's 1-indexed grid.
+    """
+
+    label: str
+    grid_col: int
+    grid_col_span: int
+
+
+@dataclass(frozen=True)
 class VowelChartGeometry:
     """Complete render-ready description of a vowel chart.
 
@@ -500,7 +520,9 @@ class VowelChartGeometry:
     without a "is this row populated" check.
     """
 
-    cols: tuple[str, ...]
+    title: str
+    title_grid_col_span: int
+    cols: tuple[VowelChartColHeader, ...]
     rows: tuple[VowelChartRow, ...]
     cells: tuple[VowelChartCell, ...]
 
@@ -571,8 +593,19 @@ def build_vowel_chart_geometry(
             )
         )
 
+    col_headers = tuple(
+        VowelChartColHeader(
+            label=label,
+            grid_col=(VOWEL_FIRST_DATA_GRID_COL + ci * 3),
+            grid_col_span=VOWEL_COL_HEADER_GRID_COL_SPAN,
+        )
+        for ci, label in enumerate(COL_LABELS)
+    )
+
     return VowelChartGeometry(
-        cols=COL_LABELS,
+        title=VOWEL_CHART_TITLE,
+        title_grid_col_span=VOWEL_TITLE_GRID_COL_SPAN,
+        cols=col_headers,
         rows=rows,
         cells=tuple(cells),
     )

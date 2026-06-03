@@ -290,6 +290,28 @@ def _feat_tabs(
     }
 
 
+#: Glyph shown in a FeatureRow's badge when the row is neutral
+#: (no value picked, not contrastive). Centralised so a future
+#: change touches both UIs in one edit; desktop reset()/apply
+#: paths read it instead of inlining "·".
+NEUTRAL_BADGE: str = "·"
+
+
+def feature_row_badge(*, value: str, shared: bool, contrastive: bool) -> str:
+    """Return the badge glyph a FeatureRow should display given its
+    semantic state. Standalone (no engine needed) so renderers can
+    recompute the glyph during a theme refresh without re-running
+    a summary. Mirrors the ``badge`` field in
+    :py:func:`_feature_row_state`.
+    """
+    del shared  # currently unused; kept for callsite symmetry
+    if contrastive:
+        return "±"
+    if value:
+        return MINUS_SIGN if value == "-" else value
+    return NEUTRAL_BADGE
+
+
 def _feature_row_state(
     *,
     value: str = "",
@@ -308,19 +330,9 @@ def _feature_row_state(
     explicit ones (e.g. ``UNDERSPEC_CONFLICT`` vs
     ``EXPLICIT_CONFLICT``).
     """
-    if contrastive:
-        badge = "±"
-    elif value:
-        # Engine values are ASCII ("+", "-", "0"); the badge that
-        # surfaces in the UI must use U+2212 MINUS SIGN so the glyph
-        # matches the polarity buttons (also U+2212) and the chips in
-        # the analysis pane. Doing the translation here means both
-        # desktop (FeatureRow.set_display) and web (main.js
-        # _setRasterizedBadge) get the right glyph without each
-        # implementing its own ASCII -> U+2212 fix.
-        badge = MINUS_SIGN if value == "-" else value
-    else:
-        badge = "·"
+    badge = feature_row_badge(
+        value=value, shared=shared, contrastive=contrastive
+    )
     return {
         "value": value,
         "shared": shared,
@@ -367,7 +379,16 @@ def _vowel_chart_summary(
         seg_feats,
     )
     return {
-        "cols": list(geometry.cols),
+        "title": geometry.title,
+        "title_grid_col_span": geometry.title_grid_col_span,
+        "cols": [
+            {
+                "label": col.label,
+                "grid_col": col.grid_col,
+                "grid_col_span": col.grid_col_span,
+            }
+            for col in geometry.cols
+        ],
         "rows": [
             {
                 "logical_row": row.logical_row,

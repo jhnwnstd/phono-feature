@@ -194,6 +194,76 @@ def theme_toggle_tooltip(*, is_dark: bool) -> str:
     return "Switch to light mode" if is_dark else "Switch to dark mode"
 
 
+def theme_toggle_glyph(*, is_dark: bool) -> str:
+    """Glyph shown on the theme button. Mirrors the tooltip: when
+    dark is active the button shows the sun (clicking switches to
+    light); when light is active it shows the moon. U+2600 BLACK
+    SUN renders cleanly in both Qt's default font and the browser
+    font stack; the moon U+263E was already shared.
+    """
+    return "☀" if is_dark else "☾"
+
+
+#: Status-bar message when the user hits undo with no history.
+UNDO_NOTHING_MESSAGE: str = "Nothing to undo."
+
+#: Status-bar message when the user hits redo with no future history.
+REDO_NOTHING_MESSAGE: str = "Nothing to redo."
+
+#: ``{n}`` and ``{plural}`` substituted per UI.
+UNDID_TEMPLATE: str = "Undid {n} cell change{plural}."
+
+#: ``{n}`` and ``{plural}`` substituted per UI.
+REDID_TEMPLATE: str = "Redid {n} cell change{plural}."
+
+#: ``{seg}`` substituted per UI. Builder add/remove status messages.
+ADDED_SEGMENT_TEMPLATE: str = "Added segment '{seg}'."
+REMOVED_SEGMENT_TEMPLATE: str = "Removed segment '{seg}'."
+
+#: ``{feat}`` substituted per UI. Builder add/remove status messages.
+ADDED_FEATURE_TEMPLATE: str = "Added feature '{feat}'."
+REMOVED_FEATURE_TEMPLATE: str = "Removed feature '{feat}'."
+
+
+def plural_s(n: int) -> str:
+    """English plural-suffix helper. Single rule shared by both UIs
+    so ``"1 cell change"`` vs ``"2 cell changes"`` stays consistent.
+    """
+    return "" if n == 1 else "s"
+
+
+def undid_message(n: int) -> str:
+    """Builder status after undo. ``{plural}`` resolves via
+    :py:func:`plural_s`.
+    """
+    return UNDID_TEMPLATE.format(n=n, plural=plural_s(n))
+
+
+def redid_message(n: int) -> str:
+    """Builder status after redo."""
+    return REDID_TEMPLATE.format(n=n, plural=plural_s(n))
+
+
+def added_segment_message(seg: str) -> str:
+    """Builder status after adding a new segment column."""
+    return ADDED_SEGMENT_TEMPLATE.format(seg=seg)
+
+
+def removed_segment_message(seg: str) -> str:
+    """Builder status after removing a segment column."""
+    return REMOVED_SEGMENT_TEMPLATE.format(seg=seg)
+
+
+def added_feature_message(feat: str) -> str:
+    """Builder status after adding a new feature row."""
+    return ADDED_FEATURE_TEMPLATE.format(feat=feat)
+
+
+def removed_feature_message(feat: str) -> str:
+    """Builder status after removing a feature row."""
+    return REMOVED_FEATURE_TEMPLATE.format(feat=feat)
+
+
 def palette_toggle_tooltip(*, is_colorblind: bool) -> str:
     """Tooltip / aria-label on the colorblind-palette button.
     Names the destination palette. ``-friendly`` is retained:

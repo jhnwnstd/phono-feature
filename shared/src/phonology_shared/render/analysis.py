@@ -32,6 +32,7 @@ from phonology_shared.render.constants import (
     sort_spec,
     tag_palettes,
 )
+from phonology_shared.render.mode_logic import VALIDATION_REPORT_HEADING
 from phonology_shared.render.palette import C
 
 if TYPE_CHECKING:
@@ -152,6 +153,21 @@ def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
 
 
 # --- engine-side query helper ------------------------------------
+
+
+def render_validation_report(issues: Sequence[str]) -> str:
+    """HTML for the validation-error banner shown on a failed
+    inventory load. Single source of truth so the Class tab on
+    web and the analysis pane on desktop produce identical markup
+    (red heading + one paragraph per issue). Every issue is
+    HTML-escaped because inventory data is user-supplied.
+    """
+    parts = [
+        f"<p><b style='color:{C['minus']}'>"
+        f"{html.escape(VALIDATION_REPORT_HEADING)}</b></p>"
+    ]
+    parts.extend(f"<p>{html.escape(issue)}</p>" for issue in issues)
+    return "".join(parts)
 
 
 def compute_contrastive(

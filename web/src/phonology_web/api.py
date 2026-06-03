@@ -29,6 +29,7 @@ from phonology_shared.engine import (
     ValidationError,
     parse_inventory_json_text,
 )
+from phonology_shared.render.analysis import render_validation_report
 
 # ``confirm_remove_*_prompt`` are re-exported on the api module so
 # main.js can resolve them via ``callBridge("confirm_remove_*", ...)``
@@ -582,3 +583,12 @@ def validation_issues_from_error(exc: Any) -> list[str]:
     if isinstance(exc, ValidationError):
         return list(exc.issues)
     return [str(exc)]
+
+
+def validation_report_html(issues: list[str]) -> str:
+    """Render the validation-error banner shown after a failed
+    inventory load. Delegates to the shared renderer so the web
+    Class tab and the desktop analysis pane carry byte-identical
+    markup (red heading + one paragraph per escaped issue).
+    """
+    return render_validation_report(issues)

@@ -597,6 +597,15 @@ function _isValidBootstrap(info) {
         const c0 = info.vowel_chart.cells[0];
         if (!Array.isArray(c0?.segs)) return false;
     }
+    // ``title`` + structured ``cols`` (with grid_col / grid_col_span)
+    // landed when chart geometry moved to the shared SSOT. Reject any
+    // stale-cache bootstrap missing them; the bridge will repopulate.
+    if (typeof info.vowel_chart.title !== "string") return false;
+    if (!Array.isArray(info.vowel_chart.cols)) return false;
+    if (info.vowel_chart.cols.length > 0) {
+        const col0 = info.vowel_chart.cols[0];
+        if (typeof col0?.grid_col !== "number") return false;
+    }
     return true;
 }
 
@@ -636,11 +645,20 @@ async function loadInventoryText(text, sourceLabel) {
         prewarmCommonAnalyses();
     } catch (e) {
         const issues = e.message ? [e.message] : ["unknown error"];
-        const heading = STATUS_TEXT.validation_report_heading
-            || "Validation errors:";
-        const errorHtml = `<p><b>${escapeHtml(heading)}</b></p><ul>`
-            + issues.map((i) => `<li>${escapeHtml(i)}</li>`).join("")
-            + "</ul>";
+        // Delegate to the shared renderer so the Class tab here
+        // and the desktop analysis pane produce byte-identical
+        // markup (red heading + escaped <p> per issue). The
+        // fallback is reached only if the bridge isn't yet
+        // available (pre-Pyodide boot, fetch failure, etc.).
+        let errorHtml;
+        try {
+            errorHtml = callBridge("validation_report_html", issues);
+        } catch (_) {
+            const heading = STATUS_TEXT.validation_report_heading
+                || "Validation errors:";
+            errorHtml = `<p><b>${escapeHtml(heading)}</b></p>`
+                + issues.map((i) => `<p>${escapeHtml(i)}</p>`).join("");
+        }
         // Route load errors to the Class tab — same place users
         // expect to see the primary analytical output.
         setAnalysisTabs({
@@ -1111,7 +1129,9 @@ function _buildVowelChart(chart) {
     groupEl.className = "seg-group vowel-chart-group";
     const header = document.createElement("div");
     header.className = "seg-group-header";
-    header.textContent = "VOWELS";
+    // ``chart.title`` comes from shared vowel_layout.VOWEL_CHART_TITLE
+    // so the desktop and web charts always agree on the heading.
+    header.textContent = chart.title;
     groupEl.appendChild(header);
 
     const chartEl = document.createElement("div");
@@ -1123,15 +1143,14 @@ function _buildVowelChart(chart) {
     corner.className = "vowel-chart-corner";
     chartEl.appendChild(corner);
 
-    chart.cols.forEach((label, i) => {
+    // ``chart.cols`` is a list of {label, grid_col, grid_col_span}
+    // produced by shared/render/vowel_layout. Add +1 to grid_col
+    // because Qt uses 0-based and CSS grid-column lines are 1-indexed.
+    chart.cols.forEach((col) => {
         const colHeader = document.createElement("div");
         colHeader.className = "vowel-chart-col-label";
-        colHeader.textContent = label;
-        // Each backness label spans its unrounded + rounded pair.
-        // Physical columns: front 2-3, central 5-6, back 8-9 (cols
-        // 4 and 7 are spacer tracks; see ``.vowel-chart`` in
-        // style.css). Header starts at ``2 + i * 3`` and spans 2.
-        colHeader.style.gridColumn = `${2 + i * 3} / span 2`;
+        colHeader.textContent = col.label;
+        colHeader.style.gridColumn = `${col.grid_col + 1} / span ${col.grid_col_span}`;
         chartEl.appendChild(colHeader);
     });
 
@@ -2683,30 +2702,54 @@ function applyEdit(edit, useOld) {
     }
 }
 
+// Both UIs read these status templates from STATUS_TEXT (baked
+// from shared/render/mode_logic.py) so the desktop and web
+// builders surface byte-identical wording on undo / redo / add /
+// remove. Fallbacks mirror the Python literals.
+function _pluralS(n) {
+    return n === 1 ? "" : "s";
+}
+
+function _formatTpl(key, fallback, vars) {
+    let tpl = STATUS_TEXT[key] || fallback;
+    for (const [name, value] of Object.entries(vars)) {
+        tpl = tpl.split(`{${name}}`).join(String(value));
+    }
+    return tpl;
+}
+
 function undo() {
     const edit = editorState.undoStack.pop();
     if (edit === undefined) {
-        setEditorStatus("Nothing to undo.");
+        setEditorStatus(STATUS_TEXT.undo_nothing_message || "Nothing to undo.");
         return;
     }
     applyEdit(edit, true);
     editorState.redoStack.push(edit);
     markEditorDirty();
     const n = edit.cells.length;
-    setEditorStatus(`Undid ${n} cell change${n === 1 ? "" : "s"}.`);
+    setEditorStatus(_formatTpl(
+        "undid_template",
+        "Undid {n} cell change{plural}.",
+        { n, plural: _pluralS(n) },
+    ));
 }
 
 function redo() {
     const edit = editorState.redoStack.pop();
     if (edit === undefined) {
-        setEditorStatus("Nothing to redo.");
+        setEditorStatus(STATUS_TEXT.redo_nothing_message || "Nothing to redo.");
         return;
     }
     applyEdit(edit, false);
     editorState.undoStack.push(edit);
     markEditorDirty();
     const n = edit.cells.length;
-    setEditorStatus(`Redid ${n} cell change${n === 1 ? "" : "s"}.`);
+    setEditorStatus(_formatTpl(
+        "redid_template",
+        "Redid {n} cell change{plural}.",
+        { n, plural: _pluralS(n) },
+    ));
 }
 
 // Mouse handling -------------------------------------------------------
@@ -3048,7 +3091,9 @@ function addSegmentToState(seg) {
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
-    setEditorStatus(`Added segment '${seg}'.`);
+    setEditorStatus(_formatTpl(
+        "added_segment_template", "Added segment '{seg}'.", { seg },
+    ));
 }
 
 function addFeatureToState(feat) {
@@ -3059,7 +3104,9 @@ function addFeatureToState(feat) {
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
-    setEditorStatus(`Added feature '${feat}'.`);
+    setEditorStatus(_formatTpl(
+        "added_feature_template", "Added feature '{feat}'.", { feat },
+    ));
 }
 
 function removeSelectedSegment() {
@@ -3077,7 +3124,9 @@ function removeSelectedSegment() {
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
-    setEditorStatus(`Removed segment '${seg}'.`);
+    setEditorStatus(_formatTpl(
+        "removed_segment_template", "Removed segment '{seg}'.", { seg },
+    ));
 }
 
 function removeSelectedFeature() {
@@ -3091,7 +3140,9 @@ function removeSelectedFeature() {
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
-    setEditorStatus(`Removed feature '${feat}'.`);
+    setEditorStatus(_formatTpl(
+        "removed_feature_template", "Removed feature '{feat}'.", { feat },
+    ));
 }
 
 /** Write ``value`` to the selection (or the focused cell when
@@ -3400,11 +3451,16 @@ function wireColorblindToggle() {
 }
 
 function wireThemeToggle() {
-    // aria-label and title share one source so SRs (which prefer
-    // aria-label) and hover tooltips can never drift apart.
+    // aria-label, title, AND glyph share one source (shared
+    // mode_logic.theme_toggle_{tooltip,glyph}) so the SR
+    // announcement, hover tooltip, and visual icon can never drift
+    // from each other or from the desktop button.
     const labelFor = (theme) => theme === THEME.DARK
         ? (STATUS_TEXT.theme_to_light || "Switch to light mode")
         : (STATUS_TEXT.theme_to_dark || "Switch to dark mode");
+    const glyphFor = (theme) => theme === THEME.DARK
+        ? (STATUS_TEXT.theme_glyph_dark || "☀")
+        : (STATUS_TEXT.theme_glyph_light || "☾");
     const applyLabel = (theme) => {
         const text = labelFor(theme);
         nodes.themeBtn.title = text;
@@ -3413,7 +3469,7 @@ function wireThemeToggle() {
     const stored = normalizeTheme(safeStorageGet("theme"));
     if (stored === THEME.DARK) {
         document.documentElement.dataset.theme = THEME.DARK;
-        nodes.themeBtn.textContent = "☀";
+        nodes.themeBtn.textContent = glyphFor(THEME.DARK);
         applyLabel(THEME.DARK);
     } else {
         applyLabel(THEME.LIGHT);
@@ -3422,7 +3478,7 @@ function wireThemeToggle() {
         const cur = normalizeTheme(document.documentElement.dataset.theme);
         const next = cur === THEME.DARK ? THEME.LIGHT : THEME.DARK;
         document.documentElement.dataset.theme = next;
-        nodes.themeBtn.textContent = next === THEME.DARK ? "☀" : "☾";
+        nodes.themeBtn.textContent = glyphFor(next);
         applyLabel(next);
         safeStorageSet("theme", next);
         if (state.bridge) {

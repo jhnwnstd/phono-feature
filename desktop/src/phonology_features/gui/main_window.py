@@ -5,7 +5,6 @@ PyQt6 GUI for the Segment & Feature Engine.
 
 from __future__ import annotations
 
-import html
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -79,6 +78,7 @@ from phonology_features.gui.widgets import (
 from phonology_shared.engine.feature_engine import FeatureEngine
 from phonology_shared.engine.inventory import Inventory, ValidationError
 from phonology_shared.render import layout
+from phonology_shared.render.analysis import render_validation_report
 from phonology_shared.render.constants import (
     FEATURE_GROUPS,
     FEATURE_ORDER,
@@ -89,7 +89,6 @@ from phonology_shared.render.constants import (
 )
 from phonology_shared.render.layout import distribute_feature_groups
 from phonology_shared.render.mode_logic import (
-    VALIDATION_REPORT_HEADING,
     Mode,
     clipboard_copy_message,
     inventory_load_failure_message,
@@ -929,15 +928,12 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _validation_report_html(issues: tuple[str, ...]) -> str:
-        """Render validation issues as HTML. Every issue is escaped:
-        inventory data is interpolated into messages and we don't want
-        a malformed feature name like ``"<b>oops"`` to break layout."""
-        parts = [
-            f"<p><b style='color:{C['minus']}'>"
-            f"{html.escape(VALIDATION_REPORT_HEADING)}</b></p>"
-        ]
-        parts.extend(f"<p>{html.escape(issue)}</p>" for issue in issues)
-        return "".join(parts)
+        """Render validation issues as HTML. Thin wrapper over the
+        shared renderer so the desktop pane and the web Class tab
+        produce byte-identical markup. The shared function escapes
+        every interpolated issue.
+        """
+        return render_validation_report(issues)
 
     def _populate_after_load(self) -> None:
         """Rebuild segment + feature widgets for the freshly-loaded engine.
@@ -1507,6 +1503,7 @@ class MainWindow(QMainWindow):
                 state["value"],
                 bool(state["shared"]),
                 contrastive=bool(state["contrastive"]),
+                badge=state["badge"],
             )
         for seg, btn in self._seg_buttons.items():
             btn.set_state(summary["segment_states"][seg])

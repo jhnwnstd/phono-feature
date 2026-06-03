@@ -36,6 +36,9 @@ from phonology_shared.render.palette import C
 from phonology_shared.render.vowel_layout import (
     COL_LABELS,
     ROW_LABELS,
+    VOWEL_COL_HEADER_GRID_ROW,
+    VOWEL_FIRST_DATA_GRID_COL,
+    VOWEL_TITLE_GRID_ROW,
     Confidence,
     VowelChartCell,
     VowelChartCellEntry,
@@ -210,38 +213,44 @@ class VowelChartWidget(QWidget):
         followed by per-cell buttons (or a vbox stack for collision
         cells).
         """
-        self._add_title_and_col_headers(geometry.cols)
+        self._add_title_and_col_headers(geometry)
         for row in geometry.rows:
             self._add_row_header(row)
         for cell in geometry.cells:
             self._add_cell(cell)
 
-    def _add_title_and_col_headers(self, cols: tuple[str, ...]) -> None:
+    def _add_title_and_col_headers(self, geometry: VowelChartGeometry) -> None:
         """VOWELS title (spanning all data columns) + Front /
-        Central / Back labels. Parented at construction so they're
-        never transient top-level widgets.
+        Central / Back labels. Title text, span, and per-header
+        grid coordinates come from the shared geometry so the two
+        UIs can never drift on chart-header placement.
         """
-        title = QLabel("VOWELS", self)
+        title = QLabel(geometry.title, self)
         title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
         title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1px;"
             " padding: 2px 2px 0 2px;"
         )
-        # Span every data column (including the two spacer columns)
-        # so the title sits flush with the vowel cells, not the row
-        # labels. Physical columns: 1..8 (front 1-2, spacer 3,
-        # central 4-5, spacer 6, back 7-8).
-        self._grid.addWidget(title, 0, 1, 1, 8)
+        self._grid.addWidget(
+            title,
+            VOWEL_TITLE_GRID_ROW,
+            VOWEL_FIRST_DATA_GRID_COL,
+            1,
+            geometry.title_grid_col_span,
+        )
         self._header_labels.append((title, False))
-        for ci, label in enumerate(cols):
-            lbl = QLabel(label, self)
+        for col in geometry.cols:
+            lbl = QLabel(col.label, self)
             lbl.setFont(QFont("Noto Sans", 7))
             lbl.setStyleSheet(f"color: {C['text_dim']};")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            # Each backness header straddles its pair: ci=0 (Front)
-            # at col 1 span 2, ci=1 (Central) at col 4 span 2,
-            # ci=2 (Back) at col 7 span 2.
-            self._grid.addWidget(lbl, 1, 1 + ci * 3, 1, 2)
+            self._grid.addWidget(
+                lbl,
+                VOWEL_COL_HEADER_GRID_ROW,
+                col.grid_col,
+                1,
+                col.grid_col_span,
+            )
             self._header_labels.append((lbl, False))
 
     def _add_row_header(self, row: VowelChartRow) -> None:
