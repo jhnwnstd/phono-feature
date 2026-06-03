@@ -227,8 +227,10 @@ _SORT_KEYS: list[tuple[str, dict[str, int]]] = [
     ("nasal", _VAL_ORD),
     ("continuant", _VAL_ORD),
     ("delrel", _VAL_ORD),
-    ("front", {"+": 0, "-": 1, "0": 2}),
-    ("back", _VAL_ORD),
+    # Mouth-position ordering: fronted -> unspecified -> retracted
+    # (so X+ / X / X- cluster as fronted, base, retracted).
+    ("front", {"+": 0, "0": 1, "-": 2}),
+    ("back", {"-": 0, "0": 1, "+": 2}),
     ("labial", _VAL_ORD),
     ("voice", {"-": 0, "+": 1, "0": 2}),
     ("spreadgl", _VAL_ORD),
