@@ -6,7 +6,7 @@
 # calling shell so the launcher can exec phonology-features directly.
 #
 # Usage from a launcher:
-#     source "$REPO_ROOT/scripts/install.sh"
+#     source "$REPO_ROOT/tools/install.sh"
 #     phono_install "macOS"     # or "Linux"
 #     exec phonology-features "$@"
 

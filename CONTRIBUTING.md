@@ -70,11 +70,11 @@ Three single-step launchers live at the repo root:
 * `RUN-Mac.command`
 * `RUN-Windows.bat`
 
-Each launcher delegates to a shared bootstrap in `scripts/`:
+Each launcher delegates to a shared bootstrap in `tools/`:
 
-* the two Unix launchers `source scripts/install.sh` and call
+* the two Unix launchers `source tools/install.sh` and call
   `phono_install`;
-* the Windows launcher `call`s `scripts\install.bat`.
+* the Windows launcher `call`s `tools\install.bat`.
 
 Both bootstraps pick a Python 3.11+ interpreter, create `app/.venv/`
 on first run, install the engine and the app in editable mode, and
@@ -82,7 +82,7 @@ stamp `app/.venv/.installed` so subsequent runs skip the install
 step unless `pyproject.toml` changes.
 
 If you change the launcher contract (Python version, install flags,
-venv location), change `scripts/install.sh` and `scripts/install.bat`
+venv location), change `tools/install.sh` and `tools/install.bat`
 together so the three launchers stay in lockstep.
 
 ## Where tests live

@@ -11,8 +11,8 @@ cumulative and tottime.
 Run from anywhere; the script puts ``app/src/`` on sys.path and uses the
 offscreen Qt platform plugin so no display is needed:
 
-    python scripts/profile_app.py
-    python scripts/profile_app.py --section seg_toggle  # one phase only
+    python tools/profile_app.py
+    python tools/profile_app.py --section seg_toggle  # one phase only
 """
 
 from __future__ import annotations
