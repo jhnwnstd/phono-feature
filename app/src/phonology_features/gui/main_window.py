@@ -71,7 +71,7 @@ from phonology_features.gui.shared.constants import (
     sort_features,
 )
 from phonology_features.gui.shared.layout import distribute_feature_groups
-from phonology_features.gui.shared.mode_logic import Mode
+from phonology_features.gui.shared.mode_logic import Mode, mode_status_text
 from phonology_features.gui.shared.palette import (
     ALLOWED_PALETTE_MODES,
     ALLOWED_THEMES,
@@ -453,7 +453,7 @@ class MainWindow(QMainWindow):
         )
         self.setStatusBar(self.status)
         self.status.showMessage(
-            "Select an inventory from the dropdown to begin."
+            mode_status_text(Mode.SEG_TO_FEAT, has_engine=False)
         )
 
     def _build_segment_panel(self, parent: QWidget | None = None) -> QFrame:
@@ -547,7 +547,12 @@ class MainWindow(QMainWindow):
         assert vp is not None
         set_css(vp, "background: transparent;")
         vlay.addWidget(self._seg_scroll, stretch=1)
-        self.seg_hint = QLabel("\u2190 Select an inventory to see segments")
+        # Sources the same "no inventory" text both UIs use; the
+        # left arrow is desktop-only decoration that points at the
+        # dropdown to the left of the seg pane.
+        self.seg_hint = QLabel(
+            "\u2190 " + mode_status_text(Mode.SEG_TO_FEAT, has_engine=False)
+        )
         self.seg_hint.setFont(QFont("Noto Sans", 9))
         set_css(self.seg_hint, f"color: {C['text_dim']};")
         self.seg_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)

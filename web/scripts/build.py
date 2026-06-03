@@ -37,6 +37,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -644,14 +645,42 @@ def hash_assets() -> None:
     # straight into the HTML so the JS pre-bridge fallback reads
     # the canonical Python output instead of carrying a literal
     # that can drift.
+    status_text_payload = _build_status_text_payload()
     status_block = (
         '<script id="status-text" type="application/json">'
         + json.dumps(
-            _build_status_text_payload(),
+            status_text_payload,
             separators=(",", ":"),
             ensure_ascii=False,
         )
         + "</script>"
+    )
+    # Bake the no-engine status string into the <span id="statusbar">
+    # default so the pre-JS HTML carries the SAME literal the JS
+    # ``statusTextForMode(...)`` returns. ``mode_status_text`` is the
+    # single source of truth; the source ``index.html`` ships a
+    # matching placeholder so the page reads sensibly even if served
+    # raw, but this substitution is what guarantees parity after a
+    # future change to the shared string. The presence check asserts
+    # the placeholder block exists at all -- if a future ``index.html``
+    # edit drops the block, the bake fails loudly instead of producing
+    # silently empty status text.
+    statusbar_marker = '<span id="statusbar" class="statusbar-message">'
+    if statusbar_marker not in html:
+        raise RuntimeError(
+            "index.html is missing the statusbar marker"
+            f" {statusbar_marker!r}; build.py needs it to bake the"
+            " shared no-engine text. Either restore the marker or"
+            " update the substitution pattern."
+        )
+    # Replace whatever placeholder text the source carries with the
+    # canonical shared string. Uses a regex to span from the marker
+    # to the closing </span>.
+    html = re.sub(
+        re.escape(statusbar_marker) + r"[^<]*</span>",
+        statusbar_marker + status_text_payload["no_engine"] + "</span>",
+        html,
+        count=1,
     )
     # Same inline-JSON pattern as the status block. JS reads
     # ``LIMITS.max_inventory_file_bytes`` for the upload pre-check

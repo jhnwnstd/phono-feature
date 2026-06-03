@@ -640,6 +640,4 @@ def render_contrasts_tab_feat() -> str:
     differ. Stable placeholder so the tab still exists and the user
     isn't left wondering whether they broke something.
     """
-    return _muted_italic_p(
-        "Switch to segment mode to compare segments."
-    )
+    return _muted_italic_p("Switch to segment mode to compare segments.")
