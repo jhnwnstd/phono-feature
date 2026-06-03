@@ -180,8 +180,14 @@ class FeatureEngine:
 
     @staticmethod
     def _feat_match(seg_val: str, spec_val: str) -> bool:
-        """True if a segment value matches a spec value, with '0'
-        treated as a wildcard."""
+        """Underspec-compatible value match: equal values, or the
+        segment's value is ``'0'`` (underspecified, treated as
+        wildcard against the spec). The spec's ``'0'`` is NOT
+        wild; only the segment side relaxes. Reached only via
+        :py:meth:`_find_segments_unsorted` with
+        ``underspec_compatible=True``; the strict default path
+        compares with plain ``==``.
+        """
         return seg_val == spec_val or seg_val == "0"
 
     def _is_natural_class_bool(self, segments: list[str]) -> bool:
@@ -264,9 +270,14 @@ class FeatureEngine:
     ) -> list[str]:
         """Match segments against a feature spec; unsorted result.
 
-        With ``underspec_compatible``, a segment's '0' counts as
-        compatible with any spec value (used for natural-class
-        analysis).
+        Default is strict equality (the same matching rule the
+        user-typed feat->seg query uses). With
+        ``underspec_compatible=True``, the segment's ``'0'`` is
+        treated as wildcard via :py:meth:`_feat_match`. The
+        underspec path's only current consumer is
+        :py:meth:`suggest_natural_class_extension`, which uses it
+        to gather the candidate extending segments that don't
+        explicitly disagree with the selection's common features.
         """
         match = self._feat_match if underspec_compatible else None
         matching = []
@@ -381,15 +392,18 @@ class FeatureEngine:
         With ``underspec_compatible``, a segment's ``'0'`` is treated
         as compatible with any spec value.
 
-        Matching semantics. The default (``False``) is STRICT: ``'0'``
-        is its own value and does not match ``'+'`` or ``'-'``. The
-        GUI's feat-to-seg query mode uses this default, so a query
-        ``{Syllabic: '-', Strident: '+'}`` returns only segments that
-        are explicitly ``-syllabic`` AND explicitly ``+strident``.
-        Underspec-compatible is used internally by
-        :py:meth:`find_all_minimal_bundles` and the per-segment
-        matching it derives; see that method for the rationale and
-        the documented gotcha.
+        Matching semantics. The default (``False``) is STRICT:
+        ``'0'`` is its own value and does not match ``'+'`` or
+        ``'-'``. The GUI's feat-to-seg query mode uses this default,
+        so a query ``{Syllabic: '-', Strident: '+'}`` returns only
+        segments that are explicitly ``-syllabic`` AND explicitly
+        ``+strident``. ``underspec_compatible=True`` is reached
+        only by :py:meth:`suggest_natural_class_extension` to
+        enumerate extending candidates; the natural-class engine
+        itself (:py:meth:`find_all_minimal_bundles`,
+        :py:meth:`_is_natural_class_bool`) does not call this
+        method and runs entirely on the precomputed +/- membership
+        sets.
         """
         for feature, value in feature_spec.items():
             self._validate_feature(feature)
@@ -471,10 +485,10 @@ class FeatureEngine:
         # when EVERY selected segment has the same explicit value
         # (``selected ⊆ plus_segs[f]`` for value '+' or
         # ``selected ⊆ minus_segs[f]`` for '-'). ``'0'`` cells in
-        # the selection disqualify the feature. Strict candidates
-        # are a subset of the wildcard candidates the engine used
-        # before; the trade is that any bundle returned here
-        # round-trips through the feat pane.
+        # the selection disqualify the feature, which is exactly
+        # what gives the round-trip invariant: any bundle returned
+        # here, typed into the feat pane, returns the input set
+        # under strict equality.
         candidates: dict[str, str] = {}
         for feature in features_tuple:
             if cache_key <= plus_segs[feature]:
@@ -734,42 +748,44 @@ class FeatureEngine:
         self, segments: list[str]
     ) -> list[str]:
         """The smallest set of segments that, added to ``segments``,
-        completes it into a natural class.
+        completes it into a (strict) natural class.
 
         Returns ``[]`` when ``segments`` is already a natural class
-        or has no shared +/- features to extend by. Single source of
-        truth for the "N segments needed for natural class" UX hint
-        used by both the desktop and the web bridge.
+        or has no shared +/- features to extend by. Single source
+        of truth for the "N segments needed for natural class" UX
+        hint used by both the desktop and the web bridge.
 
-        Algorithm: candidates are the segments that share the
-        ``common_features`` of the selection (under-spec compatible)
-        but aren't selected. The MAXIMAL completion ``S ∪ candidates``
-        is always a natural class (characterised by ``common``), so a
-        completion exists. We search by ascending subset size and
-        return the first subset where ``is_natural_class(S ∪ subset)``
-        holds. This is the MINIMAL completion size.
+        Algorithm:
 
-        Why this matters: ``common_features`` uses strict-shared
-        matching (all selected segments must have the same explicit
-        value), so it misses features where one of the selected
-        segments has ``'0'`` (underspecified). ``is_natural_class``
-        uses ``find_all_minimal_bundles`` which understands underspec
-        as a wildcard, so it can find tighter bundles that match the
-        selection plus a SUBSET of the candidates. The maximal
-        completion overestimates how many more segments are needed.
+        1. If ``S`` is already a strict natural class, return ``[]``.
+        2. Compute ``common`` = the strictly-shared +/- features of
+           ``S`` (every selected segment has the same explicit value
+           on each feature in ``common``).
+        3. Enumerate candidates: segments outside ``S`` whose
+           feature bundle is compatible with ``common`` under
+           underspec-compatible matching (i.e. don't explicitly
+           disagree with any feature in ``common``).
+        4. Search subsets of candidates in ascending size order;
+           return the first subset whose union with ``S`` forms a
+           strict natural class.
 
-        Example (Blevins): selecting /b͡v/ /d͡z/ /t͡s/ shares only
-        ``{-ConstrGl, +DelRel, -Lateral}``, giving 7 candidate
-        affricates. But adding just /p͡f/ alone makes the union a
-        natural class via the bundle
-        ``{-DORSAL, -Sonorant, +DelRel, +Strident, +Anterior,
-        -Distributed, -Lateral}`` — underspec wildcards on /b͡v/
-        and /p͡f/ for Anterior let this tighter spec match. The
-        minimal completion is ``[p͡f]``, not all 7 candidates.
+        The strict natural-class test (step 4) is the same predicate
+        the typed feat->seg query uses, so any non-empty completion
+        returned here, added to ``S``, yields a set that a typed
+        bundle can characterise exactly.
 
-        Search budget: caps at ``MAX_SEARCH_CALLS`` so a pathological
-        candidate pool (rare in real inventories) doesn't hang the
-        UI; falls back to the full extension in that case.
+        Strict semantics throughout: ``common_features`` treats
+        ``'0'`` cells as disqualifying for shared values, and
+        :py:meth:`_is_natural_class_bool` (the inner test) treats
+        ``'0'`` outsiders as not-matched by ``+`` or ``-`` specs.
+        Underspec-compatible matching appears once, in step 3, only
+        to bound the candidate pool: a segment that explicitly
+        disagrees with ``common`` cannot complete the class.
+
+        Search budget: caps at 2000 inner tests so a pathological
+        candidate pool doesn't hang the UI; falls back to the full
+        candidate list in that case (a conservative overestimate,
+        never wrong).
         """
         from itertools import combinations
 
@@ -803,8 +819,8 @@ class FeatureEngine:
         # only INVALIDATE existing candidates (combo introduces a
         # disagreeing value); it cannot PROMOTE a feature where S
         # already has a ``'0'`` cell, because combo doesn't change
-        # S's ``'0'`` status. So the four-way wildcard classification
-        # collapses to two categories: plus_cand and minus_cand.
+        # S's ``'0'`` status. So the per-feature candidacy collapses
+        # to just two categories: ``plus_cand`` and ``minus_cand``.
         plus_segs = self.plus_segs
         minus_segs = self.minus_segs
         base_outside = self._all_segments - selected
