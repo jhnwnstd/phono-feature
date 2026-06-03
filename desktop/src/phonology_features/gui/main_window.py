@@ -639,7 +639,13 @@ class MainWindow(QMainWindow):
             # Fresh install: 75% of the primary screen.
             self.resize(*self._geom.default_window_size())
         self._geom.has_saved_size = True
-        if pos is not None:
+        # Fall back to centering when the saved position would put the
+        # window entirely off-screen. Stale geometry from a previous
+        # monitor configuration would otherwise leave the user with
+        # no visible window even though the app started cleanly.
+        if pos is not None and self._geom.is_pos_visible(
+            pos, self.width(), self.height()
+        ):
             self.move(pos)
         elif screen is not None:
             frame = self.frameGeometry()

@@ -2,14 +2,16 @@
 # Shared install bootstrap for the desktop launchers (sourced, not
 # executed). Defines phono_install, which creates desktop/.venv on
 # first call and refreshes the editable install when either
-# pyproject.toml is newer than the marker stamp. Leaves the venv
-# activated for the calling shell so the launcher can exec
-# phonology-features directly.
+# pyproject.toml is newer than the marker stamp. Sets PHONO_BIN to
+# the absolute path of the venv's phonology-features console script
+# so launchers ``exec`` it directly and avoid any shim/PATH lookup
+# (pyenv-virtualenv, conda, asdf etc. would otherwise intercept
+# the bare command name even with the venv on PATH).
 #
 # Usage from a launcher:
 #     source "$REPO_ROOT/tools/install.sh"
 #     phono_install "macOS"     # or "Linux"
-#     exec phonology-features "$@"
+#     exec "$PHONO_BIN" "$@"
 
 # Minimum Python version. Bump together with desktop/pyproject.toml's
 # requires-python; the pick_python check guards both.
@@ -72,4 +74,10 @@ phono_install() {
         pip install --quiet -e "../web"
         touch "$stamp"
     fi
+
+    # Absolute path to the console script so the launcher's exec
+    # bypasses pyenv-virtualenv / conda / asdf shims that would
+    # otherwise intercept the bare ``phonology-features`` name.
+    PHONO_BIN="$repo_root/desktop/$venv_dir/bin/phonology-features"
+    export PHONO_BIN
 }

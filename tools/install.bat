@@ -36,6 +36,12 @@ if not exist "%VENV_DIR%" (
 
 call "%VENV_DIR%\Scripts\activate.bat" || goto :venv_fail
 
+REM Absolute path to the console script so the launcher's call
+REM bypasses any shim layer that would otherwise intercept the
+REM bare ``phonology-features`` name. Visible to the caller because
+REM this script does not ``setlocal``.
+set "PHONO_BIN=%VENV_DIR%\Scripts\phonology-features.exe"
+
 if not exist "%STAMP%" goto :install
 
 REM No reliable "is newer than" operator in cmd.exe: ``IF`` only
@@ -44,8 +50,8 @@ REM Workarounds (xcopy /D, forfiles, powershell) are either locale-
 REM dependent or pull in a slow second process. The bash launchers'
 REM ``-nt`` test has no clean cmd equivalent, so the Windows
 REM launcher only triggers a reinstall when the stamp is missing.
-REM Manual override: ``del app\.venv\.installed`` to force the next
-REM run to reinstall.
+REM Manual override: ``del desktop\.venv\.installed`` to force the
+REM next run to reinstall.
 
 exit /b 0
 

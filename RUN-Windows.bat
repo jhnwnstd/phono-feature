@@ -16,5 +16,5 @@ set "SCRIPT_DIR=%~dp0"
 
 call "%SCRIPT_DIR%tools\install.bat" "Windows" || exit /b 1
 
-phonology-features %*
+"%PHONO_BIN%" %*
 exit /b %errorlevel%

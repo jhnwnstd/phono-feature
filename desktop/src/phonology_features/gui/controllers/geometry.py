@@ -112,6 +112,29 @@ class GeometryController:
             min(h, max(480, avail.height() - deco_h)),
         )
 
+    def is_pos_visible(self, pos: QPoint, w: int, h: int) -> bool:
+        """True if at least the title-bar strip of a ``(w, h)`` window
+        anchored at ``pos`` lands inside any connected screen's
+        :py:meth:`QScreen.availableGeometry`. Guards against stale
+        saved positions from a previous monitor configuration that
+        would otherwise place the window entirely off-screen (the
+        user sees the launcher succeed but no window appears).
+        """
+        app = QApplication.instance()
+        if not isinstance(app, QApplication):
+            return True
+        title_strip_h = 24
+        x, y = pos.x(), pos.y()
+        for screen in app.screens():
+            avail = screen.availableGeometry()
+            inter_left = max(x, avail.left())
+            inter_right = min(x + w, avail.right())
+            inter_top = max(y, avail.top())
+            inter_bottom = min(y + title_strip_h, avail.bottom())
+            if inter_right > inter_left and inter_bottom > inter_top:
+                return True
+        return False
+
     def default_window_size(self) -> tuple[int, int]:
         """Fresh-install window size. Delegates the policy to the
         Qt-free :py:func:`layout.recommended_initial_window_size` so

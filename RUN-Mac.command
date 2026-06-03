@@ -14,4 +14,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/tools/install.sh"
 phono_install "macOS"
 
-exec phonology-features "$@"
+exec "$PHONO_BIN" "$@"
