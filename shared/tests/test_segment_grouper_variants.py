@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.engine import Inventory, FeatureEngine
+from phonology_shared.engine import FeatureEngine, Inventory
 
 HAYES = (
     Path(__file__).resolve().parents[2]
@@ -36,22 +36,18 @@ def test_l_family_orders_plus_then_base_then_minus(
     engine: FeatureEngine,
 ) -> None:
     liquids = engine.grouped_segments["Liquids"]
-    assert (
-        _index(liquids, "ʟ+")
-        < _index(liquids, "ʟ")
-        < _index(liquids, "ʟ-")
-    )
+    assert _index(liquids, "ʟ+") < _index(liquids, "ʟ") < _index(liquids, "ʟ-")
 
 
 def test_velar_plosive_family_orders_plus_then_base_then_minus(
     engine: FeatureEngine,
 ) -> None:
     plosives = engine.grouped_segments["Plosives"]
-    assert _index(plosives, "k+") < _index(plosives, "k") < _index(
-        plosives, "k-"
+    assert (
+        _index(plosives, "k+") < _index(plosives, "k") < _index(plosives, "k-")
     )
-    assert _index(plosives, "ɡ+") < _index(plosives, "ɡ") < _index(
-        plosives, "ɡ-"
+    assert (
+        _index(plosives, "ɡ+") < _index(plosives, "ɡ") < _index(plosives, "ɡ-")
     )
 
 
