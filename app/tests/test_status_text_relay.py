@@ -21,7 +21,14 @@ from pathlib import Path
 
 import pytest
 
-from phonology_features.gui.shared.mode_logic import Mode, mode_status_text
+from phonology_features.gui.shared.mode_logic import (
+    LOAD_FAILED_TEMPLATE,
+    VALIDATION_REPORT_HEADING,
+    Mode,
+    mode_status_text,
+    palette_toggle_tooltip,
+    theme_toggle_tooltip,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_SCRIPT = REPO_ROOT / "web" / "scripts" / "build.py"
@@ -124,5 +131,64 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         "expand_maximize",
         "expand_restore",
         "clipboard_copy_template",
+        "validation_report_heading",
+        "load_failed_template",
+        "theme_to_dark",
+        "theme_to_light",
+        "palette_to_colorblind",
+        "palette_to_standard",
     }
     assert set(status_payload.keys()) == expected_keys
+
+
+def test_validation_heading_matches_python(
+    status_payload: dict[str, str],
+) -> None:
+    """The web's Class-tab heading on load failure must equal the
+    desktop's ``VALIDATION_REPORT_HEADING`` byte-for-byte; drift would
+    surface a different phrase on the two UIs for the same error.
+    """
+    assert (
+        status_payload.get("validation_report_heading")
+        == VALIDATION_REPORT_HEADING
+    )
+
+
+def test_load_failed_template_matches_python(
+    status_payload: dict[str, str],
+) -> None:
+    """The status-bar template used by ``loadInventoryText`` must
+    equal the Python ``LOAD_FAILED_TEMPLATE`` so the desktop's
+    ``"Cannot load {fname}: {issue}"`` shape is what users see on
+    both UIs.
+    """
+    assert status_payload.get("load_failed_template") == LOAD_FAILED_TEMPLATE
+
+
+def test_theme_tooltips_match_python(
+    status_payload: dict[str, str],
+) -> None:
+    """Theme button labels (both states) must match the Python
+    helper, so SR users hear the same destination phrase on both UIs.
+    """
+    assert status_payload.get("theme_to_dark") == theme_toggle_tooltip(
+        is_dark=False
+    )
+    assert status_payload.get("theme_to_light") == theme_toggle_tooltip(
+        is_dark=True
+    )
+
+
+def test_palette_tooltips_match_python(
+    status_payload: dict[str, str],
+) -> None:
+    """Colorblind-palette button labels (both states) must match
+    the Python helper. Retains the ``-friendly`` suffix on the
+    standard-to-colorblind label to disambiguate intent.
+    """
+    assert status_payload.get(
+        "palette_to_colorblind"
+    ) == palette_toggle_tooltip(is_colorblind=False)
+    assert status_payload.get("palette_to_standard") == palette_toggle_tooltip(
+        is_colorblind=True
+    )

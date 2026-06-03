@@ -899,9 +899,7 @@ class MainWindow(QMainWindow):
             # we just record what the GUI did about it.
             _log.info("surfacing validation error to user: %s", fname)
             self.status.showMessage(
-                inventory_load_failure_message(
-                    fname=fname, issue=e.issues[0]
-                )
+                inventory_load_failure_message(fname=fname, issue=e.issues[0])
             )
             self.analysis.set_html(self._validation_report_html(e.issues))
             return

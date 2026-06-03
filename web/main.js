@@ -3392,16 +3392,30 @@ function wireColorblindToggle() {
 }
 
 function wireThemeToggle() {
+    // aria-label and title share one source so SRs (which prefer
+    // aria-label) and hover tooltips can never drift apart.
+    const labelFor = (theme) => theme === THEME.DARK
+        ? STATUS_TEXT.theme_to_light
+        : STATUS_TEXT.theme_to_dark;
+    const applyLabel = (theme) => {
+        const text = labelFor(theme);
+        nodes.themeBtn.title = text;
+        nodes.themeBtn.setAttribute("aria-label", text);
+    };
     const stored = normalizeTheme(safeStorageGet("theme"));
     if (stored === THEME.DARK) {
         document.documentElement.dataset.theme = THEME.DARK;
         nodes.themeBtn.textContent = "☀";
+        applyLabel(THEME.DARK);
+    } else {
+        applyLabel(THEME.LIGHT);
     }
     nodes.themeBtn.addEventListener("click", () => {
         const cur = normalizeTheme(document.documentElement.dataset.theme);
         const next = cur === THEME.DARK ? THEME.LIGHT : THEME.DARK;
         document.documentElement.dataset.theme = next;
         nodes.themeBtn.textContent = next === THEME.DARK ? "☀" : "☾";
+        applyLabel(next);
         safeStorageSet("theme", next);
         if (state.bridge) {
             callBridge("set_active_theme", next);

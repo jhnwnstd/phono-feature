@@ -404,16 +404,10 @@ def _build_status_text_payload() -> dict[str, str]:
         payload["clipboard_copy_template"] = (
             module.CLIPBOARD_COPY_MESSAGE_TEMPLATE
         )
-        payload["validation_report_heading"] = (
-            module.VALIDATION_REPORT_HEADING
-        )
+        payload["validation_report_heading"] = module.VALIDATION_REPORT_HEADING
         payload["load_failed_template"] = module.LOAD_FAILED_TEMPLATE
-        payload["theme_to_dark"] = module.theme_toggle_tooltip(
-            is_dark=False
-        )
-        payload["theme_to_light"] = module.theme_toggle_tooltip(
-            is_dark=True
-        )
+        payload["theme_to_dark"] = module.theme_toggle_tooltip(is_dark=False)
+        payload["theme_to_light"] = module.theme_toggle_tooltip(is_dark=True)
         payload["palette_to_colorblind"] = module.palette_toggle_tooltip(
             is_colorblind=False
         )
