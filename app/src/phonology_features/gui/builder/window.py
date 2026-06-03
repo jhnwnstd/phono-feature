@@ -4,14 +4,14 @@ import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-from phonology_engine.inventory import Inventory, ValidationError
-from phonology_engine.limits import (
+from phonology_shared.engine.inventory import Inventory, ValidationError
+from phonology_shared.engine.limits import (
     MAX_FEATURES,
     MAX_NAME_LENGTH,
     MAX_SEGMENTS,
 )
 from phonology_features._logging import get_logger
-from phonology_features.gui.shared.inventory_setup import suggest_filename
+from phonology_shared.render.inventory_setup import suggest_filename
 
 if TYPE_CHECKING:
     # Only used in a string-form type annotation; importing at runtime
@@ -65,17 +65,17 @@ from phonology_features.gui.builder.table import (
     _SelectionFillDelegate,
     _ToggleHeaderView,
 )
-from phonology_features.gui.shared.grid_logic import (
+from phonology_shared.render.grid_logic import (
     MOVE_KEYS as _SHARED_MOVE_KEYS,
 )
-from phonology_features.gui.shared.grid_logic import (
+from phonology_shared.render.grid_logic import (
     SELECTION_SHAPE_SINGLE_COLUMN,
     SELECTION_SHAPE_SINGLE_ROW,
 )
-from phonology_features.gui.shared.grid_logic import (
+from phonology_shared.render.grid_logic import (
     VALUE_KEYS as _SHARED_VALUE_KEYS,
 )
-from phonology_features.gui.shared.grid_logic import (
+from phonology_shared.render.grid_logic import (
     classify_selection,
     confirm_remove_feature_prompt,
     confirm_remove_segment_prompt,
@@ -84,7 +84,7 @@ from phonology_features.gui.shared.grid_logic import (
     validate_new_feature_label,
     validate_new_segment_label,
 )
-from phonology_features.gui.shared.palette import C
+from phonology_shared.render.palette import C
 
 _log = get_logger(__name__)
 

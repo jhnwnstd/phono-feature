@@ -27,7 +27,7 @@ def _reset_palette_module_state() -> None:
     """Pin module-level palette state to (light, standard) before
     each test.
 
-    :py:mod:`phonology_features.gui.shared.palette` keeps ``_active_theme``,
+    :py:mod:`phonology_shared.render.palette` keeps ``_active_theme``,
     ``_active_mode``, ``C``, and ``theme_version`` at module scope so
     a test that mutates them leaks into the next test's view of the
     palette. Today the suite happens to pass anyway because most
@@ -41,7 +41,7 @@ def _reset_palette_module_state() -> None:
     clean up after itself. Yield-less form because the reset has no
     cleanup; one-call-per-test is enough.
     """
-    from phonology_features.gui.shared.palette import (
+    from phonology_shared.render.palette import (
         set_palette_mode,
         set_theme,
     )

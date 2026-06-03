@@ -29,12 +29,12 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QTimer
 
-from phonology_features.gui.shared.mode_logic import (
+from phonology_shared.render.mode_logic import (
     Mode,
     mode_status_text,
     project_mode_transition,
 )
-from phonology_features.gui.shared.palette import C
+from phonology_shared.render.palette import C
 from phonology_features.gui.widgets import SegmentState
 
 if TYPE_CHECKING:

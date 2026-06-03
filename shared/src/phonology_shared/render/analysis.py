@@ -20,7 +20,7 @@ import html
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
-from phonology_features.gui.shared.constants import (
+from phonology_shared.render.constants import (
     CHIP_BORDER_RADIUS_PX,
     CHIP_FONT_SIZE_PT,
     CHIP_MARGIN_PX,
@@ -32,10 +32,10 @@ from phonology_features.gui.shared.constants import (
     sort_spec,
     tag_palettes,
 )
-from phonology_features.gui.shared.palette import C
+from phonology_shared.render.palette import C
 
 if TYPE_CHECKING:
-    from phonology_engine.feature_engine import FeatureEngine
+    from phonology_shared.engine.feature_engine import FeatureEngine
 
 
 # --- chip + paragraph primitives ---------------------------------

@@ -25,12 +25,12 @@ from PyQt6.QtWidgets import QLabel, QPushButton, QToolTip
 from phonology_features._logging import get_logger
 from phonology_features._settings import SettingsKey, write_setting
 from phonology_features.gui.controllers.mode import ModeController
-from phonology_features.gui.shared.constants import scrollbar_style
-from phonology_features.gui.shared.mode_logic import (
+from phonology_shared.render.constants import scrollbar_style
+from phonology_shared.render.mode_logic import (
     palette_toggle_tooltip,
     theme_toggle_tooltip,
 )
-from phonology_features.gui.shared.palette import (
+from phonology_shared.render.palette import (
     C,
     get_palette_mode,
     get_theme_name,

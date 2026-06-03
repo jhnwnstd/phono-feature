@@ -119,7 +119,7 @@ def get_logger(name: str) -> logging.Logger:
     """``logging.getLogger`` namespaced under ``phonology_features``.
 
     Use module's ``__name__`` for ``name`` so the log line says where
-    each message came from (``phonology_engine.inventory``
+    each message came from (``phonology_shared.engine.inventory``
     etc.). The handler is shared across all modules via the root
     namespace logger.
     """

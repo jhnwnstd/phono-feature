@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from phonology_features.gui.shared import layout
+from phonology_shared.render import layout
 
 
 @pytest.mark.parametrize(

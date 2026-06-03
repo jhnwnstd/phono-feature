@@ -1,4 +1,4 @@
-"""Public API for the :py:mod:`phonology_engine` package.
+"""Public API for the :py:mod:`phonology_shared.engine` package.
 
 Consumers (desktop GUI, web Pyodide bridge, tests) import from this
 module rather than from submodules so the public surface is one
@@ -12,8 +12,8 @@ this barrel-export layer is for downstream consumers only.
 
 from __future__ import annotations
 
-from phonology_engine.feature_engine import FeatureEngine
-from phonology_engine.inventory import (
+from phonology_shared.engine.feature_engine import FeatureEngine
+from phonology_shared.engine.inventory import (
     VALID_VALUES,
     Inventory,
     ValidationError,
@@ -21,7 +21,7 @@ from phonology_engine.inventory import (
     canonicalize_segment_label,
     parse_inventory_json_text,
 )
-from phonology_engine.limits import (
+from phonology_shared.engine.limits import (
     ADVISORY_FEATURE_THRESHOLD,
     ADVISORY_SEGMENT_THRESHOLD,
     MAX_FEATURES,

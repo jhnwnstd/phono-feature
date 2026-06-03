@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
-from phonology_engine.inventory import (
+from phonology_shared.engine.inventory import (
     Inventory,
     ValidationError,
 )

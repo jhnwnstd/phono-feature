@@ -96,7 +96,7 @@ def test_selection_shape_remove_target_js_matches_python() -> None:
     with ``grid_logic.SELECTION_SHAPE_REMOVE_TARGET``. If either
     side gains a new shape mapping, this test forces the other to
     follow."""
-    from phonology_features.gui.shared.grid_logic import (
+    from phonology_shared.render.grid_logic import (
         SELECTION_SHAPE_REMOVE_TARGET,
     )
 

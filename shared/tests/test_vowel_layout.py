@@ -23,9 +23,9 @@ from pathlib import Path
 
 import pytest
 
-from phonology_engine.feature_engine import FeatureEngine
-from phonology_engine.inventory import Inventory
-from phonology_features.gui.shared.vowel_layout import (
+from phonology_shared.engine.feature_engine import FeatureEngine
+from phonology_shared.engine.inventory import Inventory
+from phonology_shared.render.vowel_layout import (
     VowelProfile,
     compute_placements,
     detect_vowel_profile,
@@ -153,7 +153,7 @@ def test_compute_placements_orders_by_confidence_desc():
 def test_module_constants_are_tuples():
     """ROW_LABELS / COL_LABELS / VOWEL_HEIGHT are exported as
     tuples so importers cannot mutate the shared singletons."""
-    import phonology_features.gui.shared.vowel_layout as vl
+    import phonology_shared.render.vowel_layout as vl
 
     assert isinstance(vl.ROW_LABELS, tuple)
     assert isinstance(vl.COL_LABELS, tuple)
@@ -331,7 +331,7 @@ def test_logical_col_offset_skips_spacer_tracks() -> None:
     (= VOWEL_LABEL_GRID_COL + offset = 0 + offset) is exactly the
     offset; the resulting set is {1, 2, 4, 5, 7, 8}.
     """
-    from phonology_features.gui.shared.vowel_layout import (
+    from phonology_shared.render.vowel_layout import (
         VOWEL_LABEL_GRID_COL,
         logical_col_offset,
     )
@@ -348,7 +348,7 @@ def test_vowel_tooltip_format_pinned() -> None:
     to both UIs from one edit, so this test pins the current
     format.
     """
-    from phonology_features.gui.shared.vowel_layout import vowel_tooltip
+    from phonology_shared.render.vowel_layout import vowel_tooltip
 
     assert vowel_tooltip("i", "high", "Close: [+high, -low]") == (
         "/i/  [high]  Close: [+high, -low]"
@@ -360,7 +360,7 @@ def test_chart_geometry_omits_empty_rows() -> None:
     no occupied cell. Without this, the web renderer would emit a
     "Close" row label for an inventory with no close vowels.
     """
-    from phonology_features.gui.shared.vowel_layout import (
+    from phonology_shared.render.vowel_layout import (
         build_vowel_chart_geometry,
     )
 
@@ -379,7 +379,7 @@ def test_chart_geometry_omits_empty_rows() -> None:
     )
     # Rows are listed in ascending logical-row order with
     # contiguous grid_row values starting at VOWEL_FIRST_DATA_GRID_ROW.
-    from phonology_features.gui.shared.vowel_layout import (
+    from phonology_shared.render.vowel_layout import (
         VOWEL_FIRST_DATA_GRID_ROW,
     )
 
@@ -393,7 +393,7 @@ def test_chart_geometry_bakes_tooltip_per_entry() -> None:
     """Every cell entry must carry the prebaked tooltip string so the
     web bridge can attach it verbatim without re-formatting.
     """
-    from phonology_features.gui.shared.vowel_layout import (
+    from phonology_shared.render.vowel_layout import (
         build_vowel_chart_geometry,
         vowel_tooltip,
     )
@@ -421,7 +421,7 @@ def test_chart_geometry_cell_grid_col_avoids_spacer_tracks() -> None:
     spacer would silently render the button under a hidden track
     in CSS and overlap a spacer label in Qt.
     """
-    from phonology_features.gui.shared.vowel_layout import (
+    from phonology_shared.render.vowel_layout import (
         build_vowel_chart_geometry,
     )
 

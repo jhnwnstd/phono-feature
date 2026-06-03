@@ -20,7 +20,7 @@ from __future__ import annotations
 import pytest
 from PyQt6.QtCore import QRect, QSettings
 
-from phonology_features.gui.shared.constants import (
+from phonology_shared.render.constants import (
     SETTINGS_APP,
     SETTINGS_ORG,
 )

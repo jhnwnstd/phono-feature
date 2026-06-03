@@ -30,7 +30,7 @@ from PyQt6.QtGui import QScreen
 from PyQt6.QtWidgets import QApplication
 
 from phonology_features._settings import SettingsKey, safe_read_setting
-from phonology_features.gui.shared import layout
+from phonology_shared.render import layout
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QSettings
@@ -61,7 +61,7 @@ class GeometryController:
     # First-launch floor: the content-derived width can come out
     # around 900-1100 px depending on the inventory, which leaves the
     # analysis pane visibly cramped on a fresh install. The floor
-    # lives in ``phonology_features.gui.shared.layout`` so the web bundle
+    # lives in ``phonology_shared.render.layout`` so the web bundle
     # picks up the same value via ``generate_layout_css``.
     MIN_FIRST_LAUNCH_W: ClassVar[int] = layout.MIN_FIRST_LAUNCH_W
     MIN_FIRST_LAUNCH_H: ClassVar[int] = layout.MIN_FIRST_LAUNCH_H
@@ -251,7 +251,7 @@ class GeometryController:
             )
             n_cols = layout.seg_pane_n_cols(seg_pane_w)
             seg_content_h = layout.seg_grid_natural_height(cons_groups, n_cols)
-            from phonology_features.gui.shared.constants import FEATURE_GROUPS
+            from phonology_shared.render.constants import FEATURE_GROUPS
 
             present = set(engine.features)
             placed: set[str] = set()

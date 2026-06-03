@@ -29,12 +29,12 @@ classifiers = [
 ]
 dependencies = [
     "PyQt6>=6.6.0",
-    # Pure-Python phonological analysis engine. Lives at
-    # ../packages/phonology-engine in the monorepo; installs from
-    # PyPI in a standalone clone of just this app directory. The
-    # ``RUN-*`` launchers do an editable install of the workspace
-    # root, which picks up the local engine before checking PyPI.
-    "phonology-engine>=0.1.0",
+    # Pure-Python phonology core (engine + render helpers). Lives at
+    # ../shared in the monorepo; installs from PyPI in a standalone
+    # clone of just this app directory. The ``RUN-*`` launchers do
+    # an editable install of the workspace root, which picks up the
+    # local source before checking PyPI.
+    "phonology-shared>=0.1.0",
 ]
 
 [project.optional-dependencies]
@@ -71,11 +71,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
-# Make the repo root importable so ``tests/test_bridge_validation.py``
-# can ``import web.api`` regardless of pytest's cwd. The bridge isn't
-# a pip-installed package -- it's a flat module at ``../web/api.py``
-# that the Pyodide bundle copies into ``dist/`` -- so the test reaches
-# it via direct import. Without this, ``cd app && pytest`` (the CI
-# invocation) collects fine when launched from the repo root
-# (``pytest app/tests``) but fails at collection in CI.
-pythonpath = [".."]

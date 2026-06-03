@@ -26,8 +26,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_features.gui.shared.layout import VOWEL_TOOLTIP_SHOW_DELAY_MS
-from phonology_features.gui.shared.palette import C
+from phonology_shared.render.layout import VOWEL_TOOLTIP_SHOW_DELAY_MS
+from phonology_shared.render.palette import C
 
 
 class TooltipDelayStyle(QProxyStyle):

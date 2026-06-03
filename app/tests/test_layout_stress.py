@@ -4,7 +4,7 @@ Drives the main window through adversarial resizes, splitter drags,
 and collapse attempts, then asserts that the dependent layout state
 (vowel chart width, stack flag, splitter sizes, feature panel
 height) stays consistent with the shared decisions in
-:py:mod:`phonology_features.gui.shared.layout`.
+:py:mod:`phonology_shared.render.layout`.
 
 Pins the invariants that broke when the user reported "segments
 expand but never collapse" and "analysis grows but segments don't
@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QSettings
 
-from phonology_features.gui.shared import layout
-from phonology_features.gui.shared.constants import SETTINGS_APP, SETTINGS_ORG
+from phonology_shared.render import layout
+from phonology_shared.render.constants import SETTINGS_APP, SETTINGS_ORG
 
 
 def _wipe_settings() -> None:

@@ -1,4 +1,4 @@
-"""Tests for :py:mod:`phonology_features.gui.shared.mode_logic`.
+"""Tests for :py:mod:`phonology_shared.render.mode_logic`.
 
 Pure-Python contract tests for the top-level seg/feat mode transition.
 """
@@ -8,9 +8,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from phonology_engine.feature_engine import FeatureEngine
-from phonology_engine.inventory import Inventory
-from phonology_features.gui.shared.mode_logic import (
+from phonology_shared.engine.feature_engine import FeatureEngine
+from phonology_shared.engine.inventory import Inventory
+from phonology_shared.render.mode_logic import (
     Mode,
     mode_status_text,
     project_mode_transition,

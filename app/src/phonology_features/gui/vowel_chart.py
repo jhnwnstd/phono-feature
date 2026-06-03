@@ -2,7 +2,7 @@
 
 All placement decisions, collision grouping, tooltip formatting,
 and physical-coordinate arithmetic live in
-:py:mod:`phonology_features.gui.shared.vowel_layout`. This module
+:py:mod:`phonology_shared.render.vowel_layout`. This module
 walks the pre-built :py:class:`~vowel_layout.VowelChartGeometry`
 and emits Qt widgets: labels for headers + rows, buttons (single
 cells) or vbox stacks (collision cells) for the data cells.
@@ -27,13 +27,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_features.gui.shared.layout import (
+from phonology_shared.render.layout import (
     REGION_CONSTRAINTS,
     VOWEL_PAIR_GAP_PX,
     VOWEL_PAIR_SEPARATOR_PX,
 )
-from phonology_features.gui.shared.palette import C
-from phonology_features.gui.shared.vowel_layout import (
+from phonology_shared.render.palette import C
+from phonology_shared.render.vowel_layout import (
     COL_LABELS,
     ROW_LABELS,
     Confidence,

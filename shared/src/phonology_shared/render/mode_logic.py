@@ -19,7 +19,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from phonology_engine.feature_engine import FeatureEngine
+    from phonology_shared.engine.feature_engine import FeatureEngine
 
 
 class Mode(StrEnum):

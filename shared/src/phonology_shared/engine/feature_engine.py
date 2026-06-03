@@ -27,11 +27,11 @@ from functools import cached_property
 from types import MappingProxyType
 from typing import Any
 
-from phonology_engine.inventory import (
+from phonology_shared.engine.inventory import (
     VALID_VALUES,
     Inventory,
 )
-from phonology_engine.segment_grouper import (
+from phonology_shared.engine.segment_grouper import (
     _normalize_feats,
     group_segments,
 )

@@ -14,7 +14,8 @@ set "PLATFORM=%~1"
 set "SCRIPT_DIR=%~dp0"
 set "ROOT_DIR=%SCRIPT_DIR%.."
 set "APP_DIR=%ROOT_DIR%\app"
-set "ENGINE_DIR=%ROOT_DIR%\packages\phonology-engine"
+set "SHARED_DIR=%ROOT_DIR%\shared"
+set "WEB_DIR=%ROOT_DIR%\web"
 set "VENV_DIR=%APP_DIR%\.venv"
 set "STAMP=%VENV_DIR%\.installed"
 set "APP_PYPROJECT=%APP_DIR%\pyproject.toml"
@@ -51,8 +52,9 @@ exit /b 0
 :install
 echo Installing dependencies ...
 python -m pip install --quiet --upgrade pip || goto :pip_fail
-python -m pip install --quiet -e "%ENGINE_DIR%" || goto :pip_fail
+python -m pip install --quiet -e "%SHARED_DIR%" || goto :pip_fail
 python -m pip install --quiet -e "%APP_DIR%" || goto :pip_fail
+python -m pip install --quiet -e "%WEB_DIR%" || goto :pip_fail
 type nul > "%STAMP%"
 exit /b 0
 

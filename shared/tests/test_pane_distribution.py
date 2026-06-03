@@ -1,5 +1,5 @@
 """Tests for the adaptive-window-layout helpers in
-:py:mod:`phonology_features.gui.shared.layout`.
+:py:mod:`phonology_shared.render.layout`.
 
 These functions are the single source of truth that both the desktop
 (Qt splitter sizing in ``geometry_controller``) and the web (CSS
@@ -10,7 +10,7 @@ without breaking these assertions.
 
 from __future__ import annotations
 
-from phonology_features.gui.shared import layout
+from phonology_shared.render import layout
 
 # ---------------------------------------------------------------------------
 # distribute_pane_widths
@@ -284,7 +284,7 @@ def test_region_constraints_match_constants() -> None:
     Pin the agreement so any future re-introduction of an inline
     literal trips here.
     """
-    from phonology_features.gui.shared.constants import BTN_W
+    from phonology_shared.render.constants import BTN_W
 
     seg_btn = layout.REGION_CONSTRAINTS["seg_btn"]
     assert seg_btn.min_w == BTN_W
@@ -356,7 +356,7 @@ def test_font_size_ladder_relays_into_layout_css() -> None:
     """
     from pathlib import Path
 
-    from phonology_features.gui.shared import constants
+    from phonology_shared.render import constants
 
     build_py = (
         Path(__file__).resolve().parents[2] / "web" / "scripts" / "build.py"

@@ -47,8 +47,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_engine.feature_engine import FeatureEngine
-from phonology_engine.inventory import Inventory, ValidationError
+from phonology_shared.engine.feature_engine import FeatureEngine
+from phonology_shared.engine.inventory import Inventory, ValidationError
 from phonology_features._logging import get_logger
 from phonology_features._settings import (
     SettingsKey,
@@ -61,8 +61,8 @@ from phonology_features.gui.controllers.inventory_dir import (
 )
 from phonology_features.gui.controllers.mode import ModeController
 from phonology_features.gui.controllers.theme import ThemeController
-from phonology_features.gui.shared import layout
-from phonology_features.gui.shared.constants import (
+from phonology_shared.render import layout
+from phonology_shared.render.constants import (
     FEATURE_GROUPS,
     FEATURE_ORDER,
     SETTINGS_APP,
@@ -70,8 +70,8 @@ from phonology_features.gui.shared.constants import (
     scrollbar_style,
     sort_features,
 )
-from phonology_features.gui.shared.layout import distribute_feature_groups
-from phonology_features.gui.shared.mode_logic import (
+from phonology_shared.render.layout import distribute_feature_groups
+from phonology_shared.render.mode_logic import (
     VALIDATION_REPORT_HEADING,
     Mode,
     clipboard_copy_message,
@@ -79,7 +79,7 @@ from phonology_features.gui.shared.mode_logic import (
     inventory_loaded_message,
     mode_status_text,
 )
-from phonology_features.gui.shared.palette import (
+from phonology_shared.render.palette import (
     ALLOWED_PALETTE_MODES,
     ALLOWED_THEMES,
     C,
@@ -87,7 +87,7 @@ from phonology_features.gui.shared.palette import (
     set_palette_mode,
     set_theme,
 )
-from phonology_features.gui.shared.view_models import (
+from phonology_shared.render.view_models import (
     summarize_feature_query,
     summarize_segment_selection,
 )
@@ -226,7 +226,7 @@ class MainWindow(QMainWindow):
         toggles. Idempotent: calling twice does no extra work since
         the second pass is a cache hit.
         """
-        from phonology_features.gui.shared.palette import (
+        from phonology_shared.render.palette import (
             get_palette_mode,
             set_palette_mode,
         )
@@ -1273,7 +1273,7 @@ class MainWindow(QMainWindow):
         """Apply the shared layout rules to the seg pane internals
         whenever the seg-pane width changes (initial layout, splitter
         drag, window resize, or inventory-load fit). Pure-Python
-        decisions come from ``phonology_features.gui.shared.layout``; this
+        decisions come from ``phonology_shared.render.layout``; this
         method just wires the results into Qt.
 
         Decisions delegated:

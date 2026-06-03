@@ -19,12 +19,12 @@ from pathlib import Path
 
 import pytest
 
-import web.api as bridge
-from phonology_engine import (
+from phonology_shared.engine import (
     FeatureEngine,
     Inventory,
     ValidationError,
 )
+from phonology_web import api as bridge
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HAYES = str(REPO_ROOT / "app" / "inventories" / "hayes_features.json")

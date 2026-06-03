@@ -37,8 +37,8 @@ phono_install() {
 
     local venv_dir=".venv"
     local stamp="$venv_dir/.installed"
-    local engine_dir="../packages/phonology-engine"
-    local engine_pyproject="$engine_dir/pyproject.toml"
+    local shared_dir="../shared"
+    local shared_pyproject="$shared_dir/pyproject.toml"
 
     if [[ ! -d "$venv_dir" ]]; then
         local python
@@ -58,13 +58,17 @@ phono_install() {
 
     if [[ ! -f "$stamp" ]] \
             || [[ "pyproject.toml" -nt "$stamp" ]] \
-            || [[ "$engine_pyproject" -nt "$stamp" ]]; then
+            || [[ "$shared_pyproject" -nt "$stamp" ]]; then
         echo "Installing dependencies ..."
         pip install --quiet --upgrade pip
-        # Engine first so the app's resolver sees a satisfied
-        # phonology-engine dep instead of going to PyPI for it.
-        pip install --quiet -e "$engine_dir"
+        # Shared first so the app's resolver sees a satisfied
+        # phonology-shared dep instead of going to PyPI for it.
+        pip install --quiet -e "$shared_dir"
         pip install --quiet -e .
+        # Web bridge is a workspace member so lint/mypy/pytest can
+        # see it from the same venv; runtime only needs api.py via
+        # the Pyodide bundle.
+        pip install --quiet -e "../web"
         touch "$stamp"
     fi
 }

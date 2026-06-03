@@ -12,7 +12,7 @@ from math import comb
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from phonology_engine.feature_engine import FeatureEngine
+    from phonology_shared.engine.feature_engine import FeatureEngine
 
 
 def _hypergeom_sf(k: int, n: int, big_k: int, m: int) -> float:

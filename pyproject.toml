@@ -9,14 +9,13 @@ requires-python = ">=3.11"
 # run ``pip install -e packages/phonology-engine -e app`` to achieve
 # the same result without uv.
 [tool.uv.workspace]
-members = ["packages/*", "app"]
+members = ["shared", "app", "web"]
 
 [tool.uv.sources]
-# The desktop app depends on phonology-engine. In the workspace,
+# Desktop and web depend on phonology-shared. In the workspace,
 # resolve that against the local source tree instead of PyPI so
-# edits to the engine show up immediately in the desktop without a
-# release cycle.
-phonology-engine = { workspace = true }
+# edits show up immediately in both UIs without a release cycle.
+phonology-shared = { workspace = true }
 
 # Isort config. Lives at the repo root so ``isort .`` from any cwd
 # picks it up. Mirrors the ruff isort config in app/pyproject.toml
@@ -27,7 +26,7 @@ phonology-engine = { workspace = true }
 [tool.isort]
 profile = "black"
 line_length = 79
-known_first_party = ["phonology_engine", "phonology_features"]
+known_first_party = ["phonology_shared", "phonology_features", "phonology_web"]
 
 # Black config so ``black .`` from any cwd matches the user's
 # preferred ``black -l79`` invocation without needing the flag.
@@ -39,8 +38,8 @@ target-version = ["py311"]
 python_version = "3.11"
 files = [
     "app/src",
-    "packages/phonology-engine/src",
-    "web/api.py",
+    "shared/src",
+    "web/src",
     "web/scripts/build.py",
 ]
 # Strict mode: turns on every disallow_* / warn_* / check_* mypy

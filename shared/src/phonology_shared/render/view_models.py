@@ -21,8 +21,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from phonology_engine.feature_engine import FeatureCategory
-from phonology_features.gui.shared.analysis import (
+from phonology_shared.engine.feature_engine import FeatureCategory
+from phonology_shared.render.analysis import (
     compute_contrastive,
     render_class_tab_feat,
     render_class_tab_seg,
@@ -35,18 +35,18 @@ from phonology_features.gui.shared.analysis import (
     render_selection_summary_seg,
     render_single_segment,
 )
-from phonology_features.gui.shared.constants import (
+from phonology_shared.render.constants import (
     FEATURE_GROUPS,
     MINUS_SIGN,
 )
-from phonology_features.gui.shared.layout import distribute_feature_groups
-from phonology_features.gui.shared.vowel_layout import (
+from phonology_shared.render.layout import distribute_feature_groups
+from phonology_shared.render.vowel_layout import (
     build_vowel_chart_geometry,
     detect_vowel_profile,
 )
 
 if TYPE_CHECKING:
-    from phonology_engine.feature_engine import FeatureEngine
+    from phonology_shared.engine.feature_engine import FeatureEngine
 
 
 def build_inventory_summary(

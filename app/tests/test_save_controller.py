@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 from PyQt6.QtWidgets import QStatusBar, QWidget
 
-from phonology_engine.feature_engine import FeatureEngine
-from phonology_engine.inventory import Inventory
+from phonology_shared.engine.feature_engine import FeatureEngine
+from phonology_shared.engine.inventory import Inventory
 from phonology_features.gui.builder import (
     save_controller as save_controller_module,
 )

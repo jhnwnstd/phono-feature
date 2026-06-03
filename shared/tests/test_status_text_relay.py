@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from phonology_features.gui.shared.mode_logic import (
+from phonology_shared.render.mode_logic import (
     INVENTORY_LOADED_TEMPLATE,
     LOAD_FAILED_TEMPLATE,
     VALIDATION_REPORT_HEADING,

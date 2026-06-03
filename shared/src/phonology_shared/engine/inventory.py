@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
 
-from phonology_engine.limits import (
+from phonology_shared.engine.limits import (
     ADVISORY_FEATURE_THRESHOLD,
     ADVISORY_SEGMENT_THRESHOLD,
     MAX_FEATURES,
@@ -42,7 +42,7 @@ from phonology_engine.limits import (
     MAX_NAME_LENGTH,
     MAX_SEGMENTS,
 )
-from phonology_engine.segment_grouper import _normalize_key
+from phonology_shared.engine.segment_grouper import _normalize_key
 
 _log = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ into the ``LIMITS`` constant and uses ``LIMITS.max_inventory_file_bytes``
 as the upload pre-check cap.
 
 Without this test a future edit to ``packages/phonology-engine/
-src/phonology_engine/limits.py`` could silently drift from the JS
+src/phonology_shared.engine/limits.py`` could silently drift from the JS
 pre-check (the prior bug: JS held 5 MB while the engine held 50
 MB; a 20 MB file passed the JS gate then failed in Pyodide with a
 confusing generic error). The build runs in a subprocess, the
@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from phonology_engine import (
+from phonology_shared.engine import (
     MAX_FEATURES,
     MAX_INVENTORY_FILE_BYTES,
     MAX_NAME_LENGTH,

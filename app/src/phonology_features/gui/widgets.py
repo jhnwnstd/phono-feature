@@ -21,21 +21,21 @@ from PyQt6.QtWidgets import (
 )
 
 from phonology_features.gui._themed_style_cache import styles_for_active_theme
-from phonology_features.gui.shared import layout as layout_mod
-from phonology_features.gui.shared.constants import (
+from phonology_shared.render import layout as layout_mod
+from phonology_shared.render.constants import (
     BTN_GAP,
     BTN_W,
     MINUS_SIGN,
     MONO_FAMILIES,
     scrollbar_style,
 )
-from phonology_features.gui.shared.layout import (
+from phonology_shared.render.layout import (
     REGION_CONSTRAINTS,
     best_segment_n_cols,
     partition_groups_for_spillover,
 )
-from phonology_features.gui.shared.mode_logic import expand_button_tooltip
-from phonology_features.gui.shared.palette import C
+from phonology_shared.render.mode_logic import expand_button_tooltip
+from phonology_shared.render.palette import C
 from phonology_features.gui.style_utils import (
     _LAST_HTML_ATTR,
     set_css,

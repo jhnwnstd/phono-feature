@@ -35,8 +35,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QSettings  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
-from phonology_features.gui.shared import palette as _palette  # noqa: E402
-from phonology_features.gui.shared.palette import (  # noqa: E402
+from phonology_shared.render import palette as _palette  # noqa: E402
+from phonology_shared.render.palette import (  # noqa: E402
     COLORBLIND_DARK,
     COLORBLIND_LIGHT,
     DARK,
@@ -501,7 +501,7 @@ def test_mainwindow_user_path_cb_then_dark_then_uncb_then_undark(
     palette, no stale colors anywhere in ``C``.
     """
     from phonology_features.gui.main_window import MainWindow
-    from phonology_features.gui.shared.constants import (
+    from phonology_shared.render.constants import (
         SETTINGS_APP,
         SETTINGS_ORG,
     )
@@ -546,7 +546,7 @@ def test_mainwindow_geometry_stable_across_palette_toggles(
     in widgets that compute sizeHint from palette-derived metrics).
     """
     from phonology_features.gui.main_window import MainWindow
-    from phonology_features.gui.shared.constants import (
+    from phonology_shared.render.constants import (
         SETTINGS_APP,
         SETTINGS_ORG,
     )

@@ -26,8 +26,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_features.gui.shared.layout import REGION_CONSTRAINTS
-from phonology_features.gui.shared.palette import C
+from phonology_shared.render.layout import REGION_CONSTRAINTS
+from phonology_shared.render.palette import C
 from phonology_features.gui.style_utils import set_css
 
 

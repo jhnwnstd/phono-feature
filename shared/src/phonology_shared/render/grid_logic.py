@@ -27,7 +27,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from phonology_engine.inventory import (
+from phonology_shared.engine.inventory import (
     Inventory,
     canonicalize_feature_label,
     canonicalize_segment_label,
