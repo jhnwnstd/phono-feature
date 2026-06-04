@@ -115,49 +115,40 @@ class NaturalClassCompletion:
       :py:attr:`additions`: the smallest addition set(s) ``A`` such
       that ``S ∪ A`` is a strict natural class.
 
-    The field names enforce the boundary. ``selected_minimal_bundles``
-    describes ``S`` itself; ``completed_class_bundles`` describes
-    ``S ∪ A`` (the completion). UI code that displays
-    ``completed_class_bundles`` on a not-a-natural-class verdict
-    would be a misuse: the original ``S`` does NOT have a minimal
-    specification when the verdict is "No".
+    The dataclass deliberately does NOT carry the minimal bundles
+    of the completed class ``S ∪ A``. Computing them is an
+    exponential-worst-case hitting-set search and is unused on the
+    not-a-natural-class verdict path. Callers that genuinely need
+    those bundles can recover them with
+    :py:meth:`FeatureEngine.find_all_minimal_bundles` on
+    ``selected + list(additions[i])``.
 
     :py:attr:`status` discriminates the three outcomes:
 
     * ``"already_natural_class"``: only
-      :py:attr:`selected_minimal_bundles` is populated. The other
-      fields are empty.
+      :py:attr:`selected_minimal_bundles` is populated;
+      :py:attr:`additions` is empty.
     * ``"one_minimal_completion"``: :py:attr:`additions` has one
-      element (the single distinct minimum addition set), and
-      :py:attr:`completed_class_bundles` parallel to it carries the
-      equivalent minimal specs for that one completed class.
+      element (the unique minimum addition set);
       :py:attr:`selected_minimal_bundles` is empty.
-    * ``"multiple_minimal_completions"``: :py:attr:`additions`
-      carries more than one distinct minimum addition set, and
-      :py:attr:`completed_class_bundles` is parallel to it
-      (``completed_class_bundles[i]`` describes
-      ``S ∪ additions[i]``). Strict-bundle semantics make this
-      branch unreachable from the present solver, but the type
-      keeps the model general so a future algorithm change cannot
-      silently violate the contract.
+    * ``"multiple_minimal_completions"``: reserved. Under strict-
+      bundle semantics the minimum addition set is provably
+      unique (see the algorithm docstring), so the present solver
+      never emits this status. The value is kept on the Literal
+      and the outer-tuple shape on :py:attr:`additions` is kept
+      general so a future, more permissive solver could populate
+      multiple distinct minimum addition sets without a breaking
+      change.
 
     The universal class (whole inventory, empty bundle) is always
     a valid containing natural class, so :py:attr:`additions` is
     non-empty whenever the verdict is "No" — the solver never
     fails to find a completion.
-
-    All tuples and inner mappings are read-only. The shape outside
-    the dataclass is::
-
-        additions:                tuple of (segment-tuple) per completion
-        completed_class_bundles:  tuple of (bundle-tuple) per completion
-        selected_minimal_bundles: tuple of bundles for S (only when NC)
     """
 
     status: CompletionStatus
     selected_minimal_bundles: tuple[Mapping[str, str], ...]
     additions: tuple[tuple[str, ...], ...]
-    completed_class_bundles: tuple[tuple[Mapping[str, str], ...], ...]
 
 
 class FeatureEngine:
@@ -288,7 +279,10 @@ class FeatureEngine:
         don't, no subset does either.
         """
         if not segments:
-            return True
+            # ``∅`` is not a strict natural class: no bundle ``B``
+            # satisfies ``find_segments(B) == ∅``. Matches the
+            # contract pinned by :py:meth:`find_all_minimal_bundles`.
+            return False
         selected: frozenset[str] = frozenset(segments)
         cached = self._bundle_cache.get(selected)
         if cached is not None:
@@ -296,33 +290,23 @@ class FeatureEngine:
         all_segments = self._all_segments
         if not selected <= all_segments:
             bad = next(iter(selected - all_segments))
-            raise ValueError(f"Segment '{bad}' not in inventory")
+            raise KeyError(f"Segment '{bad}' not in inventory")
         outside = all_segments - selected
         if not outside:
             return True
         plus_segs = self.plus_segs
         minus_segs = self.minus_segs
-        plus_candidate_feats: list[str] = []
-        minus_candidate_feats: list[str] = []
-        for feat in self._inventory.features:
-            # Strict candidate: every selected segment must be
-            # explicitly +/- on this feature. ``selected <= ps`` is
-            # subset, i.e. all selected ∈ plus_segs[f].
-            if selected <= plus_segs[feat]:
-                plus_candidate_feats.append(feat)
-            elif selected <= minus_segs[feat]:
-                minus_candidate_feats.append(feat)
+        candidates = self._strict_candidate_constraints(selected)
         # Outside coverage under strict matching: (f, +) excludes
         # outside t iff t is NOT explicitly + on f. That's the
         # complement of plus_segs[f] within outside, which includes
         # both explicit '-' and '0' segments.
         covered: set[str] = set()
-        for feat in plus_candidate_feats:
-            covered |= outside - plus_segs[feat]
-            if covered == outside:
-                return True
-        for feat in minus_candidate_feats:
-            covered |= outside - minus_segs[feat]
+        for feat, val in candidates.items():
+            if val == "+":
+                covered |= outside - plus_segs[feat]
+            else:
+                covered |= outside - minus_segs[feat]
             if covered == outside:
                 return True
         return covered == outside
@@ -336,28 +320,45 @@ class FeatureEngine:
         """Match segments against a feature spec; unsorted result.
 
         Default is strict equality (the same matching rule the
-        user-typed feat->seg query uses). With
-        ``underspec_compatible=True``, the segment's ``'0'`` is
-        treated as wildcard via :py:meth:`_feat_match`. No engine
-        method currently uses the underspec path; it is kept on
-        the public API for callers that want to gather a candidate
-        pool of segments not in explicit disagreement with a query.
+        user-typed feat->seg query uses). Computed via membership-
+        set intersections so it stays vertical-set-shaped like the
+        rest of the engine -- a fresh ``find_segments(B)`` call is
+        an ``O(F)`` walk over the spec, intersecting the relevant
+        ``plus_segs[f]``, ``minus_segs[f]``, or
+        ``all_segments - spec_segs[f]`` (for ``'0'``) into the
+        running match set.
+
+        With ``underspec_compatible=True``, the segment's ``'0'``
+        is treated as wildcard via :py:meth:`_feat_match`. No
+        engine method currently uses the underspec path; it is
+        kept on the public API for callers that want to gather a
+        candidate pool of segments not in explicit disagreement
+        with a query. That path still scans because the wildcard
+        rule isn't expressible as a single membership intersection.
         """
-        match = self._feat_match if underspec_compatible else None
-        matching = []
-        for segment, features in self.segments.items():
-            if match is not None:
-                ok = all(
+        if underspec_compatible:
+            match = self._feat_match
+            matching = []
+            for segment, features in self.segments.items():
+                if all(
                     match(features.get(f, "0"), v)
                     for f, v in feature_spec.items()
-                )
+                ):
+                    matching.append(segment)
+            return matching
+        # Strict path: build the match set by membership intersection.
+        matched: frozenset[str] = self._all_segments
+        for feature, value in feature_spec.items():
+            if value == "+":
+                matched &= self.plus_segs[feature]
+            elif value == "-":
+                matched &= self.minus_segs[feature]
             else:
-                ok = all(
-                    features.get(f, "0") == v for f, v in feature_spec.items()
-                )
-            if ok:
-                matching.append(segment)
-        return matching
+                # ``'0'`` is its own value: segments NOT in spec_segs.
+                matched -= self.spec_segs[feature]
+            if not matched:
+                break
+        return list(matched)
 
     def _build_membership_caches(self) -> None:
         """Populate the three membership sets in one pass."""
@@ -498,15 +499,23 @@ class FeatureEngine:
         outside-segment exclusion treats ``'0'`` as a distinct
         value that does NOT match ``'+'`` or ``'-'``.
 
-        Returns ``(EMPTY_BUNDLE,)`` for the universal class, and
-        ``()`` when ``S`` is not a strict natural class (some
-        segment outside ``S`` shares every explicit value with
-        every member of ``S`` and so cannot be excluded). The
-        empty-tuple case is common for sets where some member is
+        Returns ``(EMPTY_BUNDLE,)`` ONLY for the universal class
+        (the whole inventory selected). Returns ``()`` for any
+        non-NC set, including the empty selection (``find_segments({})``
+        is the whole inventory under strict matching, so the empty
+        bundle does NOT characterise ``∅``). The empty-tuple case
+        is the common one for non-NC sets where some member is
         ``'0'`` on a feature that would otherwise be discriminating;
         the user-facing UI presents these as "not a natural class"
         and surfaces a suggested completion via
         :py:meth:`complete_to_minimal_natural_class`.
+
+        Returns up to ``max_bundles`` minimal bundles; the search
+        terminates early once that many are found. The current
+        return type does not distinguish "all minimal bundles" from
+        "the first N" -- consumers that need to know whether the
+        result was truncated should compare ``len(result)`` to
+        ``max_bundles`` and re-query with a higher limit if needed.
 
         Return shape is ``tuple[Mapping[str, str], ...]``: a tuple
         of read-only views. The same object is returned across
@@ -523,41 +532,36 @@ class FeatureEngine:
         Complexity: worst case ``O(C^k)`` where ``C`` is the
         number of candidate features and ``k`` the best-size
         bound. Branch-and-bound pruning typically keeps it well
-        below the worst case. ``max_bundles`` is a hard ceiling
-        on result size; if hit, the search terminates early.
+        below the worst case.
 
         Results are memoized per-engine on ``frozenset(segments)``.
         Safe because the engine and its underlying Inventory are
         immutable for their lifetime.
         """
         if not segments:
-            return (_EMPTY_BUNDLE,)
+            # ``∅`` is not a strict natural class: there is no bundle
+            # ``B`` with ``find_segments(B) == ∅`` (the empty bundle's
+            # extent is the whole inventory). Callers special-case
+            # the empty selection at the UI layer.
+            return ()
         seg_map = self._inventory.segments
-        features_tuple = self._inventory.features
         plus_segs = self.plus_segs
         minus_segs = self.minus_segs
         all_segments = self._all_segments
         for seg in segments:
             if seg not in seg_map:
-                raise ValueError(f"Segment '{seg}' not in inventory")
+                raise KeyError(f"Segment '{seg}' not in inventory")
         cache_key: frozenset[str] = frozenset(segments)
         cached = self._bundle_cache.get(cache_key)
         if cached is not None:
             return cached
         # Strict candidate collection: a feature is a candidate only
-        # when EVERY selected segment has the same explicit value
-        # (``selected ⊆ plus_segs[f]`` for value '+' or
-        # ``selected ⊆ minus_segs[f]`` for '-'). ``'0'`` cells in
-        # the selection disqualify the feature, which is exactly
-        # what gives the round-trip invariant: any bundle returned
-        # here, typed into the feat pane, returns the input set
-        # under strict equality.
-        candidates: dict[str, str] = {}
-        for feature in features_tuple:
-            if cache_key <= plus_segs[feature]:
-                candidates[feature] = "+"
-            elif cache_key <= minus_segs[feature]:
-                candidates[feature] = "-"
+        # when EVERY selected segment has the same explicit value.
+        # ``'0'`` cells in the selection disqualify the feature,
+        # which is exactly what gives the round-trip invariant: any
+        # bundle returned here, typed into the feat pane, returns
+        # the input set under strict equality.
+        candidates = self._strict_candidate_constraints(cache_key)
         outside_set = all_segments - cache_key
         if not outside_set:
             self._bundle_cache[cache_key] = (_EMPTY_BUNDLE,)
@@ -758,28 +762,49 @@ class FeatureEngine:
 
     def common_features(self, segments: list[str]) -> dict[str, str]:
         """Features whose ``'+'`` or ``'-'`` value is shared by every
-        given segment."""
+        given segment.
+
+        Identical to the strict natural-class candidate rule -- a
+        feature is "shared" iff every selected segment has the same
+        explicit value on it. Delegates to
+        :py:meth:`_strict_candidate_constraints` so the strict-NC
+        contract has one source of truth across this method,
+        :py:meth:`_is_natural_class_bool`,
+        :py:meth:`find_all_minimal_bundles`, and
+        :py:meth:`complete_to_minimal_natural_class`.
+        """
         if not segments:
             return {}
         for seg in segments:
             self._validate_segment(seg)
-        seg_dict = self.segments
-        features = self.features
-        # Single-segment fast path skips the per-feature set/pop.
-        if len(segments) == 1:
-            bundle = seg_dict[segments[0]]
-            return {f: v for f in features if (v := bundle.get(f, "0")) != "0"}
-        # Cache inner bundles so the inner loop is one local index
-        # instead of two attribute lookups per (segment, feature).
-        bundles = [seg_dict[seg] for seg in segments]
-        result = {}
-        for feature in features:
-            values = {bundle.get(feature, "0") for bundle in bundles}
-            if len(values) == 1:
-                v = values.pop()
-                if v != "0":
-                    result[feature] = v
-        return result
+        return self._strict_candidate_constraints(frozenset(segments))
+
+    def _strict_candidate_constraints(
+        self, selected: frozenset[str]
+    ) -> dict[str, str]:
+        """Strict candidate constraints of ``selected``.
+
+        Returns ``{feature: value}`` for every feature where
+        ``selected ⊆ plus_segs[f]`` (value ``'+'``) or
+        ``selected ⊆ minus_segs[f]`` (value ``'-'``). These are the
+        only (feature, value) pairs a strict natural-class bundle
+        can use without disqualifying some member of ``selected``,
+        and are also exactly the features whose value is shared by
+        every member.
+
+        Does not validate ``selected``; callers that need an
+        ``ValueError`` on unknown segments must do that check first
+        (this is the engine-internal hot path).
+        """
+        plus_segs = self.plus_segs
+        minus_segs = self.minus_segs
+        candidates: dict[str, str] = {}
+        for feature in self._inventory.features:
+            if selected <= plus_segs[feature]:
+                candidates[feature] = "+"
+            elif selected <= minus_segs[feature]:
+                candidates[feature] = "-"
+        return candidates
 
     def project_segments_to_features(
         self, segments: list[str]
@@ -817,22 +842,23 @@ class FeatureEngine:
 
         * ``already_natural_class`` → ``selected_minimal_bundles``
           carries the minimal feature bundles of ``S`` (Concept A:
-          definition of the selected set). ``additions`` and
-          ``completed_class_bundles`` are empty.
+          definition of the selected set). ``additions`` is empty.
         * ``one_minimal_completion`` → ``additions = ((seg, seg, ...),)``
           carries the segments needed to complete ``S`` into a
-          strict natural class (Concept B). ``completed_class_bundles[0]``
-          carries the minimal specs that characterise ``S ∪ additions[0]``
-          (engine-internal proof artefact; the UI rule is to NOT
-          display these on the not-a-natural-class verdict).
+          strict natural class (Concept B).
           ``selected_minimal_bundles`` is empty because ``S`` is not
-          itself a natural class.
+          itself a natural class. If the caller needs the minimal
+          specs of the COMPLETED class (Concept A applied to
+          ``S ∪ additions[0]``), it can call
+          :py:meth:`find_all_minimal_bundles` separately --
+          intentionally NOT computed here because the not-a-natural-
+          class UI path does not display them and the hitting-set
+          search is exponential worst case.
 
         The third status ``multiple_minimal_completions`` is part of
         the contract for general correctness but is unreachable from
         the present solver: under strict-bundle semantics the
-        minimum addition set is provably unique. See
-        :py:class:`NaturalClassCompletion`.
+        minimum addition set is provably unique.
 
         **Algorithm.** Intersect the constraint-sets of every
         strict-shared candidate constraint:
@@ -840,9 +866,7 @@ class FeatureEngine:
             ``smallest_class = ∩ {plus_segs[f] | S ⊆ plus_segs[f]}``
             ``                  ∩ {minus_segs[f] | S ⊆ minus_segs[f]}``
 
-        ``additions = smallest_class - S``. Minimal specs of the
-        completed class are recovered by
-        :py:meth:`find_all_minimal_bundles` on ``smallest_class``.
+        ``additions = smallest_class - S``.
 
         **Guaranteed exact.** No search budget, no fallback. The
         universal class (empty bundle, whole inventory) is itself
@@ -851,28 +875,26 @@ class FeatureEngine:
         universal completion exactly rather than degrading.
 
         **Cost.** One ``find_all_minimal_bundles`` call on ``S``
-        (the already-NC fast path), an ``O(F)`` intersection over
-        features, and one ``find_all_minimal_bundles`` call on
-        the completed class. No exponential subset enumeration.
+        (the already-NC fast path; cached) plus an ``O(F)``
+        intersection over features. No exponential work on the
+        not-a-natural-class path.
         """
         if not segments:
             return NaturalClassCompletion(
                 status="already_natural_class",
-                selected_minimal_bundles=(_EMPTY_BUNDLE,),
+                selected_minimal_bundles=(),
                 additions=(),
-                completed_class_bundles=(),
             )
         seg_map = self._inventory.segments
         for seg in segments:
             if seg not in seg_map:
-                raise ValueError(f"Segment '{seg}' not in inventory")
+                raise KeyError(f"Segment '{seg}' not in inventory")
         own_bundles = self.find_all_minimal_bundles(segments)
         if own_bundles:
             return NaturalClassCompletion(
                 status="already_natural_class",
                 selected_minimal_bundles=own_bundles,
                 additions=(),
-                completed_class_bundles=(),
             )
         # ``S`` is not a strict NC. Build the smallest strict NC
         # containing it by intersecting every selection-safe
@@ -883,30 +905,19 @@ class FeatureEngine:
         plus_segs = self.plus_segs
         minus_segs = self.minus_segs
         smallest_class: frozenset[str] = self._all_segments
-        for feature in self._inventory.features:
-            if selected <= plus_segs[feature]:
-                smallest_class &= plus_segs[feature]
-            elif selected <= minus_segs[feature]:
-                smallest_class &= minus_segs[feature]
+        for feat, val in self._strict_candidate_constraints(selected).items():
+            if val == "+":
+                smallest_class &= plus_segs[feat]
+            else:
+                smallest_class &= minus_segs[feat]
         # Inventory-declaration order so the UI gets a stable,
         # human-meaningful sequence of additions.
         additions_set = smallest_class - selected
         additions_tuple = tuple(s for s in seg_map if s in additions_set)
-        completion_bundles = self.find_all_minimal_bundles(
-            list(smallest_class)
-        )
-        # Under strict-bundle semantics the present solver always
-        # returns exactly one distinct minimum addition set. The
-        # outer-tuple shape leaves room for a generalised algorithm
-        # without re-shaping the public contract; ``additions`` and
-        # ``completed_class_bundles`` are kept parallel so
-        # ``completed_class_bundles[i]`` describes
-        # ``S ∪ additions[i]``.
         return NaturalClassCompletion(
             status="one_minimal_completion",
             selected_minimal_bundles=(),
             additions=(additions_tuple,),
-            completed_class_bundles=(completion_bundles,),
         )
 
     def is_natural_class(

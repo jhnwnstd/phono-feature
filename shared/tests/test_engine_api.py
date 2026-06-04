@@ -341,18 +341,15 @@ def test_feature_query_match_is_always_natural_class(
 def test_complete_to_minimal_natural_class_empty_input(
     engine: FeatureEngine,
 ) -> None:
-    """Empty selection: the empty bundle vacuously characterises
-    everything, so the result is ``already_natural_class`` with the
-    empty bundle on ``selected_minimal_bundles``. Pinning this
-    keeps the no-selection UI path from needing a special case.
+    """Empty selection: no bundle strictly characterises ``∅`` (the
+    empty bundle's extent is the whole inventory), so the result is
+    ``already_natural_class`` with empty ``selected_minimal_bundles``.
+    Pinning this keeps the empty-selection UI path explicit.
     """
     result = engine.complete_to_minimal_natural_class([])
     assert result.status == "already_natural_class"
     assert result.additions == ()
-    assert result.completed_class_bundles == ()
-    # selected_minimal_bundles carries the empty (universal) bundle
-    # for the empty selection.
-    assert all(not b for b in result.selected_minimal_bundles)
+    assert result.selected_minimal_bundles == ()
 
 
 def test_complete_to_minimal_natural_class_already_nc(
@@ -360,13 +357,12 @@ def test_complete_to_minimal_natural_class_already_nc(
 ) -> None:
     """A selection that's already a strict natural class returns
     ``already_natural_class``. Concept A (definition of S) is
-    carried in ``selected_minimal_bundles``; the completion fields
-    are empty. /l/ alone is a natural class in Hayes.
+    carried in ``selected_minimal_bundles``; ``additions`` is
+    empty. /l/ alone is a natural class in Hayes.
     """
     result = engine.complete_to_minimal_natural_class(["l"])
     assert result.status == "already_natural_class"
     assert result.additions == ()
-    assert result.completed_class_bundles == ()
     assert result.selected_minimal_bundles, (
         "expected at least one minimal bundle for /l/"
     )
@@ -379,11 +375,10 @@ def test_complete_to_minimal_natural_class_validity_invariant(
 ) -> None:
     """**Validity invariant**: for any non-NC selection, every
     ``additions[i]`` set must, when added to ``S``, form a strict
-    natural class; and every bundle in ``completed_class_bundles[i]``
-    must characterise exactly that completed class. This pins the
-    bug the old ``suggest_natural_class_extension`` had: a budget-
-    exhausted fallback returned a list of candidates that did NOT
-    actually close the class.
+    natural class. This pins the bug the old
+    ``suggest_natural_class_extension`` had: a budget-exhausted
+    fallback returned a list of candidates that did NOT actually
+    close the class.
     """
     import random
 
@@ -401,28 +396,13 @@ def test_complete_to_minimal_natural_class_validity_invariant(
                 "multiple_minimal_completions",
             )
             assert result.selected_minimal_bundles == ()
-            # additions and completed_class_bundles are parallel
-            # tuples (one entry per distinct minimum completion).
-            assert len(result.additions) == len(
-                result.completed_class_bundles
-            )
-            for additions, bundles in zip(
-                result.additions, result.completed_class_bundles
-            ):
+            for additions in result.additions:
                 completed = set(S) | set(additions)
                 is_nc, _ = engine.is_natural_class(list(completed))
                 assert is_nc, (
                     f"{S} + {additions} = {completed} is not a "
                     f"strict natural class"
                 )
-                for bundle in bundles:
-                    assert (
-                        set(engine.find_segments(dict(bundle)))
-                        == completed
-                    ), (
-                        f"bundle {dict(bundle)} does not characterise "
-                        f"{completed} (S={S}, additions={additions})"
-                    )
             checked += 1
     assert checked >= 200, (
         f"only {checked} non-NC selections sampled; the random seed"
@@ -472,8 +452,7 @@ def test_complete_to_minimal_natural_class_universal_fallback(
     """When no candidate constraint exists (the selected segments
     share NO explicit +/- feature value), the universal class is the
     only containing natural class. The solver must return it as an
-    exact ``one_minimal_completion``, with the empty bundle on
-    ``completed_class_bundles[0]`` and ``additions[0]`` equal to
+    exact ``one_minimal_completion`` with ``additions[0]`` equal to
     ``inventory − S``.
     """
     from phonology_shared.engine import Inventory
@@ -481,7 +460,7 @@ def test_complete_to_minimal_natural_class_universal_fallback(
     # Inventory: a/c are F+, b is F-. Selecting {a, b} disagrees
     # on F (no shared explicit feature), so there's no candidate
     # constraint at all. The smallest containing strict NC is the
-    # whole inventory, characterised by the empty bundle.
+    # whole inventory.
     inv = Inventory.parse(
         {
             "features": ["F"],
@@ -498,53 +477,26 @@ def test_complete_to_minimal_natural_class_universal_fallback(
     assert result.status == "one_minimal_completion"
     assert len(result.additions) == 1
     assert set(result.additions[0]) == {"c"}
-    assert len(result.completed_class_bundles) == 1
-    assert all(not b for b in result.completed_class_bundles[0])
-
-
-def test_complete_to_minimal_natural_class_completed_bundles_multiplicity(
-    engine: FeatureEngine,
-) -> None:
-    """``completed_class_bundles[0]`` can carry more than one
-    equivalent minimal feature spec for the same completed class
-    (e.g. ``{+dorsal}`` and ``{+back, -high}`` characterising the
-    same segments). This is Concept A applied to ``S ∪ additions``
-    and is an engine-internal artefact: the UI rule is to NOT
-    display these on the not-a-natural-class verdict.
-    """
-    import random
-
-    segs = list(engine.segments)
-    random.seed(43)
-    seen_multi_bundle = False
-    for _ in range(200):
-        S = random.sample(segs, random.choice([2, 3, 4]))
-        result = engine.complete_to_minimal_natural_class(S)
-        if result.status != "one_minimal_completion":
-            continue
-        bundles = result.completed_class_bundles[0]
-        if len(bundles) < 2:
-            continue
-        completed = set(S) | set(result.additions[0])
-        for bundle in bundles:
-            assert (
-                set(engine.find_segments(dict(bundle))) == completed
-            )
-        seen_multi_bundle = True
-        break
-    assert seen_multi_bundle, (
-        "expected at least one completion with multiple equivalent"
-        " minimal specs in 200 random selections on Hayes"
+    assert result.selected_minimal_bundles == ()
+    # Recovering the completed class's minimal bundles is a
+    # separate engine call -- intentionally NOT on the completion
+    # result.
+    completed = ["a", "b"] + list(result.additions[0])
+    completed_bundles = eng.find_all_minimal_bundles(completed)
+    assert completed_bundles, (
+        "completed class must be a strict NC"
     )
+    assert all(not b for b in completed_bundles)
 
 
-def test_complete_to_minimal_natural_class_perf_floor(
+def test_complete_to_minimal_natural_class_perf(
     engine: FeatureEngine,
 ) -> None:
-    """Perf-regression guard. The new solver's cost is dominated by
-    two ``find_all_minimal_bundles`` calls and one ``O(F)`` set
-    intersection, with no exponential subset enumeration. A 50-segment
-    selection on Hayes should complete in well under 50 ms.
+    """Perf-regression guard. The not-a-natural-class path costs
+    one ``find_all_minimal_bundles`` call on S (fast/cached) plus
+    an O(F) intersection -- no second hitting-set search. A
+    50-segment selection on Hayes should complete in well under
+    50 ms.
     """
     import time
 
@@ -564,6 +516,8 @@ def test_complete_to_minimal_natural_class_perf_floor(
         f"complete_to_minimal_natural_class(N=50) took {best:.1f} ms;"
         f" perf floor is 50 ms"
     )
+
+
 
 
 # ----------------------------------------------------------------------

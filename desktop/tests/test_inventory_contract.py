@@ -1406,7 +1406,6 @@ def test_analysis_render_single_segment_escapes_symbol() -> None:
         status="already_natural_class",
         selected_minimal_bundles=(),
         additions=(),
-        completed_class_bundles=(),
     )
     out = render_single_segment("<x>", {"Voice": "+"}, completion)
     assert "/<x>/" not in out

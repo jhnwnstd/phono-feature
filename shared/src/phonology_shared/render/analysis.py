@@ -294,11 +294,11 @@ def _render_completion_body(completion: NaturalClassCompletion) -> str:
       of the SELECTED set (Concept A).
     * ``one_minimal_completion`` / ``multiple_minimal_completions``:
       render the "N segments needed for natural class" chip strip
-      alone (Concept B). ``completed_class_bundles`` is
-      deliberately NOT displayed: it describes the completed class
-      ``S ∪ additions``, not the selected set ``S``, so showing it
-      under a "not a natural class" verdict would conflate the
-      two concepts.
+      alone (Concept B). The completed class's minimal specs (if
+      anyone wanted them) would be Concept A applied to
+      ``S ∪ additions`` and are NOT carried on the completion
+      result -- the not-a-natural-class UI does not display them
+      so the engine does not pay the hitting-set search cost.
     """
     if completion.status == "already_natural_class":
         return _render_completion_specs(completion.selected_minimal_bundles)
