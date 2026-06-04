@@ -73,8 +73,14 @@ def _signed_feature_chip(value: str, feature: str) -> str:
 
 
 def _muted_italic_span(text: str) -> str:
-    """Inline ``<i>`` styled with the palette's muted-text colour."""
-    return f"<i style='color:{C['text_dim']}'>{text}</i>"
+    """Inline ``<i>`` styled with the palette's muted-text colour.
+
+    ``text`` is HTML-escaped. Every call site currently passes a
+    literal string, but escaping unconditionally keeps the rule
+    simple ("text helpers escape, HTML helpers don't") and removes
+    the footgun if a future caller passes inventory-derived text.
+    """
+    return f"<i style='color:{C['text_dim']}'>{html.escape(text)}</i>"
 
 
 def _muted_italic_p(text: str) -> str:
@@ -143,6 +149,60 @@ def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
 
 
 # --- engine-side query helper ------------------------------------
+
+
+def _render_universal_spec() -> str:
+    """Markup for the universal-class spec line, shown when the
+    selected segments cover the whole inventory and the minimal
+    spec is the empty bundle.
+    """
+    return (
+        f"<p><b>Minimal specification:</b>"
+        f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"
+    )
+
+
+def _single_segment_strict_specs(
+    engine: FeatureEngine,
+    seg: str,
+    feats: Mapping[str, str],
+) -> tuple[bool, tuple[Mapping[str, str], ...]]:
+    """Return ``(is_nc, specs)`` for a single-segment characterization.
+
+    If ``{seg}`` is itself a strict natural class, returns its
+    minimal specs. Otherwise looks for an equivalence class of
+    segments that match the same nonzero-feature bundle via
+    underspec-compatible matching, and (if more than one was
+    found) returns the strict minimal spec of THAT class. The
+    returned specs are always strict; the underspec-compatible
+    step only widens the candidate set before strict
+    characterization.
+    """
+    is_nc, specs = engine.is_natural_class([seg])
+    if not is_nc:
+        non_zero = {feat: val for feat, val in feats.items() if val != "0"}
+        equiv = engine.find_segments(non_zero, underspec_compatible=True)
+        if len(equiv) > 1:
+            is_nc, specs = engine.is_natural_class(equiv)
+    return is_nc, specs
+
+
+def _render_matching_segments(matching: Sequence[str]) -> str:
+    """HTML for the matching-segments answer of a feature query.
+
+    ``"none"`` when empty; otherwise ``"Matching N segment(s):"``
+    followed by the chips. Shared between the legacy blob renderer
+    and the per-tab variant so the two surfaces can't drift on the
+    answer line.
+    """
+    if not matching:
+        return f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
+    n = len(matching)
+    chips = " ".join(_segment_chip(seg) for seg in matching)
+    return (
+        f"<p><b>Matching {_plural(n, 'segment')} ({n}):</b></p>"
+        f"<p>{chips}</p>"
+    )
 
 
 def render_validation_report(issues: Sequence[str]) -> str:
@@ -218,14 +278,7 @@ def render_single_segment(
         f"<p>{plus_tags}</p>"
         f"<p>{minus_tags}</p>"
     )
-    is_nc, specs = engine.is_natural_class([seg])
-    if not is_nc:
-        non_zero = {
-            feature: value for feature, value in feats.items() if value != "0"
-        }
-        equiv = engine.find_segments(non_zero, underspec_compatible=True)
-        if len(equiv) > 1:
-            is_nc, specs = engine.is_natural_class(equiv)
+    is_nc, specs = _single_segment_strict_specs(engine, seg, feats)
     if is_nc and specs:
         out += _render_spec_list(specs)
     else:
@@ -283,18 +336,9 @@ def render_feat_to_seg(
         _signed_feature_chip(value, feature)
         for feature, value in sort_spec(feature_dict).items()
     )
-    if matching:
-        seg_tags = " ".join(_segment_chip(seg) for seg in matching)
-        n = len(matching)
-        segs_html = (
-            f"<p><b>Matching {_plural(n, 'segment')} ({n}):</b></p>"
-            f"<p>{seg_tags}</p>"
-        )
-    else:
-        segs_html = (
-            f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
-        )
-    return f"<p><b>Query:</b> {feat_tags}</p>{segs_html}"
+    return (
+        f"<p><b>Query:</b> {feat_tags}</p>{_render_matching_segments(matching)}"
+    )
 
 
 # --- helpers for render_multi_segment ----------------------------
@@ -407,10 +451,7 @@ def _render_natural_class_verdict(
         # is the universal class, where specs == (EMPTY_BUNDLE,)
         # and specs[0] is the empty mapping.
         if not specs[0]:
-            spec_html = (
-                f"<p><b>Minimal specification:</b>"
-                f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"
-            )
+            spec_html = _render_universal_spec()
         else:
             spec_html = _render_spec_list(specs)
         return verdict, spec_html
@@ -517,22 +558,14 @@ def render_class_tab_seg(
     if len(segs) == 1:
         seg = segs[0]
         feats = engine.get_segment_features(seg)
-        is_nc, specs = engine.is_natural_class([seg])
-        if not is_nc:
-            non_zero = {feat: val for feat, val in feats.items() if val != "0"}
-            equiv = engine.find_segments(non_zero, underspec_compatible=True)
-            if len(equiv) > 1:
-                is_nc, specs = engine.is_natural_class(equiv)
+        is_nc, specs = _single_segment_strict_specs(engine, seg, feats)
         if is_nc and specs:
             return _render_spec_list(specs)
         return _muted_italic_p("Not uniquely characterizable.")
     is_nc, specs = engine.is_natural_class(segs)
     if is_nc:
         if not specs[0]:
-            return (
-                f"<p><b>Minimal specification:</b>"
-                f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"
-            )
+            return _render_universal_spec()
         return _render_spec_list(specs)
     if suggested:
         chips = " ".join(
@@ -560,14 +593,7 @@ def render_class_tab_feat(
         return _muted_italic_p(
             "Set + or − on a feature to find matching segments."
         )
-    if not matching:
-        return f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
-    n = len(matching)
-    chips = " ".join(_segment_chip(seg) for seg in matching)
-    return (
-        f"<p><b>Matching {_plural(n, 'segment')} ({n}):</b></p>"
-        f"<p>{chips}</p>"
-    )
+    return _render_matching_segments(matching)
 
 
 def render_features_tab_seg(

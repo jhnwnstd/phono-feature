@@ -1,10 +1,19 @@
 """The Inventory contract.
 
-One source of truth for the question "is this inventory data valid".
-Every loader, editor, and saver routes through this module. The only
-entry points that accept untrusted data are :py:meth:`Inventory.parse`,
-:py:meth:`Inventory.from_grid`, and :py:meth:`Inventory.load`, and each
-funnels through ``parse`` so the validation code path is singular.
+This module validates inventory STRUCTURE, not phonological theory.
+It enforces JSON shape, stable identifiers, declared feature keys,
+allowed cell values (``+`` / ``-`` / ``0``), Unicode safety, size
+limits, and crash-safe writes. It does not infer feature values
+from segment labels and does not reject feature bundles for being
+phonologically unusual. Segment labels are identifiers; feature
+values are the semantics.
+
+One source of truth for the question "is this inventory data
+structurally valid". Every loader, editor, and saver routes
+through this module. The only entry points that accept untrusted
+data are :py:meth:`Inventory.parse`, :py:meth:`Inventory.from_grid`,
+and :py:meth:`Inventory.load`, and each funnels through ``parse``
+so the validation code path is singular.
 
 Parse-don't-validate: ``parse`` either returns a fully normalized
 :py:class:`Inventory` whose invariants hold for the life of the value,
@@ -31,6 +40,7 @@ import tempfile
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from functools import lru_cache
 from types import MappingProxyType
 from typing import Any
 
@@ -42,11 +52,36 @@ from phonology_shared.engine.limits import (
     MAX_NAME_LENGTH,
     MAX_SEGMENTS,
 )
-from phonology_shared.engine.segment_grouper import _normalize_key
 
 _log = logging.getLogger(__name__)
 
 VALID_VALUES: frozenset[str] = frozenset({"+", "-", "0"})
+
+
+@lru_cache(maxsize=512)
+def normalize_feature_key(key: str) -> str:
+    """Fold a feature name to its canonical engine-side spelling.
+
+    Lowercases, collapses delimiters (``.``, ``_``, space) to empty,
+    and rewrites a small set of common multi-word aliases so engine
+    consumers (matching, grouping, alias-collision detection at
+    parse time) see one operational identity for variants like
+    ``"DelRel"`` / ``"delayed_release"`` / ``"del.rel."``. Memoized
+    because the same handful of names recur for every segment and
+    every reload.
+
+    Lives in :py:mod:`inventory` so :py:meth:`Inventory.parse` can
+    detect alias collisions at the boundary without depending on
+    the display layer; :py:mod:`segment_grouper` re-imports it for
+    its own bundle normalisation.
+    """
+    k = key.lower()
+    k = k.replace("del.rel.", "delrel")
+    k = k.replace("delayed_release", "delrel")
+    k = k.replace("s.g.", "spreadgl")
+    k = k.replace("c.g.", "constrgl")
+    return k.replace(".", "").replace("_", "").replace(" ", "")
+
 
 # Domain-specific identity folding for segment labels. ``r`` is
 # deliberately excluded: it is the legitimate IPA alveolar trill, and
@@ -300,7 +335,7 @@ class ValidationError(Exception):
         super().__init__(issues[0])
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Inventory:
     """A validated phonological inventory.
 
@@ -677,15 +712,15 @@ def _validate_features(
         canonical_origin[canonical] = f
         valid.append(canonical)
 
-    # Alias-collision check on the engine's :py:func:`_normalize_key`
-    # (case and delimiter folding). "DelRel" and "delayed_release" are
-    # distinct in canonical form (different case + underscores) but
-    # engine consumers fold them. Catching at the parser boundary
-    # means the engine never has to defend against
+    # Alias-collision check on :py:func:`normalize_feature_key`
+    # (case and delimiter folding). "DelRel" and "delayed_release"
+    # are distinct in canonical form (different case + underscores)
+    # but engine consumers fold them. Catching at the parser
+    # boundary means the engine never has to defend against
     # ``AliasCollisionError`` downstream.
     by_alias: dict[str, list[str]] = {}
     for f in valid:
-        by_alias.setdefault(_normalize_key(f), []).append(f)
+        by_alias.setdefault(normalize_feature_key(f), []).append(f)
     for canonical, originals in by_alias.items():
         if len(originals) > 1:
             issues.append(
@@ -744,15 +779,18 @@ def _canonicalize_segment_key(
 def _validate_segment_bundle(
     canonical_seg: str,
     seg_feats: Any,
-    declared: set[str],
+    declared_features: set[str],
     issues: list[str],
     prefix: str,
 ) -> Mapping[str, str] | None:
-    """Validate one segment's feature bundle. Returns a read-only
-    inner dict on success or ``None`` if the bundle isn't even a
-    dict (skipping the segment entirely). Per-feature-key issues
-    are appended and the offending entry is dropped; the bundle
-    keeps the surviving features.
+    """Validate one segment's feature bundle.
+
+    Returns a read-only mapping on success, or ``None`` when the bundle
+    is not an object and the whole segment should be skipped.
+
+    Invalid feature entries are reported and dropped. The caller later
+    raises if any issues were collected, so the partial bundle exists
+    only to keep collecting all validation errors in one pass.
     """
     if not isinstance(seg_feats, dict):
         issues.append(
@@ -760,73 +798,90 @@ def _validate_segment_bundle(
             f"object, got {type(seg_feats).__name__}"
         )
         return None
-    inner: dict[str, str] = {}
-    for feat_name, feat_val in seg_feats.items():
-        if not isinstance(feat_name, str) or not feat_name:
+
+    validated: dict[str, str] = {}
+    original_by_canonical: dict[str, str] = {}
+
+    for raw_feature_name, raw_feature_value in seg_feats.items():
+        if not isinstance(raw_feature_name, str) or not raw_feature_name:
             issues.append(
                 f"{prefix}segment {canonical_seg!r}: feature key "
-                f"{feat_name!r} must be a non-empty string"
+                f"{raw_feature_name!r} must be a non-empty string"
             )
             continue
-        if len(feat_name) > MAX_NAME_LENGTH:
+
+        if len(raw_feature_name) > MAX_NAME_LENGTH:
             issues.append(
                 f"{prefix}segment {canonical_seg!r}: feature key "
-                f"{feat_name!r} is {len(feat_name)} chars; max is "
-                f"{MAX_NAME_LENGTH}"
+                f"{raw_feature_name!r} is {len(raw_feature_name)} chars; "
+                f"max is {MAX_NAME_LENGTH}"
             )
             continue
-        canonical_feat = _canonicalize_name(feat_name)
-        if not canonical_feat:
+
+        canonical_feature = _canonicalize_name(raw_feature_name)
+        if not canonical_feature:
             issues.append(
                 f"{prefix}segment {canonical_seg!r}: feature key "
-                f"{feat_name!r} is empty after canonicalization"
+                f"{raw_feature_name!r} is empty after canonicalization"
             )
             continue
-        # No ``if declared and ...`` short-circuit. An inventory
-        # with ``features=[]`` AND per-segment feature keys would
-        # otherwise be silently accepted, storing ghost data that
-        # :py:meth:`Inventory.feature_value` can never reach.
-        # Always cross-check so the contract holds at every count.
-        if canonical_feat not in declared:
+
+        prior_feature_name = original_by_canonical.get(canonical_feature)
+        if prior_feature_name is not None:
+            issues.append(
+                f"{prefix}segment {canonical_seg!r}: feature keys "
+                f"{prior_feature_name!r} and {raw_feature_name!r} are the "
+                f"same after canonicalization ({canonical_feature!r}); "
+                f"rename or remove one"
+            )
+            continue
+
+        original_by_canonical[canonical_feature] = raw_feature_name
+
+        if canonical_feature not in declared_features:
             issues.append(
                 f"{prefix}segment {canonical_seg!r}: feature "
-                f"{feat_name!r} is not declared in 'features'"
+                f"{raw_feature_name!r} is not declared in 'features'"
             )
             continue
-        if not isinstance(feat_val, str):
+
+        if not isinstance(raw_feature_value, str):
             issues.append(
                 f"{prefix}segment {canonical_seg!r}."
-                f"{canonical_feat!r}: value must be a string, got "
-                f"{type(feat_val).__name__} ({feat_val!r})"
+                f"{canonical_feature!r}: value must be a string, got "
+                f"{type(raw_feature_value).__name__} ({raw_feature_value!r})"
             )
             continue
-        if feat_val not in VALID_VALUES:
+
+        if raw_feature_value not in VALID_VALUES:
             issues.append(
                 f"{prefix}segment {canonical_seg!r}."
-                f"{canonical_feat!r}: invalid value {feat_val!r} "
+                f"{canonical_feature!r}: invalid value {raw_feature_value!r} "
                 f"(expected one of {sorted(VALID_VALUES)})"
             )
             continue
-        inner[canonical_feat] = feat_val
-    return MappingProxyType(inner)
 
+        validated[canonical_feature] = raw_feature_value
+
+    return MappingProxyType(validated)
 
 def _validate_segments(
     segments_raw: Any,
-    declared: set[str],
+    declared_features: set[str],
     issues: list[str],
     prefix: str,
 ) -> Mapping[str, Mapping[str, str]]:
-    """Return a read-only view of validated segments with CANONICAL
-    keys (NFC + stripped). Appends issues. ``declared`` must already
-    contain canonical feature names so per-bundle feature keys can be
-    matched against it after canonicalization.
+    """Return a read-only mapping of validated segment labels to bundles.
 
-    Composes two single-concern helpers
-    (:py:func:`_canonicalize_segment_key` and
-    :py:func:`_validate_segment_bundle`) so the driver loop reads
-    as "for each segment: canonicalise the key, check for
-    collisions, validate the bundle".
+    Segment labels are treated as arbitrary identifiers. This function
+    canonicalizes labels only for stable identity, checks for collisions,
+    and validates each segment's feature bundle against the declared
+    feature list.
+
+    ``declared_features`` must contain the canonical feature names
+    returned by ``_validate_features``. Any issues are appended to
+    ``issues``; callers decide whether to raise after collecting all
+    validation problems.
     """
     if not isinstance(segments_raw, dict):
         issues.append(
@@ -842,59 +897,74 @@ def _validate_segments(
         )
         return MappingProxyType({})
 
-    result: dict[str, Mapping[str, str]] = {}
-    canonical_origin: dict[str, str] = {}
-    for seg_name, seg_feats in segments_raw.items():
-        canonical_seg = _canonicalize_segment_key(seg_name, issues, prefix)
-        if canonical_seg is None:
-            continue
-        if canonical_seg in result:
-            prior = canonical_origin[canonical_seg]
-            if prior == seg_name:
-                issues.append(
-                    f"{prefix}segment key {seg_name!r} appears more than once"
-                )
-            else:
-                issues.append(
-                    f"{prefix}segments {prior!r} and {seg_name!r} are the "
-                    f"same after NFC + whitespace normalization "
-                    f"({canonical_seg!r}); rename or remove one"
-                )
-            continue
-        inner = _validate_segment_bundle(
-            canonical_seg, seg_feats, declared, issues, prefix
+    validated_segments: dict[str, Mapping[str, str]] = {}
+    original_by_canonical: dict[str, str] = {}
+
+    for raw_segment_label, raw_feature_bundle in segments_raw.items():
+        canonical_segment = _canonicalize_segment_key(
+            raw_segment_label,
+            issues,
+            prefix,
         )
-        if inner is None:
+        if canonical_segment is None:
             continue
-        result[canonical_seg] = inner
-        canonical_origin[canonical_seg] = seg_name
-    return MappingProxyType(result)
+
+        prior_label = original_by_canonical.get(canonical_segment)
+        if prior_label is not None:
+            issues.append(
+                f"{prefix}segments {prior_label!r} and "
+                f"{raw_segment_label!r} are the same after "
+                f"canonicalization ({canonical_segment!r}); "
+                f"rename or remove one"
+            )
+            continue
+
+        validated_bundle = _validate_segment_bundle(
+            canonical_segment,
+            raw_feature_bundle,
+            declared_features,
+            issues,
+            prefix,
+        )
+        if validated_bundle is None:
+            continue
+
+        validated_segments[canonical_segment] = validated_bundle
+        original_by_canonical[canonical_segment] = raw_segment_label
+
+    return MappingProxyType(validated_segments)
 
 
 def atomic_write_json(path: str, data: Any) -> None:
-    """Write JSON to ``path`` atomically.
+    """Write JSON to ``path`` using a temporary file and atomic replace.
 
-    Writes to a sibling tmp file in the same directory (so the rename
-    is a same-filesystem move), fsyncs, then :py:func:`os.replace`s.
-    A crash or kill anywhere before the replace leaves the destination
-    untouched. The rename itself is atomic on POSIX and Windows.
+    Writes to a sibling temporary file in the same directory, flushes
+    and fsyncs that file, then replaces the destination with
+    :func:`os.replace`. A failed write normally leaves the previous
+    destination file untouched instead of truncating it.
 
-    File watchers see exactly one filesystem event for the destination
-    (the rename) rather than a sequence of write-truncate-write events
-    that would each trigger a reload.
+    On POSIX, the parent directory is fsynced after the replace on a
+    best-effort basis so the rename itself is more durable across
+    crashes. Directory fsync is skipped when unsupported.
     """
     basename = os.path.basename(path)
     _log.debug("atomic write start: %s", basename)
+
     directory = os.path.dirname(os.path.abspath(path)) or "."
     fd, tmp_path = tempfile.mkstemp(
         prefix=".tmp_inv_", suffix=".json", dir=directory
     )
+
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+            f.write("\n")
             f.flush()
             os.fsync(f.fileno())
+
         os.replace(tmp_path, path)
+        _fsync_directory_best_effort(directory)
+
     except BaseException as e:
         _log.error("atomic write failed: %s: %s", basename, e)
         try:
@@ -902,4 +972,23 @@ def atomic_write_json(path: str, data: Any) -> None:
         except OSError:
             pass
         raise
+
     _log.info("atomic write complete: %s", basename)
+
+
+def _fsync_directory_best_effort(directory: str) -> None:
+    """Best-effort directory fsync for POSIX rename durability."""
+    if os.name == "nt":
+        return
+
+    try:
+        dir_fd = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+
+    try:
+        os.fsync(dir_fd)
+    except OSError:
+        pass
+    finally:
+        os.close(dir_fd)

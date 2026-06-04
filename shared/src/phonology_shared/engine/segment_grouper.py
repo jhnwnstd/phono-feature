@@ -9,7 +9,8 @@ skip the related step.
 
 from collections import defaultdict
 from collections.abc import Mapping
-from functools import lru_cache
+
+from phonology_shared.engine.inventory import normalize_feature_key
 
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.
@@ -151,22 +152,6 @@ _DERIVED_MERGES: list[tuple[frozenset[str], str]] = [
 ]
 
 
-@lru_cache(maxsize=512)
-def _normalize_key(key: str) -> str:
-    """Normalise a feature name to a canonical lowercase token.
-
-    Memoized because the same handful of feature names are reused
-    across all segments and inventory reloads; the cache turns
-    thousands of calls per load into one per unique name.
-    """
-    k = key.lower()
-    k = k.replace("del.rel.", "delrel")
-    k = k.replace("delayed_release", "delrel")
-    k = k.replace("s.g.", "spreadgl")
-    k = k.replace("c.g.", "constrgl")
-    return k.replace(".", "").replace("_", "").replace(" ", "")
-
-
 class AliasCollisionError(ValueError):
     """Raised when two feature names in the same bundle collapse to
     the same normalized key (for example ``"DelRel"`` and
@@ -194,7 +179,7 @@ def _normalize_feats(feat_dict: Mapping[str, str]) -> dict[str, str]:
     result: dict[str, str] = {}
     collisions: dict[str, list[str]] = {}
     for k, v in feat_dict.items():
-        canonical = _normalize_key(k)
+        canonical = normalize_feature_key(k)
         if canonical in result and k not in collisions.get(canonical, ()):
             collisions.setdefault(canonical, []).append(
                 _find_existing_key(feat_dict, result, canonical, exclude=k)
@@ -218,7 +203,7 @@ def _find_existing_key(
     for k in feat_dict:
         if k == exclude:
             continue
-        if _normalize_key(k) == canonical:
+        if normalize_feature_key(k) == canonical:
             return k
     return (
         canonical  # should be unreachable when called from the collision path

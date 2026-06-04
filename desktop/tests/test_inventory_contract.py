@@ -94,7 +94,7 @@ def test_parse_rejects_non_string_feature_entries() -> None:
 
 def test_parse_rejects_aliased_feature_names() -> None:
     """Two distinct literal feature names that collapse to the same
-    canonical key under ``_normalize_key`` (e.g. ``"DelRel"`` and
+    canonical key under ``normalize_feature_key`` (e.g. ``"DelRel"`` and
     ``"delayed_release"``) would later raise ``AliasCollisionError``
     inside ``engine.grouped_segments`` -- uncaught, that escapes
     ``_load_path`` and can crash app startup via the last-inventory
@@ -209,7 +209,7 @@ def test_parse_rejects_nfc_nfd_segment_collision() -> None:
                 "segments": {nfc: {"V": "+"}, nfd: {"V": "-"}},
             }
         )
-    assert "normalization" in " ".join(ex.value.issues).lower()
+    assert "canonicalization" in " ".join(ex.value.issues).lower()
 
 
 def test_parse_rejects_overlong_feature_name() -> None:
@@ -435,7 +435,7 @@ def test_ascii_g_and_script_g_in_one_inventory_is_collision() -> None:
             }
         )
     msg = " ".join(ex.value.issues).lower()
-    assert "normalization" in msg or "duplicate" in msg
+    assert "canonicalization" in msg or "duplicate" in msg
 
 
 def test_advisory_fires_for_ascii_colon_in_segment_label() -> None:
