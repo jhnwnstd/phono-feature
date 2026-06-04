@@ -566,17 +566,41 @@ dialog input[type="text"]:focus-visible {
 .vowel-chart {
   display: grid;
   grid-template-columns: minmax(60px, auto) 1fr;
-  grid-template-rows: auto 1fr;
+  /* Row 1: title (centred over the data column only).
+     Row 2: column headers (Front / Central / Back).
+     Row 3: row-label gutter + data area. */
+  grid-template-rows: auto auto 1fr;
   padding: var(--space-xs) 2px;
   column-gap: var(--space-sm);
   row-gap: 2px;
 }
-.vowel-chart-corner {
+/* Mirrors the desktop's ``QLabel(geometry.title)`` placed at the
+   top, centred over the data area. The desktop's
+   ``VowelChartWidget._render_geometry`` puts it there via manual
+   ``move(dx + (dw - tw) // 2, 0)``; here we ride CSS grid by
+   pinning the title to column 2 only so it lines up over the
+   data-area's centre, not the centre of "row-label gutter + data
+   area" together. ``VowelChartGeometry.title`` is the shared
+   source of truth for the text. */
+.vowel-chart-title {
   grid-row: 1;
+  grid-column: 2;
+  text-align: center;
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  padding: var(--space-xs) 2px var(--space-xs);
+}
+.panel[data-active="true"] .vowel-chart-title {
+  color: var(--text);
+}
+.vowel-chart-corner {
+  grid-row: 2;
   grid-column: 1;
 }
 .vowel-chart-cols {
-  grid-row: 1;
+  grid-row: 2;
   grid-column: 2;
   position: relative;
   height: 1.4em;
@@ -592,7 +616,7 @@ dialog input[type="text"]:focus-visible {
   white-space: nowrap;
 }
 .vowel-chart-row-labels {
-  grid-row: 2;
+  grid-row: 3;
   grid-column: 1;
   position: relative;
   /* Empty placeholder that reserves the left gutter. Labels live
@@ -636,7 +660,7 @@ dialog input[type="text"]:focus-visible {
    cells uses the same bottom-width fraction, so the cells stay
    inside the silhouette at every row. */
 .vowel-chart-data {
-  grid-row: 2;
+  grid-row: 3;
   grid-column: 2;
   position: relative;
   /* Match ``.vowel-chart-row-labels``: eight slots of breathing

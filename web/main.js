@@ -1144,21 +1144,28 @@ function _buildSegmentButton(seg, extraAttrs) {
 function _buildVowelChart(chart) {
     const groupEl = document.createElement("div");
     groupEl.className = "seg-group vowel-chart-group";
-    const header = document.createElement("div");
-    header.className = "seg-group-header";
-    // ``chart.title`` comes from shared vowel_layout.VOWEL_CHART_TITLE
-    // so the desktop and web charts always agree on the heading.
-    header.textContent = chart.title;
-    groupEl.appendChild(header);
 
-    // Outer rectangular UI space. Two rows (column headers, body)
-    // and two columns (row labels, data area). Only the data area
-    // gets the trapezoid silhouette and absolutely-positioned cells;
-    // labels and headers stay in the rectangular chrome.
+    // Outer rectangular UI space. Three rows (title, column
+    // headers, body) and two columns (row labels, data area). Only
+    // the data area gets the trapezoid silhouette and
+    // absolutely-positioned cells; labels and the title stay in
+    // the rectangular chrome.
     const chartEl = document.createElement("div");
     chartEl.className = "vowel-chart";
     chartEl.setAttribute("role", "grid");
     chartEl.setAttribute("aria-label", "IPA vowel chart");
+
+    // Title sits in row 1, column 2 only -- centered over the data
+    // area, NOT over the row-label gutter. Mirrors the desktop's
+    // manual ``move(dx + (dw - tw) // 2, 0)`` placement; the
+    // shared ``VowelChartGeometry`` documents this as the contract
+    // both UIs must honour.
+    const titleEl = document.createElement("div");
+    titleEl.className = "vowel-chart-title";
+    // ``chart.title`` comes from shared vowel_layout.VOWEL_CHART_TITLE
+    // so the desktop and web charts always agree on the heading.
+    titleEl.textContent = chart.title;
+    chartEl.appendChild(titleEl);
 
     const corner = document.createElement("div");
     corner.className = "vowel-chart-corner";

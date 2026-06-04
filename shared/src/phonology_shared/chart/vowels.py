@@ -1052,7 +1052,6 @@ def compute_placements(
 #               spacer tracks at physical cols 3 and 6.
 # The numbers are 0-based (Qt convention); CSS-side renderers add 1
 # when assigning ``grid-row`` / ``grid-column`` (1-indexed).
-VOWEL_TITLE_GRID_ROW: int = 0
 VOWEL_COL_HEADER_GRID_ROW: int = 1
 VOWEL_FIRST_DATA_GRID_ROW: int = 2
 VOWEL_LABEL_GRID_COL: int = 0
@@ -1061,11 +1060,11 @@ VOWEL_LABEL_GRID_COL: int = 0
 # separates each pair from the next.
 VOWEL_FIRST_DATA_GRID_COL: int = VOWEL_LABEL_GRID_COL + 1
 #: Title shown above the chart on both UIs. Centralised so a
-#: future rename (e.g. localisation) touches one constant.
+#: future rename (e.g. localisation) touches one constant. The
+#: placement contract for both renderers lives on
+#: :py:class:`VowelChartGeometry`: centred over the data area only,
+#: at the top of the chart's rectangular chrome.
 VOWEL_CHART_TITLE: str = "VOWELS"
-#: How many physical grid tracks the title spans (covers every
-#: data column plus the two spacer tracks).
-VOWEL_TITLE_GRID_COL_SPAN: int = 8
 #: Each backness header straddles its pair (unrounded + rounded).
 VOWEL_COL_HEADER_GRID_COL_SPAN: int = 2
 
@@ -1256,10 +1255,21 @@ class VowelChartGeometry:
     Empty rows (no vowels in any column at that height tier) are
     OMITTED from :py:attr:`rows`; renderers iterate the list as-is
     without a "is this row populated" check.
+
+    **Title placement contract.** :py:attr:`title` is the heading
+    text both renderers display above the chart. Both UIs MUST
+    place it CENTRED OVER THE DATA AREA (not over "row-label
+    gutter + data area" together) and at the TOP of the chart's
+    rectangular chrome. The desktop achieves this by manually
+    moving the title QLabel to ``(dx + (dw - tw) // 2, 0)`` inside
+    :py:meth:`VowelChartWidget._layout_children`; the web pins
+    ``.vowel-chart-title`` to grid row 1, column 2 of the
+    ``.vowel-chart`` grid (the data column only). New renderers
+    must follow the same rule so the title stays visually aligned
+    with the column headers and the data cells below.
     """
 
     title: str
-    title_grid_col_span: int
     shape: VowelChartShape
     silhouette: VowelChartSilhouette
     cols: tuple[VowelChartColHeader, ...]
@@ -1994,7 +2004,6 @@ def build_vowel_chart_geometry(
     natural_w, natural_h = _natural_data_area_size(tuple(cells))
     return VowelChartGeometry(
         title=VOWEL_CHART_TITLE,
-        title_grid_col_span=VOWEL_TITLE_GRID_COL_SPAN,
         shape=shape,
         silhouette=silhouette,
         cols=col_headers,
