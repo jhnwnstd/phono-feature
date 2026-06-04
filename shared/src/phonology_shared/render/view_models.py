@@ -386,10 +386,22 @@ def _vowel_chart_summary(
         profile,
         seg_feats,
     )
+    sil = geometry.silhouette
     return {
         "title": geometry.title,
         "title_grid_col_span": geometry.title_grid_col_span,
         "shape": geometry.shape.value,
+        "silhouette": {
+            "shape": sil.shape.value,
+            "top_y": sil.top_y,
+            "bottom_y": sil.bottom_y,
+            "top_left": sil.top_left,
+            "top_right": sil.top_right,
+            "bottom_left": sil.bottom_left,
+            "bottom_right": sil.bottom_right,
+            "top_width": sil.top_width,
+            "bottom_width": sil.bottom_width,
+        },
         "cols": [
             {
                 "label": col.label,

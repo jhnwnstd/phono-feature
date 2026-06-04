@@ -606,6 +606,12 @@ function _isValidBootstrap(info) {
         const col0 = info.vowel_chart.cols[0];
         if (typeof col0?.grid_col !== "number") return false;
     }
+    // ``silhouette`` landed when the chart silhouette became
+    // inventory-adaptive; an older cached bootstrap without it
+    // would paint the canonical Close-to-Open trapezoid even when
+    // the inventory's populated rows imply something narrower.
+    const sil = info.vowel_chart.silhouette;
+    if (!sil || typeof sil.top_y !== "number") return false;
     return true;
 }
 
@@ -1175,10 +1181,34 @@ function _buildVowelChart(chart) {
     // silhouette (clip-path keyed off data-shape); each cell drops
     // at chart_x/chart_y already projected through the shape, so
     // the cells follow the silhouette exactly.
+    //
+    // Per-render silhouette: layout.css bakes a canonical
+    // ``--vowel-trapezoid-*`` / ``--vowel-triangle-*`` fallback,
+    // but the bridge payload's ``silhouette`` carries the actual
+    // inventory-adapted corners (an inventory with no Open vowels
+    // ends up with a wider bottom edge, etc.). Setting the CSS
+    // custom properties on the data element overrides the
+    // canonical defaults for this chart only.
     const dataEl = document.createElement("div");
     dataEl.className = "vowel-chart-data";
     if (chart.shape) {
         dataEl.setAttribute("data-shape", chart.shape);
+    }
+    const sil = chart.silhouette;
+    if (sil) {
+        const shape = sil.shape || chart.shape || "trapezoid";
+        const setVar = (name, value) => {
+            dataEl.style.setProperty(
+                `--vowel-${shape}-${name}`,
+                `${(value * 100).toFixed(3)}%`
+            );
+        };
+        setVar("top-y", sil.top_y);
+        setVar("bottom-y", sil.bottom_y);
+        setVar("top-left", sil.top_left);
+        setVar("top-right", sil.top_right);
+        setVar("bottom-left", sil.bottom_left);
+        setVar("bottom-right", sil.bottom_right);
     }
     for (const cell of chart.cells) {
         // Multiple vowels can map to the same chart cell (the

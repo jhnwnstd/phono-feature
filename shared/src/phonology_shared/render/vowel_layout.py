@@ -4,53 +4,80 @@ Pure-Python, shared by the desktop :py:class:`VowelChartWidget` and
 the web app's vowel chart renderer (relayed into the Pyodide bundle
 by the web build).
 
-**Scope.** This module is *chart placement policy*, not phonological
-theory. Given a vowel's feature bundle, it decides which cell of the
-IPA chart to render the vowel in. The categories (height tiers,
-front/central/back columns, rounded/unrounded split) are real
-phonological dimensions, but several of the placement rules below
-are inventory-conventional heuristics, not universally agreed
-phonological inferences. The :py:class:`VowelProfile` gates each
-fallback on whether the relevant feature is actually used by the
-inventory, so an inventory that has no Coronal or no Labial does
-not get tagged with the corresponding fallback semantics.
+**Scope.** This module is chart placement policy, not a general theory
+of vowel phonology. Given a segment's feature bundle, it resolves the
+best available display position in a vowel chart. The resolved position
+may be rendered as a square grid cell, a trapezoid point, a triangle
+point, or another chart geometry. The phonological evidence and the
+screen geometry are separate concerns: this module first interprets
+height, backness, and rounding evidence, then the renderer projects
+that evidence into a visible chart.
 
-**Theory-neutrality limits.**
+**Theory-neutrality limits.** This module is intentionally feature-first.
+It does not infer features from IPA symbols, and it does not require a
+particular phonological theory. It does, however, make limited
+display-oriented assumptions when a feature system supplies enough
+evidence for a useful chart placement.
 
-* ``[+high, -low]`` -> close / near-close, ``[-high, -low]`` -> mid,
-  ``[-high, +low]`` -> open / near-open. Standard binary-feature
-  decomposition of vowel height.
-* ``[+back]`` -> back, ``[+front]`` -> front. Direct read.
-* ``[+round]`` -> rounded. Direct read.
-* ``[-back]`` with no ``[front]`` -> inferred front. Defensible in
-  most feature systems where ``front == not back`` is a working
-  approximation for chart display.
-* ``[-front]`` alone with no ``[back]`` -> defaults to central. In
-  feature systems where ``[-front, -back]`` means central and
-  ``[-front, +back]`` means back, ``[-front]`` alone is genuinely
-  ambiguous; central is the conservative default and we mark the
-  confidence LOW so the UI can surface the uncertainty.
-* ``[+labial]`` -> rounded when ``[round]`` is absent. Inventory
-  convention, not a universal phonological inference: some feature
-  geometries (Sagey) place ``[round]`` under Labial, but other
-  systems treat all vowels and glides as ``[+labial]``, which would
-  overgenerate rounded vowels under this fallback. We only enable
-  it when the inventory has ``Labial`` AND lacks ``Round``.
-* ``[+coronal]`` -> front. Not standard phonology (Coronal is
-  typically a consonant place node); enabled only when the
-  inventory has ``Coronal`` AND lacks ``Front``, and tagged with
-  LOW confidence so callers know it is a backstop. Real
-  phonological analysis would not use this rule.
-* ``[tense]`` vs ``[ATR]``. Some traditions treat these as the same
-  feature; there is no settled consensus. When both are present and
-  disagree, this module prefers ``tense`` and the reason string
-  records the override so the choice is auditable. Inventories that
-  use only one of the two are unaffected.
+* `[+high, -low]` identifies the high vowel region. A split feature
+  such as `[tense]` or `[ATR]` may refine this into close versus
+  near-close when the inventory uses that distinction.
 
-**Underspecification** lands at "Open-mid Central" with LOW
-confidence. The UI uses ``confidence`` and ``reason`` to expose this
-to the user; the default is a placement choice, not a claim that the
-vowel is genuinely open-mid central.
+* `[-high, -low]` identifies the mid vowel region. A split feature
+  such as `[tense]` or `[ATR]` may refine this into close-mid
+  versus open-mid. A policy may optionally treat `0` on the split
+  feature as true mid, but that is a chart convention, not a universal
+  interpretation of underspecification.
+
+* `[-high, +low]` identifies the low vowel region. A policy may
+  refine this into near-open versus open, but low-vowel splitting is
+  theory-sensitive and should be flagged or documented when enabled.
+
+* `[+front]` -> front and `[+back]` -> back are direct readings.
+  `[-front, -back]` -> central is a direct reading when both features
+  are explicitly present with negative values.
+
+* `[-back]` without `[front]` is not automatically equivalent to
+  `[+front]`. It may be used as a frontness fallback only when the
+  inventory lacks a `Front` feature altogether. If the inventory uses
+  `Front` elsewhere, segment-level absence of `front` is treated as
+  underspecification and anchored conservatively.
+
+* `[-front]` without `[back]` is ambiguous between central and back
+  in many binary systems. This module anchors it centrally with LOW
+  confidence unless a more specific inventory policy is supplied.
+
+* `[+round]` -> rounded and `[-round]` -> unrounded are direct
+  readings. `0round` or absent `round` does not mean unrounded by
+  default in all theories; it may be rendered as neutral, default
+  unrounded, or low-confidence unrounded according to policy.
+
+* `[+labial]` -> rounded is only a profile-gated fallback when the
+  inventory has `Labial` and lacks `Round`. Some feature geometries
+  associate vowel rounding with Labial, but this is not safe as a
+  universal inference.
+
+* `[+coronal]` -> front is a last-resort, nonstandard fallback. It is
+  disabled by default, enabled only by policy, and should always be
+  marked LOW confidence / NONSTANDARD when used.
+
+* `[tense]` and `[ATR]` are not universally equivalent. When both
+  are present and disagree, this module follows the configured policy
+  and records the divergence in the placement evidence so the choice is
+  auditable.
+
+* Fine IPA distinctions such as near-front, near-back, centralized,
+  raised, lowered, advanced, retracted, compressed, and protruded
+  require explicit features or explicit chart heuristics. They should
+  not be inferred silently from a coarse bundle such as
+  `[+high, +back, +round]`.
+
+**Underspecification.** Underspecified or conflicting evidence produces
+a low-confidence anchor, not a phonological claim. For example, a vowel
+may be displayed near the central mid area because the chart needs a
+stable location, not because the segment is asserted to be phonetically
+or phonologically central mid. Callers should use `confidence`,
+`reason`, and `flags` to surface this distinction.
 """
 
 from __future__ import annotations
@@ -450,54 +477,83 @@ _PAIR_OUTER_EXTENT: float = (
 )
 
 
-def vowel_trapezoid_corners(
+def vowel_silhouette(
     shape: VowelChartShape,
-) -> dict[str, float]:
-    """Return the four corner positions of the chart silhouette,
-    in the data area's normalised ``[0, 1]`` coordinate space.
+    top_logical_row: int = 0,
+    bottom_logical_row: int | None = None,
+) -> VowelChartSilhouette:
+    """Compute the silhouette for an inventory whose populated
+    rows span ``top_logical_row`` to ``bottom_logical_row``
+    (inclusive, indices into :py:data:`ROW_LABELS`).
 
-    The corners are derived from where the cells actually sit so
-    the silhouette outline hugs them exactly. The keys are
-    ``"top_left"`` / ``"top_right"`` / ``"bottom_left"`` /
-    ``"bottom_right"`` (chart_x) and ``"top_y"`` / ``"bottom_y"``
-    (chart_y).
+    Defaults reproduce the canonical 7-row Close-to-Open silhouette
+    (used by :py:func:`web/scripts/build.py` to bake fallback CSS
+    variables). Inventory-adaptive callers pass the actual
+    populated row range so the silhouette top and bottom widths
+    track the IPA narrowness of the rows actually rendered: an
+    inventory whose lowest row is Open-mid carries a wider bottom
+    edge than one with a true Open vowel.
 
-    The silhouette top edge sits at the Close row's ``chart_y``
-    and the bottom edge sits at the Open row's ``chart_y`` so the
-    outline passes through the vertical centre of those rows'
-    buttons. This is the classic IPA aesthetic: the top button
-    pair straddles the top edge of the quadrilateral and the
-    bottom pair straddles the bottom edge.
-
-    Horizontally, the right edge is the back-pair's outer extent
-    (back vowels are flush against it; ``top_right ==
-    bottom_right`` so the right wall is vertical), and the left
-    edge slants from the front column's close x-position to its
-    open x-position. The slant comes from the back-anchored
-    projection: front migrates toward the back anchor as the row
-    narrows.
+    The silhouette top edge always sits at the Close anchor
+    (``_HEIGHT_Y["Close"]``) and the bottom edge at the Open anchor
+    (``_HEIGHT_Y["Open"]``) so the data area is fully used
+    regardless of which rows are populated; the
+    inventory-adaptive part is only the widths at those edges.
     """
+    if bottom_logical_row is None:
+        bottom_logical_row = len(ROW_LABELS) - 1
     front = _BACKNESS_X["front"]
     back = _BACKNESS_X["back"]
     pair_outer = _PAIR_OUTER_EXTENT
-    y_close = _HEIGHT_Y["Close"]
-    y_open = _HEIGHT_Y["Open"]
-    bottom_width = (
+    bottom_width_canonical = (
         TRIANGLE_BOTTOM_WIDTH
         if shape == VowelChartShape.TRIANGLE
         else TRAPEZOID_BOTTOM_WIDTH
     )
-    row_width_close = 1.0 - (1.0 - bottom_width) * y_close
-    row_width_open = 1.0 - (1.0 - bottom_width) * y_open
-    front_close = back + row_width_close * (front - back)
-    front_open = back + row_width_open * (front - back)
+    top_logical_y = _HEIGHT_Y[ROW_LABELS[top_logical_row]]
+    bottom_logical_y = _HEIGHT_Y[ROW_LABELS[bottom_logical_row]]
+    top_row_width = 1.0 - (1.0 - bottom_width_canonical) * top_logical_y
+    bottom_row_width = (
+        1.0 - (1.0 - bottom_width_canonical) * bottom_logical_y
+    )
+    front_at_top = back + top_row_width * (front - back)
+    front_at_bottom = back + bottom_row_width * (front - back)
+    y_anchor_top = _HEIGHT_Y["Close"]
+    y_anchor_bottom = _HEIGHT_Y["Open"]
+    return VowelChartSilhouette(
+        shape=shape,
+        top_y=y_anchor_top,
+        bottom_y=y_anchor_bottom,
+        top_left=front_at_top - pair_outer,
+        top_right=back + pair_outer,
+        bottom_left=front_at_bottom - pair_outer,
+        bottom_right=back + pair_outer,
+        top_width=top_row_width,
+        bottom_width=bottom_row_width,
+    )
+
+
+def vowel_trapezoid_corners(
+    shape: VowelChartShape,
+    top_logical_row: int = 0,
+    bottom_logical_row: int | None = None,
+) -> dict[str, float]:
+    """Legacy corners-as-dict helper. Returns the same six values
+    (``top_left``, ``top_right``, ``bottom_left``, ``bottom_right``,
+    ``top_y``, ``bottom_y``) that pre-silhouette callers consumed,
+    derived via :py:func:`vowel_silhouette` so inventory-adaptive
+    parameters work transparently. New callers should prefer
+    :py:func:`vowel_silhouette` and access the dataclass fields
+    directly.
+    """
+    sil = vowel_silhouette(shape, top_logical_row, bottom_logical_row)
     return {
-        "top_left": front_close - pair_outer,
-        "top_right": back + pair_outer,
-        "bottom_left": front_open - pair_outer,
-        "bottom_right": back + pair_outer,
-        "top_y": y_close,
-        "bottom_y": y_open,
+        "top_left": sil.top_left,
+        "top_right": sil.top_right,
+        "bottom_left": sil.bottom_left,
+        "bottom_right": sil.bottom_right,
+        "top_y": sil.top_y,
+        "bottom_y": sil.bottom_y,
     }
 
 
@@ -1073,6 +1129,45 @@ class VowelChartColHeader:
 
 
 @dataclass(frozen=True)
+class VowelChartSilhouette:
+    """The outline of the chart's data area, adapted to the
+    inventory's populated rows.
+
+    Position vs display split: ``top_y`` / ``bottom_y`` are the
+    DISPLAY positions of the silhouette's top and bottom edges in
+    the data area's normalised ``[0, 1]`` coordinate space (the
+    silhouette always spans the full data area vertically so cells
+    fill the available room). ``top_left`` / ``top_right`` /
+    ``bottom_left`` / ``bottom_right`` are the four corners'
+    horizontal positions, derived from the POSITIONAL identity of
+    the topmost and bottommost populated logical rows (an
+    inventory whose lowest row is Close-mid carries a much wider
+    bottom edge than one whose lowest row is Open).
+
+    Renderers draw the outline straight between these corners and
+    project each cell's ``chart_x`` by linearly interpolating
+    between ``top_width`` and ``bottom_width`` at the cell's
+    ``chart_y`` so cells sit on the silhouette slant by
+    construction.
+
+    ``top_width`` / ``bottom_width`` are the row widths (full
+    content-area fraction) at the two edges, exposed as
+    independent data so the renderer can interpolate without
+    re-deriving from the corners.
+    """
+
+    shape: VowelChartShape
+    top_y: float
+    bottom_y: float
+    top_left: float
+    top_right: float
+    bottom_left: float
+    bottom_right: float
+    top_width: float
+    bottom_width: float
+
+
+@dataclass(frozen=True)
 class VowelChartGeometry:
     """Complete render-ready description of a vowel chart.
 
@@ -1086,6 +1181,10 @@ class VowelChartGeometry:
     coordinates inside the chart do not change with shape; only
     the chart's outer outline does.
 
+    :py:attr:`silhouette` carries the inventory-adapted silhouette
+    corners so the renderer can paint the outline and confirm
+    every cell sits on its slant.
+
     Empty rows (no vowels in any column at that height tier) are
     OMITTED from :py:attr:`rows`; renderers iterate the list as-is
     without a "is this row populated" check.
@@ -1094,6 +1193,7 @@ class VowelChartGeometry:
     title: str
     title_grid_col_span: int
     shape: VowelChartShape
+    silhouette: VowelChartSilhouette
     cols: tuple[VowelChartColHeader, ...]
     rows: tuple[VowelChartRow, ...]
     cells: tuple[VowelChartCell, ...]
@@ -1128,17 +1228,63 @@ def build_vowel_chart_geometry(
         for display_index, ri in enumerate(populated_logical_rows)
     }
 
+    shape = infer_vowel_shape(profile)
+    # Silhouette: position logic (top/bottom widths) comes from the
+    # populated logical row range; display logic (top_y/bottom_y)
+    # always spans the full data area so cells use every pixel
+    # regardless of which rows are present.
+    silhouette = vowel_silhouette(
+        shape,
+        top_logical_row=populated_logical_rows[0],
+        bottom_logical_row=populated_logical_rows[-1],
+    )
+
+    # Display y per populated row: evenly distributed in the
+    # silhouette's vertical span. This is the DISPLAY logic. A
+    # single-row inventory parks the row at the vertical midpoint
+    # so the silhouette is not a degenerate horizontal line.
+    if len(populated_logical_rows) == 1:
+        display_y_by_row = {
+            populated_logical_rows[0]: (
+                silhouette.top_y + silhouette.bottom_y
+            )
+            / 2
+        }
+    else:
+        span = silhouette.bottom_y - silhouette.top_y
+        denom = len(populated_logical_rows) - 1
+        display_y_by_row = {
+            ri: silhouette.top_y + span * (i / denom)
+            for i, ri in enumerate(populated_logical_rows)
+        }
+
     rows = tuple(
         VowelChartRow(
             logical_row=ri,
             label=ROW_LABELS[ri],
             grid_row=logical_row_to_grid_row[ri],
-            chart_y=_HEIGHT_Y[ROW_LABELS[ri]],
+            chart_y=display_y_by_row[ri],
         )
         for ri in populated_logical_rows
     )
 
-    shape = infer_vowel_shape(profile)
+    def _width_at_display_y(y: float) -> float:
+        """Linear interp between silhouette top and bottom widths
+        at the given display y. Unifies position (silhouette) and
+        display (cell y) at the cell projection step so cells lie
+        on the silhouette slant by construction.
+        """
+        if silhouette.bottom_y == silhouette.top_y:
+            return silhouette.top_width
+        t = (y - silhouette.top_y) / (
+            silhouette.bottom_y - silhouette.top_y
+        )
+        return (
+            silhouette.top_width * (1.0 - t) + silhouette.bottom_width * t
+        )
+
+    back = _BACKNESS_X["back"]
+
     # Map ``col`` to its backness anchor. Pair side (unrounded vs
     # rounded) is handled separately by the renderer as a fixed
     # pixel shift so the within-pair gap stays constant regardless
@@ -1167,12 +1313,11 @@ def build_vowel_chart_geometry(
     }
     cells: list[VowelChartCell] = []
     for ri, ci in sorted(occupied):
-        x = _col_to_anchor[ci]
-        y = _HEIGHT_Y[ROW_LABELS[ri]]
-        # Pure backness anchor projection; the rounded/unrounded
-        # split is exposed on ``pair_side`` for the renderer to
-        # apply in pixels.
-        chart_x, chart_y = project_to_chart_xy(x, y, 0.0, shape)
+        anchor_x = _col_to_anchor[ci]
+        cell_display_y = display_y_by_row[ri]
+        row_width = _width_at_display_y(cell_display_y)
+        chart_x = back + row_width * (anchor_x - back)
+        chart_y = cell_display_y
         if ci >= 6:
             pair_side = 0
             grid_col = _neutral_col_to_grid_col[ci]
@@ -1192,17 +1337,22 @@ def build_vowel_chart_geometry(
             )
         )
 
-    # Header chart_x sits on the backness anchor (front / central /
-    # back) so the labels line up with the cells in the widest row
-    # of the trapezoid. ``COL_LABELS`` is ``(Front, Central, Back)``
-    # in matching order with the ``_BACKNESS_X`` keys.
+    # Column headers sit at the silhouette's top edge so they line
+    # up with the topmost populated row's cells. Their chart_x is
+    # the topmost row's projected backness anchor (front migrates
+    # inward as the silhouette narrows; central shifts toward the
+    # back anchor too; back stays flush with the vertical right
+    # edge).
     _col_label_to_anchor_key = ("front", "central", "back")
+    top_row_width = silhouette.top_width
     col_headers = tuple(
         VowelChartColHeader(
             label=label,
             grid_col=(VOWEL_FIRST_DATA_GRID_COL + ci * 3),
             grid_col_span=VOWEL_COL_HEADER_GRID_COL_SPAN,
-            chart_x=_BACKNESS_X[_col_label_to_anchor_key[ci]],
+            chart_x=back
+            + top_row_width
+            * (_BACKNESS_X[_col_label_to_anchor_key[ci]] - back),
         )
         for ci, label in enumerate(COL_LABELS)
     )
@@ -1211,6 +1361,7 @@ def build_vowel_chart_geometry(
         title=VOWEL_CHART_TITLE,
         title_grid_col_span=VOWEL_TITLE_GRID_COL_SPAN,
         shape=shape,
+        silhouette=silhouette,
         cols=col_headers,
         rows=rows,
         cells=tuple(cells),

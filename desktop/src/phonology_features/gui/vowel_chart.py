@@ -38,6 +38,7 @@ from phonology_shared.render.vowel_layout import (
     Confidence,
     VowelChartCell,
     VowelChartGeometry,
+    VowelChartSilhouette,
     VowelChartShape,
     VowelPlacement,
     VowelProfile,
@@ -131,6 +132,14 @@ class VowelChartWidget(QWidget):
         # trapezoid or triangle silhouette behind the data area
         # only (not under the row labels or column headers).
         self._shape: VowelChartShape = VowelChartShape.TRAPEZOID
+        # Silhouette corners for the current inventory. Populated
+        # by :py:meth:`_render_geometry` from the shared
+        # :py:attr:`VowelChartGeometry.silhouette` so the outline
+        # adapts to the populated row range (e.g. a Spanish
+        # inventory whose lowest row is Open uses the canonical
+        # narrow bottom; one whose lowest row is Open-mid carries
+        # a wider bottom edge). ``None`` before the first render.
+        self._silhouette: VowelChartSilhouette | None = None
         # Cell width hint used to inset the data rectangle so cells
         # placed at chart_x == 0 / 1 stay fully inside the trapezoid
         # instead of clipping at the left / right edge. Populated
@@ -235,6 +244,7 @@ class VowelChartWidget(QWidget):
         children track the widget's size.
         """
         self._shape = geometry.shape
+        self._silhouette = geometry.silhouette
         # Title (top, centred over the data area).
         title = QLabel(geometry.title, self)
         title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
@@ -390,19 +400,36 @@ class VowelChartWidget(QWidget):
         dx, dy, dw, dh = self._data_area_rect()
         if dw <= 0 or dh <= 0:
             return
-        # Silhouette corners come from the shared helper that the
-        # web bakes into CSS, so the two surfaces draw the same
-        # outline. The right edge sits on the back-pair's outer
-        # extent (back vowels are flush against it) and the left
-        # edge slants from the front column's close position to
-        # its open position.
-        corners = vowel_trapezoid_corners(self._shape)
-        top_y = dy + int(corners["top_y"] * dh)
-        bottom_y = dy + int(corners["bottom_y"] * dh)
-        top_left_x = dx + int(corners["top_left"] * dw)
-        top_right_x = dx + int(corners["top_right"] * dw)
-        bottom_left_x = dx + int(corners["bottom_left"] * dw)
-        bottom_right_x = dx + int(corners["bottom_right"] * dw)
+        # Silhouette corners come from the geometry the bridge
+        # built for this inventory (adapted to its populated row
+        # range). Falls back to the canonical 7-row silhouette
+        # before the first render so an empty widget paints
+        # something sensible. The right edge sits on the back-
+        # pair's outer extent (back vowels are flush against it)
+        # and the left edge slants from the topmost row's front
+        # position to the bottommost row's front position.
+        sil = self._silhouette
+        if sil is None:
+            corners = vowel_trapezoid_corners(self._shape)
+            top_y_norm = corners["top_y"]
+            bottom_y_norm = corners["bottom_y"]
+            top_left_norm = corners["top_left"]
+            top_right_norm = corners["top_right"]
+            bottom_left_norm = corners["bottom_left"]
+            bottom_right_norm = corners["bottom_right"]
+        else:
+            top_y_norm = sil.top_y
+            bottom_y_norm = sil.bottom_y
+            top_left_norm = sil.top_left
+            top_right_norm = sil.top_right
+            bottom_left_norm = sil.bottom_left
+            bottom_right_norm = sil.bottom_right
+        top_y = dy + int(top_y_norm * dh)
+        bottom_y = dy + int(bottom_y_norm * dh)
+        top_left_x = dx + int(top_left_norm * dw)
+        top_right_x = dx + int(top_right_norm * dw)
+        bottom_left_x = dx + int(bottom_left_norm * dw)
+        bottom_right_x = dx + int(bottom_right_norm * dw)
         path = QPainterPath()
         path.moveTo(top_left_x, top_y)
         path.lineTo(top_right_x, top_y)
