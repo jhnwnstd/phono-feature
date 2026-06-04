@@ -253,11 +253,6 @@ def test_layout_css_emits_all_height_constants() -> None:
         # the equal-spacing problem.
         ("--vowel-pair-gap", "VOWEL_PAIR_GAP_PX"),
         ("--vowel-pair-separator", "VOWEL_PAIR_SEPARATOR_PX"),
-        # Vowel tooltip wake-up delay. Web reads the CSS custom
-        # property; desktop reads the same Python constant via a
-        # QProxyStyle override. Pinned so a future "just bump the
-        # JS literal" diff fails CI and forces the shared edit.
-        ("--vowel-tooltip-show-delay-ms", "VOWEL_TOOLTIP_SHOW_DELAY_MS"),
         # Per-button stride (BTN_W / BTN_GAP). main.js reads
         # ``--seg-btn-w`` / ``--seg-btn-gap`` via
         # ``getComputedStyle`` so the JS-side per-row column math

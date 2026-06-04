@@ -356,19 +356,6 @@ def test_logical_col_offset_skips_spacer_tracks() -> None:
     assert physicals == {1, 2, 4, 5, 7, 8}
 
 
-def test_vowel_tooltip_format_pinned() -> None:
-    """One source of truth for the per-vowel tooltip string. A
-    future tweak (extra whitespace, different brackets) propagates
-    to both UIs from one edit, so this test pins the current
-    format.
-    """
-    from phonology_shared.render.vowel_layout import vowel_tooltip
-
-    assert vowel_tooltip("i", "high", "Close: [+high, -low]") == (
-        "/i/  [high]  Close: [+high, -low]"
-    )
-
-
 def test_chart_geometry_omits_empty_rows() -> None:
     """``build_vowel_chart_geometry`` skips height tiers that have
     no occupied cell. Without this, the web renderer would emit a
@@ -401,32 +388,6 @@ def test_chart_geometry_omits_empty_rows() -> None:
         VOWEL_FIRST_DATA_GRID_ROW + i for i in range(len(geometry.rows))
     ]
     assert [r.grid_row for r in geometry.rows] == expected_grid_rows
-
-
-def test_chart_geometry_bakes_tooltip_per_entry() -> None:
-    """Every cell entry must carry the prebaked tooltip string so the
-    web bridge can attach it verbatim without re-formatting.
-    """
-    from phonology_shared.render.vowel_layout import (
-        build_vowel_chart_geometry,
-        vowel_tooltip,
-    )
-
-    engine = _engine("hayes_features.json")
-    vowel_segs = _vowel_segs(engine)
-    seg_feats = {s: dict(engine.segments[s]) for s in vowel_segs}
-    profile = detect_vowel_profile(vowel_segs, seg_feats)
-    geometry = build_vowel_chart_geometry(vowel_segs, profile, seg_feats)
-
-    for cell in geometry.cells:
-        for entry in cell.entries:
-            assert entry.tooltip == vowel_tooltip(
-                entry.seg, entry.confidence, entry.reason
-            ), f"tooltip drift on /{entry.seg}/: got {entry.tooltip!r}"
-            assert entry.tooltip.startswith(f"/{entry.seg}/"), (
-                f"tooltip for /{entry.seg}/ does not lead with the"
-                f" slash-bracketed segment: {entry.tooltip!r}"
-            )
 
 
 def test_chart_geometry_cell_grid_col_avoids_spacer_tracks() -> None:

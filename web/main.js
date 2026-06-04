@@ -1102,16 +1102,6 @@ function _buildSegmentButton(seg, extraAttrs) {
     if (extraAttrs) {
         for (const [k, v] of Object.entries(extraAttrs)) {
             if (k.startsWith("data-")) btn.setAttribute(k, v);
-            else if (k === "title") {
-                // Use a CSS-controlled tooltip via data-tooltip rather
-                // than the native ``title`` attribute. Native tooltips
-                // pick up the host OS theme (Linux dark-GTK shows
-                // dark-on-dark even in app lightmode); the CSS variant
-                // honours the app palette. ``aria-label`` is left as
-                // the canonical label so screen readers still get the
-                // pronunciation; the tooltip extends it.
-                btn.setAttribute("data-tooltip", v);
-            }
         }
     }
     state.seg_buttons.set(seg, btn);
@@ -1191,15 +1181,9 @@ function _buildVowelChart(chart) {
     return groupEl;
 }
 
-/** Build a single vowel-cell button. ``segEntry`` carries
- *  ``{seg, confidence, reason, tooltip}`` from the bridge; the
- *  tooltip string is preformatted by the shared
- *  ``vowel_layout.vowel_tooltip`` helper so both UIs render the
- *  same text. */
-function _buildVowelCellButton(segEntry) {
-    const btn = _buildSegmentButton(segEntry.seg, {
-        title: segEntry.tooltip,
-    });
+/** Build a single vowel-cell button from an IPA segment string. */
+function _buildVowelCellButton(seg) {
+    const btn = _buildSegmentButton(seg);
     btn.classList.add("vowel-chart-cell");
     return btn;
 }
@@ -1209,11 +1193,11 @@ function _buildVowelCellButton(segEntry) {
  *  :py:meth:`VowelChartWidget._place_cell` collision-cell handling:
  *  the entries arrive sorted by descending placement confidence,
  *  so the highest-confidence vowel sits on top. */
-function _buildVowelCellStack(segEntries) {
+function _buildVowelCellStack(segs) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-stack";
-    for (const entry of segEntries) {
-        cell.appendChild(_buildVowelCellButton(entry));
+    for (const seg of segs) {
+        cell.appendChild(_buildVowelCellButton(seg));
     }
     return cell;
 }
@@ -3630,112 +3614,6 @@ function wireSegmentDelegation() {
         ev.preventDefault();
         copySegmentToClipboard(seg);
     });
-    // Tooltip on vowel-chart buttons. The CSS-only ``:hover::after``
-    // pattern would render the tooltip inside the seg-pane's
-    // ``overflow: auto`` clip rect; for top-row vowels (close /i/y/...)
-    // that meant the tooltip popped above the visible area and the
-    // pane added a phantom scroll. We instead drive a single
-    // body-level fixed-position element from ``mouseover`` /
-    // ``mouseout`` (these bubble, unlike mouseenter/mouseleave), with
-    // a show-delay matching native title-tip behaviour.
-    nodes.segGrid.addEventListener("mouseover", (ev) => {
-        const btn = ev.target.closest(".seg-btn[data-tooltip]");
-        if (!btn || !nodes.segGrid.contains(btn)) return;
-        _scheduleVowelTooltip(btn);
-    });
-    nodes.segGrid.addEventListener("mouseout", (ev) => {
-        const btn = ev.target.closest(".seg-btn[data-tooltip]");
-        if (!btn || !nodes.segGrid.contains(btn)) return;
-        // ``relatedTarget`` is where the pointer is heading. If it's
-        // still inside the same button (e.g. into its rasterized-label
-        // span), keep the tooltip; ignore the mouseout.
-        const next = ev.relatedTarget;
-        if (next instanceof Node && btn.contains(next)) return;
-        _hideVowelTooltip();
-    });
-}
-
-/** Show delay in ms before the vowel tooltip appears on hover.
- *  Read once at boot from the ``--vowel-tooltip-show-delay-ms`` CSS
- *  custom property that ``web/scripts/build.py`` bakes from
- *  ``layout.VOWEL_TOOLTIP_SHOW_DELAY_MS`` (the single source of
- *  truth, also consumed by the desktop's QProxyStyle override). The
- *  fallback only fires if layout.css somehow failed to load. */
-const VOWEL_TOOLTIP_SHOW_DELAY_MS = (() => {
-    const raw = getComputedStyle(document.documentElement)
-        .getPropertyValue("--vowel-tooltip-show-delay-ms")
-        .trim();
-    const n = parseInt(raw, 10);
-    return Number.isFinite(n) && n > 0 ? n : 1000;
-})();
-
-const _tooltipState = {
-    el: null,
-    showTimer: 0,
-    activeBtn: null,
-};
-
-function _ensureVowelTooltip() {
-    if (_tooltipState.el) return _tooltipState.el;
-    const el = document.createElement("div");
-    el.className = "vowel-tooltip";
-    el.setAttribute("role", "tooltip");
-    document.body.appendChild(el);
-    _tooltipState.el = el;
-    return el;
-}
-
-/** Start (or restart) the hover delay for ``btn``. Always clears any
- *  pending timer and any currently-shown tooltip so each hover gets
- *  the full ``VOWEL_TOOLTIP_SHOW_DELAY_MS`` countdown. Previously the
- *  "same button" early-return preserved an in-flight timer, which
- *  was correct, but the post-show path left the tooltip's CSS state
- *  in a way that made the next button's mouseover trip a near-instant
- *  reveal. Hiding+rescheduling unconditionally per hover removes that
- *  state ambiguity. */
-function _scheduleVowelTooltip(btn) {
-    if (_tooltipState.showTimer) {
-        clearTimeout(_tooltipState.showTimer);
-        _tooltipState.showTimer = 0;
-    }
-    if (_tooltipState.el) _tooltipState.el.classList.remove("show");
-    _tooltipState.activeBtn = btn;
-    _tooltipState.showTimer = window.setTimeout(() => {
-        _tooltipState.showTimer = 0;
-        if (_tooltipState.activeBtn !== btn) return;
-        _showVowelTooltip(btn);
-    }, VOWEL_TOOLTIP_SHOW_DELAY_MS);
-}
-
-function _showVowelTooltip(btn) {
-    const text = btn.getAttribute("data-tooltip");
-    if (!text) return;
-    const el = _ensureVowelTooltip();
-    el.textContent = text;
-    // Position off-screen first so the about-to-be-shown tooltip
-    // doesn't flash at the previous position during the
-    // measure-then-place dance.
-    el.style.top = "-9999px";
-    el.style.left = "-9999px";
-    el.classList.add("show");
-    const r = btn.getBoundingClientRect();
-    const tr = el.getBoundingClientRect();
-    let left = r.left + r.width / 2 - tr.width / 2;
-    const max = window.innerWidth - tr.width - 4;
-    if (left < 4) left = 4;
-    if (left > max) left = max;
-    const top = r.top - tr.height - 4;
-    el.style.left = left + "px";
-    el.style.top = top + "px";
-}
-
-function _hideVowelTooltip() {
-    if (_tooltipState.showTimer) {
-        clearTimeout(_tooltipState.showTimer);
-        _tooltipState.showTimer = 0;
-    }
-    _tooltipState.activeBtn = null;
-    if (_tooltipState.el) _tooltipState.el.classList.remove("show");
 }
 
 /** Copy a segment symbol to the OS clipboard with status-bar

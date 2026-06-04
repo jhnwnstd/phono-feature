@@ -123,20 +123,6 @@ def _run_gui(argv: list[str]) -> int:
     icon_pix.fill(QColor("#2563EB"))
     app.setWindowIcon(QIcon(icon_pix))
     app.setStyle("Fusion")
-    # Apply the shared tooltip wake-up delay (single source of truth
-    # in ``layout.VOWEL_TOOLTIP_SHOW_DELAY_MS``) by wrapping the
-    # active QStyle in a QProxyStyle that overrides the
-    # ``SH_ToolTip_WakeUpDelay`` style hint. Qt's QToolTip queries
-    # the style for this hint when scheduling the wake-up timer, so
-    # this is the cleanest hook to align with the web's delay without
-    # writing a custom Qt tooltip widget. Web reads the same constant
-    # via the ``--vowel-tooltip-show-delay-ms`` CSS variable that
-    # ``web/scripts/build.py`` bakes from the Python source.
-    from phonology_features.gui.style_utils import (
-        TooltipDelayStyle,
-    )
-
-    app.setStyle(TooltipDelayStyle(app.style()))
     # Seed Qt's default palette + app-wide background BEFORE any window
     # is constructed. Without this, the compositor's initial surface
     # is filled by Qt against its default light palette; in dark mode

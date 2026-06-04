@@ -1,7 +1,7 @@
 """Qt thin shell that renders the shared vowel chart geometry.
 
-All placement decisions, collision grouping, tooltip formatting,
-and physical-coordinate arithmetic live in
+All placement decisions, collision grouping, and physical-
+coordinate arithmetic live in
 :py:mod:`phonology_shared.render.vowel_layout`. This module
 walks the pre-built :py:class:`~vowel_layout.VowelChartGeometry`
 and emits Qt widgets: labels for headers + rows, buttons (single
@@ -41,7 +41,6 @@ from phonology_shared.render.vowel_layout import (
     VOWEL_TITLE_GRID_ROW,
     Confidence,
     VowelChartCell,
-    VowelChartCellEntry,
     VowelChartGeometry,
     VowelChartRow,
     VowelPlacement,
@@ -195,8 +194,8 @@ class VowelChartWidget(QWidget):
     ) -> None:
         """Build the shared geometry, then render it as Qt widgets.
 
-        The geometry pass (placement, collision grouping, tooltip
-        formatting, physical-coordinate arithmetic) all happens in
+        The geometry pass (placement, collision grouping, and
+        physical-coordinate arithmetic) all happens in
         :py:mod:`vowel_layout`; this method only translates the
         result into widget calls.
         """
@@ -268,10 +267,9 @@ class VowelChartWidget(QWidget):
         """Single entry: button straight in. Multiple entries:
         stack them in a transparent vbox container."""
         if len(cell.entries) == 1:
-            entry = cell.entries[0]
-            btn = self._buttons.get(entry.seg)
+            btn = self._buttons.get(cell.entries[0])
             if btn:
-                self._prep_button(btn, entry)
+                btn.show()
                 self._grid.addWidget(btn, cell.grid_row, cell.grid_col)
             return
         # Parented at construction so the container is never a
@@ -284,10 +282,10 @@ class VowelChartWidget(QWidget):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(1)
         added = False
-        for entry in cell.entries:
-            btn = self._buttons.get(entry.seg)
+        for seg in cell.entries:
+            btn = self._buttons.get(seg)
             if btn:
-                self._prep_button(btn, entry)
+                btn.show()
                 vbox.addWidget(btn)
                 added = True
         if added:
@@ -295,11 +293,3 @@ class VowelChartWidget(QWidget):
         else:
             self._cell_containers.remove(container)
             container.deleteLater()
-
-    @staticmethod
-    def _prep_button(btn: QWidget, entry: VowelChartCellEntry) -> None:
-        """Attach the prebaked tooltip + show. The tooltip string is
-        formatted by the shared :py:func:`vowel_layout.vowel_tooltip`
-        so the desktop and web read the same text."""
-        btn.setToolTip(entry.tooltip)
-        btn.show()

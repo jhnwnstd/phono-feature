@@ -17,41 +17,9 @@ rebuild is wasted. ``set_html`` short-circuits the common case.
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import (
-    QProxyStyle,
-    QStyle,
-    QStyleHintReturn,
-    QStyleOption,
-    QTextEdit,
-    QWidget,
-)
+from PyQt6.QtWidgets import QTextEdit, QWidget
 
-from phonology_shared.render.layout import VOWEL_TOOLTIP_SHOW_DELAY_MS
 from phonology_shared.render.palette import C
-
-
-class TooltipDelayStyle(QProxyStyle):
-    """QStyle wrapper that overrides ``SH_ToolTip_WakeUpDelay``.
-
-    The desktop's QToolTip uses the active style's wake-up delay to
-    schedule the show timer. By wrapping the system style in this
-    proxy at startup and routing the hint through
-    :py:data:`VOWEL_TOOLTIP_SHOW_DELAY_MS` (shared with the web via
-    the build relay), the desktop hover delay tracks the same Python
-    constant the web reads from layout.css. One number to update,
-    no per-UI drift.
-    """
-
-    def styleHint(
-        self,
-        hint: QStyle.StyleHint,
-        option: QStyleOption | None = None,
-        widget: QWidget | None = None,
-        returnData: QStyleHintReturn | None = None,
-    ) -> int:
-        if hint == QStyle.StyleHint.SH_ToolTip_WakeUpDelay:
-            return VOWEL_TOOLTIP_SHOW_DELAY_MS
-        return super().styleHint(hint, option, widget, returnData)
 
 
 def set_css(widget: QWidget, css: str) -> bool:

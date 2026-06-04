@@ -41,7 +41,7 @@ def test_build_inventory_summary_groups_colliding_vowels() -> None:
         for cell in summary["vowel_chart"]["cells"]
         if cell["row"] == 3 and cell["col"] == 2
     )
-    assert {entry["seg"] for entry in target["segs"]} == {"ə", "ɜ"}
+    assert set(target["segs"]) == {"ə", "ɜ"}
 
 
 def test_summarize_segment_selection_single_maps_zero_to_empty() -> None:

@@ -345,18 +345,17 @@ def _vowel_chart_summary(
 ) -> dict[str, Any]:
     """Serialize the render-ready vowel chart geometry for both UIs.
 
-    Delegates the placement, collision-grouping, tooltip formatting,
-    and physical-coordinate decisions to
-    :py:func:`build_vowel_chart_geometry`; this function only
-    flattens the dataclass tree into a JSON-shaped dict for the
-    bridge. Both the Qt widget and the web renderer consume the
-    same fields.
+    Delegates the placement, collision-grouping, and physical-
+    coordinate decisions to :py:func:`build_vowel_chart_geometry`;
+    this function only flattens the dataclass tree into a
+    JSON-shaped dict for the bridge. Both the Qt widget and the
+    web renderer consume the same fields.
 
     ``rows`` lists only POPULATED height tiers (empty rows omitted).
-    ``cells`` carries per-cell logical + physical coordinates plus
-    fully-baked tooltip strings on every entry; the web renderer
-    adds 1 to the ``grid_*`` fields when assigning CSS grid lines
-    (which are 1-indexed) and the Qt renderer uses them directly.
+    ``cells`` carries per-cell logical + physical coordinates and
+    the segments occupying the cell; the web renderer adds 1 to
+    the ``grid_*`` fields when assigning CSS grid lines (which are
+    1-indexed) and the Qt renderer uses them directly.
     """
     seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)
@@ -390,15 +389,7 @@ def _vowel_chart_summary(
                 "col": cell.col,
                 "grid_row": cell.grid_row,
                 "grid_col": cell.grid_col,
-                "segs": [
-                    {
-                        "seg": entry.seg,
-                        "confidence": entry.confidence,
-                        "reason": entry.reason,
-                        "tooltip": entry.tooltip,
-                    }
-                    for entry in cell.entries
-                ],
+                "segs": list(cell.entries),
             }
             for cell in geometry.cells
         ],
