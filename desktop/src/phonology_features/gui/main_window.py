@@ -364,7 +364,19 @@ class MainWindow(QMainWindow):
         self._vsplit = _ThemedSplitter(Qt.Orientation.Vertical, central)
         self._vsplit.addWidget(splitter)
         self._vsplit.addWidget(self.analysis)
-        self._vsplit.setSizes([700, 220])
+        # First-paint seed: reserve the comfortable analysis floor so
+        # the 50 ms pre-fit_to_content paint shows the analysis pane
+        # at its real minimum, not the historical 220 px stub. The top
+        # half gets whatever remains of MIN_FIRST_LAUNCH_H after the
+        # toolbar / status bar / floor reservation; on the first
+        # ``fit_to_content`` call those numbers get re-applied against
+        # the live vsplit height.
+        _initial_analysis_h = layout.analysis_content_floor_h()
+        _initial_top_h = max(
+            layout.MIN_TOP_PANE_H,
+            layout.MIN_FIRST_LAUNCH_H - _initial_analysis_h - 100,
+        )
+        self._vsplit.setSizes([_initial_top_h, _initial_analysis_h])
         # Vertical handle is not user-draggable; the split is driven
         # by the panels' minimum heights plus the ⤢ expand toggle.
         # Qt resets ``handleWidth`` on every style polish, so
@@ -376,19 +388,24 @@ class MainWindow(QMainWindow):
             handle.setCursor(Qt.CursorShape.ArrowCursor)
             handle.setMaximumHeight(0)
             handle.setMinimumHeight(0)
-        # Vertical stretch: extra height goes to the analysis pane
-        # (user explicitly asked for this). The top panels keep their
-        # content-driven height; analysis grows for the rest.
-        self._vsplit.setStretchFactor(0, 0)
-        self._vsplit.setStretchFactor(1, 1)
+        # Vertical stretch: extra height now goes to the TOP pane
+        # (seg + feat). The analysis pane keeps its comfortable
+        # four-row floor; spare vertical room is what lets the
+        # segment grid fit more rows / reduce its internal scrollbar
+        # and what the feature panel uses to drop its own scrollbar.
+        # The expand toggle still lifts the analysis pane to 55%
+        # temporarily when the user wants more analysis room.
+        self._vsplit.setStretchFactor(0, 1)
+        self._vsplit.setStretchFactor(1, 0)
         self._geom = GeometryController(
             self, self._hsplit, self._vsplit, self._settings
         )
-        # Floor lets analysis squeeze down to its title bar + one
-        # line; the preferred 220 px still wins on comfortable
-        # windows because ``apply_splitter_sizes`` gives analysis
-        # whatever's left after the top panes' ``top_need_h``.
-        self.analysis.setMinimumHeight(self._geom.HARD_MIN_ANALYSIS_H)
+        # The widget's ``minimumSizeHint`` already returns the
+        # comfortable four-row floor via
+        # ``REGION_CONSTRAINTS['analysis_panel'].min_h``. Setting an
+        # explicit ``setMinimumHeight`` here would lock that into a
+        # second authority and break the degenerate-window fallback;
+        # leave Qt's minimum-resolution machinery to read the hint.
         self._vsplit.setCollapsible(1, False)
         root.addWidget(self._vsplit)
         # A manual drag owns the ratio until the next inventory
@@ -399,11 +416,14 @@ class MainWindow(QMainWindow):
         # Push horizontal drag into seg-pane internals so the vowel
         # chart resizes and flips at the ``VOWEL_STACK_W`` threshold.
         self._hsplit.splitterMoved.connect(self._on_hsplit_moved)
-        # ⤢ stashes current sizes + top-pane min height, then resizes
-        # so analysis gets ~55% (matches the web ``.analysis.expanded``
-        # rule). ⤣ restores both.
+        # ⤢ stashes the vsplit sizes and freezes the seg-pane layout
+        # for the duration of the expand. Top-pane minimums are NOT
+        # touched -- the splitter compresses the top panes' visible
+        # area but their internal layout (column count, spillover
+        # partition, vowel chart placement) stays at its pre-expand
+        # state. ⤣ restores the vsplit sizes and unfreezes layout.
         self._pre_expand_vsplit_sizes: list[int] | None = None
-        self._pre_expand_min_heights: tuple[int, int, int] = (0, 0, 0)
+        self._layout_frozen: bool = False
         self.analysis.expand_toggled.connect(self._toggle_analysis_expand)
         # Ctrl+Shift+M (Magnify) mirrors the header button.
         _expand_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
@@ -476,8 +496,14 @@ class MainWindow(QMainWindow):
         left_lay.setContentsMargins(0, 0, 0, 0)
         left_lay.setSpacing(0)
         self.seg_grid_widget = SegmentGridWidget(left_wrap)
-        left_lay.addWidget(self.seg_grid_widget)
-        left_lay.addStretch()
+        # Stretch=1 + ``MinimumExpanding`` vertical policy on the widget
+        # (set inside SegmentGridWidget.__init__) lets the consonant
+        # grid absorb whatever vertical space left_wrap holds -- so
+        # the spillover algorithm sees the FULL available column-of-
+        # consonants height as its budget instead of just the
+        # natural-content height. No trailing ``addStretch`` so the
+        # widget actually claims that space.
+        left_lay.addWidget(self.seg_grid_widget, stretch=1)
         self.vowel_chart_widget = VowelChartWidget(seg_content)
         self.vowel_chart_widget.hide()
         # Seed with the per-pane width default; the splitter-drag
@@ -494,8 +520,7 @@ class MainWindow(QMainWindow):
             stretch=0,
             alignment=Qt.AlignmentFlag.AlignTop,
         )
-        seg_content_layout.addLayout(self._seg_h_pair)
-        seg_content_layout.addStretch()
+        seg_content_layout.addLayout(self._seg_h_pair, stretch=1)
         # Tracks whether the chart is currently in the bottom-stacked
         # slot (True) or the right-side slot (False). Flipped by
         # ``_on_seg_pane_width_changed``.
@@ -1198,7 +1223,14 @@ class MainWindow(QMainWindow):
         Idempotent on same-width calls — the resize event filter
         fires this on every resizeEvent, including Qt's own internal
         layout passes; the early-return below keeps that cheap.
+
+        Frozen-layout short-circuit: while ``_layout_frozen`` is True
+        (set during the analysis-pane expand toggle), the vowel-stack
+        flip and chart-width push are skipped. The expand is a
+        TEMPORARY viewing aid and must not reflow the seg pane.
         """
+        if self._layout_frozen:
+            return
         if seg_pane_w == getattr(self, "_last_seg_pane_w", -1):
             return
         self._last_seg_pane_w = seg_pane_w
@@ -1236,14 +1268,18 @@ class MainWindow(QMainWindow):
         total. Mirrors the web version (``.analysis.expanded`` →
         ``min-height: 55vh``).
 
-        The "hard barrier" stopping the analysis pane from growing
-        is ``geometry_controller.fit_to_content`` setting each top
-        panel's ``minimumHeight`` to its content size hint (~597 px
-        for the feature panel). Qt's splitter respects per-child
-        minimums, so without dropping those the splitter literally
-        cannot compress the top block. Expand stashes the original
-        minimums on hsplit + seg_panel + feat_panel and zeroes
-        them; collapse restores all three.
+        The expand toggle is a TEMPORARY viewing aid -- the top panes
+        physically compress (their content scrolls internally if they
+        no longer fit) but their LAYOUT is frozen: the seg-pane
+        column count, spillover partition, and vowel-chart stack-vs-
+        side-by-side decision are NOT recomputed during the expansion.
+        The previous implementation zeroed seg / feat / hsplit
+        ``minimumHeight`` to free room for the splitter, which both
+        let panel minimums go stale across inventory swaps AND
+        triggered reflow-on-resize. Now ``geometry.fit_to_content``
+        caps those minimums at ``vsplit_total - analysis_floor`` from
+        the start, so the splitter is free to compress without any
+        runtime mutation of the panes' minimums.
         """
         if self._pre_expand_vsplit_sizes is not None:
             self._restore_analysis_expand()
@@ -1253,29 +1289,25 @@ class MainWindow(QMainWindow):
         if total <= 0:
             return
         self._pre_expand_vsplit_sizes = list(sizes)
-        # Stash every minimum-height constraint we'll need to relax
-        # so collapse can restore the exact floor the user (or
-        # ``fit_to_content``) set up. Drop all three to zero so the
-        # splitter is free to give the analysis pane its 55 percent.
-        self._pre_expand_min_heights = (
-            self._hsplit.minimumHeight(),
-            self.seg_panel.minimumHeight(),
-            self.feat_panel.minimumHeight(),
-        )
-        self._hsplit.setMinimumHeight(0)
-        self.seg_panel.setMinimumHeight(0)
-        self.feat_panel.setMinimumHeight(0)
+        # Freeze layout recompute: child widgets (SegmentGridWidget,
+        # vowel-stack toggle in ``_on_seg_pane_width_changed``) read
+        # this flag and short-circuit. The expand-induced resize
+        # events still flow, but no spillover / column repartition
+        # happens until ``_restore_analysis_expand`` clears the flag.
+        self._layout_frozen = True
         new_analysis = layout.analysis_expand_target(total)
         self._vsplit.setSizes([total - new_analysis, new_analysis])
         self.analysis.set_expanded(True)
         self._geom.has_saved_splitter = True
 
     def _restore_analysis_expand(self) -> None:
-        """Restore the vsplit sizes and every relaxed minimum that
-        was active when the pane was expanded. Idempotent and safe
-        to call from non-expand paths (Clear, mode swap) so the
-        pane never lingers expanded after the state that motivated
-        the expand goes away.
+        """Restore the vsplit sizes and unfreeze layout recompute.
+        Idempotent and safe to call from non-expand paths (Clear,
+        mode swap, inventory load) so the pane never lingers
+        expanded after the state that motivated the expand goes
+        away. Does NOT touch any ``setMinimumHeight`` -- those are
+        owned by ``fit_to_content`` and remain stable across
+        expand / restore cycles.
         """
         if self._pre_expand_vsplit_sizes is None:
             return
@@ -1285,12 +1317,12 @@ class MainWindow(QMainWindow):
         if old_total > 0 and total > 0:
             new_top = round(total * old_top / old_total)
             self._vsplit.setSizes([new_top, total - new_top])
-        hsplit_min, seg_min, feat_min = self._pre_expand_min_heights
-        self._hsplit.setMinimumHeight(hsplit_min)
-        self.seg_panel.setMinimumHeight(seg_min)
-        self.feat_panel.setMinimumHeight(feat_min)
         self._pre_expand_vsplit_sizes = None
         self.analysis.set_expanded(False)
+        # Unfreeze after the splitter resize has happened so the
+        # final relayout (if any) on the post-resize event picks up
+        # the now-restored geometry without an extra round-trip.
+        self._layout_frozen = False
 
     def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
         """Activate the clicked panel on a press in its empty area,

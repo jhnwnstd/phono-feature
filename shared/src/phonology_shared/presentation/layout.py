@@ -162,6 +162,213 @@ def partition_groups_for_spillover(
 
 
 # ---------------------------------------------------------------------------
+# Geometry-aware segment-pane layout (supersedes
+# ``partition_groups_for_spillover``).
+#
+# The old policy assumed (a) a single rectangular budget at the bottom
+# of the pane, (b) fixed 2-column spillover, and (c) "row N height =
+# max(group_heights[2N..2N+1])" fixed-pair packing. None of those match
+# the actual seg-pane geometry: the vowel chart occupies a fixed width
+# on the right (in side-by-side mode) and the "dead space" the user
+# wants reclaimed is the rectangle BELOW max(main_flow_bottom,
+# chart_bottom) -- a non-trivial function of both the chart's height
+# and how many groups stayed in the main flow.
+#
+# ``plan_seg_layout`` returns a ``SegLayoutPlan`` describing the
+# complete layout: which groups stay in the main single-column flow,
+# which go into the spillover, how many columns the spillover gets
+# (1..max_spillover_cols based on pane width), and which spillover
+# column each spilled group lands in. Column assignment uses Longest-
+# Processing-Time (LPT) bin-packing so the spillover's bounding height
+# is minimal -- strictly tighter than the old fixed-pair-row scheme.
+# Source order is preserved at render time: the column assignment is
+# computed by LPT but each column lists its groups in their original
+# index order so the user reads top-to-bottom in a column without
+# surprise.
+#
+# Sweep policy: the smallest k (number of groups in spillover) that
+# makes the whole layout fit wins. This preserves the historical
+# "spill only the tail" semantics so the user sees the maximum number
+# of groups in the natural single-column flow on top.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SegLayoutPlan:
+    """Complete segment-pane layout decision returned by
+    :py:func:`plan_seg_layout`.
+
+    ``main_groups`` lists the names that stay in the single-column
+    main flow at the top of the pane; ``spillover_groups`` lists the
+    names that fall into the spillover region below the main flow and
+    the vowel chart. ``n_spillover_cols`` is the number of columns in
+    that region (0 means no spillover). ``spillover_column_assignment``
+    is parallel to ``spillover_groups`` and gives each group's
+    destination column (0-indexed); when rendering, walk
+    ``spillover_groups`` in order and place each at the bottom of its
+    assigned column so the user reads top-to-bottom in column-major
+    order. ``spillover_rect`` is ``(x, y, w, h)`` of the spillover
+    region in pane-local pixel coordinates so the desktop can place
+    the spillover container precisely (web reads it for parity).
+    """
+
+    main_groups: tuple[str, ...]
+    spillover_groups: tuple[str, ...]
+    n_spillover_cols: int
+    spillover_column_assignment: tuple[int, ...]
+    spillover_rect: tuple[int, int, int, int]
+
+
+def plan_seg_layout(
+    group_names: Sequence[str],
+    group_heights: Sequence[int],
+    group_widths: Sequence[int],
+    *,
+    pane_w: int,
+    pane_h: int,
+    chart_rect: tuple[int, int, int, int] | None,
+    min_col_w: int,
+    max_spillover_cols: int = 4,
+    spillover_gutter: int = 8,
+) -> SegLayoutPlan:
+    """Compute the complete segment-pane layout (main flow + spillover)
+    given the pane size, the vowel chart's local rect, and per-group
+    natural heights and widths.
+
+    Algorithm (six small steps, each independently testable):
+
+    1. **Compute the spillover rectangle.** Always full-width, sits
+       below ``max(main_flow_bottom, chart_bottom)``. ``chart_rect``
+       is ``(x, y, w, h)`` in pane coords or ``None`` for "no chart
+       blocks the bottom" (stacked-below or empty inventories).
+
+    2. **Pick ``n_spillover_cols``.** ``min(max_spillover_cols, max(1,
+       spillover_w // (min_col_w + spillover_gutter)))``. Floor at 1
+       so a narrow pane still has somewhere for spillover to land; cap
+       at ``max_spillover_cols`` (default 4) so a 1600 px pane doesn't
+       fan groups out incoherently.
+
+    3. **Sweep candidate spill sizes from smallest to largest.** Start
+       with ``k = 0`` (no spillover); if the whole main flow fits in
+       ``pane_h``, accept. Otherwise try ``k = 1, 2, ...`` and pick
+       the smallest ``k`` that fits. This matches the historical
+       "spill only the tail" semantics.
+
+    4. **Pack the ``k`` spilled groups via LPT.** Sort by descending
+       natural height; assign each to the currently-shortest column.
+       The column with the largest total height sets the spillover's
+       bounding height. Source order is preserved at render time --
+       the assignment tuple records column membership, not display
+       order.
+
+    5. **Reject plans that overflow a column's width.** Each spillover
+       column gets width
+       ``(spillover_w - (n_cols - 1) * gutter) // n_cols``. A group
+       whose natural width exceeds that is unspillable for this
+       ``n_cols``; the sweep skips ``k`` values that would put it in
+       spillover (effectively pinning it to main flow).
+
+    6. **Fall back to "all main, scroll" on no fit.** If no ``k`` makes
+       the layout fit in ``pane_h``, the returned plan has every
+       group in ``main_groups`` and empty spillover. The caller's
+       internal ``QScrollArea`` then handles the overflow.
+    """
+    n = len(group_names)
+    if not (n == len(group_heights) == len(group_widths)):
+        raise ValueError(
+            "group_names, group_heights, group_widths must be the same"
+            f" length; got {n}, {len(group_heights)}, {len(group_widths)}"
+        )
+
+    empty_plan = SegLayoutPlan(
+        main_groups=tuple(group_names),
+        spillover_groups=(),
+        n_spillover_cols=0,
+        spillover_column_assignment=(),
+        spillover_rect=(0, 0, 0, 0),
+    )
+
+    if n == 0 or pane_h <= 0 or pane_w <= 0:
+        return empty_plan
+
+    chart_bottom = (
+        chart_rect[1] + chart_rect[3] if chart_rect is not None else 0
+    )
+
+    # Step 2: pick spillover column count from the full pane width.
+    # Spillover always claims the full pane width (sits below both
+    # main flow and chart), so it doesn't depend on which groups are
+    # spilled -- it's a property of the pane.
+    n_cols_max = max(
+        1, (pane_w + spillover_gutter) // (min_col_w + spillover_gutter)
+    )
+    n_cols = min(max_spillover_cols, n_cols_max)
+    col_w = (pane_w - (n_cols - 1) * spillover_gutter) // n_cols
+
+    def spillover_for(k: int) -> tuple[int, list[int], int]:
+        """Return ``(bounding_h, assignment_in_source_order,
+        rejected_flag)`` for spilling the last ``k`` groups.
+
+        ``rejected_flag`` is non-zero when one of the spilled groups
+        is too wide for ``col_w`` -- the caller skips this ``k``.
+        """
+        spill_indices = list(range(n - k, n))
+        # Width check first -- if any group is too wide, this k is
+        # infeasible regardless of how heights pack.
+        for idx in spill_indices:
+            if group_widths[idx] > col_w:
+                return 0, [], 1
+        # LPT bin-packing by descending height. ``order`` is indices
+        # into ``spill_indices`` sorted by height descending; stable
+        # tie-break by source order so identical-height groups keep
+        # natural ordering.
+        order = sorted(
+            range(k),
+            key=lambda i: (-group_heights[spill_indices[i]], i),
+        )
+        col_heights = [0] * n_cols
+        assignment = [0] * k
+        for i in order:
+            target_col = min(range(n_cols), key=lambda c: col_heights[c])
+            assignment[i] = target_col
+            col_heights[target_col] += group_heights[spill_indices[i]]
+        bounding = max(col_heights) if col_heights else 0
+        return bounding, assignment, 0
+
+    def main_flow_h_for(k: int) -> int:
+        return sum(group_heights[: n - k])
+
+    def total_h_for(k: int, spillover_bound: int) -> int:
+        main_bottom = main_flow_h_for(k)
+        spill_top = max(main_bottom, chart_bottom)
+        return spill_top + spillover_bound
+
+    # Step 3+6: try k=0 first (no spillover); if it fits, done.
+    # Then sweep upward looking for the smallest k that fits.
+    if main_flow_h_for(0) <= pane_h and chart_bottom <= pane_h:
+        return empty_plan
+
+    best_plan: SegLayoutPlan | None = None
+    for k in range(1, n + 1):
+        bounding, assignment, rejected = spillover_for(k)
+        if rejected:
+            continue
+        if total_h_for(k, bounding) <= pane_h:
+            spill_top = max(main_flow_h_for(k), chart_bottom)
+            best_plan = SegLayoutPlan(
+                main_groups=tuple(group_names[: n - k]),
+                spillover_groups=tuple(group_names[n - k :]),
+                n_spillover_cols=n_cols,
+                spillover_column_assignment=tuple(assignment),
+                spillover_rect=(0, spill_top, pane_w, bounding),
+            )
+            break
+
+    # Step 6 fallback: no k made the layout fit; let the caller scroll.
+    return best_plan if best_plan is not None else empty_plan
+
+
+# ---------------------------------------------------------------------------
 # Adaptive window layout — single source of truth for both frontends.
 #
 # Every layout decision below is consumed by:
@@ -234,17 +441,67 @@ MIN_FIRST_LAUNCH_H: int = 900
 # the app a comfortable claim on the primary screen on first launch
 # without filling it edge-to-edge; the user can resize from there.
 DEFAULT_SCREEN_FRACTION: float = 0.80
-# Preferred analysis-pane height when the feature pane already fits
-# its content. On short windows where the features need more height,
-# ``top_pane_height`` lets analysis shrink past this floor down to
-# ``HARD_MIN_ANALYSIS_H``. Sized so the resting (non-expanded)
-# analysis pane shows at least three minimal feature specification
-# rows comfortably (selection chip strip ~30 px + tab bar ~30 px +
-# three chip rows at ~30 px each + outer padding ~30 px); larger
-# bundles use the expand toggle.
-MIN_ANALYSIS_H: int = 252
-# Absolute floor so analysis is at least its title bar + a line of
-# text on the worst-case window size.
+# Per-row strides inside the analysis pane. Sized to match what the
+# desktop AnalysisPanel and the web .analysis box actually render --
+# selection-chip strip + spacing, QTabBar + its margins, and outer
+# panel padding (top + bottom + the tab content's inner padding) --
+# so ``analysis_content_floor_h`` returns the same pixel count both
+# UIs need.
+ANALYSIS_SELECTION_STRIP_H: int = 38
+ANALYSIS_TAB_BAR_H: int = 36
+ANALYSIS_OUTER_PADDING_H: int = 54
+# Comfortable minimum count of feature-spec rows the analysis pane
+# always reserves room for. The user's stated requirement: the pane
+# must reliably show at least four minimal feature specs without
+# clipping or scrollbars, on any inventory.
+ANALYSIS_MIN_VISIBLE_ROWS: int = 4
+
+
+def analysis_content_floor_h() -> int:
+    """The analysis pane's stable minimum height. Pure function of
+    the row strides above -- no inventory inputs, no widget metrics.
+
+    Both UIs consume this:
+
+    * Desktop: ``AnalysisPanel.minimumSizeHint().height()`` reads
+      ``REGION_CONSTRAINTS['analysis_panel'].min_h``, which is set
+      to this value below; the Qt splitter then refuses to compress
+      the analysis pane past it.
+    * Web: ``build.py`` bakes ``--min-analysis-h`` to the same number;
+      ``style.css`` locks ``min-height == max-height == var(...)`` in
+      the resting state.
+
+    This is the value the user means by "the analysis pane should
+    reliably show four minimal feature specs". The cap on top-pane
+    minimums in ``geometry.fit_to_content`` uses this so the splitter
+    cannot starve the pane below this floor regardless of inventory.
+    """
+    return (
+        ANALYSIS_SELECTION_STRIP_H
+        + ANALYSIS_TAB_BAR_H
+        + ANALYSIS_MIN_VISIBLE_ROWS * FEAT_ROW_H
+        + ANALYSIS_OUTER_PADDING_H
+    )
+
+
+# Preferred analysis-pane height. Identical to the floor since the
+# floor is the four-row comfortable minimum; kept as a distinct name
+# so existing callers reading "preferred" semantics stay valid. The
+# ``MIN_ANALYSIS_H`` constant is preserved for back-compat (web build
+# relays it as ``--min-analysis-h``); the value is now computed.
+# A function call would be cleaner but module-level CSS-relay code
+# reads this as a literal, so it stays a module-level int.
+MIN_ANALYSIS_H: int = (
+    38  # ANALYSIS_SELECTION_STRIP_H -- inline to keep type 'int'
+    + 36  # ANALYSIS_TAB_BAR_H
+    + 4 * 31  # ANALYSIS_MIN_VISIBLE_ROWS * FEAT_ROW_H
+    + 54  # ANALYSIS_OUTER_PADDING_H
+)
+# Absolute floor for the splitter policy only -- used as the cap
+# inside ``top_pane_height`` when the entire window is so short that
+# even ``analysis_content_floor_h()`` would not fit. Widgets must
+# NEVER use this directly; ``AnalysisPanel.minimumSizeHint`` reads
+# the four-row floor above instead.
 HARD_MIN_ANALYSIS_H: int = 60
 # Defensive floor for the top (seg / feat) pane in
 # ``top_pane_height``. The actual minimum heights are content-driven:
@@ -507,19 +764,29 @@ def top_pane_height(top_need_h: int, total: int) -> int:
 
     Policy:
 
-    * Cap at ``total - HARD_MIN_ANALYSIS_H`` so the analysis pane
-      always keeps at least its title-bar / one-line floor, no
-      matter how tall the features want to be.
-    * Floor at ``MIN_TOP_PANE_H`` so a tiny window still leaves the
-      feature cards a usable height, even when the cap above would
-      otherwise let them shrink to nothing.
+    * Cap at ``total - analysis_content_floor_h()`` so the analysis
+      pane always keeps its four-row comfortable floor, regardless
+      of how tall the top content wants to be.
+    * If the window is so short that even that cap would push top
+      below ``MIN_TOP_PANE_H``, fall back to the absolute
+      ``HARD_MIN_ANALYSIS_H`` cap; the analysis pane temporarily
+      shrinks past its comfortable floor on these worst-case window
+      sizes (acceptable degenerate behaviour).
+    * Floor at ``MIN_TOP_PANE_H`` so the feature cards always have
+      usable height even when the top pane would otherwise vanish.
 
     Both UIs honour this. Desktop calls it from
     ``geometry_controller.apply_splitter_sizes``; web encodes the
     same constants via the generated ``layout.css`` properties so
     the policy can't drift between frontends.
     """
-    top_h = min(top_need_h, total - HARD_MIN_ANALYSIS_H)
+    comfortable_cap = total - analysis_content_floor_h()
+    if comfortable_cap >= MIN_TOP_PANE_H:
+        top_h = min(top_need_h, comfortable_cap)
+    else:
+        # Window too short for both top and analysis floors; fall back
+        # to the absolute analysis floor so top stays usable.
+        top_h = min(top_need_h, total - HARD_MIN_ANALYSIS_H)
     return max(top_h, MIN_TOP_PANE_H)
 
 
@@ -770,16 +1037,18 @@ REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
         max_h=None,
         overflow="scroll",
     ),
-    # Analysis panel: floor lets analysis collapse to a tab-bar +
-    # one line; preferred height shows ~3 minimal feature-spec rows.
-    # The expand toggle bypasses ``pref_h`` up to
+    # Analysis panel: floor is the comfortable four-row minimum from
+    # ``analysis_content_floor_h``; the same value the web locks via
+    # ``--min-analysis-h``. The expand toggle bypasses this up to
     # ``ANALYSIS_MAX_RATIO`` of the vsplit (see
-    # ``analysis_expand_target``).
+    # ``analysis_expand_target``). ``HARD_MIN_ANALYSIS_H`` is reserved
+    # for the worst-case-window degenerate path inside
+    # ``top_pane_height`` and MUST NOT be used as a widget min.
     "analysis_panel": RegionConstraint(
         min_w=SEG_MIN_W + FEAT_MIN_W,
         pref_w=None,
         max_w=None,
-        min_h=HARD_MIN_ANALYSIS_H,
+        min_h=MIN_ANALYSIS_H,
         pref_h=MIN_ANALYSIS_H,
         max_h=None,
         overflow="scroll",

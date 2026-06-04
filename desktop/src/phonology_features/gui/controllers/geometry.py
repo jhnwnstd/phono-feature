@@ -289,27 +289,23 @@ class GeometryController:
             )
         feat_v_padding = 20
         top_need_h = feat_content_h + 80 + feat_v_padding
-        # Lock each panel's vertical minimum to its actual content
-        # height. Without this, the vsplit's stretch policy (top=0,
-        # analysis=1) lets the top section shrink when the window
-        # shrinks past the analysis floor, but never restores it
-        # when the window grows back — Qt's stretch factor only
-        # distributes EXTRA space, so anything the top "gave up"
-        # stays lost. Setting a content-driven minimum on each panel
-        # turns those givebacks into reversible operations: when the
-        # window grows again, Qt honors the minimum and analysis
-        # absorbs only what's beyond it.
-        #
-        # The chrome constant lives in ``layout`` so both UIs apply
-        # the same overhead: panel outer padding + header strip
-        # (clear button row) = ``PANEL_CHROME_V``. Was previously
-        # the duplicated literal ``24 + 30`` here.
-        self._w.seg_panel.setMinimumHeight(
-            seg_content_h + layout.PANEL_CHROME_V
-        )
-        self._w.feat_panel.setMinimumHeight(
-            feat_content_h + layout.PANEL_CHROME_V
-        )
+        # Cap each top-pane's minimum height so the analysis pane's
+        # comfortable four-row floor is always reservable. Without
+        # this cap, a tall inventory (Hayes' 28 features at full
+        # natural content height ~ 597 px + chrome) would push
+        # ``seg_panel.minimumHeight`` past the vsplit's
+        # ``total - analysis_floor`` budget; Qt's splitter respects
+        # per-child mins and the analysis pane silently collapses.
+        # The cap is the maximum height the panel may CLAIM as a
+        # hard splitter floor; anything beyond that flows into the
+        # panel's internal QScrollArea (already wired).
+        vsplit_total = self._vsplit.height()
+        floor = layout.analysis_content_floor_h()
+        max_top_min = max(layout.MIN_TOP_PANE_H, vsplit_total - floor)
+        seg_min = min(seg_content_h + layout.PANEL_CHROME_V, max_top_min)
+        feat_min = min(feat_content_h + layout.PANEL_CHROME_V, max_top_min)
+        self._w.seg_panel.setMinimumHeight(seg_min)
+        self._w.feat_panel.setMinimumHeight(feat_min)
         analysis_h = self.min_analysis_h
         toolbar_h = 50
         total_need_h = top_need_h + analysis_h + toolbar_h + 30
@@ -354,7 +350,13 @@ class GeometryController:
             if not self.has_saved_splitter:
                 self.apply_splitter_sizes(seg_need_w, feat_need_w, top_need_h)
             else:
-                self.apply_vsplit_to_content(top_need_h)
+                # Inventory-swap path: keep the user's vsplit size
+                # stable so the analysis pane does not jitter across
+                # loads. The seg / feat panel ``setMinimumHeight``
+                # calls above already announced the new content
+                # ceiling; Qt's layout pass picks it up without us
+                # writing splitter sizes.
+                self.reflow_top_pane_only(top_need_h)
 
     def fit_window_to_size(
         self, screen: QScreen | None, need_w: int, need_h: int
@@ -502,13 +504,13 @@ class GeometryController:
 
     def apply_vsplit_to_content(self, top_need_h: int) -> None:
         """Re-fit JUST the vsplit (top vs analysis) to the current
-        inventory's content height. Called on every inventory swap
-        AFTER the first launch (when ``has_saved_splitter`` is True
-        and we keep the user's hsplit drag preference). The vsplit
-        is not user-draggable, so re-fitting here is safe — and
-        necessary, because the user's "analysis as tall as it can
-        be" preference requires the top pane to shrink when a smaller
-        inventory loads, freeing vertical room for analysis.
+        inventory's content height. Called from
+        ``apply_splitter_sizes`` on the first launch only. Subsequent
+        inventory swaps go through :py:meth:`reflow_top_pane_only`
+        instead so the analysis-pane height stays stable across loads
+        (the user-visible bug: loading a smaller inventory used to
+        make analysis grow, which then shrank back on the next big
+        load, churning the layout).
         """
         total = self._vsplit.height()
         if total <= 0:
@@ -518,6 +520,24 @@ class GeometryController:
             return
         top_h = layout.top_pane_height(top_need_h, total)
         self._vsplit.setSizes([top_h, total - top_h])
+
+    def reflow_top_pane_only(self, top_need_h: int) -> None:
+        """Re-run the seg-pane spillover and feature-pane layout for
+        the new inventory WITHOUT changing the vsplit sizes. Called
+        on inventory swaps after the first launch so the user's
+        established analysis-pane height stays stable.
+
+        ``top_need_h`` is kept as a parameter for symmetry with
+        :py:meth:`apply_vsplit_to_content` and for the future case
+        where a very tall new inventory would push the cap (the
+        analysis floor is sacrosanct via ``setMinimumHeight``, so the
+        top pane's content overflows into its internal scroll area
+        rather than mutating the vsplit). No splitter writes here --
+        layout-reflow alone via Qt's normal resize-event path picks
+        up the new top-pane content from the panel's
+        ``setMinimumHeight`` that ``fit_to_content`` just applied.
+        """
+        del top_need_h  # currently unused; reserved for future cap-aware logic
 
     def fit_vsplit_after_layout(self, top_need_h: int) -> None:
         """Vertical-only fallback for the case in

@@ -7,7 +7,7 @@ import math
 from enum import StrEnum
 from typing import ClassVar
 
-from PyQt6.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QMimeData, QObject, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QContextMenuEvent, QFont, QResizeEvent
 from PyQt6.QtWidgets import (
     QGridLayout,
@@ -36,7 +36,6 @@ from phonology_shared.presentation.constants import (
 from phonology_shared.presentation.layout import (
     REGION_CONSTRAINTS,
     best_segment_n_cols,
-    partition_groups_for_spillover,
 )
 from phonology_shared.presentation.mode_logic import expand_button_tooltip
 from phonology_shared.presentation.palette import C
@@ -52,6 +51,26 @@ from phonology_shared.presentation.view_models import (
 # the button / header style if either changes.
 _SEG_BTN_H = 26
 _SEG_HEADER_H = 22
+
+
+def _owning_main_window(widget: QWidget) -> QObject | None:
+    """Walk up the parent chain looking for the ``MainWindow`` that
+    owns ``widget``. Used by ``SegmentGridWidget`` to read the
+    ``_layout_frozen`` flag without a hard import cycle: during the
+    analysis-pane expand toggle the owning window sets the flag,
+    and child widgets must short-circuit their layout-recompute paths
+    so a temporary expansion does not trigger spillover / column-count
+    reflow. Returns ``None`` when the widget is unparented (early
+    tests) or no ancestor has the flag attribute. The return type is
+    ``QObject`` (not ``QWidget``) so the helper works for any
+    flag-bearing ancestor regardless of widget hierarchy.
+    """
+    node: QObject | None = widget.parent()
+    while node is not None:
+        if hasattr(node, "_layout_frozen"):
+            return node
+        node = node.parent()
+    return None
 
 
 def _class_state_stylesheet(class_state: str) -> str:
@@ -1006,11 +1025,15 @@ class SegmentGridWidget(QWidget):
         self._grid.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
         )
-        # The grid can shrink (its parent panel holds the real floor).
-        # See ``REGION_CONSTRAINTS['seg_grid']`` for the contract.
+        # Horizontal: Preferred (parent splitter sets the bound).
+        # Vertical: MinimumExpanding so the widget claims whatever
+        # height ``left_wrap`` extends to (the seg-h-pair's tallest
+        # member, typically the vowel chart). The spillover policy
+        # uses that claimed height as its budget so dead space below
+        # the natural consonant content turns into spillover room.
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred,
-            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.MinimumExpanding,
         )
         self.setMinimumWidth(0)
         self._resize_timer = QTimer(self)
@@ -1130,6 +1153,16 @@ class SegmentGridWidget(QWidget):
         return max_possible
 
     def _do_relayout(self) -> None:
+        # Layout-frozen short-circuit: the analysis-pane expand toggle
+        # sets this flag on the owning MainWindow so the visible
+        # compression of the top panes does not trigger spillover /
+        # column-count recomputes mid-expand. The user wants the
+        # expand to be a temporary viewing aid, not a layout change.
+        frozen_owner = _owning_main_window(self)
+        if frozen_owner is not None and getattr(
+            frozen_owner, "_layout_frozen", False
+        ):
+            return
         n_cols = self._compute_n_cols()
         available = self._available_pane_height()
         groups_items = list(self._groups.items())
@@ -1152,11 +1185,34 @@ class SegmentGridWidget(QWidget):
                 groups_items, group_cols_main, strict=True
             )
         ]
-        main_count = partition_groups_for_spillover(
+        # New geometry-aware layout plan: variable spillover column
+        # count (driven by the widget's actual width) and LPT bin-
+        # packing so the spillover's bounding height is minimal. The
+        # ``chart_rect=None`` path means "spillover lives directly
+        # below main flow at this widget's bounds"; the full
+        # "spillover under the chart at full pane width" layout would
+        # move the spillover to a separate sibling widget and is
+        # deferred. ``min_col_w`` is the smallest column that hosts
+        # a half-width pair so the existing visual remains familiar.
+        slot_col_w = max(1, (n_cols - 1) // 2) * BTN_W + BTN_GAP
+        group_widths = [
+            best_segment_n_cols(len(segs), n_cols) * BTN_W
+            + max(0, best_segment_n_cols(len(segs), n_cols) - 1) * BTN_GAP
+            for (_, segs), _ in zip(groups_items, group_cols_main, strict=True)
+        ]
+        layout_plan = layout_mod.plan_seg_layout(
+            [name for name, _ in groups_items],
             main_heights,
-            available,
-            n_spillover_cols=2,
+            group_widths,
+            pane_w=max(self.width(), 0),
+            pane_h=max(available, 0),
+            chart_rect=None,
+            min_col_w=slot_col_w,
         )
+        # Old ``main_count`` semantics: number of groups in single-
+        # column main flow at the top. Derived from the plan so the
+        # rest of the rendering path stays the same.
+        main_count = len(layout_plan.main_groups)
         # Short-circuit: same n_cols + partition decision means the
         # previous layout is still valid; skips the rebuild on the
         # multi-pixel jitter common during live window drags.
@@ -1197,39 +1253,42 @@ class SegmentGridWidget(QWidget):
                 btn.show()
             grid_row += math.ceil(len(segs) / g_cols)
 
-        # Spillover: pair-by-pair, each group gets a half-width slot.
-        # Slot 0 in cols ``[0, slot_cols)``; col ``slot_cols`` is the
-        # visible gap; slot 1 in ``[slot_cols + 1, 2 * slot_cols + 1)``.
-        # Same QGridLayout as the main flow (nested-container version
-        # tanked startup). Each group runs ``best_segment_n_cols`` for
-        # its slot so spillover rows also avoid orphan buttons.
-        slot_cols = max(1, (n_cols - 1) // 2)
+        # Spillover: ``layout_plan.n_spillover_cols`` columns wide,
+        # with the LPT column assignment supplied per group.
+        # Groups stack column-major: within each column they appear in
+        # source order, top to bottom; LPT determines which column
+        # each lands in. Same QGridLayout as the main flow so a
+        # follow-up "spillover under chart at full pane width" only
+        # needs to move the widget, not the rendering scheme.
         spill = groups_items[main_count:]
-        for pair_start in range(0, len(spill), 2):
-            pair = spill[pair_start : pair_start + 2]
-            for slot, _ in enumerate(pair):
+        n_spill_cols = max(1, layout_plan.n_spillover_cols) if spill else 0
+        col_assignment = layout_plan.spillover_column_assignment
+        if spill:
+            gap_cols = n_spill_cols - 1
+            slot_cols = max(1, (n_cols - gap_cols) // n_spill_cols)
+            column_next_row = [grid_row] * n_spill_cols
+            for spill_idx, (_manner, segs) in enumerate(spill):
+                col_idx = (
+                    col_assignment[spill_idx]
+                    if spill_idx < len(col_assignment)
+                    else 0
+                )
+                col_idx = max(0, min(col_idx, n_spill_cols - 1))
+                slot_row = column_next_row[col_idx]
+                col_start = col_idx * (slot_cols + 1)
                 hdr = next(hdr_iter)
-                col_start = slot * (slot_cols + 1)
-                self._grid.addWidget(hdr, grid_row, col_start, 1, slot_cols)
+                self._grid.addWidget(hdr, slot_row, col_start, 1, slot_cols)
                 hdr.show()
-            pair_cols = [
-                best_segment_n_cols(len(segs), slot_cols) for _, segs in pair
-            ]
-            max_btn_rows = max(
-                math.ceil(len(segs) / g_cols)
-                for (_, segs), g_cols in zip(pair, pair_cols, strict=True)
-            )
-            for slot, ((_, segs), g_cols) in enumerate(
-                zip(pair, pair_cols, strict=True)
-            ):
-                col_start = slot * (slot_cols + 1)
-                for col_i, seg in enumerate(segs):
+                group_cols = best_segment_n_cols(len(segs), slot_cols)
+                for seg_i, seg in enumerate(segs):
                     btn = self._buttons[seg]
-                    br = grid_row + 1 + col_i // g_cols
-                    bc = col_start + (col_i % g_cols)
+                    br = slot_row + 1 + seg_i // max(group_cols, 1)
+                    bc = col_start + (seg_i % max(group_cols, 1))
                     self._grid.addWidget(btn, br, bc)
                     btn.show()
-            grid_row += 1 + max_btn_rows
+                n_btn_rows = math.ceil(len(segs) / max(group_cols, 1))
+                column_next_row[col_idx] = slot_row + 1 + n_btn_rows
+            grid_row = max(column_next_row)
 
     def _available_pane_height(self) -> int:
         """Viewport height of the QScrollArea ancestor: the budget the

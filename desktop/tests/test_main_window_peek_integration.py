@@ -109,14 +109,21 @@ def test_expand_button_round_trips_repeatedly(
             assert window._pre_expand_vsplit_sizes is None
 
 
-def test_expand_relaxes_all_top_pane_min_heights(
+def test_expand_does_not_mutate_top_pane_min_heights(
     qapp: QApplication, window: MainWindow
 ) -> None:
-    """⤢ drops the minimumHeight on hsplit AND on each top panel
-    so the splitter can actually shrink them. Without dropping
-    ``feat_panel.minimumHeight`` (set by ``fit_to_content`` to
-    ~597 px), the splitter respects that per-child floor and the
-    analysis pane can't grow past it. ⤣ restores all three.
+    """⤢ now leaves every top-pane minimumHeight UNCHANGED.
+
+    The previous implementation zeroed ``hsplit.minimumHeight``,
+    ``seg_panel.minimumHeight``, and ``feat_panel.minimumHeight`` so
+    the splitter was free to compress the top; that mutation went
+    stale across inventory swaps and forced the segment grid to
+    reflow on every expand. The new policy: ``fit_to_content``
+    already caps each top pane's minimumHeight at
+    ``vsplit_total - analysis_content_floor_h()`` so the splitter
+    has room to compress without runtime mutation, and the expand /
+    restore cycle is purely a vsplit size change plus a
+    ``_layout_frozen`` flag.
     """
     _select(window, qapp, ("b", "d"))
     originals = (
@@ -126,15 +133,16 @@ def test_expand_relaxes_all_top_pane_min_heights(
     )
     window.analysis.expand_btn.click()
     qapp.processEvents()
-    assert window._hsplit.minimumHeight() == 0
-    assert window.seg_panel.minimumHeight() == 0
-    assert window.feat_panel.minimumHeight() == 0
-    assert window._pre_expand_min_heights == originals
+    assert window._hsplit.minimumHeight() == originals[0]
+    assert window.seg_panel.minimumHeight() == originals[1]
+    assert window.feat_panel.minimumHeight() == originals[2]
+    assert window._layout_frozen is True
     window.analysis.expand_btn.click()
     qapp.processEvents()
     assert window._hsplit.minimumHeight() == originals[0]
     assert window.seg_panel.minimumHeight() == originals[1]
     assert window.feat_panel.minimumHeight() == originals[2]
+    assert window._layout_frozen is False
 
 
 def test_expand_target_is_fifty_five_percent_of_vsplit(

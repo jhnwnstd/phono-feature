@@ -47,15 +47,19 @@ def test_segment_button_is_fixed_size_and_policy(app: QApplication) -> None:
     assert btn.size().height() == (constraint.pref_h or constraint.min_h)
 
 
-def test_segment_grid_widget_is_preferred_preferred(app: QApplication) -> None:
-    """``SegmentGridWidget`` declares Preferred/Preferred so a parent
-    splitter can stretch the grid without the grid demanding more
-    than its ``sizeHint``.
+def test_segment_grid_widget_is_preferred_minimum_expanding(
+    app: QApplication,
+) -> None:
+    """``SegmentGridWidget`` declares Preferred horizontally (the
+    parent splitter sets the bound) and MinimumExpanding vertically
+    so the widget claims left_wrap's full available height -- the
+    height beyond the natural consonant content becomes the spillover
+    policy's budget instead of stranded space.
     """
     grid = SegmentGridWidget()
     policy = grid.sizePolicy()
     assert policy.horizontalPolicy() == QSizePolicy.Policy.Preferred
-    assert policy.verticalPolicy() == QSizePolicy.Policy.Preferred
+    assert policy.verticalPolicy() == QSizePolicy.Policy.MinimumExpanding
 
 
 def test_vowel_chart_is_fixed_horizontal(app: QApplication) -> None:

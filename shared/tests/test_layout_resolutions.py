@@ -543,10 +543,14 @@ def test_tall_narrow_1280x1200_fits_screen_width() -> None:
 # Vertical-axis split: top_pane_height across the resolution matrix
 #
 # Vertical policy lives in ``layout.top_pane_height``: top pane gets up to
-# its content need but never more than ``total - HARD_MIN_ANALYSIS_H``, and
-# never less than ``MIN_TOP_PANE_H``. These tests pin the analysis-pane
-# vertical floor at each resolution so a short-window regression (analysis
-# crushed below readable height) surfaces here, not in the UI.
+# its content need but never more than ``total - analysis_content_floor_h()``
+# on comfortable windows (the analysis pane reserves four feature-spec
+# rows). On tiny windows where reserving the comfortable floor would
+# starve the top pane below ``MIN_TOP_PANE_H``, the policy degrades to
+# the absolute ``HARD_MIN_ANALYSIS_H`` floor so the top stays usable.
+# These tests pin the analysis-pane vertical floor at each resolution so
+# a short-window regression (analysis crushed below readable height)
+# surfaces here, not in the UI.
 # ---------------------------------------------------------------------------
 
 
@@ -559,18 +563,20 @@ TOP_CONTENT_H = 540
 def test_top_pane_height_keeps_analysis_floor(res: Resolution) -> None:
     """At every resolution's recommended-window height, the
     ``layout.top_pane_height`` policy must leave the analysis pane
-    at least ``HARD_MIN_ANALYSIS_H`` (60 px). The user can drag the
-    splitter past this in normal usage, but the initial layout
-    should never deliver an unreadable analysis pane."""
+    its comfortable four-row floor. The user can drag the splitter
+    past this in normal usage, but the initial layout should never
+    deliver a sub-floor analysis pane. (The targeted resolutions are
+    all well above the degenerate-window threshold where the policy
+    would have to degrade to ``HARD_MIN_ANALYSIS_H``.)"""
     _, win_h = layout.recommended_initial_window_size(res.width, res.height)
     # Toolbar (~50) + status bar (~25) consume some height before
     # the vsplit; use a conservative total for the policy.
     vsplit_total = max(win_h - 100, 100)
     top_h = layout.top_pane_height(TOP_CONTENT_H, vsplit_total)
     analysis_h = vsplit_total - top_h
-    assert analysis_h >= layout.HARD_MIN_ANALYSIS_H, (
+    assert analysis_h >= layout.analysis_content_floor_h(), (
         f"{res.label}: analysis pane {analysis_h}px below "
-        f"HARD_MIN_ANALYSIS_H {layout.HARD_MIN_ANALYSIS_H}"
+        f"comfortable floor {layout.analysis_content_floor_h()}"
     )
 
 
@@ -593,12 +599,28 @@ def test_top_pane_height_keeps_min_top_pane_floor(
 def test_top_pane_height_caps_at_total_minus_analysis_floor() -> None:
     """When the features want more height than the splitter can
     deliver, the policy caps the top pane so the analysis pane
-    still keeps its 60-px floor. Pins literal 60 so a bump to
-    HARD_MIN_ANALYSIS_H trips."""
-    # Features want 800 px; vsplit has 600 px total. Cap path wins.
-    top_h = layout.top_pane_height(top_need_h=800, total=600)
-    assert top_h == 600 - 60
-    assert top_h == 540
+    reserves its comfortable four-row floor. Pins the relationship to
+    ``analysis_content_floor_h()`` so a bump to either the floor or
+    the constants underneath trips this test."""
+    # Features want 1000 px; vsplit has 800 px total. Cap path wins,
+    # and the comfortable floor is reservable (800 - 252 = 548 >=
+    # MIN_TOP_PANE_H so the comfortable branch is the one that fires).
+    top_h = layout.top_pane_height(top_need_h=1000, total=800)
+    assert top_h == 800 - layout.analysis_content_floor_h()
+
+
+def test_top_pane_height_degrades_to_hard_floor_on_short_window() -> None:
+    """When the window is so short that reserving the comfortable
+    four-row floor would push the top pane below ``MIN_TOP_PANE_H``,
+    the policy degrades to the absolute ``HARD_MIN_ANALYSIS_H`` cap
+    so the top pane stays usable. Documented degenerate path."""
+    # vsplit_total = MIN_TOP_PANE_H + comfortable_floor - 1 -> comfortable
+    # branch would require top < MIN_TOP_PANE_H, so we degrade.
+    tiny = layout.MIN_TOP_PANE_H + layout.analysis_content_floor_h() - 1
+    top_h = layout.top_pane_height(top_need_h=tiny, total=tiny)
+    # Top pane keeps its MIN_TOP_PANE_H floor; analysis gets the rest.
+    assert top_h >= layout.MIN_TOP_PANE_H
+    assert tiny - top_h >= layout.HARD_MIN_ANALYSIS_H
 
 
 def test_top_pane_height_passes_through_when_room_to_spare() -> None:
