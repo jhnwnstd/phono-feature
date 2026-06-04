@@ -76,8 +76,8 @@ class FeatureCategory(StrEnum):
 
     Strict natural-class detection (the contract the round-trip
     invariant rests on) only considers ``ALL_PLUS`` and ``ALL_MINUS``
-    features as bundle candidates -- this is what ensures any spec
-    the engine LISTS round-trips exactly through
+    features as bundle candidates. That restriction is what ensures
+    any spec the engine LISTS round-trips exactly through
     :py:meth:`find_segments`.
     """
 
@@ -263,8 +263,8 @@ class FeatureEngine:
         :py:meth:`find_all_minimal_bundles` performs and answers the
         decision question directly using the precomputed membership
         sets. Complexity is ``O(F + O*C)`` where F = features,
-        O = outside segments, C = candidate (feature, value) pairs
-        -- never exponential, no backtracking.
+        O = outside segments, C = candidate (feature, value) pairs.
+        Never exponential, no backtracking.
 
         Theory: under strict matching, a feature is a candidate for
         the bundle iff every selected segment has the **same
@@ -320,7 +320,7 @@ class FeatureEngine:
         Default is strict equality (the same matching rule the
         user-typed feat->seg query uses). Computed via membership-
         set intersections so it stays vertical-set-shaped like the
-        rest of the engine -- a fresh ``find_segments(B)`` call is
+        rest of the engine. A fresh ``find_segments(B)`` call is
         an ``O(F)`` walk over the spec, intersecting the relevant
         ``plus_segs[f]``, ``minus_segs[f]``, or
         ``all_segments - spec_segs[f]`` (for ``'0'``) into the
@@ -512,7 +512,7 @@ class FeatureEngine:
         Returns up to ``max_bundles`` minimal bundles; the search
         terminates early once that many are found. The current
         return type does not distinguish "all minimal bundles" from
-        "the first N" -- consumers that need to know whether the
+        "the first N". Consumers that need to know whether the
         result was truncated should compare ``len(result)`` to
         ``max_bundles`` and re-query with a higher limit if needed.
 
@@ -591,7 +591,7 @@ class FeatureEngine:
         counts: dict[str, int] = dict.fromkeys(candidates, 0)
         raw_excluders: list[list[str]] = []
         # Strict excluder collection: outside t is excluded by
-        # (f, +) iff t is not explicitly ``+`` on f -- so
+        # (f, +) iff t is not explicitly ``+`` on f, so
         # ``outside - plus_segs[f]`` covers explicit ``-`` and
         # ``'0'`` segments alike. Strict matching treats ``'0'`` as
         # a distinct value, which is what the user-typed feat→seg
@@ -763,7 +763,7 @@ class FeatureEngine:
         """Features whose ``'+'`` or ``'-'`` value is shared by every
         given segment.
 
-        Identical to the strict natural-class candidate rule -- a
+        Identical to the strict natural-class candidate rule: a
         feature is "shared" iff every selected segment has the same
         explicit value on it. Delegates to
         :py:meth:`_strict_candidate_constraints` so the strict-NC
@@ -849,10 +849,11 @@ class FeatureEngine:
           itself a natural class. If the caller needs the minimal
           specs of the COMPLETED class (Concept A applied to
           ``S ∪ additions[0]``), it can call
-          :py:meth:`find_all_minimal_bundles` separately --
-          intentionally NOT computed here because the not-a-natural-
-          class UI path does not display them and the hitting-set
-          search is exponential worst case.
+          :py:meth:`find_all_minimal_bundles` separately. The
+          completion result intentionally does NOT carry them
+          because the not-a-natural-class UI path does not display
+          them and the hitting-set search is exponential worst
+          case.
 
         The third status ``multiple_minimal_completions`` is part of
         the contract for general correctness but is unreachable from
@@ -934,7 +935,7 @@ class FeatureEngine:
 
         Returns ``(False, ())`` when no strict bundle exists. The
         UI presents these as "not a natural class" and offers the
-        :py:meth:`complete_to_minimal_natural_class` completion --
+        :py:meth:`complete_to_minimal_natural_class` completion:
         the smallest set of segments to add so the union does form
         a strict natural class.
 
@@ -960,13 +961,30 @@ class FeatureEngine:
     def find_nearest_segments(
         self, segment: str, n: int = 5
     ) -> list[tuple[str, int]]:
-        """``n`` closest segments to ``segment`` by feature distance."""
+        """``n`` closest segments to ``segment`` by feature distance.
+
+        Equivalent to mapping :py:meth:`segment_distance` across the
+        inventory but skips the per-pair validation and dictionary
+        re-lookup. For inventories on the order of the Hayes count,
+        the inner Python overhead dominated.
+        """
         self._validate_segment(segment)
-        distances = [
-            (other, self.segment_distance(segment, other))
-            for other in self.segments
-            if other != segment
-        ]
+        target = self._seg_value_tuples[segment]
+        tuples = self._seg_value_tuples
+        distances: list[tuple[str, int]] = []
+        for other, values in tuples.items():
+            if other == segment:
+                continue
+            distances.append(
+                (
+                    other,
+                    sum(
+                        1
+                        for a, b in zip(target, values, strict=True)
+                        if a != b
+                    ),
+                )
+            )
         distances.sort(key=lambda x: (x[1], x[0]))
         return distances[:n]
 

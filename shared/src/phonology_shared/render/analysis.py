@@ -257,7 +257,7 @@ def render_single_segment(
     :py:class:`~phonology_shared.engine.feature_engine.NaturalClassCompletion`
     for ``[seg]``; the renderer dispatches on its status without
     re-asking the engine. The previous fallback that quietly looked
-    for an underspec-compatible equivalence class is gone -- when
+    for an underspec-compatible equivalence class is gone. When
     ``seg`` is not its own natural class the user now sees the
     smallest strict completion explicitly.
     """
@@ -290,15 +290,15 @@ def _render_completion_body(completion: NaturalClassCompletion) -> str:
     Hard concept boundary:
 
     * ``already_natural_class``: render
-      ``selected_minimal_bundles`` -- the minimal feature spec(s)
+      ``selected_minimal_bundles``, the minimal feature spec(s)
       of the SELECTED set (Concept A).
     * ``one_minimal_completion`` / ``multiple_minimal_completions``:
       render the "N segments needed for natural class" chip strip
       alone (Concept B). The completed class's minimal specs (if
       anyone wanted them) would be Concept A applied to
       ``S ∪ additions`` and are NOT carried on the completion
-      result -- the not-a-natural-class UI does not display them
-      so the engine does not pay the hitting-set search cost.
+      result. The not-a-natural-class UI does not display them, so
+      the engine does not pay the hitting-set search cost.
     """
     if completion.status == "already_natural_class":
         return _render_completion_specs(completion.selected_minimal_bundles)

@@ -162,7 +162,7 @@ def test_natural_class_bundle_round_trip(
     * a bundle is returned: feeding it back through
       :py:meth:`find_segments` (default strict equality) returns
       EXACTLY the input set. This is the contract the analysis
-      pane's bundle display rests on -- any spec the engine lists
+      pane's bundle display rests on. Any spec the engine lists
       must round-trip when manually typed into the feat→seg pane.
     * ``None`` is returned: the input is not a natural class. The
       cross-check is that no strict bundle exists; equivalently,
@@ -479,8 +479,8 @@ def test_complete_to_minimal_natural_class_universal_fallback(
     assert set(result.additions[0]) == {"c"}
     assert result.selected_minimal_bundles == ()
     # Recovering the completed class's minimal bundles is a
-    # separate engine call -- intentionally NOT on the completion
-    # result.
+    # separate engine call. They are intentionally NOT on the
+    # completion result.
     completed = ["a", "b"] + list(result.additions[0])
     completed_bundles = eng.find_all_minimal_bundles(completed)
     assert completed_bundles, (
@@ -494,9 +494,9 @@ def test_complete_to_minimal_natural_class_perf(
 ) -> None:
     """Perf-regression guard. The not-a-natural-class path costs
     one ``find_all_minimal_bundles`` call on S (fast/cached) plus
-    an O(F) intersection -- no second hitting-set search. A
-    50-segment selection on Hayes should complete in well under
-    50 ms.
+    an O(F) intersection. No second hitting-set search. A 50-
+    segment selection on Hayes should complete in well under 50
+    ms.
     """
     import time
 
@@ -516,8 +516,6 @@ def test_complete_to_minimal_natural_class_perf(
         f"complete_to_minimal_natural_class(N=50) took {best:.1f} ms;"
         f" perf floor is 50 ms"
     )
-
-
 
 
 # ----------------------------------------------------------------------
