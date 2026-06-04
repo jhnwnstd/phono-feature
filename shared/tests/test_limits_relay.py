@@ -8,7 +8,7 @@ into the ``LIMITS`` constant and uses ``LIMITS.max_inventory_file_bytes``
 as the upload pre-check cap.
 
 Without this test a future edit to
-``shared/src/phonology_shared/engine/limits.py`` could silently
+``shared/src/phonology_shared/data/limits.py`` could silently
 drift from the JS pre-check (the prior bug: JS held 5 MB while
 the engine held 50 MB; a 20 MB file passed the JS gate then
 failed in Pyodide with a confusing generic error). The build

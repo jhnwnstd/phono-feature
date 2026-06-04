@@ -10,9 +10,10 @@ readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "John Winstead" }]
-# Pure-Python bridge. Engine + render helpers come from
-# phonology-engine + phonology-features at editable-install time
-# (workspace members). No runtime deps the wheel itself needs.
+# Pure-Python bridge. The shared package (data / theory / chart /
+# presentation / editor) comes from phonology-shared at editable-
+# install time (workspace member). No runtime deps the wheel itself
+# needs.
 dependencies = []
 
 [project.optional-dependencies]

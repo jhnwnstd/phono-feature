@@ -29,7 +29,8 @@ classifiers = [
 ]
 dependencies = [
     "PyQt6>=6.6.0",
-    # Pure-Python phonology core (engine + render helpers). Lives at
+    # Pure-Python phonology core (data / theory / chart /
+    # presentation / editor subpackages). Lives at
     # ../shared in the monorepo; installs from PyPI in a standalone
     # clone of just this app directory. The ``RUN-*`` launchers do
     # an editable install of the workspace root, which picks up the

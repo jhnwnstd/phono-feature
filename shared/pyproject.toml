@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "phonology-shared"
 version = "0.1.0"
-description = "Pure-Python core for the Phonology Segment & Feature Engine: phonological analysis engine (engine) + UI-agnostic render and view-model helpers (render). Consumed by both the desktop and the Pyodide web app."
+description = "Pure-Python core for the Phonology Segment & Feature Engine. Five subpackages: data (inventory schema + caps), theory (analysis engine), chart (consonant + vowel placement), presentation (palette, layout, view models), editor (builder grid). Consumed by both the desktop and the Pyodide web app."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -23,9 +23,10 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Topic :: Text Processing :: Linguistic",
 ]
-# Pure Python, stdlib only. No PyQt6, no NumPy. The engine
-# subpackage must remain Pyodide-distributable; render must remain
-# UI-agnostic (no PyQt6, no DOM).
+# Pure Python, stdlib only. No PyQt6, no NumPy. All five
+# subpackages must remain Pyodide-distributable and UI-agnostic
+# (no PyQt6, no DOM); the desktop and web frontends both consume
+# them through the same import surface.
 dependencies = []
 
 [project.optional-dependencies]
