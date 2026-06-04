@@ -1377,12 +1377,11 @@ def _compute_shrunken_widths(
     """Compute shrunken silhouette ``(top_width, bottom_width)``
     that satisfy every populated row's minimum required width.
 
-    The shrink is uniform: both widths are reduced by the same
-    amount, set by the most-constrained row's slack between its
-    canonical row_width and its minimum-required row_width.
-    Uniform shrink keeps the canonical trapezoid proportions
-    intact for inventories with multiple-row content and shrinks
-    proportionally as sparsity increases.
+    Concurrent shrink: both widths shrink by the same amount,
+    set by the most-constrained row's slack between its canonical
+    row_width and its minimum-required row_width. The trapezoid
+    keeps its canonical proportions while pulling inward as a
+    whole; the close/front angle stays constant.
     """
     if _VOWEL_SHRINK_FACTOR <= 0.0:
         return canonical_top_width, canonical_bottom_width
