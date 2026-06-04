@@ -429,6 +429,67 @@ TRIANGLE_BOTTOM_WIDTH: float = (
     (2 * BTN_W + VOWEL_PAIR_GAP_PX)
     / (3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX)
 )
+#: Outer envelope of a single backness pair, expressed as a
+#: fraction of the canonical content width (i.e. the distance
+#: from the pair's anchor centre to the outer edge of either
+#: rounded or unrounded button). The renderer adds this to the
+#: back anchor to find the silhouette right edge, and subtracts
+#: it from the front anchor to find the silhouette left edge.
+_PAIR_OUTER_EXTENT: float = (
+    (BTN_W + VOWEL_PAIR_GAP_PX) / 2 + BTN_W / 2
+) / (
+    3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
+)
+
+
+def vowel_trapezoid_corners(
+    shape: VowelChartShape,
+) -> dict[str, float]:
+    """Return the four corner positions of the chart silhouette,
+    in the data area's normalised ``[0, 1]`` coordinate space.
+
+    The corners are derived from where the cells actually sit so
+    the silhouette outline hugs them exactly. The keys are
+    ``"top_left"`` / ``"top_right"`` / ``"bottom_left"`` /
+    ``"bottom_right"`` (chart_x) and ``"top_y"`` / ``"bottom_y"``
+    (chart_y).
+
+    The silhouette extends to the data area's vertical edges
+    (``top_y == 0``, ``bottom_y == 1``) so the close row's
+    buttons (centred at :py:data:`_HEIGHT_Y` close) and the
+    open row's buttons land COMPLETELY inside the silhouette
+    instead of poking past its top or bottom edge.
+
+    Horizontally, the right edge is the back-pair's outer extent
+    (back vowels are flush against it; ``top_right ==
+    bottom_right`` so the right wall is vertical), and the left
+    edge slants from the front column's close x-position to its
+    open x-position. The slant comes from the back-anchored
+    projection: front migrates toward the back anchor as the row
+    narrows.
+    """
+    front = _BACKNESS_X["front"]
+    back = _BACKNESS_X["back"]
+    pair_outer = _PAIR_OUTER_EXTENT
+    y_close = _HEIGHT_Y["Close"]
+    y_open = _HEIGHT_Y["Open"]
+    bottom_width = (
+        TRIANGLE_BOTTOM_WIDTH
+        if shape == VowelChartShape.TRIANGLE
+        else TRAPEZOID_BOTTOM_WIDTH
+    )
+    row_width_close = 1.0 - (1.0 - bottom_width) * y_close
+    row_width_open = 1.0 - (1.0 - bottom_width) * y_open
+    front_close = back + row_width_close * (front - back)
+    front_open = back + row_width_open * (front - back)
+    return {
+        "top_left": front_close - pair_outer,
+        "top_right": back + pair_outer,
+        "bottom_left": front_open - pair_outer,
+        "bottom_right": back + pair_outer,
+        "top_y": 0.0,
+        "bottom_y": 1.0,
+    }
 
 
 def project_to_chart_xy(
@@ -447,26 +508,35 @@ def project_to_chart_xy(
     cells via ``left: calc(chart_x * 100%)`` / ``top: calc(chart_y
     * 100%)``.
 
-    Asymmetric narrowing: the right edge stays vertical (back
-    vowels keep the same horizontal position from close to open),
-    only the left edge slants inward as ``y`` grows. This matches
-    the IPA vowel quadrilateral, where the front column at lower
-    rows is pushed toward the centre while the back column stays
-    put. Each row's effective width is
-    ``1 - (1 - bottom_width) * y``; the row is right-anchored at
-    ``chart_x = 1.0``. Pair offset rides on the row's effective
-    width so rounded/unrounded mates stay glued together inside
-    narrowing rows.
+    The projection is **back-anchored**: the back column sits at
+    a constant ``chart_x`` across every row (so the silhouette's
+    right edge can be drawn as a single vertical line that the
+    back vowels are flush against). Cells to the left of the back
+    anchor migrate toward it as the row narrows; the front column
+    migrates the most. The formula is
+
+        chart_x = back + row_width * (x - back)
+
+    so ``x = back`` is a fixed point and ``x < back`` shifts right
+    by ``(1 - row_width) * (back - x)`` as ``y`` grows. ``x``
+    values to the right of the back anchor (i.e. positions inside
+    the back pair's pixel envelope) ride the same formula but
+    contract slightly so the back pair's outer extent also stays
+    flush with the silhouette right edge.
+
+    Pair offset is included for backward compatibility but is now
+    applied by the renderer in pixels (see
+    :py:class:`VowelChartCell.pair_side`); call this method with
+    ``pair_offset = 0.0`` to obtain the pure backness-anchor
+    projection.
     """
     if shape == VowelChartShape.TRIANGLE:
         bottom_width = TRIANGLE_BOTTOM_WIDTH
     else:
         bottom_width = TRAPEZOID_BOTTOM_WIDTH
     row_width = 1.0 - (1.0 - bottom_width) * y
-    # Right-anchored: the rightmost position stays at 1.0 across
-    # all rows; the leftmost slides right as the row narrows.
-    row_left = 1.0 - row_width
-    chart_x = row_left + (x + pair_offset) * row_width
+    back = _BACKNESS_X["back"]
+    chart_x = back + row_width * (x + pair_offset - back)
     return chart_x, y
 
 

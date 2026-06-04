@@ -435,30 +435,32 @@ def _build_status_text_payload() -> dict[str, str]:
         sys.modules.pop(module_name, None)
 
 
-def _backness_content_width(mod: ModuleType) -> int:
-    """Pixel width of the top (widest) row of the vowel trapezoid:
-    three backness columns plus two inter-column separators."""
-    backness_w = 2 * mod.BTN_W + mod.VOWEL_PAIR_GAP_PX
-    return 3 * backness_w + 2 * mod.VOWEL_PAIR_SEPARATOR_PX
+def _vowel_corner_lines(shape: str) -> list[str]:
+    """Emit ``--vowel-<shape>-<corner>`` percentage variables for
+    every corner of the silhouette so the CSS clip-path can
+    reference them directly."""
+    corners = _vowel_corners(shape)
+    return [
+        f"  --vowel-{shape}-top-left: {corners['top_left'] * 100:.3f}%;",
+        f"  --vowel-{shape}-top-right: {corners['top_right'] * 100:.3f}%;",
+        f"  --vowel-{shape}-bottom-left: {corners['bottom_left'] * 100:.3f}%;",
+        f"  --vowel-{shape}-bottom-right: {corners['bottom_right'] * 100:.3f}%;",
+        f"  --vowel-{shape}-top-y: {corners['top_y'] * 100:.3f}%;",
+        f"  --vowel-{shape}-bottom-y: {corners['bottom_y'] * 100:.3f}%;",
+    ]
 
 
-def _vowel_bottom_left_pct(mod: ModuleType) -> str:
-    """Bottom-left of the asymmetric trapezoid as a percentage of
-    the data-area width. Right edge stays vertical at 100%; only
-    the left side slants inward by ``1 - bottom_width``."""
-    backness_w = 2 * mod.BTN_W + mod.VOWEL_PAIR_GAP_PX
-    bottom_w = 2 * backness_w + mod.VOWEL_PAIR_SEPARATOR_PX
-    return f"{(1 - bottom_w / _backness_content_width(mod)) * 100:.3f}%"
-
-
-def _vowel_triangle_bottom_left_pct(mod: ModuleType) -> str:
-    """Bottom-left of the triangle (one backness column at the
-    bottom). Same derivation as the trapezoid, with the narrower
-    bottom carrying only a single backness column."""
-    backness_w = 2 * mod.BTN_W + mod.VOWEL_PAIR_GAP_PX
-    return (
-        f"{(1 - backness_w / _backness_content_width(mod)) * 100:.3f}%"
+def _vowel_corners(shape: str) -> dict[str, float]:
+    """Silhouette corner positions in ``[0, 1]`` data-area coords
+    for the given shape, derived from the shared
+    :py:func:`vowel_layout.vowel_trapezoid_corners`. Keeps the
+    Python and CSS computations bit-for-bit identical."""
+    from phonology_shared.render.vowel_layout import (
+        VowelChartShape,
+        vowel_trapezoid_corners,
     )
+
+    return vowel_trapezoid_corners(VowelChartShape(shape))
 
 
 def generate_layout_css() -> None:
@@ -482,14 +484,15 @@ def generate_layout_css() -> None:
         f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
         f"  --vowel-pair-gap: {mod.VOWEL_PAIR_GAP_PX}px;",
         f"  --vowel-pair-separator: {mod.VOWEL_PAIR_SEPARATOR_PX}px;",
-        # Trapezoid / triangle bottom-left clip percentages.
-        # Derived in vowel_layout from the same pixel constants as
-        # the cell projection, so the silhouette outline matches
-        # the row narrowing exactly.
-        "  --vowel-trapezoid-bottom-left: "
-        + _vowel_bottom_left_pct(mod) + ";",
-        "  --vowel-triangle-bottom-left: "
-        + _vowel_triangle_bottom_left_pct(mod) + ";",
+        # Silhouette corners for both shapes, in the data area's
+        # normalised ``[0, 1]`` coordinate space. Derived in
+        # ``vowel_layout.vowel_trapezoid_corners`` so the silhouette
+        # outline exactly hugs the back-anchored cell positions:
+        # the right edge is vertical at the back-pair's outer edge
+        # and the left edge slants from front-close-left to
+        # front-open-left.
+        *_vowel_corner_lines("trapezoid"),
+        *_vowel_corner_lines("triangle"),
         f"  --collapse-w: {mod.COLLAPSE_W}px;",
         # Per-button dimensions sourced from
         # ``constants.BTN_W`` / ``constants.BTN_GAP`` (single source

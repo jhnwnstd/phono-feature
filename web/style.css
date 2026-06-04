@@ -635,41 +635,54 @@ dialog input[type="text"]:focus-visible {
      padding around the cells. */
   min-height: calc(8 * var(--control-h-sm));
 }
-.vowel-chart-data::before {
+/* Trapezoid / triangle silhouette: OUTLINE only, no painted fill.
+
+   Two layered pseudo-elements achieve the outline:
+     - ``::before`` is a clipped solid block in the border colour
+       (the visible rim of the silhouette);
+     - ``::after`` sits 1.5 px inside ``::before``, filled with
+       the panel surface colour so the interior of the silhouette
+       matches its surroundings. Net visual: a thin trapezoid
+       outline with no painted interior.
+
+   The clip-path corners come from
+   ``vowel_layout.vowel_trapezoid_corners`` (baked into
+   ``layout.css`` by ``build.py``) so the outline exactly hugs
+   the back-anchored cell positions: the right edge sits on the
+   back-pair's outer extent (back vowels are flush against it)
+   and the left edge slants from the front column's close
+   position to its open position. */
+.vowel-chart-data::before,
+.vowel-chart-data::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 0;
-  /* Fill is the page background tint so the silhouette reads as
-     "carved into the panel": visibly different from the white
-     panel surface around it without competing with the segment
-     buttons. Border is two pixels of the standard ``--border``
-     tone so the trapezoid outline is unmistakable. */
-  background: var(--bg);
-  border: 2px solid var(--border);
   pointer-events: none;
 }
-/* IPA convention: right edge stays vertical (back vowels keep
-   their column from close to open); left edge slants inward as
-   ``y`` grows so the front column gets pushed toward the centre.
-   The bottom-left percentages come from ``layout.css`` and are
-   derived in ``vowel_layout._derive_backness_anchors`` from the
-   same pixel constants that drive the cell projection, so the
-   silhouette and the cells stay in sync. */
-.vowel-chart-data[data-shape="trapezoid"]::before {
+.vowel-chart-data::before {
+  background: var(--border);
+}
+.vowel-chart-data::after {
+  inset: 1.5px;
+  background: var(--panel);
+}
+.vowel-chart-data[data-shape="trapezoid"]::before,
+.vowel-chart-data[data-shape="trapezoid"]::after {
   clip-path: polygon(
-    0% 0%,
-    100% 0%,
-    100% 100%,
-    var(--vowel-trapezoid-bottom-left) 100%
+    var(--vowel-trapezoid-top-left)     var(--vowel-trapezoid-top-y),
+    var(--vowel-trapezoid-top-right)    var(--vowel-trapezoid-top-y),
+    var(--vowel-trapezoid-bottom-right) var(--vowel-trapezoid-bottom-y),
+    var(--vowel-trapezoid-bottom-left)  var(--vowel-trapezoid-bottom-y)
   );
 }
-.vowel-chart-data[data-shape="triangle"]::before {
+.vowel-chart-data[data-shape="triangle"]::before,
+.vowel-chart-data[data-shape="triangle"]::after {
   clip-path: polygon(
-    0% 0%,
-    100% 0%,
-    100% 100%,
-    var(--vowel-triangle-bottom-left) 100%
+    var(--vowel-triangle-top-left)     var(--vowel-triangle-top-y),
+    var(--vowel-triangle-top-right)    var(--vowel-triangle-top-y),
+    var(--vowel-triangle-bottom-right) var(--vowel-triangle-bottom-y),
+    var(--vowel-triangle-bottom-left)  var(--vowel-triangle-bottom-y)
   );
 }
 .vowel-chart-cell {

@@ -35,8 +35,6 @@ from phonology_shared.render.palette import C
 from phonology_shared.render.vowel_layout import (
     COL_LABELS,
     ROW_LABELS,
-    TRAPEZOID_BOTTOM_WIDTH,
-    TRIANGLE_BOTTOM_WIDTH,
     Confidence,
     VowelChartCell,
     VowelChartGeometry,
@@ -45,6 +43,7 @@ from phonology_shared.render.vowel_layout import (
     VowelProfile,
     build_vowel_chart_geometry,
     detect_vowel_profile,
+    vowel_trapezoid_corners,
 )
 
 # Re-exports preserved for any external importer that read these
@@ -391,31 +390,31 @@ class VowelChartWidget(QWidget):
         dx, dy, dw, dh = self._data_area_rect()
         if dw <= 0 or dh <= 0:
             return
-        # Asymmetric trapezoid: the right edge stays vertical (back
-        # vowels keep their column from close to open) and only the
-        # left edge slants inward. The bottom widths come from the
-        # shared ``vowel_layout`` constants, derived from the same
-        # pixel constants as the cell projection, so the silhouette
-        # and the cells stay in sync across both surfaces.
-        bottom_width = (
-            TRIANGLE_BOTTOM_WIDTH
-            if self._shape == VowelChartShape.TRIANGLE
-            else TRAPEZOID_BOTTOM_WIDTH
-        )
-        bottom_left_x = dx + int(dw * (1 - bottom_width))
+        # Silhouette corners come from the shared helper that the
+        # web bakes into CSS, so the two surfaces draw the same
+        # outline. The right edge sits on the back-pair's outer
+        # extent (back vowels are flush against it) and the left
+        # edge slants from the front column's close position to
+        # its open position.
+        corners = vowel_trapezoid_corners(self._shape)
+        top_y = dy + int(corners["top_y"] * dh)
+        bottom_y = dy + int(corners["bottom_y"] * dh)
+        top_left_x = dx + int(corners["top_left"] * dw)
+        top_right_x = dx + int(corners["top_right"] * dw)
+        bottom_left_x = dx + int(corners["bottom_left"] * dw)
+        bottom_right_x = dx + int(corners["bottom_right"] * dw)
         path = QPainterPath()
-        path.moveTo(dx, dy)
-        path.lineTo(dx + dw, dy)
-        path.lineTo(dx + dw, dy + dh)
-        path.lineTo(bottom_left_x, dy + dh)
+        path.moveTo(top_left_x, top_y)
+        path.lineTo(top_right_x, top_y)
+        path.lineTo(bottom_right_x, bottom_y)
+        path.lineTo(bottom_left_x, bottom_y)
         path.closeSubpath()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        # Fill: the page background tint so the silhouette reads as
-        # carved into the panel surface around it. Border: two
-        # pixels of the standard ``border`` colour so the trapezoid
-        # outline is unmistakable, mirroring the web's CSS rule.
-        painter.fillPath(path, QColor(C["bg"]))
+        # Outline only, no painted fill: the trapezoid is a
+        # structural guide, not a coloured region. Two-pixel stroke
+        # in the standard ``border`` colour mirrors the web's
+        # ``::before`` / ``::after`` outline-only treatment.
         pen = QPen(QColor(C["border"]))
         pen.setWidth(2)
         painter.setPen(pen)
