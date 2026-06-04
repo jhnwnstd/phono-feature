@@ -462,11 +462,12 @@ def vowel_trapezoid_corners(
     ``"bottom_right"`` (chart_x) and ``"top_y"`` / ``"bottom_y"``
     (chart_y).
 
-    The silhouette extends to the data area's vertical edges
-    (``top_y == 0``, ``bottom_y == 1``) so the close row's
-    buttons (centred at :py:data:`_HEIGHT_Y` close) and the
-    open row's buttons land COMPLETELY inside the silhouette
-    instead of poking past its top or bottom edge.
+    The silhouette top edge sits at the Close row's ``chart_y``
+    and the bottom edge sits at the Open row's ``chart_y`` so the
+    outline passes through the vertical centre of those rows'
+    buttons. This is the classic IPA aesthetic: the top button
+    pair straddles the top edge of the quadrilateral and the
+    bottom pair straddles the bottom edge.
 
     Horizontally, the right edge is the back-pair's outer extent
     (back vowels are flush against it; ``top_right ==
@@ -495,8 +496,8 @@ def vowel_trapezoid_corners(
         "top_right": back + pair_outer,
         "bottom_left": front_open - pair_outer,
         "bottom_right": back + pair_outer,
-        "top_y": 0.0,
-        "bottom_y": 1.0,
+        "top_y": y_close,
+        "bottom_y": y_open,
     }
 
 
