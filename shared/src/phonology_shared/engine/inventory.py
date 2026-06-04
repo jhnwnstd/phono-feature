@@ -704,8 +704,8 @@ def _validate_features(
                 # "é").
                 issues.append(
                     f"{prefix}features {prior!r} and {f!r} are the same "
-                    f"after NFC + whitespace normalization "
-                    f"({canonical!r}); rename or remove one"
+                    f"after canonicalization ({canonical!r}); "
+                    f"rename or remove one"
                 )
             continue
         seen.add(canonical)
@@ -864,6 +864,7 @@ def _validate_segment_bundle(
         validated[canonical_feature] = raw_feature_value
 
     return MappingProxyType(validated)
+
 
 def _validate_segments(
     segments_raw: Any,

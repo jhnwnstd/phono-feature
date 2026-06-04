@@ -115,6 +115,26 @@ def test_parse_rejects_aliased_feature_names() -> None:
     assert "delrel" in msg.lower()
 
 
+def test_parse_rejects_canonical_collision_in_segment_bundle() -> None:
+    """Two feature keys inside one segment's bundle that canonicalize
+    to the same name (here ``"Voice"`` and ``" Voice "`` both fold to
+    ``"Voice"`` after NFC + strip) used to silently overwrite each
+    other in the bundle dict, losing one of the two values. The parser
+    catches this at the bundle boundary so neither value is dropped
+    without report.
+    """
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {
+                "features": ["Voice"],
+                "segments": {"p": {"Voice": "-", " Voice ": "+"}},
+            }
+        )
+    msg = " ".join(ex.value.issues).lower()
+    assert "voice" in msg
+    assert "canonicalization" in msg
+
+
 def test_engine_consumers_never_raise_on_parsed_inventory() -> None:
     """Defense in depth: anything ``Inventory.parse`` accepts must
     survive ``FeatureEngine.grouped_segments`` and
@@ -162,7 +182,7 @@ def test_parse_rejects_nfc_nfd_feature_collision() -> None:
     with pytest.raises(ValidationError) as ex:
         Inventory.parse({"features": [nfc, nfd, "Voice"], "segments": {}})
     msg = " ".join(ex.value.issues).lower()
-    assert "nfc" in msg or "normalization" in msg
+    assert "canonicalization" in msg
 
 
 def test_parse_rejects_whitespace_padded_feature_collision() -> None:
@@ -172,7 +192,7 @@ def test_parse_rejects_whitespace_padded_feature_collision() -> None:
         Inventory.parse({"features": ["Voice", " Voice "], "segments": {}})
     msg = " ".join(ex.value.issues).lower()
     assert "voice" in msg
-    assert "normalization" in msg or "whitespace" in msg
+    assert "canonicalization" in msg
 
 
 def test_parse_strips_whitespace_from_feature_names() -> None:
