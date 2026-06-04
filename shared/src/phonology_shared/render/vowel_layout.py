@@ -954,13 +954,25 @@ class VowelChartRow:
 @dataclass(frozen=True)
 class VowelChartColHeader:
     """A backness column header (Front / Central / Back) with its
-    physical placement already resolved. Both renderers consume the
-    grid coordinates verbatim; web adds 1 for CSS's 1-indexed grid.
+    placement already resolved.
+
+    Carries two coordinate systems for parity with
+    :py:class:`VowelChartCell`:
+
+    * ``grid_col`` / ``grid_col_span``: physical grid coordinates
+      for the legacy rectangular grid layout. Web adds 1 for
+      CSS's 1-indexed grid.
+    * ``chart_x``: the column's backness ANCHOR as a normalised
+      ``[0, 1]`` fraction of the data-area width. The renderer
+      should sit each header at ``chart_x * 100%`` so the header
+      lines up over the centre of the cells in its column at the
+      widest (top) row of the trapezoid.
     """
 
     label: str
     grid_col: int
     grid_col_span: int
+    chart_x: float
 
 
 @dataclass(frozen=True)
@@ -1064,11 +1076,17 @@ def build_vowel_chart_geometry(
             )
         )
 
+    # Header chart_x sits on the backness anchor (front / central /
+    # back) so the labels line up with the cells in the widest row
+    # of the trapezoid. ``COL_LABELS`` is ``(Front, Central, Back)``
+    # in matching order with the ``_BACKNESS_X`` keys.
+    _col_label_to_anchor_key = ("front", "central", "back")
     col_headers = tuple(
         VowelChartColHeader(
             label=label,
             grid_col=(VOWEL_FIRST_DATA_GRID_COL + ci * 3),
             grid_col_span=VOWEL_COL_HEADER_GRID_COL_SPAN,
+            chart_x=_BACKNESS_X[_col_label_to_anchor_key[ci]],
         )
         for ci, label in enumerate(COL_LABELS)
     )

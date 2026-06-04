@@ -1143,15 +1143,16 @@ function _buildVowelChart(chart) {
     // the cells migrate inward; the headers do not move.
     const headersEl = document.createElement("div");
     headersEl.className = "vowel-chart-cols";
-    chart.cols.forEach((col, idx) => {
+    chart.cols.forEach((col) => {
         const colHeader = document.createElement("div");
         colHeader.className = "vowel-chart-col-label";
         colHeader.textContent = col.label;
-        // Three headers evenly spaced across the data-area width.
-        // chart.cols arrives Front, Central, Back so the indices
-        // map to 0%, 50%, 100%.
-        const x = idx === 0 ? 0 : (idx === 1 ? 50 : 100);
-        colHeader.style.left = x + "%";
+        // ``col.chart_x`` is the column's backness anchor (front /
+        // central / back) projected into the data-area's [0, 1]
+        // coordinate space. Sitting the header there keeps it
+        // aligned with the cells in the widest row of the
+        // trapezoid.
+        colHeader.style.left = (col.chart_x * 100) + "%";
         headersEl.appendChild(colHeader);
     });
     chartEl.appendChild(headersEl);

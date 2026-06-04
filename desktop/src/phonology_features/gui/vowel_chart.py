@@ -247,18 +247,17 @@ class VowelChartWidget(QWidget):
         title.adjustSize()
         title.show()
         self._title_label = title
-        # Column headers: positioned at x=0, 0.5, 1.0 of the data
-        # area width (so they sit above the TOP row, which is the
-        # widest row of the trapezoid).
-        col_xs = (0.0, 0.5, 1.0)
-        for col, x in zip(geometry.cols, col_xs, strict=False):
+        # Column headers: positioned at the backness anchor for
+        # each column (front / central / back) so the labels line
+        # up with the cells in the widest row of the trapezoid.
+        for col in geometry.cols:
             lbl = QLabel(col.label, self)
             lbl.setFont(QFont("Noto Sans", 7))
             lbl.setStyleSheet(self._HDR_INACTIVE)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.adjustSize()
             lbl.show()
-            self._col_labels.append((lbl, x))
+            self._col_labels.append((lbl, col.chart_x))
         # Row labels: positioned at chart_y on the left gutter.
         for row in geometry.rows:
             lbl = QLabel(row.label, self)
@@ -412,9 +411,13 @@ class VowelChartWidget(QWidget):
         path.closeSubpath()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.fillPath(path, QColor(C["panel"]))
+        # Fill: the page background tint so the silhouette reads as
+        # carved into the panel surface around it. Border: two
+        # pixels of the standard ``border`` colour so the trapezoid
+        # outline is unmistakable, mirroring the web's CSS rule.
+        painter.fillPath(path, QColor(C["bg"]))
         pen = QPen(QColor(C["border"]))
-        pen.setWidth(1)
+        pen.setWidth(2)
         painter.setPen(pen)
         painter.drawPath(path)
         painter.end()

@@ -395,6 +395,7 @@ def _vowel_chart_summary(
                 "label": col.label,
                 "grid_col": col.grid_col,
                 "grid_col_span": col.grid_col_span,
+                "chart_x": col.chart_x,
             }
             for col in geometry.cols
         ],

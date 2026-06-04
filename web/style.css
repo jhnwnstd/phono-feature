@@ -640,8 +640,13 @@ dialog input[type="text"]:focus-visible {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: var(--panel-alt, var(--panel));
-  border: var(--border-thin) solid var(--border);
+  /* Fill is the page background tint so the silhouette reads as
+     "carved into the panel": visibly different from the white
+     panel surface around it without competing with the segment
+     buttons. Border is two pixels of the standard ``--border``
+     tone so the trapezoid outline is unmistakable. */
+  background: var(--bg);
+  border: 2px solid var(--border);
   pointer-events: none;
 }
 /* IPA convention: right edge stays vertical (back vowels keep
