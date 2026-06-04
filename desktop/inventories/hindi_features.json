@@ -1205,7 +1205,7 @@
       "Back": "-",
       "Front": "+",
       "Pharyngeal": "0",
-      "ATR": "0",
+      "ATR": "-",
       "Long": "-",
       "LowerLarynx": "0"
     },
@@ -1236,7 +1236,7 @@
       "Back": "-",
       "Front": "+",
       "Pharyngeal": "0",
-      "ATR": "0",
+      "ATR": "+",
       "Long": "+",
       "LowerLarynx": "0"
     },
@@ -1267,7 +1267,7 @@
       "Back": "+",
       "Front": "-",
       "Pharyngeal": "0",
-      "ATR": "0",
+      "ATR": "-",
       "Long": "-",
       "LowerLarynx": "0"
     },
@@ -1298,7 +1298,7 @@
       "Back": "+",
       "Front": "-",
       "Pharyngeal": "0",
-      "ATR": "0",
+      "ATR": "+",
       "Long": "+",
       "LowerLarynx": "0"
     },
@@ -1329,7 +1329,7 @@
       "Back": "-",
       "Front": "+",
       "Pharyngeal": "0",
-      "ATR": "0",
+      "ATR": "+",
       "Long": "+",
       "LowerLarynx": "0"
     },
@@ -1360,7 +1360,7 @@
       "Back": "-",
       "Front": "+",
       "Pharyngeal": "0",
-      "ATR": "0",
+      "ATR": "-",
       "Long": "+",
       "LowerLarynx": "0"
     },
@@ -1391,7 +1391,7 @@
       "Back": "+",
       "Front": "-",
       "Pharyngeal": "0",
-      "ATR": "0",
+      "ATR": "+",
       "Long": "+",
       "LowerLarynx": "0"
     },
@@ -1422,7 +1422,7 @@
       "Back": "+",
       "Front": "-",
       "Pharyngeal": "0",
-      "ATR": "0",
+      "ATR": "-",
       "Long": "+",
       "LowerLarynx": "0"
     },
@@ -1515,7 +1515,7 @@
       "Back": "-",
       "Front": "+",
       "Pharyngeal": "0",
-      "ATR": "0",
+      "ATR": "-",
       "Long": "+",
       "LowerLarynx": "0"
     }

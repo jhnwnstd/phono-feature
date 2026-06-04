@@ -636,6 +636,90 @@ def test_split_low_by_tense_policy_knob(profile):
     assert paper_strict.row == 6
 
 
+def test_long_pair_map_pairs_feature_identical_long_short() -> None:
+    """``_long_pair_map`` pairs two segments iff their normalised
+    feature bundles match exactly except on ``long``. The check is
+    purely feature-based; segment identity strings are arbitrary.
+    """
+    from phonology_shared.render.vowel_layout import _long_pair_map
+
+    common = {"high": "+", "low": "-", "front": "+", "back": "-"}
+    feats = {
+        "i": {**common, "long": "-"},
+        "iː": {**common, "long": "+"},
+        "u": {"high": "+", "low": "-", "front": "-", "back": "+", "long": "-"},
+    }
+    pairs = _long_pair_map(list(feats), feats)
+    assert pairs["i"] == "iː"
+    assert pairs["iː"] == "i"
+    assert pairs["u"] is None
+
+
+def test_long_tier_three_splits_high_when_no_pair_and_no_tense_atr() -> None:
+    """The Long-based Tier 3 height refinement fires on high
+    vowels that carry an explicit ``long`` value but no Tense/ATR
+    info AND no same-quality Long partner in the inventory. Long+
+    -> Close; Long- -> Near-close. The flag set marks the
+    placement ``FALLBACK | PROFILE_GATED`` so audits can spot the
+    inferred row decision.
+    """
+    from phonology_shared.render.vowel_layout import (
+        PlacementFlag,
+        VowelProfile,
+        compute_placements,
+    )
+
+    profile = VowelProfile(
+        has_front=True, has_back=True, has_high=True, has_low=True,
+        has_round=True, has_long=True,
+    )
+    # /iː/ (Long+) without /i/ short partner; /ɪ/ (Long-) feature-
+    # distinct from /iː/ (here via Front polarity) so they don't
+    # pair. The Tier 3 refinement must place /iː/ at Close and /ɪ/
+    # at Near-close instead of stacking them at Close.
+    feats = {
+        "iː": {"high": "+", "low": "-", "front": "+", "back": "-",
+               "round": "-", "long": "+"},
+        "ɪ":  {"high": "+", "low": "-", "front": "-", "back": "-",
+               "round": "-", "long": "-"},
+    }
+    _, placements = compute_placements(list(feats), profile, feats)
+    assert placements["iː"].height.value == "Close"
+    assert placements["ɪ"].height.value == "Near-close"
+    assert PlacementFlag.FALLBACK in placements["ɪ"].height.flags
+    assert PlacementFlag.PROFILE_GATED in placements["ɪ"].height.flags
+
+
+def test_long_pair_suppresses_tier_three_refinement() -> None:
+    """When a high vowel has a same-quality Long partner in the
+    inventory (feature-identical except on Long), the Tier 3
+    refinement is suppressed: both members land on the canonical
+    Close row and stack as a Long-pair collision. Arabic
+    ``/i/`` + ``/iː/`` is the canonical case.
+    """
+    from phonology_shared.render.vowel_layout import (
+        VowelProfile,
+        compute_placements,
+    )
+
+    profile = VowelProfile(
+        has_front=True, has_back=True, has_high=True, has_low=True,
+        has_round=True, has_long=True,
+    )
+    common = {"high": "+", "low": "-", "front": "+", "back": "-",
+              "round": "-"}
+    feats = {
+        "i":  {**common, "long": "-"},
+        "iː": {**common, "long": "+"},
+    }
+    occupied, placements = compute_placements(list(feats), profile, feats)
+    # Same canonical placement (Close front unrounded); cell-grouping
+    # stacks them.
+    assert placements["i"].row == placements["iː"].row == 0
+    assert placements["i"].col == placements["iː"].col == 0
+    assert occupied[(0, 0)] == ["i", "iː"] or occupied[(0, 0)] == ["iː", "i"]
+
+
 def test_placement_carries_normalized_coordinates(profile):
     """Every placement carries normalized ``x`` / ``y`` /
     ``pair_offset`` alongside the existing ``row`` / ``col`` grid
