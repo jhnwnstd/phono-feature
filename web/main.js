@@ -3647,16 +3647,30 @@ function wireClearButtons() {
     nodes.segClearBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         clearAll();
-        activateMode(MODE.SEG_TO_FEAT);
+        if (state.mode !== MODE.SEG_TO_FEAT) {
+            activateMode(MODE.SEG_TO_FEAT);
+        } else if (state.bridge) {
+            runAnalysis();
+        }
     });
     nodes.featClearBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         clearAll();
-        activateMode(MODE.FEAT_TO_SEG);
+        if (state.mode !== MODE.FEAT_TO_SEG) {
+            activateMode(MODE.FEAT_TO_SEG);
+        } else if (state.bridge) {
+            runAnalysis();
+        }
     });
 }
 
 function clearAll() {
+    // Clear is "make the selection empty", not a distinct UI state.
+    // The analysis pane is intentionally not wiped here: the caller
+    // follows up with ``activateMode`` (on a mode change) or
+    // ``runAnalysis`` (same mode), and the empty-selection payload
+    // from the view-model produces the default placeholder text --
+    // same shape as app launch.
     state.selected_segments = [];
     state.selected_features = emptyFeatureSpec();
     state.saved_seg_state = [];
@@ -3674,7 +3688,6 @@ function clearAll() {
         rec.minus.dataset.active = "false";
         delete rec.row.dataset.queryValue;
     }
-    clearAnalysisTabs();
     setStatus(statusTextForMode(state.mode));
 }
 

@@ -641,9 +641,14 @@ dialog input[type="text"]:focus-visible {
      - ``::before`` is a clipped solid block in the border colour
        (the visible rim of the silhouette);
      - ``::after`` sits 1.5 px inside ``::before``, filled with
-       the panel surface colour so the interior of the silhouette
-       matches its surroundings. Net visual: a thin trapezoid
-       outline with no painted interior.
+       the surrounding pane's surface colour so the interior of
+       the silhouette matches its container. Net visual: a thin
+       trapezoid outline with no visible painted interior.
+
+   ``::after`` tracks the enclosing ``.panel``'s active state:
+   ``--bg`` when the seg pane is inactive, ``--panel`` when
+   active. Without the active-state rule, the trapezoid interior
+   would stay white against the inactive pane's grey surface.
 
    The clip-path corners come from
    ``vowel_layout.vowel_trapezoid_corners`` (baked into
@@ -665,6 +670,9 @@ dialog input[type="text"]:focus-visible {
 }
 .vowel-chart-data::after {
   inset: 1.5px;
+  background: var(--bg);
+}
+.panel[data-active="true"] .vowel-chart-data::after {
   background: var(--panel);
 }
 .vowel-chart-data[data-shape="trapezoid"]::before,

@@ -1460,27 +1460,41 @@ class MainWindow(QMainWindow):
         self._reset_both_sides(silent)
 
     def _clear_then_activate_segs(self) -> None:
-        """Clear button handler: wipe both panes, then activate seg mode.
-        Reversing the order would flash the new mode's colors for a
-        frame before the wipe lands.
+        """Clear button handler: empty the selection, snap to seg mode,
+        render the empty-selection state.
+
+        Clear is "make the selection empty", not a distinct UI state.
+        The view-model's empty-selection payload produces the default
+        placeholder text -- same shape as app launch -- so the post-
+        clear analysis re-renders through the normal pipeline:
+        :py:meth:`ModeController.apply_phases` schedules the deferred
+        refresh on a mode change; the same-mode branch refreshes
+        directly.
         """
         self._reset_both_sides(silent=False)
         if self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             self._set_mode(Mode.SEG_TO_FEAT)
+        else:
+            self._mode_ctrl.refresh_analysis()
 
     def _clear_then_activate_feats(self) -> None:
-        """See ``_clear_then_activate_segs``."""
+        """See :py:meth:`_clear_then_activate_segs`."""
         self._reset_both_sides(silent=False)
         if self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
             self._set_mode(Mode.FEAT_TO_SEG)
+        else:
+            self._mode_ctrl.refresh_analysis()
 
     def _reset_both_sides(self, silent: bool) -> None:
         """Reset segments and features to their neutral state. Shared
         implementation behind both Clear buttons. "Clear means clear":
         the two panes are wired together, so each Clear wipes both.
         ``silent=True`` is the inventory-load path: visible selection
-        resets but saved cross-mode state, analysis pane, and expand
-        all survive (the user did not press Clear).
+        resets but saved cross-mode state and expand survive (the user
+        did not press Clear). The analysis pane is never wiped here;
+        the caller's subsequent refresh re-renders the empty-selection
+        state through the normal view-model pipeline, which is what
+        produces the default placeholder text.
         """
         self._selected_segments.clear()
         self._selected_features.clear()
@@ -1493,7 +1507,6 @@ class MainWindow(QMainWindow):
         if not silent:
             self._mode_ctrl.saved_seg_state = []
             self._mode_ctrl.saved_feat_state = {}
-            self.analysis.clear()
         # Clear undoes the expand too: a magnified view of state
         # that no longer exists would just be stale.
         if self._pre_expand_vsplit_sizes is not None:

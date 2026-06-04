@@ -108,6 +108,12 @@ class VowelChartWidget(QWidget):
             QSizePolicy.Policy.Preferred,
         )
         self.setMinimumHeight(_constraint.min_h)
+        # Transparent so the enclosing seg-panel's surface color shows
+        # through. Without this the widget paints an opaque palette
+        # window (white) regardless of whether the seg pane is active
+        # or inactive, leaving the trapezoid sitting on a white patch
+        # against the inactive panel's grey bg.
+        self.setStyleSheet("background: transparent;")
         # The widget owns these directly; no layout manager. Children
         # are positioned absolutely from ``_layout_children``, which
         # runs on ``set_vowels`` and on every ``resizeEvent`` so the
