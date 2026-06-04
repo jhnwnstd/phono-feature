@@ -1217,9 +1217,18 @@ function _buildVowelChart(chart) {
         // ``cell.segs``, sorted by descending placement confidence.
         const segs = cell.segs;
         if (!Array.isArray(segs) || segs.length === 0) continue;
-        const target = segs.length === 1
-            ? _buildVowelCellButton(segs[0])
-            : _buildVowelCellStack(segs);
+        let target;
+        if (segs.length === 1) {
+            target = _buildVowelCellButton(segs[0]);
+        } else if (cell.is_long_pair) {
+            // Length is a display attribute on the same vowel-space
+            // position, not a separate row. Render the pair
+            // horizontally so the contrast reads as one cell with
+            // two duration variants rather than a stacked column.
+            target = _buildVowelCellLongPair(segs);
+        } else {
+            target = _buildVowelCellStack(segs);
+        }
         // Position concern: backness anchor projected through the
         // chart silhouette. Display concern: fixed-pixel shift so
         // rounded/unrounded mates stay exactly tangent regardless
@@ -1254,6 +1263,20 @@ function _buildVowelCellButton(seg) {
 function _buildVowelCellStack(segs) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-stack";
+    for (const seg of segs) {
+        cell.appendChild(_buildVowelCellButton(seg));
+    }
+    return cell;
+}
+
+/** Build a horizontal container for a vowel-chart cell whose two
+ *  entries are a Long contrast (feature-identical except on
+ *  ``Long``). Side-by-side layout reflects that the two segments
+ *  share a single vowel-space position; length is a duration
+ *  attribute, not a row difference. */
+function _buildVowelCellLongPair(segs) {
+    const cell = document.createElement("div");
+    cell.className = "vowel-chart-cell vowel-chart-cell-long-pair";
     for (const seg of segs) {
         cell.appendChild(_buildVowelCellButton(seg));
     }

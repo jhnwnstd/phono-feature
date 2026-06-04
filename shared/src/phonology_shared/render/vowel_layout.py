@@ -214,6 +214,15 @@ class VowelProfile:
     has_syllabic: bool = False
     has_consonantal: bool = False
     has_long: bool = False
+    #: True iff the inventory has at least one ``Long+`` vowel AND
+    #: at least one ``Long-`` vowel. Distinguishes inventories that
+    #: USE Long as a contrast (e.g. Arabic ``/i/`` vs ``/iː/``) from
+    #: inventories where ``Long-`` is just the default polarity on
+    #: every vowel (English's ``Long-`` everywhere does not mean the
+    #: inventory contrasts length). The Long-based Tier 3 height
+    #: refinement only fires when this flag is True so non-contrastive
+    #: inventories keep their canonical placements.
+    has_long_contrast: bool = False
 
     @property
     def has_height_sub_distinction(self) -> bool:
@@ -434,10 +443,13 @@ def detect_vowel_profile(
     or pre-normalized lowercase feats (``{"high": "+", ...}``).
     """
     active: set[str] = set()
+    long_polarities: set[str] = set()
     for seg in segs:
         for feat, val in seg_feats.get(seg, {}).items():
             if val != "0":
                 active.add(feat.lower())
+            if feat.lower() == "long" and val in ("+", "-"):
+                long_polarities.add(val)
     return VowelProfile(
         has_front="front" in active,
         has_back="back" in active,
@@ -451,6 +463,8 @@ def detect_vowel_profile(
         has_syllabic="syllabic" in active,
         has_consonantal="consonantal" in active,
         has_long="long" in active,
+        has_long_contrast=("+" in long_polarities)
+        and ("-" in long_polarities),
     )
 
 
@@ -633,54 +647,6 @@ def _nonzero(val: str | None) -> str | None:
     return val if val and val != "0" else None
 
 
-def _long_pair_map(
-    segs: list[str],
-    norm_feats: Mapping[str, Mapping[str, str]],
-) -> dict[str, str | None]:
-    """Map each segment to its same-quality long/non-long counterpart
-    in the inventory (or ``None`` if no pair exists).
-
-    Two segments form a Long pair iff their normalised feature
-    bundles match exactly *except* on the ``long`` feature, one
-    carrying ``long='+'`` and the other ``long='-'``. The check is
-    purely feature-based: segment identity strings are arbitrary
-    glyphs and never inspected. If the inventory's feature
-    granularity cannot distinguish two vowels that the language
-    treats as distinct qualities (e.g. ``/iː/`` and ``/ɪ/`` both
-    marked ``[+high, -low]`` with no Tense/ATR contrast), the fix
-    belongs in the inventory's feature data, not in this helper.
-
-    The pair information is consumed by :py:func:`_infer_height` to
-    suppress the Long-based Tier 3 height refinement when the
-    segment has a real same-quality partner: the partner already
-    disambiguates position, and splitting them across rows would
-    visually break a contrast the inventory marks as Long.
-
-    Inputs may carry PascalCase or lowercase keys; this helper
-    normalises internally so callers don't have to.
-    """
-    by_skeleton: dict[tuple[tuple[str, str], ...], list[str]] = {}
-    normalized: dict[str, Mapping[str, str]] = {
-        seg: _normalize_feat_keys(norm_feats.get(seg, {})) for seg in segs
-    }
-    for seg in segs:
-        bundle = normalized[seg]
-        skeleton = tuple(
-            sorted((k, v) for k, v in bundle.items() if k != "long")
-        )
-        by_skeleton.setdefault(skeleton, []).append(seg)
-    pair_map: dict[str, str | None] = {seg: None for seg in segs}
-    for group in by_skeleton.values():
-        if len(group) < 2:
-            continue
-        plus = [s for s in group if normalized[s].get("long") == "+"]
-        minus = [s for s in group if normalized[s].get("long") == "-"]
-        if plus and minus:
-            pair_map[plus[0]] = minus[0]
-            pair_map[minus[0]] = plus[0]
-    return pair_map
-
-
 def _height_split_value(
     feats: Mapping[str, str],
 ) -> tuple[str | None, str, bool]:
@@ -716,7 +682,6 @@ def _infer_height(
     feats: Mapping[str, str],
     profile: VowelProfile,
     policy: PlacementPolicy,
-    is_long_paired: bool = False,
 ) -> AxisEvidence:
     """Resolve the vowel's height tier to a row label and confidence.
 
@@ -725,13 +690,6 @@ def _infer_height(
     placement as direct, conflicted, or default-anchored. The
     caller maps the label back to a row index via
     :py:data:`_ROW_LABEL_TO_INDEX`.
-
-    ``is_long_paired`` is set by :py:func:`compute_placements` when
-    the vowel has a same-quality Long counterpart in the inventory
-    (e.g. Arabic ``/i/`` + ``/iː/``). Pairs share their canonical
-    placement so the renderer can stack them; the Tier 3 Long-based
-    height refinement is suppressed for paired segments to preserve
-    that intent.
     """
     hi = feats.get("high", "0")
     lo = feats.get("low", "0")
@@ -761,38 +719,6 @@ def _infer_height(
                 f"Close: [+high, -low, +{split_source}]",
                 base_flags | {PlacementFlag.DIRECT},
             )
-        # Tier 3 via Long: when tense/ATR is unavailable and the
-        # segment has no same-quality Long partner to stack with,
-        # split Close (Long+) from Near-close (Long-). Fires on
-        # high vowels only so inventories like Hindi that lack
-        # tense/ATR but carry Long can separate /iː/ from /ɪ/ and
-        # /uː/ from /ʊ/ instead of stacking them in the Close cell.
-        if profile.has_long and not is_long_paired:
-            long_val = _nonzero(feats.get("long"))
-            if long_val == "-":
-                return AxisEvidence(
-                    "Near-close",
-                    Confidence.MEDIUM,
-                    "long-fallback",
-                    "Near-close (inferred): [+high, -low, -long]",
-                    base_flags
-                    | {
-                        PlacementFlag.FALLBACK,
-                        PlacementFlag.PROFILE_GATED,
-                    },
-                )
-            if long_val == "+":
-                return AxisEvidence(
-                    "Close",
-                    Confidence.MEDIUM,
-                    "long-fallback",
-                    "Close (inferred): [+high, -low, +long]",
-                    base_flags
-                    | {
-                        PlacementFlag.FALLBACK,
-                        PlacementFlag.PROFILE_GATED,
-                    },
-                )
         return AxisEvidence(
             "Close",
             Confidence.HIGH,
@@ -1071,23 +997,10 @@ def compute_placements(
     ascending segment string for stable ordering.
     """
     policy = policy or PlacementPolicy()
-    # Detect Long pairs across the inventory so the placement code
-    # can suppress the Long-based Tier 3 height refinement for any
-    # vowel that already has a same-quality partner. Arabic
-    # ``/i/`` + ``/iː/`` is a real pair: both stay at Close and
-    # collision-group naturally. Hindi ``/iː/`` has no ``/i/`` short
-    # partner, so the refinement keeps firing and ``/ɪ/`` migrates
-    # to Near-close instead of stacking with ``/iː/``.
-    long_pairs = _long_pair_map(segs, norm_feats)
     occupied: dict[tuple[int, int], list[str]] = {}
     placements: dict[str, VowelPlacement] = {}
     for seg in segs:
-        placement = vowel_grid_pos(
-            norm_feats.get(seg, {}),
-            profile,
-            policy,
-            is_long_paired=long_pairs.get(seg) is not None,
-        )
+        placement = vowel_grid_pos(norm_feats.get(seg, {}), profile, policy)
         placements[seg] = placement
         occupied.setdefault((placement.row, placement.col), []).append(seg)
     # Confidence DESCENDING (via negated int), segment ASCENDING
@@ -1179,6 +1092,17 @@ class VowelChartCell:
     abstract logical placement (0..5 each). ``entries`` is the
     segments occupying this cell, ordered by descending placement
     confidence (ties broken by ascending segment string).
+
+    ``is_long_pair`` is True when the cell carries exactly two
+    segments whose feature bundles differ only on ``Long`` (one
+    ``Long+``, one ``Long-``). Renderers use this hint to lay the
+    two buttons SIDE-BY-SIDE inside the cell instead of stacking
+    them vertically: length is a display-layer attribute on the
+    same vowel-space position, not two separate positions, and
+    side-by-side reads more honestly than a vertical pair would.
+    Other collision groups (three or more segments, or two
+    segments that differ on something besides Long) keep the
+    default vertical-stack layout.
     """
 
     row: int
@@ -1189,6 +1113,7 @@ class VowelChartCell:
     chart_y: float
     pair_side: int
     entries: tuple[str, ...]
+    is_long_pair: bool = False
 
 
 @dataclass(frozen=True)
@@ -1414,6 +1339,31 @@ def build_vowel_chart_geometry(
         7: VOWEL_LABEL_GRID_COL + logical_col_offset(2),
         8: VOWEL_LABEL_GRID_COL + logical_col_offset(4),
     }
+    def _is_long_pair_display(entries: list[str]) -> bool:
+        """True iff the cell carries exactly two segments whose
+        normalised feature bundles differ only on ``Long`` (one
+        ``Long+``, one ``Long-``). Renderers use this to lay the
+        pair out side-by-side instead of stacking them.
+        """
+        if len(entries) != 2:
+            return False
+        a, b = (
+            _normalize_feat_keys(norm_feats.get(entries[0], {})),
+            _normalize_feat_keys(norm_feats.get(entries[1], {})),
+        )
+        long_a, long_b = a.get("long"), b.get("long")
+        if {long_a, long_b} != {"+", "-"}:
+            return False
+        # Compare all keys except ``long`` for equality. Skip keys
+        # whose values are both ``None`` so a one-sided ``"0"``
+        # doesn't count as a difference.
+        for key in set(a) | set(b):
+            if key == "long":
+                continue
+            if a.get(key) != b.get(key):
+                return False
+        return True
+
     cells: list[VowelChartCell] = []
     for ri, ci in sorted(occupied):
         anchor_x = _col_to_anchor[ci]
@@ -1427,6 +1377,7 @@ def build_vowel_chart_geometry(
         else:
             pair_side = 1 if ci % 2 else -1
             grid_col = VOWEL_LABEL_GRID_COL + logical_col_offset(ci)
+        entries = occupied[(ri, ci)]
         cells.append(
             VowelChartCell(
                 row=ri,
@@ -1436,7 +1387,8 @@ def build_vowel_chart_geometry(
                 chart_x=chart_x,
                 chart_y=chart_y,
                 pair_side=pair_side,
-                entries=tuple(occupied[(ri, ci)]),
+                entries=tuple(entries),
+                is_long_pair=_is_long_pair_display(entries),
             )
         )
 
@@ -1475,7 +1427,6 @@ def vowel_grid_pos(
     feats: Mapping[str, str],
     profile: VowelProfile,
     policy: PlacementPolicy | None = None,
-    is_long_paired: bool = False,
 ) -> VowelPlacement:
     """Return a :py:class:`VowelPlacement` for a single vowel.
 
@@ -1486,11 +1437,11 @@ def vowel_grid_pos(
     (PascalCase) or pre-normalized lowercase feats; both produce
     identical results.
 
-    ``is_long_paired`` is set by :py:func:`compute_placements` when
-    the segment has a same-quality Long counterpart in the
-    inventory. Standalone callers can leave it at the default
-    ``False``; the flag only affects placements that would otherwise
-    fall through to the Long-based Tier 3 height refinement.
+    Length (the ``Long`` feature) is deliberately NOT consulted:
+    it is a display-layer concern, not a vowel-space position.
+    Two segments that differ only in ``Long`` resolve to the same
+    row and column here, and the renderer is responsible for
+    presenting the length contrast visually.
 
     Top-level ``confidence`` and ``reason`` are derived summaries
     over the per-axis evidence. ``flags`` is the union of every
@@ -1499,9 +1450,7 @@ def vowel_grid_pos(
     """
     policy = policy or PlacementPolicy()
     normalized = _normalize_feat_keys(feats)
-    height = _infer_height(
-        normalized, profile, policy, is_long_paired=is_long_paired
-    )
+    height = _infer_height(normalized, profile, policy)
     backness = _infer_backness(normalized, profile, policy)
     rounding = _infer_rounding(normalized, profile, policy)
 

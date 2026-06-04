@@ -20,6 +20,7 @@ from typing import ClassVar
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
+    QHBoxLayout,
     QLabel,
     QSizePolicy,
     QVBoxLayout,
@@ -292,10 +293,11 @@ class VowelChartWidget(QWidget):
 
     def _build_cell(self, cell: VowelChartCell) -> QWidget | None:
         """Return the widget that represents ``cell`` -- a single
-        button for the common case, a vbox stack when more than one
-        segment lands in the same cell. Returns ``None`` if none of
-        the segments have a backing button (defensive; should not
-        happen in normal flow).
+        button for the common case, a hbox pair when the cell
+        carries a Long contrast (same vowel-space position, two
+        durations), and a vbox stack otherwise. Returns ``None`` if
+        none of the segments have a backing button (defensive;
+        should not happen in normal flow).
         """
         if len(cell.entries) == 1:
             btn = self._buttons.get(cell.entries[0])
@@ -307,15 +309,19 @@ class VowelChartWidget(QWidget):
         container = QWidget(self)
         container.setStyleSheet("background: transparent;")
         self._cell_containers.append(container)
-        vbox = QVBoxLayout(container)
-        vbox.setContentsMargins(0, 0, 0, 0)
-        vbox.setSpacing(1)
+        if cell.is_long_pair:
+            layout: QHBoxLayout | QVBoxLayout = QHBoxLayout(container)
+            layout.setSpacing(VOWEL_PAIR_GAP_PX)
+        else:
+            layout = QVBoxLayout(container)
+            layout.setSpacing(1)
+        layout.setContentsMargins(0, 0, 0, 0)
         added = False
         for seg in cell.entries:
             btn = self._buttons.get(seg)
             if btn is not None:
                 btn.show()
-                vbox.addWidget(btn)
+                layout.addWidget(btn)
                 added = True
         if not added:
             self._cell_containers.remove(container)
