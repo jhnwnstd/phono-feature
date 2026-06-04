@@ -1259,19 +1259,22 @@ _VOWEL_CONTENT_W_PX: float = float(
     3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
 )
 
-#: How aggressively the silhouette pulls each edge toward the
-#: corresponding row's actual content extent. ``0.0`` is no
-#: shrinkage (canonical trapezoid); ``1.0`` would hug the content
-#: exactly. A modest factor keeps the trapezoid recognisable while
-#: removing dead space on the rows that need it. Top and bottom
-#: rows are inspected independently: a sparse Open row pinches the
-#: bottom edge inward without disturbing the top.
+#: How aggressively the silhouette's top_width and bottom_width
+#: shrink toward each row's minimum-required width. ``0.0`` keeps
+#: the canonical widths; ``1.0`` would consume all per-row slack.
+#: The shrink is uniform across top and bottom so the trapezoid
+#: keeps its canonical proportions while pulling inward toward the
+#: content. Both the silhouette outline and the back-anchored cell
+#: projection use these widths, so cells follow the silhouette by
+#: construction with no drift.
 _VOWEL_SHRINK_FACTOR: float = 0.3
 
-#: Breathing room outside the content extent before the shrink
-#: interpolation collapses onto an edge. Prevents cells from
-#: sitting visually flush against the trapezoid's slanted edges.
-_VOWEL_SHRINK_PADDING: float = 0.03
+#: Minimum visual separation between adjacent cells in the same
+#: row (expressed as a fraction of the canonical content width).
+#: Matches the inter-pair separator on the canonical 3-slot
+#: layout, so two pinched-together slots end up with the same
+#: comfortable gap as canonical adjacent pairs.
+_VOWEL_MIN_CELL_GAP_NORM: float = VOWEL_PAIR_SEPARATOR_PX / _VOWEL_CONTENT_W_PX
 
 
 def _row_content_extent(
@@ -1301,6 +1304,135 @@ def _row_content_extent(
         lefts.append(center - half)
         rights.append(center + half)
     return min(lefts), max(rights)
+
+
+def _min_row_width_for_meta(
+    row_cells: list[tuple[int, int, bool]],
+) -> float:
+    """Lower bound on ``row_width`` such that the row's cells do
+    not overlap given back-anchored projection.
+
+    Each tuple is ``(col, pair_side, is_long_pair)``; the cell's
+    horizontal extent is its half-width plus its pair-side offset
+    from the row's projected anchor. With back-anchored projection
+    ``chart_x = back + W * (anchor - back)``, the distance between
+    two cells at adjacent anchors scales linearly with ``W``; this
+    function solves for the minimum ``W`` such that every adjacent
+    pair has at least ``_VOWEL_MIN_CELL_GAP_NORM`` between them
+    (zero if a single cell occupies the row).
+    """
+    if len(row_cells) < 2:
+        return 0.0
+    canonical_anchor: dict[int, float] = {
+        0: _BACKNESS_X["front"],
+        1: _BACKNESS_X["front"],
+        6: _BACKNESS_X["front"],
+        2: _BACKNESS_X["central"],
+        3: _BACKNESS_X["central"],
+        7: _BACKNESS_X["central"],
+        4: _BACKNESS_X["back"],
+        5: _BACKNESS_X["back"],
+        8: _BACKNESS_X["back"],
+    }
+    pair_shift = (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _VOWEL_CONTENT_W_PX
+    single_half = (BTN_W / 2.0) / _VOWEL_CONTENT_W_PX
+    long_pair_half = (
+        (2 * BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _VOWEL_CONTENT_W_PX
+    )
+    sorted_meta = sorted(row_cells, key=lambda c: canonical_anchor[c[0]])
+    min_w = 0.0
+    for (col_a, ps_a, lp_a), (col_b, ps_b, lp_b) in zip(
+        sorted_meta, sorted_meta[1:]
+    ):
+        anchor_a = canonical_anchor[col_a]
+        anchor_b = canonical_anchor[col_b]
+        if anchor_b <= anchor_a:
+            # Same backness slot -- pair_side handles separation.
+            continue
+        half_a = long_pair_half if lp_a else single_half
+        half_b = long_pair_half if lp_b else single_half
+        # Center distance at row_width=W = W*(anchor_b - anchor_a)
+        # + (ps_b - ps_a) * pair_shift. For non-overlap with a
+        # min visible gap, this must be >= half_a + half_b + gap.
+        required = (
+            _VOWEL_MIN_CELL_GAP_NORM
+            + half_a
+            + half_b
+            - (ps_b - ps_a) * pair_shift
+        )
+        w_req = required / (anchor_b - anchor_a)
+        if w_req > min_w:
+            min_w = w_req
+    return max(0.0, min(1.0, min_w))
+
+
+def _compute_shrunken_widths(
+    cells_meta_by_row: dict[int, list[tuple[int, int, bool]]],
+    display_y_by_row: dict[int, float],
+    top_y: float,
+    bottom_y: float,
+    canonical_top_width: float,
+    canonical_bottom_width: float,
+) -> tuple[float, float]:
+    """Compute shrunken silhouette ``(top_width, bottom_width)``
+    that satisfy every populated row's minimum required width.
+
+    The shrink is uniform: both widths are reduced by the same
+    amount, set by the most-constrained row's slack between its
+    canonical row_width and its minimum-required row_width.
+    Uniform shrink keeps the canonical trapezoid proportions
+    intact for inventories with multiple-row content and shrinks
+    proportionally as sparsity increases.
+    """
+    if _VOWEL_SHRINK_FACTOR <= 0.0:
+        return canonical_top_width, canonical_bottom_width
+    span = bottom_y - top_y
+    if span <= 0:
+        return canonical_top_width, canonical_bottom_width
+    min_slack = float("inf")
+    for r, meta in cells_meta_by_row.items():
+        if r not in display_y_by_row:
+            continue
+        t = (display_y_by_row[r] - top_y) / span
+        canonical_row_w = (
+            canonical_top_width * (1.0 - t) + canonical_bottom_width * t
+        )
+        min_w = _min_row_width_for_meta(meta)
+        slack = canonical_row_w - min_w
+        if slack < min_slack:
+            min_slack = slack
+    if min_slack <= 0 or min_slack == float("inf"):
+        return canonical_top_width, canonical_bottom_width
+    consume = _VOWEL_SHRINK_FACTOR * min_slack
+    return (
+        max(0.0, canonical_top_width - consume),
+        max(0.0, canonical_bottom_width - consume),
+    )
+
+
+def _silhouette_with_widths(
+    silhouette: VowelChartSilhouette,
+    top_width: float,
+    bottom_width: float,
+) -> VowelChartSilhouette:
+    """Recompute silhouette corners for new ``top_width`` /
+    ``bottom_width`` while keeping shape and y bounds. Back edge
+    stays vertical at ``back + pair_outer``.
+    """
+    front = _BACKNESS_X["front"]
+    back = _BACKNESS_X["back"]
+    pair_outer = _PAIR_OUTER_EXTENT
+    front_at_top = back + top_width * (front - back)
+    front_at_bottom = back + bottom_width * (front - back)
+    return replace(
+        silhouette,
+        top_left=front_at_top - pair_outer,
+        top_right=back + pair_outer,
+        bottom_left=front_at_bottom - pair_outer,
+        bottom_right=back + pair_outer,
+        top_width=top_width,
+        bottom_width=bottom_width,
+    )
 
 
 def _natural_data_area_size(
@@ -1533,29 +1665,18 @@ def build_vowel_chart_geometry(
         open_row_index,
         1,
     ) in occupied
-    cells: list[VowelChartCell] = []
+
+    # First pass: resolve each cell's metadata (col, pair_side,
+    # is_long_pair). The display layer needs these to size the
+    # silhouette before it can fix cell ``chart_x`` positions.
+    # No phonology re-decisions happen below this point -- the
+    # cell COL/row are already final; only their pixel-space
+    # position is still pending.
+    cell_meta: list[tuple[int, int, tuple[str, ...], bool, int, int]] = []
+    cells_meta_by_row: dict[int, list[tuple[int, int, bool]]] = {}
     for ri, ci in sorted(occupied):
-        if ri == open_row_index and ci in (2, 3) and not open_front_populated:
-            anchor_x = _BACKNESS_X["front"]
-        else:
-            anchor_x = _col_to_anchor[ci]
-        cell_display_y = display_y_by_row[ri]
-        row_width = _width_at_display_y(cell_display_y)
-        chart_x = back + row_width * (anchor_x - back)
-        chart_y = cell_display_y
-        entries = occupied[(ri, ci)]
-        is_long_pair = _is_long_pair_display(entries)
-        # ``pair_side`` reflects what the cell ACTUALLY occupies
-        # in its backness slot. A regular pair splits the slot
-        # (unr at -1, rnd at +1). A side-by-side Long pair is
-        # already two buttons wide -- if it has no sibling at the
-        # opposite rounding column, it occupies the whole slot,
-        # so pair_side=0 (centered on the anchor) keeps the
-        # container's outer edge flush with the silhouette
-        # instead of pushing past it. When a sibling does live in
-        # the opposite column the canonical +/-1 shift returns so
-        # the two cells coexist (at the cost of slot crowding the
-        # growth policy will eventually need to address).
+        entries = tuple(occupied[(ri, ci)])
+        is_long_pair = _is_long_pair_display(list(entries))
         if ci >= 6:
             pair_side = 0
             grid_col = _neutral_col_to_grid_col[ci]
@@ -1567,6 +1688,44 @@ def build_vowel_chart_geometry(
             else:
                 pair_side = 1 if ci % 2 else -1
             grid_col = VOWEL_LABEL_GRID_COL + logical_col_offset(ci)
+        cell_meta.append((ri, ci, entries, is_long_pair, pair_side, grid_col))
+        cells_meta_by_row.setdefault(ri, []).append(
+            (ci, pair_side, is_long_pair)
+        )
+
+    # Shrink silhouette widths so the trapezoid tracks the actual
+    # content. With back-anchored cell projection, the shrunken
+    # widths also pull cell anchors inward by the same factor, so
+    # the silhouette and the cells stay aligned by construction.
+    shrunken_top_w, shrunken_bot_w = _compute_shrunken_widths(
+        cells_meta_by_row,
+        display_y_by_row,
+        silhouette.top_y,
+        silhouette.bottom_y,
+        silhouette.top_width,
+        silhouette.bottom_width,
+    )
+    if (
+        shrunken_top_w != silhouette.top_width
+        or shrunken_bot_w != silhouette.bottom_width
+    ):
+        silhouette = _silhouette_with_widths(
+            silhouette, shrunken_top_w, shrunken_bot_w
+        )
+
+    # Second pass: project cells using the final silhouette
+    # widths. Long pairs without an opposite-rounding sibling
+    # render centred on their anchor (pair_side=0); regular pairs
+    # and lone Long pairs with a sibling keep canonical pair_side.
+    cells: list[VowelChartCell] = []
+    for ri, ci, entries, is_long_pair, pair_side, grid_col in cell_meta:
+        if ri == open_row_index and ci in (2, 3) and not open_front_populated:
+            anchor_x = _BACKNESS_X["front"]
+        else:
+            anchor_x = _col_to_anchor[ci]
+        cell_display_y = display_y_by_row[ri]
+        row_width = _width_at_display_y(cell_display_y)
+        chart_x = back + row_width * (anchor_x - back)
         cells.append(
             VowelChartCell(
                 row=ri,
@@ -1574,18 +1733,12 @@ def build_vowel_chart_geometry(
                 grid_row=logical_row_to_grid_row[ri],
                 grid_col=grid_col,
                 chart_x=chart_x,
-                chart_y=chart_y,
+                chart_y=cell_display_y,
                 pair_side=pair_side,
-                entries=tuple(entries),
+                entries=entries,
                 is_long_pair=is_long_pair,
             )
         )
-
-    # Long pairs always render side-by-side. When the side-by-
-    # side layout pushes the row's total content past the
-    # canonical chart width, the renderer grows the chart slot
-    # to accommodate (see ``natural_data_width_px``); no
-    # demote-to-stack happens at this layer.
 
     # Column headers sit at the silhouette's top edge so they line
     # up with the topmost populated row's cells. Their chart_x is
@@ -1606,73 +1759,6 @@ def build_vowel_chart_geometry(
         )
         for ci, label in enumerate(COL_LABELS)
     )
-
-    # Shrink the front slant inward when sparsity allows. The
-    # constraint is per-row: at each populated row's display_y,
-    # the interpolated silhouette left must stay at or to the left
-    # of that row's leftmost cell extent. With back-anchored cell
-    # projection (cells fixed at canonical anchors), the front
-    # slant cannot move past any populated row's front-most
-    # content. The solver below picks the most-shrunk (TL, BL)
-    # satisfying every row, with TL and BL each clamped by the
-    # min over rows of their per-row maximum.
-    if cells and _VOWEL_SHRINK_FACTOR > 0.0:
-        cells_tuple = tuple(cells)
-        populated_rows = sorted({c.row for c in cells_tuple})
-        row_constraints: list[tuple[float, float, float]] = []
-        for r in populated_rows:
-            extent = _row_content_extent(cells_tuple, r)
-            if extent is None:
-                continue
-            row_constraints.append((display_y_by_row[r], extent[0], extent[1]))
-        if row_constraints:
-            top_y, bot_y = silhouette.top_y, silhouette.bottom_y
-            slant_span = bot_y - top_y
-            canonical_TL = silhouette.top_left
-            canonical_BL = silhouette.bottom_left
-            # Max BL keeping TL = canonical_TL: per-row constraint
-            # gives BL <= (content_left - TL*(1-t))/t when t > 0.
-            bl_caps = []
-            for dy, cleft, _ in row_constraints:
-                t = (dy - top_y) / slant_span if slant_span > 0 else 0.0
-                if t <= 0.0:
-                    continue
-                bl_caps.append((cleft - canonical_TL * (1.0 - t)) / t)
-            bl_max = min(bl_caps) if bl_caps else canonical_BL
-            # Max TL keeping BL = canonical_BL: TL <= (content_left
-            # - BL*t)/(1-t) when t < 1.
-            tl_caps = []
-            for dy, cleft, _ in row_constraints:
-                t = (dy - top_y) / slant_span if slant_span > 0 else 0.0
-                if t >= 1.0:
-                    continue
-                tl_caps.append((cleft - canonical_BL * t) / (1.0 - t))
-            tl_max = min(tl_caps) if tl_caps else canonical_TL
-            # Apply the shrink factor; floor at canonical so the
-            # silhouette never grows outward.
-            new_TL = max(
-                canonical_TL,
-                canonical_TL + _VOWEL_SHRINK_FACTOR * (tl_max - canonical_TL),
-            )
-            new_BL = max(
-                canonical_BL,
-                canonical_BL + _VOWEL_SHRINK_FACTOR * (bl_max - canonical_BL),
-            )
-
-            # Back edge: vertical, constrained by max content_right.
-            max_cright = max(r[2] for r in row_constraints)
-            cand_back = silhouette.top_right - _VOWEL_SHRINK_FACTOR * (
-                silhouette.top_right - max_cright - _VOWEL_SHRINK_PADDING
-            )
-            new_back = max(min(silhouette.top_right, cand_back), max_cright)
-
-            silhouette = replace(
-                silhouette,
-                top_left=new_TL,
-                top_right=new_back,
-                bottom_left=new_BL,
-                bottom_right=new_back,
-            )
 
     natural_w, natural_h = _natural_data_area_size(tuple(cells))
     return VowelChartGeometry(
