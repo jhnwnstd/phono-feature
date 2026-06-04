@@ -636,6 +636,53 @@ def test_split_low_by_tense_policy_knob(profile):
     assert paper_strict.row == 6
 
 
+def test_long_pair_demotes_to_stack_when_slot_has_sibling() -> None:
+    """A side-by-side Long-pair cell needs the full width of its
+    backness-pair slot. When the inventory has another segment in
+    the same row + backness slot, the pair cannot fit at the
+    canonical anchor without overlapping its sibling, so the
+    geometry builder demotes the pair to a vertical-stack cell
+    (``is_long_pair=False``).
+    """
+    from phonology_shared.render.vowel_layout import (
+        VowelProfile,
+        build_vowel_chart_geometry,
+        detect_vowel_profile,
+    )
+
+    common = {
+        "high": "+", "low": "-", "front": "+", "back": "-",
+        "tense": "+",
+    }
+    # Lone Long pair: both members share col 0, no sibling at
+    # col 1 -> side-by-side stays.
+    feats_alone = {
+        "i":  {**common, "round": "-", "long": "-"},
+        "iː": {**common, "round": "-", "long": "+"},
+    }
+    profile = detect_vowel_profile(list(feats_alone), feats_alone)
+    g = build_vowel_chart_geometry(list(feats_alone), profile, feats_alone)
+    pair_cell = next(c for c in g.cells if set(c.entries) == {"i", "iː"})
+    assert pair_cell.is_long_pair is True
+
+    # Add a sibling at col 1 (the rounded mate's slot) and the pair
+    # demotes to a vertical stack so /y/ has its own legible
+    # position.
+    feats_with_sibling = {
+        **feats_alone,
+        "y": {**common, "round": "+", "long": "-"},
+    }
+    profile = detect_vowel_profile(list(feats_with_sibling), feats_with_sibling)
+    g = build_vowel_chart_geometry(
+        list(feats_with_sibling), profile, feats_with_sibling
+    )
+    pair_cell = next(c for c in g.cells if set(c.entries) == {"i", "iː"})
+    assert pair_cell.is_long_pair is False
+    y_cell = next(c for c in g.cells if c.entries == ("y",))
+    assert y_cell.col == 1
+    _ = VowelProfile  # imported for completeness; satisfies linters
+
+
 def test_long_does_not_affect_placement() -> None:
     """``Long`` is a display-layer concern, not a vowel-space
     position. Two segments that differ only on ``Long`` must

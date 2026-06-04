@@ -1,0 +1,269 @@
+{
+  "metadata": {
+    "name": "Maximalist Vowel Test Inventory",
+    "citation": "Synthetic test inventory built from a coordinate table covering every cell of the 3-column x 7-row vowel grid, plus neutral-round and Long-pair probes. Cell coordinates use (x, y, R/U/Ø) where x in {0=front, 1=central, 2=back}, y in {0=close, 1=near-close, 2=close-mid, 3=mid, 4=open-mid, 5=near-open, 6=open}, and round in {U=-, R=+, Ø=0}. Provided by the project owner as a reference for the chart geometry's intended behavior.",
+    "compiled_by": "internal debugging fixture",
+    "schema_note": "Vowels only. Feature values use Hayes / Halle-style '+', '-', '0'. Not a real language inventory; values are chosen to populate specific chart cells and should not be interpreted phonologically.",
+    "notes": {
+      "purpose": "Visual debugging of the vowel chart layout; every cell that the chart could render is populated by at least one segment so layout regressions surface immediately.",
+      "row_coverage": "Close, Near-close, Close-mid, Mid (Tier 2 via 0tense), Open-mid, Near-open, Open.",
+      "column_coverage": "front, central, back; unrounded and rounded; plus central-neutral (0round) probes at Mid and Near-open.",
+      "long_pairs": "None. The Long contrast is intentionally absent to keep this inventory's cells one-segment so position regressions surface unambiguously.",
+      "policy_probes": [
+        "Near-open at y=5 fires via the -tense low-vowel split.",
+        "Open at y=6 fires via 0tense low-vowel default; +front +low at y=6 (a, ɶ) tests whether the layout honors the open vs near-open policy."
+      ]
+    }
+  },
+  "features": [
+    "Syllabic",
+    "Consonantal",
+    "Sonorant",
+    "Approximant",
+    "Continuant",
+    "Voice",
+    "LABIAL",
+    "Round",
+    "DORSAL",
+    "High",
+    "Low",
+    "Back",
+    "Front",
+    "ATR",
+    "Tense",
+    "Long"
+  ],
+  "segments": {
+    "i": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "+", "Low": "-", "Front": "+", "Back": "-",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "y": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "+", "Low": "-", "Front": "+", "Back": "-",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "ɨ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "+", "Low": "-", "Front": "-", "Back": "-",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "ʉ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "+", "Low": "-", "Front": "-", "Back": "-",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "ɯ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "+", "Low": "-", "Front": "-", "Back": "+",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "u": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "+", "Low": "-", "Front": "-", "Back": "+",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "ɪ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "+", "Low": "-", "Front": "+", "Back": "-",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "ʏ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "+", "Low": "-", "Front": "+", "Back": "-",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "ʊ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "+", "Low": "-", "Front": "-", "Back": "+",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "e": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "+", "Back": "-",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "ø": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "+", "Back": "-",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "ɘ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "-",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "ɵ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "-",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "ɤ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "+",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "o": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "+",
+      "ATR": "+", "Tense": "+", "Long": "-"
+    },
+    "e̞": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "+", "Back": "-",
+      "ATR": "0", "Tense": "0", "Long": "-"
+    },
+    "ø̞": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "+", "Back": "-",
+      "ATR": "0", "Tense": "0", "Long": "-"
+    },
+    "ə": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "0", "Round": "0", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "-",
+      "ATR": "0", "Tense": "0", "Long": "-"
+    },
+    "ɤ̞": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "+",
+      "ATR": "0", "Tense": "0", "Long": "-"
+    },
+    "o̞": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "+",
+      "ATR": "0", "Tense": "0", "Long": "-"
+    },
+    "ɛ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "+", "Back": "-",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "œ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "+", "Back": "-",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "ɜ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "-",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "ɞ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "-",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "ʌ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "+",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "ɔ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "-", "Low": "-", "Front": "-", "Back": "+",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "æ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "+", "Front": "+", "Back": "-",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "ɐ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "0", "Round": "0", "DORSAL": "+",
+      "High": "-", "Low": "+", "Front": "-", "Back": "-",
+      "ATR": "-", "Tense": "-", "Long": "-"
+    },
+    "a": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "+", "Front": "+", "Back": "-",
+      "ATR": "0", "Tense": "0", "Long": "-"
+    },
+    "ɶ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "-", "Low": "+", "Front": "+", "Back": "-",
+      "ATR": "0", "Tense": "0", "Long": "-"
+    },
+    "ä": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "+", "Front": "-", "Back": "-",
+      "ATR": "0", "Tense": "0", "Long": "-"
+    },
+    "ɑ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "-", "Round": "-", "DORSAL": "+",
+      "High": "-", "Low": "+", "Front": "-", "Back": "+",
+      "ATR": "0", "Tense": "0", "Long": "-"
+    },
+    "ɒ": {
+      "Syllabic": "+", "Consonantal": "-", "Sonorant": "+",
+      "Approximant": "+", "Continuant": "+", "Voice": "+",
+      "LABIAL": "+", "Round": "+", "DORSAL": "+",
+      "High": "-", "Low": "+", "Front": "-", "Back": "+",
+      "ATR": "0", "Tense": "0", "Long": "-"
+    }
+  }
+}

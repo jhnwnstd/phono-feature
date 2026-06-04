@@ -391,6 +391,8 @@ def _vowel_chart_summary(
         "title": geometry.title,
         "title_grid_col_span": geometry.title_grid_col_span,
         "shape": geometry.shape.value,
+        "natural_data_width_px": geometry.natural_data_width_px,
+        "natural_data_height_px": geometry.natural_data_height_px,
         "silhouette": {
             "shape": sil.shape.value,
             "top_y": sil.top_y,

@@ -83,11 +83,12 @@ or phonologically central mid. Callers should use `confidence`,
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import IntEnum, StrEnum
 
 from phonology_shared.render.constants import BTN_W
 from phonology_shared.render.layout import (
+    SEG_BTN_H,
     VOWEL_PAIR_GAP_PX,
     VOWEL_PAIR_SEPARATOR_PX,
 )
@@ -1213,6 +1214,15 @@ class VowelChartGeometry:
     corners so the renderer can paint the outline and confirm
     every cell sits on its slant.
 
+    :py:attr:`natural_data_width_px` and
+    :py:attr:`natural_data_height_px` are the data-area's preferred
+    pixel dimensions, derived from the inventory's content: the
+    width grows with the widest row's button + gap requirements,
+    and the height grows with row count + per-row vertical-stack
+    depth. Renderers should treat these as the chart container's
+    PREFERRED natural size and add chrome (title, row labels,
+    column headers, padding) on top.
+
     Empty rows (no vowels in any column at that height tier) are
     OMITTED from :py:attr:`rows`; renderers iterate the list as-is
     without a "is this row populated" check.
@@ -1225,6 +1235,103 @@ class VowelChartGeometry:
     cols: tuple[VowelChartColHeader, ...]
     rows: tuple[VowelChartRow, ...]
     cells: tuple[VowelChartCell, ...]
+    natural_data_width_px: int
+    natural_data_height_px: int
+
+
+#: Gap between vertically stacked segment buttons inside a single
+#: cell. Smaller than the inter-row gap because the stack reads as
+#: one cell, not several.
+_VOWEL_CELL_STACK_GAP_PX: int = 1
+
+#: Vertical breathing room between adjacent populated rows. Picked
+#: to read as a row break without overweighting the chart's chrome.
+_VOWEL_ROW_GAP_PX: int = 6
+
+#: Vertical padding (top + bottom combined) around the row content
+#: so the silhouette's top edge can cut through the Close row's
+#: button centres without clipping their tops.
+_VOWEL_DATA_AREA_VERTICAL_PADDING_PX: int = SEG_BTN_H
+
+
+def _natural_data_area_size(
+    cells: tuple[VowelChartCell, ...],
+) -> tuple[int, int]:
+    """Derive the chart data area's preferred pixel size from the
+    inventory's content.
+
+    The chart grows along both axes so the rendered cells have room
+    to breathe:
+
+    * Width is set by the widest populated row's button + gap
+      requirements. Each backness slot (front / central / back)
+      contributes ``N * BTN_W + (N - 1) * VOWEL_PAIR_GAP_PX`` where
+      ``N`` is the slot's button count (a side-by-side Long pair
+      contributes 2 buttons, a regular single contributes 1). Slot
+      widths are separated by ``VOWEL_PAIR_SEPARATOR_PX``.
+    * Height is set by the populated rows' content height: each
+      row contributes ``max_stack * SEG_BTN_H + (max_stack - 1) *
+      stack_gap`` where ``max_stack`` is the row's deepest vertical
+      collision-stack. Long-pair cells count as 1 (they grow
+      horizontally, not vertically). Rows are separated by
+      ``_VOWEL_ROW_GAP_PX`` and the silhouette adds vertical
+      padding above the top row and below the bottom row.
+    """
+    if not cells:
+        # Fall back to a single canonical pair slot.
+        return (
+            2 * BTN_W + VOWEL_PAIR_GAP_PX,
+            SEG_BTN_H + _VOWEL_DATA_AREA_VERTICAL_PADDING_PX,
+        )
+
+    # col -> backness slot (front=0, central=1, back=2).
+    col_to_slot: dict[int, int] = {
+        0: 0, 1: 0, 6: 0,
+        2: 1, 3: 1, 7: 1,
+        4: 2, 5: 2, 8: 2,
+    }
+
+    rows_in_use: set[int] = {c.row for c in cells}
+    max_row_w = 2 * BTN_W + VOWEL_PAIR_GAP_PX
+    for ri in rows_in_use:
+        # Buttons per backness slot at this row.
+        slot_buttons: dict[int, int] = {0: 0, 1: 0, 2: 0}
+        for c in cells:
+            if c.row != ri:
+                continue
+            slot = col_to_slot[c.col]
+            slot_buttons[slot] += 2 if c.is_long_pair else 1
+        populated_slots = [s for s, n in slot_buttons.items() if n > 0]
+        if not populated_slots:
+            continue
+        slot_widths = [
+            slot_buttons[s] * BTN_W
+            + max(0, slot_buttons[s] - 1) * VOWEL_PAIR_GAP_PX
+            for s in populated_slots
+        ]
+        row_w = sum(slot_widths) + (len(populated_slots) - 1) * (
+            VOWEL_PAIR_SEPARATOR_PX
+        )
+        max_row_w = max(max_row_w, row_w)
+
+    # Height: per-row max stack depth, plus inter-row gaps and
+    # vertical padding for the silhouette's top/bottom offset.
+    row_heights: list[int] = []
+    for ri in sorted(rows_in_use):
+        depth = 1
+        for c in cells:
+            if c.row != ri:
+                continue
+            cell_depth = 1 if c.is_long_pair else len(c.entries)
+            if cell_depth > depth:
+                depth = cell_depth
+        row_heights.append(
+            depth * SEG_BTN_H + max(0, depth - 1) * _VOWEL_CELL_STACK_GAP_PX
+        )
+
+    total_h = sum(row_heights) + (len(row_heights) - 1) * _VOWEL_ROW_GAP_PX
+    total_h += _VOWEL_DATA_AREA_VERTICAL_PADDING_PX
+    return max_row_w, total_h
 
 
 def build_vowel_chart_geometry(
@@ -1364,9 +1471,28 @@ def build_vowel_chart_geometry(
                 return False
         return True
 
+    open_row_index = _ROW_LABEL_TO_INDEX["Open"]
+    # Open-row front-pair cells (cols 0 / 1) take priority for the
+    # bottom-left of the trapezoid. When they are empty, the Open
+    # central pair migrates leftward to occupy that visual slot
+    # (a one-low-vowel inventory's central /a/ should not sit at
+    # the geometric midpoint of the narrowed bottom edge). When
+    # the front pair IS populated, central stays at its true
+    # central anchor so the two cells do not collide.
+    open_front_populated = (
+        (open_row_index, 0) in occupied
+        or (open_row_index, 1) in occupied
+    )
     cells: list[VowelChartCell] = []
     for ri, ci in sorted(occupied):
-        anchor_x = _col_to_anchor[ci]
+        if (
+            ri == open_row_index
+            and ci in (2, 3)
+            and not open_front_populated
+        ):
+            anchor_x = _BACKNESS_X["front"]
+        else:
+            anchor_x = _col_to_anchor[ci]
         cell_display_y = display_y_by_row[ri]
         row_width = _width_at_display_y(cell_display_y)
         chart_x = back + row_width * (anchor_x - back)
@@ -1392,6 +1518,29 @@ def build_vowel_chart_geometry(
             )
         )
 
+    # Collision demote: a side-by-side Long-pair cell needs the
+    # full width of its backness-pair slot. When the inventory
+    # populates a sibling cell in the same row + backness slot,
+    # the pair cannot fit at the canonical anchor without
+    # overlapping its sibling. Fall back to a vertical stack so
+    # both cells stay legible at their canonical positions.
+    col_to_slot: dict[int, int] = {
+        0: 0, 1: 0, 6: 0,
+        2: 1, 3: 1, 7: 1,
+        4: 2, 5: 2, 8: 2,
+    }
+    cells_per_row_slot: dict[tuple[int, int], int] = {}
+    for c in cells:
+        key = (c.row, col_to_slot[c.col])
+        cells_per_row_slot[key] = cells_per_row_slot.get(key, 0) + 1
+    cells = [
+        replace(c, is_long_pair=False)
+        if c.is_long_pair
+        and cells_per_row_slot[(c.row, col_to_slot[c.col])] > 1
+        else c
+        for c in cells
+    ]
+
     # Column headers sit at the silhouette's top edge so they line
     # up with the topmost populated row's cells. Their chart_x is
     # the topmost row's projected backness anchor (front migrates
@@ -1412,6 +1561,7 @@ def build_vowel_chart_geometry(
         for ci, label in enumerate(COL_LABELS)
     )
 
+    natural_w, natural_h = _natural_data_area_size(tuple(cells))
     return VowelChartGeometry(
         title=VOWEL_CHART_TITLE,
         title_grid_col_span=VOWEL_TITLE_GRID_COL_SPAN,
@@ -1420,6 +1570,8 @@ def build_vowel_chart_geometry(
         cols=col_headers,
         rows=rows,
         cells=tuple(cells),
+        natural_data_width_px=natural_w,
+        natural_data_height_px=natural_h,
     )
 
 
