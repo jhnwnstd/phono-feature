@@ -82,7 +82,7 @@ or phonologically central mid. Callers should use `confidence`,
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from enum import IntEnum, StrEnum
 
@@ -492,18 +492,6 @@ _PAIR_OUTER_EXTENT: float = ((BTN_W + VOWEL_PAIR_GAP_PX) / 2 + BTN_W / 2) / (
     3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
 )
 
-#: Pixel-space outer envelope of a back-rounded button pair: from
-#: the pair's anchor centre (``back`` in normalised coords) to the
-#: outer right edge of the rounded mate. Used as the canonical
-#: ``VowelChartSilhouette.back_right_pixel_offset`` so the silhouette
-#: right edge sits at the back-rounded mate's outer right when no
-#: inventory adaptation has applied. Renderers compute the back
-#: edge as ``dx + top_right * dw + back_right_pixel_offset``; the
-#: pixel offset captures the fixed-pixel pair shift the cell
-#: renderer applies, which the normalised ``top_right`` alone cannot
-#: represent at arbitrary data-area widths.
-_PAIR_OUTER_PIXEL_EXTENT: int = (BTN_W + VOWEL_PAIR_GAP_PX) // 2 + BTN_W // 2
-
 
 def vowel_silhouette(
     shape: VowelChartShape,
@@ -551,21 +539,18 @@ def vowel_silhouette(
         top_y=y_anchor_top,
         bottom_y=y_anchor_bottom,
         top_left=front_at_top - pair_outer,
-        # ``top_right`` / ``bottom_right`` are the back ANCHOR
-        # (normalised). The pair-outer extent that used to be baked
-        # in here is now expressed via ``back_right_pixel_offset``
-        # in fixed pixels so the rendered line lands at the same
-        # spot regardless of how wide the data area becomes. The
-        # canonical default sits at the back-rounded mate's outer
-        # right edge; ``build_vowel_chart_geometry`` overrides per
-        # inventory to make the line pass through the rightmost
-        # back-vowel button's CENTRE.
-        top_right=back,
+        # ``top_right`` / ``bottom_right`` are the canonical back-
+        # edge position in normalised x: the back anchor plus the
+        # pair-outer extent so the line sits where a back-rounded
+        # mate's outer right edge WOULD be. Renderers multiply by
+        # the data-area width; on charts wider than the canonical
+        # content width the line drifts slightly past the button,
+        # which is the intended visual spacing.
+        top_right=back + pair_outer,
         bottom_left=front_at_bottom - pair_outer,
-        bottom_right=back,
+        bottom_right=back + pair_outer,
         top_width=top_row_width,
         bottom_width=bottom_row_width,
-        back_right_pixel_offset=_PAIR_OUTER_PIXEL_EXTENT,
     )
 
 
@@ -1212,16 +1197,15 @@ class VowelChartSilhouette:
     bottom_right: float
     top_width: float
     bottom_width: float
-    # Pixel correction added at render time to make the back
-    # silhouette edge pass through the CENTRE of the rightmost
-    # rendered back-vowel button (matching how the top / bottom
-    # horizontal edges pass through the centres of Close-row /
-    # Open-row buttons). Renderers compute the back-edge x as
-    # ``dx + top_right * dw + back_right_pixel_offset``; this
-    # captures the fixed-pixel pair-shift the cell renderer applies,
-    # which the normalised ``top_right`` alone cannot represent at
-    # arbitrary data-area widths. ``0`` is the canonical default
-    # (renderers behave as before; line sits at ``top_right * dw``).
+    # Optional fixed-pixel correction added at render time to the
+    # back silhouette edge. Renderers compute the back-edge x as
+    # ``dx + top_right * dw + back_right_pixel_offset``; the
+    # default ``0`` leaves the line at the canonical normalised
+    # position ``top_right * dw``. The field is a refactor hook for
+    # any future per-inventory back-edge tweak (e.g. snap-to-button
+    # styles, breathing-room tuning); both UIs already consume it
+    # through the shared formula so a value change here propagates
+    # to desktop and web without touching either renderer.
     back_right_pixel_offset: int = 0
 
 
@@ -1586,9 +1570,7 @@ def _silhouette_with_widths(
     """Recompute silhouette corners for new ``top_width`` /
     ``bottom_width`` while keeping shape, y bounds, and the back
     anchor + pixel offset. The back edge stays a vertical line at
-    ``back`` (anchor) + ``back_right_pixel_offset`` (pixels);
-    the inventory-aware override of the pixel offset is applied
-    separately in :py:func:`build_vowel_chart_geometry`.
+    ``back`` (anchor) + ``back_right_pixel_offset`` (pixels).
     """
     front = _BACKNESS_X["front"]
     back = _BACKNESS_X["back"]
@@ -1598,68 +1580,12 @@ def _silhouette_with_widths(
     return replace(
         silhouette,
         top_left=front_at_top - pair_outer,
-        top_right=back,
+        top_right=back + pair_outer,
         bottom_left=front_at_bottom - pair_outer,
-        bottom_right=back,
+        bottom_right=back + pair_outer,
         top_width=top_width,
         bottom_width=bottom_width,
     )
-
-
-#: Per-back-column pixel offsets from the back anchor (chart_x =
-#: back) to the CENTRE of the back-column button. Renderer combines
-#: with ``silhouette.top_right * dw`` so the line lands through the
-#: button regardless of how wide the data area is rendered.
-#:
-#:   col 5  back-rounded   pair_side +1  centre at  +pair_shift_px
-#:   col 8  back-neutral   pair_side  0  centre at   0
-#:   col 4  back-unrounded pair_side -1  centre at  -pair_shift_px
-#:
-#: Picked the col-5 magnitude as the "rightmost back vowel present"
-#: when multiple back cols are in the inventory (the back-rounded
-#: mate is by construction the rightmost of any rounded / unrounded
-#: pair). Ordering here is by signed pixel offset so the helper
-#: below can take ``max(...)`` without re-deriving the priority.
-_BACK_COL_BUTTON_CENTRE_OFFSET_PX: dict[int, int] = {
-    5: (BTN_W + VOWEL_PAIR_GAP_PX) // 2,
-    8: 0,
-    4: -(BTN_W + VOWEL_PAIR_GAP_PX) // 2,
-}
-
-
-def _back_right_pixel_offset_for_cells(
-    occupied: Mapping[tuple[int, int], Sequence[str]],
-) -> int | None:
-    """Pixel offset to add at render time so the back silhouette
-    edge passes through the CENTRE of the rightmost rendered back
-    vowel's button. Returns ``None`` when no back vowel is present;
-    callers keep the silhouette's canonical default (renderers fall
-    through to ``top_right * dw`` with offset 0).
-
-    The aesthetic rule: the silhouette's back edge should pass
-    through the backmost real back vowel so an inventory whose
-    rightmost vowel is unrounded (e.g. /ɯ/ without /u/) doesn't show
-    an empty strip on the right; back-rounded vowels (/u/, /o/, /ɔ/,
-    etc.) make the line go through their centre. The FRONT (left)
-    edge keeps its canonical normalised extent regardless of which
-    front vowels are present; the asymmetry implies the open-mouth
-    shape (back of the mouth closes around the back vowel; front
-    opens out).
-
-    Both renderers consume this via
-    :py:attr:`VowelChartSilhouette.back_right_pixel_offset` -- the
-    shared field eliminates the parallel desktop / web fix that
-    previously lived inside each renderer's drawing code.
-    """
-    chosen: int | None = None
-    for ri, ci in occupied:
-        del ri
-        offset = _BACK_COL_BUTTON_CENTRE_OFFSET_PX.get(ci)
-        if offset is None:
-            continue
-        if chosen is None or offset > chosen:
-            chosen = offset
-    return chosen
 
 
 def _natural_data_area_size(
@@ -1940,19 +1866,16 @@ def build_vowel_chart_geometry(
             silhouette, shrunken_top_w, shrunken_bot_w
         )
 
-    # Asymmetric back-edge adaptation: when the inventory has any
-    # back vowel, set the silhouette's ``back_right_pixel_offset``
-    # so the rendered line passes through the CENTRE of the rightmost
-    # back-vowel button (matching how the top / bottom horizontal
-    # edges pass through Close-row / Open-row button centres). The
-    # FRONT edge does NOT mirror this; the asymmetry implies the
-    # open mouth (tight at the back, open at the front). Inventories
-    # without any back vowel keep the canonical default
-    # (``back_right_pixel_offset = 0``) so the silhouette extends to
-    # its canonical normalised right edge at ``top_right * dw``.
-    back_offset = _back_right_pixel_offset_for_cells(occupied)
-    if back_offset is not None:
-        silhouette = replace(silhouette, back_right_pixel_offset=back_offset)
+    # The back edge stays at the canonical ``_PAIR_OUTER_PIXEL_EXTENT``
+    # default set by ``vowel_silhouette``: the line sits at the back-
+    # rounded mate's outer right edge so back vowels stay flush
+    # against (but not crossing) the silhouette. An earlier policy
+    # snapped the line to the rightmost back-vowel BUTTON CENTRE per
+    # inventory; the visual result intersected the buttons, which we
+    # rejected. The shared field / formula stays in place
+    # (``dx + top_right * dw + back_right_pixel_offset``) so any
+    # future per-inventory policy lands in this slot without touching
+    # the renderers.
 
     # Second pass: project cells using the final silhouette
     # widths. Long pairs without an opposite-rounding sibling

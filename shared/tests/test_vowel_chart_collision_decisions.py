@@ -153,45 +153,56 @@ def test_long_pair_classification_is_consistent_across_renderers() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_silhouette_back_edge_passes_through_back_rounded_when_present() -> (
-    None
-):
-    """The new semantics: ``top_right`` is the back ANCHOR
-    (normalised), and ``back_right_pixel_offset`` is the pixel offset
-    from that anchor to the rendered silhouette line. For an
-    inventory with a back-rounded vowel (col 5), the offset is the
-    pair-shift in pixels -- the line passes through the CENTRE of
-    the back-rounded mate, matching how the top / bottom horizontal
-    lines pass through Close-row / Open-row button centres.
+def test_silhouette_back_edge_at_canonical_normalised_extent() -> None:
+    """Silhouette back edge sits at the canonical ``back + pair_outer``
+    normalised position for every inventory; ``back_right_pixel_offset``
+    is the shared render-time hook for future tweaks but stays ``0``
+    by default so the rendered line is purely ``top_right * dw``.
+
+    The earlier inventory-adaptive snap-to-button-centre policy was
+    reverted (the visual intersected the button); the refactor
+    (single shared field consumed by both renderers via
+    ``dx + top_right * dw + back_right_pixel_offset``) is preserved.
     """
     from phonology_shared.chart.vowels import (
-        _BACK_COL_BUTTON_CENTRE_OFFSET_PX,
         _BACKNESS_X,
+        _PAIR_OUTER_EXTENT,
     )
 
-    geom = _geometry("english_features.json")
-    sil = geom.silhouette
-    assert sil.top_right == pytest.approx(_BACKNESS_X["back"], abs=1e-6)
-    assert sil.bottom_right == pytest.approx(_BACKNESS_X["back"], abs=1e-6)
-    assert sil.back_right_pixel_offset == _BACK_COL_BUTTON_CENTRE_OFFSET_PX[5]
+    canonical_back_edge = _BACKNESS_X["back"] + _PAIR_OUTER_EXTENT
+    for name in (
+        "english_features.json",
+        "hayes_features.json",
+        "spanish_features.json",
+    ):
+        geom = _geometry(name)
+        sil = geom.silhouette
+        assert sil.top_right == pytest.approx(canonical_back_edge, abs=1e-6)
+        assert sil.bottom_right == pytest.approx(canonical_back_edge, abs=1e-6)
+        assert sil.back_right_pixel_offset == 0, (
+            f"{name}: back_right_pixel_offset should be the hook "
+            f"default (0), not an inventory-driven snap value"
+        )
 
 
-def test_silhouette_back_offset_canonical_when_no_back_vowel() -> None:
-    """An inventory with no back vowel (col 4, 5, or 8) keeps the
-    canonical pair-outer pixel extent so the silhouette right edge
-    sits where a hypothetical back-rounded mate's outer right would
-    be. ``vowel_silhouette()`` (the canonical builder used by
-    ``build.py`` for the pre-load fallback) is the closest accessible
-    "no back vowel" case.
+def test_vowel_silhouette_builder_matches_per_inventory_back_edge() -> None:
+    """``vowel_silhouette()`` (the canonical builder used by
+    ``build.py`` for the pre-load CSS bake) lands the back edge at
+    the same normalised extent the per-inventory builder produces,
+    so the bake and the runtime path stay byte-aligned.
     """
     from phonology_shared.chart.vowels import (
-        _PAIR_OUTER_PIXEL_EXTENT,
+        _BACKNESS_X,
+        _PAIR_OUTER_EXTENT,
         VowelChartShape,
         vowel_silhouette,
     )
 
     sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
-    assert sil.back_right_pixel_offset == _PAIR_OUTER_PIXEL_EXTENT
+    assert sil.top_right == pytest.approx(
+        _BACKNESS_X["back"] + _PAIR_OUTER_EXTENT, abs=1e-6
+    )
+    assert sil.back_right_pixel_offset == 0
 
 
 def test_silhouette_front_edge_does_not_adapt_to_front_vowels() -> None:
