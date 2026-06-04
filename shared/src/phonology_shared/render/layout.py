@@ -191,12 +191,13 @@ FEAT_MIN_W: int = 480
 # flush against the splitter handle / panel edge.
 FEAT_CUSHION_PX: int = 40
 # Vowel chart natural display width: row-label gutter + 6 button
-# columns (BTN_W=33, BTN_GAP=4) + a few pixels of buffer for the
-# longest IPA-chart row labels ("Near-close", "Close-mid") so they
-# never clip. The chart is a fixed phonetic visualisation, not a
-# fluid grid, so it keeps the same width regardless of seg-pane
-# size — extra horizontal space goes to consonants instead.
-VOWEL_NATURAL_W: int = 320
+# columns (BTN_W=33, BTN_GAP=4) + buffer for the longest IPA-chart
+# row labels ("Near-close", "Close-mid") and breathing room around
+# the trapezoid silhouette so cells do not sit flush against the
+# chart's outer edge. The chart is a fixed phonetic visualisation,
+# not a fluid grid, so it keeps the same width regardless of
+# seg-pane size and extra horizontal space goes to consonants.
+VOWEL_NATURAL_W: int = 380
 # Within each backness (front, central, back), the unrounded/rounded
 # vowel pair sits in two grid columns. ``VOWEL_PAIR_GAP_PX`` is the
 # gap between the two mates -- small enough to read as a pair, not as
@@ -211,7 +212,7 @@ VOWEL_PAIR_SEPARATOR_PX: int = 14
 # Below this seg-pane width, the chart drops below the consonants
 # instead of floating beside them. Picked so a 3-column-of-buttons
 # consonant area still fits next to a min-width chart.
-VOWEL_STACK_W: int = 620
+VOWEL_STACK_W: int = 680
 # Total-viewport threshold below which the page-level grid collapses to
 # a single column (web ``@media (max-width: ...)`` matches this). The
 # media query is hardcoded; a unit test pins it to this constant.
@@ -730,12 +731,18 @@ REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
         overflow="reflow",
     ),
     # Vowel chart: fixed phonetic visualisation, kept at its natural
-    # width across pane sizes; height grows with row count.
+    # width across pane sizes; height grows with row count. The
+    # vertical floor leaves enough room for the title + column
+    # header chrome + six populated height tiers without the
+    # trapezoid silhouette getting squashed against the top / bottom
+    # edges. Eight ``SEG_BTN_ROW_H`` slots is a comfortable floor:
+    # roughly two extra rows of breathing room above what the six
+    # vowel tiers alone would need.
     "vowel_chart": RegionConstraint(
         min_w=VOWEL_NATURAL_W,
         pref_w=VOWEL_NATURAL_W,
         max_w=VOWEL_NATURAL_W,
-        min_h=4 * SEG_BTN_ROW_H,
+        min_h=8 * SEG_BTN_ROW_H,
         pref_h=None,
         max_h=None,
         overflow="clip",

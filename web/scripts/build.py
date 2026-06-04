@@ -553,6 +553,26 @@ def generate_layout_css() -> None:
             lines.append(f"  --{css_key}-max-h: {region.max_h}px;")
         lines.append(f"  --{css_key}-overflow: {region.overflow};")
     lines.extend(["}", ""])
+    # Container-query thresholds derived from the same Python
+    # constants. The seg-pane uses ``VOWEL_STACK_W`` to decide
+    # whether the vowel chart floats beside the consonant grid or
+    # drops below it; baking the rule here means changing
+    # ``VOWEL_STACK_W`` in Python automatically rewrites the CSS
+    # threshold on the next build (no hand-edits to ``style.css``).
+    lines.extend(
+        [
+            "/* Container-query thresholds derived from layout.py. */",
+            f"@container (max-width: {mod.VOWEL_STACK_W}px) {{",
+            "  .seg-vowels {",
+            "    float: none;",
+            "    margin: var(--space-md) 0 0 0;",
+            "    max-width: 100%;",
+            "    min-width: 0;",
+            "  }",
+            "}",
+            "",
+        ]
+    )
     (DIST / "layout.css").write_text("\n".join(lines))
     print(f"  {len(lines) - 4} layout tokens")
 

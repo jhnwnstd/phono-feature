@@ -301,16 +301,18 @@ def _feature_state(feats: Mapping[str, str], key: str) -> FeatureState:
 # Normalized abstract-vowel-space coordinates exposed on
 # :py:class:`VowelPlacement`. ``y`` is non-uniform to match the
 # IPA chart's visual convention (the near-close / close-mid /
-# open-mid gap is larger than near-close / close); the values
-# inset from 0 / 1 so close vowels land inside the data area
-# rather than half-clipping at the top edge.
+# open-mid gap is larger than near-close / close). The range
+# stops short of 0.0 and 1.0 so the top button at Close and the
+# bottom button at Open never clip against the data area's top
+# or bottom edge, and the silhouette has visible padding above
+# and below the cells.
 _HEIGHT_Y: dict[str, float] = {
-    "Close": 0.04,
-    "Near-close": 0.22,
+    "Close": 0.08,
+    "Near-close": 0.24,
     "Close-mid": 0.40,
-    "Open-mid": 0.62,
-    "Near-open": 0.80,
-    "Open": 0.96,
+    "Open-mid": 0.60,
+    "Near-open": 0.76,
+    "Open": 0.92,
 }
 
 
@@ -895,28 +897,32 @@ def logical_col_offset(col: int) -> int:
 class VowelChartCell:
     """A populated chart cell with its position resolved.
 
-    Carries two coordinate systems for the renderer to pick from:
+    The cell carries two ORTHOGONAL pieces of information so the
+    renderer can keep "where in the trapezoid does this cell
+    belong" (a position concern) cleanly separate from "how far
+    apart should paired mates sit visually" (a display concern):
 
-    * ``grid_row`` / ``grid_col``: the Qt 0-based physical
-      coordinates for the legacy rectangular grid layout. CSS-side
-      code adds 1. Used when the renderer arranges cells in a
-      fixed-width grid that does not follow the chart silhouette.
-    * ``chart_x`` / ``chart_y``: normalised ``[0, 1]`` floats
-      already projected through the chart's
-      :py:class:`VowelChartShape`. Renderers that arrange cells
-      inside the trapezoidal segment-display space drop each cell
-      at ``left: calc(chart_x * 100%)`` /
-      ``top: calc(chart_y * 100%)`` (web) or the equivalent
-      ``move()`` (Qt). The projection is built so the cells follow
-      the chart silhouette exactly; no per-row narrowing is needed
-      at the renderer.
+    * ``chart_x`` / ``chart_y``: normalised ``[0, 1]`` floats for
+      the cell's BACKNESS ANCHOR projected through the chart's
+      :py:class:`VowelChartShape`. Both unrounded and rounded
+      mates at the same backness share the same anchor, so the
+      paired-mate spacing does NOT change with chart width or
+      with how narrow a low row becomes inside the trapezoid.
+      Renderers drop the cell at
+      ``left: calc(chart_x * 100%)`` / ``top: calc(chart_y * 100%)``
+      (web) or the equivalent ``move()`` (Qt).
+    * ``pair_side``: ``-1`` for the unrounded mate, ``+1`` for the
+      rounded mate, ``0`` for an unrounded/rounded-unknown cell.
+      The renderer applies a FIXED PIXEL shift of
+      ``pair_side * (BTN_W + VOWEL_PAIR_GAP_PX) / 2`` on top of
+      the anchor so paired mates are always exactly tangent
+      regardless of the row's effective width.
 
-    ``row`` / ``col`` are the original logical placement (0..5
-    each) kept for callers that need to reason about the abstract
-    placement decision rather than its visual coordinates.
-    ``entries`` is the segments occupying this cell, ordered by
-    descending placement confidence (ties broken by ascending
-    segment string).
+    ``grid_row`` / ``grid_col`` remain for callers that still use
+    the legacy rectangular grid layout. ``row`` / ``col`` are the
+    abstract logical placement (0..5 each). ``entries`` is the
+    segments occupying this cell, ordered by descending placement
+    confidence (ties broken by ascending segment string).
     """
 
     row: int
@@ -925,6 +931,7 @@ class VowelChartCell:
     grid_col: int
     chart_x: float
     chart_y: float
+    pair_side: int
     entries: tuple[str, ...]
 
 
@@ -1023,25 +1030,27 @@ def build_vowel_chart_geometry(
     )
 
     shape = infer_vowel_shape(profile)
-    # Map ``col`` to (backness anchor, signed pair offset). Both
-    # anchors and pair offset are derived from the layout pixel
-    # constants in :py:func:`_derive_backness_anchors` / the
-    # ``_PAIR_OFFSET_HALF`` derivation, so the centre-to-centre
-    # spacing of paired mates on the widest row equals one button
-    # width plus the within-pair gap exactly.
-    _col_to_anchor: dict[int, tuple[float, float]] = {
-        0: (_BACKNESS_X["front"], -_PAIR_OFFSET_HALF),
-        1: (_BACKNESS_X["front"], +_PAIR_OFFSET_HALF),
-        2: (_BACKNESS_X["central"], -_PAIR_OFFSET_HALF),
-        3: (_BACKNESS_X["central"], +_PAIR_OFFSET_HALF),
-        4: (_BACKNESS_X["back"], -_PAIR_OFFSET_HALF),
-        5: (_BACKNESS_X["back"], +_PAIR_OFFSET_HALF),
+    # Map ``col`` to its backness anchor. Pair side (unrounded vs
+    # rounded) is handled separately by the renderer as a fixed
+    # pixel shift so the within-pair gap stays constant regardless
+    # of how narrow a row becomes inside the trapezoid.
+    _col_to_anchor: dict[int, float] = {
+        0: _BACKNESS_X["front"],
+        1: _BACKNESS_X["front"],
+        2: _BACKNESS_X["central"],
+        3: _BACKNESS_X["central"],
+        4: _BACKNESS_X["back"],
+        5: _BACKNESS_X["back"],
     }
     cells: list[VowelChartCell] = []
     for ri, ci in sorted(occupied):
-        x, pair_offset = _col_to_anchor[ci]
+        x = _col_to_anchor[ci]
         y = _HEIGHT_Y[ROW_LABELS[ri]]
-        chart_x, chart_y = project_to_chart_xy(x, y, pair_offset, shape)
+        # Pure backness anchor projection; the rounded/unrounded
+        # split is exposed on ``pair_side`` for the renderer to
+        # apply in pixels.
+        chart_x, chart_y = project_to_chart_xy(x, y, 0.0, shape)
+        pair_side = 1 if ci % 2 else -1
         cells.append(
             VowelChartCell(
                 row=ri,
@@ -1050,6 +1059,7 @@ def build_vowel_chart_geometry(
                 grid_col=VOWEL_LABEL_GRID_COL + logical_col_offset(ci),
                 chart_x=chart_x,
                 chart_y=chart_y,
+                pair_side=pair_side,
                 entries=tuple(occupied[(ri, ci)]),
             )
         )

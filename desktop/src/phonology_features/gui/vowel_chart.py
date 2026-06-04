@@ -26,7 +26,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_shared.render.layout import REGION_CONSTRAINTS
+from phonology_shared.render.constants import BTN_W
+from phonology_shared.render.layout import (
+    REGION_CONSTRAINTS,
+    VOWEL_PAIR_GAP_PX,
+)
 from phonology_shared.render.palette import C
 from phonology_shared.render.vowel_layout import (
     COL_LABELS,
@@ -75,12 +79,13 @@ class VowelChartWidget(QWidget):
     # Chrome dimensions for the outer rectangular UI space. The
     # title / column headers stack at the top; row labels sit on
     # the left; the trapezoidal data area takes the remaining
-    # rectangle. Values match the web's spacing tokens loosely so
-    # the two surfaces look comparable.
-    _TITLE_H: ClassVar[int] = 18
-    _COL_HEADER_H: ClassVar[int] = 16
-    _PAD_R: ClassVar[int] = 8
-    _PAD_B: ClassVar[int] = 4
+    # rectangle. The bottom and right paddings give the trapezoid
+    # silhouette a small inset from the widget border so the cells
+    # at the open / back edges have visible breathing room.
+    _TITLE_H: ClassVar[int] = 20
+    _COL_HEADER_H: ClassVar[int] = 18
+    _PAD_R: ClassVar[int] = 12
+    _PAD_B: ClassVar[int] = 10
 
     def __init__(
         self, parent: QWidget | None = None, *, btn_gap: int = 4
@@ -106,9 +111,13 @@ class VowelChartWidget(QWidget):
         self._col_labels: list[tuple[QLabel, float]] = []
         self._row_labels: list[tuple[QLabel, float]] = []
         # Cell widgets (segment buttons or vbox stacks for collision
-        # cells) carry their chart_x / chart_y so resize re-places
-        # them along the trapezoid silhouette.
-        self._cells: list[tuple[QWidget, float, float]] = []
+        # cells) carry their chart_x / chart_y plus a pair_side
+        # signed multiplier (-1 / 0 / +1). The resize pass projects
+        # them to pixel positions: the anchor follows the trapezoid
+        # silhouette, then a FIXED pair shift in pixels keeps
+        # rounded/unrounded mates exactly tangent regardless of how
+        # narrow the row becomes.
+        self._cells: list[tuple[QWidget, float, float, int]] = []
         self._cell_containers: list[QWidget] = []
         # Cached header styles, rebuilt by apply_theme each toggle.
         self._HDR_ACTIVE = ""
@@ -267,7 +276,9 @@ class VowelChartWidget(QWidget):
             widget = self._build_cell(cell)
             if widget is None:
                 continue
-            self._cells.append((widget, cell.chart_x, cell.chart_y))
+            self._cells.append(
+                (widget, cell.chart_x, cell.chart_y, cell.pair_side)
+            )
         self._layout_children()
         self.update()
 
@@ -345,15 +356,22 @@ class VowelChartWidget(QWidget):
             py = dy + int(y * dh) - lh // 2
             px = dx - lbl.width() - 4
             lbl.move(max(0, px), py)
-        # Cells: chart_x / chart_y come pre-projected through the
-        # shape, so the cells sit on the trapezoid exactly.
-        for widget, cx, cy in self._cells:
+        # Cells: position concern (anchor) + display concern (pair
+        # shift). ``chart_x`` / ``chart_y`` are the backness anchor
+        # already projected through the chart silhouette; the pair
+        # shift is a FIXED pixel offset of half a button width plus
+        # half the within-pair gap, multiplied by ``pair_side``
+        # (-1 unrounded, 0 unknown, +1 rounded). Keeping the pair
+        # shift in pixels means rounded/unrounded mates stay
+        # exactly tangent at every row of the trapezoid.
+        pair_shift_px = (BTN_W + VOWEL_PAIR_GAP_PX) // 2
+        for widget, cx, cy, pair_side in self._cells:
             widget.adjustSize()
             ww = widget.width()
             wh = widget.height()
             if ww > self._cell_w_hint:
                 self._cell_w_hint = ww
-            px = dx + int(cx * dw) - ww // 2
+            px = dx + int(cx * dw) - ww // 2 + pair_side * pair_shift_px
             py = dy + int(cy * dh) - wh // 2
             widget.move(px, py)
 

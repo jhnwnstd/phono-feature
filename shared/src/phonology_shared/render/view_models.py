@@ -415,6 +415,7 @@ def _vowel_chart_summary(
                 "grid_col": cell.grid_col,
                 "chart_x": cell.chart_x,
                 "chart_y": cell.chart_y,
+                "pair_side": cell.pair_side,
                 "segs": list(cell.entries),
             }
             for cell in geometry.cells

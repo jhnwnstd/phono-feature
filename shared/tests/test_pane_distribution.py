@@ -76,17 +76,19 @@ def test_distribute_seg_content_overrides_min() -> None:
 
 def test_vowel_width_is_constant_natural() -> None:
     # The chart is a fixed phonetic visualisation; it returns its
-    # natural width regardless of pane width. Literal 320 so a bump
-    # to VOWEL_NATURAL_W is caught here.
+    # natural width regardless of pane width. Tripwire on the
+    # exact value so a future bump to VOWEL_NATURAL_W lands as a
+    # deliberate test edit, not a silent drift.
     for seg_pane_w in (0, 100, 480, 1200, 3840):
-        assert layout.vowel_chart_width(seg_pane_w) == 320
+        assert layout.vowel_chart_width(seg_pane_w) == 380
 
 
 def test_vowel_natural_width_fits_label_column() -> None:
     # The chart's natural width has to clear: 6 button columns
     # (BTN_W + BTN_GAP each) + a label-column gutter wide enough
     # for the longest row label ("Near-close" at ~60 px in
-    # Noto Sans 7pt). 320 covers that with breathing room.
+    # Noto Sans 7pt) + breathing room around the trapezoid
+    # silhouette.
     btn_strip = 6 * (33 + 4)  # six button cols + five gaps + trailing
     assert layout.VOWEL_NATURAL_W >= btn_strip + 64
 
@@ -118,7 +120,7 @@ def test_initial_size_floored_on_small_screen() -> None:
     # the floor; ``clamp_size_to_screen`` will then trim down to fit.
     # Width floor is now 1120 (vowel-safe minimum) instead of 1400.
     w, h = layout.recommended_initial_window_size(1366, 768)
-    assert w == 1120  # MIN_FIRST_LAUNCH_W (vowel-safe floor)
+    assert w == layout.MIN_FIRST_LAUNCH_W  # vowel-safe floor
     assert h == 900  # MIN_FIRST_LAUNCH_H
 
 
@@ -200,17 +202,40 @@ def test_collapse_w_matches_css_media_query() -> None:
     )
 
 
-def test_vowel_stack_w_matches_css_container_query() -> None:
-    """Same parity check for the vowel-stack container query."""
+def test_vowel_stack_w_matches_build_py_container_query() -> None:
+    """The @container threshold that drops the vowel chart below
+    the consonant grid lives in ``build.py``'s emitted
+    ``layout.css``, not in the hand-edited ``style.css``. Pin that
+    ``build.py`` does the emission so a future refactor cannot
+    silently revert to a duplicated hand-edited literal.
+    """
     from pathlib import Path
 
+    build_py = (
+        Path(__file__).resolve().parents[2] / "web" / "scripts" / "build.py"
+    )
+    contents = build_py.read_text(encoding="utf-8")
+    # The literal in build.py is an f-string interpolating
+    # VOWEL_STACK_W; pin the f-string skeleton plus a non-magic
+    # reference to the constant.
+    assert "VOWEL_STACK_W" in contents, (
+        "build.py must reference layout.VOWEL_STACK_W when emitting"
+        " the vowel-stack container query so the threshold tracks"
+        " the constant automatically"
+    )
+    assert "@container (max-width:" in contents, (
+        "build.py must emit the @container rule for the vowel-stack"
+        " threshold"
+    )
+
+    # And the hand-edited style.css must NOT carry a literal
+    # threshold, since that path used to drift from the Python
+    # constant on every bump.
     style_css = Path(__file__).resolve().parents[2] / "web" / "style.css"
-    contents = style_css.read_text(encoding="utf-8")
-    expected_rule = f"@container (max-width: {layout.VOWEL_STACK_W}px)"
-    assert expected_rule in contents, (
-        f"style.css container-query threshold does not match "
-        f"layout.VOWEL_STACK_W={layout.VOWEL_STACK_W}; expected literal "
-        f"{expected_rule!r}"
+    style_contents = style_css.read_text(encoding="utf-8")
+    assert "@container (max-width:" not in style_contents, (
+        "style.css should not carry a hand-edited @container threshold;"
+        " the rule belongs in build.py so it tracks VOWEL_STACK_W."
     )
 
 

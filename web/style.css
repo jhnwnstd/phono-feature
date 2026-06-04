@@ -466,14 +466,10 @@ dialog input[type="text"]:focus-visible {
 @supports selector(:has(*)) {
   .panel:has(#seg-grid) { container-type: inline-size; }
 }
-@container (max-width: 620px) {
-  .seg-vowels {
-    float: none;
-    margin: var(--space-md) 0 0 0;
-    max-width: 100%;
-    min-width: 0;
-  }
-}
+/* The container query that drops the vowel chart below the
+   consonant grid (keyed on VOWEL_STACK_W) lives in the generated
+   layout.css so the threshold tracks the Python constant
+   automatically; do not duplicate it here. */
 .seg-group {
   margin-bottom: var(--space-md);
   min-width: 0;
@@ -599,7 +595,11 @@ dialog input[type="text"]:focus-visible {
   grid-row: 2;
   grid-column: 1;
   position: relative;
-  min-height: calc(6 * var(--control-h-sm));
+  /* Eight slots match the chart's vertical floor in
+     ``REGION_CONSTRAINTS["vowel_chart"]`` so a row label always
+     has room next to its data cell instead of compressing into
+     the chrome. */
+  min-height: calc(8 * var(--control-h-sm));
 }
 .vowel-chart-row-label {
   position: absolute;
@@ -629,7 +629,11 @@ dialog input[type="text"]:focus-visible {
   grid-row: 2;
   grid-column: 2;
   position: relative;
-  min-height: calc(6 * var(--control-h-sm));
+  /* Match ``.vowel-chart-row-labels``: eight slots of breathing
+     room so close/open vowels never sit flush against the data
+     area's top / bottom and the trapezoid silhouette has visible
+     padding around the cells. */
+  min-height: calc(8 * var(--control-h-sm));
 }
 .vowel-chart-data::before {
   content: "";
@@ -666,7 +670,19 @@ dialog input[type="text"]:focus-visible {
 .vowel-chart-cell {
   position: absolute;
   z-index: 1;
-  transform: translate(-50%, -50%);
+  /* Centre the button on the anchor, then add a fixed-pixel pair
+     shift derived from the button width and the within-pair gap.
+     Pair shift is multiplied by ``--pair-side`` (-1, 0, or +1) so
+     the same rule centres the unrounded mate to the left and the
+     rounded mate to the right of the backness anchor. */
+  transform: translate(
+    calc(
+      -50% +
+        var(--pair-side, 0) *
+        (var(--seg-btn-w) + var(--vowel-pair-gap)) / 2
+    ),
+    -50%
+  );
 }
 /* Vertical stack for cells holding multiple vowels (e.g. ə / ɜ / ɚ
    all landing in open-mid central). Mirrors the desktop's

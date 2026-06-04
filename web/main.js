@@ -1189,8 +1189,17 @@ function _buildVowelChart(chart) {
         const target = segs.length === 1
             ? _buildVowelCellButton(segs[0])
             : _buildVowelCellStack(segs);
+        // Position concern: backness anchor projected through the
+        // chart silhouette. Display concern: fixed-pixel shift so
+        // rounded/unrounded mates stay exactly tangent regardless
+        // of how narrow the row becomes. ``--pair-side`` is the
+        // signed multiplier; the per-mate shift is half a button
+        // width plus half the within-pair gap, expressed as a CSS
+        // calc against ``--seg-btn-w`` / ``--vowel-pair-gap`` so a
+        // future bump to either constant flows through.
         target.style.left = (cell.chart_x * 100) + "%";
         target.style.top = (cell.chart_y * 100) + "%";
+        target.style.setProperty("--pair-side", String(cell.pair_side));
         dataEl.appendChild(target);
     }
     chartEl.appendChild(dataEl);
