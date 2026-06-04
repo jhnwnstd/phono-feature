@@ -628,3 +628,61 @@ def test_split_low_by_tense_policy_knob(profile):
     # Default: Near-open (row 4). Strict: Open (row 5).
     assert default.row == 4
     assert paper_strict.row == 5
+
+
+def test_placement_carries_normalized_coordinates(profile):
+    """Every placement carries normalized ``x`` / ``y`` /
+    ``pair_offset`` alongside the existing ``row`` / ``col`` grid
+    coordinates. The float fields feed the trapezoid/triangle
+    projection. Anchor values are derived in
+    :py:func:`_derive_backness_anchors` from the layout pixel
+    constants; this test pins the structural invariants rather
+    than the exact numbers so tuning the pixel constants does
+    not also rewrite the test.
+    """
+    # Close front rounded /y/: top of the chart, leftmost backness,
+    # rounded so pair_offset is positive.
+    close_front_rnd = vowel_grid_pos(
+        {"high": "+", "low": "-", "front": "+", "back": "-", "round": "+"},
+        profile,
+    )
+    assert close_front_rnd.row == 0
+    assert close_front_rnd.col == 1
+    # Anchors are insetted from 0 / 1 so paired mates do not
+    # overshoot the data area on the leftmost or rightmost
+    # backness. The exact values are derived; structural bounds:
+    assert 0.0 < close_front_rnd.x < 0.5
+    assert 0.0 <= close_front_rnd.y < 0.2
+    assert close_front_rnd.pair_offset > 0.0
+
+    # Open back unrounded /ɑ/: bottom of the chart, rightmost
+    # backness, unrounded so pair_offset is negative.
+    open_back_unr = vowel_grid_pos(
+        {"high": "-", "low": "+", "front": "-", "back": "+", "round": "-"},
+        profile,
+    )
+    assert 0.8 < open_back_unr.y <= 1.0
+    assert 0.5 < open_back_unr.x < 1.0
+    assert open_back_unr.pair_offset < 0.0
+
+    # Unrounded and rounded mates sit on the same anchor with
+    # opposite-sign offsets of equal magnitude. A projector relies
+    # on this symmetry.
+    assert open_back_unr.pair_offset == -close_front_rnd.pair_offset
+
+    # Front + back anchors are symmetric around x == 0.5 so the
+    # chart's vertical axis sits in the middle of the central
+    # column regardless of which row.
+    open_front_unr = vowel_grid_pos(
+        {"high": "-", "low": "+", "front": "+", "back": "-", "round": "-"},
+        profile,
+    )
+    assert abs((open_front_unr.x + open_back_unr.x) / 2 - 0.5) < 1e-9
+
+    # Central anchor stays at x == 0.5 regardless of rounding so a
+    # projection layer can use the anchor as the symmetry axis.
+    central_unr = vowel_grid_pos(
+        {"high": "-", "low": "-", "front": "-", "back": "-", "round": "-"},
+        profile,
+    )
+    assert central_unr.x == 0.5

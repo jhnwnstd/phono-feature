@@ -59,6 +59,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 
+from phonology_shared.render.constants import BTN_W
+from phonology_shared.render.layout import (
+    VOWEL_PAIR_GAP_PX,
+    VOWEL_PAIR_SEPARATOR_PX,
+)
+
 # The six height tiers of the IPA vowel chart, in row order. Tuple
 # is (label, +high, +low, +tense-or-atr): the feature bundle that
 # canonically populates the row. Used by the chart widget to label
@@ -89,6 +95,28 @@ class Confidence(IntEnum):
     LOW = 1
     MEDIUM = 2
     HIGH = 3
+
+
+class VowelChartShape(StrEnum):
+    """Visual envelope the renderer paints around the vowel chart.
+
+    The placement decisions (height, backness, rounding) are the
+    same across both shapes; only the chart's outer outline
+    changes. :py:attr:`TRAPEZOID` matches the IPA vowel
+    quadrilateral convention and is the default (the bottom row
+    sits narrower than the top because open vowels carry less
+    front/back distinction). :py:attr:`TRIANGLE` collapses the
+    bottom edge to a near-point and is appropriate for inventories
+    that lack any front/back contrast.
+
+    :py:func:`infer_vowel_shape` picks one from a
+    :py:class:`VowelProfile`; the choice is a cosmetic envelope
+    hint, so a future user policy can override it without
+    changing any placement.
+    """
+
+    TRAPEZOID = "trapezoid"
+    TRIANGLE = "triangle"
 
 
 class FeatureState(StrEnum):
@@ -210,19 +238,38 @@ class AxisEvidence:
 
 @dataclass(frozen=True)
 class VowelPlacement:
-    """A vowel's cell in the IPA chart. ``row`` is the height tier
-    (index into ``ROW_LABELS``); ``col`` is the 6-column index
-    (front-unr, front-rnd, central-unr, central-rnd, back-unr,
-    back-rnd, 0-5).
+    """A vowel's position in the IPA chart.
+
+    Carries two representations of the same placement decision so a
+    future shape-projection layer (trapezoid, triangle) has the
+    data it needs without re-deriving anything:
+
+    * ``row`` / ``col``: discrete grid coordinates the current
+      desktop and web renderers consume. ``row`` is the height
+      tier (index into :py:data:`ROW_LABELS`); ``col`` is the
+      6-column index (front-unr, front-rnd, central-unr,
+      central-rnd, back-unr, back-rnd, 0-5).
+    * ``x`` / ``y`` / ``pair_offset``: normalized continuous
+      coordinates in abstract vowel space. ``x`` is the backness
+      anchor (0.0 front, 0.5 central, 1.0 back), ``y`` is the
+      height anchor (0.0 close, 1.0 open), and ``pair_offset`` is
+      the small signed shift within a rounded/unrounded pair
+      (negative for unrounded, positive for rounded, zero when
+      rounding is unknown). A future renderer that wants a
+      trapezoid or triangle reads these floats and projects them;
+      the current grid renderer ignores them.
 
     Per-axis ``height`` / ``backness`` / ``rounding`` carry the
-    evidence each placement decision was made from. The top-level
+    evidence each placement decision was made from. Top-level
     ``confidence`` and ``reason`` are derived summaries kept for
     backward compatibility with existing consumers.
     """
 
     row: int
     col: int
+    x: float
+    y: float
+    pair_offset: float
     confidence: Confidence
     reason: str
     height: AxisEvidence | None = None
@@ -251,6 +298,73 @@ def _feature_state(feats: Mapping[str, str], key: str) -> FeatureState:
 #: Reverse of ``ROW_LABELS`` so axis evidence carrying a row label
 #: ("Close", "Open-mid", ...) can be turned back into a row index
 #: without an O(n) scan on every placement.
+# Normalized abstract-vowel-space coordinates exposed on
+# :py:class:`VowelPlacement`. ``y`` is non-uniform to match the
+# IPA chart's visual convention (the near-close / close-mid /
+# open-mid gap is larger than near-close / close); the values
+# inset from 0 / 1 so close vowels land inside the data area
+# rather than half-clipping at the top edge.
+_HEIGHT_Y: dict[str, float] = {
+    "Close": 0.04,
+    "Near-close": 0.22,
+    "Close-mid": 0.40,
+    "Open-mid": 0.62,
+    "Near-open": 0.80,
+    "Open": 0.96,
+}
+
+
+def _derive_backness_anchors() -> tuple[dict[str, float], float]:
+    """Derive backness anchors and the trapezoid bottom-width from
+    real layout pixels.
+
+    The TOP row of the chart needs to fit three backness columns
+    (front, central, back), each holding an unrounded + rounded
+    pair of segment buttons, plus a separator between adjacent
+    backness columns. The BOTTOM row of the trapezoid needs to fit
+    at least two backness columns + one separator so a typical
+    open-row inventory (front + back, no central) still has room
+    for its cells.
+
+    Returns:
+        ``(anchors, bottom_width)`` where ``anchors`` maps
+        ``"front"`` / ``"central"`` / ``"back"`` to a normalised
+        x in ``[0, 1]`` (the column centre for the TOP, widest
+        row), and ``bottom_width`` is the trapezoid's bottom edge
+        as a fraction of the top edge.
+
+    The numbers fall out of the existing pixel constants
+    (``BTN_W``, ``VOWEL_PAIR_GAP_PX``, ``VOWEL_PAIR_SEPARATOR_PX``):
+    no hand-picked fractions, no magic numbers.
+    """
+    backness_w = 2 * BTN_W + VOWEL_PAIR_GAP_PX
+    content_w = 3 * backness_w + 2 * VOWEL_PAIR_SEPARATOR_PX
+    front_centre = backness_w / 2.0
+    central_centre = backness_w + VOWEL_PAIR_SEPARATOR_PX + backness_w / 2.0
+    back_centre = content_w - backness_w / 2.0
+    anchors = {
+        "front": front_centre / content_w,
+        "central": central_centre / content_w,
+        "back": back_centre / content_w,
+    }
+    min_bottom_content = 2 * backness_w + VOWEL_PAIR_SEPARATOR_PX
+    bottom_width = min_bottom_content / content_w
+    return anchors, bottom_width
+
+
+_BACKNESS_X, _DERIVED_BOTTOM_WIDTH = _derive_backness_anchors()
+
+#: Half-width of the signed offset that separates the rounded
+#: mate from its unrounded partner inside a backness anchor.
+#: Derived from the pixel constants so the two mates are exactly
+#: one button-width apart centre-to-centre on the widest row of
+#: the trapezoid (no overlap, no gratuitous gap). Signed so a
+#: renderer can apply ``x + pair_offset`` directly.
+_PAIR_OFFSET_HALF: float = (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / (
+    3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
+)
+
+
 _ROW_LABEL_TO_INDEX: dict[str, int] = {
     label: i for i, label in enumerate(ROW_LABELS)
 }
@@ -299,6 +413,80 @@ def detect_vowel_profile(
         has_syllabic="syllabic" in active,
         has_consonantal="consonantal" in active,
     )
+
+
+#: Width of the trapezoid's bottom edge as a fraction of its top
+#: edge. Derived (:py:func:`_derive_backness_anchors`) from the
+#: pixel constants so the bottom row has just enough room for two
+#: backness columns plus the inter-column separator.
+TRAPEZOID_BOTTOM_WIDTH: float = _DERIVED_BOTTOM_WIDTH
+#: Triangle bottom edge: one backness column wide. Derived from
+#: the same pixel constants so the lowest row of a triangle chart
+#: still has finite horizontal extent for a single vowel pair.
+TRIANGLE_BOTTOM_WIDTH: float = (
+    (2 * BTN_W + VOWEL_PAIR_GAP_PX)
+    / (3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX)
+)
+
+
+def project_to_chart_xy(
+    x: float,
+    y: float,
+    pair_offset: float,
+    shape: VowelChartShape,
+) -> tuple[float, float]:
+    """Project an abstract-vowel-space point onto the chart's
+    silhouette.
+
+    ``x`` (0.0 front, 1.0 back), ``y`` (0.0 close, 1.0 open), and
+    ``pair_offset`` (signed within-pair shift) come from
+    :py:class:`VowelPlacement`. Returns ``(chart_x, chart_y)``
+    where both values land in ``[0, 1]`` for renderers that drop
+    cells via ``left: calc(chart_x * 100%)`` / ``top: calc(chart_y
+    * 100%)``.
+
+    Asymmetric narrowing: the right edge stays vertical (back
+    vowels keep the same horizontal position from close to open),
+    only the left edge slants inward as ``y`` grows. This matches
+    the IPA vowel quadrilateral, where the front column at lower
+    rows is pushed toward the centre while the back column stays
+    put. Each row's effective width is
+    ``1 - (1 - bottom_width) * y``; the row is right-anchored at
+    ``chart_x = 1.0``. Pair offset rides on the row's effective
+    width so rounded/unrounded mates stay glued together inside
+    narrowing rows.
+    """
+    if shape == VowelChartShape.TRIANGLE:
+        bottom_width = TRIANGLE_BOTTOM_WIDTH
+    else:
+        bottom_width = TRAPEZOID_BOTTOM_WIDTH
+    row_width = 1.0 - (1.0 - bottom_width) * y
+    # Right-anchored: the rightmost position stays at 1.0 across
+    # all rows; the leftmost slides right as the row narrows.
+    row_left = 1.0 - row_width
+    chart_x = row_left + (x + pair_offset) * row_width
+    return chart_x, y
+
+
+def infer_vowel_shape(profile: VowelProfile) -> VowelChartShape:
+    """Pick a chart shape from inventory facts.
+
+    :py:attr:`VowelChartShape.TRAPEZOID` is the default: it matches
+    the IPA vowel-quadrilateral convention, where the open-vowel
+    row sits narrower than the close-vowel row. A
+    near-rectangular trapezoid (small narrowing) is still a
+    trapezoid; the projector's bottom-edge width controls how
+    visually obvious the narrowing is.
+
+    :py:attr:`VowelChartShape.TRIANGLE` fires only when the
+    inventory has no front/back contrast at all. Without backness,
+    the chart collapses to a single column of heights and a
+    triangular envelope reads more honestly than a trapezoid that
+    would imply an unused front/back axis.
+    """
+    if not (profile.has_front or profile.has_back):
+        return VowelChartShape.TRIANGLE
+    return VowelChartShape.TRAPEZOID
 
 
 def _nonzero(val: str | None) -> str | None:
@@ -707,30 +895,53 @@ def logical_col_offset(col: int) -> int:
 class VowelChartCell:
     """A populated chart cell with its position resolved.
 
-    ``row`` / ``col`` are the logical placement (0..5 each). ``grid_row``
-    and ``grid_col`` are the Qt 0-based physical coordinates the
-    renderer drops the cell into; CSS-side code adds 1 to each.
+    Carries two coordinate systems for the renderer to pick from:
+
+    * ``grid_row`` / ``grid_col``: the Qt 0-based physical
+      coordinates for the legacy rectangular grid layout. CSS-side
+      code adds 1. Used when the renderer arranges cells in a
+      fixed-width grid that does not follow the chart silhouette.
+    * ``chart_x`` / ``chart_y``: normalised ``[0, 1]`` floats
+      already projected through the chart's
+      :py:class:`VowelChartShape`. Renderers that arrange cells
+      inside the trapezoidal segment-display space drop each cell
+      at ``left: calc(chart_x * 100%)`` /
+      ``top: calc(chart_y * 100%)`` (web) or the equivalent
+      ``move()`` (Qt). The projection is built so the cells follow
+      the chart silhouette exactly; no per-row narrowing is needed
+      at the renderer.
+
+    ``row`` / ``col`` are the original logical placement (0..5
+    each) kept for callers that need to reason about the abstract
+    placement decision rather than its visual coordinates.
     ``entries`` is the segments occupying this cell, ordered by
-    descending placement confidence (ties broken by ascending segment
-    string).
+    descending placement confidence (ties broken by ascending
+    segment string).
     """
 
     row: int
     col: int
     grid_row: int
     grid_col: int
+    chart_x: float
+    chart_y: float
     entries: tuple[str, ...]
 
 
 @dataclass(frozen=True)
 class VowelChartRow:
     """A row to render. ``logical_row`` indexes into ``ROW_LABELS``;
-    ``grid_row`` is the Qt 0-based physical row the renderer drops the
-    row label into."""
+    ``grid_row`` is the Qt 0-based physical row the renderer drops
+    the row label into for the legacy grid layout. ``chart_y`` is
+    the row's normalised vertical position inside the trapezoid
+    data area so a row-label renderer can vertically align the
+    label with the row's data cells via
+    ``top: calc(chart_y * 100%)``."""
 
     logical_row: int
     label: str
     grid_row: int
+    chart_y: float
 
 
 @dataclass(frozen=True)
@@ -753,6 +964,12 @@ class VowelChartGeometry:
     label per :py:attr:`rows` entry, one cell per :py:attr:`cells`
     entry, and one button per segment in each cell.
 
+    :py:attr:`shape` is the visual envelope the renderer paints
+    around the chart (trapezoid by default, triangle for
+    inventories without a backness contrast). The placement
+    coordinates inside the chart do not change with shape; only
+    the chart's outer outline does.
+
     Empty rows (no vowels in any column at that height tier) are
     OMITTED from :py:attr:`rows`; renderers iterate the list as-is
     without a "is this row populated" check.
@@ -760,6 +977,7 @@ class VowelChartGeometry:
 
     title: str
     title_grid_col_span: int
+    shape: VowelChartShape
     cols: tuple[VowelChartColHeader, ...]
     rows: tuple[VowelChartRow, ...]
     cells: tuple[VowelChartCell, ...]
@@ -799,18 +1017,39 @@ def build_vowel_chart_geometry(
             logical_row=ri,
             label=ROW_LABELS[ri],
             grid_row=logical_row_to_grid_row[ri],
+            chart_y=_HEIGHT_Y[ROW_LABELS[ri]],
         )
         for ri in populated_logical_rows
     )
 
+    shape = infer_vowel_shape(profile)
+    # Map ``col`` to (backness anchor, signed pair offset). Both
+    # anchors and pair offset are derived from the layout pixel
+    # constants in :py:func:`_derive_backness_anchors` / the
+    # ``_PAIR_OFFSET_HALF`` derivation, so the centre-to-centre
+    # spacing of paired mates on the widest row equals one button
+    # width plus the within-pair gap exactly.
+    _col_to_anchor: dict[int, tuple[float, float]] = {
+        0: (_BACKNESS_X["front"], -_PAIR_OFFSET_HALF),
+        1: (_BACKNESS_X["front"], +_PAIR_OFFSET_HALF),
+        2: (_BACKNESS_X["central"], -_PAIR_OFFSET_HALF),
+        3: (_BACKNESS_X["central"], +_PAIR_OFFSET_HALF),
+        4: (_BACKNESS_X["back"], -_PAIR_OFFSET_HALF),
+        5: (_BACKNESS_X["back"], +_PAIR_OFFSET_HALF),
+    }
     cells: list[VowelChartCell] = []
     for ri, ci in sorted(occupied):
+        x, pair_offset = _col_to_anchor[ci]
+        y = _HEIGHT_Y[ROW_LABELS[ri]]
+        chart_x, chart_y = project_to_chart_xy(x, y, pair_offset, shape)
         cells.append(
             VowelChartCell(
                 row=ri,
                 col=ci,
                 grid_row=logical_row_to_grid_row[ri],
                 grid_col=VOWEL_LABEL_GRID_COL + logical_col_offset(ci),
+                chart_x=chart_x,
+                chart_y=chart_y,
                 entries=tuple(occupied[(ri, ci)]),
             )
         )
@@ -827,6 +1066,7 @@ def build_vowel_chart_geometry(
     return VowelChartGeometry(
         title=VOWEL_CHART_TITLE,
         title_grid_col_span=VOWEL_TITLE_GRID_COL_SPAN,
+        shape=shape,
         cols=col_headers,
         rows=rows,
         cells=tuple(cells),
@@ -863,6 +1103,20 @@ def vowel_grid_pos(
     base_col = place_to_column[backness.value]
     col = base_col + 1 if rounding.value == "rounded" else base_col
 
+    # Normalized abstract-vowel-space coordinates. Same decision as
+    # ``row`` / ``col`` but expressed as floats so a future trapezoid
+    # or triangle projector can read them without having to recover
+    # axis semantics from a grid index. ``pair_offset`` is signed:
+    # rounded sits to the right of its unrounded mate.
+    y = _HEIGHT_Y[height.value]
+    x = _BACKNESS_X[backness.value]
+    if rounding.value == "rounded":
+        pair_offset = _PAIR_OFFSET_HALF
+    elif rounding.value == "unrounded":
+        pair_offset = -_PAIR_OFFSET_HALF
+    else:
+        pair_offset = 0.0
+
     # IntEnum orders by int; min picks the weakest of the three
     # axes. Including rounding here is more honest than the prior
     # height-and-backness-only summary: a vowel with unspecified
@@ -875,6 +1129,9 @@ def vowel_grid_pos(
     return VowelPlacement(
         row=row,
         col=col,
+        x=x,
+        y=y,
+        pair_offset=pair_offset,
         confidence=confidence,
         reason=reason,
         height=height,

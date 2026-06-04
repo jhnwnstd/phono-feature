@@ -18,31 +18,25 @@ from collections.abc import Mapping
 from typing import ClassVar
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
-    QGridLayout,
     QLabel,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
-from phonology_shared.render.layout import (
-    REGION_CONSTRAINTS,
-    VOWEL_PAIR_GAP_PX,
-    VOWEL_PAIR_SEPARATOR_PX,
-)
+from phonology_shared.render.layout import REGION_CONSTRAINTS
 from phonology_shared.render.palette import C
 from phonology_shared.render.vowel_layout import (
     COL_LABELS,
     ROW_LABELS,
-    VOWEL_COL_HEADER_GRID_ROW,
-    VOWEL_FIRST_DATA_GRID_COL,
-    VOWEL_TITLE_GRID_ROW,
+    TRAPEZOID_BOTTOM_WIDTH,
+    TRIANGLE_BOTTOM_WIDTH,
     Confidence,
     VowelChartCell,
     VowelChartGeometry,
-    VowelChartRow,
+    VowelChartShape,
     VowelPlacement,
     VowelProfile,
     build_vowel_chart_geometry,
@@ -78,6 +72,16 @@ class VowelChartWidget(QWidget):
     _COL_HEADERS: ClassVar[tuple[str, ...]] = COL_LABELS
     _ROW_HEADERS: ClassVar[tuple[str, ...]] = ROW_LABELS
 
+    # Chrome dimensions for the outer rectangular UI space. The
+    # title / column headers stack at the top; row labels sit on
+    # the left; the trapezoidal data area takes the remaining
+    # rectangle. Values match the web's spacing tokens loosely so
+    # the two surfaces look comparable.
+    _TITLE_H: ClassVar[int] = 18
+    _COL_HEADER_H: ClassVar[int] = 16
+    _PAD_R: ClassVar[int] = 8
+    _PAD_B: ClassVar[int] = 4
+
     def __init__(
         self, parent: QWidget | None = None, *, btn_gap: int = 4
     ) -> None:
@@ -90,24 +94,22 @@ class VowelChartWidget(QWidget):
             QSizePolicy.Policy.Preferred,
         )
         self.setMinimumHeight(_constraint.min_h)
+        # The widget owns these directly; no layout manager. Children
+        # are positioned absolutely from ``_layout_children``, which
+        # runs on ``set_vowels`` and on every ``resizeEvent`` so the
+        # cells, headers, and row labels track the widget's size.
         self._buttons: dict[str, QWidget] = {}
-        self._header_labels: list[tuple[QLabel, bool]] = []
+        self._title_label: QLabel | None = None
+        # Column / row labels with their normalised positions
+        # (chart_x for columns, chart_y for rows) so resize can
+        # re-place them without re-fetching the geometry.
+        self._col_labels: list[tuple[QLabel, float]] = []
+        self._row_labels: list[tuple[QLabel, float]] = []
+        # Cell widgets (segment buttons or vbox stacks for collision
+        # cells) carry their chart_x / chart_y so resize re-places
+        # them along the trapezoid silhouette.
+        self._cells: list[tuple[QWidget, float, float]] = []
         self._cell_containers: list[QWidget] = []
-        self._grid = QGridLayout(self)
-        # Asymmetric column spacing: the horizontal gap is the tight
-        # within-pair value, and the two spacer columns (3, 6) get
-        # the inter-pair separator as a minimum width. Vertical gap
-        # stays at ``btn_gap`` so row-to-row breathing room matches
-        # the consonant grid.
-        self._grid.setHorizontalSpacing(VOWEL_PAIR_GAP_PX)
-        self._grid.setVerticalSpacing(btn_gap)
-        # Spacer columns between front<->central and central<->back
-        # pairs. Logical 0..5 from the placement code map to physical
-        # grid columns 1, 2, 4, 5, 7, 8 (with row labels at column 0
-        # and spacers at columns 3, 6).
-        self._grid.setColumnMinimumWidth(3, VOWEL_PAIR_SEPARATOR_PX)
-        self._grid.setColumnMinimumWidth(6, VOWEL_PAIR_SEPARATOR_PX)
-        self._grid.setContentsMargins(0, 0, 8, 0)
         # Cached header styles, rebuilt by apply_theme each toggle.
         self._HDR_ACTIVE = ""
         self._HDR_INACTIVE = ""
@@ -117,6 +119,16 @@ class VowelChartWidget(QWidget):
         # Last ``active`` value styled into the headers; cleared by
         # clear() and apply_theme() to force a re-style.
         self._last_headers_active: bool | None = None
+        # Shape envelope. ``paintEvent`` consumes it to draw the
+        # trapezoid or triangle silhouette behind the data area
+        # only (not under the row labels or column headers).
+        self._shape: VowelChartShape = VowelChartShape.TRAPEZOID
+        # Cell width hint used to inset the data rectangle so cells
+        # placed at chart_x == 0 / 1 stay fully inside the trapezoid
+        # instead of clipping at the left / right edge. Populated
+        # from the first cell that lands inside, defaults to the
+        # consonant button width as a sensible floor.
+        self._cell_w_hint: int = 36
 
     def _rebuild_style_cache(self) -> None:
         self._HDR_ACTIVE = f"color: {C['text']};"
@@ -148,17 +160,17 @@ class VowelChartWidget(QWidget):
         # when fresh labels replace the cached ones.
         if self._last_headers_active == active:
             return
-        if active:
-            header_style = self._HDR_ACTIVE
-            row_style = self._ROW_ACTIVE
-        else:
-            header_style = self._HDR_INACTIVE
-            row_style = self._ROW_INACTIVE
-        for lbl, is_row in self._header_labels:
-            if is_row:
-                lbl.setStyleSheet(row_style)
-            else:
-                lbl.setStyleSheet(header_style)
+        header_style = self._HDR_ACTIVE if active else self._HDR_INACTIVE
+        row_style = self._ROW_ACTIVE if active else self._ROW_INACTIVE
+        if self._title_label is not None:
+            self._title_label.setStyleSheet(
+                f"color: {C['text' if active else 'text_dim']};"
+                " letter-spacing: 1px; padding: 2px 2px 0 2px;"
+            )
+        for lbl, _ in self._col_labels:
+            lbl.setStyleSheet(header_style)
+        for lbl, _ in self._row_labels:
+            lbl.setStyleSheet(row_style)
         self._last_headers_active = active
 
     def clear(self) -> None:
@@ -171,16 +183,16 @@ class VowelChartWidget(QWidget):
         for btn in self._buttons.values():
             btn.setParent(None)
         self._buttons.clear()
-        while self._grid.count():
-            item = self._grid.takeAt(0)
-            if item is None:
-                continue
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
-        for lbl, _ in self._header_labels:
+        if self._title_label is not None:
+            self._title_label.deleteLater()
+            self._title_label = None
+        for lbl, _ in self._col_labels:
             lbl.deleteLater()
-        self._header_labels.clear()
+        self._col_labels.clear()
+        for lbl, _ in self._row_labels:
+            lbl.deleteLater()
+        self._row_labels.clear()
+        self._cells.clear()
         self._last_headers_active = None
         for container in self._cell_containers:
             container.deleteLater()
@@ -206,75 +218,73 @@ class VowelChartWidget(QWidget):
         self._render_geometry(geometry)
 
     def _render_geometry(self, geometry: VowelChartGeometry) -> None:
-        """Walk the geometry and emit one Qt widget per item.
+        """Translate the shared geometry into Qt widgets.
 
-        Order: title row, col headers, then per row a row label
-        followed by per-cell buttons (or a vbox stack for collision
-        cells).
+        Builds title, column header labels, row labels, and one
+        widget per data cell. None of them are laid out yet; the
+        actual positions land in :py:meth:`_layout_children`, which
+        also runs on every ``resizeEvent`` so the absolute-positioned
+        children track the widget's size.
         """
-        self._add_title_and_col_headers(geometry)
-        for row in geometry.rows:
-            self._add_row_header(row)
-        for cell in geometry.cells:
-            self._add_cell(cell)
-
-    def _add_title_and_col_headers(self, geometry: VowelChartGeometry) -> None:
-        """VOWELS title (spanning all data columns) + Front /
-        Central / Back labels. Title text, span, and per-header
-        grid coordinates come from the shared geometry so the two
-        UIs can never drift on chart-header placement.
-        """
+        self._shape = geometry.shape
+        # Title (top, centred over the data area).
         title = QLabel(geometry.title, self)
         title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
         title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1px;"
             " padding: 2px 2px 0 2px;"
         )
-        self._grid.addWidget(
-            title,
-            VOWEL_TITLE_GRID_ROW,
-            VOWEL_FIRST_DATA_GRID_COL,
-            1,
-            geometry.title_grid_col_span,
-        )
-        self._header_labels.append((title, False))
-        for col in geometry.cols:
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.adjustSize()
+        title.show()
+        self._title_label = title
+        # Column headers: positioned at x=0, 0.5, 1.0 of the data
+        # area width (so they sit above the TOP row, which is the
+        # widest row of the trapezoid).
+        col_xs = (0.0, 0.5, 1.0)
+        for col, x in zip(geometry.cols, col_xs, strict=False):
             lbl = QLabel(col.label, self)
             lbl.setFont(QFont("Noto Sans", 7))
-            lbl.setStyleSheet(f"color: {C['text_dim']};")
+            lbl.setStyleSheet(self._HDR_INACTIVE)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._grid.addWidget(
-                lbl,
-                VOWEL_COL_HEADER_GRID_ROW,
-                col.grid_col,
-                1,
-                col.grid_col_span,
+            lbl.adjustSize()
+            lbl.show()
+            self._col_labels.append((lbl, x))
+        # Row labels: positioned at chart_y on the left gutter.
+        for row in geometry.rows:
+            lbl = QLabel(row.label, self)
+            lbl.setFont(QFont("Noto Sans", 7))
+            lbl.setStyleSheet(self._ROW_INACTIVE)
+            lbl.setAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
-            self._header_labels.append((lbl, False))
+            lbl.adjustSize()
+            lbl.show()
+            self._row_labels.append((lbl, row.chart_y))
+        # Data cells: collected with their chart_x / chart_y; the
+        # layout pass turns those into pixel positions.
+        for cell in geometry.cells:
+            widget = self._build_cell(cell)
+            if widget is None:
+                continue
+            self._cells.append((widget, cell.chart_x, cell.chart_y))
+        self._layout_children()
+        self.update()
 
-    def _add_row_header(self, row: VowelChartRow) -> None:
-        lbl = QLabel(row.label, self)
-        lbl.setFont(QFont("Noto Sans", 7))
-        lbl.setStyleSheet(f"color: {C['text_dim']}; padding-right: 4px;")
-        lbl.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        lbl.setMinimumWidth(VOWEL_LABEL_W - 4)
-        self._grid.addWidget(lbl, row.grid_row, 0)
-        self._header_labels.append((lbl, True))
-
-    def _add_cell(self, cell: VowelChartCell) -> None:
-        """Single entry: button straight in. Multiple entries:
-        stack them in a transparent vbox container."""
+    def _build_cell(self, cell: VowelChartCell) -> QWidget | None:
+        """Return the widget that represents ``cell`` -- a single
+        button for the common case, a vbox stack when more than one
+        segment lands in the same cell. Returns ``None`` if none of
+        the segments have a backing button (defensive; should not
+        happen in normal flow).
+        """
         if len(cell.entries) == 1:
             btn = self._buttons.get(cell.entries[0])
-            if btn:
-                btn.show()
-                self._grid.addWidget(btn, cell.grid_row, cell.grid_col)
-            return
-        # Parented at construction so the container is never a
-        # transient top-level widget during the brief gap before
-        # ``self._grid.addWidget`` re-parents it.
+            if btn is None:
+                return None
+            btn.setParent(self)
+            btn.show()
+            return btn
         container = QWidget(self)
         container.setStyleSheet("background: transparent;")
         self._cell_containers.append(container)
@@ -284,12 +294,109 @@ class VowelChartWidget(QWidget):
         added = False
         for seg in cell.entries:
             btn = self._buttons.get(seg)
-            if btn:
+            if btn is not None:
                 btn.show()
                 vbox.addWidget(btn)
                 added = True
-        if added:
-            self._grid.addWidget(container, cell.grid_row, cell.grid_col)
-        else:
+        if not added:
             self._cell_containers.remove(container)
             container.deleteLater()
+            return None
+        container.adjustSize()
+        container.show()
+        return container
+
+    def _data_area_rect(self) -> tuple[int, int, int, int]:
+        """``(x, y, width, height)`` of the trapezoidal segment
+        display space inside the rectangular widget. The chrome
+        (title, column headers, row label gutter, right / bottom
+        padding) is excluded so labels sit OUTSIDE the silhouette.
+        """
+        x = VOWEL_LABEL_W
+        y = self._TITLE_H + self._COL_HEADER_H
+        w = max(0, self.width() - x - self._PAD_R)
+        h = max(0, self.height() - y - self._PAD_B)
+        return x, y, w, h
+
+    def _layout_children(self) -> None:
+        """Place title, headers, row labels, and cells.
+
+        Headers and row labels go in the rectangular chrome; cells
+        go inside the trapezoidal data area at their projected
+        ``(chart_x, chart_y)``. Re-runs on every ``resizeEvent``.
+        """
+        dx, dy, dw, dh = self._data_area_rect()
+        if self._title_label is not None:
+            self._title_label.adjustSize()
+            tw = self._title_label.width()
+            self._title_label.move(dx + (dw - tw) // 2, 0)
+        # Column headers: x in [0, 1] mapped across the data area,
+        # then centred on each anchor.
+        for lbl, x in self._col_labels:
+            lbl.adjustSize()
+            lw = lbl.width()
+            px = dx + int(x * dw) - lw // 2
+            lbl.move(px, self._TITLE_H)
+        # Row labels: positioned at chart_y, right-aligned against
+        # the data area's left edge.
+        for lbl, y in self._row_labels:
+            lbl.adjustSize()
+            lh = lbl.height()
+            py = dy + int(y * dh) - lh // 2
+            px = dx - lbl.width() - 4
+            lbl.move(max(0, px), py)
+        # Cells: chart_x / chart_y come pre-projected through the
+        # shape, so the cells sit on the trapezoid exactly.
+        for widget, cx, cy in self._cells:
+            widget.adjustSize()
+            ww = widget.width()
+            wh = widget.height()
+            if ww > self._cell_w_hint:
+                self._cell_w_hint = ww
+            px = dx + int(cx * dw) - ww // 2
+            py = dy + int(cy * dh) - wh // 2
+            widget.move(px, py)
+
+    def resizeEvent(self, event) -> None:  # noqa: D401
+        super().resizeEvent(event)
+        self._layout_children()
+
+    def paintEvent(self, event) -> None:  # noqa: D401
+        """Paint the trapezoid (or triangle) silhouette behind the
+        data area only.
+
+        The chrome (title, column headers, row label gutter) sits
+        in the rectangular outer space and is not covered by the
+        silhouette, so the distinction between UI space and segment
+        display space stays visible.
+        """
+        super().paintEvent(event)
+        dx, dy, dw, dh = self._data_area_rect()
+        if dw <= 0 or dh <= 0:
+            return
+        # Asymmetric trapezoid: the right edge stays vertical (back
+        # vowels keep their column from close to open) and only the
+        # left edge slants inward. The bottom widths come from the
+        # shared ``vowel_layout`` constants, derived from the same
+        # pixel constants as the cell projection, so the silhouette
+        # and the cells stay in sync across both surfaces.
+        bottom_width = (
+            TRIANGLE_BOTTOM_WIDTH
+            if self._shape == VowelChartShape.TRIANGLE
+            else TRAPEZOID_BOTTOM_WIDTH
+        )
+        bottom_left_x = dx + int(dw * (1 - bottom_width))
+        path = QPainterPath()
+        path.moveTo(dx, dy)
+        path.lineTo(dx + dw, dy)
+        path.lineTo(dx + dw, dy + dh)
+        path.lineTo(bottom_left_x, dy + dh)
+        path.closeSubpath()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.fillPath(path, QColor(C["panel"]))
+        pen = QPen(QColor(C["border"]))
+        pen.setWidth(1)
+        painter.setPen(pen)
+        painter.drawPath(path)
+        painter.end()

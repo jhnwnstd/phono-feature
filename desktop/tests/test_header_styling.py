@@ -55,9 +55,12 @@ def test_seg_grid_headers_bright_after_inventory_switch(window):
 def test_vowel_chart_headers_bright_after_reload(window):
     """Same regression for the vowel-chart row+column headers."""
     window._load_path("inventories/hayes_features.json")
-    labels = window.vowel_chart_widget._header_labels
+    widget = window.vowel_chart_widget
+    labels = [lbl for lbl, _ in widget._col_labels] + [
+        lbl for lbl, _ in widget._row_labels
+    ]
     assert labels, "expected vowel-chart headers"
-    for lbl, _is_row in labels:
+    for lbl in labels:
         assert _is_bright_color(lbl.styleSheet()), (
             f"vowel-chart header '{lbl.text()}' muted after reload:"
             f" {lbl.styleSheet()!r}"

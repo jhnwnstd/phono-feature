@@ -1124,6 +1124,10 @@ function _buildVowelChart(chart) {
     header.textContent = chart.title;
     groupEl.appendChild(header);
 
+    // Outer rectangular UI space. Two rows (column headers, body)
+    // and two columns (row labels, data area). Only the data area
+    // gets the trapezoid silhouette and absolutely-positioned cells;
+    // labels and headers stay in the rectangular chrome.
     const chartEl = document.createElement("div");
     chartEl.className = "vowel-chart";
     chartEl.setAttribute("role", "grid");
@@ -1133,49 +1137,63 @@ function _buildVowelChart(chart) {
     corner.className = "vowel-chart-corner";
     chartEl.appendChild(corner);
 
-    // ``chart.cols`` is a list of {label, grid_col, grid_col_span}
-    // produced by shared/render/vowel_layout. Add +1 to grid_col
-    // because Qt uses 0-based and CSS grid-column lines are 1-indexed.
-    chart.cols.forEach((col) => {
+    // Column headers (Front/Central/Back). Positioned absolutely
+    // at x=0%, 50%, 100% so they align with the data cells at the
+    // TOP row (the widest row of the trapezoid). For lower rows
+    // the cells migrate inward; the headers do not move.
+    const headersEl = document.createElement("div");
+    headersEl.className = "vowel-chart-cols";
+    chart.cols.forEach((col, idx) => {
         const colHeader = document.createElement("div");
         colHeader.className = "vowel-chart-col-label";
         colHeader.textContent = col.label;
-        colHeader.style.gridColumn = `${col.grid_col + 1} / span ${col.grid_col_span}`;
-        chartEl.appendChild(colHeader);
+        // Three headers evenly spaced across the data-area width.
+        // chart.cols arrives Front, Central, Back so the indices
+        // map to 0%, 50%, 100%.
+        const x = idx === 0 ? 0 : (idx === 1 ? 50 : 100);
+        colHeader.style.left = x + "%";
+        headersEl.appendChild(colHeader);
     });
+    chartEl.appendChild(headersEl);
 
-    // ``chart.rows`` is now a list of populated rows with prebaked
-    // grid_row positions (Qt 0-based; +1 for CSS). Empty rows are
-    // omitted upstream, so this is a straight walk -- no "is this
-    // row populated" check at the render site.
+    // Row labels column. One label per populated height tier,
+    // positioned absolutely at the row's chart_y so each label
+    // sits vertically aligned with its data cells.
+    const labelsEl = document.createElement("div");
+    labelsEl.className = "vowel-chart-row-labels";
     for (const row of chart.rows) {
         const rowLabel = document.createElement("div");
         rowLabel.className = "vowel-chart-row-label";
         rowLabel.textContent = row.label;
-        rowLabel.style.gridRow = row.grid_row + 1;
-        rowLabel.style.gridColumn = 1;
-        chartEl.appendChild(rowLabel);
+        rowLabel.style.top = (row.chart_y * 100) + "%";
+        labelsEl.appendChild(rowLabel);
     }
+    chartEl.appendChild(labelsEl);
 
+    // Trapezoid data area. The CSS pseudo-element draws the
+    // silhouette (clip-path keyed off data-shape); each cell drops
+    // at chart_x/chart_y already projected through the shape, so
+    // the cells follow the silhouette exactly.
+    const dataEl = document.createElement("div");
+    dataEl.className = "vowel-chart-data";
+    if (chart.shape) {
+        dataEl.setAttribute("data-shape", chart.shape);
+    }
     for (const cell of chart.cells) {
         // Multiple vowels can map to the same chart cell (the
         // classic case is ə / ɜ / ɚ all landing in open-mid central
         // for the General inventory). The bridge groups them into
         // ``cell.segs``, sorted by descending placement confidence.
-        // We render them stacked in a vertical container so each
-        // button is independently visible and clickable, matching
-        // the desktop's :py:class:`QVBoxLayout` collision handling.
         const segs = cell.segs;
         if (!Array.isArray(segs) || segs.length === 0) continue;
         const target = segs.length === 1
             ? _buildVowelCellButton(segs[0])
             : _buildVowelCellStack(segs);
-        // ``grid_row`` / ``grid_col`` are baked by the bridge as Qt
-        // 0-based; +1 converts to CSS 1-indexed grid lines.
-        target.style.gridRow = cell.grid_row + 1;
-        target.style.gridColumn = cell.grid_col + 1;
-        chartEl.appendChild(target);
+        target.style.left = (cell.chart_x * 100) + "%";
+        target.style.top = (cell.chart_y * 100) + "%";
+        dataEl.appendChild(target);
     }
+    chartEl.appendChild(dataEl);
 
     groupEl.appendChild(chartEl);
     return groupEl;

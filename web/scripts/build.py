@@ -435,6 +435,32 @@ def _build_status_text_payload() -> dict[str, str]:
         sys.modules.pop(module_name, None)
 
 
+def _backness_content_width(mod: ModuleType) -> int:
+    """Pixel width of the top (widest) row of the vowel trapezoid:
+    three backness columns plus two inter-column separators."""
+    backness_w = 2 * mod.BTN_W + mod.VOWEL_PAIR_GAP_PX
+    return 3 * backness_w + 2 * mod.VOWEL_PAIR_SEPARATOR_PX
+
+
+def _vowel_bottom_left_pct(mod: ModuleType) -> str:
+    """Bottom-left of the asymmetric trapezoid as a percentage of
+    the data-area width. Right edge stays vertical at 100%; only
+    the left side slants inward by ``1 - bottom_width``."""
+    backness_w = 2 * mod.BTN_W + mod.VOWEL_PAIR_GAP_PX
+    bottom_w = 2 * backness_w + mod.VOWEL_PAIR_SEPARATOR_PX
+    return f"{(1 - bottom_w / _backness_content_width(mod)) * 100:.3f}%"
+
+
+def _vowel_triangle_bottom_left_pct(mod: ModuleType) -> str:
+    """Bottom-left of the triangle (one backness column at the
+    bottom). Same derivation as the trapezoid, with the narrower
+    bottom carrying only a single backness column."""
+    backness_w = 2 * mod.BTN_W + mod.VOWEL_PAIR_GAP_PX
+    return (
+        f"{(1 - backness_w / _backness_content_width(mod)) * 100:.3f}%"
+    )
+
+
 def generate_layout_css() -> None:
     """Emit ``layout.css`` from the constants in
     ``phonology_shared.render.layout`` so the same numbers drive both
@@ -456,6 +482,14 @@ def generate_layout_css() -> None:
         f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
         f"  --vowel-pair-gap: {mod.VOWEL_PAIR_GAP_PX}px;",
         f"  --vowel-pair-separator: {mod.VOWEL_PAIR_SEPARATOR_PX}px;",
+        # Trapezoid / triangle bottom-left clip percentages.
+        # Derived in vowel_layout from the same pixel constants as
+        # the cell projection, so the silhouette outline matches
+        # the row narrowing exactly.
+        "  --vowel-trapezoid-bottom-left: "
+        + _vowel_bottom_left_pct(mod) + ";",
+        "  --vowel-triangle-bottom-left: "
+        + _vowel_triangle_bottom_left_pct(mod) + ";",
         f"  --collapse-w: {mod.COLLAPSE_W}px;",
         # Per-button dimensions sourced from
         # ``constants.BTN_W`` / ``constants.BTN_GAP`` (single source

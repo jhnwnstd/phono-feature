@@ -549,69 +549,124 @@ dialog input[type="text"]:focus-visible {
   break-inside: avoid;
   margin-top: var(--space-xs);
 }
+/* Vowel chart: outer rectangular UI space.
+
+   Two-column, two-row layout splits the labels (rectangular
+   chrome) from the trapezoidal segment-display space:
+
+     +-------+----------------------+
+     |       |  Front Central Back  |  <- column headers
+     +-------+----------------------+
+     | Close |                      |
+     | ...   |   trapezoid data     |  <- row labels + data area
+     | Open  |                      |
+     +-------+----------------------+
+
+   Cells inside ``.vowel-chart-data`` are absolutely positioned at
+   ``(chart_x, chart_y)`` already projected through the chart's
+   :py:class:`VowelChartShape`, so the cells follow the silhouette
+   exactly. The pseudo-element on ``.vowel-chart-data`` paints the
+   trapezoid (or triangle) clip-path. */
 .vowel-chart {
   display: grid;
-  /* Column 1: row labels. Backness pairs (front, central, back)
-     each occupy two adjacent columns -- unrounded then rounded --
-     joined by ``column-gap: var(--vowel-pair-gap)``. Between pairs
-     we splice fixed spacer tracks of ``--vowel-pair-separator`` so
-     paired vowels read as bonded mates and adjacent pairs stay
-     visually distinct. Track layout:
-       1 row-label
-       2-3 front-unr / front-rnd
-       4   spacer
-       5-6 central-unr / central-rnd
-       7   spacer
-       8-9 back-unr / back-rnd
-     ``main.js:_buildVowelChart`` maps placement.col 0..5 to these
-     physical columns. */
-  grid-template-columns:
-    minmax(60px, auto)
-    minmax(28px, 1fr) minmax(28px, 1fr)
-    var(--vowel-pair-separator)
-    minmax(28px, 1fr) minmax(28px, 1fr)
-    var(--vowel-pair-separator)
-    minmax(28px, 1fr) minmax(28px, 1fr);
-  /* Min height keeps single-button rows compact; auto lets a row
-     expand to fit a tall collision-cell stack (e.g. ə / ɜ / ɚ all
-     landing in open-mid central for the General inventory).
-     Mirrors the desktop's QGridLayout, where the row height grows
-     to fit its tallest cell. */
-  grid-auto-rows: minmax(var(--control-h-sm), auto);
-  column-gap: var(--vowel-pair-gap);
-  row-gap: 2px;
+  grid-template-columns: minmax(60px, auto) 1fr;
+  grid-template-rows: auto 1fr;
   padding: var(--space-xs) 2px;
-  align-items: center;
+  column-gap: var(--space-sm);
+  row-gap: 2px;
 }
 .vowel-chart-corner {
   grid-row: 1;
   grid-column: 1;
 }
-.vowel-chart-col-label {
+.vowel-chart-cols {
   grid-row: 1;
+  grid-column: 2;
+  position: relative;
+  height: 1.4em;
+}
+.vowel-chart-col-label {
+  position: absolute;
+  transform: translateX(-50%);
   text-align: center;
   font-size: var(--font-size-micro);
   font-weight: 600;
   letter-spacing: 0.5px;
   color: var(--text-dim);
-  padding-bottom: 2px;
+  white-space: nowrap;
+}
+.vowel-chart-row-labels {
+  grid-row: 2;
+  grid-column: 1;
+  position: relative;
+  min-height: calc(6 * var(--control-h-sm));
 }
 .vowel-chart-row-label {
+  position: absolute;
+  right: var(--space-xs);
+  transform: translateY(-50%);
   text-align: right;
-  padding-right: var(--space-sm);
   font-size: var(--font-size-micro);
   font-weight: 600;
   letter-spacing: 0.3px;
   color: var(--text-dim);
+  white-space: nowrap;
 }
 .panel[data-active="true"] .vowel-chart-col-label,
 .panel[data-active="true"] .vowel-chart-row-label {
   color: var(--text);
 }
+
+/* Trapezoid / triangle segment-display space.
+
+   The silhouette is drawn by a pseudo-element layered BEHIND the
+   absolute-positioned cells (``z-index: 0``; cells at
+   ``z-index: 1``). ``clip-path`` narrows the bottom edge to give
+   the IPA-conventional outline; the projection that placed the
+   cells uses the same bottom-width fraction, so the cells stay
+   inside the silhouette at every row. */
+.vowel-chart-data {
+  grid-row: 2;
+  grid-column: 2;
+  position: relative;
+  min-height: calc(6 * var(--control-h-sm));
+}
+.vowel-chart-data::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--panel-alt, var(--panel));
+  border: var(--border-thin) solid var(--border);
+  pointer-events: none;
+}
+/* IPA convention: right edge stays vertical (back vowels keep
+   their column from close to open); left edge slants inward as
+   ``y`` grows so the front column gets pushed toward the centre.
+   The bottom-left percentages come from ``layout.css`` and are
+   derived in ``vowel_layout._derive_backness_anchors`` from the
+   same pixel constants that drive the cell projection, so the
+   silhouette and the cells stay in sync. */
+.vowel-chart-data[data-shape="trapezoid"]::before {
+  clip-path: polygon(
+    0% 0%,
+    100% 0%,
+    100% 100%,
+    var(--vowel-trapezoid-bottom-left) 100%
+  );
+}
+.vowel-chart-data[data-shape="triangle"]::before {
+  clip-path: polygon(
+    0% 0%,
+    100% 0%,
+    100% 100%,
+    var(--vowel-triangle-bottom-left) 100%
+  );
+}
 .vowel-chart-cell {
-  /* Each grid cell is wider than a button so the trapezoid keeps
-     its proportions; center the button within the cell. */
-  justify-self: center;
+  position: absolute;
+  z-index: 1;
+  transform: translate(-50%, -50%);
 }
 /* Vertical stack for cells holding multiple vowels (e.g. ə / ɜ / ɚ
    all landing in open-mid central). Mirrors the desktop's
