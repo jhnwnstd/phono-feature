@@ -21,12 +21,10 @@ import pytest
 from phonology_shared.engine.feature_engine import FeatureEngine
 from phonology_shared.engine.geometry import GeometryAnalyzer
 from phonology_shared.engine.inventory import (
+    AliasCollisionError,
     Inventory,
     ValidationError,
     atomic_write_json,
-)
-from phonology_shared.engine.inventory import (
-    AliasCollisionError,
     normalize_feature_bundle,
 )
 

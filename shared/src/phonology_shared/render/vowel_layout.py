@@ -408,8 +408,10 @@ _BACKNESS_X, _DERIVED_BOTTOM_WIDTH = _derive_backness_anchors()
 #: one button-width apart centre-to-centre on the widest row of
 #: the trapezoid (no overlap, no gratuitous gap). Signed so a
 #: renderer can apply ``x + pair_offset`` directly.
-_PAIR_OFFSET_HALF: float = (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / (
-    3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
+_PAIR_OFFSET_HALF: float = (
+    (BTN_W + VOWEL_PAIR_GAP_PX)
+    / 2.0
+    / (3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX)
 )
 
 
@@ -477,9 +479,8 @@ TRAPEZOID_BOTTOM_WIDTH: float = _DERIVED_BOTTOM_WIDTH
 #: Triangle bottom edge: one backness column wide. Derived from
 #: the same pixel constants so the lowest row of a triangle chart
 #: still has finite horizontal extent for a single vowel pair.
-TRIANGLE_BOTTOM_WIDTH: float = (
-    (2 * BTN_W + VOWEL_PAIR_GAP_PX)
-    / (3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX)
+TRIANGLE_BOTTOM_WIDTH: float = (2 * BTN_W + VOWEL_PAIR_GAP_PX) / (
+    3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
 )
 #: Outer envelope of a single backness pair, expressed as a
 #: fraction of the canonical content width (i.e. the distance
@@ -487,9 +488,7 @@ TRIANGLE_BOTTOM_WIDTH: float = (
 #: rounded or unrounded button). The renderer adds this to the
 #: back anchor to find the silhouette right edge, and subtracts
 #: it from the front anchor to find the silhouette left edge.
-_PAIR_OUTER_EXTENT: float = (
-    (BTN_W + VOWEL_PAIR_GAP_PX) / 2 + BTN_W / 2
-) / (
+_PAIR_OUTER_EXTENT: float = ((BTN_W + VOWEL_PAIR_GAP_PX) / 2 + BTN_W / 2) / (
     3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
 )
 
@@ -530,9 +529,7 @@ def vowel_silhouette(
     top_logical_y = _HEIGHT_Y[ROW_LABELS[top_logical_row]]
     bottom_logical_y = _HEIGHT_Y[ROW_LABELS[bottom_logical_row]]
     top_row_width = 1.0 - (1.0 - bottom_width_canonical) * top_logical_y
-    bottom_row_width = (
-        1.0 - (1.0 - bottom_width_canonical) * bottom_logical_y
-    )
+    bottom_row_width = 1.0 - (1.0 - bottom_width_canonical) * bottom_logical_y
     front_at_top = back + top_row_width * (front - back)
     front_at_bottom = back + bottom_row_width * (front - back)
     y_anchor_top = _HEIGHT_Y["Close"]
@@ -1286,9 +1283,15 @@ def _natural_data_area_size(
 
     # col -> backness slot (front=0, central=1, back=2).
     col_to_slot: dict[int, int] = {
-        0: 0, 1: 0, 6: 0,
-        2: 1, 3: 1, 7: 1,
-        4: 2, 5: 2, 8: 2,
+        0: 0,
+        1: 0,
+        6: 0,
+        2: 1,
+        3: 1,
+        7: 1,
+        4: 2,
+        5: 2,
+        8: 2,
     }
 
     rows_in_use: set[int] = {c.row for c in cells}
@@ -1380,9 +1383,7 @@ def build_vowel_chart_geometry(
     # so the silhouette is not a degenerate horizontal line.
     if len(populated_logical_rows) == 1:
         display_y_by_row = {
-            populated_logical_rows[0]: (
-                silhouette.top_y + silhouette.bottom_y
-            )
+            populated_logical_rows[0]: (silhouette.top_y + silhouette.bottom_y)
             / 2
         }
     else:
@@ -1411,12 +1412,8 @@ def build_vowel_chart_geometry(
         """
         if silhouette.bottom_y == silhouette.top_y:
             return silhouette.top_width
-        t = (y - silhouette.top_y) / (
-            silhouette.bottom_y - silhouette.top_y
-        )
-        return (
-            silhouette.top_width * (1.0 - t) + silhouette.bottom_width * t
-        )
+        t = (y - silhouette.top_y) / (silhouette.bottom_y - silhouette.top_y)
+        return silhouette.top_width * (1.0 - t) + silhouette.bottom_width * t
 
     back = _BACKNESS_X["back"]
 
@@ -1446,6 +1443,7 @@ def build_vowel_chart_geometry(
         7: VOWEL_LABEL_GRID_COL + logical_col_offset(2),
         8: VOWEL_LABEL_GRID_COL + logical_col_offset(4),
     }
+
     def _is_long_pair_display(entries: list[str]) -> bool:
         """True iff the cell carries exactly two segments whose
         normalised feature bundles differ only on ``Long`` (one
@@ -1479,17 +1477,13 @@ def build_vowel_chart_geometry(
     # the geometric midpoint of the narrowed bottom edge). When
     # the front pair IS populated, central stays at its true
     # central anchor so the two cells do not collide.
-    open_front_populated = (
-        (open_row_index, 0) in occupied
-        or (open_row_index, 1) in occupied
-    )
+    open_front_populated = (open_row_index, 0) in occupied or (
+        open_row_index,
+        1,
+    ) in occupied
     cells: list[VowelChartCell] = []
     for ri, ci in sorted(occupied):
-        if (
-            ri == open_row_index
-            and ci in (2, 3)
-            and not open_front_populated
-        ):
+        if ri == open_row_index and ci in (2, 3) and not open_front_populated:
             anchor_x = _BACKNESS_X["front"]
         else:
             anchor_x = _col_to_anchor[ci]
@@ -1525,19 +1519,27 @@ def build_vowel_chart_geometry(
     # overlapping its sibling. Fall back to a vertical stack so
     # both cells stay legible at their canonical positions.
     col_to_slot: dict[int, int] = {
-        0: 0, 1: 0, 6: 0,
-        2: 1, 3: 1, 7: 1,
-        4: 2, 5: 2, 8: 2,
+        0: 0,
+        1: 0,
+        6: 0,
+        2: 1,
+        3: 1,
+        7: 1,
+        4: 2,
+        5: 2,
+        8: 2,
     }
     cells_per_row_slot: dict[tuple[int, int], int] = {}
     for c in cells:
         key = (c.row, col_to_slot[c.col])
         cells_per_row_slot[key] = cells_per_row_slot.get(key, 0) + 1
     cells = [
-        replace(c, is_long_pair=False)
-        if c.is_long_pair
-        and cells_per_row_slot[(c.row, col_to_slot[c.col])] > 1
-        else c
+        (
+            replace(c, is_long_pair=False)
+            if c.is_long_pair
+            and cells_per_row_slot[(c.row, col_to_slot[c.col])] > 1
+            else c
+        )
         for c in cells
     ]
 

@@ -91,9 +91,7 @@ def summarize_segment_selection(
         empty_completion = engine.complete_to_minimal_natural_class([])
         return {
             "analysis_html": "",
-            "analysis_tabs": _seg_tabs(
-                engine, [], {}, {}, empty_completion
-            ),
+            "analysis_tabs": _seg_tabs(engine, [], {}, {}, empty_completion),
             "selected": [],
             "suggested": [],
             "common": {},
@@ -143,9 +141,7 @@ def summarize_segment_selection(
     common = dict(engine.common_features(segs))
     contrastive = compute_contrastive(engine, segs)
     completion = engine.complete_to_minimal_natural_class(list(segs))
-    suggested = list(
-        completion.additions[0] if completion.additions else ()
-    )
+    suggested = list(completion.additions[0] if completion.additions else ())
     # Seven-way classification per feature (single source of truth
     # for the semantic state -- see ``FeatureCategory``). The view-
     # model surfaces the category on every row so renderers can

@@ -173,7 +173,9 @@ def test_feature_row_badge_uses_unicode_minus_for_shared_negative() -> None:
     assert voice["badge"] == "+"
 
 
-def test_complete_to_minimal_natural_class_blevins_affricate_strict_closure() -> None:
+def test_complete_to_minimal_natural_class_blevins_affricate_strict_closure() -> (
+    None
+):
     """Pinning: under strict natural-class semantics,
     ``complete_to_minimal_natural_class([b͡v, d͡z, t͡s])`` returns
     a completion that, when added, makes the union a STRICT

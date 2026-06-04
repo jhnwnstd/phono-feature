@@ -122,9 +122,7 @@ def normalize_feature_bundle(
         canonical = normalize_feature_key(k)
         if canonical in result and k not in collisions.get(canonical, ()):
             collisions.setdefault(canonical, []).append(
-                _find_existing_alias(
-                    feat_dict, result, canonical, exclude=k
-                )
+                _find_existing_alias(feat_dict, result, canonical, exclude=k)
             )
             collisions[canonical].append(k)
         result[canonical] = v

@@ -18,7 +18,15 @@ from collections.abc import Mapping
 from typing import ClassVar
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
+from PyQt6.QtGui import (
+    QColor,
+    QFont,
+    QPainter,
+    QPainterPath,
+    QPaintEvent,
+    QPen,
+    QResizeEvent,
+)
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -39,8 +47,8 @@ from phonology_shared.render.vowel_layout import (
     Confidence,
     VowelChartCell,
     VowelChartGeometry,
-    VowelChartSilhouette,
     VowelChartShape,
+    VowelChartSilhouette,
     VowelPlacement,
     VowelProfile,
     build_vowel_chart_geometry,
@@ -389,11 +397,11 @@ class VowelChartWidget(QWidget):
             py = dy + int(cy * dh) - wh // 2
             widget.move(px, py)
 
-    def resizeEvent(self, event) -> None:  # noqa: D401
+    def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: D401
         super().resizeEvent(event)
         self._layout_children()
 
-    def paintEvent(self, event) -> None:  # noqa: D401
+    def paintEvent(self, event: QPaintEvent | None) -> None:  # noqa: D401
         """Paint the trapezoid (or triangle) silhouette behind the
         data area only.
 

@@ -363,9 +363,9 @@ def test_complete_to_minimal_natural_class_already_nc(
     result = engine.complete_to_minimal_natural_class(["l"])
     assert result.status == "already_natural_class"
     assert result.additions == ()
-    assert result.selected_minimal_bundles, (
-        "expected at least one minimal bundle for /l/"
-    )
+    assert (
+        result.selected_minimal_bundles
+    ), "expected at least one minimal bundle for /l/"
     for bundle in result.selected_minimal_bundles:
         assert set(engine.find_segments(dict(bundle))) == {"l"}
 
@@ -483,9 +483,7 @@ def test_complete_to_minimal_natural_class_universal_fallback(
     # completion result.
     completed = ["a", "b"] + list(result.additions[0])
     completed_bundles = eng.find_all_minimal_bundles(completed)
-    assert completed_bundles, (
-        "completed class must be a strict NC"
-    )
+    assert completed_bundles, "completed class must be a strict NC"
     assert all(not b for b in completed_bundles)
 
 

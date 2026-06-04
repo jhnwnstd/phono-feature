@@ -651,13 +651,16 @@ def test_long_pair_demotes_to_stack_when_slot_has_sibling() -> None:
     )
 
     common = {
-        "high": "+", "low": "-", "front": "+", "back": "-",
+        "high": "+",
+        "low": "-",
+        "front": "+",
+        "back": "-",
         "tense": "+",
     }
     # Lone Long pair: both members share col 0, no sibling at
     # col 1 -> side-by-side stays.
     feats_alone = {
-        "i":  {**common, "round": "-", "long": "-"},
+        "i": {**common, "round": "-", "long": "-"},
         "iː": {**common, "round": "-", "long": "+"},
     }
     profile = detect_vowel_profile(list(feats_alone), feats_alone)
@@ -672,7 +675,9 @@ def test_long_pair_demotes_to_stack_when_slot_has_sibling() -> None:
         **feats_alone,
         "y": {**common, "round": "+", "long": "-"},
     }
-    profile = detect_vowel_profile(list(feats_with_sibling), feats_with_sibling)
+    profile = detect_vowel_profile(
+        list(feats_with_sibling), feats_with_sibling
+    )
     g = build_vowel_chart_geometry(
         list(feats_with_sibling), profile, feats_with_sibling
     )
@@ -696,13 +701,17 @@ def test_long_does_not_affect_placement() -> None:
     )
 
     profile = VowelProfile(
-        has_front=True, has_back=True, has_high=True, has_low=True,
-        has_round=True, has_long=True, has_long_contrast=True,
+        has_front=True,
+        has_back=True,
+        has_high=True,
+        has_low=True,
+        has_round=True,
+        has_long=True,
+        has_long_contrast=True,
     )
-    common = {"high": "+", "low": "-", "front": "+", "back": "-",
-              "round": "-"}
+    common = {"high": "+", "low": "-", "front": "+", "back": "-", "round": "-"}
     feats = {
-        "i":  {**common, "long": "-"},
+        "i": {**common, "long": "-"},
         "iː": {**common, "long": "+"},
     }
     _, placements = compute_placements(list(feats), profile, feats)

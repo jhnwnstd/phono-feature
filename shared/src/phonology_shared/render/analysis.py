@@ -309,9 +309,7 @@ def _render_completion_body(completion: NaturalClassCompletion) -> str:
         return ""
     additions = completion.additions[0]
     n = len(additions)
-    chips = " ".join(
-        _segment_chip(seg, TagColor.NEUTRAL) for seg in additions
-    )
+    chips = " ".join(_segment_chip(seg, TagColor.NEUTRAL) for seg in additions)
     return (
         f"<p><b>{n} {_plural(n, 'segment')} needed for natural class:</b></p>"
         f"<p>{chips}</p>"
@@ -370,9 +368,7 @@ def render_feat_to_seg(
         _signed_feature_chip(value, feature)
         for feature, value in sort_spec(feature_dict).items()
     )
-    return (
-        f"<p><b>Query:</b> {feat_tags}</p>{_render_matching_segments(matching)}"
-    )
+    return f"<p><b>Query:</b> {feat_tags}</p>{_render_matching_segments(matching)}"
 
 
 # --- helpers for render_multi_segment ----------------------------
