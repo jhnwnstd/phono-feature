@@ -8,32 +8,38 @@ one place doesn't silently rot another.
 ## The relay system: one Python source, two UIs
 
 The desktop app (PyQt6) and the browser app (Pyodide) are two
-front-ends over the same engine and the same renderer. The pattern:
+front-ends over the same shared package. The pattern:
 
-1. Pure-Python modules live in `shared/src/phonology_shared/`. The
-   `engine/` subpackage is the framework-agnostic computation core;
-   the `render/` subpackage holds UI-agnostic render and view-model
-   helpers. Neither has Qt or DOM imports at module scope.
-2. `web/scripts/build.py:RELAYED_SOURCES` lists each render module
-   by filename. The build copies them into
-   `web/dist/render/phonology_shared/render/` plus the engine into
-   `web/dist/engine/phonology_shared/engine/`, then bundles both
-   into `python_bundle.zip` which Pyodide mounts via zipimport.
+1. Pure-Python modules live in `shared/src/phonology_shared/`,
+   split by functional role into five subpackages:
+   * `data/` -- inventory schema, parsing, hard caps.
+   * `theory/` -- phonological analysis engine + geometry.
+   * `chart/` -- IPA chart placement (consonants, vowels).
+   * `presentation/` -- palette, layout, view models, mode logic,
+     HTML analysis renderer.
+   * `editor/` -- inventory-builder grid + setup helpers.
+
+   No subpackage has Qt or DOM imports at module scope.
+2. `web/scripts/build.py:copy_shared_sources` mirrors the whole
+   `phonology_shared/` tree into `web/dist/shared/phonology_shared/`,
+   then `write_python_bundle` packs that tree plus
+   `web/src/phonology_web/api.py` into `python_bundle.zip` which
+   Pyodide mounts via zipimport.
 3. The web bridge (`web/src/phonology_web/api.py`) imports from
-   `phonology_shared.{engine,render}.<name>` at runtime inside
+   `phonology_shared.<subpackage>.<name>` at runtime inside
    Pyodide, so any change you make in `shared/` reaches both UIs
    on the next `python web/scripts/build.py`.
 
-In addition to the source relay, two CSS files are generated at
+In addition to the source mirror, two CSS files are generated at
 build time from the same Python constants the desktop reads:
 
-* `dist/theme.css` from `shared/.../render/palette.py` (LIGHT,
-  DARK, COLORBLIND_* dicts).
-* `dist/layout.css` from `shared/.../render/layout.py` (pane-width
-  thresholds, per-row heights, analysis-pane sizing).
+* `dist/theme.css` from `shared/.../presentation/palette.py`
+  (LIGHT, DARK, COLORBLIND_* dicts).
+* `dist/layout.css` from `shared/.../presentation/layout.py`
+  (pane-width thresholds, per-row heights, analysis-pane sizing).
 
 If you find yourself adding a number to `web/style.css` that
-already exists in `render/layout.py`, route it through the
+already exists in `presentation/layout.py`, route it through the
 generator instead and consume the CSS variable. Parity tests in
 `shared/tests/` fail loudly if a layout literal in CSS disagrees
 with the Python source.
@@ -54,8 +60,11 @@ phono-feature/
 │   └── tests/               Qt-dependent tests.
 ├── shared/                  Framework-agnostic Python both UIs use.
 │   └── src/phonology_shared/
-│       ├── engine/          Computation core (formerly phonology_engine).
-│       └── render/          UI-agnostic render + view-model helpers.
+│       ├── data/            Inventory schema + hard caps.
+│       ├── theory/          Analysis engine + geometry.
+│       ├── chart/           IPA chart placement (consonants + vowels).
+│       ├── presentation/    Palette, layout, view models, mode logic.
+│       └── editor/          Builder grid + setup.
 ├── web/                     Pyodide bridge + browser surface.
 │   ├── src/phonology_web/api.py  JS-to-Python bridge.
 │   ├── index.html, main.js, style.css, sw.js
@@ -69,16 +78,19 @@ The boundary rules:
 * `shared/` is the only place web-consumed Python lives. Anything
   that imports `PyQt6.QtWidgets` at module scope belongs in
   `desktop/src/phonology_features/gui/` proper.
-* The engine never imports anything UI-shaped. `render` may
-  import from `engine`; the reverse is forbidden.
+* `data/` is the leaf; everything else may depend on it. `theory/`,
+  `chart/`, and `editor/` never import anything UI-shaped. `chart/`
+  reads pixel constants from `presentation/` but no other reverse
+  edge is allowed.
 * `controllers/` holds desktop-only orchestrators
   (`GeometryController`, `ModeController`, `ThemeController`,
   `InventoryDirController`).
 
 When you add a new module, the first question is "would the web
-need this too?" If yes, it goes in `shared/`. Render-side
-additions also need the filename appended to `RELAYED_SOURCES`
-in `web/scripts/build.py`.
+need this too?" If yes, it goes in `shared/` under the subpackage
+that matches its role. The whole `phonology_shared/` tree is
+mirrored into the bundle automatically; no manual filename list
+to update.
 
 ## Launchers and the install bootstrap
 
@@ -109,7 +121,7 @@ lockstep.
 
 | Suite                | What it covers |
 |----------------------|---|
-| `shared/tests/`      | Pure-Python engine + render: Inventory, FeatureEngine, geometry, layout, mode_logic, view_models. No Qt. |
+| `shared/tests/`      | Pure-Python: Inventory, FeatureEngine, geometry, chart placement, layout, mode_logic, view_models, builder grid. No Qt. |
 | `desktop/tests/`     | Desktop GUI + integration. Boots PyQt6 under `QT_QPA_PLATFORM=offscreen`. |
 | `web/tests/`         | Bridge-boundary validation: every `api.py` entry rejects bad input as `ValidationError`. |
 | `shared/tests/test_jsfallback_parity.py`, `test_status_text_relay.py` | Pin the web's pre-bridge JS mirrors and the build-time JSON bake against the Python source they shadow. |
