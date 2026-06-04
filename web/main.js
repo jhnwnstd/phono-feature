@@ -1304,14 +1304,24 @@ function _buildVowelCellButton(seg) {
 
 /** Build a stacked vertical container for a vowel-chart cell that
  *  holds multiple vowels. Mirrors the desktop's
- *  :py:meth:`VowelChartWidget._place_cell` collision-cell handling:
+ *  :py:meth:`VowelChartWidget._build_cell` collision-cell handling:
  *  the entries arrive sorted by descending placement confidence,
- *  so the highest-confidence vowel sits on top. */
+ *  so the highest-confidence vowel sits on top.
+ *
+ *  Children are PLAIN ``_buildSegmentButton`` results (no
+ *  ``.vowel-chart-cell`` class). The cell class carries
+ *  ``position: absolute`` + ``transform: translate(-50%, -50%)`` so
+ *  the outer cell can sit on its (chart_x, chart_y) anchor; putting
+ *  it on each child would yank the buttons out of the flex flow and
+ *  pile them on top of each other (the schwa / rhotic-schwa overlap
+ *  bug). The desktop's QVBoxLayout does the right thing
+ *  automatically because Qt's layout managers do not rely on
+ *  absolute positioning. */
 function _buildVowelCellStack(segs) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-stack";
     for (const seg of segs) {
-        cell.appendChild(_buildVowelCellButton(seg));
+        cell.appendChild(_buildSegmentButton(seg));
     }
     return cell;
 }
@@ -1320,12 +1330,16 @@ function _buildVowelCellStack(segs) {
  *  entries are a Long contrast (feature-identical except on
  *  ``Long``). Side-by-side layout reflects that the two segments
  *  share a single vowel-space position; length is a duration
- *  attribute, not a row difference. */
+ *  attribute, not a row difference.
+ *
+ *  Same rule as :py:func:`_buildVowelCellStack`: children are plain
+ *  segment buttons so the flex row actually distributes them
+ *  side-by-side instead of overlapping. */
 function _buildVowelCellLongPair(segs) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-long-pair";
     for (const seg of segs) {
-        cell.appendChild(_buildVowelCellButton(seg));
+        cell.appendChild(_buildSegmentButton(seg));
     }
     return cell;
 }

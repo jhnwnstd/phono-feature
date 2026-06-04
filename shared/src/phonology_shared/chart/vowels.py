@@ -82,7 +82,7 @@ or phonologically central mid. Callers should use `confidence`,
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from enum import IntEnum, StrEnum
 
@@ -490,6 +490,23 @@ TRIANGLE_BOTTOM_WIDTH: float = (2 * BTN_W + VOWEL_PAIR_GAP_PX) / (
 #: it from the front anchor to find the silhouette left edge.
 _PAIR_OUTER_EXTENT: float = ((BTN_W + VOWEL_PAIR_GAP_PX) / 2 + BTN_W / 2) / (
     3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
+)
+
+#: Helper sub-extents for the per-column right edge calculation in
+#: :py:func:`_adapted_back_right_extent`. ``_PAIR_SHIFT_NORM`` is
+#: the signed half-distance between the rounded and unrounded mates
+#: of a backness pair (centre-to-centre); ``_HALF_BTN_NORM`` is half
+#: a segment-button width. Both expressed in the canonical
+#: content-width unit so they compose with ``_BACKNESS_X``.
+_PAIR_SHIFT_NORM: float = (
+    (BTN_W + VOWEL_PAIR_GAP_PX)
+    / 2.0
+    / (3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX)
+)
+_HALF_BTN_NORM: float = (
+    BTN_W
+    / 2.0
+    / (3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX)
 )
 
 
@@ -1542,7 +1559,9 @@ def _silhouette_with_widths(
 ) -> VowelChartSilhouette:
     """Recompute silhouette corners for new ``top_width`` /
     ``bottom_width`` while keeping shape and y bounds. Back edge
-    stays vertical at ``back + pair_outer``.
+    stays vertical at ``back + pair_outer`` (the inventory-adapted
+    back-right pull-in is applied separately by
+    :py:func:`_silhouette_with_back_right`).
     """
     front = _BACKNESS_X["front"]
     back = _BACKNESS_X["back"]
@@ -1557,6 +1576,67 @@ def _silhouette_with_widths(
         bottom_right=back + pair_outer,
         top_width=top_width,
         bottom_width=bottom_width,
+    )
+
+
+def _adapted_back_right_extent(
+    occupied: Mapping[tuple[int, int], Sequence[str]],
+) -> float | None:
+    """Rightmost normalised-x extent of any back vowel actually
+    present in the inventory, or ``None`` when no back vowel is
+    populated.
+
+    The aesthetic rule: the silhouette's back (right) edge should
+    pass through the backmost real back vowel so an inventory whose
+    rightmost vowel is unrounded (e.g. /ɯ/ without /u/) doesn't show
+    an empty strip on the right. The FRONT (left) edge keeps its
+    canonical extent regardless of which front vowels are present;
+    the asymmetry implies the open-mouth shape (back of the mouth
+    closes tightly around the back vowel; front opens out).
+
+    Back columns are 4 (unrounded), 5 (rounded), and 8 (neutral, used
+    by single-back-mate placements at the open row). Each column's
+    outer right-edge is back + pair_side * pair_shift + half_btn,
+    where ``pair_side`` is -1 for col 4, +1 for col 5, and 0 for col
+    8. ``None`` return signals "no back vowel present; keep canonical
+    extent" -- the caller does not touch the silhouette in that case.
+    """
+    back = _BACKNESS_X["back"]
+    col_right_edge = {
+        # col -> (pair_side multiplier on shift)
+        4: back - _PAIR_SHIFT_NORM + _HALF_BTN_NORM,
+        5: back + _PAIR_SHIFT_NORM + _HALF_BTN_NORM,
+        8: back + _HALF_BTN_NORM,
+    }
+    rightmost: float | None = None
+    for ri, ci in occupied:
+        del ri
+        extent = col_right_edge.get(ci)
+        if extent is None:
+            continue
+        if rightmost is None or extent > rightmost:
+            rightmost = extent
+    return rightmost
+
+
+def _silhouette_with_back_right(
+    silhouette: VowelChartSilhouette,
+    back_right: float,
+) -> VowelChartSilhouette:
+    """Pull the silhouette's right edge in to ``back_right`` while
+    leaving every other corner alone. The right edge is vertical
+    (top_right == bottom_right) so a single scalar fully specifies
+    the move.
+    """
+    if (
+        back_right == silhouette.top_right
+        and back_right == silhouette.bottom_right
+    ):
+        return silhouette
+    return replace(
+        silhouette,
+        top_right=back_right,
+        bottom_right=back_right,
     )
 
 
@@ -1836,6 +1916,19 @@ def build_vowel_chart_geometry(
     ):
         silhouette = _silhouette_with_widths(
             silhouette, shrunken_top_w, shrunken_bot_w
+        )
+
+    # Asymmetric back-edge adaptation: when the inventory has any
+    # back vowel, pull the silhouette's right edge in to the
+    # rightmost present back vowel so the line hugs that cell. The
+    # FRONT edge does NOT mirror this; the asymmetry implies the
+    # open mouth (tight at the back, open at the front). Inventories
+    # without any back vowel keep the canonical back extent so the
+    # silhouette doesn't crush over central or front cells.
+    adapted_back_right = _adapted_back_right_extent(occupied)
+    if adapted_back_right is not None:
+        silhouette = _silhouette_with_back_right(
+            silhouette, adapted_back_right
         )
 
     # Second pass: project cells using the final silhouette
