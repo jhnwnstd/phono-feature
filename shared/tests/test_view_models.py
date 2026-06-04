@@ -33,15 +33,23 @@ def _engine(name: str) -> FeatureEngine:
     return FeatureEngine(Inventory.parse(raw, source=str(path)))
 
 
-def test_build_inventory_summary_groups_colliding_vowels() -> None:
+def test_build_inventory_summary_places_general_schwa_on_mid_row() -> None:
+    """``ə`` (ATR=0) lifts onto the Tier 2 Mid row, while ``ɜ``
+    (ATR=-) stays on Open-mid. The renderer reads the row/col from
+    ``vowel_chart.cells``; both must land at the central-unrounded
+    column on their respective rows.
+    """
     engine = _engine("general_features.json")
     summary = build_inventory_summary(engine, "General")
-    target = next(
-        cell
-        for cell in summary["vowel_chart"]["cells"]
-        if cell["row"] == 3 and cell["col"] == 2
+    cells = summary["vowel_chart"]["cells"]
+    mid_cell = next(
+        cell for cell in cells if cell["row"] == 3 and cell["col"] == 2
     )
-    assert set(target["segs"]) == {"ə", "ɜ"}
+    open_mid_cell = next(
+        cell for cell in cells if cell["row"] == 4 and cell["col"] == 2
+    )
+    assert set(mid_cell["segs"]) == {"ə"}
+    assert set(open_mid_cell["segs"]) == {"ɜ"}
 
 
 def test_summarize_segment_selection_single_maps_zero_to_empty() -> None:

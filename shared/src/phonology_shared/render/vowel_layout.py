@@ -65,15 +65,20 @@ from phonology_shared.render.layout import (
     VOWEL_PAIR_SEPARATOR_PX,
 )
 
-# The six height tiers of the IPA vowel chart, in row order. Tuple
-# is (label, +high, +low, +tense-or-atr): the feature bundle that
-# canonically populates the row. Used by the chart widget to label
-# rows and by tests to spot-check that placement maps correctly.
-# Immutable so importers cannot mutate the shared singleton.
+# The seven height tiers of the maximalist vowel chart, in row
+# order. Tuple is (label, +high, +low, +tense-or-atr): the feature
+# bundle that canonically populates the row. The ``Mid`` row sits
+# between Close-mid and Open-mid as a Tier 2 display slot for
+# [-high, -low] vowels whose tense/ATR is unspecified (display
+# inference only; engine logic still treats those as
+# underspecified). Used by the chart widget to label rows and by
+# tests to spot-check that placement maps correctly. Immutable so
+# importers cannot mutate the shared singleton.
 VOWEL_HEIGHT: tuple[tuple[str, str, str, str | None], ...] = (
     ("Close", "+", "-", "+"),
     ("Near-close", "+", "-", "-"),
     ("Close-mid", "-", "-", "+"),
+    ("Mid", "-", "-", None),
     ("Open-mid", "-", "-", "-"),
     ("Near-open", "-", "+", "-"),
     ("Open", "-", "+", None),
@@ -247,8 +252,11 @@ class VowelPlacement:
     * ``row`` / ``col``: discrete grid coordinates the current
       desktop and web renderers consume. ``row`` is the height
       tier (index into :py:data:`ROW_LABELS`); ``col`` is the
-      6-column index (front-unr, front-rnd, central-unr,
-      central-rnd, back-unr, back-rnd, 0-5).
+      column index (front-unr, front-rnd, central-unr,
+      central-rnd, back-unr, back-rnd, 0-5; plus front-neutral,
+      central-neutral, back-neutral, 6-8). Neutral cols apply to
+      Tier 2 ``0round`` placements that sit at the backness
+      anchor centre with no L/R pair shift.
     * ``x`` / ``y`` / ``pair_offset``: normalized continuous
       coordinates in abstract vowel space. ``x`` is the backness
       anchor (0.0 front, 0.5 central, 1.0 back), ``y`` is the
@@ -299,19 +307,19 @@ def _feature_state(feats: Mapping[str, str], key: str) -> FeatureState:
 #: ("Close", "Open-mid", ...) can be turned back into a row index
 #: without an O(n) scan on every placement.
 # Normalized abstract-vowel-space coordinates exposed on
-# :py:class:`VowelPlacement`. ``y`` is non-uniform to match the
-# IPA chart's visual convention (the near-close / close-mid /
-# open-mid gap is larger than near-close / close). The range
-# stops short of 0.0 and 1.0 so the top button at Close and the
-# bottom button at Open never clip against the data area's top
-# or bottom edge, and the silhouette has visible padding above
-# and below the cells.
+# :py:class:`VowelPlacement`. Seven rows distributed at uniform
+# 0.14 spacing across [0.08, 0.92] so the top button at Close and
+# the bottom button at Open never clip against the data area's
+# top or bottom edge, and the silhouette has visible padding above
+# and below the cells. ``Mid`` sits midway at 0.50 between
+# Close-mid and Open-mid.
 _HEIGHT_Y: dict[str, float] = {
     "Close": 0.08,
-    "Near-close": 0.24,
-    "Close-mid": 0.40,
-    "Open-mid": 0.60,
-    "Near-open": 0.76,
+    "Near-close": 0.22,
+    "Close-mid": 0.36,
+    "Mid": 0.50,
+    "Open-mid": 0.64,
+    "Near-open": 0.78,
     "Open": 0.92,
 }
 
@@ -683,13 +691,17 @@ def _infer_height(
                 f"Open-mid: [-high, -low, -{split_source}]",
                 base_flags | {PlacementFlag.DIRECT},
             )
+        # Tier 2 display policy: explicit [-high, -low] with no
+        # tense/ATR specification places the vowel on the Mid row
+        # midway between Close-mid and Open-mid. The engine still
+        # treats tense/ATR as underspecified; only the display
+        # inference uses the absence as positional evidence.
         return AxisEvidence(
-            "Open-mid",
-            Confidence.LOW,
-            "default",
-            "Open-mid (default): [-high, -low], no tense/ATR",
-            base_flags
-            | {PlacementFlag.UNDERSPECIFIED, PlacementFlag.DEFAULT_ANCHOR},
+            "Mid",
+            Confidence.MEDIUM,
+            "height",
+            "Mid: [-high, -low], no tense/ATR",
+            base_flags | {PlacementFlag.DIRECT},
         )
     return AxisEvidence(
         "Open-mid",
@@ -867,6 +879,20 @@ def _infer_rounding(
             Confidence.HIGH,
             "round",
             "Unrounded: [-round]",
+            frozenset({PlacementFlag.DIRECT}),
+        )
+    # Tier 2 display policy: an inventory that has the Round
+    # feature, with a vowel that leaves it unspecified, displays
+    # the cell on the backness anchor centre rather than offset
+    # toward the unrounded side (the schwa / ɐ pattern). Falls
+    # back to "unrounded" when the inventory has no Round feature
+    # at all so the historical default still applies there.
+    if profile.has_round:
+        return AxisEvidence(
+            "neutral",
+            Confidence.MEDIUM,
+            "default",
+            "Neutral round: no round specified",
             frozenset({PlacementFlag.DIRECT}),
         )
     return AxisEvidence(
@@ -1115,7 +1141,9 @@ def build_vowel_chart_geometry(
     # Map ``col`` to its backness anchor. Pair side (unrounded vs
     # rounded) is handled separately by the renderer as a fixed
     # pixel shift so the within-pair gap stays constant regardless
-    # of how narrow a row becomes inside the trapezoid.
+    # of how narrow a row becomes inside the trapezoid. Cols 6..8
+    # are the neutral-round slots that sit on the anchor centre
+    # with no L/R shift.
     _col_to_anchor: dict[int, float] = {
         0: _BACKNESS_X["front"],
         1: _BACKNESS_X["front"],
@@ -1123,6 +1151,18 @@ def build_vowel_chart_geometry(
         3: _BACKNESS_X["central"],
         4: _BACKNESS_X["back"],
         5: _BACKNESS_X["back"],
+        6: _BACKNESS_X["front"],
+        7: _BACKNESS_X["central"],
+        8: _BACKNESS_X["back"],
+    }
+    # Legacy rectangular grid_col mapping for the neutral slots:
+    # snap onto the unrounded physical track of the matching
+    # backness so existing grid-col consumers stay on a non-spacer
+    # column (1, 4, or 7).
+    _neutral_col_to_grid_col: dict[int, int] = {
+        6: VOWEL_LABEL_GRID_COL + logical_col_offset(0),
+        7: VOWEL_LABEL_GRID_COL + logical_col_offset(2),
+        8: VOWEL_LABEL_GRID_COL + logical_col_offset(4),
     }
     cells: list[VowelChartCell] = []
     for ri, ci in sorted(occupied):
@@ -1132,13 +1172,18 @@ def build_vowel_chart_geometry(
         # split is exposed on ``pair_side`` for the renderer to
         # apply in pixels.
         chart_x, chart_y = project_to_chart_xy(x, y, 0.0, shape)
-        pair_side = 1 if ci % 2 else -1
+        if ci >= 6:
+            pair_side = 0
+            grid_col = _neutral_col_to_grid_col[ci]
+        else:
+            pair_side = 1 if ci % 2 else -1
+            grid_col = VOWEL_LABEL_GRID_COL + logical_col_offset(ci)
         cells.append(
             VowelChartCell(
                 row=ri,
                 col=ci,
                 grid_row=logical_row_to_grid_row[ri],
-                grid_col=VOWEL_LABEL_GRID_COL + logical_col_offset(ci),
+                grid_col=grid_col,
                 chart_x=chart_x,
                 chart_y=chart_y,
                 pair_side=pair_side,
@@ -1199,7 +1244,16 @@ def vowel_grid_pos(
     row = _ROW_LABEL_TO_INDEX[height.value]
     place_to_column = {"front": 0, "central": 2, "back": 4}
     base_col = place_to_column[backness.value]
-    col = base_col + 1 if rounding.value == "rounded" else base_col
+    # Cols 0..5 = (front-unr, front-rnd, central-unr, central-rnd,
+    # back-unr, back-rnd). Cols 6..8 are the neutral-round slots
+    # (front, central, back) the renderer drops at the backness
+    # anchor centre with no L/R pair shift.
+    if rounding.value == "neutral":
+        col = 6 + (base_col // 2)
+    elif rounding.value == "rounded":
+        col = base_col + 1
+    else:
+        col = base_col
 
     # Normalized abstract-vowel-space coordinates. Same decision as
     # ``row`` / ``col`` but expressed as floats so a future trapezoid

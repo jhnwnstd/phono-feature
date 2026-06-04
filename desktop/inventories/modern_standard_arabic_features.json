@@ -11,6 +11,11 @@
         "Modern Standard Arabic is not normally an L1 variety.",
         "Arabic dialects differ substantially in consonant realization and phoneme inventory.",
         "The segment /d͡ʒ/ has major regional variation in realization."
+      ],
+      "corrections_reviewed": [
+        "No core segment corrections made against the Wikipedia MSA tables.",
+        "Kept six vowel phonemes /a aː i iː u uː/ and 28 consonant phonemes.",
+        "Kept /d͡ʒ/ with a caveat because its realization varies regionally."
       ]
     }
   },

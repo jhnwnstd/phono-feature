@@ -111,23 +111,24 @@ def test_english_vowels_not_all_in_default_cell() -> None:
 # compute_placements: shared cell-grouping helper
 
 
-def test_compute_placements_groups_collisions_general():
-    """The General inventory's ə and ɜ both map to the open-mid
-    central cell (3, 2). The shared compute_placements groups them
-    so both the desktop and the web render them stacked rather
-    than overlapping at the same CSS-grid coordinates.
+def test_compute_placements_general_tier_two_mid_splits_schwa_from_open_mid():
+    """The General inventory's ə (ATR=0) and ɜ (ATR=-) historically
+    collapsed onto the same Open-mid Central cell because the Tier 1
+    height inference could not tell them apart. The Tier 2 Mid
+    display policy now lifts ə onto the Mid row (logical row 3,
+    inserted between Close-mid and Open-mid) while ɜ stays on
+    Open-mid (logical row 4), so the renderer no longer stacks them.
     """
     engine = _engine("general_features.json")
     vowels = _vowel_segs(engine)
     seg_feats = {s: dict(engine.segments[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
     occupied, placements = compute_placements(vowels, profile, seg_feats)
-    assert (3, 2) in occupied
-    cell_segs = occupied[(3, 2)]
-    assert set(cell_segs) == {"ə", "ɜ"}
-    # Every segment in the cell has a corresponding placement entry.
-    for s in cell_segs:
-        assert s in placements
+    # ə now lives on the Mid row; ɜ stays on Open-mid.
+    assert occupied.get((3, 2)) == ["ə"]
+    assert occupied.get((4, 2)) == ["ɜ"]
+    assert placements["ə"].height.value == "Mid"
+    assert placements["ɜ"].height.value == "Open-mid"
 
 
 def test_compute_placements_orders_by_confidence_desc():
@@ -161,7 +162,10 @@ def test_module_constants_are_tuples():
     assert isinstance(vl.COL_LABELS, tuple)
     assert isinstance(vl.VOWEL_HEIGHT, tuple)
     # Spot-check shape so a future re-shape is a deliberate break.
-    assert len(vl.ROW_LABELS) == 6
+    # Seven height tiers since the Tier 2 Mid row landed between
+    # Close-mid and Open-mid.
+    assert len(vl.ROW_LABELS) == 7
+    assert "Mid" in vl.ROW_LABELS
     assert vl.COL_LABELS == ("Front", "Central", "Back")
 
 
@@ -625,9 +629,11 @@ def test_split_low_by_tense_policy_knob(profile):
     paper_strict = vowel_grid_pos(
         feats, profile, PlacementPolicy(split_low_by_tense=False)
     )
-    # Default: Near-open (row 4). Strict: Open (row 5).
-    assert default.row == 4
-    assert paper_strict.row == 5
+    # Default: Near-open (row 5). Strict: Open (row 6). Row
+    # indices reflect the 7-tier layout with Mid inserted between
+    # Close-mid and Open-mid.
+    assert default.row == 5
+    assert paper_strict.row == 6
 
 
 def test_placement_carries_normalized_coordinates(profile):
