@@ -8,7 +8,7 @@ consume the same renderer, so this gate lives in shared/.
 
 from __future__ import annotations
 
-from phonology_shared.render.analysis import render_validation_report
+from phonology_shared.presentation.analysis import render_validation_report
 
 
 def test_render_validation_report_escapes_issue_text() -> None:

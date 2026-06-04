@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.engine.feature_engine import FeatureEngine
-from phonology_shared.engine.geometry import GeometryAnalyzer
-from phonology_shared.engine.inventory import (
+from phonology_shared.theory.feature_engine import FeatureEngine
+from phonology_shared.theory.geometry import GeometryAnalyzer
+from phonology_shared.data.inventory import (
     AliasCollisionError,
     Inventory,
     ValidationError,
@@ -928,7 +928,7 @@ def test_parse_inventory_json_text_uniform_contract(
     web upload silently accepted duplicate keys (last-write-wins data
     loss) while the desktop rejected the same file.
     """
-    from phonology_shared.engine.inventory import parse_inventory_json_text
+    from phonology_shared.data.inventory import parse_inventory_json_text
 
     with pytest.raises(ValidationError) as ex:
         parse_inventory_json_text(text, source=f"<{kind}>")
@@ -1115,7 +1115,7 @@ def test_cell_brushes_cached_until_theme_changes() -> None:
     across calls within one theme epoch, then a fresh one after
     ``set_theme`` bumps ``theme_version``."""
     from phonology_features.gui.builder.grid import _cell_brushes
-    from phonology_shared.render import palette
+    from phonology_shared.presentation import palette
 
     palette.set_theme("light")
     fg_a, bg_a = _cell_brushes("+")
@@ -1386,8 +1386,8 @@ def test_analysis_tag_escapes_html_in_text() -> None:
     layout. The ``_tag`` chip is the only path through which
     inventory text reaches the HTML output, so escaping there is
     sufficient."""
-    from phonology_shared.render.analysis import _tag
-    from phonology_shared.render.constants import TagColor
+    from phonology_shared.presentation.analysis import _tag
+    from phonology_shared.presentation.constants import TagColor
 
     out = _tag("<b>oops</b>", TagColor.PLUS)
     assert "<b>oops</b>" not in out
@@ -1397,8 +1397,8 @@ def test_analysis_tag_escapes_html_in_text() -> None:
 def test_analysis_render_single_segment_escapes_symbol() -> None:
     """The segment symbol is interpolated into the bold header
     outside the tag chip, so it has its own escape call."""
-    from phonology_shared.engine.feature_engine import NaturalClassCompletion
-    from phonology_shared.render.analysis import render_single_segment
+    from phonology_shared.theory.feature_engine import NaturalClassCompletion
+    from phonology_shared.presentation.analysis import render_single_segment
 
     completion = NaturalClassCompletion(
         status="already_natural_class",
@@ -1681,7 +1681,7 @@ def test_worker_non_oserror_clears_save_in_flight(
     app = QApplication.instance() or QApplication([])
     from phonology_features.gui.builder import InventoryBuilder
     from phonology_features.gui.builder import save_controller as _sc
-    from phonology_shared.engine.inventory import Inventory
+    from phonology_shared.data.inventory import Inventory
 
     # Stub modal warning so the error path doesn't deadlock the test.
     monkeypatch.setattr(_sc, "show_warning", lambda *a, **k: None)
@@ -1816,7 +1816,7 @@ def test_edit_during_in_flight_save_preserves_dirty(
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
     from phonology_features.gui.builder import InventoryBuilder
-    from phonology_shared.engine.inventory import Inventory
+    from phonology_shared.data.inventory import Inventory
 
     # Stall the worker so the main thread has time to mutate the grid
     # between snapshot and completion.
@@ -1876,7 +1876,7 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
     app = QApplication.instance() or QApplication([])
     from phonology_features.gui.builder import InventoryBuilder
     from phonology_features.gui.builder import save_controller as _sc
-    from phonology_shared.engine.inventory import Inventory
+    from phonology_shared.data.inventory import Inventory
 
     monkeypatch.setattr(_sc, "show_warning", lambda *a, **k: None)
     monkeypatch.setattr(
@@ -2014,7 +2014,7 @@ def test_mainwindow_construction_survives_corrupt_window_size(
     QApplication.instance() or QApplication([])
 
     # Pre-populate corrupt settings BEFORE the window is constructed.
-    from phonology_shared.render.constants import (
+    from phonology_shared.presentation.constants import (
         SETTINGS_APP,
         SETTINGS_ORG,
     )
@@ -2195,7 +2195,7 @@ def test_main_viewer_loads_freshly_saved_builder_inventory(
     app = QApplication.instance() or QApplication([])
     from phonology_features.gui.builder import InventoryBuilder
     from phonology_features.gui.main_window import MainWindow
-    from phonology_shared.render.constants import (
+    from phonology_shared.presentation.constants import (
         SETTINGS_APP,
         SETTINGS_ORG,
     )

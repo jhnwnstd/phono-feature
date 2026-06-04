@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.engine import (
+from phonology_shared.data import (
     MAX_FEATURES,
     MAX_INVENTORY_FILE_BYTES,
     MAX_NAME_LENGTH,

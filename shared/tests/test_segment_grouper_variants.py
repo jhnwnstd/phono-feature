@@ -12,7 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.engine import FeatureEngine, Inventory
+from phonology_shared.data import Inventory
+from phonology_shared.theory import FeatureEngine
 
 HAYES = (
     Path(__file__).resolve().parents[2]

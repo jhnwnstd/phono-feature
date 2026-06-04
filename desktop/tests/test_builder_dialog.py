@@ -225,7 +225,7 @@ def test_accept_with_valid_inputs_dismisses(dialog, mocker):
 def test_infer_split_whitespace_fallback():
     """No explicit delimiter -> whitespace fallback. Covers the
     legacy "p b t d" segment input shape."""
-    from phonology_shared.render.inventory_setup import (
+    from phonology_shared.editor.setup import (
         infer_split as _infer_split,
     )
 
@@ -233,7 +233,7 @@ def test_infer_split_whitespace_fallback():
 
 
 def test_infer_split_newline_separated():
-    from phonology_shared.render.inventory_setup import (
+    from phonology_shared.editor.setup import (
         infer_split as _infer_split,
     )
 
@@ -248,7 +248,7 @@ def test_infer_split_comma_separated_with_internal_spaces():
     """Explicit delimiter present -> only split on it, NOT on
     whitespace. Lets multi-word feature names like "Long Vowel"
     survive a paste."""
-    from phonology_shared.render.inventory_setup import (
+    from phonology_shared.editor.setup import (
         infer_split as _infer_split,
     )
 
@@ -260,7 +260,7 @@ def test_infer_split_comma_separated_with_internal_spaces():
 
 
 def test_infer_split_semicolon_pipe_tab_each_work():
-    from phonology_shared.render.inventory_setup import (
+    from phonology_shared.editor.setup import (
         infer_split as _infer_split,
     )
 
@@ -273,7 +273,7 @@ def test_infer_split_mixed_explicit_delimiters():
     """Multiple explicit delimiters in one paste (commas + newlines,
     as you'd get from a column accidentally pasted with both row and
     cell separators) split on all of them."""
-    from phonology_shared.render.inventory_setup import (
+    from phonology_shared.editor.setup import (
         infer_split as _infer_split,
     )
 
@@ -281,7 +281,7 @@ def test_infer_split_mixed_explicit_delimiters():
 
 
 def test_infer_split_empty_returns_empty():
-    from phonology_shared.render.inventory_setup import (
+    from phonology_shared.editor.setup import (
         infer_split as _infer_split,
     )
 
@@ -293,7 +293,7 @@ def test_infer_split_single_item_no_delimiter():
     """A single token with no delimiter at all is preserved as a
     one-item list. accept()'s "no items" guard fires only on truly
     empty input, not on legitimate single-segment inventories."""
-    from phonology_shared.render.inventory_setup import (
+    from phonology_shared.editor.setup import (
         infer_split as _infer_split,
     )
 

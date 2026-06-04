@@ -86,8 +86,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from enum import IntEnum, StrEnum
 
-from phonology_shared.render.constants import BTN_W
-from phonology_shared.render.layout import (
+from phonology_shared.presentation.constants import BTN_W
+from phonology_shared.presentation.layout import (
     SEG_BTN_H,
     VOWEL_PAIR_GAP_PX,
     VOWEL_PAIR_SEPARATOR_PX,

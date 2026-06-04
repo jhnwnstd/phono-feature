@@ -15,12 +15,12 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QTimer
 
 from phonology_features.gui.widgets import SegmentState
-from phonology_shared.render.mode_logic import (
+from phonology_shared.presentation.mode_logic import (
     Mode,
     mode_status_text,
     project_mode_transition,
 )
-from phonology_shared.render.palette import C
+from phonology_shared.presentation.palette import C
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QWidget

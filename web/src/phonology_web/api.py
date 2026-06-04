@@ -5,7 +5,7 @@ zipped engine + renderer bundle has been mounted on sys.path.
 JS calls the module-level functions; their return values are
 Pyodide-converted into plain JS dicts/lists/strings.
 
-The HTML renderers live in ``phonology_shared.render.analysis``
+The HTML renderers live in ``phonology_shared.presentation.analysis``
 (the desktop's source tree). The web build copies those files
 into the bundle at the same package path so imports resolve
 identically here and on the desktop, keeping one source of
@@ -20,22 +20,22 @@ from collections.abc import Callable
 from functools import lru_cache
 from typing import Any, TypeVar, cast
 
-from phonology_shared.engine import (
+from phonology_shared.data import (
     MAX_FEATURES,
     MAX_SEGMENTS,
     VALID_VALUES,
-    FeatureEngine,
     Inventory,
     ValidationError,
     parse_inventory_json_text,
 )
-from phonology_shared.render.analysis import render_validation_report
+from phonology_shared.theory import FeatureEngine
+from phonology_shared.presentation.analysis import render_validation_report
 
 # ``confirm_remove_*_prompt`` are re-exported on the api module so
 # main.js can resolve them via ``callBridge("confirm_remove_*", ...)``
 # without a thin wrapper; static linters can't see Pyodide attribute
 # access, so this import block carries a noqa for them.
-from phonology_shared.render.grid_logic import (  # noqa: F401
+from phonology_shared.editor.grid import (  # noqa: F401
     CYCLE_LADDER,
     MAX_UNDO_DEPTH,
     MOVE_KEYS,
@@ -46,23 +46,23 @@ from phonology_shared.render.grid_logic import (  # noqa: F401
     validate_new_feature_label,
     validate_new_segment_label,
 )
-from phonology_shared.render.inventory_setup import (
+from phonology_shared.editor.setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
     FEATURE_PRESETS,
     suggest_filename,
     validate_setup,
 )
-from phonology_shared.render.layout import (
+from phonology_shared.presentation.layout import (
     best_segment_n_cols,
     partition_groups_for_spillover,
 )
-from phonology_shared.render.mode_logic import (
+from phonology_shared.presentation.mode_logic import (
     mode_status_text,
     project_mode_transition,
 )
-from phonology_shared.render.palette import set_palette_mode, set_theme
-from phonology_shared.render.view_models import (
+from phonology_shared.presentation.palette import set_palette_mode, set_theme
+from phonology_shared.presentation.view_models import (
     build_inventory_summary,
     summarize_feature_query,
     summarize_segment_selection,
@@ -180,7 +180,7 @@ def get_setup_defaults() -> dict[str, Any]:
     web setup modal needs to populate its UI.
 
     Shared with the desktop builder via
-    :py:mod:`phonology_shared.render.inventory_setup` so both
+    :py:mod:`phonology_shared.editor.setup` so both
     frontends offer the same Tab-autofill strings and the same
     named presets in the dropdown.
     """

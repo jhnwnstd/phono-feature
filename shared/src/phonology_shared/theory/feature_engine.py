@@ -28,12 +28,12 @@ from functools import cached_property
 from types import MappingProxyType
 from typing import Any, Literal
 
-from phonology_shared.engine.inventory import (
+from phonology_shared.data.inventory import (
     VALID_VALUES,
     Inventory,
     normalize_feature_bundle,
 )
-from phonology_shared.engine.segment_grouper import group_segments
+from phonology_shared.chart.consonants import group_segments
 
 _log = logging.getLogger(__name__)
 

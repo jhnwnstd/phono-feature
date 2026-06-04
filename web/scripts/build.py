@@ -6,29 +6,27 @@ Pages workflow. Output is what GitHub Pages publishes verbatim.
 
 Pipeline:
 
-1. ``copy_engine_sources``       engine package -> dist/engine/
+1. ``copy_shared_sources``       phonology_shared/* -> dist/shared/
 2. ``copy_static_assets``        web/{index.html,style.css,main.js}
                                   + web/src/phonology_web/api.py
                                   -> dist/
-3. ``relay_renderer_sources``    desktop GUI relayed sources ->
-                                  dist/render/
-4. ``generate_theme_css``        palette.py -> dist/theme.css
-5. ``generate_layout_css``       layout.py -> dist/layout.css
-6. ``copy_inventories``          desktop/inventories/*.json -> dist/
+3. ``generate_theme_css``        palette.py -> dist/theme.css
+4. ``generate_layout_css``       layout.py -> dist/layout.css
+5. ``copy_inventories``          desktop/inventories/*.json -> dist/
                                   inventories/ + dist/inventories.json
-7. ``write_python_bundle``       dist/{engine,render}/* + dist/api.py
+6. ``write_python_bundle``       dist/shared/* + dist/api.py
                                   -> dist/python_bundle.zip
                                   (removes the loose copies)
-8. ``write_bootstrap``           default inventory's render summary
+7. ``write_bootstrap``           default inventory's render summary
                                   -> dist/bootstrap.json
-9. ``hash_assets``               content-hash filenames + asset
+8. ``hash_assets``               content-hash filenames + asset
                                   manifest + index.html rewrite
-10. ``write_service_worker``     sw.js template -> dist/sw.js
-11. ``write_pages_no_jekyll``    dist/.nojekyll
+9. ``write_service_worker``      sw.js template -> dist/sw.js
+10. ``write_pages_no_jekyll``    dist/.nojekyll
 
-Both ``engine/`` and ``render/`` are copies of the canonical
-sources under ``shared/src/phonology_shared/{engine,render}/``.
-Mounted into Pyodide's FS at runtime via zipimport; no wheel
+The full ``phonology_shared`` package (data / theory / chart /
+presentation / editor) is mirrored under ``dist/shared/`` and
+mounted into Pyodide's FS at runtime via zipimport. No wheel
 build, no micropip install.
 """
 
@@ -50,34 +48,23 @@ ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = ROOT / "web"
 DIST = WEB_DIR / "dist"
 SHARED_SRC = ROOT / "shared" / "src"
-ENGINE_DIR = SHARED_SRC / "phonology_shared" / "engine"
-RENDER_DIR = SHARED_SRC / "phonology_shared" / "render"
+SHARED_PKG = SHARED_SRC / "phonology_shared"
+DATA_DIR = SHARED_PKG / "data"
+THEORY_DIR = SHARED_PKG / "theory"
+CHART_DIR = SHARED_PKG / "chart"
+PRESENTATION_DIR = SHARED_PKG / "presentation"
+EDITOR_DIR = SHARED_PKG / "editor"
 INVENTORIES = ROOT / "desktop" / "inventories"
 
 # Make the shared source tree importable as a normal package so the
 # ``spec_from_file_location`` side-loads below can transitively
-# import their siblings (``inventory_setup.py`` imports
-# ``phonology_shared.engine.limits.MAX_NAME_LENGTH`` at module load).
+# import their siblings (``editor/setup.py`` imports
+# ``phonology_shared.data.limits.MAX_NAME_LENGTH`` at module load).
 # CI runs this script against a bare interpreter where nothing is
 # pip-installed, so we feed sys.path directly rather than relying on
 # the workspace's editable install.
 if str(SHARED_SRC) not in sys.path:
     sys.path.insert(0, str(SHARED_SRC))
-
-# Desktop GUI files relayed verbatim into the web bundle. Each one
-# is pure Python with no module-level Qt imports (palette.py wraps
-# its Qt imports in a function), so they run unchanged in Pyodide.
-RELAYED_SOURCES = [
-    "palette.py",
-    "constants.py",
-    "analysis.py",
-    "view_models.py",
-    "mode_logic.py",
-    "layout.py",
-    "vowel_layout.py",
-    "inventory_setup.py",
-    "grid_logic.py",
-]
 
 
 def clean_dist() -> None:
@@ -86,19 +73,21 @@ def clean_dist() -> None:
     DIST.mkdir(parents=True)
 
 
-def copy_engine_sources() -> None:
-    """Copy the engine subpackage .py tree into ``dist/engine/`` so
-    the bundle can mount it under ``phonology_shared/engine/``.
+def copy_shared_sources() -> None:
+    """Mirror the whole ``phonology_shared`` package into
+    ``dist/shared/phonology_shared/`` so the bundle can zipimport
+    every submodule (``data``, ``theory``, ``chart``,
+    ``presentation``, ``editor``) under the canonical dotted path.
     """
-    print("Copying engine package source...")
-    target_pkg = DIST / "engine" / "phonology_shared" / "engine"
+    print("Copying shared package source...")
+    target_pkg = DIST / "shared" / "phonology_shared"
     if target_pkg.exists():
         shutil.rmtree(target_pkg)
-    shutil.copytree(ENGINE_DIR, target_pkg)
+    shutil.copytree(SHARED_PKG, target_pkg)
     for pycache in target_pkg.rglob("__pycache__"):
         shutil.rmtree(pycache, ignore_errors=True)
-    py_files = sorted(target_pkg.glob("*.py"))
-    print(f"  {len(py_files)} .py files in engine/phonology_shared/engine/")
+    py_files = sorted(target_pkg.rglob("*.py"))
+    print(f"  {len(py_files)} .py files in shared/phonology_shared/")
 
 
 def copy_static_assets() -> None:
@@ -113,26 +102,6 @@ def copy_static_assets() -> None:
     for name in ("index.html", "style.css", "main.js"):
         shutil.copy(WEB_DIR / name, DIST / name)
     shutil.copy(WEB_DIR / "src" / "phonology_web" / "api.py", DIST / "api.py")
-
-
-def relay_renderer_sources() -> None:
-    """Copy the render subpackage .py tree into ``dist/render/`` so
-    the bundle can mount it under ``phonology_shared/render/``.
-
-    The render modules live in ``shared/src/phonology_shared/render/``
-    on disk; api.py and view_models reach them via the same dotted
-    path at runtime once zipimport mounts the bundle.
-    """
-    print("Relaying renderer sources from shared/...")
-    target = DIST / "render" / "phonology_shared" / "render"
-    target.mkdir(parents=True, exist_ok=True)
-    (DIST / "render" / "phonology_shared" / "__init__.py").write_text("")
-    (target / "__init__.py").write_text("")
-    for name in RELAYED_SOURCES:
-        src = RENDER_DIR / name
-        if not src.exists():
-            raise RuntimeError(f"missing shared render source: {src}")
-        shutil.copy(src, target / name)
 
 
 def copy_inventories() -> None:
@@ -267,7 +236,7 @@ def _load_palette_module() -> ModuleType:
     of the desktop GUI package (the build runs outside the package
     layout, so a normal import would fail).
     """
-    palette_path = RENDER_DIR / "palette.py"
+    palette_path = PRESENTATION_DIR / "palette.py"
     spec = importlib.util.spec_from_file_location("_palette", palette_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {palette_path}")
@@ -281,7 +250,7 @@ def _load_layout_module() -> ModuleType:
     by ``generate_layout_css`` to bake the adaptive-layout constants
     into a CSS custom-property file the stylesheet then references.
     """
-    layout_path = RENDER_DIR / "layout.py"
+    layout_path = PRESENTATION_DIR / "layout.py"
     spec = importlib.util.spec_from_file_location("_layout", layout_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {layout_path}")
@@ -299,7 +268,7 @@ def _load_constants_module() -> ModuleType:
     the FONT_SIZE_* ladder without requiring the engine package to be
     installed (this script runs against a bare interpreter in CI).
     """
-    constants_path = RENDER_DIR / "constants.py"
+    constants_path = PRESENTATION_DIR / "constants.py"
     spec = importlib.util.spec_from_file_location(
         "_constants",
         constants_path,
@@ -317,7 +286,7 @@ def _load_inventory_setup_module() -> ModuleType:
     substitute shared dialog strings (``SETUP_DIALOG_TITLE``,
     ``SETUP_NAME_PLACEHOLDER``) into ``index.html``.
     """
-    path = RENDER_DIR / "inventory_setup.py"
+    path = EDITOR_DIR / "setup.py"
     spec = importlib.util.spec_from_file_location("_inv_setup", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {path}")
@@ -344,7 +313,7 @@ def _build_limits_payload() -> dict[str, int]:
     as a package. CI runs ``python web/scripts/build.py`` against a
     bare interpreter; only the standard library is available.
     """
-    limits_path = ENGINE_DIR / "limits.py"
+    limits_path = DATA_DIR / "limits.py"
     spec = importlib.util.spec_from_file_location("_limits", limits_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {limits_path}")
@@ -374,7 +343,7 @@ def _build_status_text_payload() -> dict[str, str]:
     """
     import sys
 
-    mode_logic_path = RENDER_DIR / "mode_logic.py"
+    mode_logic_path = PRESENTATION_DIR / "mode_logic.py"
     module_name = "_build_mode_logic"
     spec = importlib.util.spec_from_file_location(module_name, mode_logic_path)
     if spec is None or spec.loader is None:
@@ -455,7 +424,7 @@ def _vowel_corners(shape: str) -> dict[str, float]:
     for the given shape, derived from the shared
     :py:func:`vowel_layout.vowel_trapezoid_corners`. Keeps the
     Python and CSS computations bit-for-bit identical."""
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         VowelChartShape,
         vowel_trapezoid_corners,
     )
@@ -465,7 +434,7 @@ def _vowel_corners(shape: str) -> dict[str, float]:
 
 def generate_layout_css() -> None:
     """Emit ``layout.css`` from the constants in
-    ``phonology_shared.render.layout`` so the same numbers drive both
+    ``phonology_shared.presentation.layout`` so the same numbers drive both
     the desktop's Qt splitter / chart sizing and the web's CSS grid.
     Edits to the shared constants propagate to both on the next build.
     Mirrors the ``generate_theme_css`` pattern.

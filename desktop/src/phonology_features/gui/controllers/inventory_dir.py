@@ -19,7 +19,7 @@ from PyQt6.QtGui import QStandardItemModel
 
 from phonology_features._logging import get_logger
 from phonology_features._settings import SettingsKey, write_setting
-from phonology_shared.render.inventory_setup import inventory_display_label
+from phonology_shared.editor.setup import inventory_display_label
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QSettings

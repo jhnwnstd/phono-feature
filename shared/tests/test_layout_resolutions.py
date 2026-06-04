@@ -1,7 +1,7 @@
 """Layout-policy tests at the nine most common desktop resolutions.
 
 Each resolution is exercised through the shared layout module
-(``phonology_shared.render.layout``) so the policy decisions are
+(``phonology_shared.presentation.layout``) so the policy decisions are
 deterministic and identical across the desktop and web frontends.
 A failure here means a real user on that monitor would see broken
 chrome (panes too narrow, vowel chart in the wrong place, fresh-
@@ -36,7 +36,7 @@ from typing import NamedTuple
 
 import pytest
 
-from phonology_shared.render import layout
+from phonology_shared.presentation import layout
 
 
 class Resolution(NamedTuple):
@@ -710,7 +710,7 @@ def _segment_grid_natural_width(seg_count: int) -> int:
     here because we only care about whether the assumption used
     in ``SEG_CONTENT_W`` is in the right ballpark.
     """
-    from phonology_shared.render.constants import BTN_GAP, BTN_W
+    from phonology_shared.presentation.constants import BTN_GAP, BTN_W
 
     cols = layout.best_segment_n_cols(seg_count, max_cols=12)
     return cols * (BTN_W + BTN_GAP)
@@ -776,8 +776,8 @@ def _consonant_group_sizes(name: str) -> list[int]:
     """Per-manner-class consonant counts for an inventory, excluding
     the ``vowels`` group. Mirrors the data the segment grid actually
     lays out (vowels go to the separate chart, not the grid)."""
-    from phonology_shared.engine.feature_engine import FeatureEngine
-    from phonology_shared.engine.inventory import Inventory
+    from phonology_shared.theory.feature_engine import FeatureEngine
+    from phonology_shared.data.inventory import Inventory
 
     data = _load_inventory(f"{name}_features")
     inv = Inventory.parse(data)
@@ -793,9 +793,9 @@ def _feature_card_rows(name: str) -> tuple[list[str], list[int]]:
     """Per-card row counts for an inventory's feature panel,
     bucketed via the FEATURE_GROUPS constant the way
     ``view_models._grouped_features`` does it."""
-    from phonology_shared.engine.feature_engine import FeatureEngine
-    from phonology_shared.engine.inventory import Inventory
-    from phonology_shared.render.constants import FEATURE_GROUPS
+    from phonology_shared.theory.feature_engine import FeatureEngine
+    from phonology_shared.data.inventory import Inventory
+    from phonology_shared.presentation.constants import FEATURE_GROUPS
 
     data = _load_inventory(f"{name}_features")
     inv = Inventory.parse(data)

@@ -24,7 +24,7 @@ from phonology_features.gui.widgets import (
     SegmentButton,
     SegmentGridWidget,
 )
-from phonology_shared.render.layout import REGION_CONSTRAINTS
+from phonology_shared.presentation.layout import REGION_CONSTRAINTS
 
 
 @pytest.fixture()

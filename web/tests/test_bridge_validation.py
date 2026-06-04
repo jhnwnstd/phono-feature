@@ -19,11 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.engine import (
-    FeatureEngine,
+from phonology_shared.data import (
     Inventory,
     ValidationError,
 )
+from phonology_shared.theory import FeatureEngine
 from phonology_web import api as bridge
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

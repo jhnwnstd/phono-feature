@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Callable, TypeVar
 
-from phonology_shared.render import palette as _palette
+from phonology_shared.presentation import palette as _palette
 
 K = TypeVar("K")
 

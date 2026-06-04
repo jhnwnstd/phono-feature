@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from enum import StrEnum
 
-from phonology_shared.render.palette import C
+from phonology_shared.presentation.palette import C
 
 SETTINGS_ORG = "features"
 SETTINGS_APP = "SegFeatureEngine"
@@ -97,13 +97,13 @@ def tag_palettes() -> dict[TagColor, tuple[str, str]]:
     """Inline-chip ``(background, foreground)`` palette keyed by
     :class:`TagColor`.
 
-    Memoised on :py:data:`phonology_shared.render.palette.theme_version`
+    Memoised on :py:data:`phonology_shared.presentation.palette.theme_version`
     so the analysis pane's chip rendering (which calls this thousands
     of times per click via :py:func:`_tag`) doesn't pay for eight
     dict lookups + a fresh dict + four fresh tuples per call. A
     theme toggle bumps ``theme_version`` and invalidates the cache.
     """
-    from phonology_shared.render import palette as _palette
+    from phonology_shared.presentation import palette as _palette
 
     global _tag_palettes_cache
     version = _palette.theme_version

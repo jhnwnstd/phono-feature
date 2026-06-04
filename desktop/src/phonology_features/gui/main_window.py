@@ -75,11 +75,11 @@ from phonology_features.gui.widgets import (
     SegmentGridWidget,
     SegmentState,
 )
-from phonology_shared.engine.feature_engine import FeatureEngine
-from phonology_shared.engine.inventory import Inventory, ValidationError
-from phonology_shared.render import layout
-from phonology_shared.render.analysis import render_validation_report
-from phonology_shared.render.constants import (
+from phonology_shared.theory.feature_engine import FeatureEngine
+from phonology_shared.data.inventory import Inventory, ValidationError
+from phonology_shared.presentation import layout
+from phonology_shared.presentation.analysis import render_validation_report
+from phonology_shared.presentation.constants import (
     FEATURE_GROUPS,
     FEATURE_ORDER,
     SETTINGS_APP,
@@ -87,15 +87,15 @@ from phonology_shared.render.constants import (
     scrollbar_style,
     sort_features,
 )
-from phonology_shared.render.layout import distribute_feature_groups
-from phonology_shared.render.mode_logic import (
+from phonology_shared.presentation.layout import distribute_feature_groups
+from phonology_shared.presentation.mode_logic import (
     Mode,
     clipboard_copy_message,
     inventory_load_failure_message,
     inventory_loaded_message,
     mode_status_text,
 )
-from phonology_shared.render.palette import (
+from phonology_shared.presentation.palette import (
     ALLOWED_PALETTE_MODES,
     ALLOWED_THEMES,
     C,
@@ -103,7 +103,7 @@ from phonology_shared.render.palette import (
     set_palette_mode,
     set_theme,
 )
-from phonology_shared.render.view_models import (
+from phonology_shared.presentation.view_models import (
     summarize_feature_query,
     summarize_segment_selection,
 )
@@ -217,7 +217,7 @@ class MainWindow(QMainWindow):
         toggles. Idempotent: calling twice does no extra work since
         the second pass is a cache hit.
         """
-        from phonology_shared.render.palette import (
+        from phonology_shared.presentation.palette import (
             get_palette_mode,
             set_palette_mode,
         )
@@ -1089,7 +1089,7 @@ class MainWindow(QMainWindow):
         with the active feature count.
 
         Placement is delegated to
-        :py:func:`phonology_shared.render.layout.distribute_feature_groups`
+        :py:func:`phonology_shared.presentation.layout.distribute_feature_groups`
         so the web app uses the same algorithm via Pyodide. This
         function only does the Qt-specific work: clear and refill
         the column layouts and toggle card visibility.
@@ -1183,7 +1183,7 @@ class MainWindow(QMainWindow):
         """Apply the shared layout rules to the seg pane internals
         whenever the seg-pane width changes (initial layout, splitter
         drag, window resize, or inventory-load fit). Pure-Python
-        decisions come from ``phonology_shared.render.layout``; this
+        decisions come from ``phonology_shared.presentation.layout``; this
         method just wires the results into Qt.
 
         Decisions delegated:

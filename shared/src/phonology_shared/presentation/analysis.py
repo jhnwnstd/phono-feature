@@ -10,7 +10,7 @@ import html
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
-from phonology_shared.render.constants import (
+from phonology_shared.presentation.constants import (
     CHIP_BORDER_RADIUS_PX,
     CHIP_FONT_SIZE_PT,
     CHIP_MARGIN_PX,
@@ -22,11 +22,11 @@ from phonology_shared.render.constants import (
     sort_spec,
     tag_palettes,
 )
-from phonology_shared.render.mode_logic import VALIDATION_REPORT_HEADING
-from phonology_shared.render.palette import C
+from phonology_shared.presentation.mode_logic import VALIDATION_REPORT_HEADING
+from phonology_shared.presentation.palette import C
 
 if TYPE_CHECKING:
-    from phonology_shared.engine.feature_engine import (
+    from phonology_shared.theory.feature_engine import (
         FeatureEngine,
         NaturalClassCompletion,
     )
@@ -254,7 +254,7 @@ def render_single_segment(
     """Build HTML for a single selected segment.
 
     ``completion`` is the precomputed
-    :py:class:`~phonology_shared.engine.feature_engine.NaturalClassCompletion`
+    :py:class:`~phonology_shared.theory.feature_engine.NaturalClassCompletion`
     for ``[seg]``; the renderer dispatches on its status without
     re-asking the engine. The previous fallback that quietly looked
     for an underspec-compatible equivalence class is gone. When

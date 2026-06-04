@@ -10,7 +10,7 @@ The undo stack is a list of ``_BulkEdit`` records. Each carries the
 pre-edit value of every cell that changed plus the single new value
 they all moved to. Capped at :py:data:`MAX_UNDO_DEPTH` (200) so a
 long session does not grow the stack without bound. The cap is
-defined in :py:mod:`phonology_shared.render.grid_logic` so the web
+defined in :py:mod:`phonology_shared.editor.grid` so the web
 editor's JS undo stack uses the same value.
 """
 
@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from phonology_shared.render.grid_logic import MAX_UNDO_DEPTH
+from phonology_shared.editor.grid import MAX_UNDO_DEPTH
 
 
 class _CellPrev(NamedTuple):

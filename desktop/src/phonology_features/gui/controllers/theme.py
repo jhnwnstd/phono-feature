@@ -21,13 +21,13 @@ from phonology_features.gui.style_utils import (
     set_css,
 )
 from phonology_features.gui.themed_widgets import _clear_btn_style
-from phonology_shared.render.constants import scrollbar_style
-from phonology_shared.render.mode_logic import (
+from phonology_shared.presentation.constants import scrollbar_style
+from phonology_shared.presentation.mode_logic import (
     palette_toggle_tooltip,
     theme_toggle_glyph,
     theme_toggle_tooltip,
 )
-from phonology_shared.render.palette import (
+from phonology_shared.presentation.palette import (
     C,
     get_palette_mode,
     get_theme_name,

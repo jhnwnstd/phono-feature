@@ -16,7 +16,7 @@ from typing import Literal
 # cycle with build.py side-loading; after Phase D's sys.path entry
 # in ``web/scripts/build.py`` (commit 851fca2), no cycle exists and
 # the top-level form is what the rest of the codebase consults.
-from phonology_shared.render.constants import BTN_GAP, BTN_W
+from phonology_shared.presentation.constants import BTN_GAP, BTN_W
 
 # Pins are conventional in IPA chart layouts: place-of-articulation
 # features (Major Class, Place) sit on the left, manner-of-
@@ -852,7 +852,7 @@ def font_below_min(
     pulled lazily to avoid a load-time cycle.
     """
     if min_px is None:
-        from phonology_shared.render.constants import FONT_SIZE_MIN_PX
+        from phonology_shared.presentation.constants import FONT_SIZE_MIN_PX
 
         min_px = FONT_SIZE_MIN_PX
     if text_w_px <= max_w_px:

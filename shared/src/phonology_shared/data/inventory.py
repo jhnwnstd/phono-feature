@@ -44,7 +44,7 @@ from functools import lru_cache
 from types import MappingProxyType
 from typing import Any
 
-from phonology_shared.engine.limits import (
+from phonology_shared.data.limits import (
     ADVISORY_FEATURE_THRESHOLD,
     ADVISORY_SEGMENT_THRESHOLD,
     MAX_FEATURES,

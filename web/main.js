@@ -1049,7 +1049,7 @@ function rebalanceSegmentSpillover() {
     if (consonants.length === 0) return;
     // Single source of truth for the partition decision: the desktop
     // and web both call ``partition_groups_for_spillover`` in
-    // ``phonology_shared.render.layout``. JS measures the heights and
+    // ``phonology_shared.presentation.layout``. JS measures the heights and
     // available area; the bridge function computes ``main_count``.
     const heights = consonants.map((el) => el.offsetHeight);
     const mainCount = state.bridge

@@ -10,7 +10,7 @@ skip the related step.
 from collections import defaultdict
 from collections.abc import Mapping
 
-from phonology_shared.engine.inventory import normalize_feature_bundle
+from phonology_shared.data.inventory import normalize_feature_bundle
 
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.

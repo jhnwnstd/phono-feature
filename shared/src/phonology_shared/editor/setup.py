@@ -10,7 +10,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from phonology_shared.engine.limits import MAX_NAME_LENGTH
+from phonology_shared.data.limits import MAX_NAME_LENGTH
 
 # Delimiters :py:func:`infer_split` tries, in no particular order.
 # Whitespace is the FALLBACK (used only when none of these appear):

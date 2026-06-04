@@ -1,4 +1,4 @@
-"""Tests for :py:mod:`phonology_shared.render.inventory_setup`.
+"""Tests for :py:mod:`phonology_shared.editor.setup`.
 
 The module is pure-Python and consumed by both the desktop builder
 dialog and the web setup modal. These tests exercise its contract
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from phonology_shared.render.inventory_setup import (
+from phonology_shared.editor.setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
     EXPLICIT_DELIMITERS,

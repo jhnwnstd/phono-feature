@@ -23,9 +23,9 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.engine.feature_engine import FeatureEngine
-from phonology_shared.engine.inventory import Inventory
-from phonology_shared.render.vowel_layout import (
+from phonology_shared.theory.feature_engine import FeatureEngine
+from phonology_shared.data.inventory import Inventory
+from phonology_shared.chart.vowels import (
     VowelProfile,
     compute_placements,
     detect_vowel_profile,
@@ -156,7 +156,7 @@ def test_compute_placements_orders_by_confidence_desc():
 def test_module_constants_are_tuples():
     """ROW_LABELS / COL_LABELS / VOWEL_HEIGHT are exported as
     tuples so importers cannot mutate the shared singletons."""
-    import phonology_shared.render.vowel_layout as vl
+    import phonology_shared.chart.vowels as vl
 
     assert isinstance(vl.ROW_LABELS, tuple)
     assert isinstance(vl.COL_LABELS, tuple)
@@ -349,7 +349,7 @@ def test_logical_col_offset_skips_spacer_tracks() -> None:
     (= VOWEL_LABEL_GRID_COL + offset = 0 + offset) is exactly the
     offset; the resulting set is {1, 2, 4, 5, 7, 8}.
     """
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         VOWEL_LABEL_GRID_COL,
         logical_col_offset,
     )
@@ -365,7 +365,7 @@ def test_chart_geometry_omits_empty_rows() -> None:
     no occupied cell. Without this, the web renderer would emit a
     "Close" row label for an inventory with no close vowels.
     """
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         build_vowel_chart_geometry,
     )
 
@@ -384,7 +384,7 @@ def test_chart_geometry_omits_empty_rows() -> None:
     )
     # Rows are listed in ascending logical-row order with
     # contiguous grid_row values starting at VOWEL_FIRST_DATA_GRID_ROW.
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         VOWEL_FIRST_DATA_GRID_ROW,
     )
 
@@ -400,7 +400,7 @@ def test_chart_geometry_cell_grid_col_avoids_spacer_tracks() -> None:
     spacer would silently render the button under a hidden track
     in CSS and overlap a spacer label in Qt.
     """
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         build_vowel_chart_geometry,
     )
 
@@ -429,7 +429,7 @@ def test_feature_state_distinguishes_zero_from_absent() -> None:
     distinct from a missing key. The shared four-state model must
     preserve that distinction.
     """
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         FeatureState,
         _feature_state,
     )
@@ -450,7 +450,7 @@ def test_back_minus_falls_back_to_front_only_when_inventory_lacks_front(
     profile, ``[-back]`` alone anchors central with
     ``UNDERSPECIFIED``.
     """
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         PlacementFlag,
         VowelProfile,
     )
@@ -491,7 +491,7 @@ def test_central_by_spec_vs_conflict_vs_anchor_carry_distinct_flags(
     but mean different things. Flags let downstream code distinguish
     them without parsing the free-text reason.
     """
-    from phonology_shared.render.vowel_layout import PlacementFlag
+    from phonology_shared.chart.vowels import PlacementFlag
 
     by_spec = vowel_grid_pos(
         {"high": "-", "low": "-", "front": "-", "back": "-", "round": "-"},
@@ -527,7 +527,7 @@ def test_coronal_front_fallback_off_by_default(profile):
     today's gating already blocks it; flip ``has_front`` off and
     confirm the policy default still blocks the fallback.
     """
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         PlacementPolicy,
         VowelProfile,
     )
@@ -555,7 +555,7 @@ def test_atr_tense_divergence_flag_fires_on_disagreement(profile):
     ``ATR_TENSE_DIVERGENCE`` flag so a renderer can surface the
     contention without text parsing.
     """
-    from phonology_shared.render.vowel_layout import PlacementFlag
+    from phonology_shared.chart.vowels import PlacementFlag
 
     agreeing = vowel_grid_pos(
         {
@@ -588,7 +588,7 @@ def test_per_axis_evidence_exposes_height_backness_rounding(profile):
     so renderers can read source, confidence, and flags per axis
     without parsing the joined reason string.
     """
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         AxisEvidence,
         PlacementFlag,
     )
@@ -615,7 +615,7 @@ def test_split_low_by_tense_policy_knob(profile):
     to preserve historical placements; the paper's recommended
     stricter default is False.
     """
-    from phonology_shared.render.vowel_layout import PlacementPolicy
+    from phonology_shared.chart.vowels import PlacementPolicy
 
     feats = {
         "high": "-",
@@ -645,7 +645,7 @@ def test_long_pair_stays_side_by_side_and_grows_chart() -> None:
     the renderer grows the chart slot to that width so all cells
     stay legible at their canonical positions.
     """
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         build_vowel_chart_geometry,
         detect_vowel_profile,
     )
@@ -683,7 +683,7 @@ def test_long_does_not_affect_placement() -> None:
     the length contrast as a visual treatment rather than the
     placement code splitting them across the chart.
     """
-    from phonology_shared.render.vowel_layout import (
+    from phonology_shared.chart.vowels import (
         VowelProfile,
         compute_placements,
     )
@@ -713,7 +713,7 @@ def test_has_long_contrast_requires_both_polarities() -> None:
     The display layer reads this to decide whether to surface a
     length contrast in the rendering; placement never consults it.
     """
-    from phonology_shared.render.vowel_layout import detect_vowel_profile
+    from phonology_shared.chart.vowels import detect_vowel_profile
 
     contrastive = detect_vowel_profile(
         ["a", "b"],

@@ -26,21 +26,21 @@ from phonology_features.gui.style_utils import (
     set_css,
     set_html,
 )
-from phonology_shared.render import layout as layout_mod
-from phonology_shared.render.constants import (
+from phonology_shared.presentation import layout as layout_mod
+from phonology_shared.presentation.constants import (
     BTN_GAP,
     BTN_W,
     MONO_FAMILIES,
     scrollbar_style,
 )
-from phonology_shared.render.layout import (
+from phonology_shared.presentation.layout import (
     REGION_CONSTRAINTS,
     best_segment_n_cols,
     partition_groups_for_spillover,
 )
-from phonology_shared.render.mode_logic import expand_button_tooltip
-from phonology_shared.render.palette import C
-from phonology_shared.render.view_models import (
+from phonology_shared.presentation.mode_logic import expand_button_tooltip
+from phonology_shared.presentation.palette import C
+from phonology_shared.presentation.view_models import (
     NEUTRAL_BADGE,
     feature_row_badge,
 )
@@ -559,7 +559,7 @@ class FeatureRow(QWidget):
             shared: all selected segments share this value.
             contrastive: selected segments split cleanly on this feature.
             badge: glyph from
-                :py:func:`phonology_shared.render.view_models._feature_row_state`
+                :py:func:`phonology_shared.presentation.view_models._feature_row_state`
                 (`\u00b1` / `+` / U+2212 / `\u00b7`). Single source of truth so the
                 desktop and web FeatureRow can never drift; QSS selection
                 stays Qt-only below.

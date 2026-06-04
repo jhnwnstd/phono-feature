@@ -27,8 +27,8 @@ from PyQt6.QtWidgets import (
 )
 
 from phonology_features.gui.style_utils import set_css
-from phonology_shared.render.layout import REGION_CONSTRAINTS
-from phonology_shared.render.palette import C
+from phonology_shared.presentation.layout import REGION_CONSTRAINTS
+from phonology_shared.presentation.palette import C
 
 
 def _clear_btn_style() -> str:

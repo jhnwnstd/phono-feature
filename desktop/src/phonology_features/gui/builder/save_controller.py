@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import QMessageBox
 
 from phonology_features._logging import get_logger
 from phonology_features.gui.builder.dialogs import ask_question, show_warning
-from phonology_shared.engine.inventory import (
+from phonology_shared.data.inventory import (
     Inventory,
     ValidationError,
 )

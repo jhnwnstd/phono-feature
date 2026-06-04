@@ -1,5 +1,5 @@
 """
-Public-API tests for ``phonology_shared.engine``.
+Public-API tests for ``phonology_shared.theory`` + ``.data``.
 
 These exercise the engine without any PyQt6 import path. They double as the
 smoke test the README points new users at: a clean run here proves the
@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.engine.feature_engine import FeatureEngine
-from phonology_shared.engine.geometry import GeometryAnalyzer
+from phonology_shared.theory.feature_engine import FeatureEngine
+from phonology_shared.theory.geometry import GeometryAnalyzer
 
 
 def _find_repo_root() -> Path:
@@ -198,7 +198,7 @@ def test_feature_categories_classify_seven_way(engine: FeatureEngine) -> None:
     a small selection, fall back to property assertions that
     hold for any inventory.
     """
-    from phonology_shared.engine.feature_engine import FeatureCategory
+    from phonology_shared.theory.feature_engine import FeatureCategory
 
     all_segs = list(engine.segments)
     assert len(all_segs) >= 4, "fixture too small"
@@ -455,7 +455,7 @@ def test_complete_to_minimal_natural_class_universal_fallback(
     exact ``one_minimal_completion`` with ``additions[0]`` equal to
     ``inventory − S``.
     """
-    from phonology_shared.engine import Inventory
+    from phonology_shared.data import Inventory
 
     # Inventory: a/c are F+, b is F-. Selecting {a, b} disagrees
     # on F (no shared explicit feature), so there's no candidate
