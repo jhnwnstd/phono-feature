@@ -28,8 +28,6 @@ from phonology_shared.data import (
     ValidationError,
     parse_inventory_json_text,
 )
-from phonology_shared.theory import FeatureEngine
-from phonology_shared.presentation.analysis import render_validation_report
 
 # ``confirm_remove_*_prompt`` are re-exported on the api module so
 # main.js can resolve them via ``callBridge("confirm_remove_*", ...)``
@@ -53,6 +51,7 @@ from phonology_shared.editor.setup import (
     suggest_filename,
     validate_setup,
 )
+from phonology_shared.presentation.analysis import render_validation_report
 from phonology_shared.presentation.layout import (
     best_segment_n_cols,
     partition_groups_for_spillover,
@@ -67,6 +66,7 @@ from phonology_shared.presentation.view_models import (
     summarize_feature_query,
     summarize_segment_selection,
 )
+from phonology_shared.theory import FeatureEngine
 
 _engine: FeatureEngine | None = None
 _inventory_name: str = ""

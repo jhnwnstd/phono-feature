@@ -23,14 +23,14 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.theory.feature_engine import FeatureEngine
-from phonology_shared.data.inventory import Inventory
 from phonology_shared.chart.vowels import (
     VowelProfile,
     compute_placements,
     detect_vowel_profile,
     vowel_grid_pos,
 )
+from phonology_shared.data.inventory import Inventory
+from phonology_shared.theory.feature_engine import FeatureEngine
 
 INVENTORIES_DIR = (
     Path(__file__).resolve().parents[2] / "desktop" / "inventories"

@@ -35,12 +35,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_shared.presentation.constants import BTN_W
-from phonology_shared.presentation.layout import (
-    REGION_CONSTRAINTS,
-    VOWEL_PAIR_GAP_PX,
-)
-from phonology_shared.presentation.palette import C
 from phonology_shared.chart.vowels import (
     COL_LABELS,
     ROW_LABELS,
@@ -55,6 +49,12 @@ from phonology_shared.chart.vowels import (
     detect_vowel_profile,
     vowel_trapezoid_corners,
 )
+from phonology_shared.presentation.constants import BTN_W
+from phonology_shared.presentation.layout import (
+    REGION_CONSTRAINTS,
+    VOWEL_PAIR_GAP_PX,
+)
+from phonology_shared.presentation.palette import C
 
 # Re-exports preserved for any external importer that read these
 # from vowel_chart directly. Canonical definitions live in

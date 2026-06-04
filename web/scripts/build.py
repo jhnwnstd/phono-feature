@@ -203,7 +203,7 @@ def generate_theme_css() -> None:
         return out
 
     lines: list[str] = [
-        "/* AUTO-GENERATED from shared/src/phonology_shared/render/palette.py",
+        "/* AUTO-GENERATED from shared/src/phonology_shared/presentation/palette.py",
         " * by web/scripts/build.py. Do not edit by hand. */",
     ]
     lines.extend(block(":root", palette.LIGHT))
@@ -442,7 +442,7 @@ def generate_layout_css() -> None:
     print("Generating layout.css from layout.py...")
     mod = _load_layout_module()
     lines: list[str] = [
-        "/* AUTO-GENERATED from shared/src/phonology_shared/render/layout.py",
+        "/* AUTO-GENERATED from shared/src/phonology_shared/presentation/layout.py",
         " * by web/scripts/build.py. Do not edit by hand. */",
         ":root {",
         # Pane-width thresholds.
@@ -550,32 +550,34 @@ def generate_layout_css() -> None:
 
 
 def write_python_bundle() -> None:
-    """Pack engine + relayed renderer + api.py into
-    ``python_bundle.zip`` and mount via zipimport at runtime.
+    """Pack the shared package + api.py into ``python_bundle.zip``
+    and mount via zipimport at runtime.
 
     One binary fetch + one ``writeFile`` instead of fetch +
     JSON.parse + N writeFiles. Compressed on the wire via
-    ZIP_DEFLATED even without server gzip. Loose copies of the
-    sources are removed after bundling.
+    ZIP_DEFLATED even without server gzip. The loose ``dist/shared``
+    tree is removed after bundling so only the zip ships.
 
-    Zip layout (packages mounted under a single namespace so one
-    sys.path entry suffices)::
+    Zip layout (single namespace, one sys.path entry suffices)::
 
         phonology_shared/__init__.py
-        phonology_shared/engine/__init__.py
-        phonology_shared/engine/inventory.py
+        phonology_shared/data/__init__.py
+        phonology_shared/data/inventory.py
+        phonology_shared/theory/feature_engine.py
+        phonology_shared/chart/consonants.py
+        phonology_shared/chart/vowels.py
+        phonology_shared/presentation/palette.py
         ...
-        phonology_shared/render/analysis.py
-        ...
+        phonology_shared/editor/grid.py
+        phonology_shared/editor/setup.py
         api.py
     """
     print("Bundling Python sources into zip...")
     out = DIST / "python_bundle.zip"
+    shared_root = DIST / "shared"
     entries: list[tuple[str, Path]] = []
-    for path in sorted((DIST / "engine").rglob("*.py")):
-        entries.append((path.relative_to(DIST / "engine").as_posix(), path))
-    for path in sorted((DIST / "render").rglob("*.py")):
-        entries.append((path.relative_to(DIST / "render").as_posix(), path))
+    for path in sorted(shared_root.rglob("*.py")):
+        entries.append((path.relative_to(shared_root).as_posix(), path))
     entries.append(("api.py", DIST / "api.py"))
 
     with zipfile.ZipFile(
@@ -587,8 +589,7 @@ def write_python_bundle() -> None:
         for zip_path, src in entries:
             zf.write(src, arcname=zip_path)
 
-    shutil.rmtree(DIST / "engine", ignore_errors=True)
-    shutil.rmtree(DIST / "render", ignore_errors=True)
+    shutil.rmtree(shared_root, ignore_errors=True)
     raw = sum(p.stat().st_size for _, p in entries if p.exists())
     print(
         f"  {len(entries)} files, {out.stat().st_size} bytes zip ({raw} raw)"
@@ -923,9 +924,8 @@ def write_pages_no_jekyll() -> None:
 def main() -> int:
     argparse.ArgumentParser(description=__doc__).parse_args()
     clean_dist()
-    copy_engine_sources()
+    copy_shared_sources()
     copy_static_assets()
-    relay_renderer_sources()
     generate_theme_css()
     generate_layout_css()
     copy_inventories()

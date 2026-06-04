@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from phonology_shared.theory.feature_engine import (
-    FeatureCategory,
-    NaturalClassCompletion,
+from phonology_shared.chart.vowels import (
+    build_vowel_chart_geometry,
+    detect_vowel_profile,
 )
 from phonology_shared.presentation.analysis import (
     compute_contrastive,
@@ -30,9 +30,9 @@ from phonology_shared.presentation.constants import (
     MINUS_SIGN,
 )
 from phonology_shared.presentation.layout import distribute_feature_groups
-from phonology_shared.chart.vowels import (
-    build_vowel_chart_geometry,
-    detect_vowel_profile,
+from phonology_shared.theory.feature_engine import (
+    FeatureCategory,
+    NaturalClassCompletion,
 )
 
 if TYPE_CHECKING:

@@ -10,13 +10,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from phonology_shared.theory.feature_engine import FeatureEngine
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.view_models import (
     build_inventory_summary,
     summarize_feature_query,
     summarize_segment_selection,
 )
+from phonology_shared.theory.feature_engine import FeatureEngine
 
 INVENTORIES_DIR = (
     Path(__file__).resolve().parents[2] / "desktop" / "inventories"

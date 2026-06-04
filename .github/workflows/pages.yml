@@ -1,10 +1,11 @@
 name: Deploy web app to GitHub Pages
 
 # Builds web/dist/ on every push to main and publishes it
-# as the GitHub Pages site. The same source files that the desktop
-# app uses (engine + renderer) get bundled into the deploy, so
-# edits land in both places on next push. PRs run the build + smoke
-# without deploying, so regressions fail pre-merge.
+# as the GitHub Pages site. The same shared package the desktop
+# app uses (data / theory / chart / presentation / editor) gets
+# bundled into the deploy, so edits land in both places on next
+# push. PRs run the build + smoke without deploying, so regressions
+# fail pre-merge.
 
 on:
   push:
@@ -50,9 +51,9 @@ jobs:
         run: python web/scripts/build.py
 
       # Headless browser smoke over the built site; catches Pyodide
-      # micropip wheel-resolution drift, engine API changes the bridge
-      # missed, and JS regressions pytest can't see. See web/scripts/smoke.py
-      # for the asserted coverage.
+      # micropip wheel-resolution drift, shared-package API changes
+      # the bridge missed, and JS regressions pytest can't see. See
+      # web/scripts/smoke.py for the asserted coverage.
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:

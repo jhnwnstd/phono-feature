@@ -18,8 +18,6 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.theory.feature_engine import FeatureEngine
-from phonology_shared.theory.geometry import GeometryAnalyzer
 from phonology_shared.data.inventory import (
     AliasCollisionError,
     Inventory,
@@ -27,6 +25,8 @@ from phonology_shared.data.inventory import (
     atomic_write_json,
     normalize_feature_bundle,
 )
+from phonology_shared.theory.feature_engine import FeatureEngine
+from phonology_shared.theory.geometry import GeometryAnalyzer
 
 from .conftest import close_builder_silent
 
@@ -1397,8 +1397,8 @@ def test_analysis_tag_escapes_html_in_text() -> None:
 def test_analysis_render_single_segment_escapes_symbol() -> None:
     """The segment symbol is interpolated into the bold header
     outside the tag chip, so it has its own escape call."""
-    from phonology_shared.theory.feature_engine import NaturalClassCompletion
     from phonology_shared.presentation.analysis import render_single_segment
+    from phonology_shared.theory.feature_engine import NaturalClassCompletion
 
     completion = NaturalClassCompletion(
         status="already_natural_class",

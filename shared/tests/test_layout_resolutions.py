@@ -776,8 +776,8 @@ def _consonant_group_sizes(name: str) -> list[int]:
     """Per-manner-class consonant counts for an inventory, excluding
     the ``vowels`` group. Mirrors the data the segment grid actually
     lays out (vowels go to the separate chart, not the grid)."""
-    from phonology_shared.theory.feature_engine import FeatureEngine
     from phonology_shared.data.inventory import Inventory
+    from phonology_shared.theory.feature_engine import FeatureEngine
 
     data = _load_inventory(f"{name}_features")
     inv = Inventory.parse(data)
@@ -793,9 +793,9 @@ def _feature_card_rows(name: str) -> tuple[list[str], list[int]]:
     """Per-card row counts for an inventory's feature panel,
     bucketed via the FEATURE_GROUPS constant the way
     ``view_models._grouped_features`` does it."""
-    from phonology_shared.theory.feature_engine import FeatureEngine
     from phonology_shared.data.inventory import Inventory
     from phonology_shared.presentation.constants import FEATURE_GROUPS
+    from phonology_shared.theory.feature_engine import FeatureEngine
 
     data = _load_inventory(f"{name}_features")
     inv = Inventory.parse(data)

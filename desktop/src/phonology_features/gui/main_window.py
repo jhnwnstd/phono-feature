@@ -75,7 +75,6 @@ from phonology_features.gui.widgets import (
     SegmentGridWidget,
     SegmentState,
 )
-from phonology_shared.theory.feature_engine import FeatureEngine
 from phonology_shared.data.inventory import Inventory, ValidationError
 from phonology_shared.presentation import layout
 from phonology_shared.presentation.analysis import render_validation_report
@@ -107,6 +106,7 @@ from phonology_shared.presentation.view_models import (
     summarize_feature_query,
     summarize_segment_selection,
 )
+from phonology_shared.theory.feature_engine import FeatureEngine
 
 if TYPE_CHECKING:
     from phonology_features.gui.builder import InventoryBuilder

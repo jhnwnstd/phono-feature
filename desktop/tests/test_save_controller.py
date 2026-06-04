@@ -20,8 +20,8 @@ from phonology_features.gui.builder import (
     save_controller as save_controller_module,
 )
 from phonology_features.gui.builder.save_controller import _SaveController
-from phonology_shared.theory.feature_engine import FeatureEngine
 from phonology_shared.data.inventory import Inventory
+from phonology_shared.theory.feature_engine import FeatureEngine
 
 INVENTORIES_DIR = Path(__file__).resolve().parents[1] / "inventories"
 

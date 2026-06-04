@@ -4,12 +4,12 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import QTableWidgetItem
 
-from phonology_shared.presentation import palette
 from phonology_shared.editor.grid import (
     MINUS_DISPLAY,
     MINUS_SERIALIZED,
     cycle_value,
 )
+from phonology_shared.presentation import palette
 from phonology_shared.presentation.palette import C
 
 # Re-export so existing ``from .grid import cycle_value`` call sites

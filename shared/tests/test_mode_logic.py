@@ -8,13 +8,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from phonology_shared.theory.feature_engine import FeatureEngine
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.mode_logic import (
     Mode,
     mode_status_text,
     project_mode_transition,
 )
+from phonology_shared.theory.feature_engine import FeatureEngine
 
 INVENTORIES_DIR = (
     Path(__file__).resolve().parents[2] / "desktop" / "inventories"

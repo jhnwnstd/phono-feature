@@ -128,11 +128,12 @@ jobs:
         run: pytest -v
 
       - name: Run shared-package pytest in the same venv
-        # Engine + render are the single source of truth shared
-        # with the web build; a regression here breaks both
-        # downstream consumers. Runs on every OS because inventory
-        # I/O touches platform-divergent paths (atomic-replace
-        # semantics, BOM handling, line endings).
+        # The shared package (data / theory / chart / presentation /
+        # editor) is the single source of truth shared with the web
+        # build; a regression here breaks both downstream consumers.
+        # Runs on every OS because inventory I/O touches platform-
+        # divergent paths (atomic-replace semantics, BOM handling,
+        # line endings).
         working-directory: shared
         shell: bash
         run: pytest -v
@@ -143,9 +144,9 @@ jobs:
         run: pytest -v
 
       - name: Build web artifact (Linux)
-        # Exercise web/scripts/build.py at PR time so relay-source or
-        # inventory renames fail here instead of leaving main red after
-        # merge. Reuses the launcher's venv; no second install.
+        # Exercise web/scripts/build.py at PR time so shared-source
+        # or inventory renames fail here instead of leaving main red
+        # after merge. Reuses the launcher's venv; no second install.
         if: runner.os == 'Linux'
         working-directory: ${{ github.workspace }}
         shell: bash
