@@ -95,6 +95,11 @@ class VowelChartWidget(QWidget):
     _COL_HEADER_H: ClassVar[int] = 18
     _PAD_R: ClassVar[int] = 12
     _PAD_B: ClassVar[int] = 10
+    # Pixel gap between a row label's right edge and the silhouette's
+    # slanted left edge at that row. Loose enough that the label and
+    # the trapezoid read as separate elements; web mirrors this via
+    # the ``--space-md`` token in ``style.css``.
+    _ROW_LABEL_GAP_PX: ClassVar[int] = 10
 
     def __init__(
         self, parent: QWidget | None = None, *, btn_gap: int = 4
@@ -397,12 +402,26 @@ class VowelChartWidget(QWidget):
             px = dx + int(x * dw) - lw // 2
             lbl.move(px, self._TITLE_H)
         # Row labels: positioned at chart_y, right-aligned against
-        # the data area's left edge.
+        # the silhouette's slanted left edge at this row so the label
+        # follows the trapezoid inward as it shrinks. Falls back to
+        # the data area's left gutter when no silhouette has been
+        # rendered yet. The gap keeps the label off the slant stroke
+        # so the two read as separate elements; web mirrors the value
+        # in style.css.
+        sil = self._silhouette
+        label_gap_px = self._ROW_LABEL_GAP_PX
         for lbl, y in self._row_labels:
             lbl.adjustSize()
             lh = lbl.height()
             py = dy + int(y * dh) - lh // 2
-            px = dx - lbl.width() - 4
+            if sil is not None and sil.bottom_y > sil.top_y:
+                t = (y - sil.top_y) / (sil.bottom_y - sil.top_y)
+                t = max(0.0, min(1.0, t))
+                left_norm = sil.top_left + (sil.bottom_left - sil.top_left) * t
+                anchor_x = dx + int(left_norm * dw)
+            else:
+                anchor_x = dx
+            px = anchor_x - lbl.width() - label_gap_px
             lbl.move(max(0, px), py)
         # Cells: position concern (anchor) + display concern (pair
         # shift). ``chart_x`` / ``chart_y`` are the backness anchor

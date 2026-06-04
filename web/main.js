@@ -1184,18 +1184,14 @@ function _buildVowelChart(chart) {
     });
     chartEl.appendChild(headersEl);
 
-    // Row labels column. One label per populated height tier,
-    // positioned absolutely at the row's chart_y so each label
-    // sits vertically aligned with its data cells.
+    // Row labels: emitted into the data area below so each label can
+    // sit just outside the silhouette's SLANTED left edge at its
+    // chart_y -- following the trapezoid inward as it shrinks. The
+    // empty placeholder in grid column 1 keeps the chart's left
+    // gutter wide enough to host the label text (which overflows
+    // leftward out of the data area into this reserved track).
     const labelsEl = document.createElement("div");
     labelsEl.className = "vowel-chart-row-labels";
-    for (const row of chart.rows) {
-        const rowLabel = document.createElement("div");
-        rowLabel.className = "vowel-chart-row-label";
-        rowLabel.textContent = row.label;
-        rowLabel.style.top = (row.chart_y * 100) + "%";
-        labelsEl.appendChild(rowLabel);
-    }
     chartEl.appendChild(labelsEl);
 
     // Trapezoid data area. The CSS pseudo-element draws the
@@ -1230,6 +1226,36 @@ function _buildVowelChart(chart) {
         setVar("top-right", sil.top_right);
         setVar("bottom-left", sil.bottom_left);
         setVar("bottom-right", sil.bottom_right);
+    }
+    // Per-row labels go INSIDE the data area so the slanted left
+    // edge is the natural alignment reference (``right: 100%`` is
+    // the data area's right edge; ``right: calc(100% - L%)`` puts
+    // the label's right edge at fraction ``L`` from the left, i.e.
+    // on the silhouette's left edge at this row). Labels overflow
+    // leftward out of the data area into the empty labels gutter
+    // (``.vowel-chart-row-labels`` in grid column 1), so the
+    // reserved track keeps them legible.
+    const silTopY = sil ? sil.top_y : 0;
+    const silBotY = sil ? sil.bottom_y : 1;
+    const silTopLeft = sil ? sil.top_left : 0;
+    const silBotLeft = sil ? sil.bottom_left : 0;
+    const silSpanY = silBotY - silTopY;
+    for (const row of chart.rows) {
+        const rowLabel = document.createElement("div");
+        rowLabel.className = "vowel-chart-row-label";
+        rowLabel.textContent = row.label;
+        let leftNorm;
+        if (silSpanY > 0) {
+            const t = Math.min(
+                1, Math.max(0, (row.chart_y - silTopY) / silSpanY)
+            );
+            leftNorm = silTopLeft + (silBotLeft - silTopLeft) * t;
+        } else {
+            leftNorm = 0;
+        }
+        rowLabel.style.setProperty("--row-y", String(row.chart_y));
+        rowLabel.style.setProperty("--row-left", leftNorm.toFixed(5));
+        dataEl.appendChild(rowLabel);
     }
     for (const cell of chart.cells) {
         // Multiple vowels can map to the same chart cell (the
