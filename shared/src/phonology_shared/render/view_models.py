@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from phonology_shared.engine.feature_engine import FeatureCategory
+from phonology_shared.engine.feature_engine import (
+    FeatureCategory,
+    NaturalClassCompletion,
+)
 from phonology_shared.render.analysis import (
     compute_contrastive,
     render_class_tab_feat,
@@ -85,9 +88,12 @@ def summarize_segment_selection(
     default_seg_states = _default_segment_states(engine)
     default_feat_rows = _default_feature_rows(engine)
     if not segs:
+        empty_completion = engine.complete_to_minimal_natural_class([])
         return {
             "analysis_html": "",
-            "analysis_tabs": _seg_tabs(engine, [], {}, {}, []),
+            "analysis_tabs": _seg_tabs(
+                engine, [], {}, {}, empty_completion
+            ),
             "selected": [],
             "suggested": [],
             "common": {},
@@ -97,6 +103,7 @@ def summarize_segment_selection(
         }
     if len(segs) == 1:
         feats = engine.get_segment_features(segs[0])
+        completion = engine.complete_to_minimal_natural_class(list(segs))
         categories = engine.feature_categories(segs)
         row_states = _default_feature_rows(engine)
         for feat in engine.features:
@@ -110,14 +117,24 @@ def summarize_segment_selection(
                 )
         seg_states = _default_segment_states(engine)
         seg_states[segs[0]] = "selected"
+        # ``additions`` is tuple-of-tuples (one tuple per distinct
+        # minimum completion). The strict-bundle solver always
+        # returns a single completion, so the seg-pane "suggested"
+        # highlight flattens additions[0] onto the seg states.
+        suggested_segs = (
+            completion.additions[0] if completion.additions else ()
+        )
+        for seg in suggested_segs:
+            if seg_states.get(seg) == "default":
+                seg_states[seg] = "suggested"
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
         return {
             "analysis_html": render_single_segment(
-                engine, segs[0], dict(feats)
+                segs[0], dict(feats), completion
             ),
-            "analysis_tabs": _seg_tabs(engine, segs, common, {}, []),
+            "analysis_tabs": _seg_tabs(engine, segs, common, {}, completion),
             "selected": list(segs),
-            "suggested": [],
+            "suggested": list(suggested_segs),
             "common": common,
             "contrastive": [],
             "segment_states": seg_states,
@@ -125,7 +142,10 @@ def summarize_segment_selection(
         }
     common = dict(engine.common_features(segs))
     contrastive = compute_contrastive(engine, segs)
-    suggested = list(engine.suggest_natural_class_extension(segs))
+    completion = engine.complete_to_minimal_natural_class(list(segs))
+    suggested = list(
+        completion.additions[0] if completion.additions else ()
+    )
     # Seven-way classification per feature (single source of truth
     # for the semantic state -- see ``FeatureCategory``). The view-
     # model surfaces the category on every row so renderers can
@@ -164,10 +184,10 @@ def summarize_segment_selection(
             segs,
             common,
             contrastive,
-            suggested,
+            completion,
         ),
         "analysis_tabs": _seg_tabs(
-            engine, segs, common, contrastive, suggested
+            engine, segs, common, contrastive, completion
         ),
         "selected": list(segs),
         "suggested": suggested,
@@ -216,7 +236,7 @@ def _seg_tabs(
     segs: list[str],
     common: dict[str, str],
     contrastive: dict[str, dict[str, list[str]]],
-    suggested: list[str],
+    completion: NaturalClassCompletion,
 ) -> dict[str, Any]:
     """Build the per-tab HTML payload for the SEG-mode analysis pane.
 
@@ -229,8 +249,7 @@ def _seg_tabs(
     ``"class_state"`` that colours the Class tab itself: green
     ``"natural"`` when the selection forms a natural class, red
     ``"not_natural"`` when it doesn't, ``"neutral"`` for the empty
-    selection. Colouring the tab replaces the previous "Natural
-    class: Yes/No" body text (same information, less visual noise).
+    selection.
     """
     # Class-tab background colour cue. Single-segment selections stay
     # neutral (white). Every singleton is trivially a "natural class"
@@ -238,13 +257,16 @@ def _seg_tabs(
     # and just adds visual noise on every click. The cue lives on the
     # multi-segment verdict where the answer is genuinely useful.
     if len(segs) >= 2:
-        is_nc, _ = engine.is_natural_class(segs)
-        class_state = "natural" if is_nc else "not_natural"
+        class_state = (
+            "natural"
+            if completion.status == "already_natural_class"
+            else "not_natural"
+        )
     else:
         class_state = "neutral"
     return {
         "selection": render_selection_summary_seg(segs),
-        "class": render_class_tab_seg(engine, segs, suggested),
+        "class": render_class_tab_seg(segs, completion),
         "features": render_features_tab_seg(engine, segs, common),
         "contrasts": render_contrasts_tab_seg(engine, segs, contrastive),
         # Tab enable/disable is mode-driven, not selection-driven. SEG

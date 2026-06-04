@@ -22,10 +22,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 from functools import cached_property
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Literal
 
 from phonology_shared.engine.inventory import (
     VALID_VALUES,
@@ -89,6 +90,74 @@ class FeatureCategory(StrEnum):
     UNDERSPEC_PLUS = "underspec_plus"
     UNDERSPEC_MINUS = "underspec_minus"
     UNDERSPEC_CONFLICT = "underspec_conflict"
+
+
+CompletionStatus = Literal[
+    "already_natural_class",
+    "one_minimal_completion",
+    "multiple_minimal_completions",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class NaturalClassCompletion:
+    """Result of :py:meth:`FeatureEngine.complete_to_minimal_natural_class`.
+
+    Two concepts are kept on a hard API boundary so the UI cannot
+    mistakenly display one as if it were the other:
+
+    * **Concept A — definition of the selected set.** Applies when
+      ``S`` is already a strict natural class. Carried in
+      :py:attr:`selected_minimal_bundles`: the minimal feature
+      bundle(s) ``B`` such that ``find_segments(B) == S``.
+    * **Concept B — completion of the selected set.** Applies when
+      ``S`` is NOT a strict natural class. Carried in
+      :py:attr:`additions`: the smallest addition set(s) ``A`` such
+      that ``S ∪ A`` is a strict natural class.
+
+    The field names enforce the boundary. ``selected_minimal_bundles``
+    describes ``S`` itself; ``completed_class_bundles`` describes
+    ``S ∪ A`` (the completion). UI code that displays
+    ``completed_class_bundles`` on a not-a-natural-class verdict
+    would be a misuse: the original ``S`` does NOT have a minimal
+    specification when the verdict is "No".
+
+    :py:attr:`status` discriminates the three outcomes:
+
+    * ``"already_natural_class"``: only
+      :py:attr:`selected_minimal_bundles` is populated. The other
+      fields are empty.
+    * ``"one_minimal_completion"``: :py:attr:`additions` has one
+      element (the single distinct minimum addition set), and
+      :py:attr:`completed_class_bundles` parallel to it carries the
+      equivalent minimal specs for that one completed class.
+      :py:attr:`selected_minimal_bundles` is empty.
+    * ``"multiple_minimal_completions"``: :py:attr:`additions`
+      carries more than one distinct minimum addition set, and
+      :py:attr:`completed_class_bundles` is parallel to it
+      (``completed_class_bundles[i]`` describes
+      ``S ∪ additions[i]``). Strict-bundle semantics make this
+      branch unreachable from the present solver, but the type
+      keeps the model general so a future algorithm change cannot
+      silently violate the contract.
+
+    The universal class (whole inventory, empty bundle) is always
+    a valid containing natural class, so :py:attr:`additions` is
+    non-empty whenever the verdict is "No" — the solver never
+    fails to find a completion.
+
+    All tuples and inner mappings are read-only. The shape outside
+    the dataclass is::
+
+        additions:                tuple of (segment-tuple) per completion
+        completed_class_bundles:  tuple of (bundle-tuple) per completion
+        selected_minimal_bundles: tuple of bundles for S (only when NC)
+    """
+
+    status: CompletionStatus
+    selected_minimal_bundles: tuple[Mapping[str, str], ...]
+    additions: tuple[tuple[str, ...], ...]
+    completed_class_bundles: tuple[tuple[Mapping[str, str], ...], ...]
 
 
 class FeatureEngine:
@@ -206,11 +275,7 @@ class FeatureEngine:
         decision question directly using the precomputed membership
         sets. Complexity is ``O(F + O*C)`` where F = features,
         O = outside segments, C = candidate (feature, value) pairs
-        -- never exponential, no backtracking. The hot consumer is
-        :py:meth:`suggest_natural_class_extension` which probes up to
-        2000 hypothetical segment unions per user click; calling the
-        full enumeration there made selection lag perceptible in
-        Pyodide on inventories of ~140 segments.
+        -- never exponential, no backtracking.
 
         Theory: under strict matching, a feature is a candidate for
         the bundle iff every selected segment has the **same
@@ -273,11 +338,10 @@ class FeatureEngine:
         Default is strict equality (the same matching rule the
         user-typed feat->seg query uses). With
         ``underspec_compatible=True``, the segment's ``'0'`` is
-        treated as wildcard via :py:meth:`_feat_match`. The
-        underspec path's only current consumer is
-        :py:meth:`suggest_natural_class_extension`, which uses it
-        to gather the candidate extending segments that don't
-        explicitly disagree with the selection's common features.
+        treated as wildcard via :py:meth:`_feat_match`. No engine
+        method currently uses the underspec path; it is kept on
+        the public API for callers that want to gather a candidate
+        pool of segments not in explicit disagreement with a query.
         """
         match = self._feat_match if underspec_compatible else None
         matching = []
@@ -397,10 +461,9 @@ class FeatureEngine:
         ``'-'``. The GUI's feat-to-seg query mode uses this default,
         so a query ``{Syllabic: '-', Strident: '+'}`` returns only
         segments that are explicitly ``-syllabic`` AND explicitly
-        ``+strident``. ``underspec_compatible=True`` is reached
-        only by :py:meth:`suggest_natural_class_extension` to
-        enumerate extending candidates; the natural-class engine
-        itself (:py:meth:`find_all_minimal_bundles`,
+        ``+strident``. ``underspec_compatible=True`` is a public
+        relaxation path with no current internal consumer; the
+        natural-class engine itself (:py:meth:`find_all_minimal_bundles`,
         :py:meth:`_is_natural_class_bool`) does not call this
         method and runs entirely on the precomputed +/- membership
         sets.
@@ -443,7 +506,7 @@ class FeatureEngine:
         ``'0'`` on a feature that would otherwise be discriminating;
         the user-facing UI presents these as "not a natural class"
         and surfaces a suggested completion via
-        :py:meth:`suggest_natural_class_extension`.
+        :py:meth:`complete_to_minimal_natural_class`.
 
         Return shape is ``tuple[Mapping[str, str], ...]``: a tuple
         of read-only views. The same object is returned across
@@ -744,175 +807,107 @@ class FeatureEngine:
             if v in ("+", "-")
         }
 
-    def suggest_natural_class_extension(
+    def complete_to_minimal_natural_class(
         self, segments: list[str]
-    ) -> list[str]:
-        """The smallest set of segments that, added to ``segments``,
-        completes it into a (strict) natural class.
+    ) -> NaturalClassCompletion:
+        """The smallest strict natural class containing ``segments``.
 
-        Returns ``[]`` when ``segments`` is already a natural class
-        or has no shared +/- features to extend by. Single source
-        of truth for the "N segments needed for natural class" UX
-        hint used by both the desktop and the web bridge.
+        Returns a :py:class:`NaturalClassCompletion`. The two
+        concepts are kept on a hard API boundary by field name:
 
-        Algorithm:
+        * ``already_natural_class`` → ``selected_minimal_bundles``
+          carries the minimal feature bundles of ``S`` (Concept A:
+          definition of the selected set). ``additions`` and
+          ``completed_class_bundles`` are empty.
+        * ``one_minimal_completion`` → ``additions = ((seg, seg, ...),)``
+          carries the segments needed to complete ``S`` into a
+          strict natural class (Concept B). ``completed_class_bundles[0]``
+          carries the minimal specs that characterise ``S ∪ additions[0]``
+          (engine-internal proof artefact; the UI rule is to NOT
+          display these on the not-a-natural-class verdict).
+          ``selected_minimal_bundles`` is empty because ``S`` is not
+          itself a natural class.
 
-        1. If ``S`` is already a strict natural class, return ``[]``.
-        2. Compute ``common`` = the strictly-shared +/- features of
-           ``S`` (every selected segment has the same explicit value
-           on each feature in ``common``).
-        3. Enumerate candidates: segments outside ``S`` whose
-           feature bundle is compatible with ``common`` under
-           underspec-compatible matching (i.e. don't explicitly
-           disagree with any feature in ``common``).
-        4. Search subsets of candidates in ascending size order;
-           return the first subset whose union with ``S`` forms a
-           strict natural class.
+        The third status ``multiple_minimal_completions`` is part of
+        the contract for general correctness but is unreachable from
+        the present solver: under strict-bundle semantics the
+        minimum addition set is provably unique. See
+        :py:class:`NaturalClassCompletion`.
 
-        The strict natural-class test (step 4) is the same predicate
-        the typed feat->seg query uses, so any non-empty completion
-        returned here, added to ``S``, yields a set that a typed
-        bundle can characterise exactly.
+        **Algorithm.** Intersect the constraint-sets of every
+        strict-shared candidate constraint:
 
-        Strict semantics throughout: ``common_features`` treats
-        ``'0'`` cells as disqualifying for shared values, and
-        :py:meth:`_is_natural_class_bool` (the inner test) treats
-        ``'0'`` outsiders as not-matched by ``+`` or ``-`` specs.
-        Underspec-compatible matching appears once, in step 3, only
-        to bound the candidate pool: a segment that explicitly
-        disagrees with ``common`` cannot complete the class.
+            ``smallest_class = ∩ {plus_segs[f] | S ⊆ plus_segs[f]}``
+            ``                  ∩ {minus_segs[f] | S ⊆ minus_segs[f]}``
 
-        Search budget: caps at 2000 inner tests so a pathological
-        candidate pool doesn't hang the UI; falls back to the full
-        candidate list in that case (a conservative overestimate,
-        never wrong).
+        ``additions = smallest_class - S``. Minimal specs of the
+        completed class are recovered by
+        :py:meth:`find_all_minimal_bundles` on ``smallest_class``.
+
+        **Guaranteed exact.** No search budget, no fallback. The
+        universal class (empty bundle, whole inventory) is itself
+        a strict natural class containing any selection, so when
+        no candidate constraints exist the function returns the
+        universal completion exactly rather than degrading.
+
+        **Cost.** One ``find_all_minimal_bundles`` call on ``S``
+        (the already-NC fast path), an ``O(F)`` intersection over
+        features, and one ``find_all_minimal_bundles`` call on
+        the completed class. No exponential subset enumeration.
         """
-        from itertools import combinations
-
-        # Fast path #1: boolean check, skips the exponential-worst-case
-        # minimal-bundle enumeration that ``find_all_minimal_bundles``
-        # would otherwise run. Multi-hundred-millisecond Pyodide lag
-        # on 10+ segment selections originated here.
-        if self._is_natural_class_bool(segments):
-            return []
-        common = self.common_features(segments)
-        if not common:
-            return []
-        selected: frozenset[str] = frozenset(segments)
-        candidates = [
-            s
-            for s in self.find_segments(common, underspec_compatible=True)
-            if s not in selected
-        ]
-        if not candidates:
-            return []
-
-        # Fast path #2: precompute the S-dependent state once. Every
-        # combo probe operates on the same base selection, so the
-        # candidates of S and the outside of S are stable across
-        # combos. The per-combo cost collapses to set algebra over
-        # precomputed members.
-        #
-        # Strict semantics: a feature is a candidate iff every
-        # selected segment has the same explicit value on it (no
-        # ``'0'`` cells in the selection). Adding combo to S can
-        # only INVALIDATE existing candidates (combo introduces a
-        # disagreeing value); it cannot PROMOTE a feature where S
-        # already has a ``'0'`` cell, because combo doesn't change
-        # S's ``'0'`` status. So the per-feature candidacy collapses
-        # to just two categories: ``plus_cand`` and ``minus_cand``.
+        if not segments:
+            return NaturalClassCompletion(
+                status="already_natural_class",
+                selected_minimal_bundles=(_EMPTY_BUNDLE,),
+                additions=(),
+                completed_class_bundles=(),
+            )
+        seg_map = self._inventory.segments
+        for seg in segments:
+            if seg not in seg_map:
+                raise ValueError(f"Segment '{seg}' not in inventory")
+        own_bundles = self.find_all_minimal_bundles(segments)
+        if own_bundles:
+            return NaturalClassCompletion(
+                status="already_natural_class",
+                selected_minimal_bundles=own_bundles,
+                additions=(),
+                completed_class_bundles=(),
+            )
+        # ``S`` is not a strict NC. Build the smallest strict NC
+        # containing it by intersecting every selection-safe
+        # constraint set. An empty constraint set leaves
+        # ``smallest_class`` at ``_all_segments`` (the universal
+        # class), which is itself always a valid containing NC.
+        selected = frozenset(segments)
         plus_segs = self.plus_segs
         minus_segs = self.minus_segs
-        base_outside = self._all_segments - selected
-        base_plus_candidates: list[tuple[str, frozenset[str]]] = []
-        base_minus_candidates: list[tuple[str, frozenset[str]]] = []
-        for feat in self._inventory.features:
-            # Strict +/- candidacy: selected fully in plus_segs[f]
-            # or fully in minus_segs[f] (no '0' members).
-            if selected <= plus_segs[feat]:
-                # Strict excludes set for (f, +): outside not
-                # explicitly +. Includes both '-' and '0' outside.
-                base_plus_candidates.append(
-                    (feat, base_outside - plus_segs[feat])
-                )
-            elif selected <= minus_segs[feat]:
-                base_minus_candidates.append(
-                    (feat, base_outside - minus_segs[feat])
-                )
-
-        # Ascending subset size; first valid combination wins. The
-        # full ``candidates`` set is always valid (characterised by
-        # ``common``), so the loop always returns before the fallback.
-        max_search_calls = 2000
-        calls = 0
-        for k in range(1, len(candidates) + 1):
-            for combo in combinations(candidates, k):
-                calls += 1
-                if calls > max_search_calls:
-                    # Pathological pool; fall back to the full
-                    # extension. The "N needed" hint becomes
-                    # conservative (overestimate) but never wrong.
-                    return list(candidates)
-                if self._combo_completes_class(
-                    combo,
-                    base_outside,
-                    base_plus_candidates,
-                    base_minus_candidates,
-                    plus_segs,
-                    minus_segs,
-                ):
-                    return list(combo)
-        # Unreachable in practice — the full extension is always a
-        # valid completion — but return it for safety.
-        return list(candidates)
-
-    @staticmethod
-    def _combo_completes_class(
-        combo: tuple[str, ...],
-        base_outside: frozenset[str],
-        base_plus_candidates: list[tuple[str, frozenset[str]]],
-        base_minus_candidates: list[tuple[str, frozenset[str]]],
-        plus_segs: dict[str, frozenset[str]],
-        minus_segs: dict[str, frozenset[str]],
-    ) -> bool:
-        """Inner test for :py:meth:`suggest_natural_class_extension`.
-
-        ``True`` iff ``S ∪ combo`` is a STRICT natural class given
-        precomputed per-S state. Inline-equivalent to
-        ``_is_natural_class_bool(S + combo)`` but reuses the work
-        that depends only on S -- the candidate (feature, value)
-        pairs and the outside set -- across thousands of combo
-        probes per call. Static so the closure isn't re-bound per
-        outer call.
-
-        Strict survival rule: a plus candidate (f, +) of S stays a
-        plus candidate of S ∪ combo iff combo is also fully in
-        ``plus_segs[f]`` (no combo segment is ``'-'`` OR ``'0'`` on
-        f -- both would disqualify the union from having a uniform
-        explicit value on f).
-        """
-        combo_set = frozenset(combo)
-        union_outside = base_outside - combo_set
-        if not union_outside:
-            return True  # combo absorbs the entire outside
-        covered: set[str] = set()
-        for feat, ex in base_plus_candidates:
-            if not (combo_set <= plus_segs[feat]):
-                continue
-            new = ex - combo_set
-            if new:
-                covered |= new
-                if covered >= union_outside:
-                    return True
-        for feat, ex in base_minus_candidates:
-            if not (combo_set <= minus_segs[feat]):
-                continue
-            new = ex - combo_set
-            if new:
-                covered |= new
-                if covered >= union_outside:
-                    return True
-        return covered >= union_outside
+        smallest_class: frozenset[str] = self._all_segments
+        for feature in self._inventory.features:
+            if selected <= plus_segs[feature]:
+                smallest_class &= plus_segs[feature]
+            elif selected <= minus_segs[feature]:
+                smallest_class &= minus_segs[feature]
+        # Inventory-declaration order so the UI gets a stable,
+        # human-meaningful sequence of additions.
+        additions_set = smallest_class - selected
+        additions_tuple = tuple(s for s in seg_map if s in additions_set)
+        completion_bundles = self.find_all_minimal_bundles(
+            list(smallest_class)
+        )
+        # Under strict-bundle semantics the present solver always
+        # returns exactly one distinct minimum addition set. The
+        # outer-tuple shape leaves room for a generalised algorithm
+        # without re-shaping the public contract; ``additions`` and
+        # ``completed_class_bundles`` are kept parallel so
+        # ``completed_class_bundles[i]`` describes
+        # ``S ∪ additions[i]``.
+        return NaturalClassCompletion(
+            status="one_minimal_completion",
+            selected_minimal_bundles=(),
+            additions=(additions_tuple,),
+            completed_class_bundles=(completion_bundles,),
+        )
 
     def is_natural_class(
         self, segments: list[str]
@@ -929,7 +924,7 @@ class FeatureEngine:
 
         Returns ``(False, ())`` when no strict bundle exists. The
         UI presents these as "not a natural class" and offers the
-        :py:meth:`suggest_natural_class_extension` completion --
+        :py:meth:`complete_to_minimal_natural_class` completion --
         the smallest set of segments to add so the union does form
         a strict natural class.
 

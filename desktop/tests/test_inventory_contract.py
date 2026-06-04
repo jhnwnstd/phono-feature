@@ -1399,29 +1399,16 @@ def test_analysis_tag_escapes_html_in_text() -> None:
 def test_analysis_render_single_segment_escapes_symbol() -> None:
     """The segment symbol is interpolated into the bold header
     outside the tag chip, so it has its own escape call."""
-    from typing import ClassVar
-
+    from phonology_shared.engine.feature_engine import NaturalClassCompletion
     from phonology_shared.render.analysis import render_single_segment
 
-    class _FakeEngine:
-        features: tuple[str, ...] = ("Voice",)
-        segments: ClassVar[dict] = {"<x>": {"Voice": "+"}}
-
-        def is_natural_class(self, segs):
-            return False, []
-
-        def find_segments(self, *args, **kwargs):
-            return []
-
-    # The renderer treats ``engine`` as duck-typed for testability:
-    # it only ever reads ``segments``. Compound ignore: from app/
-    # mypy sees no mismatch (so unused-ignore would fire); from the
-    # repo root the path resolution surfaces the type error.
-    out = render_single_segment(
-        _FakeEngine(),  # type: ignore[arg-type,unused-ignore]
-        "<x>",
-        {"Voice": "+"},
+    completion = NaturalClassCompletion(
+        status="already_natural_class",
+        selected_minimal_bundles=(),
+        additions=(),
+        completed_class_bundles=(),
     )
+    out = render_single_segment("<x>", {"Voice": "+"}, completion)
     assert "/<x>/" not in out
     assert "/&lt;x&gt;/" in out
 

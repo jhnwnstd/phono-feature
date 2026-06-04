@@ -26,7 +26,10 @@ from phonology_shared.render.mode_logic import VALIDATION_REPORT_HEADING
 from phonology_shared.render.palette import C
 
 if TYPE_CHECKING:
-    from phonology_shared.engine.feature_engine import FeatureEngine
+    from phonology_shared.engine.feature_engine import (
+        FeatureEngine,
+        NaturalClassCompletion,
+    )
 
 
 # --- chip + paragraph primitives ---------------------------------
@@ -153,8 +156,8 @@ def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
 
 def _render_universal_spec() -> str:
     """Markup for the universal-class spec line, shown when the
-    selected segments cover the whole inventory and the minimal
-    spec is the empty bundle.
+    completed class is the entire inventory and the minimal spec
+    is the empty bundle.
     """
     return (
         f"<p><b>Minimal specification:</b>"
@@ -162,29 +165,19 @@ def _render_universal_spec() -> str:
     )
 
 
-def _single_segment_strict_specs(
-    engine: FeatureEngine,
-    seg: str,
-    feats: Mapping[str, str],
-) -> tuple[bool, tuple[Mapping[str, str], ...]]:
-    """Return ``(is_nc, specs)`` for a single-segment characterization.
+def _render_completion_specs(
+    bundles: Sequence[Mapping[str, str]],
+) -> str:
+    """Render the minimal specs of a completion.
 
-    If ``{seg}`` is itself a strict natural class, returns its
-    minimal specs. Otherwise looks for an equivalence class of
-    segments that match the same nonzero-feature bundle via
-    underspec-compatible matching, and (if more than one was
-    found) returns the strict minimal spec of THAT class. The
-    returned specs are always strict; the underspec-compatible
-    step only widens the candidate set before strict
-    characterization.
+    Dispatches to :py:func:`_render_universal_spec` when the
+    bundle is the universal-class empty bundle, otherwise to
+    :py:func:`_render_spec_list` (which handles the singular vs
+    "Minimal specifications (N)" headings and numbered rows).
     """
-    is_nc, specs = engine.is_natural_class([seg])
-    if not is_nc:
-        non_zero = {feat: val for feat, val in feats.items() if val != "0"}
-        equiv = engine.find_segments(non_zero, underspec_compatible=True)
-        if len(equiv) > 1:
-            is_nc, specs = engine.is_natural_class(equiv)
-    return is_nc, specs
+    if bundles and not bundles[0]:
+        return _render_universal_spec()
+    return _render_spec_list(bundles)
 
 
 def _render_matching_segments(matching: Sequence[str]) -> str:
@@ -254,11 +247,20 @@ def compute_contrastive(
 
 
 def render_single_segment(
-    engine: FeatureEngine,
     seg: str,
     feats: dict[str, str],
+    completion: NaturalClassCompletion,
 ) -> str:
-    """Build HTML for a single selected segment."""
+    """Build HTML for a single selected segment.
+
+    ``completion`` is the precomputed
+    :py:class:`~phonology_shared.engine.feature_engine.NaturalClassCompletion`
+    for ``[seg]``; the renderer dispatches on its status without
+    re-asking the engine. The previous fallback that quietly looked
+    for an underspec-compatible equivalence class is gone -- when
+    ``seg`` is not its own natural class the user now sees the
+    smallest strict completion explicitly.
+    """
     plus_feats = sort_features(
         [feature for feature, value in feats.items() if value == "+"]
     )
@@ -278,12 +280,42 @@ def render_single_segment(
         f"<p>{plus_tags}</p>"
         f"<p>{minus_tags}</p>"
     )
-    is_nc, specs = _single_segment_strict_specs(engine, seg, feats)
-    if is_nc and specs:
-        out += _render_spec_list(specs)
-    else:
-        out += _muted_italic_p("Not uniquely characterizable.")
+    out += _render_completion_body(completion)
     return out
+
+
+def _render_completion_body(completion: NaturalClassCompletion) -> str:
+    """Class-pane content for a single selection's completion.
+
+    Hard concept boundary:
+
+    * ``already_natural_class``: render
+      ``selected_minimal_bundles`` -- the minimal feature spec(s)
+      of the SELECTED set (Concept A).
+    * ``one_minimal_completion`` / ``multiple_minimal_completions``:
+      render the "N segments needed for natural class" chip strip
+      alone (Concept B). ``completed_class_bundles`` is
+      deliberately NOT displayed: it describes the completed class
+      ``S ∪ additions``, not the selected set ``S``, so showing it
+      under a "not a natural class" verdict would conflate the
+      two concepts.
+    """
+    if completion.status == "already_natural_class":
+        return _render_completion_specs(completion.selected_minimal_bundles)
+    # additions is tuple-of-tuples; current solver produces a single
+    # completion, but pick the first defensively if the shape ever
+    # widens.
+    if not completion.additions:
+        return ""
+    additions = completion.additions[0]
+    n = len(additions)
+    chips = " ".join(
+        _segment_chip(seg, TagColor.NEUTRAL) for seg in additions
+    )
+    return (
+        f"<p><b>{n} {_plural(n, 'segment')} needed for natural class:</b></p>"
+        f"<p>{chips}</p>"
+    )
 
 
 def render_multi_segment(
@@ -291,7 +323,7 @@ def render_multi_segment(
     segs: list[str],
     common: dict[str, str],
     contrastive: dict[str, dict[str, list[str]]],
-    suggested: list[str],
+    completion: NaturalClassCompletion,
 ) -> str:
     """Build HTML for multiple selected segments.
 
@@ -301,12 +333,14 @@ def render_multi_segment(
     inventory selected), where the left side reduces to one line.
     """
     seg_tags = " ".join(_segment_chip(seg) for seg in segs)
-    is_nc, specs = engine.is_natural_class(segs)
-    # Universal class = a single empty bundle in specs; it gets the
-    # single-column layout because the spec column reduces to one
-    # line. Everything else stays two-column.
-    is_universal = bool(specs) and not specs[0]
-    nc_html, spec_html = _render_natural_class_verdict(engine, segs, suggested)
+    # Universal-class layout cue: the spec is the empty bundle. The
+    # left column collapses to one line, so render full-width.
+    is_universal = (
+        completion.status == "already_natural_class"
+        and completion.selected_minimal_bundles
+        and not completion.selected_minimal_bundles[0]
+    )
+    nc_html, spec_html = _render_natural_class_verdict(completion)
     common_html = _render_shared_features(common)
     contrast_html = _render_contrast_section(engine, segs, contrastive)
     selected_html = f"<p><b>Selected:</b> {seg_tags}</p>"
@@ -437,36 +471,30 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
 
 
 def _render_natural_class_verdict(
-    engine: FeatureEngine,
-    segs: list[str],
-    suggested: list[str],
+    completion: NaturalClassCompletion,
 ) -> tuple[str, str]:
-    """Return ``(verdict_html, spec_html)``. ``spec_html`` is empty
-    for a No verdict (no minimal bundle to show)."""
-    is_nc, specs = engine.is_natural_class(segs)
-    if is_nc:
+    """Return ``(verdict_html, spec_html)`` from the completion.
+
+    For ``already_natural_class``, ``spec_html`` is the minimal
+    feature spec(s) of the selection. For both completion statuses
+    (``one_minimal_completion`` / ``multiple_minimal_completions``)
+    ``spec_html`` is empty: the verdict line carries the chips and
+    the completed-class spec is intentionally suppressed to keep
+    the not-a-natural-class display focused on what to add.
+    """
+    if completion.status == "already_natural_class":
         verdict = f"<p><b>Natural class:</b> {_yes_no(True)}</p>"
-        # Under strict semantics, is_nc == True iff specs is
-        # non-empty. The only sub-case that needs special handling
-        # is the universal class, where specs == (EMPTY_BUNDLE,)
-        # and specs[0] is the empty mapping.
-        if not specs[0]:
-            spec_html = _render_universal_spec()
-        else:
-            spec_html = _render_spec_list(specs)
-        return verdict, spec_html
-    if suggested:
-        suggested_tags = " ".join(
-            _segment_chip(seg, TagColor.NEUTRAL) for seg in suggested
+        return verdict, _render_completion_specs(
+            completion.selected_minimal_bundles
         )
-        n = len(suggested)
-        verdict = (
-            f"<p><b>Natural class:</b> {_yes_no(False)},"
-            f" add {n} {_plural(n, 'segment')} to complete:</p>"
-            f"<p>{suggested_tags}</p>"
-        )
-    else:
-        verdict = f"<p><b>Natural class:</b> {_yes_no(False)}</p>"
+    additions = completion.additions[0] if completion.additions else ()
+    n = len(additions)
+    chips = " ".join(_segment_chip(seg, TagColor.NEUTRAL) for seg in additions)
+    verdict = (
+        f"<p><b>Natural class:</b> {_yes_no(False)},"
+        f" add {n} {_plural(n, 'segment')} to complete:</p>"
+        f"<p>{chips}</p>"
+    )
     return verdict, ""
 
 
@@ -535,49 +563,28 @@ def render_selection_summary_feat(feature_dict: dict[str, str]) -> str:
 
 
 def render_class_tab_seg(
-    engine: FeatureEngine,
     segs: list[str],
-    suggested: list[str],
+    completion: NaturalClassCompletion,
 ) -> str:
     """Class tab content for SEG mode.
 
-    The "is this a natural class?" verdict is no longer shown as
-    Yes/No text. The surrounding tab colour conveys that (driven
-    by ``analysis_tabs.class_state``). The body now carries only
-    the substantive answer:
+    The Yes/No verdict is no longer shown as text; the surrounding
+    tab colour conveys that (driven by ``analysis_tabs.class_state``).
+    The body carries the substantive answer:
 
-    * Natural class: the minimal feature specifications.
-    * Not a natural class but completable: "N segments needed
-      for natural class:" followed by the chips that would
-      complete it.
-    * Not a natural class and not completable from the current
-      inventory: a muted italic note.
+    * ``already_natural_class``: the minimal feature spec(s) of the
+      selection.
+    * ``one_minimal_completion`` / ``multiple_minimal_completions``:
+      "N segments needed for natural class:" + chips + the minimal
+      spec(s) of the completed class.
+
+    The universal class (whole inventory containment) is always a
+    valid completion, so there is no "no completion possible"
+    fall-through.
     """
     if not segs:
         return _muted_italic_p("Click a segment to inspect it.")
-    if len(segs) == 1:
-        seg = segs[0]
-        feats = engine.get_segment_features(seg)
-        is_nc, specs = _single_segment_strict_specs(engine, seg, feats)
-        if is_nc and specs:
-            return _render_spec_list(specs)
-        return _muted_italic_p("Not uniquely characterizable.")
-    is_nc, specs = engine.is_natural_class(segs)
-    if is_nc:
-        if not specs[0]:
-            return _render_universal_spec()
-        return _render_spec_list(specs)
-    if suggested:
-        chips = " ".join(
-            _segment_chip(seg, TagColor.NEUTRAL) for seg in suggested
-        )
-        n = len(suggested)
-        return (
-            f"<p><b>{n} {_plural(n, 'segment')} needed for natural"
-            f" class:</b></p>"
-            f"<p>{chips}</p>"
-        )
-    return _muted_italic_p("No natural-class completion from this inventory.")
+    return _render_completion_body(completion)
 
 
 def render_class_tab_feat(

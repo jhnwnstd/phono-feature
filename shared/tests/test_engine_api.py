@@ -338,122 +338,107 @@ def test_feature_query_match_is_always_natural_class(
 # ----------------------------------------------------------------------
 
 
-def test_suggest_natural_class_extension_empty_for_natural_class(
+def test_complete_to_minimal_natural_class_empty_input(
     engine: FeatureEngine,
 ) -> None:
-    """A selection that's already a natural class -> empty list.
-
-    /l/ alone is a natural class per ``NATURAL_CLASS_CASES`` above,
-    so the engine should suggest nothing further.
+    """Empty selection: the empty bundle vacuously characterises
+    everything, so the result is ``already_natural_class`` with the
+    empty bundle on ``selected_minimal_bundles``. Pinning this
+    keeps the no-selection UI path from needing a special case.
     """
-    assert engine.suggest_natural_class_extension(["l"]) == []
+    result = engine.complete_to_minimal_natural_class([])
+    assert result.status == "already_natural_class"
+    assert result.additions == ()
+    assert result.completed_class_bundles == ()
+    # selected_minimal_bundles carries the empty (universal) bundle
+    # for the empty selection.
+    assert all(not b for b in result.selected_minimal_bundles)
 
 
-def test_suggest_natural_class_extension_completes_partial(
+def test_complete_to_minimal_natural_class_already_nc(
     engine: FeatureEngine,
 ) -> None:
-    """When the selection isn't a natural class, the engine should
-    suggest the additional segments needed to complete it.
-
-    In this Hayes inventory /b, d, ɡ/ alone aren't a natural class
-    (other voiced stops match the same features); the suggestion
-    must include some of those other voiced stops and never the
-    already-selected segments.
+    """A selection that's already a strict natural class returns
+    ``already_natural_class``. Concept A (definition of S) is
+    carried in ``selected_minimal_bundles``; the completion fields
+    are empty. /l/ alone is a natural class in Hayes.
     """
-    selected = ["b", "d", "ɡ"]
-    suggested = engine.suggest_natural_class_extension(selected)
-    assert suggested, "expected non-empty extension for a partial class"
-    assert not set(suggested) & set(
-        selected
-    ), "suggestion must not re-include selected segments"
+    result = engine.complete_to_minimal_natural_class(["l"])
+    assert result.status == "already_natural_class"
+    assert result.additions == ()
+    assert result.completed_class_bundles == ()
+    assert result.selected_minimal_bundles, (
+        "expected at least one minimal bundle for /l/"
+    )
+    for bundle in result.selected_minimal_bundles:
+        assert set(engine.find_segments(dict(bundle))) == {"l"}
 
 
-def test_suggest_natural_class_extension_empty_input(
+def test_complete_to_minimal_natural_class_validity_invariant(
     engine: FeatureEngine,
 ) -> None:
-    """Empty selection has no features to extend by -> empty list."""
-    assert engine.suggest_natural_class_extension([]) == []
-
-
-def test_suggest_natural_class_extension_completes_to_natural_class(
-    engine: FeatureEngine,
-) -> None:
-    """**Round-trip invariant**: for any non-natural-class selection,
-    the suggested extension MUST actually complete the selection
-    into a natural class. Previously the algorithm returned the
-    maximal extension (segments sharing the strict ``common_features``),
-    but ``is_natural_class`` uses underspec-compatible matching that
-    can find tighter bundles closing the class with a SMALLER subset.
-    The function now searches for the minimum subset and returns it;
-    this test pins that adding the suggestion always closes the class.
+    """**Validity invariant**: for any non-NC selection, every
+    ``additions[i]`` set must, when added to ``S``, form a strict
+    natural class; and every bundle in ``completed_class_bundles[i]``
+    must characterise exactly that completed class. This pins the
+    bug the old ``suggest_natural_class_extension`` had: a budget-
+    exhausted fallback returned a list of candidates that did NOT
+    actually close the class.
     """
-    cases = [
-        ["b", "d", "ɡ"],
-        ["p", "t", "k"],
-        ["m", "n"],
-    ]
-    for selected in cases:
-        # Skip cases where any segment is missing from the test
-        # inventory (the fixture inventory varies in conftest).
-        if any(s not in engine.segments for s in selected):
-            continue
-        is_nc_before, _ = engine.is_natural_class(selected)
-        if is_nc_before:
-            continue
-        suggested = engine.suggest_natural_class_extension(selected)
-        assert suggested, f"{selected}: no suggestion but not a natural class"
-        union = selected + list(suggested)
-        is_nc_after, _ = engine.is_natural_class(union)
-        assert is_nc_after, (
-            f"{selected} + suggested {suggested} = {union}; "
-            f"is_natural_class still returns False — algorithm is "
-            f"inconsistent"
-        )
-
-
-def test_suggest_natural_class_extension_perf_floor(
-    engine: FeatureEngine,
-) -> None:
-    """Perf-regression guard for the fast path in
-    :py:meth:`suggest_natural_class_extension`. Before the fast path
-    a 50-segment selection on Hayes ran at ~330 ms; the precomputed
-    incremental candidate filter brings it to single-digit ms. The
-    floor here is generous (50 ms on desktop CPython) so it catches
-    a 10x regression while staying noise-tolerant. Skipped if the
-    Hayes inventory isn't present.
-    """
-    import time
+    import random
 
     segs = list(engine.segments)
-    if len(segs) < 50:
-        import pytest
-
-        pytest.skip("fixture inventory too small for the perf floor")
-    # Warm up: load Python bytecode + populate any one-time caches.
-    engine.suggest_natural_class_extension(segs[:5])
-    # Take the best-of-3 to dodge interpreter / GC jitter; the
-    # measurement is interactive responsiveness, not steady-state
-    # throughput.
-    best = float("inf")
-    for _ in range(3):
-        engine._bundle_cache.clear()
-        t0 = time.perf_counter()
-        engine.suggest_natural_class_extension(segs[:50])
-        best = min(best, (time.perf_counter() - t0) * 1000)
-    assert best < 50.0, (
-        f"suggest_natural_class_extension(N=50) took {best:.1f} ms; "
-        f"perf floor is 50 ms (pre-fast-path baseline was ~330 ms). "
-        f"A regression here means each user click in seg-mode will lag."
+    random.seed(42)
+    checked = 0
+    for size in (2, 2, 2, 3, 3, 4):
+        for _ in range(60):
+            S = random.sample(segs, size)
+            if engine.is_natural_class(S)[0]:
+                continue
+            result = engine.complete_to_minimal_natural_class(S)
+            assert result.status in (
+                "one_minimal_completion",
+                "multiple_minimal_completions",
+            )
+            assert result.selected_minimal_bundles == ()
+            # additions and completed_class_bundles are parallel
+            # tuples (one entry per distinct minimum completion).
+            assert len(result.additions) == len(
+                result.completed_class_bundles
+            )
+            for additions, bundles in zip(
+                result.additions, result.completed_class_bundles
+            ):
+                completed = set(S) | set(additions)
+                is_nc, _ = engine.is_natural_class(list(completed))
+                assert is_nc, (
+                    f"{S} + {additions} = {completed} is not a "
+                    f"strict natural class"
+                )
+                for bundle in bundles:
+                    assert (
+                        set(engine.find_segments(dict(bundle)))
+                        == completed
+                    ), (
+                        f"bundle {dict(bundle)} does not characterise "
+                        f"{completed} (S={S}, additions={additions})"
+                    )
+            checked += 1
+    assert checked >= 200, (
+        f"only {checked} non-NC selections sampled; the random seed"
+        f" or inventory has shifted enough that this test no longer"
+        f" exercises the path it was written for"
     )
 
 
-def test_suggest_natural_class_extension_is_minimal(
+def test_complete_to_minimal_natural_class_minimality_invariant(
     engine: FeatureEngine,
 ) -> None:
-    """**Minimality invariant**: the suggested extension must be a
-    minimum-size completion. No PROPER subset of the suggestion
-    should also close the natural class. Pins that the algorithm
-    doesn't over-suggest.
+    """**Minimality invariant**: no proper subset of any
+    ``additions[i]`` can also close the class. The solver intersects
+    all strict-shared constraint sets, which is provably the smallest
+    containing class; this test pins that the implementation matches
+    the proof.
     """
     from itertools import combinations
 
@@ -466,24 +451,119 @@ def test_suggest_natural_class_extension_is_minimal(
             continue
         if engine.is_natural_class(selected)[0]:
             continue
-        suggested = engine.suggest_natural_class_extension(selected)
-        if not suggested:
+        result = engine.complete_to_minimal_natural_class(selected)
+        for additions in result.additions:
+            if len(additions) <= 1:
+                continue
+            smaller = len(additions) - 1
+            for subset in combinations(additions, smaller):
+                union = selected + list(subset)
+                is_nc, _ = engine.is_natural_class(union)
+                assert not is_nc, (
+                    f"{selected}: returned additions {additions} of"
+                    f" size {len(additions)}, but the smaller subset"
+                    f" {list(subset)} already completes the class"
+                )
+
+
+def test_complete_to_minimal_natural_class_universal_fallback(
+    engine: FeatureEngine,
+) -> None:
+    """When no candidate constraint exists (the selected segments
+    share NO explicit +/- feature value), the universal class is the
+    only containing natural class. The solver must return it as an
+    exact ``one_minimal_completion``, with the empty bundle on
+    ``completed_class_bundles[0]`` and ``additions[0]`` equal to
+    ``inventory − S``.
+    """
+    from phonology_shared.engine import Inventory
+
+    # Inventory: a/c are F+, b is F-. Selecting {a, b} disagrees
+    # on F (no shared explicit feature), so there's no candidate
+    # constraint at all. The smallest containing strict NC is the
+    # whole inventory, characterised by the empty bundle.
+    inv = Inventory.parse(
+        {
+            "features": ["F"],
+            "segments": {
+                "a": {"F": "+"},
+                "b": {"F": "-"},
+                "c": {"F": "+"},
+            },
+        }
+    )
+    eng = FeatureEngine(inv)
+    assert not eng.is_natural_class(["a", "b"])[0]
+    result = eng.complete_to_minimal_natural_class(["a", "b"])
+    assert result.status == "one_minimal_completion"
+    assert len(result.additions) == 1
+    assert set(result.additions[0]) == {"c"}
+    assert len(result.completed_class_bundles) == 1
+    assert all(not b for b in result.completed_class_bundles[0])
+
+
+def test_complete_to_minimal_natural_class_completed_bundles_multiplicity(
+    engine: FeatureEngine,
+) -> None:
+    """``completed_class_bundles[0]`` can carry more than one
+    equivalent minimal feature spec for the same completed class
+    (e.g. ``{+dorsal}`` and ``{+back, -high}`` characterising the
+    same segments). This is Concept A applied to ``S ∪ additions``
+    and is an engine-internal artefact: the UI rule is to NOT
+    display these on the not-a-natural-class verdict.
+    """
+    import random
+
+    segs = list(engine.segments)
+    random.seed(43)
+    seen_multi_bundle = False
+    for _ in range(200):
+        S = random.sample(segs, random.choice([2, 3, 4]))
+        result = engine.complete_to_minimal_natural_class(S)
+        if result.status != "one_minimal_completion":
             continue
-        # No PROPER subset of the suggestion should also close the
-        # class. (Subsets of size |suggested| - 1.)
-        if len(suggested) <= 1:
-            # k=1 is trivially minimal; nothing to check.
+        bundles = result.completed_class_bundles[0]
+        if len(bundles) < 2:
             continue
-        smaller_size = len(suggested) - 1
-        for subset in combinations(suggested, smaller_size):
-            union = selected + list(subset)
-            is_nc, _ = engine.is_natural_class(union)
-            assert not is_nc, (
-                f"{selected}: returned {suggested} of size "
-                f"{len(suggested)}, but the smaller subset {list(subset)} "
-                f"already completes the natural class — algorithm is "
-                f"not minimal"
+        completed = set(S) | set(result.additions[0])
+        for bundle in bundles:
+            assert (
+                set(engine.find_segments(dict(bundle))) == completed
             )
+        seen_multi_bundle = True
+        break
+    assert seen_multi_bundle, (
+        "expected at least one completion with multiple equivalent"
+        " minimal specs in 200 random selections on Hayes"
+    )
+
+
+def test_complete_to_minimal_natural_class_perf_floor(
+    engine: FeatureEngine,
+) -> None:
+    """Perf-regression guard. The new solver's cost is dominated by
+    two ``find_all_minimal_bundles`` calls and one ``O(F)`` set
+    intersection, with no exponential subset enumeration. A 50-segment
+    selection on Hayes should complete in well under 50 ms.
+    """
+    import time
+
+    segs = list(engine.segments)
+    if len(segs) < 50:
+        import pytest
+
+        pytest.skip("fixture inventory too small for the perf floor")
+    engine.complete_to_minimal_natural_class(segs[:5])
+    best = float("inf")
+    for _ in range(3):
+        engine._bundle_cache.clear()
+        t0 = time.perf_counter()
+        engine.complete_to_minimal_natural_class(segs[:50])
+        best = min(best, (time.perf_counter() - t0) * 1000)
+    assert best < 50.0, (
+        f"complete_to_minimal_natural_class(N=50) took {best:.1f} ms;"
+        f" perf floor is 50 ms"
+    )
 
 
 # ----------------------------------------------------------------------

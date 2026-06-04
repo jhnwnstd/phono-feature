@@ -87,7 +87,7 @@ def test_summarize_segment_selection_multi_matches_engine() -> None:
     # whole engine semantics rests on.
     is_nc, bundles = engine.is_natural_class(segs + suggested)
     assert is_nc, (
-        f"engine.suggest_natural_class_extension({segs}) returned "
+        f"view_models.summarize_segment_selection({segs}) suggested "
         f"{suggested}, but {segs + suggested} is not a natural class"
     )
     # Strict round-trip: every returned bundle returns exactly the
@@ -165,9 +165,9 @@ def test_feature_row_badge_uses_unicode_minus_for_shared_negative() -> None:
     assert voice["badge"] == "+"
 
 
-def test_suggest_natural_class_blevins_affricate_strict_closure() -> None:
+def test_complete_to_minimal_natural_class_blevins_affricate_strict_closure() -> None:
     """Pinning: under strict natural-class semantics,
-    ``suggest_natural_class_extension([b͡v, d͡z, t͡s])`` returns
+    ``complete_to_minimal_natural_class([b͡v, d͡z, t͡s])`` returns
     a completion that, when added, makes the union a STRICT
     natural class -- i.e. some feature bundle strictly round-trips
     to it via the default ``find_segments``.
@@ -197,21 +197,27 @@ def test_suggest_natural_class_blevins_affricate_strict_closure() -> None:
     # /b͡v d͡z t͡s/ is not a STRICT natural class on its own (some
     # member has '0' on a discriminating feature).
     assert not engine.is_natural_class(selected)[0]
-    suggested = engine.suggest_natural_class_extension(selected)
-    assert suggested, "expected a non-empty completion"
+    completion = engine.complete_to_minimal_natural_class(selected)
+    assert completion.status in (
+        "one_minimal_completion",
+        "multiple_minimal_completions",
+    )
+    assert completion.additions, "expected a non-empty completion"
+    additions = list(completion.additions[0])
     # Closure: the union forms a STRICT natural class and every
     # returned bundle round-trips exactly via find_segments.
-    is_nc, bundles = engine.is_natural_class(selected + suggested)
+    completed = selected + additions
+    is_nc, bundles = engine.is_natural_class(completed)
     assert is_nc
     assert bundles
     for b in bundles:
         recovered = engine.find_segments(dict(b))
-        assert sorted(recovered) == sorted(selected + suggested), (
+        assert sorted(recovered) == sorted(completed), (
             f"bundle {dict(b)} does not strictly round-trip: "
             f"got {recovered}"
         )
-    # Selection itself is never in the suggestion.
-    assert not set(selected) & set(suggested)
+    # Selection itself is never in the additions.
+    assert not set(selected) & set(additions)
 
 
 def test_summarize_feature_query_always_returns_find_segments() -> None:
