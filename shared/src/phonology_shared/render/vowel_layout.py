@@ -83,7 +83,7 @@ or phonologically central mid. Callers should use `confidence`,
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 
 from phonology_shared.render.constants import BTN_W
@@ -1512,36 +1512,11 @@ def build_vowel_chart_geometry(
             )
         )
 
-    # Collision demote: a side-by-side Long-pair cell needs the
-    # full width of its backness-pair slot. When the inventory
-    # populates a sibling cell in the same row + backness slot,
-    # the pair cannot fit at the canonical anchor without
-    # overlapping its sibling. Fall back to a vertical stack so
-    # both cells stay legible at their canonical positions.
-    col_to_slot: dict[int, int] = {
-        0: 0,
-        1: 0,
-        6: 0,
-        2: 1,
-        3: 1,
-        7: 1,
-        4: 2,
-        5: 2,
-        8: 2,
-    }
-    cells_per_row_slot: dict[tuple[int, int], int] = {}
-    for c in cells:
-        key = (c.row, col_to_slot[c.col])
-        cells_per_row_slot[key] = cells_per_row_slot.get(key, 0) + 1
-    cells = [
-        (
-            replace(c, is_long_pair=False)
-            if c.is_long_pair
-            and cells_per_row_slot[(c.row, col_to_slot[c.col])] > 1
-            else c
-        )
-        for c in cells
-    ]
+    # Long pairs always render side-by-side. When the side-by-
+    # side layout pushes the row's total content past the
+    # canonical chart width, the renderer grows the chart slot
+    # to accommodate (see ``natural_data_width_px``); no
+    # demote-to-stack happens at this layer.
 
     # Column headers sit at the silhouette's top edge so they line
     # up with the topmost populated row's cells. Their chart_x is

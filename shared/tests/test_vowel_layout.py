@@ -636,16 +636,16 @@ def test_split_low_by_tense_policy_knob(profile):
     assert paper_strict.row == 6
 
 
-def test_long_pair_demotes_to_stack_when_slot_has_sibling() -> None:
-    """A side-by-side Long-pair cell needs the full width of its
-    backness-pair slot. When the inventory has another segment in
-    the same row + backness slot, the pair cannot fit at the
-    canonical anchor without overlapping its sibling, so the
-    geometry builder demotes the pair to a vertical-stack cell
-    (``is_long_pair=False``).
+def test_long_pair_stays_side_by_side_and_grows_chart() -> None:
+    """A side-by-side Long-pair cell keeps ``is_long_pair=True``
+    even when the inventory populates a sibling in the same
+    backness-pair slot. Instead of demoting the pair to a vertical
+    stack, the builder reports the inventory's expanded natural
+    width via :py:attr:`VowelChartGeometry.natural_data_width_px`;
+    the renderer grows the chart slot to that width so all cells
+    stay legible at their canonical positions.
     """
     from phonology_shared.render.vowel_layout import (
-        VowelProfile,
         build_vowel_chart_geometry,
         detect_vowel_profile,
     )
@@ -657,35 +657,23 @@ def test_long_pair_demotes_to_stack_when_slot_has_sibling() -> None:
         "back": "-",
         "tense": "+",
     }
-    # Lone Long pair: both members share col 0, no sibling at
-    # col 1 -> side-by-side stays.
-    feats_alone = {
+    feats = {
         "i": {**common, "round": "-", "long": "-"},
         "iː": {**common, "round": "-", "long": "+"},
-    }
-    profile = detect_vowel_profile(list(feats_alone), feats_alone)
-    g = build_vowel_chart_geometry(list(feats_alone), profile, feats_alone)
-    pair_cell = next(c for c in g.cells if set(c.entries) == {"i", "iː"})
-    assert pair_cell.is_long_pair is True
-
-    # Add a sibling at col 1 (the rounded mate's slot) and the pair
-    # demotes to a vertical stack so /y/ has its own legible
-    # position.
-    feats_with_sibling = {
-        **feats_alone,
         "y": {**common, "round": "+", "long": "-"},
     }
-    profile = detect_vowel_profile(
-        list(feats_with_sibling), feats_with_sibling
-    )
-    g = build_vowel_chart_geometry(
-        list(feats_with_sibling), profile, feats_with_sibling
-    )
+    profile = detect_vowel_profile(list(feats), feats)
+    g = build_vowel_chart_geometry(list(feats), profile, feats)
     pair_cell = next(c for c in g.cells if set(c.entries) == {"i", "iː"})
-    assert pair_cell.is_long_pair is False
     y_cell = next(c for c in g.cells if c.entries == ("y",))
+    assert pair_cell.is_long_pair is True
     assert y_cell.col == 1
-    _ = VowelProfile  # imported for completeness; satisfies linters
+    # Front slot needs Long pair (2 buttons + gap) + inter-cell gap
+    # + single /y/. The natural width must surface at least that
+    # much so a growth-aware renderer can widen the chart.
+    pair_w = 2 * 33 + 2
+    expected_front_slot_w = pair_w + 2 + 33
+    assert g.natural_data_width_px >= expected_front_slot_w
 
 
 def test_long_does_not_affect_placement() -> None:

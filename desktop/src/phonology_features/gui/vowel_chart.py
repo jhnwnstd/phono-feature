@@ -149,6 +149,13 @@ class VowelChartWidget(QWidget):
         # narrow bottom; one whose lowest row is Open-mid carries
         # a wider bottom edge). ``None`` before the first render.
         self._silhouette: VowelChartSilhouette | None = None
+        # Floor for ``set_target_width``: the geometry's natural
+        # data width plus this widget's chrome. Updated on every
+        # :py:meth:`_render_geometry` call so external resize
+        # requests below this floor are clamped, keeping cells
+        # legible when an inventory needs more horizontal room than
+        # the canonical ``layout.VOWEL_NATURAL_W``.
+        self._natural_total_w: int = 0
         # Cell width hint used to inset the data rectangle so cells
         # placed at chart_x == 0 / 1 stay fully inside the trapezoid
         # instead of clipping at the left / right edge. Populated
@@ -172,13 +179,15 @@ class VowelChartWidget(QWidget):
     def set_target_width(self, w: int) -> None:
         """Push the chart's width from the outside (the seg-pane
         controller in ``main_window``) instead of pulling via
-        ``setFixedWidth`` once at construction. Width is decided by
-        the shared :py:func:`layout.vowel_chart_width`; the chart
-        itself doesn't re-measure on resize, which keeps the layout
-        pass cheap when the user drags the splitter.
+        ``setFixedWidth`` once at construction. The external target
+        is clamped to ``self._natural_total_w``: if the current
+        inventory needs more horizontal room than ``w`` to fit its
+        cells side-by-side, the natural floor wins so callers can't
+        squeeze the chart below its content's needs.
         """
-        self.setMinimumWidth(w)
-        self.setMaximumWidth(w)
+        effective_w = max(w, self._natural_total_w)
+        self.setMinimumWidth(effective_w)
+        self.setMaximumWidth(effective_w)
 
     def set_headers_active(self, active: bool) -> None:
         # Dedup is safe: clear() (called by set_vowels on every
@@ -254,6 +263,17 @@ class VowelChartWidget(QWidget):
         """
         self._shape = geometry.shape
         self._silhouette = geometry.silhouette
+        # Growth policy: when the inventory's natural data width
+        # exceeds the canonical chart width that ``set_target_width``
+        # would set, expand the widget so all cells stay legible
+        # side-by-side. Stash the natural total so
+        # :py:meth:`set_target_width` honors the floor on subsequent
+        # external resize requests.
+        chrome_w = VOWEL_LABEL_W + self._PAD_R
+        self._natural_total_w = geometry.natural_data_width_px + chrome_w
+        if self._natural_total_w > self.width():
+            self.setMinimumWidth(self._natural_total_w)
+            self.setMaximumWidth(self._natural_total_w)
         # Title (top, centred over the data area).
         title = QLabel(geometry.title, self)
         title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))

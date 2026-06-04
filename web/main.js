@@ -878,6 +878,27 @@ function renderSegmentGrid(groups, vowelChart) {
     if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
         const vowels = document.createElement("div");
         vowels.className = "seg-vowels";
+        // Growth policy: the slot stays at the canonical
+        // ``--vowel-natural-w`` when the inventory's content fits.
+        // When a row needs more horizontal room (a Long-pair cell
+        // sharing its backness slot with another cell, etc.), the
+        // shared geometry reports a larger ``natural_data_width_px``
+        // and the slot grows to fit. No shrinking yet -- sparse
+        // inventories keep the canonical slot so the consonant
+        // pane's flow remains stable.
+        if (typeof vowelChart.natural_data_width_px === "number") {
+            const chromeW = 60 + 8 + 4;
+            const naturalSlotW = vowelChart.natural_data_width_px + chromeW;
+            const canonicalSlotW =
+                parseInt(
+                    getComputedStyle(document.documentElement)
+                        .getPropertyValue("--vowel-natural-w"),
+                    10,
+                ) || 380;
+            if (naturalSlotW > canonicalSlotW) {
+                vowels.style.width = `${naturalSlotW}px`;
+            }
+        }
         vowels.appendChild(_buildVowelChart(vowelChart));
         grid.appendChild(vowels);
     }
