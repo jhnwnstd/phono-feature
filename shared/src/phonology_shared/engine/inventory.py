@@ -83,6 +83,74 @@ def normalize_feature_key(key: str) -> str:
     return k.replace(".", "").replace("_", "").replace(" ", "")
 
 
+class AliasCollisionError(ValueError):
+    """Raised when two feature names in the same bundle collapse to
+    the same canonical key under :py:func:`normalize_feature_key`
+    (for example ``"DelRel"`` and ``"delayed_release"``). A plain
+    dict-comprehension rebuild would silently keep whichever came
+    last; surfacing the collision lets the caller rename or remove
+    one. The blocked features are on ``.collisions`` as
+    ``{canonical_key: [original_names]}``."""
+
+    def __init__(self, collisions: dict[str, list[str]]):
+        self.collisions = collisions
+        sample = "; ".join(
+            f"{canonical!r} <- {sorted(originals)}"
+            for canonical, originals in sorted(collisions.items())
+        )
+        super().__init__(
+            f"Feature name aliases collide after normalization: {sample}"
+        )
+
+
+def normalize_feature_bundle(
+    feat_dict: Mapping[str, str],
+) -> dict[str, str]:
+    """Normalize the feature names of one segment's feature bundle.
+
+    Returns ``{canonical_key: value}`` where each key is folded via
+    :py:func:`normalize_feature_key`. Raises
+    :py:class:`AliasCollisionError` when two distinct input keys
+    collapse to the same canonical key, because silently dropping
+    one would be data loss. The :py:meth:`Inventory.parse` boundary
+    catches the same situation at parse time so engine consumers
+    don't have to defend against the collision downstream.
+    """
+    result: dict[str, str] = {}
+    collisions: dict[str, list[str]] = {}
+    for k, v in feat_dict.items():
+        canonical = normalize_feature_key(k)
+        if canonical in result and k not in collisions.get(canonical, ()):
+            collisions.setdefault(canonical, []).append(
+                _find_existing_alias(
+                    feat_dict, result, canonical, exclude=k
+                )
+            )
+            collisions[canonical].append(k)
+        result[canonical] = v
+    if collisions:
+        raise AliasCollisionError(collisions)
+    return result
+
+
+def _find_existing_alias(
+    feat_dict: Mapping[str, str],
+    result: Mapping[str, str],
+    canonical: str,
+    *,
+    exclude: str,
+) -> str:
+    """Recover the original key that produced ``canonical`` (other
+    than ``exclude``). Used to build a helpful collision report."""
+    for k in feat_dict:
+        if k == exclude:
+            continue
+        if normalize_feature_key(k) == canonical:
+            return k
+    # Unreachable when called from the collision path.
+    return canonical
+
+
 # Domain-specific identity folding for segment labels. ``r`` is
 # deliberately excluded: it is the legitimate IPA alveolar trill, and
 # folding it to ``ɹ`` (the approximant) would silently change meaning.

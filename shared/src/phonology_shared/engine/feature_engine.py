@@ -31,11 +31,9 @@ from typing import Any, Literal
 from phonology_shared.engine.inventory import (
     VALID_VALUES,
     Inventory,
+    normalize_feature_bundle,
 )
-from phonology_shared.engine.segment_grouper import (
-    _normalize_feats,
-    group_segments,
-)
+from phonology_shared.engine.segment_grouper import group_segments
 
 _log = logging.getLogger(__name__)
 
@@ -426,10 +424,11 @@ class FeatureEngine:
     @cached_property
     def normalized_segment_feats(self) -> dict[str, dict[str, str]]:
         """Per-segment feature bundles with names normalized to the
-        :py:mod:`segment_grouper` canonical keys. Same lifetime and
+        engine's canonical keys via
+        :py:func:`normalize_feature_bundle`. Same lifetime and
         invalidation story as :py:attr:`grouped_segments`."""
         return {
-            seg: _normalize_feats(self._inventory.segments[seg])
+            seg: normalize_feature_bundle(self._inventory.segments[seg])
             for seg in self._inventory.segments
         }
 

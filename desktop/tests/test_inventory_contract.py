@@ -25,9 +25,9 @@ from phonology_shared.engine.inventory import (
     ValidationError,
     atomic_write_json,
 )
-from phonology_shared.engine.segment_grouper import (
+from phonology_shared.engine.inventory import (
     AliasCollisionError,
-    _normalize_feats,
+    normalize_feature_bundle,
 )
 
 from .conftest import close_builder_silent
@@ -1268,17 +1268,17 @@ def test_from_grid_rejects_unknown_cell_value() -> None:
 # ---------------------------------------------------------------------------
 # Alias collision detection in segment_grouper
 # ---------------------------------------------------------------------------
-def test_normalize_feats_raises_on_alias_collision() -> None:
+def testnormalize_feature_bundle_raises_on_alias_collision() -> None:
     """Reviewer's #7: previously a dict-comprehension rebuild would
     silently keep whichever alias came last. Now the collision is
     surfaced."""
     with pytest.raises(AliasCollisionError) as ex:
-        _normalize_feats({"DelRel": "+", "delayed_release": "-"})
+        normalize_feature_bundle({"DelRel": "+", "delayed_release": "-"})
     assert "delrel" in ex.value.collisions
 
 
-def test_normalize_feats_passes_when_no_collision() -> None:
-    out = _normalize_feats({"DelRel": "+", "Voice": "-"})
+def testnormalize_feature_bundle_passes_when_no_collision() -> None:
+    out = normalize_feature_bundle({"DelRel": "+", "Voice": "-"})
     assert out["delrel"] == "+"
     assert out["voice"] == "-"
 
