@@ -1214,18 +1214,31 @@ function _buildVowelChart(chart) {
     const sil = chart.silhouette;
     if (sil) {
         const shape = sil.shape || chart.shape || "trapezoid";
-        const setVar = (name, value) => {
+        const setPct = (name, value) => {
             dataEl.style.setProperty(
                 `--vowel-${shape}-${name}`,
                 `${(value * 100).toFixed(3)}%`
             );
         };
-        setVar("top-y", sil.top_y);
-        setVar("bottom-y", sil.bottom_y);
-        setVar("top-left", sil.top_left);
-        setVar("top-right", sil.top_right);
-        setVar("bottom-left", sil.bottom_left);
-        setVar("bottom-right", sil.bottom_right);
+        setPct("top-y", sil.top_y);
+        setPct("bottom-y", sil.bottom_y);
+        setPct("top-left", sil.top_left);
+        setPct("bottom-left", sil.bottom_left);
+        // Back edge: ``top_right`` is the back ANCHOR (normalised);
+        // ``back_right_pixel_offset`` captures the fixed-pixel
+        // pair-shift that the percentage alone cannot represent at
+        // arbitrary data-area widths. Same formula on the desktop
+        // (``dx + sil.top_right * dw + sil.back_right_pixel_offset``)
+        // so the line lands on the same vowel button in both UIs.
+        // The asymmetric snap-to-back-vowel-centre logic lives in
+        // ``build_vowel_chart_geometry``; we just add.
+        const backRightCalc =
+            `calc(${(sil.top_right * 100).toFixed(3)}% + ${sil.back_right_pixel_offset}px)`;
+        dataEl.style.setProperty(`--vowel-${shape}-top-right`, backRightCalc);
+        dataEl.style.setProperty(
+            `--vowel-${shape}-bottom-right`,
+            backRightCalc,
+        );
     }
     // Per-row labels go INSIDE the data area so the slanted left
     // edge is the natural alignment reference (``right: 100%`` is

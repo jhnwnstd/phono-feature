@@ -405,31 +405,48 @@ def _build_status_text_payload() -> dict[str, str]:
 
 
 def _vowel_corner_lines(shape: str) -> list[str]:
-    """Emit ``--vowel-<shape>-<corner>`` percentage variables for
-    every corner of the silhouette so the CSS clip-path can
-    reference them directly."""
-    corners = _vowel_corners(shape)
+    """Emit ``--vowel-<shape>-<corner>`` variables for every corner
+    of the silhouette so the CSS clip-path can reference them
+    directly. The back edge (top-right / bottom-right) is emitted as
+    a ``calc()`` that mixes the back-anchor percentage with the
+    pixel-offset captured in
+    :py:attr:`VowelChartSilhouette.back_right_pixel_offset` -- the
+    same formula the desktop and web renderers apply at runtime, so
+    the canonical bake stays aligned with the interactive renders.
+    """
+    sil = _vowel_silhouette(shape)
+    back_offset = sil["back_right_pixel_offset"]
+    back_right_calc = f"calc({sil['top_right'] * 100:.3f}% + {back_offset}px)"
     return [
-        f"  --vowel-{shape}-top-left: {corners['top_left'] * 100:.3f}%;",
-        f"  --vowel-{shape}-top-right: {corners['top_right'] * 100:.3f}%;",
-        f"  --vowel-{shape}-bottom-left: {corners['bottom_left'] * 100:.3f}%;",
-        f"  --vowel-{shape}-bottom-right: {corners['bottom_right'] * 100:.3f}%;",
-        f"  --vowel-{shape}-top-y: {corners['top_y'] * 100:.3f}%;",
-        f"  --vowel-{shape}-bottom-y: {corners['bottom_y'] * 100:.3f}%;",
+        f"  --vowel-{shape}-top-left: {sil['top_left'] * 100:.3f}%;",
+        f"  --vowel-{shape}-top-right: {back_right_calc};",
+        f"  --vowel-{shape}-bottom-left: {sil['bottom_left'] * 100:.3f}%;",
+        f"  --vowel-{shape}-bottom-right: {back_right_calc};",
+        f"  --vowel-{shape}-top-y: {sil['top_y'] * 100:.3f}%;",
+        f"  --vowel-{shape}-bottom-y: {sil['bottom_y'] * 100:.3f}%;",
     ]
 
 
-def _vowel_corners(shape: str) -> dict[str, float]:
-    """Silhouette corner positions in ``[0, 1]`` data-area coords
-    for the given shape, derived from the shared
-    :py:func:`vowel_layout.vowel_trapezoid_corners`. Keeps the
-    Python and CSS computations bit-for-bit identical."""
+def _vowel_silhouette(shape: str) -> dict[str, float | int]:
+    """Canonical silhouette field values for the given shape. Reads
+    :py:func:`vowel_layout.vowel_silhouette` so the bake's numbers
+    match what ``build_vowel_chart_geometry`` produces for an
+    inventory-free chart."""
     from phonology_shared.chart.vowels import (
         VowelChartShape,
-        vowel_trapezoid_corners,
+        vowel_silhouette,
     )
 
-    return vowel_trapezoid_corners(VowelChartShape(shape))
+    sil = vowel_silhouette(VowelChartShape(shape))
+    return {
+        "top_left": sil.top_left,
+        "top_right": sil.top_right,
+        "bottom_left": sil.bottom_left,
+        "bottom_right": sil.bottom_right,
+        "top_y": sil.top_y,
+        "bottom_y": sil.bottom_y,
+        "back_right_pixel_offset": sil.back_right_pixel_offset,
+    }
 
 
 def generate_layout_css() -> None:

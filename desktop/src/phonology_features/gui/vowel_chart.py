@@ -47,7 +47,7 @@ from phonology_shared.chart.vowels import (
     VowelProfile,
     build_vowel_chart_geometry,
     detect_vowel_profile,
-    vowel_trapezoid_corners,
+    vowel_silhouette,
 )
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
@@ -136,7 +136,10 @@ class VowelChartWidget(QWidget):
         # them to pixel positions: the anchor follows the trapezoid
         # silhouette, then a FIXED pair shift in pixels keeps
         # rounded/unrounded mates exactly tangent regardless of how
-        # narrow the row becomes.
+        # narrow the row becomes. The back-line snap-to-button-centre
+        # decision lives on the shared
+        # ``VowelChartSilhouette.back_right_pixel_offset`` field so
+        # the renderer does not need each cell's ``col``.
         self._cells: list[tuple[QWidget, float, float, int]] = []
         self._cell_containers: list[QWidget] = []
         # Cached header styles, rebuilt by apply_theme each toggle.
@@ -469,26 +472,26 @@ class VowelChartWidget(QWidget):
         # position to the bottommost row's front position.
         sil = self._silhouette
         if sil is None:
-            corners = vowel_trapezoid_corners(self._shape)
-            top_y_norm = corners["top_y"]
-            bottom_y_norm = corners["bottom_y"]
-            top_left_norm = corners["top_left"]
-            top_right_norm = corners["top_right"]
-            bottom_left_norm = corners["bottom_left"]
-            bottom_right_norm = corners["bottom_right"]
-        else:
-            top_y_norm = sil.top_y
-            bottom_y_norm = sil.bottom_y
-            top_left_norm = sil.top_left
-            top_right_norm = sil.top_right
-            bottom_left_norm = sil.bottom_left
-            bottom_right_norm = sil.bottom_right
-        top_y = dy + int(top_y_norm * dh)
-        bottom_y = dy + int(bottom_y_norm * dh)
-        top_left_x = dx + int(top_left_norm * dw)
-        top_right_x = dx + int(top_right_norm * dw)
-        bottom_left_x = dx + int(bottom_left_norm * dw)
-        bottom_right_x = dx + int(bottom_right_norm * dw)
+            # No inventory rendered yet -- use the canonical silhouette
+            # so a pre-load paint still shows the trapezoid outline.
+            sil = vowel_silhouette(self._shape)
+        top_y = dy + int(sil.top_y * dh)
+        bottom_y = dy + int(sil.bottom_y * dh)
+        top_left_x = dx + int(sil.top_left * dw)
+        bottom_left_x = dx + int(sil.bottom_left * dw)
+        # Back edge: ``top_right`` is the back ANCHOR (normalised);
+        # the fixed-pixel ``back_right_pixel_offset`` captures the
+        # rest. The same formula runs on the web (via the bridge
+        # payload), so both UIs land the line at the same place
+        # regardless of how wide the data area is rendered. The
+        # asymmetric pull-in (snap to back-vowel centre rather than
+        # the canonical pair-outer extent) is encoded in the offset
+        # by ``build_vowel_chart_geometry``; the renderer just adds.
+        back_right_x = (
+            dx + int(sil.top_right * dw) + sil.back_right_pixel_offset
+        )
+        top_right_x = back_right_x
+        bottom_right_x = back_right_x
         path = QPainterPath()
         path.moveTo(top_left_x, top_y)
         path.lineTo(top_right_x, top_y)

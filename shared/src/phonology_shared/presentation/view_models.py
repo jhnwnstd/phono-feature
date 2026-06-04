@@ -399,6 +399,7 @@ def _vowel_chart_summary(
             "bottom_right": sil.bottom_right,
             "top_width": sil.top_width,
             "bottom_width": sil.bottom_width,
+            "back_right_pixel_offset": sil.back_right_pixel_offset,
         },
         "cols": [
             {

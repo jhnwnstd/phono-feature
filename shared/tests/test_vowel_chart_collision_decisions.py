@@ -156,21 +156,42 @@ def test_long_pair_classification_is_consistent_across_renderers() -> None:
 def test_silhouette_back_edge_passes_through_back_rounded_when_present() -> (
     None
 ):
-    """An inventory with a back-rounded vowel (col 5) keeps the
-    canonical back extent ``back + pair_outer`` (== the back-rounded
-    mate's outer right edge).
+    """The new semantics: ``top_right`` is the back ANCHOR
+    (normalised), and ``back_right_pixel_offset`` is the pixel offset
+    from that anchor to the rendered silhouette line. For an
+    inventory with a back-rounded vowel (col 5), the offset is the
+    pair-shift in pixels -- the line passes through the CENTRE of
+    the back-rounded mate, matching how the top / bottom horizontal
+    lines pass through Close-row / Open-row button centres.
     """
-    geom = _geometry("english_features.json")
-    sil = geom.silhouette
-    # English has /u/, /o/, /ʊ/ -- all back-rounded -> col 5 present.
     from phonology_shared.chart.vowels import (
+        _BACK_COL_BUTTON_CENTRE_OFFSET_PX,
         _BACKNESS_X,
-        _PAIR_OUTER_EXTENT,
     )
 
-    canonical_right = _BACKNESS_X["back"] + _PAIR_OUTER_EXTENT
-    assert sil.top_right == pytest.approx(canonical_right, abs=1e-6)
-    assert sil.bottom_right == pytest.approx(canonical_right, abs=1e-6)
+    geom = _geometry("english_features.json")
+    sil = geom.silhouette
+    assert sil.top_right == pytest.approx(_BACKNESS_X["back"], abs=1e-6)
+    assert sil.bottom_right == pytest.approx(_BACKNESS_X["back"], abs=1e-6)
+    assert sil.back_right_pixel_offset == _BACK_COL_BUTTON_CENTRE_OFFSET_PX[5]
+
+
+def test_silhouette_back_offset_canonical_when_no_back_vowel() -> None:
+    """An inventory with no back vowel (col 4, 5, or 8) keeps the
+    canonical pair-outer pixel extent so the silhouette right edge
+    sits where a hypothetical back-rounded mate's outer right would
+    be. ``vowel_silhouette()`` (the canonical builder used by
+    ``build.py`` for the pre-load fallback) is the closest accessible
+    "no back vowel" case.
+    """
+    from phonology_shared.chart.vowels import (
+        _PAIR_OUTER_PIXEL_EXTENT,
+        VowelChartShape,
+        vowel_silhouette,
+    )
+
+    sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
+    assert sil.back_right_pixel_offset == _PAIR_OUTER_PIXEL_EXTENT
 
 
 def test_silhouette_front_edge_does_not_adapt_to_front_vowels() -> None:
