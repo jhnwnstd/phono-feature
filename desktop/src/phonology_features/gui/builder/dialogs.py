@@ -411,11 +411,37 @@ class InputDialog(QDialog):
         the offending field, and keep the dialog open. The rules and
         messages are owned by :py:func:`validate_setup` so the web
         setup modal produces identical wording.
+
+        Provider-driven presets (PanPhon today) need at least one
+        segment to derive bundles from; this branch surfaces a
+        provider-specific message so the user understands why the
+        generic "no segments" hint is showing up. It also routes
+        the features-side validation against the provider's
+        canonical feature names so a user who cleared the
+        auto-filled textarea does not get a misleading "no
+        features" error: the builder uses the provider's features
+        regardless.
         """
+        provider = self._chosen_provider
+        if provider is not None:
+            if not infer_split(self.seg_edit.toPlainText()):
+                QMessageBox.warning(
+                    self,
+                    "No segments found",
+                    f"{provider.name} needs at least one IPA segment "
+                    "to generate features from. Enter segments above "
+                    "(or press Tab in the empty box for a quick-start "
+                    "set), then click Create Grid.",
+                )
+                self.seg_edit.setFocus()
+                return
+            features_text = "\n".join(provider.feature_names())
+        else:
+            features_text = self.feat_edit.toPlainText()
         result = validate_setup(
             self.name_edit.text(),
             self.seg_edit.toPlainText(),
-            self.feat_edit.toPlainText(),
+            features_text,
         )
         if not result.issues:
             super().accept()

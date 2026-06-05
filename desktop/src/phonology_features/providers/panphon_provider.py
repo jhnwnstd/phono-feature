@@ -123,7 +123,11 @@ class PanPhonFeatureProvider:
             self.version = "unknown"
 
     def display_label(self) -> str:
-        return f"{self.name} (auto-generate)"
+        # Bare name in the dropdown: the dialog's parent label
+        # ("Features (delimited):") already makes the role clear,
+        # and a parenthetical suffix on every provider would
+        # clutter the row once more sources are added.
+        return self.name
 
     def feature_names(self) -> tuple[str, ...]:
         """App-side feature names, in PanPhon's column order.
@@ -147,6 +151,16 @@ class PanPhonFeatureProvider:
         ``unresolved`` with a human-readable warning. The caller
         seeds unresolved columns with
         :py:func:`phonology_shared.editor.providers.blank_bundle`.
+
+        Features that no resolved segment specifies (every value is
+        ``"0"`` across the resolved bundles) are dropped from both
+        the returned ``features`` tuple and every per-segment
+        bundle. This stops a small selection from pulling in every
+        column the underlying source defines and producing a
+        sparsely-populated inventory the user would then have to
+        prune by hand. The full feature set is still surfaced when
+        no segment resolves (so the user has columns to edit on the
+        failure path) or when the input list is empty.
         """
         features = self.feature_names()
         resolved: dict[str, Mapping[str, str]] = {}
@@ -186,6 +200,21 @@ class PanPhonFeatureProvider:
                 warnings.append(
                     f"{symbol!r}: PanPhon feature conversion failed: " f"{exc}"
                 )
+
+        if resolved:
+            used = {
+                feat
+                for bundle in resolved.values()
+                for feat, value in bundle.items()
+                if value in ("+", "-")
+            }
+            features = tuple(feat for feat in features if feat in used)
+            resolved = {
+                seg: {
+                    feat: val for feat, val in bundle.items() if feat in used
+                }
+                for seg, bundle in resolved.items()
+            }
 
         return GeneratedInventory(
             features=features,

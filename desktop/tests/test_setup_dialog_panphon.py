@@ -30,7 +30,7 @@ from phonology_features.providers.panphon_provider import (  # noqa: E402
     PanPhonFeatureProvider,
 )
 
-PANPHON_LABEL = "PanPhon (auto-generate)"
+PANPHON_LABEL = "PanPhon"
 
 
 def test_preset_combo_lists_panphon_after_static_presets(
@@ -48,6 +48,74 @@ def test_preset_combo_lists_panphon_after_static_presets(
     assert labels[1] == "Custom"
     assert PANPHON_LABEL in labels
     assert labels.index(PANPHON_LABEL) > labels.index("Custom")
+    dlg.deleteLater()
+
+
+def test_accept_blocks_when_panphon_chosen_with_empty_segments(
+    qapp: QApplication, mocker
+) -> None:
+    """Robustness pin: picking PanPhon with the segments box empty
+    must not accept the dialog. Otherwise the builder would run
+    ``provider.generate([])`` and present the user with a
+    0-segment grid that fails save-time validation downstream.
+    The dialog instead surfaces a provider-specific warning, names
+    the provider in the message, and leaves itself open."""
+    from PyQt6.QtWidgets import QDialog, QMessageBox
+
+    warn = mocker.patch.object(QMessageBox, "warning")
+    dlg = InputDialog()
+    dlg.preset_combo.setCurrentText(PANPHON_LABEL)
+    assert dlg.get_chosen_provider() is not None
+    dlg.seg_edit.clear()
+    dlg.accept()
+    warn.assert_called_once()
+    title, body = warn.call_args.args[1], warn.call_args.args[2]
+    assert title == "No segments found"
+    assert "PanPhon" in body
+    assert dlg.result() != QDialog.DialogCode.Accepted
+    dlg.deleteLater()
+
+
+def test_accept_passes_when_panphon_chosen_with_segments(
+    qapp: QApplication, mocker
+) -> None:
+    """Sanity opposite: with PanPhon selected and at least one
+    segment, accept must dismiss the dialog. Pins that the
+    provider-specific empty-segments check does NOT introduce a
+    regression that blocks the happy path."""
+    from PyQt6.QtWidgets import QDialog, QMessageBox
+
+    warn = mocker.patch.object(QMessageBox, "warning")
+    dlg = InputDialog()
+    dlg.preset_combo.setCurrentText(PANPHON_LABEL)
+    dlg.name_edit.setText("Round Trip")
+    dlg.seg_edit.setPlainText("p b i")
+    dlg.accept()
+    warn.assert_not_called()
+    assert dlg.result() == QDialog.DialogCode.Accepted
+    dlg.deleteLater()
+
+
+def test_accept_passes_when_panphon_features_box_cleared(
+    qapp: QApplication, mocker
+) -> None:
+    """When PanPhon is the chosen preset the features textarea is
+    auto-filled; if the user wipes it, validation must still pass
+    because the builder will use the provider's canonical feature
+    names regardless. Otherwise the user sees a misleading "No
+    features found" error for a path where features are
+    provider-supplied."""
+    from PyQt6.QtWidgets import QDialog, QMessageBox
+
+    warn = mocker.patch.object(QMessageBox, "warning")
+    dlg = InputDialog()
+    dlg.preset_combo.setCurrentText(PANPHON_LABEL)
+    dlg.name_edit.setText("Features Cleared")
+    dlg.seg_edit.setPlainText("p b")
+    dlg.feat_edit.clear()
+    dlg.accept()
+    warn.assert_not_called()
+    assert dlg.result() == QDialog.DialogCode.Accepted
     dlg.deleteLater()
 
 

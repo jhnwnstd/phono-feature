@@ -42,6 +42,15 @@ def test_provider_advertises_name_and_version(
     assert isinstance(provider.version, str) and provider.version
 
 
+def test_display_label_is_just_name(
+    provider: PanPhonFeatureProvider,
+) -> None:
+    """The dropdown entry shows the bare provider name; the parent
+    label ("Features (delimited):") already conveys what picking it
+    does, so a "(auto-generate)" suffix is redundant."""
+    assert provider.display_label() == "PanPhon"
+
+
 def test_feature_names_are_app_canonical(
     provider: PanPhonFeatureProvider,
 ) -> None:
@@ -176,12 +185,63 @@ def test_empty_segment_list_returns_empty_result(
 ) -> None:
     """Edge case: no segments means no bundles to generate. The
     dialog's validation already rejects empty segment lists before
-    this is called, but the provider should still be total."""
+    this is called, but the provider should still be total.
+    The full feature set is returned because there is no resolved
+    bundle to filter against (the user gets every column to edit
+    on the empty path)."""
     result = provider.generate([])
     assert result.segments == {}
     assert result.unresolved == ()
     assert result.warnings == ()
     assert len(result.features) >= 22
+
+
+def test_unused_features_are_pruned_for_a_single_vowel(
+    provider: PanPhonFeatureProvider,
+) -> None:
+    """A single ``/i/`` resolution must not pull in every feature
+    PanPhon defines. Features the vowel does not specify
+    ("0"-valued ones) get pruned from both ``features`` and the
+    bundle so the user is not handed a sparse 24-column grid for
+    a one-segment inventory. Pins the bloat-prevention behaviour
+    the user requested.
+    """
+    result = provider.generate(["i"])
+    full_count = len(provider.feature_names())
+    assert len(result.features) < full_count
+    # Every returned feature must actually be specified on ``i``.
+    bundle = result.segments["i"]
+    assert set(bundle.keys()) == set(result.features)
+    assert all(v in ("+", "-") for v in bundle.values())
+
+
+def test_pruning_preserves_canonical_feature_order(
+    provider: PanPhonFeatureProvider,
+) -> None:
+    """The kept-features tuple stays in the canonical PanPhon order
+    after filtering. Pins that the dialog and the builder see a
+    stable column order regardless of which segments were
+    submitted."""
+    full = provider.feature_names()
+    result = provider.generate(["p"])
+    kept = result.features
+    # Indices of kept features in the original order must be
+    # strictly increasing; i.e. no reordering, just deletion.
+    indices = [full.index(name) for name in kept]
+    assert indices == sorted(indices)
+
+
+def test_pruning_keeps_full_feature_set_when_nothing_resolves(
+    provider: PanPhonFeatureProvider,
+) -> None:
+    """If every input symbol is unresolved (e.g. typos only), the
+    pruning step has no resolved bundles to inspect and so cannot
+    decide which features are "in use". Return the full feature
+    set so the user still has a grid to edit by hand."""
+    result = provider.generate(["customX"])
+    assert result.segments == {}
+    assert "customX" in result.unresolved
+    assert result.features == provider.feature_names()
 
 
 def test_registry_exposes_panphon_when_installed() -> None:
