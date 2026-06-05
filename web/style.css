@@ -304,12 +304,17 @@ dialog input[type="text"]:focus-visible {
   border-color: var(--accent);
 }
 
-/* ---------- PHOIBLE inline subpanel ---------- */
-/* Same visual weight as the segments/features textareas it
-   replaces; the JS toggles ``.setup-hidden`` on the textareas'
-   labels and the panel itself based on the preset picker. */
+/* ---------- PHOIBLE picker dialog ---------- */
+/* Standalone dialog opened by the toolbar's PHOIBLE button. Loads
+   a chosen inventory directly into the engine (semantically parallel
+   to ``Browse…``); the Builder is the post-load edit surface, not a
+   step in this picker's flow. Sizing follows the same viewport-cap
+   pattern as ``.setup-dialog``. */
 
-.setup-hidden { display: none !important; }
+.phoible-picker {
+  min-width: min(520px, calc(100vw - var(--space-xl) * 2));
+  max-width: min(640px, calc(100vw - var(--space-xl) * 2));
+}
 
 .phoible-panel {
   display: flex;

@@ -260,13 +260,6 @@ def get_setup_defaults() -> dict[str, Any]:
         }
         for provider in _provider_registry().values()
     ]
-    inventory_providers = [
-        {
-            "name": provider.name,
-            "version": provider.version,
-        }
-        for provider in _inventory_provider_registry().values()
-    ]
     return {
         "default_segments": DEFAULT_SEGMENTS,
         "default_features": DEFAULT_FEATURES,
@@ -274,7 +267,6 @@ def get_setup_defaults() -> dict[str, Any]:
             name: list(feats) for name, feats in FEATURE_PRESETS.items()
         },
         "providers": providers,
-        "inventory_providers": inventory_providers,
     }
 
 
@@ -431,28 +423,29 @@ def phoible_preview_inventory(inventory_id: str) -> dict[str, Any]:
     }
 
 
-def create_new_inventory_from_phoible(
-    raw_name: str, inventory_id: str
-) -> dict[str, Any]:
-    """Build an inventory from a PHOIBLE inventory descriptor.
+def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
+    """Load a PHOIBLE inventory into the engine and return its
+    summary.
 
-    Distinct from :py:func:`create_new_inventory` because PHOIBLE
-    provides segments + features as a coherent unit; there is no
-    user-typed text to validate the way ``validate_setup`` expects.
-    Only the inventory NAME goes through the text-validation gate;
-    the segment + feature payload comes verbatim from the bake
-    snapshot.
+    Semantically parallel to :py:func:`load_inventory_json` and the
+    bundled-inventory pick path: the user is loading an existing
+    inventory, not building one. The dialog never asks for a name;
+    the inventory is named after the PHOIBLE language (the user can
+    rename in place via the toolbar's pencil button OR overwrite
+    the name on the next save). Once loaded the inventory is fully
+    the user's: any edit in the Builder produces a personal copy,
+    and saving routes through the same Save flow as any other
+    in-memory inventory.
 
-    Stamps full PHOIBLE provenance into the inventory metadata so
-    the saved file records which database row it came from:
-    ``feature_source``, ``feature_source_version``, plus
-    ``phoible_inventory_id``, ``phoible_source``,
-    ``phoible_glottocode``, and ``phoible_dialect`` (when known).
+    Metadata stamping is light and informational, not authoritative:
+    one ``feature_source`` field records the PHOIBLE provenance so a
+    saved file is debuggable, but the field is plain text and the
+    user can edit or delete it. There is no "phoible_inventory_id"
+    lock; once loaded the inventory is detached from the database.
 
     Raises :py:class:`ValidationError` when the PHOIBLE provider is
     unavailable, the data payload has not been loaded, or the
-    inventory id is unknown. The dialog surfaces the message via
-    the standard error-box channel.
+    inventory id is unknown.
     """
     global _engine, _inventory_name
     provider = _phoible_provider()
@@ -464,7 +457,7 @@ def create_new_inventory_from_phoible(
         raise ValidationError(
             (
                 "PHOIBLE data payload not loaded; call phoible_load_data "
-                "before submitting.",
+                "before loading an inventory.",
             )
         )
     descriptor = provider.descriptor(inventory_id)  # type: ignore[attr-defined]
@@ -474,26 +467,27 @@ def create_new_inventory_from_phoible(
         )
     generated = provider.generate(inventory_id)
 
-    # Reuse the shared name-validation path so naming rules match
-    # the static-preset flow. Segments + features come from the
-    # provider and skip ``validate_setup``; they're database
-    # rows, not user typing.
-    canonical_name = (raw_name or descriptor.language_name).strip()
-    if not canonical_name:
-        canonical_name = descriptor.language_name
-
-    metadata: dict[str, Any] = {
-        "feature_source": provider.name,
-        "feature_source_version": provider.version,
-        "phoible_inventory_id": descriptor.id,
-        "phoible_source": descriptor.source_label,
-    }
-    if descriptor.glottocode:
-        metadata["phoible_glottocode"] = descriptor.glottocode
-    if descriptor.iso_code:
-        metadata["phoible_iso"] = descriptor.iso_code
+    # Inventory name defaults to the PHOIBLE language so the toolbar
+    # immediately reflects what the user just loaded. The dialect
+    # suffix disambiguates when one language has several inventories
+    # the user might compare side-by-side ("Korean (SPA)" vs
+    # "Korean (UPSID)"); without it the picker would surface
+    # identical-named entries in the active-inventory dropdown if
+    # the user later loads bundled inventories.
+    source_short = descriptor.source_label.split(" / ", 1)[-1]
+    name = descriptor.language_name
     if descriptor.dialect:
-        metadata["phoible_dialect"] = descriptor.dialect
+        name = f"{name} ({descriptor.dialect})"
+    name = f"{name} [{source_short}]"
+
+    # One light metadata field for provenance. No id-lock keys;
+    # once loaded the inventory belongs to the user.
+    metadata = {
+        "feature_source": (
+            f"PHOIBLE {provider.version.split()[-1]} / "
+            f"{descriptor.language_name} / {source_short}"
+        )
+    }
 
     features_list = list(generated.features)
     grid: dict[str, dict[str, str]] = {
@@ -502,7 +496,7 @@ def create_new_inventory_from_phoible(
     }
 
     inventory = Inventory.from_grid(
-        name=canonical_name,
+        name=name,
         features=features_list,
         segments=grid,
         metadata=metadata,

@@ -72,6 +72,10 @@
           aria-label="Rename current inventory" title="Rename inventory">✎</button>
   <button id="upload-btn" type="button" disabled>Browse…</button>
   <input id="upload-input" type="file" accept=".json" hidden>
+  <button id="phoible-btn" type="button" disabled
+          title="Load an inventory from the PHOIBLE 2.0 database">
+    PHOIBLE
+  </button>
   <button id="builder-btn" type="button" disabled>Builder</button>
   <div class="toolbar-spacer"></div>
   <button id="cb-btn" type="button"
@@ -254,36 +258,49 @@
     <textarea id="setup-features-input" rows="10" spellcheck="false"
               autocomplete="off"></textarea>
 
-    <!-- PHOIBLE inline subpanel. Hidden by default; revealed when
-         the preset picker selects "Load from PHOIBLE…". Replaces
-         the segments + features textareas above (their parent
-         elements get .setup-hidden during PHOIBLE mode) so the
-         dialog stays compact instead of growing a fifth column. -->
-    <div id="setup-phoible-panel" hidden class="phoible-panel">
-      <div class="phoible-loading" id="setup-phoible-loading" hidden>
+    <div class="dialog-error" id="setup-error" role="alert"></div>
+    <div class="dialog-actions">
+      <button type="button" id="setup-cancel" value="cancel">Cancel</button>
+      <button type="submit" id="setup-create" value="create">Create grid</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- PHOIBLE picker dialog. Opened by the toolbar's PHOIBLE button;
+     loads a chosen inventory directly into the engine (like
+     Browse… loads a JSON file). The user then owns the loaded
+     inventory and can edit / rename / save as their own. -->
+<dialog id="phoible-picker" class="phoible-picker"
+        aria-labelledby="phoible-picker-title">
+  <form method="dialog" id="phoible-picker-form">
+    <div class="dialog-title" id="phoible-picker-title">
+      Load inventory from PHOIBLE
+    </div>
+
+    <div class="phoible-panel">
+      <div class="phoible-loading" id="phoible-loading" hidden>
         Loading PHOIBLE table…
       </div>
-      <div class="phoible-active" id="setup-phoible-active" hidden>
-        <label class="dialog-label" for="setup-phoible-search">
+      <div class="phoible-active" id="phoible-active" hidden>
+        <label class="dialog-label" for="phoible-search">
           Language
         </label>
-        <input id="setup-phoible-search" type="text" autocomplete="off"
+        <input id="phoible-search" type="text" autocomplete="off"
                spellcheck="false"
                placeholder="Type a language name or ISO code">
-        <ul id="setup-phoible-results" class="phoible-results" hidden
+        <ul id="phoible-results" class="phoible-results" hidden
             role="listbox"></ul>
 
-        <div id="setup-phoible-inventories" hidden>
+        <div id="phoible-inventories" hidden>
           <div class="dialog-label">Inventory source</div>
-          <div id="setup-phoible-radios" role="radiogroup"></div>
+          <div id="phoible-radios" role="radiogroup"></div>
         </div>
 
-        <div id="setup-phoible-preview" hidden class="phoible-preview">
-          <div id="setup-phoible-summary" class="phoible-summary"></div>
-          <div id="setup-phoible-segments" class="phoible-segments"></div>
+        <div id="phoible-preview" hidden class="phoible-preview">
+          <div id="phoible-summary" class="phoible-summary"></div>
+          <div id="phoible-segments" class="phoible-segments"></div>
           <div class="phoible-citation">
-            <span>A starting point — edit before saving.</span>
-            <a id="setup-phoible-cite" href="PHOIBLE_LICENSE.txt"
+            <a id="phoible-cite" href="PHOIBLE_LICENSE.txt"
                target="_blank" rel="noopener">
               Powered by PHOIBLE 2.0
             </a>
@@ -292,10 +309,12 @@
       </div>
     </div>
 
-    <div class="dialog-error" id="setup-error" role="alert"></div>
+    <div class="dialog-error" id="phoible-error" role="alert"></div>
     <div class="dialog-actions">
-      <button type="button" id="setup-cancel" value="cancel">Cancel</button>
-      <button type="submit" id="setup-create" value="create">Create grid</button>
+      <button type="button" id="phoible-cancel" value="cancel">Cancel</button>
+      <button type="submit" id="phoible-load" value="load" disabled>
+        Load inventory
+      </button>
     </div>
   </form>
 </dialog>
