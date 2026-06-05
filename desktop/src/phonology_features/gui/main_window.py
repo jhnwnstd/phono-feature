@@ -214,6 +214,18 @@ class MainWindow(QMainWindow):
         # as a "shake" on the user's first colorblind toggle). One
         # synthetic round-trip now lets Qt finish that work invisibly.
         self._warm_palette_cache()
+        # Construct the PanPhon FeatureTable in a daemon thread so the
+        # first Builder "New" click does not pay the ~2 s panphon-data-
+        # load cost on the UI thread. The dialog's
+        # ``available_providers()`` call hits a warm cache after this
+        # thread finishes (~2 s after launch); if the user clicks New
+        # sooner, they block on the same lock the daemon is already
+        # waiting on and get the result as soon as it lands. Safe to
+        # call when ``panphon`` is not installed: the registry helper
+        # short-circuits on ``find_spec``.
+        from phonology_features.providers import prewarm_in_background
+
+        prewarm_in_background()
 
     def _warm_palette_cache(self) -> None:
         """Cycle the active palette mode once to pre-build cached
