@@ -360,6 +360,40 @@ def test_logical_col_offset_skips_spacer_tracks() -> None:
     assert physicals == {1, 2, 4, 5, 7, 8}
 
 
+def test_chart_geometry_handles_no_vowels() -> None:
+    """``build_vowel_chart_geometry`` must not crash on an inventory
+    that contains zero vowels. The original implementation indexed
+    ``populated_logical_rows[0]`` unconditionally and IndexError'd
+    out the entire ``build_inventory_summary`` call path, taking
+    down the New-inventory flow for any consonant-only setup (the
+    default ``DEFAULT_SEGMENTS`` placeholder is "p b t d k ɡ", so
+    the crash fired on the first New click that left the segments
+    box at the placeholder).
+
+    Empty inventories produce a degenerate but valid geometry:
+    canonical full-range silhouette, no rows, no cells, no cols.
+    Both renderers already guard on ``cells.length > 0`` before
+    drawing anything so the user simply sees no vowel chart.
+    """
+    from phonology_shared.chart.vowels import (
+        VOWEL_CHART_TITLE,
+        build_vowel_chart_geometry,
+    )
+
+    # Empty segs is the literal "no vowels" case the bug fired on.
+    profile = detect_vowel_profile([], {})
+    geometry = build_vowel_chart_geometry([], profile, {})
+
+    assert geometry.title == VOWEL_CHART_TITLE
+    assert geometry.cells == ()
+    assert geometry.rows == ()
+    assert geometry.cols == ()
+    # Silhouette is the canonical fallback so renderers can still
+    # paint a chart frame if they want to; both clients currently
+    # short-circuit on empty cells.
+    assert geometry.silhouette is not None
+
+
 def test_chart_geometry_omits_empty_rows() -> None:
     """``build_vowel_chart_geometry`` skips height tiers that have
     no occupied cell. Without this, the web renderer would emit a

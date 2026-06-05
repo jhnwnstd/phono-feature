@@ -2161,12 +2161,33 @@ def build_vowel_chart_geometry(
     occupied, _ = compute_placements(segs, profile, norm_feats, policy)
 
     populated_logical_rows = sorted({row for (row, _) in occupied})
+    shape = infer_vowel_shape(profile)
+
+    # Empty case: the inventory has no vowels (consonant-only setup,
+    # or a fresh "New" with the default-segments placeholder which
+    # is all-stops). Skip every row/cell-dependent computation and
+    # return a degenerate geometry with the canonical full-range
+    # silhouette so renderers can still draw the empty chart chrome
+    # (or hide it) by iterating zero-length ``rows`` / ``cells`` /
+    # ``cols``. Without this short-circuit the silhouette index
+    # ``populated_logical_rows[0]`` raises IndexError and the whole
+    # New-inventory flow dies for any inventory without vowels.
+    if not populated_logical_rows:
+        return VowelChartGeometry(
+            title=VOWEL_CHART_TITLE,
+            shape=shape,
+            silhouette=vowel_silhouette(shape),
+            cols=(),
+            rows=(),
+            cells=(),
+            natural_data_width_px=0,
+            natural_data_height_px=0,
+        )
+
     logical_row_to_grid_row = {
         ri: VOWEL_FIRST_DATA_GRID_ROW + display_index
         for display_index, ri in enumerate(populated_logical_rows)
     }
-
-    shape = infer_vowel_shape(profile)
     # Silhouette: position logic (top/bottom widths) comes from the
     # populated logical row range; display logic (top_y/bottom_y)
     # always spans the full data area so cells use every pixel
