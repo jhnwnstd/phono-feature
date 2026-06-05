@@ -101,6 +101,7 @@ from phonology_shared.presentation.palette import (
     set_theme,
 )
 from phonology_shared.presentation.view_models import (
+    AnalysisTabsPayload,
     summarize_feature_query,
     summarize_segment_selection,
 )
@@ -1406,7 +1407,7 @@ class MainWindow(QMainWindow):
             btn.set_state(summary["segment_states"][seg])
         self._apply_analysis_tabs(summary["analysis_tabs"])
 
-    def _apply_analysis_tabs(self, tabs: dict[str, Any]) -> None:
+    def _apply_analysis_tabs(self, tabs: AnalysisTabsPayload) -> None:
         """Unpack the shared view-model's ``analysis_tabs`` payload
         into :py:meth:`AnalysisPanel.set_sections`. Required because
         the payload key ``"class"`` is a Python keyword and can't be

@@ -62,6 +62,8 @@ from phonology_shared.presentation.mode_logic import (
 )
 from phonology_shared.presentation.palette import set_palette_mode, set_theme
 from phonology_shared.presentation.view_models import (
+    FeatureQuerySummary,
+    SegmentSelectionSummary,
     build_inventory_summary,
     summarize_feature_query,
     summarize_segment_selection,
@@ -498,7 +500,7 @@ def best_segment_n_cols_for_groups(
 
 
 @_translate_engine_errors
-def analyze_segments(segs: list[str]) -> dict[str, Any]:
+def analyze_segments(segs: list[str]) -> SegmentSelectionSummary:
     """SEG-mode analysis. Returns the per-tab ``analysis_tabs``
     payload plus the inputs JS needs to derive each row/button's
     state inline (mirroring the desktop's _update_seg_to_feat).
@@ -527,14 +529,16 @@ def analyze_segments(segs: list[str]) -> dict[str, Any]:
 
 
 @lru_cache(maxsize=256)
-def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict[str, Any]:
+def _analyze_segments_cached(
+    segs_tuple: tuple[str, ...],
+) -> SegmentSelectionSummary:
     """SEG analysis result; computed by the shared desktop helpers."""
     engine = _require_engine()
     return summarize_segment_selection(engine, list(segs_tuple))
 
 
 @_translate_engine_errors
-def analyze_features(spec: dict[str, str]) -> dict[str, Any]:
+def analyze_features(spec: dict[str, str]) -> FeatureQuerySummary:
     """FEAT-mode analysis. Returns the per-tab ``analysis_tabs``
     payload plus the matching segment list. JS derives
     matched/unmatched state per button inline (mirroring
@@ -572,7 +576,7 @@ def analyze_features(spec: dict[str, str]) -> dict[str, Any]:
 @lru_cache(maxsize=256)
 def _analyze_features_cached(
     spec_items: tuple[tuple[str, str], ...],
-) -> dict[str, Any]:
+) -> FeatureQuerySummary:
     engine = _require_engine()
     return summarize_feature_query(engine, dict(spec_items))
 

@@ -6,7 +6,7 @@ Pyodide.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from phonology_shared.chart.vowels import (
     build_vowel_chart_geometry,
@@ -35,6 +35,56 @@ from phonology_shared.theory.feature_engine import (
 
 if TYPE_CHECKING:
     from phonology_shared.theory.feature_engine import FeatureEngine
+
+
+# AnalysisTabsPayload is the per-tab content + per-tab control flags
+# the desktop's ``AnalysisPanel.set_sections`` and the web's
+# ``setAnalysisTabs`` consume. Used by ``_seg_tabs`` (SEG mode) and
+# ``_feat_tabs`` (FEAT mode). Functional ``TypedDict`` form so the
+# Python keyword ``class`` can be a key name (the analysis pane's
+# Class tab).
+AnalysisTabsPayload = TypedDict(
+    "AnalysisTabsPayload",
+    {
+        "selection": str,
+        "class": str,
+        "features": str,
+        "contrasts": str,
+        "contrasts_enabled": bool,
+        "class_state": ClassState,
+    },
+)
+
+
+class SegmentSelectionSummary(TypedDict):
+    """SEG-mode payload returned by :py:func:`summarize_segment_selection`.
+
+    Shared by desktop (``main_window._update_seg_to_feat``) and web
+    (``api.analyze_segments`` then JS unpack). Pins the exact key
+    set so a future drop / rename surfaces in mypy here instead of
+    at a JS bridge boundary later.
+    """
+
+    analysis_tabs: AnalysisTabsPayload
+    selected: list[str]
+    suggested: list[str]
+    common: dict[str, str]
+    contrastive: list[str]
+    segment_states: dict[str, str]
+    feature_rows: dict[str, dict[str, Any]]
+
+
+class FeatureQuerySummary(TypedDict):
+    """FEAT-mode payload returned by :py:func:`summarize_feature_query`.
+
+    Same single-source contract as :py:class:`SegmentSelectionSummary`.
+    The ``segment_states`` map has values ``"matched"``,
+    ``"unmatched"``, or ``"default"`` depending on engine response.
+    """
+
+    analysis_tabs: AnalysisTabsPayload
+    matching: list[str]
+    segment_states: dict[str, str]
 
 
 def build_inventory_summary(
@@ -68,7 +118,7 @@ def build_inventory_summary(
 def summarize_segment_selection(
     engine: FeatureEngine,
     segs: list[str],
-) -> dict[str, Any]:
+) -> SegmentSelectionSummary:
     """SEG-mode analysis payload shared by desktop and web.
 
     Keys:
@@ -185,7 +235,7 @@ def summarize_segment_selection(
 def summarize_feature_query(
     engine: FeatureEngine,
     spec: dict[str, str],
-) -> dict[str, Any]:
+) -> FeatureQuerySummary:
     """FEAT-mode analysis payload shared by desktop and web.
 
     **Invariant:** ``matching`` always equals
@@ -219,7 +269,7 @@ def _seg_tabs(
     common: dict[str, str],
     contrastive: dict[str, dict[str, list[str]]],
     completion: NaturalClassCompletion,
-) -> dict[str, Any]:
+) -> AnalysisTabsPayload:
     """Build the per-tab HTML payload for the SEG-mode analysis pane.
 
     Keys map to the three tabs the desktop and web render:
@@ -263,7 +313,7 @@ def _seg_tabs(
 def _feat_tabs(
     spec: dict[str, str],
     matching: list[str],
-) -> dict[str, Any]:
+) -> AnalysisTabsPayload:
     """Same shape as :py:func:`_seg_tabs` but for FEAT mode. The
     Contrasts tab is never meaningful for a feature query, so
     ``contrasts_enabled`` is always False (the UI greys it out).

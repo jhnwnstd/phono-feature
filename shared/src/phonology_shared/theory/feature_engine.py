@@ -727,6 +727,14 @@ class FeatureEngine:
 
         Empty selection returns an empty dict (no selection => no
         categorisation).
+
+        Performance: measured at 13 us (single segment) to 245 us
+        (all 141 Hayes segments) per call on a 2026-era laptop via
+        :py:mod:`shared/tests/bench/bench_feature_categories`. No
+        cache wraps this method because the per-click click-to-
+        repaint budget is in milliseconds and even the worst case
+        is well under the cost a frame budget would notice. Re-run
+        the bench before adding memoization here.
         """
         if not segments:
             return {}
