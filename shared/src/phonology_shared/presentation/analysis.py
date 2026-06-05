@@ -184,9 +184,8 @@ def _render_matching_segments(matching: Sequence[str]) -> str:
     """HTML for the matching-segments answer of a feature query.
 
     ``"none"`` when empty; otherwise ``"Matching N segment(s):"``
-    followed by the chips. Shared between the legacy blob renderer
-    and the per-tab variant so the two surfaces can't drift on the
-    answer line.
+    followed by the chips. Used by ``render_features_tab_feat`` so
+    the answer line shares one source of truth.
     """
     if not matching:
         return f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
@@ -243,47 +242,6 @@ def compute_contrastive(
     return result
 
 
-# --- top-level renderers -----------------------------------------
-
-
-def render_single_segment(
-    seg: str,
-    feats: dict[str, str],
-    completion: NaturalClassCompletion,
-) -> str:
-    """Build HTML for a single selected segment.
-
-    ``completion`` is the precomputed
-    :py:class:`~phonology_shared.theory.feature_engine.NaturalClassCompletion`
-    for ``[seg]``; the renderer dispatches on its status without
-    re-asking the engine. The previous fallback that quietly looked
-    for an underspec-compatible equivalence class is gone. When
-    ``seg`` is not its own natural class the user now sees the
-    smallest strict completion explicitly.
-    """
-    plus_feats = sort_features(
-        [feature for feature, value in feats.items() if value == "+"]
-    )
-    minus_feats = sort_features(
-        [feature for feature, value in feats.items() if value == "-"]
-    )
-    plus_tags = " ".join(
-        _signed_feature_chip("+", feature) for feature in plus_feats
-    )
-    minus_tags = " ".join(
-        _signed_feature_chip("-", feature) for feature in minus_feats
-    )
-    seg_safe = html.escape(seg)
-    out = (
-        f"<p><b style='color:{C['text']}'>/{seg_safe}/</b>"
-        " feature bundle:</p>"
-        f"<p>{plus_tags}</p>"
-        f"<p>{minus_tags}</p>"
-    )
-    out += _render_completion_body(completion)
-    return out
-
-
 def _render_completion_body(completion: NaturalClassCompletion) -> str:
     """Class-pane content for a single selection's completion.
 
@@ -314,64 +272,6 @@ def _render_completion_body(completion: NaturalClassCompletion) -> str:
         f"<p><b>{n} {_plural(n, 'segment')} needed for natural class:</b></p>"
         f"<p>{chips}</p>"
     )
-
-
-def render_multi_segment(
-    engine: FeatureEngine,
-    segs: list[str],
-    common: dict[str, str],
-    contrastive: dict[str, dict[str, list[str]]],
-    completion: NaturalClassCompletion,
-) -> str:
-    """Build HTML for multiple selected segments.
-
-    Two-column layout: selection / natural-class verdict on the
-    left, shared / contrasting features on the right. Falls back to
-    a single full-width column for the universal class (whole
-    inventory selected), where the left side reduces to one line.
-    """
-    seg_tags = " ".join(_segment_chip(seg) for seg in segs)
-    # Universal-class layout cue: the spec is the empty bundle. The
-    # left column collapses to one line, so render full-width.
-    is_universal = (
-        completion.status == "already_natural_class"
-        and completion.selected_minimal_bundles
-        and not completion.selected_minimal_bundles[0]
-    )
-    nc_html, spec_html = _render_natural_class_verdict(completion)
-    common_html = _render_shared_features(common)
-    contrast_html = _render_contrast_section(engine, segs, contrastive)
-    selected_html = f"<p><b>Selected:</b> {seg_tags}</p>"
-    if is_universal:
-        return (
-            f"{selected_html}{nc_html}{spec_html}{common_html}{contrast_html}"
-        )
-    return (
-        "<table width='100%' cellpadding='0' cellspacing='0'>"
-        "<tr>"
-        "<td width='50%' style='vertical-align:top; padding-right:18px;'>"
-        f"{selected_html}{nc_html}{spec_html}{common_html}"
-        "</td>"
-        "<td width='50%' style='vertical-align:top;'>"
-        f"{contrast_html}"
-        "</td>"
-        "</tr></table>"
-    )
-
-
-def render_feat_to_seg(
-    feature_dict: dict[str, str],
-    matching: list[str],
-) -> str:
-    """Build HTML for a feature-to-segment query result."""
-    feat_tags = " ".join(
-        _signed_feature_chip(value, feature)
-        for feature, value in sort_spec(feature_dict).items()
-    )
-    return f"<p><b>Query:</b> {feat_tags}</p>{_render_matching_segments(matching)}"
-
-
-# --- helpers for render_multi_segment ----------------------------
 
 
 def _render_shared_features(common: dict[str, str]) -> str:
@@ -466,43 +366,14 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
     return "<tr>" + "".join(cells) + "</tr>"
 
 
-def _render_natural_class_verdict(
-    completion: NaturalClassCompletion,
-) -> tuple[str, str]:
-    """Return ``(verdict_html, spec_html)`` from the completion.
-
-    For ``already_natural_class``, ``spec_html`` is the minimal
-    feature spec(s) of the selection. For both completion statuses
-    (``one_minimal_completion`` / ``multiple_minimal_completions``)
-    ``spec_html`` is empty: the verdict line carries the chips and
-    the completed-class spec is intentionally suppressed to keep
-    the not-a-natural-class display focused on what to add.
-    """
-    if completion.status == "already_natural_class":
-        verdict = f"<p><b>Natural class:</b> {_yes_no(True)}</p>"
-        return verdict, _render_completion_specs(
-            completion.selected_minimal_bundles
-        )
-    additions = completion.additions[0] if completion.additions else ()
-    n = len(additions)
-    chips = " ".join(_segment_chip(seg, TagColor.NEUTRAL) for seg in additions)
-    verdict = (
-        f"<p><b>Natural class:</b> {_yes_no(False)},"
-        f" add {n} {_plural(n, 'segment')} to complete:</p>"
-        f"<p>{chips}</p>"
-    )
-    return verdict, ""
-
-
 # ---------------------------------------------------------------------------
 # Per-tab renderers: one HTML string per analysis tab in the UI.
 #
-# The single-blob ``render_*`` functions above are still used (the web's
-# legacy ``analysis_html`` payload reads them) but the desktop's tabbed
-# analysis panel and the matching web layout consume these per-tab
-# variants so each tab gets exactly its section. Splitting the
-# rendering at this layer keeps the desktop and web in lockstep: both
-# read the same Python output via ``view_models``.
+# The desktop's tabbed analysis panel and the web's tabbed layout
+# consume these per-tab variants so each tab gets exactly its
+# section. Both clients read the same Python output via
+# ``view_models``, so the rendering stays in lockstep without a
+# parallel JS implementation.
 # ---------------------------------------------------------------------------
 
 
@@ -511,9 +382,8 @@ def _render_natural_class_verdict(
 #: muted indicator. The full selection is still available via the
 #: per-tab content below; this just keeps the persistent header
 #: from bloating the analysis pane on selections like General-IPA's
-#: "all 97 consonants", which would otherwise wrap to many rows,
-#: push the tabs / content down, and collide with the expand
-#: button at the top-right.
+#: "all 97 consonants", which would otherwise wrap to many rows
+#: and push the tabs / content down.
 SELECTION_HEADER_MAX_CHIPS: int = 24
 
 

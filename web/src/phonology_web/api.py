@@ -499,9 +499,9 @@ def best_segment_n_cols_for_groups(
 
 @_translate_engine_errors
 def analyze_segments(segs: list[str]) -> dict[str, Any]:
-    """SEG-mode analysis. Returns ``analysis_html`` + the inputs
-    JS needs to derive each row/button's state inline (mirroring
-    the desktop's _update_seg_to_feat).
+    """SEG-mode analysis. Returns the per-tab ``analysis_tabs``
+    payload plus the inputs JS needs to derive each row/button's
+    state inline (mirroring the desktop's _update_seg_to_feat).
 
     Cache hit on a repeated selection returns in ~5 us; a fresh
     selection takes ~30 ms for the feature math + HTML render.
@@ -535,9 +535,10 @@ def _analyze_segments_cached(segs_tuple: tuple[str, ...]) -> dict[str, Any]:
 
 @_translate_engine_errors
 def analyze_features(spec: dict[str, str]) -> dict[str, Any]:
-    """FEAT-mode analysis. Returns ``analysis_html`` + the
-    matching segment list. JS derives matched/unmatched state per
-    button inline (mirroring _update_feat_to_seg).
+    """FEAT-mode analysis. Returns the per-tab ``analysis_tabs``
+    payload plus the matching segment list. JS derives
+    matched/unmatched state per button inline (mirroring
+    _update_feat_to_seg).
 
     Validates that every key in ``spec`` is a feature present in
     the active inventory and every value is one of ``"+" / "-"

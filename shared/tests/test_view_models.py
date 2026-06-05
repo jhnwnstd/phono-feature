@@ -60,7 +60,6 @@ def test_summarize_segment_selection_single_maps_zero_to_empty() -> None:
     assert summary["contrastive"] == []
     assert summary["common"]["Voice"] == "+"
     assert summary["common"]["Back"] == ""
-    assert "/b/" in summary["analysis_html"]
     assert summary["segment_states"]["b"] == "selected"
     assert summary["segment_states"]["d"] == "default"
     assert summary["feature_rows"]["Voice"]["value"] == "+"
@@ -275,7 +274,6 @@ def test_summarize_feature_query_matches_engine() -> None:
         assert seg in matching, f"voiced /{seg}/ should match +Voice"
     for seg in ("p", "t", "k", "f", "s"):
         assert seg not in matching, f"voiceless /{seg}/ should not match"
-    assert "+Voice" in summary["analysis_html"]
     assert summary["segment_states"]["b"] == "matched"
     assert summary["segment_states"]["p"] == "unmatched"
 

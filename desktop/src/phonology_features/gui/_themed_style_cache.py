@@ -37,7 +37,7 @@ def styles_for_active_theme(
     version. The cache grows by one entry per distinct version
     seen during the process lifetime, which is bounded by the
     number of unique (theme, mode) combinations the user toggles
-    through (currently 4) plus the warmup pass — single-digit
+    through (currently 4) plus the warmup pass, so single-digit
     entries in practice.
 
     The function takes the cache dict by reference so the caller

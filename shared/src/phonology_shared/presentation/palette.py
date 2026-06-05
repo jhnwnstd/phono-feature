@@ -8,6 +8,42 @@ Neutrals avoid pure black and pure white (less glare, contrast above
 WCAG AA on body text); accent and status colors are tuned per theme.
 """
 
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class Theme(StrEnum):
+    """Light vs dark palette axis. StrEnum so existing string call
+    sites (``set_theme("light")``) keep working while typed callers
+    use :py:attr:`Theme.LIGHT` for discoverability and mypy support.
+    """
+
+    LIGHT = "light"
+    DARK = "dark"
+
+
+class PaletteMode(StrEnum):
+    """Standard vs colorblind-friendly palette axis. Independent of
+    :py:class:`Theme`; both axes compose to produce the four
+    concrete palette tables (LIGHT, DARK, COLORBLIND_LIGHT,
+    COLORBLIND_DARK)."""
+
+    STANDARD = "standard"
+    COLORBLIND = "colorblind"
+
+
+class ClassState(StrEnum):
+    """Natural-class verdict for the analysis panel's Class tab.
+    Drives both the tab's colour cue and the
+    :py:func:`class_state_palette_keys` mapping that resolves into
+    palette role keys for both clients."""
+
+    NATURAL = "natural"
+    NOT_NATURAL = "not_natural"
+    NEUTRAL = "neutral"
+
+
 LIGHT = {
     # Neutrals (Material-ish: warm light gray, not blueish)
     "bg": "#F7F7F7",
@@ -321,6 +357,12 @@ def _resolve(theme: str, mode: str) -> dict[str, str]:
 def _refresh_active() -> None:
     """Repopulate ``C`` from the current (_active_theme, _active_mode)
     pair and bump ``theme_version`` so cached derivatives invalidate.
+
+    Invariant: ``C`` is mutated in place (``clear()`` + ``update()``),
+    never rebound. Modules that did ``from ... import C`` once at
+    load time keep observing the live palette without re-importing.
+    Replacing the rebind path with ``C = target`` would silently
+    leave existing importers pointing at the stale dict.
     """
     global theme_version
     target = _resolve(_active_theme, _active_mode)
@@ -329,15 +371,17 @@ def _refresh_active() -> None:
     theme_version += 1
 
 
-#: Accepted ``set_theme`` arguments. Both UIs read this; the web
-#: bridge's ``set_active_theme`` and the desktop's settings-read
-#: validate against it. Frozen so importers can't append to it.
-ALLOWED_THEMES: frozenset[str] = frozenset({"light", "dark"})
-#: Accepted ``set_palette_mode`` arguments. Same shared contract.
-ALLOWED_PALETTE_MODES: frozenset[str] = frozenset({"standard", "colorblind"})
+#: Accepted ``set_theme`` arguments, derived from :py:class:`Theme`
+#: so the enum stays the single source of truth. Both UIs read this
+#: as a string set for backward compatibility with callers that
+#: predate the enum.
+ALLOWED_THEMES: frozenset[str] = frozenset(Theme)
+#: Accepted ``set_palette_mode`` arguments, derived from
+#: :py:class:`PaletteMode`. Same shared contract.
+ALLOWED_PALETTE_MODES: frozenset[str] = frozenset(PaletteMode)
 
 
-def set_theme(name: str) -> None:
+def set_theme(name: str | Theme) -> None:
     """Switch the active palette to "light" or "dark", preserving the
     current standard/colorblind mode.
 
@@ -345,32 +389,23 @@ def set_theme(name: str) -> None:
     this contract: the web bridge wraps the raise into a
     ``ValidationError``; the desktop validates user-supplied values
     (e.g. ``QSettings`` reads) at the trust boundary before calling
-    in. The previous silent coercion to "light" hid typos.
+    in. ``Theme(name)`` coerces strings and rejects unknowns with
+    the same ValueError the manual check used to raise.
     """
-    if name not in ALLOWED_THEMES:
-        raise ValueError(
-            f"unknown theme {name!r}; expected one of"
-            f" {sorted(ALLOWED_THEMES)}"
-        )
     global _active_theme
-    _active_theme = name
+    _active_theme = str(Theme(name))
     _refresh_active()
 
 
-def set_palette_mode(mode: str) -> None:
+def set_palette_mode(mode: str | PaletteMode) -> None:
     """Switch the active palette between "standard" and "colorblind",
     preserving the current light/dark theme.
 
     Raises :py:class:`ValueError` on unknown modes. See
     :py:func:`set_theme` for the rationale.
     """
-    if mode not in ALLOWED_PALETTE_MODES:
-        raise ValueError(
-            f"unknown palette mode {mode!r}; expected one of"
-            f" {sorted(ALLOWED_PALETTE_MODES)}"
-        )
     global _active_mode
-    _active_mode = mode
+    _active_mode = str(PaletteMode(mode))
     _refresh_active()
 
 
@@ -384,36 +419,33 @@ def get_theme_name() -> str:
     return _active_theme
 
 
-# Accepted natural-class verdict labels. Both UIs read the same set
-# from view_models / analysis builders; centralised here so the
-# palette helpers can validate without an import cycle.
-ALLOWED_CLASS_STATES: frozenset[str] = frozenset(
-    {"natural", "not_natural", "neutral"}
-)
+#: Accepted natural-class verdict labels, derived from
+#: :py:class:`ClassState`. Kept as a string frozenset for callers
+#: that predate the enum.
+ALLOWED_CLASS_STATES: frozenset[str] = frozenset(ClassState)
 
 
-def class_state_palette_keys(state: str) -> tuple[str, str] | None:
+def class_state_palette_keys(
+    state: str | ClassState,
+) -> tuple[str, str] | None:
     """Map a natural-class verdict to the ``(fg_key, bg_key)`` pair
     of palette keys used to paint the Class tab band.
 
-    Returns ``None`` for the ``"neutral"`` state to signal "no
-    override; let the tab keep its default palette colours". The
-    desktop's :py:func:`_class_state_stylesheet` and the build
+    Returns ``None`` for :py:attr:`ClassState.NEUTRAL` to signal
+    "no override; let the tab keep its default palette colours".
+    The desktop's :py:func:`_class_state_stylesheet` and the build
     script's CSS-variable bake both consult this helper so the
     verdict-to-palette-role mapping lives in one place. Adding a
-    new state means editing this function and adding a CSS rule;
-    no second mapping copy to keep in sync.
+    new state means editing :py:class:`ClassState`, extending the
+    match below, and adding a CSS rule; no second mapping copy to
+    keep in sync.
     """
-    if state == "natural":
+    coerced = ClassState(state)
+    if coerced is ClassState.NATURAL:
         return ("plus", "plus_bg")
-    if state == "not_natural":
+    if coerced is ClassState.NOT_NATURAL:
         return ("minus", "minus_bg")
-    if state == "neutral":
-        return None
-    raise ValueError(
-        f"unknown class state {state!r}; expected one of"
-        f" {sorted(ALLOWED_CLASS_STATES)}"
-    )
+    return None
 
 
 def detect_system_theme(default: str = "light") -> str:

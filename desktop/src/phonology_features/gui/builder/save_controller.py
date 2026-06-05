@@ -161,7 +161,7 @@ class _SaveController(QObject):
             # a BaseException subclass propagates past the inner
             # ``except Exception`` (KeyboardInterrupt, SystemExit, or
             # any future BaseException-derived class), the ``finally``
-            # below still emits a *failure* completion — the main
+            # below still emits a *failure* completion, so the main
             # thread clears ``save_in_flight`` and the user is not
             # told "saved" when the file was not written. The string
             # is cleared to "" only on the success path inside try.

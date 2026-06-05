@@ -383,23 +383,22 @@ class MainWindow(QMainWindow):
         )
         self._vsplit.setSizes([_initial_top_h, _initial_analysis_h])
         # Vertical handle is not user-draggable; the split is driven
-        # by the panels' minimum heights plus the ⤢ expand toggle.
-        # Qt resets ``handleWidth`` on every style polish, so
-        # ``setHandleWidth(0)`` doesn't stick. Disabling the handle
-        # widget AND clamping its max height to 0 does.
+        # by the analysis pane's four-row floor plus the top pane's
+        # content-derived minimum. Qt resets ``handleWidth`` on every
+        # style polish, so ``setHandleWidth(0)`` doesn't stick.
+        # Disabling the handle widget AND clamping its max height to
+        # 0 does.
         handle = self._vsplit.handle(1)
         if handle is not None:
             handle.setEnabled(False)
             handle.setCursor(Qt.CursorShape.ArrowCursor)
             handle.setMaximumHeight(0)
             handle.setMinimumHeight(0)
-        # Vertical stretch: extra height now goes to the TOP pane
-        # (seg + feat). The analysis pane keeps its comfortable
-        # four-row floor; spare vertical room is what lets the
-        # segment grid fit more rows / reduce its internal scrollbar
-        # and what the feature panel uses to drop its own scrollbar.
-        # The expand toggle still lifts the analysis pane to 55%
-        # temporarily when the user wants more analysis room.
+        # Vertical stretch: extra height goes to the TOP pane (seg
+        # + feat). The analysis pane keeps its comfortable four-row
+        # floor; spare vertical room is what lets the segment grid
+        # fit more rows / reduce its internal scrollbar, and what
+        # the feature panel uses to drop its own scrollbar.
         self._vsplit.setStretchFactor(0, 1)
         self._vsplit.setStretchFactor(1, 0)
         self._geom = GeometryController(
@@ -1204,7 +1203,7 @@ class MainWindow(QMainWindow):
         """Splitter-drag callback. Re-runs the seg-pane layout rules
         (vowel chart width + stack-vs-side-by-side) using the new
         seg-pane width. The widgets themselves don't re-measure on
-        resize — width is pushed in from here, so a drag is one
+        resize; width is pushed in from here, so a drag is one
         cheap layout invalidation instead of the per-pixel widget
         churn an earlier attempt produced.
         """
@@ -1229,7 +1228,7 @@ class MainWindow(QMainWindow):
             once per threshold crossing so a continuous drag doesn't
             churn the layout.
 
-        Idempotent on same-width calls — the resize event filter
+        Idempotent on same-width calls. The resize event filter
         fires this on every resizeEvent, including Qt's own internal
         layout passes; the early-return below keeps that cheap.
         """
@@ -1247,7 +1246,7 @@ class MainWindow(QMainWindow):
         # which is owned by the same parent widget either way.
         if should_stack:
             self._seg_h_pair.removeWidget(self.vowel_chart_widget)
-            # Insert at index 1 — directly under the consonants pair,
+            # Insert at index 1, directly under the consonants pair,
             # before the trailing stretch.
             self._seg_content_layout.insertWidget(
                 1,
@@ -1268,7 +1267,7 @@ class MainWindow(QMainWindow):
         """Activate the clicked panel on a press in its empty area,
         and keep the seg-pane-dependent layout state (vowel chart
         width, stack-vs-side-by-side flag) in sync whenever the seg
-        panel changes width — not only on splitter drag.
+        panel changes width, not only on splitter drag.
 
         Installed on ``seg_panel`` / ``feat_panel`` only, so ``a0`` is
         always one of the two.
@@ -1462,7 +1461,7 @@ class MainWindow(QMainWindow):
         implementation behind both Clear buttons. "Clear means clear":
         the two panes are wired together, so each Clear wipes both.
         ``silent=True`` is the inventory-load path: visible selection
-        resets but saved cross-mode state and expand survive (the user
+        resets but the saved cross-mode state survives (the user
         did not press Clear). The analysis pane is never wiped here;
         the caller's subsequent refresh re-renders the empty-selection
         state through the normal view-model pipeline, which is what

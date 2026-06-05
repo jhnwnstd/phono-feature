@@ -39,6 +39,7 @@ from phonology_shared.presentation.layout import (
 )
 from phonology_shared.presentation.palette import (
     C,
+    ClassState,
     class_state_palette_keys,
 )
 from phonology_shared.presentation.view_models import (
@@ -55,7 +56,7 @@ _SEG_BTN_H = 26
 _SEG_HEADER_H = 22
 
 
-def _class_state_stylesheet(class_state: str) -> str:
+def _class_state_stylesheet(class_state: str | ClassState) -> str:
     """Compose the analysis pane's QTabBar stylesheet with an
     optional ``QTabBar::tab:first`` override that paints the Class
     tab green / red per the natural-class verdict. Shared by
@@ -790,7 +791,7 @@ class AnalysisPanel(QWidget):
         # Class-tab background-colour state (natural / not_natural /
         # neutral). ``apply_theme`` reads this when composing the
         # stylesheet so a theme swap mid-session keeps the cue.
-        self._class_state: str = "neutral"
+        self._class_state: ClassState = ClassState.NEUTRAL
         self.apply_theme()
 
     def minimumSizeHint(self) -> QSize:
@@ -854,7 +855,7 @@ class AnalysisPanel(QWidget):
         contrasts_html: str,
         *,
         contrasts_enabled: bool = True,
-        class_state: str = "neutral",
+        class_state: str | ClassState = ClassState.NEUTRAL,
     ) -> None:
         """Push the four analysis sections produced by the shared
         view-model into the persistent selection header + three tabs.
@@ -894,7 +895,7 @@ class AnalysisPanel(QWidget):
             self.tabs.setCurrentIndex(self._TAB_CLASS_IDX)
         self._apply_class_state(class_state)
 
-    def _apply_class_state(self, state: str) -> None:
+    def _apply_class_state(self, state: str | ClassState) -> None:
         """Colour the first tab (Class) per the natural-class verdict.
 
         Re-applies the full tab-bar stylesheet with a state-specific
@@ -905,10 +906,11 @@ class AnalysisPanel(QWidget):
         vision and is consistent with the web's ``data-class-state``
         styling.
         """
-        if state == self._class_state:
+        coerced = ClassState(state)
+        if coerced is self._class_state:
             return
-        self._class_state = state
-        set_css(self.tabs, _class_state_stylesheet(state))
+        self._class_state = coerced
+        set_css(self.tabs, _class_state_stylesheet(coerced))
 
     def clear(self) -> None:
         """Reset the analysis pane to its post-construction state.
@@ -931,7 +933,7 @@ class AnalysisPanel(QWidget):
                 delattr(tab, _LAST_HTML_ATTR)
         if hasattr(self.selection_label, _LAST_HTML_ATTR):
             delattr(self.selection_label, _LAST_HTML_ATTR)
-        self._apply_class_state("neutral")
+        self._apply_class_state(ClassState.NEUTRAL)
         self.tabs.setTabEnabled(self._TAB_CONTRASTS_IDX, True)
         self.tabs.setCurrentIndex(self._TAB_CLASS_IDX)
 

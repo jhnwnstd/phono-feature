@@ -18,18 +18,16 @@ from phonology_shared.presentation.analysis import (
     render_class_tab_seg,
     render_contrasts_tab_feat,
     render_contrasts_tab_seg,
-    render_feat_to_seg,
     render_features_tab_feat,
     render_features_tab_seg,
-    render_multi_segment,
     render_selection_summary_seg,
-    render_single_segment,
 )
 from phonology_shared.presentation.constants import (
     FEATURE_GROUPS,
     MINUS_SIGN,
 )
 from phonology_shared.presentation.layout import distribute_feature_groups
+from phonology_shared.presentation.palette import ClassState
 from phonology_shared.theory.feature_engine import (
     FeatureCategory,
     NaturalClassCompletion,
@@ -75,7 +73,8 @@ def summarize_segment_selection(
 
     Keys:
 
-    * ``analysis_html``: pre-rendered HTML for the analysis pane.
+    * ``analysis_tabs``: per-tab payload consumed by the desktop's
+      ``AnalysisPanel.set_sections`` and the web's tab renderer.
     * ``selected``: echoed selection list.
     * ``suggested``: natural-class extension suggestions.
     * ``common``: ``{feat: value}`` display state for shared rows.
@@ -90,7 +89,6 @@ def summarize_segment_selection(
     if not segs:
         empty_completion = engine.complete_to_minimal_natural_class([])
         return {
-            "analysis_html": "",
             "analysis_tabs": _seg_tabs(engine, [], {}, {}, empty_completion),
             "selected": [],
             "suggested": [],
@@ -127,9 +125,6 @@ def summarize_segment_selection(
                 seg_states[seg] = "suggested"
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
         return {
-            "analysis_html": render_single_segment(
-                segs[0], dict(feats), completion
-            ),
             "analysis_tabs": _seg_tabs(engine, segs, common, {}, completion),
             "selected": list(segs),
             "suggested": list(suggested_segs),
@@ -175,13 +170,6 @@ def summarize_segment_selection(
         else:
             seg_states[seg] = "default"
     return {
-        "analysis_html": render_multi_segment(
-            engine,
-            segs,
-            common,
-            contrastive,
-            completion,
-        ),
         "analysis_tabs": _seg_tabs(
             engine, segs, common, contrastive, completion
         ),
@@ -210,7 +198,6 @@ def summarize_feature_query(
     segment_states = _default_segment_states(engine)
     if not spec:
         return {
-            "analysis_html": "",
             "analysis_tabs": _feat_tabs({}, []),
             "matching": [],
             "segment_states": segment_states,
@@ -220,7 +207,6 @@ def summarize_feature_query(
     for seg in engine.segments:
         segment_states[seg] = "matched" if seg in matching_set else "unmatched"
     return {
-        "analysis_html": render_feat_to_seg(spec, matching),
         "analysis_tabs": _feat_tabs(spec, matching),
         "matching": matching,
         "segment_states": segment_states,
@@ -254,12 +240,12 @@ def _seg_tabs(
     # multi-segment verdict where the answer is genuinely useful.
     if len(segs) >= 2:
         class_state = (
-            "natural"
+            ClassState.NATURAL
             if completion.status == "already_natural_class"
-            else "not_natural"
+            else ClassState.NOT_NATURAL
         )
     else:
-        class_state = "neutral"
+        class_state = ClassState.NEUTRAL
     return {
         "selection": render_selection_summary_seg(segs),
         "class": render_class_tab_seg(segs, completion),
@@ -291,7 +277,7 @@ def _feat_tabs(
         "features": render_features_tab_feat(spec),
         "contrasts": render_contrasts_tab_feat(),
         "contrasts_enabled": False,
-        "class_state": "neutral",
+        "class_state": ClassState.NEUTRAL,
     }
 
 

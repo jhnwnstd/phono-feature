@@ -118,14 +118,14 @@ def partition_groups_for_spillover(
     a single vertical flow. With wide inventories (General IPA being
     the canonical case), that flow overshoots the visible area.
     Instead of forcing the user to scroll, the bottom groups get
-    rearranged into ``n_spillover_cols`` columns at the bottom — the
+    rearranged into ``n_spillover_cols`` columns at the bottom: the
     pair sits side-by-side, so the saved vertical space lets the
     remaining single-column groups fit comfortably above.
 
     ``group_heights`` is the natural per-group height (header + button
     rows) at the current pane width, in display units (px on web,
-    QGridLayout-row heights on desktop — they're both monotonic, so
-    the algorithm doesn't care which). ``available_height`` is the
+    QGridLayout-row heights on desktop). They're both monotonic, so
+    the algorithm doesn't care which. ``available_height`` is the
     pane's clientHeight on web / scroll-viewport height on desktop.
 
     Returns ``main_count``: the number of groups (from the front of
@@ -369,7 +369,7 @@ def plan_seg_layout(
 
 
 # ---------------------------------------------------------------------------
-# Adaptive window layout — single source of truth for both frontends.
+# Adaptive window layout: single source of truth for both frontends.
 #
 # Every layout decision below is consumed by:
 #   * the desktop, by calling these functions directly from
@@ -511,12 +511,12 @@ HARD_MIN_ANALYSIS_H: int = 60
 # its real inventory content. This floor is just degenerate-case
 # protection (e.g. an empty inventory whose ``sizeHint`` reports 0)
 # so the top pane doesn't fully collapse. The analysis pane
-# absorbs everything above the content-driven need by default —
-# the user's stated preference of "analysis as tall as it can be".
+# absorbs everything above the content-driven need by default
+# (the user's stated preference of "analysis as tall as it can be").
 MIN_TOP_PANE_H: int = 200
 
 # ---------------------------------------------------------------------------
-# RAW DIMENSIONS — per-row / per-card pixel measurements shared by
+# RAW DIMENSIONS: per-row / per-card pixel measurements shared by
 # desktop (Qt) and web (CSS). These are the single source of truth
 # both UIs consume; height-computation helpers below build everything
 # else from them. Centralised so the per-row stride doesn't drift
@@ -642,7 +642,7 @@ def distribute_pane_widths(
     available width.
 
     Policy: the feature pane gets ``max(FEAT_MIN_W, feat_content_w
-    + FEAT_CUSHION_PX)`` — content-driven, so it stays "relatively
+    + FEAT_CUSHION_PX)``, content-driven, so it stays "relatively
     consistent" as the user requested. The segments pane absorbs the
     rest above ``SEG_MIN_W`` (or its own content width, whichever is
     larger). On wide screens this means segments fan out instead of
@@ -662,7 +662,7 @@ def distribute_pane_widths(
 def vowel_chart_width(seg_pane_w: int) -> int:
     """The vowel chart's natural display width. The IPA chart is a
     fixed visualisation (one row-label column + six button columns)
-    so it doesn't grow with ``seg_pane_w`` — that would just put
+    so it doesn't grow with ``seg_pane_w``: that would just put
     empty space around the buttons and steal width from the
     consonant flow. Always returns ``VOWEL_NATURAL_W``; the
     parameter is kept for signature symmetry with
@@ -783,7 +783,7 @@ def best_segment_n_cols(group_size: int, max_cols: int) -> int:
     For ``group_size <= max_cols`` the whole group fits in one row,
     so we return ``group_size`` (no orphan possible). Otherwise the
     final row carries ``group_size % n_cols`` buttons. A remainder
-    of 1 is the worst case — one button on a line by itself — so
+    of 1 is the worst case (one button on a line by itself), so
     we step ``n_cols`` down from ``max_cols`` until the remainder
     is either 0 (rows exactly fill) or at least 2 (no orphan).
 
@@ -803,7 +803,7 @@ def best_segment_n_cols(group_size: int, max_cols: int) -> int:
         remainder = group_size % n_cols
         if remainder == 0 or remainder >= 2:
             return n_cols
-    # Theoretical fallback — every remainder was 1 somehow.
+    # Theoretical fallback: every remainder was 1 somehow.
     # ``group_size % 2`` is 0 or 1, so n_cols=2 above already covers
     # every group_size > 2; we only reach here for group_size in
     # {2, 3} where the loop short-circuits anyway.
@@ -811,7 +811,7 @@ def best_segment_n_cols(group_size: int, max_cols: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Content-driven height helpers — predict the natural height each top
+# Content-driven height helpers: predict the natural height each top
 # pane will take BEFORE Qt lays it out. Lets ``geometry_controller``
 # pick the right ``setMinimumHeight`` values from inventory metadata
 # alone, and lets the cross-product test prove that no bundled
@@ -918,12 +918,12 @@ def feature_panel_natural_height(
 # ``overflow`` names the documented strategy when natural content
 # would exceed ``max_*``:
 #
-#   "clip"        — hard-cut via ``overflow: hidden`` / Qt clip.
-#   "scroll"      — show a scrollbar.
-#   "shrink-font" — re-render at a smaller font-size (seg buttons
-#                   use this via the rasterizer's font-shrink loop).
-#   "reflow"      — engage an alternative layout (spillover, stack).
-#   "hide"        — drop the region (e.g. tooltip when no source).
+#   "clip":        hard-cut via ``overflow: hidden`` / Qt clip.
+#   "scroll":      show a scrollbar.
+#   "shrink-font": re-render at a smaller font-size (seg buttons
+#                  use this via the rasterizer's font-shrink loop).
+#   "reflow":      engage an alternative layout (spillover, stack).
+#   "hide":        drop the region (e.g. tooltip when no source).
 #
 # Adding a region: add the entry below, then cite it in the widget's
 # constructor and the test in ``desktop/tests/test_size_policies.py``.

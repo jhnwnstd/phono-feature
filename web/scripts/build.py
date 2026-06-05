@@ -187,8 +187,8 @@ def generate_theme_css() -> None:
     variables. Edits to palette.py propagate to both on the next build.
 
     Two perpendicular axes drive variant selection:
-      * ``html[data-theme="dark"]`` — dark theme overrides.
-      * ``html[data-cb="on"]``      — colorblind-friendly palette.
+      * ``html[data-theme="dark"]``: dark theme overrides.
+      * ``html[data-cb="on"]``:      colorblind-friendly palette.
     The colorblind-dark variant is keyed on both attributes so the
     most-specific selector wins regardless of attribute order.
     """
@@ -510,7 +510,7 @@ def generate_layout_css() -> None:
         # the web's container queries, and ``applyPerGroupSegmentColumns``.
         f"  --seg-btn-w: {mod.BTN_W}px;",
         f"  --seg-btn-gap: {mod.BTN_GAP}px;",
-        # Per-row / per-card heights — single source of truth for
+        # Per-row / per-card heights: single source of truth for
         # consonant-grid and feature-card height math in the web.
         f"  --seg-btn-h: {mod.SEG_BTN_H}px;",
         f"  --seg-btn-row-h: {mod.SEG_BTN_ROW_H}px;",

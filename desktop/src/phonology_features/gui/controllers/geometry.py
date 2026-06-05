@@ -226,7 +226,7 @@ class GeometryController:
         feat_padding = 40
         feat_need_w = feat_content_w + feat_chrome + feat_padding
         # Heights come from the shared layout helpers, not Qt's
-        # ``sizeHint`` — the helpers compute from inventory data
+        # ``sizeHint``: the helpers compute from inventory data
         # directly so we don't have to wait for Qt's reflow, and so
         # the same numbers appear on the web bundle via the CSS-
         # variable relay. Falls back to ``sizeHint`` if the engine
@@ -241,7 +241,7 @@ class GeometryController:
             # Predict the EVENTUAL seg pane width (post-splitter) so
             # ``seg_pane_n_cols`` picks the column count the grid
             # will actually paint at. Neither ``seg_panel.width()``
-            # nor ``hsplit.width()`` is reliable here — on the
+            # nor ``hsplit.width()`` is reliable here. On the
             # first-launch synchronous path they're constructor
             # defaults (480 and 100 px respectively). The WINDOW
             # width is reliable because the caller resizes the
@@ -341,9 +341,9 @@ class GeometryController:
             # user-draggable, so once they've established a width
             # preference we leave it alone on inventory swap. Only
             # the first launch gets a content-derived hsplit ratio.
-            # The vsplit (top vs analysis) is NOT user-draggable —
-            # the handle is disabled — so we always re-fit it to the
-            # new content. Otherwise loading a smaller inventory
+            # The vsplit (top vs analysis) is NOT user-draggable
+            # (the handle is disabled), so we always re-fit it to
+            # the new content. Otherwise loading a smaller inventory
             # would leave the analysis pane at its old size instead
             # of growing to absorb the freed space (the user's
             # "analysis as tall as it can be" preference).

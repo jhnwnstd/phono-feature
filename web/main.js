@@ -664,7 +664,7 @@ async function loadInventoryText(text, sourceLabel) {
             errorHtml = `<p><b>${escapeHtml(heading)}</b></p>`
                 + issues.map((i) => `<p>${escapeHtml(i)}</p>`).join("");
         }
-        // Route load errors to the Class tab — same place users
+        // Route load errors to the Class tab, the same place users
         // expect to see the primary analytical output.
         setAnalysisTabs({
             selection: "",
@@ -731,7 +731,7 @@ function escapeHtml(s) {
  * Uses solid black on transparent so the result is purely an alpha
  * mask; the displaying element supplies the actual colour via
  * ``background-color: currentColor``. The literal text passed in
- * is what gets drawn — no normalisation — so segments come through
+ * is what gets drawn (no normalisation) so segments come through
  * with their original Unicode code points (IPA ɡ U+0261, not ASCII
  * g U+0067, etc.).
  */
@@ -949,7 +949,7 @@ function relayoutSegments() {
 
 /** Pick a column count per consonant group that avoids one-button
  *  orphan rows. Mirrors the desktop's per-group ``best_segment_n_cols``
- *  pass in ``SegmentGridWidget._do_relayout`` — same Python helper, two
+ *  pass in ``SegmentGridWidget._do_relayout``: same Python helper, two
  *  call sites. Inline ``grid-template-columns`` per ``.seg-row``
  *  switches that row from the default ``flex-wrap`` to a grid with the
  *  computed count; default CSS still applies between layout passes for
@@ -1113,7 +1113,7 @@ function _buildSegmentButton(seg, extraAttrs) {
     // Rasterize the glyph as a canvas-alpha mask: the literal
     // codepoint passed in (IPA ɡ U+0261 etc.) is what gets drawn,
     // and the result lives in CSS-mask space rather than the DOM
-    // text content — so drag-select-and-copy yields nothing.
+    // text content, so drag-select-and-copy yields nothing.
     // ``SEG_LABEL_MAX_W`` matches ``--seg-btn-min-w`` in style.css
     // minus a small breathing margin. The rasterizer downscales the
     // font when the glyph's natural width would overflow the
@@ -1757,7 +1757,7 @@ function _surfaceBridgeFailure(callName, err) {
 }
 
 /** Push the shared view-model's per-tab payload into the analysis
- *  pane. Mirrors the desktop ``AnalysisPanel.set_sections`` — same
+ *  pane. Mirrors the desktop ``AnalysisPanel.set_sections``: same
  *  Python source, both UIs render the same three tabs.
  *
  *  Payload keys:
@@ -1770,7 +1770,7 @@ function _surfaceBridgeFailure(callName, err) {
  *    contrasts         html for the Contrasts tab body
  *    contrasts_enabled false → grey the Contrasts tab + snap back
  *                      to Class if it was active
- *    class_state       "natural" | "not_natural" | "neutral" — colour
+ *    class_state       "natural" | "not_natural" | "neutral": colour
  *                      cue on the Class tab itself, replaces the
  *                      old "Natural class: Yes/No" text
  */
@@ -2327,14 +2327,14 @@ function wireBuilderEditor(setupDialog) {
     // content overflows). The col/row-header panes are overflow:hidden
     // (no scrollbars). On platforms with classic scrollbars (Windows,
     // most Linux), the data pane's vertical scrollbar eats ~15px from
-    // its viewport while the cols pane keeps the full width — so at
+    // its viewport while the cols pane keeps the full width.
     // Scrollbar-gutter compensation: when the data pane shows a
     // scrollbar, the header panes need a matching transparent
     // border to keep their viewport aligned. The actual
     // application happens per-render in ``_alignHeaderPanesToData``
     // (gated on observed scrollbar presence) so the rows pane
     // doesn't carry a phantom bottom border when no horizontal
-    // scrollbar is visible — that border was clipping the last
+    // scrollbar is visible. That border was clipping the last
     // row label with a panel-coloured stripe.
 
     // +/− Segment / Feature buttons.
@@ -2518,12 +2518,12 @@ function _measureScrollbarWidth() {
  *  install a ``<colgroup>`` of explicit widths on BOTH the cols-pane
  *  and data-pane tables and switch them to ``table-layout: fixed``,
  *  which is the only reliable way to make two separate tables share
- *  column widths — setting ``style.width`` on individual cells is
+ *  column widths; setting ``style.width`` on individual cells is
  *  treated as a hint and ignored when other cells in the column are
  *  narrower. Without this, an IPA digraph like ``t͡ʃ`` expands its
  *  header cell past the 32px min-width while the data cell below
  *  stays at 32px, drifting every subsequent column out of alignment.
- *  Row heights are simpler — explicit ``<tr>.style.height`` works in
+ *  Row heights are simpler: explicit ``<tr>.style.height`` works in
  *  both layout modes. Called after each render. */
 function _alignHeaderPanesToData() {
     const dataTable = nodes.editorGridData.querySelector("table");
@@ -3179,7 +3179,7 @@ function onGridKeyDown(ev) {
 
 /** Move the focused cell by ``(dr, dc)``, clamping at the grid
  *  edges. Arrowing past the top edge selects the current column;
- *  past the left edge selects the current row — same hit as clicking
+ *  past the left edge selects the current row, the same hit as clicking
  *  the corresponding header. Within the cell grid, mirrors the
  *  desktop's clamped navigation in :py:meth:`_handle_table_key`,
  *  which routes through ``QTableWidget.setCurrentCell`` and that

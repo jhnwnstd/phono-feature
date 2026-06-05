@@ -308,7 +308,7 @@ dialog input[type="text"]:focus-visible {
 
 .grid {
   display: grid;
-  /* Adaptive panes — single source of truth in layout.py, baked
+  /* Adaptive panes: single source of truth in layout.py, baked
      into layout.css as custom properties at build time. The seg
      pane absorbs extra horizontal space (1fr); the feat pane stays
      at its content width (`max-content`) so it varies "some, not
@@ -344,7 +344,7 @@ dialog input[type="text"]:focus-visible {
 }
 
 /* Narrow-window collapse. The 900px literal must match
-   ``layout.COLLAPSE_W`` — a unit test pins this. CSS media queries
+   ``layout.COLLAPSE_W``: a unit test pins this. CSS media queries
    can't read custom properties, so the value lives in two places
    with a test to keep them in sync. */
 @media (max-width: 900px) {
@@ -443,7 +443,7 @@ dialog input[type="text"]:focus-visible {
 .seg-vowels {
   float: right;
   margin: 0 0 var(--space-md) var(--space-xl);
-  /* Pinned at the chart's natural width — matches the desktop's
+  /* Pinned at the chart's natural width to match the desktop's
      ``layout.VOWEL_NATURAL_W`` (baked from Python into layout.css).
      Extra horizontal space in the seg pane goes to consonants. */
   width: var(--vowel-natural-w);
@@ -453,7 +453,7 @@ dialog input[type="text"]:focus-visible {
    instead of floating beside them. Mirrors
    ``layout.should_stack_vowels`` on the desktop, expressed as a
    container query on the segments panel so it triggers from the
-   pane's actual width (not the whole window) — that way the user
+   pane's actual width (not the whole window) so the user
    can shrink just the seg side of the splitter and the chart
    reflows like it does on a small screen.
    The id-keyed fallback below opts the seg panel into a container
@@ -943,7 +943,7 @@ dialog input[type="text"]:focus-visible {
 .analysis {
   background: var(--analysis-bg);
   border-top: var(--border-thin) solid var(--border);
-  /* No top heading — the tab labels carry their own naming, so
+  /* No top heading; the tab labels carry their own naming, so
      the pane starts immediately with either the chips strip
      (SEG mode) or the tab bar (FEAT mode). Top padding is 2 px so
      the first row sits flush with the pane's top border; saved
@@ -982,7 +982,7 @@ dialog input[type="text"]:focus-visible {
 .analysis-selection p { margin: 0; }
 .analysis-selection b { color: var(--text); }
 
-/* Tab strip — Class / Features / Contrasts. Mirrors the desktop's
+/* Tab strip: Class / Features / Contrasts. Mirrors the desktop's
    QTabBar styling: bottom-flush tabs with the active tab merged
    into the content card via ``border-bottom`` colour matching. */
 .analysis-tabs {
@@ -1012,7 +1012,7 @@ dialog input[type="text"]:focus-visible {
   color: var(--text);
   font-weight: 600;
   /* Pull the active tab over the container's top border so the
-     two visually merge — matches the QTabWidget appearance. */
+     two visually merge, matching the QTabWidget appearance. */
   margin-bottom: -1px;
   border-bottom: var(--border-thin) solid var(--panel);
 }
@@ -1020,14 +1020,14 @@ dialog input[type="text"]:focus-visible {
   color: var(--border);
   cursor: not-allowed;
 }
-/* Class-tab colour cues — replaces the previous "Natural class:
+/* Class-tab colour cues, replacing the previous "Natural class:
    Yes/No" body text. The state attribute is set by JS from the
    shared ``analysis_tabs.class_state`` field. Tab BACKGROUND
    carries the cue (green / red), which stays readable for users
    with reduced colour vision and matches the desktop's
    ``QTabBar::tab:first { background: ... }`` styling. Singleton
    selections keep ``class_state="neutral"`` so the tab stays
-   white — every singleton is trivially a natural class of itself,
+   white; every singleton is trivially a natural class of itself,
    so colouring it would just be visual noise on every click. */
 .analysis-tab[data-class-state="natural"] {
   background: var(--class-state-natural-bg);
@@ -1149,8 +1149,8 @@ dialog input[type="text"]:focus-visible {
    channel and applied as a CSS mask; the actual paint colour
    comes from ``background-color: currentColor`` so the parent's
    theme-driven colour cascades through automatically. The text
-   string never lives in the DOM — drag-select / copy / "view
-   source" yields nothing — but accessibility is preserved via
+   string never lives in the DOM (drag-select / copy / "view
+   source" yields nothing), but accessibility is preserved via
    the host element's ``aria-label`` (the rasterized span carries
    ``aria-hidden``).
 */
@@ -1172,7 +1172,7 @@ dialog input[type="text"]:focus-visible {
 }
 
 /* Segment + feature controls have no selectable text now that
-   their labels are rasterized — but they still get the explicit
+   their labels are rasterized, but they still get the explicit
    user-select rule so the surrounding button chrome (padding,
    focus ring) doesn't accidentally pick up a drag-select either. */
 .seg-btn,

@@ -1501,20 +1501,18 @@ def test_analysis_tag_escapes_html_in_text() -> None:
     assert "&lt;b&gt;oops&lt;/b&gt;" in out
 
 
-def test_analysis_render_single_segment_escapes_symbol() -> None:
-    """The segment symbol is interpolated into the bold header
-    outside the tag chip, so it has its own escape call."""
-    from phonology_shared.presentation.analysis import render_single_segment
-    from phonology_shared.theory.feature_engine import NaturalClassCompletion
-
-    completion = NaturalClassCompletion(
-        status="already_natural_class",
-        selected_minimal_bundles=(),
-        additions=(),
+def test_analysis_selection_summary_escapes_segment_symbol() -> None:
+    """Selection-summary chips interpolate segment symbols through
+    ``_segment_chip``, which must HTML-escape. Pins the XSS
+    boundary contract for the persistent header on the live
+    per-tab rendering path."""
+    from phonology_shared.presentation.analysis import (
+        render_selection_summary_seg,
     )
-    out = render_single_segment("<x>", {"Voice": "+"}, completion)
-    assert "/<x>/" not in out
-    assert "/&lt;x&gt;/" in out
+
+    out = render_selection_summary_seg(["<x>"])
+    assert "<x>" not in out.replace("&lt;x&gt;", "")
+    assert "&lt;x&gt;" in out
 
 
 def test_bulk_cycle_whole_table_under_100ms(tmp_path: Path) -> None:

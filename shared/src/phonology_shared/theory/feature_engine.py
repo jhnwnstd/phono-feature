@@ -104,11 +104,11 @@ class NaturalClassCompletion:
     Two concepts are kept on a hard API boundary so the UI cannot
     mistakenly display one as if it were the other:
 
-    * **Concept A — definition of the selected set.** Applies when
+    * **Concept A, definition of the selected set.** Applies when
       ``S`` is already a strict natural class. Carried in
       :py:attr:`selected_minimal_bundles`: the minimal feature
       bundle(s) ``B`` such that ``find_segments(B) == S``.
-    * **Concept B — completion of the selected set.** Applies when
+    * **Concept B, completion of the selected set.** Applies when
       ``S`` is NOT a strict natural class. Carried in
       :py:attr:`additions`: the smallest addition set(s) ``A`` such
       that ``S ∪ A`` is a strict natural class.
@@ -140,7 +140,7 @@ class NaturalClassCompletion:
 
     The universal class (whole inventory, empty bundle) is always
     a valid containing natural class, so :py:attr:`additions` is
-    non-empty whenever the verdict is "No" — the solver never
+    non-empty whenever the verdict is "No"; the solver never
     fails to find a completion.
     """
 
