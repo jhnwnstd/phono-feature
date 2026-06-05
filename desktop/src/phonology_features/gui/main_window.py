@@ -919,6 +919,7 @@ class MainWindow(QMainWindow):
         with self._batched_updates():
             self._populate_segments()
             self._populate_features()
+            self._apply_feature_density()
             self._mode_ctrl.apply_to_new_widgets()
             self.analysis.clear()
         if self.isVisible():
@@ -1168,6 +1169,29 @@ class MainWindow(QMainWindow):
             self._feat_right_layout.addWidget(cards_by_title[name])
         self._feat_left_layout.addStretch()
         self._feat_right_layout.addStretch()
+
+    # Threshold at which the feature panel switches to compact row
+    # density so a high-feature inventory fits without scrolling. At
+    # 22 active features the worst-balanced column is ~12 rows; one
+    # row beyond that and the natural-height panel starts to overflow
+    # the typical 440-px top-pane budget at 720p. Tuned conservatively
+    # so Hayes (28) goes compact, Default-33 goes compact, and shorter
+    # inventories (Spanish ~16) stay comfortable.
+    _FEAT_COMPACT_THRESHOLD: int = 22
+
+    def _apply_feature_density(self) -> None:
+        """Flip every pooled :py:class:`FeatureRow` between comfortable
+        and compact density based on the active feature count.
+
+        Applied to the ENTIRE pool (not just active rows) because the
+        next inventory might re-activate a row that was hidden during
+        this load, and we want a clean inherited density on the
+        re-show path. The density set is idempotent, so the bulk apply
+        is cheap on rapid inventory swaps.
+        """
+        compact = len(self._feat_rows) >= self._FEAT_COMPACT_THRESHOLD
+        for row in self._feat_row_pool.values():
+            row.set_compact(compact)
 
     def _take_cards_out_of_columns(self) -> None:
         """Empty both column layouts. Card widgets stay alive (held by

@@ -28,6 +28,8 @@ from hypothesis import strategies as st  # noqa: E402
 from phonology_shared.data.inventory import (  # noqa: E402
     Inventory,
     ValidationError,
+    canonicalize_segment_label,
+    normalize_feature_key,
 )
 
 #: Feature names are short, ascii, no whitespace, no delimiters.
@@ -61,12 +63,33 @@ _FEATURE_VALUES = st.sampled_from(["+", "-", "0"])
 @st.composite
 def _well_formed_inventory(draw: st.DrawFn) -> dict[str, object]:
     """Build a JSON-shaped inventory dict that
-    :py:meth:`Inventory.parse` should accept."""
+    :py:meth:`Inventory.parse` should accept.
+
+    Uses ``unique_by`` keyed on the parser's own canonicalisation
+    helpers so the strategy never emits a "valid by string equality
+    but collides at parse time" case (e.g. ``["Ë", "ë"]``, which
+    both fold to ``"ë"`` under :py:func:`normalize_feature_key`).
+    Without this filter Hypothesis would occasionally generate such
+    pairs and the validator would correctly reject them; the
+    round-trip test would then fail not because of a real
+    regression but because the strategy outran the contract it
+    intended to exercise.
+    """
     features = draw(
-        st.lists(_FEATURE_NAMES, min_size=1, max_size=6, unique=True)
+        st.lists(
+            _FEATURE_NAMES,
+            min_size=1,
+            max_size=6,
+            unique_by=normalize_feature_key,
+        )
     )
     seg_labels = draw(
-        st.lists(_SEG_LABELS, min_size=1, max_size=6, unique=True)
+        st.lists(
+            _SEG_LABELS,
+            min_size=1,
+            max_size=6,
+            unique_by=canonicalize_segment_label,
+        )
     )
     segments: dict[str, dict[str, str]] = {}
     for seg in seg_labels:

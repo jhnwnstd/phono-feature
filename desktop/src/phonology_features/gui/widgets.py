@@ -4,6 +4,7 @@ swaps; per-widget style dicts are cached per theme at class level.
 """
 
 import math
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar
 
@@ -280,11 +281,64 @@ class SegmentButton(QPushButton):
         self.right_clicked.emit(self.segment)
 
 
+@dataclass(frozen=True, slots=True)
+class _RowDensity:
+    """Fixed-size sizing pack for a :py:class:`FeatureRow`.
+
+    Two instances ship below: ``_DENSITY_NORMAL`` for the everyday
+    case and ``_DENSITY_COMPACT`` for inventories that would
+    otherwise overflow the typical 440-px feature panel. Frozen so
+    the values can be referenced safely from class-level callsites.
+    """
+
+    btn_size: tuple[int, int]
+    badge_size: tuple[int, int]
+    margin_v: int
+    row_h: int
+    name_font: int
+    btn_font: int
+
+
+# Comfortable default: 30-px row stride, 28x24 buttons, 10-pt label.
+_DENSITY_NORMAL = _RowDensity(
+    btn_size=(28, 24),
+    badge_size=(30, 24),
+    margin_v=3,
+    row_h=30,
+    name_font=10,
+    btn_font=11,
+)
+# Moderate shrink: ~4 px shorter per row than NORMAL. Keeps button
+# and name fonts at the same point sizes so the visual feel stays
+# consistent; only the vertical breathing room tightens. At this
+# density the cards may still overflow on inventories near the
+# 40-feature cap, in which case the panel's :py:class:`QScrollArea`
+# takes over for the remainder. Picked over the previous 22-px
+# row (which the user found cramped) and the bare-pin-only fix
+# (which would scroll for every >22-feature inventory).
+_DENSITY_COMPACT = _RowDensity(
+    btn_size=(26, 22),
+    badge_size=(28, 22),
+    margin_v=2,
+    row_h=26,
+    name_font=10,
+    btn_font=11,
+)
+
+
 class FeatureRow(QWidget):
     """One feature row in the feature panel. Interactive mode shows
     +/- toggle buttons; display mode shows a coloured value badge.
     Style strings cached per theme at class level (see SegmentButton);
     ``apply_theme`` re-binds instance attrs on a live theme swap.
+
+    The row pins a fixed height per active density. Without the pin,
+    a feature-heavy inventory squeezes each row below the buttons'
+    fixed 24 px height; the buttons are then drawn outside the row's
+    allocated rect and overlap the adjacent row. Pinning the height
+    + the panel's :py:class:`QScrollArea` together produce predictable
+    geometry: rows render at their full size and the scroll area
+    takes over when the content exceeds the viewport.
     """
 
     value_changed = pyqtSignal(str, str)
@@ -366,6 +420,12 @@ class FeatureRow(QWidget):
         self.minus_btn.clicked.connect(lambda: self._on_click("-"))
         self.setAutoFillBackground(True)
         set_css(self, self._ROW_NEUTRAL)
+        # Pin the row to its density's stride so Qt cannot squeeze it
+        # below the buttons' fixed height. Owners flip density via
+        # ``set_compact`` after they know the inventory's feature
+        # count; the constructor starts in NORMAL.
+        self._compact = False
+        self.setFixedHeight(_DENSITY_NORMAL.row_h)
 
     def _build_styles(self) -> None:
         """Bind the active theme's style strings as instance attrs."""
@@ -549,6 +609,41 @@ class FeatureRow(QWidget):
         self.plus_btn.setVisible(yes)
         self.minus_btn.setVisible(yes)
         self.badge.setVisible(not yes)
+
+    def set_compact(self, yes: bool) -> None:
+        """Switch the row between comfortable and compact density.
+
+        Compact mode shrinks the buttons and tightens the margins so
+        a feature-rich inventory (PanPhon-generated 24+ features,
+        custom 30+ sets) fits in the typical 440-px feature panel
+        without falling back on the scrollbar. The panel owner picks
+        the threshold; this method only applies the chosen mode.
+
+        Idempotent: a second call with the same value is a fast
+        no-op so a bulk apply over the pool stays cheap on rapid
+        inventory swaps.
+        """
+        if yes == self._compact:
+            return
+        self._compact = yes
+        cfg = _DENSITY_COMPACT if yes else _DENSITY_NORMAL
+        btn_w, btn_h = cfg.btn_size
+        badge_w, badge_h = cfg.badge_size
+        self.plus_btn.setFixedSize(btn_w, btn_h)
+        self.minus_btn.setFixedSize(btn_w, btn_h)
+        self.badge.setFixedSize(badge_w, badge_h)
+        self.plus_btn.setFont(
+            QFont("Noto Sans", cfg.btn_font, QFont.Weight.Bold)
+        )
+        self.minus_btn.setFont(
+            QFont("Noto Sans", cfg.btn_font, QFont.Weight.Bold)
+        )
+        self.badge.setFont(QFont("Noto Sans", cfg.btn_font, QFont.Weight.Bold))
+        self.name_label.setFont(QFont("Noto Sans", cfg.name_font))
+        lay = self.layout()
+        if lay is not None:
+            lay.setContentsMargins(8, cfg.margin_v, 8, cfg.margin_v)
+        self.setFixedHeight(cfg.row_h)
 
     def set_display(
         self,
