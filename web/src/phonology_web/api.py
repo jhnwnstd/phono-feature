@@ -44,10 +44,19 @@ from phonology_shared.editor.grid import (  # noqa: F401
     validate_new_feature_label,
     validate_new_segment_label,
 )
+from phonology_shared.editor.lookup_provider import (
+    LookupFeatureProvider,
+    LookupTableNotAvailable,
+)
+from phonology_shared.editor.providers import (
+    FeatureProvider,
+    blank_bundle,
+)
 from phonology_shared.editor.setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
     FEATURE_PRESETS,
+    infer_split,
     suggest_filename,
     validate_setup,
 )
@@ -177,35 +186,111 @@ def get_download_filename() -> str:
     return suggest_filename(_inventory_name or "")
 
 
+@lru_cache(maxsize=1)
+def _provider_registry() -> dict[str, FeatureProvider]:
+    """Return the available providers indexed by ``name``.
+
+    The lookup provider depends on the build-baked snapshot under
+    ``shared/.../editor/_panphon_table.generated.json``; a stale
+    developer checkout where ``web/scripts/bake_panphon.py`` has
+    never run will hit :py:class:`LookupTableNotAvailable` and the
+    provider quietly drops out of the registry so the dialog
+    falls back to static presets without crashing.
+
+    Cached because the lookup provider eagerly decodes ~6.4k
+    segments at construction; re-running that on every
+    :py:func:`get_setup_defaults` call would dominate the
+    dialog-open latency.
+    """
+    registry: dict[str, FeatureProvider] = {}
+    try:
+        provider = LookupFeatureProvider()
+    except LookupTableNotAvailable:
+        return registry
+    registry[provider.name] = provider
+    return registry
+
+
 def get_setup_defaults() -> dict[str, Any]:
-    """Return the autofill seeds and named feature presets the
-    web setup modal needs to populate its UI.
+    """Return the autofill seeds, named feature presets, and any
+    available bootstrap providers the web setup modal needs to
+    populate its UI.
 
     Shared with the desktop builder via
-    :py:mod:`phonology_shared.editor.setup` so both
-    frontends offer the same Tab-autofill strings and the same
-    named presets in the dropdown.
+    :py:mod:`phonology_shared.editor.setup` so both frontends offer
+    the same Tab-autofill strings and the same named presets in the
+    dropdown. The ``providers`` list mirrors the desktop's
+    :py:func:`phonology_features.providers.available_providers`
+    surface: each entry carries the provider name + display label,
+    and the JS picker appends them under the static presets.
     """
+    providers = [
+        {
+            "name": provider.name,
+            "label": provider.display_label(),
+            "version": provider.version,
+        }
+        for provider in _provider_registry().values()
+    ]
     return {
         "default_segments": DEFAULT_SEGMENTS,
         "default_features": DEFAULT_FEATURES,
         "presets": {
             name: list(feats) for name, feats in FEATURE_PRESETS.items()
         },
+        "providers": providers,
     }
 
 
+def preview_provider_features(
+    provider_name: str, segments_text: str
+) -> list[str]:
+    """Return the feature list the named provider would emit for
+    the current segments input.
+
+    Used by the web setup dialog to populate the features textarea
+    live as the user edits segments (matching the desktop dialog's
+    debounced refresh). Falls back to the provider's full feature
+    list when:
+      - ``segments_text`` is empty (UI preview state).
+      - All segments are unresolved (``generate`` returns empty
+        features; the user still needs columns to edit by hand).
+
+    Returns an empty list when the provider name is unknown so JS
+    can route to the static-preset fallback without an exception
+    spamming the console.
+    """
+    provider = _provider_registry().get(provider_name)
+    if provider is None:
+        return []
+    segments = infer_split(segments_text)
+    if not segments:
+        return list(provider.feature_names())
+    generated = provider.generate(segments)
+    if not generated.features:
+        return list(provider.feature_names())
+    return list(generated.features)
+
+
 def create_new_inventory(
-    raw_name: str, segments_text: str, features_text: str
+    raw_name: str,
+    segments_text: str,
+    features_text: str,
+    provider_name: str | None = None,
 ) -> dict[str, Any]:
-    """Build a new all-zero inventory from delimited text inputs.
+    """Build a new inventory from delimited text inputs.
 
     Runs the shared :py:func:`validate_setup` so the rules and
-    error wording match the desktop's New Inventory dialog. On
-    success constructs an Inventory with every (segment, feature)
-    cell at ``"0"`` and swaps the engine; the inventory summary
-    (the same shape :py:func:`load_inventory_json` returns) is
-    handed back so JS can mount the empty grid as the active view.
+    error wording match the desktop's New Inventory dialog. With
+    no provider, every cell starts at ``"0"`` (static-preset
+    path). With a provider, the provider resolves each segment to
+    a feature bundle and unresolved segments seed with all-zero
+    columns; the inventory's :py:attr:`Inventory.metadata` records
+    ``feature_source`` + ``feature_source_version`` for provenance
+    so a downstream save round-trips the attribution. This mirrors
+    the desktop builder's
+    :py:meth:`InventoryBuilder._open_setup_dialog` behaviour
+    one-for-one.
 
     Raises :py:class:`ValidationError` with the full tuple of
     issue messages when validation fails. JS surfaces the first
@@ -214,16 +299,47 @@ def create_new_inventory(
     :py:func:`validation_issues_from_error`.
     """
     global _engine, _inventory_name
+    provider: FeatureProvider | None = None
+    if provider_name:
+        provider = _provider_registry().get(provider_name)
+        # Unknown provider name: silently fall through to the static
+        # path. The dialog should never send a name we didn't list in
+        # ``get_setup_defaults``; if a stale tab does, the static
+        # behaviour is the safer recovery than raising.
     result = validate_setup(raw_name, segments_text, features_text)
     if not result.ok:
         raise ValidationError(tuple(issue.message for issue in result.issues))
-    grid = {
-        seg: dict.fromkeys(result.features, "0") for seg in result.segments
-    }
+
+    metadata: dict[str, Any] = {}
+    if provider is not None:
+        # Use the provider's resolved bundles for segments it
+        # recognises; seed an all-zero bundle for the rest so the
+        # grid still has a column-per-feature for the user to edit.
+        generated = provider.generate(list(result.segments))
+        feature_names = tuple(generated.features) or tuple(result.features)
+        grid: dict[str, dict[str, str]] = {}
+        for seg in result.segments:
+            bundle = generated.segments.get(seg)
+            if bundle is not None:
+                grid[seg] = {
+                    feat: bundle.get(feat, "0") for feat in feature_names
+                }
+            else:
+                grid[seg] = dict(blank_bundle(feature_names))
+        metadata["feature_source"] = provider.name
+        metadata["feature_source_version"] = provider.version
+        features_list = list(feature_names)
+    else:
+        grid = {
+            seg: dict.fromkeys(result.features, "0") for seg in result.segments
+        }
+        features_list = list(result.features)
+
     inventory = Inventory.from_grid(
         name=result.name,
-        features=list(result.features),
+        features=features_list,
         segments=grid,
+        metadata=metadata if metadata else None,
     )
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name

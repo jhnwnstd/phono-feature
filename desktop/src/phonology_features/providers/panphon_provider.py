@@ -22,55 +22,11 @@ from __future__ import annotations
 import importlib.metadata
 from collections.abc import Mapping
 
+from phonology_shared.editor.panphon_features import (
+    PANPHON_TO_APP_FEATURE,
+    panphon_value_to_app,
+)
 from phonology_shared.editor.providers import GeneratedInventory
-
-# Canonical PanPhon-to-app feature name mapping. Names on the right
-# follow the existing "Default (33)" preset's capitalisation
-# conventions (terminal features title-cased; the matching Hayes
-# bundle keys are recognised by the engine identically). Ordering
-# here also fixes the column order of generated bundles so
-# :py:func:`_segment_to_bundle` can iterate :py:meth:`FeatureTable.names`
-# and pair values positionally.
-PANPHON_TO_APP_FEATURE: Mapping[str, str] = {
-    "syl": "Syllabic",
-    "son": "Sonorant",
-    "cons": "Consonantal",
-    "cont": "Continuant",
-    "delrel": "DelRel",
-    "lat": "Lateral",
-    "nas": "Nasal",
-    "strid": "Strident",
-    "voi": "Voice",
-    "sg": "SpreadGl",
-    "cg": "ConstrGl",
-    "ant": "Anterior",
-    "cor": "Coronal",
-    "distr": "Distributed",
-    "lab": "Labial",
-    "hi": "High",
-    "lo": "Low",
-    "back": "Back",
-    "round": "Round",
-    "velaric": "Velaric",
-    "tense": "Tense",
-    "long": "Long",
-    "hitone": "HighTone",
-    "hireg": "HighRegister",
-}
-
-
-def _panphon_value_to_app(value: object) -> str:
-    """Coerce a single PanPhon feature value to the app's three-
-    valued vocabulary. PanPhon emits ``"+"`` / ``"-"`` / ``"0"`` from
-    :py:meth:`Segment.strings`; the numeric path (``1``, ``-1``,
-    ``0``) is supported for forward-compatibility with PanPhon
-    versions that switch their default representation.
-    """
-    if value in ("+", 1):
-        return "+"
-    if value in ("-", -1):
-        return "-"
-    return "0"
 
 
 def _segment_to_bundle(
@@ -104,7 +60,7 @@ def _segment_to_bundle(
         app_name = PANPHON_TO_APP_FEATURE.get(panphon_name)
         if app_name is None:
             continue
-        bundle[app_name] = _panphon_value_to_app(value)
+        bundle[app_name] = panphon_value_to_app(value)
     return bundle
 
 

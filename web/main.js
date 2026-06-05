@@ -1987,6 +1987,19 @@ function wireSetupDialog() {
     let presets = Object.create(null);
     let defaultSegments = "";
     let defaultFeatures = "";
+    // Sentinel prefix used in the picker's option values to mark a
+    // provider entry distinct from a static preset name. Stripped
+    // before any bridge call.
+    const PROVIDER_PREFIX = "provider:";
+    // Mirror of the desktop dialog's ``_chosen_provider`` slot:
+    // non-null while the user has a PanPhon-style auto-generate
+    // provider selected, null while a static preset is active.
+    let chosenProvider = null;
+    let providerRefreshTimer = 0;
+    // 250 ms matches the desktop dialog's
+    // ``_provider_refresh_timer`` debounce so live-preview behaviour
+    // is the same across clients.
+    const PROVIDER_REFRESH_MS = 250;
 
     const loadDefaultsOnce = () => {
         if (defaultsLoaded) return;
@@ -2009,11 +2022,52 @@ function wireSetupDialog() {
             opt.textContent = name;
             presetPicker.appendChild(opt);
         }
+        // Append providers (PanPhon today) at the bottom of the
+        // picker. The dropdown stays a flat list because the
+        // current Qt dialog does the same: one combo of presets +
+        // providers, no submenu.
+        const providers = defaults.providers || [];
+        for (const provider of providers) {
+            const opt = document.createElement("option");
+            opt.value = PROVIDER_PREFIX + provider.name;
+            opt.textContent = provider.label || provider.name;
+            presetPicker.appendChild(opt);
+        }
         defaultsLoaded = true;
     };
 
-    const applyPreset = (name) => {
-        const list = presets[name];
+    const cancelProviderRefresh = () => {
+        if (providerRefreshTimer) {
+            window.clearTimeout(providerRefreshTimer);
+            providerRefreshTimer = 0;
+        }
+    };
+
+    const refreshProviderFeatures = () => {
+        if (!chosenProvider) return;
+        // The bridge falls back to the provider's full feature list
+        // when segInput is empty or all-unresolved, so an empty box
+        // still gives the user a preview of the columns they will
+        // get; matches the desktop dialog's behaviour.
+        const features = callBridge(
+            "preview_provider_features",
+            chosenProvider,
+            segInput.value,
+        );
+        if (Array.isArray(features) && features.length > 0) {
+            featInput.value = features.join("\n");
+        }
+    };
+
+    const applyPreset = (value) => {
+        cancelProviderRefresh();
+        if (value && value.startsWith(PROVIDER_PREFIX)) {
+            chosenProvider = value.slice(PROVIDER_PREFIX.length);
+            refreshProviderFeatures();
+            return;
+        }
+        chosenProvider = null;
+        const list = presets[value];
         if (!list || list.length === 0) {
             featInput.value = "";
             return;
@@ -2048,10 +2102,28 @@ function wireSetupDialog() {
     autofillOnTab(segInput, () => defaultSegments);
     autofillOnTab(featInput, () => defaultFeatures);
 
+    // Debounced provider refresh on segments edit, parallel to the
+    // desktop dialog's textChanged hookup. Only fires when a
+    // provider is active; static-preset users keep their hand-typed
+    // features intact even as they edit segments.
+    segInput.addEventListener("input", () => {
+        if (!chosenProvider) return;
+        cancelProviderRefresh();
+        providerRefreshTimer = window.setTimeout(
+            refreshProviderFeatures,
+            PROVIDER_REFRESH_MS,
+        );
+    });
+
     const openDialog = () => {
         loadDefaultsOnce();
         nameInput.value = "";
         segInput.value = "";
+        // Drop any leftover provider selection from a prior open;
+        // applyPreset below resets it from whatever the first picker
+        // option is.
+        chosenProvider = null;
+        cancelProviderRefresh();
         // Default to the first preset (Default(33)) on open so the
         // common case is one click. The user can switch to Custom
         // and clear if they want to start blank.
@@ -2076,7 +2148,10 @@ function wireSetupDialog() {
         }
     };
 
-    nodes.setupCancel.addEventListener("click", closeDialog);
+    nodes.setupCancel.addEventListener("click", () => {
+        cancelProviderRefresh();
+        closeDialog();
+    });
     presetPicker.addEventListener("change", () => {
         applyPreset(presetPicker.value);
     });
@@ -2094,18 +2169,31 @@ function wireSetupDialog() {
                 return;
             }
         }
+        // Provider-driven path: flush any pending debounced
+        // preview before submit so the features text reflects the
+        // CURRENT segment list, not the pre-edit one. Mirrors the
+        // desktop dialog's accept() which forces a refresh before
+        // closing.
+        if (chosenProvider) {
+            cancelProviderRefresh();
+            refreshProviderFeatures();
+        }
         try {
             const info = callBridge(
                 "create_new_inventory",
                 nameInput.value,
                 segInput.value,
                 featInput.value,
+                chosenProvider,
             );
             applyInventoryInfo(info);
+            const sourceSuffix = chosenProvider
+                ? ` via ${chosenProvider}`
+                : "";
             setStatus(
                 `Created ${info.name} `
                 + `(${info.segments.length} segments, `
-                + `${info.features.length} features).`,
+                + `${info.features.length} features)${sourceSuffix}.`,
             );
             errorBox.textContent = "";
             closeDialog();

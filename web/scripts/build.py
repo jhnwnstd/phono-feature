@@ -73,6 +73,47 @@ def clean_dist() -> None:
     DIST.mkdir(parents=True)
 
 
+def bake_panphon_table() -> None:
+    """Refresh the PanPhon-lookup JSON snapshot in shared/.
+
+    Runs ``bake_panphon.bake_table()`` against the installed
+    ``panphon`` package and writes the result to
+    ``shared/.../editor/_panphon_table.generated.json``. The shared/
+    mirror step below picks the file up alongside every other .py /
+    .json under the package root, so the lookup provider in the
+    Pyodide bundle finds it via importlib.resources at runtime.
+
+    When ``panphon`` is not installed (typical on a fresh CI runner
+    that hasn't pulled the optional dep) we print a warning, leave
+    any stale snapshot in place, and continue: the LookupProvider's
+    registry quietly drops the entry so the dialog falls back to
+    static presets instead of crashing.
+    """
+    print("Baking PanPhon lookup table...")
+    bake_script = WEB_DIR / "scripts" / "bake_panphon.py"
+    spec = importlib.util.spec_from_file_location("bake_panphon", bake_script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load bake script at {bake_script}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        table = module.bake_table()
+    except ImportError as exc:
+        print(
+            f"  WARNING: panphon not installed ({exc}); "
+            "lookup provider will be unavailable in the web bundle."
+        )
+        return
+    out_path = SHARED_PKG / "editor" / "_panphon_table.generated.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8") as f:
+        json.dump(table, f, ensure_ascii=False)
+        f.write("\n")
+    n_seg = len(table["segments"])
+    size_kb = out_path.stat().st_size / 1024
+    print(f"  baked {n_seg} segments ({size_kb:.1f} KB) -> {out_path.name}")
+
+
 def copy_shared_sources() -> None:
     """Mirror the whole ``phonology_shared`` package into
     ``dist/shared/phonology_shared/`` so the bundle can zipimport
@@ -616,6 +657,13 @@ def write_python_bundle() -> None:
     entries: list[tuple[str, Path]] = []
     for path in sorted(shared_root.rglob("*.py")):
         entries.append((path.relative_to(shared_root).as_posix(), path))
+    # Non-Python data files that ship inside the package and load via
+    # importlib.resources at runtime (today: the baked PanPhon
+    # lookup snapshot). Glob is the gating decision: anything matching
+    # ``*.generated.json`` is bundle-bound, everything else stays out
+    # to avoid sweeping in stray scratch files.
+    for path in sorted(shared_root.rglob("*.generated.json")):
+        entries.append((path.relative_to(shared_root).as_posix(), path))
     entries.append(("api.py", DIST / "api.py"))
 
     with zipfile.ZipFile(
@@ -954,6 +1002,10 @@ def write_pages_no_jekyll() -> None:
 def main() -> int:
     argparse.ArgumentParser(description=__doc__).parse_args()
     clean_dist()
+    # Bake the PanPhon snapshot BEFORE the shared mirror step so the
+    # generated JSON travels into ``dist/shared/`` alongside the
+    # rest of the package.
+    bake_panphon_table()
     copy_shared_sources()
     copy_static_assets()
     generate_theme_css()
