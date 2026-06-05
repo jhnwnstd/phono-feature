@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 
 from phonology_shared.data.inventory import normalize_feature_bundle
@@ -180,6 +181,53 @@ _DERIVED_MERGES: list[tuple[frozenset[str], str]] = [
 ]
 
 
+@dataclass(frozen=True, slots=True)
+class ConsonantProfile:
+    """Inventory-level facts about which conventions a bundle uses.
+
+    Mirrors :py:class:`phonology_shared.chart.vowels.VowelProfile` in
+    spirit: per-segment derivations look up the bundle's
+    convention-flag rather than guessing at runtime. The flags are
+    discovered once per inventory via :py:func:`detect_consonant_profile`
+    and threaded through the grouper / sort pipeline so a Hayes-style
+    inventory and a general-feature-system inventory both produce the
+    IPA-correct display labels.
+
+    Today the only field is :py:attr:`dorsals_use_anterior`, the
+    palatal-versus-velar discriminator. Add new fields as similar
+    "this inventory encodes X using convention Y" facts surface.
+    """
+
+    #: True iff at least one ``+dorsal`` segment in the inventory
+    #: carries an explicit (``+`` or ``-``) ``anterior`` value.
+    #: Hayes-style inventories use the ``-anterior`` value on
+    #: dorsals to mark palatal stops (``c`` / ``ɉ``) and the absent
+    #: / ``0anterior`` value on advanced velars (``k+`` / ``ɡ+``).
+    #: When the flag is True, :py:func:`derive_place` discriminates
+    #: palatal from velar via ``anterior``. When False, the inventory
+    #: follows the general rule (``+dorsal +high -back`` or
+    #: ``+dorsal +high +front`` -> palatal regardless of anterior).
+    dorsals_use_anterior: bool = False
+
+
+def detect_consonant_profile(
+    norm_feats: Mapping[str, Mapping[str, str]],
+) -> ConsonantProfile:
+    """Scan ``norm_feats`` (segment label -> normalised feature
+    bundle) for inventory-level convention flags.
+
+    A single ``+dorsal`` segment carrying an explicit ``anterior``
+    value is enough to flip :py:attr:`ConsonantProfile.dorsals_use_anterior`
+    to True: feature theory inventories use anterior consistently
+    within a system, so partial evidence is reliable.
+    """
+    dorsals_use_anterior = any(
+        f.get("dorsal", "0") == "+" and f.get("anterior", "0") in ("+", "-")
+        for f in norm_feats.values()
+    )
+    return ConsonantProfile(dorsals_use_anterior=dorsals_use_anterior)
+
+
 class PlaceRank(IntEnum):
     """Display-place ordering derived from distinctive features.
 
@@ -257,7 +305,10 @@ def _is_epiglottal_like(feats: dict[str, str]) -> bool:
     )
 
 
-def derive_place(feats: dict[str, str]) -> PlaceRank:
+def derive_place(
+    feats: dict[str, str],
+    profile: ConsonantProfile | None = None,
+) -> PlaceRank:
     """Derive an IPA-style place rank from distinctive features.
 
     ``feats`` is a normalised feature bundle (the keys have already
@@ -265,7 +316,7 @@ def derive_place(feats: dict[str, str]) -> PlaceRank:
     :py:func:`phonology_shared.data.inventory.normalize_feature_key`).
     Reads only conventional distinctive features --
     ``labial``/``labiodental``, ``coronal``/``anterior``/
-    ``distributed``, ``dorsal``/``high``/``back``/``low``,
+    ``distributed``, ``dorsal``/``high``/``back``/``low``/``front``,
     ``pharyngeal``/``constrpharynx``/``radical``/``rtr``,
     ``epilaryngeal``/``aryepiglottic``, ``constrgl`` -- never any
     invented ``"uvular"``/``"retroflex"``/etc. primitives.
@@ -278,14 +329,31 @@ def derive_place(feats: dict[str, str]) -> PlaceRank:
     ``+dorsal +back +low`` pattern (the lowered-tongue-body uvular
     used in some whole-larynx inventories).
 
-    The palatal-versus-velar split inside ``+dorsal +high -back``
-    segments still uses ``anterior`` as the discriminator: Hayes-
-    style inventories code palatal stops as ``+dorsal +high -back
-    -anterior`` and advanced velars (Hayes ``k+``) as ``+dorsal
-    +high -back +front 0anterior``, so an ``anterior``-blind rule
-    would conflate them. Apical-versus-laminal coronal
-    distinctions stay encoded through ``distributed``, never
-    through literal ``apical`` / ``laminal`` primitives.
+    ``profile`` switches the palatal-versus-velar discrimination on
+    ``+dorsal +high -back`` segments. The function mirrors the
+    vowel-chart pattern (``coronal`` as a ``+front`` fallback when
+    the inventory lacks the ``Front`` feature): the inventory's
+    convention is detected once, then applied per-segment.
+
+    * When ``profile`` is ``None`` or
+      :py:attr:`ConsonantProfile.dorsals_use_anterior` is True
+      (Hayes-style inventories), ``anterior`` is the discriminator:
+      ``+dorsal +high -back -anterior`` -> PALATAL, all other
+      ``+dorsal +high -back`` -> VELAR. This protects advanced
+      velars like Hayes ``k+`` (``+dorsal +high -back +front
+      0anterior``) from being mis-classified as palatals.
+
+    * When :py:attr:`ConsonantProfile.dorsals_use_anterior` is
+      False (general feature systems), the rule honours ``+front``
+      and ``-back`` as palatal evidence regardless of anterior:
+      ``+dorsal +high (+front OR -back)`` -> PALATAL. Spanish
+      ``ʝ`` / ``ɲ`` / ``ʎ`` and Hindi ``ɲ`` lift into PALATAL
+      here; they were silently routed to VELAR by the old
+      anterior-only check.
+
+    Apical-versus-laminal coronal distinctions stay encoded
+    through ``distributed``, never through literal ``apical`` /
+    ``laminal`` primitives.
     """
     if feats.get("constrgl", "0") == "+":
         return PlaceRank.GLOTTAL
@@ -298,14 +366,27 @@ def derive_place(feats: dict[str, str]) -> PlaceRank:
         hi = feats.get("high", "0")
         bk = feats.get("back", "0")
         lo = feats.get("low", "0")
+        front = feats.get("front", "0")
         if hi == "-":
             return PlaceRank.UVULAR
         if bk == "+" and lo == "+":
             return PlaceRank.UVULAR
-        if bk == "-":
-            if feats.get("anterior", "0") == "-":
-                return PlaceRank.PALATAL
+        # Hayes-style inventories: anterior is the palatal/velar
+        # discriminator. Default to this when no profile is given
+        # so the function stays backward-compatible at every
+        # call site that has not yet been profile-threaded.
+        hayes_style = profile is None or profile.dorsals_use_anterior
+        if hayes_style:
+            if bk == "-":
+                if feats.get("anterior", "0") == "-":
+                    return PlaceRank.PALATAL
+                return PlaceRank.VELAR
             return PlaceRank.VELAR
+        # General feature systems: +high + (-back OR +front)
+        # marks palatal regardless of anterior. The advice's rule
+        # without the anterior caveat.
+        if hi == "+" and (bk == "-" or front == "+"):
+            return PlaceRank.PALATAL
         return PlaceRank.VELAR
     cor = feats.get("coronal", "0")
     if cor == "+":
@@ -585,7 +666,10 @@ _SORT_KEYS: list[tuple[str, dict[str, int]]] = [
 ]
 
 
-def _segment_sort_key(feats: dict[str, str]) -> tuple[int, ...]:
+def _segment_sort_key(
+    feats: dict[str, str],
+    profile: ConsonantProfile | None = None,
+) -> tuple[int, ...]:
     """Full feature-based sort key for a segment.
 
     Slot order: place rank -> legacy :py:data:`_SORT_KEYS` columns
@@ -595,6 +679,12 @@ def _segment_sort_key(feats: dict[str, str]) -> tuple[int, ...]:
     (Hayes-style ``k+ / ɡ+``, ``k / ɡ``, ``k͡p / ɡ͡b``, ``k- / ɡ-``):
     front / back / labial sort BEFORE voice, so each place
     sub-variant's pair stays adjacent.
+
+    ``profile`` is threaded into :py:func:`derive_place` so the
+    place rank reflects the inventory's palatal/velar convention.
+    Without it, the function falls back to Hayes-style behaviour
+    -- compatible with every call site that has not yet been
+    profile-threaded.
 
     An earlier attempt inserted a typed
     :py:class:`LaryngealKind` slot right after place rank. That
@@ -607,7 +697,7 @@ def _segment_sort_key(feats: dict[str, str]) -> tuple[int, ...]:
     within-group SORT ORDER stays driven by the legacy column
     sequence that demonstrably reads as the IPA chart.
     """
-    key: list[int] = [int(derive_place(feats))]
+    key: list[int] = [int(derive_place(feats, profile))]
     for feat, ordering in _SORT_KEYS:
         key.append(ordering.get(feats.get(feat, "0"), 2))
     return tuple(key)
@@ -663,6 +753,12 @@ def group_segments(
         for k, v in feats.items():
             if v != "0":
                 active_features.add(k)
+    # Inventory-level convention flags discovered once and threaded
+    # into the per-segment sort key. Mirrors the vowel chart's
+    # VowelProfile pattern so a Hayes-style inventory and a general
+    # feature-system inventory both produce IPA-correct place
+    # rankings without per-segment guesswork.
+    profile = detect_consonant_profile(norm)
 
     def positive_matches(
         seg_feats: dict[str, str], spec: dict[str, str]
@@ -875,7 +971,8 @@ def group_segments(
             assignment.setdefault("Laryngeals", []).extend(laryngeal_segs)
     return {
         name: sorted(
-            assignment[name], key=lambda s: _segment_sort_key(norm[s])
+            assignment[name],
+            key=lambda s: _segment_sort_key(norm[s], profile),
         )
         for name in DISPLAY_ORDER
         if assignment.get(name)

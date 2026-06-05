@@ -17,12 +17,14 @@ either kind shows up here before reaching :py:func:`group_segments`.
 from __future__ import annotations
 
 from phonology_shared.chart.consonants import (
+    ConsonantProfile,
     LaryngealKind,
     PlaceRank,
     SecondaryKind,
     derive_laryngeal_kind,
     derive_place,
     derive_secondary_articulations,
+    detect_consonant_profile,
 )
 
 # ---------------------------------------------------------------------------
@@ -470,3 +472,109 @@ def test_secondary_no_inference_from_just_dorsal_features() -> None:
     assert (
         derive_secondary_articulations(feats, PlaceRank.VELAR) == frozenset()
     )
+
+
+# ---------------------------------------------------------------------------
+# Profile-aware palatal/velar discrimination.
+#
+# Mirrors the vowel-chart pattern where ``+coronal`` substitutes for
+# ``+front`` only when the inventory's profile shows ``+front`` is not in
+# active use. Here the discriminator is ``+anterior`` on dorsals: a
+# Hayes-style inventory uses ``-anterior`` to mark palatal stops (``c`` /
+# ``ɉ``) and the absent value for advanced velars (``k+`` / ``ɡ+``); a
+# general feature-system inventory uses ``+front`` and ``-back`` alone.
+# Without the profile, ``derive_place`` defaults to Hayes-style behaviour
+# so every existing call site keeps working.
+# ---------------------------------------------------------------------------
+
+
+_AMBIGUOUS_PALATAL_OR_ADVANCED_VELAR = {
+    "dorsal": "+",
+    "high": "+",
+    "back": "-",
+    "front": "+",
+}
+
+
+def test_detect_consonant_profile_flags_hayes_style_inventory() -> None:
+    """A single ``+dorsal`` segment carrying an explicit ``anterior``
+    value flips the flag. Feature theory inventories use anterior
+    consistently within a system, so partial evidence is reliable."""
+    feats = {
+        "c": {"dorsal": "+", "high": "+", "back": "-", "anterior": "-"},
+        "i": {"dorsal": "+", "syllabic": "+"},
+    }
+    assert detect_consonant_profile(feats).dorsals_use_anterior is True
+
+
+def test_detect_consonant_profile_general_style_default_off() -> None:
+    """An inventory whose dorsal segments leave ``anterior``
+    unspecified (or set to ``0``) is treated as general-feature-
+    system style."""
+    feats = {
+        "k": {"dorsal": "+", "high": "+", "back": "+"},
+        "i": {"dorsal": "+", "syllabic": "+"},
+        "n": {"coronal": "+", "anterior": "+"},
+    }
+    assert detect_consonant_profile(feats).dorsals_use_anterior is False
+
+
+def test_derive_place_palatal_via_front_when_general_profile() -> None:
+    """A general-style inventory: ``+dorsal +high -back +front``
+    is enough for PALATAL, no ``-anterior`` required. The Spanish
+    ``ʝ`` / ``ɲ`` / ``ʎ`` case becomes IPA-correct."""
+    general = ConsonantProfile(dorsals_use_anterior=False)
+    assert (
+        derive_place(_AMBIGUOUS_PALATAL_OR_ADVANCED_VELAR, general)
+        == PlaceRank.PALATAL
+    )
+
+
+def test_derive_place_velar_via_anterior_zero_when_hayes_profile() -> None:
+    """A Hayes-style inventory: the same ``+dorsal +high -back +front``
+    bundle (with ``anterior`` unspecified, i.e. an advanced velar
+    like ``k+``) lands at VELAR. The anterior discriminator
+    protects against conflating palatal stops with advanced velars."""
+    hayes = ConsonantProfile(dorsals_use_anterior=True)
+    assert (
+        derive_place(_AMBIGUOUS_PALATAL_OR_ADVANCED_VELAR, hayes)
+        == PlaceRank.VELAR
+    )
+
+
+def test_derive_place_palatal_via_anterior_minus_when_hayes_profile() -> None:
+    """Same Hayes-style inventory, but the segment is a true palatal
+    (carries ``-anterior``, like Hayes ``c``)."""
+    feats = dict(_AMBIGUOUS_PALATAL_OR_ADVANCED_VELAR)
+    feats["anterior"] = "-"
+    hayes = ConsonantProfile(dorsals_use_anterior=True)
+    assert derive_place(feats, hayes) == PlaceRank.PALATAL
+
+
+def test_derive_place_default_profile_is_hayes_style() -> None:
+    """Calling ``derive_place`` without a profile preserves the
+    pre-extension Hayes-style behaviour: every existing call site
+    that has not been profile-threaded keeps working."""
+    assert (
+        derive_place(_AMBIGUOUS_PALATAL_OR_ADVANCED_VELAR) == PlaceRank.VELAR
+    )
+    feats_with_anterior_minus = dict(_AMBIGUOUS_PALATAL_OR_ADVANCED_VELAR)
+    feats_with_anterior_minus["anterior"] = "-"
+    assert derive_place(feats_with_anterior_minus) == PlaceRank.PALATAL
+
+
+def test_derive_place_general_profile_minus_back_alone_is_palatal() -> None:
+    """``+dorsal +high -back`` (no ``+front``) still triggers
+    PALATAL under general-style logic -- the rule is ``+high AND
+    (+front OR -back)``, either alone is enough."""
+    general = ConsonantProfile(dorsals_use_anterior=False)
+    feats = {"dorsal": "+", "high": "+", "back": "-"}
+    assert derive_place(feats, general) == PlaceRank.PALATAL
+
+
+def test_derive_place_general_profile_plus_back_is_velar() -> None:
+    """``+dorsal +high +back`` lands at VELAR under both profiles
+    -- no palatal evidence, so the discriminator never matters."""
+    general = ConsonantProfile(dorsals_use_anterior=False)
+    feats = {"dorsal": "+", "high": "+", "back": "+"}
+    assert derive_place(feats, general) == PlaceRank.VELAR
