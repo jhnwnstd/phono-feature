@@ -53,6 +53,11 @@ dev = [
     "flake8-bugbear>=24",
     "build>=1",
 ]
+# Optional PanPhon-backed inventory bootstrap. Lazy-imported by
+# desktop/.../providers/panphon_provider.py; the New-inventory
+# dialog hides its dropdown entry when this is not installed, so
+# a desktop install without the extra stays fully functional.
+panphon = ["panphon>=0.20"]
 
 [project.scripts]
 phonology-features = "phonology_features.__main__:main"

@@ -704,6 +704,7 @@ class Inventory:
         name: str,
         features: list[str],
         segments: dict[str, dict[str, str]],
+        metadata: Mapping[str, Any] | None = None,
     ) -> Inventory:
         """Construct from builder grid state.
 
@@ -711,6 +712,14 @@ class Inventory:
         exactly one validation code path. ASCII-minus normalization
         (Unicode ``−`` to ``-``) happens here because the grid stores
         the Unicode form for display.
+
+        ``metadata`` carries provenance the caller wants stamped on
+        the resulting inventory (for example, the feature-provider
+        name and version when the grid was bootstrapped from
+        PanPhon). The keys are merged ALONGSIDE ``name``; if a
+        caller passes ``"name"`` in ``metadata`` it is ignored in
+        favour of the explicit ``name`` argument so there is one
+        source of truth for the inventory's display name.
         """
         normalized_segments: dict[str, dict[str, str]] = {}
         for seg, feats in segments.items():
@@ -720,9 +729,15 @@ class Inventory:
                     v = "-"
                 normalized[f] = v
             normalized_segments[seg] = normalized
+        meta_dict: dict[str, Any] = {"name": name}
+        if metadata:
+            for key, value in metadata.items():
+                if key == "name":
+                    continue
+                meta_dict[key] = value
         return cls.parse(
             {
-                "metadata": {"name": name},
+                "metadata": meta_dict,
                 "features": features,
                 "segments": normalized_segments,
             }

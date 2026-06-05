@@ -17,7 +17,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from phonology_features.providers import available_providers
 from phonology_shared.data.limits import MAX_NAME_LENGTH
+from phonology_shared.editor.providers import FeatureProvider
 from phonology_shared.editor.setup import (
     DEFAULT_FEATURES,
     DEFAULT_SEGMENTS,
@@ -227,6 +229,18 @@ class InputDialog(QDialog):
         self.setWindowTitle(SETUP_DIALOG_TITLE)
         self.setMinimumSize(500, 500)
         self.setWindowModality(Qt.WindowModality.WindowModal)
+        # Provider chosen via the preset dropdown. ``None`` means the
+        # user picked a static features-only preset (Default / Custom)
+        # so the builder takes the user-typed feature list verbatim
+        # and produces an empty grid. A non-None value means the
+        # builder calls ``provider.generate(segments)`` after the
+        # dialog accepts and pre-populates grid cells.
+        self._chosen_provider: FeatureProvider | None = None
+        # Provider-labelled entries in the preset combo are routed
+        # through this map. Keys are the combo's display label
+        # (``provider.display_label()``), values are the provider
+        # instance. Populated once at construction.
+        self._provider_by_label: dict[str, FeatureProvider] = {}
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
         layout.addLayout(self._build_name_row())
@@ -290,6 +304,14 @@ class InputDialog(QDialog):
         """)
         for name in FEATURE_PRESETS:
             self.preset_combo.addItem(name)
+        # Append one entry per available bootstrap provider (PanPhon
+        # today). Hidden when the optional dependency is not
+        # installed, so a desktop without ``panphon`` shows only the
+        # static presets.
+        for provider in available_providers():
+            label = provider.display_label()
+            self._provider_by_label[label] = provider
+            self.preset_combo.addItem(label)
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
         # Features header row: bold label on the left, preset combo
         # flush to the RIGHT edge (separated by stretch). The combo
@@ -337,6 +359,13 @@ class InputDialog(QDialog):
         return row
 
     def _on_preset_changed(self, name: str) -> None:
+        provider = self._provider_by_label.get(name)
+        if provider is not None:
+            self._chosen_provider = provider
+            self.feat_edit.setPlainText("\n".join(provider.feature_names()))
+            self.feat_edit.setReadOnly(False)
+            return
+        self._chosen_provider = None
         features = FEATURE_PRESETS.get(name, [])
         if features:
             self.feat_edit.setPlainText("\n".join(features))
@@ -353,6 +382,16 @@ class InputDialog(QDialog):
 
     def get_name(self) -> str:
         return normalize_setup_name(self.name_edit.text())
+
+    def get_chosen_provider(self) -> FeatureProvider | None:
+        """Return the bootstrap provider the user picked, if any.
+
+        ``None`` when the user picked a static preset (Default /
+        Custom) and the builder should produce an empty grid.
+        Otherwise the builder calls ``provider.generate(segments)``
+        after validation to pre-populate cells.
+        """
+        return self._chosen_provider
 
     # Field name (from :py:class:`SetupIssue`) to (title, focus widget).
     # Drives the warning box title and where focus lands on rejection;

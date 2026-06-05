@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import Any
 
 from phonology_shared.data.inventory import (
     Inventory,
@@ -225,6 +226,7 @@ def grid_to_inventory(
     features: Sequence[str],
     segments: Sequence[str],
     cells: Sequence[Sequence[str]],
+    metadata: Mapping[str, Any] | None = None,
 ) -> Inventory:
     """Snapshot grid state as a validated :py:class:`Inventory`.
 
@@ -239,6 +241,11 @@ def grid_to_inventory(
     feature => ``'0'``" semantics, so writing explicit zeros would
     silently inflate sparsely-authored on-disk files on every
     builder round-trip. Omission keeps load/save symmetric.
+
+    ``metadata`` is forwarded to :py:meth:`Inventory.from_grid` so
+    the caller can stamp provenance (e.g. ``feature_source``,
+    ``feature_source_version``) onto the saved JSON. The ``name``
+    key is always taken from the explicit argument.
 
     Routes through :py:meth:`Inventory.from_grid`, which funnels
     into :py:meth:`Inventory.parse`. Validation errors (unknown
@@ -277,6 +284,7 @@ def grid_to_inventory(
         name=name,
         features=list(features),
         segments=segments_dict,
+        metadata=metadata,
     )
 
 

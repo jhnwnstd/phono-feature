@@ -1,7 +1,7 @@
 """InventoryBuilder: grid editor for creating or editing inventories."""
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from phonology_features._logging import get_logger
@@ -161,6 +161,13 @@ class InventoryBuilder(QMainWindow):
         # by a single user action). Cleared on table rebuild.
         self._undo_stack: list[_BulkEdit] = []
         self._redo_stack: list[_BulkEdit] = []
+        # Provenance for the eventual ``_to_inventory`` save. Set by
+        # ``show_setup_dialog`` when the user picks a bootstrap
+        # provider (PanPhon, etc.); cleared on ``_load_existing`` so
+        # an existing inventory's metadata is not overwritten with
+        # this run's provider name.
+        self._feature_source: str | None = None
+        self._feature_source_version: str | None = None
         self._build_ui()
         # SaveController owns save_in_flight / dirty / draining_save
         # state plus the cross-thread save_finished / save_drained
@@ -472,23 +479,73 @@ class InventoryBuilder(QMainWindow):
         # both lists are non-empty.
         segments = list(dict.fromkeys(dlg.get_segments()))
         features = list(dict.fromkeys(dlg.get_features()))
+        provider = dlg.get_chosen_provider()
+        initial_cells: Mapping[str, Mapping[str, str]] | None = None
+        status_suffix = ""
+        if provider is not None:
+            # Provider-driven bootstrap. The feature list returned by
+            # the provider is canonical (matches the value-vector
+            # shape its ``generate`` emits), so we use it verbatim
+            # even if the user edited the textarea: a mismatch would
+            # produce a grid whose columns and values do not line up.
+            generated = provider.generate(segments)
+            features = list(generated.features)
+            # Seed unresolved segments with a blank bundle so the
+            # grid still has a column for them. The user edits the
+            # cells in place. Resolved segments come straight from
+            # the provider's bundle map.
+            cells: dict[str, dict[str, str]] = {
+                seg: dict(bundle) for seg, bundle in generated.segments.items()
+            }
+            for sym in generated.unresolved:
+                cells[sym] = {feat: "0" for feat in features}
+            initial_cells = cells
+            self._feature_source = provider.name
+            self._feature_source_version = provider.version
+            for warning in generated.warnings:
+                _log.info("inventory bootstrap: %s", warning)
+            if generated.unresolved:
+                n_total = len(segments)
+                n_unresolved = len(generated.unresolved)
+                n_resolved = n_total - n_unresolved
+                status_suffix = (
+                    f" Generated {n_resolved} of {n_total} via "
+                    f"{provider.name}; {n_unresolved} unresolved "
+                    "(edit by hand)."
+                )
+            else:
+                status_suffix = f" Generated via {provider.name}."
+        else:
+            self._feature_source = None
+            self._feature_source_version = None
         self._segments = segments
         self._features = features
         self._inv_name = dlg.get_name()
         self._current_path = None
         self._dirty = True
-        self._rebuild_table()
+        self._rebuild_table(initial_cells=initial_cells)
         self._update_title()
         self._status.showMessage(
             f"Created grid: {len(segments)} segments "
             f"\u00d7 {len(features)} features. "
-            "Click cells to cycle through +/\u2212/0."
+            "Click cells to cycle through +/\u2212/0." + status_suffix
         )
         return True
 
     # Table management
-    def _rebuild_table(self) -> None:
-        """Build the table: rows=features, cols=segments."""
+    def _rebuild_table(
+        self,
+        initial_cells: Mapping[str, Mapping[str, str]] | None = None,
+    ) -> None:
+        """Build the table: rows=features, cols=segments.
+
+        ``initial_cells`` seeds the grid from a provider-generated
+        bundle map. Each cell at ``(feature, segment)`` reads from
+        ``initial_cells.get(segment, {}).get(feature, "0")`` so
+        missing entries fall through to the existing zero-fill. The
+        default ``None`` preserves the original blank-grid behaviour
+        for the user-typed-features path.
+        """
         # Edits captured against the previous table refer to row/col
         # indices that may no longer match the new table; drop them.
         self._undo_stack.clear()
@@ -555,9 +612,14 @@ class InventoryBuilder(QMainWindow):
             except TypeError:
                 pass
             sel_model.selectionChanged.connect(self._on_selection_changed)
-        for r in range(len(self._features)):
-            for c in range(len(self._segments)):
-                self._table.setItem(r, c, make_cell("0"))
+        for r, feat in enumerate(self._features):
+            for c, seg in enumerate(self._segments):
+                value = "0"
+                if initial_cells is not None:
+                    bundle = initial_cells.get(seg)
+                    if bundle is not None:
+                        value = bundle.get(feat, "0")
+                self._table.setItem(r, c, make_cell(value))
 
     # Direct-entry keyboard shortcuts. Derived from the shared
     # :py:data:`VALUE_KEYS` constant in grid_logic so the desktop
@@ -1112,11 +1174,19 @@ class InventoryBuilder(QMainWindow):
                 item = self._table.item(r, c)
                 row.append(item.text() if item is not None else "0")
             cells.append(row)
+        metadata: dict[str, str] | None = None
+        if self._feature_source:
+            metadata = {"feature_source": self._feature_source}
+            if self._feature_source_version:
+                metadata["feature_source_version"] = (
+                    self._feature_source_version
+                )
         return grid_to_inventory(
             name=self._inv_name,
             features=self._features,
             segments=self._segments,
             cells=cells,
+            metadata=metadata,
         )
 
     # ------------------------------------------------------------------
@@ -1311,6 +1381,19 @@ class InventoryBuilder(QMainWindow):
         self._features = list(inventory.features)
         self._segments = list(inventory.segments.keys())
         self._current_path = path
+        # Preserve any feature-source provenance already on the
+        # loaded inventory; clearing here would erase the original
+        # PanPhon (or future-provider) stamp on the next save. The
+        # ``feature_source_version`` may have been written by an
+        # older release; we read both keys defensively.
+        loaded_source = inventory.metadata.get("feature_source")
+        loaded_version = inventory.metadata.get("feature_source_version")
+        self._feature_source = (
+            str(loaded_source) if isinstance(loaded_source, str) else None
+        )
+        self._feature_source_version = (
+            str(loaded_version) if isinstance(loaded_version, str) else None
+        )
         self._rebuild_table()
         for c, seg in enumerate(self._segments):
             seg_feats = inventory.segments[seg]
