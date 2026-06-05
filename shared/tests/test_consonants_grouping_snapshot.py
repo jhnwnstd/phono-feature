@@ -1,35 +1,42 @@
 """Pin :py:func:`group_segments` output for every bundled inventory.
 
-This is the regression net for the consonants grouper. Any change to
-the grouping pipeline that drifts the output for a bundled inventory
-fails this test loudly; intentional changes update the snapshot.
+This is the regression net for the consonants grouper. The snapshot
+is a BASELINE, not a freeze: deliberate improvements to the grouper
+(a new typed-fact breakout, a better place derivation, an
+alias-aware feature read) are expected to drift the snapshot, and
+the right response is to regenerate it and review the diff for
+whether the new grouping is better. The test fails so unintended
+REGRESSIONS surface -- a refactor that splits Plosives in half by
+accident, a code-path that drops Sibilants entirely -- not so that
+every change is blocked.
 
-The snapshot covers (group_label -> [segment, ...]) per inventory.
-Segment order inside each group matters: the grouper emits segments
-sorted by the internal sort key (place, then laryngeal-flavoured
-features). A re-ordering inside a group is a behavioural change worth
-catching.
+Snapshot file: :file:`shared/tests/data/consonants_grouping_snapshot.json`.
+Format: ``{inventory_filename: {group_label: [segment, ...]}}``.
 
-Add a new bundled inventory: re-run the regeneration helper below
-and paste the new entry into ``_GROUPING_SNAPSHOT``::
+Regenerate after an intentional change with::
 
-    python3 -c "
+    python3 - <<'PY'
     import json
     from pathlib import Path
     from phonology_shared.chart.consonants import group_segments
     from phonology_shared.data.inventory import Inventory
+    snapshot = {}
     for p in sorted(Path('desktop/inventories').glob('*.json')):
         if p.name.startswith(('_', '.')): continue
         inv = Inventory.parse(
             json.loads(p.read_text(encoding='utf-8-sig')),
             source=str(p),
         )
-        groups = group_segments(inv.segments)
-        print(repr(p.name) + ': ' + json.dumps(
-            {g: list(s) for g, s in groups.items()},
-            ensure_ascii=False,
-        ))
-    "
+        snapshot[p.name] = {
+            g: list(s) for g, s in group_segments(inv.segments).items()
+        }
+    Path('shared/tests/data/consonants_grouping_snapshot.json').write_text(
+        json.dumps(snapshot, indent=2, ensure_ascii=False, sort_keys=True)
+    )
+    PY
+
+then ``git diff shared/tests/data/consonants_grouping_snapshot.json``
+to review the new baseline before committing.
 """
 
 from __future__ import annotations
@@ -43,9 +50,23 @@ from phonology_shared.chart.consonants import group_segments
 from phonology_shared.data.inventory import Inventory
 
 INVENTORIES = Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+SNAPSHOT_PATH = (
+    Path(__file__).resolve().parent
+    / "data"
+    / "consonants_grouping_snapshot.json"
+)
 
 
-def _load(inventory_name: str) -> Inventory:
+def _load_snapshot() -> dict[str, dict[str, list[str]]]:
+    if not SNAPSHOT_PATH.exists():
+        pytest.fail(
+            f"missing snapshot at {SNAPSHOT_PATH}; regenerate via the "
+            f"helper in the module docstring"
+        )
+    return json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+
+
+def _load_inventory(inventory_name: str) -> Inventory:
     path = INVENTORIES / inventory_name
     if not path.exists():
         pytest.skip(f"missing inventory: {inventory_name}")
@@ -55,15 +76,17 @@ def _load(inventory_name: str) -> Inventory:
 
 def test_grouping_matches_snapshot_for_every_bundled_inventory() -> None:
     """Walk every bundled inventory, run :py:func:`group_segments`,
-    diff against the inlined snapshot. Any drift surfaces here; if the
-    drift is intentional, update :py:data:`_GROUPING_SNAPSHOT` with the
-    new values (see module docstring for the regeneration command).
+    diff against the JSON snapshot. Any drift surfaces here; review
+    the per-inventory diff in the failure message and either
+    (a) fix the regression, or (b) regenerate the snapshot if the
+    new behaviour is better.
     """
+    snapshot = _load_snapshot()
     drifts: list[str] = []
-    for inv_name in sorted(_GROUPING_SNAPSHOT):
-        inv = _load(inv_name)
+    for inv_name in sorted(snapshot):
+        inv = _load_inventory(inv_name)
         actual = {g: list(s) for g, s in group_segments(inv.segments).items()}
-        expected = _GROUPING_SNAPSHOT[inv_name]
+        expected = snapshot[inv_name]
         if actual != expected:
             extra_groups = set(actual) - set(expected)
             missing_groups = set(expected) - set(actual)
@@ -87,594 +110,22 @@ def test_grouping_matches_snapshot_for_every_bundled_inventory() -> None:
     )
 
 
-# Pre-extension snapshot of group_segments output per bundled inventory.
-# Captured before the consonants.py expansion (typed PlaceRank +
-# LaryngealKind + fact-based Implosive/Ejective breakouts) so the
-# regression test can catch unintended changes. If a deliberate
-# expansion changes the output (e.g. introducing Implosives as a new
-# group for an inventory with implosives), regenerate this dict via
-# the helper in the module docstring and review the diff carefully
-# before committing.
-_GROUPING_SNAPSHOT: dict[str, dict[str, list[str]]] = {
-    "blevins_features.json": {
-        "Affricates": [
-            "p͡ɸ",
-            "b͡β",
-            "p͡f",
-            "b͡v",
-            "t̪͡θ",
-            "d̪͡ð",
-            "c͡ç",
-            "ɉ͡ʝ",
-            "k͡x",
-            "ɡ͡ɣ",
-            "k-͡x-",
-            "ɡ-͡ɣ-",
-            "q͡χ",
-            "ɢ͡ʁ",
-        ],
-        "Central Approximants": ["ʋ", "ɹ", "ɻ"],
-        "Fricatives": [
-            "ɸ",
-            "β",
-            "f",
-            "v",
-            "θ",
-            "ð",
-            "ç",
-            "ʝ",
-            "x",
-            "ɣ",
-            "x-",
-            "ɣ-",
-            "χ",
-            "ʁ",
-            "ħ",
-            "ʕ",
-        ],
-        "Laryngeals": ["ʔ", "ɦ", "h"],
-        "Lateral Approximants": ["l", "ɭ", "ʎ", "ʟ", "ʟ-", "ɫ"],
-        "Nasals": ["m", "ɱ", "n", "ɳ", "ɲ", "ŋ", "ɴ"],
-        "Plosives": [
-            "p",
-            "b",
-            "t",
-            "d",
-            "p͡t",
-            "b͡d",
-            "ʈ",
-            "ɖ",
-            "c",
-            "ɉ",
-            "k",
-            "ɡ",
-            "k͡p",
-            "ɡ͡b",
-            "k-",
-            "ɡ-",
-            "q",
-            "ɢ",
-        ],
-        "Semivowels": ["ʍ", "j", "ɥ", "ɰ", "ɰ-", "w"],
-        "Sibilant Affricates": [
-            "t̪͡s̪",
-            "d̪͡z̪",
-            "t̪͡ɬ̪",
-            "d̪͡ɮ̪",
-            "t͡s",
-            "d͡z",
-            "t͡ɬ",
-            "d͡ɮ",
-            "t͡ʃ",
-            "d͡ʒ",
-            "t-͡ɬ-",
-            "d-͡ɮ-",
-            "ʈ͡ʂ",
-            "ɖ͡ʐ",
-            "t͡ɕ",
-            "d͡ʑ",
-        ],
-        "Sibilants": ["s", "z", "ɬ", "ɮ", "ʃ", "ʒ", "ʂ", "ʐ", "ɕ", "ʑ", "ɧ"],
-        "Vibrants": ["ʙ", "ɾ", "r", "ɺ", "ɽ", "ʀ"],
-        "Vowels": [
-            "ɚ",
-            "ɪ",
-            "i",
-            "ʏ",
-            "y",
-            "ɨ",
-            "ɯ",
-            "ʊ",
-            "u",
-            "ʉ",
-            "ɛ",
-            "e",
-            "æ",
-            "œ",
-            "ø",
-            "ɶ",
-            "a",
-            "ə",
-            "ʌ",
-            "ɘ",
-            "ɤ",
-            "ɑ",
-            "ɔ",
-            "ɞ",
-            "o",
-            "ɵ",
-            "ɒ",
-        ],
-    },
-    "english_features.json": {
-        "Affricates": ["t͡ʃ", "d͡ʒ"],
-        "Fricatives": ["f", "v", "θ", "ð", "ʍ"],
-        "Laryngeals": ["h"],
-        "Liquids": ["ɾ", "l", "ɹ"],
-        "Nasals": ["m", "n", "ŋ"],
-        "Plosives": ["p", "b", "t", "d", "k", "ɡ"],
-        "Semivowels": ["j", "w"],
-        "Sibilants": ["s", "z", "ʃ", "ʒ"],
-        "Vowels": [
-            "ɪ",
-            "i",
-            "ʊ",
-            "u",
-            "ɚ",
-            "ɛ",
-            "e",
-            "æ",
-            "ə",
-            "ʌ",
-            "ɑ",
-            "ɔ",
-            "o",
-        ],
-    },
-    "general_features.json": {
-        "Affricates": ["p͡f", "b͡v", "t͡ɬ", "d͡ɮ"],
-        "Central Approximants": ["ʋ", "ɹ", "ɻ", "ʕ"],
-        "Clicks": ["ǀ", "ǃ", "ǂ", "ʘ", "ǁ"],
-        "Fricatives": [
-            "ɸ",
-            "β",
-            "f",
-            "v",
-            "θ",
-            "ð",
-            "ɬ",
-            "ɮ",
-            "ç",
-            "ʝ",
-            "x",
-            "ɣ",
-            "χ",
-            "ʁ",
-            "ħ",
-        ],
-        "Laryngeals": ["ʔ", "h", "ɦ"],
-        "Lateral Approximants": ["l", "ɭ", "ʎ", "ʟ", "ɫ", "ʟ-"],
-        "Nasals": [
-            "ᵐb",
-            "m̥",
-            "m",
-            "ɱ",
-            "ⁿd",
-            "n̥",
-            "n",
-            "ɳ",
-            "ɲ",
-            "ᵑɡ",
-            "ŋ̊",
-            "ŋ",
-            "ŋ͡m",
-            "ɴ",
-        ],
-        "Plosives": [
-            "p",
-            "b",
-            "ɓ",
-            "t",
-            "d",
-            "ɗ",
-            "ʈ",
-            "ɖ",
-            "c",
-            "ɟ",
-            "k",
-            "ɡ",
-            "ɠ",
-            "k͡p",
-            "ɡ͡b",
-            "q",
-            "ɢ",
-            "ʛ",
-            "tʼ",
-            "pʼ",
-            "kʼ",
-        ],
-        "Semivowels": ["j", "ɥ", "ɰ", "ʍ", "w", "ɰ-"],
-        "Sibilant Affricates": [
-            "t͡s",
-            "d͡z",
-            "t͡ʃ",
-            "d͡ʒ",
-            "ʈ͡ʂ",
-            "ɖ͡ʐ",
-            "t͡ɕ",
-            "d͡ʑ",
-            "t͡sʼ",
-        ],
-        "Sibilants": ["s", "z", "ʃ", "ʒ", "ʂ", "ʐ", "ɕ", "ʑ", "ɧ", "sʼ", "ʃʼ"],
-        "Vibrants": ["ʙ", "ⱱ", "r̥", "ɾ", "r", "ɺ", "ɽ", "ʀ"],
-        "Vowels": [
-            "i",
-            "ɪ",
-            "y",
-            "ʏ",
-            "ɨ",
-            "ʉ",
-            "ɯ",
-            "u",
-            "ʊ",
-            "e",
-            "ɛ",
-            "æ",
-            "ø",
-            "œ",
-            "ɶ",
-            "ə",
-            "ɘ",
-            "ɜ",
-            "ɐ",
-            "a",
-            "ɵ",
-            "ɞ",
-            "ɤ",
-            "ʌ",
-            "ɑ",
-            "o",
-            "ɔ",
-            "ɒ",
-        ],
-    },
-    "german_features.json": {
-        "Affricates": ["p͡f", "t͡s"],
-        "Fricatives": ["f", "v", "ç", "x", "ʁ"],
-        "Laryngeals": ["h"],
-        "Lateral Approximants": ["l"],
-        "Nasals": ["m", "n", "ŋ"],
-        "Plosives": ["p", "b", "t", "d", "k", "ɡ"],
-        "Semivowels": ["j"],
-        "Sibilants": ["s", "z", "ʃ"],
-        "Vowels": [
-            "ɪ",
-            "iː",
-            "ʏ",
-            "yː",
-            "ʊ",
-            "uː",
-            "ɛ",
-            "eː",
-            "œ",
-            "øː",
-            "ɑ",
-            "ɑː",
-            "ɔ",
-            "oː",
-        ],
-    },
-    "hayes_features.json": {
-        "Affricates": [
-            "p͡ɸ",
-            "b͡β",
-            "p͡f",
-            "b͡v",
-            "t̪͡θ",
-            "d̪͡ð",
-            "t̪͡ɬ̪",
-            "d̪͡ɮ̪",
-            "t͡ɬ",
-            "d͡ɮ",
-            "t-͡ɬ-",
-            "d-͡ɮ-",
-            "c͡ç",
-            "ɉ͡ʝ",
-            "k+͡x+",
-            "ɡ+͡ɣ+",
-            "k͡x",
-            "ɡ͡ɣ",
-            "k-͡x-",
-            "ɡ-͡ɣ-",
-            "q͡χ",
-            "ɢ͡ʁ",
-        ],
-        "Central Approximants": ["ʋ", "ɹ", "ɻ"],
-        "Fricatives": [
-            "ɸ",
-            "β",
-            "f",
-            "v",
-            "θ",
-            "ð",
-            "ɬ",
-            "ɮ",
-            "ç",
-            "ʝ",
-            "x+",
-            "ɣ+",
-            "x",
-            "ɣ",
-            "x-",
-            "ɣ-",
-            "χ",
-            "ħ",
-            "ʁ",
-            "ʕ",
-        ],
-        "Laryngeals": ["ʔ", "h", "ɦ"],
-        "Liquids": [
-            "ʙ",
-            "ɾ",
-            "r",
-            "l",
-            "ɺ",
-            "ɽ",
-            "ɭ",
-            "ʎ",
-            "ʟ+",
-            "ʟ",
-            "ʟ-",
-            "ʀ",
-            "ɫ",
-        ],
-        "Nasals": ["m", "ɱ", "n", "ɳ", "ɲ", "ŋ+", "ŋ", "ŋ-", "ɴ"],
-        "Plosives": [
-            "p",
-            "b",
-            "t",
-            "d",
-            "p͡t",
-            "b͡d",
-            "ʈ",
-            "ɖ",
-            "c",
-            "ɉ",
-            "k+",
-            "ɡ+",
-            "k",
-            "ɡ",
-            "k͡p",
-            "ɡ͡b",
-            "k-",
-            "ɡ-",
-            "q",
-            "ɢ",
-        ],
-        "Semivowels": ["ʍ", "j", "ɥ", "ɰ", "ɰ-", "w"],
-        "Sibilant Affricates": [
-            "t̪͡s̪",
-            "d̪͡z̪",
-            "t͡s",
-            "d͡z",
-            "t͡ʃ",
-            "d͡ʒ",
-            "ʈ͡ʂ",
-            "ɖ͡ʐ",
-            "t͡ɕ",
-            "d͡ʑ",
-        ],
-        "Sibilants": ["s", "z", "ʃ", "ʒ", "ʂ", "ʐ", "ɕ", "ʑ", "ɧ"],
-        "Vowels": [
-            "ɪ",
-            "i",
-            "ʏ",
-            "y",
-            "ɨ",
-            "ʉ",
-            "ɯ",
-            "ʊ",
-            "u",
-            "ɛ",
-            "e",
-            "æ",
-            "œ",
-            "ø",
-            "ɶ",
-            "ə",
-            "ɘ",
-            "a",
-            "ɞ",
-            "ɵ",
-            "ʌ",
-            "ɤ",
-            "ɑ",
-            "ɔ",
-            "o",
-            "ɒ",
-        ],
-    },
-    "hindi_features.json": {
-        "Affricates": ["t͡ʃ", "t͡ʃʰ", "d͡ʒ", "d͡ʒʱ"],
-        "Fricatives": ["f"],
-        "Laryngeals": ["ɦ"],
-        "Liquids": ["r", "l", "ɽ"],
-        "Nasals": ["m", "n", "ɳ", "ɲ", "ŋ"],
-        "Plosives": [
-            "p",
-            "pʰ",
-            "b",
-            "bʱ",
-            "t̪",
-            "t̪ʰ",
-            "d̪",
-            "d̪ʱ",
-            "ʈ",
-            "ʈʰ",
-            "ɖ",
-            "ɖʱ",
-            "k",
-            "kʰ",
-            "ɡ",
-            "ɡʱ",
-        ],
-        "Semivowels": ["ʋ", "j"],
-        "Sibilants": ["s", "z", "ʃ", "ʂ"],
-        "Vowels": [
-            "ɪ",
-            "iː",
-            "ʊ",
-            "uː",
-            "eː",
-            "ɛː",
-            "æː",
-            "ə",
-            "ɑː",
-            "oː",
-            "ɔː",
-        ],
-    },
-    "ilokano_features.json": {
-        "Affricates": ["t͡ʃ", "d͡ʒ"],
-        "Fricatives": ["s"],
-        "Laryngeals": ["ʔ", "h"],
-        "Liquids": ["ɾ", "l"],
-        "Nasals": ["m", "n", "ŋ"],
-        "Plosives": ["p", "b", "t", "d", "k", "ɡ"],
-        "Semivowels": ["j", "w"],
-        "Vowels": ["i", "u", "e", "a", "o"],
-    },
-    "indonesian_features.json": {
-        "Fricatives": ["s"],
-        "Laryngeals": ["ʔ", "h"],
-        "Liquids": ["r", "l"],
-        "Nasals": ["m", "n", "ɳ", "ŋ"],
-        "Plosives": ["p", "b", "t", "d", "c", "ɟ", "k", "ɡ"],
-        "Semivowels": ["j", "w"],
-        "Vowels": ["i", "u", "e", "a", "o"],
-    },
-    "japanese_features.json": {
-        "Affricates": ["t͡s", "t͡ʃ", "d͡ʒ"],
-        "Central Approximants": ["ɾ"],
-        "Fricatives": ["ɸ", "ç"],
-        "Laryngeals": ["h"],
-        "Nasals": ["m", "n", "ŋ"],
-        "Plosives": ["p", "b", "t", "d", "k", "ɡ"],
-        "Semivowels": ["j", "w"],
-        "Sibilants": ["s", "z", "ʃ"],
-        "Vowels": ["i", "iː", "ɯ", "ɯː", "e", "eː", "a", "aː", "o", "oː"],
-    },
-    "korean_features.json": {
-        "Affricates": ["t͡ʃ", "t͡ʃʰ", "t͡ʃʼ"],
-        "Fricatives": ["s", "sʰ"],
-        "Laryngeals": ["h"],
-        "Lateral Approximants": ["l"],
-        "Nasals": ["m", "n", "ŋ"],
-        "Plosives": ["p", "pʰ", "t", "tʰ", "k", "kʰ", "tʼ", "kʼ", "pʼ"],
-        "Semivowels": ["j", "w"],
-        "Vowels": ["i", "ɨ", "u", "e", "ə", "a", "o"],
-    },
-    "lango_features.json": {
-        "Affricates": ["c͡ç", "ɟ͡ʝ"],
-        "Fricatives": ["ɸ", "ç", "x"],
-        "Liquids": ["ɾ̥", "ɾ", "l"],
-        "Nasals": ["m", "n", "ɲ", "ŋ"],
-        "Plosives": ["p", "b", "t", "d", "k", "ɡ"],
-        "Semivowels": ["j", "w"],
-        "Vowels": ["i", "u", "e", "a", "o"],
-    },
-    "lomongo_features.json": {
-        "Affricates": ["t͡s", "d͡ʒ"],
-        "Fricatives": ["s"],
-        "Lateral Approximants": ["l"],
-        "Nasals": ["m", "m̩", "n", "n̩", "ŋ", "ŋ̩"],
-        "Plosives": ["b", "t", "k", "ɡ"],
-        "Semivowels": ["w"],
-        "Vowels": ["i", "u", "ɛ", "e", "a", "ɔ", "o"],
-    },
-    "mandarin_chinese_features.json": {
-        "Affricates": ["t͡s", "t͡sʰ", "t͡ɕ", "t͡ɕʰ", "t͡ʂ", "t͡ʂʰ"],
-        "Fricatives": ["f", "x"],
-        "Lateral Approximants": ["l"],
-        "Nasals": ["m", "n", "ŋ"],
-        "Plosives": ["p", "pʰ", "t", "tʰ", "k", "kʰ"],
-        "Semivowels": ["ɻ", "j", "ɥ", "w"],
-        "Sibilants": ["s", "ɕ", "ʂ"],
-        "Vowels": ["i", "y", "u", "ə", "ɚ", "a"],
-    },
-    "maximalist_vowels.json": {
-        "Vowels": [
-            "ɪ",
-            "i",
-            "ʏ",
-            "y",
-            "ɨ",
-            "ʉ",
-            "ɯ",
-            "ʊ",
-            "u",
-            "ɛ",
-            "e",
-            "e̞",
-            "æ",
-            "a",
-            "œ",
-            "ø",
-            "ø̞",
-            "ɶ",
-            "ɜ",
-            "ɘ",
-            "ä",
-            "ɞ",
-            "ɵ",
-            "ə",
-            "ɐ",
-            "ʌ",
-            "ɤ",
-            "ɤ̞",
-            "ɑ",
-            "ɔ",
-            "o",
-            "o̞",
-            "ɒ",
-        ],
-    },
-    "modern_standard_arabic_features.json": {
-        "Affricates": ["d͡ʒ"],
-        "Fricatives": ["f", "θ", "ð", "x", "ɣ", "ħ", "ðˤ", "ʕ"],
-        "Laryngeals": ["ʔ", "h"],
-        "Liquids": ["r", "l"],
-        "Nasals": ["m", "n"],
-        "Plosives": ["b", "t", "d", "k", "q", "tˤ", "dˤ"],
-        "Semivowels": ["j", "w"],
-        "Sibilants": ["s", "z", "ʃ", "sˤ"],
-        "Vowels": ["i", "iː", "u", "uː", "a", "aː"],
-    },
-    "spanish_features.json": {
-        "Affricates": ["t͡ʃ"],
-        "Fricatives": ["f", "θ", "s", "ʝ", "x"],
-        "Liquids": ["ɾ", "r", "l", "ʎ"],
-        "Nasals": ["m", "n", "ɲ"],
-        "Plosives": ["p", "b", "t", "d", "k", "ɡ"],
-        "Vowels": ["i", "u", "e", "a", "o"],
-    },
-    "tobabatak_features.json": {
-        "Fricatives": ["s"],
-        "Laryngeals": ["ʔ", "h"],
-        "Liquids": ["ɾ", "l"],
-        "Nasals": ["m", "n", "ŋ"],
-        "Plosives": ["p", "pʰ", "b", "t", "tʰ", "d", "ɟ", "k", "kʰ", "ɡ"],
-        "Vowels": ["i", "u", "ɛ", "e", "a", "ɔ", "o"],
-    },
-    "turkish_features.json": {
-        "Affricates": ["t͡ʃ", "d͡ʒ"],
-        "Fricatives": ["f", "v"],
-        "Laryngeals": ["h"],
-        "Lateral Approximants": ["l"],
-        "Nasals": ["m", "n"],
-        "Plosives": ["p", "b", "t", "d", "k", "ɡ"],
-        "Semivowels": ["ɹ", "j"],
-        "Sibilants": ["s", "z", "ʃ", "ʒ"],
-        "Vowels": ["i", "y", "ɯ", "u", "e", "ɑ", "o"],
-    },
-}
+def test_snapshot_covers_every_bundled_inventory() -> None:
+    """The snapshot must include every non-underscore-prefixed
+    inventory in ``desktop/inventories/``. Adding a new bundled
+    inventory is the trigger for regenerating the snapshot; this
+    test surfaces the omission so the regeneration cannot be
+    silently forgotten.
+    """
+    snapshot = _load_snapshot()
+    bundled: set[str] = set()
+    for path in INVENTORIES.glob("*.json"):
+        if path.name.startswith("_") or path.name.startswith("."):
+            continue
+        bundled.add(path.name)
+    missing_from_snapshot = bundled - set(snapshot)
+    assert not missing_from_snapshot, (
+        f"bundled inventories not in snapshot: "
+        f"{sorted(missing_from_snapshot)}; regenerate via the helper "
+        f"in the module docstring"
+    )

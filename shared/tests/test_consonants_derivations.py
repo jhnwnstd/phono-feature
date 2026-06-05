@@ -19,8 +19,10 @@ from __future__ import annotations
 from phonology_shared.chart.consonants import (
     LaryngealKind,
     PlaceRank,
+    SecondaryKind,
     derive_laryngeal_kind,
     derive_place,
+    derive_secondary_articulations,
 )
 
 # ---------------------------------------------------------------------------
@@ -245,4 +247,187 @@ def test_laryngeal_conventional_wins_over_alias() -> None:
     assert (
         derive_laryngeal_kind({"voice": "+", "ejective": "+"})
         == LaryngealKind.PLAIN_VOICED
+    )
+
+
+# ---------------------------------------------------------------------------
+# derive_secondary_articulations: derive from real features only, never
+# from invented "velarized" / "palatalized" primitives.
+# ---------------------------------------------------------------------------
+
+
+def test_secondary_empty_for_vowels() -> None:
+    """Secondary articulation is a consonantal display fact in this
+    grouper. A syllabic segment always returns an empty set."""
+    assert (
+        derive_secondary_articulations(
+            {"syllabic": "+", "round": "+"}, PlaceRank.VOWEL_OR_UNKNOWN
+        )
+        == frozenset()
+    )
+
+
+def test_secondary_labialized_from_round_on_consonant() -> None:
+    """``+round`` on a non-vowel is the practical labialisation
+    cue, per the advice. No ``+labialized`` primitive needed."""
+    assert SecondaryKind.LABIALIZED in derive_secondary_articulations(
+        {"syllabic": "-", "round": "+"}, PlaceRank.VELAR
+    )
+
+
+def test_secondary_labialized_from_secondarylabial_explicit() -> None:
+    """When the inventory supplies ``+secondarylabial`` directly,
+    that's the cleanest signal and fires regardless of ``round``."""
+    assert SecondaryKind.LABIALIZED in derive_secondary_articulations(
+        {"syllabic": "-", "secondarylabial": "+"}, PlaceRank.BILABIAL
+    )
+
+
+def test_secondary_labialized_via_labialized_alias() -> None:
+    """The optional descriptive alias ``+labialized`` is honored
+    when the inventory uses it."""
+    assert SecondaryKind.LABIALIZED in derive_secondary_articulations(
+        {"syllabic": "-", "labialized": "+"}, PlaceRank.VELAR
+    )
+
+
+def test_secondary_palatalized_requires_secondarydorsal_not_primary_dorsal() -> None:
+    """A bare primary ``+dorsal`` segment is NOT secondarily
+    palatalised: that would over-claim every dorsal consonant. The
+    derivation requires explicit ``+secondarydorsal`` evidence (or
+    the alias)."""
+    primary_dorsal_only = derive_secondary_articulations(
+        {"syllabic": "-", "dorsal": "+", "high": "+", "back": "-"},
+        PlaceRank.PALATAL,
+    )
+    assert SecondaryKind.PALATALIZED not in primary_dorsal_only
+
+    explicit_secondary = derive_secondary_articulations(
+        {
+            "syllabic": "-",
+            "secondarydorsal": "+",
+            "high": "+",
+            "back": "-",
+        },
+        PlaceRank.VELAR,
+    )
+    assert SecondaryKind.PALATALIZED in explicit_secondary
+
+
+def test_secondary_palatalized_via_palatalized_alias() -> None:
+    """The optional descriptive alias still works when the
+    inventory declares ``+palatalized`` directly."""
+    assert SecondaryKind.PALATALIZED in derive_secondary_articulations(
+        {"syllabic": "-", "palatalized": "+"}, PlaceRank.VELAR
+    )
+
+
+def test_secondary_velarized_requires_secondarydorsal_with_back() -> None:
+    explicit_secondary = derive_secondary_articulations(
+        {
+            "syllabic": "-",
+            "secondarydorsal": "+",
+            "high": "+",
+            "back": "+",
+        },
+        PlaceRank.ALVEOLAR,
+    )
+    assert SecondaryKind.VELARIZED in explicit_secondary
+
+    bare_primary_dorsal = derive_secondary_articulations(
+        {"syllabic": "-", "dorsal": "+", "high": "+", "back": "+"},
+        PlaceRank.VELAR,
+    )
+    assert SecondaryKind.VELARIZED not in bare_primary_dorsal
+
+
+def test_secondary_velarized_via_velarized_alias() -> None:
+    assert SecondaryKind.VELARIZED in derive_secondary_articulations(
+        {"syllabic": "-", "velarized": "+"}, PlaceRank.ALVEOLAR
+    )
+
+
+def test_secondary_pharyngealized_from_pharyngeal_layered_on_oral_place() -> None:
+    """Pharyngeal evidence layered on a segment whose primary
+    place is ORAL (here alveolar via the primary ``+coronal``)
+    triggers PHARYNGEALIZED. The primary stays alveolar; the
+    pharyngealisation is the secondary fact."""
+    # +radical +rtr triggers pharyngeal evidence per the centralised
+    # helper, layered onto an alveolar primary -> pharyngealized.
+    feats = {
+        "syllabic": "-",
+        "coronal": "+",
+        "anterior": "+",
+        "distributed": "-",
+        "radical": "+",
+        "rtr": "+",
+    }
+    assert SecondaryKind.PHARYNGEALIZED in derive_secondary_articulations(
+        feats, PlaceRank.ALVEOLAR
+    )
+
+
+def test_secondary_pharyngealized_not_on_primary_pharyngeal() -> None:
+    """A segment whose primary place is already PHARYNGEAL is NOT
+    also tagged as secondarily pharyngealised -- the secondary
+    label only makes sense layered onto another oral place."""
+    feats = {"syllabic": "-", "pharyngeal": "+"}
+    assert (
+        SecondaryKind.PHARYNGEALIZED
+        not in derive_secondary_articulations(
+            feats, PlaceRank.PHARYNGEAL
+        )
+    )
+
+
+def test_secondary_pharyngealized_via_secondarypharyngeal_explicit() -> None:
+    feats = {"syllabic": "-", "secondarypharyngeal": "+"}
+    assert SecondaryKind.PHARYNGEALIZED in derive_secondary_articulations(
+        feats, PlaceRank.ALVEOLAR
+    )
+
+
+def test_secondary_pharyngealized_via_pharyngealized_alias() -> None:
+    feats = {"syllabic": "-", "pharyngealized": "+"}
+    assert SecondaryKind.PHARYNGEALIZED in derive_secondary_articulations(
+        feats, PlaceRank.ALVEOLAR
+    )
+
+
+def test_secondary_multiple_kinds_coexist() -> None:
+    """A labialised, pharyngealised alveolar (e.g. an emphatic
+    rounded coronal) carries both LABIALIZED and PHARYNGEALIZED in
+    the same set; they refine the same segment independently."""
+    feats = {
+        "syllabic": "-",
+        "coronal": "+",
+        "anterior": "+",
+        "distributed": "-",
+        "round": "+",
+        "radical": "+",
+        "rtr": "+",
+    }
+    kinds = derive_secondary_articulations(feats, PlaceRank.ALVEOLAR)
+    assert {
+        SecondaryKind.LABIALIZED,
+        SecondaryKind.PHARYNGEALIZED,
+    } <= kinds
+
+
+def test_secondary_no_inference_from_just_dorsal_features() -> None:
+    """The most important non-regression of the previous attempt:
+    a plain dorsal consonant does NOT pick up palatalised or
+    velarised display facts just because it has dorsal/high/back/
+    front evidence. Secondary articulation requires explicit
+    secondary-place features (or an alias) or, in the
+    pharyngealisation case, layered pharyngeal evidence."""
+    feats = {
+        "syllabic": "-",
+        "dorsal": "+",
+        "high": "+",
+        "back": "+",
+    }
+    assert (
+        derive_secondary_articulations(feats, PlaceRank.VELAR)
+        == frozenset()
     )

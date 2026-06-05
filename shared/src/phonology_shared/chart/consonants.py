@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 
 from phonology_shared.data.inventory import normalize_feature_bundle
 
@@ -102,6 +102,11 @@ DERIVED_BREAKOUTS: list[tuple[str, str, dict[str, str]]] = [
     ("Lateral Affricates", "Affricates", {"lateral": "+"}),
     ("Lateral Flaps", "Taps & Flaps", {"lateral": "+"}),
 ]
+
+# Fact-based breakouts populated after :py:class:`LaryngealKind` is
+# declared (further down). The table is a list of
+# ``(display name, parent group, target laryngeal kind)`` -- see
+# :py:data:`_FACT_BREAKOUTS` for the actual entries.
 _MERGE_PARENT: dict[str, str] = {
     "Sibilant Affricates": "Affricates",
     "Lateral Affricates": "Affricates",
@@ -110,18 +115,26 @@ _MERGE_PARENT: dict[str, str] = {
     "Lateral Flaps": "Taps & Flaps",
     "Trills": "Central Approximants",
     "Taps & Flaps": "Central Approximants",
+    "Implosives": "Plosives",
+    "Ejective Plosives": "Plosives",
+    "Ejective Fricatives": "Fricatives",
+    "Ejective Affricates": "Affricates",
 }
 # Exempt from upward merging; laryngeal rescue can still peel members.
 _FROZEN_GROUPS: set[str] = {"Plosives"}
 DISPLAY_ORDER: list[str] = [
     "Clicks",
     "Plosives",
+    "Implosives",
+    "Ejective Plosives",
     "Fricatives",
     "Sibilants",
     "Lateral Fricatives",
+    "Ejective Fricatives",
     "Affricates",
     "Sibilant Affricates",
     "Lateral Affricates",
+    "Ejective Affricates",
     "Nasals",
     "Vibrants",
     "Trills",
@@ -175,13 +188,18 @@ class PlaceRank(IntEnum):
     sort-key tuple directly via :py:func:`int`, so reshuffling them
     would change within-group display order across every inventory.
 
-    Membership is DERIVED from distinctive features (``labial``,
-    ``coronal``, ``dorsal``, ``pharyngeal``, ``constrpharynx``,
-    ``radical``, plus their ``anterior`` / ``distributed`` /
-    ``apical`` / ``high`` / ``back`` / ``front`` refiners). The
-    inventory never declares a ``"uvular"`` or ``"retroflex"``
-    feature; those are display labels :py:func:`derive_place`
-    emits.
+    Membership is DERIVED from conventional distinctive features
+    (``labial`` + ``labiodental``; ``coronal`` + ``anterior`` +
+    ``distributed``; ``dorsal`` + ``high`` + ``back``; plus
+    ``pharyngeal`` / ``constrpharynx`` / (``radical`` + ``rtr``)
+    for pharyngeal evidence). Apical-versus-laminal coronal
+    distinctions are encoded by ``distributed``: ``[+distributed]``
+    aligns with laminal dental and postalveolar contacts and
+    ``[-distributed]`` aligns with apical alveolar and retroflex
+    contacts -- the derivation does not require literal
+    ``apical`` / ``laminal`` primitives. The inventory never
+    declares a ``"uvular"`` or ``"retroflex"`` feature; those are
+    display labels :py:func:`derive_place` emits.
 
     :py:attr:`VOWEL_OR_UNKNOWN` is the catch-all bucket for
     segments that carry no place evidence the grouper can read --
@@ -218,12 +236,14 @@ def derive_place(feats: dict[str, str]) -> PlaceRank:
     Behaviour is intentionally identical to the pre-extension
     :py:func:`_ipa_place` integer helper so the snapshot pinned in
     :py:mod:`test_consonants_grouping_snapshot` stays byte-stable
-    while the typed-fact infrastructure is introduced.  Richer
-    derivations (palatal via ``+front``, uvular via
-    ``+low,+back``, retroflex via ``+apical``, epiglottal via
-    ``+radical,+constrpharynx,+RTR``) come in a follow-up step
+    while the typed-fact infrastructure is introduced. Richer
+    derivations (palatal via ``+dorsal +high +front``, uvular via
+    ``+dorsal +low +back``, epiglottal via
+    ``+radical +constrpharynx +rtr``) come in a follow-up step
     once the snapshot has been regenerated to capture the
-    intentional changes.
+    intentional changes. Apical-versus-laminal coronal
+    distinctions stay encoded through ``distributed``, never
+    through literal ``apical`` / ``laminal`` primitives.
     """
     if feats.get("constrgl", "0") == "+":
         return PlaceRank.GLOTTAL
@@ -354,17 +374,158 @@ def derive_laryngeal_kind(feats: dict[str, str]) -> LaryngealKind:
         return LaryngealKind.IMPLOSIVE
     if feats.get("ejective", "0") == "+":
         return LaryngealKind.EJECTIVE
-    if (
-        feats.get("breathy", "0") == "+"
-        or feats.get("slackvoice", "0") == "+"
-    ):
+    if feats.get("breathy", "0") == "+" or feats.get("slackvoice", "0") == "+":
         return LaryngealKind.BREATHY
-    if (
-        feats.get("creaky", "0") == "+"
-        or feats.get("stiffvoice", "0") == "+"
-    ):
+    if feats.get("creaky", "0") == "+" or feats.get("stiffvoice", "0") == "+":
         return LaryngealKind.CREAKY
     return LaryngealKind.UNKNOWN
+
+
+# Fact-based breakouts driven by :py:func:`derive_laryngeal_kind`
+# rather than a flat feature spec. Run AFTER
+# :py:data:`DERIVED_BREAKOUTS` so the more specific spec classes
+# (Sibilants, Lateral Fricatives, etc.) absorb their members first;
+# a sibilant ejective lands in Sibilants, NOT Ejective Fricatives.
+# Each tuple is (display name, parent group, target laryngeal kind);
+# the breakout fires when at least
+# :py:func:`_should_break_out`-many parent members match the kind.
+_FACT_BREAKOUTS: list[tuple[str, str, LaryngealKind]] = [
+    ("Implosives", "Plosives", LaryngealKind.IMPLOSIVE),
+    ("Ejective Plosives", "Plosives", LaryngealKind.EJECTIVE),
+    ("Ejective Fricatives", "Fricatives", LaryngealKind.EJECTIVE),
+    ("Ejective Affricates", "Affricates", LaryngealKind.EJECTIVE),
+]
+
+
+class SecondaryKind(StrEnum):
+    """Secondary articulation display facts.
+
+    Derived from real distinctive features, never from an invented
+    ``"velarized"`` / ``"palatalized"`` primitive: there is no
+    ``velarized`` feature in standard distinctive feature theory.
+    The flat names below are the DISPLAY labels the grouper emits,
+    not the input vocabulary.
+
+    Evidence the derivation accepts:
+
+      * ``LABIALIZED`` -- explicit ``+secondarylabial``, OR
+        ``+round`` on a non-vowel (the practical labialisation cue),
+        OR the optional ``+labialized`` alias when an inventory
+        supplies it.
+      * ``PALATALIZED`` -- explicit ``+secondarydorsal`` combined
+        with ``+high`` and front-leaning evidence (``+front`` or
+        ``-back``), OR the optional ``+palatalized`` alias. A bare
+        primary ``+dorsal`` segment is NOT treated as secondarily
+        palatalised; the inventory must declare secondary place.
+      * ``VELARIZED`` -- explicit ``+secondarydorsal`` combined
+        with ``+high +back``, OR the optional ``+velarized`` alias.
+        Same discipline as palatalised: no inference from primary
+        ``+dorsal`` alone.
+      * ``PHARYNGEALIZED`` -- explicit ``+secondarypharyngeal`` or
+        ``+secondaryradical``, OR pharyngeal evidence (
+        ``+pharyngeal`` / ``+constrpharynx`` / ``+radical +rtr``)
+        layered onto a segment whose primary place is already an
+        ORAL place (so a primary pharyngeal is not also tagged as
+        secondarily pharyngealised), OR the optional
+        ``+pharyngealized`` alias.
+
+    The set is empty for vowels: secondary articulation is a
+    consonantal display fact in this grouper.
+    """
+
+    LABIALIZED = "labialized"
+    PALATALIZED = "palatalized"
+    VELARIZED = "velarized"
+    PHARYNGEALIZED = "pharyngealized"
+
+
+def _has_pharyngeal_evidence(feats: dict[str, str]) -> bool:
+    """True iff ``feats`` carries any conventional pharyngeal /
+    radical-tongue-root evidence. Centralised so the place and
+    secondary-articulation paths agree on the rule."""
+    return (
+        feats.get("pharyngeal", "0") == "+"
+        or feats.get("constrpharynx", "0") == "+"
+        or (feats.get("radical", "0") == "+" and feats.get("rtr", "0") == "+")
+    )
+
+
+def derive_secondary_articulations(
+    feats: dict[str, str],
+    place: PlaceRank,
+) -> frozenset[SecondaryKind]:
+    """Derive secondary articulation display facts.
+
+    Always returns an empty set for vowels (``+syllabic``) -- the
+    grouper does not surface secondary articulation on vowel
+    cells. For consonants, the function reads ``feats`` against
+    the rules documented on :py:class:`SecondaryKind` and returns
+    every applicable kind.
+
+    ``place`` is the result of :py:func:`derive_place` on the same
+    bundle; the pharyngealisation branch needs it to refuse the
+    label on a segment whose primary place is already pharyngeal
+    or glottal (no point flagging "secondarily pharyngealised" on
+    a primary pharyngeal).
+    """
+    if feats.get("syllabic", "0") == "+":
+        return frozenset()
+
+    out: set[SecondaryKind] = set()
+
+    # LABIALIZED
+    if (
+        feats.get("secondarylabial", "0") == "+"
+        or feats.get("round", "0") == "+"
+        or feats.get("labialized", "0") == "+"
+    ):
+        out.add(SecondaryKind.LABIALIZED)
+
+    secondary_dorsal = feats.get("secondarydorsal", "0") == "+"
+    high = feats.get("high", "0")
+    back = feats.get("back", "0")
+    front = feats.get("front", "0")
+
+    # PALATALIZED -- only from explicit secondary-dorsal evidence
+    # (or alias), never from primary +dorsal alone.
+    if (
+        secondary_dorsal and high == "+" and (front == "+" or back == "-")
+    ) or feats.get("palatalized", "0") == "+":
+        out.add(SecondaryKind.PALATALIZED)
+
+    # VELARIZED -- same discipline as palatalised.
+    if (secondary_dorsal and high == "+" and back == "+") or feats.get(
+        "velarized", "0"
+    ) == "+":
+        out.add(SecondaryKind.VELARIZED)
+
+    # PHARYNGEALIZED. Three accepted paths: explicit secondary place,
+    # pharyngeal evidence layered onto a primary ORAL place (so we
+    # don't tag a primary pharyngeal as secondarily pharyngealised),
+    # or the explicit alias.
+    has_secondary_pharyngeal = (
+        feats.get("secondarypharyngeal", "0") == "+"
+        or feats.get("secondaryradical", "0") == "+"
+    )
+    has_oral_primary_place = place in {
+        PlaceRank.BILABIAL,
+        PlaceRank.LABIODENTAL,
+        PlaceRank.DENTAL,
+        PlaceRank.ALVEOLAR,
+        PlaceRank.POSTALVEOLAR,
+        PlaceRank.RETROFLEX,
+        PlaceRank.PALATAL,
+        PlaceRank.VELAR,
+        PlaceRank.UVULAR,
+    }
+    if (
+        has_secondary_pharyngeal
+        or (has_oral_primary_place and _has_pharyngeal_evidence(feats))
+        or feats.get("pharyngealized", "0") == "+"
+    ):
+        out.add(SecondaryKind.PHARYNGEALIZED)
+
+    return frozenset(out)
 
 
 _VAL_ORD: dict[str, int] = {"-": 0, "+": 1, "0": 2}
@@ -569,6 +730,32 @@ def group_segments(
             continue
         assignment[parent_name] = remainder
         assignment[new_name] = subgroup
+
+    # Fact-based breakouts: peel Implosives / Ejective {Plosives,
+    # Fricatives, Affricates} off their manner parents using the
+    # typed :py:class:`LaryngealKind` derived per segment. Runs
+    # AFTER the spec-based breakouts so the more specific spec
+    # classes (Sibilants, Lateral Fricatives, Sibilant Affricates,
+    # Lateral Affricates) absorb their members first; a sibilant
+    # ejective therefore lands in Sibilants, not Ejective
+    # Fricatives.
+    for new_name, parent_name, target_kind in _FACT_BREAKOUTS:
+        if parent_name not in assignment:
+            continue
+        parent_members = list(assignment[parent_name])
+        subgroup = [
+            s
+            for s in parent_members
+            if derive_laryngeal_kind(norm[s]) == target_kind
+        ]
+        remainder = [s for s in parent_members if s not in subgroup]
+        if not subgroup or not remainder:
+            continue
+        if not _should_break_out(len(subgroup), len(inventory)):
+            continue
+        assignment[parent_name] = remainder
+        assignment[new_name] = subgroup
+
     for origin_set, new_label in _RELABEL_PATTERNS.items():
         present = [g for g in sorted(origin_set) if g in assignment]
         if len(present) < 2:
