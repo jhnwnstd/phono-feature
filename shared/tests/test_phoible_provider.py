@@ -45,7 +45,8 @@ _STUB_INDEX: dict[str, object] = {
             "iso": "kor",
             "dialect": None,
             "source": "spa",
-            "source_label": "PHOIBLE / SPA",
+            "source_short": "SPA",
+            "source_description": "Stanford Phonology Archive",
             "segment_count": 2,
         },
         {
@@ -55,7 +56,8 @@ _STUB_INDEX: dict[str, object] = {
             "iso": "kor",
             "dialect": "Seoul Korean",
             "source": "ph",
-            "source_label": "PHOIBLE / PHOIBLE",
+            "source_short": "PHOIBLE",
+            "source_description": "Curated PHOIBLE inventory",
             "segment_count": 2,
         },
         {
@@ -65,7 +67,8 @@ _STUB_INDEX: dict[str, object] = {
             "iso": "kor",
             "dialect": None,
             "source": "ea",
-            "source_label": "PHOIBLE / Eurasian Phonologies",
+            "source_short": "Eurasian Phonologies",
+            "source_description": "",
             "segment_count": 2,
         },
         {
@@ -75,7 +78,10 @@ _STUB_INDEX: dict[str, object] = {
             "iso": "jpn",
             "dialect": None,
             "source": "upsid",
-            "source_label": "PHOIBLE / UPSID",
+            "source_short": "UPSID",
+            "source_description": (
+                "UCLA Phonological Segment Inventory Database"
+            ),
             "segment_count": 1,
         },
     ],
@@ -162,13 +168,16 @@ def test_list_inventories_merges_case_variants() -> None:
     assert {inv.id for inv in p.list_inventories("KOREAN")} == ids
 
 
-def test_list_inventories_sorted_by_source_label() -> None:
+def test_list_inventories_sorted_by_source_short() -> None:
     """Stable ordering across calls so the radio-button list does
-    not jitter between user opens."""
+    not jitter between user opens. Sort key is ``source_short``
+    because that is the heading the picker shows first; alpha
+    tiebreak by inventory id keeps two same-source entries
+    deterministic."""
     p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
     inventories = p.list_inventories("Korean")
-    labels = [inv.source_label for inv in inventories]
-    assert labels == sorted(labels)
+    shorts = [inv.source_short for inv in inventories]
+    assert shorts == sorted(shorts)
 
 
 def test_list_inventories_unknown_language_returns_empty() -> None:

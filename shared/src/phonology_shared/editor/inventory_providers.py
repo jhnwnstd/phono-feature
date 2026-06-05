@@ -68,12 +68,16 @@ class InventoryDescriptor:
             as ``glottocode``.
         dialect: Specific-dialect label when the source recorded
             one (``"Seoul Korean"``); ``None`` is typical.
-        source_label: Short source label suitable for one-line
-            display in the picker (``"PHOIBLE / SPA"``,
-            ``"PHOIBLE / UPSID"``). The provider composes it from
-            its own source vocabulary.
+        source_short: Short label that the picker shows as the
+            primary heading for the entry (``"SPA"``, ``"UPSID"``,
+            ``"Eurasian Phonologies"``). Provider composes from its
+            own source vocabulary.
+        source_description: Long form that expands opaque
+            acronyms in the secondary line (``"Stanford Phonology
+            Archive"`` for SPA). Empty when the short label already
+            says everything.
         segment_count: Number of segments in this inventory.
-            Used by the picker to default-select the median-sized
+            Picker uses this to default-select the median sized
             entry so a stray marginal source does not become the
             user's first impression.
     """
@@ -83,7 +87,8 @@ class InventoryDescriptor:
     glottocode: str | None
     iso_code: str | None
     dialect: str | None
-    source_label: str
+    source_short: str
+    source_description: str
     segment_count: int
 
 

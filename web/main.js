@@ -2233,24 +2233,6 @@ function wireSetupDialog() {
 }
 
 
-// Long-form descriptions for the PHOIBLE source acronyms. The bake
-// script emits short codes ("SPA", "UPSID") because those are how
-// the literature cites them; the picker shows the expansion below
-// so users who don't know the acronyms still understand what they
-// are choosing between. Keep keys in sync with bake_phoible.py's
-// ``SOURCE_LABELS`` (compare without the ``PHOIBLE / `` prefix).
-const PHOIBLE_SOURCE_DESCRIPTIONS = Object.freeze({
-    "SPA": "Stanford Phonology Archive",
-    "UPSID": "UCLA Phonological Segment Inventory Database",
-    "PHOIBLE": "Curated PHOIBLE inventory",
-    "Eurasian Phonologies": "Eurasian Phonology Inventories database",
-    "Alphabets of Africa": "Alphabets of Africa orthographies",
-    "Green & Moran": "Green & Moran phoneme inventories",
-    "SAPhon": "South American Phonological Inventory Database",
-    "Common Linguistic Features": "Common Linguistic Features database",
-    "Ramaswami": "Ramaswami's Common Linguistic Features",
-});
-
 /**
  * Build one inventory-source card for the PHOIBLE picker.
  *
@@ -2262,12 +2244,14 @@ const PHOIBLE_SOURCE_DESCRIPTIONS = Object.freeze({
  *   │   <dialect, if present>                    │
  *   └────────────────────────────────────────────┘
  *
- * The radio input is the actual form-state carrier but visually
- * the whole row is the click target. ``:has(input:checked)`` in
- * CSS paints the selected card with the accent border so the
- * radio dot is a redundant cue, not the only one.
+ * ``onPick`` is the picker-scoped selection callback (passed in
+ * rather than reached via a module global) so cards never grow a
+ * hidden dependency on the most-recently-wired picker instance.
+ * The radio input is the form-state carrier but the whole row is
+ * the click target; ``:has(input:checked)`` in CSS paints the
+ * accent border so the dot is a redundant cue, not the only one.
  */
-function _buildSourceCard(inv, defaultId) {
+function _buildSourceCard(inv, defaultId, onPick) {
     const radioId = "phoible-radio-" + inv.id;
     const label = document.createElement("label");
     label.className = "phoible-source-card";
@@ -2279,7 +2263,7 @@ function _buildSourceCard(inv, defaultId) {
     input.id = radioId;
     input.value = inv.id;
     input.checked = inv.id === defaultId;
-    input.addEventListener("change", () => pickInventoryFromCard(inv.id));
+    input.addEventListener("change", () => onPick(inv.id));
 
     const body = document.createElement("div");
     body.className = "phoible-source-body";
@@ -2288,13 +2272,7 @@ function _buildSourceCard(inv, defaultId) {
     header.className = "phoible-source-header";
     const name = document.createElement("span");
     name.className = "phoible-source-name";
-    // Strip the ``PHOIBLE / `` prefix the bridge ships for general
-    // cross-database labelling; in this dialog every row is from
-    // PHOIBLE so the prefix is redundant noise.
-    const shortName = inv.source_label.startsWith("PHOIBLE / ")
-        ? inv.source_label.slice("PHOIBLE / ".length)
-        : inv.source_label;
-    name.textContent = shortName;
+    name.textContent = inv.source_short;
     const segs = document.createElement("span");
     segs.className = "phoible-source-segs";
     segs.textContent = `${inv.segment_count} segments`;
@@ -2302,11 +2280,10 @@ function _buildSourceCard(inv, defaultId) {
     header.appendChild(segs);
     body.appendChild(header);
 
-    const description = PHOIBLE_SOURCE_DESCRIPTIONS[shortName];
-    if (description) {
+    if (inv.source_description) {
         const desc = document.createElement("div");
         desc.className = "phoible-source-desc";
-        desc.textContent = description;
+        desc.textContent = inv.source_description;
         body.appendChild(desc);
     }
 
@@ -2321,11 +2298,6 @@ function _buildSourceCard(inv, defaultId) {
     label.appendChild(body);
     return label;
 }
-
-// Module-level handle the radio change callback closes over; set by
-// ``wirePhoiblePicker`` so cards built outside the closure can still
-// invoke the picker's selection logic.
-let pickInventoryFromCard = () => {};
 
 
 /**
@@ -2459,7 +2431,7 @@ function wirePhoiblePicker() {
             .sort((a, b) => a.segment_count - b.segment_count);
         const defaultId = sorted[Math.floor(sorted.length / 2)].id;
         for (const inv of invs) {
-            radios.appendChild(_buildSourceCard(inv, defaultId));
+            radios.appendChild(_buildSourceCard(inv, defaultId, pickInventory));
         }
         nodes.phoibleInventories.hidden = false;
         pickInventory(defaultId);
@@ -2484,10 +2456,6 @@ function wirePhoiblePicker() {
         nodes.phoiblePreview.hidden = false;
         loadBtn.disabled = false;
     };
-    // Cards built by ``_buildSourceCard`` close over this binding so
-    // the radio's ``change`` event reaches the picker-scoped
-    // ``pickInventory`` selection logic.
-    pickInventoryFromCard = pickInventory;
 
     const closeDialog = () => {
         if (typeof dialog.close === "function") {

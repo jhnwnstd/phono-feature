@@ -61,18 +61,22 @@ PHOIBLE_CITATION = (
     "DOI: 10.5281/zenodo.2626687"
 )
 
-# Display labels for PHOIBLE's short source codes. Picker shows
-# the long form so users do not need to memorise the abbreviations.
-SOURCE_LABELS: dict[str, str] = {
-    "spa": "SPA",
-    "upsid": "UPSID",
-    "aa": "Alphabets of Africa",
-    "gm": "Green & Moran",
-    "ph": "PHOIBLE",
-    "ra": "Ramaswami",
-    "saphon": "SAPhon",
-    "ea": "Eurasian Phonologies",
-    "uz": "Common Linguistic Features",
+# Source identity per PHOIBLE source code: a ``(short, description)``
+# pair. ``short`` is the bold heading the picker shows; ``description``
+# is the secondary line that expands opaque acronyms like SPA and
+# UPSID. Empty description means ``short`` already says everything.
+# Keep both fields here so a future bake refresh does not have to
+# coordinate with the JS picker over a separate description map.
+SOURCE_INFO: dict[str, tuple[str, str]] = {
+    "spa": ("SPA", "Stanford Phonology Archive"),
+    "upsid": ("UPSID", "UCLA Phonological Segment Inventory Database"),
+    "aa": ("Alphabets of Africa", ""),
+    "gm": ("Green & Moran", ""),
+    "ph": ("PHOIBLE", "Curated PHOIBLE inventory"),
+    "ra": ("Ramaswami", ""),
+    "saphon": ("SAPhon", "South American Phonological Inventory Database"),
+    "ea": ("Eurasian Phonologies", ""),
+    "uz": ("Common Linguistic Features", ""),
 }
 
 
@@ -100,15 +104,15 @@ def _open_csv(path: Path) -> io.TextIOWrapper:
     return io.TextIOWrapper(binary, encoding="utf-8", newline="")
 
 
-def _source_label(source: str) -> str:
-    """Return ``"PHOIBLE / <Display>"`` for a PHOIBLE source code.
+def _source_info(source: str) -> tuple[str, str]:
+    """Return the ``(short, description)`` pair for a PHOIBLE source
+    code.
 
-    Unknown codes pass through as uppercased so the picker still
-    has something readable when a future PHOIBLE release adds a
-    new source family.
+    Unknown codes pass through as uppercased short with empty
+    description so the picker still has something readable when a
+    future PHOIBLE release introduces a new source family.
     """
-    pretty = SOURCE_LABELS.get(source, source.upper())
-    return f"PHOIBLE / {pretty}"
+    return SOURCE_INFO.get(source, (source.upper(), ""))
 
 
 def bake_tables(
@@ -177,6 +181,7 @@ def bake_tables(
                 if dialect == "NA":
                     dialect = None
                 source = row.get("Source") or "unknown"
+                source_short, source_description = _source_info(source)
 
                 inv_meta[inv_id] = {
                     "id": inv_id,
@@ -185,7 +190,8 @@ def bake_tables(
                     "iso": iso,
                     "dialect": dialect,
                     "source": source,
-                    "source_label": _source_label(source),
+                    "source_short": source_short,
+                    "source_description": source_description,
                     # filled in after the streaming pass
                     "segment_count": 0,
                 }

@@ -165,7 +165,8 @@ class PhoibleProvider:
                 glottocode=entry.get("glottocode"),
                 iso_code=entry.get("iso"),
                 dialect=entry.get("dialect"),
-                source_label=str(entry.get("source_label", "PHOIBLE")),
+                source_short=str(entry.get("source_short", "PHOIBLE")),
+                source_description=str(entry.get("source_description", "")),
                 segment_count=int(entry.get("segment_count", 0)),
             )
             self._inventories[inv_id] = descriptor
@@ -344,7 +345,7 @@ class PhoibleProvider:
         """
         ids = self._by_language.get(language_name.casefold(), [])
         descriptors = [self._inventories[i] for i in ids]
-        descriptors.sort(key=lambda d: (d.source_label, d.id))
+        descriptors.sort(key=lambda d: (d.source_short, d.id))
         return descriptors
 
     def generate(self, inventory_id: str) -> GeneratedInventory:

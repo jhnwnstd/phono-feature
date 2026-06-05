@@ -377,7 +377,8 @@ def _descriptor_to_dict(descriptor: InventoryDescriptor) -> dict[str, Any]:
         "glottocode": descriptor.glottocode,
         "iso": descriptor.iso_code,
         "dialect": descriptor.dialect,
-        "source_label": descriptor.source_label,
+        "source_short": descriptor.source_short,
+        "source_description": descriptor.source_description,
         "segment_count": descriptor.segment_count,
     }
 
@@ -468,37 +469,32 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     generated = provider.generate(inventory_id)
 
     # Inventory name defaults to the PHOIBLE language so the toolbar
-    # immediately reflects what the user just loaded. The dialect
-    # suffix disambiguates when one language has several inventories
-    # the user might compare side-by-side ("Korean (SPA)" vs
-    # "Korean (UPSID)"); without it the picker would surface
-    # identical-named entries in the active-inventory dropdown if
-    # the user later loads bundled inventories.
-    source_short = descriptor.source_label.split(" / ", 1)[-1]
+    # The dialect suffix disambiguates languages with several
+    # PHOIBLE sources the user might compare side by side
+    # ("Korean (SPA)" vs "Korean (UPSID)"); without it later loads
+    # would surface identical names in the active-inventory dropdown.
     name = descriptor.language_name
     if descriptor.dialect:
         name = f"{name} ({descriptor.dialect})"
-    name = f"{name} [{source_short}]"
+    name = f"{name} [{descriptor.source_short}]"
 
     # One light metadata field for provenance. No id-lock keys;
     # once loaded the inventory belongs to the user.
     metadata = {
         "feature_source": (
-            f"PHOIBLE {provider.version.split()[-1]} / "
-            f"{descriptor.language_name} / {source_short}"
+            f"{provider.version} / {descriptor.language_name}"
+            f" / {descriptor.source_short}"
         )
     }
 
-    features_list = list(generated.features)
-    grid: dict[str, dict[str, str]] = {
-        seg: {feat: bundle.get(feat, "0") for feat in features_list}
-        for seg, bundle in generated.segments.items()
-    }
-
+    # ``generated.segments`` is already pruned to ``generated.features``
+    # by the provider; the bundles do not carry stray keys and they
+    # are not missing any. Copy each into a plain ``dict`` so
+    # ``Inventory.from_grid`` owns its input.
     inventory = Inventory.from_grid(
         name=name,
-        features=features_list,
-        segments=grid,
+        features=list(generated.features),
+        segments={seg: dict(b) for seg, b in generated.segments.items()},
         metadata=metadata,
     )
     _engine = FeatureEngine(inventory)

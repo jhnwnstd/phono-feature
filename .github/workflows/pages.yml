@@ -62,17 +62,25 @@ jobs:
       # Headless browser smoke over the built site; catches Pyodide
       # micropip wheel-resolution drift, shared-package API changes
       # the bridge missed, and JS regressions pytest can't see. See
-      # web/scripts/smoke.py for the asserted coverage.
+      # web/scripts/smoke.py for the asserted coverage. Cache key
+      # includes the browser-set tag (cfw = chromium + firefox +
+      # webkit) so adding or removing a browser invalidates the
+      # cache; otherwise a stale chromium-only cache would silently
+      # hide the missing-driver branches in smoke.py.
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-v1
+          key: playwright-cfw-${{ runner.os }}-v1
 
-      - name: Install Playwright + Chromium
+      # ``--with-deps`` installs the GTK / libffi / libavif system
+      # packages WebKit needs on Ubuntu; without it WebKit silently
+      # skips at run time and the cross-browser coverage degrades to
+      # Chromium only.
+      - name: Install Playwright browsers and system deps
         run: |
           python -m pip install playwright
-          python -m playwright install chromium
+          python -m playwright install --with-deps chromium firefox webkit
 
       - name: Smoke-test the built site
         run: python web/scripts/smoke.py
