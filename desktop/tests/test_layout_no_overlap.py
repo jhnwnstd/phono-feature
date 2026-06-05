@@ -131,6 +131,15 @@ def test_analysis_panel_does_not_overlap_top_split(
     """The vertical splitter places the analysis pane below the
     seg/feat split. Vertically the analysis-pane top must be at or
     below the top-split's bottom.
+
+    Uses 0-px tolerance because the active panel's 1.5-px accent
+    border occupies the panel's bottom edge; any overlap into the
+    analysis pane lands a coloured stripe on top of the analysis
+    pane's first row of pixels. A previous regression had the top
+    panes overflowing their hsplit by ``handleWidth`` (4 px)
+    because the budget cap in ``apply_splitter_sizes`` did not
+    subtract the handle width; pinning at 0 px catches that class
+    of bug immediately.
     """
     window.resize(width, height)
     _drain(qapp)
@@ -138,9 +147,11 @@ def test_analysis_panel_does_not_overlap_top_split(
         _global_rect(window.analysis),
         _global_rect(window.seg_panel),
         f"analysis vs seg_panel @ {width}x{height}",
+        tolerance=0,
     )
     _assert_no_overlap(
         _global_rect(window.analysis),
         _global_rect(window.feat_panel),
         f"analysis vs feat_panel @ {width}x{height}",
+        tolerance=0,
     )

@@ -385,10 +385,19 @@ class MainWindow(QMainWindow):
         self._vsplit.setSizes([_initial_top_h, _initial_analysis_h])
         # Vertical handle is not user-draggable; the split is driven
         # by the analysis pane's four-row floor plus the top pane's
-        # content-derived minimum. Qt resets ``handleWidth`` on every
-        # style polish, so ``setHandleWidth(0)`` doesn't stick.
-        # Disabling the handle widget AND clamping its max height to
-        # 0 does.
+        # content-derived minimum. Qt's initial style polish resets
+        # ``handleWidth`` back to the platform default (~4 px) AFTER
+        # construction returns, so a synchronous ``setHandleWidth(0)``
+        # here doesn't stick. Re-applying via ``singleShot(0, ...)``
+        # lands the call after the polish, and the geometry
+        # controller's budget cap subtracts ``handleWidth()`` from
+        # the analysis-floor reservation as a belt-and-suspenders
+        # guarantee against any future polish that re-introduces a
+        # non-zero value. The handle widget itself is also disabled
+        # and clamped to zero height so it can never render a drag
+        # cursor or visible stripe even if handleWidth is non-zero.
+        self._vsplit.setHandleWidth(0)
+        QTimer.singleShot(0, lambda: self._vsplit.setHandleWidth(0))
         handle = self._vsplit.handle(1)
         if handle is not None:
             handle.setEnabled(False)

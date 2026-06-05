@@ -77,9 +77,7 @@ def main() -> None:
             label = f"size={k}"
             sample = all_segs[:k]
         _bench(engine, sample, label)
-    print(
-        "\nThreshold for caching: median >= 500 us/call at any size."
-    )
+    print("\nThreshold for caching: median >= 500 us/call at any size.")
 
 
 if __name__ == "__main__":

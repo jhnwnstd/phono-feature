@@ -301,7 +301,19 @@ class GeometryController:
         # panel's internal QScrollArea (already wired).
         vsplit_total = self._vsplit.height()
         floor = layout.analysis_content_floor_h()
-        max_top_min = max(layout.MIN_TOP_PANE_H, vsplit_total - floor)
+        # ``handleWidth`` is the gap QSplitter reserves between its
+        # children. We zero it at construction (see main_window's
+        # vsplit setup), but read the live value here so a future
+        # restyle that reinstates a non-zero handleWidth still keeps
+        # the budget honest. Without this subtraction the top panel
+        # min-height can exceed the hsplit's allocated slot by
+        # ``handleWidth``, the panel overflows its parent's rect,
+        # and the active panel's 1.5-px accent border lands in the
+        # analysis pane.
+        handle_h = self._vsplit.handleWidth()
+        max_top_min = max(
+            layout.MIN_TOP_PANE_H, vsplit_total - floor - handle_h
+        )
         seg_min = min(seg_content_h + layout.PANEL_CHROME_V, max_top_min)
         feat_min = min(feat_content_h + layout.PANEL_CHROME_V, max_top_min)
         self._w.seg_panel.setMinimumHeight(seg_min)
