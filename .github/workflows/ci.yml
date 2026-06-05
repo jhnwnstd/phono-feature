@@ -37,6 +37,14 @@ jobs:
     env:
       # Qt has no display on the runner; offscreen is the standard headless plugin.
       QT_QPA_PLATFORM: offscreen
+      # Python UTF-8 Mode: forces ``open()`` to default to UTF-8 on
+      # every platform regardless of the system code page. panphon's
+      # ``FeatureTable`` opens ``ipa_bases.csv`` without an explicit
+      # encoding, so on Windows it would otherwise decode through
+      # cp1252 and crash on the first IPA byte (0x90 in the
+      # ``ʁ`` row near offset 970). PEP 540 / Python 3.7+. Benign on
+      # Linux/macOS, which already default to UTF-8.
+      PYTHONUTF8: "1"
 
     steps:
       - uses: actions/checkout@v5
