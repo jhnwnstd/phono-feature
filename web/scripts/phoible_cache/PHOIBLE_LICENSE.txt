@@ -1,0 +1,48 @@
+PHOIBLE 2.0 — Attribution and License
+======================================
+
+This product includes phonological-inventory data from PHOIBLE 2.0,
+distributed under the GNU General Public License version 3.
+
+  Repository:  https://github.com/phoible/dev
+  Release:     PHOIBLE 2.0
+  Released:    2019-04-03
+  License:     GNU GPL-3.0 (codebase) + CC BY-SA 3.0 (data)
+  Full GPL:    https://www.gnu.org/licenses/gpl-3.0.txt
+  Full CC:     https://creativecommons.org/licenses/by-sa/3.0/
+
+Citation
+--------
+
+Please cite PHOIBLE when using the data:
+
+  Moran, Steven & McCloy, Daniel (eds.) 2019.
+  PHOIBLE 2.0.
+  Jena: Max Planck Institute for the Science of Human History.
+  http://phoible.org
+  DOI: 10.5281/zenodo.2626687
+
+Per-language citation
+---------------------
+
+PHOIBLE inventories are aggregated from multiple primary sources
+(SPA, UPSID, PHOIBLE, Eurasian Phonologies, etc.); when citing a
+specific language's inventory, the PHOIBLE README directs users to
+also credit the original source documented in PHOIBLE's
+``InventoryID`` / ``Source`` fields.
+
+What we include
+---------------
+
+We bundle a pre-processed snapshot of ``phoible.csv``:
+
+  * an index of language names + inventory descriptors
+    (``_phoible_index.generated.json``), and
+  * the per-inventory segment-feature bundles
+    (``_phoible_data.generated.json``).
+
+Both are derived from PHOIBLE 2.0's raw CSV. The raw CSV itself
+ships gzipped under ``web/scripts/phoible_cache/phoible.csv.gz`` so
+the derivative artifacts can be rebuilt verbatim at any time.
+
+No other files in this repository are derived from PHOIBLE.

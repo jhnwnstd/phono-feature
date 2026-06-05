@@ -254,6 +254,44 @@
     <textarea id="setup-features-input" rows="10" spellcheck="false"
               autocomplete="off"></textarea>
 
+    <!-- PHOIBLE inline subpanel. Hidden by default; revealed when
+         the preset picker selects "Load from PHOIBLE…". Replaces
+         the segments + features textareas above (their parent
+         elements get .setup-hidden during PHOIBLE mode) so the
+         dialog stays compact instead of growing a fifth column. -->
+    <div id="setup-phoible-panel" hidden class="phoible-panel">
+      <div class="phoible-loading" id="setup-phoible-loading" hidden>
+        Loading PHOIBLE table…
+      </div>
+      <div class="phoible-active" id="setup-phoible-active" hidden>
+        <label class="dialog-label" for="setup-phoible-search">
+          Language
+        </label>
+        <input id="setup-phoible-search" type="text" autocomplete="off"
+               spellcheck="false"
+               placeholder="Type a language name or ISO code">
+        <ul id="setup-phoible-results" class="phoible-results" hidden
+            role="listbox"></ul>
+
+        <div id="setup-phoible-inventories" hidden>
+          <div class="dialog-label">Inventory source</div>
+          <div id="setup-phoible-radios" role="radiogroup"></div>
+        </div>
+
+        <div id="setup-phoible-preview" hidden class="phoible-preview">
+          <div id="setup-phoible-summary" class="phoible-summary"></div>
+          <div id="setup-phoible-segments" class="phoible-segments"></div>
+          <div class="phoible-citation">
+            <span>A starting point — edit before saving.</span>
+            <a id="setup-phoible-cite" href="PHOIBLE_LICENSE.txt"
+               target="_blank" rel="noopener">
+              Powered by PHOIBLE 2.0
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="dialog-error" id="setup-error" role="alert"></div>
     <div class="dialog-actions">
       <button type="button" id="setup-cancel" value="cancel">Cancel</button>

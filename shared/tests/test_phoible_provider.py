@@ -1,0 +1,307 @@
+"""Contract tests for :py:class:`PhoibleProvider`.
+
+Uses hand-built stub tables so the suite does not depend on the
+build-baked snapshot (which CI machines without the PHOIBLE cache
+wouldn't have access to before the bake step runs). The byte-
+identical parity check against the real PHOIBLE table is done as
+a smoke check in the bake script's output; this module pins the
+runtime behaviour of the lookup + search logic itself.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from phonology_shared.editor.inventory_providers import (
+    InventoryDescriptor,
+    InventoryProvider,
+)
+from phonology_shared.editor.phoible_provider import (
+    PhoibleProvider,
+    PhoibleSnapshotNotAvailable,
+)
+
+# Minimal-but-realistic stub. Two features (Syllabic, Consonantal),
+# three languages with overlapping inventories so we exercise the
+# multi-inventory-per-language code path.
+_STUB_INDEX: dict[str, object] = {
+    "version": "PHOIBLE 2.0",
+    "citation": "Moran & McCloy 2019",
+    "license": "CC BY-SA 3.0",
+    "source_url": "https://github.com/phoible/dev",
+    "languages": [
+        {"name": "Korean", "glottocode": "kore1280", "iso": "kor"},
+        {"name": "KOREAN", "glottocode": "kore1280", "iso": "kor"},
+        {"name": "Japanese", "glottocode": "nucl1643", "iso": "jpn"},
+    ],
+    "inventories": [
+        {
+            "id": "1",
+            "language_name": "Korean",
+            "glottocode": "kore1280",
+            "iso": "kor",
+            "dialect": None,
+            "source": "spa",
+            "source_label": "PHOIBLE / SPA",
+            "segment_count": 2,
+        },
+        {
+            "id": "2",
+            "language_name": "Korean",
+            "glottocode": "kore1280",
+            "iso": "kor",
+            "dialect": "Seoul Korean",
+            "source": "ph",
+            "source_label": "PHOIBLE / PHOIBLE",
+            "segment_count": 2,
+        },
+        {
+            "id": "9",
+            "language_name": "KOREAN",
+            "glottocode": "kore1280",
+            "iso": "kor",
+            "dialect": None,
+            "source": "ea",
+            "source_label": "PHOIBLE / Eurasian Phonologies",
+            "segment_count": 2,
+        },
+        {
+            "id": "3",
+            "language_name": "Japanese",
+            "glottocode": "nucl1643",
+            "iso": "jpn",
+            "dialect": None,
+            "source": "upsid",
+            "source_label": "PHOIBLE / UPSID",
+            "segment_count": 1,
+        },
+    ],
+}
+
+_STUB_DATA: dict[str, object] = {
+    "version": "PHOIBLE 2.0",
+    "feature_names": ["Syllabic", "Consonantal"],
+    "inventories": {
+        "1": {"p": "-+", "i": "+-"},
+        "2": {"k": "-+", "u": "+-"},
+        "9": {"b": "-+", "a": "+-"},
+        "3": {"t": "-+"},
+    },
+}
+
+
+def test_provider_satisfies_protocol() -> None:
+    """``PhoibleProvider`` must duck-type as
+    :py:class:`InventoryProvider`; the runtime_checkable Protocol
+    makes this assertable without an inheritance declaration."""
+    provider = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    assert isinstance(provider, InventoryProvider)
+    assert provider.name == "PHOIBLE"
+    assert provider.version == "PHOIBLE 2.0"
+
+
+def test_search_languages_substring_matches() -> None:
+    """Case-insensitive substring match against language names."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    assert "Korean" in p.search_languages("kor")
+    assert "Japanese" in p.search_languages("jap")
+    assert "Japanese" in p.search_languages("JAP")
+    assert p.search_languages("klingon") == []
+
+
+def test_search_languages_dedups_case_variants() -> None:
+    """PHOIBLE ships both ``"Korean"`` and ``"KOREAN"``; the
+    autocomplete should surface only the mixed-case form so users
+    aren't shown two entries for the same language. Regression
+    against the original implementation that overwrote with
+    whichever case came last in the index iteration."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    results = p.search_languages("kor", limit=20)
+    # Exactly one Korean entry, and it's the mixed-case form.
+    korean_hits = [r for r in results if r.casefold() == "korean"]
+    assert korean_hits == ["Korean"]
+
+
+def test_search_languages_iso_shortcut_bubbles_to_top() -> None:
+    """A 3-character query matching an ISO code surfaces the
+    language at the top of the result list."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    results = p.search_languages("jpn")
+    assert results[0] == "Japanese"
+
+
+def test_search_languages_empty_query_returns_empty() -> None:
+    """Picker should never auto-populate on an empty query;
+    returning [] keeps the dropdown closed until the user types."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    assert p.search_languages("") == []
+
+
+def test_search_languages_respects_limit() -> None:
+    """``limit`` is a hard cap so the picker never balloons."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    assert len(p.search_languages("a", limit=2)) <= 2
+
+
+def test_list_inventories_merges_case_variants() -> None:
+    """Different sources record the language name with different
+    case (``"Korean"`` vs ``"KOREAN"``); ``list_inventories`` must
+    surface BOTH groups' inventories under the canonical name so
+    the user sees every available source in one click. The
+    casefold-keyed dispatch in ``_by_language`` is what makes this
+    work."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    inventories = p.list_inventories("Korean")
+    ids = {inv.id for inv in inventories}
+    assert ids == {"1", "2", "9"}
+    # Same dispatch on uppercase input — the picker's autocomplete
+    # may surface either form depending on user input.
+    assert {inv.id for inv in p.list_inventories("KOREAN")} == ids
+
+
+def test_list_inventories_sorted_by_source_label() -> None:
+    """Stable ordering across calls so the radio-button list does
+    not jitter between user opens."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    inventories = p.list_inventories("Korean")
+    labels = [inv.source_label for inv in inventories]
+    assert labels == sorted(labels)
+
+
+def test_list_inventories_unknown_language_returns_empty() -> None:
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    assert p.list_inventories("Klingon") == []
+
+
+def test_generate_returns_bundles_for_known_inventory() -> None:
+    """The encoded bundle decodes via positional zip against
+    ``feature_names``; the GeneratedInventory matches the shape
+    other providers (PanPhon, Lookup) return so the dialog code
+    is agnostic to which provider the user picked."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    result = p.generate("1")
+    assert set(result.segments) == {"p", "i"}
+    assert dict(result.segments["p"]) == {
+        "Syllabic": "-",
+        "Consonantal": "+",
+    }
+    assert dict(result.segments["i"]) == {
+        "Syllabic": "+",
+        "Consonantal": "-",
+    }
+
+
+def test_generate_prunes_unused_features() -> None:
+    """Features where no segment carries ``+``/``-`` are dropped,
+    same as PanPhon. Inventory 3 only has ``"t"`` (Consonantal+,
+    Syllabic-); both features carry at least one ``+``/``-`` so
+    both stay. Tested with a synthetic all-zero bundle below."""
+    table = {
+        **_STUB_DATA,
+        "inventories": {
+            "1": {"p": "00", "i": "00"},  # all zero → both pruned
+        },
+    }
+    index = {
+        **_STUB_INDEX,
+        "inventories": [
+            inv for inv in _STUB_INDEX["inventories"] if inv["id"] == "1"
+        ],
+    }
+    p = PhoibleProvider(index_table=index, data_table=table)
+    result = p.generate("1")
+    assert result.features == ()
+    assert dict(result.segments["p"]) == {}
+
+
+def test_generate_unknown_inventory_id_raises_keyerror() -> None:
+    """Unknown id → KeyError; the bridge layer translates that to
+    a ValidationError the dialog shows to the user."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    with pytest.raises(KeyError, match="42"):
+        p.generate("42")
+
+
+def test_descriptor_lookup_by_id() -> None:
+    """Used by the dialog for the preview before generate."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    descriptor = p.descriptor("2")
+    assert descriptor is not None
+    assert descriptor.language_name == "Korean"
+    assert descriptor.dialect == "Seoul Korean"
+    assert p.descriptor("999") is None
+
+
+def test_descriptor_uses_strict_inventory_descriptor_type() -> None:
+    """The Protocol pins ``InventoryDescriptor`` as the result
+    type; tests against the dataclass shape so a future field
+    rename trips here instead of at the picker."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    inventories = p.list_inventories("Korean")
+    assert all(isinstance(inv, InventoryDescriptor) for inv in inventories)
+
+
+def test_load_data_payload_late_injection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Web bridge boots with index only; data arrives later via
+    ``load_data_payload``. Index-only mode supports search and
+    list, but ``generate`` must raise until data lands.
+
+    Mocks the on-disk fallback to ``None`` so the test pins the
+    web cold-boot behaviour even when a developer has the bake
+    artifact sitting in ``shared/.../editor/`` from a prior run.
+    """
+    monkeypatch.setattr(
+        "phonology_shared.editor.phoible_provider._try_load_data_bytes",
+        lambda: None,
+    )
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=None)
+    assert not p.has_data
+    # search and list still work
+    assert "Korean" in p.search_languages("kor")
+    assert len(p.list_inventories("Korean")) == 3
+    # generate raises until payload arrives
+    with pytest.raises(PhoibleSnapshotNotAvailable):
+        p.generate("1")
+    p.load_data_payload(json.dumps(_STUB_DATA))
+    assert p.has_data
+    assert "p" in p.generate("1").segments
+
+
+def test_from_path_round_trip(tmp_path: Path) -> None:
+    """Convenience constructor for tests that ship their own
+    snapshot files; pin that it reads the schema produced by the
+    bake script."""
+    index_path = tmp_path / "index.json"
+    data_path = tmp_path / "data.json"
+    index_path.write_text(json.dumps(_STUB_INDEX), encoding="utf-8")
+    data_path.write_text(json.dumps(_STUB_DATA), encoding="utf-8")
+    p = PhoibleProvider.from_path(index_path, data_path)
+    assert len(p.list_inventories("Korean")) == 3
+    assert "p" in p.generate("1").segments
+
+
+def test_constructor_rejects_non_mapping_index() -> None:
+    """Schema enforcement at construction so a corrupt snapshot
+    surfaces as a typed error the registry can catch and exclude
+    the provider, not a stray crash mid-dialog."""
+    with pytest.raises(TypeError, match="mapping"):
+        PhoibleProvider(index_table=[1, 2, 3])  # type: ignore[arg-type]
+
+
+def test_constructor_rejects_missing_inventories_list() -> None:
+    with pytest.raises(ValueError, match="inventories"):
+        PhoibleProvider(
+            index_table={"version": "X", "languages": []},
+        )
+
+
+def test_phoible_snapshot_not_available_is_runtime_error() -> None:
+    """The typed exception the registry catches must be a
+    RuntimeError subclass so a generic exception-suppress also
+    handles it gracefully."""
+    assert issubclass(PhoibleSnapshotNotAvailable, RuntimeError)

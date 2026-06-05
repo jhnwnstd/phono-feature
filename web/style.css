@@ -304,6 +304,115 @@ dialog input[type="text"]:focus-visible {
   border-color: var(--accent);
 }
 
+/* ---------- PHOIBLE inline subpanel ---------- */
+/* Same visual weight as the segments/features textareas it
+   replaces; the JS toggles ``.setup-hidden`` on the textareas'
+   labels and the panel itself based on the preset picker. */
+
+.setup-hidden { display: none !important; }
+
+.phoible-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+.phoible-loading {
+  color: var(--text-dim);
+  font-style: italic;
+  text-align: center;
+  padding: var(--space-md);
+}
+.phoible-panel input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.phoible-panel input[type="text"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+.phoible-results {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 180px;
+  overflow-y: auto;
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+.phoible-results li {
+  padding: 4px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.phoible-results li:hover,
+.phoible-results li[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+#setup-phoible-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#setup-phoible-radios label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 3px 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+#setup-phoible-radios label:hover {
+  background: var(--accent-soft);
+}
+#setup-phoible-radios .phoible-radio-meta {
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+.phoible-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: var(--border-std) solid var(--border);
+}
+.phoible-summary {
+  font-weight: bold;
+}
+.phoible-segments {
+  font-family: var(--mono-family, ui-monospace, monospace);
+  color: var(--text-dim);
+  font-size: 0.9em;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.phoible-citation {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  font-size: 0.85em;
+  color: var(--text-dim);
+}
+.phoible-citation a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.phoible-citation a:hover {
+  text-decoration: underline;
+}
+
 /* ---------- two-pane split (segments | features) ---------- */
 
 .grid {

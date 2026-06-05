@@ -44,9 +44,17 @@ from phonology_shared.editor.grid import (  # noqa: F401
     validate_new_feature_label,
     validate_new_segment_label,
 )
+from phonology_shared.editor.inventory_providers import (
+    InventoryDescriptor,
+    InventoryProvider,
+)
 from phonology_shared.editor.lookup_provider import (
     LookupFeatureProvider,
     LookupTableNotAvailable,
+)
+from phonology_shared.editor.phoible_provider import (
+    PhoibleProvider,
+    PhoibleSnapshotNotAvailable,
 )
 from phonology_shared.editor.providers import (
     FeatureProvider,
@@ -211,6 +219,26 @@ def _provider_registry() -> dict[str, FeatureProvider]:
     return registry
 
 
+@lru_cache(maxsize=1)
+def _inventory_provider_registry() -> dict[str, InventoryProvider]:
+    """Return the available inventory providers indexed by ``name``.
+
+    Sibling to :py:func:`_provider_registry`; today the only
+    inventory provider is PHOIBLE. The provider boots in index-
+    only mode on the web (data file is lazy-loaded), so the
+    autocomplete + inventory listing are available before the
+    user has fetched the data payload. ``generate`` raises until
+    :py:func:`phoible_load_data` injects the data JSON.
+    """
+    registry: dict[str, InventoryProvider] = {}
+    try:
+        provider = PhoibleProvider()
+    except PhoibleSnapshotNotAvailable:
+        return registry
+    registry[provider.name] = provider
+    return registry
+
+
 def get_setup_defaults() -> dict[str, Any]:
     """Return the autofill seeds, named feature presets, and any
     available bootstrap providers the web setup modal needs to
@@ -232,6 +260,13 @@ def get_setup_defaults() -> dict[str, Any]:
         }
         for provider in _provider_registry().values()
     ]
+    inventory_providers = [
+        {
+            "name": provider.name,
+            "version": provider.version,
+        }
+        for provider in _inventory_provider_registry().values()
+    ]
     return {
         "default_segments": DEFAULT_SEGMENTS,
         "default_features": DEFAULT_FEATURES,
@@ -239,6 +274,7 @@ def get_setup_defaults() -> dict[str, Any]:
             name: list(feats) for name, feats in FEATURE_PRESETS.items()
         },
         "providers": providers,
+        "inventory_providers": inventory_providers,
     }
 
 
@@ -270,6 +306,211 @@ def preview_provider_features(
     if not generated.features:
         return list(provider.feature_names())
     return list(generated.features)
+
+
+# --- PHOIBLE bridge endpoints --------------------------------------------
+# Sibling surface to the feature-provider endpoints above. The picker
+# calls these in three stages: search the autocomplete, list the
+# inventories for the chosen language, and (after the user picks one)
+# either preview or generate it. ``phoible_load_data`` is the one-shot
+# lazy-load handshake the web bridge uses to inject the ~5 MB data
+# blob the desktop reads from disk; ``phoible_is_ready`` lets the
+# dialog gate the "Create Grid" button until the fetch + load lands.
+
+
+def _phoible_provider() -> InventoryProvider | None:
+    return _inventory_provider_registry().get("PHOIBLE")
+
+
+def phoible_is_available() -> bool:
+    """Return ``True`` when a PHOIBLE provider is registered.
+
+    The web dialog uses this at open time to decide whether to
+    surface the "Load from PHOIBLE…" entry at all; a stale checkout
+    with no baked index will return ``False`` and the picker hides
+    the option entirely rather than showing a broken row.
+    """
+    return _phoible_provider() is not None
+
+
+def phoible_is_ready() -> bool:
+    """Return ``True`` once the PHOIBLE data payload is loaded.
+
+    Index-only mode (the web cold path) returns ``False`` until
+    :py:func:`phoible_load_data` runs. The picker uses this to
+    gate the "Create Grid" submit so a user can't trigger
+    ``generate`` before the data is in memory.
+    """
+    provider = _phoible_provider()
+    return provider is not None and getattr(provider, "has_data", False)
+
+
+def phoible_load_data(payload_json: str) -> bool:
+    """Ingest the lazy-loaded PHOIBLE data JSON payload.
+
+    Called once by the web dialog after the ``fetch`` of
+    ``phoible_data.<hash>.json`` lands. Returns ``True`` on
+    success, ``False`` when there is no PHOIBLE provider to
+    receive the payload (no-op for desktop, which loads from
+    disk at construction). Re-loading is idempotent and cheap.
+    """
+    provider = _phoible_provider()
+    if provider is None:
+        return False
+    provider.load_data_payload(payload_json)  # type: ignore[attr-defined]
+    return True
+
+
+def phoible_search_languages(query: str, limit: int = 20) -> list[str]:
+    """Autocomplete: return up to ``limit`` language names matching
+    the substring query. Empty query returns an empty list.
+
+    Returns ``[]`` if no PHOIBLE provider is registered so JS can
+    treat the absence the same as "no results" without an extra
+    feature-detect call.
+    """
+    provider = _phoible_provider()
+    if provider is None:
+        return []
+    return provider.search_languages(query, limit=limit)
+
+
+def _descriptor_to_dict(descriptor: InventoryDescriptor) -> dict[str, Any]:
+    """Flatten an :py:class:`InventoryDescriptor` into the dict the
+    JS picker consumes. Centralised so a future field rename
+    surfaces here once instead of at every endpoint."""
+    return {
+        "id": descriptor.id,
+        "language_name": descriptor.language_name,
+        "glottocode": descriptor.glottocode,
+        "iso": descriptor.iso_code,
+        "dialect": descriptor.dialect,
+        "source_label": descriptor.source_label,
+        "segment_count": descriptor.segment_count,
+    }
+
+
+def phoible_list_inventories(language_name: str) -> list[dict[str, Any]]:
+    """Return every inventory descriptor for the named language.
+
+    Empty list for unknown languages or when no PHOIBLE provider
+    is registered; the picker treats both as "nothing to show".
+    """
+    provider = _phoible_provider()
+    if provider is None:
+        return []
+    return [
+        _descriptor_to_dict(d)
+        for d in provider.list_inventories(language_name)
+    ]
+
+
+def phoible_preview_inventory(inventory_id: str) -> dict[str, Any]:
+    """Return a compact preview payload for the named PHOIBLE
+    inventory (one round-trip cheaper than calling ``generate``
+    just to inspect the segment list).
+
+    Shape: ``{descriptor, segments, feature_count}`` where
+    ``segments`` is the first 50 IPA glyphs and ``feature_count``
+    is the number of columns the materialised inventory carries
+    after the empty-column pruning step.
+    """
+    provider = _phoible_provider()
+    if provider is None or not getattr(provider, "has_data", False):
+        return {}
+    descriptor = provider.descriptor(inventory_id)  # type: ignore[attr-defined]
+    if descriptor is None:
+        return {}
+    generated = provider.generate(inventory_id)
+    segments = list(generated.segments.keys())
+    return {
+        "descriptor": _descriptor_to_dict(descriptor),
+        "segments": segments[:50],
+        "segment_total": len(segments),
+        "feature_count": len(generated.features),
+    }
+
+
+def create_new_inventory_from_phoible(
+    raw_name: str, inventory_id: str
+) -> dict[str, Any]:
+    """Build an inventory from a PHOIBLE inventory descriptor.
+
+    Distinct from :py:func:`create_new_inventory` because PHOIBLE
+    provides segments + features as a coherent unit; there is no
+    user-typed text to validate the way ``validate_setup`` expects.
+    Only the inventory NAME goes through the text-validation gate;
+    the segment + feature payload comes verbatim from the bake
+    snapshot.
+
+    Stamps full PHOIBLE provenance into the inventory metadata so
+    the saved file records which database row it came from:
+    ``feature_source``, ``feature_source_version``, plus
+    ``phoible_inventory_id``, ``phoible_source``,
+    ``phoible_glottocode``, and ``phoible_dialect`` (when known).
+
+    Raises :py:class:`ValidationError` when the PHOIBLE provider is
+    unavailable, the data payload has not been loaded, or the
+    inventory id is unknown. The dialog surfaces the message via
+    the standard error-box channel.
+    """
+    global _engine, _inventory_name
+    provider = _phoible_provider()
+    if provider is None:
+        raise ValidationError(
+            ("PHOIBLE provider is not available; rebuild the web bundle.",)
+        )
+    if not getattr(provider, "has_data", False):
+        raise ValidationError(
+            (
+                "PHOIBLE data payload not loaded; call phoible_load_data "
+                "before submitting.",
+            )
+        )
+    descriptor = provider.descriptor(inventory_id)  # type: ignore[attr-defined]
+    if descriptor is None:
+        raise ValidationError(
+            (f"Unknown PHOIBLE inventory id {inventory_id!r}.",)
+        )
+    generated = provider.generate(inventory_id)
+
+    # Reuse the shared name-validation path so naming rules match
+    # the static-preset flow. Segments + features come from the
+    # provider and skip ``validate_setup``; they're database
+    # rows, not user typing.
+    canonical_name = (raw_name or descriptor.language_name).strip()
+    if not canonical_name:
+        canonical_name = descriptor.language_name
+
+    metadata: dict[str, Any] = {
+        "feature_source": provider.name,
+        "feature_source_version": provider.version,
+        "phoible_inventory_id": descriptor.id,
+        "phoible_source": descriptor.source_label,
+    }
+    if descriptor.glottocode:
+        metadata["phoible_glottocode"] = descriptor.glottocode
+    if descriptor.iso_code:
+        metadata["phoible_iso"] = descriptor.iso_code
+    if descriptor.dialect:
+        metadata["phoible_dialect"] = descriptor.dialect
+
+    features_list = list(generated.features)
+    grid: dict[str, dict[str, str]] = {
+        seg: {feat: bundle.get(feat, "0") for feat in features_list}
+        for seg, bundle in generated.segments.items()
+    }
+
+    inventory = Inventory.from_grid(
+        name=canonical_name,
+        features=features_list,
+        segments=grid,
+        metadata=metadata,
+    )
+    _engine = FeatureEngine(inventory)
+    _inventory_name = inventory.name
+    _invalidate_analysis_caches()
+    return build_inventory_summary(_engine, _inventory_name)
 
 
 def create_new_inventory(

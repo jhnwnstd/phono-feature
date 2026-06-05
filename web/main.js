@@ -46,6 +46,19 @@ const NODE_IDS = Object.freeze({
     setupFeaturesInput: "setup-features-input",
     setupPresetPicker: "setup-preset-picker",
     setupError: "setup-error",
+    // PHOIBLE subpanel + its internal nodes. The container is hidden
+    // by default; toggled on when the preset picker selects the
+    // PHOIBLE entry (see PROVIDER_PREFIX in wireSetupDialog).
+    setupPhoiblePanel: "setup-phoible-panel",
+    setupPhoibleLoading: "setup-phoible-loading",
+    setupPhoibleActive: "setup-phoible-active",
+    setupPhoibleSearch: "setup-phoible-search",
+    setupPhoibleResults: "setup-phoible-results",
+    setupPhoibleInventories: "setup-phoible-inventories",
+    setupPhoibleRadios: "setup-phoible-radios",
+    setupPhoiblePreview: "setup-phoible-preview",
+    setupPhoibleSummary: "setup-phoible-summary",
+    setupPhoibleSegments: "setup-phoible-segments",
     setupCancel: "setup-cancel",
     setupCreate: "setup-create",
     editorView: "editor-view",
@@ -1991,15 +2004,33 @@ function wireSetupDialog() {
     // provider entry distinct from a static preset name. Stripped
     // before any bridge call.
     const PROVIDER_PREFIX = "provider:";
+    // Same sentinel pattern for the PHOIBLE inventory provider so
+    // the picker can stay a flat dropdown. PHOIBLE differs from
+    // PanPhon: it supplies the whole inventory (segments + features),
+    // so picking it swaps the textareas out for the inline subpanel
+    // below instead of populating featInput live.
+    const INVENTORY_PROVIDER_PREFIX = "inventory:";
     // Mirror of the desktop dialog's ``_chosen_provider`` slot:
     // non-null while the user has a PanPhon-style auto-generate
     // provider selected, null while a static preset is active.
     let chosenProvider = null;
+    // PHOIBLE state: when ``chosenInventoryProvider`` is non-null,
+    // the subpanel is visible and the segments/features textareas
+    // are hidden. ``selectedInventoryId`` is set once the user picks
+    // a radio; submit reads it to call the PHOIBLE-specific create
+    // endpoint instead of the segments/features one.
+    let chosenInventoryProvider = null;
+    let selectedInventoryId = null;
+    let phoibleSearchTimer = 0;
     let providerRefreshTimer = 0;
     // 250 ms matches the desktop dialog's
     // ``_provider_refresh_timer`` debounce so live-preview behaviour
     // is the same across clients.
     const PROVIDER_REFRESH_MS = 250;
+    // 150 ms autocomplete debounce. Short enough that the user
+    // perceives the dropdown as instant; long enough that a fast
+    // typist doesn't trigger a fetch per keystroke.
+    const PHOIBLE_SEARCH_MS = 150;
 
     const loadDefaultsOnce = () => {
         if (defaultsLoaded) return;
@@ -2033,6 +2064,16 @@ function wireSetupDialog() {
             opt.textContent = provider.label || provider.name;
             presetPicker.appendChild(opt);
         }
+        // Inventory providers (PHOIBLE today). Distinguished by the
+        // INVENTORY_PROVIDER_PREFIX sentinel so applyPreset routes
+        // them to the subpanel rather than the live-preview path.
+        const invProviders = defaults.inventory_providers || [];
+        for (const provider of invProviders) {
+            const opt = document.createElement("option");
+            opt.value = INVENTORY_PROVIDER_PREFIX + provider.name;
+            opt.textContent = `Load from ${provider.name}…`;
+            presetPicker.appendChild(opt);
+        }
         defaultsLoaded = true;
     };
 
@@ -2059,8 +2100,190 @@ function wireSetupDialog() {
         }
     };
 
+    // --- PHOIBLE subpanel helpers --------------------------------------
+
+    /** Hide the segments + features inputs and show the PHOIBLE panel.
+     *  ``.setup-hidden`` is a one-line CSS utility (display:none) the
+     *  panel toggles on the inputs' enclosing labels + textareas. */
+    const _toggleStandardInputs = (hidden) => {
+        const els = [
+            segInput,
+            featInput,
+            segInput.previousElementSibling,
+            featInput.previousElementSibling,
+        ];
+        for (const el of els) {
+            if (!el) continue;
+            el.classList.toggle("setup-hidden", hidden);
+        }
+    };
+
+    /** Reset the PHOIBLE subpanel to a fresh state (no search, no
+     *  inventory chosen). Called when the user switches preset OR
+     *  when the dialog re-opens. */
+    const resetPhoiblePanel = () => {
+        nodes.setupPhoibleSearch.value = "";
+        nodes.setupPhoibleResults.hidden = true;
+        nodes.setupPhoibleResults.innerHTML = "";
+        nodes.setupPhoibleInventories.hidden = true;
+        nodes.setupPhoibleRadios.innerHTML = "";
+        nodes.setupPhoiblePreview.hidden = true;
+        selectedInventoryId = null;
+    };
+
+    /** Activate the PHOIBLE subpanel. Lazy-loads the ~5 MB data
+     *  payload on first use (the index is bundled, but the data
+     *  ships as a separate static asset to keep the cold path
+     *  cheap). Subsequent activations short-circuit because the
+     *  bridge caches the loaded provider. */
+    const activatePhoiblePanel = async () => {
+        nodes.setupPhoiblePanel.hidden = false;
+        nodes.setupPhoibleLoading.hidden = false;
+        nodes.setupPhoibleActive.hidden = true;
+        _toggleStandardInputs(true);
+
+        if (!callBridge("phoible_is_ready")) {
+            try {
+                const url = assetUrl("phoible_data");
+                const resp = await fetch(url);
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}`);
+                }
+                const text = await resp.text();
+                callBridge("phoible_load_data", text);
+            } catch (e) {
+                nodes.setupPhoibleLoading.textContent =
+                    `Could not load PHOIBLE data: ${e.message || e}`;
+                return;
+            }
+        }
+
+        nodes.setupPhoibleLoading.hidden = true;
+        nodes.setupPhoibleActive.hidden = false;
+        resetPhoiblePanel();
+        nodes.setupPhoibleSearch.focus();
+    };
+
+    const deactivatePhoiblePanel = () => {
+        nodes.setupPhoiblePanel.hidden = true;
+        _toggleStandardInputs(false);
+        if (phoibleSearchTimer) {
+            window.clearTimeout(phoibleSearchTimer);
+            phoibleSearchTimer = 0;
+        }
+    };
+
+    /** Render up to N language-name autocomplete results. */
+    const renderPhoibleResults = (matches) => {
+        const ul = nodes.setupPhoibleResults;
+        ul.innerHTML = "";
+        if (!matches || matches.length === 0) {
+            ul.hidden = true;
+            return;
+        }
+        for (const name of matches) {
+            const li = document.createElement("li");
+            li.textContent = name;
+            li.setAttribute("role", "option");
+            li.addEventListener("mousedown", (ev) => {
+                // mousedown (not click) so the input doesn't lose
+                // focus before we read the selection.
+                ev.preventDefault();
+                pickLanguage(name);
+            });
+            ul.appendChild(li);
+        }
+        ul.hidden = false;
+    };
+
+    /** Once the user picks a language, fetch its inventories and
+     *  render them as radio buttons, defaulting to the median-
+     *  segment-count entry so a stray marginal source doesn't end
+     *  up the user's first impression. */
+    const pickLanguage = (languageName) => {
+        nodes.setupPhoibleSearch.value = languageName;
+        nodes.setupPhoibleResults.hidden = true;
+        const invs = callBridge("phoible_list_inventories", languageName);
+        const radios = nodes.setupPhoibleRadios;
+        radios.innerHTML = "";
+        if (!invs || invs.length === 0) {
+            nodes.setupPhoibleInventories.hidden = true;
+            nodes.setupPhoiblePreview.hidden = true;
+            selectedInventoryId = null;
+            return;
+        }
+        // Default selection: median segment_count, with alphabetical
+        // tiebreak baked into list_inventories' sort order.
+        const sorted = invs
+            .slice()
+            .sort((a, b) => a.segment_count - b.segment_count);
+        const defaultId = sorted[Math.floor(sorted.length / 2)].id;
+        for (const inv of invs) {
+            const id = "phoible-radio-" + inv.id;
+            const label = document.createElement("label");
+            label.htmlFor = id;
+            const input = document.createElement("input");
+            input.type = "radio";
+            input.name = "phoible-inventory";
+            input.id = id;
+            input.value = inv.id;
+            input.checked = inv.id === defaultId;
+            input.addEventListener("change", () => pickInventory(inv.id));
+            const text = document.createElement("span");
+            text.textContent = inv.source_label;
+            const meta = document.createElement("span");
+            meta.className = "phoible-radio-meta";
+            const parts = [`${inv.segment_count} segments`];
+            if (inv.dialect) parts.push(inv.dialect);
+            meta.textContent = parts.join(" · ");
+            label.appendChild(input);
+            label.appendChild(text);
+            label.appendChild(meta);
+            radios.appendChild(label);
+        }
+        nodes.setupPhoibleInventories.hidden = false;
+        pickInventory(defaultId);
+    };
+
+    /** Render the compact preview for the chosen inventory. */
+    const pickInventory = (inventoryId) => {
+        selectedInventoryId = inventoryId;
+        const preview = callBridge("phoible_preview_inventory", inventoryId);
+        if (!preview || !preview.descriptor) {
+            nodes.setupPhoiblePreview.hidden = true;
+            return;
+        }
+        const { descriptor, segments, segment_total, feature_count } = preview;
+        nodes.setupPhoibleSummary.textContent =
+            `${segment_total} segments · ${feature_count} features`
+            + (descriptor.dialect ? ` · ${descriptor.dialect}` : "");
+        const trail = segments.length < segment_total
+            ? ` … +${segment_total - segments.length} more`
+            : "";
+        nodes.setupPhoibleSegments.textContent = segments.join(" ") + trail;
+        nodes.setupPhoiblePreview.hidden = false;
+    };
+
+    // --- preset / provider dispatch ------------------------------------
+
     const applyPreset = (value) => {
         cancelProviderRefresh();
+        if (value && value.startsWith(INVENTORY_PROVIDER_PREFIX)) {
+            chosenInventoryProvider = value.slice(
+                INVENTORY_PROVIDER_PREFIX.length,
+            );
+            chosenProvider = null;
+            // Async because we may need to fetch the PHOIBLE data
+            // file on first activation.
+            activatePhoiblePanel();
+            return;
+        }
+        if (chosenInventoryProvider) {
+            // Switching away from PHOIBLE: tear down the subpanel
+            // and restore the standard textareas.
+            chosenInventoryProvider = null;
+            deactivatePhoiblePanel();
+        }
         if (value && value.startsWith(PROVIDER_PREFIX)) {
             chosenProvider = value.slice(PROVIDER_PREFIX.length);
             refreshProviderFeatures();
@@ -2115,6 +2338,22 @@ function wireSetupDialog() {
         );
     });
 
+    // PHOIBLE language-name autocomplete. Debounced so a fast
+    // typist doesn't trigger a bridge call per keystroke; results
+    // render in the <ul> below the input.
+    nodes.setupPhoibleSearch.addEventListener("input", () => {
+        if (phoibleSearchTimer) {
+            window.clearTimeout(phoibleSearchTimer);
+        }
+        const query = nodes.setupPhoibleSearch.value;
+        phoibleSearchTimer = window.setTimeout(() => {
+            const matches = callBridge(
+                "phoible_search_languages", query, 20,
+            );
+            renderPhoibleResults(matches);
+        }, PHOIBLE_SEARCH_MS);
+    });
+
     const openDialog = () => {
         loadDefaultsOnce();
         nameInput.value = "";
@@ -2123,7 +2362,10 @@ function wireSetupDialog() {
         // applyPreset below resets it from whatever the first picker
         // option is.
         chosenProvider = null;
+        chosenInventoryProvider = null;
+        selectedInventoryId = null;
         cancelProviderRefresh();
+        deactivatePhoiblePanel();
         // Default to the first preset (Default(33)) on open so the
         // common case is one click. The user can switch to Custom
         // and clear if they want to start blank.
@@ -2179,17 +2421,34 @@ function wireSetupDialog() {
             refreshProviderFeatures();
         }
         try {
-            const info = callBridge(
-                "create_new_inventory",
-                nameInput.value,
-                segInput.value,
-                featInput.value,
-                chosenProvider,
-            );
+            let info;
+            let sourceSuffix = "";
+            if (chosenInventoryProvider) {
+                // PHOIBLE path: short-circuit when the user hasn't
+                // picked an inventory yet so the error message is
+                // specific instead of "no segments".
+                if (!selectedInventoryId) {
+                    errorBox.textContent =
+                        "Pick a PHOIBLE inventory before creating.";
+                    return;
+                }
+                info = callBridge(
+                    "create_new_inventory_from_phoible",
+                    nameInput.value,
+                    selectedInventoryId,
+                );
+                sourceSuffix = ` via ${chosenInventoryProvider}`;
+            } else {
+                info = callBridge(
+                    "create_new_inventory",
+                    nameInput.value,
+                    segInput.value,
+                    featInput.value,
+                    chosenProvider,
+                );
+                sourceSuffix = chosenProvider ? ` via ${chosenProvider}` : "";
+            }
             applyInventoryInfo(info);
-            const sourceSuffix = chosenProvider
-                ? ` via ${chosenProvider}`
-                : "";
             setStatus(
                 `Created ${info.name} `
                 + `(${info.segments.length} segments, `

@@ -114,6 +114,64 @@ def bake_panphon_table() -> None:
     print(f"  baked {n_seg} segments ({size_kb:.1f} KB) -> {out_path.name}")
 
 
+def bake_phoible_tables() -> None:
+    """Refresh the PHOIBLE snapshots in shared/.
+
+    Reads the vendored ``phoible.csv.gz`` under
+    ``web/scripts/phoible_cache/`` and writes two JSON files:
+
+    * ``_phoible_index.generated.json`` -> shared/.../editor/
+      (small; ships inside ``python_bundle.zip``)
+    * ``_phoible_data.generated.json`` -> shared/.../editor/
+      (larger; ships as a SEPARATE static asset under
+      ``web/dist/`` because we lazy-load it on first PHOIBLE
+      click to keep the cold path cheap)
+
+    The data file STILL gets written into the shared/ directory
+    here so the desktop install picks it up via
+    ``importlib.resources``; the
+    :py:func:`write_python_bundle` step below opts the data file
+    OUT of the zip (it walks ``_phoible_index.generated.json``
+    explicitly so the larger data file is left for
+    :py:func:`copy_phoible_data_asset` to handle separately).
+
+    When the vendored cache is missing (a stripped clone, an
+    intentional dev override), the bake prints a warning and
+    continues: the registry quietly drops the PHOIBLE provider
+    so the dialog falls back to PanPhon / static presets without
+    crashing.
+    """
+    print("Baking PHOIBLE inventory tables...")
+    bake_script = WEB_DIR / "scripts" / "bake_phoible.py"
+    spec = importlib.util.spec_from_file_location("bake_phoible", bake_script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load bake script at {bake_script}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        index, data, stats = module.bake_tables()
+    except FileNotFoundError as exc:
+        print(
+            f"  WARNING: PHOIBLE cache missing ({exc}); "
+            "PHOIBLE provider will be unavailable in the web bundle."
+        )
+        return
+    out_index = SHARED_PKG / "editor" / "_phoible_index.generated.json"
+    out_data = SHARED_PKG / "editor" / "_phoible_data.generated.json"
+    out_index.parent.mkdir(parents=True, exist_ok=True)
+    for path, payload in ((out_index, index), (out_data, data)):
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+            f.write("\n")
+    idx_kb = out_index.stat().st_size / 1024
+    data_kb = out_data.stat().st_size / 1024
+    print(
+        f"  baked {stats['language_count']} languages / "
+        f"{stats['inventory_count']} inventories "
+        f"(index {idx_kb:.0f} KB, data {data_kb:.0f} KB)"
+    )
+
+
 def copy_shared_sources() -> None:
     """Mirror the whole ``phonology_shared`` package into
     ``dist/shared/phonology_shared/`` so the bundle can zipimport
@@ -658,11 +716,14 @@ def write_python_bundle() -> None:
     for path in sorted(shared_root.rglob("*.py")):
         entries.append((path.relative_to(shared_root).as_posix(), path))
     # Non-Python data files that ship inside the package and load via
-    # importlib.resources at runtime (today: the baked PanPhon
-    # lookup snapshot). Glob is the gating decision: anything matching
-    # ``*.generated.json`` is bundle-bound, everything else stays out
-    # to avoid sweeping in stray scratch files.
+    # importlib.resources at runtime (PanPhon lookup snapshot, PHOIBLE
+    # index). The PHOIBLE *data* file is intentionally excluded: it is
+    # 5 MB raw and ships as a separate static asset under ``dist/`` so
+    # the cold Pyodide boot path stays cheap (the dialog fetches and
+    # injects the JSON on first PHOIBLE click via the bridge).
     for path in sorted(shared_root.rglob("*.generated.json")):
+        if path.name == "_phoible_data.generated.json":
+            continue
         entries.append((path.relative_to(shared_root).as_posix(), path))
     entries.append(("api.py", DIST / "api.py"))
 
@@ -680,6 +741,38 @@ def write_python_bundle() -> None:
     print(
         f"  {len(entries)} files, {out.stat().st_size} bytes zip ({raw} raw)"
     )
+
+
+def copy_phoible_data_asset() -> None:
+    """Copy the PHOIBLE data JSON + the attribution file to dist/.
+
+    The data JSON is lazy-loaded by main.js on first PHOIBLE click,
+    not included in the Pyodide bundle, so it ships as a plain
+    static asset alongside the inventories. The :py:func:`hash_assets`
+    step below applies the same content-hash + asset-manifest
+    treatment it does for every other static file so the browser
+    cache key updates whenever PHOIBLE is re-baked.
+
+    PHOIBLE_LICENSE.txt is the GPL-3.0 + CC BY-SA 3.0 attribution
+    document the user can link from the dialog's citation chip;
+    ships unhashed at a stable URL so the link in the HTML doesn't
+    rot per build.
+    """
+    src = SHARED_PKG / "editor" / "_phoible_data.generated.json"
+    if not src.exists():
+        # No bake produced (cache missing); the PHOIBLE provider is
+        # already excluded from the registry so the dialog won't
+        # try to fetch this asset.
+        return
+    dst = DIST / "phoible_data.json"
+    shutil.copy(src, dst)
+    kb = dst.stat().st_size / 1024
+    print(f"Copying PHOIBLE data asset...\n  {kb:.0f} KB -> {dst.name}")
+
+    license_src = WEB_DIR / "scripts" / "phoible_cache" / "PHOIBLE_LICENSE.txt"
+    if license_src.exists():
+        shutil.copy(license_src, DIST / "PHOIBLE_LICENSE.txt")
+        print("  PHOIBLE_LICENSE.txt -> dist/")
 
 
 def write_bootstrap() -> None:
@@ -774,6 +867,17 @@ def hash_assets() -> None:
     py_bundle.rename(DIST / new_py_bundle)
     runtime_map["python_bundle"] = new_py_bundle
     full_map["python_bundle.zip"] = new_py_bundle
+
+    # 3a. PHOIBLE data asset. Lazy-loaded by main.js on first
+    #     PHOIBLE click; the hashed name lands in ``runtime_map``
+    #     so ``main.js`` can ``fetch(asset_map.phoible_data)``
+    #     without hard-coding the cache-busting suffix.
+    phoible_data = DIST / "phoible_data.json"
+    if phoible_data.exists():
+        new_phoible = _hashed_name(phoible_data)
+        phoible_data.rename(DIST / new_phoible)
+        runtime_map["phoible_data"] = new_phoible
+        full_map["phoible_data.json"] = new_phoible
 
     # 4. CSS files referenced from index.html.
     for css in ("theme.css", "layout.css", "style.css"):
@@ -967,12 +1071,21 @@ def write_service_worker() -> None:
     template = (WEB_DIR / "sw.js").read_text(encoding="utf-8")
 
     SKIP_NAMES = {"sw.js", ".nojekyll"}
+    # PHOIBLE data file (~5 MB) is lazy-loaded on demand; precaching
+    # it would force every visitor to download it during the SW
+    # install even if they never click the PHOIBLE picker. The file
+    # gets cached on first fetch via the cache-first rule in sw.js
+    # so subsequent visits hit the local copy. ``startswith`` so a
+    # future content-hash on the same logical asset still matches.
+    LAZY_PREFIXES = ("phoible_data.",)
     precache = ["./", "./index.html"]
     for path in sorted(DIST.rglob("*")):
         if not path.is_file():
             continue
         rel = path.relative_to(DIST).as_posix()
         if rel in SKIP_NAMES:
+            continue
+        if any(rel.startswith(p) for p in LAZY_PREFIXES):
             continue
         precache.append(f"./{rel}")
     precache = sorted(set(precache))
@@ -1002,16 +1115,20 @@ def write_pages_no_jekyll() -> None:
 def main() -> int:
     argparse.ArgumentParser(description=__doc__).parse_args()
     clean_dist()
-    # Bake the PanPhon snapshot BEFORE the shared mirror step so the
+    # Bake both snapshots BEFORE the shared mirror step so the
     # generated JSON travels into ``dist/shared/`` alongside the
-    # rest of the package.
+    # rest of the package. PHOIBLE's data file is excluded from
+    # the zip bundle (see write_python_bundle) and copied to dist/
+    # separately by copy_phoible_data_asset for lazy-load.
     bake_panphon_table()
+    bake_phoible_tables()
     copy_shared_sources()
     copy_static_assets()
     generate_theme_css()
     generate_layout_css()
     copy_inventories()
     write_python_bundle()
+    copy_phoible_data_asset()
     write_bootstrap()
     hash_assets()
     write_service_worker()
