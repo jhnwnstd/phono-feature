@@ -1,17 +1,20 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
 
 # Distribution / packaging
+# uv.lock IS tracked (workspace lockfile for the multi-package
+# repo); do NOT add it here. CI verifies it stays fresh via
+# `uv lock --check`.
 *.egg-info/
-dist/
 build/
+dist/
 
 # Virtual environments
 .venv/
 venv/
 env/
+.python-version
 
 # Type checking
 .mypy_cache/
@@ -19,18 +22,38 @@ env/
 
 # Testing
 .pytest_cache/
+.hypothesis/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
+
+# Profiling (tools/profile_app.py output)
+*.prof
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Tooling caches / scratch dirs
+.uv-cache/
+.codex/
+
+# Web build (defensive: web/dist/ already covered by ``dist/``;
+# these guard against future JS-dep growth)
+node_modules/
+.parcel-cache/
 
 # Editors
 .vscode/
 .idea/
 *.swp
+*.swo
 *~
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # PyQt / Qt
 *.qmlc
