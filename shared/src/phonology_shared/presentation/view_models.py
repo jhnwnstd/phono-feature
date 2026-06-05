@@ -429,6 +429,8 @@ def _vowel_chart_summary(
                 "pair_side": cell.pair_side,
                 "segs": list(cell.entries),
                 "is_long_pair": cell.is_long_pair,
+                "display_kind": cell.display_kind.value,
+                "contrast_features": list(cell.contrast_features),
             }
             for cell in geometry.cells
         ],

@@ -1287,14 +1287,29 @@ function _buildVowelChart(chart) {
         let target;
         if (segs.length === 1) {
             target = _buildVowelCellButton(segs[0]);
-        } else if (cell.is_long_pair) {
-            // Length is a display attribute on the same vowel-space
-            // position, not a separate row. Render the pair
-            // horizontally so the contrast reads as one cell with
-            // two duration variants rather than a stacked column.
-            target = _buildVowelCellLongPair(segs);
         } else {
-            target = _buildVowelCellStack(segs);
+            // ``display_kind`` is the shared classifier's choice for
+            // how to arrange multiple entries inside one chart slot.
+            // PAIR kinds (long / nasal / rhotic / phonation / tone)
+            // render horizontally; CONTRAST_SET renders as a 2x2
+            // grid; STACK falls back to a vertical column. The
+            // ``is_long_pair`` fallback keeps cached bootstrap
+            // payloads working until the next CSS bake refresh.
+            const kind = cell.display_kind || (cell.is_long_pair ? "long_pair" : "stack");
+            switch (kind) {
+                case "long_pair":
+                case "nasal_pair":
+                case "rhotic_pair":
+                case "phonation_pair":
+                case "tone_pair":
+                    target = _buildVowelCellPair(segs, kind);
+                    break;
+                case "contrast_set":
+                    target = _buildVowelCellContrastSet(segs);
+                    break;
+                default:
+                    target = _buildVowelCellStack(segs);
+            }
         }
         // Position concern: backness anchor projected through the
         // chart silhouette. Display concern: fixed-pixel shift so
@@ -1347,17 +1362,43 @@ function _buildVowelCellStack(segs) {
 }
 
 /** Build a horizontal container for a vowel-chart cell whose two
- *  entries are a Long contrast (feature-identical except on
- *  ``Long``). Side-by-side layout reflects that the two segments
- *  share a single vowel-space position; length is a duration
- *  attribute, not a row difference.
+ *  entries share a single vowel-space position and differ only on
+ *  one in-cell-contrast feature (long / nasal / rhotic / breathy
+ *  or creaky / tone). Side-by-side layout reflects that the two
+ *  segments share a single vowel-space position.
+ *
+ *  ``kind`` is the shared classifier's ``VowelCellDisplayKind``
+ *  value (``"long_pair"`` / ``"nasal_pair"`` / etc.); it lands on
+ *  the container as a ``data-pair-kind`` attribute so the
+ *  stylesheet (or downstream tooling) can react without
+ *  re-deriving from the entries.
  *
  *  Same rule as :py:func:`_buildVowelCellStack`: children are plain
  *  segment buttons so the flex row actually distributes them
  *  side-by-side instead of overlapping. */
-function _buildVowelCellLongPair(segs) {
+function _buildVowelCellPair(segs, kind) {
     const cell = document.createElement("div");
-    cell.className = "vowel-chart-cell vowel-chart-cell-long-pair";
+    cell.className = "vowel-chart-cell vowel-chart-cell-pair";
+    if (kind) cell.dataset.pairKind = kind;
+    for (const seg of segs) {
+        cell.appendChild(_buildSegmentButton(seg));
+    }
+    return cell;
+}
+
+/** Build a 2-column grid for a vowel-chart cell whose 3-4 entries
+ *  differ on more than one in-cell-contrast feature (e.g. a 2x2
+ *  long x nasal set). Three entries: first spans both columns on
+ *  row 0; the remaining two land side-by-side on row 1. Four
+ *  entries: pure 2x2 in input order, row-major.
+ *
+ *  Children are plain segment buttons; the grid layout is driven
+ *  by the ``.vowel-chart-cell-contrast-set`` class so the same
+ *  positioning rules apply as the other cell kinds. */
+function _buildVowelCellContrastSet(segs) {
+    const cell = document.createElement("div");
+    cell.className = "vowel-chart-cell vowel-chart-cell-contrast-set";
+    cell.dataset.cellSize = String(segs.length);
     for (const seg of segs) {
         cell.appendChild(_buildSegmentButton(seg));
     }

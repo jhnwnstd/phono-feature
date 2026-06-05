@@ -28,6 +28,7 @@ from PyQt6.QtGui import (
     QResizeEvent,
 )
 from PyQt6.QtWidgets import (
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QSizePolicy,
@@ -39,6 +40,7 @@ from phonology_shared.chart.vowels import (
     COL_LABELS,
     ROW_LABELS,
     Confidence,
+    VowelCellDisplayKind,
     VowelChartCell,
     VowelChartGeometry,
     VowelChartShape,
@@ -55,6 +57,21 @@ from phonology_shared.presentation.layout import (
     VOWEL_PAIR_GAP_PX,
 )
 from phonology_shared.presentation.palette import C
+
+#: PAIR display kinds the desktop renderer lays out as a horizontal
+#: row of two buttons (mirrors the legacy LONG_PAIR layout). All
+#: other PAIR kinds (NASAL/RHOTIC/PHONATION/TONE) reuse the same
+#: visual: the marked member on the right per the classifier's
+#: ordering convention.
+_PAIR_DISPLAY_KINDS: frozenset[VowelCellDisplayKind] = frozenset(
+    {
+        VowelCellDisplayKind.LONG_PAIR,
+        VowelCellDisplayKind.NASAL_PAIR,
+        VowelCellDisplayKind.RHOTIC_PAIR,
+        VowelCellDisplayKind.PHONATION_PAIR,
+        VowelCellDisplayKind.TONE_PAIR,
+    }
+)
 
 # Re-exports preserved for any external importer that read these
 # from vowel_chart directly. Canonical definitions live in
@@ -334,12 +351,21 @@ class VowelChartWidget(QWidget):
         self.update()
 
     def _build_cell(self, cell: VowelChartCell) -> QWidget | None:
-        """Return the widget that represents ``cell`` -- a single
-        button for the common case, a hbox pair when the cell
-        carries a Long contrast (same vowel-space position, two
-        durations), and a vbox stack otherwise. Returns ``None`` if
-        none of the segments have a backing button (defensive;
-        should not happen in normal flow).
+        """Return the widget that represents ``cell``.
+
+        Dispatches on ``cell.display_kind``:
+
+        * Single entry -> the raw button (no container).
+        * PAIR kind (long / nasal / rhotic / phonation / tone) ->
+          horizontal hbox with the two entries side-by-side, marked
+          member on the right per the shared classifier's ordering
+          convention.
+        * CONTRAST_SET -> 2-column grid (3 entries: first spans both
+          columns on row 0; 4 entries: 2x2 in entry order).
+        * STACK (default) -> vertical vbox with all entries.
+
+        Returns ``None`` if none of the segments have a backing
+        button (defensive; should not happen in normal flow).
         """
         if len(cell.entries) == 1:
             btn = self._buttons.get(cell.entries[0])
@@ -351,12 +377,19 @@ class VowelChartWidget(QWidget):
         container = QWidget(self)
         container.setStyleSheet("background: transparent;")
         self._cell_containers.append(container)
-        if cell.is_long_pair:
-            layout: QHBoxLayout | QVBoxLayout = QHBoxLayout(container)
-            layout.setSpacing(VOWEL_PAIR_GAP_PX)
-        else:
-            layout = QVBoxLayout(container)
-            layout.setSpacing(1)
+        if cell.display_kind in _PAIR_DISPLAY_KINDS:
+            return self._fill_pair_layout(container, cell)
+        if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
+            return self._fill_contrast_set_layout(container, cell)
+        return self._fill_stack_layout(container, cell)
+
+    def _fill_pair_layout(
+        self, container: QWidget, cell: VowelChartCell
+    ) -> QWidget | None:
+        """Lay the two entries side-by-side in a horizontal box.
+        Marked member sits on the right per the classifier."""
+        layout = QHBoxLayout(container)
+        layout.setSpacing(VOWEL_PAIR_GAP_PX)
         layout.setContentsMargins(0, 0, 0, 0)
         added = False
         for seg in cell.entries:
@@ -365,6 +398,66 @@ class VowelChartWidget(QWidget):
                 btn.show()
                 layout.addWidget(btn)
                 added = True
+        return self._finalize_container(container, added)
+
+    def _fill_contrast_set_layout(
+        self, container: QWidget, cell: VowelChartCell
+    ) -> QWidget | None:
+        """Lay 3-4 entries in a 2-column grid.
+
+        Three entries: entry 0 spans columns 0+1 on row 0; entries 1
+        and 2 land on row 1, columns 0 and 1. Four entries: pure 2x2
+        in entry order, row-major.
+        """
+        layout = QGridLayout(container)
+        layout.setHorizontalSpacing(VOWEL_PAIR_GAP_PX)
+        layout.setVerticalSpacing(1)
+        layout.setContentsMargins(0, 0, 0, 0)
+        added = False
+        entries = list(cell.entries)
+        if len(entries) == 3:
+            slots: list[tuple[str, int, int, int]] = [
+                (entries[0], 0, 0, 2),
+                (entries[1], 1, 0, 1),
+                (entries[2], 1, 1, 1),
+            ]
+            for seg, row, col, span in slots:
+                btn = self._buttons.get(seg)
+                if btn is not None:
+                    btn.show()
+                    layout.addWidget(btn, row, col, 1, span)
+                    added = True
+        else:
+            for idx, seg in enumerate(entries):
+                row = idx // 2
+                col = idx % 2
+                btn = self._buttons.get(seg)
+                if btn is not None:
+                    btn.show()
+                    layout.addWidget(btn, row, col)
+                    added = True
+        return self._finalize_container(container, added)
+
+    def _fill_stack_layout(
+        self, container: QWidget, cell: VowelChartCell
+    ) -> QWidget | None:
+        """Default vertical-stack layout for STACK display kinds."""
+        layout = QVBoxLayout(container)
+        layout.setSpacing(1)
+        layout.setContentsMargins(0, 0, 0, 0)
+        added = False
+        for seg in cell.entries:
+            btn = self._buttons.get(seg)
+            if btn is not None:
+                btn.show()
+                layout.addWidget(btn)
+                added = True
+        return self._finalize_container(container, added)
+
+    def _finalize_container(
+        self, container: QWidget, added: bool
+    ) -> QWidget | None:
+        """Shared tail: drop empty containers, otherwise size + show."""
         if not added:
             self._cell_containers.remove(container)
             container.deleteLater()

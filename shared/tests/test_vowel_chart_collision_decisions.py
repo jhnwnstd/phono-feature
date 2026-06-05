@@ -260,3 +260,585 @@ def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
             f"(top_right={geom.silhouette.top_right}, "
             f"bottom_right={geom.silhouette.bottom_right})"
         )
+
+
+# ---------------------------------------------------------------------------
+# Display-kind classifier: the generalisation of ``is_long_pair`` that
+# the shared bridge sends to both renderers. The tests below pin the
+# pure-Python classifier; the renderer-side tests live in their own
+# files but consume the same :py:class:`VowelCellDisplayKind` values
+# verified here.
+# ---------------------------------------------------------------------------
+
+
+def _make_classifier_feats(
+    pairs: dict[str, dict[str, str]],
+) -> dict[str, dict[str, str]]:
+    """Wrap ``pairs`` so :py:func:`_classify_vowel_cell_display` reads
+    each segment's feature bundle directly. Tests build small
+    inventories without going through ``Inventory.parse`` because the
+    classifier is feature-bundle-pure: no engine state is needed.
+    """
+    return pairs
+
+
+def test_classify_long_pair_returns_long_pair_kind() -> None:
+    """The long-only case still produces ``LONG_PAIR`` and a
+    ``contrast_features`` tuple with just ``("long",)``. The existing
+    desktop and web LONG_PAIR rendering path stays driven by this
+    kind value.
+    """
+    from phonology_shared.chart.vowels import (
+        VowelCellDisplayKind,
+        _classify_vowel_cell_display,
+    )
+
+    feats = _make_classifier_feats(
+        {
+            "i": {"high": "+", "long": "-"},
+            "iː": {"high": "+", "long": "+"},
+        }
+    )
+    kind, contrast, ordered = _classify_vowel_cell_display(("i", "iː"), feats)
+    assert kind == VowelCellDisplayKind.LONG_PAIR
+    assert contrast == ("long",)
+    # Marked (+long) goes on the right.
+    assert ordered == ("i", "iː")
+
+
+def test_classify_nasal_pair() -> None:
+    from phonology_shared.chart.vowels import (
+        VowelCellDisplayKind,
+        _classify_vowel_cell_display,
+    )
+
+    feats = _make_classifier_feats(
+        {
+            "o": {"high": "-", "low": "-", "nasal": "-"},
+            "õ": {"high": "-", "low": "-", "nasal": "+"},
+        }
+    )
+    kind, contrast, ordered = _classify_vowel_cell_display(("o", "õ"), feats)
+    assert kind == VowelCellDisplayKind.NASAL_PAIR
+    assert contrast == ("nasal",)
+    assert ordered == ("o", "õ")
+
+
+def test_classify_rhotic_pair_with_aliases() -> None:
+    """The data-boundary alias map maps ``r-colored`` / ``rcolored``
+    / ``rhotacized`` to the canonical ``rhotic`` key. Feeding any of
+    those spellings into :py:func:`Inventory.parse` and round-tripping
+    through :py:func:`detect_vowel_profile` -> classifier produces a
+    ``RHOTIC_PAIR``.
+    """
+    from phonology_shared.chart.vowels import (
+        VowelCellDisplayKind,
+        _classify_vowel_cell_display,
+    )
+    from phonology_shared.data.inventory import normalize_feature_bundle
+
+    raw_a = {"High": "-", "Low": "-", "R-Colored": "-"}
+    raw_b = {"High": "-", "Low": "-", "Rhotacized": "+"}
+    norm_a = normalize_feature_bundle(raw_a)
+    norm_b = normalize_feature_bundle(raw_b)
+    assert "rhotic" in norm_a
+    assert "rhotic" in norm_b
+    feats = _make_classifier_feats({"ə": norm_a, "ɚ": norm_b})
+    kind, contrast, ordered = _classify_vowel_cell_display(("ə", "ɚ"), feats)
+    assert kind == VowelCellDisplayKind.RHOTIC_PAIR
+    assert contrast == ("rhotic",)
+    assert ordered == ("ə", "ɚ")
+
+
+def test_classify_phonation_pair() -> None:
+    from phonology_shared.chart.vowels import (
+        VowelCellDisplayKind,
+        _classify_vowel_cell_display,
+    )
+
+    feats = _make_classifier_feats(
+        {
+            "a": {"high": "-", "low": "+", "breathy": "-", "creaky": "-"},
+            "a̤": {"high": "-", "low": "+", "breathy": "+", "creaky": "-"},
+        }
+    )
+    kind, contrast, ordered = _classify_vowel_cell_display(("a", "a̤"), feats)
+    assert kind == VowelCellDisplayKind.PHONATION_PAIR
+    assert contrast == ("breathy",)
+    # modal on left, marked on right.
+    assert ordered == ("a", "a̤")
+
+
+def test_classify_tone_pair() -> None:
+    from phonology_shared.chart.vowels import (
+        VowelCellDisplayKind,
+        _classify_vowel_cell_display,
+    )
+
+    feats = _make_classifier_feats(
+        {
+            "ā": {"high": "-", "low": "+", "tone": "H"},
+            "à": {"high": "-", "low": "+", "tone": "L"},
+        }
+    )
+    kind, contrast, _ = _classify_vowel_cell_display(("ā", "à"), feats)
+    assert kind == VowelCellDisplayKind.TONE_PAIR
+    assert contrast == ("tone",)
+
+
+def test_classify_long_plus_nasal_is_contrast_set() -> None:
+    """Four entries differing on long and nasal -> CONTRAST_SET with
+    both features in the sorted contrast tuple.
+    """
+    from phonology_shared.chart.vowels import (
+        VowelCellDisplayKind,
+        _classify_vowel_cell_display,
+    )
+
+    feats = _make_classifier_feats(
+        {
+            "a": {"long": "-", "nasal": "-", "high": "-", "low": "+"},
+            "aa": {"long": "+", "nasal": "-", "high": "-", "low": "+"},
+            "aN": {"long": "-", "nasal": "+", "high": "-", "low": "+"},
+            "aaN": {"long": "+", "nasal": "+", "high": "-", "low": "+"},
+        }
+    )
+    kind, contrast, ordered = _classify_vowel_cell_display(
+        ("a", "aa", "aN", "aaN"), feats
+    )
+    assert kind == VowelCellDisplayKind.CONTRAST_SET
+    assert contrast == ("long", "nasal")
+    assert ordered == ("a", "aa", "aN", "aaN")
+
+
+def test_classify_differs_on_position_feature_is_stack() -> None:
+    """Entries differing on a position feature (``high``) fall
+    through to ``STACK`` -- vertical stack is the safe default when
+    a non-display feature distinguishes the entries.
+    """
+    from phonology_shared.chart.vowels import (
+        VowelCellDisplayKind,
+        _classify_vowel_cell_display,
+    )
+
+    feats = _make_classifier_feats(
+        {
+            "ə": {"high": "-", "low": "-"},
+            "ɨ": {"high": "+", "low": "-"},
+        }
+    )
+    kind, contrast, ordered = _classify_vowel_cell_display(("ə", "ɨ"), feats)
+    assert kind == VowelCellDisplayKind.STACK
+    assert contrast == ()
+    assert ordered == ("ə", "ɨ")
+
+
+def test_pair_ordering_puts_marked_on_right() -> None:
+    """For each PAIR kind, ``entries[1]`` is the ``+``-valued
+    member of the contrast feature; this is the renderer's
+    canonical "marked on right" convention.
+    """
+    from phonology_shared.chart.vowels import (
+        VowelCellDisplayKind,
+        _classify_vowel_cell_display,
+    )
+
+    # Input order intentionally reversed for each case so the
+    # classifier has to reorder.
+    cases = [
+        (
+            VowelCellDisplayKind.LONG_PAIR,
+            "long",
+            {"a": {"long": "+"}, "b": {"long": "-"}},
+        ),
+        (
+            VowelCellDisplayKind.NASAL_PAIR,
+            "nasal",
+            {"a": {"nasal": "+"}, "b": {"nasal": "-"}},
+        ),
+        (
+            VowelCellDisplayKind.RHOTIC_PAIR,
+            "rhotic",
+            {"a": {"rhotic": "+"}, "b": {"rhotic": "-"}},
+        ),
+    ]
+    for expected_kind, feat, feats in cases:
+        kind, contrast, ordered = _classify_vowel_cell_display(
+            ("a", "b"), feats
+        )
+        assert kind == expected_kind, f"{expected_kind}: got {kind}"
+        assert contrast == (feat,)
+        # Marked (+) member must end up at index 1.
+        assert ordered == (
+            "b",
+            "a",
+        ), f"{expected_kind}: expected marked on right; got {ordered}"
+
+
+def test_classify_stack_for_three_position_differences() -> None:
+    """3 entries differing on a non-display feature still produce
+    STACK (the classifier never silently upgrades position
+    differences to a display contrast).
+    """
+    from phonology_shared.chart.vowels import (
+        VowelCellDisplayKind,
+        _classify_vowel_cell_display,
+    )
+
+    feats = _make_classifier_feats(
+        {
+            "a": {"high": "-", "low": "+"},
+            "b": {"high": "-", "low": "-"},
+            "c": {"high": "+", "low": "-"},
+        }
+    )
+    kind, contrast, _ = _classify_vowel_cell_display(("a", "b", "c"), feats)
+    assert kind == VowelCellDisplayKind.STACK
+    assert contrast == ()
+
+
+def test_view_model_serializes_display_kind() -> None:
+    """The presentation bridge exposes ``display_kind`` and
+    ``contrast_features`` on every cell payload so the web renderer
+    can switch on them without re-deriving from entries.
+    """
+    from phonology_shared.presentation.view_models import (
+        _vowel_chart_summary,
+    )
+
+    path = INVENTORIES / "english_features.json"
+    raw = json.loads(path.read_text(encoding="utf-8-sig"))
+    engine = FeatureEngine(Inventory.parse(raw, source=str(path)))
+    vowels = [
+        s for s in engine.segments if engine.segments[s].get("Syllabic") == "+"
+    ]
+    payload = _vowel_chart_summary(engine, vowels)
+    assert "cells" in payload
+    for cell_payload in payload["cells"]:
+        assert "display_kind" in cell_payload
+        assert "contrast_features" in cell_payload
+        # display_kind serializes as a string (StrEnum value).
+        assert isinstance(cell_payload["display_kind"], str)
+        assert isinstance(cell_payload["contrast_features"], list)
+
+
+def test_inventory_alias_collapses_rcolored_to_rhotic() -> None:
+    """The data-boundary alias map folds the descriptive ``r-colored``
+    and synonyms onto the canonical IPA-distinctive-feature name
+    ``rhotic``; ``breathy voice`` -> ``breathy``;
+    ``creaky_voice`` -> ``creaky``.
+    """
+    from phonology_shared.data.inventory import normalize_feature_key
+
+    assert normalize_feature_key("r-colored") == "rhotic"
+    assert normalize_feature_key("r_colored") == "rhotic"
+    assert normalize_feature_key("R Coloured") == "rhotic"
+    assert normalize_feature_key("rhotacized") == "rhotic"
+    assert normalize_feature_key("breathy voice") == "breathy"
+    assert normalize_feature_key("breathy_voice") == "breathy"
+    assert normalize_feature_key("creaky voice") == "creaky"
+    # Canonical names pass through unchanged.
+    assert normalize_feature_key("rhotic") == "rhotic"
+    assert normalize_feature_key("breathy") == "breathy"
+    assert normalize_feature_key("creaky") == "creaky"
+
+
+def test_bundled_inventories_placement_stable_under_extensions() -> None:
+    """No bundled inventory uses any of the new placement features
+    (rtr, raised, lowered, advanced, retracted, centralized,
+    peripheral). The (row, col) of every vowel must match the
+    pre-extension snapshot, so the extension is a strict no-op for
+    current users.
+
+    The snapshot is inlined as a hardcoded dict rather than living
+    in a fixture file so the regression baseline travels with the
+    test and any future placement change is forced through a
+    deliberate snapshot update.
+    """
+    snapshot = _PLACEMENT_SNAPSHOT
+    for inv in sorted(INVENTORIES.glob("*.json")):
+        if inv.name.startswith("_") or inv.name.startswith("."):
+            continue
+        if inv.name not in snapshot:
+            continue
+        geom = _geometry(inv.name)
+        actual: dict[str, list[int]] = {}
+        for cell in geom.cells:
+            for seg in cell.entries:
+                actual[seg] = [cell.row, cell.col]
+        expected = snapshot[inv.name]
+        assert actual == expected, (
+            f"{inv.name}: placement drift from pre-extension snapshot. "
+            f"Expected {sorted(expected.items())}, "
+            f"got {sorted(actual.items())}"
+        )
+
+
+# Pre-extension snapshot of (row, col) per vowel per bundled inventory.
+# Captured before the placement-layer extensions landed; the
+# regression test above asserts every entry still matches. If a
+# deliberate placement change is needed, regenerate this dict with
+# a small script and review the diff before approving.
+_PLACEMENT_SNAPSHOT: dict[str, dict[str, list[int]]] = {
+    "blevins_features.json": {
+        "a": [5, 2],
+        "e": [2, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "u": [0, 5],
+        "y": [0, 1],
+        "æ": [5, 0],
+        "ø": [2, 1],
+        "œ": [4, 1],
+        "ɑ": [6, 4],
+        "ɒ": [6, 5],
+        "ɔ": [4, 5],
+        "ɘ": [2, 4],
+        "ə": [4, 4],
+        "ɚ": [4, 4],
+        "ɛ": [4, 0],
+        "ɞ": [4, 5],
+        "ɤ": [2, 4],
+        "ɨ": [0, 4],
+        "ɪ": [1, 0],
+        "ɯ": [0, 4],
+        "ɵ": [2, 5],
+        "ɶ": [5, 1],
+        "ʉ": [0, 5],
+        "ʊ": [1, 5],
+        "ʌ": [4, 4],
+        "ʏ": [1, 1],
+    },
+    "english_features.json": {
+        "e": [2, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "u": [0, 5],
+        "æ": [6, 0],
+        "ɑ": [6, 4],
+        "ɔ": [4, 5],
+        "ə": [4, 2],
+        "ɚ": [4, 2],
+        "ɛ": [4, 0],
+        "ɪ": [1, 0],
+        "ʊ": [1, 5],
+        "ʌ": [4, 4],
+    },
+    "general_features.json": {
+        "a": [6, 2],
+        "e": [2, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "u": [0, 5],
+        "y": [0, 1],
+        "æ": [5, 0],
+        "ø": [2, 1],
+        "œ": [4, 1],
+        "ɐ": [5, 2],
+        "ɑ": [5, 4],
+        "ɒ": [5, 5],
+        "ɔ": [4, 5],
+        "ɘ": [2, 2],
+        "ə": [3, 2],
+        "ɛ": [4, 0],
+        "ɜ": [4, 2],
+        "ɞ": [4, 3],
+        "ɤ": [2, 4],
+        "ɨ": [0, 2],
+        "ɪ": [1, 0],
+        "ɯ": [0, 4],
+        "ɵ": [2, 3],
+        "ɶ": [5, 1],
+        "ʉ": [0, 3],
+        "ʊ": [1, 5],
+        "ʌ": [4, 4],
+        "ʏ": [1, 1],
+    },
+    "german_features.json": {
+        "eː": [2, 0],
+        "iː": [0, 0],
+        "oː": [2, 5],
+        "uː": [0, 5],
+        "yː": [0, 1],
+        "øː": [2, 1],
+        "œ": [4, 1],
+        "ɑ": [6, 4],
+        "ɑː": [6, 4],
+        "ɔ": [4, 5],
+        "ɛ": [4, 0],
+        "ɪ": [1, 0],
+        "ʊ": [1, 5],
+        "ʏ": [1, 1],
+    },
+    "hayes_features.json": {
+        "a": [6, 2],
+        "e": [2, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "u": [0, 5],
+        "y": [0, 1],
+        "æ": [6, 0],
+        "ø": [2, 1],
+        "œ": [4, 1],
+        "ɑ": [6, 4],
+        "ɒ": [6, 5],
+        "ɔ": [4, 5],
+        "ɘ": [2, 2],
+        "ə": [4, 2],
+        "ɛ": [4, 0],
+        "ɞ": [4, 3],
+        "ɤ": [2, 4],
+        "ɨ": [0, 2],
+        "ɪ": [1, 0],
+        "ɯ": [0, 4],
+        "ɵ": [2, 3],
+        "ɶ": [6, 1],
+        "ʉ": [0, 3],
+        "ʊ": [1, 5],
+        "ʌ": [4, 4],
+        "ʏ": [1, 1],
+    },
+    "hindi_features.json": {
+        "eː": [2, 0],
+        "iː": [0, 0],
+        "oː": [2, 5],
+        "uː": [0, 5],
+        "æː": [5, 0],
+        "ɑː": [6, 4],
+        "ɔː": [4, 5],
+        "ə": [4, 2],
+        "ɛː": [4, 0],
+        "ɪ": [1, 0],
+        "ʊ": [1, 5],
+    },
+    "ilokano_features.json": {
+        "a": [6, 2],
+        "e": [2, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "u": [0, 5],
+    },
+    "indonesian_features.json": {
+        "a": [6, 2],
+        "e": [2, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "u": [0, 5],
+    },
+    "japanese_features.json": {
+        "a": [6, 2],
+        "aː": [6, 2],
+        "e": [2, 0],
+        "eː": [2, 0],
+        "i": [0, 0],
+        "iː": [0, 0],
+        "o": [2, 5],
+        "oː": [2, 5],
+        "ɯ": [0, 4],
+        "ɯː": [0, 4],
+    },
+    "korean_features.json": {
+        "a": [6, 2],
+        "e": [2, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "u": [0, 5],
+        "ə": [4, 2],
+        "ɨ": [0, 2],
+    },
+    "lango_features.json": {
+        "a": [6, 2],
+        "e": [2, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "u": [0, 5],
+    },
+    "lomongo_features.json": {
+        "a": [6, 2],
+        "e": [2, 0],
+        "i": [0, 0],
+        "m̩": [4, 2],
+        "n̩": [4, 2],
+        "o": [2, 5],
+        "u": [0, 5],
+        "ŋ̩": [0, 2],
+        "ɔ": [4, 5],
+        "ɛ": [4, 0],
+    },
+    "mandarin_chinese_features.json": {
+        "a": [6, 2],
+        "i": [0, 0],
+        "u": [0, 5],
+        "y": [0, 1],
+        "ə": [3, 2],
+        "ɚ": [3, 2],
+    },
+    "maximalist_vowels.json": {
+        "a": [6, 0],
+        "e": [2, 0],
+        "e̞": [3, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "o̞": [3, 5],
+        "u": [0, 5],
+        "y": [0, 1],
+        "ä": [6, 2],
+        "æ": [5, 0],
+        "ø": [2, 1],
+        "ø̞": [3, 1],
+        "œ": [4, 1],
+        "ɐ": [5, 7],
+        "ɑ": [6, 4],
+        "ɒ": [6, 5],
+        "ɔ": [4, 5],
+        "ɘ": [2, 2],
+        "ə": [3, 7],
+        "ɛ": [4, 0],
+        "ɜ": [4, 2],
+        "ɞ": [4, 3],
+        "ɤ": [2, 4],
+        "ɤ̞": [3, 4],
+        "ɨ": [0, 2],
+        "ɪ": [1, 0],
+        "ɯ": [0, 4],
+        "ɵ": [2, 3],
+        "ɶ": [6, 1],
+        "ʉ": [0, 3],
+        "ʊ": [1, 5],
+        "ʌ": [4, 4],
+        "ʏ": [1, 1],
+    },
+    "modern_standard_arabic_features.json": {
+        "a": [6, 2],
+        "aː": [6, 2],
+        "i": [0, 0],
+        "iː": [0, 0],
+        "u": [0, 5],
+        "uː": [0, 5],
+    },
+    "spanish_features.json": {
+        "a": [6, 2],
+        "e": [3, 0],
+        "i": [0, 0],
+        "o": [3, 5],
+        "u": [0, 5],
+    },
+    "tobabatak_features.json": {
+        "a": [6, 2],
+        "e": [2, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "u": [0, 5],
+        "ɔ": [4, 5],
+        "ɛ": [4, 0],
+    },
+    "turkish_features.json": {
+        "e": [2, 0],
+        "i": [0, 0],
+        "o": [2, 5],
+        "u": [0, 5],
+        "y": [0, 1],
+        "ɑ": [6, 4],
+        "ɯ": [0, 4],
+    },
+}

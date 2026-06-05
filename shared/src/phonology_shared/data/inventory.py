@@ -62,13 +62,14 @@ VALID_VALUES: frozenset[str] = frozenset({"+", "-", "0"})
 def normalize_feature_key(key: str) -> str:
     """Fold a feature name to its canonical engine-side spelling.
 
-    Lowercases, collapses delimiters (``.``, ``_``, space) to empty,
-    and rewrites a small set of common multi-word aliases so engine
-    consumers (matching, grouping, alias-collision detection at
+    Lowercases, collapses delimiters (``.``, ``_``, ``-``, space) to
+    empty, and rewrites a small set of common multi-word aliases so
+    engine consumers (matching, grouping, alias-collision detection at
     parse time) see one operational identity for variants like
-    ``"DelRel"`` / ``"delayed_release"`` / ``"del.rel."``. Memoized
-    because the same handful of names recur for every segment and
-    every reload.
+    ``"DelRel"`` / ``"delayed_release"`` / ``"del.rel."``,
+    ``"r-colored"`` / ``"rhotacized"`` / ``"rhotic"``, or
+    ``"breathy voice"`` / ``"breathy"``. Memoized because the same
+    handful of names recur for every segment and every reload.
 
     Lives in :py:mod:`inventory` so :py:meth:`Inventory.parse` can
     detect alias collisions at the boundary without depending on
@@ -80,7 +81,14 @@ def normalize_feature_key(key: str) -> str:
     k = k.replace("delayed_release", "delrel")
     k = k.replace("s.g.", "spreadgl")
     k = k.replace("c.g.", "constrgl")
-    return k.replace(".", "").replace("_", "").replace(" ", "")
+    k = k.replace(".", "").replace("_", "").replace(" ", "").replace("-", "")
+    if k in ("rcolored", "rcoloured", "rhotacized"):
+        return "rhotic"
+    if k == "breathyvoice":
+        return "breathy"
+    if k == "creakyvoice":
+        return "creaky"
+    return k
 
 
 class AliasCollisionError(ValueError):

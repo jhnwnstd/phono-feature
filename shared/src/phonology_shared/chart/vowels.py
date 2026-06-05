@@ -130,6 +130,64 @@ class Confidence(IntEnum):
     HIGH = 3
 
 
+class VowelCellDisplayKind(StrEnum):
+    """How a renderer should arrange the buttons inside a chart cell.
+
+    The vowel chart's row + column place the cell on the (height,
+    backness) grid; this enum chooses the layout INSIDE the cell
+    once two or more vowels share the same slot.
+
+    * ``STACK`` -- default: vertical stack, one button per row. Used
+      when the entries differ on a non-display feature (or on no
+      feature at all) so vertical stacking is the safe arrangement.
+    * ``LONG_PAIR`` / ``NASAL_PAIR`` / ``RHOTIC_PAIR`` /
+      ``PHONATION_PAIR`` / ``TONE_PAIR`` -- side-by-side: two
+      buttons in a horizontal row, marked member on the right. The
+      five PAIR kinds share the same physical layout; the kind
+      records WHICH non-position feature drove the contrast so the
+      renderer (or downstream tooling) can read it without
+      re-deriving from the entries.
+    * ``CONTRAST_SET`` -- 2x2 grid (for 3-4 entries) when the
+      entries differ on more than one display feature (e.g. long x
+      nasal). Renderer decides the 2D arrangement; ``entries`` is
+      passed through in input order.
+
+    StrEnum so the value serializes verbatim through the
+    presentation bridge into the web payload.
+    """
+
+    STACK = "stack"
+    LONG_PAIR = "long_pair"
+    NASAL_PAIR = "nasal_pair"
+    RHOTIC_PAIR = "rhotic_pair"
+    PHONATION_PAIR = "phonation_pair"
+    TONE_PAIR = "tone_pair"
+    CONTRAST_SET = "contrast_set"
+
+
+#: Feature names (canonical, post-:py:func:`normalize_feature_key`)
+#: that the cell-display classifier treats as "in-cell contrasts":
+#: two vowels differing only on one of these can share a slot and
+#: be displayed side by side rather than stacked. Everything outside
+#: this set is a position feature; cells whose entries differ on a
+#: position feature fall through to ``STACK``.
+_DISPLAY_CONTRAST_FEATURES: frozenset[str] = frozenset(
+    {"long", "nasal", "rhotic", "breathy", "creaky", "tone"}
+)
+
+
+#: PAIR display kinds keyed by the single contrast feature that
+#: produced them. Used in classification and in pair-ordering so
+#: the "marked" (``+``-valued) entry consistently lands on the
+#: right side of the rendered pair.
+_PAIR_KIND_FOR_FEATURE: dict[str, VowelCellDisplayKind] = {
+    "long": VowelCellDisplayKind.LONG_PAIR,
+    "nasal": VowelCellDisplayKind.NASAL_PAIR,
+    "rhotic": VowelCellDisplayKind.RHOTIC_PAIR,
+    "tone": VowelCellDisplayKind.TONE_PAIR,
+}
+
+
 class VowelChartShape(StrEnum):
     """Visual envelope the renderer paints around the vowel chart.
 
@@ -179,6 +237,17 @@ class PlacementFlag(StrEnum):
     "central as a conflict anchor" distinct from "central because no
     usable evidence existed". Same screen position, three different
     semantics; the flags let downstream code surface that honestly.
+
+    ``REFINED`` marks a row or column that was nudged by a relative
+    feature (``raised``/``lowered``/``advanced``/``retracted``/
+    ``centralized``/``peripheral``) after the base inference. The
+    base inference's flags propagate alongside it so the original
+    evidence is still legible.
+
+    ``SPLIT_SOURCE_DIVERGENCE`` fires when two of the height-split
+    sources (``tense``, ``atr``, ``rtr``) are both present and point
+    in opposite directions. Replaces the older ``ATR_TENSE``-only
+    flag now that RTR is a third source.
     """
 
     DIRECT = "direct"
@@ -188,7 +257,8 @@ class PlacementFlag(StrEnum):
     CONFLICT = "conflict"
     DEFAULT_ANCHOR = "default_anchor"
     NONSTANDARD = "nonstandard"
-    ATR_TENSE_DIVERGENCE = "atr_tense_divergence"
+    REFINED = "refined"
+    SPLIT_SOURCE_DIVERGENCE = "split_source_divergence"
 
 
 @dataclass(frozen=True)
@@ -224,14 +294,29 @@ class VowelProfile:
     #: refinement only fires when this flag is True so non-contrastive
     #: inventories keep their canonical placements.
     has_long_contrast: bool = False
+    #: Tongue-root retraction. Third height-split source after
+    #: ``tense`` and ``atr``; inverted on the way into
+    #: :py:func:`_height_split_value` because ``[+rtr]`` corresponds
+    #: to ``[-atr]`` / ``[-tense]`` in feature systems that contrast
+    #: the two roots.
+    has_rtr: bool = False
+    #: Relative-articulation diacritics. Each lets the refinement
+    #: layer nudge the base row or column one step in the
+    #: corresponding direction.
+    has_raised: bool = False
+    has_lowered: bool = False
+    has_advanced: bool = False
+    has_retracted: bool = False
+    has_centralized: bool = False
+    has_peripheral: bool = False
 
     @property
     def has_height_sub_distinction(self) -> bool:
-        """True if the inventory uses ATR or Tense to split height
-        tiers (the difference between Close and Near-close, or
-        Close-mid and Open-mid).
+        """True if the inventory uses ATR, Tense, or RTR to split
+        height tiers (the difference between Close and Near-close,
+        or Close-mid and Open-mid).
         """
-        return self.has_atr or self.has_tense
+        return self.has_atr or self.has_tense or self.has_rtr
 
 
 @dataclass(frozen=True)
@@ -259,6 +344,24 @@ class PlacementPolicy:
     #: recommends defaulting off. Kept True here to preserve
     #: pre-policy placements on bundled inventories.
     split_low_by_tense: bool = True
+    #: Allow ``[rtr]`` to drive the height split when neither
+    #: ``tense`` nor ``atr`` are present. ``[+rtr]`` is inverted
+    #: (treated as ``[-atr]``-equivalent) so retracted-root vowels
+    #: land on the Near-close / Open-mid side of each split.
+    allow_rtr_split: bool = True
+    #: Apply ``raised`` / ``lowered`` to nudge the resolved row
+    #: one step (e.g. Close ``+lowered`` -> Near-close). Disabling
+    #: this restores pre-extension behaviour where these features
+    #: are silently ignored.
+    allow_relative_height_refinement: bool = True
+    #: Apply ``advanced`` / ``retracted`` / ``centralized`` to
+    #: nudge the resolved column one step. Disabling restores
+    #: pre-extension behaviour.
+    allow_relative_backness_refinement: bool = True
+    #: Allow ``peripheral`` to break ties on underspecified or
+    #: fallback backness placements. Never overrides a DIRECT
+    #: inference; only nudges already-uncertain placements.
+    allow_peripheral_tiebreak: bool = True
 
 
 @dataclass(frozen=True)
@@ -468,6 +571,13 @@ def detect_vowel_profile(
         has_long="long" in active,
         has_long_contrast=("+" in long_polarities)
         and ("-" in long_polarities),
+        has_rtr="rtr" in active,
+        has_raised="raised" in active,
+        has_lowered="lowered" in active,
+        has_advanced="advanced" in active,
+        has_retracted="retracted" in active,
+        has_centralized="centralized" in active,
+        has_peripheral="peripheral" in active,
     )
 
 
@@ -654,32 +764,65 @@ def _nonzero(val: str | None) -> str | None:
 
 def _height_split_value(
     feats: Mapping[str, str],
+    policy: PlacementPolicy | None = None,
 ) -> tuple[str | None, str, bool]:
-    """Resolve the tense/ATR split that distinguishes adjacent
+    """Resolve the tense/ATR/RTR split that distinguishes adjacent
     height tiers (Close vs Near-close, Close-mid vs Open-mid).
 
     Returns ``(value, source, divergent)`` where ``value`` is
     ``"+"``, ``"-"``, or ``None`` (no specification), ``source``
     names which feature supplied the value, and ``divergent``
-    is True when both ``tense`` and ``atr`` were specified but
+    is True when two of the three sources were specified but
     disagreed (so the placement object can attach the
-    ``ATR_TENSE_DIVERGENCE`` flag).
+    ``SPLIT_SOURCE_DIVERGENCE`` flag).
 
-    Resolution policy: when both specified and agree, take it.
-    When both specified and disagree, prefer ``tense`` and surface
-    the conflict in the source string. When only one is specified,
-    use it. When neither is specified, return ``None``.
+    Priority: ``tense`` -> ``atr`` -> ``rtr``. RTR is inverted on
+    the way in (``[+rtr]`` is treated as ``[-atr]`` for split
+    purposes) since the two roots are oppositely valued. Divergence
+    is checked across all three sources whenever more than one is
+    specified.
+
+    Resolution policy: when several specified and agree (with RTR
+    inverted), take it. When several disagree, prefer the highest-
+    priority specified source and surface the conflict. When only
+    one is specified, use it. When none is specified, return
+    ``None``.
     """
+    policy = policy or PlacementPolicy()
     tense = _nonzero(feats.get("tense"))
     atr = _nonzero(feats.get("atr"))
-    if tense is not None and atr is not None:
-        if tense == atr:
-            return tense, "tense/ATR", False
-        return tense, "tense (overrides conflicting ATR)", True
+    rtr = _nonzero(feats.get("rtr"))
+    rtr_inverted = ("-" if rtr == "+" else "+") if rtr is not None else None
+
+    def _has_disagreement(*vals: str | None) -> bool:
+        present = [v for v in vals if v is not None]
+        return len(present) >= 2 and len(set(present)) > 1
+
     if tense is not None:
-        return tense, "tense", False
+        divergent = _has_disagreement(tense, atr, rtr_inverted)
+        if atr is not None:
+            label = (
+                "tense/ATR"
+                if tense == atr and not _has_disagreement(tense, rtr_inverted)
+                else (
+                    "tense (overrides conflicting ATR/RTR)"
+                    if divergent
+                    else "tense/ATR"
+                )
+            )
+        else:
+            label = (
+                "tense"
+                if not divergent
+                else "tense (overrides conflicting RTR)"
+            )
+        return tense, label, divergent
     if atr is not None:
-        return atr, "ATR", False
+        divergent = _has_disagreement(atr, rtr_inverted)
+        label = "ATR" if not divergent else "ATR (overrides conflicting RTR)"
+        return atr, label, divergent
+    if rtr is not None and policy.allow_rtr_split:
+        return rtr_inverted, "RTR", False
     return None, "none", False
 
 
@@ -698,10 +841,12 @@ def _infer_height(
     """
     hi = feats.get("high", "0")
     lo = feats.get("low", "0")
-    split_value, split_source, atr_tense_divergent = _height_split_value(feats)
+    split_value, split_source, split_divergent = _height_split_value(
+        feats, policy
+    )
     base_flags: frozenset[PlacementFlag] = (
-        frozenset({PlacementFlag.ATR_TENSE_DIVERGENCE})
-        if atr_tense_divergent
+        frozenset({PlacementFlag.SPLIT_SOURCE_DIVERGENCE})
+        if split_divergent
         else frozenset()
     )
     is_high_vowel = hi == "+" and lo == "-"
@@ -984,6 +1129,159 @@ def _infer_rounding(
     )
 
 
+#: Single-step "lowered" move on the height axis: each key is the
+#: base row, value is the row one step more open. Rows at the
+#: bottom of the chart (``Open``) have no further lowering target.
+_HEIGHT_LOWERED_STEP: dict[str, str] = {
+    "Close": "Near-close",
+    "Near-close": "Close-mid",
+    "Close-mid": "Mid",
+    "Mid": "Open-mid",
+    "Open-mid": "Near-open",
+    "Near-open": "Open",
+}
+
+#: Inverse of :py:data:`_HEIGHT_LOWERED_STEP` ("raised" goes one
+#: step more close). Computed once so the refinement helper does
+#: not rebuild the table on every call.
+_HEIGHT_RAISED_STEP: dict[str, str] = {
+    v: k for k, v in _HEIGHT_LOWERED_STEP.items()
+}
+
+
+def _refine_height_with_relative_features(
+    base: AxisEvidence,
+    feats: Mapping[str, str],
+    policy: PlacementPolicy,
+) -> AxisEvidence:
+    """Nudge the base height row by ``raised`` / ``lowered``.
+
+    Returns the input ``base`` unchanged when the refinement is
+    disabled by policy, neither feature is specified, both are
+    specified with conflicting positive values, or the target
+    row is off the end of the chart (e.g. ``Open`` ``+lowered``
+    has no destination).
+
+    Adds :py:attr:`PlacementFlag.REFINED` to the returned evidence
+    whenever a nudge actually fires so downstream tooling can tell
+    direct from refined placements apart. A blocked nudge (target
+    off-chart, ``+raised`` and ``+lowered`` both set) returns the
+    base unchanged but unions :py:attr:`PlacementFlag.CONFLICT`
+    when the block was driven by conflicting raised/lowered values.
+    """
+    if not policy.allow_relative_height_refinement:
+        return base
+    raised = _nonzero(feats.get("raised"))
+    lowered = _nonzero(feats.get("lowered"))
+    if raised is None and lowered is None:
+        return base
+    if raised == "+" and lowered == "+":
+        return replace(
+            base, flags=base.flags | frozenset({PlacementFlag.CONFLICT})
+        )
+    target: str | None = None
+    direction: str | None = None
+    if raised == "+":
+        target = _HEIGHT_RAISED_STEP.get(base.value)
+        direction = "+raised"
+    elif lowered == "+":
+        target = _HEIGHT_LOWERED_STEP.get(base.value)
+        direction = "+lowered"
+    if target is None or direction is None:
+        return base
+    new_reason = f"{target}: {base.value} refined by [{direction}]"
+    new_source = f"{base.source}+relative-height"
+    return AxisEvidence(
+        value=target,
+        confidence=base.confidence,
+        source=new_source,
+        reason=new_reason,
+        flags=base.flags | frozenset({PlacementFlag.REFINED}),
+    )
+
+
+#: Single-step "advance" move on the backness axis: each key is the
+#: base column, value is the column one step more front. ``front``
+#: has no further advancement target.
+_BACKNESS_ADVANCED_STEP: dict[str, str] = {
+    "back": "central",
+    "central": "front",
+}
+
+#: Inverse of :py:data:`_BACKNESS_ADVANCED_STEP` ("retracted" goes
+#: one step more back).
+_BACKNESS_RETRACTED_STEP: dict[str, str] = {
+    v: k for k, v in _BACKNESS_ADVANCED_STEP.items()
+}
+
+
+def _refine_backness_with_relative_features(
+    base: AxisEvidence,
+    feats: Mapping[str, str],
+    policy: PlacementPolicy,
+) -> AxisEvidence:
+    """Nudge the base backness column by ``advanced`` /
+    ``retracted`` / ``centralized`` / ``peripheral``.
+
+    Conflict handling mirrors :py:func:`_refine_height_with_relative_features`:
+    ``+advanced`` and ``+retracted`` both set drops the nudge and
+    adds :py:attr:`PlacementFlag.CONFLICT`. ``centralized``
+    collapses front and back to central but is a no-op on a base
+    that is already central. ``peripheral`` is a TIEBREAK only and
+    never overrides a base evidence carrying
+    :py:attr:`PlacementFlag.DIRECT`; it nudges underspecified or
+    fallback placements when ``-peripheral`` (toward central) or
+    explicitly preserves edge placements when ``+peripheral``.
+    """
+    if not policy.allow_relative_backness_refinement:
+        return base
+    advanced = _nonzero(feats.get("advanced"))
+    retracted = _nonzero(feats.get("retracted"))
+    centralized = _nonzero(feats.get("centralized"))
+    peripheral = _nonzero(feats.get("peripheral"))
+    if advanced == "+" and retracted == "+":
+        return replace(
+            base, flags=base.flags | frozenset({PlacementFlag.CONFLICT})
+        )
+    target: str | None = None
+    direction: str | None = None
+    if advanced == "+":
+        target = _BACKNESS_ADVANCED_STEP.get(base.value)
+        direction = "+advanced"
+    elif retracted == "+":
+        target = _BACKNESS_RETRACTED_STEP.get(base.value)
+        direction = "+retracted"
+    elif centralized == "+":
+        if base.value != "central":
+            target = "central"
+            direction = "+centralized"
+    refined = base
+    if target is not None and direction is not None:
+        refined = AxisEvidence(
+            value=target,
+            confidence=base.confidence,
+            source=f"{base.source}+relative-backness",
+            reason=f"{target}: {base.value} refined by [{direction}]",
+            flags=base.flags | frozenset({PlacementFlag.REFINED}),
+        )
+    if peripheral is not None and policy.allow_peripheral_tiebreak:
+        is_direct = PlacementFlag.DIRECT in refined.flags
+        if peripheral == "-" and not is_direct and refined.value != "central":
+            refined = AxisEvidence(
+                value="central",
+                confidence=refined.confidence,
+                source=f"{refined.source}+peripheral-tiebreak",
+                reason="central: refined by [-peripheral] (tiebreak)",
+                flags=refined.flags | frozenset({PlacementFlag.REFINED}),
+            )
+        elif peripheral == "+" and refined.value in ("front", "back"):
+            refined = replace(
+                refined,
+                reason=f"{refined.reason}; +peripheral preserves edge",
+            )
+    return refined
+
+
 def compute_placements(
     segs: list[str],
     profile: VowelProfile,
@@ -1097,16 +1395,21 @@ class VowelChartCell:
     segments occupying this cell, ordered by descending placement
     confidence (ties broken by ascending segment string).
 
-    ``is_long_pair`` is True when the cell carries exactly two
-    segments whose feature bundles differ only on ``Long`` (one
-    ``Long+``, one ``Long-``). Renderers use this hint to lay the
-    two buttons SIDE-BY-SIDE inside the cell instead of stacking
-    them vertically: length is a display-layer attribute on the
-    same vowel-space position, not two separate positions, and
-    side-by-side reads more honestly than a vertical pair would.
-    Other collision groups (three or more segments, or two
-    segments that differ on something besides Long) keep the
-    default vertical-stack layout.
+    ``display_kind`` tells the renderer how to arrange the entries
+    inside the cell. ``STACK`` is the default and reproduces the
+    legacy vertical-stack layout. ``LONG_PAIR`` / ``NASAL_PAIR`` /
+    ``RHOTIC_PAIR`` / ``PHONATION_PAIR`` / ``TONE_PAIR`` are
+    side-by-side layouts (two entries differing only on a single
+    in-cell-contrast feature; the marked member sits on the right).
+    ``CONTRAST_SET`` is a 2x2 grid for 3-4 entries differing on
+    multiple display features.
+
+    ``contrast_features`` is the sorted tuple of display-contrast
+    features that drove the kind choice (``()`` for ``STACK``).
+
+    ``is_long_pair`` is kept as a derived bool (``display_kind ==
+    LONG_PAIR``) so existing readers that branch on length keep
+    working until they migrate to ``display_kind``.
     """
 
     row: int
@@ -1118,6 +1421,8 @@ class VowelChartCell:
     pair_side: int
     entries: tuple[str, ...]
     is_long_pair: bool = False
+    display_kind: VowelCellDisplayKind = VowelCellDisplayKind.STACK
+    contrast_features: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1338,7 +1643,8 @@ def _row_content_extent(
     lefts: list[float] = []
     rights: list[float] = []
     for cell in row_cells:
-        half = long_pair_half if cell.is_long_pair else single_half
+        is_pair = cell.display_kind in _PAIR_DISPLAY_KINDS
+        half = long_pair_half if is_pair else single_half
         center = cell.chart_x + cell.pair_side * pair_shift
         lefts.append(center - half)
         rights.append(center + half)
@@ -1588,6 +1894,139 @@ def _silhouette_with_widths(
     )
 
 
+#: PAIR display kinds; renderers lay these out as one horizontal
+#: row of two buttons. Shared by ``_cell_natural_size`` and both
+#: renderer dispatches.
+_PAIR_DISPLAY_KINDS: frozenset[VowelCellDisplayKind] = frozenset(
+    {
+        VowelCellDisplayKind.LONG_PAIR,
+        VowelCellDisplayKind.NASAL_PAIR,
+        VowelCellDisplayKind.RHOTIC_PAIR,
+        VowelCellDisplayKind.PHONATION_PAIR,
+        VowelCellDisplayKind.TONE_PAIR,
+    }
+)
+
+
+def _classify_vowel_cell_display(
+    entries: tuple[str, ...],
+    norm_feats: Mapping[str, Mapping[str, str]],
+) -> tuple[VowelCellDisplayKind, tuple[str, ...], tuple[str, ...]]:
+    """Pick a :py:class:`VowelCellDisplayKind` for ``entries``.
+
+    Pure classifier over canonical feature bundles: no coordinate
+    knowledge, no renderer knowledge. Returns ``(kind,
+    contrast_features, ordered_entries)`` where
+    ``contrast_features`` is the sorted tuple of in-cell-contrast
+    features the entries differ on (``()`` for ``STACK``) and
+    ``ordered_entries`` is the input tuple with the PAIR ordering
+    convention (marked / ``+``-valued member on the right) applied
+    when the kind is a PAIR; otherwise input order is preserved.
+
+    Decision tree:
+      1. < 2 entries -> STACK.
+      2. Compute the set of features whose values are NOT identical
+         across the entries (skipping ``None``-only differences so
+         a one-sided ``"0"`` does not register as a contrast).
+      3. Partition into display features (intersection with
+         :py:data:`_DISPLAY_CONTRAST_FEATURES`) and other features.
+      4. If any non-display feature differs -> STACK. The entries
+         differ on a position feature; stacking is the safe layout.
+      5. Two entries differing on exactly one display feature ->
+         the matching PAIR kind (or PHONATION_PAIR for the joint
+         breathy/creaky case).
+      6. Two entries differing on multiple display features OR
+         3-4 entries differing on any display features ->
+         CONTRAST_SET.
+      7. Otherwise -> STACK.
+    """
+    if len(entries) < 2:
+        return VowelCellDisplayKind.STACK, (), entries
+    bundles = [
+        _normalize_feat_keys(norm_feats.get(seg, {})) for seg in entries
+    ]
+    all_keys: set[str] = set()
+    for b in bundles:
+        all_keys.update(b)
+    differing: set[str] = set()
+    for key in all_keys:
+        vals = {b.get(key) for b in bundles}
+        vals.discard(None)
+        if len(vals) > 1:
+            differing.add(key)
+    differing_display = differing & _DISPLAY_CONTRAST_FEATURES
+    differing_other = differing - _DISPLAY_CONTRAST_FEATURES
+    if differing_other or not differing_display:
+        return VowelCellDisplayKind.STACK, (), entries
+    contrast = tuple(sorted(differing_display))
+    if len(entries) == 2:
+        if differing_display.issubset({"breathy", "creaky"}):
+            kind = VowelCellDisplayKind.PHONATION_PAIR
+        elif len(differing_display) == 1:
+            (only,) = differing_display
+            kind = _PAIR_KIND_FOR_FEATURE.get(
+                only, VowelCellDisplayKind.CONTRAST_SET
+            )
+        else:
+            kind = VowelCellDisplayKind.CONTRAST_SET
+        ordered: tuple[str, ...] = entries
+        if kind in _PAIR_DISPLAY_KINDS:
+            ordered = _order_pair_entries(entries, bundles, kind)
+        return kind, contrast, ordered
+    if 3 <= len(entries) <= 4:
+        return VowelCellDisplayKind.CONTRAST_SET, contrast, entries
+    return VowelCellDisplayKind.STACK, (), entries
+
+
+def _order_pair_entries(
+    entries: tuple[str, ...],
+    bundles: list[dict[str, str]],
+    kind: VowelCellDisplayKind,
+) -> tuple[str, ...]:
+    """Reorder a 2-entry PAIR tuple so the "marked" member sits on
+    the right (canonical reading direction).
+
+    LONG_PAIR / NASAL_PAIR / RHOTIC_PAIR / TONE_PAIR sort by the
+    underlying feature value (``+`` to the right). PHONATION_PAIR
+    puts the modal entry (neither breathy nor creaky) on the left
+    when one exists; otherwise sorts on whichever feature is the
+    single contrast. The reordering is stable: ties keep input
+    order.
+    """
+    feature_for_kind = {
+        VowelCellDisplayKind.LONG_PAIR: "long",
+        VowelCellDisplayKind.NASAL_PAIR: "nasal",
+        VowelCellDisplayKind.RHOTIC_PAIR: "rhotic",
+        VowelCellDisplayKind.TONE_PAIR: "tone",
+    }
+    if kind in feature_for_kind:
+        feat = feature_for_kind[kind]
+        a_val = bundles[0].get(feat)
+        b_val = bundles[1].get(feat)
+        if a_val == "+" and b_val != "+":
+            return (entries[1], entries[0])
+        return entries
+    if kind == VowelCellDisplayKind.PHONATION_PAIR:
+
+        def _is_modal(b: dict[str, str]) -> bool:
+            return b.get("breathy") not in ("+",) and b.get("creaky") not in (
+                "+",
+            )
+
+        if _is_modal(bundles[0]) and not _is_modal(bundles[1]):
+            return entries
+        if _is_modal(bundles[1]) and not _is_modal(bundles[0]):
+            return (entries[1], entries[0])
+        for feat in ("breathy", "creaky"):
+            a_val = bundles[0].get(feat)
+            b_val = bundles[1].get(feat)
+            if a_val == "+" and b_val != "+":
+                return (entries[1], entries[0])
+            if b_val == "+" and a_val != "+":
+                return entries
+    return entries
+
+
 def _natural_data_area_size(
     cells: tuple[VowelChartCell, ...],
 ) -> tuple[int, int]:
@@ -1600,14 +2039,16 @@ def _natural_data_area_size(
     * Width is set by the widest populated row's button + gap
       requirements. Each backness slot (front / central / back)
       contributes ``N * BTN_W + (N - 1) * VOWEL_PAIR_GAP_PX`` where
-      ``N`` is the slot's button count (a side-by-side Long pair
-      contributes 2 buttons, a regular single contributes 1). Slot
-      widths are separated by ``VOWEL_PAIR_SEPARATOR_PX``.
+      ``N`` is the slot's button count (a PAIR cell contributes 2
+      buttons horizontally; a CONTRAST_SET cell contributes 2; a
+      regular single contributes 1). Slot widths are separated by
+      ``VOWEL_PAIR_SEPARATOR_PX``.
     * Height is set by the populated rows' content height: each
       row contributes ``max_stack * SEG_BTN_H + (max_stack - 1) *
       stack_gap`` where ``max_stack`` is the row's deepest vertical
-      collision-stack. Long-pair cells count as 1 (they grow
-      horizontally, not vertically). Rows are separated by
+      depth. PAIR cells count as 1 (horizontal layout); CONTRAST_SET
+      cells count as ``ceil(entries / 2)`` (2x2 or 2x1 grid). STACK
+      cells count as ``len(entries)``. Rows are separated by
       ``_VOWEL_ROW_GAP_PX`` and the silhouette adds vertical
       padding above the top row and below the bottom row.
     """
@@ -1631,6 +2072,28 @@ def _natural_data_area_size(
         8: 2,
     }
 
+    def _cell_button_width_count(cell: VowelChartCell) -> int:
+        """Horizontal button count contributed by ``cell`` for slot
+        sizing. PAIR cells take 2; CONTRAST_SET takes 2 (2-column
+        grid); STACK takes 1.
+        """
+        if cell.display_kind in _PAIR_DISPLAY_KINDS:
+            return 2
+        if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
+            return 2
+        return 1
+
+    def _cell_vertical_depth(cell: VowelChartCell) -> int:
+        """Vertical row count contributed by ``cell`` for height
+        sizing. PAIR cells are 1 row; CONTRAST_SET is
+        ``ceil(entries / 2)``; STACK is ``len(entries)``.
+        """
+        if cell.display_kind in _PAIR_DISPLAY_KINDS:
+            return 1
+        if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
+            return (len(cell.entries) + 1) // 2
+        return len(cell.entries)
+
     rows_in_use: set[int] = {c.row for c in cells}
     max_row_w = 2 * BTN_W + VOWEL_PAIR_GAP_PX
     for ri in rows_in_use:
@@ -1640,7 +2103,7 @@ def _natural_data_area_size(
             if c.row != ri:
                 continue
             slot = col_to_slot[c.col]
-            slot_buttons[slot] += 2 if c.is_long_pair else 1
+            slot_buttons[slot] += _cell_button_width_count(c)
         populated_slots = [s for s, n in slot_buttons.items() if n > 0]
         if not populated_slots:
             continue
@@ -1662,7 +2125,7 @@ def _natural_data_area_size(
         for c in cells:
             if c.row != ri:
                 continue
-            cell_depth = 1 if c.is_long_pair else len(c.entries)
+            cell_depth = _cell_vertical_depth(c)
             if cell_depth > depth:
                 depth = cell_depth
         row_heights.append(
@@ -1781,31 +2244,6 @@ def build_vowel_chart_geometry(
         8: VOWEL_LABEL_GRID_COL + logical_col_offset(4),
     }
 
-    def _is_long_pair_display(entries: list[str]) -> bool:
-        """True iff the cell carries exactly two segments whose
-        normalised feature bundles differ only on ``Long`` (one
-        ``Long+``, one ``Long-``). Renderers use this to lay the
-        pair out side-by-side instead of stacking them.
-        """
-        if len(entries) != 2:
-            return False
-        a, b = (
-            _normalize_feat_keys(norm_feats.get(entries[0], {})),
-            _normalize_feat_keys(norm_feats.get(entries[1], {})),
-        )
-        long_a, long_b = a.get("long"), b.get("long")
-        if {long_a, long_b} != {"+", "-"}:
-            return False
-        # Compare all keys except ``long`` for equality. Skip keys
-        # whose values are both ``None`` so a one-sided ``"0"``
-        # doesn't count as a difference.
-        for key in set(a) | set(b):
-            if key == "long":
-                continue
-            if a.get(key) != b.get(key):
-                return False
-        return True
-
     open_row_index = _ROW_LABEL_TO_INDEX["Open"]
     # Open-row front-pair cells (cols 0 / 1) take priority for the
     # bottom-left of the trapezoid. When they are empty, the Open
@@ -1819,31 +2257,54 @@ def build_vowel_chart_geometry(
         1,
     ) in occupied
 
-    # First pass: resolve each cell's metadata (col, pair_side,
-    # is_long_pair). The display layer needs these to size the
-    # silhouette before it can fix cell ``chart_x`` positions.
-    # No phonology re-decisions happen below this point -- the
-    # cell COL/row are already final; only their pixel-space
-    # position is still pending.
-    cell_meta: list[tuple[int, int, tuple[str, ...], bool, int, int]] = []
+    # First pass: classify each cell's display kind, resolve
+    # ordering, and compute col / pair_side / grid_col. The display
+    # layer needs these to size the silhouette before it can fix
+    # cell ``chart_x`` positions. No phonology re-decisions happen
+    # below this point -- the cell COL/row are already final; only
+    # their pixel-space position is still pending.
+    cell_meta: list[
+        tuple[
+            int,
+            int,
+            tuple[str, ...],
+            VowelCellDisplayKind,
+            tuple[str, ...],
+            int,
+            int,
+        ]
+    ] = []
     cells_meta_by_row: dict[int, list[tuple[int, int, bool]]] = {}
     for ri, ci in sorted(occupied):
-        entries = tuple(occupied[(ri, ci)])
-        is_long_pair = _is_long_pair_display(list(entries))
+        raw_entries = tuple(occupied[(ri, ci)])
+        display_kind, contrast_features, entries = (
+            _classify_vowel_cell_display(raw_entries, norm_feats)
+        )
+        is_pair_layout = display_kind in _PAIR_DISPLAY_KINDS
         if ci >= 6:
             pair_side = 0
             grid_col = _neutral_col_to_grid_col[ci]
         else:
             sibling_ci = ci ^ 1
             has_sibling = (ri, sibling_ci) in occupied
-            if is_long_pair and not has_sibling:
+            if is_pair_layout and not has_sibling:
                 pair_side = 0
             else:
                 pair_side = 1 if ci % 2 else -1
             grid_col = VOWEL_LABEL_GRID_COL + logical_col_offset(ci)
-        cell_meta.append((ri, ci, entries, is_long_pair, pair_side, grid_col))
+        cell_meta.append(
+            (
+                ri,
+                ci,
+                entries,
+                display_kind,
+                contrast_features,
+                pair_side,
+                grid_col,
+            )
+        )
         cells_meta_by_row.setdefault(ri, []).append(
-            (ci, pair_side, is_long_pair)
+            (ci, pair_side, is_pair_layout)
         )
 
     # Shrink silhouette widths so the trapezoid tracks the actual
@@ -1878,11 +2339,19 @@ def build_vowel_chart_geometry(
     # the renderers.
 
     # Second pass: project cells using the final silhouette
-    # widths. Long pairs without an opposite-rounding sibling
+    # widths. PAIR cells without an opposite-rounding sibling
     # render centred on their anchor (pair_side=0); regular pairs
-    # and lone Long pairs with a sibling keep canonical pair_side.
+    # and lone PAIR cells with a sibling keep canonical pair_side.
     cells: list[VowelChartCell] = []
-    for ri, ci, entries, is_long_pair, pair_side, grid_col in cell_meta:
+    for (
+        ri,
+        ci,
+        entries,
+        display_kind,
+        contrast_features,
+        pair_side,
+        grid_col,
+    ) in cell_meta:
         if ri == open_row_index and ci in (2, 3) and not open_front_populated:
             anchor_x = _BACKNESS_X["front"]
         else:
@@ -1900,7 +2369,9 @@ def build_vowel_chart_geometry(
                 chart_y=cell_display_y,
                 pair_side=pair_side,
                 entries=entries,
-                is_long_pair=is_long_pair,
+                is_long_pair=(display_kind == VowelCellDisplayKind.LONG_PAIR),
+                display_kind=display_kind,
+                contrast_features=contrast_features,
             )
         )
 
@@ -1965,7 +2436,11 @@ def vowel_grid_pos(
     policy = policy or PlacementPolicy()
     normalized = _normalize_feat_keys(feats)
     height = _infer_height(normalized, profile, policy)
+    height = _refine_height_with_relative_features(height, normalized, policy)
     backness = _infer_backness(normalized, profile, policy)
+    backness = _refine_backness_with_relative_features(
+        backness, normalized, policy
+    )
     rounding = _infer_rounding(normalized, profile, policy)
 
     row = _ROW_LABEL_TO_INDEX[height.value]

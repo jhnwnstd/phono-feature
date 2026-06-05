@@ -550,10 +550,12 @@ def test_coronal_front_fallback_off_by_default(profile):
     assert opted_in.backness.value == "front"
 
 
-def test_atr_tense_divergence_flag_fires_on_disagreement(profile):
+def test_split_source_divergence_flag_fires_on_disagreement(profile):
     """When tense and ATR disagree, the placement carries the
-    ``ATR_TENSE_DIVERGENCE`` flag so a renderer can surface the
-    contention without text parsing.
+    ``SPLIT_SOURCE_DIVERGENCE`` flag so a renderer can surface the
+    contention without text parsing. The flag is the unified
+    successor of the older ``ATR_TENSE`` flag now that RTR is a
+    third split source.
     """
     from phonology_shared.chart.vowels import PlacementFlag
 
@@ -579,8 +581,8 @@ def test_atr_tense_divergence_flag_fires_on_disagreement(profile):
         },
         profile,
     )
-    assert PlacementFlag.ATR_TENSE_DIVERGENCE not in agreeing.flags
-    assert PlacementFlag.ATR_TENSE_DIVERGENCE in diverging.flags
+    assert PlacementFlag.SPLIT_SOURCE_DIVERGENCE not in agreeing.flags
+    assert PlacementFlag.SPLIT_SOURCE_DIVERGENCE in diverging.flags
 
 
 def test_per_axis_evidence_exposes_height_backness_rounding(profile):

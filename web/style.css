@@ -755,16 +755,35 @@ dialog input[type="text"]:focus-visible {
   gap: 1px;
   background: transparent;
 }
-/* Horizontal layout for a Long-pair cell: two segments that share
-   the same vowel-space position (same row, same col) but differ
-   only in duration (one ``Long+``, one ``Long-``). Length is a
-   display attribute on the same position, so the pair lays out
-   side-by-side rather than stacking vertically. */
+/* Horizontal layout for a PAIR cell: two segments that share the
+   same vowel-space position (same row, same col) but differ on a
+   single in-cell-contrast feature -- long, nasal, rhotic, breathy
+   or creaky (phonation), tone. Length and the other contrasts are
+   display attributes on the same position, so the pair lays out
+   side-by-side rather than stacking vertically. ``data-pair-kind``
+   carries which contrast drove the pair so stylesheet hooks (or
+   downstream tooling) can react without re-deriving from entries. */
+.vowel-chart-cell-pair,
 .vowel-chart-cell-long-pair {
   display: flex;
   flex-direction: row;
   gap: var(--vowel-pair-gap, 2px);
   background: transparent;
+}
+/* 2-column grid for a CONTRAST_SET cell (3-4 segments differing on
+   two display features, e.g. long x nasal). Three-entry layout
+   spans the first child across both columns on row 0; four-entry
+   layout uses a pure 2x2. ``data-cell-size`` is set by the JS
+   builder so the 3-entry case can apply the column span without
+   needing a separate class. */
+.vowel-chart-cell-contrast-set {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--vowel-pair-gap, 2px) var(--vowel-pair-gap, 2px);
+  background: transparent;
+}
+.vowel-chart-cell-contrast-set[data-cell-size="3"] > :first-child {
+  grid-column: span 2;
 }
 
 /* ---------- feature panel ----------
