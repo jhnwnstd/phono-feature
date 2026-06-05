@@ -1394,12 +1394,17 @@ class InventoryBuilder(QMainWindow):
         self._feature_source_version = (
             str(loaded_version) if isinstance(loaded_version, str) else None
         )
-        self._rebuild_table()
-        for c, seg in enumerate(self._segments):
-            seg_feats = inventory.segments[seg]
-            for r, feat in enumerate(self._features):
-                val = seg_feats.get(feat, "0")
-                self._table.setItem(r, c, make_cell(val))
+        # Seed the grid from the parsed bundle directly. Previously
+        # ``_rebuild_table()`` created an all-zero grid and the loop
+        # below replaced every cell with the loaded value -- doubling
+        # the ``make_cell`` work (each cell is a QTableWidgetItem
+        # construction + setTextAlignment + setFlags + style_cell).
+        # On Hayes (140 segs x 28 features = 3920 cells) that was the
+        # dominant cost of every Builder open. ``_rebuild_table``
+        # already supports an ``initial_cells`` seed via the PanPhon
+        # provider path; reuse it here so loaded inventories take
+        # the same single-pass build path.
+        self._rebuild_table(initial_cells=inventory.segments)
         self._dirty = False
         self._update_title()
         self._status.showMessage(

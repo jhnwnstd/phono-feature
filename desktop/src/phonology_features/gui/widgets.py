@@ -326,6 +326,39 @@ _DENSITY_COMPACT = _RowDensity(
 )
 
 
+def _feature_row_btn_qss(*, is_plus: bool) -> str:
+    """QSS for one polarity of a FeatureRow's +/- toggle button.
+
+    Shape is identical across rows; only the active/hover/checked
+    colour family flips per polarity. Pulled out so
+    :py:meth:`FeatureRow._compute_styles` can cache it alongside
+    the other per-theme style strings, sparing each row's
+    ``apply_theme`` from rebuilding the f-string for both buttons.
+    """
+    active_bg = C["plus_bg"] if is_plus else C["minus_bg"]
+    active_text = C["plus"] if is_plus else C["minus"]
+    border = C["plus"] if is_plus else C["minus"]
+    return f"""
+        QPushButton {{
+            background: {C["analysis_bg"]};
+            color: {C["text_dim"]};
+            border: 1.5px solid {C["border"]};
+            border-radius: 5px;
+        }}
+        QPushButton:hover {{
+            background: {active_bg};
+            color: {active_text};
+            border: 1.5px solid {border};
+        }}
+        QPushButton:checked {{
+            background: {active_bg};
+            color: {active_text};
+            border: 2px solid {border};
+            font-weight: bold;
+        }}
+    """
+
+
 class FeatureRow(QWidget):
     """One feature row in the feature panel. Interactive mode shows
     +/- toggle buttons; display mode shows a coloured value badge.
@@ -362,6 +395,8 @@ class FeatureRow(QWidget):
     _ROW_NEUTRAL: str = ""
     _NAME_ACTIVE: str = ""
     _NAME_INACTIVE: str = ""
+    _BTN_PLUS: str = ""
+    _BTN_MINUS: str = ""
 
     @classmethod
     def _styles_for_active_theme(cls) -> dict[str, str]:
@@ -475,6 +510,14 @@ class FeatureRow(QWidget):
             "ROW_NEUTRAL": "background: transparent; border-radius: 6px;",
             "NAME_ACTIVE": f"color: {C['text']};",
             "NAME_INACTIVE": f"color: {C['text_dim']};",
+            # Per-polarity +/- button QSS. Identical across every
+            # FeatureRow in the pool, so caching once per palette
+            # version saves the f-string rebuild + attribute lookups
+            # on every row's apply_theme. The setStyleSheet polish
+            # cost itself is unavoidable on a theme change, but the
+            # cache cuts the per-call CPU above the Qt boundary.
+            "BTN_PLUS": _feature_row_btn_qss(is_plus=True),
+            "BTN_MINUS": _feature_row_btn_qss(is_plus=False),
         }
 
     def apply_theme(self) -> None:
@@ -539,32 +582,15 @@ class FeatureRow(QWidget):
             self._panel_cached_for = self._panel_active
 
     def _style_btn(self, btn: QPushButton, polarity: str) -> None:
-        is_plus = polarity == "+"
-        active_bg = C["plus_bg"] if is_plus else C["minus_bg"]
-        active_text = C["plus"] if is_plus else C["minus"]
-        border = C["plus"] if is_plus else C["minus"]
-        set_css(
-            btn,
-            f"""
-            QPushButton {{
-                background: {C["analysis_bg"]};
-                color: {C["text_dim"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background: {active_bg};
-                color: {active_text};
-                border: 1.5px solid {border};
-            }}
-            QPushButton:checked {{
-                background: {active_bg};
-                color: {active_text};
-                border: 2px solid {border};
-                font-weight: bold;
-            }}
-        """,
-        )
+        # Stylesheet is shape-identical for every FeatureRow in the
+        # pool; the per-polarity strings are cached at class level by
+        # :py:meth:`_compute_styles` and bound on this instance via
+        # :py:meth:`_build_styles`. Reading the precomputed attr
+        # avoids rebuilding two ~350-char f-strings per row on every
+        # theme/palette toggle (34 rows x 2 polarities = 68 rebuilds
+        # per toggle on Hayes).
+        qss = self._BTN_PLUS if polarity == "+" else self._BTN_MINUS
+        set_css(btn, qss)
 
     def _on_click(self, polarity: str) -> None:
         clicked_current_value = self._current_value == polarity
