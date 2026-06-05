@@ -59,7 +59,12 @@ exit /b 0
 echo Installing dependencies ...
 python -m pip install --quiet --upgrade pip || goto :pip_fail
 python -m pip install --quiet -e "%SHARED_DIR%" || goto :pip_fail
-python -m pip install --quiet -e "%APP_DIR%" || goto :pip_fail
+rem ``[panphon]`` brings in the optional IPA bootstrap source the
+rem New-inventory dialog uses. Marked optional in pyproject.toml so
+rem an air-gapped install can drop the suffix, but the launcher
+rem pulls it in so end users see "PanPhon (auto-generate)" in the
+rem preset dropdown without a manual pip install step.
+python -m pip install --quiet -e "%APP_DIR%[panphon]" || goto :pip_fail
 python -m pip install --quiet -e "%WEB_DIR%" || goto :pip_fail
 type nul > "%STAMP%"
 exit /b 0

@@ -67,7 +67,14 @@ phono_install() {
         # Shared first so the app's resolver sees a satisfied
         # phonology-shared dep instead of going to PyPI for it.
         pip install --quiet -e "$shared_dir"
-        pip install --quiet -e .
+        # ``[panphon]`` brings in the optional IPA bootstrap source
+        # the New-inventory dialog uses. Marked optional in
+        # pyproject.toml so an air-gapped install can drop the
+        # ``[panphon]`` suffix and still get a working app, but the
+        # launcher path pulls it in so end users see "PanPhon
+        # (auto-generate)" in the preset dropdown without a manual
+        # ``pip install`` step.
+        pip install --quiet -e ".[panphon]"
         # Web bridge is a workspace member so lint/mypy/pytest can
         # see it from the same venv; runtime only needs api.py via
         # the Pyodide bundle.

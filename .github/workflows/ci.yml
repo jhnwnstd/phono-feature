@@ -99,9 +99,14 @@ jobs:
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/desktop/.venv" >> "$GITHUB_ENV"
 
       - name: Install dev dependencies into the launcher's venv
+        # ``[dev,panphon]`` so the New-inventory dialog's PanPhon
+        # provider tests run in CI instead of skipping. PanPhon is
+        # the same optional extra the launcher's ``tools/install.sh``
+        # pulls in for end-user installs, so what CI tests is what
+        # users get.
         working-directory: desktop
         shell: bash
-        run: python -m pip install --quiet -e ".[dev]"
+        run: python -m pip install --quiet -e ".[dev,panphon]"
 
       - name: Run isort + black + flake8 + mypy + node --check in the launcher's venv
         # Lint runs ONCE on Linux -- the rules are platform-agnostic and
