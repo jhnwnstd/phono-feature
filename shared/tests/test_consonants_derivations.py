@@ -94,6 +94,45 @@ def test_place_uvular_from_dorsal_minus_high() -> None:
     )
 
 
+def test_place_uvular_from_dorsal_plus_low_plus_back() -> None:
+    """Alternative uvular evidence pattern from the whole-larynx
+    feature traditions: ``+dorsal +back +low``. Snapshot-stable
+    because no bundled inventory uses it today; the rule lands
+    here so an inventory that DOES adopt the pattern routes
+    correctly."""
+    assert (
+        derive_place({"dorsal": "+", "high": "0", "low": "+", "back": "+"})
+        == PlaceRank.UVULAR
+    )
+
+
+def test_place_epiglottal_from_radical_constrpharynx_rtr_triple() -> None:
+    """Moisik / Esling-style epiglottal evidence: the
+    ``+radical +constrpharynx +rtr`` triple maps to EPIGLOTTAL.
+    The check must run BEFORE the pharyngeal-like rule because
+    that rule's ``+radical +rtr`` pattern is a strict subset; an
+    inverted order would absorb every epiglottal candidate into
+    PHARYNGEAL."""
+    assert (
+        derive_place({"radical": "+", "constrpharynx": "+", "rtr": "+"})
+        == PlaceRank.EPIGLOTTAL
+    )
+
+
+def test_place_epiglottal_from_explicit_epilaryngeal() -> None:
+    assert derive_place({"epilaryngeal": "+"}) == PlaceRank.EPIGLOTTAL
+
+
+def test_place_epiglottal_from_explicit_aryepiglottic() -> None:
+    assert derive_place({"aryepiglottic": "+"}) == PlaceRank.EPIGLOTTAL
+
+
+def test_place_pharyngeal_subset_does_not_match_epiglottal() -> None:
+    """``+radical +rtr`` without ``+constrpharynx`` stays at the
+    pharyngeal rule -- the epiglottal triple is strict."""
+    assert derive_place({"radical": "+", "rtr": "+"}) == PlaceRank.PHARYNGEAL
+
+
 def test_place_pharyngeal_from_pharyngeal_feature() -> None:
     assert derive_place({"pharyngeal": "+"}) == PlaceRank.PHARYNGEAL
 
@@ -291,7 +330,9 @@ def test_secondary_labialized_via_labialized_alias() -> None:
     )
 
 
-def test_secondary_palatalized_requires_secondarydorsal_not_primary_dorsal() -> None:
+def test_secondary_palatalized_requires_secondarydorsal_not_primary_dorsal() -> (
+    None
+):
     """A bare primary ``+dorsal`` segment is NOT secondarily
     palatalised: that would over-claim every dorsal consonant. The
     derivation requires explicit ``+secondarydorsal`` evidence (or
@@ -347,7 +388,9 @@ def test_secondary_velarized_via_velarized_alias() -> None:
     )
 
 
-def test_secondary_pharyngealized_from_pharyngeal_layered_on_oral_place() -> None:
+def test_secondary_pharyngealized_from_pharyngeal_layered_on_oral_place() -> (
+    None
+):
     """Pharyngeal evidence layered on a segment whose primary
     place is ORAL (here alveolar via the primary ``+coronal``)
     triggers PHARYNGEALIZED. The primary stays alveolar; the
@@ -372,11 +415,8 @@ def test_secondary_pharyngealized_not_on_primary_pharyngeal() -> None:
     also tagged as secondarily pharyngealised -- the secondary
     label only makes sense layered onto another oral place."""
     feats = {"syllabic": "-", "pharyngeal": "+"}
-    assert (
-        SecondaryKind.PHARYNGEALIZED
-        not in derive_secondary_articulations(
-            feats, PlaceRank.PHARYNGEAL
-        )
+    assert SecondaryKind.PHARYNGEALIZED not in derive_secondary_articulations(
+        feats, PlaceRank.PHARYNGEAL
     )
 
 
@@ -428,6 +468,5 @@ def test_secondary_no_inference_from_just_dorsal_features() -> None:
         "back": "+",
     }
     assert (
-        derive_secondary_articulations(feats, PlaceRank.VELAR)
-        == frozenset()
+        derive_secondary_articulations(feats, PlaceRank.VELAR) == frozenset()
     )

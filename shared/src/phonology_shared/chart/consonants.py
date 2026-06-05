@@ -217,8 +217,44 @@ class PlaceRank(IntEnum):
     VELAR = 7
     UVULAR = 8
     PHARYNGEAL = 9
-    GLOTTAL = 10
-    VOWEL_OR_UNKNOWN = 11
+    EPIGLOTTAL = 10
+    GLOTTAL = 11
+    VOWEL_OR_UNKNOWN = 12
+
+
+def _is_pharyngeal_like(feats: dict[str, str]) -> bool:
+    """Conventional pharyngeal-evidence patterns: explicit
+    ``+pharyngeal``, explicit ``+constrpharynx``, or the
+    ``+radical +rtr`` combination characteristic of pharyngeal
+    constrictions made with tongue-root retraction.
+    """
+    return (
+        feats.get("pharyngeal", "0") == "+"
+        or feats.get("constrpharynx", "0") == "+"
+        or (feats.get("radical", "0") == "+" and feats.get("rtr", "0") == "+")
+    )
+
+
+def _is_epiglottal_like(feats: dict[str, str]) -> bool:
+    """Conventional epiglottal-evidence patterns: explicit
+    whole-larynx features (``+epilaryngeal`` /
+    ``+aryepiglottic``), or the ``+radical +constrpharynx +rtr``
+    triple Moisik / Esling-style inventories use to mark the
+    aryepiglottic stricture mechanism. The triple is a strict
+    superset of the pharyngeal ``+radical +rtr`` pattern, so
+    :py:func:`derive_place` must call this BEFORE
+    :py:func:`_is_pharyngeal_like` to avoid the broader pharyngeal
+    rule absorbing every epiglottal candidate.
+    """
+    return (
+        feats.get("epilaryngeal", "0") == "+"
+        or feats.get("aryepiglottic", "0") == "+"
+        or (
+            feats.get("radical", "0") == "+"
+            and feats.get("constrpharynx", "0") == "+"
+            and feats.get("rtr", "0") == "+"
+        )
+    )
 
 
 def derive_place(feats: dict[str, str]) -> PlaceRank:
@@ -229,34 +265,42 @@ def derive_place(feats: dict[str, str]) -> PlaceRank:
     :py:func:`phonology_shared.data.inventory.normalize_feature_key`).
     Reads only conventional distinctive features --
     ``labial``/``labiodental``, ``coronal``/``anterior``/
-    ``distributed``, ``dorsal``/``high``/``back``,
-    ``pharyngeal``/``constrpharynx``, ``constrgl`` -- never any
+    ``distributed``, ``dorsal``/``high``/``back``/``low``,
+    ``pharyngeal``/``constrpharynx``/``radical``/``rtr``,
+    ``epilaryngeal``/``aryepiglottic``, ``constrgl`` -- never any
     invented ``"uvular"``/``"retroflex"``/etc. primitives.
 
-    Behaviour is intentionally identical to the pre-extension
-    :py:func:`_ipa_place` integer helper so the snapshot pinned in
-    :py:mod:`test_consonants_grouping_snapshot` stays byte-stable
-    while the typed-fact infrastructure is introduced. Richer
-    derivations (palatal via ``+dorsal +high +front``, uvular via
-    ``+dorsal +low +back``, epiglottal via
-    ``+radical +constrpharynx +rtr``) come in a follow-up step
-    once the snapshot has been regenerated to capture the
-    intentional changes. Apical-versus-laminal coronal
+    Check order matters: epiglottal evidence is detected BEFORE
+    pharyngeal because the ``+radical +constrpharynx +rtr`` triple
+    is a strict superset of the pharyngeal ``+radical +rtr``
+    pattern. The dorsal branch recognises uvular via the
+    conventional ``+dorsal -high`` AND the alternative
+    ``+dorsal +back +low`` pattern (the lowered-tongue-body uvular
+    used in some whole-larynx inventories).
+
+    The palatal-versus-velar split inside ``+dorsal +high -back``
+    segments still uses ``anterior`` as the discriminator: Hayes-
+    style inventories code palatal stops as ``+dorsal +high -back
+    -anterior`` and advanced velars (Hayes ``k+``) as ``+dorsal
+    +high -back +front 0anterior``, so an ``anterior``-blind rule
+    would conflate them. Apical-versus-laminal coronal
     distinctions stay encoded through ``distributed``, never
     through literal ``apical`` / ``laminal`` primitives.
     """
     if feats.get("constrgl", "0") == "+":
         return PlaceRank.GLOTTAL
-    if (
-        feats.get("constrpharynx", "0") == "+"
-        or feats.get("pharyngeal", "0") == "+"
-    ):
+    if _is_epiglottal_like(feats):
+        return PlaceRank.EPIGLOTTAL
+    if _is_pharyngeal_like(feats):
         return PlaceRank.PHARYNGEAL
     dor = feats.get("dorsal", "0")
     if dor == "+":
         hi = feats.get("high", "0")
         bk = feats.get("back", "0")
+        lo = feats.get("low", "0")
         if hi == "-":
+            return PlaceRank.UVULAR
+        if bk == "+" and lo == "+":
             return PlaceRank.UVULAR
         if bk == "-":
             if feats.get("anterior", "0") == "-":
@@ -439,17 +483,6 @@ class SecondaryKind(StrEnum):
     PHARYNGEALIZED = "pharyngealized"
 
 
-def _has_pharyngeal_evidence(feats: dict[str, str]) -> bool:
-    """True iff ``feats`` carries any conventional pharyngeal /
-    radical-tongue-root evidence. Centralised so the place and
-    secondary-articulation paths agree on the rule."""
-    return (
-        feats.get("pharyngeal", "0") == "+"
-        or feats.get("constrpharynx", "0") == "+"
-        or (feats.get("radical", "0") == "+" and feats.get("rtr", "0") == "+")
-    )
-
-
 def derive_secondary_articulations(
     feats: dict[str, str],
     place: PlaceRank,
@@ -520,7 +553,7 @@ def derive_secondary_articulations(
     }
     if (
         has_secondary_pharyngeal
-        or (has_oral_primary_place and _has_pharyngeal_evidence(feats))
+        or (has_oral_primary_place and _is_pharyngeal_like(feats))
         or feats.get("pharyngealized", "0") == "+"
     ):
         out.add(SecondaryKind.PHARYNGEALIZED)
@@ -553,21 +586,31 @@ _SORT_KEYS: list[tuple[str, dict[str, int]]] = [
 
 
 def _segment_sort_key(feats: dict[str, str]) -> tuple[int, ...]:
-    """Full feature-based sort key for a segment."""
-    key: list[int] = [_ipa_place(feats)]
+    """Full feature-based sort key for a segment.
+
+    Slot order: place rank -> legacy :py:data:`_SORT_KEYS` columns
+    (manner -> place sub-variant -> phonation -> rounding ->
+    height -> length). The legacy column sequence is what keeps
+    voiceless / voiced pairs CLUSTERED at each place sub-variant
+    (Hayes-style ``k+ / ɡ+``, ``k / ɡ``, ``k͡p / ɡ͡b``, ``k- / ɡ-``):
+    front / back / labial sort BEFORE voice, so each place
+    sub-variant's pair stays adjacent.
+
+    An earlier attempt inserted a typed
+    :py:class:`LaryngealKind` slot right after place rank. That
+    made phonation dominate the sub-place discriminators and
+    split every voiceless / voiced pair across the entire VELAR
+    cluster -- a regression versus the IPA-conventional pair
+    display. The typed-fact infrastructure (PlaceRank,
+    LaryngealKind, SecondaryKind) is still consumed by the
+    fact-based breakouts and by future renderers; the
+    within-group SORT ORDER stays driven by the legacy column
+    sequence that demonstrably reads as the IPA chart.
+    """
+    key: list[int] = [int(derive_place(feats))]
     for feat, ordering in _SORT_KEYS:
         key.append(ordering.get(feats.get(feat, "0"), 2))
     return tuple(key)
-
-
-def _ipa_place(feats: dict[str, str]) -> int:
-    """Integer place rank for the sort-key tuple.
-
-    Thin wrapper around :py:func:`derive_place` kept so the existing
-    call in :py:func:`_segment_sort_key` does not change shape; the
-    typed :py:class:`PlaceRank` is what new code should reach for.
-    """
-    return int(derive_place(feats))
 
 
 def _should_merge_up(group_size: int, inventory_size: int) -> bool:
