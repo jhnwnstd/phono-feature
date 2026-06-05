@@ -573,16 +573,10 @@ MIN_FEAT_CARD_W: int = 220
 # button), not when it's a "this much of the window" decision.
 # ---------------------------------------------------------------------------
 
-# Vertical-split target for the ⤢ expand toggle: the analysis pane
-# grows to this fraction of the vsplit total when the user clicks ⤢.
-# Mirrors the web ``.analysis.expanded { min-height: 55vh }`` rule.
-ANALYSIS_EXPAND_RATIO: float = 0.55
-
 # Vertical-split safety cap: the analysis pane never grows beyond
-# this fraction of the vsplit total via any code path. The expand
-# toggle uses ``ANALYSIS_EXPAND_RATIO``; user splitter drags are
-# bounded by per-pane minimums; this constant exists for any future
-# auto-grow path that wants a single canonical ceiling.
+# this fraction of the vsplit total via any code path. User splitter
+# drags are bounded by per-pane minimums; this constant exists for
+# any future auto-grow path that wants a single canonical ceiling.
 ANALYSIS_MAX_RATIO: float = 0.80
 
 # Content-width cap (ultrawide). On 3440 / 3840 / 5120 px monitors
@@ -597,14 +591,6 @@ ANALYSIS_MAX_RATIO: float = 0.80
 # 2560p monitors are unaffected (their 80% windows fall well under
 # 2400 px) but 3440p+ ultrawides see the cap bite.
 CONTENT_MAX_W_ABS: int = 2400
-
-
-def analysis_expand_target(vsplit_total: int) -> int:
-    """The analysis-pane height the expand toggle should set, given
-    the vsplit's current total height. Centralised so the desktop
-    splitter swap and any future web equivalent share one source.
-    """
-    return int(vsplit_total * ANALYSIS_EXPAND_RATIO)
 
 
 def initial_window_fraction(screen_dimension: int) -> int:
@@ -1039,11 +1025,11 @@ REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
     ),
     # Analysis panel: floor is the comfortable four-row minimum from
     # ``analysis_content_floor_h``; the same value the web locks via
-    # ``--min-analysis-h``. The expand toggle bypasses this up to
-    # ``ANALYSIS_MAX_RATIO`` of the vsplit (see
-    # ``analysis_expand_target``). ``HARD_MIN_ANALYSIS_H`` is reserved
-    # for the worst-case-window degenerate path inside
-    # ``top_pane_height`` and MUST NOT be used as a widget min.
+    # ``--min-analysis-h``. The pane is non-resizable -- its tabs
+    # scroll their content internally when overflow occurs.
+    # ``HARD_MIN_ANALYSIS_H`` is reserved for the worst-case-window
+    # degenerate path inside ``top_pane_height`` and MUST NOT be used
+    # as a widget min.
     "analysis_panel": RegionConstraint(
         min_w=SEG_MIN_W + FEAT_MIN_W,
         pref_w=None,

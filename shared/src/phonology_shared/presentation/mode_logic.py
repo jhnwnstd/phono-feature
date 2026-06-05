@@ -120,14 +120,6 @@ def mode_status_text(mode: Mode | str, *, has_engine: bool) -> str:
     return "Toggle feature values (+/−) to find matching segments."
 
 
-def expand_button_tooltip(*, is_expanded: bool) -> str:
-    """Tooltip on the analysis pane's ⤢ / ⤣ button. Toggles
-    between "Maximize" and "Restore" depending on current state.
-    Both UIs render the same labels.
-    """
-    return "Restore analysis pane" if is_expanded else "Maximize analysis pane"
-
-
 #: Portable template for the clipboard-copy status message.
 #: ``{seg}`` is the segment glyph the user copied. Python uses
 #: ``.format(seg=...)``; the web's main.js does the same substitution

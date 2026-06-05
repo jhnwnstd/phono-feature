@@ -28,7 +28,6 @@ const NODE_IDS = Object.freeze({
     analysisContentClass: "analysis-content-class",
     analysisContentFeatures: "analysis-content-features",
     analysisContentContrasts: "analysis-content-contrasts",
-    expandBtn: "expand-btn",
     themeBtn: "theme-btn",
     cbBtn: "cb-btn",
     bugBtn: "bug-btn",
@@ -3705,23 +3704,6 @@ function populateInventoryPicker() {
     if (preferred) picker.value = preferred.file;
 }
 
-function wireExpandButton() {
-    nodes.expandBtn.addEventListener("click", () => {
-        const pane = nodes.analysisPane;
-        const expanded = pane.classList.toggle("expanded");
-        nodes.expandBtn.textContent = expanded ? "⤣" : "⤢";
-        // Keep the tooltip / aria-label in lockstep with the toggle
-        // state, matching the desktop's ``AnalysisPanel.set_expanded``.
-        // Strings come from ``STATUS_TEXT`` (baked from shared
-        // ``mode_logic.expand_button_tooltip``).
-        const tip = expanded
-            ? (STATUS_TEXT.expand_restore || "Restore analysis pane")
-            : (STATUS_TEXT.expand_maximize || "Maximize analysis pane");
-        nodes.expandBtn.setAttribute("aria-label", tip);
-        nodes.expandBtn.title = tip;
-    });
-}
-
 /** Wire the three analysis-tab buttons. Click-to-activate, with a
  *  no-op when the user clicks the already-active or a disabled tab.
  *  Tab content and the contrasts-enabled flag come from the shared
@@ -3936,7 +3918,6 @@ async function main() {
     const setupDialog = wireSetupDialog();
     wireLabelPrompt();
     wireBuilderEditor(setupDialog);
-    wireExpandButton();
     wireAnalysisTabs();
     wireClearButtons();
     wirePanelClickMode();

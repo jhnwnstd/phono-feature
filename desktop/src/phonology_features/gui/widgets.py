@@ -7,7 +7,7 @@ import math
 from enum import StrEnum
 from typing import ClassVar
 
-from PyQt6.QtCore import QMimeData, QObject, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QContextMenuEvent, QFont, QResizeEvent
 from PyQt6.QtWidgets import (
     QGridLayout,
@@ -37,7 +37,6 @@ from phonology_shared.presentation.layout import (
     REGION_CONSTRAINTS,
     best_segment_n_cols,
 )
-from phonology_shared.presentation.mode_logic import expand_button_tooltip
 from phonology_shared.presentation.palette import C
 from phonology_shared.presentation.view_models import (
     NEUTRAL_BADGE,
@@ -51,26 +50,6 @@ from phonology_shared.presentation.view_models import (
 # the button / header style if either changes.
 _SEG_BTN_H = 26
 _SEG_HEADER_H = 22
-
-
-def _owning_main_window(widget: QWidget) -> QObject | None:
-    """Walk up the parent chain looking for the ``MainWindow`` that
-    owns ``widget``. Used by ``SegmentGridWidget`` to read the
-    ``_layout_frozen`` flag without a hard import cycle: during the
-    analysis-pane expand toggle the owning window sets the flag,
-    and child widgets must short-circuit their layout-recompute paths
-    so a temporary expansion does not trigger spillover / column-count
-    reflow. Returns ``None`` when the widget is unparented (early
-    tests) or no ancestor has the flag attribute. The return type is
-    ``QObject`` (not ``QWidget``) so the helper works for any
-    flag-bearing ancestor regardless of widget hierarchy.
-    """
-    node: QObject | None = widget.parent()
-    while node is not None:
-        if hasattr(node, "_layout_frozen"):
-            return node
-        node = node.parent()
-    return None
 
 
 def _class_state_stylesheet(class_state: str) -> str:
@@ -710,24 +689,17 @@ class AnalysisPanel(QWidget):
 
     Layout (single ``QGridLayout``):
 
-    - Row 0, col 0 hosts the persistent selection label AND the
-      expand/restore toggle in the same cell. The toggle uses
-      ``AlignTop | AlignRight`` so it overlays the label's top-
-      right corner; the label fills the cell normally. A reserved
-      row minimum height keeps the toggle's pinning constant when
-      the selection label is hidden (FEAT mode), so the visual
-      ``y`` of the toggle does not depend on whether chips are
-      currently displayed. The previous implementation positioned
-      the toggle via ``resizeEvent`` + manual ``move()``; the cell-
-      overlay form gives the same visual placement with explicit
-      layout ownership.
+    - Row 0 hosts the persistent selection label. A reserved row
+      minimum height keeps the selection strip's vertical footprint
+      stable when the label is hidden (FEAT mode), so the tab bar's
+      ``y`` does not shift between modes.
     - Row 1 hosts the tab widget; it absorbs all vertical stretch.
 
-    The toggle emits ``expand_toggled``; MainWindow owns the vsplit
-    and handles the actual resize.
+    The pane is non-resizable: ``REGION_CONSTRAINTS['analysis_panel']``
+    pins its floor at the comfortable four-row minimum, and each tab's
+    ``_CopyableTextEdit`` (a ``QTextEdit`` subclass) provides built-in
+    scrollbars when the content overflows.
     """
-
-    expand_toggled = pyqtSignal()
 
     # Index in ``self.tabs`` for the Contrasts tab, kept as a class
     # constant so ``set_sections`` can enable/disable it cleanly. Order
@@ -738,11 +710,10 @@ class AnalysisPanel(QWidget):
     _TAB_FEATURES_IDX = 1
     _TAB_CONTRASTS_IDX = 2
 
-    # Reserved height for the top row (selection label + overlaid
-    # toggle). 26 px = the 20-px button plus the 6-px top inset of
-    # its previous manual position, so the toggle's ``y`` matches
-    # the historical placement even when the selection label is
-    # hidden and row 0 collapses to this minimum.
+    # Reserved minimum height for row 0 (the selection-label strip).
+    # 26 px keeps the strip's vertical footprint stable when the
+    # selection label hides in FEAT mode so the tab bar below does
+    # not jump between modes.
     _SELECTION_ROW_MIN_H = 26
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -755,15 +726,6 @@ class AnalysisPanel(QWidget):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
         )
-        # Expand/restore toggle. Text glyphs (not emoji) so the button
-        # honors the active font and palette.
-        self.expand_btn = QPushButton("⤢", self)
-        self.expand_btn.setFlat(True)
-        self.expand_btn.setFixedSize(24, 20)
-        self.expand_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.expand_btn.setToolTip(expand_button_tooltip(is_expanded=False))
-        self.expand_btn.clicked.connect(self.expand_toggled.emit)
-        self._is_expanded = False
         # Persistent header content: "Selected: /a/ /b/" or
         # "Query: +Voice −Nasal". Stays visible regardless of which
         # tab is active so the user always sees what they selected.
@@ -804,44 +766,23 @@ class AnalysisPanel(QWidget):
         layout.setContentsMargins(16, 2, 16, 8)
         layout.setHorizontalSpacing(0)
         layout.setVerticalSpacing(2)
-        # Row 0: selection label + overlaid expand toggle (same cell,
-        # different alignments). The reserved minimum height keeps
-        # the toggle anchored even when the label hides in FEAT mode.
+        # Row 0: selection label. The reserved minimum height keeps
+        # the strip's footprint stable when the label hides in FEAT
+        # mode so the tab bar's y does not shift.
         layout.setRowMinimumHeight(0, self._SELECTION_ROW_MIN_H)
         layout.addWidget(self.selection_label, 0, 0)
-        layout.addWidget(
-            self.expand_btn,
-            0,
-            0,
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
-        )
         layout.addWidget(self.tabs, 1, 0)
         layout.setRowStretch(1, 1)
         # Selection label starts hidden. Empty selection / FEAT
         # mode shouldn't render chips. ``set_sections`` toggles
         # visibility based on whether the html payload actually
-        # carries chips. The row 0 minimum height keeps the toggle
-        # anchored when the label is gone.
+        # carries chips.
         self.selection_label.setVisible(False)
         # Class-tab background-colour state (natural / not_natural /
         # neutral). ``apply_theme`` reads this when composing the
         # stylesheet so a theme swap mid-session keeps the cue.
         self._class_state: str = "neutral"
         self.apply_theme()
-
-    def set_expanded(self, expanded: bool) -> None:
-        """Update the toggle's visual state. MainWindow calls this
-        after applying the splitter swap so the button glyph reflects
-        the live state regardless of which path triggered the change
-        (button click, keyboard shortcut, or user-drag detection).
-        """
-        if self._is_expanded == expanded:
-            return
-        self._is_expanded = expanded
-        # U+2922 (diagonal arrows out) = expand, U+2923 (diagonal
-        # arrows in) = restore.
-        self.expand_btn.setText("⤣" if expanded else "⤢")
-        self.expand_btn.setToolTip(expand_button_tooltip(is_expanded=expanded))
 
     def minimumSizeHint(self) -> QSize:
         """Sourced from ``REGION_CONSTRAINTS['analysis_panel']``. The
@@ -858,19 +799,6 @@ class AnalysisPanel(QWidget):
             self,
             f"background: {C['analysis_bg']};"
             f" border-top: 1px solid {C['border']};",
-        )
-        set_css(
-            self.expand_btn,
-            f"""
-            QPushButton {{
-                color: {C['text_dim']};
-                background: transparent;
-                border: none;
-                font-size: 14px;
-                padding: 0;
-            }}
-            QPushButton:hover {{ color: {C['text']}; }}
-            """,
         )
         text_edit_css = f"""
             QTextEdit {{
@@ -1153,16 +1081,6 @@ class SegmentGridWidget(QWidget):
         return max_possible
 
     def _do_relayout(self) -> None:
-        # Layout-frozen short-circuit: the analysis-pane expand toggle
-        # sets this flag on the owning MainWindow so the visible
-        # compression of the top panes does not trigger spillover /
-        # column-count recomputes mid-expand. The user wants the
-        # expand to be a temporary viewing aid, not a layout change.
-        frozen_owner = _owning_main_window(self)
-        if frozen_owner is not None and getattr(
-            frozen_owner, "_layout_frozen", False
-        ):
-            return
         n_cols = self._compute_n_cols()
         available = self._available_pane_height()
         groups_items = list(self._groups.items())

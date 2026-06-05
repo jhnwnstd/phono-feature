@@ -896,35 +896,6 @@ def test_top_panes_fit_without_scroll(res: Resolution, inv_name: str) -> None:
 
 
 @pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
-def test_analysis_expand_target_scales_with_vsplit(
-    res: Resolution,
-) -> None:
-    """The ⤢ expand-toggle target is a fraction of the vsplit
-    total, not a fixed pixel value. At every resolution the
-    analysis pane after expand should be ``ANALYSIS_EXPAND_RATIO ×
-    vsplit_total``. Literal 0.55 so a bump to
-    ``ANALYSIS_EXPAND_RATIO`` trips here."""
-    _, win_h = layout.recommended_initial_window_size(res.width, res.height)
-    # Approximate vsplit total = window height minus toolbar + status.
-    vsplit_total = max(win_h - 100, 100)
-    target = layout.analysis_expand_target(vsplit_total)
-    expected = int(vsplit_total * 0.55)
-    assert target == expected
-    # Target must be at least HARD_MIN_ANALYSIS_H so the user
-    # always gets a usable expand even on tiny screens.
-    assert target >= layout.HARD_MIN_ANALYSIS_H
-
-
-def test_analysis_expand_target_at_fixed_vsplit_is_literal() -> None:
-    """Pin the literal ratio: 0.55 × 1000 = 550. A bump to
-    ``ANALYSIS_EXPAND_RATIO`` (0.55 → 0.6) trips this assertion
-    rather than silently reshaping every call site."""
-    assert layout.analysis_expand_target(1000) == 550
-    assert layout.analysis_expand_target(820) == 451
-    assert layout.analysis_expand_target(0) == 0
-
-
-@pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_initial_window_fraction_scales_with_screen(
     res: Resolution,
 ) -> None:
@@ -936,20 +907,17 @@ def test_initial_window_fraction_scales_with_screen(
     assert layout.initial_window_fraction(res.height) == int(res.height * 0.80)
 
 
-def test_analysis_expand_ratio_in_canonical_range() -> None:
-    """The expand-target ratio sits between the 50% default-feel
-    and the 80% safety cap. Pins both ends so a bump that would
-    make analysis too small or overflow the top pane trips here."""
-    assert 0.5 <= layout.ANALYSIS_EXPAND_RATIO <= layout.ANALYSIS_MAX_RATIO
-    assert layout.ANALYSIS_MAX_RATIO <= 0.9  # leave room for top pane
-
-
 def test_ratios_are_float_not_int() -> None:
     """Ratios must be floats so multiplication doesn't lose
     precision via integer truncation. Pins the type contract."""
     assert isinstance(layout.DEFAULT_SCREEN_FRACTION, float)
-    assert isinstance(layout.ANALYSIS_EXPAND_RATIO, float)
     assert isinstance(layout.ANALYSIS_MAX_RATIO, float)
+
+
+def test_analysis_max_ratio_leaves_room_for_top_pane() -> None:
+    """The safety cap on any future analysis auto-grow path must
+    leave room for the top panes; 0.9 is the practical ceiling."""
+    assert layout.ANALYSIS_MAX_RATIO <= 0.9
 
 
 def test_min_vowel_safe_window_w_keeps_vowels_alongside() -> None:
@@ -987,15 +955,3 @@ def test_min_vowel_safe_window_w_floors_at_feat_min() -> None:
     floor = layout.VOWEL_STACK_W + layout.FEAT_MIN_W + 20
     assert layout.min_vowel_safe_window_w(0) == floor
     assert layout.min_vowel_safe_window_w(100) == floor
-
-
-def test_expand_target_scales_proportionally_across_resolutions() -> None:
-    """The whole point of using a ratio is that the expand target
-    grows with the display. Pins the ordering: 4K window → bigger
-    expand than QHD → bigger than 1080p → bigger than 720p."""
-    smallest = layout.analysis_expand_target(720)
-    laptop = layout.analysis_expand_target(900)
-    full_hd = layout.analysis_expand_target(1080)
-    qhd = layout.analysis_expand_target(1440)
-    uhd = layout.analysis_expand_target(2160)
-    assert smallest < laptop < full_hd < qhd < uhd

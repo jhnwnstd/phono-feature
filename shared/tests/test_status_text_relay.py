@@ -129,8 +129,6 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         "no_engine",
         # Other shared UI strings the web reads from STATUS_TEXT
         # instead of hardcoding inline.
-        "expand_maximize",
-        "expand_restore",
         "clipboard_copy_template",
         "validation_report_heading",
         "load_failed_template",

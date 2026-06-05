@@ -367,12 +367,6 @@ def _build_status_text_payload() -> dict[str, str]:
         # hardcode. Each one is the exact value the desktop renders
         # via its own ``mode_logic`` call; baking here makes the
         # Python helper the single source.
-        payload["expand_maximize"] = module.expand_button_tooltip(
-            is_expanded=False
-        )
-        payload["expand_restore"] = module.expand_button_tooltip(
-            is_expanded=True
-        )
         payload["clipboard_copy_template"] = (
             module.CLIPBOARD_COPY_MESSAGE_TEMPLATE
         )
@@ -497,12 +491,11 @@ def generate_layout_css() -> None:
         f"  --feat-card-chrome-h: {mod.FEAT_CARD_CHROME_H}px;",
         f"  --panel-chrome-v: {mod.PANEL_CHROME_V}px;",
         f"  --min-top-pane-h: {mod.MIN_TOP_PANE_H}px;",
-        # Analysis-pane sizing. Both UIs consume these via CSS vars
-        # so the desktop's Qt math (``layout.analysis_expand_target``,
-        # ``HARD_MIN_ANALYSIS_H``) and the web's ``.analysis`` /
-        # ``.analysis.expanded`` rules can never drift.
+        # Analysis-pane sizing. Both UIs consume this via the CSS
+        # variable so the desktop's Qt math
+        # (``analysis_content_floor_h``, ``HARD_MIN_ANALYSIS_H``)
+        # and the web's ``.analysis`` floor lock can never drift.
         f"  --min-analysis-h: {mod.MIN_ANALYSIS_H}px;",
-        f"  --analysis-expand-ratio: {mod.ANALYSIS_EXPAND_RATIO};",
         # Hard cap on overall content width (ultrawide). Above this
         # pixel ceiling ``main.grid`` stops growing and centres via
         # ``margin-inline: auto``; below it the grid fills the
@@ -809,14 +802,6 @@ def hash_assets() -> None:
         "setup-name-placeholder",
         r'(id="setup-name-input"[^>]*?placeholder=")[^"]*(")',
         r"\1" + inv_setup.SETUP_NAME_PLACEHOLDER + r"\2",
-    )
-    # Expand button aria-label comes from
-    # ``mode_logic.expand_button_tooltip(is_expanded=False)`` (the
-    # initial state). JS swaps to the restore label on toggle.
-    _bake(
-        "expand-btn-aria-label",
-        r'(id="expand-btn"[^>]*?aria-label=")[^"]*(")',
-        r"\1" + status_text_payload["expand_maximize"] + r"\2",
     )
     # Theme + colorblind toggles. Both UIs render identical wording
     # via ``mode_logic.theme_toggle_tooltip`` /

@@ -1,23 +1,28 @@
-"""Desktop tests for the analysis-pane floor and expand-toggle
-non-mutation invariants.
+"""Desktop tests for the analysis-pane floor invariant.
 
-These tests assert the user-facing contracts the layout refactor
-introduced:
+The analysis pane sits at a stable 4-row floor on every inventory in
+every mode. The pane has no expand toggle: each tab's
+``_CopyableTextEdit`` (``QTextEdit`` subclass) provides built-in
+scrollbars when its content overflows, so the pane's outer geometry
+never has to grow to accommodate large analysis output.
+
+These tests pin the user-facing contracts:
 
 1. ``AnalysisPanel.minimumSizeHint().height()`` is the same integer
    regardless of which inventory is loaded -- the user's complaint
    that "the analysis pane size depends on whichever inventory was
    loaded first" must no longer reproduce.
 
-2. The expand toggle does NOT mutate the seg / feat / hsplit
-   ``minimumHeight`` values. The previous implementation zeroed those
-   to free room for the splitter; the new policy caps them inside
-   ``fit_to_content`` so no runtime mutation is needed.
+2. The shared ``analysis_content_floor_h()`` value drives the
+   minimum-size hint via ``REGION_CONSTRAINTS['analysis_panel'].min_h``.
+   A future tweak to either fails this test rather than silently
+   shrinking the analysis pane.
 
-3. The expand toggle freezes layout-recompute. While expanded, the
-   seg-pane width tracker (``_last_seg_pane_w``) does not change in
-   response to the splitter compressing the top panes; the vowel-stack
-   flag does not flip; the segment grid does not repartition spillover.
+3. Inventory swap does NOT mutate the vsplit sizes, so the user
+   never sees the analysis pane jump up or down between loads.
+
+4. Mode swap (seg-to-feat / feat-to-seg) does NOT change the pane's
+   floor either; the floor is a layout fact, not a mode fact.
 """
 
 from __future__ import annotations
@@ -82,55 +87,6 @@ def test_analysis_min_size_hint_matches_shared_floor(
         window.analysis.minimumSizeHint().height()
         == layout.analysis_content_floor_h()
     )
-
-
-# ---------------------------------------------------------------------------
-# Expand toggle: layout state preserved
-# ---------------------------------------------------------------------------
-
-
-def test_expand_freezes_segment_grid_column_count(
-    qapp: QApplication, window: MainWindow
-) -> None:
-    """The user's complaint: 'segments readjust dynamically after
-    using the expansion button'. Pin that the seg-grid's column
-    count is unchanged across an expand/collapse cycle.
-    """
-    qapp.processEvents()
-    cols_before = window.seg_grid_widget._n_cols
-    stacked_before = window._seg_vowels_stacked
-    window.analysis.expand_btn.click()
-    qapp.processEvents()
-    assert window._layout_frozen is True
-    assert window.seg_grid_widget._n_cols == cols_before
-    assert window._seg_vowels_stacked == stacked_before
-    window.analysis.expand_btn.click()
-    qapp.processEvents()
-    assert window._layout_frozen is False
-    assert window.seg_grid_widget._n_cols == cols_before
-    assert window._seg_vowels_stacked == stacked_before
-
-
-def test_expand_does_not_recompute_seg_pane_width(
-    qapp: QApplication, window: MainWindow
-) -> None:
-    """The eventFilter on seg_panel sees a Resize event when the
-    expand toggle compresses the top pane; with the frozen-layout
-    flag set, ``_on_seg_pane_width_changed`` short-circuits before
-    touching ``_last_seg_pane_w``. Pin that the tracker stays at its
-    pre-expand value.
-    """
-    qapp.processEvents()
-    last_w_before = getattr(window, "_last_seg_pane_w", None)
-    window.analysis.expand_btn.click()
-    qapp.processEvents()
-    last_w_during = getattr(window, "_last_seg_pane_w", None)
-    assert last_w_during == last_w_before, (
-        f"_last_seg_pane_w changed mid-expand: "
-        f"{last_w_before} -> {last_w_during}"
-    )
-    window.analysis.expand_btn.click()
-    qapp.processEvents()
 
 
 # ---------------------------------------------------------------------------

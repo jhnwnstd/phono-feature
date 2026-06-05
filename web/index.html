@@ -104,18 +104,13 @@
 
 <section class="analysis" id="analysis-pane">
   <!--
-    Maximize/restore toggle. Absolutely positioned at the pane's
-    top-right corner so it costs zero vertical layout space — the
-    pane no longer has a dedicated header row now that the tab
-    labels (Class / Features / Contrasts) describe their own
-    contents. Mirrors the desktop's ``setCornerWidget`` placement.
-  -->
-  <button id="expand-btn" type="button" aria-label="Maximize analysis pane">⤢</button>
-  <!--
     Persistent selection header — sits above the tabs so the user
     always sees "Selected: …" / "Query: …" regardless of which tab
     they have active. Content is set by main.js from the shared
-    Python ``analysis_tabs.selection`` field.
+    Python ``analysis_tabs.selection`` field. The pane has no
+    expand/restore toggle: each tab's content area scrolls
+    internally (``overflow: auto``) when output exceeds the pane's
+    floor height.
   -->
   <div class="analysis-selection" id="analysis-selection" hidden></div>
   <!--

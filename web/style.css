@@ -947,54 +947,21 @@ dialog input[type="text"]:focus-visible {
      the pane starts immediately with either the chips strip
      (SEG mode) or the tab bar (FEAT mode). Top padding is 2 px so
      the first row sits flush with the pane's top border; saved
-     pixels go to the tab content area below.
-     ``position: relative`` anchors the absolutely-positioned
-     ``#expand-btn`` at the top-right corner. */
-  position: relative;
+     pixels go to the tab content area below. */
   padding: 2px var(--space-xl) 10px;
   display: flex;
   flex-direction: column;
-  /* Locked height in the resting state. Both bounds are equal on
-     purpose so the splitter ratio between the top panes and the
-     analysis pane is stable across inventory loads; the user-
-     facing way to grow this surface is the ⤢ toggle below. */
+  /* Locked height. Both bounds are equal on purpose so the
+     splitter ratio between the top panes and the analysis pane
+     is stable across inventory loads; each tab's content area
+     scrolls internally (``.analysis-content { overflow: auto; }``
+     below) when output exceeds the floor. */
   min-height: var(--min-analysis-h);
   max-height: var(--min-analysis-h);
 }
-.analysis.expanded {
-  min-height: calc(var(--analysis-expand-ratio) * 100vh);
-  min-height: calc(var(--analysis-expand-ratio) * 100dvh);
-}
-/* Maximize/restore toggle in the analysis pane's top-right corner.
-   Absolutely positioned so it doesn't reserve a horizontal row
-   above the tabs — mirrors the desktop's
-   ``QTabWidget.setCornerWidget`` placement. ``z-index`` keeps the
-   button above the chips strip / tab bar in case of overlap. */
-#expand-btn {
-  position: absolute;
-  top: 4px;
-  right: var(--space-xl);
-  width: var(--feat-btn-h);
-  height: 20px;
-  /* Solid background (not transparent) so a stray chip rendered
-     under the absolutely-positioned button can't bleed through.
-     Combined with the higher z-index and the renderer-level
-     truncation in :py:func:`analysis.render_selection_summary_seg`,
-     this is the third defence against large selections covering
-     or pushing the expand control. */
-  background: var(--panel);
-  border: none;
-  color: var(--text-dim);
-  font-size: var(--font-size-base);
-  cursor: pointer;
-  z-index: 5;
-}
-#expand-btn:hover { color: var(--text); }
 /* Persistent selection header above the tabs (SEG mode only).
    FEAT mode sets ``hidden`` via JS so the strip doesn't reserve
    space when the query is already explicit in the Features tab.
-   ``padding-right`` reserves room for the absolutely-positioned
-   ``#expand-btn`` so a long chip line doesn't slide under it.
    The shared Python renderer
    (:py:func:`render_selection_summary_seg`) truncates the visible
    chip list past ``SELECTION_HEADER_MAX_CHIPS`` so this strip
@@ -1002,8 +969,7 @@ dialog input[type="text"]:focus-visible {
    ``max-height`` + ``overflow: hidden`` here is a CSS-level
    safety net for that contract: even a future renderer bug, a
    bespoke inventory, or a downstream consumer that bypasses the
-   truncation can never grow the strip beyond two rows of chips
-   or cover / push the expand button. */
+   truncation can never grow the strip beyond two rows of chips. */
 .analysis-selection {
   margin-top: 0;
   padding: 0 calc(var(--feat-btn-h) + var(--space-sm)) 0 var(--space-xs);
@@ -1018,14 +984,11 @@ dialog input[type="text"]:focus-visible {
 
 /* Tab strip — Class / Features / Contrasts. Mirrors the desktop's
    QTabBar styling: bottom-flush tabs with the active tab merged
-   into the content card via ``border-bottom`` colour matching.
-   ``padding-right`` reserves room for the absolutely-positioned
-   ``#expand-btn`` so the rightmost tab can't slide under it. */
+   into the content card via ``border-bottom`` colour matching. */
 .analysis-tabs {
   display: flex;
   gap: 2px;
   margin-top: 0;
-  padding-right: calc(var(--feat-btn-h) + var(--space-sm));
   border-bottom: var(--border-thin) solid var(--border);
 }
 .analysis-tab {

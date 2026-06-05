@@ -5,9 +5,7 @@ sizes and content-driven thresholds. None of them assert "widget A's
 geometry does not intersect widget B's geometry". This file fills
 that gap: at a representative set of window resolutions, every
 declared pair of visible regions must not occupy overlapping screen
-coordinates unless the design explicitly puts one on top of the
-other (e.g. ``AnalysisPanel.expand_btn`` overlaying
-``selection_label`` — that pair is excluded by design).
+coordinates.
 
 The test resolution matrix mirrors the named breakpoints used in
 ``test_layout_resolutions.py`` so a future "all my resolution tests
@@ -145,26 +143,4 @@ def test_analysis_panel_does_not_overlap_top_split(
         _global_rect(window.analysis),
         _global_rect(window.feat_panel),
         f"analysis vs feat_panel @ {width}x{height}",
-    )
-
-
-@pytest.mark.parametrize("width,height", _RESOLUTIONS)
-def test_expand_button_does_not_overlap_tabs(
-    window,
-    qapp,
-    width: int,
-    height: int,
-) -> None:
-    """Inside ``AnalysisPanel``, the expand toggle (row 0 of the
-    QGridLayout) must not overlap the tab area (row 1). Phase B
-    moved the button into a row-based layout precisely to make this
-    guarantee structural, not pixel-tuned.
-    """
-    window.resize(width, height)
-    _drain(qapp)
-    panel = window.analysis
-    _assert_no_overlap(
-        _global_rect(panel.expand_btn),
-        _global_rect(panel.tabs),
-        f"expand_btn vs tabs @ {width}x{height}",
     )

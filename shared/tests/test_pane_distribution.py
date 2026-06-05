@@ -270,7 +270,6 @@ def test_layout_css_emits_all_height_constants() -> None:
         # so the web ``.analysis`` rules and ``main.grid`` cap stay
         # in sync with ``layout.py`` after future edits.
         ("--min-analysis-h", "MIN_ANALYSIS_H"),
-        ("--analysis-expand-ratio", "ANALYSIS_EXPAND_RATIO"),
         ("--content-max-w", "CONTENT_MAX_W_ABS"),
         # Vowel-pair spacing: tighter gap inside a rounded/unrounded
         # mate pair and a wider separator between backness columns.
