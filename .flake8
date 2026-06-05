@@ -10,6 +10,7 @@ exclude =
     desktop/.venv,
     desktop/build,
     desktop/dist,
-    web/dist
+    web/dist,
+    web/node_modules
 per-file-ignores =
     desktop/tests/conftest.py:E402

@@ -115,7 +115,9 @@ jobs:
         # local invocation (``isort . --profile black; black -l 79 .;
         # flake8 .; mypy``) so anything green locally is green in CI.
         # node ships on ubuntu-latest; the JS gate is a pre-merge syntax
-        # check over the web bundle.
+        # check over the web bundle. ESLint runs in a separate step so
+        # the npm-install cost only lands once and so its failures stay
+        # legible.
         if: runner.os == 'Linux'
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -126,6 +128,28 @@ jobs:
           mypy
           node --check web/main.js
           node --check web/sw.js
+
+      - name: Install ESLint via npm ci
+        # Reproducible install from web/package-lock.json. Runs once
+        # on Linux; ESLint rules are platform-agnostic so the matrix
+        # entries on macOS / Windows would just pay the cost twice
+        # for the same result.
+        if: runner.os == 'Linux'
+        working-directory: web
+        shell: bash
+        run: npm ci
+
+      - name: Run ESLint over web/main.js and web/sw.js
+        # ``node --check`` (above) catches syntax errors but nothing
+        # else. ESLint catches real bugs: undeclared globals, unused
+        # vars (with the ``_``-prefixed-args opt-out), unreachable
+        # code, type-coercion smells. Config lives in
+        # web/eslint.config.js (flat config; flag globals from the
+        # Pyodide CDN script + the build-time PRECACHE token).
+        if: runner.os == 'Linux'
+        working-directory: web
+        shell: bash
+        run: npx eslint main.js sw.js
 
       - name: Run pytest in the launcher's venv
         working-directory: desktop

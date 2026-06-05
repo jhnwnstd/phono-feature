@@ -110,7 +110,6 @@ function printBootMeasures() {
     const rows = performance
         .getEntriesByType("measure")
         .map((e) => ({ phase: e.name, ms: Math.round(e.duration) }));
-    // eslint-disable-next-line no-console
     console.table(rows);
 }
 
@@ -125,7 +124,6 @@ function printResourceSummary() {
             transfer_kb: Math.round((r.transferSize || 0) / 1024),
             decoded_kb: Math.round((r.decodedBodySize || 0) / 1024),
         }));
-    // eslint-disable-next-line no-console
     console.table(rows);
 }
 
@@ -562,13 +560,11 @@ function applyBootstrap() {
     try {
         info = JSON.parse(el.textContent);
     } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error("bootstrap parse failed; falling back to bridge", e);
+            console.error("bootstrap parse failed; falling back to bridge", e);
         return false;
     }
     if (!_isValidBootstrap(info)) {
-        // eslint-disable-next-line no-console
-        console.error("bootstrap shape invalid; falling back to bridge", info);
+            console.error("bootstrap shape invalid; falling back to bridge", info);
         return false;
     }
     state.inventory_name = info.name;
@@ -3897,8 +3893,7 @@ function registerServiceWorker() {
     const register = () => {
         navigator.serviceWorker
             .register("./sw.js", { scope: "./" })
-            // eslint-disable-next-line no-console
-            .catch((e) => console.warn("SW registration failed:", e));
+                    .catch((e) => console.warn("SW registration failed:", e));
     };
     if (document.readyState === "complete") {
         register();
@@ -3943,8 +3938,7 @@ async function main() {
         await bootPyodide({ prerendered });
         prewarmCommonAnalyses();
     } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error(e);
+            console.error(e);
         setLoadingStatus(`Failed to load: ${e.message}`);
     }
 }

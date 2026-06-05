@@ -81,7 +81,7 @@ async function cacheFirst(req) {
         // pin the user to an error page.
         if (response.ok) cache.put(req, response.clone());
         return response;
-    } catch (e) {
+    } catch (_e) {
         return cached || Response.error();
     }
 }

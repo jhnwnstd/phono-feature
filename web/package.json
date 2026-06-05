@@ -1,0 +1,13 @@
+{
+  "name": "phonology-features-web",
+  "private": true,
+  "type": "module",
+  "description": "Lint config for the web frontend. The runtime bundle is built by web/scripts/build.py and does NOT depend on npm; this file exists solely so npm/eslint can find a project root for the lint job. ``type: module`` lets ``eslint.config.js`` use ESM imports without a Node parse warning; the runtime files themselves (main.js, sw.js) are still loaded as classic scripts by index.html and use no import/export statements.",
+  "scripts": {
+    "lint": "eslint main.js sw.js"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0"
+  }
+}
