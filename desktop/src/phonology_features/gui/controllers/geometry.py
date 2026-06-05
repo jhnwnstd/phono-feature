@@ -503,10 +503,10 @@ class GeometryController:
         self._hsplit.setSizes([seg_w, feat_w])
         # Notify the seg-pane internals (vowel chart sizing /
         # stack-vs-side-by-side) that the seg width changed. The
-        # callback is a no-op pre-build_central; we guard for that.
-        notify = getattr(self._w, "_on_seg_pane_width_changed", None)
-        if callable(notify):
-            notify(seg_w)
+        # method is defined unconditionally on MainWindow; calling it
+        # directly is offensive coding (a future rename trips mypy
+        # immediately, not silently via a getattr fallback).
+        self._w._on_seg_pane_width_changed(seg_w)
         total = self._vsplit.height()
         if total > 0:
             top_h = layout.top_pane_height(top_need_h, total)

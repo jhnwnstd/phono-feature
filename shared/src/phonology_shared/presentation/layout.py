@@ -11,11 +11,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-# Module-level imports of the segment-button dimensions. Earlier
-# revisions did this lazily inside helpers to dodge a hypothetical
-# cycle with build.py side-loading; after Phase D's sys.path entry
-# in ``web/scripts/build.py`` (commit 851fca2), no cycle exists and
-# the top-level form is what the rest of the codebase consults.
+# ``web/scripts/build.py`` prepends the shared-src path to
+# ``sys.path`` before importing this module, so the top-level form
+# is safe for both desktop (workspace install) and web (Pyodide
+# bundling); no cycle exists.
 from phonology_shared.presentation.constants import BTN_GAP, BTN_W
 
 # Pins are conventional in IPA chart layouts: place-of-articulation

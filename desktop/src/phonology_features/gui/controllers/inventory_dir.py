@@ -39,6 +39,15 @@ _MRU_CAP: int = 10
 # succession. The timer coalesces those into one reload.
 _RELOAD_DEBOUNCE_MS: int = 600
 
+# Delay before re-adding a path to the watcher after a fileChanged
+# fires. Vim and a few other editors implement save as ``unlink +
+# rename``; the original inode is gone for the duration of the swap,
+# so an immediate ``addPath`` finds nothing and the watcher silently
+# drops. 200 ms is long enough for the rename to land in every
+# editor we've tested but short enough that the user doesn't
+# perceive lag on the next save.
+_WATCHER_REARM_DELAY_MS: int = 200
+
 # Stale tmp-file age threshold. Atomic writes complete in
 # milliseconds; anything older than an hour is from a crashed save.
 _TMP_FILE_STALE_SECONDS: int = 3600
@@ -279,9 +288,9 @@ class InventoryDirController:
         """Called by QFileSystemWatcher when the watched file
         changes."""
         # Some editors remove and recreate the file; re-add if
-        # needed.
+        # needed (see _WATCHER_REARM_DELAY_MS).
         QTimer.singleShot(
-            200,
+            _WATCHER_REARM_DELAY_MS,
             lambda: (
                 self._watcher.addPath(path)
                 if path not in self._watcher.files()

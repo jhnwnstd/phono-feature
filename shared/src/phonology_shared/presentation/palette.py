@@ -333,25 +333,41 @@ DARK = {
 # Active palette, mutated in place by set_theme / set_palette_mode.
 C: dict[str, str] = dict(LIGHT)
 
-# Active light/dark name and standard/colorblind mode. ``C`` is the
-# product of these two axes; storing them separately means a mode
+# Active palette axes (light/dark and standard/colorblind). ``C`` is
+# the product of these two; storing them separately means a mode
 # flip preserves the user's light/dark choice and vice versa.
-_active_theme: str = "light"
-_active_mode: str = "standard"
+#
+# These three (_active_theme, _active_mode, theme_version) are
+# intentional module-level mutable state, parallel to ``C`` above.
+# Justification: the palette is a process-wide singleton observed by
+# every widget; threading it through every consumer as state would
+# require a global registry anyway. The test suite resets them via
+# the ``_reset_palette_module_state`` fixture in
+# ``shared/tests/conftest.py`` so tests do not leak palette state
+# across each other.
+_active_theme: str = Theme.LIGHT.value
+_active_mode: str = PaletteMode.STANDARD.value
 
 # Monotonic counter bumped on every palette change. Caches that
 # depend on palette colors key on this integer; on miss they
-# rebuild from the current ``C`` and store the new version.
-# Lets callers cache derived objects (for example QBrush triples)
+# rebuild from the current ``C`` and store the new version. Lets
+# callers cache derived objects (for example QBrush triples)
 # without wiring observer callbacks into ``set_theme``.
 theme_version: int = 0
 
 
 def _resolve(theme: str, mode: str) -> dict[str, str]:
-    """Return the palette dict for the given (theme, mode) pair."""
-    if mode == "colorblind":
-        return COLORBLIND_DARK if theme == "dark" else COLORBLIND_LIGHT
-    return DARK if theme == "dark" else LIGHT
+    """Return the palette dict for the given (theme, mode) pair.
+
+    Inputs are coerced through the enum constructors so a misspelled
+    string raises ``ValueError`` at the boundary instead of silently
+    routing to LIGHT / STANDARD.
+    """
+    mode_e = PaletteMode(mode)
+    theme_e = Theme(theme)
+    if mode_e is PaletteMode.COLORBLIND:
+        return COLORBLIND_DARK if theme_e is Theme.DARK else COLORBLIND_LIGHT
+    return DARK if theme_e is Theme.DARK else LIGHT
 
 
 def _refresh_active() -> None:
@@ -446,28 +462,3 @@ def class_state_palette_keys(
     if coerced is ClassState.NOT_NATURAL:
         return ("minus", "minus_bg")
     return None
-
-
-def detect_system_theme(default: str = "light") -> str:
-    """Return "dark" if the OS reports dark mode, else "light".
-    Uses Qt's ``styleHints().colorScheme()`` (Qt 6.5+); falls back to
-    ``default`` when no QApplication exists, Qt reports Unknown, or
-    the running Qt is too old.
-    """
-    try:
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtWidgets import QApplication
-    except ImportError:
-        return default
-    app = QApplication.instance()
-    if not isinstance(app, QApplication):
-        return default
-    hints = app.styleHints()
-    if hints is None or not hasattr(hints, "colorScheme"):
-        return default
-    scheme = hints.colorScheme()
-    if scheme == Qt.ColorScheme.Dark:
-        return "dark"
-    if scheme == Qt.ColorScheme.Light:
-        return "light"
-    return default

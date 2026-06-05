@@ -131,20 +131,18 @@ def _run_gui(argv: list[str]) -> int:
     # theme here keeps this in sync with whatever MainWindow will pick.
     from PyQt6.QtCore import QSettings
 
+    from phonology_features.gui.controllers.theme import detect_system_theme
     from phonology_shared.presentation.constants import (
         SETTINGS_APP,
         SETTINGS_ORG,
     )
-    from phonology_shared.presentation.palette import (
-        detect_system_theme,
-        set_theme,
-    )
+    from phonology_shared.presentation.palette import set_theme
 
     _settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
     # safe_read_setting defends against stale-pickled-enum SystemError
     # AND wrong-type values; without it a corrupt theme value would
-    # crash startup BEFORE MainWindow's own ``_read_setting`` guard
-    # ever ran, leaving the user with no in-app way to recover.
+    # crash startup before MainWindow's own settings reads ever ran,
+    # leaving the user with no in-app way to recover.
     from phonology_features._settings import SettingsKey, safe_read_setting
 
     _seed_theme = safe_read_setting(

@@ -36,6 +36,11 @@ from phonology_shared.presentation.palette import C
 _SEG_BTN_H = 26
 _SEG_HEADER_H = 22
 
+# Live-resize debounce: a re-layout pass on a Hayes-sized grid is
+# cheap (~5 ms) but Qt fires resizeEvent many times during a drag.
+# 40 ms keeps re-flow responsive without burning cycles each tick.
+_RESIZE_DEBOUNCE_MS = 40
+
 
 class SegmentGridWidget(QWidget):
     """Fluid grid of segment buttons. Column count is recomputed from
@@ -76,7 +81,7 @@ class SegmentGridWidget(QWidget):
         self.setMinimumWidth(0)
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
-        self._resize_timer.setInterval(40)
+        self._resize_timer.setInterval(_RESIZE_DEBOUNCE_MS)
         self._resize_timer.timeout.connect(self._do_relayout)
         # ``set_groups`` runs during __init__ when the widget width is
         # ~0, so _compute_n_cols comes out as 1. The first post-show

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
@@ -290,32 +291,55 @@ def grid_to_inventory(
 
 # Selection shape -----------------------------------------------------
 
-# Discrete shape names a cell selection can take. Used by both
-# frontends to decide which remove-button to enable and to keep the
-# "what counts as a single-column selection" rule in one place. The
-# enum-style strings are stable; do not rename without also updating
-# the JS-side classifier and the SELECTION_SHAPE_REMOVE_TARGET table
-# below.
-SELECTION_SHAPE_EMPTY: str = "empty"
-SELECTION_SHAPE_SINGLE_CELL: str = "single_cell"
-SELECTION_SHAPE_SINGLE_COLUMN: str = "single_column"
-SELECTION_SHAPE_SINGLE_ROW: str = "single_row"
-SELECTION_SHAPE_FULL_GRID: str = "full_grid"
-SELECTION_SHAPE_RECTANGLE: str = "rectangle"
-SELECTION_SHAPE_IRREGULAR: str = "irregular"
+
+class SelectionShapeKind(StrEnum):
+    """Discrete shapes a cell selection can take.
+
+    Used by both frontends to decide which remove-button to enable
+    and to keep the "what counts as a single-column selection" rule
+    in one place. The string values are wire-stable: do not rename
+    without also updating the JS-side classifier and the
+    :py:data:`SELECTION_SHAPE_REMOVE_TARGET` table below.
+
+    StrEnum so existing literal-string call sites keep comparing
+    equal while typed callers (mypy + the test suite) get a closed
+    set: a typo in ``"single_colum"`` is now an attribute error
+    instead of silently landing in ``IRREGULAR``.
+    """
+
+    EMPTY = "empty"
+    SINGLE_CELL = "single_cell"
+    SINGLE_COLUMN = "single_column"
+    SINGLE_ROW = "single_row"
+    FULL_GRID = "full_grid"
+    RECTANGLE = "rectangle"
+    IRREGULAR = "irregular"
+
+
+# Module-level aliases kept so external imports of
+# ``SELECTION_SHAPE_*`` keep resolving. Each is the enum member, not
+# a bare string, so ``isinstance(x, SelectionShapeKind)`` is True at
+# every call site.
+SELECTION_SHAPE_EMPTY = SelectionShapeKind.EMPTY
+SELECTION_SHAPE_SINGLE_CELL = SelectionShapeKind.SINGLE_CELL
+SELECTION_SHAPE_SINGLE_COLUMN = SelectionShapeKind.SINGLE_COLUMN
+SELECTION_SHAPE_SINGLE_ROW = SelectionShapeKind.SINGLE_ROW
+SELECTION_SHAPE_FULL_GRID = SelectionShapeKind.FULL_GRID
+SELECTION_SHAPE_RECTANGLE = SelectionShapeKind.RECTANGLE
+SELECTION_SHAPE_IRREGULAR = SelectionShapeKind.IRREGULAR
 
 
 @dataclass(frozen=True)
 class SelectionShape:
     """Classification of a cell selection's structural shape.
 
-    ``kind`` is one of the ``SELECTION_SHAPE_*`` constants.
-    ``row`` and ``column`` are populated when the shape names a
-    specific index (``single_cell``, ``single_column``,
-    ``single_row``); they are ``None`` otherwise.
+    ``kind`` is a :py:class:`SelectionShapeKind` member. ``row`` and
+    ``column`` are populated when the shape names a specific index
+    (``SINGLE_CELL``, ``SINGLE_COLUMN``, ``SINGLE_ROW``); ``None``
+    otherwise.
     """
 
-    kind: str
+    kind: SelectionShapeKind
     row: int | None = None
     column: int | None = None
 
@@ -383,11 +407,13 @@ def classify_selection(
 # enable. ``None`` means "no remove available". Shared with the web
 # editor so a future shape (e.g. ``single_column`` allowing
 # multi-column remove) lands once and propagates to both UIs.
-SELECTION_SHAPE_REMOVE_TARGET: Mapping[str, str | None] = MappingProxyType(
-    {
-        SELECTION_SHAPE_SINGLE_COLUMN: "segment",
-        SELECTION_SHAPE_SINGLE_ROW: "feature",
-    }
+SELECTION_SHAPE_REMOVE_TARGET: Mapping[SelectionShapeKind, str] = (
+    MappingProxyType(
+        {
+            SelectionShapeKind.SINGLE_COLUMN: "segment",
+            SelectionShapeKind.SINGLE_ROW: "feature",
+        }
+    )
 )
 
 

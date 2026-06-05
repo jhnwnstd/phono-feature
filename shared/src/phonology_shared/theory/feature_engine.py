@@ -486,56 +486,31 @@ class FeatureEngine:
         *,
         max_bundles: int = 10_000,
     ) -> tuple[Mapping[str, str], ...]:
-        """Every minimal feature bundle that characterises the segment set.
+        """Every minimal feature bundle that characterises ``segments``.
 
-        **Strict semantics:** a bundle ``B`` characterises ``S`` iff
-        ``find_segments(B) == S`` under the default strict equality
-        (``'0' != '+' != '-'``). The round-trip invariant: any
-        bundle this method returns, when typed into the feat→seg
-        pane, returns exactly ``S``. Candidate features are
-        restricted to those where EVERY selected segment has the
-        same explicit value (``'0'`` disqualifies the feature);
-        outside-segment exclusion treats ``'0'`` as a distinct
-        value that does NOT match ``'+'`` or ``'-'``.
+        Strict semantics: ``find_segments(B) == set(segments)`` under
+        ``'0' != '+' != '-'``. Returns up to ``max_bundles`` bundles
+        (truncation is silent; compare ``len(result)`` to detect).
 
-        Returns ``(EMPTY_BUNDLE,)`` ONLY for the universal class
-        (the whole inventory selected). Returns ``()`` for any
-        non-NC set, including the empty selection (``find_segments({})``
-        is the whole inventory under strict matching, so the empty
-        bundle does NOT characterise ``∅``). The empty-tuple case
-        is the common one for non-NC sets where some member is
-        ``'0'`` on a feature that would otherwise be discriminating;
-        the user-facing UI presents these as "not a natural class"
-        and surfaces a suggested completion via
-        :py:meth:`complete_to_minimal_natural_class`.
-
-        Returns up to ``max_bundles`` minimal bundles; the search
-        terminates early once that many are found. The current
-        return type does not distinguish "all minimal bundles" from
-        "the first N". Consumers that need to know whether the
-        result was truncated should compare ``len(result)`` to
-        ``max_bundles`` and re-query with a higher limit if needed.
-
-        Return shape is ``tuple[Mapping[str, str], ...]``: a tuple
-        of read-only views. The same object is returned across
-        cache hits, so handing back a mutable list would let a
-        caller append/clear/mutate-in-place and silently corrupt
-        every subsequent query on the same input.
-
-        Implementation: hitting-set backtracking with bitmask
-        representation. For each segment outside ``S``, find the
-        candidate features that can exclude it, then search for
-        the smallest set of candidates that hits every outside
-        segment.
-
-        Complexity: worst case ``O(C^k)`` where ``C`` is the
-        number of candidate features and ``k`` the best-size
-        bound. Branch-and-bound pruning typically keeps it well
-        below the worst case.
-
-        Results are memoized per-engine on ``frozenset(segments)``.
-        Safe because the engine and its underlying Inventory are
-        immutable for their lifetime.
+        Implementation notes:
+            - Candidate features: only those where every selected
+              segment carries the SAME explicit ``'+'``/``'-'``
+              (a ``'0'`` disqualifies the feature).
+            - Returns ``(EMPTY_BUNDLE,)`` ONLY for the universal
+              class; ``()`` for non-NC sets and for ``∅`` (the empty
+              bundle's extent is the whole inventory under strict
+              matching, so it doesn't characterise the empty set).
+              The UI presents the ``()`` case as "not a natural
+              class" and offers
+              :py:meth:`complete_to_minimal_natural_class`.
+            - Tuple-of-MappingProxy return shape: results are cached
+              and shared across calls; a mutable list would let a
+              caller corrupt every subsequent query on the same input.
+            - Algorithm: hitting-set backtracking on the segments
+              outside ``S``; worst case ``O(C^k)``, branch-and-bound
+              pruning typically keeps it well below.
+            - Memoized on ``frozenset(segments)``; safe because both
+              the engine and the underlying Inventory are immutable.
         """
         if not segments:
             # ``∅`` is not a strict natural class: there is no bundle
@@ -728,13 +703,10 @@ class FeatureEngine:
         Empty selection returns an empty dict (no selection => no
         categorisation).
 
-        Performance: measured at 13 us (single segment) to 245 us
-        (all 141 Hayes segments) per call on a 2026-era laptop via
-        :py:mod:`shared/tests/bench/bench_feature_categories`. No
-        cache wraps this method because the per-click click-to-
-        repaint budget is in milliseconds and even the worst case
-        is well under the cost a frame budget would notice. Re-run
-        the bench before adding memoization here.
+        Hot path: called once per selection change. No memoization
+        because the worst case is well under the per-click repaint
+        budget; re-run :py:mod:`shared.tests.bench.bench_feature_categories`
+        before adding a cache.
         """
         if not segments:
             return {}

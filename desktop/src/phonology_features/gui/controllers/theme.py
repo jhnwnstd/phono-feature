@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtWidgets import QLabel, QPushButton, QToolTip
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QLabel, QPushButton, QToolTip
 
 from phonology_features._logging import get_logger
 from phonology_features._settings import SettingsKey, write_setting
@@ -29,6 +30,8 @@ from phonology_shared.presentation.mode_logic import (
 )
 from phonology_shared.presentation.palette import (
     C,
+    PaletteMode,
+    Theme,
     get_palette_mode,
     get_theme_name,
     set_palette_mode,
@@ -41,6 +44,29 @@ if TYPE_CHECKING:
     from phonology_features.gui.main_window import MainWindow
 
 _log = get_logger(__name__)
+
+
+def detect_system_theme(default: str = "light") -> str:
+    """Return "dark" if the OS reports dark mode, else "light".
+
+    Uses Qt's ``styleHints().colorScheme()`` (Qt 6.5+); falls back
+    to ``default`` when no QApplication exists or Qt reports
+    Unknown. Lives here (desktop-only) rather than in
+    :py:mod:`phonology_shared.presentation.palette` so the shared
+    package stays Qt-free; the web build never needs it.
+    """
+    app = QApplication.instance()
+    if not isinstance(app, QApplication):
+        return default
+    hints = app.styleHints()
+    if hints is None or not hasattr(hints, "colorScheme"):
+        return default
+    scheme = hints.colorScheme()
+    if scheme == Qt.ColorScheme.Dark:
+        return "dark"
+    if scheme == Qt.ColorScheme.Light:
+        return "light"
+    return default
 
 
 class ThemeController:
@@ -111,10 +137,14 @@ class ThemeController:
         Geometry, splitter sizes, selections, and the widget tree are
         preserved; only stylesheet strings change.
         """
-        new_theme = "dark" if get_theme_name() == "light" else "light"
-        _log.info("theme toggle: %s", new_theme)
+        new_theme = (
+            Theme.DARK
+            if Theme(get_theme_name()) is Theme.LIGHT
+            else Theme.LIGHT
+        )
+        _log.info("theme toggle: %s", new_theme.value)
         set_theme(new_theme)
-        write_setting(self._main._settings, SettingsKey.THEME, new_theme)
+        write_setting(self._main._settings, SettingsKey.THEME, new_theme.value)
         self.apply()
 
     def toggle_palette_mode(self) -> None:
@@ -124,11 +154,15 @@ class ThemeController:
         Same in-place re-style path as :py:meth:`toggle`.
         """
         new_mode = (
-            "colorblind" if get_palette_mode() == "standard" else "standard"
+            PaletteMode.COLORBLIND
+            if PaletteMode(get_palette_mode()) is PaletteMode.STANDARD
+            else PaletteMode.STANDARD
         )
-        _log.info("palette mode toggle: %s", new_mode)
+        _log.info("palette mode toggle: %s", new_mode.value)
         set_palette_mode(new_mode)
-        write_setting(self._main._settings, SettingsKey.PALETTE_MODE, new_mode)
+        write_setting(
+            self._main._settings, SettingsKey.PALETTE_MODE, new_mode.value
+        )
         self.apply()
 
     def apply(self) -> None:
@@ -262,7 +296,7 @@ class ThemeController:
         The symbol shows the OPPOSITE of the active theme: clicking
         switches to that.
         """
-        is_dark = get_theme_name() == "dark"
+        is_dark = Theme(get_theme_name()) is Theme.DARK
         btn: QPushButton = self._main._theme_btn
         btn.setText(theme_toggle_glyph(is_dark=is_dark))
         btn.setToolTip(theme_toggle_tooltip(is_dark=is_dark))
@@ -291,7 +325,7 @@ class ThemeController:
         visible at a glance, matching the toolbar nav buttons'
         hover affordance.
         """
-        is_cb = get_palette_mode() == "colorblind"
+        is_cb = PaletteMode(get_palette_mode()) is PaletteMode.COLORBLIND
         btn: QPushButton = self._main._cb_btn
         btn.setText("\U0001f441")
         btn.setToolTip(palette_toggle_tooltip(is_colorblind=is_cb))

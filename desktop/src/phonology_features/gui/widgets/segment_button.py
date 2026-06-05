@@ -1,16 +1,17 @@
-"""Single-segment toggle button + its visual-state enum.
+"""Single-segment toggle button.
 
-``SegmentButton`` carries one IPA glyph; ``SegmentState`` is the
-closed set of visual states the seg pane mutates between
-(selected / matched / unmatched / suggested / default). Stylesheet
-strings cached per theme at class level so a 140-segment palette
-swap pays the f-string cost once per theme rather than once per
-button.
+``SegmentButton`` carries one IPA glyph; the closed set of visual
+states it mutates between (selected / matched / unmatched /
+suggested / default) lives on
+:py:class:`phonology_shared.presentation.view_models.SegmentState`
+and is re-exported below so widget consumers can keep importing
+``SegmentState`` from this module. Stylesheet strings cached per
+theme at class level so a 140-segment palette swap pays the
+f-string cost once per theme rather than once per button.
 """
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import ClassVar
 
 from PyQt6.QtCore import pyqtSignal
@@ -22,16 +23,9 @@ from phonology_features.gui.style_utils import set_css
 from phonology_shared.presentation.constants import MONO_FAMILIES
 from phonology_shared.presentation.layout import REGION_CONSTRAINTS
 from phonology_shared.presentation.palette import C
+from phonology_shared.presentation.view_models import SegmentState
 
-
-class SegmentState(StrEnum):
-    """Visual state of a SegmentButton."""
-
-    SELECTED = "selected"
-    MATCHED = "matched"
-    UNMATCHED = "unmatched"
-    SUGGESTED = "suggested"
-    DEFAULT = "default"
+__all__ = ["SegmentButton", "SegmentState"]
 
 
 class SegmentButton(QPushButton):

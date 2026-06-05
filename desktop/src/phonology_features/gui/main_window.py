@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import (
     QEvent,
@@ -55,7 +55,10 @@ from phonology_features.gui.controllers.inventory_dir import (
     InventoryDirController,
 )
 from phonology_features.gui.controllers.mode import ModeController
-from phonology_features.gui.controllers.theme import ThemeController
+from phonology_features.gui.controllers.theme import (
+    ThemeController,
+    detect_system_theme,
+)
 from phonology_features.gui.style_utils import (
     set_css,
 )
@@ -96,7 +99,6 @@ from phonology_shared.presentation.palette import (
     ALLOWED_PALETTE_MODES,
     ALLOWED_THEMES,
     C,
-    detect_system_theme,
     set_palette_mode,
     set_theme,
 )
@@ -117,6 +119,20 @@ _log = get_logger(__name__)
 # action); binding the comparison target to a name avoids resolving
 # QEvent.Type.MouseButtonPress through the enum machinery each call.
 _QEVENT_MOUSE_BUTTON_PRESS = QEvent.Type.MouseButtonPress
+
+# Toolbar chrome: 32 px is the 1x baseline. Qt grows the button when
+# the font scales up on a hi-DPI display so glyphs do not clip at
+# 200% / 300% OS scaling; this is the minimum floor.
+_TOOLBAR_BTN_H = 32
+# Width floor for the inventory dropdown; wide enough to show the
+# longest bundled-inventory name ("Hayes (2009) Features") without
+# truncation at the 1x baseline.
+_INVENTORY_COMBO_MIN_W = 176
+# Theme + colorblind toggles. Square so the glyph centres cleanly.
+_TOGGLE_BTN_SIZE = 32
+# Clear buttons inside the seg / feat pane headers; smaller than
+# toolbar so the header row stays compact.
+_CLEAR_BTN_H = 26
 
 
 class MainWindow(QMainWindow):
@@ -236,12 +252,17 @@ class MainWindow(QMainWindow):
         the second pass is a cache hit.
         """
         from phonology_shared.presentation.palette import (
+            PaletteMode,
             get_palette_mode,
             set_palette_mode,
         )
 
-        original = get_palette_mode()
-        alternate = "colorblind" if original == "standard" else "standard"
+        original = PaletteMode(get_palette_mode())
+        alternate = (
+            PaletteMode.COLORBLIND
+            if original is PaletteMode.STANDARD
+            else PaletteMode.STANDARD
+        )
         with self._batched_updates():
             set_palette_mode(alternate)
             self._theme.apply()
@@ -279,8 +300,8 @@ class MainWindow(QMainWindow):
         self.inventory_combo.setFont(QFont("Noto Sans", 10))
         # Minimum (not fixed) height so the combo grows with font
         # metrics on 200%+ scaled displays without clipping.
-        self.inventory_combo.setMinimumHeight(32)
-        self.inventory_combo.setMinimumWidth(176)
+        self.inventory_combo.setMinimumHeight(_TOOLBAR_BTN_H)
+        self.inventory_combo.setMinimumWidth(_INVENTORY_COMBO_MIN_W)
         set_css(self.inventory_combo, ThemeController.combo_style())
         # Populated by ``InventoryDirController.__init__``, which
         # runs after ``_build_ui`` because it needs the combo widget.
@@ -290,10 +311,7 @@ class MainWindow(QMainWindow):
         def add_nav(label: str, slot: Callable[[], object]) -> QPushButton:
             btn = QPushButton(label, toolbar)
             btn.setFont(QFont("Noto Sans", 10))
-            # Floor at 32px (the historic 1x baseline); Qt grows the
-            # button when the font scales up on a hi-DPI display so
-            # glyphs don't clip at 200% / 300% OS scaling.
-            btn.setMinimumHeight(32)
+            btn.setMinimumHeight(_TOOLBAR_BTN_H)
             btn.clicked.connect(slot)
             toolbar.addWidget(btn)
             self._nav_buttons.append(btn)
@@ -312,7 +330,7 @@ class MainWindow(QMainWindow):
         # :py:meth:`ThemeController.apply_cb_btn`.
         self._cb_btn = QPushButton("", toolbar)
         self._cb_btn.setFont(QFont("Noto Sans", 12))
-        self._cb_btn.setFixedSize(32, 32)
+        self._cb_btn.setFixedSize(_TOGGLE_BTN_SIZE, _TOGGLE_BTN_SIZE)
         self._cb_btn.clicked.connect(self._theme.toggle_palette_mode)
         toolbar.addWidget(self._cb_btn)
         cb_gap = QWidget(toolbar)
@@ -323,7 +341,7 @@ class MainWindow(QMainWindow):
         # :py:meth:`ThemeController.apply_theme_btn`.
         self._theme_btn = QPushButton("", toolbar)
         self._theme_btn.setFont(QFont("Noto Sans", 12))
-        self._theme_btn.setFixedSize(32, 32)
+        self._theme_btn.setFixedSize(_TOGGLE_BTN_SIZE, _TOGGLE_BTN_SIZE)
         self._theme_btn.clicked.connect(self._theme.toggle)
         toolbar.addWidget(self._theme_btn)
         self._theme._restyle_toolbar()
@@ -409,6 +427,9 @@ class MainWindow(QMainWindow):
         # and clamped to zero height so it can never render a drag
         # cursor or visible stripe even if handleWidth is non-zero.
         self._vsplit.setHandleWidth(0)
+        # Deferred re-apply after Qt's post-construction polish; see
+        # the block comment above for why a single setHandleWidth(0)
+        # doesn't stick.
         QTimer.singleShot(0, lambda: self._vsplit.setHandleWidth(0))
         handle = self._vsplit.handle(1)
         if handle is not None:
@@ -473,7 +494,7 @@ class MainWindow(QMainWindow):
             f"color: {C['text_dim']}; letter-spacing: 1.5px;"
         )
         self.clear_seg_btn = QPushButton("Clear", container)
-        self.clear_seg_btn.setFixedHeight(26)
+        self.clear_seg_btn.setFixedHeight(_CLEAR_BTN_H)
         self.clear_seg_btn.setFont(QFont("Noto Sans", 9))
         set_css(self.clear_seg_btn, _clear_btn_style())
         self.clear_seg_btn.clicked.connect(self._clear_then_activate_segs)
@@ -583,7 +604,7 @@ class MainWindow(QMainWindow):
             f"color: {C['text_dim']}; letter-spacing: 1.5px;"
         )
         self.clear_feat_btn = QPushButton("Clear", container)
-        self.clear_feat_btn.setFixedHeight(26)
+        self.clear_feat_btn.setFixedHeight(_CLEAR_BTN_H)
         self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
         set_css(self.clear_feat_btn, _clear_btn_style())
         self.clear_feat_btn.clicked.connect(self._clear_then_activate_feats)
@@ -634,16 +655,10 @@ class MainWindow(QMainWindow):
         self._geom.on_user_move(self.pos())
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:
-        """Default resize handling. The vsplit absorbs any extra
-        height via its own stretch factors; nothing for MainWindow
-        to do beyond delegating."""
+        # Seg / feat pane width changes fan out via the eventFilter
+        # installed on seg_panel + feat_panel (see ``eventFilter``);
+        # the MainWindow override only exists to keep Qt's MRO happy.
         super().resizeEvent(event)
-
-    def _read_setting(self, key: str, default: Any = None) -> Any:
-        """Defensive QSettings read. Thin wrapper around the
-        shared ``safe_read_setting`` helper; kept as an instance
-        method so call sites don't have to plumb ``self._settings``."""
-        return safe_read_setting(self._settings, key, default)
 
     def _read_setting_str(self, key: str, default: str) -> str:
         return safe_read_setting(

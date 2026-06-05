@@ -94,6 +94,10 @@ from phonology_shared.presentation.palette import C
 
 _log = get_logger(__name__)
 
+# Builder toolbar button height. Matches the main-window toolbar so
+# the two surfaces feel like one chrome family at the 1x baseline.
+_TOOLBAR_BTN_H = 32
+
 
 # Translate JS-native key-name vocabulary (the format
 # :py:data:`gui.grid_logic.MOVE_KEYS` uses) into ``Qt.Key`` constants.
@@ -279,12 +283,14 @@ class InventoryBuilder(QMainWindow):
             *,
             style: str = btn_style,
         ) -> QPushButton:
-            """Add a 32 px Noto Sans 10 button to the toolbar with the
-            given label, slot, and style.
+            """Add a Noto Sans 10 toolbar button.
+
+            Height is pinned via ``_TOOLBAR_BTN_H`` so a hi-DPI
+            display does not collapse the row.
             """
             btn = QPushButton(label)
             btn.setFont(QFont("Noto Sans", 10))
-            btn.setFixedHeight(32)
+            btn.setFixedHeight(_TOOLBAR_BTN_H)
             btn.setStyleSheet(style)
             btn.clicked.connect(slot)
             toolbar.addWidget(btn)

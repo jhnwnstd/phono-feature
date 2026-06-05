@@ -6,6 +6,7 @@ Pyodide.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from phonology_shared.chart.vowels import (
@@ -35,6 +36,45 @@ from phonology_shared.theory.feature_engine import (
 
 if TYPE_CHECKING:
     from phonology_shared.theory.feature_engine import FeatureEngine
+
+
+class SegmentState(StrEnum):
+    """Visual state a segment button can be in.
+
+    Single source of truth for both clients. The desktop's
+    :py:class:`phonology_features.gui.widgets.SegmentButton`
+    re-exports this same enum so widget consumers and view-model
+    producers share one closed set; a typo in ``"selcted"`` at any
+    call site is now a mypy / AttributeError instead of silently
+    routing to ``DEFAULT`` styling.
+
+    Values are wire-stable: the web bridge reads the raw strings.
+    """
+
+    SELECTED = "selected"
+    MATCHED = "matched"
+    UNMATCHED = "unmatched"
+    SUGGESTED = "suggested"
+    DEFAULT = "default"
+
+
+class FeatureRowState(TypedDict):
+    """Per-feature visual payload returned by
+    :py:func:`_feature_row_state`.
+
+    Pins the inner shape carried by ``SegmentSelectionSummary``'s
+    ``feature_rows`` slot so a renamed key surfaces in mypy here
+    rather than as a missing badge in the UI. ``category`` is the
+    stringified :py:class:`FeatureCategory`; ``shared`` /
+    ``contrastive`` are the derived presentation flags kept for
+    consumers that do not yet read the category directly.
+    """
+
+    value: str
+    shared: bool
+    contrastive: bool
+    category: str
+    badge: str
 
 
 # AnalysisTabsPayload is the per-tab content + per-tab control flags
@@ -70,21 +110,22 @@ class SegmentSelectionSummary(TypedDict):
     suggested: list[str]
     common: dict[str, str]
     contrastive: list[str]
-    segment_states: dict[str, str]
-    feature_rows: dict[str, dict[str, Any]]
+    segment_states: dict[str, SegmentState]
+    feature_rows: dict[str, FeatureRowState]
 
 
 class FeatureQuerySummary(TypedDict):
     """FEAT-mode payload returned by :py:func:`summarize_feature_query`.
 
     Same single-source contract as :py:class:`SegmentSelectionSummary`.
-    The ``segment_states`` map has values ``"matched"``,
-    ``"unmatched"``, or ``"default"`` depending on engine response.
+    The ``segment_states`` map carries :py:class:`SegmentState`
+    members so consumers compare against ``SegmentState.MATCHED``
+    instead of bare strings.
     """
 
     analysis_tabs: AnalysisTabsPayload
     matching: list[str]
-    segment_states: dict[str, str]
+    segment_states: dict[str, SegmentState]
 
 
 def build_inventory_summary(
@@ -162,7 +203,7 @@ def summarize_segment_selection(
                     category=cat,
                 )
         seg_states = _default_segment_states(engine)
-        seg_states[segs[0]] = "selected"
+        seg_states[segs[0]] = SegmentState.SELECTED
         # ``additions`` is tuple-of-tuples (one tuple per distinct
         # minimum completion). The strict-bundle solver always
         # returns a single completion, so the seg-pane "suggested"
@@ -171,8 +212,8 @@ def summarize_segment_selection(
             completion.additions[0] if completion.additions else ()
         )
         for seg in suggested_segs:
-            if seg_states.get(seg) == "default":
-                seg_states[seg] = "suggested"
+            if seg_states.get(seg) is SegmentState.DEFAULT:
+                seg_states[seg] = SegmentState.SUGGESTED
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
         return {
             "analysis_tabs": _seg_tabs(engine, segs, common, {}, completion),
@@ -211,14 +252,14 @@ def summarize_segment_selection(
             row_states[feat] = _feature_row_state(category=cat)
     selected = set(segs)
     suggested_set = set(suggested)
-    seg_states = {}
+    seg_states = _default_segment_states(engine)
     for seg in engine.segments:
         if seg in selected:
-            seg_states[seg] = "selected"
+            seg_states[seg] = SegmentState.SELECTED
         elif seg in suggested_set:
-            seg_states[seg] = "suggested"
+            seg_states[seg] = SegmentState.SUGGESTED
         else:
-            seg_states[seg] = "default"
+            seg_states[seg] = SegmentState.DEFAULT
     return {
         "analysis_tabs": _seg_tabs(
             engine, segs, common, contrastive, completion
@@ -255,7 +296,11 @@ def summarize_feature_query(
     matching = engine.find_segments(spec)
     matching_set = set(matching)
     for seg in engine.segments:
-        segment_states[seg] = "matched" if seg in matching_set else "unmatched"
+        segment_states[seg] = (
+            SegmentState.MATCHED
+            if seg in matching_set
+            else SegmentState.UNMATCHED
+        )
     return {
         "analysis_tabs": _feat_tabs(spec, matching),
         "matching": matching,
@@ -359,7 +404,7 @@ def _feature_row_state(
     shared: bool = False,
     contrastive: bool = False,
     category: FeatureCategory = FeatureCategory.ALL_ZERO,
-) -> dict[str, Any]:
+) -> FeatureRowState:
     """Per-row visual payload + the semantic category from the
     engine (see :py:class:`FeatureCategory`). The ``category`` is
     the authoritative semantic state; ``shared`` / ``contrastive``
@@ -371,25 +416,26 @@ def _feature_row_state(
     explicit ones (e.g. ``UNDERSPEC_CONFLICT`` vs
     ``EXPLICIT_CONFLICT``).
     """
-    badge = feature_row_badge(
-        value=value, shared=shared, contrastive=contrastive
-    )
     return {
         "value": value,
         "shared": shared,
         "contrastive": contrastive,
         "category": str(category),
-        "badge": badge,
+        "badge": feature_row_badge(
+            value=value, shared=shared, contrastive=contrastive
+        ),
     }
 
 
-def _default_segment_states(engine: FeatureEngine) -> dict[str, str]:
-    return {seg: "default" for seg in engine.segments}
+def _default_segment_states(
+    engine: FeatureEngine,
+) -> dict[str, SegmentState]:
+    return {seg: SegmentState.DEFAULT for seg in engine.segments}
 
 
 def _default_feature_rows(
     engine: FeatureEngine,
-) -> dict[str, dict[str, Any]]:
+) -> dict[str, FeatureRowState]:
     return {feat: _feature_row_state() for feat in engine.features}
 
 

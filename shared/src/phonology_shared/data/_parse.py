@@ -47,7 +47,7 @@ from phonology_shared.data.inventory import (
     FeatureValue,
     ValidationError,
     _canonicalize_name,
-    _invisible_format_chars,
+    _disallowed_format_chars,
     _ipa_confusable_notes,
     _ipa_normalize_segment,
     _IssueCodes,
@@ -171,7 +171,7 @@ def _validate_features(
                 f"'features[{i}]' is empty after canonicalization",
             )
             continue
-        invisible = _invisible_format_chars(canonical)
+        invisible = _disallowed_format_chars(canonical)
         if invisible:
             ctx.error(
                 _IssueCodes.FEATURE_INVISIBLE_CHAR,
@@ -278,7 +278,7 @@ def _canonicalize_segment_key(
     # an inventory containing both "g" and "ɡ" is detected as a
     # duplicate rather than silently kept as two distinct keys.
     canonical_seg = _ipa_normalize_segment(canonical_seg)
-    invisible = _invisible_format_chars(canonical_seg)
+    invisible = _disallowed_format_chars(canonical_seg)
     if invisible:
         ctx.error(
             _IssueCodes.SEGMENT_KEY_INVISIBLE_CHAR,

@@ -165,6 +165,14 @@ class AnalysisPanel(QWidget):
     # selection label hides in FEAT mode so the tab bar below does
     # not jump between modes.
     _SELECTION_ROW_MIN_H = 26
+    # Fixed height for the selection label. Taller than
+    # ``_SELECTION_ROW_MIN_H`` because the label needs room for one
+    # line of mono text at 10pt plus a 2-line wrap on long queries.
+    _SELECTION_LABEL_H = 38
+    # Floor for the active tab's content area so a single-line
+    # output (a one-feature query) still presents as a real pane,
+    # not a thin strip.
+    _CONTENT_TAB_MIN_H = 60
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -181,7 +189,7 @@ class AnalysisPanel(QWidget):
         # tab is active so the user always sees what they selected.
         self.selection_label = _CopyableTextEdit(self)
         self.selection_label.setReadOnly(True)
-        self.selection_label.setFixedHeight(38)
+        self.selection_label.setFixedHeight(self._SELECTION_LABEL_H)
         mono_font = QFont()
         mono_font.setFamilies(MONO_FAMILIES)
         mono_font.setPointSize(10)
@@ -211,7 +219,7 @@ class AnalysisPanel(QWidget):
         # tab carries the most prominent analytical output so
         # ``.content`` lands there.
         self.content = self._tab_class
-        self.content.setMinimumHeight(60)
+        self.content.setMinimumHeight(self._CONTENT_TAB_MIN_H)
         layout = QGridLayout(self)
         layout.setContentsMargins(16, 2, 16, 8)
         layout.setHorizontalSpacing(0)
@@ -277,11 +285,11 @@ class AnalysisPanel(QWidget):
         set_css(self.tabs, _class_state_stylesheet(self._class_state))
 
     def set_html(self, html: str) -> None:
-        """Legacy single-blob entry point. Routes the whole HTML to
-        the Class tab so anything still calling this from outside the
-        view-model layer keeps working. New call sites should use
-        :py:meth:`set_sections` so the three tabs each carry their
-        own content."""
+        """Single-blob entry point: routes the whole HTML to the
+        Class tab and clears the other tabs + selection label. Used
+        on the validation-error path where there's no view-model
+        envelope to feed :py:meth:`set_sections`.
+        """
         set_html(self._tab_class, html)
         self.selection_label.setHtml("")
         set_html(self._tab_features, "")
@@ -355,11 +363,12 @@ class AnalysisPanel(QWidget):
     def clear(self) -> None:
         """Reset the analysis pane to its post-construction state.
 
-        Canonical full-reset sink. After this returns, every observable
-        visual cue (tab bodies, tab colour, tab enable, active tab,
-        chips strip) is back to its empty baseline. Any new display
-        cue added later must reset here too, so a future regression
-        breaks ``test_analysis_panel_clear`` instead of the UI.
+        Canonical full-reset sink. After this returns, every
+        observable visual cue (selection label, three tab bodies,
+        Contrasts tab enable, active tab, Class tab colour state)
+        is back to its empty baseline. Any new display cue added
+        later must reset here too, so a future regression breaks
+        ``test_analysis_panel_clear`` instead of the UI.
         """
         self.selection_label.clear()
         self.selection_label.setVisible(False)

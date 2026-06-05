@@ -195,7 +195,12 @@ class PanPhonFeatureProvider:
 
             try:
                 resolved[symbol] = _segment_to_bundle(parsed[0], panphon_names)
-            except Exception as exc:
+            except (TypeError, ValueError) as exc:
+                # The two raises in _segment_to_bundle: unexpected
+                # Segment shape (TypeError) and value/name length
+                # mismatch (ValueError). Anything else is a real bug
+                # and should propagate instead of being swallowed as
+                # a per-symbol unresolved warning.
                 unresolved.append(symbol)
                 warnings.append(
                     f"{symbol!r}: PanPhon feature conversion failed: " f"{exc}"

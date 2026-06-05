@@ -1798,10 +1798,11 @@ function setAnalysisTabs(tabs) {
 }
 
 /** Canonical full-reset sink for the analysis pane. After this
- *  returns, every observable visual cue (tab bodies, tab colour
- *  cue, tab enable, active tab, chips strip) is back to its empty
- *  baseline. Any new display cue added later must reset here too,
- *  so a regression breaks the invariant test instead of the UI. */
+ *  returns, every observable visual cue (selection label, three
+ *  tab bodies, Contrasts tab enable, active tab, Class tab colour
+ *  state) is back to its empty baseline. Any new display cue added
+ *  later must reset here too, so a regression breaks the invariant
+ *  test instead of the UI. */
 function clearAnalysisTabs() {
     nodes.analysisSelection.innerHTML = "";
     nodes.analysisSelection.hidden = true;

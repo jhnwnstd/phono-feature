@@ -54,6 +54,12 @@ from pathlib import Path
 _LOG_FORMAT = "%(asctime)s.%(msecs)03d %(levelname)-7s %(name)s: %(message)s"
 _DATE_FORMAT = "%H:%M:%S"
 
+# One-shot configure guard. The desktop entry point calls
+# :py:func:`configure` once at startup; if a second call slips
+# through (re-launch in the same process, test re-import) the second
+# pass would add duplicate handlers, doubling every log line.
+# Module-level mutable state is the simplest fit because configure
+# is itself a process-wide side effect.
 _CONFIGURED = False
 
 

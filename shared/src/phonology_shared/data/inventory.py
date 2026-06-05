@@ -1,34 +1,11 @@
-"""The Inventory contract.
+"""The Inventory contract: structural validation, not phonological theory.
 
-This module validates inventory STRUCTURE, not phonological theory.
-It enforces JSON shape, stable identifiers, declared feature keys,
+Enforces JSON shape, stable identifiers, declared feature keys,
 allowed cell values (``+`` / ``-`` / ``0``), Unicode safety, size
-limits, and crash-safe writes. It does not infer feature values
-from segment labels and does not reject feature bundles for being
-phonologically unusual. Segment labels are identifiers; feature
-values are the semantics.
-
-One source of truth for the question "is this inventory data
-structurally valid". Every loader, editor, and saver routes
-through this module. The only entry points that accept untrusted
-data are :py:meth:`Inventory.parse`, :py:meth:`Inventory.from_grid`,
-and :py:meth:`Inventory.load`, and each funnels through ``parse``
-so the validation code path is singular.
-
-Parse-don't-validate: ``parse`` either returns a fully normalized
-:py:class:`Inventory` whose invariants hold for the life of the value,
-or raises :py:class:`ValidationError` carrying every problem it found
-(not just the first). Downstream code never re-checks.
-
-The instance is structurally immutable: ``features`` is a tuple and
-``segments`` is a :py:class:`MappingProxyType` of MappingProxyType.
-Holders may store the value directly without a defensive copy because
-the caller cannot mutate it after construction. Edits produce a new
-``Inventory``.
-
-Writes go through :py:func:`atomic_write_json`, which writes to a tmp
-file and ``os.replace``s onto the target so a crash mid-write never
-leaves a truncated JSON on disk.
+limits, and crash-safe writes. Segment labels are identifiers;
+feature values are the semantics. The parse pipeline lives in
+:py:mod:`._parse`; see :py:meth:`Inventory.parse` for the
+parse-don't-validate contract.
 """
 
 from __future__ import annotations
@@ -369,7 +346,7 @@ def _canonicalize_name(s: str) -> str:
     and so on) but does not strip Unicode FORMAT characters (ZWJ, ZWNJ,
     LRM, RLM, BOM). Those survive canonicalization and create truly
     invisible distinct keys, so they are rejected separately via
-    :py:func:`_invisible_format_chars` rather than silently stripped.
+    :py:func:`_disallowed_format_chars` rather than silently stripped.
     """
     return unicodedata.normalize("NFC", s).strip()
 
@@ -389,14 +366,10 @@ def _canonicalize_name(s: str) -> str:
 _DISALLOWED_NAME_CATEGORIES: frozenset[str] = frozenset({"Cf", "Cs", "Cc"})
 
 
-def _invisible_format_chars(s: str) -> list[str]:
+def _disallowed_format_chars(s: str) -> list[str]:
     """Return any disallowed-category characters in ``s``, formatted
     as "U+XXXX (NAME)" so the caller can include them in a user-facing
     error message. Empty when the string is clean.
-
-    The function name predates the broader scope (it now also catches
-    surrogates and embedded controls) but is preserved for clarity at
-    call sites.
     """
     found: list[str] = []
     for ch in s:
@@ -778,8 +751,8 @@ class Inventory:
         Serializes to a sibling tmp file, fsyncs, then ``os.replace``s
         onto the target. An interrupted run leaves either the old file
         untouched or the new file fully written, never a half-written
-        file. External file watchers see one atomic rename rather than
-        a series of partial writes.
+        file. See :py:func:`atomic_write_json` for the platform-
+        specific details (directory fsync is POSIX-only).
         """
         atomic_write_json(path, self.to_json_dict())
 
