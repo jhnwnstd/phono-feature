@@ -2233,6 +2233,101 @@ function wireSetupDialog() {
 }
 
 
+// Long-form descriptions for the PHOIBLE source acronyms. The bake
+// script emits short codes ("SPA", "UPSID") because those are how
+// the literature cites them; the picker shows the expansion below
+// so users who don't know the acronyms still understand what they
+// are choosing between. Keep keys in sync with bake_phoible.py's
+// ``SOURCE_LABELS`` (compare without the ``PHOIBLE / `` prefix).
+const PHOIBLE_SOURCE_DESCRIPTIONS = Object.freeze({
+    "SPA": "Stanford Phonology Archive",
+    "UPSID": "UCLA Phonological Segment Inventory Database",
+    "PHOIBLE": "Curated PHOIBLE inventory",
+    "Eurasian Phonologies": "Eurasian Phonology Inventories database",
+    "Alphabets of Africa": "Alphabets of Africa orthographies",
+    "Green & Moran": "Green & Moran phoneme inventories",
+    "SAPhon": "South American Phonological Inventory Database",
+    "Common Linguistic Features": "Common Linguistic Features database",
+    "Ramaswami": "Ramaswami's Common Linguistic Features",
+});
+
+/**
+ * Build one inventory-source card for the PHOIBLE picker.
+ *
+ * Layout per row (CSS-driven):
+ *
+ *   ┌────────────────────────────────────────────┐
+ *   │ ◉ SPA                            40 segs   │
+ *   │   Stanford Phonology Archive               │
+ *   │   <dialect, if present>                    │
+ *   └────────────────────────────────────────────┘
+ *
+ * The radio input is the actual form-state carrier but visually
+ * the whole row is the click target. ``:has(input:checked)`` in
+ * CSS paints the selected card with the accent border so the
+ * radio dot is a redundant cue, not the only one.
+ */
+function _buildSourceCard(inv, defaultId) {
+    const radioId = "phoible-radio-" + inv.id;
+    const label = document.createElement("label");
+    label.className = "phoible-source-card";
+    label.htmlFor = radioId;
+
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "phoible-inventory";
+    input.id = radioId;
+    input.value = inv.id;
+    input.checked = inv.id === defaultId;
+    input.addEventListener("change", () => pickInventoryFromCard(inv.id));
+
+    const body = document.createElement("div");
+    body.className = "phoible-source-body";
+
+    const header = document.createElement("div");
+    header.className = "phoible-source-header";
+    const name = document.createElement("span");
+    name.className = "phoible-source-name";
+    // Strip the ``PHOIBLE / `` prefix the bridge ships for general
+    // cross-database labelling; in this dialog every row is from
+    // PHOIBLE so the prefix is redundant noise.
+    const shortName = inv.source_label.startsWith("PHOIBLE / ")
+        ? inv.source_label.slice("PHOIBLE / ".length)
+        : inv.source_label;
+    name.textContent = shortName;
+    const segs = document.createElement("span");
+    segs.className = "phoible-source-segs";
+    segs.textContent = `${inv.segment_count} segments`;
+    header.appendChild(name);
+    header.appendChild(segs);
+    body.appendChild(header);
+
+    const description = PHOIBLE_SOURCE_DESCRIPTIONS[shortName];
+    if (description) {
+        const desc = document.createElement("div");
+        desc.className = "phoible-source-desc";
+        desc.textContent = description;
+        body.appendChild(desc);
+    }
+
+    if (inv.dialect) {
+        const dialect = document.createElement("div");
+        dialect.className = "phoible-source-dialect";
+        dialect.textContent = inv.dialect;
+        body.appendChild(dialect);
+    }
+
+    label.appendChild(input);
+    label.appendChild(body);
+    return label;
+}
+
+// Module-level handle the radio change callback closes over; set by
+// ``wirePhoiblePicker`` so cards built outside the closure can still
+// invoke the picker's selection logic.
+let pickInventoryFromCard = () => {};
+
+
 /**
  * Wire the toolbar's PHOIBLE button and its picker dialog.
  *
@@ -2286,9 +2381,42 @@ function wirePhoiblePicker() {
         }
     };
 
+    // Index of the currently keyboard-highlighted entry in the
+    // autocomplete dropdown; -1 when nothing is highlighted. Reset
+    // every time the result list changes so keystrokes after a
+    // new query land on the freshly rendered list, not on the
+    // previous (now-gone) row at the same offset.
+    let highlightedIndex = -1;
+
+    const setHighlight = (newIndex) => {
+        const ul = nodes.phoibleResults;
+        const items = ul.children;
+        if (!items.length) {
+            highlightedIndex = -1;
+            return;
+        }
+        // Clamp + wrap. Letting ArrowDown past the end roll to the
+        // top is the convention in dropdown menus; same for
+        // ArrowUp past the start.
+        if (newIndex < 0) newIndex = items.length - 1;
+        if (newIndex >= items.length) newIndex = 0;
+        if (highlightedIndex >= 0 && highlightedIndex < items.length) {
+            items[highlightedIndex].classList.remove("is-highlighted");
+            items[highlightedIndex].setAttribute("aria-selected", "false");
+        }
+        highlightedIndex = newIndex;
+        const el = items[highlightedIndex];
+        el.classList.add("is-highlighted");
+        el.setAttribute("aria-selected", "true");
+        // Scroll into view if the highlighted entry would otherwise
+        // be hidden by the ul's overflow cap.
+        el.scrollIntoView({ block: "nearest" });
+    };
+
     const renderResults = (matches) => {
         const ul = nodes.phoibleResults;
         ul.innerHTML = "";
+        highlightedIndex = -1;
         if (!matches || matches.length === 0) {
             ul.hidden = true;
             return;
@@ -2297,6 +2425,7 @@ function wirePhoiblePicker() {
             const li = document.createElement("li");
             li.textContent = name;
             li.setAttribute("role", "option");
+            li.setAttribute("aria-selected", "false");
             li.addEventListener("mousedown", (ev) => {
                 // mousedown (not click) so the input does not lose
                 // focus before we read the selection.
@@ -2330,27 +2459,7 @@ function wirePhoiblePicker() {
             .sort((a, b) => a.segment_count - b.segment_count);
         const defaultId = sorted[Math.floor(sorted.length / 2)].id;
         for (const inv of invs) {
-            const id = "phoible-radio-" + inv.id;
-            const label = document.createElement("label");
-            label.htmlFor = id;
-            const input = document.createElement("input");
-            input.type = "radio";
-            input.name = "phoible-inventory";
-            input.id = id;
-            input.value = inv.id;
-            input.checked = inv.id === defaultId;
-            input.addEventListener("change", () => pickInventory(inv.id));
-            const text = document.createElement("span");
-            text.textContent = inv.source_label;
-            const meta = document.createElement("span");
-            meta.className = "phoible-radio-meta";
-            const parts = [`${inv.segment_count} segments`];
-            if (inv.dialect) parts.push(inv.dialect);
-            meta.textContent = parts.join(" · ");
-            label.appendChild(input);
-            label.appendChild(text);
-            label.appendChild(meta);
-            radios.appendChild(label);
+            radios.appendChild(_buildSourceCard(inv, defaultId));
         }
         nodes.phoibleInventories.hidden = false;
         pickInventory(defaultId);
@@ -2375,6 +2484,10 @@ function wirePhoiblePicker() {
         nodes.phoiblePreview.hidden = false;
         loadBtn.disabled = false;
     };
+    // Cards built by ``_buildSourceCard`` close over this binding so
+    // the radio's ``change`` event reaches the picker-scoped
+    // ``pickInventory`` selection logic.
+    pickInventoryFromCard = pickInventory;
 
     const closeDialog = () => {
         if (typeof dialog.close === "function") {
@@ -2443,6 +2556,43 @@ function wirePhoiblePicker() {
             );
             renderResults(matches);
         }, SEARCH_DEBOUNCE_MS);
+    });
+
+    // Keyboard navigation for the autocomplete dropdown. ArrowDown
+    // and ArrowUp wrap through the result list; Enter picks the
+    // highlighted entry (or the first one when nothing is yet
+    // highlighted but results are visible); Escape closes the
+    // dropdown without committing. Default Tab behaviour is kept
+    // so the user can leave the dropdown open and tab to the
+    // inventory radios if they prefer.
+    searchInput.addEventListener("keydown", (ev) => {
+        const ul = nodes.phoibleResults;
+        const items = ul.children;
+        if (ev.key === "ArrowDown") {
+            if (!items.length || ul.hidden) return;
+            ev.preventDefault();
+            setHighlight(highlightedIndex + 1);
+            return;
+        }
+        if (ev.key === "ArrowUp") {
+            if (!items.length || ul.hidden) return;
+            ev.preventDefault();
+            setHighlight(highlightedIndex - 1);
+            return;
+        }
+        if (ev.key === "Enter") {
+            if (ul.hidden || !items.length) return;
+            ev.preventDefault();
+            const target = highlightedIndex >= 0 ? highlightedIndex : 0;
+            pickLanguage(items[target].textContent);
+            return;
+        }
+        if (ev.key === "Escape") {
+            if (ul.hidden) return;
+            ev.preventDefault();
+            ul.hidden = true;
+            highlightedIndex = -1;
+        }
     });
 
     nodes.phoibleCancel.addEventListener("click", closeDialog);

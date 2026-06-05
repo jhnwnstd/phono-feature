@@ -362,29 +362,77 @@ dialog input[type="text"]:focus-visible {
   user-select: none;
 }
 .phoible-results li:hover,
-.phoible-results li[aria-selected="true"] {
+.phoible-results li.is-highlighted {
   background: var(--accent-soft);
   color: var(--accent);
 }
-#setup-phoible-radios {
+
+/* Source-card chooser. One ``<label>`` per inventory; the radio
+   input is the form-state carrier and the rest of the row is the
+   click target. ``:has(input:checked)`` paints the selected card
+   so the radio dot is a redundant cue, not the only one. */
+#phoible-radios {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-height: 240px;
+  overflow-y: auto;
+  /* Match the input + result list radius so the chooser feels like
+     one continuous control rather than a stack of detached pills. */
+  border-radius: var(--radius-md);
+}
+.phoible-source-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  cursor: pointer;
+  transition: border-color 0.1s ease, background 0.1s ease;
+}
+.phoible-source-card:hover {
+  border-color: var(--accent);
+}
+.phoible-source-card:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.phoible-source-card input[type="radio"] {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+.phoible-source-body {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
-#setup-phoible-radios label {
+.phoible-source-header {
   display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: 3px 4px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-md);
 }
-#setup-phoible-radios label:hover {
-  background: var(--accent-soft);
+.phoible-source-name {
+  font-weight: 600;
 }
-#setup-phoible-radios .phoible-radio-meta {
+.phoible-source-segs {
   color: var(--text-dim);
   font-size: 0.85em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.phoible-source-desc {
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+.phoible-source-dialect {
+  color: var(--text);
+  font-size: 0.9em;
+  font-style: italic;
 }
 .phoible-preview {
   display: flex;
