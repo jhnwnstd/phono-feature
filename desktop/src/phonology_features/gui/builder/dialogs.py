@@ -2,7 +2,7 @@
 
 from typing import ClassVar
 
-from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtCore import QEvent, Qt, QTimer
 from PyQt6.QtGui import QFont, QPainter, QPaintEvent, QTextCursor
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -241,6 +241,18 @@ class InputDialog(QDialog):
         # (``provider.display_label()``), values are the provider
         # instance. Populated once at construction.
         self._provider_by_label: dict[str, FeatureProvider] = {}
+        # Debounced re-generation of the features preview while a
+        # provider is chosen and the user is editing the segments
+        # textarea. ``generate`` is fast (~ms per segment via PanPhon)
+        # but spamming it on every keystroke would be noisy; 250 ms
+        # of idle is enough to feel responsive without flashing the
+        # textarea as the user types out a segment list.
+        self._provider_refresh_timer = QTimer(self)
+        self._provider_refresh_timer.setSingleShot(True)
+        self._provider_refresh_timer.setInterval(250)
+        self._provider_refresh_timer.timeout.connect(
+            self._refresh_provider_features
+        )
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
         layout.addLayout(self._build_name_row())
@@ -270,6 +282,11 @@ class InputDialog(QDialog):
         # format hint for the inferred-delimiter parser.
         self.seg_edit.setPlaceholderText(SegmentTextEdit.DEFAULT_FILL)
         self.seg_edit.setFont(QFont("Noto Sans", 12))
+        # Live-trim the features preview while a provider is active.
+        # Each edit re-arms the debounce timer so the textarea catches
+        # up after the user pauses typing; the handler no-ops when no
+        # provider is selected.
+        self.seg_edit.textChanged.connect(self._on_segments_changed)
         # Stretch 1 here vs 4 on the features edit below: segments
         # are typically a short list (~10-40 symbols) while features
         # are routinely 30+ entries, often pasted from a spreadsheet.
@@ -362,10 +379,17 @@ class InputDialog(QDialog):
         provider = self._provider_by_label.get(name)
         if provider is not None:
             self._chosen_provider = provider
-            self.feat_edit.setPlainText("\n".join(provider.feature_names()))
             self.feat_edit.setReadOnly(False)
+            # Run the same refresh path the textChanged handler uses,
+            # so a provider pick with already-typed segments lands
+            # immediately on the trimmed feature set instead of
+            # flashing the full 24-name canonical list first.
+            self._refresh_provider_features()
             return
         self._chosen_provider = None
+        # Drop any pending provider-driven refresh: switching to a
+        # static preset means the user opted out of auto-generation.
+        self._provider_refresh_timer.stop()
         features = FEATURE_PRESETS.get(name, [])
         if features:
             self.feat_edit.setPlainText("\n".join(features))
@@ -373,6 +397,41 @@ class InputDialog(QDialog):
             return
         self.feat_edit.clear()
         self.feat_edit.setReadOnly(False)
+
+    def _on_segments_changed(self) -> None:
+        """Trigger a debounced features-preview refresh while a
+        provider is active. No-op for static presets so typing
+        segments does not clobber the user's hand-edited features
+        list.
+        """
+        if self._chosen_provider is None:
+            return
+        self._provider_refresh_timer.start()
+
+    def _refresh_provider_features(self) -> None:
+        """Replace the features textarea with the actual feature
+        list the active provider would emit for the current segment
+        text. Empty / all-unresolved segment input falls back to
+        the provider's full canonical feature set so the user has
+        a preview of what is available before they enter any IPA.
+
+        Idempotent: callers (textChanged debounce, ``_on_preset_changed``,
+        and the test fixture) can invoke it freely.
+        """
+        if self._chosen_provider is None:
+            return
+        segments = infer_split(self.seg_edit.toPlainText())
+        if not segments:
+            features = self._chosen_provider.feature_names()
+        else:
+            features = self._chosen_provider.generate(segments).features
+            if not features:
+                # All inputs unresolved: ``generate`` already falls
+                # back to the full set so the user has columns to
+                # edit. Defensive guard in case a future provider
+                # returns an empty tuple instead.
+                features = self._chosen_provider.feature_names()
+        self.feat_edit.setPlainText("\n".join(features))
 
     def get_segments(self) -> list[str]:
         return self.seg_edit.entries()

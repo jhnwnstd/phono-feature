@@ -141,6 +141,71 @@ def test_choosing_panphon_exposes_provider_and_fills_features(
     dlg.deleteLater()
 
 
+def test_features_textarea_trims_to_used_features_when_segments_typed(
+    qapp: QApplication,
+) -> None:
+    """The features preview must reflect the same pruning the grid
+    will get. Typing a single vowel must not advertise all 24
+    PanPhon features, because the resulting grid will only contain
+    the features that vowel actually uses. Pins the dialog/grid
+    parity the user asked for: what you see in the setup textarea
+    matches what you get in the editor."""
+    dlg = InputDialog()
+    dlg.preset_combo.setCurrentText(PANPHON_LABEL)
+    provider = dlg.get_chosen_provider()
+    assert provider is not None
+    full = set(provider.feature_names())
+
+    # No segments yet: full set is shown so the user has a preview.
+    preview_empty = set(dlg.get_features())
+    assert preview_empty == full
+
+    # Typing a single vowel triggers the debounce timer; bypass it
+    # by invoking the refresh directly (the timer fires the same
+    # callback after 250 ms in interactive use).
+    dlg.seg_edit.setPlainText("i")
+    dlg._refresh_provider_features()
+
+    trimmed = set(dlg.get_features())
+    assert trimmed.issubset(full)
+    assert trimmed != full, (
+        "single-vowel input must drop the features /i/ does not "
+        "specify; otherwise dialog and grid disagree on what the "
+        "saved inventory will contain"
+    )
+    # Major-class features that any segment carries: must survive.
+    assert {"Syllabic", "Consonantal"}.issubset(trimmed)
+
+    # Erasing the segments must expand the preview back to the full
+    # canonical set so the user sees the whole catalogue again.
+    dlg.seg_edit.clear()
+    dlg._refresh_provider_features()
+    assert set(dlg.get_features()) == full
+    dlg.deleteLater()
+
+
+def test_switching_to_static_preset_cancels_pending_provider_refresh(
+    qapp: QApplication,
+) -> None:
+    """If the user picks PanPhon, types segments (arming the debounce
+    timer), then switches to ``Default (33)``, the pending provider
+    refresh must not fire over the static preset's features. Without
+    the explicit ``stop()`` the static preset would briefly flicker
+    to a trimmed PanPhon set when the timer eventually fired."""
+    from phonology_shared.editor.setup import FEATURE_PRESETS
+
+    dlg = InputDialog()
+    dlg.preset_combo.setCurrentText(PANPHON_LABEL)
+    dlg.seg_edit.setPlainText("i")
+    assert dlg._provider_refresh_timer.isActive()
+
+    dlg.preset_combo.setCurrentText("Default (33)")
+    assert not dlg._provider_refresh_timer.isActive()
+    # Static preset must own the features list.
+    assert dlg.get_features() == list(FEATURE_PRESETS["Default (33)"])
+    dlg.deleteLater()
+
+
 def test_switching_back_to_static_preset_clears_chosen_provider(
     qapp: QApplication,
 ) -> None:
