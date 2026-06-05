@@ -199,6 +199,23 @@ def generate_theme_css() -> None:
         out = [f"{selector} {{"]
         for key, value in table.items():
             out.append(f"  --{_css_var_name(key)}: {value};")
+        # Bake the class-state verdict mapping as additional CSS
+        # variables so style.css doesn't have to repeat the
+        # verdict-to-palette-role decision. The helper is the
+        # single source of truth for the mapping; the resolved
+        # hex values come from this palette table.
+        for state in ("natural", "not_natural"):
+            keys = palette.class_state_palette_keys(state)
+            assert keys is not None  # non-neutral states always map
+            fg_key, bg_key = keys
+            out.append(
+                f"  --class-state-{state.replace('_', '-')}-fg:"
+                f" {table[fg_key]};"
+            )
+            out.append(
+                f"  --class-state-{state.replace('_', '-')}-bg:"
+                f" {table[bg_key]};"
+            )
         out.append("}")
         return out
 
@@ -393,6 +410,17 @@ def _build_status_text_payload() -> dict[str, str]:
         payload["removed_segment_template"] = module.REMOVED_SEGMENT_TEMPLATE
         payload["added_feature_template"] = module.ADDED_FEATURE_TEMPLATE
         payload["removed_feature_template"] = module.REMOVED_FEATURE_TEMPLATE
+        # Builder cell-value glyphs. U+2212 (display) vs U+002D
+        # (serialized). The JS used to declare these as literals;
+        # baking from phonology_shared.editor.grid makes the Python
+        # constants the single source.
+        from phonology_shared.editor.grid import (
+            MINUS_DISPLAY,
+            MINUS_SERIALIZED,
+        )
+
+        payload["minus_display"] = MINUS_DISPLAY
+        payload["minus_serialized"] = MINUS_SERIALIZED
         return payload
     finally:
         sys.modules.pop(module_name, None)

@@ -1030,22 +1030,22 @@ dialog input[type="text"]:focus-visible {
    white — every singleton is trivially a natural class of itself,
    so colouring it would just be visual noise on every click. */
 .analysis-tab[data-class-state="natural"] {
-  background: var(--plus-bg);
-  color: var(--plus);
+  background: var(--class-state-natural-bg);
+  color: var(--class-state-natural-fg);
 }
 .analysis-tab[data-class-state="not_natural"] {
-  background: var(--minus-bg);
-  color: var(--minus);
+  background: var(--class-state-not-natural-bg);
+  color: var(--class-state-not-natural-fg);
 }
-.analysis-tab[data-class-state="natural"][aria-selected="true"],
-.analysis-tab[data-class-state="not_natural"][aria-selected="true"] {
-  /* Keep the coloured background even when the tab is active —
-     the cue is more useful than the active-tab's panel colour. */
-  background: var(--plus-bg);
+.analysis-tab[data-class-state="natural"][aria-selected="true"] {
+  /* Keep the coloured background even when the tab is active. The
+     cue is more useful than the active-tab's panel colour. */
+  background: var(--class-state-natural-bg);
   font-weight: 600;
 }
 .analysis-tab[data-class-state="not_natural"][aria-selected="true"] {
-  background: var(--minus-bg);
+  background: var(--class-state-not-natural-bg);
+  font-weight: 600;
 }
 
 .analysis-content {

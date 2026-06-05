@@ -142,6 +142,13 @@ class MainWindow(QMainWindow):
         self._inv_dir: InventoryDirController  # populated below
         self._did_first_show = False
         self._builder: InventoryBuilder | None = None
+        # Last-seen segment-pane width; ``_on_seg_pane_width_changed``
+        # short-circuits when the width hasn't actually changed across
+        # a Qt-internal layout pass. Initialized to -1 so the first
+        # real width always falls through; explicit field beats a
+        # ``getattr(..., -1)`` because it surfaces the contract in
+        # __init__ instead of hiding behind a defaulted read.
+        self._last_seg_pane_w: int = -1
         # Pool of every FeatureRow ever created (FEATURE_ORDER plus any
         # inventory-specific Other-card extras). ``_feat_rows`` above is
         # the active subset; external code reads from _feat_rows.
@@ -694,6 +701,11 @@ class MainWindow(QMainWindow):
             self._set_mode(Mode(saved_mode))
 
     def closeEvent(self, event: QCloseEvent | None) -> None:
+        # Stop pending timers before any Qt teardown. A click ~100 ms
+        # before close otherwise leaves the debounce timer armed; its
+        # slot then fires on a half-destroyed window. Calling stop()
+        # is safe even if the timer is not active.
+        self._debounce.stop()
         # Let the builder prompt for unsaved changes. Without this,
         # Qt parent-child cleanup destroys it without firing its
         # closeEvent and unsaved edits are silently dropped.
@@ -787,29 +799,40 @@ class MainWindow(QMainWindow):
             self._builder.raise_()
             self._builder.activateWindow()
             return
+        # Drop any stale (closed-but-not-yet-deleted) reference
+        # before constructing the new builder. Without this the old
+        # instance's _save_finished connection lingers alongside the
+        # new one's, and a save fires the handler twice.
+        if self._builder is not None:
+            self._builder.deleteLater()
+            self._builder = None
+
         from phonology_features.gui.builder import InventoryBuilder
 
         if self._current_path:
-            self._builder = InventoryBuilder(
+            builder = InventoryBuilder(
                 parent=self, load_path=self._current_path
             )
-            self._builder.setWindowFlag(Qt.WindowType.Window)
-            self._builder.setWindowModality(Qt.WindowModality.WindowModal)
-            self._builder._save_finished.connect(
-                self._on_builder_save_finished
-            )
-            self._builder.show()
-            return
-        # No inventory loaded; show the setup dialog. Cancel = no window.
-        builder = InventoryBuilder(parent=self)
+        else:
+            builder = InventoryBuilder(parent=self)
+            if not builder.show_setup_dialog():
+                builder.deleteLater()
+                return
+
         builder.setWindowFlag(Qt.WindowType.Window)
         builder.setWindowModality(Qt.WindowModality.WindowModal)
-        if not builder.show_setup_dialog():
-            builder.deleteLater()
-            return
+        builder._save_finished.connect(self._on_builder_save_finished)
+        # When Qt destroys the builder, clear the field so the next
+        # open creates a fresh instance instead of resurrecting a
+        # dangling pointer.
+        builder.destroyed.connect(self._on_builder_destroyed)
         self._builder = builder
-        self._builder._save_finished.connect(self._on_builder_save_finished)
         self._builder.show()
+
+    def _on_builder_destroyed(self, _obj: object) -> None:
+        """Reset the cached builder reference when Qt finishes
+        destroying it. Connected by :py:meth:`_open_builder`."""
+        self._builder = None
 
     def _on_builder_save_finished(self, path: str, err: str) -> None:
         """When the builder finishes a save, switch the main viewer to
@@ -1210,7 +1233,7 @@ class MainWindow(QMainWindow):
         fires this on every resizeEvent, including Qt's own internal
         layout passes; the early-return below keeps that cheap.
         """
-        if seg_pane_w == getattr(self, "_last_seg_pane_w", -1):
+        if seg_pane_w == self._last_seg_pane_w:
             return
         self._last_seg_pane_w = seg_pane_w
         target_w = layout.vowel_chart_width(seg_pane_w)

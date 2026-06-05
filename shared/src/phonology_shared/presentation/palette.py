@@ -384,6 +384,38 @@ def get_theme_name() -> str:
     return _active_theme
 
 
+# Accepted natural-class verdict labels. Both UIs read the same set
+# from view_models / analysis builders; centralised here so the
+# palette helpers can validate without an import cycle.
+ALLOWED_CLASS_STATES: frozenset[str] = frozenset(
+    {"natural", "not_natural", "neutral"}
+)
+
+
+def class_state_palette_keys(state: str) -> tuple[str, str] | None:
+    """Map a natural-class verdict to the ``(fg_key, bg_key)`` pair
+    of palette keys used to paint the Class tab band.
+
+    Returns ``None`` for the ``"neutral"`` state to signal "no
+    override; let the tab keep its default palette colours". The
+    desktop's :py:func:`_class_state_stylesheet` and the build
+    script's CSS-variable bake both consult this helper so the
+    verdict-to-palette-role mapping lives in one place. Adding a
+    new state means editing this function and adding a CSS rule;
+    no second mapping copy to keep in sync.
+    """
+    if state == "natural":
+        return ("plus", "plus_bg")
+    if state == "not_natural":
+        return ("minus", "minus_bg")
+    if state == "neutral":
+        return None
+    raise ValueError(
+        f"unknown class state {state!r}; expected one of"
+        f" {sorted(ALLOWED_CLASS_STATES)}"
+    )
+
+
 def detect_system_theme(default: str = "light") -> str:
     """Return "dark" if the OS reports dark mode, else "light".
     Uses Qt's ``styleHints().colorScheme()`` (Qt 6.5+); falls back to

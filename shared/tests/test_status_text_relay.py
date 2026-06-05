@@ -148,8 +148,33 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         "removed_segment_template",
         "added_feature_template",
         "removed_feature_template",
+        # Builder cell-value glyphs relayed from
+        # phonology_shared.editor.grid so the JS no longer hardcodes
+        # them as literals (see test_minus_glyphs_match_python below).
+        "minus_display",
+        "minus_serialized",
     }
     assert set(status_payload.keys()) == expected_keys
+
+
+def test_minus_glyphs_match_python(
+    status_payload: dict[str, str],
+) -> None:
+    """The builder cell-value glyphs (U+2212 display, U+002D
+    serialized) must equal the Python constants byte-for-byte.
+
+    Until this bake landed the web's main.js declared the two
+    characters as literals, so a Python-side glyph edit could
+    silently leave the web on the old character. Asserting parity
+    here turns any future drift into a test failure.
+    """
+    from phonology_shared.editor.grid import (
+        MINUS_DISPLAY,
+        MINUS_SERIALIZED,
+    )
+
+    assert status_payload.get("minus_display") == MINUS_DISPLAY
+    assert status_payload.get("minus_serialized") == MINUS_SERIALIZED
 
 
 def test_validation_heading_matches_python(

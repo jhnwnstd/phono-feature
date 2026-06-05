@@ -37,7 +37,10 @@ from phonology_shared.presentation.layout import (
     REGION_CONSTRAINTS,
     best_segment_n_cols,
 )
-from phonology_shared.presentation.palette import C
+from phonology_shared.presentation.palette import (
+    C,
+    class_state_palette_keys,
+)
 from phonology_shared.presentation.view_models import (
     NEUTRAL_BADGE,
     feature_row_badge,
@@ -87,14 +90,12 @@ def _class_state_stylesheet(class_state: str) -> str:
             color: {C["border"]};
         }}
     """
-    if class_state == "natural":
-        bg = C["plus_bg"]
-        fg = C["plus"]
-    elif class_state == "not_natural":
-        bg = C["minus_bg"]
-        fg = C["minus"]
-    else:
+    keys = class_state_palette_keys(class_state)
+    if keys is None:
         return base
+    fg_key, bg_key = keys
+    fg = C[fg_key]
+    bg = C[bg_key]
     return base + f"""
         QTabBar::tab:first {{
             background: {bg};
@@ -322,10 +323,15 @@ class FeatureRow(QWidget):
         # Dedup cache for set_display; cleared by reset / _apply_query_style
         # (both rewrite the same stylesheets without going through set_display).
         self._last_display_state: tuple[str, bool, bool] | None = None
-        # Tracks the panel-active value the row was last reset for, so
-        # repeat reset() calls during populate + mode-switch can
-        # short-circuit. None forces the next reset to take the full path.
-        self._reset_for_panel: bool | None = None
+        # Reset-cache state: ``_panel_cache_valid`` says "the row has
+        # been reset to neutral and the cache is fresh"; on a True
+        # cache, ``_panel_cached_for`` records the ``panel_active``
+        # value it was reset for so reset() can short-circuit when
+        # nothing relevant has changed. Two named flags beat a
+        # ``bool | None`` sentinel where ``None`` overloads
+        # "no cache" with "force full reset".
+        self._panel_cache_valid: bool = False
+        self._panel_cached_for: bool = False
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 3, 8, 3)
         layout.setSpacing(4)
@@ -436,7 +442,7 @@ class FeatureRow(QWidget):
         saved_current_value = self._current_value
         self._build_styles()
         self._last_display_state = None
-        self._reset_for_panel = None
+        self._panel_cache_valid = False
         self._style_btn(self.plus_btn, "+")
         self._style_btn(self.minus_btn, "-")
         if saved_current_value:
@@ -468,7 +474,8 @@ class FeatureRow(QWidget):
                 ),
             )
             set_css(self, self._ROW_NEUTRAL)
-            self._reset_for_panel = self._panel_active
+            self._panel_cache_valid = True
+            self._panel_cached_for = self._panel_active
 
     def _style_btn(self, btn: QPushButton, polarity: str) -> None:
         is_plus = polarity == "+"
@@ -517,7 +524,7 @@ class FeatureRow(QWidget):
         bypass set_display and reset but rewrite the same stylesheets.
         """
         self._last_display_state = None
-        self._reset_for_panel = None
+        self._panel_cache_valid = False
         if value == "+":
             set_css(self, self._ROW_PLUS)
             set_css(self.name_label, self._NAME_BOLD)
@@ -568,7 +575,7 @@ class FeatureRow(QWidget):
         if self._last_display_state == state:
             return
         self._last_display_state = state
-        self._reset_for_panel = None
+        self._panel_cache_valid = False
         self.badge.setText(badge)
         if contrastive:
             set_css(self.badge, self._BADGE_CONTRASTIVE)
@@ -605,14 +612,14 @@ class FeatureRow(QWidget):
            matches): no-op.
         2. Clean-but-panel-changed: only name_label depends on the
            panel_active value when neutral, so rewrite just that.
-        3. Visual-dirty, value non-empty, or ``_reset_for_panel is None``
-           (the apply_theme sentinel meaning "palette may be stale,
-           rebuild visible styles"): full reset.
+        3. Visual-dirty, value non-empty, or cache invalidated (set
+           by ``apply_theme`` / ``_apply_query_style`` / ``set_display``
+           when palette or query state may have moved): full reset.
         """
         visual_dirty = self._last_display_state is not None
-        force_full = self._reset_for_panel is None
+        force_full = not self._panel_cache_valid
         if self._current_value == "" and not visual_dirty and not force_full:
-            if self._reset_for_panel == self._panel_active:
+            if self._panel_cached_for == self._panel_active:
                 return
             name_style = (
                 self._NAME_ACTIVE
@@ -620,7 +627,8 @@ class FeatureRow(QWidget):
                 else self._NAME_INACTIVE
             )
             set_css(self.name_label, name_style)
-            self._reset_for_panel = self._panel_active
+            self._panel_cache_valid = True
+            self._panel_cached_for = self._panel_active
             return
         self._current_value = ""
         self._last_display_state = None
@@ -633,7 +641,8 @@ class FeatureRow(QWidget):
         )
         set_css(self.name_label, name_style)
         set_css(self, self._ROW_NEUTRAL)
-        self._reset_for_panel = self._panel_active
+        self._panel_cache_valid = True
+        self._panel_cached_for = self._panel_active
 
 
 class _CopyableTextEdit(QTextEdit):

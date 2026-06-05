@@ -2187,8 +2187,12 @@ let moveKeys = null;
 let maxUndoDepth = 200;  // sane default; overwritten on first open
 const ZERO_VALUE = "0";
 
-const MINUS_DISPLAY = "−"; // U+2212 MATHEMATICAL MINUS SIGN
-const MINUS_SERIALIZED = "-"; // ASCII U+002D HYPHEN-MINUS
+// Baked from phonology_shared.editor.grid via STATUS_TEXT so a
+// Python-side glyph edit propagates without a JS change. The
+// literal fallbacks keep the file usable when opened raw (without
+// the build step) for dev; the baked path is canonical.
+const MINUS_DISPLAY = STATUS_TEXT.minus_display || "−"; // U+2212
+const MINUS_SERIALIZED = STATUS_TEXT.minus_serialized || "-"; // U+002D
 
 // Cached cell <td> nodes keyed by row index. Populated by
 // renderEditorGrid and consulted by selection-paint and bulk-cycle.
