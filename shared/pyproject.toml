@@ -30,7 +30,14 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-mock>=3.12", "mypy>=1.8"]
+dev = [
+    "pytest>=7",
+    "pytest-mock>=3.12",
+    "mypy>=1.8",
+    # Property-based tests on the inventory boundary: round-trip
+    # parse <-> to_json_dict and accept/reject invariants.
+    "hypothesis>=6",
+]
 
 [project.urls]
 Homepage = "https://github.com/jhnwnstd/phono-feature"

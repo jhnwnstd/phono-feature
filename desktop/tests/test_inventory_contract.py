@@ -120,7 +120,13 @@ def test_parse_rejects_canonical_collision_in_segment_bundle() -> None:
     other in the bundle dict, losing one of the two values. The parser
     catches this at the bundle boundary so neither value is dropped
     without report.
+
+    Pinned on the stable issue code so future wording changes
+    (e.g. the alias-aware resolution now reports "resolve to the
+    same declared feature") do not break this contract.
     """
+    from phonology_shared.data.inventory import _IssueCodes
+
     with pytest.raises(ValidationError) as ex:
         Inventory.parse(
             {
@@ -128,9 +134,110 @@ def test_parse_rejects_canonical_collision_in_segment_bundle() -> None:
                 "segments": {"p": {"Voice": "-", " Voice ": "+"}},
             }
         )
+    codes = {vi.code for vi in ex.value.validation_issues}
+    assert _IssueCodes.BUNDLE_FEATURE_KEY_COLLISION in codes
     msg = " ".join(ex.value.issues).lower()
     assert "voice" in msg
-    assert "canonicalization" in msg
+
+
+def test_alias_aware_bundle_folds_r_colored_to_declared_rhotic() -> None:
+    """A bundle key (``"r-colored"``) that normalises to the same
+    engine key as a declared feature (``"Rhotic"``) is accepted and
+    stored under the declared canonical name. This is the
+    alias-aware boundary contract: bundle keys are resolved against
+    the feature table's normalised lookup, not just by literal
+    canonical-name match.
+
+    Previously this case raised ``ValidationError`` because
+    ``r-colored`` was not literally in the declared-name set. The
+    new resolver folds it onto ``Rhotic`` so engine code sees one
+    operational identity.
+    """
+    from phonology_shared.data.inventory import Inventory
+
+    inv = Inventory.parse(
+        {
+            "features": ["Rhotic"],
+            "segments": {
+                "a": {"r-colored": "+"},
+                "b": {"rhotacized": "-"},
+                "c": {"Rhotic": "0"},
+            },
+        }
+    )
+    assert "Rhotic" in inv.segments["a"]
+    assert "Rhotic" in inv.segments["b"]
+    assert "Rhotic" in inv.segments["c"]
+    # Folded key is the declared canonical name; the alias spelling
+    # does not survive in the stored bundle.
+    assert "r-colored" not in inv.segments["a"]
+    assert "rhotacized" not in inv.segments["b"]
+    # Values land where the alias key carried them.
+    assert inv.feature_value("a", "Rhotic") == "+"
+    assert inv.feature_value("b", "Rhotic") == "-"
+    assert inv.feature_value("c", "Rhotic") == "0"
+
+
+def test_alias_aware_bundle_round_trip_emits_declared_name() -> None:
+    """``to_json_dict`` after an alias-aware parse writes the
+    declared canonical name, NOT the original alias spelling, so
+    a save-then-reload is byte-stable."""
+    from phonology_shared.data.inventory import Inventory
+
+    inv = Inventory.parse(
+        {
+            "features": ["Breathy"],
+            "segments": {"a": {"breathy_voice": "+"}},
+        }
+    )
+    payload = inv.to_json_dict()
+    seg_a = payload["segments"]["a"]
+    assert "Breathy" in seg_a
+    assert "breathy_voice" not in seg_a
+
+
+def test_alias_aware_bundle_rejects_genuinely_unknown_feature() -> None:
+    """Aliases only fold onto a declared feature when the alias
+    actually matches one. A truly unknown name still raises with
+    the matching issue code, even when alias-aware resolution is on."""
+    from phonology_shared.data.inventory import (
+        Inventory,
+        ValidationError,
+        _IssueCodes,
+    )
+
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {
+                "features": ["Voice"],
+                "segments": {"p": {"NotADeclaredFeature": "+"}},
+            }
+        )
+    codes = {vi.code for vi in ex.value.validation_issues}
+    assert _IssueCodes.BUNDLE_FEATURE_NOT_DECLARED in codes
+
+
+def test_alias_aware_bundle_two_alias_spellings_collide() -> None:
+    """When one bundle uses two different alias spellings of the
+    same declared feature (e.g. ``"r-colored"`` and ``"rhotacized"``
+    both folding to ``Rhotic``), the parser reports the collision
+    so neither value silently overwrites the other.
+    """
+    from phonology_shared.data.inventory import (
+        Inventory,
+        ValidationError,
+        _IssueCodes,
+    )
+
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(
+            {
+                "features": ["Rhotic"],
+                "segments": {"p": {"r-colored": "+", "rhotacized": "-"}},
+            }
+        )
+    codes = {vi.code for vi in ex.value.validation_issues}
+    assert _IssueCodes.BUNDLE_FEATURE_KEY_COLLISION in codes
 
 
 def test_engine_consumers_never_raise_on_parsed_inventory() -> None:
