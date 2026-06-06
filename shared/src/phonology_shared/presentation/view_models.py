@@ -132,12 +132,19 @@ class FeatureQuerySummary(TypedDict):
 def build_inventory_summary(
     engine: FeatureEngine,
     inventory_name: str,
+    provenance: str | None = None,
 ) -> dict[str, Any]:
     """Shape the inventory summary both frontends need after a load.
 
     Returns the plain dict payload the web bridge exposes to JS. The
     structure is also useful to the desktop when we want a canonical,
     serializable snapshot of the current engine-backed layout state.
+
+    ``provenance`` is an optional short label naming where the
+    inventory came from (e.g. ``"PHOIBLE / Korean (Eurasian
+    Phonologies)"``, ``"bundled / english_features"``,
+    ``"PanPhon / IPA Help"``). Surfaced by both renderers so the
+    user can tell the source after the picker dialog closes.
     """
     grouped = engine.grouped_segments
     consonant_groups: list[dict[str, Any]] = []
@@ -149,6 +156,7 @@ def build_inventory_summary(
             consonant_groups.append({"name": manner, "segments": list(segs)})
     return {
         "name": inventory_name,
+        "provenance": provenance,
         "segments": list(engine.segments),
         "features": list(engine.features),
         "groups": consonant_groups,

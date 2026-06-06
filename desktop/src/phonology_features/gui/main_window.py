@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import (
@@ -860,15 +861,19 @@ class MainWindow(QMainWindow):
         # live on the engine, so the new engine starts with fresh
         # caches.
         self.engine = FeatureEngine(inventory)
+        # ``Inventory.metadata['feature_source']`` carries the bake-
+        # time provenance ("PHOIBLE", "PanPhon", etc.). The PHOIBLE
+        # picker dialog stamps this on each materialised inventory.
+        feature_source = inventory.metadata.get("feature_source") or "PHOIBLE"
+        provenance = f"{feature_source} / {inventory.name}"
         base_msg = inventory_loaded_message(
             name=inventory.name,
             n_segments=len(self.engine.segments),
             n_features=len(self.engine.features),
         )
+        msg = f"{base_msg}  [{provenance}]"
         if inventory.advisories:
-            self.status.showMessage(
-                f"{base_msg} Note: {inventory.advisories[0]}"
-            )
+            self.status.showMessage(f"{msg} Note: {inventory.advisories[0]}")
             for note in inventory.advisories:
                 _log.info(
                     "inventory advisory (phoible %s): %s",
@@ -876,7 +881,7 @@ class MainWindow(QMainWindow):
                     note,
                 )
         else:
-            self.status.showMessage(base_msg)
+            self.status.showMessage(msg)
         # Clear any path-based registration so the inventory combo
         # does not point at a stale file when the user later picks
         # a bundled entry.
@@ -980,18 +985,23 @@ class MainWindow(QMainWindow):
         # No manual invalidation needed.
         self.engine = FeatureEngine(inventory)
         name = inventory.name
+        feature_source = inventory.metadata.get("feature_source")
+        provenance = (
+            f"{feature_source} / {name}"
+            if feature_source
+            else f"bundled / {Path(fname).stem}"
+        )
         base_msg = inventory_loaded_message(
             name=name,
             n_segments=len(self.engine.segments),
             n_features=len(self.engine.features),
         )
+        msg = f"{base_msg}  [{provenance}]"
         if inventory.advisories:
             # Show the first advisory inline; the rest go to the log so
             # we don't truncate or wrap the status bar. Empty for every
             # bundled inventory.
-            self.status.showMessage(
-                f"{base_msg} Note: {inventory.advisories[0]}"
-            )
+            self.status.showMessage(f"{msg} Note: {inventory.advisories[0]}")
             for note in inventory.advisories:
                 _log.info("inventory advisory: %s: %s", fname, note)
         else:

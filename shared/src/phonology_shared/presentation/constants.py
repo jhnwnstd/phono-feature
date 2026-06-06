@@ -79,15 +79,9 @@ DIPHTHONG_TOGGLE_LABEL: str = "diphthongs"
 # place of an empty result so the user always sees something
 # orienting rather than a blank region. Tone matches the rest of
 # the status copy: short, lowercase, never alarming.
-EMPTY_NATURAL_CLASS_HINT: str = (
-    "No natural class matches this selection."
-)
-EMPTY_SHARED_FEATURES_HINT: str = (
-    "No features shared across this selection."
-)
-EMPTY_PHOIBLE_SEARCH_HINT: str = (
-    "No PHOIBLE inventories match this query."
-)
+EMPTY_NATURAL_CLASS_HINT: str = "No natural class matches this selection."
+EMPTY_SHARED_FEATURES_HINT: str = "No features shared across this selection."
+EMPTY_PHOIBLE_SEARCH_HINT: str = "No PHOIBLE inventories match this query."
 
 # Monospace font fallback chain for IPA-heavy text (analysis-pane
 # chips, anything rendering segment symbols / feature values). Order:

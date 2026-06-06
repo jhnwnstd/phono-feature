@@ -155,7 +155,16 @@ def load_inventory_json(
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name or source_label
     _invalidate_analysis_caches()
-    return build_inventory_summary(_engine, _inventory_name)
+    # ``source_label`` is the user-facing label the picker passed
+    # (bundled inventory title / uploaded filename / PHOIBLE
+    # composite). Carry it through as the provenance so the chip
+    # tracks the chosen pick.
+    provenance = (
+        f"bundled / {source_label}"
+        if source_label and source_label != "uploaded"
+        else "uploaded"
+    )
+    return build_inventory_summary(_engine, _inventory_name, provenance)
 
 
 def _invalidate_analysis_caches() -> None:
@@ -480,7 +489,13 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name
     _invalidate_analysis_caches()
-    return build_inventory_summary(_engine, _inventory_name)
+    descriptor = provider.descriptor(inventory_id)
+    provenance = (
+        f"PHOIBLE / {descriptor.language_name} ({descriptor.source_short})"
+        if descriptor is not None
+        else "PHOIBLE"
+    )
+    return build_inventory_summary(_engine, _inventory_name, provenance)
 
 
 def create_new_inventory(
@@ -555,7 +570,7 @@ def create_new_inventory(
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name
     _invalidate_analysis_caches()
-    return build_inventory_summary(_engine, _inventory_name)
+    return build_inventory_summary(_engine, _inventory_name, "builder / new")
 
 
 def get_cycle_ladder() -> dict[str, str]:
@@ -682,7 +697,7 @@ def commit_inventory_from_grid(
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name
     _invalidate_analysis_caches()
-    return build_inventory_summary(_engine, _inventory_name)
+    return build_inventory_summary(_engine, _inventory_name, "builder / grid")
 
 
 def rename_current_inventory(new_name: str) -> dict[str, Any]:

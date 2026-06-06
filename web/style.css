@@ -417,6 +417,17 @@ dialog input[type="text"]:focus-visible {
   background: var(--accent-soft);
   color: var(--accent);
 }
+/* Empty-search hint: muted + non-interactive so the user reads
+   "no matches" rather than mistaking the entry for a result. */
+.phoible-results li.phoible-empty-hint {
+  cursor: default;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.phoible-results li.phoible-empty-hint:hover {
+  background: transparent;
+  color: var(--text-dim);
+}
 
 /* Source-card chooser. One ``<label>`` per inventory; the radio
    input is the form-state carrier and the rest of the row is the
@@ -1459,6 +1470,20 @@ dialog input[type="text"]:focus-visible {
 .analysis-selection[hidden] { display: none; }
 .analysis-selection p { margin: 0; }
 .analysis-selection b { color: var(--text); }
+
+/* Persistent inventory-source badge. Lives ABOVE the analysis-
+   selection strip so the user can tell where the loaded inventory
+   came from after the picker closes. Muted typography keeps it
+   out of the way of the IPA chip strip below. */
+.inventory-provenance {
+  display: block;
+  margin: 0 0 var(--space-xs) var(--space-xs);
+  font-size: var(--font-size-label);
+  color: var(--text-dim);
+  letter-spacing: 0.2px;
+  user-select: text;
+}
+.inventory-provenance[hidden] { display: none; }
 
 /* Tab strip: Class / Features / Contrasts. Mirrors the desktop's
    QTabBar styling: bottom-flush tabs with the active tab merged

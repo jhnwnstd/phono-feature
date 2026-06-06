@@ -264,7 +264,11 @@ def _render_completion_body(completion: NaturalClassCompletion) -> str:
     # completion, but pick the first defensively if the shape ever
     # widens.
     if not completion.additions:
-        return ""
+        from phonology_shared.presentation.constants import (
+            EMPTY_NATURAL_CLASS_HINT,
+        )
+
+        return f"<p>{_muted_italic_span(EMPTY_NATURAL_CLASS_HINT)}</p>"
     additions = completion.additions[0]
     n = len(additions)
     chips = " ".join(_segment_chip(seg, TagColor.NEUTRAL) for seg in additions)
@@ -276,7 +280,14 @@ def _render_completion_body(completion: NaturalClassCompletion) -> str:
 
 def _render_shared_features(common: dict[str, str]) -> str:
     if not common:
-        return f"<p><b>Shared features:</b> {_muted_italic_span('none')}</p>"
+        from phonology_shared.presentation.constants import (
+            EMPTY_SHARED_FEATURES_HINT,
+        )
+
+        return (
+            f"<p><b>Shared features:</b></p>"
+            f"<p>{_muted_italic_span(EMPTY_SHARED_FEATURES_HINT)}</p>"
+        )
     chips = " ".join(
         _signed_feature_chip(value, feature)
         for feature, value in sort_spec(common).items()

@@ -644,6 +644,7 @@ async function loadBundledInventory(item) {
  */
 function applyInventoryInfo(info) {
     state.inventory_name = info.name;
+    state.provenance = info.provenance || null;
     state.segments = info.segments;
     state.features = info.features;
     state.selected_segments = [];
@@ -651,6 +652,32 @@ function applyInventoryInfo(info) {
     renderSegmentGrid(info.groups, info.vowel_chart);
     renderFeaturePanel(info.feature_groups);
     clearAnalysisTabs();
+    _applyProvenanceChip(info.provenance);
+}
+
+/** Paint the persistent inventory-source badge next to the
+ *  analysis-selection header. Reads the ``provenance`` field from
+ *  the bridge payload so the user can tell where the loaded
+ *  inventory came from (PHOIBLE / bundled / uploaded / builder)
+ *  after the picker dialog closes. */
+function _applyProvenanceChip(provenance) {
+    let chip = document.getElementById("inventory-provenance");
+    if (!provenance) {
+        if (chip) chip.hidden = true;
+        return;
+    }
+    if (!chip) {
+        chip = document.createElement("span");
+        chip.id = "inventory-provenance";
+        chip.className = "inventory-provenance";
+        const host = document.getElementById("analysis-selection");
+        if (host && host.parentNode) {
+            host.parentNode.insertBefore(chip, host);
+        }
+    }
+    chip.textContent = provenance;
+    chip.title = `Loaded from ${provenance}`;
+    chip.hidden = false;
 }
 
 async function loadInventoryText(text, sourceLabel) {
@@ -2705,7 +2732,22 @@ function wirePhoiblePicker() {
         ul.innerHTML = "";
         highlightedIndex = -1;
         if (!matches || matches.length === 0) {
-            ul.hidden = true;
+            // Hide the dropdown for empty queries; show a single
+            // muted entry for non-empty queries that yielded zero
+            // matches so the user reads "this surfaced no matches"
+            // rather than a frozen UI.
+            const query = (searchInput.value || "").trim();
+            if (!query) {
+                ul.hidden = true;
+                return;
+            }
+            const li = document.createElement("li");
+            li.className = "phoible-empty-hint";
+            li.textContent = STATUS_TEXT.empty_phoible_search_hint
+                || "No PHOIBLE inventories match this query.";
+            li.setAttribute("aria-disabled", "true");
+            ul.appendChild(li);
+            ul.hidden = false;
             return;
         }
         for (const name of matches) {
