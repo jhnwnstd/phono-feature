@@ -1422,30 +1422,57 @@ function _appendVowelHeightTierBands(dataEl, chart, silTopY, silBotY) {
     dataEl.insertBefore(container, dataEl.firstChild);
 }
 
+/** Overlay an SVG layer of curved-arrow diphthong glides on top
+ *  of the vowel chart's data area. The geometry layer ships each
+ *  diphthong with both endpoints' projected ``(chart_x, chart_y)``
+ *  in ``[0, 1]`` already, so the renderer applies them via
+ *  ``viewBox="0 0 100 100"`` percentages directly. The pinned
+ *  contract (validated across all 3020 PHOIBLE inventories by
+ *  ``test_phoible_vowel_rendering_stress``):
+ *
+ *   - every diphthong's primary and secondary endpoints are
+ *     distinct (degenerate self-loops are suppressed at the
+ *     geometry layer, not here)
+ *   - both endpoints' coordinates fall in ``[0, 1]``
+ *
+ *  A defensive ``console.warn`` fires on any breach of either
+ *  invariant — diphthongs that violate are skipped so the chart
+ *  still renders cleanly. */
 function _appendVowelDiphthongArrows(dataEl, chart) {
     const arrows = chart.diphthongs;
     if (!Array.isArray(arrows) || arrows.length === 0) return;
-    // Map ``(row, col) -> (chart_x, chart_y)`` so the arrows can
-    // look up endpoints without an O(N*M) scan per diphthong.
-    const cellByKey = new Map();
-    for (const cell of chart.cells) {
-        cellByKey.set(`${cell.row},${cell.col}`, cell);
-    }
     // Group arrows that share the same primary -> secondary cell
     // pair so we can fan their control points across the
-    // perpendicular axis; otherwise the 57 PHOIBLE inventories
-    // that have multiple distinct diphthongs at one pair would
-    // render N curves literally on top of each other.
+    // perpendicular axis; otherwise PHOIBLE inventories that have
+    // multiple distinct diphthongs at one pair would render N
+    // curves literally on top of each other.
     const groups = new Map();
     for (const d of arrows) {
-        const a = cellByKey.get(`${d.primary_row},${d.primary_col}`);
-        const b = cellByKey.get(`${d.secondary_row},${d.secondary_col}`);
-        if (!a || !b) continue;
+        // Defensive: catch a future regression where the geometry
+        // layer ships an endpoint outside [0, 1] or a self-loop.
+        // The renderer skips the offender so the rest of the chart
+        // stays clean; the warn surfaces in DevTools so the
+        // breakage is visible during development.
+        const okBounds =
+            d.primary_chart_x >= 0 && d.primary_chart_x <= 1 &&
+            d.primary_chart_y >= 0 && d.primary_chart_y <= 1 &&
+            d.secondary_chart_x >= 0 && d.secondary_chart_x <= 1 &&
+            d.secondary_chart_y >= 0 && d.secondary_chart_y <= 1;
+        const selfLoop =
+            d.primary_row === d.secondary_row &&
+            d.primary_col === d.secondary_col;
+        if (!okBounds || selfLoop) {
+            console.warn(
+                "vowel-chart diphthong invariant breach",
+                {seg: d.segment, selfLoop, okBounds, d},
+            );
+            continue;
+        }
         const key =
             `${d.primary_row},${d.primary_col}` +
             `->${d.secondary_row},${d.secondary_col}`;
         if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push({ d, a, b });
+        groups.get(key).push(d);
     }
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
@@ -1456,11 +1483,11 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
     for (const groupArrows of groups.values()) {
         const N = groupArrows.length;
         for (let i = 0; i < N; i++) {
-            const { d, a, b } = groupArrows[i];
-            const ax = a.chart_x * 100;
-            const ay = a.chart_y * 100;
-            const bx = b.chart_x * 100;
-            const by = b.chart_y * 100;
+            const d = groupArrows[i];
+            const ax = d.primary_chart_x * 100;
+            const ay = d.primary_chart_y * 100;
+            const bx = d.secondary_chart_x * 100;
+            const by = d.secondary_chart_y * 100;
             // Control point: midpoint nudged perpendicular to the
             // chord. The base arc rise stays subtle on long arrows
             // and visible on short ones. When N > 1 share the same

@@ -524,9 +524,12 @@ def _vowel_chart_summary(
         ],
         # Diphthong rendering hints; empty list for monophthong-only
         # inventories. Renderers draw a curved arrow from
-        # ``(primary_row, primary_col)`` to
-        # ``(secondary_row, secondary_col)`` and look up the cell
-        # coordinates in the ``cells`` array above.
+        # ``(primary_chart_x, primary_chart_y)`` to
+        # ``(secondary_chart_x, secondary_chart_y)`` directly; the
+        # row / col fields are included for diagnostic use and the
+        # rendering stress suite, but the renderer does not look
+        # cells up by row/col any more (the projection survives
+        # secondary endpoints that fall on unpopulated cells).
         "diphthongs": [
             {
                 "segment": d.segment,
@@ -534,6 +537,10 @@ def _vowel_chart_summary(
                 "primary_col": d.primary_col,
                 "secondary_row": d.secondary_row,
                 "secondary_col": d.secondary_col,
+                "primary_chart_x": d.primary_chart_x,
+                "primary_chart_y": d.primary_chart_y,
+                "secondary_chart_x": d.secondary_chart_x,
+                "secondary_chart_y": d.secondary_chart_y,
             }
             for d in geometry.diphthongs
         ],

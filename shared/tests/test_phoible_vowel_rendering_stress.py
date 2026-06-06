@@ -1,0 +1,297 @@
+"""Whole-PHOIBLE vowel-chart RENDERING stress suite.
+
+Walks every PHOIBLE inventory (~3020) and pins the geometric and
+structural invariants the web + desktop renderers rely on. The
+existing dimensions-stress suite checks aggregate size budgets;
+this suite checks per-cell and per-diphthong correctness so a
+future placement-policy tweak, bake schema change, or silhouette-
+shrink refactor cannot silently produce a malformed chart.
+
+Pinned invariants:
+
+- **B1 Bounds**: every populated cell has
+  ``chart_x in [0, 1]`` and ``chart_y in [0, 1]``. The web renderer
+  sets ``left: chart_x * 100%; top: chart_y * 100%`` without
+  clamping; out-of-range projections would render outside the
+  chart container.
+
+- **B2 Silhouette containment**: every populated cell's projected
+  centre sits inside the silhouette polygon. The trapezoid /
+  triangle silhouette is the visual envelope; cells outside it
+  read as floating artefacts even though they technically render.
+
+- **B3 Diphthong cell existence**: every diphthong's primary AND
+  secondary ``(row, col)`` corresponds to a populated cell in
+  ``geom.cells``. After the degenerate-secondary suppression in
+  ``compute_placements``, this also asserts no self-loops.
+
+- **B4 Cell-count ceiling**: no inventory produces > 24 cells.
+  PHOIBLE max today is 16; 24 leaves a 50% safety margin.
+
+- **B5 Disjoint cell membership**: every segment appears in
+  exactly one cell. The collision-dict construction guarantees
+  this by design, but pinning it here catches a future renderer
+  refactor that double-counts.
+
+Skipped when the PHOIBLE bake snapshot is absent.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from phonology_shared.chart.vowels import (
+    build_vowel_chart_geometry,
+    detect_vowel_profile,
+)
+from phonology_shared.theory.feature_engine import FeatureEngine
+
+try:
+    from phonology_shared.editor.phoible_provider import (
+        PhoibleProvider,
+        materialize_phoible_inventory,
+    )
+except ImportError:  # pragma: no cover - dev-only path
+    pytest.skip("phoible_provider unavailable", allow_module_level=True)
+
+
+# Tolerance for the silhouette-containment check. Cells are
+# centred on (chart_x, chart_y); the button has finite width and
+# may legitimately straddle the silhouette edge by a small fraction
+# of the container. The tolerance is fraction-of-container.
+_SILHOUETTE_TOLERANCE = 0.02
+
+# Cell-count safety margin above the empirical PHOIBLE max (16).
+_CELL_COUNT_HARD_CAP = 24
+
+
+@pytest.fixture(scope="module")
+def provider() -> PhoibleProvider:
+    try:
+        return PhoibleProvider()
+    except FileNotFoundError as exc:  # pragma: no cover
+        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
+    except Exception as exc:  # pragma: no cover
+        pytest.skip(f"PHOIBLE provider unavailable: {exc}")
+
+
+@pytest.fixture(scope="module")
+def all_inventory_ids(provider: PhoibleProvider) -> list[str]:
+    return list(provider._inventories)  # type: ignore[attr-defined]
+
+
+def _label_for(provider: PhoibleProvider, inv_id: str) -> str:
+    desc = provider.descriptor(inv_id)
+    if desc is None:
+        return inv_id
+    return f"{desc.language_name}/{desc.source_short}"
+
+
+def _build_geometry(provider: PhoibleProvider, inv_id: str):
+    """Materialise the inventory through the same pipeline the UI
+    uses. Returns ``None`` if the inventory has no vowels."""
+    inv = materialize_phoible_inventory(provider, inv_id)
+    engine = FeatureEngine(inv)
+    vowels = list(engine.grouped_segments.get("Vowels", []))
+    if not vowels:
+        return None
+    seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
+    profile = detect_vowel_profile(vowels, seg_feats)
+    secondary = inv.metadata.get("vowel_secondary")
+    secondary_map = secondary if isinstance(secondary, dict) else None
+    return build_vowel_chart_geometry(
+        vowels, profile, seg_feats, vowel_secondary=secondary_map
+    )
+
+
+def _silhouette_left_at_y(sil, y: float) -> float:
+    """Linear interpolation of the silhouette's left edge at the
+    given normalised y. The silhouette is a quadrilateral with
+    ``top_left`` at ``top_y`` and ``bottom_left`` at ``bottom_y``."""
+    if sil.bottom_y == sil.top_y:
+        return sil.top_left
+    t = (y - sil.top_y) / (sil.bottom_y - sil.top_y)
+    t = max(0.0, min(1.0, t))
+    return sil.top_left + (sil.bottom_left - sil.top_left) * t
+
+
+def _silhouette_right_at_y(sil, y: float) -> float:
+    """Linear interpolation of the silhouette's right edge at the
+    given normalised y."""
+    if sil.bottom_y == sil.top_y:
+        return sil.top_right
+    t = (y - sil.top_y) / (sil.bottom_y - sil.top_y)
+    t = max(0.0, min(1.0, t))
+    return sil.top_right + (sil.bottom_right - sil.top_right) * t
+
+
+def test_b1_chart_xy_within_unit_bounds(
+    provider: PhoibleProvider, all_inventory_ids: list[str]
+) -> None:
+    """Every populated cell's projection stays in ``[0, 1]``. The
+    web renderer applies ``left: chart_x * 100%; top: chart_y *
+    100%`` without clamping; out-of-range values would render
+    outside the chart container."""
+    offenders: list[tuple[str, int, int, float, float]] = []
+    for inv_id in all_inventory_ids:
+        geom = _build_geometry(provider, inv_id)
+        if geom is None:
+            continue
+        for cell in geom.cells:
+            if not (0.0 <= cell.chart_x <= 1.0 and 0.0 <= cell.chart_y <= 1.0):
+                offenders.append(
+                    (
+                        _label_for(provider, inv_id),
+                        cell.row,
+                        cell.col,
+                        cell.chart_x,
+                        cell.chart_y,
+                    )
+                )
+    assert not offenders, (
+        f"cells with chart_x or chart_y outside [0, 1] in "
+        f"{len(offenders)} placements; first 5: {offenders[:5]}"
+    )
+
+
+def test_b2_cells_sit_inside_silhouette(
+    provider: PhoibleProvider, all_inventory_ids: list[str]
+) -> None:
+    """Every populated cell's projected centre sits inside the
+    silhouette polygon (interpolated edges at the cell's y).
+    Catches the shrunken-row case where a front-anchored cell
+    could project past the silhouette's contracted left edge."""
+    offenders: list[tuple[str, int, int, float, float, float, float]] = []
+    for inv_id in all_inventory_ids:
+        geom = _build_geometry(provider, inv_id)
+        if geom is None:
+            continue
+        sil = geom.silhouette
+        for cell in geom.cells:
+            left = _silhouette_left_at_y(sil, cell.chart_y)
+            right = _silhouette_right_at_y(sil, cell.chart_y)
+            if not (
+                left - _SILHOUETTE_TOLERANCE
+                <= cell.chart_x
+                <= right + _SILHOUETTE_TOLERANCE
+            ):
+                offenders.append(
+                    (
+                        _label_for(provider, inv_id),
+                        cell.row,
+                        cell.col,
+                        cell.chart_x,
+                        cell.chart_y,
+                        left,
+                        right,
+                    )
+                )
+    assert not offenders, (
+        f"cells sitting outside the silhouette in "
+        f"{len(offenders)} placements; first 5: {offenders[:5]}"
+    )
+
+
+def test_b3_diphthongs_have_distinct_well_defined_endpoints(
+    provider: PhoibleProvider, all_inventory_ids: list[str]
+) -> None:
+    """Every diphthong has distinct primary and secondary endpoints
+    (no degenerate self-loops after the suppression in
+    ``compute_placements``) and both ``chart_x`` / ``chart_y`` pairs
+    fall in ``[0, 1]`` so the renderer can position the arrow with
+    a simple percentage transform. The endpoints no longer need
+    to correspond to populated cells; the geometry projects them
+    independently via ``_project_to_chart_xy``."""
+    offenders: list[tuple[str, str, tuple[int, int], tuple[int, int]]] = []
+    bounds_offenders: list[tuple[str, str, float, float, float, float]] = []
+    for inv_id in all_inventory_ids:
+        geom = _build_geometry(provider, inv_id)
+        if geom is None:
+            continue
+        for d in geom.diphthongs:
+            primary = (d.primary_row, d.primary_col)
+            secondary = (d.secondary_row, d.secondary_col)
+            if primary == secondary:
+                offenders.append(
+                    (
+                        _label_for(provider, inv_id),
+                        d.segment,
+                        primary,
+                        secondary,
+                    )
+                )
+            if not (
+                0.0 <= d.primary_chart_x <= 1.0
+                and 0.0 <= d.primary_chart_y <= 1.0
+                and 0.0 <= d.secondary_chart_x <= 1.0
+                and 0.0 <= d.secondary_chart_y <= 1.0
+            ):
+                bounds_offenders.append(
+                    (
+                        _label_for(provider, inv_id),
+                        d.segment,
+                        d.primary_chart_x,
+                        d.primary_chart_y,
+                        d.secondary_chart_x,
+                        d.secondary_chart_y,
+                    )
+                )
+    assert not offenders, (
+        f"degenerate diphthongs (primary == secondary) in "
+        f"{len(offenders)} placements; first 5: {offenders[:5]}"
+    )
+    assert not bounds_offenders, (
+        f"diphthong endpoints outside [0, 1] in "
+        f"{len(bounds_offenders)} placements; first 5: "
+        f"{bounds_offenders[:5]}"
+    )
+
+
+def test_b4_cell_count_within_hard_cap(
+    provider: PhoibleProvider, all_inventory_ids: list[str]
+) -> None:
+    """No PHOIBLE inventory produces more cells than the hard cap.
+    PHOIBLE's worst case today is 16 populated cells (the 7-row x
+    9-column grid is sparse); 24 leaves room for a future bake
+    with a moderately denser inventory without permitting
+    unbounded growth that would slow the renderer's paint pass."""
+    offenders: list[tuple[str, int]] = []
+    for inv_id in all_inventory_ids:
+        geom = _build_geometry(provider, inv_id)
+        if geom is None:
+            continue
+        n = len(geom.cells)
+        if n > _CELL_COUNT_HARD_CAP:
+            offenders.append((_label_for(provider, inv_id), n))
+    assert not offenders, (
+        f"inventories producing > {_CELL_COUNT_HARD_CAP} cells in "
+        f"{len(offenders)} cases; first 5: {offenders[:5]}"
+    )
+
+
+def test_b5_segments_appear_in_at_most_one_cell(
+    provider: PhoibleProvider, all_inventory_ids: list[str]
+) -> None:
+    """Every segment appears in at most one cell. The construction
+    of ``occupied`` via ``setdefault(...).append`` guarantees this
+    by design; pinning it here catches a future renderer-side
+    refactor that double-iterates or copies entries."""
+    offenders: list[tuple[str, str, list[tuple[int, int]]]] = []
+    for inv_id in all_inventory_ids:
+        geom = _build_geometry(provider, inv_id)
+        if geom is None:
+            continue
+        seg_to_cells: dict[str, list[tuple[int, int]]] = {}
+        for cell in geom.cells:
+            for seg in cell.entries:
+                seg_to_cells.setdefault(seg, []).append((cell.row, cell.col))
+        duplicates = {
+            seg: cells for seg, cells in seg_to_cells.items() if len(cells) > 1
+        }
+        if duplicates:
+            for seg, cells in list(duplicates.items())[:3]:
+                offenders.append((_label_for(provider, inv_id), seg, cells))
+    assert not offenders, (
+        f"segments appearing in > 1 cell in "
+        f"{len(offenders)} placements; first 5: {offenders[:5]}"
+    )

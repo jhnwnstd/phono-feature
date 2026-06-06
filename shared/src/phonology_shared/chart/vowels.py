@@ -1315,6 +1315,20 @@ def compute_placements(
     collision-cell map (``occupied``) only tracks PRIMARY
     placements; secondaries live purely as a rendering hint.
 
+    Degenerate-secondary suppression: when the secondary projection
+    collapses to the SAME ``(row, col)`` cell as the primary (PHOIBLE
+    pharyngealised vowels like ``iˤ`` whose contour halves differ
+    only on features the placement code does not read for grid
+    position), the secondary is dropped and the segment is treated
+    as a monophthong. Without this, the chart would render a
+    zero-length diphthong arrow that reads as a stray dot,
+    misleading the user about the segment's behaviour. Today this
+    affects 84 segments across 20 PHOIBLE languages (ARCHI/UPSID,
+    Northern Qiang/EA, !Xun/PHOIBLE, etc.). After this gate, every
+    ``geom.diphthongs`` entry honours the contract that its primary
+    and secondary cells are distinct, which the rendering stress
+    suite asserts.
+
     Returns ``(occupied, placements)``. Cells are sorted by
     descending placement confidence (highest first); ties break on
     ascending segment string for stable ordering.
@@ -1327,15 +1341,27 @@ def compute_placements(
         placement = vowel_grid_pos(norm_feats.get(seg, {}), profile, policy)
         if seg in secondary_feats:
             secondary = vowel_grid_pos(secondary_feats[seg], profile, policy)
-            secondary = replace(
-                secondary,
-                flags=secondary.flags | frozenset({PlacementFlag.DIPHTHONG}),
-            )
-            placement = replace(
-                placement,
-                flags=placement.flags | frozenset({PlacementFlag.DIPHTHONG}),
-                secondary=secondary,
-            )
+            # Suppress the secondary when it lands in the SAME
+            # (row, col) cell as the primary; the arrow would be
+            # zero-length. The segment then renders as a regular
+            # monophthong.
+            if (
+                secondary.row != placement.row
+                or secondary.col != placement.col
+            ):
+                secondary = replace(
+                    secondary,
+                    flags=(
+                        secondary.flags | frozenset({PlacementFlag.DIPHTHONG})
+                    ),
+                )
+                placement = replace(
+                    placement,
+                    flags=(
+                        placement.flags | frozenset({PlacementFlag.DIPHTHONG})
+                    ),
+                    secondary=secondary,
+                )
         placements[seg] = placement
         occupied.setdefault((placement.row, placement.col), []).append(seg)
     # Confidence DESCENDING (via negated int), segment ASCENDING
@@ -1442,6 +1468,23 @@ class VowelChartCell:
     ``is_long_pair`` is kept as a derived bool (``display_kind ==
     LONG_PAIR``) so existing readers that branch on length keep
     working until they migrate to ``display_kind``.
+
+    Invariants pinned by :py:mod:`tests.test_phoible_vowel_rendering_stress`
+    across the full PHOIBLE catalogue:
+
+    1. ``chart_x in [0, 1]`` and ``chart_y in [0, 1]``. The
+       web renderer applies ``left: chart_x * 100%`` and
+       ``top: chart_y * 100%`` without clamping.
+    2. The cell's projected centre sits inside the
+       :py:class:`VowelChartSilhouette` polygon (tolerance ~2% of
+       the container) so the chart's outline always wraps the
+       buttons.
+    3. ``(row, col)`` is unique across all cells in the same
+       geometry. The collision dict in :py:func:`compute_placements`
+       enforces this by construction.
+    4. ``entries`` is non-empty and contains no duplicate segments;
+       every segment string appears in at most one cell across the
+       geometry.
     """
 
     row: int
@@ -1548,13 +1591,24 @@ class VowelChartSilhouette:
 
 @dataclass(frozen=True, slots=True)
 class VowelChartDiphthong:
-    """One diphthong's primary -> secondary cell pair, plus the
+    """One diphthong's primary -> secondary endpoint pair, with the
     grid coordinates the renderer uses to position the arrow.
 
-    Both endpoints reference a populated ``VowelChartCell`` by its
-    ``(row, col)`` key; the renderer looks the cells up in
-    :py:attr:`VowelChartGeometry.cells` to compute arrow endpoints
-    from the cells' ``chart_x`` / ``chart_y``.
+    The endpoint's ``(row, col)`` keys identify the logical cells;
+    ``primary_chart_x`` / ``primary_chart_y`` and
+    ``secondary_chart_x`` / ``secondary_chart_y`` are the projected
+    fractional positions (``[0, 1]``) the renderer applies directly.
+    Carrying the projection here (rather than asking the renderer to
+    look up cells in :py:attr:`VowelChartGeometry.cells`) decouples
+    the diphthong overlay from cell population: a secondary that
+    points to an unpopulated logical slot (PHOIBLE diphthong glides
+    landing on a row/col the inventory does not otherwise specify)
+    still gets a valid endpoint.
+
+    The geometry builder computes the projection through the same
+    silhouette + row-distribution math the populated cells use, so
+    the arrow lands at the would-be cell position regardless of
+    whether a vowel actually populates that slot.
     """
 
     segment: str
@@ -1562,6 +1616,10 @@ class VowelChartDiphthong:
     primary_col: int
     secondary_row: int
     secondary_col: int
+    primary_chart_x: float = 0.0
+    primary_chart_y: float = 0.0
+    secondary_chart_x: float = 0.0
+    secondary_chart_y: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -2482,22 +2540,59 @@ def build_vowel_chart_geometry(
     )
 
     natural_w, natural_h = _natural_data_area_size(tuple(cells))
+
+    def _project_to_chart_xy(ri: int, ci: int) -> tuple[float, float]:
+        """Project a logical (row, col) to its (chart_x, chart_y)
+        using the same silhouette + row-distribution math the
+        populated cells consume. Used by the diphthong overlay so
+        an arrow whose secondary lands on an unpopulated slot still
+        has a valid endpoint (rather than being silently dropped by
+        the renderer).
+
+        For rows outside ``populated_logical_rows`` we fall back to
+        the canonical row-y from ``_HEIGHT_Y`` so a diphthong glide
+        targeting an empty tier still points at a sensible vertical
+        position; the silhouette may not visually extend to that y,
+        but the arrow geometry stays defined.
+        """
+        if ri in display_y_by_row:
+            cy = display_y_by_row[ri]
+        else:
+            cy = _HEIGHT_Y[ROW_LABELS[ri]]
+        if ri == open_row_index and ci in (2, 3) and not open_front_populated:
+            anchor_x = _BACKNESS_X["front"]
+        else:
+            anchor_x = _col_to_anchor[ci]
+        row_w = _width_at_display_y(cy)
+        return back + row_w * (anchor_x - back), cy
+
     # Diphthong rendering hints. One entry per placement whose
     # ``secondary`` attribute is non-null. Order is stable across
     # builds (insertion order of ``placements``, which iterates
     # ``segs`` in caller-supplied order) so diff-driven tests on
     # the geometry stay reproducible.
-    diphthongs = tuple(
-        VowelChartDiphthong(
-            segment=seg,
-            primary_row=p.row,
-            primary_col=p.col,
-            secondary_row=p.secondary.row,
-            secondary_col=p.secondary.col,
+    diphthongs_list: list[VowelChartDiphthong] = []
+    for seg, p in placements.items():
+        if p.secondary is None:
+            continue
+        primary_x, primary_y = _project_to_chart_xy(p.row, p.col)
+        secondary_x, secondary_y = _project_to_chart_xy(
+            p.secondary.row, p.secondary.col
         )
-        for seg, p in placements.items()
-        if p.secondary is not None
-    )
+        diphthongs_list.append(
+            VowelChartDiphthong(
+                segment=seg,
+                primary_row=p.row,
+                primary_col=p.col,
+                secondary_row=p.secondary.row,
+                secondary_col=p.secondary.col,
+                primary_chart_x=primary_x,
+                primary_chart_y=primary_y,
+                secondary_chart_x=secondary_x,
+                secondary_chart_y=secondary_y,
+            )
+        )
+    diphthongs = tuple(diphthongs_list)
     return VowelChartGeometry(
         title=VOWEL_CHART_TITLE,
         shape=shape,

@@ -223,15 +223,25 @@ def test_e3_default_anchor_ceiling_for_large_inventories(
     )
 
 
-def test_e4_every_diphthong_has_non_null_secondary_placement(
+def test_e4_diphthong_secondary_is_present_or_intentionally_suppressed(
     provider: PhoibleProvider, all_inventory_ids: list[str]
 ) -> None:
     """For every PHOIBLE inventory with diphthongs, every key in
-    ``vowel_secondary`` must produce a placement whose ``secondary``
-    is non-null. Pins the end-to-end contract: bake -> provider ->
-    materializer -> placement reader all agree on the same
-    canonical segment key, so a diphthong cannot silently lose
-    its target cell."""
+    ``vowel_secondary`` either produces a placement with a non-null
+    ``secondary``, OR ``compute_placements`` intentionally
+    suppressed it because the secondary projection collapsed to
+    the same ``(row, col)`` cell as the primary (a degenerate
+    self-loop the renderer would draw as a stray dot). The
+    suppression path is documented in :py:func:`compute_placements`
+    and exercised on ~84 segments across ~20 languages today
+    (mostly pharyngealised vowels like ``iˤ``, ``aˤː``).
+
+    A regression here would either:
+    - Reintroduce null secondaries for non-degenerate diphthongs
+      (the NFC mismatch the original bug had), OR
+    - Reintroduce self-loop arrows that the suppression path
+      should be catching.
+    """
     offenders: list[tuple[str, list[str]]] = []
     for inv_id in all_inventory_ids:
         inv = materialize_phoible_inventory(provider, inv_id)
@@ -244,11 +254,30 @@ def test_e4_every_diphthong_has_non_null_secondary_placement(
         _, placements = compute_placements(
             vowels, profile, seg_feats, vowel_secondary=vs
         )
-        missing = [
-            seg
-            for seg in vs
-            if seg in placements and placements[seg].secondary is None
-        ]
+        # A null secondary is acceptable IFF the primary and the
+        # secondary feature bundles would project to the same cell;
+        # otherwise the lookup truly missed.
+        from phonology_shared.chart.vowels import vowel_grid_pos
+
+        missing = []
+        for seg in vs:
+            if seg not in placements:
+                missing.append(seg)
+                continue
+            if placements[seg].secondary is not None:
+                continue
+            # Null secondary: was it the intentional degenerate-
+            # collapse suppression? Recompute both placements
+            # without the suppression to compare cells.
+            primary_again = placements[seg]
+            secondary_raw = vowel_grid_pos(vs[seg], profile)
+            if (primary_again.row, primary_again.col) == (
+                secondary_raw.row,
+                secondary_raw.col,
+            ):
+                # Intentional suppression.
+                continue
+            missing.append(seg)
         if missing:
             desc = provider.descriptor(inv_id)
             label = (
@@ -258,7 +287,7 @@ def test_e4_every_diphthong_has_non_null_secondary_placement(
             )
             offenders.append((label, missing))
     assert not offenders, (
-        f"diphthongs with null secondary placement in "
+        f"diphthongs with unexpectedly null secondary placement in "
         f"{len(offenders)} inventories: {offenders[:5]}"
     )
 

@@ -795,21 +795,19 @@ class VowelChartWidget(QWidget):
         for arrows in groups.values():
             n = len(arrows)
             for i, d in enumerate(arrows):
-                a = self._cell_anchors_by_rc.get(
-                    (d.primary_row, d.primary_col)
-                )
-                b = self._cell_anchors_by_rc.get(
-                    (d.secondary_row, d.secondary_col)
-                )
-                if a is None or b is None:
-                    continue
+                # Use the diphthong's own projected coordinates
+                # (computed at geometry build time via the same
+                # silhouette projection that places populated cells).
+                # Decoupling from ``_cell_anchors_by_rc`` keeps the
+                # arrow well-defined when the secondary lands on an
+                # unpopulated logical slot.
                 is_focus = d.segment == focused
                 if not is_focus and not self._show_all_arrows:
                     continue
-                ax = dx + a[0] * dw
-                ay = dy + a[1] * dh
-                bx = dx + b[0] * dw
-                by = dy + b[1] * dh
+                ax = dx + d.primary_chart_x * dw
+                ay = dy + d.primary_chart_y * dh
+                bx = dx + d.secondary_chart_x * dw
+                by = dy + d.secondary_chart_y * dh
                 # Fan-out factor: -1, 0, +1 for n=3; -1, +1 for n=2;
                 # 0 for solo arrows. Outer arrows arc more than the
                 # inner ones to keep the bundle readable.
