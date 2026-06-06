@@ -281,7 +281,7 @@ def test_vowel_chart_keeps_natural_width(res: Resolution) -> None:
         seg_content_w=SEG_CONTENT_W,
         feat_content_w=FEAT_CONTENT_W,
     )
-    assert layout.vowel_chart_width(seg_w) == 380
+    assert layout.vowel_chart_width(seg_w) == 440
 
 
 # ---------------------------------------------------------------------------

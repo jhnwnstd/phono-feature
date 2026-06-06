@@ -403,7 +403,14 @@ FEAT_CUSHION_PX: int = 40
 # chart's outer edge. The chart is a fixed phonetic visualisation,
 # not a fluid grid, so it keeps the same width regardless of
 # seg-pane size and extra horizontal space goes to consonants.
-VOWEL_NATURAL_W: int = 380
+#
+# Sized to comfortably host the PHOIBLE worst-case data area
+# (max ~302 px natural width across all 3020 inventories) with
+# enough surrounding whitespace that the silhouette breathes. The
+# previous 380 px floor crowded small inventories (a 5-vowel
+# system at 100 px natural width sat in a 380 px container that
+# felt overshadowed by the rectangular chrome).
+VOWEL_NATURAL_W: int = 440
 # Within each backness (front, central, back), the unrounded/rounded
 # vowel pair sits in two grid columns. ``VOWEL_PAIR_GAP_PX`` is the
 # gap between the two mates -- small enough to read as a pair, not as

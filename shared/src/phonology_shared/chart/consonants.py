@@ -85,6 +85,17 @@ PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
         {"consonantal": "-", "syllabic": "-", "sonorant": "+"},
     ),
     ("Vowels", {"syllabic": "+"}),
+    # Suprasegmental tone letters (Chao ``˥˦˧˨˩`` plus combining
+    # tone diacritics). PHOIBLE ships these as standalone segments
+    # with only ``HighTone=+`` and no consonant / vowel features;
+    # before this group existed, the fallback assigner routed them
+    # to Affricates by document order. The ``is_member`` invariant
+    # below (the tone-phoneme guard) gates this group symmetrically
+    # to the vowel-phoneme guard. Feature-set general: PHOIBLE maps
+    # ``tone`` -> ``HighTone`` and PanPhon maps ``hitone`` ->
+    # ``HighTone``; Hayes does not record standalone tone letters
+    # so the group simply stays empty on Hayes inventories.
+    ("Tones", {"hightone": "+"}),
 ]
 # Minimum positive matches required for membership; prevents barely
 # specified segments from qualifying for classes by default.
@@ -148,6 +159,9 @@ DISPLAY_ORDER: list[str] = [
     "Semivowels",
     "Laryngeals",
     "Vowels",
+    # Tones render after the segmental classes so the chart reads
+    # consonants first, then vowels, then the suprasegmental tier.
+    "Tones",
 ]
 # Origin-set -> display label for relational relabeling.
 _RELABEL_PATTERNS: dict[frozenset[str], str] = {
@@ -732,7 +746,24 @@ def _is_laryngeal_candidate(feats: dict[str, str]) -> bool:
     has_place = any(feats.get(f, "0") == "+" for f in _PLACE_FEATURES)
     is_vowel = feats.get("syllabic", "0") == "+"
     is_click = feats.get("click", "0") == "+"
-    return has_laryngeal and not has_place and not is_vowel and not is_click
+    # Tone-phonemes (Chao tone letters, possibly with phonation
+    # diacritics like ``˥˧̰``) belong in the Tones group regardless
+    # of their laryngeal-feature surface; without this guard the
+    # laryngeal rescue below would pull a creaky-toned segment out
+    # of Tones into Laryngeals. Mirrors the tone-phoneme guard in
+    # ``is_member``.
+    is_tone = (
+        feats.get("hightone", "0") == "+"
+        and feats.get("consonantal", "0") != "+"
+        and not is_vowel
+    )
+    return (
+        has_laryngeal
+        and not has_place
+        and not is_vowel
+        and not is_click
+        and not is_tone
+    )
 
 
 def group_segments(
@@ -777,22 +808,33 @@ def group_segments(
         """Test whether a segment matches a group spec.
 
         Universal major-class invariant: the matcher partitions
-        segments into vowel-phonemes (``Syllabic=+`` AND
-        ``Consonantal!=+``) vs consonants (everything else,
-        including syllabic consonants like ``m̩`` and ``n̩``).
+        segments into three disjoint phoneme classes:
 
-        - ``Vowels`` accepts vowel-phonemes only.
-        - Every other group rejects vowel-phonemes outright.
+        - **Vowel-phonemes**: ``Syllabic=+`` AND ``Consonantal!=+``
+          (true vowels including nasalised vowels like ``ã``)
+        - **Tone-phonemes**: ``HighTone=+`` AND no positive
+          consonant/vowel major-class features (Chao tone letters
+          ``˥˦˧˨˩`` shipped by PHOIBLE)
+        - **Consonants**: everything else, including syllabic
+          consonants like ``m̩``/``n̩``
 
-        Without this guard, the bare ``Nasals`` spec (``{nasal:
-        +}``) accidentally absorbs nasalised vowels like ``ã``
-        because Acehnese / PHOIBLE encodes them as ``Syllabic=+,
-        Consonantal=-, Nasal=+``. The guard lives in the matcher
-        so the property is inherent to the pipeline rather than
-        something every group spec has to remember to encode, and
-        it stays feature-set agnostic: Hayes, PHOIBLE, and PanPhon
-        all share ``Syllabic`` and ``Consonantal`` columns with
-        the same polarity vocabulary.
+        Each phoneme class lives in exactly one home group
+        (``Vowels``, ``Tones``, or a consonant manner class) and
+        is rejected from the other two. Without these guards:
+
+        - The bare ``Nasals`` spec (``{nasal: +}``) absorbs
+          nasalised vowels (the original bug for Acehnese ``ã``).
+        - Standalone tone letters fall through ``is_member`` (no
+          consonant features match) and the fallback assigner
+          routes them to Affricates by document order; this
+          previously affected ~860 PHOIBLE inventories.
+
+        The guards live in the matcher so the property is inherent
+        to the pipeline rather than something every group spec has
+        to remember to encode, and they stay feature-set agnostic:
+        Hayes, PHOIBLE, and PanPhon all share ``Syllabic``,
+        ``Consonantal``, and ``HighTone`` columns under the same
+        canonical app names.
 
         Syllabic consonants (``Syllabic=+, Consonantal=+``, e.g.
         Lomongo's ``m̩``/``n̩``/``ŋ̩``) are NOT vowel-phonemes
@@ -804,11 +846,23 @@ def group_segments(
             seg_feats.get("syllabic", "0") == "+"
             and seg_feats.get("consonantal", "0") != "+"
         )
+        # Tone-phoneme: positive tone with no consonantal /
+        # syllabic major-class anchor. Suprasegmental by nature so
+        # never carries a segmental class membership.
+        is_tone_phoneme = (
+            seg_feats.get("hightone", "0") == "+"
+            and seg_feats.get("consonantal", "0") != "+"
+            and seg_feats.get("syllabic", "0") != "+"
+        )
         if group_name == "Vowels":
             if not is_vowel_phoneme:
                 return False
-        elif is_vowel_phoneme:
-            return False
+        elif group_name == "Tones":
+            if not is_tone_phoneme:
+                return False
+        else:
+            if is_vowel_phoneme or is_tone_phoneme:
+                return False
         relevant = [f for f in spec if f in active_features]
         if not relevant:
             return False

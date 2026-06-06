@@ -1151,6 +1151,20 @@ dialog input[type="text"]:focus-visible {
   width: 40px;
   min-width: 40px;
 }
+/* Pathological-cell tier for 10+ entry stacks (PHOIBLE worst case
+   is 12 in one cell on !XU/UPSID). Pack tighter still so the
+   stack fits within a reasonable row budget. Font-size stays
+   above the rasterizer floor via the natural shrink path; only
+   the button box tightens. */
+.vowel-chart-cell-stack[data-cell-density="ultra"] {
+  gap: 0;
+}
+.vowel-chart-cell-stack[data-cell-density="ultra"] > .seg-btn {
+  height: calc(var(--control-h-sm) - 8px);
+  width: 36px;
+  min-width: 36px;
+  border-radius: var(--radius-md);
+}
 /* Vertical stack for cells holding multiple vowels (e.g. ə / ɜ / ɚ
    all landing in open-mid central). Mirrors the desktop's
    QVBoxLayout collision handling so each vowel stays independently

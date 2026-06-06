@@ -80,7 +80,7 @@ def test_vowel_width_is_constant_natural() -> None:
     # exact value so a future bump to VOWEL_NATURAL_W lands as a
     # deliberate test edit, not a silent drift.
     for seg_pane_w in (0, 100, 480, 1200, 3840):
-        assert layout.vowel_chart_width(seg_pane_w) == 380
+        assert layout.vowel_chart_width(seg_pane_w) == 440
 
 
 def test_vowel_natural_width_fits_label_column() -> None:

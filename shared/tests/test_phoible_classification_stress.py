@@ -43,11 +43,13 @@ except ImportError:  # pragma: no cover - dev-only path
     pytest.skip("phoible_provider unavailable", allow_module_level=True)
 
 
-# Group labels the classifier emits for non-vowel segments. Drawn
+# Group labels the classifier emits for consonant segments. Drawn
 # from the PRIMARY_GROUPS + derived breakouts + relabel patterns in
-# consonants.py. ``Other`` and ``Vowels`` are the only labels that
-# may carry syllabic segments; everything else is consonantal by
-# the invariant.
+# consonants.py. ``Vowels`` and ``Tones`` are the only labels that
+# carry non-consonant phoneme classes; everything else here is a
+# consonant manner / place / laryngeal bucket and gets the
+# vowel-phoneme + tone-phoneme rejection invariants from
+# ``is_member``.
 _CONSONANT_GROUP_NAMES: frozenset[str] = frozenset(
     {
         "Clicks",
@@ -337,3 +339,122 @@ def test_b4_nasal_vowel_lands_in_vowels_for_every_feature_set_shape(
     assert "ã" not in groups.get(
         "Nasals", []
     ), f"[{shape_name}] nasal vowel /ã/ leaked into Nasals"
+
+
+def test_b5_no_tone_phoneme_lands_in_a_consonant_group(
+    provider: PhoibleProvider, all_inventory_ids: list[str]
+) -> None:
+    """The classifier must never route a tone-phoneme
+    (``HighTone=+`` AND no positive ``Consonantal`` / ``Syllabic``)
+    into a consonant group. PHOIBLE ships Chao tone letters
+    (``˥``, ``˦``, ``˧``, ``˨``, ``˩``) as standalone segments
+    with only the tone feature set; before the Tones group +
+    matcher invariant landed, these fell through ``is_member`` and
+    the fallback assigner routed all of them to ``Affricates``
+    (the second group in document order) across ~860 inventories.
+    """
+    offenders: list[tuple[str, str, list[str]]] = []
+    for inv_id in all_inventory_ids:
+        inv = materialize_phoible_inventory(provider, inv_id)
+        engine = FeatureEngine(inv)
+        groups = engine.grouped_segments
+        for gname in _CONSONANT_GROUP_NAMES:
+            segs = groups.get(gname, [])
+            if not segs:
+                continue
+            misrouted = [
+                s
+                for s in segs
+                if (
+                    inv.segments.get(s, {}).get("HighTone") == "+"
+                    and inv.segments.get(s, {}).get("Consonantal") != "+"
+                    and inv.segments.get(s, {}).get("Syllabic") != "+"
+                )
+            ]
+            if misrouted:
+                offenders.append(
+                    (_label_for(provider, inv_id), gname, misrouted)
+                )
+    assert not offenders, (
+        f"tone-phonemes leaked into consonant groups in "
+        f"{len(offenders)} (inventory, group) buckets; first 5: "
+        f"{offenders[:5]}"
+    )
+
+
+def test_b6_phoible_tone_letters_land_in_tones_group(
+    provider: PhoibleProvider, all_inventory_ids: list[str]
+) -> None:
+    """Positive symmetry: every PHOIBLE Chao tone letter segment
+    in the snapshot must land in the ``Tones`` group. Walks the
+    real data so a future bake schema change or normalizer
+    regression that strips ``HighTone`` from tone segments
+    surfaces here with the failing inventory named."""
+    tone_codepoints = set(range(0x02E5, 0x02EA))  # ˥˦˧˨˩
+    missed: list[tuple[str, list[str]]] = []
+    for inv_id in all_inventory_ids:
+        inv = materialize_phoible_inventory(provider, inv_id)
+        engine = FeatureEngine(inv)
+        tones_group = engine.grouped_segments.get("Tones", [])
+        # Identify segments that contain a Chao tone letter codepoint.
+        candidates = [
+            s
+            for s in inv.segments
+            if any(ord(c) in tone_codepoints for c in s)
+            and inv.segments[s].get("HighTone") == "+"
+            and inv.segments[s].get("Consonantal") != "+"
+            and inv.segments[s].get("Syllabic") != "+"
+        ]
+        if not candidates:
+            continue
+        missed_in_inv = [s for s in candidates if s not in tones_group]
+        if missed_in_inv:
+            missed.append((_label_for(provider, inv_id), missed_in_inv))
+    assert not missed, (
+        f"PHOIBLE tone letters missed the Tones group in "
+        f"{len(missed)} inventories; first 5: {missed[:5]}"
+    )
+
+
+@pytest.mark.parametrize(
+    "shape_name,features_factory",
+    [
+        ("hayes", lambda: list(_HAYES_SHAPE)),
+        ("phoible", _phoible_shape_features),
+        ("panphon", _panphon_shape_features),
+    ],
+)
+def test_b7_chao_tone_letter_lands_in_tones_for_every_feature_shape(
+    shape_name: str, features_factory
+) -> None:
+    """Parametrised tone-phoneme parity: a synthetic Chao tone
+    letter (``HighTone=+``, no consonant/vowel anchors) lands in
+    the ``Tones`` group regardless of whether the surrounding
+    feature inventory is Hayes-shaped (no HighTone column - the
+    classifier sees zero positive features and the segment is
+    correctly excluded from every group), PHOIBLE-shaped, or
+    PanPhon-shaped. Pins feature-set generality on the
+    tone-phoneme half of the invariant."""
+    features = features_factory()
+    if "HighTone" not in features:
+        pytest.skip(
+            f"{shape_name} shape does not record HighTone; tone"
+            " classification is a no-op there"
+        )
+    base: dict[str, str] = {f: "0" for f in features}
+    tone_seg: dict[str, str] = dict(base)
+    tone_seg["HighTone"] = "+"
+    inv = Inventory.from_grid(
+        name="tone-synthetic",
+        features=features,
+        segments={"˧": tone_seg},
+    )
+    engine = FeatureEngine(inv)
+    groups = engine.grouped_segments
+    assert "˧" in groups.get(
+        "Tones", []
+    ), f"[{shape_name}] Chao tone /˧/ should land in Tones"
+    # And the negative: never in Affricates.
+    assert "˧" not in groups.get(
+        "Affricates", []
+    ), f"[{shape_name}] Chao tone /˧/ leaked into Affricates"

@@ -1645,13 +1645,22 @@ function _buildVowelCellButton(seg) {
 function _buildVowelCellStack(segs) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-stack";
-    if (segs.length >= 5) {
-        // Crowded-cell density tier: at 5+ entries the stack starts
-        // to overflow the typical row height. Mark the cell so CSS
-        // can shrink the children's seg-btn box without changing
-        // the placement code or surfacing as a different display
-        // kind to downstream consumers. Mirrors the desktop's
-        // crowded-cell paint pass.
+    if (segs.length >= 10) {
+        // Pathological-cell tier: PHOIBLE's worst case is 12
+        // segments in one cell (!XU/UPSID). At 10+ entries the
+        // standard dense tier still produces a stack ~250 px tall;
+        // pack the buttons more aggressively (smaller height,
+        // narrower min-width) so the cell stays roughly within a
+        // typical row's visual budget. The placement decision
+        // does not change; only the rendered button size does.
+        cell.dataset.cellDensity = "ultra";
+    } else if (segs.length >= 5) {
+        // Crowded-cell density tier: at 5-9 entries the stack
+        // starts to overflow the typical row height. Mark the cell
+        // so CSS can shrink the children's seg-btn box without
+        // changing the placement code or surfacing as a different
+        // display kind to downstream consumers. Mirrors the
+        // desktop's crowded-cell paint pass.
         cell.dataset.cellDensity = "dense";
     }
     for (const seg of segs) {
