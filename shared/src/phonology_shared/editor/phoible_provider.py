@@ -27,7 +27,11 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from phonology_shared.editor.inventory_providers import InventoryDescriptor
+from phonology_shared.data.inventory import Inventory
+from phonology_shared.editor.inventory_providers import (
+    InventoryDescriptor,
+    InventoryProvider,
+)
 from phonology_shared.editor.providers import GeneratedInventory
 
 _INDEX_FILENAME = "_phoible_index.generated.json"
@@ -489,3 +493,63 @@ class PhoibleProvider:
         :py:meth:`list_inventories` call.
         """
         return self._inventories.get(inventory_id)
+
+
+def materialize_phoible_inventory(
+    provider: InventoryProvider, inventory_id: str
+) -> Inventory:
+    """Compose a fully-formed :py:class:`Inventory` from a PHOIBLE
+    inventory id, ready to feed into a fresh
+    :py:class:`~phonology_shared.theory.feature_engine.FeatureEngine`.
+
+    Pure logic shared by both the web bridge's
+    ``load_phoible_inventory`` endpoint and the desktop's PHOIBLE
+    picker dialog so the two surfaces stay in lock-step: a future
+    bake schema change, name-composition tweak, or metadata stamp
+    flows through here once.
+
+    Single-source-of-truth contract:
+
+    * The inventory name follows the
+      ``"<language> [(<dialect>)] [<source_short>]"`` template so
+      the toolbar shows what the user just loaded.
+    * ``feature_source`` metadata records the PHOIBLE provenance
+      ("PHOIBLE 2.0 / Korean / SPA") so a saved file is debuggable;
+      the field is plain text and the user can edit or delete it.
+    * Diphthong secondary bundles get stamped under
+      ``vowel_secondary`` so the vowel chart can draw arrows
+      without a new bridge endpoint or constructor parameter.
+
+    Raises :py:class:`KeyError` for an unknown ``inventory_id``;
+    callers translate the failure into whatever the platform's
+    error surface expects (``ValidationError`` on web,
+    ``QMessageBox`` on desktop).
+    """
+    descriptor = provider.descriptor(inventory_id)  # type: ignore[attr-defined]
+    if descriptor is None:
+        raise KeyError(f"unknown PHOIBLE inventory id {inventory_id!r}")
+    generated = provider.generate(inventory_id)
+
+    name = descriptor.language_name
+    if descriptor.dialect:
+        name = f"{name} ({descriptor.dialect})"
+    name = f"{name} [{descriptor.source_short}]"
+
+    metadata: dict[str, Any] = {
+        "feature_source": (
+            f"{provider.version} / {descriptor.language_name}"
+            f" / {descriptor.source_short}"
+        )
+    }
+    if generated.vowel_secondary:
+        metadata["vowel_secondary"] = {
+            seg: dict(bundle)
+            for seg, bundle in generated.vowel_secondary.items()
+        }
+
+    return Inventory.from_grid(
+        name=name,
+        features=list(generated.features),
+        segments={seg: dict(b) for seg, b in generated.segments.items()},
+        metadata=metadata,
+    )

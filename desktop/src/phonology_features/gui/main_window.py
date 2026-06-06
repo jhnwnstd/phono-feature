@@ -318,6 +318,7 @@ class MainWindow(QMainWindow):
             return btn
 
         add_nav("Browse\u2026", self._browse_inventory)
+        add_nav("PHOIBLE", self._open_phoible_picker)
         add_nav("Builder", self._open_builder)
         # Spacer pushes the theme toggle to the far right.
         spacer = QWidget(toolbar)
@@ -818,6 +819,67 @@ class MainWindow(QMainWindow):
             idx = self.inventory_combo.count() - 1
         self.inventory_combo.setCurrentIndex(idx)
         self._load_path(path)
+
+    def _open_phoible_picker(self) -> None:
+        """Open the PHOIBLE inventory picker dialog and load the
+        chosen language inventory into the active engine.
+
+        Mirrors the web's toolbar PHOIBLE button. All non-Qt
+        composition (search, list, generate, name + metadata stamp,
+        ``Inventory.from_grid``) lives in shared so the two UIs
+        produce the same ``Inventory`` from the same picker
+        selection: see
+        :py:func:`phonology_shared.editor.phoible_provider.materialize_phoible_inventory`.
+
+        Falls back to a friendly status-bar message when the
+        PHOIBLE snapshot is absent on this checkout (developer
+        ran the tests without running ``bake_phoible.py``); the
+        dialog is never shown in that case.
+        """
+        from phonology_features.gui.phoible_dialog import (
+            create_phoible_dialog,
+        )
+
+        dialog = create_phoible_dialog(self)
+        if dialog is None:
+            self.status.showMessage(
+                "PHOIBLE data not available; run "
+                "``python web/scripts/bake_phoible.py`` to enable."
+            )
+            return
+        if not dialog.exec():
+            return
+        inventory = dialog.chosen_inventory
+        if inventory is None:
+            return
+        # Engine swap mirrors :py:meth:`_load_path` after a
+        # successful ``Inventory.load`` (the picker has no file path
+        # to register or remember). Grouping/normalization caches
+        # live on the engine, so the new engine starts with fresh
+        # caches.
+        self.engine = FeatureEngine(inventory)
+        base_msg = inventory_loaded_message(
+            name=inventory.name,
+            n_segments=len(self.engine.segments),
+            n_features=len(self.engine.features),
+        )
+        if inventory.advisories:
+            self.status.showMessage(
+                f"{base_msg} Note: {inventory.advisories[0]}"
+            )
+            for note in inventory.advisories:
+                _log.info(
+                    "inventory advisory (phoible %s): %s",
+                    inventory.name,
+                    note,
+                )
+        else:
+            self.status.showMessage(base_msg)
+        # Clear any path-based registration so the inventory combo
+        # does not point at a stale file when the user later picks
+        # a bundled entry.
+        self._current_path = None
+        self._populate_after_load()
 
     def _open_builder(self) -> None:
         """Open (or raise) the Builder window. Edits the current

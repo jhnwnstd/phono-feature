@@ -55,6 +55,7 @@ from phonology_shared.editor.lookup_provider import (
 from phonology_shared.editor.phoible_provider import (
     PhoibleProvider,
     PhoibleSnapshotNotAvailable,
+    materialize_phoible_inventory,
 )
 from phonology_shared.editor.providers import (
     FeatureProvider,
@@ -466,51 +467,16 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
                 "before loading an inventory.",
             )
         )
-    descriptor = provider.descriptor(inventory_id)  # type: ignore[attr-defined]
-    if descriptor is None:
-        raise ValidationError(
-            (f"Unknown PHOIBLE inventory id {inventory_id!r}.",)
-        )
-    generated = provider.generate(inventory_id)
-
-    # Inventory name defaults to the PHOIBLE language so the toolbar
-    # The dialect suffix disambiguates languages with several
-    # PHOIBLE sources the user might compare side by side
-    # ("Korean (SPA)" vs "Korean (UPSID)"); without it later loads
-    # would surface identical names in the active-inventory dropdown.
-    name = descriptor.language_name
-    if descriptor.dialect:
-        name = f"{name} ({descriptor.dialect})"
-    name = f"{name} [{descriptor.source_short}]"
-
-    # One light metadata field for provenance. No id-lock keys;
-    # once loaded the inventory belongs to the user. When the
-    # inventory carries diphthong segments, also stamp the
-    # secondary feature bundles into metadata so the vowel chart
-    # can read them at placement time without a new parameter on
-    # every downstream signature.
-    metadata: dict[str, Any] = {
-        "feature_source": (
-            f"{provider.version} / {descriptor.language_name}"
-            f" / {descriptor.source_short}"
-        )
-    }
-    if generated.vowel_secondary:
-        metadata["vowel_secondary"] = {
-            seg: dict(bundle)
-            for seg, bundle in generated.vowel_secondary.items()
-        }
-
-    # ``generated.segments`` is already pruned to ``generated.features``
-    # by the provider; the bundles do not carry stray keys and they
-    # are not missing any. Copy each into a plain ``dict`` so
-    # ``Inventory.from_grid`` owns its input.
-    inventory = Inventory.from_grid(
-        name=name,
-        features=list(generated.features),
-        segments={seg: dict(b) for seg, b in generated.segments.items()},
-        metadata=metadata,
-    )
+    # Pure-logic composition (name template, metadata stamping,
+    # ``Inventory.from_grid``) lives in shared so the desktop's
+    # PHOIBLE picker dialog produces an identical inventory from
+    # the same ``inventory_id``. Only the bridge-side platform
+    # glue (global engine swap + analysis cache invalidation +
+    # summary build) stays here.
+    try:
+        inventory = materialize_phoible_inventory(provider, inventory_id)
+    except KeyError as exc:
+        raise ValidationError((str(exc),)) from exc
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name
     _invalidate_analysis_caches()

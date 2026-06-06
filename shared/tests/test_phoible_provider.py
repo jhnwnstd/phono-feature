@@ -314,3 +314,71 @@ def test_phoible_snapshot_not_available_is_runtime_error() -> None:
     RuntimeError subclass so a generic exception-suppress also
     handles it gracefully."""
     assert issubclass(PhoibleSnapshotNotAvailable, RuntimeError)
+
+
+# materialize_phoible_inventory: shared composition contract
+#
+# This is the single source of truth both the web bridge
+# (load_phoible_inventory) and the desktop dialog
+# (PhoibleDialog._on_load_clicked) consume; the tests pin the
+# name template + metadata stamp so future bake schema changes
+# either keep the contract or break here loudly.
+
+
+def test_materialize_phoible_inventory_composes_name_with_source_short() -> (
+    None
+):
+    """The inventory name follows ``"<language> [<source>]"`` so
+    the toolbar reflects what the user loaded. Dialect-less inputs
+    skip the parenthetical."""
+    from phonology_shared.editor.phoible_provider import (
+        materialize_phoible_inventory,
+    )
+
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    inv = materialize_phoible_inventory(p, "1")  # Korean SPA
+    assert inv.name == "Korean [SPA]"
+
+
+def test_materialize_phoible_inventory_includes_dialect_when_present() -> None:
+    """When the descriptor records a dialect, the name gets a
+    parenthetical so two inventories of the same language with
+    different dialects do not collide in the toolbar dropdown."""
+    from phonology_shared.editor.phoible_provider import (
+        materialize_phoible_inventory,
+    )
+
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    inv = materialize_phoible_inventory(
+        p, "2"
+    )  # Korean PHOIBLE w/ Seoul dialect
+    assert inv.name == "Korean (Seoul Korean) [PHOIBLE]"
+
+
+def test_materialize_phoible_inventory_stamps_feature_source_metadata() -> (
+    None
+):
+    """Provenance metadata is informational, not authoritative; the
+    user can edit the field after load. Pinning the template here
+    prevents silent drift between the web's saved-file format and
+    the desktop's saved-file format."""
+    from phonology_shared.editor.phoible_provider import (
+        materialize_phoible_inventory,
+    )
+
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    inv = materialize_phoible_inventory(p, "1")
+    assert inv.metadata["feature_source"] == "PHOIBLE 2.0 / Korean / SPA"
+
+
+def test_materialize_phoible_inventory_raises_keyerror_on_unknown_id() -> None:
+    """The shared materializer surfaces unknown-id as ``KeyError``;
+    each caller translates to its platform's error surface
+    (``ValidationError`` on web, status-bar message on desktop)."""
+    from phonology_shared.editor.phoible_provider import (
+        materialize_phoible_inventory,
+    )
+
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    with pytest.raises(KeyError, match="unknown PHOIBLE inventory id"):
+        materialize_phoible_inventory(p, "does-not-exist")
