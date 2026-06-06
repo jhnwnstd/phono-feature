@@ -29,6 +29,14 @@ from PyQt6.QtWidgets import (
 
 from phonology_features.gui._themed_style_cache import styles_for_active_theme
 from phonology_features.gui.style_utils import set_css
+from phonology_shared.presentation.layout import (
+    FEAT_BADGE_W,
+    FEAT_BADGE_W_COMPACT,
+    FEAT_BTN_H,
+    FEAT_BTN_H_COMPACT,
+    FEAT_BTN_W,
+    FEAT_BTN_W_COMPACT,
+)
 from phonology_shared.presentation.palette import C
 from phonology_shared.presentation.view_models import (
     NEUTRAL_BADGE,
@@ -55,9 +63,11 @@ class _RowDensity:
 
 
 # Comfortable default: 30-px row stride, 28x24 buttons, 10-pt label.
+# Pixel dimensions come from shared layout constants so the desktop
+# and the generated CSS (--feat-btn-*, --feat-badge-w) cannot drift.
 _DENSITY_NORMAL = _RowDensity(
-    btn_size=(28, 24),
-    badge_size=(30, 24),
+    btn_size=(FEAT_BTN_W, FEAT_BTN_H),
+    badge_size=(FEAT_BADGE_W, FEAT_BTN_H),
     margin_v=3,
     row_h=30,
     name_font=10,
@@ -68,12 +78,10 @@ _DENSITY_NORMAL = _RowDensity(
 # consistent; only the vertical breathing room tightens. At this
 # density the cards may still overflow on inventories near the
 # 40-feature cap, in which case the panel's :py:class:`QScrollArea`
-# takes over for the remainder. Picked over the previous 22-px
-# row (which the user found cramped) and the bare-pin-only fix
-# (which would scroll for every >22-feature inventory).
+# takes over for the remainder.
 _DENSITY_COMPACT = _RowDensity(
-    btn_size=(26, 22),
-    badge_size=(28, 22),
+    btn_size=(FEAT_BTN_W_COMPACT, FEAT_BTN_H_COMPACT),
+    badge_size=(FEAT_BADGE_W_COMPACT, FEAT_BTN_H_COMPACT),
     margin_v=2,
     row_h=26,
     name_font=10,

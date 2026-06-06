@@ -59,6 +59,7 @@ from phonology_shared.chart.vowels import (
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
     REGION_CONSTRAINTS,
+    VOWEL_NATURAL_W,
     VOWEL_PAIR_GAP_PX,
 )
 from phonology_shared.presentation.palette import C
@@ -362,25 +363,27 @@ class VowelChartWidget(QWidget):
         self._silhouette = geometry.silhouette
         self._diphthongs = tuple(geometry.diphthongs)
         self._bands = tuple(geometry.bands)
-        # Growth policy: grow the widget only when the inventory's
-        # natural footprint EXCEEDS the current size. Shrinking lives
-        # in ``clear()`` (which releases the prior pin) so a switch
-        # from a wide PHOIBLE inventory back to a narrow bundled one
-        # collapses cleanly via the external set_target_width path
-        # rather than freezing at the prior width or being clamped
-        # below the canonical width.
+        # Sizing policy: always pin width to
+        # ``max(VOWEL_NATURAL_W, natural)`` so the chart never falls
+        # below the canonical 440 px floor and grows for inventories
+        # that need more horizontal room. Always pin height to
+        # ``max(min_h, natural)`` for the same reason on the vertical
+        # axis. The pin is unconditional so wide-to-narrow swaps
+        # actually shrink down to canonical (the conditional version
+        # left the widget unpinned between clear() and the next
+        # ``set_target_width`` call and Qt's default sizeHint
+        # collapsed the chart visually).
         chrome_w = VOWEL_LABEL_W + self._PAD_R
         chrome_h = self._TITLE_H + self._COL_HEADER_H + self._PAD_B
         self._natural_total_w = geometry.natural_data_width_px + chrome_w
+        effective_w = max(VOWEL_NATURAL_W, self._natural_total_w)
         natural_total_h = max(
             REGION_CONSTRAINTS["vowel_chart"].min_h,
             geometry.natural_data_height_px + chrome_h,
         )
-        if self._natural_total_w > self.width():
-            self.setMinimumWidth(self._natural_total_w)
-            self.setMaximumWidth(self._natural_total_w)
-        if natural_total_h > self.minimumHeight():
-            self.setMinimumHeight(natural_total_h)
+        self.setMinimumWidth(effective_w)
+        self.setMaximumWidth(effective_w)
+        self.setMinimumHeight(natural_total_h)
         # Title (top, centred over the data area).
         title = QLabel(geometry.title, self)
         title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))

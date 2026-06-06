@@ -40,14 +40,11 @@
   --border-std: 1.5px;
   --border-thick: 2px;
   --control-h-md: 32px;   /* toolbar buttons / selects */
-  --control-h-sm: 26px;   /* segment buttons */
   --control-h-xs: 22px;   /* panel clear button */
-  /* Note: --seg-btn-min-w and the --font-size-* ladder are sourced
-     from layout.css (auto-generated from shared/layout.py and
-     shared/constants.py respectively). Don't redeclare them here. */
-  --feat-btn-w: 28px;
-  --feat-btn-h: 24px;     /* also feat-badge height */
-  --feat-badge-w: 30px;
+  /* Note: --seg-btn-min-w, --seg-btn-h, --feat-btn-*, --feat-badge-w
+     and the --font-size-* ladder are sourced from layout.css
+     (auto-generated from shared/layout.py and shared/constants.py
+     respectively). Don't redeclare them here. */
   /* `system-ui` and `ui-monospace` map to the OS's native UI fonts
      on modern browsers (SF Pro on macOS, Segoe UI Variable on
      Windows 11, Roboto on Android). The named fallbacks cover older
@@ -734,7 +731,7 @@ dialog input[type="text"]:focus-visible {
      rasterizer downscales the glyph to fit (see ``rasterizeText``
      ``maxWidth`` in main.js). */
   width: var(--seg-btn-min-w);
-  height: var(--control-h-sm);
+  height: var(--seg-btn-h);
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -878,7 +875,7 @@ dialog input[type="text"]:focus-visible {
      inside ``.vowel-chart-data`` (below) so they can right-align to
      the silhouette's slanted left edge; they overflow leftward into
      this track which keeps the chart wide enough to host them. */
-  min-height: calc(8 * var(--control-h-sm));
+  min-height: calc(8 * var(--seg-btn-h));
 }
 .vowel-chart-row-label {
   /* ``--row-y`` is the row's chart_y in [0, 1]; ``--row-left`` is
@@ -1191,7 +1188,7 @@ dialog input[type="text"]:focus-visible {
   gap: 0;
 }
 .vowel-chart-cell-stack[data-cell-density="dense"] > .seg-btn {
-  height: calc(var(--control-h-sm) - 4px);
+  height: calc(var(--seg-btn-h) - 4px);
   width: 40px;
   min-width: 40px;
 }
@@ -1204,7 +1201,7 @@ dialog input[type="text"]:focus-visible {
   gap: 0;
 }
 .vowel-chart-cell-stack[data-cell-density="ultra"] > .seg-btn {
-  height: calc(var(--control-h-sm) - 8px);
+  height: calc(var(--seg-btn-h) - 8px);
   width: 36px;
   min-width: 36px;
   border-radius: var(--radius-md);

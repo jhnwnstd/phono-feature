@@ -616,6 +616,14 @@ def generate_layout_css() -> None:
         f"  --seg-group-header-h: {mod.SEG_GROUP_HEADER_H}px;",
         f"  --feat-row-h: {mod.FEAT_ROW_H}px;",
         f"  --feat-card-chrome-h: {mod.FEAT_CARD_CHROME_H}px;",
+        # Feature-row button + badge sizing. Mirrors the desktop's
+        # ``_DENSITY_NORMAL`` so a single Python edit updates both
+        # renderers. Without the relay these were hand-defined in
+        # ``style.css`` and silently drifted whenever the desktop
+        # tweaked density.
+        f"  --feat-btn-w: {mod.FEAT_BTN_W}px;",
+        f"  --feat-btn-h: {mod.FEAT_BTN_H}px;",
+        f"  --feat-badge-w: {mod.FEAT_BADGE_W}px;",
         f"  --panel-chrome-v: {mod.PANEL_CHROME_V}px;",
         f"  --min-top-pane-h: {mod.MIN_TOP_PANE_H}px;",
         # Analysis-pane sizing. Both UIs consume this via the CSS

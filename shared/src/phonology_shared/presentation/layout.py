@@ -543,6 +543,20 @@ SEG_GROUP_HEADER_H: int = 22
 FEAT_ROW_H: int = 31
 # Feature card chrome: card top margin (6) + title (14) + bottom (6).
 FEAT_CARD_CHROME_H: int = 26
+# Feature-row button + badge dimensions. Two density tiers: NORMAL
+# is the everyday case, COMPACT shrinks vertical breathing room for
+# inventories near the 40-feature cap. Both renderers (desktop
+# QPushButton sizing + web ``--feat-btn-*`` / ``--feat-badge-*``)
+# consume these values; ``generate_layout_css`` emits the NORMAL
+# CSS vars so a single edit here updates both. ``BADGE_W`` is wider
+# than ``BTN_W`` so the "+" / "-" badge can host the slightly wider
+# numeric values without truncation at small sizes.
+FEAT_BTN_W: int = 28
+FEAT_BTN_H: int = 24
+FEAT_BADGE_W: int = 30
+FEAT_BTN_W_COMPACT: int = 26
+FEAT_BTN_H_COMPACT: int = 22
+FEAT_BADGE_W_COMPACT: int = 28
 
 # Outer panel chrome (top + bottom margins + the clear-button header
 # strip). Same on seg and feat panels. Used as the additive overhead
