@@ -760,6 +760,15 @@ function escapeHtml(s) {
 // pushing the grid out of alignment.
 const SEG_LABEL_MAX_W = 30;
 
+// Wider variant for vowel-chart cells. PHOIBLE inventories carry
+// many 2+ char vowel glyphs (diphthongs like ``ia``, ``oɛ̃`` and
+// combining-mark vowels like ``o̞``) that the consonant-grid's
+// 30 px MAX_W shrinks aggressively, with the combining marks
+// becoming unreadable at the shrunken size. The vowel chart's
+// data area is fluid (cells anchored by percentage) so giving
+// vowel cells extra horizontal room costs nothing in layout.
+const SEG_LABEL_MAX_W_VOWEL = 42;
+
 function rasterizeText(text, font, maxWidth) {
     const measure = document.createElement("canvas").getContext("2d");
     // 3-px padding all around so antialias edges + accent marks
@@ -1120,7 +1129,7 @@ function _buildConsonantGroup(group) {
  * a single delegated listener on #seg-grid (wireSegmentDelegation)
  * dispatches by data-seg.
  */
-function _buildSegmentButton(seg, extraAttrs) {
+function _buildSegmentButton(seg, extraAttrs, maxWidth) {
     const btn = document.createElement("button");
     btn.className = "seg-btn";
     btn.type = "button";
@@ -1136,11 +1145,14 @@ function _buildSegmentButton(seg, extraAttrs) {
     // minus a small breathing margin. The rasterizer downscales the
     // font when the glyph's natural width would overflow the
     // fixed-width button (the consonant grid wants uniform cells).
+    // Vowel cells override ``maxWidth`` via ``_buildVowelSegBtn``
+    // because PHOIBLE vowels are often 2-3 characters wide and the
+    // chart's fluid data area can absorb the extra width.
     btn.appendChild(
         createRasterizedLabel(
             seg,
             '14px "Noto Sans Mono", monospace',
-            SEG_LABEL_MAX_W,
+            maxWidth != null ? maxWidth : SEG_LABEL_MAX_W,
         ),
     );
     if (extraAttrs) {
@@ -1150,6 +1162,16 @@ function _buildSegmentButton(seg, extraAttrs) {
     }
     state.seg_buttons.set(seg, btn);
     return btn;
+}
+
+/** Factory wrapper that builds a seg-btn for the vowel chart with
+ *  the wider rasterizer budget. Used by every vowel-cell builder
+ *  so the cell containers and their children agree on layout width.
+ *  Adds the ``data-vowel-cell`` flag so CSS can scope the
+ *  width override (``.vowel-chart-data .seg-btn`` is more
+ *  brittle because the rendered tree differs by cell kind). */
+function _buildVowelSegBtn(seg) {
+    return _buildSegmentButton(seg, null, SEG_LABEL_MAX_W_VOWEL);
 }
 
 /**
@@ -1409,72 +1431,198 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
     for (const cell of chart.cells) {
         cellByKey.set(`${cell.row},${cell.col}`, cell);
     }
+    // Group arrows that share the same primary -> secondary cell
+    // pair so we can fan their control points across the
+    // perpendicular axis; otherwise the 57 PHOIBLE inventories
+    // that have multiple distinct diphthongs at one pair would
+    // render N curves literally on top of each other.
+    const groups = new Map();
+    for (const d of arrows) {
+        const a = cellByKey.get(`${d.primary_row},${d.primary_col}`);
+        const b = cellByKey.get(`${d.secondary_row},${d.secondary_col}`);
+        if (!a || !b) continue;
+        const key =
+            `${d.primary_row},${d.primary_col}` +
+            `->${d.secondary_row},${d.secondary_col}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push({ d, a, b });
+    }
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("class", "vowel-diphthong-arrows");
     svg.setAttribute("viewBox", "0 0 100 100");
     svg.setAttribute("preserveAspectRatio", "none");
     svg.setAttribute("aria-hidden", "true");
-    for (const d of arrows) {
-        const a = cellByKey.get(`${d.primary_row},${d.primary_col}`);
-        const b = cellByKey.get(`${d.secondary_row},${d.secondary_col}`);
-        if (!a || !b) continue;
-        const ax = a.chart_x * 100;
-        const ay = a.chart_y * 100;
-        const bx = b.chart_x * 100;
-        const by = b.chart_y * 100;
-        // Control point: midpoint nudged perpendicular to the
-        // chord. A small constant arc rise keeps the curve subtle
-        // even on long arrows and visible on short ones.
-        const mx = (ax + bx) / 2;
-        const my = (ay + by) / 2;
-        const dx = bx - ax;
-        const dy = by - ay;
-        const len = Math.hypot(dx, dy) || 1;
-        const lift = Math.min(8, len * 0.18);
-        const nx = -dy / len;
-        const ny = dx / len;
-        const cx = mx + nx * lift;
-        const cy = my + ny * lift;
-        const path = document.createElementNS(svgNS, "path");
-        path.setAttribute("d", `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`);
-        path.setAttribute("class", "vowel-diphthong-arrow");
-        svg.appendChild(path);
-        // Arrowhead: a small triangle at the end, oriented along the
-        // curve's tangent at the endpoint (approximated by the
-        // control-point-to-endpoint direction).
-        const tx = bx - cx;
-        const ty = by - cy;
-        const tlen = Math.hypot(tx, ty) || 1;
-        const ux = tx / tlen;
-        const uy = ty / tlen;
-        // Perpendicular for arrowhead wings.
-        const px = -uy;
-        const py = ux;
-        const headLen = 2.5;
-        const headHalfW = 1.4;
-        const tipX = bx;
-        const tipY = by;
-        const baseX = bx - ux * headLen;
-        const baseY = by - uy * headLen;
-        const leftX = baseX + px * headHalfW;
-        const leftY = baseY + py * headHalfW;
-        const rightX = baseX - px * headHalfW;
-        const rightY = baseY - py * headHalfW;
-        const head = document.createElementNS(svgNS, "path");
-        head.setAttribute(
-            "d",
-            `M ${tipX} ${tipY} L ${leftX} ${leftY} L ${rightX} ${rightY} Z`,
-        );
-        head.setAttribute("class", "vowel-diphthong-arrowhead");
-        svg.appendChild(head);
+    for (const groupArrows of groups.values()) {
+        const N = groupArrows.length;
+        for (let i = 0; i < N; i++) {
+            const { d, a, b } = groupArrows[i];
+            const ax = a.chart_x * 100;
+            const ay = a.chart_y * 100;
+            const bx = b.chart_x * 100;
+            const by = b.chart_y * 100;
+            // Control point: midpoint nudged perpendicular to the
+            // chord. The base arc rise stays subtle on long arrows
+            // and visible on short ones. When N > 1 share the same
+            // pair (PHOIBLE length/nasal variants of one diphthong),
+            // distribute the signed lift across [-1, +1] so the
+            // group fans into N distinct curves around the chord
+            // instead of stacking on top of each other.
+            const mx = (ax + bx) / 2;
+            const my = (ay + by) / 2;
+            const dx = bx - ax;
+            const dy = by - ay;
+            const len = Math.hypot(dx, dy) || 1;
+            const baseLift = Math.min(8, len * 0.18);
+            // For N=1: factor = 0 (single curve, normal side).
+            // For N=2: factors = -1, +1 (two opposite curves).
+            // For N=3: -1, 0, +1.  For N=4: -1, -1/3, +1/3, +1.
+            const signedFactor =
+                N > 1 ? (i / (N - 1)) * 2 - 1 : 1;
+            // Magnitude grows with the absolute factor so the outer
+            // arrows arc more than the inner ones, keeping the inner
+            // arrows close to the chord and reducing tangle.
+            const lift =
+                baseLift * signedFactor * (0.7 + 0.5 * Math.abs(signedFactor));
+            const nx = -dy / len;
+            const ny = dx / len;
+            const cx = mx + nx * lift;
+            const cy = my + ny * lift;
+            const path = document.createElementNS(svgNS, "path");
+            path.setAttribute("d", `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`);
+            path.setAttribute("class", "vowel-diphthong-arrow");
+            path.dataset.diphthongSeg = d.segment;
+            svg.appendChild(path);
+            // Arrowhead: a small triangle at the end, oriented along
+            // the curve's tangent at the endpoint (approximated by
+            // the control-point-to-endpoint direction).
+            const tx = bx - cx;
+            const ty = by - cy;
+            const tlen = Math.hypot(tx, ty) || 1;
+            const ux = tx / tlen;
+            const uy = ty / tlen;
+            // Perpendicular for arrowhead wings.
+            const px = -uy;
+            const py = ux;
+            const headLen = 2.5;
+            const headHalfW = 1.4;
+            const tipX = bx;
+            const tipY = by;
+            const baseX = bx - ux * headLen;
+            const baseY = by - uy * headLen;
+            const leftX = baseX + px * headHalfW;
+            const leftY = baseY + py * headHalfW;
+            const rightX = baseX - px * headHalfW;
+            const rightY = baseY - py * headHalfW;
+            const head = document.createElementNS(svgNS, "path");
+            head.setAttribute(
+                "d",
+                `M ${tipX} ${tipY} L ${leftX} ${leftY} ` +
+                    `L ${rightX} ${rightY} Z`,
+            );
+            head.setAttribute("class", "vowel-diphthong-arrowhead");
+            head.dataset.diphthongSeg = d.segment;
+            svg.appendChild(head);
+        }
     }
     dataEl.appendChild(svg);
+    _wireVowelDiphthongFocus(dataEl);
+    _appendVowelDiphthongToggle(dataEl);
+}
+
+/** A small chart-corner toggle that flips ``data-show-arrows``
+ *  between ``"focus"`` (default; arrows visible only for the
+ *  hovered / focused vowel) and ``"all"`` (every arrow visible at
+ *  reduced opacity). Rendered only when the chart actually has
+ *  diphthongs so monophthong-only inventories don't carry the
+ *  extra chrome. The ``aria-pressed`` flips so screen readers
+ *  announce the state change. */
+function _appendVowelDiphthongToggle(dataEl) {
+    if (!dataEl.querySelector("svg.vowel-diphthong-arrows")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "vowel-diphthong-toggle";
+    btn.setAttribute("aria-pressed", "false");
+    btn.setAttribute(
+        "title",
+        "Show all diphthong arrows (hover a vowel to see one)",
+    );
+    btn.textContent = "diphthongs";
+    btn.addEventListener("click", () => {
+        const on = dataEl.dataset.showArrows === "all";
+        if (on) {
+            delete dataEl.dataset.showArrows;
+            btn.setAttribute("aria-pressed", "false");
+            btn.setAttribute(
+                "title",
+                "Show all diphthong arrows (hover a vowel to see one)",
+            );
+        } else {
+            dataEl.dataset.showArrows = "all";
+            btn.setAttribute("aria-pressed", "true");
+            btn.setAttribute("title", "Hide all-arrow overlay");
+        }
+    });
+    dataEl.appendChild(btn);
+}
+
+/** Hover / focus wiring for the diphthong overlay. Default state
+ *  hides every arrow (CSS opacity 0); when the user hovers or
+ *  keyboard-focuses a vowel seg-btn, the SVG paths whose
+ *  ``data-diphthong-seg`` matches the button's ``data-seg`` get
+ *  the ``is-focused`` class for one frame of visibility. Mouse-out
+ *  and keyboard-blur clear the class. A single delegation listener
+ *  on the data area scales to inventories with up to 50 vowels and
+ *  30 diphthongs without per-button wiring. */
+function _wireVowelDiphthongFocus(dataEl) {
+    let currentSeg = null;
+    const svg = dataEl.querySelector("svg.vowel-diphthong-arrows");
+    if (!svg) return;
+    const setFocus = (newSeg) => {
+        if (newSeg === currentSeg) return;
+        currentSeg = newSeg;
+        for (const el of svg.querySelectorAll(".is-focused")) {
+            el.classList.remove("is-focused");
+        }
+        if (!newSeg) return;
+        const matches = svg.querySelectorAll(
+            `[data-diphthong-seg="${CSS.escape(newSeg)}"]`,
+        );
+        for (const el of matches) el.classList.add("is-focused");
+    };
+    const segFromEvent = (ev) => {
+        const btn = ev.target.closest(".seg-btn[data-seg]");
+        if (!btn || !dataEl.contains(btn)) return null;
+        return btn.dataset.seg;
+    };
+    dataEl.addEventListener("pointerover", (ev) => {
+        const seg = segFromEvent(ev);
+        if (seg) setFocus(seg);
+    });
+    dataEl.addEventListener("pointerout", (ev) => {
+        const seg = segFromEvent(ev);
+        if (!seg) return;
+        // Leaving the seg-btn for an unrelated element clears focus;
+        // moving from the seg-btn to one of its own descendants
+        // (the rasterized label span) keeps the same focus.
+        const next = ev.relatedTarget;
+        if (next && next.closest && next.closest(".seg-btn[data-seg]")) {
+            return;
+        }
+        setFocus(null);
+    });
+    dataEl.addEventListener("focusin", (ev) => {
+        const seg = segFromEvent(ev);
+        if (seg) setFocus(seg);
+    });
+    dataEl.addEventListener("focusout", (ev) => {
+        if (segFromEvent(ev)) setFocus(null);
+    });
 }
 
 /** Build a single vowel-cell button from an IPA segment string. */
 function _buildVowelCellButton(seg) {
-    const btn = _buildSegmentButton(seg);
+    const btn = _buildVowelSegBtn(seg);
     btn.classList.add("vowel-chart-cell");
     return btn;
 }
@@ -1497,8 +1645,17 @@ function _buildVowelCellButton(seg) {
 function _buildVowelCellStack(segs) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-stack";
+    if (segs.length >= 5) {
+        // Crowded-cell density tier: at 5+ entries the stack starts
+        // to overflow the typical row height. Mark the cell so CSS
+        // can shrink the children's seg-btn box without changing
+        // the placement code or surfacing as a different display
+        // kind to downstream consumers. Mirrors the desktop's
+        // crowded-cell paint pass.
+        cell.dataset.cellDensity = "dense";
+    }
     for (const seg of segs) {
-        cell.appendChild(_buildSegmentButton(seg));
+        cell.appendChild(_buildVowelSegBtn(seg));
     }
     return cell;
 }
@@ -1523,7 +1680,7 @@ function _buildVowelCellPair(segs, kind) {
     cell.className = "vowel-chart-cell vowel-chart-cell-pair";
     if (kind) cell.dataset.pairKind = kind;
     for (const seg of segs) {
-        cell.appendChild(_buildSegmentButton(seg));
+        cell.appendChild(_buildVowelSegBtn(seg));
     }
     return cell;
 }
@@ -1542,7 +1699,7 @@ function _buildVowelCellContrastSet(segs) {
     cell.className = "vowel-chart-cell vowel-chart-cell-contrast-set";
     cell.dataset.cellSize = String(segs.length);
     for (const seg of segs) {
-        cell.appendChild(_buildSegmentButton(seg));
+        cell.appendChild(_buildVowelSegBtn(seg));
     }
     return cell;
 }

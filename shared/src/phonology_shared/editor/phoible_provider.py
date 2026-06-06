@@ -27,7 +27,10 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from phonology_shared.data.inventory import Inventory
+from phonology_shared.data.inventory import (
+    Inventory,
+    canonicalize_segment_label,
+)
 from phonology_shared.editor.inventory_providers import (
     InventoryDescriptor,
     InventoryProvider,
@@ -542,8 +545,18 @@ def materialize_phoible_inventory(
         )
     }
     if generated.vowel_secondary:
+        # Canonicalise the diphthong segment keys through the SAME
+        # normalisation the engine applies to ``inventory.segments``
+        # via ``Inventory.parse``. PHOIBLE ships ~26% of inventories
+        # with NFD-form segments (the nasal vowels like ``ã`` arrive
+        # as ``a + U+0303``); the engine NFC-folds them at parse,
+        # so a raw-key copy here means ``vowel_secondary['ãi']``
+        # (NFD) misses ``inventory.segments['ãi']`` (NFC) on the
+        # lookup inside ``compute_placements``. Result before the
+        # fix: nasal diphthongs silently lost their secondary
+        # placement and rendered as monophthongs.
         metadata["vowel_secondary"] = {
-            seg: dict(bundle)
+            canonicalize_segment_label(seg): dict(bundle)
             for seg, bundle in generated.vowel_secondary.items()
         }
 

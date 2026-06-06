@@ -221,13 +221,14 @@ def test_should_stack_vowels_agrees_with_would_overflow_at_threshold() -> None:
 def test_font_below_min_basic() -> None:
     """When natural text already fits, no shrink is needed and the
     floor isn't an issue (False). When the shrink ratio would drop
-    the size below the floor, True.
+    the size below the floor (``FONT_SIZE_MIN_PX`` = 10), True.
     """
     # Fits at current size: False.
     assert layout.font_below_min(50, 100, current_px=14) is False
-    # Has to shrink moderately but stays above 8 px: False.
-    assert layout.font_below_min(150, 100, current_px=14) is False
-    # Has to shrink so much the size goes below 8 px: True.
+    # Has to shrink moderately but stays at or above 10 px: False.
+    # 14 * (100/130) ~= 10.77 still clears the 10 px floor.
+    assert layout.font_below_min(130, 100, current_px=14) is False
+    # Has to shrink so much the size goes below 10 px: True.
     assert layout.font_below_min(1000, 100, current_px=14) is True
     # Explicit min override.
     assert layout.font_below_min(100, 50, current_px=14, min_px=12) is True

@@ -15,10 +15,11 @@ geometry object from the bridge.
 from __future__ import annotations
 
 import math
+from collections import defaultdict
 from collections.abc import Mapping
 from typing import ClassVar
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtGui import (
     QColor,
     QFont,
@@ -190,6 +191,15 @@ class VowelChartWidget(QWidget):
             tuple[int, int], tuple[float, float]
         ] = {}
         self._diphthongs: tuple[VowelChartDiphthong, ...] = ()
+        # Currently hovered / focused vowel seg, or None when the
+        # mouse is outside every cell. Drives the focus-gated arrow
+        # overlay: when None and ``_show_all_arrows`` is False, no
+        # arrows paint; when set, the matching diphthong's arrow(s)
+        # paint at full opacity. Mirrors the web's hover-gated
+        # overlay so the chart stays calm by default and arrows
+        # respond to user attention.
+        self._focused_seg: str | None = None
+        self._show_all_arrows: bool = False
         # Populated rows' ``chart_y`` for the height-tier banding
         # overlay; the paint pass tiles bands between midpoints of
         # adjacent rows.
@@ -252,6 +262,39 @@ class VowelChartWidget(QWidget):
         for lbl, _ in self._row_labels:
             lbl.setStyleSheet(row_style)
         self._last_headers_active = active
+
+    def set_show_all_diphthong_arrows(self, on: bool) -> None:
+        """Toggle the all-arrows overlay. Default is False (the
+        focus-gated overlay only paints the arrow for the hovered
+        / focused vowel). The desktop's toolbar surfaces this via
+        the chart-corner toggle button."""
+        if self._show_all_arrows == on:
+            return
+        self._show_all_arrows = on
+        self.update()
+
+    def eventFilter(  # noqa: D401
+        self, watched: QObject | None, event: QEvent | None
+    ) -> bool:
+        """Track which vowel seg-btn the cursor / keyboard focus
+        is on so :py:meth:`_paint_diphthong_arrows` knows which
+        arrow to paint. The chart installs this filter on every
+        button it lands during :py:meth:`_render_geometry`."""
+        if event is None or watched is None:
+            return super().eventFilter(watched, event)
+        kind = event.type()
+        seg = getattr(watched, "segment", None)
+        if not isinstance(seg, str):
+            return super().eventFilter(watched, event)
+        if kind in (QEvent.Type.HoverEnter, QEvent.Type.FocusIn):
+            if self._focused_seg != seg:
+                self._focused_seg = seg
+                self.update()
+        elif kind in (QEvent.Type.HoverLeave, QEvent.Type.FocusOut):
+            if self._focused_seg == seg:
+                self._focused_seg = None
+                self.update()
+        return super().eventFilter(watched, event)
 
     def clear(self) -> None:
         """Remove all buttons, labels, and collision containers.
@@ -390,6 +433,17 @@ class VowelChartWidget(QWidget):
             self._cells.append(
                 (widget, cell.chart_x, cell.chart_y, cell.pair_side)
             )
+            # Wire focus tracking on every seg button this cell
+            # exposes so the hover-gated diphthong arrow overlay
+            # knows which segment the user is attending to. The
+            # event filter is idempotent via the WA_Hover attribute
+            # + a single ``installEventFilter`` per button instance.
+            for seg in cell.entries:
+                btn = self._buttons.get(seg)
+                if btn is None:
+                    continue
+                btn.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+                btn.installEventFilter(self)
         self._layout_children()
         self.update()
 
@@ -718,57 +772,85 @@ class VowelChartWidget(QWidget):
         :py:attr:`_cell_anchors_by_rc`."""
         if not self._diphthongs:
             return
-        # The data overlay is bumped to 1.75 px so it reads above
-        # the 1.25 px silhouette outline; previously the arrows
-        # (data) were thinner than the silhouette (structure),
-        # inverting the chart's visual hierarchy.
-        pen = QPen(QColor(C["accent"]))
-        pen.setWidthF(1.75)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(pen)
+        # Group arrows by their (primary, secondary) cell pair so
+        # the fan-out distributes shared-pair arrows around the
+        # chord (mirrors the web SVG overlay's C3 fan-out math).
+        groups: dict[
+            tuple[tuple[int, int], tuple[int, int]],
+            list[VowelChartDiphthong],
+        ] = defaultdict(list)
         for d in self._diphthongs:
-            a = self._cell_anchors_by_rc.get((d.primary_row, d.primary_col))
-            b = self._cell_anchors_by_rc.get(
-                (d.secondary_row, d.secondary_col)
-            )
-            if a is None or b is None:
-                continue
-            ax = dx + a[0] * dw
-            ay = dy + a[1] * dh
-            bx = dx + b[0] * dw
-            by = dy + b[1] * dh
-            # Same control-point lift formula as the web SVG so both
-            # UIs draw matching curves on the same inventory.
-            mx = (ax + bx) / 2
-            my = (ay + by) / 2
-            chord = math.hypot(bx - ax, by - ay) or 1.0
-            lift = min(dw * 0.05, chord * 0.18)
-            nx = -(by - ay) / chord
-            ny = (bx - ax) / chord
-            cx = mx + nx * lift
-            cy = my + ny * lift
-            path = QPainterPath()
-            path.moveTo(ax, ay)
-            path.quadTo(cx, cy, bx, by)
-            painter.drawPath(path)
-            # Arrowhead at the secondary end, oriented along the
-            # control-point-to-endpoint tangent.
-            tx = bx - cx
-            ty = by - cy
-            tlen = math.hypot(tx, ty) or 1.0
-            ux = tx / tlen
-            uy = ty / tlen
-            head_len = 7.0
-            head_half = 4.0
-            base_x = bx - ux * head_len
-            base_y = by - uy * head_len
-            left_x = base_x + (-uy) * head_half
-            left_y = base_y + ux * head_half
-            right_x = base_x - (-uy) * head_half
-            right_y = base_y - ux * head_half
-            head = QPainterPath()
-            head.moveTo(bx, by)
-            head.lineTo(left_x, left_y)
-            head.lineTo(right_x, right_y)
-            head.closeSubpath()
-            painter.fillPath(head, QColor(C["accent"]))
+            groups[
+                (
+                    (d.primary_row, d.primary_col),
+                    (d.secondary_row, d.secondary_col),
+                )
+            ].append(d)
+
+        # Three opacity tiers mirror the web stylesheet:
+        # - focus-gated default: only the focused vowel's arrows paint
+        # - show-all toggle: every arrow paints at ~70% opacity
+        # - hover/focus on top: matching arrow goes full opacity
+        focused = self._focused_seg
+        for arrows in groups.values():
+            n = len(arrows)
+            for i, d in enumerate(arrows):
+                a = self._cell_anchors_by_rc.get(
+                    (d.primary_row, d.primary_col)
+                )
+                b = self._cell_anchors_by_rc.get(
+                    (d.secondary_row, d.secondary_col)
+                )
+                if a is None or b is None:
+                    continue
+                is_focus = d.segment == focused
+                if not is_focus and not self._show_all_arrows:
+                    continue
+                ax = dx + a[0] * dw
+                ay = dy + a[1] * dh
+                bx = dx + b[0] * dw
+                by = dy + b[1] * dh
+                # Fan-out factor: -1, 0, +1 for n=3; -1, +1 for n=2;
+                # 0 for solo arrows. Outer arrows arc more than the
+                # inner ones to keep the bundle readable.
+                signed = (i / (n - 1)) * 2 - 1 if n > 1 else 1.0
+                mx = (ax + bx) / 2
+                my = (ay + by) / 2
+                chord = math.hypot(bx - ax, by - ay) or 1.0
+                base_lift = min(dw * 0.05, chord * 0.18)
+                lift = base_lift * signed * (0.7 + 0.5 * abs(signed))
+                nx = -(by - ay) / chord
+                ny = (bx - ax) / chord
+                cx = mx + nx * lift
+                cy = my + ny * lift
+                arrow_color = QColor(C["accent"])
+                arrow_color.setAlphaF(1.0 if is_focus else 0.55)
+                pen = QPen(arrow_color)
+                pen.setWidthF(1.75)
+                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+                painter.setPen(pen)
+                path = QPainterPath()
+                path.moveTo(ax, ay)
+                path.quadTo(cx, cy, bx, by)
+                painter.drawPath(path)
+                # Arrowhead at the secondary end, oriented along the
+                # control-point-to-endpoint tangent.
+                tx = bx - cx
+                ty = by - cy
+                tlen = math.hypot(tx, ty) or 1.0
+                ux = tx / tlen
+                uy = ty / tlen
+                head_len = 7.0
+                head_half = 4.0
+                base_x = bx - ux * head_len
+                base_y = by - uy * head_len
+                left_x = base_x + (-uy) * head_half
+                left_y = base_y + ux * head_half
+                right_x = base_x - (-uy) * head_half
+                right_y = base_y - ux * head_half
+                head = QPainterPath()
+                head.moveTo(bx, by)
+                head.lineTo(left_x, left_y)
+                head.lineTo(right_x, right_y)
+                head.closeSubpath()
+                painter.fillPath(head, arrow_color)

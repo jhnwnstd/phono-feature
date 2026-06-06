@@ -58,10 +58,16 @@ FONT_SIZE_LABEL_PX: int = 11
 FONT_SIZE_MICRO_PX: int = 10
 # Lower bound on the rasterizer's font-shrink search (see
 # ``rasterizeText`` in ``web/main.js``) and any future Qt-side
-# text-fit logic. Below this point glyphs become illegible at the
-# 33-px segment-button outline. Pixel-only because the rasterizer
-# walks the CSS ``font-size`` string in px steps.
-FONT_SIZE_MIN_PX: int = 8
+# text-fit logic. Below 10 px, combining marks (the diacritics that
+# turn ``o`` into ``o̞`` or ``a`` into ``ã``) stop reading cleanly
+# regardless of font choice; the seg-btn is then better off letting
+# the glyph clip slightly than shrinking the font further. PHOIBLE
+# inventories have far more combining-mark + multi-codepoint glyphs
+# than the bundled curated inventories (Korean PHOIBLE alone has
+# stacked ``o̞̜``), so a tighter floor benefits PHOIBLE without
+# being PHOIBLE-specific. Pixel-only because the rasterizer walks
+# the CSS ``font-size`` string in px steps.
+FONT_SIZE_MIN_PX: int = 10
 
 # Monospace font fallback chain for IPA-heavy text (analysis-pane
 # chips, anything rendering segment symbols / feature values). Order:

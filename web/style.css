@@ -749,14 +749,17 @@ dialog input[type="text"]:focus-visible {
   font-size: var(--font-size-control);
   cursor: pointer;
   white-space: nowrap;
-  /* IPA glyph rendering. ``geometricPrecision`` gives the rasterizer
-     a stricter contract for combining-mark + base-glyph pairs than
-     the inherited ``optimizeLegibility``. Disabling ligatures and
-     contextual alternates prevents an IPA font from collapsing two
-     adjacent segments into one ligated form. The smoothing flags
-     make the antialiasing path explicit so a future global
-     override does not regress combining-mark sharpness. */
-  text-rendering: geometricPrecision;
+  /* IPA glyph rendering. ``optimizeLegibility`` is empirically
+     crisper than ``geometricPrecision`` for combining-mark + base-
+     glyph pairs (PHOIBLE vowels often stack two combining marks
+     below the base) without losing the rasterizer's measurement
+     stability now that ``FONT_SIZE_MIN_PX`` floors the shrink loop
+     at 10 px. Disabling ligatures and contextual alternates
+     prevents an IPA font from collapsing two adjacent segments
+     into one ligated form. The smoothing flags make the
+     antialiasing path explicit so a future global override does
+     not regress combining-mark sharpness. */
+  text-rendering: optimizeLegibility;
   font-feature-settings: "kern" 1, "liga" 0, "calt" 0;
   font-variant-ligatures: none;
   -webkit-font-smoothing: antialiased;
@@ -944,18 +947,68 @@ dialog input[type="text"]:focus-visible {
 .vowel-diphthong-arrow {
   fill: none;
   stroke: var(--accent);
-  /* Bumped from 0.4 to 0.6 so the data overlay reads at parity
-     with the structural silhouette outline (now muted to a 1 px
-     stroke); previously the arrows were lighter than the chrome
-     they overlaid, inverting the visual hierarchy. */
   stroke-width: 0.6;
-  opacity: 0.85;
+  /* Default: hidden. Most PHOIBLE inventories have many
+     diphthongs (12 in Korean PHOIBLE, up to 30 elsewhere); an
+     always-on overlay reads as a tangle. The arrows light up on
+     hover / focus of the source vowel button (``.is-focused``
+     below) and can be shown all at once via the chart's "show
+     diphthong arrows" toggle (``data-show-arrows="all"``). */
+  opacity: 0;
+  transition: opacity 0.12s ease;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
 .vowel-diphthong-arrowhead {
   fill: var(--accent);
-  opacity: 0.9;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.vowel-diphthong-arrow.is-focused {
+  opacity: 0.95;
+}
+.vowel-diphthong-arrowhead.is-focused {
+  opacity: 1;
+}
+/* Show-all toggle on the chart fades every arrow in at the
+   parity opacity Direction A's polish pass set. The hover-gated
+   ``.is-focused`` rule still applies on top so the active arrow
+   reads brightest. */
+.vowel-chart-data[data-show-arrows="all"] .vowel-diphthong-arrow {
+  opacity: 0.7;
+}
+.vowel-chart-data[data-show-arrows="all"] .vowel-diphthong-arrowhead {
+  opacity: 0.8;
+}
+/* Toggle button anchored at the data area's top-right corner.
+   Stays unobtrusive (text-dim) until hovered/active; the
+   ``aria-pressed`` state flips the visual to the accent border so
+   the active state reads at a glance. ``pointer-events: auto``
+   wins over the SVG overlay below (which has pointer-events:
+   none). */
+.vowel-diphthong-toggle {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  z-index: 3;
+  padding: 1px 6px;
+  font-size: var(--font-size-micro);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.vowel-diphthong-toggle:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+.vowel-diphthong-toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 /* Trapezoid / triangle silhouette: OUTLINE only, no painted fill.
 
@@ -1070,6 +1123,33 @@ dialog input[type="text"]:focus-visible {
     ),
     -50%
   );
+}
+
+/* Vowel-chart seg-btn overrides. Wider button + wider min-width
+   so PHOIBLE's multi-character / combining-mark glyphs ride at
+   full font size instead of being shrunken by the rasterizer.
+   Width tracks ``SEG_LABEL_MAX_W_VOWEL`` (42 px) plus the seg-
+   btn's own breathing margin so the rasterizer's measurement and
+   the layout box agree. The chart's fluid data area absorbs the
+   extra width without forcing the consonant grid to grow. */
+.vowel-chart-data .seg-btn {
+  width: 46px;
+  min-width: 46px;
+}
+
+/* Crowded-cell density tier. STACK cells with 5+ entries get a
+   slightly smaller seg-btn so the column reads as a stack rather
+   than overflowing the row. Font-size stays above the rasterizer
+   floor (FONT_SIZE_MIN_PX = 10) via the natural shrink path; we
+   only tighten the box and the row gap, never below the floor
+   the rasterizer enforces. */
+.vowel-chart-cell-stack[data-cell-density="dense"] {
+  gap: 0;
+}
+.vowel-chart-cell-stack[data-cell-density="dense"] > .seg-btn {
+  height: calc(var(--control-h-sm) - 4px);
+  width: 40px;
+  min-width: 40px;
 }
 /* Vertical stack for cells holding multiple vowels (e.g. ə / ɜ / ɚ
    all landing in open-mid central). Mirrors the desktop's

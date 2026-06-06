@@ -382,3 +382,70 @@ def test_materialize_phoible_inventory_raises_keyerror_on_unknown_id() -> None:
     p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
     with pytest.raises(KeyError, match="unknown PHOIBLE inventory id"):
         materialize_phoible_inventory(p, "does-not-exist")
+
+
+def test_materialize_normalises_vowel_secondary_keys_to_engine_form() -> None:
+    """The vowel_secondary metadata keys must use the SAME canonical
+    form (NFC + IPA folding) the engine applies to inventory
+    segments via ``Inventory.parse``. Without this, PHOIBLE's NFD-
+    encoded nasal diphthongs (e.g. ``a + U+0303 + i``) silently
+    miss the engine lookup in ``compute_placements`` (engine has
+    ``U+00E3 + i``) and render as monophthongs.
+
+    The stub mirrors the real-data shape: snapshot keys arrive as
+    NFD; materialize must NFC-normalise them so every key in
+    ``metadata['vowel_secondary']`` matches a key in
+    ``inventory.segments``.
+    """
+    from phonology_shared.editor.phoible_provider import (
+        materialize_phoible_inventory,
+    )
+
+    # Inventory id "v1": a tiny vowel system whose two diphthongs
+    # arrive in NFD form (a + combining tilde, then a base char).
+    nfd_index: dict[str, object] = {
+        "version": "PHOIBLE 2.0",
+        "languages": [{"name": "TestLang", "iso": "tst"}],
+        "inventories": [
+            {
+                "id": "v1",
+                "language_name": "TestLang",
+                "iso": "tst",
+                "source": "ph",
+                "source_short": "PHOIBLE",
+                "source_description": "",
+                "segment_count": 3,
+            }
+        ],
+    }
+    nfd_data: dict[str, object] = {
+        "version": "PHOIBLE 2.0",
+        "feature_names": ["Syllabic", "Consonantal"],
+        "inventories": {
+            # NFD: 'a' + U+0303 = nasal a; 'i' is plain.
+            "v1": {
+                "a": "+-",
+                "i": "+-",
+                "ãi": "+-",  # /ãi/ in NFD
+            },
+        },
+        "vowel_secondary": {
+            "v1": {
+                # Final state of the diphthong: nasal monophthong
+                # values would arrive here in NFD too.
+                "ãi": "+-",
+            },
+        },
+    }
+    p = PhoibleProvider(index_table=nfd_index, data_table=nfd_data)
+    inv = materialize_phoible_inventory(p, "v1")
+    vs = inv.metadata.get("vowel_secondary") or {}
+    engine_segs = set(inv.segments)
+    assert vs, "fixture invariant: stub injects one diphthong"
+    assert set(vs).issubset(engine_segs), (
+        f"vowel_secondary keys must be a subset of engine segments; "
+        f"missing={set(vs) - engine_segs}"
+    )
+    # And explicitly: NFD input lands as NFC in both maps.
+    assert "ãi" in inv.segments
+    assert "ãi" in vs
