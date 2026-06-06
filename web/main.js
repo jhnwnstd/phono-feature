@@ -1311,7 +1311,7 @@ function _buildVowelChart(chart) {
     const silTopLeft = sil ? sil.top_left : 0;
     const silBotLeft = sil ? sil.bottom_left : 0;
     const silSpanY = silBotY - silTopY;
-    _appendVowelHeightTierBands(dataEl, chart, silTopY, silBotY);
+    _appendVowelHeightTierBands(dataEl, chart);
     for (const row of chart.rows) {
         const rowLabel = document.createElement("div");
         rowLabel.className = "vowel-chart-row-label";
@@ -1411,38 +1411,22 @@ function _buildVowelChart(chart) {
  *  outward from the chord so two arrows in opposite directions
  *  do not overlap on a straight line. */
 /** Overlay faint horizontal bands behind the vowel data area, one
- *  per populated height tier (Close, Near-close, ..., Open). Bands
- *  are tiled so each row's band spans the midpoints between its
- *  ``chart_y`` and its neighbours' (with the top of the topmost
- *  band clamped to the silhouette top and the bottom of the
- *  bottommost band clamped to the silhouette bottom). Alternate
- *  bands carry the tint; same-tier rows alternate so the
- *  visual rhythm reads as ``every other row is shaded`` regardless
- *  of which subset of the 7 tiers is populated.
- *
- *  Bands sit inside a single container with the silhouette
- *  clip-path so the tints follow the trapezoid edges instead of
- *  bleeding into the row-label gutter. The container is the first
- *  child of ``dataEl`` so the silhouette ``::before`` / ``::after``
- *  pseudo-elements (and the cells above them) still paint on top. */
-function _appendVowelHeightTierBands(dataEl, chart, silTopY, silBotY) {
-    const rows = chart.rows;
-    if (!Array.isArray(rows) || rows.length === 0) return;
-    const ys = rows.map((r) => r.chart_y);
+ *  per populated height tier. Top/bottom + tinted come from
+ *  ``chart.bands`` directly; the shared geometry layer owns the
+ *  midpoint math and silhouette-clamp policy. */
+function _appendVowelHeightTierBands(dataEl, chart) {
+    const bands = chart.bands;
+    if (!Array.isArray(bands) || bands.length === 0) return;
     const container = document.createElement("div");
     container.className = "vowel-chart-row-bands";
     container.setAttribute("aria-hidden", "true");
-    for (let i = 0; i < rows.length; i++) {
-        const y = ys[i];
-        const above = i > 0 ? (y + ys[i - 1]) / 2 : silTopY;
-        const below = i < rows.length - 1 ? (y + ys[i + 1]) / 2 : silBotY;
+    for (const b of bands) {
         const band = document.createElement("div");
         band.className = "vowel-chart-row-band";
-        if (i % 2 === 0) {
-            band.classList.add("vowel-chart-row-band-tinted");
-        }
-        band.style.top = `${(above * 100).toFixed(3)}%`;
-        band.style.height = `${((below - above) * 100).toFixed(3)}%`;
+        if (b.tinted) band.classList.add("vowel-chart-row-band-tinted");
+        band.style.top = `${(b.top_norm * 100).toFixed(3)}%`;
+        band.style.height =
+            `${((b.bottom_norm - b.top_norm) * 100).toFixed(3)}%`;
         container.appendChild(band);
     }
     // Prepend so the bands sit BEHIND row labels, cells, and the
@@ -1450,22 +1434,9 @@ function _appendVowelHeightTierBands(dataEl, chart, silTopY, silBotY) {
     dataEl.insertBefore(container, dataEl.firstChild);
 }
 
-/** Overlay an SVG layer of curved-arrow diphthong glides on top
- *  of the vowel chart's data area. The geometry layer ships each
- *  diphthong with both endpoints' projected ``(chart_x, chart_y)``
- *  in ``[0, 1]`` already, so the renderer applies them via
- *  ``viewBox="0 0 100 100"`` percentages directly. The pinned
- *  contract (validated across all 3020 PHOIBLE inventories by
- *  ``test_phoible_vowel_rendering_stress``):
- *
- *   - every diphthong's primary and secondary endpoints are
- *     distinct (degenerate self-loops are suppressed at the
- *     geometry layer, not here)
- *   - both endpoints' coordinates fall in ``[0, 1]``
- *
- *  A defensive ``console.warn`` fires on any breach of either
- *  invariant — diphthongs that violate are skipped so the chart
- *  still renders cleanly. */
+/** Overlay an SVG layer of curved-arrow diphthong glides. Geometry
+ *  ships each endpoint pre-projected; the bounds + no-self-loop
+ *  invariants are pinned by ``test_phoible_vowel_rendering_stress``. */
 function _appendVowelDiphthongArrows(dataEl, chart) {
     const arrows = chart.diphthongs;
     if (!Array.isArray(arrows) || arrows.length === 0) return;
@@ -1476,26 +1447,6 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
     // curves literally on top of each other.
     const groups = new Map();
     for (const d of arrows) {
-        // Defensive: catch a future regression where the geometry
-        // layer ships an endpoint outside [0, 1] or a self-loop.
-        // The renderer skips the offender so the rest of the chart
-        // stays clean; the warn surfaces in DevTools so the
-        // breakage is visible during development.
-        const okBounds =
-            d.primary_chart_x >= 0 && d.primary_chart_x <= 1 &&
-            d.primary_chart_y >= 0 && d.primary_chart_y <= 1 &&
-            d.secondary_chart_x >= 0 && d.secondary_chart_x <= 1 &&
-            d.secondary_chart_y >= 0 && d.secondary_chart_y <= 1;
-        const selfLoop =
-            d.primary_row === d.secondary_row &&
-            d.primary_col === d.secondary_col;
-        if (!okBounds || selfLoop) {
-            console.warn(
-                "vowel-chart diphthong invariant breach",
-                {seg: d.segment, selfLoop, okBounds, d},
-            );
-            continue;
-        }
         const key =
             `${d.primary_row},${d.primary_col}` +
             `->${d.secondary_row},${d.secondary_col}`;

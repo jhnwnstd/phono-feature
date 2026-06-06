@@ -40,9 +40,11 @@ from PyQt6.QtWidgets import (
 
 from phonology_shared.chart.vowels import (
     COL_LABELS,
+    PAIR_DISPLAY_KINDS,
     ROW_LABELS,
     Confidence,
     VowelCellDisplayKind,
+    VowelChartBand,
     VowelChartCell,
     VowelChartDiphthong,
     VowelChartGeometry,
@@ -60,21 +62,6 @@ from phonology_shared.presentation.layout import (
     VOWEL_PAIR_GAP_PX,
 )
 from phonology_shared.presentation.palette import C
-
-#: PAIR display kinds the desktop renderer lays out as a horizontal
-#: row of two buttons (mirrors the legacy LONG_PAIR layout). All
-#: other PAIR kinds (NASAL/RHOTIC/PHONATION/TONE) reuse the same
-#: visual: the marked member on the right per the classifier's
-#: ordering convention.
-_PAIR_DISPLAY_KINDS: frozenset[VowelCellDisplayKind] = frozenset(
-    {
-        VowelCellDisplayKind.LONG_PAIR,
-        VowelCellDisplayKind.NASAL_PAIR,
-        VowelCellDisplayKind.RHOTIC_PAIR,
-        VowelCellDisplayKind.PHONATION_PAIR,
-        VowelCellDisplayKind.TONE_PAIR,
-    }
-)
 
 # Re-exports preserved for any external importer that read these
 # from vowel_chart directly. Canonical definitions live in
@@ -183,13 +170,9 @@ class VowelChartWidget(QWidget):
         # narrow bottom; one whose lowest row is Open-mid carries
         # a wider bottom edge). ``None`` before the first render.
         self._silhouette: VowelChartSilhouette | None = None
-        # Diphthong rendering. Populated by :py:meth:`_render_geometry`
-        # and consumed by :py:meth:`paintEvent` to draw curved arrows
-        # from primary to secondary cells. Empty before the first
-        # render and after :py:meth:`clear`.
-        self._cell_anchors_by_rc: dict[
-            tuple[int, int], tuple[float, float]
-        ] = {}
+        # Diphthong overlay. ``_diphthongs`` carries the pre-projected
+        # primary/secondary chart coordinates per arrow; the paint
+        # pass reads them directly with no anchor-lookup dict.
         self._diphthongs: tuple[VowelChartDiphthong, ...] = ()
         # Currently hovered / focused vowel seg, or None when the
         # mouse is outside every cell. Drives the focus-gated arrow
@@ -200,10 +183,10 @@ class VowelChartWidget(QWidget):
         # respond to user attention.
         self._focused_seg: str | None = None
         self._show_all_arrows: bool = False
-        # Populated rows' ``chart_y`` for the height-tier banding
-        # overlay; the paint pass tiles bands between midpoints of
-        # adjacent rows.
-        self._rows_chart_y: tuple[float, ...] = ()
+        # Height-tier band rectangles from the shared geometry.
+        # Renderer iterates and fills; midpoint math + silhouette
+        # clamps live in ``build_vowel_chart_geometry``.
+        self._bands: tuple[VowelChartBand, ...] = ()
         # Floor for ``set_target_width``: the geometry's natural
         # data width plus this widget's chrome. Updated on every
         # :py:meth:`_render_geometry` call so external resize
@@ -324,9 +307,8 @@ class VowelChartWidget(QWidget):
         for container in self._cell_containers:
             container.deleteLater()
         self._cell_containers.clear()
-        self._cell_anchors_by_rc.clear()
         self._diphthongs = ()
-        self._rows_chart_y = ()
+        self._bands = ()
         self._focused_seg = None
         self._show_all_arrows = False
         self._natural_total_w = 0
@@ -369,19 +351,8 @@ class VowelChartWidget(QWidget):
         """
         self._shape = geometry.shape
         self._silhouette = geometry.silhouette
-        # Map (row, col) -> (chart_x, chart_y) for diphthong arrow
-        # endpoints; the paintEvent overlays one curve per
-        # diphthong, looking up endpoints in this dict.
-        self._cell_anchors_by_rc = {
-            (cell.row, cell.col): (cell.chart_x, cell.chart_y)
-            for cell in geometry.cells
-        }
         self._diphthongs = tuple(geometry.diphthongs)
-        # Cache populated rows' ``chart_y`` for the height-tier
-        # banding overlay in :py:meth:`paintEvent`. Sorted ascending
-        # so the banding loop computes midpoints between adjacent
-        # rows without re-sorting on every paint.
-        self._rows_chart_y = tuple(sorted(r.chart_y for r in geometry.rows))
+        self._bands = tuple(geometry.bands)
         # Growth policy: pin the widget to the inventory's natural
         # width AND natural height so cells stay inside the
         # silhouette regardless of prior state. Width pin lets the
@@ -490,7 +461,7 @@ class VowelChartWidget(QWidget):
         container = QWidget(self)
         container.setStyleSheet("background: transparent;")
         self._cell_containers.append(container)
-        if cell.display_kind in _PAIR_DISPLAY_KINDS:
+        if cell.display_kind in PAIR_DISPLAY_KINDS:
             return self._fill_pair_layout(container, cell)
         if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
             return self._fill_contrast_set_layout(container, cell)
@@ -736,33 +707,22 @@ class VowelChartWidget(QWidget):
         dh: int,
     ) -> None:
         """Fill faint horizontal bands inside the silhouette to mark
-        height tiers. Mirrors the web's ``.vowel-chart-row-bands``
-        overlay: every other populated row gets a subtle tint, so
-        the seven-tier scale reads visually without forcing the
-        user to track row labels.
-
-        The bands are clipped to the silhouette path so the tint
-        never bleeds outside the trapezoid into the row-label
-        gutter; the QPainterPath ``setClipPath`` does the same job
-        the web's CSS ``clip-path: polygon(...)`` does.
+        height tiers. Geometry layer owns the midpoint math and
+        silhouette-clamp policy via ``VowelChartGeometry.bands``;
+        this pass just iterates and paints. The clip-path keeps
+        the tint inside the trapezoid.
         """
-        rows = self._rows_chart_y
-        if not rows or dh <= 0:
+        if dh <= 0 or not self._bands:
             return
         band_color = QColor(C["border"])
         band_color.setAlpha(40)  # ~16% opacity, same target as web
         painter.save()
         painter.setClipPath(silhouette_path)
-        n = len(rows)
-        for i, y in enumerate(rows):
-            if i % 2 != 0:
+        for band in self._bands:
+            if not band.tinted:
                 continue
-            above = rows[i - 1] if i > 0 else 0.0
-            below = rows[i + 1] if i < n - 1 else 1.0
-            top_norm = (above + y) / 2 if i > 0 else 0.0
-            bot_norm = (y + below) / 2 if i < n - 1 else 1.0
-            top_y = dy + top_norm * dh
-            bot_y = dy + bot_norm * dh
+            top_y = dy + band.top_norm * dh
+            bot_y = dy + band.bottom_norm * dh
             painter.fillRect(
                 int(dx),
                 int(top_y),
@@ -780,12 +740,9 @@ class VowelChartWidget(QWidget):
         dw: int,
         dh: int,
     ) -> None:
-        """Overlay one curved arrow per diphthong from primary cell
-        to secondary cell. Mirrors the web SVG overlay so both UIs
-        show the same arrows when a PHOIBLE diphthong inventory is
-        loaded. Coordinates come from each cell's
-        ``(chart_x, chart_y)`` already stashed in
-        :py:attr:`_cell_anchors_by_rc`."""
+        """Overlay one curved arrow per diphthong from primary to
+        secondary endpoint. Coordinates come pre-projected on each
+        ``VowelChartDiphthong``; mirrors the web SVG overlay."""
         if not self._diphthongs:
             return
         # Group arrows by their (primary, secondary) cell pair so
@@ -811,12 +768,6 @@ class VowelChartWidget(QWidget):
         for arrows in groups.values():
             n = len(arrows)
             for i, d in enumerate(arrows):
-                # Use the diphthong's own projected coordinates
-                # (computed at geometry build time via the same
-                # silhouette projection that places populated cells).
-                # Decoupling from ``_cell_anchors_by_rc`` keeps the
-                # arrow well-defined when the secondary lands on an
-                # unpopulated logical slot.
                 is_focus = d.segment == focused
                 if not is_focus and not self._show_all_arrows:
                     continue

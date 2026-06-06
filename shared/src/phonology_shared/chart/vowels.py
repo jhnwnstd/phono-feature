@@ -1633,6 +1633,21 @@ class VowelChartDiphthong:
     secondary_chart_y: float = 0.0
 
 
+@dataclass(frozen=True, slots=True)
+class VowelChartBand:
+    """One height-tier band stripe. ``top_norm`` / ``bottom_norm``
+    are clamped to the silhouette's y span; renderers apply them
+    as ``top: top_norm * 100%; height: (bottom_norm - top_norm) *
+    100%`` (web) or the equivalent fillRect (desktop). ``tinted``
+    is True on alternate rows so the every-other-row rhythm is
+    decided once rather than recomputed in each renderer's loop.
+    """
+
+    top_norm: float
+    bottom_norm: float
+    tinted: bool
+
+
 @dataclass(frozen=True)
 class VowelChartGeometry:
     """Complete render-ready description of a vowel chart.
@@ -1691,6 +1706,12 @@ class VowelChartGeometry:
     # itself stays in ``primary_cell``. Empty for monophthong-only
     # inventories.
     diphthongs: tuple[VowelChartDiphthong, ...] = ()
+    # Height-tier banding rectangles. One band per populated row,
+    # with ``(top_norm, bottom_norm)`` clamped to the silhouette
+    # span and ``tinted`` alternating every other row. Renderers
+    # paint as a translucent fill behind cells; midpoint math
+    # lives here so both renderers iterate, not compute.
+    bands: tuple[VowelChartBand, ...] = ()
 
 
 #: Gap between vertically stacked segment buttons inside a single
@@ -1768,7 +1789,7 @@ def _row_content_extent(
     lefts: list[float] = []
     rights: list[float] = []
     for cell in row_cells:
-        is_pair = cell.display_kind in _PAIR_DISPLAY_KINDS
+        is_pair = cell.display_kind in PAIR_DISPLAY_KINDS
         half = long_pair_half if is_pair else single_half
         center = cell.chart_x + cell.pair_side * pair_shift
         lefts.append(center - half)
@@ -2022,7 +2043,7 @@ def _silhouette_with_widths(
 #: PAIR display kinds; renderers lay these out as one horizontal
 #: row of two buttons. Shared by ``_cell_natural_size`` and both
 #: renderer dispatches.
-_PAIR_DISPLAY_KINDS: frozenset[VowelCellDisplayKind] = frozenset(
+PAIR_DISPLAY_KINDS: frozenset[VowelCellDisplayKind] = frozenset(
     {
         VowelCellDisplayKind.LONG_PAIR,
         VowelCellDisplayKind.NASAL_PAIR,
@@ -2095,7 +2116,7 @@ def _classify_vowel_cell_display(
         else:
             kind = VowelCellDisplayKind.CONTRAST_SET
         ordered: tuple[str, ...] = entries
-        if kind in _PAIR_DISPLAY_KINDS:
+        if kind in PAIR_DISPLAY_KINDS:
             ordered = _order_pair_entries(entries, bundles, kind)
         return kind, contrast, ordered
     if 3 <= len(entries) <= 4:
@@ -2202,7 +2223,7 @@ def _natural_data_area_size(
         sizing. PAIR cells take 2; CONTRAST_SET takes 2 (2-column
         grid); STACK takes 1.
         """
-        if cell.display_kind in _PAIR_DISPLAY_KINDS:
+        if cell.display_kind in PAIR_DISPLAY_KINDS:
             return 2
         if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
             return 2
@@ -2213,7 +2234,7 @@ def _natural_data_area_size(
         sizing. PAIR cells are 1 row; CONTRAST_SET is
         ``ceil(entries / 2)``; STACK is ``len(entries)``.
         """
-        if cell.display_kind in _PAIR_DISPLAY_KINDS:
+        if cell.display_kind in PAIR_DISPLAY_KINDS:
             return 1
         if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
             return (len(cell.entries) + 1) // 2
@@ -2362,7 +2383,7 @@ def build_vowel_chart_geometry(
             display_kind, _, ord_entries = _classify_vowel_cell_display(
                 tuple(entries), norm_feats
             )
-            if display_kind in _PAIR_DISPLAY_KINDS:
+            if display_kind in PAIR_DISPLAY_KINDS:
                 depth = 1
             elif display_kind == VowelCellDisplayKind.CONTRAST_SET:
                 depth = (len(ord_entries) + 1) // 2
@@ -2491,7 +2512,7 @@ def build_vowel_chart_geometry(
         display_kind, contrast_features, entries = (
             _classify_vowel_cell_display(raw_entries, norm_feats)
         )
-        is_pair_layout = display_kind in _PAIR_DISPLAY_KINDS
+        is_pair_layout = display_kind in PAIR_DISPLAY_KINDS
         if ci >= 6:
             pair_side = 0
             grid_col = _neutral_col_to_grid_col[ci]
@@ -2660,6 +2681,24 @@ def build_vowel_chart_geometry(
             )
         )
     diphthongs = tuple(diphthongs_list)
+    # Height-tier bands: one stripe per populated row, clamped to
+    # the silhouette's vertical span, with ``tinted`` alternating
+    # so the every-other-row rhythm is decided once here rather
+    # than recomputed by each renderer.
+    row_ys = tuple(r.chart_y for r in rows)
+    bands_list: list[VowelChartBand] = []
+    n_rows = len(row_ys)
+    for i, y in enumerate(row_ys):
+        above = (row_ys[i - 1] + y) / 2 if i > 0 else silhouette.top_y
+        below = (
+            (y + row_ys[i + 1]) / 2 if i < n_rows - 1 else silhouette.bottom_y
+        )
+        bands_list.append(
+            VowelChartBand(
+                top_norm=above, bottom_norm=below, tinted=i % 2 == 0
+            )
+        )
+    bands = tuple(bands_list)
     return VowelChartGeometry(
         title=VOWEL_CHART_TITLE,
         shape=shape,
@@ -2670,6 +2709,7 @@ def build_vowel_chart_geometry(
         natural_data_width_px=natural_w,
         natural_data_height_px=natural_h,
         diphthongs=diphthongs,
+        bands=bands,
     )
 
 
