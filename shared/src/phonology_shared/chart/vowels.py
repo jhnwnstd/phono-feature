@@ -2321,10 +2321,47 @@ def build_vowel_chart_geometry(
         bottom_logical_row=populated_logical_rows[-1],
     )
 
-    # Display y per populated row: evenly distributed in the
-    # silhouette's vertical span. This is the DISPLAY logic. A
-    # single-row inventory parks the row at the vertical midpoint
-    # so the silhouette is not a degenerate horizontal line.
+    # Display y per populated row: distributed in the silhouette's
+    # vertical span PROPORTIONAL TO PER-ROW CONTENT DEPTH so a row
+    # with a tall stack (Korean PHOIBLE has 7 entries at Close-Back,
+    # 6 at Close-Front) gets enough vertical room before the next
+    # row starts. Even distribution let a 7-button stack at row 0
+    # overlap rows 2/4/5 below; the stack visually invaded the
+    # Close-mid / Open-mid cells.
+    #
+    # Per-row depth is the max ``_cell_vertical_depth`` (PAIR -> 1;
+    # CONTRAST_SET -> ceil(n/2); STACK -> n) computed by running
+    # the same display-kind classifier ``cell_meta`` will use a few
+    # lines below; here we only need the depth.
+    #
+    # Each row gets a slot whose height is ``depth / total_depth``
+    # of the silhouette span. The row's chart_y anchor sits at:
+    #   - top of slot for the topmost row (the CSS row-tier
+    #     ``top`` anchor renders the stack DOWNWARD from chart_y);
+    #   - bottom of slot for the bottommost row (``bottom`` anchor
+    #     renders UPWARD from chart_y);
+    #   - centre of slot for middle rows (default centred anchor).
+    # The renderer's ``data-row-tier`` attribute matches this
+    # scheme so the cell box fills its slot.
+    def _row_depth(ri: int) -> int:
+        max_depth = 1
+        for (r, _c), entries in occupied.items():
+            if r != ri:
+                continue
+            display_kind, _, ord_entries = _classify_vowel_cell_display(
+                tuple(entries), norm_feats
+            )
+            if display_kind in _PAIR_DISPLAY_KINDS:
+                depth = 1
+            elif display_kind == VowelCellDisplayKind.CONTRAST_SET:
+                depth = (len(ord_entries) + 1) // 2
+            else:
+                depth = len(ord_entries)
+            if depth > max_depth:
+                max_depth = depth
+        return max_depth
+
+    row_depths = {ri: _row_depth(ri) for ri in populated_logical_rows}
     if len(populated_logical_rows) == 1:
         display_y_by_row = {
             populated_logical_rows[0]: (silhouette.top_y + silhouette.bottom_y)
@@ -2332,11 +2369,22 @@ def build_vowel_chart_geometry(
         }
     else:
         span = silhouette.bottom_y - silhouette.top_y
-        denom = len(populated_logical_rows) - 1
-        display_y_by_row = {
-            ri: silhouette.top_y + span * (i / denom)
-            for i, ri in enumerate(populated_logical_rows)
-        }
+        total_depth = sum(row_depths.values())
+        display_y_by_row = {}
+        cursor = silhouette.top_y
+        last_index = len(populated_logical_rows) - 1
+        for i, ri in enumerate(populated_logical_rows):
+            slot_height = row_depths[ri] / total_depth * span
+            if i == 0:
+                # Top row anchors at the top of its slot.
+                display_y_by_row[ri] = cursor
+            elif i == last_index:
+                # Bottom row anchors at the bottom of its slot.
+                display_y_by_row[ri] = cursor + slot_height
+            else:
+                # Middle rows anchor at the centre of their slot.
+                display_y_by_row[ri] = cursor + slot_height / 2
+            cursor += slot_height
 
     rows = tuple(
         VowelChartRow(

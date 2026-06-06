@@ -824,6 +824,10 @@ dialog input[type="text"]:focus-visible {
   padding: var(--space-xs) 2px;
   column-gap: var(--space-sm);
   row-gap: 2px;
+  /* Anchor for the absolutely-positioned ``.vowel-diphthong-toggle``
+     so it sits in the chart's title row corner instead of
+     overlapping Close-Back cell stacks inside the data area. */
+  position: relative;
 }
 /* Mirrors the desktop's ``QLabel(geometry.title)`` placed at the
    top, centred over the data area. The desktop's
@@ -987,9 +991,15 @@ dialog input[type="text"]:focus-visible {
    wins over the SVG overlay below (which has pointer-events:
    none). */
 .vowel-diphthong-toggle {
+  /* Pinned to the chart's outer container (``.vowel-chart``) at
+     the top-right corner of the title row. Sitting inside
+     ``.vowel-chart-data`` (the prior position) caused PHOIBLE
+     Close-Back stacks to overlap the toggle's hit area, with the
+     toggle's text getting drawn beneath the topmost cell button.
+     Outside the data area, the toggle has its own visual lane. */
   position: absolute;
   top: 2px;
-  right: 4px;
+  right: 2px;
   z-index: 3;
   padding: 1px 6px;
   font-size: var(--font-size-micro);
@@ -1122,6 +1132,35 @@ dialog input[type="text"]:focus-visible {
         (var(--seg-btn-w) + var(--vowel-pair-gap)) / 2
     ),
     -50%
+  );
+}
+/* Top-row cells anchor their TOP edge at chart_y so a multi-entry
+   stack hangs DOWN from the row label instead of centring and
+   spilling the upper half above the silhouette. Without this rule,
+   PHOIBLE inventories with 5+ Close-row entries (Korean, Acehnese,
+   !XU) render with the upper buttons sitting outside the chart's
+   top edge, often overlapping the title. */
+.vowel-chart-cell[data-row-tier="top"] {
+  transform: translate(
+    calc(
+      -50% +
+        var(--pair-side, 0) *
+        (var(--seg-btn-w) + var(--vowel-pair-gap)) / 2
+    ),
+    0%
+  );
+}
+/* Bottom-row cells anchor their BOTTOM edge at chart_y so a
+   multi-entry stack rises INTO the chart instead of spilling
+   below. */
+.vowel-chart-cell[data-row-tier="bottom"] {
+  transform: translate(
+    calc(
+      -50% +
+        var(--pair-side, 0) *
+        (var(--seg-btn-w) + var(--vowel-pair-gap)) / 2
+    ),
+    -100%
   );
 }
 

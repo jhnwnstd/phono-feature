@@ -1257,6 +1257,18 @@ function _buildVowelChart(chart) {
     if (chart.shape) {
         dataEl.setAttribute("data-shape", chart.shape);
     }
+    // Honour the geometry's natural height. PHOIBLE inventories
+    // with many vowels in the Close row (Korean has 7+6+3 entries
+    // across 3 cells, !XU/UPSID has 12 in a single Close-Back
+    // stack) report natural_data_height_px well above the 208 px
+    // CSS min-height; without setting it explicitly the cells'
+    // ``top: chart_y * 100%`` percentages compress them above the
+    // silhouette, with tall stacks rendering off the chart's top
+    // edge.
+    if (typeof chart.natural_data_height_px === "number"
+        && chart.natural_data_height_px > 0) {
+        dataEl.style.minHeight = chart.natural_data_height_px + "px";
+    }
     const sil = chart.silhouette;
     if (sil) {
         const shape = sil.shape || chart.shape || "trapezoid";
@@ -1362,10 +1374,24 @@ function _buildVowelChart(chart) {
         target.style.left = (cell.chart_x * 100) + "%";
         target.style.top = (cell.chart_y * 100) + "%";
         target.style.setProperty("--pair-side", String(cell.pair_side));
+        // Tag the row tier so CSS can anchor cells differently by
+        // position: top-row cells anchor their TOP at chart_y so
+        // a multi-entry stack hangs INTO the chart instead of
+        // overflowing above; bottom-row cells anchor their BOTTOM
+        // at chart_y so they grow upward into the chart. Middle
+        // rows stay centred (current default). Without this,
+        // PHOIBLE inventories like Korean (7+6 entries stacked at
+        // Close) render with the upper half of the stack sitting
+        // OUTSIDE the silhouette, above the chart title.
+        const tier = _vowelRowTier(cell.row, chart.rows);
+        if (tier !== "middle") {
+            target.dataset.rowTier = tier;
+        }
         dataEl.appendChild(target);
     }
     _appendVowelDiphthongArrows(dataEl, chart);
     chartEl.appendChild(dataEl);
+    _appendVowelDiphthongToggle(chartEl, dataEl);
 
     groupEl.appendChild(chartEl);
     return groupEl;
@@ -1554,7 +1580,6 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
     }
     dataEl.appendChild(svg);
     _wireVowelDiphthongFocus(dataEl);
-    _appendVowelDiphthongToggle(dataEl);
 }
 
 /** A small chart-corner toggle that flips ``data-show-arrows``
@@ -1564,7 +1589,7 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
  *  diphthongs so monophthong-only inventories don't carry the
  *  extra chrome. The ``aria-pressed`` flips so screen readers
  *  announce the state change. */
-function _appendVowelDiphthongToggle(dataEl) {
+function _appendVowelDiphthongToggle(chartEl, dataEl) {
     if (!dataEl.querySelector("svg.vowel-diphthong-arrows")) return;
     const btn = document.createElement("button");
     btn.type = "button";
@@ -1590,7 +1615,11 @@ function _appendVowelDiphthongToggle(dataEl) {
             btn.setAttribute("title", "Hide all-arrow overlay");
         }
     });
-    dataEl.appendChild(btn);
+    // Attach to the chart's outer container (not the data area)
+    // so the toggle sits in the title row instead of competing
+    // with Close-Back cell stacks for the top-right corner of the
+    // data rectangle.
+    chartEl.appendChild(btn);
 }
 
 /** Hover / focus wiring for the diphthong overlay. Default state
@@ -1645,6 +1674,19 @@ function _wireVowelDiphthongFocus(dataEl) {
     dataEl.addEventListener("focusout", (ev) => {
         if (segFromEvent(ev)) setFocus(null);
     });
+}
+
+/** Classify a cell's row by its position in the populated row
+ *  list: top row (index 0) -> "top"; bottom row -> "bottom";
+ *  middle -> "middle". The renderer uses this to pick the cell's
+ *  vertical anchor so tall stacks at the top row hang DOWN from
+ *  ``chart_y`` rather than centring (which lets the upper half
+ *  overflow above the silhouette). */
+function _vowelRowTier(row, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return "middle";
+    if (row === rows[0].logical_row) return "top";
+    if (row === rows[rows.length - 1].logical_row) return "bottom";
+    return "middle";
 }
 
 /** Build a single vowel-cell button from an IPA segment string. */
