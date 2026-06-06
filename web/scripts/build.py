@@ -775,6 +775,37 @@ def copy_phoible_data_asset() -> None:
         print("  PHOIBLE_LICENSE.txt -> dist/")
 
 
+def copy_ipa_font_asset() -> None:
+    """Copy the subset Charis SIL Compact woff2 + its OFL license.
+
+    The font lives at ``web/assets/charis-ipa.woff2`` (committed,
+    refreshed by running ``web/scripts/subset_ipa_font.py`` against
+    the source TTF). Shipping a vendored subset means the build
+    pipeline does not need fonttools at deploy time and the
+    ``@font-face`` URL in ``style.css`` resolves against a known
+    asset.
+
+    The license file ships at a stable URL so the citation link in
+    ``style.css`` (and the about section) does not rot per build.
+    """
+    font_src = WEB_DIR / "assets" / "charis-ipa.woff2"
+    if not font_src.exists():
+        print(
+            "  WARNING: Charis IPA woff2 not found at "
+            f"{font_src}; run web/scripts/subset_ipa_font.py first."
+        )
+        return
+    dst = DIST / "charis-ipa.woff2"
+    shutil.copy(font_src, dst)
+    kb = dst.stat().st_size / 1024
+    print(f"Copying IPA font asset...\n  {kb:.0f} KB -> {dst.name}")
+
+    license_src = WEB_DIR / "assets" / "CHARIS_SIL_LICENSE.txt"
+    if license_src.exists():
+        shutil.copy(license_src, DIST / "CHARIS_SIL_LICENSE.txt")
+        print("  CHARIS_SIL_LICENSE.txt -> dist/")
+
+
 def write_bootstrap() -> None:
     """Precompute the default inventory's render summary so the web
     app can paint its initial UI before Pyodide finishes loading.
@@ -879,7 +910,28 @@ def hash_assets() -> None:
         runtime_map["phoible_data"] = new_phoible
         full_map["phoible_data.json"] = new_phoible
 
-    # 4. CSS files referenced from index.html.
+    # 3b. IPA font. Hashed BEFORE the CSS step so we can rewrite
+    #     style.css's ``url("charis-ipa.woff2")`` reference to the
+    #     hashed name before the CSS itself gets hashed.
+    ipa_font = DIST / "charis-ipa.woff2"
+    new_font_name: str | None = None
+    if ipa_font.exists():
+        new_font_name = _hashed_name(ipa_font)
+        ipa_font.rename(DIST / new_font_name)
+        full_map["charis-ipa.woff2"] = new_font_name
+
+    # 4. CSS files referenced from index.html. style.css gets a
+    #    one-time rewrite to replace the font URL with its hashed
+    #    name; without this the browser fetches a stale or missing
+    #    asset on the cold path.
+    if new_font_name:
+        style_path = DIST / "style.css"
+        style_text = style_path.read_text(encoding="utf-8")
+        style_text = style_text.replace(
+            'url("charis-ipa.woff2")',
+            f'url("{new_font_name}")',
+        )
+        style_path.write_text(style_text, encoding="utf-8")
     for css in ("theme.css", "layout.css", "style.css"):
         path = DIST / css
         new_name = _hashed_name(path)
@@ -1129,6 +1181,7 @@ def main() -> int:
     copy_inventories()
     write_python_bundle()
     copy_phoible_data_asset()
+    copy_ipa_font_asset()
     write_bootstrap()
     hash_assets()
     write_service_worker()

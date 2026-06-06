@@ -27,12 +27,24 @@ phonology-shared = { workspace = true }
 profile = "black"
 line_length = 79
 known_first_party = ["phonology_shared", "phonology_features", "phonology_web"]
+# Vendored Charis SIL source tree under ``web/scripts/font_cache``
+# is gitignored but isort does not honour gitignore for nested
+# paths; pin the skip here.
+skip_glob = ["web/scripts/font_cache/*"]
 
 # Black config so ``black .`` from any cwd matches the user's
 # preferred ``black -l79`` invocation without needing the flag.
 [tool.black]
 line-length = 79
 target-version = ["py311"]
+# Same reason as the isort skip above; force-exclude wins over
+# gitignore inference so a ``black .`` from anywhere skips the
+# vendored font helper scripts.
+force-exclude = '''
+(
+  /web/scripts/font_cache/
+)
+'''
 
 [tool.mypy]
 python_version = "3.11"

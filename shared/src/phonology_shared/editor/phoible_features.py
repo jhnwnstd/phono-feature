@@ -13,10 +13,12 @@ Lives in shared/ alongside :py:mod:`panphon_features` so the bake
 script, the desktop provider, and the web bridge all read from one
 source.
 
-Bake-time invariant: the order in this dict fixes the column order
-of the JSON snapshot, so renaming or reordering rotates the
-positional encoding and invalidates every shipped bundle. Append
-new keys at the end, never insert in the middle.
+Bake-time invariant: the KEY order in this dict fixes the column
+order of the JSON snapshot, so reordering or inserting in the
+middle rotates the positional encoding and invalidates every
+shipped bundle. Append new keys at the end. The VALUES can be
+renamed freely; the runtime ``feature_names`` list just picks up
+the new labels on the next bake.
 """
 
 from __future__ import annotations
@@ -29,37 +31,42 @@ from collections.abc import Mapping
 PHOIBLE_TO_APP_FEATURE: Mapping[str, str] = {
     # === Header-tier features (suprasegmental). PHOIBLE-only ===
     "tone": "HighTone",
-    "stress": "stress",
+    "stress": "Stress",
     # === Major-class features (overlap with app canonical names) ===
     "syllabic": "Syllabic",
-    "short": "short",
+    "short": "Short",
     "long": "Long",
     "consonantal": "Consonantal",
     "sonorant": "Sonorant",
     "continuant": "Continuant",
     "delayedRelease": "DelRel",
-    # === Manner features (mostly PHOIBLE-only passthroughs) ===
-    "approximant": "approximant",
-    "tap": "tap",
-    "trill": "trill",
+    # === Manner features ===
+    "approximant": "Approximant",
+    "tap": "Tap",
+    "trill": "Trill",
     "nasal": "Nasal",
     "lateral": "Lateral",
     # === Place features ===
     "labial": "Labial",
     "round": "Round",
-    "labiodental": "labiodental",
+    "labiodental": "Labiodental",
     "coronal": "Coronal",
     "anterior": "Anterior",
     "distributed": "Distributed",
     "strident": "Strident",
-    "dorsal": "dorsal",
+    "dorsal": "Dorsal",
     "high": "High",
     "low": "Low",
-    "front": "front",
+    "front": "Front",
     "back": "Back",
     "tense": "Tense",
-    "retractedTongueRoot": "retractedTongueRoot",
-    "advancedTongueRoot": "advancedTongueRoot",
+    # PHOIBLE's ``advancedTongueRoot`` and ``retractedTongueRoot``
+    # are the canonical +ATR / +RTR phonological features. Mapping
+    # them to the short abbreviations reuses the existing ``ATR``
+    # slot in :py:data:`FEATURE_GROUPS` and aligns with the way
+    # academic papers cite these features.
+    "retractedTongueRoot": "RTR",
+    "advancedTongueRoot": "ATR",
     # === Laryngeal features ===
     # PHOIBLE uses ``periodicGlottalSource`` for what most SPE
     # tables call ``Voice``. They are not strictly identical
@@ -68,13 +75,13 @@ PHOIBLE_TO_APP_FEATURE: Mapping[str, str] = {
     # mapping aliases let app-side consumers query ``Voice``
     # uniformly across provider sources.
     "periodicGlottalSource": "Voice",
-    "epilaryngealSource": "epilaryngealSource",
+    "epilaryngealSource": "EpilaryngealSource",
     "spreadGlottis": "SpreadGl",
     "constrictedGlottis": "ConstrGl",
-    "fortis": "fortis",
-    "lenis": "lenis",
-    "raisedLarynxEjective": "raisedLarynxEjective",
-    "loweredLarynxImplosive": "loweredLarynxImplosive",
+    "fortis": "Fortis",
+    "lenis": "Lenis",
+    "raisedLarynxEjective": "RaisedLarynxEjective",
+    "loweredLarynxImplosive": "LoweredLarynxImplosive",
     # === Airstream ===
     # PHOIBLE splits velaric clicks out as their own column;
     # the closest app-side analog is ``Velaric``.

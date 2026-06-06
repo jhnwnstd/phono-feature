@@ -278,27 +278,35 @@
     </div>
 
     <div class="phoible-panel">
-      <div class="phoible-loading" id="phoible-loading" hidden>
-        Loading PHOIBLE table…
+      <div class="phoible-loading" id="phoible-loading" hidden
+           aria-busy="true" aria-live="polite">
+        <span class="phoible-spinner" aria-hidden="true"></span>
+        <span>Loading PHOIBLE table…</span>
       </div>
       <div class="phoible-active" id="phoible-active" hidden>
+        <p class="phoible-hint">
+          Type a language name or ISO 639-3 code to begin.
+        </p>
         <label class="dialog-label" for="phoible-search">
           Language
         </label>
         <input id="phoible-search" type="text" autocomplete="off"
                spellcheck="false"
-               placeholder="Type a language name or ISO code">
+               placeholder="e.g. Korean, kor">
         <ul id="phoible-results" class="phoible-results" hidden
             role="listbox"></ul>
 
-        <div id="phoible-inventories" hidden>
-          <div class="dialog-label">Inventory source</div>
-          <div id="phoible-radios" role="radiogroup"></div>
-        </div>
+        <fieldset id="phoible-inventories" class="phoible-fieldset" hidden
+                  role="radiogroup">
+          <legend>Inventory source</legend>
+          <div id="phoible-radios"></div>
+        </fieldset>
 
         <div id="phoible-preview" hidden class="phoible-preview">
-          <div id="phoible-summary" class="phoible-summary"></div>
-          <div id="phoible-segments" class="phoible-segments"></div>
+          <div id="phoible-summary" class="phoible-summary"
+               aria-live="polite"></div>
+          <ul id="phoible-segments" class="phoible-segments"
+              aria-label="Sample segments"></ul>
           <div class="phoible-citation">
             <a id="phoible-cite" href="PHOIBLE_LICENSE.txt"
                target="_blank" rel="noopener">

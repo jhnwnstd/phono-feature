@@ -1892,6 +1892,10 @@ function wireUploadDownload() {
         }
         const text = await file.text();
         await loadInventoryText(text, file.name);
+        // An uploaded file replaces the engine state, so the
+        // PHOIBLE synthetic entry (if any) no longer reflects what
+        // is loaded.
+        clearLoadedSyntheticOption();
         ev.target.value = "";
     });
     // Save-as lives on the editor toolbar only; the main toolbar
@@ -2449,10 +2453,19 @@ function wirePhoiblePicker() {
         nodes.phoibleSummary.textContent =
             `${segment_total} segments · ${feature_count} features`
             + (descriptor.dialect ? ` · ${descriptor.dialect}` : "");
-        const trail = segments.length < segment_total
-            ? ` … +${segment_total - segments.length} more`
-            : "";
-        nodes.phoibleSegments.textContent = segments.join(" ") + trail;
+        const ul = nodes.phoibleSegments;
+        ul.innerHTML = "";
+        for (const sym of segments) {
+            const li = document.createElement("li");
+            li.textContent = sym;
+            ul.appendChild(li);
+        }
+        if (segments.length < segment_total) {
+            const more = document.createElement("li");
+            more.textContent = `… +${segment_total - segments.length} more`;
+            more.className = "phoible-segments-more";
+            ul.appendChild(more);
+        }
         nodes.phoiblePreview.hidden = false;
         loadBtn.disabled = false;
     };
@@ -2582,6 +2595,10 @@ function wirePhoiblePicker() {
                 "load_phoible_inventory", selectedInventoryId,
             );
             applyInventoryInfo(info);
+            // Reflect the loaded PHOIBLE inventory in the toolbar
+            // dropdown so the user does not see a stale bundled
+            // name sitting above the engine state.
+            setLoadedSyntheticOption(info.name);
             setStatus(
                 `Loaded ${info.name} `
                 + `(${info.segments.length} segments, `
@@ -4159,11 +4176,62 @@ function wireThemeToggle() {
     });
 }
 
+// Synthetic option value used to mark the PHOIBLE-loaded entry in
+// the toolbar dropdown. Distinct from every bundled inventory file
+// path so the change handler can disambiguate.
+const LOADED_OPTION_VALUE = "__loaded__";
+
+/** Prepend (or update) a single ``<option>`` at the top of the
+ *  inventory dropdown that reflects the currently loaded
+ *  non-bundled inventory (today: PHOIBLE). The option lives inside
+ *  an ``<optgroup>`` for visual separation; native ``<select>``
+ *  styling on WebKit is limited and the optgroup is the most
+ *  portable visual cue. Idempotent: re-calling with the same name
+ *  just updates the label and re-selects. */
+function setLoadedSyntheticOption(name) {
+    const picker = nodes.inventoryPicker;
+    let group = picker.querySelector(`optgroup[data-loaded]`);
+    let opt;
+    if (group) {
+        opt = group.querySelector("option");
+    } else {
+        group = document.createElement("optgroup");
+        group.setAttribute("data-loaded", "true");
+        group.label = "Loaded";
+        opt = document.createElement("option");
+        opt.value = LOADED_OPTION_VALUE;
+        group.appendChild(opt);
+        picker.prepend(group);
+    }
+    opt.textContent = name;
+    picker.value = LOADED_OPTION_VALUE;
+}
+
+/** Remove the synthetic ``Loaded`` optgroup if present. Called from
+ *  the change handler whenever the user picks a bundled inventory
+ *  so the toolbar dropdown returns to its plain shape. */
+function clearLoadedSyntheticOption() {
+    const group = nodes.inventoryPicker.querySelector(
+        "optgroup[data-loaded]",
+    );
+    if (group) group.remove();
+}
+
 function wireInventoryPicker() {
     nodes.inventoryPicker.addEventListener("change", () => {
-        const file = nodes.inventoryPicker.value;
-        const item = BUNDLED_INVENTORIES.find((i) => i.file === file);
-        if (item) loadBundledInventory(item);
+        const value = nodes.inventoryPicker.value;
+        if (value === LOADED_OPTION_VALUE) {
+            // The synthetic option represents the already-loaded
+            // engine state; selecting it again is a no-op. The
+            // event still fires (e.g. when programmatic code sets
+            // the picker.value), so we early-return cleanly.
+            return;
+        }
+        const item = BUNDLED_INVENTORIES.find((i) => i.file === value);
+        if (item) {
+            clearLoadedSyntheticOption();
+            loadBundledInventory(item);
+        }
     });
 }
 

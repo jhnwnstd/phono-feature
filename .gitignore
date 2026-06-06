@@ -69,3 +69,11 @@ desktop/inventories/general_features.json
 # build. The ``.generated`` suffix is the project's convention for
 # build-output files that ship inside source dirs.
 *.generated.json
+
+# IPA font source cache. The subset woff2 ships at
+# web/assets/charis-ipa.woff2 (~64 KB, committed); the source TTF
+# release (~25 MB) is too large to track. Only the README at the
+# cache root stays committed so a maintainer who wants to refresh
+# the subset has clear instructions.
+web/scripts/font_cache/*
+!web/scripts/font_cache/README.md

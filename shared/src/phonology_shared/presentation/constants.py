@@ -164,6 +164,22 @@ FEATURE_ORDER: list[str] = [
     "Stress",
     "Tone",
     "UpperRegister",
+    # PHOIBLE-canonical extensions. Same conceptual buckets as
+    # above; the existing all-caps anchors stay for the bundled
+    # Hayes inventory while these title-case names absorb the
+    # PHOIBLE provider's emitted columns.
+    "Labial",
+    "Coronal",
+    "Dorsal",
+    "Velaric",
+    "EpilaryngealSource",
+    "Fortis",
+    "Lenis",
+    "RaisedLarynxEjective",
+    "LoweredLarynxImplosive",
+    "RTR",
+    "HighTone",
+    "Short",
 ]
 _FEATURE_ORDER_INDEX: dict[str, int] = {
     feature: index for index, feature in enumerate(FEATURE_ORDER)
@@ -186,6 +202,12 @@ FEATURE_GROUPS: list[tuple[str, list[str]]] = [
             "Voice",
             "SpreadGl",
             "ConstrGl",
+            # PHOIBLE-canonical additions
+            "EpilaryngealSource",
+            "Fortis",
+            "Lenis",
+            "RaisedLarynxEjective",
+            "LoweredLarynxImplosive",
         ],
     ),
     (
@@ -199,6 +221,9 @@ FEATURE_GROUPS: list[tuple[str, list[str]]] = [
             "Trill",
             "Tap",
             "Click",
+            # PHOIBLE-canonical: ``Velaric`` is the click column
+            # under the app's canonical name.
+            "Velaric",
         ],
     ),
     (
@@ -215,6 +240,12 @@ FEATURE_GROUPS: list[tuple[str, list[str]]] = [
             "Low",
             "Back",
             "Front",
+            # PHOIBLE-canonical: place-class features under their
+            # title-case names (Hayes uses the all-caps anchors
+            # above; both forms now find a home in this group).
+            "Labial",
+            "Coronal",
+            "Dorsal",
         ],
     ),
     (
@@ -224,6 +255,8 @@ FEATURE_GROUPS: list[tuple[str, list[str]]] = [
             "Pharyngeal",
             "ATR",
             "Tense",
+            # PHOIBLE-canonical: ``RTR`` is the partner of ``ATR``.
+            "RTR",
         ],
     ),
     (
@@ -233,6 +266,10 @@ FEATURE_GROUPS: list[tuple[str, list[str]]] = [
             "Stress",
             "Tone",
             "UpperRegister",
+            # PHOIBLE-canonical: ``HighTone`` is the tone column;
+            # ``Short`` is the length partner of ``Long``.
+            "HighTone",
+            "Short",
         ],
     ),
 ]

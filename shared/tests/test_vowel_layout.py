@@ -153,6 +153,45 @@ def test_compute_placements_orders_by_confidence_desc():
 # Constants: immutability
 
 
+def test_phoible_shaped_close_front_vowel_places_correctly():
+    """A synthetic PHOIBLE-shaped vowel bundle places at the
+    Close Front cell.
+
+    PHOIBLE inventories carry the post-bake title-case names
+    (``Syllabic``, ``High``, ``Front``, ``Back``, ``Round``); the
+    placement reader casefolds at the entry to ``vowel_grid_pos``
+    so PHOIBLE's broader feature axes are read identically to the
+    bundled Hayes lowercase keys. This test pins that contract so
+    a future refactor of the placement reader cannot silently
+    regress PHOIBLE compatibility.
+    """
+    import phonology_shared.chart.vowels as vl
+
+    feats = {
+        "i_test": {
+            "Syllabic": "+",
+            "Consonantal": "-",
+            "High": "+",
+            "Low": "-",
+            "Front": "+",
+            "Back": "-",
+            "Round": "-",
+            "Tense": "+",
+            "Long": "-",
+        }
+    }
+    profile = vl.detect_vowel_profile(["i_test"], feats)
+    occupied, placements = vl.compute_placements(["i_test"], profile, feats)
+    placement = placements["i_test"]
+    assert placement.row == vl.ROW_LABELS.index("Close"), (
+        f"PHOIBLE +High maps to Close height tier, got "
+        f"{vl.ROW_LABELS[placement.row]}"
+    )
+    # Front column index (front anchor) per
+    # ``COL_LABELS == ("Front", "Central", "Back")``.
+    assert vl.COL_LABELS[0] == "Front"
+
+
 def test_module_constants_are_tuples():
     """ROW_LABELS / COL_LABELS / VOWEL_HEIGHT are exported as
     tuples so importers cannot mutate the shared singletons."""

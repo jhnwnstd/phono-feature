@@ -181,7 +181,13 @@ class FeatureRow(QWidget):
         layout.setContentsMargins(8, 3, 8, 3)
         layout.setSpacing(4)
         self.name_label = QLabel(feature_name, self)
-        self.name_label.setFont(QFont("Noto Sans", 10))
+        # Academic small-caps for feature labels: the initial cap
+        # stays at full height and the rest of the lowercase
+        # letters render as small caps. Matches the print
+        # convention for citing features.
+        _name_font = QFont("Noto Sans", 10)
+        _name_font.setCapitalization(QFont.Capitalization.SmallCaps)
+        self.name_label.setFont(_name_font)
         self.name_label.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Preferred,
@@ -420,7 +426,9 @@ class FeatureRow(QWidget):
             QFont("Noto Sans", cfg.btn_font, QFont.Weight.Bold)
         )
         self.badge.setFont(QFont("Noto Sans", cfg.btn_font, QFont.Weight.Bold))
-        self.name_label.setFont(QFont("Noto Sans", cfg.name_font))
+        _compact_name_font = QFont("Noto Sans", cfg.name_font)
+        _compact_name_font.setCapitalization(QFont.Capitalization.SmallCaps)
+        self.name_label.setFont(_compact_name_font)
         lay = self.layout()
         if lay is not None:
             lay.setContentsMargins(8, cfg.margin_v, 8, cfg.margin_v)
