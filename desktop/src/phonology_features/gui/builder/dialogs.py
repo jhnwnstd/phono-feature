@@ -154,8 +154,8 @@ class SegmentTextEdit(_AutofillTextEdit):
 
 class FeatureTextEdit(_AutofillTextEdit):
     """Tab on empty seeds the two major-class features (Syllabic and
-    Consonantal) as a starting point for a custom set. The full
-    Default (33) preset is in the dropdown.
+    Consonantal) as a starting point for a custom set. Fuller
+    starting points (Hayes, PHOIBLE) are in the preset dropdown.
 
     Trailing newline so the caret lands on a fresh line ready for
     the user to type the next feature; ``_infer_split`` filters empty
@@ -319,16 +319,25 @@ class InputDialog(QDialog):
                 outline: none;
             }}
         """)
-        for name in FEATURE_PRESETS:
-            self.preset_combo.addItem(name)
-        # Append one entry per available bootstrap provider (PanPhon
-        # today). Hidden when the optional dependency is not
-        # installed, so a desktop without ``panphon`` shows only the
-        # static presets.
+        # Display order: providers FIRST (today PanPhon, the
+        # auto-fill recommended default), then the static presets
+        # (Hayes, PHOIBLE, Custom). Providers are bolded so the
+        # auto-generating option reads as the recommended path
+        # even at a glance; the static presets just populate the
+        # textarea with a column scaffold the user fills in.
+        bold = QFont("Noto Sans", 10, QFont.Weight.Bold)
         for provider in available_providers():
-            label = provider.display_label()
+            base_label = provider.display_label()
+            label = f"{base_label} (auto-fill)"
             self._provider_by_label[label] = provider
             self.preset_combo.addItem(label)
+            self.preset_combo.setItemData(
+                self.preset_combo.count() - 1,
+                bold,
+                Qt.ItemDataRole.FontRole,
+            )
+        for name in FEATURE_PRESETS:
+            self.preset_combo.addItem(name)
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
         # Features header row: bold label on the left, preset combo
         # flush to the RIGHT edge (separated by stretch). The combo

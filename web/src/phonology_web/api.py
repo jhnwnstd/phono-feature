@@ -249,8 +249,13 @@ def get_setup_defaults() -> dict[str, Any]:
     the same Tab-autofill strings and the same named presets in the
     dropdown. The ``providers`` list mirrors the desktop's
     :py:func:`phonology_features.providers.available_providers`
-    surface: each entry carries the provider name + display label,
-    and the JS picker appends them under the static presets.
+    surface: each entry carries the provider name + display label.
+
+    Display order in the dropdown is ``providers`` first (today:
+    PanPhon, the auto-generating recommended default), then the
+    static presets in their ``FEATURE_PRESETS`` insertion order
+    (today: Hayes, PHOIBLE, Custom). The JS picker stitches the two
+    sequences together; the order here is the contract.
     """
     providers = [
         {
@@ -479,13 +484,22 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     name = f"{name} [{descriptor.source_short}]"
 
     # One light metadata field for provenance. No id-lock keys;
-    # once loaded the inventory belongs to the user.
-    metadata = {
+    # once loaded the inventory belongs to the user. When the
+    # inventory carries diphthong segments, also stamp the
+    # secondary feature bundles into metadata so the vowel chart
+    # can read them at placement time without a new parameter on
+    # every downstream signature.
+    metadata: dict[str, Any] = {
         "feature_source": (
             f"{provider.version} / {descriptor.language_name}"
             f" / {descriptor.source_short}"
         )
     }
+    if generated.vowel_secondary:
+        metadata["vowel_secondary"] = {
+            seg: dict(bundle)
+            for seg, bundle in generated.vowel_secondary.items()
+        }
 
     # ``generated.segments`` is already pruned to ``generated.features``
     # by the provider; the bundles do not carry stray keys and they

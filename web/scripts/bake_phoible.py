@@ -132,6 +132,7 @@ def bake_tables(
     from phonology_shared.editor.phoible_features import (
         PHOIBLE_TO_APP_FEATURE,
         normalize_phoible_value,
+        split_vowel_contour,
     )
 
     if not csv_path.exists():
@@ -146,6 +147,13 @@ def bake_tables(
     # Per-inventory accumulators.
     inv_meta: dict[str, dict[str, Any]] = {}
     inv_segments: dict[str, dict[str, str]] = defaultdict(dict)
+    # Per-inventory diphthong secondary bundles. Keys are inventory
+    # ids; values map phoneme -> the final-state bundle string in
+    # the same positional encoding as inv_segments. The primary
+    # bundle stamped into inv_segments holds the initial state so
+    # any consumer that does not know about diphthongs still sees
+    # the conservative single-vowel placement.
+    inv_vowel_secondary: dict[str, dict[str, str]] = defaultdict(dict)
     # Language-name dedup. The same language often appears under
     # several inventories; the autocomplete list wants one entry per
     # language.
@@ -203,26 +211,43 @@ def bake_tables(
                     }
 
             # Build the positional bundle string in feature_columns
-            # order; one character per column.
-            bundle_chars: list[str] = []
+            # order; one character per column. For vowel rows
+            # (Syllabic=+) that carry contour values in any column,
+            # we also build a parallel SECONDARY bundle holding the
+            # final-state polarity; the primary bundle keeps the
+            # initial state. This preserves PHOIBLE's diphthong
+            # encoding for the placement code without breaking the
+            # engine's single-value-per-feature contract.
+            is_vowel = row.get("syllabic", "0") == "+"
+            initial_chars: list[str] = []
+            final_chars: list[str] = []
+            has_contour = False
             for col in feature_columns:
                 raw = row.get(col, "0")
-                normalized = normalize_phoible_value(raw)
-                if normalized != raw and raw not in ("", "NA"):
+                contour = split_vowel_contour(raw) if is_vowel else None
+                if contour is not None:
+                    has_contour = True
+                    initial, final = contour
+                    initial_chars.append(initial)
+                    final_chars.append(final)
                     contour_normalized += 1
-                bundle_chars.append(normalized)
-            bundle_str = "".join(bundle_chars)
+                else:
+                    normalized = normalize_phoible_value(raw)
+                    if normalized != raw and raw not in ("", "NA"):
+                        contour_normalized += 1
+                    initial_chars.append(normalized)
+                    final_chars.append(normalized)
+            bundle_str = "".join(initial_chars)
 
             # Multiple rows for the same phoneme within one
-            # inventory are extremely rare in PHOIBLE; the LAST one
-            # wins so the loop stays branch-free. Log if it ever
-            # fires so we know there is a regression.
+            # inventory are extremely rare in PHOIBLE; keep the
+            # FIRST one per the convention so the secondary bundle
+            # we computed above lines up with the primary.
             if phoneme in inv_segments[inv_id]:
-                # Same key, different bundle — would silently
-                # over-write. Keep the first per the PHOIBLE
-                # convention; the second is treated as a duplicate.
                 continue
             inv_segments[inv_id][phoneme] = bundle_str
+            if is_vowel and has_contour:
+                inv_vowel_secondary[inv_id][phoneme] = "".join(final_chars)
 
     # Backfill segment_count on each inventory descriptor.
     for inv_id, meta in inv_meta.items():
@@ -255,6 +280,17 @@ def bake_tables(
         "inventories": {
             inv_id: dict(inv_segments[inv_id])
             for inv_id in sorted(inv_segments.keys(), key=int)
+        },
+        # Vowel diphthong secondary bundles per inventory; sparse
+        # (only inventories with at least one diphthong appear).
+        # Each value maps phoneme -> final-state bundle string in
+        # the same positional encoding as ``inventories``. Older
+        # clients that ignore the field still get sensible
+        # single-vowel placement from the primary bundle.
+        "vowel_secondary": {
+            inv_id: dict(inv_vowel_secondary[inv_id])
+            for inv_id in sorted(inv_vowel_secondary.keys(), key=int)
+            if inv_vowel_secondary[inv_id]
         },
     }
 

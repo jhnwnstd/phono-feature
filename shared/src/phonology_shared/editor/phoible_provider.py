@@ -297,6 +297,29 @@ class PhoibleProvider:
             decoded[str(inv_id)] = bundles
         self._segments_by_inventory = decoded
 
+        # Vowel diphthong secondary bundles. Sparse: most
+        # inventories have none and stay absent from the map. The
+        # field is optional in the bake schema for backward
+        # compatibility with older snapshots that predate it.
+        raw_secondary = data.get("vowel_secondary") or {}
+        secondary_decoded: dict[str, Mapping[str, str]] = {}
+        if isinstance(raw_secondary, Mapping):
+            for inv_id, segments in raw_secondary.items():
+                if not isinstance(segments, Mapping):
+                    continue
+                bundles = {}
+                for sym, encoded in segments.items():
+                    if not isinstance(sym, str) or not isinstance(
+                        encoded, str
+                    ):
+                        continue
+                    if len(encoded) != n:
+                        continue
+                    bundles[sym] = encoded
+                if bundles:
+                    secondary_decoded[str(inv_id)] = bundles
+        self._vowel_secondary_by_inventory = secondary_decoded
+
     # ------------------------------------------------------------------
     # InventoryProvider Protocol
     # ------------------------------------------------------------------
@@ -382,6 +405,17 @@ class PhoibleProvider:
             # single ``zip`` per segment.
             resolved[sym] = dict(zip(features, encoded, strict=False))
 
+        # Decode the diphthong secondary bundles for this
+        # inventory, if any, in the same pre-prune feature space.
+        encoded_secondary = self._vowel_secondary_by_inventory.get(
+            inventory_id, {}
+        )
+        secondary: dict[str, Mapping[str, str]] = {
+            sym: dict(zip(features, encoded, strict=False))
+            for sym, encoded in encoded_secondary.items()
+            if sym in resolved
+        }
+
         if resolved:
             used = {
                 feat
@@ -389,6 +423,14 @@ class PhoibleProvider:
                 for feat, value in bundle.items()
                 if value in ("+", "-")
             }
+            # Secondary bundles count as "used" too; otherwise a
+            # diphthong that distinguishes itself only on the final
+            # half (e.g. /aɪ/ where the initial vowel matches an
+            # existing monophthong) would lose its discriminator.
+            for bundle in secondary.values():
+                for feat, value in bundle.items():
+                    if value in ("+", "-"):
+                        used.add(feat)
             features = tuple(feat for feat in features if feat in used)
             resolved = {
                 seg: {
@@ -396,12 +438,19 @@ class PhoibleProvider:
                 }
                 for seg, bundle in resolved.items()
             }
+            secondary = {
+                seg: {
+                    feat: val for feat, val in bundle.items() if feat in used
+                }
+                for seg, bundle in secondary.items()
+            }
 
         return GeneratedInventory(
             features=features,
             segments=resolved,
             unresolved=(),
             warnings=(),
+            vowel_secondary=secondary,
         )
 
     # ------------------------------------------------------------------

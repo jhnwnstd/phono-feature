@@ -184,14 +184,44 @@ def test_default_features_seeds_two_major_class_features():
     assert tokens == ["Syllabic", "Consonantal"]
 
 
-def test_presets_default33_size_and_contents():
-    """The headline preset's size matches its label and contains
-    the expected fundamentals."""
-    default = FEATURE_PRESETS["Default (33)"]
-    assert len(default) == 33
-    assert "Syllabic" in default
-    assert "Consonantal" in default
-    assert "Voice" in default
+def test_preset_keys_in_dropdown_order():
+    """Keys in ``FEATURE_PRESETS`` are the dropdown labels; their
+    insertion order is the contract for the picker render order.
+    PanPhon comes from a separate provider registry and renders
+    above these in the dialog, but Hayes -> PHOIBLE -> Custom is
+    pinned here."""
+    assert tuple(FEATURE_PRESETS.keys()) == ("Hayes", "PHOIBLE", "Custom")
+
+
+def test_presets_default33_removed():
+    """The legacy ``Default (33)`` preset is gone. New dialogs
+    should never default-select it again."""
+    assert "Default (33)" not in FEATURE_PRESETS
+
+
+def test_hayes_preset_matches_bundled_inventory():
+    """The inline Hayes preset must equal the ``features`` array in
+    ``desktop/inventories/hayes_features.json`` so the two cannot
+    drift; the JSON is the authoritative source."""
+    import json
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    hayes_path = repo_root / "desktop" / "inventories" / "hayes_features.json"
+    bundled = json.loads(hayes_path.read_text(encoding="utf-8-sig"))
+    assert FEATURE_PRESETS["Hayes"] == bundled["features"]
+
+
+def test_phoible_preset_matches_phoible_to_app_feature_values():
+    """PHOIBLE preset mirrors ``PHOIBLE_TO_APP_FEATURE.values()``
+    so the picker and the bake stay in lock-step. A future bake
+    refresh that adds or renames features flows through here
+    automatically."""
+    from phonology_shared.editor.phoible_features import (
+        PHOIBLE_TO_APP_FEATURE,
+    )
+
+    assert FEATURE_PRESETS["PHOIBLE"] == list(PHOIBLE_TO_APP_FEATURE.values())
 
 
 def test_presets_custom_is_empty_list():

@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from phonology_shared.data.limits import MAX_NAME_LENGTH
+from phonology_shared.editor.phoible_features import PHOIBLE_TO_APP_FEATURE
 
 # Delimiters :py:func:`infer_split` tries, in no particular order.
 # Whitespace is the FALLBACK (used only when none of these appear):
@@ -31,8 +32,8 @@ EXPLICIT_DELIMITERS: tuple[str, ...] = (",", ";", "|", "\t", "\n")
 DEFAULT_SEGMENTS: str = "p b t d k ɡ "
 
 # DEFAULT_FEATURES: the two major-class features as a minimal
-# starting point for a custom set. The fuller "Default (33)" preset
-# is available via the dropdown.
+# starting point for a custom set. The Hayes and PHOIBLE presets in
+# the dropdown supply fuller starting points.
 DEFAULT_FEATURES: str = "Syllabic\nConsonantal\n"
 
 # Shared dialog strings. Both UIs render the same setup modal/
@@ -43,43 +44,50 @@ SETUP_DIALOG_TITLE: str = "New inventory"
 SETUP_NAME_PLACEHOLDER: str = "e.g. My Language Inventory"
 
 # Named feature presets. Keys are the dropdown labels, values are
-# the feature lists. "Custom" is the no-fill option.
+# the feature lists. "Custom" is the no-fill option. The dict is
+# built in DROPDOWN ORDER (Python preserves insertion order); the
+# web setup dialog and the desktop builder both iterate this dict
+# and render the keys in the order they appear here.
+#
+# The Hayes list mirrors ``desktop/inventories/hayes_features.json``
+# verbatim. ``test_setup_presets.py`` pins the two together so the
+# inline copy cannot drift; the JSON is the authoritative source.
+#
+# The PHOIBLE list is generated from ``PHOIBLE_TO_APP_FEATURE``'s
+# values so any future bake refresh that adds or renames a feature
+# flows through to the dropdown automatically.
 FEATURE_PRESETS: Mapping[str, list[str]] = {
-    "Default (33)": [
-        "Syllabic",
-        "Consonantal",
-        "Sonorant",
+    "Hayes": [
+        "CORONAL",
+        "DORSAL",
+        "LABIAL",
+        "Anterior",
         "Approximant",
-        "Voice",
-        "SpreadGl",
+        "Back",
+        "Consonantal",
         "ConstrGl",
         "Continuant",
-        "Strident",
         "DelRel",
-        "Nasal",
-        "Lateral",
-        "Trill",
-        "Tap",
-        "Click",
-        "LABIAL",
-        "Round",
-        "Labiodental",
-        "CORONAL",
-        "Anterior",
         "Distributed",
-        "DORSAL",
-        "High",
-        "Low",
-        "Back",
         "Front",
-        "Pharyngeal",
-        "ATR",
-        "Tense",
+        "High",
+        "Labiodental",
+        "Lateral",
         "Long",
+        "Low",
+        "Nasal",
+        "Round",
+        "Sonorant",
+        "SpreadGl",
         "Stress",
-        "Tone",
-        "UpperRegister",
+        "Strident",
+        "Syllabic",
+        "Tap",
+        "Tense",
+        "Trill",
+        "Voice",
     ],
+    "PHOIBLE": list(PHOIBLE_TO_APP_FEATURE.values()),
     "Custom": [],
 }
 

@@ -3,8 +3,9 @@
 Pins the dialog-side half of the bootstrap contract:
 
 * The PanPhon entry appears in the preset combo when ``panphon`` is
-  installed; the static presets ("Default (33)" and "Custom") still
-  sit alongside it so the existing flows are not displaced.
+  installed and sits at the TOP as the auto-fill recommended
+  default, with the static presets (Hayes, PHOIBLE, Custom)
+  beneath it.
 * Selecting the PanPhon entry exposes a :py:class:`FeatureProvider`
   via :py:meth:`InputDialog.get_chosen_provider`, and pre-fills the
   features textarea with the provider's canonical names.
@@ -14,7 +15,7 @@ Pins the dialog-side half of the bootstrap contract:
 
 Skipped when ``panphon`` is absent. The non-PanPhon dialog path is
 covered indirectly by every other builder test that exercises the
-existing "Default (33)" preset.
+Hayes / PHOIBLE / Custom static presets.
 """
 
 from __future__ import annotations
@@ -30,24 +31,21 @@ from phonology_features.providers.panphon_provider import (  # noqa: E402
     PanPhonFeatureProvider,
 )
 
-PANPHON_LABEL = "PanPhon"
+PANPHON_LABEL = "PanPhon (auto-fill)"
 
 
-def test_preset_combo_lists_panphon_after_static_presets(
+def test_preset_combo_lists_panphon_first_then_static_presets(
     qapp: QApplication,
 ) -> None:
-    """The combo must keep the static presets at the top and append
-    the PanPhon entry. Pins the relative ordering so the user's
-    muscle memory for picking ``Default (33)`` is not disrupted by
-    the provider extension."""
+    """PanPhon is the recommended auto-fill option and sits at the
+    top of the combo; the static presets (Hayes, PHOIBLE, Custom)
+    follow underneath in their FEATURE_PRESETS insertion order."""
     dlg = InputDialog()
     labels = [
         dlg.preset_combo.itemText(i) for i in range(dlg.preset_combo.count())
     ]
-    assert labels[0] == "Default (33)"
-    assert labels[1] == "Custom"
-    assert PANPHON_LABEL in labels
-    assert labels.index(PANPHON_LABEL) > labels.index("Custom")
+    assert labels[0] == PANPHON_LABEL
+    assert labels[1:] == ["Hayes", "PHOIBLE", "Custom"]
     dlg.deleteLater()
 
 
@@ -188,7 +186,7 @@ def test_switching_to_static_preset_cancels_pending_provider_refresh(
     qapp: QApplication,
 ) -> None:
     """If the user picks PanPhon, types segments (arming the debounce
-    timer), then switches to ``Default (33)``, the pending provider
+    timer), then switches to ``Hayes``, the pending provider
     refresh must not fire over the static preset's features. Without
     the explicit ``stop()`` the static preset would briefly flicker
     to a trimmed PanPhon set when the timer eventually fired."""
@@ -199,24 +197,24 @@ def test_switching_to_static_preset_cancels_pending_provider_refresh(
     dlg.seg_edit.setPlainText("i")
     assert dlg._provider_refresh_timer.isActive()
 
-    dlg.preset_combo.setCurrentText("Default (33)")
+    dlg.preset_combo.setCurrentText("Hayes")
     assert not dlg._provider_refresh_timer.isActive()
     # Static preset must own the features list.
-    assert dlg.get_features() == list(FEATURE_PRESETS["Default (33)"])
+    assert dlg.get_features() == list(FEATURE_PRESETS["Hayes"])
     dlg.deleteLater()
 
 
 def test_switching_back_to_static_preset_clears_chosen_provider(
     qapp: QApplication,
 ) -> None:
-    """Selecting PanPhon then switching back to ``Default (33)``
+    """Selecting PanPhon then switching back to ``Hayes``
     must clear ``get_chosen_provider``. Otherwise the builder would
     call ``provider.generate`` on a path where the user explicitly
     asked for a static features-only preset."""
     dlg = InputDialog()
     dlg.preset_combo.setCurrentText(PANPHON_LABEL)
     assert dlg.get_chosen_provider() is not None
-    dlg.preset_combo.setCurrentText("Default (33)")
+    dlg.preset_combo.setCurrentText("Hayes")
     assert dlg.get_chosen_provider() is None
     dlg.preset_combo.setCurrentText("Custom")
     assert dlg.get_chosen_provider() is None

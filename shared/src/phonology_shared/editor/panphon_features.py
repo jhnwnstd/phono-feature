@@ -10,10 +10,10 @@ PanPhon's IPA table to the web bundle. Centralising the mapping
 keeps the desktop and the web in lockstep without forcing either
 to depend on the other's package.
 
-Names on the right follow the existing "Default (33)" preset's
-capitalisation conventions (terminal features title-cased; the
-matching Hayes bundle keys are recognised by the engine
-identically). Ordering here also fixes the column order of
+Names on the right follow the app's canonical capitalisation
+conventions (terminal features title-cased; the matching Hayes
+bundle keys are recognised by the engine identically). Ordering
+here also fixes the column order of
 generated bundles so positional iteration over PanPhon's name
 vector pairs values to the right column even when PanPhon adds new
 columns in a future release (unknown PanPhon names are skipped

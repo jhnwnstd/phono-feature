@@ -114,10 +114,16 @@ def normalize_phoible_value(value: str) -> str:
     PHOIBLE's main vocabulary is the same three values. A small
     fraction of rows use comma-separated contour values like
     ``"+,-"`` for segments that change polarity within a feature
-    (tone contours, certain affricates). The app's engine assumes
-    a single value per (segment, feature), so we normalize contours
-    to ``"0"`` here; the user can hand-edit afterwards if they need
-    precise contour modelling. The bake script logs the count.
+    (tone contours, certain affricates, vowel diphthongs). The
+    app's engine assumes a single value per (segment, feature), so
+    we normalize contours to ``"0"`` here; the user can hand-edit
+    afterwards if they need precise contour modelling. The bake
+    script logs the count.
+
+    Vowel diphthongs are recovered separately at bake time via
+    :py:func:`split_vowel_contour`, which gives the placement code
+    a faithful (initial, final) pair without disturbing the
+    engine's three-valued contract.
     """
     if value in ("+", "-", "0"):
         return value
@@ -125,3 +131,25 @@ def normalize_phoible_value(value: str) -> str:
     # unspecified so the engine doesn't see a value outside its
     # three-state enum.
     return "0"
+
+
+def split_vowel_contour(value: str) -> tuple[str, str] | None:
+    """Return the ``(initial, final)`` pair of a PHOIBLE contour
+    value, or ``None`` if ``value`` is not a contour.
+
+    PHOIBLE encodes diphthongs by writing the two polarities the
+    vowel traverses, separated by a comma: ``"+,-"`` for a vowel
+    that starts at ``+feature`` and glides to ``-feature``. Both
+    polarities must be members of the app's three-valued vocabulary
+    after stripping whitespace; anything else returns ``None`` so
+    the caller can fall back to :py:func:`normalize_phoible_value`.
+    """
+    if "," not in value:
+        return None
+    parts = [p.strip() for p in value.split(",", 1)]
+    if len(parts) != 2:
+        return None
+    initial, final = parts
+    if initial not in ("+", "-", "0") or final not in ("+", "-", "0"):
+        return None
+    return initial, final

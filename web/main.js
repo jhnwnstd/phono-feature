@@ -2039,24 +2039,29 @@ function wireSetupDialog() {
         segInput.placeholder = defaultSegments;
         featInput.placeholder = defaultFeatures;
         presets = defaults.presets || {};
-        // Populate the dropdown in insertion order. "Custom" empty list
-        // gives the user a no-fill option.
+        // Display order: providers FIRST (today PanPhon, the
+        // auto-fill recommended default), then the static presets
+        // (Hayes, PHOIBLE, Custom). Providers are bolded to signal
+        // they auto-generate the features as the user types
+        // segments; the static presets just populate the textarea
+        // with a column scaffold the user fills in by hand.
         presetPicker.innerHTML = "";
-        for (const name of Object.keys(presets)) {
-            const opt = document.createElement("option");
-            opt.value = name;
-            opt.textContent = name;
-            presetPicker.appendChild(opt);
-        }
-        // Append providers (PanPhon today) at the bottom of the
-        // picker. The dropdown stays a flat list because the
-        // current Qt dialog does the same: one combo of presets +
-        // providers, no submenu.
         const providers = defaults.providers || [];
         for (const provider of providers) {
             const opt = document.createElement("option");
             opt.value = PROVIDER_PREFIX + provider.name;
-            opt.textContent = provider.label || provider.name;
+            // Suffix carries the meaning even on rendering surfaces
+            // where ``<option>`` font-weight is ignored (some older
+            // WebKit), so the recommended path is unambiguous
+            // regardless of native ``<select>`` styling support.
+            opt.textContent = `${provider.label || provider.name} (auto-fill)`;
+            opt.style.fontWeight = "600";
+            presetPicker.appendChild(opt);
+        }
+        for (const name of Object.keys(presets)) {
+            const opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
             presetPicker.appendChild(opt);
         }
         defaultsLoaded = true;

@@ -259,6 +259,12 @@ class PlacementFlag(StrEnum):
     NONSTANDARD = "nonstandard"
     REFINED = "refined"
     SPLIT_SOURCE_DIVERGENCE = "split_source_divergence"
+    # The placement is one half of a diphthong; the partner cell is
+    # on the same VowelPlacement under ``secondary``. Both the
+    # primary placement and the inner secondary placement carry
+    # this flag so renderers can detect the diphthong from either
+    # endpoint.
+    DIPHTHONG = "diphthong"
 
 
 @dataclass(frozen=True)
@@ -425,6 +431,12 @@ class VowelPlacement:
     backness: AxisEvidence | None = None
     rounding: AxisEvidence | None = None
     flags: frozenset[PlacementFlag] = field(default_factory=frozenset)
+    # Final-state placement for a diphthong; ``None`` for a
+    # monophthong. When set, both this placement and the secondary
+    # carry :py:attr:`PlacementFlag.DIPHTHONG`. Renderers draw a
+    # curved arrow from the primary cell to ``secondary``'s cell;
+    # the segment glyph stays in the primary only.
+    secondary: VowelPlacement | None = None
 
 
 def _feature_state(feats: Mapping[str, str], key: str) -> FeatureState:

@@ -140,8 +140,8 @@ def feat_edit(qapp):
 def test_feature_tab_on_empty_fills_two_major_class_seeds(feat_edit):
     assert feat_edit.toPlainText() == ""
     _tab(feat_edit)
-    # Tab seeds only the two major-class features; the user fills in the
-    # rest. The full Default (33) preset is reachable via the dropdown.
+    # Tab seeds only the two major-class features; the user fills in
+    # the rest. Hayes / PHOIBLE presets are reachable via the dropdown.
     # Compare against ``entries()`` since the seed format (space- vs
     # newline-separated) is an implementation detail.
     assert feat_edit.entries() == ["Syllabic", "Consonantal"]
@@ -196,6 +196,11 @@ def test_accept_with_empty_segments_does_not_dismiss(dialog, mocker):
 
 
 def test_accept_with_empty_features_does_not_dismiss(dialog, mocker):
+    # Switch to ``Custom`` first so the dialog is on the static
+    # features path. Otherwise the default PanPhon (auto-fill)
+    # provider would generate features from the segments and the
+    # textarea-empty warning never surfaces.
+    dialog.preset_combo.setCurrentText("Custom")
     warn = mocker.patch.object(QMessageBox, "warning")
     dialog.seg_edit.setPlainText("p b t")
     dialog.feat_edit.clear()
