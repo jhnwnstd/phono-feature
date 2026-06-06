@@ -56,6 +56,11 @@ class SegmentButton(QPushButton):
         self.segment = segment
         self._state: SegmentState = SegmentState.DEFAULT
         self.setCheckable(True)
+        # Tooltip carries the full IPA string. Useful when QFontMetrics
+        # shrinks a long contour glyph below its natural size; the
+        # cost is one attribute per button and the hover behaviour
+        # matches the web's ``title=/seg/`` affordance.
+        self.setToolTip(f"/{segment}/")
         # Fixed dimensions are sourced from the constraint table so the
         # web (CSS ``--seg-btn-min-w`` / ``--seg-btn-min-h``) and the
         # desktop (here) pull from one entry. ``setSizePolicy(Fixed)``

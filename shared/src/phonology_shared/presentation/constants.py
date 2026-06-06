@@ -69,6 +69,26 @@ FONT_SIZE_MICRO_PX: int = 10
 # the CSS ``font-size`` string in px steps.
 FONT_SIZE_MIN_PX: int = 10
 
+# Label for the vowel-chart "show all diphthong arrows" toggle
+# button. Single string consumed by both renderers so a rename or
+# localisation lands once. Stays lowercase for typographic
+# consistency with the chart's row / column labels.
+DIPHTHONG_TOGGLE_LABEL: str = "diphthongs"
+
+# Placeholder copy for non-ideal states. Each string is shown in
+# place of an empty result so the user always sees something
+# orienting rather than a blank region. Tone matches the rest of
+# the status copy: short, lowercase, never alarming.
+EMPTY_NATURAL_CLASS_HINT: str = (
+    "No natural class matches this selection."
+)
+EMPTY_SHARED_FEATURES_HINT: str = (
+    "No features shared across this selection."
+)
+EMPTY_PHOIBLE_SEARCH_HINT: str = (
+    "No PHOIBLE inventories match this query."
+)
+
 # Monospace font fallback chain for IPA-heavy text (analysis-pane
 # chips, anything rendering segment symbols / feature values). Order:
 # most-IPA-coverage first, then per-OS defaults that are usually

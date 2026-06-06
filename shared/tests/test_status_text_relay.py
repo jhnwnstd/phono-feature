@@ -153,6 +153,15 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         # them as literals (see test_minus_glyphs_match_python below).
         "minus_display",
         "minus_serialized",
+        # Vowel-chart "show all diphthong arrows" toggle label and
+        # the empty-state hints surfaced by the shared analysis /
+        # PHOIBLE picker copy. The web reads via STATUS_TEXT, the
+        # desktop imports from
+        # :py:mod:`phonology_shared.presentation.constants`.
+        "diphthong_toggle_label",
+        "empty_natural_class_hint",
+        "empty_shared_features_hint",
+        "empty_phoible_search_hint",
     }
     assert set(status_payload.keys()) == expected_keys
 

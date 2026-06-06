@@ -558,6 +558,31 @@ FEAT_BTN_W_COMPACT: int = 26
 FEAT_BTN_H_COMPACT: int = 22
 FEAT_BADGE_W_COMPACT: int = 28
 
+# Spacing ladder. The web's ``--space-*`` custom properties and the
+# desktop's QSS / QLayout literals consume these. Five tiers cover
+# the everyday cases; everything else should compose from them.
+SPACING_PX: dict[str, int] = {
+    "xs": 4,
+    "sm": 6,
+    "md": 8,
+    "lg": 12,
+    "xl": 16,
+}
+
+# Border-radius tokens. ``sm`` for chip-like inline controls,
+# ``md`` for buttons / cards, ``lg`` for the largest containers.
+RADIUS_PX: dict[str, int] = {
+    "sm": 4,
+    "md": 6,
+    "lg": 8,
+}
+
+# Top-bar control heights. ``TOOLBAR_BTN_H`` is the inventory
+# combo / picker buttons; ``PANEL_CLEAR_BTN_H`` is the small
+# clear-button shown in the panel header strip.
+TOOLBAR_BTN_H: int = 32
+PANEL_CLEAR_BTN_H: int = 22
+
 # Outer panel chrome (top + bottom margins + the clear-button header
 # strip). Same on seg and feat panels. Used as the additive overhead
 # when sizing a panel's minimum height from its content.

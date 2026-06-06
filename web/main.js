@@ -1137,6 +1137,13 @@ function _buildSegmentButton(seg, extraAttrs, maxWidth) {
     btn.dataset.state = "default";
     btn.setAttribute("aria-pressed", "false");
     btn.setAttribute("aria-label", `/${seg}/`);
+    // Tooltip carries the full IPA string. Useful both for the
+    // rasterizer-shrunk case (PHOIBLE contours that drop below the
+    // natural font size) AND for ordinary buttons where the user
+    // wants to confirm the glyph identity without zoom. The cost
+    // is one DOM attribute per button; the browser's native
+    // tooltip handles keyboard focus / hover uniformly.
+    btn.title = `/${seg}/`;
     // Rasterize the glyph as a canvas-alpha mask: the literal
     // codepoint passed in (IPA ɡ U+0261 etc.) is what gets drawn,
     // and the result lives in CSS-mask space rather than the DOM
@@ -1552,7 +1559,7 @@ function _appendVowelDiphthongToggle(chartEl, dataEl) {
         "title",
         "Show all diphthong arrows (hover a vowel to see one)",
     );
-    btn.textContent = "diphthongs";
+    btn.textContent = STATUS_TEXT.diphthong_toggle_label || "diphthongs";
     btn.addEventListener("click", () => {
         const on = dataEl.dataset.showArrows === "all";
         if (on) {
@@ -1655,22 +1662,21 @@ function _buildVowelCellStack(segs) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-stack";
     if (segs.length >= 10) {
-        // Pathological-cell tier: PHOIBLE's worst case is 12
-        // segments in one cell (!XU/UPSID). At 10+ entries the
-        // standard dense tier still produces a stack ~250 px tall;
-        // pack the buttons more aggressively (smaller height,
-        // narrower min-width) so the cell stays roughly within a
-        // typical row's visual budget. The placement decision
-        // does not change; only the rendered button size does.
+        // Pathological-cell tier (PHOIBLE worst case is 12 in
+        // !XU/UPSID). The standard dense tier still produces a
+        // ~250 px stack at 10+ entries; pack tighter.
         cell.dataset.cellDensity = "ultra";
     } else if (segs.length >= 5) {
-        // Crowded-cell density tier: at 5-9 entries the stack
-        // starts to overflow the typical row height. Mark the cell
-        // so CSS can shrink the children's seg-btn box without
-        // changing the placement code or surfacing as a different
-        // display kind to downstream consumers. Mirrors the
-        // desktop's crowded-cell paint pass.
+        // Crowded-cell density tier: 5-9 entries shrink so the
+        // stack stays within the typical row height.
         cell.dataset.cellDensity = "dense";
+    }
+    // Affordance: the shrunk buttons read as "are they broken"
+    // without a tooltip explaining the intentional packing. Set
+    // a ``title`` on the cell so hovering anywhere over the stack
+    // shows the count + the full segment list.
+    if (segs.length >= 5) {
+        cell.title = `${segs.length} segments share this cell: ${segs.join(" ")}`;
     }
     for (const seg of segs) {
         cell.appendChild(_buildVowelSegBtn(seg));

@@ -547,6 +547,16 @@ class VowelChartWidget(QWidget):
                 btn.show()
                 layout.addWidget(btn)
                 added = True
+        # Affordance: dense / ultra cells visually shrink their
+        # buttons; without a tooltip, users read the packing as a
+        # rendering bug. Mirror the web's title attribute on the
+        # container so hovering anywhere over the stack explains
+        # the count.
+        if len(cell.entries) >= 5:
+            container.setToolTip(
+                f"{len(cell.entries)} segments share this cell: "
+                + " ".join(cell.entries)
+            )
         return self._finalize_container(container, added)
 
     def _finalize_container(

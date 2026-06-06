@@ -520,6 +520,20 @@ def _build_status_text_payload() -> dict[str, str]:
 
         payload["minus_display"] = MINUS_DISPLAY
         payload["minus_serialized"] = MINUS_SERIALIZED
+        # Vowel-chart diphthong-toggle label + empty-state hints.
+        # Same SSOT pattern: the desktop reads the constant by
+        # import, the web reads via this status-text bake.
+        from phonology_shared.presentation.constants import (
+            DIPHTHONG_TOGGLE_LABEL,
+            EMPTY_NATURAL_CLASS_HINT,
+            EMPTY_PHOIBLE_SEARCH_HINT,
+            EMPTY_SHARED_FEATURES_HINT,
+        )
+
+        payload["diphthong_toggle_label"] = DIPHTHONG_TOGGLE_LABEL
+        payload["empty_natural_class_hint"] = EMPTY_NATURAL_CLASS_HINT
+        payload["empty_shared_features_hint"] = EMPTY_SHARED_FEATURES_HINT
+        payload["empty_phoible_search_hint"] = EMPTY_PHOIBLE_SEARCH_HINT
         return payload
     finally:
         sys.modules.pop(module_name, None)
@@ -624,6 +638,19 @@ def generate_layout_css() -> None:
         f"  --feat-btn-w: {mod.FEAT_BTN_W}px;",
         f"  --feat-btn-h: {mod.FEAT_BTN_H}px;",
         f"  --feat-badge-w: {mod.FEAT_BADGE_W}px;",
+        # Spacing ladder, radius tokens, and top-bar control heights.
+        # Mirrors the desktop's literals so a one-Python-edit policy
+        # tweak flows through ``layout.css`` to both UIs.
+        f"  --space-xs: {mod.SPACING_PX['xs']}px;",
+        f"  --space-sm: {mod.SPACING_PX['sm']}px;",
+        f"  --space-md: {mod.SPACING_PX['md']}px;",
+        f"  --space-lg: {mod.SPACING_PX['lg']}px;",
+        f"  --space-xl: {mod.SPACING_PX['xl']}px;",
+        f"  --radius-sm: {mod.RADIUS_PX['sm']}px;",
+        f"  --radius-md: {mod.RADIUS_PX['md']}px;",
+        f"  --radius-lg: {mod.RADIUS_PX['lg']}px;",
+        f"  --control-h-md: {mod.TOOLBAR_BTN_H}px;",
+        f"  --control-h-xs: {mod.PANEL_CLEAR_BTN_H}px;",
         f"  --panel-chrome-v: {mod.PANEL_CHROME_V}px;",
         f"  --min-top-pane-h: {mod.MIN_TOP_PANE_H}px;",
         # Analysis-pane sizing. Both UIs consume this via the CSS

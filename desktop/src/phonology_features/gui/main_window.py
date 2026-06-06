@@ -87,7 +87,10 @@ from phonology_shared.presentation.constants import (
     scrollbar_style,
     sort_features,
 )
-from phonology_shared.presentation.layout import distribute_feature_groups
+from phonology_shared.presentation.layout import (
+    TOOLBAR_BTN_H,
+    distribute_feature_groups,
+)
 from phonology_shared.presentation.mode_logic import (
     Mode,
     clipboard_copy_message,
@@ -120,10 +123,9 @@ _log = get_logger(__name__)
 # QEvent.Type.MouseButtonPress through the enum machinery each call.
 _QEVENT_MOUSE_BUTTON_PRESS = QEvent.Type.MouseButtonPress
 
-# Toolbar chrome: 32 px is the 1x baseline. Qt grows the button when
-# the font scales up on a hi-DPI display so glyphs do not clip at
-# 200% / 300% OS scaling; this is the minimum floor.
-_TOOLBAR_BTN_H = 32
+# Toolbar chrome: shared with the web (relayed to ``--control-h-md``)
+# so a single edit to ``layout.TOOLBAR_BTN_H`` updates both surfaces.
+_TOOLBAR_BTN_H = TOOLBAR_BTN_H
 # Width floor for the inventory dropdown; wide enough to show the
 # longest bundled-inventory name ("Hayes (2009) Features") without
 # truncation at the 1x baseline.

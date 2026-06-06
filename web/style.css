@@ -28,23 +28,14 @@
    literals; naming them would spread the value across grep results
    without removing a decision. */
 :root {
-  --space-xs: 4px;
-  --space-sm: 6px;
-  --space-md: 8px;
-  --space-lg: 12px;
-  --space-xl: 16px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
   --border-thin: 1px;
   --border-std: 1.5px;
   --border-thick: 2px;
-  --control-h-md: 32px;   /* toolbar buttons / selects */
-  --control-h-xs: 22px;   /* panel clear button */
-  /* Note: --seg-btn-min-w, --seg-btn-h, --feat-btn-*, --feat-badge-w
-     and the --font-size-* ladder are sourced from layout.css
-     (auto-generated from shared/layout.py and shared/constants.py
-     respectively). Don't redeclare them here. */
+  /* --space-*, --radius-*, --control-h-{md,xs}, --seg-btn-*,
+     --feat-btn-*, --feat-badge-w, and the --font-size-* ladder
+     are all sourced from layout.css (auto-generated from
+     shared/layout.py and shared/constants.py). Don't redeclare
+     them here. */
   /* `system-ui` and `ui-monospace` map to the OS's native UI fonts
      on modern browsers (SF Pro on macOS, Segoe UI Variable on
      Windows 11, Roboto on Android). The named fallbacks cover older
