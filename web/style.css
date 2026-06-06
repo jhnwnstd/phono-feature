@@ -888,7 +888,12 @@ dialog input[type="text"]:focus-visible {
   transform: translateY(-50%);
   text-align: right;
   font-size: var(--font-size-micro);
-  font-weight: 600;
+  /* Row labels are AXIS labels, not section titles; the col
+     headers and the chart title carry the 600 weight reserved
+     for headings. Dropping row labels to 500 differentiates the
+     axis-label rhythm from the section-title rhythm without
+     changing size or colour. */
+  font-weight: 500;
   letter-spacing: 0.3px;
   color: var(--text-dim);
   white-space: nowrap;
@@ -932,18 +937,25 @@ dialog input[type="text"]:focus-visible {
   height: 100%;
   pointer-events: none;
   overflow: visible;
+  /* Above the height-tier bands (z-index 1) and cells (z-index 1)
+     so the arrows always render on top of the chart contents. */
+  z-index: 2;
 }
 .vowel-diphthong-arrow {
   fill: none;
   stroke: var(--accent);
-  stroke-width: 0.4;
-  opacity: 0.65;
+  /* Bumped from 0.4 to 0.6 so the data overlay reads at parity
+     with the structural silhouette outline (now muted to a 1 px
+     stroke); previously the arrows were lighter than the chrome
+     they overlaid, inverting the visual hierarchy. */
+  stroke-width: 0.6;
+  opacity: 0.85;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
 .vowel-diphthong-arrowhead {
   fill: var(--accent);
-  opacity: 0.75;
+  opacity: 0.9;
 }
 /* Trapezoid / triangle silhouette: OUTLINE only, no painted fill.
 
@@ -976,17 +988,55 @@ dialog input[type="text"]:focus-visible {
   pointer-events: none;
 }
 .vowel-chart-data::before {
-  background: var(--border);
+  /* Muted outline. The silhouette is a structural guide, not a
+     frame; ``color-mix`` softens the border colour so the line
+     reads as quiet rather than hard. The enclosing seg-pane
+     carries the framing job. */
+  background: color-mix(in srgb, var(--border) 70%, transparent);
 }
 .vowel-chart-data::after {
-  inset: 1.5px;
+  /* Thinner rim: a 1 px visible stroke matches the app-wide
+     ``--border-thin`` token used by section dividers, distinguishing
+     the structural silhouette from the 1.5 px standard interactive
+     borders on segment buttons + panel cards. */
+  inset: 1px;
   background: var(--bg);
 }
 .panel[data-active="true"] .vowel-chart-data::after {
   background: var(--panel);
 }
+
+/* Height-tier banding. One band per populated row, tiled so the
+   silhouette interior reads as a stack of subtle horizontal zones.
+   The container shares the silhouette clip-path (rule above) so
+   the tints never bleed outside the trapezoid into the row-label
+   gutter. ``z-index: 1`` lifts the bands above the
+   ``::after`` interior fill (the pseudo-element pair would
+   otherwise overpaint them); cells share z-index 1 and DOM-order
+   after the bands, so cells still paint on top. ``inset: 1px``
+   keeps the band container strictly inside the 1 px silhouette
+   rim so bands never paint over the structural outline. */
+.vowel-chart-row-bands {
+  position: absolute;
+  inset: 1px;
+  pointer-events: none;
+  z-index: 1;
+}
+.vowel-chart-row-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.vowel-chart-row-band-tinted {
+  /* Quiet alternating tint at ~16 % border opacity so the bands
+     suggest tier structure without reading as "graph paper". The
+     mix composes against the underlying ``::after`` surface fill,
+     so the bands track the seg-pane's active state automatically. */
+  background: color-mix(in srgb, var(--border) 16%, transparent);
+}
 .vowel-chart-data[data-shape="trapezoid"]::before,
-.vowel-chart-data[data-shape="trapezoid"]::after {
+.vowel-chart-data[data-shape="trapezoid"]::after,
+.vowel-chart-data[data-shape="trapezoid"] .vowel-chart-row-bands {
   clip-path: polygon(
     var(--vowel-trapezoid-top-left)     var(--vowel-trapezoid-top-y),
     var(--vowel-trapezoid-top-right)    var(--vowel-trapezoid-top-y),
@@ -995,7 +1045,8 @@ dialog input[type="text"]:focus-visible {
   );
 }
 .vowel-chart-data[data-shape="triangle"]::before,
-.vowel-chart-data[data-shape="triangle"]::after {
+.vowel-chart-data[data-shape="triangle"]::after,
+.vowel-chart-data[data-shape="triangle"] .vowel-chart-row-bands {
   clip-path: polygon(
     var(--vowel-triangle-top-left)     var(--vowel-triangle-top-y),
     var(--vowel-triangle-top-right)    var(--vowel-triangle-top-y),

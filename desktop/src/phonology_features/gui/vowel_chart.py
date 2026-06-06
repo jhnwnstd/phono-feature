@@ -190,6 +190,10 @@ class VowelChartWidget(QWidget):
             tuple[int, int], tuple[float, float]
         ] = {}
         self._diphthongs: tuple[VowelChartDiphthong, ...] = ()
+        # Populated rows' ``chart_y`` for the height-tier banding
+        # overlay; the paint pass tiles bands between midpoints of
+        # adjacent rows.
+        self._rows_chart_y: tuple[float, ...] = ()
         # Floor for ``set_target_width``: the geometry's natural
         # data width plus this widget's chrome. Updated on every
         # :py:meth:`_render_geometry` call so external resize
@@ -275,6 +279,7 @@ class VowelChartWidget(QWidget):
         self._cell_containers.clear()
         self._cell_anchors_by_rc.clear()
         self._diphthongs = ()
+        self._rows_chart_y = ()
 
     def set_vowels(
         self,
@@ -322,6 +327,11 @@ class VowelChartWidget(QWidget):
             for cell in geometry.cells
         }
         self._diphthongs = tuple(geometry.diphthongs)
+        # Cache populated rows' ``chart_y`` for the height-tier
+        # banding overlay in :py:meth:`paintEvent`. Sorted ascending
+        # so the banding loop computes midpoints between adjacent
+        # rows without re-sorting on every paint.
+        self._rows_chart_y = tuple(sorted(r.chart_y for r in geometry.rows))
         # Growth policy: when the inventory's natural data width
         # exceeds the canonical chart width that ``set_target_width``
         # would set, expand the widget so all cells stay legible
@@ -347,9 +357,14 @@ class VowelChartWidget(QWidget):
         # Column headers: positioned at the backness anchor for
         # each column (front / central / back) so the labels line
         # up with the cells in the widest row of the trapezoid.
+        # Column headers carry the title-tier weight (DemiBold) so
+        # they read as section headings; row labels stay regular
+        # so the two tiers distinguish header from axis-label rhythm.
+        # Mirrors the web's 600/500 font-weight split on
+        # ``.vowel-chart-col-label`` vs ``.vowel-chart-row-label``.
         for col in geometry.cols:
             lbl = QLabel(col.label, self)
-            lbl.setFont(QFont("Noto Sans", 7))
+            lbl.setFont(QFont("Noto Sans", 7, QFont.Weight.DemiBold))
             lbl.setStyleSheet(self._HDR_INACTIVE)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.adjustSize()
@@ -621,16 +636,71 @@ class VowelChartWidget(QWidget):
         path.closeSubpath()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        # Height-tier bands first so the silhouette outline (and
+        # the diphthong arrows) paint on top of the tints.
+        self._paint_height_tier_bands(painter, path, dx, dy, dw, dh)
         # Outline only, no painted fill: the trapezoid is a
-        # structural guide, not a coloured region. Two-pixel stroke
-        # in the standard ``border`` colour mirrors the web's
-        # ``::before`` / ``::after`` outline-only treatment.
-        pen = QPen(QColor(C["border"]))
-        pen.setWidth(2)
+        # structural guide, not a coloured region. A 1.25 px alpha-
+        # blended stroke softens the silhouette so the cells inside
+        # carry the visual weight; mirrors the web's muted
+        # ``color-mix(in srgb, var(--border) 70%, transparent)``
+        # treatment on ``.vowel-chart-data::before``.
+        outline_color = QColor(C["border"])
+        outline_color.setAlpha(178)  # 70% opacity
+        pen = QPen(outline_color)
+        pen.setWidthF(1.25)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
         painter.drawPath(path)
         self._paint_diphthong_arrows(painter, dx, dy, dw, dh)
         painter.end()
+
+    def _paint_height_tier_bands(
+        self,
+        painter: QPainter,
+        silhouette_path: QPainterPath,
+        dx: int,
+        dy: int,
+        dw: int,
+        dh: int,
+    ) -> None:
+        """Fill faint horizontal bands inside the silhouette to mark
+        height tiers. Mirrors the web's ``.vowel-chart-row-bands``
+        overlay: every other populated row gets a subtle tint, so
+        the seven-tier scale reads visually without forcing the
+        user to track row labels.
+
+        The bands are clipped to the silhouette path so the tint
+        never bleeds outside the trapezoid into the row-label
+        gutter; the QPainterPath ``setClipPath`` does the same job
+        the web's CSS ``clip-path: polygon(...)`` does.
+        """
+        rows = self._rows_chart_y
+        if not rows or dh <= 0:
+            return
+        band_color = QColor(C["border"])
+        band_color.setAlpha(40)  # ~16% opacity, same target as web
+        painter.save()
+        painter.setClipPath(silhouette_path)
+        n = len(rows)
+        for i, y in enumerate(rows):
+            if i % 2 != 0:
+                continue
+            above = rows[i - 1] if i > 0 else 0.0
+            below = rows[i + 1] if i < n - 1 else 1.0
+            top_norm = (above + y) / 2 if i > 0 else 0.0
+            bot_norm = (y + below) / 2 if i < n - 1 else 1.0
+            top_y = dy + top_norm * dh
+            bot_y = dy + bot_norm * dh
+            painter.fillRect(
+                int(dx),
+                int(top_y),
+                int(dw),
+                int(bot_y - top_y),
+                band_color,
+            )
+        painter.restore()
 
     def _paint_diphthong_arrows(
         self,
@@ -648,8 +718,12 @@ class VowelChartWidget(QWidget):
         :py:attr:`_cell_anchors_by_rc`."""
         if not self._diphthongs:
             return
+        # The data overlay is bumped to 1.75 px so it reads above
+        # the 1.25 px silhouette outline; previously the arrows
+        # (data) were thinner than the silhouette (structure),
+        # inverting the chart's visual hierarchy.
         pen = QPen(QColor(C["accent"]))
-        pen.setWidthF(1.5)
+        pen.setWidthF(1.75)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(pen)
         for d in self._diphthongs:

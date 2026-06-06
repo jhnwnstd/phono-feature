@@ -1277,6 +1277,7 @@ function _buildVowelChart(chart) {
     const silTopLeft = sil ? sil.top_left : 0;
     const silBotLeft = sil ? sil.bottom_left : 0;
     const silSpanY = silBotY - silTopY;
+    _appendVowelHeightTierBands(dataEl, chart, silTopY, silBotY);
     for (const row of chart.rows) {
         const rowLabel = document.createElement("div");
         rowLabel.className = "vowel-chart-row-label";
@@ -1359,6 +1360,46 @@ function _buildVowelChart(chart) {
  *  underlying vowel buttons. The control point lifts the curve
  *  outward from the chord so two arrows in opposite directions
  *  do not overlap on a straight line. */
+/** Overlay faint horizontal bands behind the vowel data area, one
+ *  per populated height tier (Close, Near-close, ..., Open). Bands
+ *  are tiled so each row's band spans the midpoints between its
+ *  ``chart_y`` and its neighbours' (with the top of the topmost
+ *  band clamped to the silhouette top and the bottom of the
+ *  bottommost band clamped to the silhouette bottom). Alternate
+ *  bands carry the tint; same-tier rows alternate so the
+ *  visual rhythm reads as ``every other row is shaded`` regardless
+ *  of which subset of the 7 tiers is populated.
+ *
+ *  Bands sit inside a single container with the silhouette
+ *  clip-path so the tints follow the trapezoid edges instead of
+ *  bleeding into the row-label gutter. The container is the first
+ *  child of ``dataEl`` so the silhouette ``::before`` / ``::after``
+ *  pseudo-elements (and the cells above them) still paint on top. */
+function _appendVowelHeightTierBands(dataEl, chart, silTopY, silBotY) {
+    const rows = chart.rows;
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const ys = rows.map((r) => r.chart_y);
+    const container = document.createElement("div");
+    container.className = "vowel-chart-row-bands";
+    container.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < rows.length; i++) {
+        const y = ys[i];
+        const above = i > 0 ? (y + ys[i - 1]) / 2 : silTopY;
+        const below = i < rows.length - 1 ? (y + ys[i + 1]) / 2 : silBotY;
+        const band = document.createElement("div");
+        band.className = "vowel-chart-row-band";
+        if (i % 2 === 0) {
+            band.classList.add("vowel-chart-row-band-tinted");
+        }
+        band.style.top = `${(above * 100).toFixed(3)}%`;
+        band.style.height = `${((below - above) * 100).toFixed(3)}%`;
+        container.appendChild(band);
+    }
+    // Prepend so the bands sit BEHIND row labels, cells, and the
+    // diphthong arrow overlay (which all share the data area).
+    dataEl.insertBefore(container, dataEl.firstChild);
+}
+
 function _appendVowelDiphthongArrows(dataEl, chart) {
     const arrows = chart.diphthongs;
     if (!Array.isArray(arrows) || arrows.length === 0) return;
