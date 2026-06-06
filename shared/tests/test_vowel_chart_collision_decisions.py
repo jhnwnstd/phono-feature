@@ -11,8 +11,8 @@ rhotic-schwa overlap bug. These tests pin the shared payload so any
 divergence shows up here first instead of in the rendered chart.
 
 The web's ``main.js`` ``_buildVowelCellStack`` and
-``_buildVowelCellLongPair`` consume ``cell.entries`` and
-``cell.is_long_pair`` directly from this payload; the desktop's
+``_buildVowelCellPair`` consume ``cell.entries`` and
+``cell.display_kind`` directly from this payload; the desktop's
 ``VowelChartWidget._build_cell`` consumes the same. Asserting the
 payload's structure is the closest you can get to a cross-UI parity
 test without driving Qt and a browser in the same process.
@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from phonology_shared.chart.vowels import (
+    VowelCellDisplayKind,
     VowelChartGeometry,
     build_vowel_chart_geometry,
     detect_vowel_profile,
@@ -82,18 +83,17 @@ def test_english_schwa_and_rhotic_schwa_share_a_cell() -> None:
 
 def test_english_schwa_cell_is_not_a_long_pair() -> None:
     """The cell carries 2 entries but they're not a Long contrast
-    (the contrast is rhoticity, not duration). ``is_long_pair=False``
-    routes the renderer to vertical-stack mode -- both UIs must agree
-    on that, hence the shared flag.
+    (the contrast is rhoticity, not duration). Display kind stays
+    STACK so renderers stack vertically rather than placing the two
+    segments side-by-side.
     """
     geom = _geometry("english_features.json")
     cell = _find_cell_with(geom, "ə")
     assert cell is not None
     assert len(cell.entries) >= 2
-    assert cell.is_long_pair is False, (
-        "schwa/ɚ are not a Long-contrast pair; cell.is_long_pair must "
-        "be False so renderers stack vertically instead of placing "
-        "the two segments side-by-side"
+    assert cell.display_kind != VowelCellDisplayKind.LONG_PAIR, (
+        "schwa/ɚ are not a Long-contrast pair; the cell must NOT "
+        "render as LONG_PAIR side-by-side"
     )
 
 
@@ -103,15 +103,14 @@ def test_english_schwa_cell_is_not_a_long_pair() -> None:
 
 
 def test_long_pair_classification_is_consistent_across_renderers() -> None:
-    """Inventories with explicit ``Long`` contrasts produce
-    ``is_long_pair=True`` on cells whose two entries differ only on
-    ``Long``. Both UIs receive that flag; this test pins the
-    classification so a web/desktop split (e.g. the web ignoring the
-    flag and stacking instead) is caught by the shared payload
-    before reaching either renderer.
+    """Inventories with explicit ``Long`` contrasts produce cells
+    whose ``display_kind == LONG_PAIR`` exactly when the two
+    entries differ only on ``Long``. Both UIs receive the same
+    classification; this test pins it so a renderer-side split is
+    caught by the shared payload first.
     """
     # Walk every bundled inventory; for every multi-entry cell,
-    # assert ``is_long_pair`` matches the "only ``Long`` differs"
+    # assert LONG_PAIR matches the "only ``Long`` differs"
     # criterion explicitly.
     for inv in sorted(INVENTORIES.glob("*.json")):
         if inv.name.startswith("_"):
@@ -140,9 +139,10 @@ def test_long_pair_classification_is_consistent_across_renderers() -> None:
                 for k in set(a_feats) | set(b_feats)
                 if k != "long"
             )
-            assert cell.is_long_pair is differs_only_on_long, (
-                f"{inv.name}: cell {cell.entries} -- is_long_pair="
-                f"{cell.is_long_pair} but differs_only_on_long="
+            is_long_pair = cell.display_kind == VowelCellDisplayKind.LONG_PAIR
+            assert is_long_pair is differs_only_on_long, (
+                f"{inv.name}: cell {cell.entries} -- LONG_PAIR="
+                f"{is_long_pair} but differs_only_on_long="
                 f"{differs_only_on_long}; the shared classification is "
                 f"out of sync with the criterion the renderers expect"
             )

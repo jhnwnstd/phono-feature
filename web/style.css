@@ -923,11 +923,16 @@ dialog input[type="text"]:focus-visible {
   grid-row: 3;
   grid-column: 2;
   position: relative;
-  /* Match ``.vowel-chart-row-labels``: eight slots of breathing
-     room so close/open vowels never sit flush against the data
-     area's top / bottom and the trapezoid silhouette has visible
-     padding around the cells. */
-  min-height: calc(8 * var(--control-h-sm));
+  /* Eight slots of breathing room is the floor so close/open
+     vowels never sit flush against the data area's edges. Big
+     PHOIBLE inventories publish a taller natural height via
+     ``--vowel-natural-data-h`` (set by the JS renderer); the
+     ``max()`` lets them grow past the floor without small
+     inventories collapsing below it. */
+  min-height: max(
+    calc(8 * var(--seg-btn-h)),
+    var(--vowel-natural-data-h, 0px)
+  );
 }
 
 /* Diphthong arrow overlay. One SVG per chart sits above all cells

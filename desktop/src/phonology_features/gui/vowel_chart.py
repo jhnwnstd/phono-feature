@@ -312,6 +312,15 @@ class VowelChartWidget(QWidget):
         self._focused_seg = None
         self._show_all_arrows = False
         self._natural_total_w = 0
+        # Release the prior render's width pin so the next inventory
+        # can pick its own size; without this, switching from a wide
+        # PHOIBLE inventory (700 px) to a narrow bundled one keeps
+        # the chart frozen at 700 px and visually collapses the
+        # data area inside. The post-clear pin lives in
+        # ``_render_geometry``.
+        self.setMinimumWidth(0)
+        self.setMaximumWidth(16_777_215)  # QWIDGETSIZE_MAX
+        self.setMinimumHeight(REGION_CONSTRAINTS["vowel_chart"].min_h)
 
     def set_vowels(
         self,
@@ -353,16 +362,13 @@ class VowelChartWidget(QWidget):
         self._silhouette = geometry.silhouette
         self._diphthongs = tuple(geometry.diphthongs)
         self._bands = tuple(geometry.bands)
-        # Growth policy: pin the widget to the inventory's natural
-        # width AND natural height so cells stay inside the
-        # silhouette regardless of prior state. Width pin lets the
-        # canonical chart grow side-by-side with the inventory.
-        # Height pin matches the web behaviour: without it, a
-        # 12-entry PHOIBLE stack (!XU/UPSID, Korean Close-row)
-        # overflows the silhouette because absolute-positioned
-        # cells contribute zero to Qt's sizeHint. The pin is
-        # unconditional so a wide-to-narrow inventory swap
-        # releases the prior pin instead of inheriting it.
+        # Growth policy: grow the widget only when the inventory's
+        # natural footprint EXCEEDS the current size. Shrinking lives
+        # in ``clear()`` (which releases the prior pin) so a switch
+        # from a wide PHOIBLE inventory back to a narrow bundled one
+        # collapses cleanly via the external set_target_width path
+        # rather than freezing at the prior width or being clamped
+        # below the canonical width.
         chrome_w = VOWEL_LABEL_W + self._PAD_R
         chrome_h = self._TITLE_H + self._COL_HEADER_H + self._PAD_B
         self._natural_total_w = geometry.natural_data_width_px + chrome_w
@@ -370,9 +376,11 @@ class VowelChartWidget(QWidget):
             REGION_CONSTRAINTS["vowel_chart"].min_h,
             geometry.natural_data_height_px + chrome_h,
         )
-        self.setMinimumWidth(self._natural_total_w)
-        self.setMaximumWidth(self._natural_total_w)
-        self.setMinimumHeight(natural_total_h)
+        if self._natural_total_w > self.width():
+            self.setMinimumWidth(self._natural_total_w)
+            self.setMaximumWidth(self._natural_total_w)
+        if natural_total_h > self.minimumHeight():
+            self.setMinimumHeight(natural_total_h)
         # Title (top, centred over the data area).
         title = QLabel(geometry.title, self)
         title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))

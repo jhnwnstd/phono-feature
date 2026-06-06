@@ -430,23 +430,6 @@ def profile():
 # ---------------------------------------------------------------------------
 
 
-def test_logical_col_offset_skips_spacer_tracks() -> None:
-    """``logical_col_offset(c)`` for c in 0..5 must never land on
-    the spacer-track columns 3 or 6. The Qt-physical column
-    (= VOWEL_LABEL_GRID_COL + offset = 0 + offset) is exactly the
-    offset; the resulting set is {1, 2, 4, 5, 7, 8}.
-    """
-    from phonology_shared.chart.vowels import (
-        VOWEL_LABEL_GRID_COL,
-        logical_col_offset,
-    )
-
-    physicals = {
-        VOWEL_LABEL_GRID_COL + logical_col_offset(c) for c in range(6)
-    }
-    assert physicals == {1, 2, 4, 5, 7, 8}
-
-
 def test_chart_geometry_handles_no_vowels() -> None:
     """``build_vowel_chart_geometry`` must not crash on an inventory
     that contains zero vowels. The original implementation indexed
@@ -503,23 +486,17 @@ def test_chart_geometry_omits_empty_rows() -> None:
         " appear in geometry.cells; an empty row would mislead the"
         " renderer into emitting a stray row label"
     )
-    # Rows are listed in ascending logical-row order with
-    # contiguous grid_row values starting at VOWEL_FIRST_DATA_GRID_ROW.
-    from phonology_shared.chart.vowels import (
-        VOWEL_FIRST_DATA_GRID_ROW,
-    )
-
-    expected_grid_rows = [
-        VOWEL_FIRST_DATA_GRID_ROW + i for i in range(len(geometry.rows))
-    ]
-    assert [r.grid_row for r in geometry.rows] == expected_grid_rows
+    # Rows listed in ascending logical-row order; ``chart_y``
+    # strictly increases with logical row.
+    chart_ys = [r.chart_y for r in geometry.rows]
+    assert chart_ys == sorted(chart_ys)
 
 
-def test_chart_geometry_cell_grid_col_avoids_spacer_tracks() -> None:
-    """Every cell's ``grid_col`` must be a non-spacer track (1, 2,
-    4, 5, 7, or 8). A regression that maps a logical col onto a
-    spacer would silently render the button under a hidden track
-    in CSS and overlap a spacer label in Qt.
+def test_chart_geometry_cell_chart_x_within_bounds() -> None:
+    """Every cell's ``chart_x`` lives in ``[0, 1]`` so the renderer's
+    ``left: chart_x * 100%`` lands inside the data area. Replaces
+    the legacy ``grid_col`` spacer-track check now that the grid
+    positions live in the renderer, not the geometry payload.
     """
     from phonology_shared.chart.vowels import (
         build_vowel_chart_geometry,
@@ -532,9 +509,9 @@ def test_chart_geometry_cell_grid_col_avoids_spacer_tracks() -> None:
     geometry = build_vowel_chart_geometry(vowel_segs, profile, seg_feats)
 
     for cell in geometry.cells:
-        assert cell.grid_col in {1, 2, 4, 5, 7, 8}, (
-            f"cell at logical ({cell.row}, {cell.col}) landed on"
-            f" spacer column {cell.grid_col}"
+        assert 0.0 <= cell.chart_x <= 1.0, (
+            f"cell at logical ({cell.row}, {cell.col}) has chart_x"
+            f"={cell.chart_x} outside [0, 1]"
         )
 
 
@@ -760,15 +737,16 @@ def test_split_low_by_tense_policy_knob(profile):
 
 
 def test_long_pair_stays_side_by_side_and_grows_chart() -> None:
-    """A side-by-side Long-pair cell keeps ``is_long_pair=True``
-    even when the inventory populates a sibling in the same
-    backness-pair slot. Instead of demoting the pair to a vertical
-    stack, the builder reports the inventory's expanded natural
-    width via :py:attr:`VowelChartGeometry.natural_data_width_px`;
-    the renderer grows the chart slot to that width so all cells
-    stay legible at their canonical positions.
+    """A side-by-side Long-pair cell keeps its ``LONG_PAIR``
+    display_kind even when the inventory populates a sibling in
+    the same backness-pair slot. Instead of demoting the pair to a
+    vertical stack, the builder reports the inventory's expanded
+    natural width via
+    :py:attr:`VowelChartGeometry.natural_data_width_px`; the
+    renderer grows the chart slot so all cells stay legible.
     """
     from phonology_shared.chart.vowels import (
+        VowelCellDisplayKind,
         build_vowel_chart_geometry,
         detect_vowel_profile,
     )
@@ -789,7 +767,7 @@ def test_long_pair_stays_side_by_side_and_grows_chart() -> None:
     g = build_vowel_chart_geometry(list(feats), profile, feats)
     pair_cell = next(c for c in g.cells if set(c.entries) == {"i", "iː"})
     y_cell = next(c for c in g.cells if c.entries == ("y",))
-    assert pair_cell.is_long_pair is True
+    assert pair_cell.display_kind == VowelCellDisplayKind.LONG_PAIR
     assert y_cell.col == 1
     # Front slot needs Long pair (2 buttons + gap) + inter-cell gap
     # + single /y/. The natural width must surface at least that

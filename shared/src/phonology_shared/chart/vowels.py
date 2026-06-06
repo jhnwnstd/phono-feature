@@ -1383,43 +1383,12 @@ def compute_placements(
 # physical-coordinate arithmetic.
 # ---------------------------------------------------------------------------
 
-# Grid-coordinate constants. Both UIs lay out the chart as:
-#   row 0 = "VOWELS" title spanning every data column
-#   row 1 = Front / Central / Back column headers
-#   row 2..  = data rows (only populated ones, in display order)
-# and:
-#   col 0 = row labels (Close, Near-close, ...)
-#   cols 1..8 = the six logical columns interleaved with two
-#               spacer tracks at physical cols 3 and 6.
-# The numbers are 0-based (Qt convention); CSS-side renderers add 1
-# when assigning ``grid-row`` / ``grid-column`` (1-indexed).
-VOWEL_COL_HEADER_GRID_ROW: int = 1
-VOWEL_FIRST_DATA_GRID_ROW: int = 2
-VOWEL_LABEL_GRID_COL: int = 0
-# First grid column after the row-label gutter; each backness pair
-# (unr/rnd) occupies two consecutive tracks; a one-track spacer
-# separates each pair from the next.
-VOWEL_FIRST_DATA_GRID_COL: int = VOWEL_LABEL_GRID_COL + 1
 #: Title shown above the chart on both UIs. Centralised so a
 #: future rename (e.g. localisation) touches one constant. The
 #: placement contract for both renderers lives on
 #: :py:class:`VowelChartGeometry`: centred over the data area only,
 #: at the top of the chart's rectangular chrome.
 VOWEL_CHART_TITLE: str = "VOWELS"
-#: Each backness header straddles its pair (unrounded + rounded).
-VOWEL_COL_HEADER_GRID_COL_SPAN: int = 2
-
-
-def logical_col_offset(col: int) -> int:
-    """Offset of a logical column 0..5 from the row-label column.
-
-    Logical 0..5 maps to physical offsets 1, 2, 4, 5, 7, 8 from the
-    row-label column (the spacer tracks at offsets 3 and 6 are
-    skipped). Add ``VOWEL_LABEL_GRID_COL + col_offset`` to land on
-    the physical Qt grid column; CSS renderers further add 1 to
-    translate to 1-indexed ``grid-column`` lines.
-    """
-    return col + (col >> 1) + 1
 
 
 @dataclass(frozen=True)
@@ -1447,27 +1416,22 @@ class VowelChartCell:
       the anchor so paired mates are always exactly tangent
       regardless of the row's effective width.
 
-    ``grid_row`` / ``grid_col`` remain for callers that still use
-    the legacy rectangular grid layout. ``row`` / ``col`` are the
-    abstract logical placement (0..5 each). ``entries`` is the
-    segments occupying this cell, ordered by descending placement
-    confidence (ties broken by ascending segment string).
+    ``row`` / ``col`` are the abstract logical placement (0..5
+    each). ``entries`` is the segments occupying this cell, ordered
+    by descending placement confidence (ties broken by ascending
+    segment string).
 
     ``display_kind`` tells the renderer how to arrange the entries
-    inside the cell. ``STACK`` is the default and reproduces the
-    legacy vertical-stack layout. ``LONG_PAIR`` / ``NASAL_PAIR`` /
-    ``RHOTIC_PAIR`` / ``PHONATION_PAIR`` / ``TONE_PAIR`` are
-    side-by-side layouts (two entries differing only on a single
-    in-cell-contrast feature; the marked member sits on the right).
+    inside the cell. ``STACK`` is the default vertical-stack
+    layout. ``LONG_PAIR`` / ``NASAL_PAIR`` / ``RHOTIC_PAIR`` /
+    ``PHONATION_PAIR`` / ``TONE_PAIR`` are side-by-side layouts
+    (two entries differing only on a single in-cell-contrast
+    feature; the marked member sits on the right).
     ``CONTRAST_SET`` is a 2x2 grid for 3-4 entries differing on
     multiple display features.
 
     ``contrast_features`` is the sorted tuple of display-contrast
     features that drove the kind choice (``()`` for ``STACK``).
-
-    ``is_long_pair`` is kept as a derived bool (``display_kind ==
-    LONG_PAIR``) so existing readers that branch on length keep
-    working until they migrate to ``display_kind``.
 
     Invariants pinned by :py:mod:`tests.test_phoible_vowel_rendering_stress`
     across the full PHOIBLE catalogue:
@@ -1489,65 +1453,46 @@ class VowelChartCell:
 
     row: int
     col: int
-    grid_row: int
-    grid_col: int
     chart_x: float
     chart_y: float
     pair_side: int
     entries: tuple[str, ...]
-    is_long_pair: bool = False
     display_kind: VowelCellDisplayKind = VowelCellDisplayKind.STACK
     contrast_features: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class VowelChartRow:
-    """A row to render. ``logical_row`` indexes into ``ROW_LABELS``;
-    ``grid_row`` is the Qt 0-based physical row the renderer drops
-    the row label into for the legacy grid layout. ``chart_y`` is
-    the row's normalised vertical position inside the trapezoid
-    data area so a row-label renderer can vertically align the
-    label with the row's data cells via
+    """A row to render. ``logical_row`` indexes into ``ROW_LABELS``.
+    ``chart_y`` is the row's normalised vertical position inside
+    the trapezoid data area so a row-label renderer can vertically
+    align the label with the row's data cells via
     ``top: calc(chart_y * 100%)``.
 
     ``tier`` tells renderers how the row's cells should anchor
     vertically: ``"top"`` rows anchor at chart_y and stacks hang
     DOWN, ``"bottom"`` rows anchor at chart_y and stacks rise UP,
     ``"middle"`` rows centre on chart_y. ``"only"`` is the
-    single-row case where centring is the only sane choice
-    (no other rows to grow into); ``_vowelRowTier`` in the JS
-    renderer used to misclassify it as ``"top"`` and let cells
-    grow downward into nothing.
+    single-row case (centre, with no other rows to grow into).
     """
 
     logical_row: int
     label: str
-    grid_row: int
     chart_y: float
     tier: str = "middle"
 
 
 @dataclass(frozen=True)
 class VowelChartColHeader:
-    """A backness column header (Front / Central / Back) with its
-    placement already resolved.
+    """A backness column header (Front / Central / Back).
 
-    Carries two coordinate systems for parity with
-    :py:class:`VowelChartCell`:
-
-    * ``grid_col`` / ``grid_col_span``: physical grid coordinates
-      for the legacy rectangular grid layout. Web adds 1 for
-      CSS's 1-indexed grid.
-    * ``chart_x``: the column's backness ANCHOR as a normalised
-      ``[0, 1]`` fraction of the data-area width. The renderer
-      should sit each header at ``chart_x * 100%`` so the header
-      lines up over the centre of the cells in its column at the
-      widest (top) row of the trapezoid.
+    ``chart_x`` is the column's backness ANCHOR as a normalised
+    ``[0, 1]`` fraction of the data-area width. Renderers sit each
+    header at ``chart_x * 100%`` so the header lines up over the
+    centre of its column's cells at the widest (top) row.
     """
 
     label: str
-    grid_col: int
-    grid_col_span: int
     chart_x: float
 
 
@@ -2339,10 +2284,6 @@ def build_vowel_chart_geometry(
             natural_data_height_px=0,
         )
 
-    logical_row_to_grid_row = {
-        ri: VOWEL_FIRST_DATA_GRID_ROW + display_index
-        for display_index, ri in enumerate(populated_logical_rows)
-    }
     # Silhouette: position logic (top/bottom widths) comes from the
     # populated logical row range; display logic (top_y/bottom_y)
     # always spans the full data area so cells use every pixel
@@ -2429,7 +2370,6 @@ def build_vowel_chart_geometry(
         VowelChartRow(
             logical_row=ri,
             label=ROW_LABELS[ri],
-            grid_row=logical_row_to_grid_row[ri],
             chart_y=display_y_by_row[ri],
             tier=_row_tier.get(ri, "middle"),
         )
@@ -2466,16 +2406,6 @@ def build_vowel_chart_geometry(
         7: _BACKNESS_X["central"],
         8: _BACKNESS_X["back"],
     }
-    # Legacy rectangular grid_col mapping for the neutral slots:
-    # snap onto the unrounded physical track of the matching
-    # backness so existing grid-col consumers stay on a non-spacer
-    # column (1, 4, or 7).
-    _neutral_col_to_grid_col: dict[int, int] = {
-        6: VOWEL_LABEL_GRID_COL + logical_col_offset(0),
-        7: VOWEL_LABEL_GRID_COL + logical_col_offset(2),
-        8: VOWEL_LABEL_GRID_COL + logical_col_offset(4),
-    }
-
     open_row_index = _ROW_LABEL_TO_INDEX["Open"]
     # Open-row front-pair cells (cols 0 / 1) take priority for the
     # bottom-left of the trapezoid. When they are empty, the Open
@@ -2490,11 +2420,11 @@ def build_vowel_chart_geometry(
     ) in occupied
 
     # First pass: classify each cell's display kind, resolve
-    # ordering, and compute col / pair_side / grid_col. The display
-    # layer needs these to size the silhouette before it can fix
-    # cell ``chart_x`` positions. No phonology re-decisions happen
-    # below this point -- the cell COL/row are already final; only
-    # their pixel-space position is still pending.
+    # ordering, and compute col / pair_side. The display layer
+    # needs these to size the silhouette before it can fix cell
+    # ``chart_x`` positions. No phonology re-decisions happen
+    # below this point -- the cell COL/row are already final;
+    # only their pixel-space position is still pending.
     cell_meta: list[
         tuple[
             int,
@@ -2502,7 +2432,6 @@ def build_vowel_chart_geometry(
             tuple[str, ...],
             VowelCellDisplayKind,
             tuple[str, ...],
-            int,
             int,
         ]
     ] = []
@@ -2515,7 +2444,6 @@ def build_vowel_chart_geometry(
         is_pair_layout = display_kind in PAIR_DISPLAY_KINDS
         if ci >= 6:
             pair_side = 0
-            grid_col = _neutral_col_to_grid_col[ci]
         else:
             sibling_ci = ci ^ 1
             has_sibling = (ri, sibling_ci) in occupied
@@ -2523,7 +2451,6 @@ def build_vowel_chart_geometry(
                 pair_side = 0
             else:
                 pair_side = 1 if ci % 2 else -1
-            grid_col = VOWEL_LABEL_GRID_COL + logical_col_offset(ci)
         cell_meta.append(
             (
                 ri,
@@ -2532,7 +2459,6 @@ def build_vowel_chart_geometry(
                 display_kind,
                 contrast_features,
                 pair_side,
-                grid_col,
             )
         )
         cells_meta_by_row.setdefault(ri, []).append(
@@ -2582,7 +2508,6 @@ def build_vowel_chart_geometry(
         display_kind,
         contrast_features,
         pair_side,
-        grid_col,
     ) in cell_meta:
         if ri == open_row_index and ci in (2, 3) and not open_front_populated:
             anchor_x = _BACKNESS_X["front"]
@@ -2595,13 +2520,10 @@ def build_vowel_chart_geometry(
             VowelChartCell(
                 row=ri,
                 col=ci,
-                grid_row=logical_row_to_grid_row[ri],
-                grid_col=grid_col,
                 chart_x=chart_x,
                 chart_y=cell_display_y,
                 pair_side=pair_side,
                 entries=entries,
-                is_long_pair=(display_kind == VowelCellDisplayKind.LONG_PAIR),
                 display_kind=display_kind,
                 contrast_features=contrast_features,
             )
@@ -2618,8 +2540,6 @@ def build_vowel_chart_geometry(
     col_headers = tuple(
         VowelChartColHeader(
             label=label,
-            grid_col=(VOWEL_FIRST_DATA_GRID_COL + ci * 3),
-            grid_col_span=VOWEL_COL_HEADER_GRID_COL_SPAN,
             chart_x=back
             + top_row_width
             * (_BACKNESS_X[_col_label_to_anchor_key[ci]] - back),

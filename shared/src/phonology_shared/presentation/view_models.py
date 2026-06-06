@@ -491,8 +491,6 @@ def _vowel_chart_summary(
         "cols": [
             {
                 "label": col.label,
-                "grid_col": col.grid_col,
-                "grid_col_span": col.grid_col_span,
                 "chart_x": col.chart_x,
             }
             for col in geometry.cols
@@ -501,7 +499,6 @@ def _vowel_chart_summary(
             {
                 "logical_row": row.logical_row,
                 "label": row.label,
-                "grid_row": row.grid_row,
                 "chart_y": row.chart_y,
                 "tier": row.tier,
             }
@@ -522,13 +519,10 @@ def _vowel_chart_summary(
             {
                 "row": cell.row,
                 "col": cell.col,
-                "grid_row": cell.grid_row,
-                "grid_col": cell.grid_col,
                 "chart_x": cell.chart_x,
                 "chart_y": cell.chart_y,
                 "pair_side": cell.pair_side,
                 "segs": list(cell.entries),
-                "is_long_pair": cell.is_long_pair,
                 "display_kind": cell.display_kind.value,
                 "contrast_features": list(cell.contrast_features),
             }

@@ -614,14 +614,14 @@ function _isValidBootstrap(info) {
         const c0 = info.vowel_chart.cells[0];
         if (!Array.isArray(c0?.segs)) return false;
     }
-    // ``title`` + structured ``cols`` (with grid_col / grid_col_span)
-    // landed when chart geometry moved to the shared SSOT. Reject any
+    // ``title`` + structured ``cols`` with projected chart_x landed
+    // when chart geometry moved to the shared SSOT. Reject any
     // stale-cache bootstrap missing them; the bridge will repopulate.
     if (typeof info.vowel_chart.title !== "string") return false;
     if (!Array.isArray(info.vowel_chart.cols)) return false;
     if (info.vowel_chart.cols.length > 0) {
         const col0 = info.vowel_chart.cols[0];
-        if (typeof col0?.grid_col !== "number") return false;
+        if (typeof col0?.chart_x !== "number") return false;
     }
     // ``silhouette`` landed when the chart silhouette became
     // inventory-adaptive; an older cached bootstrap without it
@@ -1257,17 +1257,19 @@ function _buildVowelChart(chart) {
     if (chart.shape) {
         dataEl.setAttribute("data-shape", chart.shape);
     }
-    // Honour the geometry's natural height. PHOIBLE inventories
-    // with many vowels in the Close row (Korean has 7+6+3 entries
-    // across 3 cells, !XU/UPSID has 12 in a single Close-Back
-    // stack) report natural_data_height_px well above the 208 px
-    // CSS min-height; without setting it explicitly the cells'
-    // ``top: chart_y * 100%`` percentages compress them above the
-    // silhouette, with tall stacks rendering off the chart's top
-    // edge.
+    // Publish the geometry's natural height as a CSS custom
+    // property; the CSS rule takes ``max(<floor>, var(...))`` so
+    // big inventories grow past the floor without small inventories
+    // collapsing below it. Setting ``minHeight`` directly used to
+    // override the CSS floor for small inventories on inventory
+    // swap (5-vowel Spanish reports ~100 px and collapsed the
+    // chart's data area below the legible 208 px floor).
     if (typeof chart.natural_data_height_px === "number"
         && chart.natural_data_height_px > 0) {
-        dataEl.style.minHeight = chart.natural_data_height_px + "px";
+        dataEl.style.setProperty(
+            "--vowel-natural-data-h",
+            chart.natural_data_height_px + "px",
+        );
     }
     const sil = chart.silhouette;
     if (sil) {
@@ -1347,10 +1349,8 @@ function _buildVowelChart(chart) {
             // how to arrange multiple entries inside one chart slot.
             // PAIR kinds (long / nasal / rhotic / phonation / tone)
             // render horizontally; CONTRAST_SET renders as a 2x2
-            // grid; STACK falls back to a vertical column. The
-            // ``is_long_pair`` fallback keeps cached bootstrap
-            // payloads working until the next CSS bake refresh.
-            const kind = cell.display_kind || (cell.is_long_pair ? "long_pair" : "stack");
+            // grid; STACK falls back to a vertical column.
+            const kind = cell.display_kind || "stack";
             switch (kind) {
                 case "long_pair":
                 case "nasal_pair":
