@@ -6,7 +6,7 @@ PyQt6 GUI for the Segment & Feature Engine.
 from __future__ import annotations
 
 import os
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, cast
 
@@ -986,8 +986,21 @@ class MainWindow(QMainWindow):
             for seg in vowel_segs:
                 vowel_buttons[seg] = self._get_or_create_seg_button(seg)
             if norm_feats is not None:
+                # PHOIBLE-loaded inventories stash their diphthong
+                # secondary bundles in metadata so the chart can
+                # draw arrows between primary and secondary cells.
+                vowel_secondary = self.engine.inventory.metadata.get(
+                    "vowel_secondary"
+                )
                 self.vowel_chart_widget.set_vowels(
-                    vowel_segs, vowel_buttons, norm_feats
+                    vowel_segs,
+                    vowel_buttons,
+                    norm_feats,
+                    vowel_secondary=(
+                        vowel_secondary
+                        if isinstance(vowel_secondary, Mapping)
+                        else None
+                    ),
                 )
                 self.vowel_chart_widget.show()
         else:

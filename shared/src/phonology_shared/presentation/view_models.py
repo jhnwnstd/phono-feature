@@ -6,6 +6,7 @@ Pyodide.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -459,10 +460,15 @@ def _vowel_chart_summary(
     """
     seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)
+    # PHOIBLE-loaded inventories stamp diphthong secondary bundles
+    # into ``Inventory.metadata`` so the chart renderer can draw
+    # arrows between the two cells without a new bridge endpoint.
+    secondary = engine.inventory.metadata.get("vowel_secondary")
     geometry = build_vowel_chart_geometry(
         list(vowel_segs),
         profile,
         seg_feats,
+        vowel_secondary=secondary if isinstance(secondary, Mapping) else None,
     )
     sil = geometry.silhouette
     return {
@@ -515,6 +521,21 @@ def _vowel_chart_summary(
                 "contrast_features": list(cell.contrast_features),
             }
             for cell in geometry.cells
+        ],
+        # Diphthong rendering hints; empty list for monophthong-only
+        # inventories. Renderers draw a curved arrow from
+        # ``(primary_row, primary_col)`` to
+        # ``(secondary_row, secondary_col)`` and look up the cell
+        # coordinates in the ``cells`` array above.
+        "diphthongs": [
+            {
+                "segment": d.segment,
+                "primary_row": d.primary_row,
+                "primary_col": d.primary_col,
+                "secondary_row": d.secondary_row,
+                "secondary_col": d.secondary_col,
+            }
+            for d in geometry.diphthongs
         ],
     }
 

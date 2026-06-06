@@ -192,6 +192,54 @@ def test_phoible_shaped_close_front_vowel_places_correctly():
     assert vl.COL_LABELS[0] == "Front"
 
 
+def test_diphthong_placement_carries_secondary_and_flag():
+    """A PHOIBLE-shaped ``/ia/`` bundle: the primary places at a
+    Close Front cell and the final state at an Open Central / Front
+    cell. Both placements carry :py:attr:`PlacementFlag.DIPHTHONG`
+    so the renderer can detect the diphthong from either endpoint;
+    the collision dict tracks the primary only.
+    """
+    import phonology_shared.chart.vowels as vl
+
+    primary = {
+        "Syllabic": "+",
+        "Consonantal": "-",
+        "High": "+",
+        "Low": "-",
+        "Front": "+",
+        "Back": "-",
+        "Round": "-",
+    }
+    final = {
+        "Syllabic": "+",
+        "Consonantal": "-",
+        "High": "-",
+        "Low": "+",
+        "Front": "-",
+        "Back": "-",
+        "Round": "-",
+    }
+    feats = {"ia": primary}
+    secondary_in = {"ia": final}
+    profile = vl.detect_vowel_profile(["ia"], feats)
+    occupied, placements = vl.compute_placements(
+        ["ia"], profile, feats, vowel_secondary=secondary_in
+    )
+    placement = placements["ia"]
+    assert placement.secondary is not None
+    assert vl.PlacementFlag.DIPHTHONG in placement.flags
+    assert vl.PlacementFlag.DIPHTHONG in placement.secondary.flags
+    assert placement.row == vl.ROW_LABELS.index(
+        "Close"
+    ), "primary anchors at Close (high) tier"
+    assert placement.secondary.row == vl.ROW_LABELS.index(
+        "Open"
+    ), "final anchors at Open (low) tier"
+    # Collision dict tracks PRIMARY only; the secondary is purely a
+    # rendering hint.
+    assert occupied == {(placement.row, placement.col): ["ia"]}
+
+
 def test_module_constants_are_tuples():
     """ROW_LABELS / COL_LABELS / VOWEL_HEIGHT are exported as
     tuples so importers cannot mutate the shared singletons."""

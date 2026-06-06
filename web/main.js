@@ -1341,10 +1341,94 @@ function _buildVowelChart(chart) {
         target.style.setProperty("--pair-side", String(cell.pair_side));
         dataEl.appendChild(target);
     }
+    _appendVowelDiphthongArrows(dataEl, chart);
     chartEl.appendChild(dataEl);
 
     groupEl.appendChild(chartEl);
     return groupEl;
+}
+
+/** Overlay a single ``<svg>`` on the vowel data area with one
+ *  arrow per diphthong: a curved Bezier from the primary cell to
+ *  the secondary cell, with a small chevron arrowhead at the end.
+ *
+ *  The SVG sits in the same SVG coordinate system as the data
+ *  area's CSS percentages (viewBox 0 to 100); cell endpoints come
+ *  from the cell array's normalized ``chart_x`` / ``chart_y``.
+ *  ``pointer-events: none`` so the arrows do not block clicks on
+ *  underlying vowel buttons. The control point lifts the curve
+ *  outward from the chord so two arrows in opposite directions
+ *  do not overlap on a straight line. */
+function _appendVowelDiphthongArrows(dataEl, chart) {
+    const arrows = chart.diphthongs;
+    if (!Array.isArray(arrows) || arrows.length === 0) return;
+    // Map ``(row, col) -> (chart_x, chart_y)`` so the arrows can
+    // look up endpoints without an O(N*M) scan per diphthong.
+    const cellByKey = new Map();
+    for (const cell of chart.cells) {
+        cellByKey.set(`${cell.row},${cell.col}`, cell);
+    }
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("class", "vowel-diphthong-arrows");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("aria-hidden", "true");
+    for (const d of arrows) {
+        const a = cellByKey.get(`${d.primary_row},${d.primary_col}`);
+        const b = cellByKey.get(`${d.secondary_row},${d.secondary_col}`);
+        if (!a || !b) continue;
+        const ax = a.chart_x * 100;
+        const ay = a.chart_y * 100;
+        const bx = b.chart_x * 100;
+        const by = b.chart_y * 100;
+        // Control point: midpoint nudged perpendicular to the
+        // chord. A small constant arc rise keeps the curve subtle
+        // even on long arrows and visible on short ones.
+        const mx = (ax + bx) / 2;
+        const my = (ay + by) / 2;
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len = Math.hypot(dx, dy) || 1;
+        const lift = Math.min(8, len * 0.18);
+        const nx = -dy / len;
+        const ny = dx / len;
+        const cx = mx + nx * lift;
+        const cy = my + ny * lift;
+        const path = document.createElementNS(svgNS, "path");
+        path.setAttribute("d", `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`);
+        path.setAttribute("class", "vowel-diphthong-arrow");
+        svg.appendChild(path);
+        // Arrowhead: a small triangle at the end, oriented along the
+        // curve's tangent at the endpoint (approximated by the
+        // control-point-to-endpoint direction).
+        const tx = bx - cx;
+        const ty = by - cy;
+        const tlen = Math.hypot(tx, ty) || 1;
+        const ux = tx / tlen;
+        const uy = ty / tlen;
+        // Perpendicular for arrowhead wings.
+        const px = -uy;
+        const py = ux;
+        const headLen = 2.5;
+        const headHalfW = 1.4;
+        const tipX = bx;
+        const tipY = by;
+        const baseX = bx - ux * headLen;
+        const baseY = by - uy * headLen;
+        const leftX = baseX + px * headHalfW;
+        const leftY = baseY + py * headHalfW;
+        const rightX = baseX - px * headHalfW;
+        const rightY = baseY - py * headHalfW;
+        const head = document.createElementNS(svgNS, "path");
+        head.setAttribute(
+            "d",
+            `M ${tipX} ${tipY} L ${leftX} ${leftY} L ${rightX} ${rightY} Z`,
+        );
+        head.setAttribute("class", "vowel-diphthong-arrowhead");
+        svg.appendChild(head);
+    }
+    dataEl.appendChild(svg);
 }
 
 /** Build a single vowel-cell button from an IPA segment string. */

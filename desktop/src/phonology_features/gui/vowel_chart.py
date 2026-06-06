@@ -14,6 +14,7 @@ geometry object from the bridge.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import ClassVar
 
@@ -42,6 +43,7 @@ from phonology_shared.chart.vowels import (
     Confidence,
     VowelCellDisplayKind,
     VowelChartCell,
+    VowelChartDiphthong,
     VowelChartGeometry,
     VowelChartShape,
     VowelChartSilhouette,
@@ -180,6 +182,14 @@ class VowelChartWidget(QWidget):
         # narrow bottom; one whose lowest row is Open-mid carries
         # a wider bottom edge). ``None`` before the first render.
         self._silhouette: VowelChartSilhouette | None = None
+        # Diphthong rendering. Populated by :py:meth:`_render_geometry`
+        # and consumed by :py:meth:`paintEvent` to draw curved arrows
+        # from primary to secondary cells. Empty before the first
+        # render and after :py:meth:`clear`.
+        self._cell_anchors_by_rc: dict[
+            tuple[int, int], tuple[float, float]
+        ] = {}
+        self._diphthongs: tuple[VowelChartDiphthong, ...] = ()
         # Floor for ``set_target_width``: the geometry's natural
         # data width plus this widget's chrome. Updated on every
         # :py:meth:`_render_geometry` call so external resize
@@ -263,12 +273,15 @@ class VowelChartWidget(QWidget):
         for container in self._cell_containers:
             container.deleteLater()
         self._cell_containers.clear()
+        self._cell_anchors_by_rc.clear()
+        self._diphthongs = ()
 
     def set_vowels(
         self,
         segs: list[str],
         buttons: Mapping[str, QWidget],
         norm_feats: Mapping[str, Mapping[str, str]],
+        vowel_secondary: Mapping[str, Mapping[str, str]] | None = None,
     ) -> None:
         """Build the shared geometry, then render it as Qt widgets.
 
@@ -276,11 +289,18 @@ class VowelChartWidget(QWidget):
         physical-coordinate arithmetic) all happens in
         :py:mod:`vowel_layout`; this method only translates the
         result into widget calls.
+
+        ``vowel_secondary`` carries final-state feature bundles for
+        PHOIBLE diphthong segments. When present, the per-diphthong
+        endpoints are stored on the widget so :py:meth:`paintEvent`
+        can draw a curved arrow between the two cells.
         """
         self.clear()
         self._buttons = dict(buttons)
         profile = detect_vowel_profile(segs, norm_feats)
-        geometry = build_vowel_chart_geometry(segs, profile, norm_feats)
+        geometry = build_vowel_chart_geometry(
+            segs, profile, norm_feats, vowel_secondary=vowel_secondary
+        )
         self._render_geometry(geometry)
 
     def _render_geometry(self, geometry: VowelChartGeometry) -> None:
@@ -294,6 +314,14 @@ class VowelChartWidget(QWidget):
         """
         self._shape = geometry.shape
         self._silhouette = geometry.silhouette
+        # Map (row, col) -> (chart_x, chart_y) for diphthong arrow
+        # endpoints; the paintEvent overlays one curve per
+        # diphthong, looking up endpoints in this dict.
+        self._cell_anchors_by_rc = {
+            (cell.row, cell.col): (cell.chart_x, cell.chart_y)
+            for cell in geometry.cells
+        }
+        self._diphthongs = tuple(geometry.diphthongs)
         # Growth policy: when the inventory's natural data width
         # exceeds the canonical chart width that ``set_target_width``
         # would set, expand the widget so all cells stay legible
@@ -601,4 +629,72 @@ class VowelChartWidget(QWidget):
         pen.setWidth(2)
         painter.setPen(pen)
         painter.drawPath(path)
+        self._paint_diphthong_arrows(painter, dx, dy, dw, dh)
         painter.end()
+
+    def _paint_diphthong_arrows(
+        self,
+        painter: QPainter,
+        dx: int,
+        dy: int,
+        dw: int,
+        dh: int,
+    ) -> None:
+        """Overlay one curved arrow per diphthong from primary cell
+        to secondary cell. Mirrors the web SVG overlay so both UIs
+        show the same arrows when a PHOIBLE diphthong inventory is
+        loaded. Coordinates come from each cell's
+        ``(chart_x, chart_y)`` already stashed in
+        :py:attr:`_cell_anchors_by_rc`."""
+        if not self._diphthongs:
+            return
+        pen = QPen(QColor(C["accent"]))
+        pen.setWidthF(1.5)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        for d in self._diphthongs:
+            a = self._cell_anchors_by_rc.get((d.primary_row, d.primary_col))
+            b = self._cell_anchors_by_rc.get(
+                (d.secondary_row, d.secondary_col)
+            )
+            if a is None or b is None:
+                continue
+            ax = dx + a[0] * dw
+            ay = dy + a[1] * dh
+            bx = dx + b[0] * dw
+            by = dy + b[1] * dh
+            # Same control-point lift formula as the web SVG so both
+            # UIs draw matching curves on the same inventory.
+            mx = (ax + bx) / 2
+            my = (ay + by) / 2
+            chord = math.hypot(bx - ax, by - ay) or 1.0
+            lift = min(dw * 0.05, chord * 0.18)
+            nx = -(by - ay) / chord
+            ny = (bx - ax) / chord
+            cx = mx + nx * lift
+            cy = my + ny * lift
+            path = QPainterPath()
+            path.moveTo(ax, ay)
+            path.quadTo(cx, cy, bx, by)
+            painter.drawPath(path)
+            # Arrowhead at the secondary end, oriented along the
+            # control-point-to-endpoint tangent.
+            tx = bx - cx
+            ty = by - cy
+            tlen = math.hypot(tx, ty) or 1.0
+            ux = tx / tlen
+            uy = ty / tlen
+            head_len = 7.0
+            head_half = 4.0
+            base_x = bx - ux * head_len
+            base_y = by - uy * head_len
+            left_x = base_x + (-uy) * head_half
+            left_y = base_y + ux * head_half
+            right_x = base_x - (-uy) * head_half
+            right_y = base_y - ux * head_half
+            head = QPainterPath()
+            head.moveTo(bx, by)
+            head.lineTo(left_x, left_y)
+            head.lineTo(right_x, right_y)
+            head.closeSubpath()
+            painter.fillPath(head, QColor(C["accent"]))

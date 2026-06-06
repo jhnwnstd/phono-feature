@@ -917,6 +917,34 @@ dialog input[type="text"]:focus-visible {
      padding around the cells. */
   min-height: calc(8 * var(--control-h-sm));
 }
+
+/* Diphthong arrow overlay. One SVG per chart sits above all cells
+   and draws a curved arrow per (primary -> secondary) placement
+   pair. ``pointer-events: none`` so clicks land on the underlying
+   vowel buttons; ``preserveAspectRatio: none`` lets the 100x100
+   viewBox stretch to the data area's actual pixel rectangle so
+   arrow endpoints land on the same chart_x / chart_y the cells
+   themselves use. */
+.vowel-diphthong-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.vowel-diphthong-arrow {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 0.4;
+  opacity: 0.65;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.vowel-diphthong-arrowhead {
+  fill: var(--accent);
+  opacity: 0.75;
+}
 /* Trapezoid / triangle silhouette: OUTLINE only, no painted fill.
 
    Two layered pseudo-elements achieve the outline:

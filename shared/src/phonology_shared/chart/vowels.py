@@ -1299,6 +1299,7 @@ def compute_placements(
     profile: VowelProfile,
     norm_feats: Mapping[str, Mapping[str, str]],
     policy: PlacementPolicy | None = None,
+    vowel_secondary: Mapping[str, Mapping[str, str]] | None = None,
 ) -> tuple[dict[tuple[int, int], list[str]], dict[str, VowelPlacement]]:
     """Place every vowel and group by (row, col) cell.
 
@@ -1307,15 +1308,34 @@ def compute_placements(
     paper-recommended stricter settings (``coronal_front``
     disabled, low-vowel split off, etc.).
 
+    ``vowel_secondary`` carries final-state feature bundles for
+    diphthong segments (PHOIBLE's contour rows). Segments that
+    appear in this map get a non-null ``placement.secondary`` and
+    both placements carry :py:attr:`PlacementFlag.DIPHTHONG`. The
+    collision-cell map (``occupied``) only tracks PRIMARY
+    placements; secondaries live purely as a rendering hint.
+
     Returns ``(occupied, placements)``. Cells are sorted by
     descending placement confidence (highest first); ties break on
     ascending segment string for stable ordering.
     """
     policy = policy or PlacementPolicy()
+    secondary_feats = vowel_secondary or {}
     occupied: dict[tuple[int, int], list[str]] = {}
     placements: dict[str, VowelPlacement] = {}
     for seg in segs:
         placement = vowel_grid_pos(norm_feats.get(seg, {}), profile, policy)
+        if seg in secondary_feats:
+            secondary = vowel_grid_pos(secondary_feats[seg], profile, policy)
+            secondary = replace(
+                secondary,
+                flags=secondary.flags | frozenset({PlacementFlag.DIPHTHONG}),
+            )
+            placement = replace(
+                placement,
+                flags=placement.flags | frozenset({PlacementFlag.DIPHTHONG}),
+                secondary=secondary,
+            )
         placements[seg] = placement
         occupied.setdefault((placement.row, placement.col), []).append(seg)
     # Confidence DESCENDING (via negated int), segment ASCENDING
@@ -1526,6 +1546,24 @@ class VowelChartSilhouette:
     back_right_pixel_offset: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class VowelChartDiphthong:
+    """One diphthong's primary -> secondary cell pair, plus the
+    grid coordinates the renderer uses to position the arrow.
+
+    Both endpoints reference a populated ``VowelChartCell`` by its
+    ``(row, col)`` key; the renderer looks the cells up in
+    :py:attr:`VowelChartGeometry.cells` to compute arrow endpoints
+    from the cells' ``chart_x`` / ``chart_y``.
+    """
+
+    segment: str
+    primary_row: int
+    primary_col: int
+    secondary_row: int
+    secondary_col: int
+
+
 @dataclass(frozen=True)
 class VowelChartGeometry:
     """Complete render-ready description of a vowel chart.
@@ -1578,6 +1616,12 @@ class VowelChartGeometry:
     cells: tuple[VowelChartCell, ...]
     natural_data_width_px: int
     natural_data_height_px: int
+    # Diphthong rendering hints. One entry per vowel segment whose
+    # PHOIBLE encoding spans two cells: the renderer draws a curved
+    # arrow from ``primary_cell`` to ``secondary_cell``; the glyph
+    # itself stays in ``primary_cell``. Empty for monophthong-only
+    # inventories.
+    diphthongs: tuple[VowelChartDiphthong, ...] = ()
 
 
 #: Gap between vertically stacked segment buttons inside a single
@@ -2154,6 +2198,7 @@ def build_vowel_chart_geometry(
     profile: VowelProfile,
     norm_feats: Mapping[str, Mapping[str, str]],
     policy: PlacementPolicy | None = None,
+    vowel_secondary: Mapping[str, Mapping[str, str]] | None = None,
 ) -> VowelChartGeometry:
     """End-to-end: compute placements and produce a render-ready
     chart geometry for both UIs.
@@ -2167,10 +2212,18 @@ def build_vowel_chart_geometry(
          :py:class:`VowelChartRow` with the assigned physical grid
          row.
 
+    ``vowel_secondary`` carries final-state feature bundles for
+    PHOIBLE diphthong segments. When present, the returned geometry's
+    :py:attr:`VowelChartGeometry.diphthongs` lists one entry per
+    diphthong with both endpoint cells so renderers can draw a
+    curved arrow between them.
+
     Renderers attach the result directly: no placement decisions
     and no coordinate arithmetic happen at the UI layer.
     """
-    occupied, _ = compute_placements(segs, profile, norm_feats, policy)
+    occupied, placements = compute_placements(
+        segs, profile, norm_feats, policy, vowel_secondary=vowel_secondary
+    )
 
     populated_logical_rows = sorted({row for (row, _) in occupied})
     shape = infer_vowel_shape(profile)
@@ -2429,6 +2482,22 @@ def build_vowel_chart_geometry(
     )
 
     natural_w, natural_h = _natural_data_area_size(tuple(cells))
+    # Diphthong rendering hints. One entry per placement whose
+    # ``secondary`` attribute is non-null. Order is stable across
+    # builds (insertion order of ``placements``, which iterates
+    # ``segs`` in caller-supplied order) so diff-driven tests on
+    # the geometry stay reproducible.
+    diphthongs = tuple(
+        VowelChartDiphthong(
+            segment=seg,
+            primary_row=p.row,
+            primary_col=p.col,
+            secondary_row=p.secondary.row,
+            secondary_col=p.secondary.col,
+        )
+        for seg, p in placements.items()
+        if p.secondary is not None
+    )
     return VowelChartGeometry(
         title=VOWEL_CHART_TITLE,
         shape=shape,
@@ -2438,6 +2507,7 @@ def build_vowel_chart_geometry(
         cells=tuple(cells),
         natural_data_width_px=natural_w,
         natural_data_height_px=natural_h,
+        diphthongs=diphthongs,
     )
 
 
