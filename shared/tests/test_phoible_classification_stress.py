@@ -1,0 +1,339 @@
+"""Whole-PHOIBLE segment-classification stress suite.
+
+Pins the feature-set-agnostic classification contract the user
+asked for: every PHOIBLE inventory's segments land in the right
+display group regardless of how many features the source records.
+
+The major-class invariant the classifier holds: a "vowel-phoneme"
+is ``Syllabic=+`` AND ``Consonantal!=+``. Vowel-phonemes must
+land in ``Vowels`` and only in ``Vowels``; everything else (true
+consonants AND syllabic consonants like ``m̩``) lands in a
+consonant group per its manner / place / laryngeal features.
+
+The classifier in
+[`shared/.../chart/consonants.py`](shared/src/phonology_shared/chart/consonants.py)
+holds these invariants at the matcher level (``is_member``) so
+the same rules apply to Hayes, PHOIBLE, and PanPhon-shaped
+inventories without per-source branches. This suite walks the
+full PHOIBLE snapshot (3000+ inventories) plus three synthetic
+feature-set shapes to keep both halves of the contract honest:
+
+- Real-data sweep (B1-B3): every PHOIBLE inventory's grouping
+  respects the syllabic invariant in both directions.
+- Synthetic parametrised (B4): the same nasal-vowel bundle
+  expressed under Hayes (28-feature), PHOIBLE (38-feature), and
+  PanPhon (24-feature) shapes lands in Vowels in all three.
+
+Skipped when the PHOIBLE bake snapshot is absent.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from phonology_shared.data.inventory import Inventory
+from phonology_shared.theory.feature_engine import FeatureEngine
+
+try:
+    from phonology_shared.editor.phoible_provider import (
+        PhoibleProvider,
+        materialize_phoible_inventory,
+    )
+except ImportError:  # pragma: no cover - dev-only path
+    pytest.skip("phoible_provider unavailable", allow_module_level=True)
+
+
+# Group labels the classifier emits for non-vowel segments. Drawn
+# from the PRIMARY_GROUPS + derived breakouts + relabel patterns in
+# consonants.py. ``Other`` and ``Vowels`` are the only labels that
+# may carry syllabic segments; everything else is consonantal by
+# the invariant.
+_CONSONANT_GROUP_NAMES: frozenset[str] = frozenset(
+    {
+        "Clicks",
+        "Plosives",
+        "Implosives",
+        "Ejective Plosives",
+        "Fricatives",
+        "Sibilants",
+        "Lateral Fricatives",
+        "Ejective Fricatives",
+        "Affricates",
+        "Sibilant Affricates",
+        "Lateral Affricates",
+        "Ejective Affricates",
+        "Nasals",
+        "Trills",
+        "Taps & Flaps",
+        "Vibrants",
+        "Lateral Approximants",
+        "Lateral Flaps",
+        "Central Approximants",
+        "Semivowels",
+        "Rhotics",
+        "Liquids",
+        "Laryngeals",
+    }
+)
+
+
+@pytest.fixture(scope="module")
+def provider() -> PhoibleProvider:
+    try:
+        return PhoibleProvider()
+    except FileNotFoundError as exc:  # pragma: no cover
+        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
+    except Exception as exc:  # pragma: no cover
+        pytest.skip(f"PHOIBLE provider unavailable: {exc}")
+
+
+@pytest.fixture(scope="module")
+def all_inventory_ids(provider: PhoibleProvider) -> list[str]:
+    return list(provider._inventories)  # type: ignore[attr-defined]
+
+
+def _label_for(provider: PhoibleProvider, inv_id: str) -> str:
+    desc = provider.descriptor(inv_id)
+    if desc is None:
+        return inv_id
+    return f"{desc.language_name}/{desc.source_short}"
+
+
+def test_b1_no_vowel_phoneme_lands_in_any_consonant_group(
+    provider: PhoibleProvider, all_inventory_ids: list[str]
+) -> None:
+    """The classifier must never route a vowel-phoneme
+    (``Syllabic=+`` AND ``Consonantal!=+``) into a consonant
+    group. The original bug had nasalised vowels (``ã``, ``ẽ``,
+    ...) landing in ``Nasals`` because the Nasals spec did not
+    explicitly exclude vowels; the major-class invariant in
+    ``is_member`` now blocks it across all PHOIBLE inventories
+    without per-spec patches.
+
+    Syllabic consonants (``Syllabic=+`` AND ``Consonantal=+``,
+    e.g. Lomongo's ``m̩``/``n̩``/``ŋ̩``) are NOT vowel-phonemes
+    under this dichotomy and legitimately land in their
+    manner-class group; they are not flagged here.
+    """
+    offenders: list[tuple[str, str, list[str]]] = []
+    for inv_id in all_inventory_ids:
+        inv = materialize_phoible_inventory(provider, inv_id)
+        engine = FeatureEngine(inv)
+        groups = engine.grouped_segments
+        for gname in _CONSONANT_GROUP_NAMES:
+            segs = groups.get(gname, [])
+            if not segs:
+                continue
+            misrouted = [
+                s
+                for s in segs
+                if (
+                    inv.segments.get(s, {}).get("Syllabic") == "+"
+                    and inv.segments.get(s, {}).get("Consonantal") != "+"
+                )
+            ]
+            if misrouted:
+                offenders.append(
+                    (_label_for(provider, inv_id), gname, misrouted)
+                )
+    assert not offenders, (
+        f"vowel-phonemes leaked into consonant groups in "
+        f"{len(offenders)} (inventory, group) buckets; first 5: "
+        f"{offenders[:5]}"
+    )
+
+
+def test_b2_only_vowel_phonemes_land_in_vowels(
+    provider: PhoibleProvider, all_inventory_ids: list[str]
+) -> None:
+    """Symmetric guarantee: ``Vowels`` must hold only vowel-phonemes
+    (``Syllabic=+`` AND ``Consonantal!=+``). A non-syllabic
+    segment in Vowels OR a syllabic consonant in Vowels both
+    indicate a major-class invariant regression."""
+    offenders: list[tuple[str, list[str]]] = []
+    for inv_id in all_inventory_ids:
+        inv = materialize_phoible_inventory(provider, inv_id)
+        engine = FeatureEngine(inv)
+        vowels = engine.grouped_segments.get("Vowels", [])
+        misrouted = [
+            s
+            for s in vowels
+            if not (
+                inv.segments.get(s, {}).get("Syllabic") == "+"
+                and inv.segments.get(s, {}).get("Consonantal") != "+"
+            )
+        ]
+        if misrouted:
+            offenders.append((_label_for(provider, inv_id), misrouted))
+    assert not offenders, (
+        f"non-vowel-phonemes leaked into Vowels in "
+        f"{len(offenders)} inventories; first 5: {offenders[:5]}"
+    )
+
+
+def test_b3_classifier_assigns_every_segment(
+    provider: PhoibleProvider, all_inventory_ids: list[str]
+) -> None:
+    """Every segment must land in exactly one group; an empty
+    "Other" fallback or unassigned segment would surface a
+    silently-broken classifier. Sampled to keep runtime bounded
+    (the B1/B2 sweeps cover the full set with cheaper checks)."""
+    sample = all_inventory_ids[::15]  # ~200 inventories
+    unassigned: list[tuple[str, list[str]]] = []
+    for inv_id in sample:
+        inv = materialize_phoible_inventory(provider, inv_id)
+        engine = FeatureEngine(inv)
+        groups = engine.grouped_segments
+        placed: set[str] = set()
+        for segs in groups.values():
+            placed.update(segs)
+        missing = set(inv.segments) - placed
+        if missing:
+            unassigned.append((_label_for(provider, inv_id), sorted(missing)))
+    assert not unassigned, (
+        f"{len(unassigned)} inventories left segments unassigned; "
+        f"first 5: {unassigned[:5]}"
+    )
+
+
+# B4: synthetic nasal-vowel parity across feature-set shapes.
+#
+# Each shape mirrors what one source records: Hayes-shape uses
+# the 28 features the bundled JSON ships; PHOIBLE-shape uses the
+# 38 mapped values from ``PHOIBLE_TO_APP_FEATURE``; PanPhon-shape
+# uses the 24 mapped values from ``PANPHON_TO_APP_FEATURE``. A
+# nasal vowel /ã/ in each must land in Vowels.
+_HAYES_SHAPE: list[str] = [
+    "CORONAL",
+    "DORSAL",
+    "LABIAL",
+    "Anterior",
+    "Approximant",
+    "Back",
+    "Consonantal",
+    "ConstrGl",
+    "Continuant",
+    "DelRel",
+    "Distributed",
+    "Front",
+    "High",
+    "Labiodental",
+    "Lateral",
+    "Long",
+    "Low",
+    "Nasal",
+    "Round",
+    "Sonorant",
+    "SpreadGl",
+    "Stress",
+    "Strident",
+    "Syllabic",
+    "Tap",
+    "Tense",
+    "Trill",
+    "Voice",
+]
+
+
+def _phoible_shape_features() -> list[str]:
+    from phonology_shared.editor.phoible_features import (
+        PHOIBLE_TO_APP_FEATURE,
+    )
+
+    return list(PHOIBLE_TO_APP_FEATURE.values())
+
+
+def _panphon_shape_features() -> list[str]:
+    from phonology_shared.editor.panphon_features import (
+        PANPHON_TO_APP_FEATURE,
+    )
+
+    return list(PANPHON_TO_APP_FEATURE.values())
+
+
+def _build_synthetic_nasal_vowel_inventory(
+    features: list[str],
+) -> Inventory:
+    """Build a 2-segment Inventory: one nasal vowel (``ã``) and one
+    plain nasal consonant (``m``), in whichever feature shape is
+    passed in.
+
+    Sparse columns are left at ``"0"`` (unspecified); the
+    classifier only relies on the shared core features (Syllabic,
+    Consonantal, Sonorant, Nasal, ...) which all three feature
+    sets carry. Feature-set generality means the classifier reads
+    those by name; the surrounding column count does not change
+    the result.
+    """
+    base: dict[str, str] = {f: "0" for f in features}
+    a_nasal: dict[str, str] = dict(base)
+    a_nasal.update(
+        {
+            "Syllabic": "+",
+            "Consonantal": "-",
+            "Sonorant": "+",
+            "Nasal": "+",
+            "Continuant": "+",
+            "Voice": "+",
+        }
+    )
+    m_nasal: dict[str, str] = dict(base)
+    m_nasal.update(
+        {
+            "Syllabic": "-",
+            "Consonantal": "+",
+            "Sonorant": "+",
+            "Nasal": "+",
+            "Continuant": "-",
+            "Voice": "+",
+        }
+    )
+    # Place is intentionally omitted: the Hayes shape carries
+    # ``"LABIAL"`` (all-caps anchor) which canonicalises to the
+    # same key the PHOIBLE / PanPhon shapes' ``"Labial"`` does, so
+    # setting both raises ValidationError at parse. The test only
+    # cares about the manner / major-class invariant; /m/ as a
+    # placeless nasal still lands in Nasals.
+    return Inventory.from_grid(
+        name="synthetic",
+        features=features,
+        segments={"ã": a_nasal, "m": m_nasal},
+    )
+
+
+@pytest.mark.parametrize(
+    "shape_name,features_factory",
+    [
+        ("hayes", lambda: list(_HAYES_SHAPE)),
+        ("phoible", _phoible_shape_features),
+        ("panphon", _panphon_shape_features),
+    ],
+)
+def test_b4_nasal_vowel_lands_in_vowels_for_every_feature_set_shape(
+    shape_name: str, features_factory
+) -> None:
+    """Pins the feature-set generality the user asked for: a
+    nasal vowel (``Syllabic=+, Nasal=+``) lands in ``Vowels``
+    regardless of whether the surrounding feature inventory is
+    Hayes-shaped (28 cols), PHOIBLE-shaped (38), or PanPhon-shaped
+    (24). The classifier reads features by name; the cardinality
+    or specific column inventory of the source must not change
+    where a segment lands."""
+    features = features_factory()
+    inv = _build_synthetic_nasal_vowel_inventory(features)
+    engine = FeatureEngine(inv)
+    groups = engine.grouped_segments
+    a_groups = {k: v for k, v in groups.items() if "ã" in v}
+    m_groups = {k: v for k, v in groups.items() if "m" in v}
+    assert "ã" in groups.get("Vowels", []), (
+        f"[{shape_name}] nasal vowel /ã/ should land in Vowels, "
+        f"got groups={a_groups}"
+    )
+    assert "m" in groups.get("Nasals", []), (
+        f"[{shape_name}] plain nasal /m/ should land in Nasals, "
+        f"got groups={m_groups}"
+    )
+    # And the negative: /ã/ never appears in Nasals.
+    assert "ã" not in groups.get(
+        "Nasals", []
+    ), f"[{shape_name}] nasal vowel /ã/ leaked into Nasals"

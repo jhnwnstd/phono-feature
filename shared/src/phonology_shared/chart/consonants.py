@@ -774,6 +774,41 @@ def group_segments(
     def is_member(
         group_name: str, seg_feats: dict[str, str], spec: dict[str, str]
     ) -> bool:
+        """Test whether a segment matches a group spec.
+
+        Universal major-class invariant: the matcher partitions
+        segments into vowel-phonemes (``Syllabic=+`` AND
+        ``Consonantal!=+``) vs consonants (everything else,
+        including syllabic consonants like ``m̩`` and ``n̩``).
+
+        - ``Vowels`` accepts vowel-phonemes only.
+        - Every other group rejects vowel-phonemes outright.
+
+        Without this guard, the bare ``Nasals`` spec (``{nasal:
+        +}``) accidentally absorbs nasalised vowels like ``ã``
+        because Acehnese / PHOIBLE encodes them as ``Syllabic=+,
+        Consonantal=-, Nasal=+``. The guard lives in the matcher
+        so the property is inherent to the pipeline rather than
+        something every group spec has to remember to encode, and
+        it stays feature-set agnostic: Hayes, PHOIBLE, and PanPhon
+        all share ``Syllabic`` and ``Consonantal`` columns with
+        the same polarity vocabulary.
+
+        Syllabic consonants (``Syllabic=+, Consonantal=+``, e.g.
+        Lomongo's ``m̩``/``n̩``/``ŋ̩``) are NOT vowel-phonemes
+        under this dichotomy, so they keep their manner-class
+        membership (e.g. Nasals). That matches the IPA convention
+        and the bundled-inventory snapshot.
+        """
+        is_vowel_phoneme = (
+            seg_feats.get("syllabic", "0") == "+"
+            and seg_feats.get("consonantal", "0") != "+"
+        )
+        if group_name == "Vowels":
+            if not is_vowel_phoneme:
+                return False
+        elif is_vowel_phoneme:
+            return False
         relevant = [f for f in spec if f in active_features]
         if not relevant:
             return False
@@ -878,6 +913,12 @@ def group_segments(
     # Lateral Affricates) absorb their members first; a sibilant
     # ejective therefore lands in Sibilants, not Ejective
     # Fricatives.
+    #
+    # No syllabic-vowel guard needed here: the consonant-group
+    # invariant in :py:func:`is_member` already rejected vowels
+    # from every parent in ``PRIMARY_GROUPS``, so the breakouts
+    # only see consonants. The relabel patterns and laryngeal
+    # rescue below inherit the same guarantee.
     for new_name, parent_name, target_kind in _FACT_BREAKOUTS:
         if parent_name not in assignment:
             continue

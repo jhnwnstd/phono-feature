@@ -1219,6 +1219,14 @@ dialog input[type="text"]:focus-visible {
 }
 .feat-group {
   margin-bottom: 0;
+  /* On large feature sets (PHOIBLE ships 38 features in 6 cards),
+     the natural column height can exceed the splitter-allocated
+     pane height. Forcing each card to its content height with no
+     shrink pushes the overflow up to ``.panel-body`` (which has
+     ``overflow: auto``) so the entire pane scrolls cleanly; without
+     this the flex columns compress the cards and rows visually
+     stack on top of each other. */
+  flex-shrink: 0;
 }
 .feat-group-header {
   font-size: var(--font-size-label);
@@ -1240,6 +1248,13 @@ dialog input[type="text"]:focus-visible {
   gap: var(--space-xs);
   padding: 2px var(--space-md);
   border-radius: var(--radius-md);
+  /* Pin a minimum row height so the row never shrinks below the
+     badge / button outline; combined with ``.feat-group {
+     flex-shrink: 0; }`` above, this keeps every row visually
+     distinct on inventories with many features and lets the
+     ``.panel-body`` parent take the scrollbar. */
+  min-height: var(--feat-btn-h);
+  flex-shrink: 0;
 }
 
 /* Row backgrounds are mode-dependent. SEG mode (feat panel
