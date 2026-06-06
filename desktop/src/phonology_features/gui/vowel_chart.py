@@ -302,6 +302,10 @@ class VowelChartWidget(QWidget):
         the caller's pool. Detaching them BEFORE deleting cell
         containers is essential; otherwise destroying the container
         would take the children with it.
+
+        Display state (focus, show-all-arrows, natural-width pin)
+        resets too so a wide-to-narrow inventory swap releases the
+        prior pin and a hovered seg does not persist across loads.
         """
         for btn in self._buttons.values():
             btn.setParent(None)
@@ -323,6 +327,9 @@ class VowelChartWidget(QWidget):
         self._cell_anchors_by_rc.clear()
         self._diphthongs = ()
         self._rows_chart_y = ()
+        self._focused_seg = None
+        self._show_all_arrows = False
+        self._natural_total_w = 0
 
     def set_vowels(
         self,
@@ -375,17 +382,26 @@ class VowelChartWidget(QWidget):
         # so the banding loop computes midpoints between adjacent
         # rows without re-sorting on every paint.
         self._rows_chart_y = tuple(sorted(r.chart_y for r in geometry.rows))
-        # Growth policy: when the inventory's natural data width
-        # exceeds the canonical chart width that ``set_target_width``
-        # would set, expand the widget so all cells stay legible
-        # side-by-side. Stash the natural total so
-        # :py:meth:`set_target_width` honors the floor on subsequent
-        # external resize requests.
+        # Growth policy: pin the widget to the inventory's natural
+        # width AND natural height so cells stay inside the
+        # silhouette regardless of prior state. Width pin lets the
+        # canonical chart grow side-by-side with the inventory.
+        # Height pin matches the web behaviour: without it, a
+        # 12-entry PHOIBLE stack (!XU/UPSID, Korean Close-row)
+        # overflows the silhouette because absolute-positioned
+        # cells contribute zero to Qt's sizeHint. The pin is
+        # unconditional so a wide-to-narrow inventory swap
+        # releases the prior pin instead of inheriting it.
         chrome_w = VOWEL_LABEL_W + self._PAD_R
+        chrome_h = self._TITLE_H + self._COL_HEADER_H + self._PAD_B
         self._natural_total_w = geometry.natural_data_width_px + chrome_w
-        if self._natural_total_w > self.width():
-            self.setMinimumWidth(self._natural_total_w)
-            self.setMaximumWidth(self._natural_total_w)
+        natural_total_h = max(
+            REGION_CONSTRAINTS["vowel_chart"].min_h,
+            geometry.natural_data_height_px + chrome_h,
+        )
+        self.setMinimumWidth(self._natural_total_w)
+        self.setMaximumWidth(self._natural_total_w)
+        self.setMinimumHeight(natural_total_h)
         # Title (top, centred over the data area).
         title = QLabel(geometry.title, self)
         title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))

@@ -1508,12 +1508,23 @@ class VowelChartRow:
     the row's normalised vertical position inside the trapezoid
     data area so a row-label renderer can vertically align the
     label with the row's data cells via
-    ``top: calc(chart_y * 100%)``."""
+    ``top: calc(chart_y * 100%)``.
+
+    ``tier`` tells renderers how the row's cells should anchor
+    vertically: ``"top"`` rows anchor at chart_y and stacks hang
+    DOWN, ``"bottom"`` rows anchor at chart_y and stacks rise UP,
+    ``"middle"`` rows centre on chart_y. ``"only"`` is the
+    single-row case where centring is the only sane choice
+    (no other rows to grow into); ``_vowelRowTier`` in the JS
+    renderer used to misclassify it as ``"top"`` and let cells
+    grow downward into nothing.
+    """
 
     logical_row: int
     label: str
     grid_row: int
     chart_y: float
+    tier: str = "middle"
 
 
 @dataclass(frozen=True)
@@ -2386,12 +2397,20 @@ def build_vowel_chart_geometry(
                 display_y_by_row[ri] = cursor + slot_height / 2
             cursor += slot_height
 
+    if len(populated_logical_rows) == 1:
+        _row_tier = {populated_logical_rows[0]: "only"}
+    else:
+        _row_tier = {
+            populated_logical_rows[0]: "top",
+            populated_logical_rows[-1]: "bottom",
+        }
     rows = tuple(
         VowelChartRow(
             logical_row=ri,
             label=ROW_LABELS[ri],
             grid_row=logical_row_to_grid_row[ri],
             chart_y=display_y_by_row[ri],
+            tier=_row_tier.get(ri, "middle"),
         )
         for ri in populated_logical_rows
     )

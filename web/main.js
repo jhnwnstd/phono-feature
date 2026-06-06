@@ -1329,6 +1329,9 @@ function _buildVowelChart(chart) {
         rowLabel.style.setProperty("--row-left", leftNorm.toFixed(5));
         dataEl.appendChild(rowLabel);
     }
+    const rowTierByLogical = new Map(
+        (chart.rows || []).map((r) => [r.logical_row, r.tier || "middle"]),
+    );
     for (const cell of chart.cells) {
         // Multiple vowels can map to the same chart cell (the
         // classic case is ə / ɜ / ɚ all landing in open-mid central
@@ -1375,16 +1378,15 @@ function _buildVowelChart(chart) {
         target.style.top = (cell.chart_y * 100) + "%";
         target.style.setProperty("--pair-side", String(cell.pair_side));
         // Tag the row tier so CSS can anchor cells differently by
-        // position: top-row cells anchor their TOP at chart_y so
-        // a multi-entry stack hangs INTO the chart instead of
-        // overflowing above; bottom-row cells anchor their BOTTOM
-        // at chart_y so they grow upward into the chart. Middle
-        // rows stay centred (current default). Without this,
-        // PHOIBLE inventories like Korean (7+6 entries stacked at
-        // Close) render with the upper half of the stack sitting
-        // OUTSIDE the silhouette, above the chart title.
-        const tier = _vowelRowTier(cell.row, chart.rows);
-        if (tier !== "middle") {
+        // tier (top / bottom / middle / only) comes from the
+        // shared geometry so the renderer never re-derives it.
+        // top/bottom anchor cells so multi-entry stacks grow INTO
+        // the chart; middle/only stay centred (default transform).
+        // The shared classifier handles single-row inventories
+        // correctly; the previous JS-side classifier misread them
+        // as "top" and let cells grow downward into nothing.
+        const tier = rowTierByLogical.get(cell.row);
+        if (tier === "top" || tier === "bottom") {
             target.dataset.rowTier = tier;
         }
         dataEl.appendChild(target);
@@ -1674,19 +1676,6 @@ function _wireVowelDiphthongFocus(dataEl) {
     dataEl.addEventListener("focusout", (ev) => {
         if (segFromEvent(ev)) setFocus(null);
     });
-}
-
-/** Classify a cell's row by its position in the populated row
- *  list: top row (index 0) -> "top"; bottom row -> "bottom";
- *  middle -> "middle". The renderer uses this to pick the cell's
- *  vertical anchor so tall stacks at the top row hang DOWN from
- *  ``chart_y`` rather than centring (which lets the upper half
- *  overflow above the silhouette). */
-function _vowelRowTier(row, rows) {
-    if (!Array.isArray(rows) || rows.length === 0) return "middle";
-    if (row === rows[0].logical_row) return "top";
-    if (row === rows[rows.length - 1].logical_row) return "bottom";
-    return "middle";
 }
 
 /** Build a single vowel-cell button from an IPA segment string. */

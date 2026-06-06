@@ -503,6 +503,7 @@ def _vowel_chart_summary(
                 "label": row.label,
                 "grid_row": row.grid_row,
                 "chart_y": row.chart_y,
+                "tier": row.tier,
             }
             for row in geometry.rows
         ],
