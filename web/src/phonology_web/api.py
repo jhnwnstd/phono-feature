@@ -489,12 +489,12 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name
     _invalidate_analysis_caches()
-    descriptor = provider.descriptor(inventory_id)
-    provenance = (
-        f"PHOIBLE / {descriptor.language_name} ({descriptor.source_short})"
-        if descriptor is not None
-        else "PHOIBLE"
-    )
+    # ``Inventory.metadata['feature_source']`` carries the bake-
+    # time provenance ("PHOIBLE / Korean (Eurasian Phonologies)").
+    # Mirrors the desktop ``_open_phoible_picker`` path so both
+    # surfaces show the same chip text.
+    feature_source = inventory.metadata.get("feature_source") or "PHOIBLE"
+    provenance = f"{feature_source} / {inventory.name}"
     return build_inventory_summary(_engine, _inventory_name, provenance)
 
 
