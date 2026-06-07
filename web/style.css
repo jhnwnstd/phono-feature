@@ -183,6 +183,27 @@ body {
   color: var(--btn-primary-text);
   border-color: var(--accent);
 }
+/* Wildcard (match-mode) toggle. Sized + accented like #cb-btn so
+   the two icon toggles read as a paired chrome cluster. When
+   wildcard mode is active (aria-pressed="true"), the button takes
+   the accent fill so the user can tell at a glance that natural-
+   class results are relaxed. */
+#match-mode-btn {
+  width: var(--control-h-md);
+  padding: 0;
+  font-size: var(--font-size-base);
+  margin-right: var(--space-xs);
+}
+#match-mode-btn[aria-pressed="true"] {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#match-mode-btn[aria-pressed="true"]:hover {
+  background: var(--accent);
+  color: var(--btn-primary-text);
+  border-color: var(--accent);
+}
 /* Pencil-icon rename button. Sized like #theme-btn so square-icon
    buttons share one footprint. Sits next to the picker so the
    "edit the displayed inventory" affordance is local to its target. */

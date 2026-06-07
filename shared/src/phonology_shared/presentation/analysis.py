@@ -25,9 +25,15 @@ from phonology_shared.presentation.palette import C
 if TYPE_CHECKING:
     from phonology_shared.theory.feature_engine import (
         FeatureEngine,
+        MatchMode,
         NaturalClassCompletion,
     )
 
+# Imported eagerly (not under TYPE_CHECKING) because the renderer
+# branches on it at runtime to pick wildcard vs. strict labels.
+from phonology_shared.theory.feature_engine import (  # noqa: E402
+    MatchMode as _MatchMode,
+)
 
 # --- chip + paragraph primitives ---------------------------------
 
@@ -126,14 +132,43 @@ def _plural(n: int, singular: str, plural: str | None = None) -> str:
 # --- spec-list rendering -----------------------------------------
 
 
-def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
+_STRICT_SPEC_LABEL_SINGULAR = "Minimal specification"
+_STRICT_SPEC_LABEL_PLURAL = "Minimal specifications"
+# Wildcard bundles are minimal COMPATIBILITY specifications, not
+# minimal strict specs: they characterise the selection under
+# wildcard matching (a "+f" constraint excludes only explicit -f).
+# The distinct label keeps users from reading them as strict
+# bundles that would round-trip in the feat pane's default mode.
+_WILDCARD_SPEC_LABEL_SINGULAR = "Minimal compatible specification"
+_WILDCARD_SPEC_LABEL_PLURAL = "Minimal compatible specifications"
+
+
+def _spec_labels(mode: "MatchMode") -> tuple[str, str]:
+    """Return ``(singular, plural)`` heading labels for a spec
+    list rendered under ``mode``."""
+    if mode is _MatchMode.WILDCARD:
+        return _WILDCARD_SPEC_LABEL_SINGULAR, _WILDCARD_SPEC_LABEL_PLURAL
+    return _STRICT_SPEC_LABEL_SINGULAR, _STRICT_SPEC_LABEL_PLURAL
+
+
+def _render_spec_list(
+    specs: Sequence[Mapping[str, str]],
+    *,
+    mode: "MatchMode" = _MatchMode.STRICT,
+) -> str:
     """Render minimal feature specifications as numbered HTML rows.
 
     Drops ``0`` values (under-specification is implicit), collapses
     rows that become identical after the drop, and omits the
     ``1.`` numbering when only one row remains. Returns ``""`` if
     nothing's left to show.
+
+    ``mode`` selects the heading label: strict bundles read
+    "Minimal specification:" while wildcard bundles read
+    "Minimal compatible specification:" so the two flavours are
+    visually distinct.
     """
+    singular, plural = _spec_labels(mode)
     seen: set[tuple[tuple[str, str], ...]] = set()
     chip_rows: list[str] = []
     for spec in specs:
@@ -157,15 +192,12 @@ def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
     if not chip_rows:
         return ""
     if len(chip_rows) == 1:
-        return f"<p><b>Minimal specification:</b></p>" f"<p>{chip_rows[0]}</p>"
+        return f"<p><b>{singular}:</b></p>" f"<p>{chip_rows[0]}</p>"
     numbered = "<br>".join(
         f"<span style='color:{C['text_dim']}'>{i + 1}.</span> {row}"
         for i, row in enumerate(chip_rows)
     )
-    return (
-        f"<p><b>Minimal specifications ({len(chip_rows)}):</b></p>"
-        f"<p>{numbered}</p>"
-    )
+    return f"<p><b>{plural} ({len(chip_rows)}):</b></p>" f"<p>{numbered}</p>"
 
 
 # --- engine-side query helper ------------------------------------
@@ -173,35 +205,43 @@ def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
 
 def _render_completion_specs(
     bundles: Sequence[Mapping[str, str]],
+    *,
+    mode: "MatchMode" = _MatchMode.STRICT,
 ) -> str:
-    """Render the minimal specs of a completion.
+    """Render the minimal specs of a completion under ``mode``.
 
     Renders the universal-class line when the bundle is the empty
     bundle (the completed class is the entire inventory), otherwise
     dispatches to :py:func:`_render_spec_list` (which handles the
-    singular vs "Minimal specifications (N)" headings).
+    mode-specific headings).
     """
+    singular, _ = _spec_labels(mode)
     if bundles and not bundles[0]:
         return (
-            f"<p><b>Minimal specification:</b>"
+            f"<p><b>{singular}:</b>"
             f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"
         )
-    return _render_spec_list(bundles)
+    return _render_spec_list(bundles, mode=mode)
 
 
-def _render_matching_segments(matching: Sequence[str]) -> str:
+def _render_matching_segments(
+    matching: Sequence[str],
+    *,
+    mode: "MatchMode" = _MatchMode.STRICT,
+) -> str:
     """HTML for the matching-segments answer of a feature query.
 
-    ``"none"`` when empty; otherwise ``"Matching N segment(s):"``
-    followed by the chips. Used by ``render_features_tab_feat`` so
-    the answer line shares one source of truth.
+    Strict: "Matching N segment(s):". Wildcard tacks "(wildcard)"
+    onto the heading so the relaxed result reads as visually
+    distinct from a strict match.
     """
     if not matching:
         return f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
     n = len(matching)
     chips = _segment_chip_strip(matching)
+    qualifier = " (wildcard)" if mode is _MatchMode.WILDCARD else ""
     return (
-        f"<p><b>Matching {_plural(n, 'segment')} ({n}):</b></p>"
+        f"<p><b>Matching {_plural(n, 'segment')} ({n}){qualifier}:</b></p>"
         f"<p>{chips}</p>"
     )
 
@@ -271,33 +311,34 @@ def compute_contrastive(
     return result
 
 
-def _render_completion_body(completion: NaturalClassCompletion) -> str:
-    """Class-pane content for a single selection's completion.
+def _render_completion_body(
+    completion: NaturalClassCompletion,
+    *,
+    mode: "MatchMode" = _MatchMode.STRICT,
+) -> str:
+    """Class-pane content for a single selection's completion under
+    ``mode``.
 
     Hard concept boundary:
 
     * ``already_natural_class``: render
-      ``selected_minimal_bundles``, the minimal feature spec(s)
-      of the SELECTED set (Concept A).
+      ``selected_minimal_bundles`` — minimal strict OR compatible
+      bundles depending on ``mode``.
     * ``one_minimal_completion`` / ``multiple_minimal_completions``:
-      render the "N segments needed for natural class" chip strip
-      alone (Concept B). The completed class's minimal specs (if
-      anyone wanted them) would be Concept A applied to
-      ``S ∪ additions`` and are NOT carried on the completion
-      result. The not-a-natural-class UI does not display them, so
-      the engine does not pay the hitting-set search cost.
+      render the "N segments needed for X natural class" line
+      where X is "wildcard" or absent (strict default).
     """
     if completion.status == "already_natural_class":
-        return _render_completion_specs(completion.selected_minimal_bundles)
-    # Engine contract (NaturalClassCompletion docstring): additions
-    # is non-empty whenever status isn't "already_natural_class".
-    # additions is tuple-of-tuples; current solver produces a single
-    # completion, pick the first.
+        return _render_completion_specs(
+            completion.selected_minimal_bundles, mode=mode
+        )
     additions = completion.additions[0]
     n = len(additions)
     chips = _segment_chip_strip(additions, TagColor.NEUTRAL)
+    qualifier = " wildcard" if mode is _MatchMode.WILDCARD else ""
     return (
-        f"<p><b>{n} {_plural(n, 'segment')} needed for natural class:</b></p>"
+        f"<p><b>{n} {_plural(n, 'segment')} needed for"
+        f"{qualifier} natural class:</b></p>"
         f"<p>{chips}</p>"
     )
 
@@ -459,45 +500,57 @@ def render_selection_summary_feat(feature_dict: dict[str, str]) -> str:
     return f"<p><b>Query:</b> {chips}</p>"
 
 
+def _wildcard_badge() -> str:
+    """Small inline badge prepended to wildcard Class-tab output so
+    users see at a glance that the verdict applies under wildcard
+    matching, not strict. Rendered as a coloured tag so it lines
+    up visually with the other inline chips in the tab body."""
+    return f"<p>{_tag('wildcard matching', TagColor.NEUTRAL)}</p>"
+
+
 def render_class_tab_seg(
     segs: list[str],
     completion: NaturalClassCompletion,
+    *,
+    mode: "MatchMode" = _MatchMode.STRICT,
 ) -> str:
-    """Class tab content for SEG mode.
+    """Class tab content for SEG mode under ``mode``.
 
-    The Yes/No verdict is no longer shown as text; the surrounding
-    tab colour conveys that (driven by ``analysis_tabs.class_state``).
-    The body carries the substantive answer:
-
-    * ``already_natural_class``: the minimal feature spec(s) of the
-      selection.
-    * ``one_minimal_completion`` / ``multiple_minimal_completions``:
-      "N segments needed for natural class:" + chips + the minimal
-      spec(s) of the completed class.
-
-    The universal class (whole inventory containment) is always a
-    valid completion, so there is no "no completion possible"
-    fall-through.
+    Wildcard verdicts open with a ``wildcard matching`` badge so
+    they are visually distinct from strict verdicts (which would
+    otherwise render identical chip strips with subtly different
+    semantics).
     """
     if not segs:
         return _muted_italic_p("Click a segment to inspect it.")
-    return _render_completion_body(completion)
+    body = _render_completion_body(completion, mode=mode)
+    if mode is _MatchMode.WILDCARD:
+        return _wildcard_badge() + body
+    return body
 
 
 def render_class_tab_feat(
     feature_dict: dict[str, str],
     matching: list[str],
+    *,
+    mode: "MatchMode" = _MatchMode.STRICT,
 ) -> str:
-    """Class tab content for FEAT mode: list of matching segments
-    (the result of the query) + count. The query itself is in the
-    persistent header above the tabs, so this tab is purely the
-    answer.
+    """Class tab content for FEAT mode under ``mode``: list of
+    matching segments (the result of the query) + count.
+
+    Wildcard FEAT-mode queries get the ``wildcard matching``
+    badge for the same reason SEG-mode wildcard verdicts do —
+    the matching set differs in meaning even when it happens to
+    coincide with the strict result.
     """
     if not feature_dict:
         return _muted_italic_p(
             "Set + or − on a feature to find matching segments."
         )
-    return _render_matching_segments(matching)
+    body = _render_matching_segments(matching, mode=mode)
+    if mode is _MatchMode.WILDCARD:
+        return _wildcard_badge() + body
+    return body
 
 
 def render_features_tab_seg(

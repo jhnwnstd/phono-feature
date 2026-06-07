@@ -127,9 +127,15 @@ from phonology_shared.presentation.view_models import (
     summarize_segment_selection,
 )
 from phonology_shared.theory import FeatureEngine
+from phonology_shared.theory.feature_engine import MatchMode
 
 _engine: FeatureEngine | None = None
 _inventory_name: str = ""
+# Active matching mode for natural-class queries. Defaults to
+# STRICT — the wildcard ("Allow underspecified") UI toggle is opt-
+# in. JS persists the choice through ``localStorage`` and replays
+# it via :py:func:`set_match_mode` after a reload.
+_match_mode: MatchMode = MatchMode.STRICT
 
 # Allowed values for the two-axis palette state. Kept here (not in
 # palette.py) so the bridge validators can reject bad strings at
@@ -204,7 +210,9 @@ def load_inventory_json(
         if source_label and source_label != "uploaded"
         else "uploaded"
     )
-    return build_inventory_summary(_engine, _inventory_name, provenance)
+    return build_inventory_summary(
+        _engine, _inventory_name, provenance, mode=_match_mode
+    )
 
 
 def _invalidate_analysis_caches() -> None:
@@ -535,7 +543,9 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     # surfaces show the same chip text.
     feature_source = inventory.metadata.get("feature_source") or "PHOIBLE"
     provenance = f"{feature_source} / {inventory.name}"
-    return build_inventory_summary(_engine, _inventory_name, provenance)
+    return build_inventory_summary(
+        _engine, _inventory_name, provenance, mode=_match_mode
+    )
 
 
 def create_new_inventory(
@@ -610,7 +620,9 @@ def create_new_inventory(
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name
     _invalidate_analysis_caches()
-    return build_inventory_summary(_engine, _inventory_name, "builder / new")
+    return build_inventory_summary(
+        _engine, _inventory_name, "builder / new", mode=_match_mode
+    )
 
 
 def get_cycle_ladder() -> dict[str, str]:
@@ -737,7 +749,9 @@ def commit_inventory_from_grid(
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name
     _invalidate_analysis_caches()
-    return build_inventory_summary(_engine, _inventory_name, "builder / grid")
+    return build_inventory_summary(
+        _engine, _inventory_name, "builder / grid", mode=_match_mode
+    )
 
 
 def rename_current_inventory(new_name: str) -> dict[str, Any]:
@@ -883,21 +897,17 @@ def best_segment_n_cols_for_groups(
 
 @_translate_engine_errors
 def analyze_segments(segs: list[str]) -> SegmentSelectionSummary:
-    """SEG-mode analysis. Returns the per-tab ``analysis_tabs``
-    payload plus the inputs JS needs to derive each row/button's
-    state inline (mirroring the desktop's _update_seg_to_feat).
-
-    Cache hit on a repeated selection returns in ~5 us; a fresh
-    selection takes ~30 ms for the feature math + HTML render.
-    Cache is invalidated by ``load_inventory_json`` and
-    ``set_active_theme``.
+    """SEG-mode analysis under the active :py:class:`MatchMode`.
+    Returns the per-tab ``analysis_tabs`` payload plus the inputs
+    JS needs to derive each row/button's state inline (mirroring
+    the desktop's _update_seg_to_feat). Cache is keyed on
+    ``(selection, mode)`` so a mode toggle does not return stale
+    strict results from a wildcard query (or vice versa).
 
     Validates that every entry of ``segs`` is a string present in
     the active inventory. A stale segment (selected before an
     inventory swap), a typo, or a non-string element gets rejected
-    here so the engine never sees garbage. Without this guard a
-    stale segment raises ``KeyError`` inside the engine and surfaces
-    in JS as a raw runtime error.
+    here so the engine never sees garbage.
     """
     engine = _require_engine()
     bad = [
@@ -907,24 +917,28 @@ def analyze_segments(segs: list[str]) -> SegmentSelectionSummary:
         raise ValidationError(
             (f"unknown segment(s) in current inventory: {bad!r}",)
         )
-    return _analyze_segments_cached(tuple(segs))
+    return _analyze_segments_cached(tuple(segs), str(_match_mode))
 
 
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=512)
 def _analyze_segments_cached(
     segs_tuple: tuple[str, ...],
+    mode_str: str,
 ) -> SegmentSelectionSummary:
-    """SEG analysis result; computed by the shared desktop helpers."""
+    """SEG analysis result. ``mode_str`` is the ``MatchMode`` value
+    as a wire string so it composes with ``lru_cache``'s hashability
+    requirement (the enum already is hashable; using the string keeps
+    the cache key human-readable in profiles)."""
     engine = _require_engine()
-    return summarize_segment_selection(engine, list(segs_tuple))
+    mode = MatchMode(mode_str)
+    return summarize_segment_selection(engine, list(segs_tuple), mode=mode)
 
 
 @_translate_engine_errors
 def analyze_features(spec: dict[str, str]) -> FeatureQuerySummary:
-    """FEAT-mode analysis. Returns the per-tab ``analysis_tabs``
-    payload plus the matching segment list. JS derives
-    matched/unmatched state per button inline (mirroring
-    _update_feat_to_seg).
+    """FEAT-mode analysis under the active :py:class:`MatchMode`.
+    Returns the per-tab ``analysis_tabs`` payload plus the matching
+    segment list.
 
     Validates that every key in ``spec`` is a feature present in
     the active inventory and every value is one of ``"+" / "-"
@@ -932,9 +946,11 @@ def analyze_features(spec: dict[str, str]) -> FeatureQuerySummary:
     :py:func:`analyze_segments`.
 
     **Display invariant:** ``matching`` always equals
-    ``engine.find_segments(spec)``, so the highlighted segments
-    in the segment pane always form a strict natural class
-    characterised by the active query.
+    ``engine.find_segments(spec, mode=active_mode)``. Under
+    strict, the highlighted segments form a strict natural class
+    characterised by the query; under wildcard, they form the
+    wildcard natural class (segments whose value is unspecified
+    for queried features are included).
     """
     engine = _require_engine()
     bad_keys = [
@@ -952,15 +968,69 @@ def analyze_features(spec: dict[str, str]) -> FeatureQuerySummary:
                 f"of {sorted(VALID_VALUES)}",
             )
         )
-    return _analyze_features_cached(tuple(spec.items()))
+    return _analyze_features_cached(tuple(spec.items()), str(_match_mode))
 
 
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=512)
 def _analyze_features_cached(
     spec_items: tuple[tuple[str, str], ...],
+    mode_str: str,
 ) -> FeatureQuerySummary:
     engine = _require_engine()
-    return summarize_feature_query(engine, dict(spec_items))
+    mode = MatchMode(mode_str)
+    return summarize_feature_query(engine, dict(spec_items), mode=mode)
+
+
+@_translate_engine_errors
+def get_match_mode() -> str:
+    """Wire-stable string of the active :py:class:`MatchMode`.
+    JS reads this on boot (after replaying its persisted
+    preference) and uses it to drive the toolbar toggle's pressed
+    state."""
+    return str(_match_mode)
+
+
+@_translate_engine_errors
+def set_match_mode(mode_str: str) -> str:
+    """Toggle the active matching mode. Accepts the wire strings
+    ``"strict"`` and ``"wildcard"``; rejects anything else.
+    Clears the analysis caches because cached results are mode-
+    keyed (the key string is part of the lru_cache key, so the
+    new mode will compute fresh — clearing is belt-and-suspenders
+    for the rare case where the cache is full of stale strict
+    entries we don't want to keep alive).
+
+    Returns the canonical wire string of the new active mode so
+    JS can confirm the round-trip.
+    """
+    global _match_mode
+    try:
+        mode = MatchMode(mode_str)
+    except ValueError as exc:
+        raise ValidationError(
+            (
+                f"invalid match mode {mode_str!r}; expected one of "
+                f"{[str(m) for m in MatchMode]}",
+            )
+        ) from exc
+    _match_mode = mode
+    _invalidate_analysis_caches()
+    return str(_match_mode)
+
+
+@_translate_engine_errors
+def inventory_summary_for_mode(mode_str: str) -> dict[str, Any]:
+    """Rebuild the inventory summary under ``mode_str``. The
+    feature pane consumes ``active_features`` from the result,
+    which differs by mode (strict drops all-``0`` columns;
+    wildcard surfaces them). Called by JS after a
+    :py:func:`set_match_mode` toggle so the feature pane re-renders
+    with the new active-feature list. Returns the full
+    :py:func:`build_inventory_summary` payload so JS can also
+    refresh anything else mode-dependent."""
+    engine = _require_engine()
+    mode = MatchMode(mode_str)
+    return build_inventory_summary(engine, _inventory_name, mode=mode)
 
 
 def validation_issues_from_error(exc: Any) -> list[str]:

@@ -32,6 +32,7 @@ from phonology_shared.presentation.layout import distribute_feature_groups
 from phonology_shared.presentation.palette import ClassState
 from phonology_shared.theory.feature_engine import (
     FeatureCategory,
+    MatchMode,
     NaturalClassCompletion,
 )
 
@@ -93,6 +94,13 @@ AnalysisTabsPayload = TypedDict(
         "contrasts": str,
         "contrasts_enabled": bool,
         "class_state": ClassState,
+        # The :py:class:`MatchMode` value that produced this
+        # payload's class verdict (a wire-stable string ``"strict"``
+        # / ``"wildcard"``). Carried on every payload so renderers
+        # never confuse strict and wildcard results — the Class tab
+        # uses it to badge wildcard verdicts and to pick the right
+        # label for the minimal-bundle line.
+        "matching_mode": str,
     },
 )
 
@@ -104,6 +112,11 @@ class SegmentSelectionSummary(TypedDict):
     (``api.analyze_segments`` then JS unpack). Pins the exact key
     set so a future drop / rename surfaces in mypy here instead of
     at a JS bridge boundary later.
+
+    The ``matching_mode`` field carries the :py:class:`MatchMode`
+    value used to produce the natural-class verdict and minimal
+    bundles. Renderers consult it to label wildcard results
+    distinctly.
     """
 
     analysis_tabs: AnalysisTabsPayload
@@ -113,6 +126,7 @@ class SegmentSelectionSummary(TypedDict):
     contrastive: list[str]
     segment_states: dict[str, SegmentState]
     feature_rows: dict[str, FeatureRowState]
+    matching_mode: str
 
 
 class FeatureQuerySummary(TypedDict):
@@ -122,17 +136,25 @@ class FeatureQuerySummary(TypedDict):
     The ``segment_states`` map carries :py:class:`SegmentState`
     members so consumers compare against ``SegmentState.MATCHED``
     instead of bare strings.
+
+    The ``matching_mode`` field tags the result with the
+    :py:class:`MatchMode` used to compute ``matching``. Wildcard
+    results carry a UI badge so they are never confused with
+    strict matches.
     """
 
     analysis_tabs: AnalysisTabsPayload
     matching: list[str]
     segment_states: dict[str, SegmentState]
+    matching_mode: str
 
 
 def build_inventory_summary(
     engine: FeatureEngine,
     inventory_name: str,
     provenance: str | None = None,
+    *,
+    mode: MatchMode = MatchMode.STRICT,
 ) -> dict[str, Any]:
     """Shape the inventory summary both frontends need after a load.
 
@@ -145,6 +167,12 @@ def build_inventory_summary(
     Phonologies)"``, ``"bundled / english_features"``,
     ``"PanPhon / IPA Help"``). Surfaced by both renderers so the
     user can tell the source after the picker dialog closes.
+
+    ``mode`` selects between strict and wildcard semantics for the
+    derived ``active_features`` list. Under wildcard, every
+    inventory feature is queryable (a request relaxes against
+    unspecified values), so the feature pane surfaces the full
+    roster instead of the strict-only filtered list.
     """
     grouped = engine.grouped_segments
     consonant_groups: list[dict[str, Any]] = []
@@ -154,11 +182,11 @@ def build_inventory_summary(
             vowel_segs = list(segs)
         else:
             consonant_groups.append({"name": manner, "segments": list(segs)})
-    # ``active_features`` drops columns where every segment is ``0``;
-    # both UIs use it to decide which feature rows to show. Without
-    # this filter, Hindi PHOIBLE renders a ``LowerLarynx`` row that
-    # cannot select any segment (Hindi has no implosives).
-    active = list(engine.active_features)
+    # In STRICT mode this drops columns where every segment is ``0``
+    # (a ``+f`` request would return ∅). In WILDCARD mode every
+    # feature stays — a request relaxes against unspecified values
+    # so the row IS interactable.
+    active = list(engine.active_features_for_mode(mode))
     return {
         "name": inventory_name,
         "provenance": provenance,
@@ -168,12 +196,15 @@ def build_inventory_summary(
         "groups": consonant_groups,
         "feature_groups": _grouped_features(active),
         "vowel_chart": _vowel_chart_summary(engine, vowel_segs),
+        "matching_mode": str(mode),
     }
 
 
 def summarize_segment_selection(
     engine: FeatureEngine,
     segs: list[str],
+    *,
+    mode: MatchMode = MatchMode.STRICT,
 ) -> SegmentSelectionSummary:
     """SEG-mode analysis payload shared by desktop and web.
 
@@ -189,26 +220,39 @@ def summarize_segment_selection(
     * ``contrastive``: feature names that split the selection.
     * ``segment_states``: ``{seg: state}`` for every segment button.
     * ``feature_rows``: per-feature visual-state payloads.
+    * ``matching_mode``: the :py:class:`MatchMode` value the engine
+      ran under to compute ``suggested`` + the class verdict.
+
+    The ``common``, ``contrastive``, and ``feature_categories``
+    derivations are mode-INDEPENDENT (they describe the data
+    distribution of the selection, not the matching policy);
+    ``suggested`` and the class verdict are mode-DEPENDENT.
     """
+    mode_str = str(mode)
     default_seg_states = _default_segment_states(engine)
     if not segs:
         # Only the empty-selection branch consumes
         # ``default_feat_rows``; allocating it on every non-empty
         # call cost ~30 ms / 1000 calls in the W1 profile.
         default_feat_rows = _default_feature_rows(engine)
-        empty_completion = engine.complete_to_minimal_natural_class([])
+        empty_completion = engine.complete_to_minimal_natural_class(
+            [], mode=mode
+        )
         return {
-            "analysis_tabs": _seg_tabs(engine, [], {}, {}, empty_completion),
+            "analysis_tabs": _seg_tabs(
+                engine, [], {}, {}, empty_completion, mode=mode
+            ),
             "selected": [],
             "suggested": [],
             "common": {},
             "contrastive": [],
             "segment_states": default_seg_states,
             "feature_rows": default_feat_rows,
+            "matching_mode": mode_str,
         }
     if len(segs) == 1:
         feats = engine.get_segment_features(segs[0])
-        completion = engine.complete_to_minimal_natural_class(segs)
+        completion = engine.complete_to_minimal_natural_class(segs, mode=mode)
         categories = engine.feature_categories(segs)
         row_states = _default_feature_rows(engine)
         for feat in engine.features:
@@ -234,17 +278,20 @@ def summarize_segment_selection(
                 seg_states[seg] = SegmentState.SUGGESTED
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
         return {
-            "analysis_tabs": _seg_tabs(engine, segs, common, {}, completion),
+            "analysis_tabs": _seg_tabs(
+                engine, segs, common, {}, completion, mode=mode
+            ),
             "selected": list(segs),
             "suggested": list(suggested_segs),
             "common": common,
             "contrastive": [],
             "segment_states": seg_states,
             "feature_rows": row_states,
+            "matching_mode": mode_str,
         }
     common = engine.common_features(segs)
     contrastive = compute_contrastive(engine, segs)
-    completion = engine.complete_to_minimal_natural_class(segs)
+    completion = engine.complete_to_minimal_natural_class(segs, mode=mode)
     suggested = list(completion.additions[0] if completion.additions else ())
     # Seven-way classification per feature (single source of truth
     # for the semantic state -- see ``FeatureCategory``). The view-
@@ -280,7 +327,7 @@ def summarize_segment_selection(
             seg_states[seg] = SegmentState.DEFAULT
     return {
         "analysis_tabs": _seg_tabs(
-            engine, segs, common, contrastive, completion
+            engine, segs, common, contrastive, completion, mode=mode
         ),
         "selected": list(segs),
         "suggested": suggested,
@@ -288,30 +335,35 @@ def summarize_segment_selection(
         "contrastive": list(contrastive),
         "segment_states": seg_states,
         "feature_rows": row_states,
+        "matching_mode": mode_str,
     }
 
 
 def summarize_feature_query(
     engine: FeatureEngine,
     spec: dict[str, str],
+    *,
+    mode: MatchMode = MatchMode.STRICT,
 ) -> FeatureQuerySummary:
     """FEAT-mode analysis payload shared by desktop and web.
 
     **Invariant:** ``matching`` always equals
-    ``engine.find_segments(spec)``. By construction the segments
-    that strictly match a feature query form a strict natural
-    class characterised by the query itself; the FEAT-mode
-    display contract requires every highlighted segment to belong
-    to that natural class.
+    ``engine.find_segments(spec, mode=mode)``. Under strict, the
+    matching set is the strict natural class characterised by
+    the query. Under wildcard, the matching set is the wildcard
+    natural class (broader; includes segments whose value is
+    unspecified for queried features).
     """
+    mode_str = str(mode)
     segment_states = _default_segment_states(engine)
     if not spec:
         return {
-            "analysis_tabs": _feat_tabs({}, []),
+            "analysis_tabs": _feat_tabs({}, [], mode=mode),
             "matching": [],
             "segment_states": segment_states,
+            "matching_mode": mode_str,
         }
-    matching = engine.find_segments(spec)
+    matching = engine.find_segments(spec, mode=mode)
     matching_set = set(matching)
     for seg in engine.segments:
         segment_states[seg] = (
@@ -320,9 +372,10 @@ def summarize_feature_query(
             else SegmentState.UNMATCHED
         )
     return {
-        "analysis_tabs": _feat_tabs(spec, matching),
+        "analysis_tabs": _feat_tabs(spec, matching, mode=mode),
         "matching": matching,
         "segment_states": segment_states,
+        "matching_mode": mode_str,
     }
 
 
@@ -332,25 +385,15 @@ def _seg_tabs(
     common: dict[str, str],
     contrastive: dict[str, dict[str, list[str]]],
     completion: NaturalClassCompletion,
+    *,
+    mode: MatchMode = MatchMode.STRICT,
 ) -> AnalysisTabsPayload:
     """Build the per-tab HTML payload for the SEG-mode analysis pane.
 
-    Keys map to the three tabs the desktop and web render:
-    ``"class"``, ``"features"``, ``"contrasts"``. Plus a
-    ``"selection"`` line for the persistent header above the tabs,
-    a ``"contrasts_enabled"`` flag that is mode-driven (True for
-    SEG mode, False for FEAT) so tab availability tracks the active
-    pane rather than specific selection contents, and a
-    ``"class_state"`` that colours the Class tab itself: green
-    ``"natural"`` when the selection forms a natural class, red
-    ``"not_natural"`` when it doesn't, ``"neutral"`` for the empty
-    selection.
+    Stamps the active :py:class:`MatchMode` into the payload so
+    the renderer can label wildcard verdicts distinctly without
+    re-deriving the mode from elsewhere.
     """
-    # Class-tab background colour cue. Single-segment selections stay
-    # neutral (white). Every singleton is trivially a "natural class"
-    # of itself, so colouring it green would be true but uninformative
-    # and just adds visual noise on every click. The cue lives on the
-    # multi-segment verdict where the answer is genuinely useful.
     if len(segs) >= 2:
         class_state = (
             ClassState.NATURAL
@@ -361,7 +404,7 @@ def _seg_tabs(
         class_state = ClassState.NEUTRAL
     return {
         "selection": render_selection_summary_seg(segs),
-        "class": render_class_tab_seg(segs, completion),
+        "class": render_class_tab_seg(segs, completion, mode=mode),
         "features": render_features_tab_seg(engine, segs, common),
         "contrasts": render_contrasts_tab_seg(engine, segs, contrastive),
         # Tab enable/disable is mode-driven, not selection-driven. SEG
@@ -370,27 +413,28 @@ def _seg_tabs(
         # selection isn't large enough yet.
         "contrasts_enabled": True,
         "class_state": class_state,
+        "matching_mode": str(mode),
     }
 
 
 def _feat_tabs(
     spec: dict[str, str],
     matching: list[str],
+    *,
+    mode: MatchMode = MatchMode.STRICT,
 ) -> AnalysisTabsPayload:
     """Same shape as :py:func:`_seg_tabs` but for FEAT mode. The
     Contrasts tab is never meaningful for a feature query, so
     ``contrasts_enabled`` is always False (the UI greys it out).
-    The selection header is intentionally empty: the query is
-    already explicit in the Features tab below, so duplicating
-    it above the tabs would just waste vertical room.
     """
     return {
         "selection": "",
-        "class": render_class_tab_feat(spec, matching),
+        "class": render_class_tab_feat(spec, matching, mode=mode),
         "features": render_features_tab_feat(spec),
         "contrasts": render_contrasts_tab_feat(),
         "contrasts_enabled": False,
         "class_state": ClassState.NEUTRAL,
+        "matching_mode": str(mode),
     }
 
 

@@ -45,6 +45,42 @@ _log = logging.getLogger(__name__)
 _EMPTY_BUNDLE: Mapping[str, str] = MappingProxyType({})
 
 
+class MatchMode(StrEnum):
+    """How feature-bundle requests are evaluated against segments.
+
+    ``STRICT`` (the historical default and the one the desktop +
+    web FEAT pane currently uses): a segment matches a requested
+    ``+``/``-`` only when its own feature value is that explicit
+    value. ``"0"`` is its OWN value; a request of ``+`` does not
+    match a segment whose feature is ``"0"``, and a request of
+    ``"0"`` returns only segments whose feature is unspecified.
+    This is the "round-trip" semantics
+    :py:meth:`FeatureEngine.find_all_minimal_bundles` relies on:
+    any bundle the engine returns, typed into the feat pane,
+    yields exactly the input set.
+
+    ``WILDCARD`` ("Allow underspecified"): a segment matches a
+    requested ``+``/``-`` unless its own feature value is the
+    OPPOSITE explicit value. ``"0"`` on a segment is compatible
+    with either polarity. A request of ``"0"`` carries no
+    constraint at all — wildcard mode reads it as "I don't care
+    about this feature," not "show me unspecified segments."
+    Users who want the latter stay in strict mode.
+
+    The two modes share the same membership data
+    (:py:attr:`FeatureEngine.plus_segs` / ``minus_segs`` /
+    ``spec_segs``); only the lookup arithmetic differs. Wildcard
+    mode is opt-in everywhere: every engine method's ``mode``
+    keyword defaults to ``MatchMode.STRICT``, and the payload
+    returned to renderers carries a ``matching_mode`` field so
+    strict and wildcard results can never be confused at the UI
+    layer.
+    """
+
+    STRICT = "strict"
+    WILDCARD = "wildcard"
+
+
 class FeatureCategory(StrEnum):
     """Semantic classification of one feature against a selected set.
 
@@ -200,11 +236,16 @@ class FeatureEngine:
         # compute_natural_class both delegate to
         # find_all_minimal_bundles, so calling both on the same input
         # would re-run an exponential-worst-case search. Keyed by
-        # frozenset(segments). Stored as tuples of MappingProxyType so
-        # a caller cannot mutate the cached result and corrupt
-        # subsequent queries on the same input.
+        # ``(frozenset(segments), match_mode)`` because the same
+        # selection yields DIFFERENT minimal bundles under strict vs.
+        # wildcard semantics (wildcard's candidate space is wider, so
+        # its minimal bundles are typically shorter). Stored as
+        # tuples of MappingProxyType so a caller cannot mutate the
+        # cached result and corrupt subsequent queries on the same
+        # input.
         self._bundle_cache: dict[
-            frozenset[str], tuple[Mapping[str, str], ...]
+            tuple[frozenset[str], MatchMode],
+            tuple[Mapping[str, str], ...],
         ] = {}
         # Pre-escaped HTML-safe segment + feature labels. Analysis-pane
         # chip rendering (analysis.py:_segment_chip / _signed_feature_chip)
@@ -252,53 +293,32 @@ class FeatureEngine:
         if feature not in self.features:
             raise KeyError(f"Feature '{feature}' not found in inventory")
 
-    @staticmethod
-    def _feat_match(seg_val: str, spec_val: str) -> bool:
-        """Underspec-compatible value match: equal values, or the
-        segment's value is ``'0'`` (underspecified, treated as
-        wildcard against the spec). The spec's ``'0'`` is NOT
-        wild; only the segment side relaxes. Reached only via
-        :py:meth:`_find_segments_unsorted` with
-        ``underspec_compatible=True``; the strict default path
-        compares with plain ``==``.
-        """
-        return seg_val == spec_val or seg_val == "0"
-
-    def _is_natural_class_bool(self, segments: list[str]) -> bool:
+    def _is_natural_class_bool(
+        self,
+        segments: list[str],
+        *,
+        mode: MatchMode = MatchMode.STRICT,
+    ) -> bool:
         """Fast boolean: does ``segments`` form a natural class?
 
-        Strict semantics: a set ``S`` is a natural class iff there
-        exists a feature bundle ``B`` such that
-        ``find_segments(B) == S`` under the default strict equality
-        (``'0' != '+' != '-'``). This is the same predicate the user
-        gets when typing into the feat→seg pane, so the analysis
-        pane's "natural class" verdict and the typed-query round-
-        trip cannot disagree.
+        STRICT: a set ``S`` is a natural class iff some bundle
+        ``B`` satisfies ``find_segments(B, mode=STRICT) == S``.
 
-        Skips the minimal-bundle enumeration that
-        :py:meth:`find_all_minimal_bundles` performs and answers the
-        decision question directly using the precomputed membership
-        sets. Complexity is ``O(F + O*C)`` where F = features,
-        O = outside segments, C = candidate (feature, value) pairs.
-        Never exponential, no backtracking.
+        WILDCARD: same shape, with the wildcard candidate set
+        (``(f, "+")`` candidate iff no selected segment is
+        explicitly ``-f``; symmetric for ``-``). The wildcard
+        verdict is more permissive — more selections qualify.
 
-        Theory: under strict matching, a feature is a candidate for
-        the bundle iff every selected segment has the **same
-        explicit** value on it (``'0'`` segments disqualify the
-        feature). The set is a natural class iff those candidate
-        features collectively exclude every outside segment, where
-        "(f, +) excludes t" means t is not explicitly ``+`` on f
-        (including the case t is ``'0'``). If they do, taking ALL
-        candidates yields a valid characterising bundle; if they
-        don't, no subset does either.
+        Skips the minimal-bundle enumeration; answers the
+        decision question directly using the precomputed
+        membership sets. Complexity ``O(F + O*C)``.
         """
         if not segments:
-            # ``∅`` is not a strict natural class: no bundle ``B``
-            # satisfies ``find_segments(B) == ∅``. Matches the
-            # contract pinned by :py:meth:`find_all_minimal_bundles`.
+            # ``∅`` is not a natural class under either mode: no
+            # bundle ``B`` satisfies ``find_segments(B) == ∅``.
             return False
         selected: frozenset[str] = frozenset(segments)
-        cached = self._bundle_cache.get(selected)
+        cached = self._bundle_cache.get((selected, mode))
         if cached is not None:
             return len(cached) > 0
         all_segments = self._all_segments
@@ -310,12 +330,20 @@ class FeatureEngine:
             return True
         plus_segs = self.plus_segs
         minus_segs = self.minus_segs
+        if mode is MatchMode.WILDCARD:
+            covered: set[str] = set()
+            for feat, val in self._wildcard_candidate_constraints(selected):
+                # Wildcard (f, +) excludes only explicit -f
+                # segments; (f, -) excludes only explicit +f.
+                if val == "+":
+                    covered |= minus_segs[feat] & outside
+                else:
+                    covered |= plus_segs[feat] & outside
+                if covered == outside:
+                    return True
+            return covered == outside
         candidates = self._strict_candidate_constraints(selected)
-        # Outside coverage under strict matching: (f, +) excludes
-        # outside t iff t is NOT explicitly + on f. That's the
-        # complement of plus_segs[f] within outside, which includes
-        # both explicit '-' and '0' segments.
-        covered: set[str] = set()
+        covered = set()
         for feat, val in candidates.items():
             if val == "+":
                 covered |= outside - plus_segs[feat]
@@ -329,39 +357,42 @@ class FeatureEngine:
         self,
         feature_spec: Mapping[str, str],
         *,
-        underspec_compatible: bool = False,
+        mode: MatchMode = MatchMode.STRICT,
     ) -> list[str]:
         """Match segments against a feature spec; unsorted result.
 
-        Default is strict equality (the same matching rule the
-        user-typed feat->seg query uses). Computed via membership-
-        set intersections so it stays vertical-set-shaped like the
-        rest of the engine. A fresh ``find_segments(B)`` call is
-        an ``O(F)`` walk over the spec, intersecting the relevant
-        ``plus_segs[f]``, ``minus_segs[f]``, or
-        ``all_segments - spec_segs[f]`` (for ``'0'``) into the
-        running match set.
+        Both modes are membership-set intersections (vertical, not
+        per-segment scans):
 
-        With ``underspec_compatible=True``, the segment's ``'0'``
-        is treated as wildcard via :py:meth:`_feat_match`. No
-        engine method currently uses the underspec path; it is
-        kept on the public API for callers that want to gather a
-        candidate pool of segments not in explicit disagreement
-        with a query. That path still scans because the wildcard
-        rule isn't expressible as a single membership intersection.
+        STRICT — ``+`` matches only ``plus_segs[f]``, ``-`` matches
+        only ``minus_segs[f]``, and a requested ``"0"`` matches
+        only ``all - spec_segs[f]`` (segments with the feature
+        explicitly absent or ``"0"``). This is the user-typed
+        feat→seg query semantics and the round-trip rule
+        :py:meth:`find_all_minimal_bundles` relies on.
+
+        WILDCARD — ``+`` excludes only ``minus_segs[f]``, ``-``
+        excludes only ``plus_segs[f]``, and a requested ``"0"`` is
+        a no-op (no constraint added). ``"0"``-on-segment is
+        compatible with either polarity; the only thing wildcard
+        rules out is an explicit opposite. See
+        :py:class:`MatchMode` for the rationale.
+
+        Either way, a fresh call is ``O(F)`` over the spec.
         """
-        if underspec_compatible:
-            match = self._feat_match
-            matching = []
-            for segment, features in self.segments.items():
-                if all(
-                    match(features.get(f, "0"), v)
-                    for f, v in feature_spec.items()
-                ):
-                    matching.append(segment)
-            return matching
-        # Strict path: build the match set by membership intersection.
         matched: frozenset[str] = self._all_segments
+        if mode is MatchMode.WILDCARD:
+            for feature, value in feature_spec.items():
+                if value == "+":
+                    matched -= self.minus_segs[feature]
+                elif value == "-":
+                    matched -= self.plus_segs[feature]
+                # value == "0": wildcard interprets as "no
+                # constraint." A user who wants the explicit-
+                # underspec semantic stays in strict mode.
+                if not matched:
+                    break
+            return list(matched)
         for feature, value in feature_spec.items():
             if value == "+":
                 matched &= self.plus_segs[feature]
@@ -430,24 +461,25 @@ class FeatureEngine:
     @cached_property
     def active_features(self) -> tuple[str, ...]:
         """Features that are explicitly specified for at least one
-        segment in the inventory.
+        segment in the inventory. STRICT-mode filter.
 
         A feature qualifies when at least one segment has a value of
         ``+`` or ``-``. Features that are uniformly ``0`` (or
-        unspecified) across every segment are dropped because there
-        is nothing to display: every segment is unmarked, so the
-        row carries no information and can never participate in a
-        query. Features with all-``-`` values stay (the inventory
-        does specify a value, and ``-`` queries still select segments).
+        unspecified) across every segment are dropped because under
+        STRICT matching they can never participate in a query — a
+        ``+f`` request returns the empty set if no segment is
+        explicitly ``+f``. Features with all-``-`` values stay (the
+        inventory does specify a value, and ``-`` queries still
+        select segments).
 
-        Iterates raw inventory bundles so the case of feature keys
-        matches ``self.features`` and preserves the original feature
-        order so display layers keep their iteration model.
-
-        Both UIs consume this list to decide which feature rows to
-        show; before this lived on the engine, the desktop's
-        ``_populate_features`` had its own inline filter while the
-        web rendered every feature, producing visible drift.
+        Under WILDCARD matching, the inverse holds: a feature with
+        no explicit values is still queryable (a ``+f`` request
+        matches every segment because nothing contradicts it).
+        Callers that need the wildcard-aware list use
+        :py:meth:`active_features_for_mode`; this property stays
+        on the existing strict-only semantics so existing
+        consumers (the feature pane, the analysis renderer)
+        remain backward-compatible without a mode argument.
         """
         used: set[str] = set()
         for bundle in self._inventory.segments.values():
@@ -455,6 +487,20 @@ class FeatureEngine:
                 if val == "+" or val == "-":
                     used.add(feat)
         return tuple(f for f in self._inventory.features if f in used)
+
+    def active_features_for_mode(self, mode: MatchMode) -> tuple[str, ...]:
+        """Active-feature list appropriate for ``mode``.
+
+        STRICT: identical to :py:attr:`active_features` — the
+        all-``0`` filter applies.
+
+        WILDCARD: the full inventory feature roster. Wildcard
+        mode lets users query features that are uniformly
+        unspecified, so the feature pane must surface them.
+        """
+        if mode is MatchMode.WILDCARD:
+            return self._inventory.features
+        return self.active_features
 
     @cached_property
     def grouped_segments(self) -> dict[str, list[str]]:
@@ -494,24 +540,19 @@ class FeatureEngine:
         self,
         feature_spec: Mapping[str, str],
         *,
-        underspec_compatible: bool = False,
+        mode: MatchMode = MatchMode.STRICT,
     ) -> list[str]:
         """Sorted list of segments matching a (possibly partial) spec.
 
-        With ``underspec_compatible``, a segment's ``'0'`` is treated
-        as compatible with any spec value.
+        ``mode`` selects between :py:class:`MatchMode`'s STRICT
+        (default) and WILDCARD interpretations of ``+`` / ``-`` /
+        ``"0"`` requests. See :py:class:`MatchMode` for the
+        per-cell rules and the design rationale.
 
-        Matching semantics. The default (``False``) is STRICT:
-        ``'0'`` is its own value and does not match ``'+'`` or
-        ``'-'``. The GUI's feat-to-seg query mode uses this default,
-        so a query ``{Syllabic: '-', Strident: '+'}`` returns only
-        segments that are explicitly ``-syllabic`` AND explicitly
-        ``+strident``. ``underspec_compatible=True`` is a public
-        relaxation path with no current internal consumer; the
-        natural-class engine itself (:py:meth:`find_all_minimal_bundles`,
-        :py:meth:`_is_natural_class_bool`) does not call this
-        method and runs entirely on the precomputed +/- membership
-        sets.
+        The GUI's feat→seg query path calls this with the default
+        strict mode; the wildcard ("Allow underspecified") UI
+        toggle threads ``mode=MatchMode.WILDCARD`` from the bridge
+        through to here.
         """
         for feature, value in feature_spec.items():
             self._validate_feature(feature)
@@ -519,49 +560,47 @@ class FeatureEngine:
                 raise ValueError(
                     f"Invalid feature value '{value}' for '{feature}'"
                 )
-        return sorted(
-            self._find_segments_unsorted(
-                feature_spec, underspec_compatible=underspec_compatible
-            )
-        )
+        return sorted(self._find_segments_unsorted(feature_spec, mode=mode))
 
     def find_all_minimal_bundles(
         self,
         segments: list[str],
         *,
+        mode: MatchMode = MatchMode.STRICT,
         max_bundles: int = 10_000,
     ) -> tuple[Mapping[str, str], ...]:
         """Every minimal feature bundle that characterises ``segments``.
 
-        Strict semantics: ``find_segments(B) == set(segments)`` under
-        ``'0' != '+' != '-'``. Returns up to ``max_bundles`` bundles
-        (truncation is silent; compare ``len(result)`` to detect).
+        Under STRICT (default): ``find_segments(B, mode=STRICT) ==
+        set(segments)`` — round-trip equality. Candidates are
+        features where every selected segment shares the same
+        explicit ``+`` / ``-`` (a ``"0"`` cell disqualifies the
+        feature).
 
-        Implementation notes:
-            - Candidate features: only those where every selected
-              segment carries the SAME explicit ``'+'``/``'-'``
-              (a ``'0'`` disqualifies the feature).
-            - Returns ``(EMPTY_BUNDLE,)`` ONLY for the universal
-              class; ``()`` for non-NC sets and for ``∅`` (the empty
-              bundle's extent is the whole inventory under strict
-              matching, so it doesn't characterise the empty set).
-              The UI presents the ``()`` case as "not a natural
-              class" and offers
-              :py:meth:`complete_to_minimal_natural_class`.
-            - Tuple-of-MappingProxy return shape: results are cached
-              and shared across calls; a mutable list would let a
-              caller corrupt every subsequent query on the same input.
-            - Algorithm: hitting-set backtracking on the segments
-              outside ``S``; worst case ``O(C^k)``, branch-and-bound
-              pruning typically keeps it well below.
-            - Memoized on ``frozenset(segments)``; safe because both
-              the engine and the underlying Inventory are immutable.
+        Under WILDCARD: ``find_segments(B, mode=WILDCARD) ==
+        set(segments)`` — round-trip under wildcard semantics.
+        Candidates widen: a ``(f, "+")`` candidate exists whenever
+        no selected segment is explicitly ``-f``; a ``(f, "-")``
+        candidate exists whenever no selected segment is explicitly
+        ``+f``. A feature with no explicit value in the selection
+        contributes BOTH candidates (each excludes a different set
+        of outside segments). Bundles emitted here are minimal
+        *compatibility* specifications, not minimal strict specs;
+        renderers label them as such.
+
+        Returns up to ``max_bundles`` bundles (truncation is
+        silent; compare ``len(result)`` to detect).
+
+        Returns ``(EMPTY_BUNDLE,)`` ONLY for the universal class;
+        ``()`` for non-NC sets and for ``∅``. The UI presents the
+        ``()`` case as "not a natural class" and offers
+        :py:meth:`complete_to_minimal_natural_class` for the
+        active mode.
+
+        Memoised on ``(frozenset(segments), mode)`` — same selection
+        with different modes does not collide.
         """
         if not segments:
-            # ``∅`` is not a strict natural class: there is no bundle
-            # ``B`` with ``find_segments(B) == ∅`` (the empty bundle's
-            # extent is the whole inventory). Callers special-case
-            # the empty selection at the UI layer.
             return ()
         seg_map = self._inventory.segments
         plus_segs = self.plus_segs
@@ -570,82 +609,94 @@ class FeatureEngine:
         for seg in segments:
             if seg not in seg_map:
                 raise KeyError(f"Segment '{seg}' not in inventory")
-        cache_key: frozenset[str] = frozenset(segments)
+        selected: frozenset[str] = frozenset(segments)
+        cache_key = (selected, mode)
         cached = self._bundle_cache.get(cache_key)
         if cached is not None:
             return cached
-        # Strict candidate collection: a feature is a candidate only
-        # when EVERY selected segment has the same explicit value.
-        # ``'0'`` cells in the selection disqualify the feature,
-        # which is exactly what gives the round-trip invariant: any
-        # bundle returned here, typed into the feat pane, returns
-        # the input set under strict equality.
-        candidates = self._strict_candidate_constraints(cache_key)
-        outside_set = all_segments - cache_key
+        outside_set = all_segments - selected
         if not outside_set:
             self._bundle_cache[cache_key] = (_EMPTY_BUNDLE,)
             return self._bundle_cache[cache_key]
+
+        # Candidate generation diverges by mode but the rest of the
+        # hitting-set algorithm is identical.
+        # ``candidate_pairs`` is the list of (feature, value)
+        # constraints the search may choose from. ``excludes_by``
+        # maps a candidate ID to the set of outside segments that
+        # constraint rules out.
+        if mode is MatchMode.WILDCARD:
+            candidate_pairs = self._wildcard_candidate_constraints(selected)
+            # Wildcard constraint excludes the OPPOSITE-explicit
+            # segments: (f, "+") rules out only minus_segs[f];
+            # (f, "-") rules out only plus_segs[f]. ``"0"``
+            # outside segments are NOT excluded by any constraint
+            # — wildcard tolerates them everywhere.
+            excludes_lookup: list[frozenset[str]] = [
+                (
+                    (minus_segs[f] & outside_set)
+                    if v == "+"
+                    else (plus_segs[f] & outside_set)
+                )
+                for f, v in candidate_pairs
+            ]
+        else:
+            strict_candidates = self._strict_candidate_constraints(selected)
+            candidate_pairs = list(strict_candidates.items())
+            # Strict excluder collection: outside t is excluded by
+            # (f, +) iff t is not explicitly + on f.
+            excludes_lookup = [
+                (outside_set - (plus_segs[f] if v == "+" else minus_segs[f]))
+                for f, v in candidate_pairs
+            ]
+        if not candidate_pairs:
+            # No constraint can be applied; only the universal class
+            # contains the selection, and the universal class is
+            # ``S`` only when outside is empty (handled above). So
+            # this branch means "not a natural class under ``mode``".
+            self._bundle_cache[cache_key] = ()
+            return self._bundle_cache[cache_key]
+
         # Preserve the historical iteration order of ``outside`` so
-        # ``raw_excluders`` lines up with ``outside`` indices the same
-        # way the old code did. Iterating ``seg_map`` (an insertion-
-        # ordered dict) gives a stable order matching the inventory
-        # declaration.
+        # the heavy-hitter sort below is deterministic.
         outside = [s for s in seg_map if s in outside_set]
 
-        # Hitting-set search via bitmask. Each candidate feature gets
-        # a bit index 0..N-1; the chosen set, the still-available set,
-        # and each excluder become single Python ints. Set
-        # intersection is ``&``, non-empty test is truthiness. This is
-        # ~7-10x faster than the previous set-based version; the
-        # previous profile had backtrack at 95% of analysis-pane
-        # render time, dominated by Python-level set operations.
-        # Python ints are arbitrary precision, so N has no hard limit;
-        # the bit-count cost grows linearly with N.
-        #
-        # Candidates are ordered by how often they appear in
-        # excluders, heavy hitters first, so branch-and-bound prunes
-        # earlier. Counts are built during the same pass that collects
-        # excluders; the bit numbering happens after sorting.
-        feat_to_bit: dict[str, int] = {}
-        excluder_bits: list[int] = []
-        counts: dict[str, int] = dict.fromkeys(candidates, 0)
-        raw_excluders: list[list[str]] = []
-        # Strict excluder collection: outside t is excluded by
-        # (f, +) iff t is not explicitly ``+`` on f, so
-        # ``outside - plus_segs[f]`` covers explicit ``-`` and
-        # ``'0'`` segments alike. Strict matching treats ``'0'`` as
-        # a distinct value, which is what the user-typed feat→seg
-        # query uses; bundles emitted here round-trip exactly.
-        excludes_by: dict[str, frozenset[str]] = {}
-        for feat, val in candidates.items():
-            target = plus_segs[feat] if val == "+" else minus_segs[feat]
-            excludes_by[feat] = outside_set - target
+        # Hitting-set search via bitmask. Each candidate pair gets a
+        # bit index 0..N-1; the chosen set, the still-available set,
+        # and each excluder become single Python ints. Pairs are
+        # ordered by how often they appear in excluders so
+        # branch-and-bound prunes earlier.
+        n_candidates = len(candidate_pairs)
+        counts = [0] * n_candidates
+        raw_excluders: list[list[int]] = []
         for seg in outside:
-            exc_feats = [
-                feat
-                for feat, excluded in excludes_by.items()
+            exc_idxs = [
+                i
+                for i, excluded in enumerate(excludes_lookup)
                 if seg in excluded
             ]
-            if not exc_feats:
+            if not exc_idxs:
+                # This outside segment is excluded by NO candidate
+                # under the current mode — selection cannot be a
+                # natural class.
                 self._bundle_cache[cache_key] = ()
                 return self._bundle_cache[cache_key]
-            raw_excluders.append(exc_feats)
-            for f in exc_feats:
-                counts[f] += 1
-        candidate_list = sorted(
-            candidates.keys(), key=lambda f: counts[f], reverse=True
+            raw_excluders.append(exc_idxs)
+            for i in exc_idxs:
+                counts[i] += 1
+        order = sorted(
+            range(n_candidates), key=lambda i: counts[i], reverse=True
         )
-        for i, f in enumerate(candidate_list):
-            feat_to_bit[f] = 1 << i
-        for exc_feats in raw_excluders:
-            mask = 0
-            for f in exc_feats:
-                mask |= feat_to_bit[f]
-            excluder_bits.append(mask)
-        n = len(candidate_list)
-        # all_remaining[idx] is the bitmask of candidates with index
-        # >= idx, precomputed so the "still solvable from here?" check
-        # is a constant-time AND instead of a set rebuild.
+        # Map original-index -> new-bit-index so excluder masks can
+        # be built in the heavy-hitter ordering.
+        old_to_bit = [0] * n_candidates
+        for new_idx, old_idx in enumerate(order):
+            old_to_bit[old_idx] = 1 << new_idx
+        excluder_bits = [
+            sum(old_to_bit[i] for i in exc_idxs) for exc_idxs in raw_excluders
+        ]
+        ordered_pairs = [candidate_pairs[i] for i in order]
+        n = n_candidates
         all_remaining = [0] * (n + 1)
         for i in range(n - 1, -1, -1):
             all_remaining[i] = all_remaining[i + 1] | (1 << i)
@@ -653,11 +704,14 @@ class FeatureEngine:
         results: list[dict[str, str]] = []
         best_size: int | None = None
 
+        def _bits_to_bundle(bits: int) -> dict[str, str]:
+            return {
+                ordered_pairs[i][0]: ordered_pairs[i][1]
+                for i in range(n)
+                if bits & (1 << i)
+            }
+
         def backtrack(idx: int, depth: int, chosen_bits: int) -> bool:
-            """``depth`` mirrors ``bin(chosen_bits).count('1')`` but
-            is tracked separately to skip a popcount per call. Returns
-            False once ``max_bundles`` is reached so the caller can
-            terminate the recursion early."""
             nonlocal best_size
             satisfied = True
             for eb in excluder_bits:
@@ -676,7 +730,6 @@ class FeatureEngine:
                 return True
             if idx >= n:
                 return True
-            # Can the remaining bits still hit every excluder?
             remaining_bits = all_remaining[idx]
             for eb in excluder_bits:
                 if not (eb & (chosen_bits | remaining_bits)):
@@ -684,21 +737,11 @@ class FeatureEngine:
             bit = 1 << idx
             if not backtrack(idx + 1, depth + 1, chosen_bits | bit):
                 return False
-            # Try excluding the candidate, but only if the
-            # still-remaining candidates (idx+1..) can still satisfy
-            # every excluder without it.
             remaining_without = all_remaining[idx + 1]
             for eb in excluder_bits:
                 if not (eb & (chosen_bits | remaining_without)):
                     return True
             return backtrack(idx + 1, depth, chosen_bits)
-
-        def _bits_to_bundle(bits: int) -> dict[str, str]:
-            return {
-                candidate_list[i]: candidates[candidate_list[i]]
-                for i in range(n)
-                if bits & (1 << i)
-            }
 
         backtrack(0, 0, 0)
         frozen = tuple(MappingProxyType(b) for b in results)
@@ -706,7 +749,10 @@ class FeatureEngine:
         return frozen
 
     def compute_natural_class(
-        self, segments: list[str]
+        self,
+        segments: list[str],
+        *,
+        mode: MatchMode = MatchMode.STRICT,
     ) -> Mapping[str, str] | None:
         """One minimal feature bundle characterising the segment set.
 
@@ -715,12 +761,13 @@ class FeatureEngine:
         * a non-empty mapping: the minimal feature bundle.
         * an empty mapping: the segments form the universal class
           (every segment in the inventory).
-        * ``None``: the segments are not a natural class.
+        * ``None``: the segments are not a natural class under
+          ``mode``.
 
         The mapping (when not ``None``) is read-only, a view into
         the per-engine bundle cache.
         """
-        bundles = self.find_all_minimal_bundles(segments)
+        bundles = self.find_all_minimal_bundles(segments, mode=mode)
         return bundles[0] if bundles else None
 
     def get_contrastive_features(self) -> list[str]:
@@ -830,6 +877,41 @@ class FeatureEngine:
                 candidates[feature] = "-"
         return candidates
 
+    def _wildcard_candidate_constraints(
+        self, selected: frozenset[str]
+    ) -> list[tuple[str, str]]:
+        """Wildcard candidate constraints of ``selected``.
+
+        A (feature, value) pair is a wildcard candidate iff no
+        selected segment carries the OPPOSITE explicit value:
+
+        - ``(f, '+')`` is a candidate iff
+          ``selected & minus_segs[f] == ∅`` — i.e. no member of
+          the selection is explicitly ``-f``.
+        - ``(f, '-')`` is a candidate iff
+          ``selected & plus_segs[f] == ∅`` — i.e. no member is
+          explicitly ``+f``.
+
+        A feature with no explicit value in the selection (every
+        member is ``'0'``/absent) yields BOTH candidates because
+        neither contradicts. Strict mode silently disqualifies
+        that feature; wildcard keeps both options on the table for
+        the hitting-set search.
+
+        Returns a list of ``(feature, value)`` pairs preserving
+        feature-declaration order. List rather than dict because a
+        single feature can produce two candidate entries.
+        """
+        plus_segs = self.plus_segs
+        minus_segs = self.minus_segs
+        candidates: list[tuple[str, str]] = []
+        for feature in self._inventory.features:
+            if not (selected & minus_segs[feature]):
+                candidates.append((feature, "+"))
+            if not (selected & plus_segs[feature]):
+                candidates.append((feature, "-"))
+        return candidates
+
     def project_segments_to_features(
         self, segments: list[str]
     ) -> dict[str, str]:
@@ -857,52 +939,37 @@ class FeatureEngine:
         }
 
     def complete_to_minimal_natural_class(
-        self, segments: list[str]
+        self,
+        segments: list[str],
+        *,
+        mode: MatchMode = MatchMode.STRICT,
     ) -> NaturalClassCompletion:
-        """The smallest strict natural class containing ``segments``.
+        """The smallest natural class containing ``segments`` under
+        ``mode``.
 
-        Returns a :py:class:`NaturalClassCompletion`. The two
-        concepts are kept on a hard API boundary by field name:
+        Returns a :py:class:`NaturalClassCompletion`:
 
         * ``already_natural_class`` → ``selected_minimal_bundles``
-          carries the minimal feature bundles of ``S`` (Concept A:
-          definition of the selected set). ``additions`` is empty.
-        * ``one_minimal_completion`` → ``additions = ((seg, seg, ...),)``
-          carries the segments needed to complete ``S`` into a
-          strict natural class (Concept B).
-          ``selected_minimal_bundles`` is empty because ``S`` is not
-          itself a natural class. If the caller needs the minimal
-          specs of the COMPLETED class (Concept A applied to
-          ``S ∪ additions[0]``), it can call
-          :py:meth:`find_all_minimal_bundles` separately. The
-          completion result intentionally does NOT carry them
-          because the not-a-natural-class UI path does not display
-          them and the hitting-set search is exponential worst
-          case.
+          carries the minimal bundles of ``S`` under ``mode``.
+        * ``one_minimal_completion`` → ``additions[0]`` carries
+          the segments needed to complete ``S`` into a natural
+          class under ``mode``. ``selected_minimal_bundles`` is
+          empty (callers needing the minimal specs of the
+          completed class re-call :py:meth:`find_all_minimal_bundles`
+          on ``S ∪ additions[0]``).
 
-        The third status ``multiple_minimal_completions`` is part of
-        the contract for general correctness but is unreachable from
-        the present solver: under strict-bundle semantics the
-        minimum addition set is provably unique.
+        **Algorithm.** Intersect the extents of every candidate
+        constraint that doesn't exclude any member of ``S``:
 
-        **Algorithm.** Intersect the constraint-sets of every
-        strict-shared candidate constraint:
+        - STRICT: ``∩{plus_segs[f] | S ⊆ plus_segs[f]} ∩
+          {minus_segs[f] | S ⊆ minus_segs[f]}``.
+        - WILDCARD: ``∩{all - minus_segs[f] | S ∩ minus_segs[f] = ∅}
+          ∩ {all - plus_segs[f] | S ∩ plus_segs[f] = ∅}``.
 
-            ``smallest_class = ∩ {plus_segs[f] | S ⊆ plus_segs[f]}``
-            ``                  ∩ {minus_segs[f] | S ⊆ minus_segs[f]}``
-
-        ``additions = smallest_class - S``.
-
-        **Guaranteed exact.** No search budget, no fallback. The
-        universal class (empty bundle, whole inventory) is itself
-        a strict natural class containing any selection, so when
-        no candidate constraints exist the function returns the
-        universal completion exactly rather than degrading.
-
-        **Cost.** One ``find_all_minimal_bundles`` call on ``S``
-        (the already-NC fast path; cached) plus an ``O(F)``
-        intersection over features. No exponential work on the
-        not-a-natural-class path.
+        ``additions = smallest_class - S``. Guaranteed exact (no
+        search budget, no fallback) under either mode. The
+        wildcard completion is always a subset of the strict
+        completion because wildcard's candidate set is wider.
         """
         if not segments:
             return NaturalClassCompletion(
@@ -914,27 +981,34 @@ class FeatureEngine:
         for seg in segments:
             if seg not in seg_map:
                 raise KeyError(f"Segment '{seg}' not in inventory")
-        own_bundles = self.find_all_minimal_bundles(segments)
+        own_bundles = self.find_all_minimal_bundles(segments, mode=mode)
         if own_bundles:
             return NaturalClassCompletion(
                 status="already_natural_class",
                 selected_minimal_bundles=own_bundles,
                 additions=(),
             )
-        # ``S`` is not a strict NC. Build the smallest strict NC
-        # containing it by intersecting every selection-safe
-        # constraint set. An empty constraint set leaves
-        # ``smallest_class`` at ``_all_segments`` (the universal
-        # class), which is itself always a valid containing NC.
         selected = frozenset(segments)
         plus_segs = self.plus_segs
         minus_segs = self.minus_segs
         smallest_class: frozenset[str] = self._all_segments
-        for feat, val in self._strict_candidate_constraints(selected).items():
-            if val == "+":
-                smallest_class &= plus_segs[feat]
-            else:
-                smallest_class &= minus_segs[feat]
+        if mode is MatchMode.WILDCARD:
+            # Wildcard (f, +) candidate exists iff no member of S is
+            # explicitly -f; its extent rules out only the explicit
+            # -f segments. Same shape for the (-) side.
+            for feat in self._inventory.features:
+                if not (selected & minus_segs[feat]):
+                    smallest_class -= minus_segs[feat]
+                if not (selected & plus_segs[feat]):
+                    smallest_class -= plus_segs[feat]
+        else:
+            for feat, val in self._strict_candidate_constraints(
+                selected
+            ).items():
+                if val == "+":
+                    smallest_class &= plus_segs[feat]
+                else:
+                    smallest_class &= minus_segs[feat]
         # Inventory-declaration order so the UI gets a stable,
         # human-meaningful sequence of additions.
         additions_set = smallest_class - selected
@@ -946,28 +1020,32 @@ class FeatureEngine:
         )
 
     def is_natural_class(
-        self, segments: list[str]
+        self,
+        segments: list[str],
+        *,
+        mode: MatchMode = MatchMode.STRICT,
     ) -> tuple[bool, tuple[Mapping[str, str], ...]]:
         """Return ``(is_natural_class, minimal_bundles)``.
 
-        Strict semantics: a set is a natural class iff some feature
-        bundle ``B`` satisfies ``find_segments(B) == segments``
-        under the default strict equality (``'0' != '+' != '-'``,
-        what the user gets when typing into the feat pane). This
-        gives the round-trip invariant: any bundle this method
-        returns, when typed into feat→seg, returns exactly the
-        input set.
+        STRICT (default): a set is a natural class iff some bundle
+        ``B`` satisfies ``find_segments(B, mode=STRICT) == segments``
+        under strict equality (``'0' != '+' != '-'``). This is the
+        user-typed feat→seg semantics; round-trip exact.
 
-        Returns ``(False, ())`` when no strict bundle exists. The
-        UI presents these as "not a natural class" and offers the
-        :py:meth:`complete_to_minimal_natural_class` completion:
-        the smallest set of segments to add so the union does form
-        a strict natural class.
+        WILDCARD: same definition with wildcard matching. More
+        permissive — many selections that fail under strict
+        succeed under wildcard (with shorter, "minimal compatible"
+        bundles).
+
+        Returns ``(False, ())`` when no bundle exists under the
+        active mode. The UI offers
+        :py:meth:`complete_to_minimal_natural_class` for the same
+        mode.
 
         The bundle tuple is a read-only view into the per-engine
         cache; callers may iterate but must not mutate.
         """
-        bundles = self.find_all_minimal_bundles(segments)
+        bundles = self.find_all_minimal_bundles(segments, mode=mode)
         return bool(bundles), bundles
 
     def segment_distance(self, seg1: str, seg2: str) -> int:

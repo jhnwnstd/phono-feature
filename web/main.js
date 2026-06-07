@@ -30,6 +30,7 @@ const NODE_IDS = Object.freeze({
     analysisContentContrasts: "analysis-content-contrasts",
     themeBtn: "theme-btn",
     cbBtn: "cb-btn",
+    matchModeBtn: "match-mode-btn",
     bugBtn: "bug-btn",
     statusbarBrand: "statusbar-brand",
     renameDialog: "rename-dialog",
@@ -470,6 +471,7 @@ async function bootPyodide({ prerendered = false } = {}) {
     // mode. Pyodide hasn't cached any analysis yet (we're pre-
     // inventory-load) so no invalidation is needed beyond the call.
     _syncBridgePaletteToStoredState();
+    _syncBridgeMatchModeToStoredState();
 
     enableBridgeGatedControls();
     setLoadingStatus("Loading default inventory…");
@@ -566,6 +568,7 @@ const BRIDGE_GATED_NODES = [
     "renameBtn",
     "builderBtn",
     "phoibleBtn",
+    "matchModeBtn",
 ];
 
 /**
@@ -4654,6 +4657,102 @@ function _syncBridgePaletteToStoredState() {
     }
 }
 
+/** Matching-mode toggle ("Strict" vs. "Wildcard"). Mirrors the
+ *  colorblind toggle's structure: persistent localStorage choice,
+ *  aria-pressed on the button, and a bridge sync so the Python
+ *  side recomputes natural-class results under the chosen
+ *  semantics.
+ *
+ *  Wildcard mode treats a segment's ``0`` or absent value as
+ *  compatible with either polarity of a requested feature, so a
+ *  ``+Voice`` query returns +Voice AND 0Voice segments. The
+ *  feature pane also surfaces features that are uniformly ``0``
+ *  (otherwise unselectable) because those features ARE queryable
+ *  under wildcard — every segment matches.
+ */
+const MATCH_MODE = Object.freeze({
+    STRICT: "strict",
+    WILDCARD: "wildcard",
+});
+
+/** localStorage is external input: anything other than the
+ *  wildcard sentinel reads as strict. */
+function normalizeMatchMode(value) {
+    return value === MATCH_MODE.WILDCARD
+        ? MATCH_MODE.WILDCARD
+        : MATCH_MODE.STRICT;
+}
+
+/** Push the user's restored matching mode (set by
+ *  wireMatchModeToggle before the bridge attached) into Python.
+ *  Without this, all natural-class results stay on strict even
+ *  when the toolbar shows the wildcard toggle pressed. */
+function _syncBridgeMatchModeToStoredState() {
+    const mode = normalizeMatchMode(safeStorageGet("match_mode"));
+    try {
+        callBridge("set_match_mode", mode);
+    } catch (e) {
+        console.warn("match-mode sync to bridge failed:", e);
+    }
+}
+
+function wireMatchModeToggle() {
+    if (!nodes.matchModeBtn) return;
+    const labelFor = (mode) => mode === MATCH_MODE.WILDCARD
+        ? "Switch to strict matching (exact +/- only)"
+        : "Allow underspecified matches (wildcard)";
+    const applyLabel = (mode) => {
+        const text = labelFor(mode);
+        nodes.matchModeBtn.title = text;
+        nodes.matchModeBtn.setAttribute("aria-label", text);
+    };
+    const stored = normalizeMatchMode(safeStorageGet("match_mode"));
+    if (stored === MATCH_MODE.WILDCARD) {
+        document.documentElement.dataset.matchMode = "wildcard";
+        nodes.matchModeBtn.setAttribute("aria-pressed", "true");
+    }
+    applyLabel(stored);
+    nodes.matchModeBtn.addEventListener("click", () => {
+        const cur = document.documentElement.dataset.matchMode === "wildcard"
+            ? MATCH_MODE.WILDCARD
+            : MATCH_MODE.STRICT;
+        const next = cur === MATCH_MODE.WILDCARD
+            ? MATCH_MODE.STRICT
+            : MATCH_MODE.WILDCARD;
+        if (next === MATCH_MODE.WILDCARD) {
+            document.documentElement.dataset.matchMode = "wildcard";
+        } else {
+            delete document.documentElement.dataset.matchMode;
+        }
+        nodes.matchModeBtn.setAttribute(
+            "aria-pressed", next === MATCH_MODE.WILDCARD ? "true" : "false"
+        );
+        applyLabel(next);
+        safeStorageSet("match_mode", next);
+        if (!state.bridge) return;
+        // Bridge call order:
+        //   1. set_match_mode flips the active mode and invalidates
+        //      the analyze_* lru_caches.
+        //   2. inventory_summary_for_mode rebuilds the feature-pane
+        //      payload under the new mode so all-0 features appear
+        //      (wildcard) / disappear (strict).
+        //   3. runAnalysis re-renders the current selection under
+        //      the new mode.
+        callBridge("set_match_mode", next);
+        try {
+            const info = callBridge("inventory_summary_for_mode", next);
+            if (info) applyInventoryInfo(info);
+        } catch (e) {
+            console.warn("match-mode inventory refresh failed:", e);
+        }
+        const hasSelection =
+            state.selected_segments.length > 0
+            || Object.keys(state.selected_features).length > 0;
+        if (hasSelection) runAnalysis();
+    });
+}
+
+
 function wireColorblindToggle() {
     if (!nodes.cbBtn) return;
     // aria-label and title share one source so SRs (which prefer
@@ -5025,6 +5124,7 @@ async function main() {
     wireBugButton();
     wireThemeToggle();
     wireColorblindToggle();
+    wireMatchModeToggle();
     wireInventoryPicker();
     wireUploadDownload();
     wirePhoiblePicker();
