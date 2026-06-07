@@ -1342,10 +1342,11 @@ function _buildSegmentButton(seg, extraAttrs) {
     btn.dataset.state = "default";
     btn.setAttribute("aria-pressed", "false");
     btn.setAttribute("aria-label", `/${seg}/`);
-    // Tooltip carries the full IPA string so the user can confirm
-    // the glyph identity without zooming. Browser-native tooltip
-    // handles hover + keyboard focus uniformly.
-    btn.title = `/${seg}/`;
+    // No browser-native ``title`` tooltip: the button's textContent
+    // already shows the glyph, and a hover bubble repeating
+    // ``/${seg}/`` is pure redundancy that flickers on every
+    // pointer pass. ``aria-label`` keeps the slashed form for
+    // screen readers and the IPA pronunciation announcement.
     btn.textContent = seg;
     // Wide glyphs (tie-bar affricates ``k+͡x+`` / ``ɡ+͡ɣ+``, PHOIBLE
     // diphthong contours ``oɛ̃``, combining-mark stacks ``o̞̜``) get
@@ -4698,9 +4699,16 @@ function _syncBridgeMatchModeToStoredState() {
 
 function wireMatchModeToggle() {
     if (!nodes.matchModeBtn) return;
+    // Tooltip strings come from the relayed STATUS_TEXT so a
+    // wording change lands in one Python constant
+    // (constants.MATCH_MODE_TOOLTIP_*) and propagates to both the
+    // desktop's setToolTip and the web's title attribute. Defaults
+    // keep the toggle usable in offline / pre-relay builds.
     const labelFor = (mode) => mode === MATCH_MODE.WILDCARD
-        ? "Switch to strict matching (exact +/- only)"
-        : "Allow underspecified matches (wildcard)";
+        ? (STATUS_TEXT.match_mode_tooltip_wildcard_active
+            || "Switch to strict matching (only explicit +/- values match).")
+        : (STATUS_TEXT.match_mode_tooltip_strict_active
+            || "Allow underspecified matches (wildcard).");
     const applyLabel = (mode) => {
         const text = labelFor(mode);
         nodes.matchModeBtn.title = text;

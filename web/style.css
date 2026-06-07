@@ -183,23 +183,35 @@ body {
   color: var(--btn-primary-text);
   border-color: var(--accent);
 }
-/* Wildcard (match-mode) toggle. Sized + accented like #cb-btn so
-   the two icon toggles read as a paired chrome cluster. When
-   wildcard mode is active (aria-pressed="true"), the button takes
-   the accent fill so the user can tell at a glance that natural-
-   class results are relaxed. */
-#match-mode-btn {
-  width: var(--control-h-md);
-  padding: 0;
+/* Panel-action buttons (currently just the wildcard toggle inside
+   the Features pane header). Same shape as ``.panel-clear-btn``
+   so the two siblings read as a matched pair; uses theme tokens
+   throughout so dark + colorblind palettes inherit automatically.
+   Aria-pressed="true" takes the accent fill so the user can see
+   at a glance that wildcard matching is active. */
+.panel-action-btn {
+  height: var(--control-h-xs);
+  min-width: var(--control-h-xs);
+  padding: 0 8px;
+  border: var(--border-thin) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
   font-size: var(--font-size-base);
-  margin-right: var(--space-xs);
+  cursor: pointer;
 }
-#match-mode-btn[aria-pressed="true"] {
+.panel-action-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.panel-action-btn[aria-pressed="true"] {
   background: var(--accent-light);
   border-color: var(--accent);
   color: var(--accent);
 }
-#match-mode-btn[aria-pressed="true"]:hover {
+.panel-action-btn[aria-pressed="true"]:hover {
   background: var(--accent);
   color: var(--btn-primary-text);
   border-color: var(--accent);
@@ -648,12 +660,19 @@ dialog input[type="text"]:focus-visible {
   border-bottom: var(--border-thin) solid var(--border);
 }
 .panel-title {
-  flex: 1;
   font-size: var(--font-size-label);
   font-weight: 600;
   letter-spacing: 0.5px;
   color: var(--text-dim);
 }
+/* The Clear button pins to the far right of the panel header.
+   ``margin-left: auto`` absorbs any leftover horizontal space so
+   the title (and any siblings placed right after it, like the
+   wildcard toggle inside the Features panel) stay clustered on
+   the left edge. Replaces the previous ``flex: 1`` on
+   ``.panel-title`` which pushed every sibling rightward and so
+   couldn't keep an inline action button next to the title. */
+.panel-clear-btn { margin-left: auto; }
 .panel[data-active="true"] .panel-title {
   color: var(--text);
 }

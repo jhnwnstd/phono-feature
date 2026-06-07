@@ -58,6 +58,10 @@ class SettingsKey(StrEnum):
     PALETTE_MODE = "palette_mode"
     MODE = "mode"
     LAST_INVENTORY = "last_inventory"
+    # MatchMode (strict / wildcard) for natural-class queries.
+    # Persists the user's "Allow underspecified" toolbar toggle so
+    # the choice survives a relaunch.
+    MATCH_MODE = "match_mode"
 
 
 def write_setting(settings: Any, key: SettingsKey, value: Any) -> None:

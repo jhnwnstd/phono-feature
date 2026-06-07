@@ -529,6 +529,8 @@ def _build_status_text_payload() -> dict[str, str]:
             EMPTY_NATURAL_CLASS_HINT,
             EMPTY_PHOIBLE_SEARCH_HINT,
             EMPTY_SHARED_FEATURES_HINT,
+            MATCH_MODE_TOOLTIP_STRICT_ACTIVE,
+            MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE,
         )
 
         payload["diphthong_toggle_label"] = DIPHTHONG_TOGGLE_LABEL
@@ -540,6 +542,15 @@ def _build_status_text_payload() -> dict[str, str]:
         # runtime default-pick in main.js can never drift to
         # different files.
         payload["default_inventory_stem"] = DEFAULT_INVENTORY_STEM
+        # Wildcard-toggle tooltip strings. Same single-source
+        # pattern: the desktop imports the constants directly; the
+        # web reads them from this baked payload.
+        payload["match_mode_tooltip_strict_active"] = (
+            MATCH_MODE_TOOLTIP_STRICT_ACTIVE
+        )
+        payload["match_mode_tooltip_wildcard_active"] = (
+            MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE
+        )
         return payload
     finally:
         sys.modules.pop(module_name, None)

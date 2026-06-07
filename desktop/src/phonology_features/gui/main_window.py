@@ -66,6 +66,7 @@ from phonology_features.gui.style_utils import (
 from phonology_features.gui.themed_widgets import (
     _BrandedStatusBar,
     _clear_btn_style,
+    _match_mode_btn_style,
     _ThemedCard,
     _ThemedSplitter,
 )
@@ -111,7 +112,7 @@ from phonology_shared.presentation.view_models import (
     summarize_feature_query,
     summarize_segment_selection,
 )
-from phonology_shared.theory.feature_engine import FeatureEngine
+from phonology_shared.theory.feature_engine import FeatureEngine, MatchMode
 
 if TYPE_CHECKING:
     from phonology_features.gui.builder import InventoryBuilder
@@ -209,6 +210,17 @@ class MainWindow(QMainWindow):
         if saved_mode not in ALLOWED_PALETTE_MODES:
             saved_mode = "standard"
         set_palette_mode(saved_mode)
+        # Restore the user's strict/wildcard matching-mode choice.
+        # Wildcard is opt-in: anything other than the literal
+        # ``"wildcard"`` reads as strict (the default).
+        saved_match_mode = self._read_setting_str(
+            SettingsKey.MATCH_MODE, str(MatchMode.STRICT)
+        )
+        self._match_mode: MatchMode = (
+            MatchMode.WILDCARD
+            if saved_match_mode == str(MatchMode.WILDCARD)
+            else MatchMode.STRICT
+        )
         set_css(self, f"background-color: {C['bg']};")
         # 150 ms debounce for selection-change analysis.
         self._debounce = QTimer(self)
@@ -605,15 +617,33 @@ class MainWindow(QMainWindow):
         self._feat_title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1.5px;"
         )
+        # Wildcard / match-mode toggle. Lives in the Features-pane
+        # header (not the toolbar) so the natural-class-policy
+        # control sits next to the panel whose results it modifies.
+        # Style helper re-evaluates against the active palette
+        # after a theme or colorblind swap; ``setCheckable`` makes
+        # ``:checked`` flip the QSS accent state.
+        self._match_mode_btn = QPushButton("≈", container)
+        self._match_mode_btn.setFixedHeight(_CLEAR_BTN_H)
+        self._match_mode_btn.setFont(QFont("Noto Sans", 11))
+        self._match_mode_btn.setCheckable(True)
+        set_css(self._match_mode_btn, _match_mode_btn_style())
+        self._match_mode_btn.clicked.connect(self._toggle_match_mode)
         self.clear_feat_btn = QPushButton("Clear", container)
         self.clear_feat_btn.setFixedHeight(_CLEAR_BTN_H)
         self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
         set_css(self.clear_feat_btn, _clear_btn_style())
         self.clear_feat_btn.clicked.connect(self._clear_then_activate_feats)
         header.addWidget(self._feat_title)
+        # Wildcard toggle sits adjacent to the FEATURES label so the
+        # natural-class-policy control reads as part of the panel's
+        # title cluster. ``addStretch()`` AFTER it pushes the Clear
+        # button to the far right.
+        header.addWidget(self._match_mode_btn)
         header.addStretch()
         header.addWidget(self.clear_feat_btn)
         vlay.addLayout(header)
+        self._apply_match_mode_btn()
         self._feat_scroll = QScrollArea(container)
         self._feat_scroll.setWidgetResizable(True)
         self._feat_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -1188,11 +1218,15 @@ class MainWindow(QMainWindow):
         """
         if self.engine is None:
             return
-        # Shared ``FeatureEngine.active_features`` drops features that
-        # are uniformly ``0`` across the inventory. Same property
-        # drives the web's filter via ``build_inventory_summary`` so
-        # the two UIs render the same rows.
-        active_feature_set: set[str] = set(self.engine.active_features)
+        # Shared filter. STRICT drops features that are uniformly
+        # ``0`` across the inventory (a +f request would return ∅).
+        # WILDCARD surfaces every feature — a request relaxes
+        # against unspecified values, so the row IS interactable.
+        # Same source the web bridge reads via
+        # ``build_inventory_summary(..., mode=...)``.
+        active_feature_set: set[str] = set(
+            self.engine.active_features_for_mode(self._match_mode)
+        )
         self._init_feature_pool()
         self._selected_features.clear()
         self._feat_rows = {}
@@ -1513,6 +1547,51 @@ class MainWindow(QMainWindow):
             else:
                 self._update_feat_to_seg()
 
+    def _apply_match_mode_btn(self) -> None:
+        """Reflect ``self._match_mode`` on the panel-header button:
+        checked state + tooltip. The accent fill comes from the
+        ``:checked`` rule in :py:func:`_match_mode_btn_style`, so a
+        theme or palette-mode swap that re-runs the style helper
+        propagates the new accent here automatically — no per-mode
+        inline CSS to keep in sync.
+
+        Tooltip strings come from the shared constants module so
+        the desktop and the web's ``title`` attribute render
+        identical hover text."""
+        from phonology_shared.presentation.constants import (
+            MATCH_MODE_TOOLTIP_STRICT_ACTIVE,
+            MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE,
+        )
+
+        is_wild = self._match_mode is MatchMode.WILDCARD
+        self._match_mode_btn.setChecked(is_wild)
+        self._match_mode_btn.setToolTip(
+            MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE
+            if is_wild
+            else MATCH_MODE_TOOLTIP_STRICT_ACTIVE
+        )
+
+    def _toggle_match_mode(self) -> None:
+        """Flip strict↔wildcard, persist the choice, refresh the
+        feature pane (wildcard surfaces all-0 features that strict
+        hides), and re-run the active analysis."""
+        self._match_mode = (
+            MatchMode.STRICT
+            if self._match_mode is MatchMode.WILDCARD
+            else MatchMode.WILDCARD
+        )
+        write_setting(
+            self._settings, SettingsKey.MATCH_MODE, str(self._match_mode)
+        )
+        self._apply_match_mode_btn()
+        if self.engine is None:
+            return
+        # Feature pane filter is mode-aware; rebuild it before re-
+        # running the analysis so the rows the new mode wants to
+        # surface are present.
+        self._populate_features()
+        self._run_pending_update()
+
     def _update_seg_to_feat(self) -> None:
         """Apply the SEG-mode summary to the panels. The shared
         ``summarize_segment_selection`` returns a total payload --
@@ -1524,7 +1603,9 @@ class MainWindow(QMainWindow):
         if not self.engine:
             return
         summary = summarize_segment_selection(
-            self.engine, self._selected_segments
+            self.engine,
+            self._selected_segments,
+            mode=self._match_mode,
         )
         for feat, row in self._feat_rows.items():
             state = summary["feature_rows"][feat]
@@ -1545,7 +1626,11 @@ class MainWindow(QMainWindow):
         there is no separate empty-selection branch."""
         if not self.engine:
             return
-        summary = summarize_feature_query(self.engine, self._selected_features)
+        summary = summarize_feature_query(
+            self.engine,
+            self._selected_features,
+            mode=self._match_mode,
+        )
         for seg, btn in self._seg_buttons.items():
             btn.set_state(summary["segment_states"][seg])
         self._apply_analysis_tabs(summary["analysis_tabs"])

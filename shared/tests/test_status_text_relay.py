@@ -168,6 +168,11 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         # precompute reads the same constant in Python so the two
         # cannot drift.
         "default_inventory_stem",
+        # Wildcard-toggle tooltip strings (one per active mode).
+        # main.js reads from STATUS_TEXT; the desktop imports the
+        # Python constants directly.
+        "match_mode_tooltip_strict_active",
+        "match_mode_tooltip_wildcard_active",
     }
     assert set(status_payload.keys()) == expected_keys
 

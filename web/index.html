@@ -78,10 +78,6 @@
   </button>
   <button id="builder-btn" type="button" disabled>Builder</button>
   <div class="toolbar-spacer"></div>
-  <button id="match-mode-btn" type="button" disabled
-          aria-label="Allow underspecified matches (wildcard)"
-          title="Allow underspecified matches (wildcard): segments with a 0 or absent value match a +/- request unless they explicitly contradict it."
-          aria-pressed="false">≈</button>
   <button id="cb-btn" type="button"
           aria-label="Switch to colorblind-friendly palette"
           title="Switch to colorblind-friendly palette"
@@ -103,6 +99,9 @@
   <section class="panel" id="feat-panel">
     <header class="panel-header">
       <span class="panel-title" id="feat-title">FEATURES</span>
+      <button class="panel-action-btn" id="match-mode-btn" type="button" disabled
+              aria-label="Allow underspecified matches (wildcard)"
+              aria-pressed="false">≈</button>
       <button class="panel-clear-btn" id="feat-clear-btn" type="button"
               aria-label="Clear feature query">Clear</button>
     </header>

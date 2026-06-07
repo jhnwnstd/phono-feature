@@ -96,6 +96,23 @@ DIPHTHONG_TOGGLE_LABEL: str = "diphthongs"
 # to different files.
 DEFAULT_INVENTORY_STEM: str = "general_features"
 
+# Hover-tooltip strings for the wildcard ("Allow underspecified")
+# matching-mode toggle that sits in the Features pane header on
+# both UIs. ``STRICT_ACTIVE`` runs when the button is NOT pressed
+# (the click would enable wildcard); ``WILDCARD_ACTIVE`` when the
+# button IS pressed (the click would revert to strict). Single
+# source so the desktop's ``setToolTip`` and the web's ``title``
+# attribute read identically; the web relays via the inlined
+# STATUS_TEXT JSON.
+MATCH_MODE_TOOLTIP_STRICT_ACTIVE: str = (
+    "Allow underspecified matches (wildcard): segments with a 0 "
+    "or absent value match a +/- request unless they explicitly "
+    "contradict it."
+)
+MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE: str = (
+    "Switch to strict matching (only explicit +/- values match)."
+)
+
 # Placeholder copy for non-ideal states. Each string is shown in
 # place of an empty result so the user always sees something
 # orienting rather than a blank region. Tone matches the rest of

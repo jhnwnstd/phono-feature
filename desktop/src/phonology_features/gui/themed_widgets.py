@@ -46,6 +46,36 @@ def _clear_btn_style() -> str:
     )
 
 
+def _match_mode_btn_style() -> str:
+    """Stylesheet for the wildcard / match-mode toggle that sits in
+    the Features pane header. Same chrome shape as the Clear button
+    so the two siblings read as a matched pair; the ``:checked``
+    state pulls the accent fill so the user can see at a glance
+    that wildcard matching is active.
+
+    Function-not-constant so it re-evaluates against the active
+    palette after a theme or palette-mode swap; the colorblind
+    palette redefines ``accent`` / ``accent_light`` and the toggle
+    inherits the new hues without an additional restyle hook.
+    """
+    return (
+        f"QPushButton {{"
+        f" color: {C['text']}; background: transparent;"
+        f" border: 1px solid {C['border']};"
+        f" border-radius: 5px; padding: 0 8px;"
+        f" }}"
+        f" QPushButton:hover {{ color: {C['accent']};"
+        f" background: {C['accent_light']};"
+        f" border-color: {C['accent']}; }}"
+        f" QPushButton:checked {{ color: {C['accent']};"
+        f" background: {C['accent_light']};"
+        f" border-color: {C['accent']}; }}"
+        f" QPushButton:checked:hover {{ color: {C['btn_primary_text']};"
+        f" background: {C['accent']};"
+        f" border-color: {C['accent']}; }}"
+    )
+
+
 class _BrandedStatusBar(QStatusBar):
     """Status bar with a 'Language Doodad' brand pinned at the right.
 

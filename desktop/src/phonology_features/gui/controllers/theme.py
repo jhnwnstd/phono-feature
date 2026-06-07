@@ -21,7 +21,10 @@ from phonology_features.gui.style_utils import (
     apply_tooltip_palette,
     set_css,
 )
-from phonology_features.gui.themed_widgets import _clear_btn_style
+from phonology_features.gui.themed_widgets import (
+    _clear_btn_style,
+    _match_mode_btn_style,
+)
 from phonology_shared.presentation.constants import scrollbar_style
 from phonology_shared.presentation.mode_logic import (
     palette_toggle_tooltip,
@@ -386,6 +389,10 @@ class ThemeController:
         m = self._main
         set_css(m.clear_seg_btn, _clear_btn_style())
         set_css(m.clear_feat_btn, _clear_btn_style())
+        # Re-apply the wildcard toggle's QSS so the ``:checked``
+        # accent fill switches to the new palette's accent
+        # (standard ⇄ colorblind, light ⇄ dark all share this hook).
+        set_css(m._match_mode_btn, _match_mode_btn_style())
         sb_qss = scrollbar_style()
         for scroll in (m._seg_scroll, m._feat_scroll):
             for bar in (
