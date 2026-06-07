@@ -780,70 +780,6 @@ function escapeHtml(s) {
  * with their original Unicode code points (IPA ɡ U+0261, not ASCII
  * g U+0067, etc.).
  */
-// Span-width ceiling for segment-button labels. Matches the
-// ``--seg-btn-min-w`` token in style.css (33px button outline,
-// minus 3px of internal breathing room). Wide glyphs are rendered
-// at a smaller font size so they sit inside the button instead of
-// pushing the grid out of alignment.
-const SEG_LABEL_MAX_W = 30;
-
-// Wider variant for vowel-chart cells. PHOIBLE inventories carry
-// many 2+ char vowel glyphs (diphthongs like ``ia``, ``oɛ̃`` and
-// combining-mark vowels like ``o̞``) that the consonant-grid's
-// 30 px MAX_W shrinks aggressively. The vowel chart's data area
-// is fluid (cells anchored by percentage) so vowel cells get a
-// slightly wider rasterizer budget than the consonant grid.
-const SEG_LABEL_MAX_W_VOWEL = 36;
-
-// IPA font stack used by the canvas rasterizer. Reads the CSS
-// custom property the buttons themselves consume so Charis IPA +
-// fallbacks reach the canvas paint instead of the system's
-// monospace fallback (which has thin combining-mark support and
-// produces visible blur on PHOIBLE diacritic stacks). Resolved
-// once at module load; if the CSS variable is missing for any
-// reason, falls through to the previous literal so the rasterizer
-// never throws.
-const SEG_FONT_FAMILY = (
-    getComputedStyle(document.documentElement)
-        .getPropertyValue("--font-ipa")
-        .trim()
-    || '"Noto Sans Mono", monospace'
-);
-// Promise that resolves once Charis IPA has attached to the page
-// (or immediately on browsers without ``document.fonts``). Drives
-// the one-shot re-rasterisation pass below so any seg-button
-// painted before Charis arrived (first-paint bootstrap bitmaps,
-// rendered against the system fallback) is rebuilt with the right
-// font instead of staying blurry forever under ``font-display:
-// swap``.
-const IPA_FONT_READY = (
-    typeof document.fonts !== "undefined" && document.fonts.load
-        ? document.fonts.load('14px "Charis IPA"').catch(() => undefined)
-        : Promise.resolve()
-);
-
-/** Re-rasterise every existing seg-button after Charis IPA loads
- *  so the first-paint bitmaps swap to crisp Charis-shaped glyphs.
- *  The rebuild reuses each button's ``data-rast-max-w`` budget so
- *  the font-shrink loop picks the same final size that produced
- *  the original layout (the box stays the same; only the strokes
- *  sharpen). Newer buttons rendered after Charis loads already use
- *  the right family from the start, so they no-op here. */
-IPA_FONT_READY.then(() => {
-    for (const [seg, btn] of state.seg_buttons) {
-        if (!btn || !btn.isConnected) continue;
-        const oldLabel = btn.querySelector(".rasterized-text");
-        if (!oldLabel) continue;
-        const maxW = Number(btn.dataset.rastMaxW) || SEG_LABEL_MAX_W;
-        const newLabel = createRasterizedLabel(
-            seg,
-            `14px ${SEG_FONT_FAMILY}`,
-            maxW,
-        );
-        oldLabel.replaceWith(newLabel);
-    }
-});
-
 function rasterizeText(text, font, maxWidth) {
     const measure = document.createElement("canvas").getContext("2d");
     // 3-px padding all around so antialias edges + accent marks
@@ -1203,11 +1139,20 @@ function _buildConsonantGroup(group) {
 }
 
 /**
- * Build a single segment button. No per-button click handler:
- * a single delegated listener on #seg-grid (wireSegmentDelegation)
- * dispatches by data-seg.
+ * Build a single segment button. Native DOM text rendering, no
+ * canvas rasterization: the desktop QPushButton just sets text on
+ * the button and lets Qt paint it through ``MONO_FAMILIES``; we
+ * mirror that by setting ``textContent`` and letting the browser
+ * shape the glyph through the CSS ``--font-ipa`` family chain
+ * (Charis IPA first). Native rendering is uniformly crisper than
+ * the prior canvas-rasterizer + mask-image pipeline; the
+ * font-display swap also fires automatically so there's no
+ * one-shot blur after Charis attaches.
+ *
+ * No per-button click handler: a single delegated listener on
+ * #seg-grid (wireSegmentDelegation) dispatches by data-seg.
  */
-function _buildSegmentButton(seg, extraAttrs, maxWidth) {
+function _buildSegmentButton(seg, extraAttrs) {
     const btn = document.createElement("button");
     btn.className = "seg-btn";
     btn.type = "button";
@@ -1215,32 +1160,11 @@ function _buildSegmentButton(seg, extraAttrs, maxWidth) {
     btn.dataset.state = "default";
     btn.setAttribute("aria-pressed", "false");
     btn.setAttribute("aria-label", `/${seg}/`);
-    // Tooltip carries the full IPA string. Useful both for the
-    // rasterizer-shrunk case (PHOIBLE contours that drop below the
-    // natural font size) AND for ordinary buttons where the user
-    // wants to confirm the glyph identity without zoom. The cost
-    // is one DOM attribute per button; the browser's native
-    // tooltip handles keyboard focus / hover uniformly.
+    // Tooltip carries the full IPA string so the user can confirm
+    // the glyph identity without zooming. Browser-native tooltip
+    // handles hover + keyboard focus uniformly.
     btn.title = `/${seg}/`;
-    // Rasterize the glyph as a canvas-alpha mask: the literal
-    // codepoint passed in (IPA ɡ U+0261 etc.) is what gets drawn,
-    // and the result lives in CSS-mask space rather than the DOM
-    // text content, so drag-select-and-copy yields nothing.
-    // ``SEG_LABEL_MAX_W`` matches ``--seg-btn-min-w`` in style.css
-    // minus a small breathing margin. The rasterizer downscales the
-    // font when the glyph's natural width would overflow the
-    // fixed-width button (the consonant grid wants uniform cells).
-    // Vowel cells override ``maxWidth`` via ``_buildVowelSegBtn``
-    // because PHOIBLE vowels are often 2-3 characters wide and the
-    // chart's fluid data area can absorb the extra width.
-    const rastMaxW = maxWidth != null ? maxWidth : SEG_LABEL_MAX_W;
-    // Store the rasterizer budget so the post-font-load
-    // re-rasterization pass can rebuild the bitmap with the same
-    // constraint that produced the initial paint.
-    btn.dataset.rastMaxW = String(rastMaxW);
-    btn.appendChild(
-        createRasterizedLabel(seg, `14px ${SEG_FONT_FAMILY}`, rastMaxW),
-    );
+    btn.textContent = seg;
     if (extraAttrs) {
         for (const [k, v] of Object.entries(extraAttrs)) {
             if (k.startsWith("data-")) btn.setAttribute(k, v);
@@ -1250,14 +1174,14 @@ function _buildSegmentButton(seg, extraAttrs, maxWidth) {
     return btn;
 }
 
-/** Factory wrapper that builds a seg-btn for the vowel chart with
- *  the wider rasterizer budget. Used by every vowel-cell builder
- *  so the cell containers and their children agree on layout width.
- *  Adds the ``data-vowel-cell`` flag so CSS can scope the
- *  width override (``.vowel-chart-data .seg-btn`` is more
- *  brittle because the rendered tree differs by cell kind). */
+/** Vowel-cell wrapper: same shape and size as a consonant-grid
+ *  seg button so the chart's visual rhythm matches the consonant
+ *  grid. The desktop's ``SegmentButton`` is single-size; the web
+ *  follows suit. Multi-character PHOIBLE diphthongs that exceed
+ *  the canonical button width are tracked by the CSS overflow
+ *  rule on ``.seg-btn``. */
 function _buildVowelSegBtn(seg) {
-    return _buildSegmentButton(seg, null, SEG_LABEL_MAX_W_VOWEL);
+    return _buildSegmentButton(seg);
 }
 
 /**

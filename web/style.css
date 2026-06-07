@@ -731,9 +731,10 @@ dialog input[type="text"]:focus-visible {
   /* Uniform fixed dimensions so the consonant grid reads as a tidy
      monospaced matrix instead of a jagged bar of variable-width
      pills. Wide segments (affricates with tie bars, modified
-     consonants like /k+͡x+/) keep the same outline as /p/; the
-     rasterizer downscales the glyph to fit (see ``rasterizeText``
-     ``maxWidth`` in main.js). */
+     consonants like /k+͡x+/, PHOIBLE diphthongs like /uˤ/) keep the
+     same outline as /p/; ``overflow: hidden`` clips the glyph
+     visually without expanding the box, matching the desktop's
+     ``QPushButton`` Fixed-size behaviour. */
   width: var(--seg-btn-min-w);
   height: var(--seg-btn-h);
   padding: 0;
@@ -1170,49 +1171,26 @@ dialog input[type="text"]:focus-visible {
   );
 }
 
-/* Vowel-chart seg-btn overrides. Wider button + wider min-width
-   so PHOIBLE's multi-character / combining-mark glyphs ride at
-   full font size instead of being shrunken by the rasterizer.
-   Width tracks ``SEG_LABEL_MAX_W_VOWEL`` (42 px) plus the seg-
-   btn's own breathing margin so the rasterizer's measurement and
-   the layout box agree. The chart's fluid data area absorbs the
-   extra width without forcing the consonant grid to grow. */
-.vowel-chart-data .seg-btn {
-  /* 40 px gives multi-character PHOIBLE diphthongs full-size font
-     room without making single-codepoint vowels feel oversized
-     next to the 33 px consonant-grid buttons. Matched by
-     ``SEG_LABEL_MAX_W_VOWEL`` in main.js so the rasterizer's
-     font-shrink loop targets this exact width. */
-  width: 40px;
-  min-width: 40px;
-}
-
 /* Crowded-cell density tier. STACK cells with 5+ entries get a
-   slightly smaller seg-btn so the column reads as a stack rather
-   than overflowing the row. Font-size stays above the rasterizer
-   floor (FONT_SIZE_MIN_PX = 10) via the natural shrink path; we
-   only tighten the box and the row gap, never below the floor
-   the rasterizer enforces. */
+   slightly shorter seg-btn so the column reads as a stack rather
+   than overflowing the row. Width stays at the canonical
+   ``--seg-btn-w`` so the chart's visual rhythm matches the
+   consonant grid; only the row height tightens to fit more
+   buttons in a stack. */
 .vowel-chart-cell-stack[data-cell-density="dense"] {
   gap: 0;
 }
 .vowel-chart-cell-stack[data-cell-density="dense"] > .seg-btn {
   height: calc(var(--seg-btn-h) - 4px);
-  width: 36px;
-  min-width: 36px;
 }
 /* Pathological-cell tier for 10+ entry stacks (PHOIBLE worst case
-   is 12 in one cell on !XU/UPSID). Pack tighter still so the
-   stack fits within a reasonable row budget. Font-size stays
-   above the rasterizer floor via the natural shrink path; only
-   the button box tightens. */
+   is 12 in one cell on !XU/UPSID). Pack tighter still on the
+   vertical axis; width still matches the consonant grid. */
 .vowel-chart-cell-stack[data-cell-density="ultra"] {
   gap: 0;
 }
 .vowel-chart-cell-stack[data-cell-density="ultra"] > .seg-btn {
   height: calc(var(--seg-btn-h) - 8px);
-  width: 32px;
-  min-width: 32px;
   border-radius: var(--radius-md);
 }
 /* Vertical stack for cells holding multiple vowels (e.g. ə / ɜ / ɚ
