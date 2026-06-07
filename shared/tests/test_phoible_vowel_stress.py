@@ -40,21 +40,8 @@ from phonology_shared.chart.vowels import (
     detect_vowel_profile,
 )
 
-try:
-    from phonology_shared.editor.phoible_provider import PhoibleProvider
-except ImportError:  # pragma: no cover - import only fails in dev
-    pytest.skip("phoible_provider unavailable", allow_module_level=True)
-
-
-def _provider() -> PhoibleProvider:
-    """Construct a PhoibleProvider from the bundled snapshot or
-    skip the whole bank if the snapshot has not been baked."""
-    try:
-        return PhoibleProvider()
-    except FileNotFoundError as exc:  # pragma: no cover
-        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
-    except Exception as exc:  # pragma: no cover
-        pytest.skip(f"PHOIBLE provider unavailable: {exc}")
+# ``phoible_provider`` comes from shared/tests/conftest.py and
+# handles the "snapshot not baked" skip in one place.
 
 
 # The stress bank. Each entry is ``(language, source_short)``; we
@@ -82,21 +69,16 @@ STRESS_BANK: list[tuple[str, str]] = [
 
 
 def _find_inventory_id(
-    provider: PhoibleProvider, language: str, source_short: str
+    phoible_provider, language: str, source_short: str
 ) -> str | None:
     """Look up an inventory id by language + source short label.
     Returns ``None`` when the (language, source) pair is not in the
     snapshot so the test parametrisation skips it rather than
     failing for a release-level data shift."""
-    for descriptor in provider.list_inventories(language):
+    for descriptor in phoible_provider.list_inventories(language):
         if descriptor.source_short == source_short:
             return descriptor.id
     return None
-
-
-@pytest.fixture(scope="module")
-def provider() -> PhoibleProvider:
-    return _provider()
 
 
 @pytest.mark.parametrize(
@@ -105,19 +87,19 @@ def provider() -> PhoibleProvider:
     ids=[f"{lang}-{src}" for lang, src in STRESS_BANK],
 )
 def test_phoible_vowel_placement_does_not_collapse(
-    provider: PhoibleProvider, language: str, source_short: str
+    phoible_provider, language: str, source_short: str
 ) -> None:
     """For every inventory in the stress bank, ensure the vowel
     placement spreads across cells rather than dumping the system
     into the Open-mid Central default. Pins that the placement
     code keeps working on the long tail of PHOIBLE vowel
     inventories."""
-    inv_id = _find_inventory_id(provider, language, source_short)
+    inv_id = _find_inventory_id(phoible_provider, language, source_short)
     if inv_id is None:
         pytest.skip(
             f"PHOIBLE inventory not present: {language}/{source_short}"
         )
-    generated = provider.generate(inv_id)
+    generated = phoible_provider.generate(inv_id)
     vowels = [
         seg
         for seg, b in generated.segments.items()
@@ -163,7 +145,7 @@ def test_phoible_vowel_placement_does_not_collapse(
     ids=lambda v: v,
 )
 def test_phoible_diphthongs_round_trip_secondary_and_flag(
-    provider: PhoibleProvider, language: str, source_short: str
+    phoible_provider, language: str, source_short: str
 ) -> None:
     """Inventories with diphthongs in the bake snapshot must
     surface them through the placement layer: each diphthong's
@@ -172,12 +154,12 @@ def test_phoible_diphthongs_round_trip_secondary_and_flag(
     exact ``(primary_cell, secondary_cell)`` pair (otherwise the
     SVG arrow overlay would render two arrows on top of one
     another)."""
-    inv_id = _find_inventory_id(provider, language, source_short)
+    inv_id = _find_inventory_id(phoible_provider, language, source_short)
     if inv_id is None:
         pytest.skip(
             f"PHOIBLE inventory not present: {language}/{source_short}"
         )
-    generated = provider.generate(inv_id)
+    generated = phoible_provider.generate(inv_id)
     if not generated.vowel_secondary:
         pytest.skip(
             f"{language}/{source_short} carries no diphthongs in the bake"

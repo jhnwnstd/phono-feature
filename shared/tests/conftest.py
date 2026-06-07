@@ -89,3 +89,138 @@ def bundled_engine(
         return FeatureEngine(bundled_inventory(name))
 
     return _load
+
+
+# ---------------------------------------------------------------
+# PHOIBLE corpus fixtures (lifted from the four
+# ``test_phoible_*_stress.py`` files where they were previously
+# duplicated verbatim).
+#
+# ``phoible_provider``: module-scoped singleton; constructing the
+#     PhoibleProvider parses ~3 MB of baked JSON, so each test file
+#     used to pay this once. Lifting to conftest lets new diagnostic
+#     tests share the same instance.
+#
+# ``phoible_inventory_ids_full``: every inventory id in the bake
+#     snapshot (~3020). Used by tests where the metric being
+#     measured is sparse (diphthong coverage; tone-letter routing)
+#     and a sample would miss real cases.
+#
+# ``phoible_inventory_ids_sample``: deterministic 200-inventory
+#     random sample (seed 42). Used by tests pinning geometric or
+#     feature-distribution invariants where coverage at sample size
+#     200 is empirically equivalent to coverage at 3020.
+#
+# ``phoible_label_for`` / ``phoible_build_geometry``: helper
+#     callables returned by fixtures. Test functions receive the
+#     closure and use it like the inline helpers they replaced.
+# ---------------------------------------------------------------
+
+
+_PHOIBLE_SAMPLE_SIZE = 200
+_PHOIBLE_SAMPLE_SEED = 42
+
+
+@pytest.fixture(scope="module")
+def phoible_provider():
+    """Module-scoped :py:class:`PhoibleProvider` singleton.
+
+    Skips the calling test with a clear message when the PHOIBLE
+    bake snapshot is absent (gitignored on fresh checkouts; not
+    present in CI without an explicit bake step).
+    """
+    try:
+        from phonology_shared.editor.phoible_provider import (
+            PhoibleProvider,
+        )
+    except ImportError as exc:  # pragma: no cover
+        pytest.skip(f"phoible_provider unavailable: {exc}")
+    try:
+        return PhoibleProvider()
+    except FileNotFoundError as exc:  # pragma: no cover
+        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
+    except Exception as exc:  # pragma: no cover
+        pytest.skip(f"PHOIBLE provider unavailable: {exc}")
+
+
+@pytest.fixture(scope="module")
+def phoible_inventory_ids_full(phoible_provider) -> list[str]:
+    """Every inventory id in the bake snapshot (~3020)."""
+    # ``_inventories`` is the internal dict; using it directly
+    # avoids materializing 3020 descriptors on every test.
+    return list(phoible_provider._inventories)  # type: ignore[attr-defined]
+
+
+@pytest.fixture(scope="module")
+def phoible_inventory_ids_sample(
+    phoible_inventory_ids_full: list[str],
+) -> list[str]:
+    """Deterministic 200-inventory random sample (seed 42).
+
+    Geometric and feature-distribution invariants reach the same
+    coverage at this sample size as at the full 3020. Cuts per-
+    test runtime by ~15x. Tests pinning sparse phenomena
+    (diphthong endpoints, tone-letter routing) consume
+    :py:func:`phoible_inventory_ids_full` instead.
+    """
+    import random
+
+    if len(phoible_inventory_ids_full) <= _PHOIBLE_SAMPLE_SIZE:
+        return phoible_inventory_ids_full
+    rng = random.Random(_PHOIBLE_SAMPLE_SEED)
+    return rng.sample(phoible_inventory_ids_full, _PHOIBLE_SAMPLE_SIZE)
+
+
+@pytest.fixture(scope="module")
+def phoible_label_for(phoible_provider) -> Callable[[str], str]:
+    """Return a callable mapping an inventory id to a
+    ``"language/source_short"`` label. Used to annotate offender
+    lists so test failures name the failing inventory."""
+
+    def _label(inv_id: str) -> str:
+        desc = phoible_provider.descriptor(inv_id)
+        if desc is None:
+            return inv_id
+        return f"{desc.language_name}/{desc.source_short}"
+
+    return _label
+
+
+@pytest.fixture(scope="module")
+def phoible_build_geometry(phoible_provider) -> Callable[[str], object]:
+    """Return a callable mapping an inventory id to the rendered
+    vowel-chart geometry. Returns ``None`` when the inventory has
+    no vowels (the chart is not rendered).
+
+    Matches the inline ``_build_geometry`` helper the three vowel
+    stress files previously each defined. Materialises the
+    inventory through :py:func:`materialize_phoible_inventory`,
+    constructs a :py:class:`FeatureEngine`, runs
+    :py:func:`detect_vowel_profile`, and calls
+    :py:func:`build_vowel_chart_geometry`.
+    """
+    from phonology_shared.chart.vowels import (
+        build_vowel_chart_geometry,
+        detect_vowel_profile,
+    )
+    from phonology_shared.editor.phoible_provider import (
+        materialize_phoible_inventory,
+    )
+
+    def _build(inv_id: str):
+        inv = materialize_phoible_inventory(phoible_provider, inv_id)
+        engine = FeatureEngine(inv)
+        vowels = list(engine.grouped_segments.get("Vowels", []))
+        if not vowels:
+            return None
+        seg_feats = {
+            s: dict(engine.normalized_segment_feats[s]) for s in vowels
+        }
+        profile = detect_vowel_profile(vowels, seg_feats)
+        secondary = inv.metadata.get("vowel_secondary")
+        secondary_map = secondary if isinstance(secondary, dict) else None
+        return build_vowel_chart_geometry(
+            vowels, profile, seg_feats, vowel_secondary=secondary_map
+        )
+
+    return _build

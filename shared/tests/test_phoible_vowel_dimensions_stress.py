@@ -25,22 +25,9 @@ Skipped when the PHOIBLE bake snapshot is absent.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
-
-from phonology_shared.chart.vowels import (
-    build_vowel_chart_geometry,
-    detect_vowel_profile,
-)
-from phonology_shared.theory.feature_engine import FeatureEngine
-
-try:
-    from phonology_shared.editor.phoible_provider import (
-        PhoibleProvider,
-        materialize_phoible_inventory,
-    )
-except ImportError:  # pragma: no cover - dev-only path
-    pytest.skip("phoible_provider unavailable", allow_module_level=True)
-
 
 # Hard caps. Any single inventory exceeding these breaks the test
 # and names the offender so we know whether to bump the cap or fix
@@ -53,72 +40,19 @@ _NATURAL_HEIGHT_HARD_CAP_PX = 1000
 _MAX_CELL_STACK_HARD_CAP = 13
 
 
-@pytest.fixture(scope="module")
-def provider() -> PhoibleProvider:
-    try:
-        return PhoibleProvider()
-    except FileNotFoundError as exc:  # pragma: no cover
-        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
-    except Exception as exc:  # pragma: no cover
-        pytest.skip(f"PHOIBLE provider unavailable: {exc}")
-
-
-#: Number of PHOIBLE inventories sampled by the dimension-stress
-#: tests below. Every assertion in this file is a GEOMETRIC
-#: invariant (width / height caps, cell-stack ceiling) — properties
-#: of the feature-distribution space, not language-specific
-#: pathologies. A 200-inventory random sample with a fixed seed
-#: captures the full distribution of feature shapes (vowel
-#: cardinality, height/backness contrasts) while cutting per-test
-#: runtime from ~12 s to ~0.8 s. The diphthong-specific tests in
-#: ``test_phoible_vowel_chart_stress`` keep their full-corpus
-#: iteration because diphthong metadata is sparse and a sample
-#: would miss rare cases.
-_DIMENSION_SAMPLE_SIZE = 200
-_DIMENSION_SAMPLE_SEED = 42
-
-
-@pytest.fixture(scope="module")
-def all_inventory_ids(provider: PhoibleProvider) -> list[str]:
-    """Deterministic 200-inventory sample. See the rationale on
-    ``_DIMENSION_SAMPLE_SIZE`` for why sampling is safe for the
-    geometric invariants this file pins."""
-    import random
-
-    all_ids = list(provider._inventories)  # type: ignore[attr-defined]
-    if len(all_ids) <= _DIMENSION_SAMPLE_SIZE:
-        return all_ids
-    rng = random.Random(_DIMENSION_SAMPLE_SEED)
-    return rng.sample(all_ids, _DIMENSION_SAMPLE_SIZE)
-
-
-def _label_for(provider: PhoibleProvider, inv_id: str) -> str:
-    desc = provider.descriptor(inv_id)
-    if desc is None:
-        return inv_id
-    return f"{desc.language_name}/{desc.source_short}"
-
-
-def _build_geometry(provider: PhoibleProvider, inv_id: str):
-    """Materialize the inventory through the same pipeline the UI
-    uses and return the chart geometry. ``None`` if the inventory
-    has no vowels (the chart is not rendered)."""
-    inv = materialize_phoible_inventory(provider, inv_id)
-    engine = FeatureEngine(inv)
-    vowels = list(engine.grouped_segments.get("Vowels", []))
-    if not vowels:
-        return None
-    seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
-    profile = detect_vowel_profile(vowels, seg_feats)
-    secondary = inv.metadata.get("vowel_secondary")
-    secondary_map = secondary if isinstance(secondary, dict) else None
-    return build_vowel_chart_geometry(
-        vowels, profile, seg_feats, vowel_secondary=secondary_map
-    )
+# ``phoible_provider`` / ``phoible_inventory_ids_sample`` /
+# ``phoible_label_for`` / ``phoible_build_geometry`` come from
+# conftest.py. Every assertion in this file is a GEOMETRIC
+# invariant (width / height caps, cell-stack ceiling) -- properties
+# of the feature-distribution space, not language-specific
+# pathologies -- so the deterministic 200-inventory sample is the
+# right corpus here.
 
 
 def test_v1_natural_width_within_hard_cap(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    phoible_build_geometry: Callable[[str], object],
+    phoible_label_for: Callable[[str], str],
+    phoible_inventory_ids_sample: list[str],
 ) -> None:
     """Every PHOIBLE inventory's natural chart width fits within
     the hard cap. The container width
@@ -127,13 +61,13 @@ def test_v1_natural_width_within_hard_cap(
     horizontal scroll.
     """
     offenders: list[tuple[str, int]] = []
-    for inv_id in all_inventory_ids:
-        geom = _build_geometry(provider, inv_id)
+    for inv_id in phoible_inventory_ids_sample:
+        geom = phoible_build_geometry(inv_id)
         if geom is None:
             continue
         if geom.natural_data_width_px > _NATURAL_WIDTH_HARD_CAP_PX:
             offenders.append(
-                (_label_for(provider, inv_id), geom.natural_data_width_px)
+                (phoible_label_for(inv_id), geom.natural_data_width_px)
             )
     assert not offenders, (
         f"natural vowel-chart width exceeded "
@@ -143,7 +77,9 @@ def test_v1_natural_width_within_hard_cap(
 
 
 def test_v2_natural_height_within_hard_cap(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    phoible_build_geometry: Callable[[str], object],
+    phoible_label_for: Callable[[str], str],
+    phoible_inventory_ids_sample: list[str],
 ) -> None:
     """Every PHOIBLE inventory's natural chart height fits within
     the hard cap. The container's parent must scroll if the
@@ -154,13 +90,13 @@ def test_v2_natural_height_within_hard_cap(
     natural height the renderer should be prepared to host.
     """
     offenders: list[tuple[str, int]] = []
-    for inv_id in all_inventory_ids:
-        geom = _build_geometry(provider, inv_id)
+    for inv_id in phoible_inventory_ids_sample:
+        geom = phoible_build_geometry(inv_id)
         if geom is None:
             continue
         if geom.natural_data_height_px > _NATURAL_HEIGHT_HARD_CAP_PX:
             offenders.append(
-                (_label_for(provider, inv_id), geom.natural_data_height_px)
+                (phoible_label_for(inv_id), geom.natural_data_height_px)
             )
     assert not offenders, (
         f"natural vowel-chart height exceeded "
@@ -170,7 +106,9 @@ def test_v2_natural_height_within_hard_cap(
 
 
 def test_v3_no_cell_stack_exceeds_hard_cap(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    phoible_build_geometry: Callable[[str], object],
+    phoible_label_for: Callable[[str], str],
+    phoible_inventory_ids_sample: list[str],
 ) -> None:
     """No single chart cell holds more than the hard cap of
     segments. PHOIBLE's worst case is currently 12; the cap is
@@ -178,13 +116,13 @@ def test_v3_no_cell_stack_exceeds_hard_cap(
     catching unbounded explosions.
     """
     offenders: list[tuple[str, int]] = []
-    for inv_id in all_inventory_ids:
-        geom = _build_geometry(provider, inv_id)
+    for inv_id in phoible_inventory_ids_sample:
+        geom = phoible_build_geometry(inv_id)
         if geom is None or not geom.cells:
             continue
         worst = max(len(c.entries) for c in geom.cells)
         if worst > _MAX_CELL_STACK_HARD_CAP:
-            offenders.append((_label_for(provider, inv_id), worst))
+            offenders.append((phoible_label_for(inv_id), worst))
     assert not offenders, (
         f"single-cell stack exceeded {_MAX_CELL_STACK_HARD_CAP} "
         f"in {len(offenders)} inventories: {offenders[:10]}"
@@ -192,7 +130,9 @@ def test_v3_no_cell_stack_exceeds_hard_cap(
 
 
 def test_v4_natural_width_floor_fits_in_vowel_container(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    phoible_build_geometry: Callable[[str], object],
+    phoible_label_for: Callable[[str], str],
+    phoible_inventory_ids_sample: list[str],
 ) -> None:
     """The chart container's pinned width
     (``VOWEL_NATURAL_W``) must hold every PHOIBLE inventory's
@@ -209,13 +149,13 @@ def test_v4_natural_width_floor_fits_in_vowel_container(
     # against an arbitrary chrome-budget refactor. If the test
     # surfaces, recompute the budget against the live constant.
     data_area_w = VOWEL_NATURAL_W - 60  # rough chrome reserve
-    for inv_id in all_inventory_ids:
-        geom = _build_geometry(provider, inv_id)
+    for inv_id in phoible_inventory_ids_sample:
+        geom = phoible_build_geometry(inv_id)
         if geom is None:
             continue
         if geom.natural_data_width_px > data_area_w:
             offenders.append(
-                (_label_for(provider, inv_id), geom.natural_data_width_px)
+                (phoible_label_for(inv_id), geom.natural_data_width_px)
             )
     assert not offenders, (
         f"natural width exceeded the chart container's data-area "
@@ -225,8 +165,8 @@ def test_v4_natural_width_floor_fits_in_vowel_container(
 
 
 def test_v5_report_size_distribution(
-    provider: PhoibleProvider,
-    all_inventory_ids: list[str],
+    phoible_build_geometry: Callable[[str], object],
+    phoible_inventory_ids_sample: list[str],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Diagnostic-only: prints percentile distribution of natural
@@ -236,8 +176,8 @@ def test_v5_report_size_distribution(
     widths: list[int] = []
     heights: list[int] = []
     worst_cells: list[int] = []
-    for inv_id in all_inventory_ids:
-        geom = _build_geometry(provider, inv_id)
+    for inv_id in phoible_inventory_ids_sample:
+        geom = phoible_build_geometry(inv_id)
         if geom is None:
             continue
         widths.append(geom.natural_data_width_px)

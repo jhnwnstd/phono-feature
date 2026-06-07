@@ -32,16 +32,10 @@ from __future__ import annotations
 import pytest
 
 from phonology_shared.data.inventory import Inventory
+from phonology_shared.editor.phoible_provider import (
+    materialize_phoible_inventory,
+)
 from phonology_shared.theory.feature_engine import FeatureEngine
-
-try:
-    from phonology_shared.editor.phoible_provider import (
-        PhoibleProvider,
-        materialize_phoible_inventory,
-    )
-except ImportError:  # pragma: no cover - dev-only path
-    pytest.skip("phoible_provider unavailable", allow_module_level=True)
-
 
 # Group labels the classifier emits for consonant segments. Drawn
 # from the PRIMARY_GROUPS + derived breakouts + relabel patterns in
@@ -79,52 +73,19 @@ _CONSONANT_GROUP_NAMES: frozenset[str] = frozenset(
 )
 
 
-@pytest.fixture(scope="module")
-def provider() -> PhoibleProvider:
-    try:
-        return PhoibleProvider()
-    except FileNotFoundError as exc:  # pragma: no cover
-        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
-    except Exception as exc:  # pragma: no cover
-        pytest.skip(f"PHOIBLE provider unavailable: {exc}")
-
-
-_CLASSIFY_SAMPLE_SIZE = 200
-_CLASSIFY_SAMPLE_SEED = 42
-
-
-@pytest.fixture(scope="module")
-def all_inventory_ids(provider: PhoibleProvider) -> list[str]:
-    """Full PHOIBLE corpus. Used by B5/B6 (tone-related invariants)
-    where sparse cross-linguistic occurrence makes sampling risky."""
-    return list(provider._inventories)  # type: ignore[attr-defined]
-
-
-@pytest.fixture(scope="module")
-def sampled_inventory_ids(all_inventory_ids: list[str]) -> list[str]:
-    """Deterministic 200-inventory sample for B1/B2 — pure
-    classification invariants (vowel-phonemes → Vowels group, only
-    vowel-phonemes in Vowels) that depend on feature-distribution
-    space rather than language specifics. Sampling cuts per-test
-    runtime from ~9.5 s to ~0.6 s while preserving coverage of
-    every distinct feature-shape combination."""
-    import random
-
-    if len(all_inventory_ids) <= _CLASSIFY_SAMPLE_SIZE:
-        return all_inventory_ids
-    rng = random.Random(_CLASSIFY_SAMPLE_SEED)
-    return rng.sample(all_inventory_ids, _CLASSIFY_SAMPLE_SIZE)
-
-
-def _label_for(provider: PhoibleProvider, inv_id: str) -> str:
-    desc = provider.descriptor(inv_id)
-    if desc is None:
-        return inv_id
-    return f"{desc.language_name}/{desc.source_short}"
+# Fixtures (``phoible_provider``, ``phoible_inventory_ids_full``,
+# ``phoible_inventory_ids_sample``, ``phoible_label_for``) come
+# from shared/tests/conftest.py. Classification invariants
+# (B1/B2: vowel-phoneme routing) consume the 200-inventory sample
+# because the feature-distribution space carries the coverage.
+# Tone-related invariants (B5/B6) consume the full corpus because
+# tone phonemes are sparse cross-linguistically.
 
 
 def test_b1_no_vowel_phoneme_lands_in_any_consonant_group(
-    provider: PhoibleProvider, sampled_inventory_ids: list[str]
+    phoible_provider,
+    phoible_label_for,
+    phoible_inventory_ids_sample: list[str],
 ) -> None:
     """The classifier must never route a vowel-phoneme
     (``Syllabic=+`` AND ``Consonantal!=+``) into a consonant
@@ -140,8 +101,8 @@ def test_b1_no_vowel_phoneme_lands_in_any_consonant_group(
     manner-class group; they are not flagged here.
     """
     offenders: list[tuple[str, str, list[str]]] = []
-    for inv_id in sampled_inventory_ids:
-        inv = materialize_phoible_inventory(provider, inv_id)
+    for inv_id in phoible_inventory_ids_sample:
+        inv = materialize_phoible_inventory(phoible_provider, inv_id)
         engine = FeatureEngine(inv)
         groups = engine.grouped_segments
         for gname in _CONSONANT_GROUP_NAMES:
@@ -157,9 +118,7 @@ def test_b1_no_vowel_phoneme_lands_in_any_consonant_group(
                 )
             ]
             if misrouted:
-                offenders.append(
-                    (_label_for(provider, inv_id), gname, misrouted)
-                )
+                offenders.append((phoible_label_for(inv_id), gname, misrouted))
     assert not offenders, (
         f"vowel-phonemes leaked into consonant groups in "
         f"{len(offenders)} (inventory, group) buckets; first 5: "
@@ -168,15 +127,17 @@ def test_b1_no_vowel_phoneme_lands_in_any_consonant_group(
 
 
 def test_b2_only_vowel_phonemes_land_in_vowels(
-    provider: PhoibleProvider, sampled_inventory_ids: list[str]
+    phoible_provider,
+    phoible_label_for,
+    phoible_inventory_ids_sample: list[str],
 ) -> None:
     """Symmetric guarantee: ``Vowels`` must hold only vowel-phonemes
     (``Syllabic=+`` AND ``Consonantal!=+``). A non-syllabic
     segment in Vowels OR a syllabic consonant in Vowels both
     indicate a major-class invariant regression."""
     offenders: list[tuple[str, list[str]]] = []
-    for inv_id in sampled_inventory_ids:
-        inv = materialize_phoible_inventory(provider, inv_id)
+    for inv_id in phoible_inventory_ids_sample:
+        inv = materialize_phoible_inventory(phoible_provider, inv_id)
         engine = FeatureEngine(inv)
         vowels = engine.grouped_segments.get("Vowels", [])
         misrouted = [
@@ -188,7 +149,7 @@ def test_b2_only_vowel_phonemes_land_in_vowels(
             )
         ]
         if misrouted:
-            offenders.append((_label_for(provider, inv_id), misrouted))
+            offenders.append((phoible_label_for(inv_id), misrouted))
     assert not offenders, (
         f"non-vowel-phonemes leaked into Vowels in "
         f"{len(offenders)} inventories; first 5: {offenders[:5]}"
@@ -196,16 +157,19 @@ def test_b2_only_vowel_phonemes_land_in_vowels(
 
 
 def test_b3_classifier_assigns_every_segment(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    phoible_provider, phoible_label_for, phoible_inventory_ids_full: list[str]
 ) -> None:
     """Every segment must land in exactly one group; an empty
     "Other" fallback or unassigned segment would surface a
     silently-broken classifier. Sampled to keep runtime bounded
     (the B1/B2 sweeps cover the full set with cheaper checks)."""
-    sample = all_inventory_ids[::15]  # ~200 inventories
+    # Stride-sampled subset of the full corpus (~200 inventories).
+    # ``phoible_inventory_ids_sample`` would have worked too; the
+    # stride keeps this test independent of the conftest seed.
+    sample = phoible_inventory_ids_full[::15]
     unassigned: list[tuple[str, list[str]]] = []
     for inv_id in sample:
-        inv = materialize_phoible_inventory(provider, inv_id)
+        inv = materialize_phoible_inventory(phoible_provider, inv_id)
         engine = FeatureEngine(inv)
         groups = engine.grouped_segments
         placed: set[str] = set()
@@ -213,7 +177,7 @@ def test_b3_classifier_assigns_every_segment(
             placed.update(segs)
         missing = set(inv.segments) - placed
         if missing:
-            unassigned.append((_label_for(provider, inv_id), sorted(missing)))
+            unassigned.append((phoible_label_for(inv_id), sorted(missing)))
     assert not unassigned, (
         f"{len(unassigned)} inventories left segments unassigned; "
         f"first 5: {unassigned[:5]}"
@@ -364,7 +328,7 @@ def test_b4_nasal_vowel_lands_in_vowels_for_every_feature_set_shape(
 
 
 def test_b5_no_tone_phoneme_lands_in_a_consonant_group(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    phoible_provider, phoible_label_for, phoible_inventory_ids_full: list[str]
 ) -> None:
     """The classifier must never route a tone-phoneme
     (``HighTone=+`` AND no positive ``Consonantal`` / ``Syllabic``)
@@ -376,8 +340,8 @@ def test_b5_no_tone_phoneme_lands_in_a_consonant_group(
     (the second group in document order) across ~860 inventories.
     """
     offenders: list[tuple[str, str, list[str]]] = []
-    for inv_id in all_inventory_ids:
-        inv = materialize_phoible_inventory(provider, inv_id)
+    for inv_id in phoible_inventory_ids_full:
+        inv = materialize_phoible_inventory(phoible_provider, inv_id)
         engine = FeatureEngine(inv)
         groups = engine.grouped_segments
         for gname in _CONSONANT_GROUP_NAMES:
@@ -394,9 +358,7 @@ def test_b5_no_tone_phoneme_lands_in_a_consonant_group(
                 )
             ]
             if misrouted:
-                offenders.append(
-                    (_label_for(provider, inv_id), gname, misrouted)
-                )
+                offenders.append((phoible_label_for(inv_id), gname, misrouted))
     assert not offenders, (
         f"tone-phonemes leaked into consonant groups in "
         f"{len(offenders)} (inventory, group) buckets; first 5: "
@@ -405,7 +367,7 @@ def test_b5_no_tone_phoneme_lands_in_a_consonant_group(
 
 
 def test_b6_phoible_tone_letters_land_in_tones_group(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    phoible_provider, phoible_label_for, phoible_inventory_ids_full: list[str]
 ) -> None:
     """Positive symmetry: every PHOIBLE Chao tone letter segment
     in the snapshot must land in the ``Tones`` group. Walks the
@@ -414,8 +376,8 @@ def test_b6_phoible_tone_letters_land_in_tones_group(
     surfaces here with the failing inventory named."""
     tone_codepoints = set(range(0x02E5, 0x02EA))  # ˥˦˧˨˩
     missed: list[tuple[str, list[str]]] = []
-    for inv_id in all_inventory_ids:
-        inv = materialize_phoible_inventory(provider, inv_id)
+    for inv_id in phoible_inventory_ids_full:
+        inv = materialize_phoible_inventory(phoible_provider, inv_id)
         engine = FeatureEngine(inv)
         tones_group = engine.grouped_segments.get("Tones", [])
         # Identify segments that contain a Chao tone letter codepoint.
@@ -431,7 +393,7 @@ def test_b6_phoible_tone_letters_land_in_tones_group(
             continue
         missed_in_inv = [s for s in candidates if s not in tones_group]
         if missed_in_inv:
-            missed.append((_label_for(provider, inv_id), missed_in_inv))
+            missed.append((phoible_label_for(inv_id), missed_in_inv))
     assert not missed, (
         f"PHOIBLE tone letters missed the Tones group in "
         f"{len(missed)} inventories; first 5: {missed[:5]}"

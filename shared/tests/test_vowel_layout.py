@@ -394,8 +394,12 @@ def test_tense_overrides_conflicting_atr(profile):
 
 @pytest.fixture
 def profile():
-    """Default profile with every feature considered active. Tests
-    that don't care about the fallback gating can use this."""
+    """Default profile with every feature considered active AND
+    contrastive. Tests that don't care about the fallback gating
+    can use this. ``has_tense_contrast`` / ``has_atr_contrast`` set
+    True so the divergence detector treats both as real sources --
+    most tests in this file rely on tense/ATR being height-split
+    sources rather than uniform inventory polarities."""
     return VowelProfile(
         has_front=True,
         has_back=True,
@@ -404,7 +408,9 @@ def profile():
         has_round=True,
         has_labial=True,
         has_atr=True,
+        has_atr_contrast=True,
         has_tense=True,
+        has_tense_contrast=True,
         has_coronal=True,
         has_syllabic=True,
         has_consonantal=True,

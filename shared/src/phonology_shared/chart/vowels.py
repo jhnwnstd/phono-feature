@@ -314,6 +314,21 @@ class VowelProfile:
     #: to ``[-atr]`` / ``[-tense]`` in feature systems that contrast
     #: the two roots.
     has_rtr: bool = False
+    #: True iff the inventory has at least one ``+tense`` AND at
+    #: least one ``-tense`` vowel. Same shape as
+    #: :py:attr:`has_long_contrast`. The divergence detector
+    #: ignores ``tense`` as a height-split source when this is
+    #: False, because a uniform polarity (every vowel coded
+    #: ``-tense`` in a no-tense-contrast inventory) carries no
+    #: positive information about the split — PHOIBLE codes most
+    #: non-tense-system vowels as ``tense=-`` by default, which
+    #: under the old rule disagreed with the explicit ATR coding
+    #: and fired SPLIT_SOURCE_DIVERGENCE on every vowel.
+    has_tense_contrast: bool = False
+    #: Same contract for ATR.
+    has_atr_contrast: bool = False
+    #: Same contract for RTR.
+    has_rtr_contrast: bool = False
     #: Relative-articulation diacritics. Each lets the refinement
     #: layer nudge the base row or column one step in the
     #: corresponding direction.
@@ -570,12 +585,22 @@ def detect_vowel_profile(
     """
     active: set[str] = set()
     long_polarities: set[str] = set()
+    tense_polarities: set[str] = set()
+    atr_polarities: set[str] = set()
+    rtr_polarities: set[str] = set()
     for seg in segs:
         for feat, val in seg_feats.get(seg, {}).items():
+            key = feat.lower()
             if val != "0":
-                active.add(feat.lower())
-            if feat.lower() == "long" and val in ("+", "-"):
+                active.add(key)
+            if key == "long" and val in ("+", "-"):
                 long_polarities.add(val)
+            elif key == "tense" and val in ("+", "-"):
+                tense_polarities.add(val)
+            elif key == "atr" and val in ("+", "-"):
+                atr_polarities.add(val)
+            elif key == "rtr" and val in ("+", "-"):
+                rtr_polarities.add(val)
     return VowelProfile(
         has_front="front" in active,
         has_back="back" in active,
@@ -592,6 +617,10 @@ def detect_vowel_profile(
         has_long_contrast=("+" in long_polarities)
         and ("-" in long_polarities),
         has_rtr="rtr" in active,
+        has_tense_contrast=("+" in tense_polarities)
+        and ("-" in tense_polarities),
+        has_atr_contrast=("+" in atr_polarities) and ("-" in atr_polarities),
+        has_rtr_contrast=("+" in rtr_polarities) and ("-" in rtr_polarities),
         has_raised="raised" in active,
         has_lowered="lowered" in active,
         has_advanced="advanced" in active,
@@ -785,6 +814,7 @@ def _nonzero(val: str | None) -> str | None:
 def _height_split_value(
     feats: Mapping[str, str],
     policy: PlacementPolicy | None = None,
+    profile: VowelProfile | None = None,
 ) -> tuple[str | None, str, bool]:
     """Resolve the tense/ATR/RTR split that distinguishes adjacent
     height tiers (Close vs Near-close, Close-mid vs Open-mid).
@@ -802,6 +832,16 @@ def _height_split_value(
     is checked across all three sources whenever more than one is
     specified.
 
+    Inventory-level contrast gating: a source is only counted
+    when ``profile.has_<feat>_contrast`` is True. Inventories that
+    encode every vowel ``tense=+`` (or every vowel ``atr=-``)
+    without a real contrast carry no positive information on that
+    feature; under the old "anywhere-non-zero counts as a source"
+    rule, PHOIBLE inventories fired SPLIT_SOURCE_DIVERGENCE on
+    every vowel because PHOIBLE stores the columns even where the
+    contrast is absent. ``profile=None`` skips the gate (back-
+    compat for callers that built a feature bundle by hand).
+
     Resolution policy: when several specified and agree (with RTR
     inverted), take it. When several disagree, prefer the highest-
     priority specified source and surface the conflict. When only
@@ -812,18 +852,52 @@ def _height_split_value(
     tense = _nonzero(feats.get("tense"))
     atr = _nonzero(feats.get("atr"))
     rtr = _nonzero(feats.get("rtr"))
-    rtr_inverted = ("-" if rtr == "+" else "+") if rtr is not None else None
+    # Asymmetric RTR -> ATR-equivalent inversion. ``+rtr``
+    # (retracted tongue root) implies ``-atr`` because a vowel
+    # can't be both advanced and retracted at the same time --
+    # this drives a real claim about the ATR axis. ``-rtr`` (not
+    # retracted) does NOT imply ``+atr``: a vowel can be neither
+    # advanced nor retracted, so a negative RTR carries no positive
+    # claim about ATR direction. The earlier symmetric rule
+    # (``-rtr -> +atr-equiv``) fired SPLIT_SOURCE_DIVERGENCE on
+    # every PHOIBLE vowel because PHOIBLE encodes most non-ATR-
+    # system vowels as ``atr=- rtr=-``; under the old inversion
+    # the synthesized ``+atr-equiv`` disagreed with the explicit
+    # ``atr=-`` and the divergence detector counted it as a
+    # source-disagreement.
+    rtr_inverted = "-" if rtr == "+" else None
 
     def _has_disagreement(*vals: str | None) -> bool:
         present = [v for v in vals if v is not None]
         return len(present) >= 2 and len(set(present)) > 1
 
+    # Inventory-level contrast gating for divergence DETECTION only.
+    # The values are still used for placement resolution; the gating
+    # only stops a uniform-polarity source from being counted as a
+    # disagreement against the others. PHOIBLE codes most non-tense-
+    # system vowels as ``tense=-`` uniformly (so reading ``tense=-``
+    # alongside ``atr=-`` looks like agreement, not a real source).
+    # The intent-coded Hayes inventories (Ilokano /e/ at Close-mid
+    # via ``tense=+``) still resolve through value-resolution
+    # because the value is read regardless of the contrast flag --
+    # only the divergence flag is gated.
+    tense_for_div = (
+        tense if profile is None or profile.has_tense_contrast else None
+    )
+    atr_for_div = atr if profile is None or profile.has_atr_contrast else None
+    rtr_inverted_for_div = (
+        rtr_inverted if profile is None or profile.has_rtr_contrast else None
+    )
+
     if tense is not None:
-        divergent = _has_disagreement(tense, atr, rtr_inverted)
+        divergent = _has_disagreement(
+            tense_for_div, atr_for_div, rtr_inverted_for_div
+        )
         if atr is not None:
             label = (
                 "tense/ATR"
-                if tense == atr and not _has_disagreement(tense, rtr_inverted)
+                if tense == atr
+                and not _has_disagreement(tense_for_div, rtr_inverted_for_div)
                 else (
                     "tense (overrides conflicting ATR/RTR)"
                     if divergent
@@ -838,7 +912,7 @@ def _height_split_value(
             )
         return tense, label, divergent
     if atr is not None:
-        divergent = _has_disagreement(atr, rtr_inverted)
+        divergent = _has_disagreement(atr_for_div, rtr_inverted_for_div)
         label = "ATR" if not divergent else "ATR (overrides conflicting RTR)"
         return atr, label, divergent
     if rtr is not None and policy.allow_rtr_split:
@@ -862,7 +936,7 @@ def _infer_height(
     hi = feats.get("high", "0")
     lo = feats.get("low", "0")
     split_value, split_source, split_divergent = _height_split_value(
-        feats, policy
+        feats, policy, profile
     )
     base_flags: frozenset[PlacementFlag] = (
         frozenset({PlacementFlag.SPLIT_SOURCE_DIVERGENCE})

@@ -52,53 +52,17 @@ from phonology_shared.chart.vowels import (
     compute_placements,
     detect_vowel_profile,
 )
+from phonology_shared.editor.phoible_provider import (
+    materialize_phoible_inventory,
+)
 
-try:
-    from phonology_shared.editor.phoible_provider import (
-        PhoibleProvider,
-        materialize_phoible_inventory,
-    )
-except ImportError:  # pragma: no cover - dev-only path
-    pytest.skip("phoible_provider unavailable", allow_module_level=True)
-
-
-@pytest.fixture(scope="module")
-def provider() -> PhoibleProvider:
-    try:
-        return PhoibleProvider()
-    except FileNotFoundError as exc:  # pragma: no cover
-        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
-    except Exception as exc:  # pragma: no cover
-        pytest.skip(f"PHOIBLE provider unavailable: {exc}")
-
-
-_CHART_SAMPLE_SIZE = 200
-_CHART_SAMPLE_SEED = 42
-
-
-@pytest.fixture(scope="module")
-def all_inventory_ids(provider: PhoibleProvider) -> list[str]:
-    """Every inventory id in the bake snapshot (3000+). Used by
-    the diphthong-aware tests (``test_e4``, ``test_e5``) where
-    sparse metadata means a sample would miss real cases."""
-    return list(provider._inventories)  # type: ignore[attr-defined]
-
-
-@pytest.fixture(scope="module")
-def sampled_inventory_ids(all_inventory_ids: list[str]) -> list[str]:
-    """Deterministic 200-inventory sample consumed by the chart-
-    structure tests (``test_e1`` / ``test_e2`` / ``test_e3``).
-    These pin shape invariants (vowel_secondary key subset,
-    per-cell segment count cap, default-anchor ceiling) that
-    depend on the feature-distribution space rather than specific
-    languages, so sampling preserves coverage while cutting
-    per-test runtime from ~6 s to ~0.4 s."""
-    import random
-
-    if len(all_inventory_ids) <= _CHART_SAMPLE_SIZE:
-        return all_inventory_ids
-    rng = random.Random(_CHART_SAMPLE_SEED)
-    return rng.sample(all_inventory_ids, _CHART_SAMPLE_SIZE)
+# Fixtures (``phoible_provider``, ``phoible_inventory_ids_full``,
+# ``phoible_inventory_ids_sample``) come from
+# shared/tests/conftest.py. Chart-structure tests (e1/e2/e3) use
+# the 200-inventory sample because the shape invariants they pin
+# depend on feature-distribution space. Diphthong-aware tests
+# (e4/e5) use the full corpus because diphthong metadata is
+# sparse.
 
 
 def _vowels_of(generated_segments: dict[str, dict[str, str]]) -> list[str]:
@@ -113,7 +77,7 @@ def _vowels_of(generated_segments: dict[str, dict[str, str]]) -> list[str]:
 
 
 def test_e1_vowel_secondary_keys_subset_of_engine_segments(
-    provider: PhoibleProvider, sampled_inventory_ids: list[str]
+    phoible_provider, phoible_inventory_ids_sample: list[str]
 ) -> None:
     """Every key in ``metadata['vowel_secondary']`` must appear in
     ``inventory.segments``. This is the NFC-mismatch regression
@@ -121,14 +85,14 @@ def test_e1_vowel_secondary_keys_subset_of_engine_segments(
     the engine's NFC-folded segment keys, silently dropping
     nasal diphthongs from the chart."""
     offenders: list[tuple[str, set[str]]] = []
-    for inv_id in sampled_inventory_ids:
-        inv = materialize_phoible_inventory(provider, inv_id)
+    for inv_id in phoible_inventory_ids_sample:
+        inv = materialize_phoible_inventory(phoible_provider, inv_id)
         vs = inv.metadata.get("vowel_secondary") or {}
         if not vs:
             continue
         missing = set(vs) - set(inv.segments)
         if missing:
-            desc = provider.descriptor(inv_id)
+            desc = phoible_provider.descriptor(inv_id)
             label = (
                 f"{desc.language_name}/{desc.source_short}"
                 if desc is not None
@@ -143,7 +107,7 @@ def test_e1_vowel_secondary_keys_subset_of_engine_segments(
 
 
 def test_e2_no_cell_holds_more_than_eight_segments(
-    provider: PhoibleProvider, sampled_inventory_ids: list[str]
+    phoible_provider, phoible_inventory_ids_sample: list[str]
 ) -> None:
     """Long-tail collision ceiling. PHOIBLE's worst case currently
     is 12 segments in one cell; the test caps at 8 because anything
@@ -156,8 +120,8 @@ def test_e2_no_cell_holds_more_than_eight_segments(
     # flag anything that grows beyond it.
     HARD_CEILING = 14
     offenders: list[tuple[str, int]] = []
-    for inv_id in sampled_inventory_ids:
-        gen = provider.generate(inv_id)
+    for inv_id in phoible_inventory_ids_sample:
+        gen = phoible_provider.generate(inv_id)
         vowels = _vowels_of(dict(gen.segments))
         if not vowels:
             continue
@@ -171,7 +135,7 @@ def test_e2_no_cell_holds_more_than_eight_segments(
         )
         max_size = max((len(segs) for segs in occupied.values()), default=0)
         if max_size > HARD_CEILING:
-            desc = provider.descriptor(inv_id)
+            desc = phoible_provider.descriptor(inv_id)
             label = (
                 f"{desc.language_name}/{desc.source_short}"
                 if desc is not None
@@ -185,7 +149,7 @@ def test_e2_no_cell_holds_more_than_eight_segments(
 
 
 def test_e3_default_anchor_ceiling_for_large_inventories(
-    provider: PhoibleProvider, sampled_inventory_ids: list[str]
+    phoible_provider, phoible_inventory_ids_sample: list[str]
 ) -> None:
     """For inventories with >= 7 vowels, at most 35% of vowels may
     collapse to the Open-mid Central default anchor. Catches mass
@@ -208,8 +172,8 @@ def test_e3_default_anchor_ceiling_for_large_inventories(
     default_row = ROW_LABELS.index("Open-mid")
     default_cell = (default_row, 2)  # COL_LABELS[2] == "Central"
     offenders: list[tuple[str, int, float]] = []
-    for inv_id in sampled_inventory_ids:
-        gen = provider.generate(inv_id)
+    for inv_id in phoible_inventory_ids_sample:
+        gen = phoible_provider.generate(inv_id)
         vowels = _vowels_of(dict(gen.segments))
         if len(vowels) < MIN_VOWELS:
             continue
@@ -229,7 +193,7 @@ def test_e3_default_anchor_ceiling_for_large_inventories(
         )
         pct = collapsed / len(vowels)
         if pct > MAX_PCT:
-            desc = provider.descriptor(inv_id)
+            desc = phoible_provider.descriptor(inv_id)
             label = (
                 f"{desc.language_name}/{desc.source_short}"
                 if desc is not None
@@ -244,7 +208,7 @@ def test_e3_default_anchor_ceiling_for_large_inventories(
 
 
 def test_e4_diphthong_secondary_is_present_or_intentionally_suppressed(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    phoible_provider, phoible_inventory_ids_full: list[str]
 ) -> None:
     """For every PHOIBLE inventory with diphthongs, every key in
     ``vowel_secondary`` either produces a placement with a non-null
@@ -263,8 +227,8 @@ def test_e4_diphthong_secondary_is_present_or_intentionally_suppressed(
       should be catching.
     """
     offenders: list[tuple[str, list[str]]] = []
-    for inv_id in all_inventory_ids:
-        inv = materialize_phoible_inventory(provider, inv_id)
+    for inv_id in phoible_inventory_ids_full:
+        inv = materialize_phoible_inventory(phoible_provider, inv_id)
         vs = inv.metadata.get("vowel_secondary") or {}
         if not vs:
             continue
@@ -299,7 +263,7 @@ def test_e4_diphthong_secondary_is_present_or_intentionally_suppressed(
                 continue
             missing.append(seg)
         if missing:
-            desc = provider.descriptor(inv_id)
+            desc = phoible_provider.descriptor(inv_id)
             label = (
                 f"{desc.language_name}/{desc.source_short}"
                 if desc is not None
@@ -313,8 +277,8 @@ def test_e4_diphthong_secondary_is_present_or_intentionally_suppressed(
 
 
 def test_e5_pair_collision_tracker(
-    provider: PhoibleProvider,
-    all_inventory_ids: list[str],
+    phoible_provider,
+    phoible_inventory_ids_full: list[str],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Soft check: counts inventories where >= 3 distinct
@@ -326,8 +290,8 @@ def test_e5_pair_collision_tracker(
 
     inventories_with_collisions = 0
     worst_collision = 0
-    for inv_id in all_inventory_ids:
-        inv = materialize_phoible_inventory(provider, inv_id)
+    for inv_id in phoible_inventory_ids_full:
+        inv = materialize_phoible_inventory(phoible_provider, inv_id)
         vs = inv.metadata.get("vowel_secondary") or {}
         if not vs:
             continue
