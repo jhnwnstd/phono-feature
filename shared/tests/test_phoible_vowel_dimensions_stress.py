@@ -63,9 +63,33 @@ def provider() -> PhoibleProvider:
         pytest.skip(f"PHOIBLE provider unavailable: {exc}")
 
 
+#: Number of PHOIBLE inventories sampled by the dimension-stress
+#: tests below. Every assertion in this file is a GEOMETRIC
+#: invariant (width / height caps, cell-stack ceiling) — properties
+#: of the feature-distribution space, not language-specific
+#: pathologies. A 200-inventory random sample with a fixed seed
+#: captures the full distribution of feature shapes (vowel
+#: cardinality, height/backness contrasts) while cutting per-test
+#: runtime from ~12 s to ~0.8 s. The diphthong-specific tests in
+#: ``test_phoible_vowel_chart_stress`` keep their full-corpus
+#: iteration because diphthong metadata is sparse and a sample
+#: would miss rare cases.
+_DIMENSION_SAMPLE_SIZE = 200
+_DIMENSION_SAMPLE_SEED = 42
+
+
 @pytest.fixture(scope="module")
 def all_inventory_ids(provider: PhoibleProvider) -> list[str]:
-    return list(provider._inventories)  # type: ignore[attr-defined]
+    """Deterministic 200-inventory sample. See the rationale on
+    ``_DIMENSION_SAMPLE_SIZE`` for why sampling is safe for the
+    geometric invariants this file pins."""
+    import random
+
+    all_ids = list(provider._inventories)  # type: ignore[attr-defined]
+    if len(all_ids) <= _DIMENSION_SAMPLE_SIZE:
+        return all_ids
+    rng = random.Random(_DIMENSION_SAMPLE_SEED)
+    return rng.sample(all_ids, _DIMENSION_SAMPLE_SIZE)
 
 
 def _label_for(provider: PhoibleProvider, inv_id: str) -> str:

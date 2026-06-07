@@ -50,34 +50,31 @@ def test_nan_rejected_before_any_temp_file(tmp_path: pathlib.Path) -> None:
     assert not target.exists()
 
 
-def test_positive_infinity_rejected(tmp_path: pathlib.Path) -> None:
+@pytest.mark.parametrize("bad_value", [float("inf"), float("-inf")])
+def test_infinity_rejected_with_no_temp_leak(
+    tmp_path: pathlib.Path, bad_value: float
+) -> None:
+    """Both polarities of infinity trip ``json.dumps``'s
+    ``allow_nan=False`` path; pinned by parametrise instead of two
+    near-identical test functions."""
     target = tmp_path / "out.json"
     with pytest.raises(ValueError):
-        atomic_write_json(target, {"a": float("inf")})
+        atomic_write_json(target, {"a": bad_value})
     assert _tmp_files(tmp_path) == []
 
 
-def test_negative_infinity_rejected(tmp_path: pathlib.Path) -> None:
+@pytest.mark.parametrize(
+    "target_factory",
+    [lambda p: p, lambda p: str(p)],
+    ids=["pathlib-Path", "plain-str"],
+)
+def test_accepts_path_or_str(tmp_path: pathlib.Path, target_factory) -> None:
+    """Both ``PathLike[str]`` and the plain string-path contract
+    work; ``os.fspath`` does the conversion either way."""
     target = tmp_path / "out.json"
-    with pytest.raises(ValueError):
-        atomic_write_json(target, {"a": float("-inf")})
-    assert _tmp_files(tmp_path) == []
-
-
-def test_accepts_pathlib_path(tmp_path: pathlib.Path) -> None:
-    """``PathLike[str]`` works without explicit ``str()`` at the
-    call site; the function converts via :py:func:`os.fspath`."""
-    target = tmp_path / "out.json"
-    atomic_write_json(target, {"hello": "world"})
+    atomic_write_json(target_factory(target), {"hello": "world"})
     assert target.is_file()
     assert json.loads(target.read_text(encoding="utf-8")) == {"hello": "world"}
-
-
-def test_accepts_plain_str_path(tmp_path: pathlib.Path) -> None:
-    """The pre-existing string-path contract still works."""
-    target = tmp_path / "out.json"
-    atomic_write_json(str(target), {"hello": "world"})
-    assert target.is_file()
 
 
 def test_unserializable_object_no_temp_leak(

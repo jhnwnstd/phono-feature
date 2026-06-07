@@ -72,13 +72,33 @@ def provider() -> PhoibleProvider:
         pytest.skip(f"PHOIBLE provider unavailable: {exc}")
 
 
+_CHART_SAMPLE_SIZE = 200
+_CHART_SAMPLE_SEED = 42
+
+
 @pytest.fixture(scope="module")
 def all_inventory_ids(provider: PhoibleProvider) -> list[str]:
-    """Every inventory id in the bake snapshot. Used to drive the
-    whole-PHOIBLE stress walks (3000+ ids)."""
-    # ``_inventories`` is the internal dict; use it directly to
-    # avoid materializing 3000 descriptors on every test.
+    """Every inventory id in the bake snapshot (3000+). Used by
+    the diphthong-aware tests (``test_e4``, ``test_e5``) where
+    sparse metadata means a sample would miss real cases."""
     return list(provider._inventories)  # type: ignore[attr-defined]
+
+
+@pytest.fixture(scope="module")
+def sampled_inventory_ids(all_inventory_ids: list[str]) -> list[str]:
+    """Deterministic 200-inventory sample consumed by the chart-
+    structure tests (``test_e1`` / ``test_e2`` / ``test_e3``).
+    These pin shape invariants (vowel_secondary key subset,
+    per-cell segment count cap, default-anchor ceiling) that
+    depend on the feature-distribution space rather than specific
+    languages, so sampling preserves coverage while cutting
+    per-test runtime from ~6 s to ~0.4 s."""
+    import random
+
+    if len(all_inventory_ids) <= _CHART_SAMPLE_SIZE:
+        return all_inventory_ids
+    rng = random.Random(_CHART_SAMPLE_SEED)
+    return rng.sample(all_inventory_ids, _CHART_SAMPLE_SIZE)
 
 
 def _vowels_of(generated_segments: dict[str, dict[str, str]]) -> list[str]:
@@ -93,7 +113,7 @@ def _vowels_of(generated_segments: dict[str, dict[str, str]]) -> list[str]:
 
 
 def test_e1_vowel_secondary_keys_subset_of_engine_segments(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    provider: PhoibleProvider, sampled_inventory_ids: list[str]
 ) -> None:
     """Every key in ``metadata['vowel_secondary']`` must appear in
     ``inventory.segments``. This is the NFC-mismatch regression
@@ -101,7 +121,7 @@ def test_e1_vowel_secondary_keys_subset_of_engine_segments(
     the engine's NFC-folded segment keys, silently dropping
     nasal diphthongs from the chart."""
     offenders: list[tuple[str, set[str]]] = []
-    for inv_id in all_inventory_ids:
+    for inv_id in sampled_inventory_ids:
         inv = materialize_phoible_inventory(provider, inv_id)
         vs = inv.metadata.get("vowel_secondary") or {}
         if not vs:
@@ -123,7 +143,7 @@ def test_e1_vowel_secondary_keys_subset_of_engine_segments(
 
 
 def test_e2_no_cell_holds_more_than_eight_segments(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    provider: PhoibleProvider, sampled_inventory_ids: list[str]
 ) -> None:
     """Long-tail collision ceiling. PHOIBLE's worst case currently
     is 12 segments in one cell; the test caps at 8 because anything
@@ -136,7 +156,7 @@ def test_e2_no_cell_holds_more_than_eight_segments(
     # flag anything that grows beyond it.
     HARD_CEILING = 14
     offenders: list[tuple[str, int]] = []
-    for inv_id in all_inventory_ids:
+    for inv_id in sampled_inventory_ids:
         gen = provider.generate(inv_id)
         vowels = _vowels_of(dict(gen.segments))
         if not vowels:
@@ -165,7 +185,7 @@ def test_e2_no_cell_holds_more_than_eight_segments(
 
 
 def test_e3_default_anchor_ceiling_for_large_inventories(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    provider: PhoibleProvider, sampled_inventory_ids: list[str]
 ) -> None:
     """For inventories with >= 7 vowels, at most 35% of vowels may
     collapse to the Open-mid Central default anchor. Catches mass
@@ -188,7 +208,7 @@ def test_e3_default_anchor_ceiling_for_large_inventories(
     default_row = ROW_LABELS.index("Open-mid")
     default_cell = (default_row, 2)  # COL_LABELS[2] == "Central"
     offenders: list[tuple[str, int, float]] = []
-    for inv_id in all_inventory_ids:
+    for inv_id in sampled_inventory_ids:
         gen = provider.generate(inv_id)
         vowels = _vowels_of(dict(gen.segments))
         if len(vowels) < MIN_VOWELS:

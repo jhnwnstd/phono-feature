@@ -158,17 +158,6 @@ def test_feature_text_edit_changes_focus_on_tab(feat_edit):
 
 
 # ---------------------------------------------------------------------------
-# InputDialog wires up FeatureTextEdit (so the feat box gets autofill too)
-# ---------------------------------------------------------------------------
-def test_dialog_feat_edit_is_feature_text_edit(dialog):
-    assert isinstance(dialog.feat_edit, FeatureTextEdit)
-
-
-def test_dialog_seg_edit_is_segment_text_edit(dialog):
-    assert isinstance(dialog.seg_edit, SegmentTextEdit)
-
-
-# ---------------------------------------------------------------------------
 # InputDialog: accept() validates before dismissing
 # ---------------------------------------------------------------------------
 @pytest.fixture

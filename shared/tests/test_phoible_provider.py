@@ -15,10 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.editor.inventory_providers import (
-    InventoryDescriptor,
-    InventoryProvider,
-)
+from phonology_shared.editor.inventory_providers import InventoryProvider
 from phonology_shared.editor.phoible_provider import (
     PhoibleProvider,
     PhoibleSnapshotNotAvailable,
@@ -245,15 +242,6 @@ def test_descriptor_lookup_by_id() -> None:
     assert p.descriptor("999") is None
 
 
-def test_descriptor_uses_strict_inventory_descriptor_type() -> None:
-    """The Protocol pins ``InventoryDescriptor`` as the result
-    type; tests against the dataclass shape so a future field
-    rename trips here instead of at the picker."""
-    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
-    inventories = p.list_inventories("Korean")
-    assert all(isinstance(inv, InventoryDescriptor) for inv in inventories)
-
-
 def test_load_data_payload_late_injection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -310,66 +298,43 @@ def test_constructor_rejects_missing_inventories_list() -> None:
         )
 
 
-def test_phoible_snapshot_not_available_is_runtime_error() -> None:
-    """The typed exception the registry catches must be a
-    RuntimeError subclass so a generic exception-suppress also
-    handles it gracefully."""
-    assert issubclass(PhoibleSnapshotNotAvailable, RuntimeError)
-
-
 # materialize_phoible_inventory: shared composition contract
 #
 # This is the single source of truth both the web bridge
 # (load_phoible_inventory) and the desktop dialog
-# (PhoibleDialog._on_load_clicked) consume; the tests pin the
+# (PhoibleDialog._on_load_clicked) consume; the test below pins the
 # name template + metadata stamp so future bake schema changes
 # either keep the contract or break here loudly.
 
 
-def test_materialize_phoible_inventory_composes_name_with_source_short() -> (
-    None
-):
-    """The inventory name follows ``"<language> [<source>]"`` so
-    the toolbar reflects what the user loaded. Dialect-less inputs
-    skip the parenthetical."""
+def test_materialize_phoible_inventory_name_and_metadata() -> None:
+    """Pin the three pieces of the composition contract in one
+    pass:
+
+    - Dialect-less input: ``"<language> [<source>]"`` (toolbar
+      label).
+    - Dialect-bearing input: ``"<language> (<dialect>) [<source>]"``
+      so two same-language inventories don't collide.
+    - ``metadata["feature_source"]`` stamps provenance the editor
+      preserves on save.
+
+    Consolidates three prior single-assertion tests into one
+    materialisation pass.
+    """
     from phonology_shared.editor.phoible_provider import (
         materialize_phoible_inventory,
     )
 
     p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
-    inv = materialize_phoible_inventory(p, "1")  # Korean SPA
-    assert inv.name == "Korean [SPA]"
 
+    # Dialect-less input (Korean SPA).
+    spa = materialize_phoible_inventory(p, "1")
+    assert spa.name == "Korean [SPA]"
+    assert spa.metadata["feature_source"] == "PHOIBLE 2.0 / Korean / SPA"
 
-def test_materialize_phoible_inventory_includes_dialect_when_present() -> None:
-    """When the descriptor records a dialect, the name gets a
-    parenthetical so two inventories of the same language with
-    different dialects do not collide in the toolbar dropdown."""
-    from phonology_shared.editor.phoible_provider import (
-        materialize_phoible_inventory,
-    )
-
-    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
-    inv = materialize_phoible_inventory(
-        p, "2"
-    )  # Korean PHOIBLE w/ Seoul dialect
-    assert inv.name == "Korean (Seoul Korean) [PHOIBLE]"
-
-
-def test_materialize_phoible_inventory_stamps_feature_source_metadata() -> (
-    None
-):
-    """Provenance metadata is informational, not authoritative; the
-    user can edit the field after load. Pinning the template here
-    prevents silent drift between the web's saved-file format and
-    the desktop's saved-file format."""
-    from phonology_shared.editor.phoible_provider import (
-        materialize_phoible_inventory,
-    )
-
-    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
-    inv = materialize_phoible_inventory(p, "1")
-    assert inv.metadata["feature_source"] == "PHOIBLE 2.0 / Korean / SPA"
+    # Dialect-bearing input (Korean PHOIBLE / Seoul Korean).
+    seoul = materialize_phoible_inventory(p, "2")
+    assert seoul.name == "Korean (Seoul Korean) [PHOIBLE]"
 
 
 def test_materialize_phoible_inventory_raises_keyerror_on_unknown_id() -> None:

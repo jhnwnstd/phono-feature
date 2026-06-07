@@ -74,19 +74,13 @@ def test_distribute_seg_content_overrides_min() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_vowel_width_is_constant_natural() -> None:
-    # The chart is a fixed phonetic visualisation; it returns its
-    # natural width. Tripwire on the exact value so a future bump
-    # to VOWEL_NATURAL_W lands as a deliberate test edit.
+def test_vowel_chart_natural_width_matches_label_column_budget() -> None:
+    """The chart's natural width is fixed at 440 px; tripwire on
+    the exact value so a bump lands as a deliberate test edit.
+    Also verifies the chart clears the minimum visual budget:
+    6 button columns + label-column gutter + breathing room. Both
+    checks ride one engine state read so they're consolidated."""
     assert layout.vowel_chart_width() == 440
-
-
-def test_vowel_natural_width_fits_label_column() -> None:
-    # The chart's natural width has to clear: 6 button columns
-    # (BTN_W + BTN_GAP each) + a label-column gutter wide enough
-    # for the longest row label ("Near-close" at ~60 px in
-    # Noto Sans 7pt) + breathing room around the trapezoid
-    # silhouette.
     btn_strip = 6 * (33 + 4)  # six button cols + five gaps + trailing
     assert layout.VOWEL_NATURAL_W >= btn_strip + 64
 

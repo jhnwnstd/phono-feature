@@ -29,21 +29,22 @@ def engine(inventories_dir: Path) -> FeatureEngine:
 # ----------------------------------------------------------------------
 
 
-def test_metadata_present(engine: FeatureEngine) -> None:
+def test_inventory_loaded_with_canonical_hayes_values(
+    engine: FeatureEngine,
+) -> None:
+    """Engine smoke test combined with a value check: the bundled
+    Hayes inventory must carry the canonical name, /p/ as voiceless
+    bilabial stop, and /b/ as voiced bilabial stop. A silently-
+    emptied inventory or a feature-table swap fails one of these
+    assertions immediately."""
     assert "name" in engine.metadata
     assert "Hayes" in engine.metadata["name"]
-
-
-def test_inventory_is_nonempty(engine: FeatureEngine) -> None:
-    """Stronger than a smoke check: pin one known segment + feature
-    so a silently-emptied inventory still fails this. ``p`` is the
-    canonical voiceless bilabial stop and must carry the standard
-    Hayes laryngeal + manner values."""
-    assert len(engine.segments) > 0
-    assert len(engine.features) > 0
     assert "p" in engine.segments
+    assert "b" in engine.segments
     assert "Voice" in engine.features
     assert engine.segments["p"]["Voice"] == "-"
+    assert engine.segments["b"]["Voice"] == "+"
+    assert engine.segments["b"]["Continuant"] == "-"
 
 
 # ----------------------------------------------------------------------
@@ -55,12 +56,6 @@ def test_segment_features_complete_for_b(engine: FeatureEngine) -> None:
     """Every feature in the inventory must be set on every segment."""
     feats = engine.get_segment_features("b")
     assert set(feats.keys()) == set(engine.features)
-
-
-def test_b_is_voiced_stop(engine: FeatureEngine) -> None:
-    feats = engine.get_segment_features("b")
-    assert feats["Voice"] == "+"
-    assert feats["Continuant"] == "-"
 
 
 def test_unknown_segment_raises(engine: FeatureEngine) -> None:
@@ -555,7 +550,11 @@ def test_nearest_neighbors_sorted_by_distance(engine: FeatureEngine) -> None:
 # ----------------------------------------------------------------------
 
 
-def test_inventory_stats_has_required_keys(engine: FeatureEngine) -> None:
+def test_inventory_stats_shape_and_counts(engine: FeatureEngine) -> None:
+    """The stats dict carries every documented key and the
+    cardinality counts match the underlying engine state.
+    Consolidated from two near-identical tests that hit the same
+    single call site."""
     stats = engine.get_inventory_stats()
     expected = {
         "segment_count",
@@ -564,10 +563,6 @@ def test_inventory_stats_has_required_keys(engine: FeatureEngine) -> None:
         "avg_feature_distance",
     }
     assert expected.issubset(stats.keys())
-
-
-def test_inventory_stats_counts_match(engine: FeatureEngine) -> None:
-    stats = engine.get_inventory_stats()
     assert stats["segment_count"] == len(engine.segments)
     assert stats["feature_count"] == len(engine.features)
 

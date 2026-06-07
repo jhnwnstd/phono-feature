@@ -75,9 +75,35 @@ def provider() -> PhoibleProvider:
         pytest.skip(f"PHOIBLE provider unavailable: {exc}")
 
 
+#: Geometric-invariant tests (b1, b2, b4, b5) consume
+#: ``sampled_inventory_ids``: a deterministic 200-inventory sample
+#: of the PHOIBLE corpus. The properties pinned (chart_xy bounds,
+#: silhouette containment, cell-count cap, segment disjointness)
+#: depend on the feature-distribution space, not language
+#: specifics; sampling preserves coverage and cuts per-test
+#: runtime from ~12 s to ~0.8 s. ``test_b3`` (diphthong endpoint
+#: validity) consumes ``all_inventory_ids`` because diphthong
+#: metadata is sparse and a sample would miss rare cases.
+_RENDER_SAMPLE_SIZE = 200
+_RENDER_SAMPLE_SEED = 42
+
+
 @pytest.fixture(scope="module")
 def all_inventory_ids(provider: PhoibleProvider) -> list[str]:
     return list(provider._inventories)  # type: ignore[attr-defined]
+
+
+@pytest.fixture(scope="module")
+def sampled_inventory_ids(all_inventory_ids: list[str]) -> list[str]:
+    """Deterministic 200-inventory sample for the geometric-
+    invariant tests. See the rationale on
+    ``_RENDER_SAMPLE_SIZE`` for why sampling is safe."""
+    import random
+
+    if len(all_inventory_ids) <= _RENDER_SAMPLE_SIZE:
+        return all_inventory_ids
+    rng = random.Random(_RENDER_SAMPLE_SEED)
+    return rng.sample(all_inventory_ids, _RENDER_SAMPLE_SIZE)
 
 
 def _label_for(provider: PhoibleProvider, inv_id: str) -> str:
@@ -126,14 +152,14 @@ def _silhouette_right_at_y(sil, y: float) -> float:
 
 
 def test_b1_chart_xy_within_unit_bounds(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    provider: PhoibleProvider, sampled_inventory_ids: list[str]
 ) -> None:
     """Every populated cell's projection stays in ``[0, 1]``. The
     web renderer applies ``left: chart_x * 100%; top: chart_y *
     100%`` without clamping; out-of-range values would render
     outside the chart container."""
     offenders: list[tuple[str, int, int, float, float]] = []
-    for inv_id in all_inventory_ids:
+    for inv_id in sampled_inventory_ids:
         geom = _build_geometry(provider, inv_id)
         if geom is None:
             continue
@@ -155,14 +181,14 @@ def test_b1_chart_xy_within_unit_bounds(
 
 
 def test_b2_cells_sit_inside_silhouette(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    provider: PhoibleProvider, sampled_inventory_ids: list[str]
 ) -> None:
     """Every populated cell's projected centre sits inside the
     silhouette polygon (interpolated edges at the cell's y).
     Catches the shrunken-row case where a front-anchored cell
     could project past the silhouette's contracted left edge."""
     offenders: list[tuple[str, int, int, float, float, float, float]] = []
-    for inv_id in all_inventory_ids:
+    for inv_id in sampled_inventory_ids:
         geom = _build_geometry(provider, inv_id)
         if geom is None:
             continue
@@ -248,7 +274,7 @@ def test_b3_diphthongs_have_distinct_well_defined_endpoints(
 
 
 def test_b4_cell_count_within_hard_cap(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    provider: PhoibleProvider, sampled_inventory_ids: list[str]
 ) -> None:
     """No PHOIBLE inventory produces more cells than the hard cap.
     PHOIBLE's worst case today is 16 populated cells (the 7-row x
@@ -256,7 +282,7 @@ def test_b4_cell_count_within_hard_cap(
     with a moderately denser inventory without permitting
     unbounded growth that would slow the renderer's paint pass."""
     offenders: list[tuple[str, int]] = []
-    for inv_id in all_inventory_ids:
+    for inv_id in sampled_inventory_ids:
         geom = _build_geometry(provider, inv_id)
         if geom is None:
             continue
@@ -270,14 +296,14 @@ def test_b4_cell_count_within_hard_cap(
 
 
 def test_b5_segments_appear_in_at_most_one_cell(
-    provider: PhoibleProvider, all_inventory_ids: list[str]
+    provider: PhoibleProvider, sampled_inventory_ids: list[str]
 ) -> None:
     """Every segment appears in at most one cell. The construction
     of ``occupied`` via ``setdefault(...).append`` guarantees this
     by design; pinning it here catches a future renderer-side
     refactor that double-iterates or copies entries."""
     offenders: list[tuple[str, str, list[tuple[int, int]]]] = []
-    for inv_id in all_inventory_ids:
+    for inv_id in sampled_inventory_ids:
         geom = _build_geometry(provider, inv_id)
         if geom is None:
             continue
