@@ -1831,9 +1831,17 @@ function _buildFeatureRow(feat) {
     const name = document.createElement("div");
     name.className = "feat-name";
     name.setAttribute("aria-label", feat);
-    name.appendChild(
-        createRasterizedLabel(feat, '12px "Noto Sans", sans-serif')
-    );
+    // Use plain DOM text so the CSS rule
+    // ``.feat-name { font-variant: small-caps }`` actually applies.
+    // ``createRasterizedLabel`` paints to a canvas bitmap, and
+    // canvas font shorthand support for ``small-caps`` varies
+    // across browsers (notably broken in WebKit at the time of
+    // writing). Feature names are short English words with no
+    // copy-protection rationale (unlike IPA seg glyphs), so plain
+    // DOM text is the right tier: theme reactivity comes from the
+    // cascaded ``color`` token; the small-caps shaping comes from
+    // the system font's OpenType ``smcp`` feature.
+    name.textContent = feat;
     row.appendChild(name);
     const badge = document.createElement("div");
     badge.className = "feat-badge";
