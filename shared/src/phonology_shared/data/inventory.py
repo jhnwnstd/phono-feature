@@ -38,10 +38,32 @@ class FeatureValue(StrEnum):
     (``FeatureValue.PLUS == "+"``), so existing call sites that do
     ``value == "+"`` keep working unchanged.
 
-    Hayes (2009) treats ``"0"`` as a deliberate "don't care" value
-    distinct from a missing key; see :py:class:`FeatureState` in
+    Canonical semantics (load-bearing, do not infer ``-`` from ``0``):
+
+    - ``PLUS``: the feature is specified as positive for this segment.
+    - ``MINUS``: the feature is specified as negative.
+    - ``ZERO``: the feature is **not applicable** to this segment OR
+      **underspecified** by the source. ``ZERO`` is NOT a negative
+      value; natural-class queries that infer ``MINUS`` from absence
+      conflate orthogonal concepts and break under-specification
+      analyses and harmony logic.
+
+    Concretely: a ``+round`` query against a vowel inventory must
+    not match consonants that carry ``round = 0`` (the feature is
+    not applicable to most consonants), and a Hindi inventory's
+    all-``0`` ``LowerLarynx`` row must read as "Hindi does not
+    specify this feature", not "Hindi is uniformly ``-LowerLarynx``".
+
+    The research note at ``research.md`` argues the ternary
+    distinction is the single most important interoperability
+    invariant between SPE-, PHOIBLE-, PanPhon-, and CLTS-style
+    feature systems. Underspecification theory (Archangeli 1988;
+    Mohanan 1991) operationalises the same distinction.
+
+    Hayes (2009) treats ``"0"`` the same way; see
+    :py:class:`FeatureState` in
     :py:mod:`phonology_shared.chart.vowels` for the four-state model
-    that distinguishes them.
+    that further distinguishes "absent key" from "explicit zero".
     """
 
     PLUS = "+"

@@ -294,6 +294,43 @@ FEATURE_GROUPS: list[tuple[str, list[str]]] = [
     ),
 ]
 
+# Features the literature treats as TIER-SEPARATE from the segmental
+# core. Autosegmental phonology (Goldsmith 1976) and the 2024 CLTS
+# vector work agree: tone, length, stress and laryngeal register
+# belong on a suprasegmental tier, not on the segment row. The
+# software treatment here is lighter-weight than a full autosegmental
+# representation but still uses this set in two load-bearing places:
+#
+# - :py:func:`phonology_shared.chart.consonants.is_member`'s
+#   tone-phoneme guard reads from this set (any positive
+#   suprasegmental on a non-syllabic, non-consonantal segment routes
+#   the segment to the ``Tones`` group rather than to a manner
+#   class).
+# - Renderers that need to surface "the segmental natural class
+#   query Q matches the same segments whether suprasegmental S is
+#   ``+``, ``-``, or ``0``" can use this set to scope the query.
+#
+# Membership in :py:data:`FEATURE_ORDER` is NOT a parallel concept;
+# ``FEATURE_ORDER`` is display-only. A feature can be both
+# segmental and in the Prosodic display group (rare), or
+# suprasegmental but absent from a particular inventory (common,
+# e.g. Hindi has no ``HighTone``).
+SUPRASEGMENTAL_FEATURES: frozenset[str] = frozenset(
+    {
+        # Tone (autosegmental tier — Goldsmith 1976).
+        "Tone",
+        "HighTone",
+        "UpperRegister",
+        # Stress (prosodic tier).
+        "Stress",
+        # Length (timing tier in moraic phonology). ``Long`` is the
+        # SPE / Hayes column; ``Short`` is the PHOIBLE column that
+        # records the polarity explicitly.
+        "Long",
+        "Short",
+    }
+)
+
 
 def sort_features(features: list[str]) -> list[str]:
     """Sort features by ``FEATURE_ORDER``; unknowns trail in original order."""
