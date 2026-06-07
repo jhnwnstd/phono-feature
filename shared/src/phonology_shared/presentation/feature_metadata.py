@@ -42,7 +42,6 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from functools import lru_cache
 
-
 # ---------------------------------------------------------------------
 # System tags
 # ---------------------------------------------------------------------
@@ -55,11 +54,11 @@ SYSTEM_PANPHON = "panphon"
 
 #: Tags identifying which display / classification subsystem reads
 #: a given feature. Used by :py:meth:`FeatureMetadata.uses`.
-USE_CONSONANT = "consonant"           # consonants.py classifier
-USE_VOWEL = "vowel"                   # vowels.py inference
-USE_LARYNGEAL = "laryngeal"           # laryngeal display path
-USE_NATURAL_CLASS = "natural_class"   # natural-class queries
-USE_VOWEL_PAIR = "vowel_pair"         # in-cell contrast (long, nasal, etc.)
+USE_CONSONANT = "consonant"  # consonants.py classifier
+USE_VOWEL = "vowel"  # vowels.py inference
+USE_LARYNGEAL = "laryngeal"  # laryngeal display path
+USE_NATURAL_CLASS = "natural_class"  # natural-class queries
+USE_VOWEL_PAIR = "vowel_pair"  # in-cell contrast (long, nasal, etc.)
 
 
 # ---------------------------------------------------------------------
@@ -198,9 +197,7 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         group=GROUP_LARYNGEAL,
         aliases=("Voice", "voi", "periodicGlottalSource"),
         systems=_ALL_THREE,
-        uses=frozenset(
-            {USE_CONSONANT, USE_LARYNGEAL, USE_NATURAL_CLASS}
-        ),
+        uses=frozenset({USE_CONSONANT, USE_LARYNGEAL, USE_NATURAL_CLASS}),
     ),
     "spreadgl": FeatureMetadata(
         canonical="spreadgl",
@@ -318,9 +315,7 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         group=GROUP_MANNER,
         aliases=("Nasal", "nas"),
         systems=_ALL_THREE,
-        uses=frozenset(
-            {USE_CONSONANT, USE_VOWEL_PAIR, USE_NATURAL_CLASS}
-        ),
+        uses=frozenset({USE_CONSONANT, USE_VOWEL_PAIR, USE_NATURAL_CLASS}),
     ),
     "lateral": FeatureMetadata(
         canonical="lateral",
@@ -636,10 +631,7 @@ def _fold_for_lookup(s: str) -> str:
     """
     k = s.lower()
     return (
-        k.replace(".", "")
-        .replace("_", "")
-        .replace(" ", "")
-        .replace("-", "")
+        k.replace(".", "").replace("_", "").replace(" ", "").replace("-", "")
     )
 
 

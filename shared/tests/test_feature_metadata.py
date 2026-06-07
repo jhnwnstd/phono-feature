@@ -45,7 +45,6 @@ from phonology_shared.presentation.feature_metadata import (
     resolve_canonical,
 )
 
-
 # ---------------------------------------------------------------
 # Registry shape invariants
 # ---------------------------------------------------------------
@@ -56,8 +55,7 @@ def test_canonical_keys_are_unique() -> None:
     match each entry's ``canonical`` field exactly."""
     for key, meta in FEATURE_REGISTRY.items():
         assert key == meta.canonical, (
-            f"registry key {key!r} != entry canonical "
-            f"{meta.canonical!r}"
+            f"registry key {key!r} != entry canonical " f"{meta.canonical!r}"
         )
 
 
@@ -65,9 +63,10 @@ def test_sort_keys_are_unique() -> None:
     """Two entries with the same sort key would produce a
     non-deterministic display order."""
     sort_keys = [m.sort_key for m in FEATURE_REGISTRY.values()]
-    assert len(sort_keys) == len(set(sort_keys)), (
-        "duplicate sort_keys: "
-        + str(sorted(k for k in sort_keys if sort_keys.count(k) > 1))
+    assert len(sort_keys) == len(
+        set(sort_keys)
+    ), "duplicate sort_keys: " + str(
+        sorted(k for k in sort_keys if sort_keys.count(k) > 1)
     )
 
 
@@ -300,9 +299,9 @@ def test_sort_features_canonicalises_case_variants() -> None:
         "sorted output"
     )
     voice_index = out.index("Voice")
-    assert voice_index < labial_indices[0], (
-        "Voice (Laryngeal) must sort before Labial (Place)"
-    )
+    assert (
+        voice_index < labial_indices[0]
+    ), "Voice (Laryngeal) must sort before Labial (Place)"
 
 
 def test_sort_features_unknowns_trail_at_end() -> None:
@@ -324,9 +323,7 @@ def test_vowel_pair_contrast_set_matches_registry_uses_tag() -> None:
     so the two stay in sync."""
     from phonology_shared.chart.vowels import _DISPLAY_CONTRAST_FEATURES
 
-    assert (
-        set(_DISPLAY_CONTRAST_FEATURES) == features_for_use(USE_VOWEL_PAIR)
-    )
+    assert set(_DISPLAY_CONTRAST_FEATURES) == features_for_use(USE_VOWEL_PAIR)
 
 
 # ---------------------------------------------------------------
