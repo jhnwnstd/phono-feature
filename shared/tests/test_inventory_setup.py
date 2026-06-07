@@ -234,7 +234,7 @@ def test_presets_custom_is_empty_list():
 # suggest_filename: download/save-as slug
 
 
-def test_suggest_filename_basic_lowercase_underscores():
+def test_suggest_filename_lowercases_and_underscores_inventory_name():
     """Lowercase, non-alphanumeric runs collapse to ``_``,
     ``_features`` suffix appended, ``.json`` extension."""
     assert suggest_filename("My Language") == "my_language_features.json"

@@ -35,8 +35,15 @@ def test_metadata_present(engine: FeatureEngine) -> None:
 
 
 def test_inventory_is_nonempty(engine: FeatureEngine) -> None:
+    """Stronger than a smoke check: pin one known segment + feature
+    so a silently-emptied inventory still fails this. ``p`` is the
+    canonical voiceless bilabial stop and must carry the standard
+    Hayes laryngeal + manner values."""
     assert len(engine.segments) > 0
     assert len(engine.features) > 0
+    assert "p" in engine.segments
+    assert "Voice" in engine.features
+    assert engine.segments["p"]["Voice"] == "-"
 
 
 # ----------------------------------------------------------------------

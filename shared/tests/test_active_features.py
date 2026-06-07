@@ -27,20 +27,13 @@ Tests:
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from collections.abc import Callable
 
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.view_models import (
     build_inventory_summary,
 )
 from phonology_shared.theory.feature_engine import FeatureEngine
-
-
-def _load_bundled(inventories_dir: Path, name: str) -> Inventory:
-    path = inventories_dir / f"{name}_features.json"
-    raw = json.loads(path.read_text(encoding="utf-8-sig"))
-    return Inventory.parse(raw, source=path.stem)
 
 
 def test_filter_drops_unspecified_features() -> None:
@@ -87,14 +80,16 @@ def test_filter_keeps_minus_only_features() -> None:
     assert "Voice" in eng.active_features
 
 
-def test_bundled_hindi_drops_lower_larynx(inventories_dir: Path) -> None:
+def test_bundled_hindi_drops_lower_larynx(
+    bundled_inventory: Callable[[str], Inventory],
+) -> None:
     """The bundled Hindi inventory has ``LowerLarynx`` uniformly
     unspecified (all segments are ``0`` because Hindi has no
     implosives). It must drop out of ``active_features`` and out
     of the ``feature_groups`` payload, matching the desktop's
     behaviour the user reported as correct.
     """
-    inv = _load_bundled(inventories_dir, "hindi")
+    inv = bundled_inventory("hindi")
     eng = FeatureEngine(inv)
     assert (
         "LowerLarynx" not in eng.active_features
@@ -111,11 +106,11 @@ def test_bundled_hindi_drops_lower_larynx(inventories_dir: Path) -> None:
 
 
 def test_bundled_english_keeps_all_specified_features(
-    inventories_dir: Path,
+    bundled_inventory: Callable[[str], Inventory],
 ) -> None:
     """Regression: every English feature with at least one explicit
     value survives the filter."""
-    inv = _load_bundled(inventories_dir, "english")
+    inv = bundled_inventory("english")
     eng = FeatureEngine(inv)
     for feat in inv.features:
         has_explicit = any(

@@ -1120,17 +1120,35 @@ def test_engine_caches_bundle_search_results() -> None:
     """``is_natural_class`` and ``compute_natural_class`` both delegate
     to ``find_all_minimal_bundles``. Calling them back-to-back on the
     same input must not re-run the exponential-worst-case search.
-    We probe via the private cache dict since timing is too flaky."""
+
+    Pinned via the public surface: the bundles returned by
+    :py:meth:`find_all_minimal_bundles` (called twice on the same
+    input) must be IDENTICAL Python objects (cached reference, not
+    a fresh search result). Equivalently, two calls produce the
+    same tuple-of-mappings identity. This is the cache contract
+    every consumer relies on; reading
+    :py:attr:`_bundle_cache` directly would couple to private
+    state.
+    """
     eng = FeatureEngine.from_path(HAYES)
-    segs = ["b", "d", "ɡ"]
-    assert frozenset(segs) not in eng._bundle_cache
+    # /m/ alone is a strict natural class in Hayes; the search
+    # returns at least one non-empty bundle so the identity check
+    # below is meaningful (empty tuples are interned by Python and
+    # would pass identity regardless).
+    segs = ["m"]
+    first = eng.find_all_minimal_bundles(segs)
+    assert first, "Hayes /m/ should produce at least one bundle"
+    # Direct second call: identity match proves cache hit.
+    second = eng.find_all_minimal_bundles(segs)
+    assert second is first, (
+        "find_all_minimal_bundles did not return the cached result on "
+        "the second call"
+    )
+    # Cross-method: is_natural_class and compute_natural_class must
+    # share the same cache slot.
     eng.is_natural_class(segs)
-    assert frozenset(segs) in eng._bundle_cache
-    # Second call must hit the cache (same list identity isn't required;
-    # only the frozenset).
-    cached = eng._bundle_cache[frozenset(segs)]
     eng.compute_natural_class(segs)
-    assert eng._bundle_cache[frozenset(segs)] is cached
+    assert eng.find_all_minimal_bundles(segs) is first
 
 
 def test_engine_grouped_segments_cached_per_engine() -> None:
@@ -1149,17 +1167,17 @@ def test_bundle_cache_results_are_immutable() -> None:
     per-engine cache; before the fix the return type was
     ``list[dict[str, str]]`` and a caller mutation would silently
     corrupt the cache for every subsequent call on the same input.
-    The new shape is ``tuple[Mapping[str, str], ...]`` -- both layers
-    immutable -- so mutation attempts raise rather than corrupt.
+    The current contract: both the outer container AND the inner
+    bundles refuse mutation -- pinned behaviourally by attempting
+    each mutation and asserting it raises.
     """
     eng = FeatureEngine.from_path(HAYES)
     segs = ["b", "d", "ɡ"]
     bundles_a = eng.find_all_minimal_bundles(segs)
-    # Outer container is a tuple: no append / pop / clear.
-    assert isinstance(bundles_a, tuple)
+    # Outer container: no append (tuples raise AttributeError).
     with pytest.raises(AttributeError):
         bundles_a.append({"X": "+"})  # type: ignore[attr-defined]
-    # Inner bundles are read-only mappings.
+    # Inner bundles: read-only mapping refuses __setitem__.
     if bundles_a:
         with pytest.raises(TypeError):
             # Two ignore codes because mypy's narrowing differs by
@@ -1168,10 +1186,6 @@ def test_bundle_cache_results_are_immutable() -> None:
             # the assignment error. ``unused-ignore`` keeps the
             # warn_unused_ignores config quiet under either path.
             bundles_a[0]["bogus"] = "+"  # type: ignore[index,unused-ignore]
-    # Cache hit returns the same object so consumers don't pay
-    # rewrap costs on repeated queries.
-    bundles_b = eng.find_all_minimal_bundles(segs)
-    assert bundles_a is bundles_b
 
 
 def test_engine_seg_value_tuples_lazy() -> None:
@@ -2078,7 +2092,7 @@ def test_safe_read_setting_rejects_wrong_type_without_removing() -> None:
     assert s.removed == [], "wrong-type fallback should preserve the value"
 
 
-def test_safe_read_setting_accepts_correct_type() -> None:
+def test_safe_read_setting_returns_value_when_type_matches() -> None:
     from PyQt6.QtCore import QSize
 
     from phonology_features._settings import safe_read_setting

@@ -218,7 +218,7 @@ def test_should_stack_vowels_agrees_with_would_overflow_at_threshold() -> None:
     )
 
 
-def test_font_below_min_basic() -> None:
+def test_font_below_min_flags_only_shrinks_that_cross_the_floor() -> None:
     """When natural text already fits, no shrink is needed and the
     floor isn't an issue (False). When the shrink ratio would drop
     the size below the floor (``FONT_SIZE_MIN_PX`` = 10), True.

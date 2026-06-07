@@ -432,58 +432,63 @@ def test_random_toggle_sequences_match_expected_palette(
 # Style-cache invalidation
 
 
-def test_segment_button_cache_invalidates_on_palette_mode_swap(
+def test_segment_button_restyles_on_palette_mode_swap(
     app: QApplication,
 ) -> None:
-    """:class:`SegmentButton` styles are cached keyed on
-    ``theme_version``. A palette-mode toggle bumps the version,
-    so the next ``apply_theme`` call must rebuild the styles
-    against the active palette (not return the previous dict).
-    """
+    """:class:`SegmentButton` rebuilds its rendered stylesheet on a
+    palette-mode swap. Pinned via the public
+    :py:meth:`QWidget.styleSheet` accessor (the CSS Qt actually
+    applies to the widget): after toggling
+    ``standard → colorblind`` the standard-palette blue accent
+    drops from the active stylesheet and the colorblind purple
+    appears."""
     from phonology_features.gui.widgets import SegmentButton
 
-    SegmentButton._styles_cache.clear()
     btn = SegmentButton("p")
     set_theme("light")
     set_palette_mode("standard")
     btn.apply_theme()
-    std_styles = btn._styles
-    assert "#2563EB" in std_styles[btn._state]  # standard blue accent
+    std_css = btn.styleSheet()
+    assert "#2563EB" in std_css, "standard blue accent missing"
     set_palette_mode("colorblind")
     btn.apply_theme()
-    cb_styles = btn._styles
+    cb_css = btn.styleSheet()
     assert (
-        cb_styles is not std_styles
-    ), "cache returned the stale standard-palette dict after CB swap"
+        cb_css != std_css
+    ), "stylesheet did not change after the palette-mode swap"
     assert (
-        "#CC79A7" in cb_styles[btn._state]
-    ), "colorblind seg-selected purple not present in rebuilt styles"
+        "#CC79A7" in cb_css
+    ), "colorblind seg-selected purple not present in rebuilt stylesheet"
     btn.deleteLater()
 
 
-def test_feature_row_cache_invalidates_on_palette_mode_swap(
+def test_feature_row_restyles_on_palette_mode_swap(
     app: QApplication,
 ) -> None:
-    """Same invariant for :class:`FeatureRow`. The badge / row /
-    name styles must rebuild after a palette-mode swap so the
-    contrastive cue picks up the new neutral hue.
-    """
+    """Same invariant for :class:`FeatureRow`: a palette-mode swap
+    must propagate to the rendered badge stylesheet. Pinned via
+    the public ``QWidget.styleSheet`` accessor on ``row.badge``
+    after driving the row into the contrastive display state."""
     from phonology_features.gui.widgets import FeatureRow
 
-    FeatureRow._styles_cache.clear()
     row = FeatureRow("son")
     set_theme("light")
     set_palette_mode("standard")
     row.apply_theme()
-    std_contrastive = row._BADGE_CONTRASTIVE
-    assert "#D6E8FF" in std_contrastive  # standard accent_light blue
+    row.set_display(value="", shared=False, contrastive=True, badge="±")
+    std_badge_css = row.badge.styleSheet()
+    assert "#D6E8FF" in std_badge_css, "standard accent_light blue missing"
     set_palette_mode("colorblind")
     row.apply_theme()
-    cb_contrastive = row._BADGE_CONTRASTIVE
-    assert cb_contrastive != std_contrastive
-    assert "#F3D6E8" in cb_contrastive, (
+    # apply_theme re-runs the last set_display; the new palette's
+    # contrastive colour must be the one applied now.
+    cb_badge_css = row.badge.styleSheet()
+    assert (
+        cb_badge_css != std_badge_css
+    ), "badge stylesheet did not change after the palette-mode swap"
+    assert "#F3D6E8" in cb_badge_css, (
         "colorblind neutral_bg purple missing from rebuilt"
-        f" contrastive badge: {cb_contrastive}"
+        f" contrastive badge: {cb_badge_css}"
     )
     row.deleteLater()
 

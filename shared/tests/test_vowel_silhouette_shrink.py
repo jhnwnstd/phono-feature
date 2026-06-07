@@ -14,8 +14,7 @@ plus an end-to-end check against the real Hayes inventory through
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from collections.abc import Callable
 
 import pytest
 
@@ -28,7 +27,6 @@ from phonology_shared.chart.vowels import (
     build_vowel_chart_geometry,
     detect_vowel_profile,
 )
-from phonology_shared.data.inventory import Inventory
 from phonology_shared.theory.feature_engine import FeatureEngine
 
 # ---------------------------------------------------------------------------
@@ -244,25 +242,19 @@ def test_compose_returns_canonical_when_factor_zero() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _engine(inventories_dir: Path, name: str) -> FeatureEngine:
-    path = inventories_dir / name
-    if not path.exists():
-        pytest.skip(f"inventory not present: {name}")
-    raw = json.loads(path.read_text(encoding="utf-8-sig"))
-    return FeatureEngine(Inventory.parse(raw, source=str(path)))
-
-
 def _vowel_segs(engine: FeatureEngine) -> list[str]:
     return [
         s for s in engine.segments if engine.segments[s].get("Syllabic") == "+"
     ]
 
 
-def test_hayes_silhouette_within_slant_cap(inventories_dir: Path) -> None:
+def test_hayes_silhouette_within_slant_cap(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
     """The Hayes inventory's rendered silhouette must respect the
     Stage 2 cap on slant change relative to its canonical slant.
     """
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     vowels = _vowel_segs(engine)
     if not vowels:
         pytest.skip("no vowels in inventory")

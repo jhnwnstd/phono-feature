@@ -5,10 +5,8 @@ Pure-Python contract tests for the top-level seg/feat mode transition.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from collections.abc import Callable
 
-from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.mode_logic import (
     Mode,
     mode_status_text,
@@ -17,14 +15,10 @@ from phonology_shared.presentation.mode_logic import (
 from phonology_shared.theory.feature_engine import FeatureEngine
 
 
-def _engine(inventories_dir: Path, name: str) -> FeatureEngine:
-    path = inventories_dir / name
-    raw = json.loads(path.read_text(encoding="utf-8-sig"))
-    return FeatureEngine(Inventory.parse(raw, source=str(path)))
-
-
-def test_project_mode_transition_seg_to_feat(inventories_dir: Path) -> None:
-    engine = _engine(inventories_dir, "hayes_features.json")
+def test_project_mode_transition_seg_to_feat(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    engine = bundled_engine("hayes")
     segs = ["b", "d", "ɡ"]
     transition = project_mode_transition(
         Mode.SEG_TO_FEAT,
@@ -39,8 +33,10 @@ def test_project_mode_transition_seg_to_feat(inventories_dir: Path) -> None:
     assert transition.saved_feat_state["Voice"] == "+"
 
 
-def test_project_mode_transition_feat_to_seg(inventories_dir: Path) -> None:
-    engine = _engine(inventories_dir, "hayes_features.json")
+def test_project_mode_transition_feat_to_seg(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    engine = bundled_engine("hayes")
     spec = {"Voice": "+"}
     transition = project_mode_transition(
         Mode.FEAT_TO_SEG,
@@ -60,14 +56,14 @@ def test_project_mode_transition_feat_to_seg(inventories_dir: Path) -> None:
 
 
 def test_feat_to_seg_carries_natural_class_over(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """**FEAT→SEG carry-over invariant**: switching from FEAT to
     SEG sets the SEG selection to the natural class the FEAT
     query picked out -- the same segments that were highlighted
     in FEAT mode.
     """
-    engine = _engine(inventories_dir, "english_features.json")
+    engine = bundled_engine("english")
     spec = {"High": "+", "Front": "+"}
     transition = project_mode_transition(
         Mode.FEAT_TO_SEG,
@@ -85,7 +81,7 @@ def test_feat_to_seg_carries_natural_class_over(
 
 
 def test_feat_to_seg_projection_is_always_a_natural_class(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """**Cross-mode display invariant**: in FEAT mode the matched
     segments highlighted in the segment grid are by construction
@@ -99,7 +95,7 @@ def test_feat_to_seg_projection_is_always_a_natural_class(
     seg selection via ``find_segments``) and
     :py:meth:`is_natural_class` fails loudly.
     """
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     queries = [
         {"Voice": "+"},
         {"Nasal": "+"},

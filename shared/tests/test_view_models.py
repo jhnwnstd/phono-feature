@@ -7,10 +7,8 @@ Pyodide.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from collections.abc import Callable
 
-from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.view_models import (
     build_inventory_summary,
     summarize_feature_query,
@@ -19,25 +17,15 @@ from phonology_shared.presentation.view_models import (
 from phonology_shared.theory.feature_engine import FeatureEngine
 
 
-def _engine(inventories_dir: Path, name: str) -> FeatureEngine:
-    import pytest
-
-    path = inventories_dir / name
-    if not path.exists():
-        pytest.skip(f"{name} not present (gitignored in CI)")
-    raw = json.loads(path.read_text(encoding="utf-8-sig"))
-    return FeatureEngine(Inventory.parse(raw, source=str(path)))
-
-
 def test_build_inventory_summary_places_general_schwa_on_mid_row(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """``ə`` (ATR=0) lifts onto the Tier 2 Mid row, while ``ɜ``
     (ATR=-) stays on Open-mid. The renderer reads the row/col from
     ``vowel_chart.cells``; both must land at the central-unrounded
     column on their respective rows.
     """
-    engine = _engine(inventories_dir, "general_features.json")
+    engine = bundled_engine("general")
     summary = build_inventory_summary(engine, "General")
     cells = summary["vowel_chart"]["cells"]
     mid_cell = next(
@@ -51,9 +39,9 @@ def test_build_inventory_summary_places_general_schwa_on_mid_row(
 
 
 def test_summarize_segment_selection_single_maps_zero_to_empty(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     summary = summarize_segment_selection(engine, ["b"])
     assert summary["selected"] == ["b"]
     assert summary["suggested"] == []
@@ -69,9 +57,9 @@ def test_summarize_segment_selection_single_maps_zero_to_empty(
 
 
 def test_summarize_segment_selection_multi_matches_engine(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     segs = ["b", "d", "ɡ"]
     summary = summarize_segment_selection(engine, segs)
     assert summary["selected"] == segs
@@ -118,7 +106,7 @@ def test_summarize_segment_selection_multi_matches_engine(
 
 
 def test_feature_categories_for_english_j_i_capital_ɪ(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """User-reported scenario, pinned: selecting /j/ /i/ /ɪ/ in
     English. Tense's values across the selection are ``+`` (/i/),
@@ -128,7 +116,7 @@ def test_feature_categories_for_english_j_i_capital_ɪ(
     category so renderers can show
     underspec-conflict distinctly from explicit-conflict.
     """
-    engine = _engine(inventories_dir, "english_features.json")
+    engine = bundled_engine("english")
     summary = summarize_segment_selection(engine, ["j", "i", "ɪ"])
     # Tense: +, -, 0 across the three -> UNDERSPEC_CONFLICT
     tense = summary["feature_rows"]["Tense"]
@@ -152,7 +140,7 @@ def test_feature_categories_for_english_j_i_capital_ɪ(
 
 
 def test_feature_row_badge_uses_unicode_minus_for_shared_negative(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """A feature shared as ``-`` across the selection must surface in
     the row's ``badge`` as U+2212 (MINUS SIGN), not ASCII U+002D
@@ -163,7 +151,7 @@ def test_feature_row_badge_uses_unicode_minus_for_shared_negative(
     ``FeatureRow.set_display``; the shared layer is the single
     source of truth so both UIs inherit it.
     """
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     # Pick a selection where some feature is shared-negative. /m/
     # /n/ are both [-Continuant], among many shared values.
     summary = summarize_segment_selection(engine, ["m", "n"])
@@ -179,7 +167,7 @@ def test_feature_row_badge_uses_unicode_minus_for_shared_negative(
 
 
 def test_complete_to_minimal_natural_class_blevins_affricate_strict_closure(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """Pinning: under strict natural-class semantics,
     ``complete_to_minimal_natural_class([b͡v, d͡z, t͡s])`` returns
@@ -201,12 +189,10 @@ def test_complete_to_minimal_natural_class_blevins_affricate_strict_closure(
 
     Skipped in CI when ``blevins_features.json`` is gitignored.
     """
-    import pytest
-
-    blevins_path = inventories_dir / "blevins_features.json"
-    if not blevins_path.exists():
-        pytest.skip("blevins_features.json not present (gitignored in CI)")
-    engine = _engine(inventories_dir, "blevins_features.json")
+    # ``bundled_engine`` skips with a clear message when the
+    # named inventory isn't on disk (gitignored under
+    # ``LookupTableProvider``'s bake-artifact policy).
+    engine = bundled_engine("blevins")
     selected = ["b͡v", "d͡z", "t͡s"]
     assert all(s in engine.segments for s in selected)
     # /b͡v d͡z t͡s/ is not a STRICT natural class on its own (some
@@ -236,7 +222,7 @@ def test_complete_to_minimal_natural_class_blevins_affricate_strict_closure(
 
 
 def test_summarize_feature_query_always_returns_find_segments(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """**FEAT-mode display invariant**: the matches returned by
     ``summarize_feature_query`` are always exactly
@@ -253,7 +239,7 @@ def test_summarize_feature_query_always_returns_find_segments(
     even though /j i/ are not a natural class) and is no longer
     permitted.
     """
-    engine = _engine(inventories_dir, "english_features.json")
+    engine = bundled_engine("english")
     # Projection from a non-natural-class seg selection: the
     # FEAT query strictly matches a superset, and the highlighted
     # segments in FEAT mode must reflect that superset, not the
@@ -268,8 +254,10 @@ def test_summarize_feature_query_always_returns_find_segments(
     assert summary["segment_states"]["ɪ"] == "matched"
 
 
-def test_summarize_feature_query_matches_engine(inventories_dir: Path) -> None:
-    engine = _engine(inventories_dir, "hayes_features.json")
+def test_summarize_feature_query_matches_engine(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    engine = bundled_engine("hayes")
     spec = {"Voice": "+"}
     summary = summarize_feature_query(engine, spec)
     # ``matching`` should contain canonical voiced segments and
@@ -304,7 +292,7 @@ def _assert_tabs_shape(tabs: dict[str, object]) -> None:
 
 
 def test_analysis_tabs_seg_single_keeps_contrasts_enabled(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """Tab enable/disable is MODE-driven, not selection-driven. SEG
     mode keeps Contrasts clickable regardless of selection count;
@@ -312,7 +300,7 @@ def test_analysis_tabs_seg_single_keeps_contrasts_enabled(
     the user lands there with fewer than two segments. The Class
     tab stays NEUTRAL (white) since a single segment is trivially
     a natural class of itself."""
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     tabs = summarize_segment_selection(engine, ["b"])["analysis_tabs"]
     _assert_tabs_shape(tabs)
     assert tabs["contrasts_enabled"] is True
@@ -323,13 +311,15 @@ def test_analysis_tabs_seg_single_keeps_contrasts_enabled(
     assert "/b/" in tabs["selection"]
 
 
-def test_analysis_tabs_seg_multi_natural_class(inventories_dir: Path) -> None:
+def test_analysis_tabs_seg_multi_natural_class(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
     """Multi-segment SEG selection that IS a natural class: tab
     state goes ``"natural"`` so the UI paints the Class tab green.
     Picking every voiced obstruent in Hayes — voiced stops + voiced
     fricatives — yields a real natural class definable by the
     feature ``+Voice``."""
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     voiced = engine.find_segments({"Voice": "+"})
     tabs = summarize_segment_selection(engine, voiced)["analysis_tabs"]
     _assert_tabs_shape(tabs)
@@ -337,13 +327,13 @@ def test_analysis_tabs_seg_multi_natural_class(inventories_dir: Path) -> None:
 
 
 def test_analysis_tabs_seg_multi_enables_contrasts(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """Multi-segment SEG: contrasting features go in the Contrasts
     tab; the flag is on. /b/ /d/ /ɡ/ aren't a natural class on
     their own in Hayes (the other voiced stops would need to be in
     the selection too), so ``class_state == "not_natural"``."""
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     segs = ["b", "d", "ɡ"]
     tabs = summarize_segment_selection(engine, segs)["analysis_tabs"]
     _assert_tabs_shape(tabs)
@@ -352,11 +342,13 @@ def test_analysis_tabs_seg_multi_enables_contrasts(
     assert "Contrasting features" in tabs["contrasts"]
 
 
-def test_analysis_tabs_feat_disables_contrasts(inventories_dir: Path) -> None:
+def test_analysis_tabs_feat_disables_contrasts(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
     """FEAT mode: contrasts aren't meaningful for a feature query,
     so the flag stays off regardless of how many matches there are.
     """
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     tabs = summarize_feature_query(engine, {"Voice": "+"})["analysis_tabs"]
     _assert_tabs_shape(tabs)
     assert tabs["contrasts_enabled"] is False
@@ -366,7 +358,7 @@ def test_analysis_tabs_feat_disables_contrasts(inventories_dir: Path) -> None:
 
 
 def test_analysis_tabs_empty_selection_safe_shape(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """Empty SEG selection still produces a well-formed payload, so
     the UI can call setSections without checking for nulls. The
@@ -374,7 +366,7 @@ def test_analysis_tabs_empty_selection_safe_shape(
     cue is neutral; the tab bodies now carry short next-step hints
     instead of empty strings so the user isn't staring at blank
     tabs wondering whether the app is alive."""
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     tabs = summarize_segment_selection(engine, [])["analysis_tabs"]
     _assert_tabs_shape(tabs)
     assert tabs["contrasts_enabled"] is True
@@ -386,7 +378,7 @@ def test_analysis_tabs_empty_selection_safe_shape(
 
 
 def test_segment_state_payload_strings_match_enum(
-    inventories_dir: Path,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """The desktop coerces ``segment_states`` strings into the
     ``SegmentState`` StrEnum via ``SegmentState(state)``. If the enum
@@ -401,7 +393,7 @@ def test_segment_state_payload_strings_match_enum(
         enum_values
     )
 
-    engine = _engine(inventories_dir, "hayes_features.json")
+    engine = bundled_engine("hayes")
     seg_list = list(engine.segments)
     seen: set[str] = set()
     seen.update(

@@ -23,10 +23,10 @@ offline). Synthetic edge cases live in ``test_active_features.py``.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from collections.abc import Callable
 
 import pytest
+from _inventory_names import BUNDLED_INVENTORY_NAMES
 
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.view_models import (
@@ -34,32 +34,18 @@ from phonology_shared.presentation.view_models import (
 )
 from phonology_shared.theory.feature_engine import FeatureEngine
 
-BUNDLED_NAMES: list[str] = [
-    "english",
-    "hindi",
-    "german",
-    "japanese",
-    "korean",
-    "spanish",
-    "lomongo",
-    "mandarin_chinese",
-    "modern_standard_arabic",
-    "turkish",
-]
 
-
-@pytest.fixture(scope="module", params=BUNDLED_NAMES)
+@pytest.fixture(scope="module", params=BUNDLED_INVENTORY_NAMES)
 def inventory_name(request: pytest.FixtureRequest) -> str:
     return str(request.param)
 
 
 @pytest.fixture(scope="module")
 def loaded(
-    inventory_name: str, inventories_dir: Path
+    inventory_name: str,
+    bundled_inventory: Callable[[str], Inventory],
 ) -> tuple[Inventory, FeatureEngine]:
-    path = inventories_dir / f"{inventory_name}_features.json"
-    raw = json.loads(path.read_text(encoding="utf-8-sig"))
-    inv = Inventory.parse(raw, source=path.stem)
+    inv = bundled_inventory(inventory_name)
     return inv, FeatureEngine(inv)
 
 

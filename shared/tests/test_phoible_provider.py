@@ -102,11 +102,20 @@ _STUB_DATA: dict[str, object] = {
 def test_provider_satisfies_protocol() -> None:
     """``PhoibleProvider`` must duck-type as
     :py:class:`InventoryProvider`; the runtime_checkable Protocol
-    makes this assertable without an inheritance declaration."""
+    makes this assertable without an inheritance declaration.
+
+    Stronger than a literal-name smoke test: also confirms the
+    provider ACTUALLY consumes the stub data by reading the
+    search-languages output back. A provider that ignored
+    ``index_table`` would pass the isinstance/name checks while
+    silently returning empty searches."""
     provider = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
     assert isinstance(provider, InventoryProvider)
     assert provider.name == "PHOIBLE"
     assert provider.version == "PHOIBLE 2.0"
+    # The stub index ships a "Korean" language; if the provider had
+    # ignored the index_table, search would return [].
+    assert "Korean" in provider.search_languages("Korean")
 
 
 def test_search_languages_substring_matches() -> None:
