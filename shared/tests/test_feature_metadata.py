@@ -184,6 +184,151 @@ def test_registry_covers_panphon_mapping_values() -> None:
 
 
 # ---------------------------------------------------------------
+# Bake-time column-order guards.
+#
+# The bake script consumes ``PHOIBLE_TO_APP_FEATURE.keys()`` and
+# ``PANPHON_TO_APP_FEATURE.keys()`` in dict-insertion order to fix
+# the column order of the positional-encoded bundle string in the
+# baked snapshot. Inserting in the middle or reordering rotates
+# the encoding and silently invalidates every shipped bundle:
+# downstream the engine reads the wrong feature for each position.
+#
+# These tests pin the current column order as a literal tuple in
+# the test file. A future edit that reorders or inserts requires
+# updating these tests (and re-baking every snapshot — the safer
+# fix is usually to append to the end of the mapping rather than
+# rotate). Each failure points at the exact mitigation in its
+# message.
+# ---------------------------------------------------------------
+
+
+_PHOIBLE_COLUMN_ORDER: tuple[str, ...] = (
+    "tone",
+    "stress",
+    "syllabic",
+    "short",
+    "long",
+    "consonantal",
+    "sonorant",
+    "continuant",
+    "delayedRelease",
+    "approximant",
+    "tap",
+    "trill",
+    "nasal",
+    "lateral",
+    "labial",
+    "round",
+    "labiodental",
+    "coronal",
+    "anterior",
+    "distributed",
+    "strident",
+    "dorsal",
+    "high",
+    "low",
+    "front",
+    "back",
+    "tense",
+    "retractedTongueRoot",
+    "advancedTongueRoot",
+    "periodicGlottalSource",
+    "epilaryngealSource",
+    "spreadGlottis",
+    "constrictedGlottis",
+    "fortis",
+    "lenis",
+    "raisedLarynxEjective",
+    "loweredLarynxImplosive",
+    "click",
+)
+
+
+def test_phoible_column_order_is_pinned() -> None:
+    """``PHOIBLE_TO_APP_FEATURE``'s key order IS the column order
+    of the baked PHOIBLE snapshot's positional-encoded bundle
+    string. Reordering or inserting in the middle silently
+    invalidates every shipped baked snapshot (every segment now
+    decodes the wrong feature for the rotated positions).
+
+    Pinned as a literal tuple so a future edit that reorders or
+    inserts trips this test and forces a deliberate decision:
+    either preserve order (append-only) or re-bake every snapshot
+    AND update this list. The failure message names both options.
+    """
+    from phonology_shared.editor.phoible_features import (
+        PHOIBLE_TO_APP_FEATURE,
+    )
+
+    actual = tuple(PHOIBLE_TO_APP_FEATURE.keys())
+    assert actual == _PHOIBLE_COLUMN_ORDER, (
+        "PHOIBLE_TO_APP_FEATURE column order changed. The order IS "
+        "the positional encoding of every baked snapshot — rotating "
+        "it silently corrupts the engine's feature lookup. To fix:\n"
+        "  (a) restore the previous order (preferred — append new "
+        "columns to the end instead of inserting), OR\n"
+        "  (b) re-bake every PHOIBLE snapshot and update "
+        "_PHOIBLE_COLUMN_ORDER in this test to match.\n"
+        f"  actual: {actual}\n"
+        f"  expected: {_PHOIBLE_COLUMN_ORDER}"
+    )
+
+
+_PANPHON_COLUMN_ORDER: tuple[str, ...] = (
+    "syl",
+    "son",
+    "cons",
+    "cont",
+    "delrel",
+    "lat",
+    "nas",
+    "strid",
+    "voi",
+    "sg",
+    "cg",
+    "ant",
+    "cor",
+    "distr",
+    "lab",
+    "hi",
+    "lo",
+    "back",
+    "round",
+    "velaric",
+    "tense",
+    "long",
+    "hitone",
+    "hireg",
+)
+
+
+def test_panphon_column_order_is_pinned() -> None:
+    """``PANPHON_TO_APP_FEATURE``'s key order pins the column order
+    PanPhon's bake artifact carries. Same rationale as the PHOIBLE
+    column-order guard: reordering or inserting silently rotates
+    every shipped bundle's feature lookup.
+
+    PanPhon's load-time path also consults the mapping by key
+    (``PANPHON_TO_APP_FEATURE.get(short_code)``), so a key rename
+    breaks the runtime lookup too — the test catches that case as
+    well.
+    """
+    from phonology_shared.editor.panphon_features import (
+        PANPHON_TO_APP_FEATURE,
+    )
+
+    actual = tuple(PANPHON_TO_APP_FEATURE.keys())
+    assert actual == _PANPHON_COLUMN_ORDER, (
+        "PANPHON_TO_APP_FEATURE column order changed. Same fix "
+        "options as the PHOIBLE guard: prefer append-only edits "
+        "to the existing order; if a reorder is required, re-bake "
+        "every PanPhon snapshot and update _PANPHON_COLUMN_ORDER.\n"
+        f"  actual: {actual}\n"
+        f"  expected: {_PANPHON_COLUMN_ORDER}"
+    )
+
+
+# ---------------------------------------------------------------
 # Derived tables stay consistent with the registry
 # ---------------------------------------------------------------
 
@@ -231,23 +376,49 @@ def test_SUPRASEGMENTAL_FEATURES_includes_every_alias() -> None:
 
 
 # ---------------------------------------------------------------
-# Place subgrouping (sort adjacency only — no visual hierarchy)
+# Subgrouping (sort adjacency only — no visual hierarchy)
 # ---------------------------------------------------------------
 
 
-def test_place_modifiers_sort_directly_after_their_anchor() -> None:
-    """The Labial/Coronal/Dorsal anchors must precede their
-    modifiers in the Place group's sort order. This is the registry-
-    level contract that makes ``Round`` render right after ``Labial``
-    in the Feature Pane regardless of which inventory loaded."""
-    anchors = {"labial", "coronal", "dorsal"}
+def test_modifiers_sort_directly_after_their_anchor() -> None:
+    """Every modifier (an entry whose ``subgroup`` points at another
+    canonical key) must have a sort_key strictly greater than its
+    anchor's. The registry-level contract makes anchored
+    sub-clusters render contiguously regardless of which inventory
+    loaded:
+
+    - Place modifiers cluster under ``labial`` / ``coronal`` /
+      ``dorsal`` (the original guarantee that prevents ``Round``
+      from drifting away from ``Labial`` on PHOIBLE).
+    - PHOIBLE-only Laryngeal modifiers cluster under ``voice``
+      (epilaryngeal source, fortis/lenis, breathy/creaky) and
+      ``constrgl`` (raised- / lowered-larynx ejective + implosive),
+      so PHOIBLE inventories surface them as visibly anchored
+      sub-clusters rather than five strangers at the bottom of the
+      Laryngeal group.
+    - Any future subgroup-anchored cluster inherits the contract
+      automatically — no per-group special case here.
+
+    Catches a regression where an edit reorders an anchor below
+    its modifiers and the pane's adjacency promise breaks silently.
+    """
     for canonical, meta in FEATURE_REGISTRY.items():
-        if meta.subgroup not in anchors or canonical in anchors:
+        if meta.subgroup is None or meta.subgroup == canonical:
             continue
-        anchor_meta = FEATURE_REGISTRY[meta.subgroup]
+        anchor_meta = FEATURE_REGISTRY.get(meta.subgroup)
+        assert anchor_meta is not None, (
+            f"{canonical!r} declares subgroup {meta.subgroup!r} "
+            f"but no registry entry by that canonical exists"
+        )
+        assert meta.group == anchor_meta.group, (
+            f"{canonical!r} (group {meta.group!r}) anchors to "
+            f"{meta.subgroup!r} (group {anchor_meta.group!r}); the "
+            f"contract pins same-group subgrouping so the renderer "
+            f"can iterate one group at a time"
+        )
         assert meta.sort_key > anchor_meta.sort_key, (
-            f"place modifier {canonical!r} (sort={meta.sort_key}) "
-            f"sorts BEFORE its anchor {meta.subgroup!r} "
+            f"modifier {canonical!r} (sort={meta.sort_key}) sorts "
+            f"BEFORE its anchor {meta.subgroup!r} "
             f"(sort={anchor_meta.sort_key})"
         )
 

@@ -106,10 +106,19 @@ class FeatureMetadata:
     :py:mod:`phonology_shared.presentation.constants` collects
     every alias of every entry tagged with each group.
 
-    ``subgroup`` is an optional anchor-name tag (``"labial"``,
-    ``"coronal"``, ``"dorsal"``, ``"laryngeal"``, ``"tongue_root"``).
-    Currently used only by tests / inspection; rendering is sort-
-    adjacency only (no visual hierarchy).
+    ``subgroup`` is an optional canonical-key pointer at another
+    registry entry that serves as this feature's "anchor" — the
+    head of an articulatory subcluster the modifier refines (e.g.
+    ``"labial"`` for ``round`` / ``labiodental``; ``"voice"`` for
+    ``fortis`` / ``lenis`` / ``breathy`` / ``creaky``;
+    ``"constrgl"`` for ``raisedlarynxejective`` /
+    ``loweredlarynximplosive``). Currently used only by tests /
+    inspection; rendering is sort-adjacency only (no visual
+    hierarchy). The
+    ``test_modifiers_sort_directly_after_their_anchor`` invariant
+    enforces same-group anchoring and ``modifier.sort_key >
+    anchor.sort_key``, so any non-None subgroup must name a
+    registered canonical in the same group.
 
     ``systems`` records which provider rosters include this
     feature. Used by import-time mappings + the bake script's
@@ -226,6 +235,12 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=203,
         group=GROUP_LARYNGEAL,
         aliases=("EpilaryngealSource", "epilaryngealSource"),
+        # Anchored to ``voice``: epilaryngeal source is the
+        # tier-internal correlate of laryngeal voicing, distinguishing
+        # supra-glottal vs. glottal voice (Esling 2005). PHOIBLE
+        # treats it as a refinement of the voicing dimension, so it
+        # reads as a child of ``voice`` in the Feature Pane.
+        subgroup="voice",
         systems=_PHOIBLE_ONLY,
         uses=frozenset({USE_LARYNGEAL}),
     ),
@@ -234,6 +249,11 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=204,
         group=GROUP_LARYNGEAL,
         aliases=("Fortis",),
+        # Fortis / lenis are the energetic-effort axis under
+        # voicing. Anchoring them to ``voice`` clusters them with
+        # their phonetic correlate rather than leaving them as
+        # un-rooted strangers at the bottom of the Laryngeal group.
+        subgroup="voice",
         systems=_PHOIBLE_ONLY,
         uses=frozenset({USE_LARYNGEAL}),
     ),
@@ -242,6 +262,7 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=205,
         group=GROUP_LARYNGEAL,
         aliases=("Lenis",),
+        subgroup="voice",
         systems=_PHOIBLE_ONLY,
         uses=frozenset({USE_LARYNGEAL}),
     ),
@@ -250,6 +271,11 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=206,
         group=GROUP_LARYNGEAL,
         aliases=("RaisedLarynxEjective", "raisedLarynxEjective"),
+        # Anchored to ``constrgl``: ejectives are constricted-glottis
+        # with a raised larynx. The PHOIBLE feature is the airstream
+        # mechanism that produces an ejective from the constricted-
+        # glottis base, so it's structurally a child of ``constrgl``.
+        subgroup="constrgl",
         systems=_PHOIBLE_ONLY,
         uses=frozenset({USE_LARYNGEAL}),
     ),
@@ -258,6 +284,9 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=207,
         group=GROUP_LARYNGEAL,
         aliases=("LoweredLarynxImplosive", "loweredLarynxImplosive"),
+        # Implosives are constricted-glottis with a lowered larynx;
+        # mirror anchor of ``raisedlarynxejective``.
+        subgroup="constrgl",
         systems=_PHOIBLE_ONLY,
         uses=frozenset({USE_LARYNGEAL}),
     ),
@@ -266,6 +295,10 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=208,
         group=GROUP_LARYNGEAL,
         aliases=("Breathy", "breathy_voice", "breathyvoice", "breathyVoice"),
+        # Breathy / creaky are phonation types that modify the
+        # ``voice`` dimension. Anchoring them here keeps the
+        # phonation-modifier subcluster contiguous in the pane.
+        subgroup="voice",
         systems=_PHOIBLE_ONLY,
         uses=frozenset({USE_LARYNGEAL, USE_VOWEL_PAIR}),
     ),
@@ -274,6 +307,7 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=209,
         group=GROUP_LARYNGEAL,
         aliases=("Creaky", "creaky_voice", "creakyvoice", "creakyVoice"),
+        subgroup="voice",
         systems=_PHOIBLE_ONLY,
         uses=frozenset({USE_LARYNGEAL, USE_VOWEL_PAIR}),
     ),
@@ -473,12 +507,19 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
     ),
     # --- Tongue-Root / Pharyngeal (500s) ---
+    # No subgroup anchor: the Tongue-Root group entries are
+    # independent dimensions (pharyngeal cavity vs. tongue-root
+    # position vs. tense) without a phonologically privileged
+    # anchor among themselves. The 500-504 sort_keys give the
+    # group its natural reading order; the contract
+    # ``test_modifiers_sort_directly_after_their_anchor`` requires
+    # any non-None ``subgroup`` to point at a registered canonical,
+    # which is the right discipline elsewhere.
     "constrpharynx": FeatureMetadata(
         canonical="constrpharynx",
         sort_key=500,
         group=GROUP_TONGUE_ROOT,
         aliases=("ConstrPharynx",),
-        subgroup="tongue_root",
         systems=_HAYES_ONLY,
         uses=frozenset({USE_NATURAL_CLASS}),
     ),
@@ -487,7 +528,6 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=501,
         group=GROUP_TONGUE_ROOT,
         aliases=("Pharyngeal",),
-        subgroup="tongue_root",
         systems=_HAYES_ONLY,
         uses=frozenset({USE_NATURAL_CLASS}),
     ),
@@ -496,7 +536,6 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=502,
         group=GROUP_TONGUE_ROOT,
         aliases=("ATR", "advancedTongueRoot", "advanced_tongue_root"),
-        subgroup="tongue_root",
         systems=_HAYES_PHOIBLE,
         uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
     ),
@@ -505,7 +544,6 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=503,
         group=GROUP_TONGUE_ROOT,
         aliases=("Tense",),
-        subgroup="tongue_root",
         systems=_ALL_THREE,
         uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
     ),
@@ -514,7 +552,6 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=504,
         group=GROUP_TONGUE_ROOT,
         aliases=("RTR", "retractedTongueRoot", "retracted_tongue_root"),
-        subgroup="tongue_root",
         systems=_PHOIBLE_ONLY,
         uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
     ),
