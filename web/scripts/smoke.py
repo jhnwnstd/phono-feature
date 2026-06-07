@@ -218,6 +218,13 @@ def run_baseline_checks(page, label: str) -> int:
         " return null; }",
     )
     print(f"  click seg /{clicked}/")
+    # Firefox is markedly slower than chromium/webkit at the first
+    # ``analyze_segments`` call (cold Pyodide path through the
+    # Python view-models stack). 10 s was tight under the prior
+    # smoke; the cold path comfortably finishes by 30 s on every
+    # browser, so the wider window only matters when something is
+    # actually broken (in which case 30 s still surfaces the
+    # failure quickly enough).
     page.wait_for_function(
         "() => {"
         " const sel = document.getElementById('analysis-selection');"
@@ -226,7 +233,7 @@ def run_baseline_checks(page, label: str) -> int:
         " return sel && feat && sel.innerHTML.length > 0"
         " && feat.innerHTML.length > 0;"
         "}",
-        timeout=10_000,
+        timeout=30_000,
     )
     selection_html = page.evaluate(
         "() => document.getElementById('analysis-selection').innerHTML",
