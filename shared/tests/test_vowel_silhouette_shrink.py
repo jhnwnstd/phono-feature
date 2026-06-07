@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 from phonology_shared.chart import vowels as vowels_mod
+from phonology_shared.chart import vowels_layout as vowels_layout_mod
 from phonology_shared.chart.vowels import (
     _compute_shrunken_widths,
     _stage1_uniform_shrink,
@@ -176,8 +177,8 @@ def test_stage2_disabled_returns_stage1() -> None:
     """Setting the cap fraction to 0 turns Stage 2 off; the function
     returns Stage 1's widths verbatim.
     """
-    saved = vowels_mod._VOWEL_SLANT_CHANGE_CAP_FRAC
-    vowels_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = 0.0
+    saved = vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC
+    vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = 0.0
     try:
         row_data = [(0.0, 0.5), (1.0, 0.5)]
         top, bot = _stage2_slant_tweak(
@@ -190,7 +191,7 @@ def test_stage2_disabled_returns_stage1() -> None:
         assert top == pytest.approx(0.91)
         assert bot == pytest.approx(0.61)
     finally:
-        vowels_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = saved
+        vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = saved
 
 
 # ---------------------------------------------------------------------------
@@ -226,8 +227,8 @@ def test_compose_stage2_strictly_dominates_stage1_when_slack_remains() -> None:
 
 def test_compose_returns_canonical_when_factor_zero() -> None:
     """``_VOWEL_SHRINK_FACTOR = 0`` disables both stages at once."""
-    saved = vowels_mod._VOWEL_SHRINK_FACTOR
-    vowels_mod._VOWEL_SHRINK_FACTOR = 0.0
+    saved = vowels_layout_mod._VOWEL_SHRINK_FACTOR
+    vowels_layout_mod._VOWEL_SHRINK_FACTOR = 0.0
     try:
         top, bot = _compute_shrunken_widths(
             cells_meta_by_row={0: []},
@@ -240,7 +241,7 @@ def test_compose_returns_canonical_when_factor_zero() -> None:
         assert top == pytest.approx(1.0)
         assert bot == pytest.approx(0.7)
     finally:
-        vowels_mod._VOWEL_SHRINK_FACTOR = saved
+        vowels_layout_mod._VOWEL_SHRINK_FACTOR = saved
 
 
 # ---------------------------------------------------------------------------
