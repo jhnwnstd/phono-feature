@@ -23,9 +23,9 @@ These tests pin three contracts:
   so display-order code never trails one of them at the end of the
   list as an "unknown" feature.
 
-The set itself follows the research note's guidance at
-``docs/research.md``: keep the segmental core small and uniform,
-lift suprasegmental concerns to a separate tier.
+The set itself follows the principle from the autosegmental
+tradition: keep the segmental core small and uniform, lift
+suprasegmental concerns to a separate tier.
 """
 
 from __future__ import annotations

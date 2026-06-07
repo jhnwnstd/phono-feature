@@ -54,11 +54,11 @@ class FeatureValue(StrEnum):
     all-``0`` ``LowerLarynx`` row must read as "Hindi does not
     specify this feature", not "Hindi is uniformly ``-LowerLarynx``".
 
-    The research note at ``docs/research.md`` argues the ternary
-    distinction is the single most important interoperability
-    invariant between SPE-, PHOIBLE-, PanPhon-, and CLTS-style
-    feature systems. Underspecification theory (Archangeli 1988;
-    Mohanan 1991) operationalises the same distinction.
+    The ternary distinction is the single most important
+    interoperability invariant between SPE-, PHOIBLE-, PanPhon-,
+    and CLTS-style feature systems. Underspecification theory
+    (Archangeli 1988; Mohanan 1991) operationalises the same
+    distinction.
 
     Hayes (2009) treats ``"0"`` the same way; see
     :py:class:`FeatureState` in
