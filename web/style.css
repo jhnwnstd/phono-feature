@@ -1178,8 +1178,13 @@ dialog input[type="text"]:focus-visible {
    the layout box agree. The chart's fluid data area absorbs the
    extra width without forcing the consonant grid to grow. */
 .vowel-chart-data .seg-btn {
-  width: 46px;
-  min-width: 46px;
+  /* 40 px gives multi-character PHOIBLE diphthongs full-size font
+     room without making single-codepoint vowels feel oversized
+     next to the 33 px consonant-grid buttons. Matched by
+     ``SEG_LABEL_MAX_W_VOWEL`` in main.js so the rasterizer's
+     font-shrink loop targets this exact width. */
+  width: 40px;
+  min-width: 40px;
 }
 
 /* Crowded-cell density tier. STACK cells with 5+ entries get a
@@ -1193,8 +1198,8 @@ dialog input[type="text"]:focus-visible {
 }
 .vowel-chart-cell-stack[data-cell-density="dense"] > .seg-btn {
   height: calc(var(--seg-btn-h) - 4px);
-  width: 40px;
-  min-width: 40px;
+  width: 36px;
+  min-width: 36px;
 }
 /* Pathological-cell tier for 10+ entry stacks (PHOIBLE worst case
    is 12 in one cell on !XU/UPSID). Pack tighter still so the
@@ -1206,8 +1211,8 @@ dialog input[type="text"]:focus-visible {
 }
 .vowel-chart-cell-stack[data-cell-density="ultra"] > .seg-btn {
   height: calc(var(--seg-btn-h) - 8px);
-  width: 36px;
-  min-width: 36px;
+  width: 32px;
+  min-width: 32px;
   border-radius: var(--radius-md);
 }
 /* Vertical stack for cells holding multiple vowels (e.g. ə / ɜ / ɚ
@@ -1670,8 +1675,12 @@ dialog input[type="text"]:focus-visible {
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
   mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
+  /* Span width / height already match the canvas's logical pixel
+     dimensions; ``100% 100%`` skips the aspect-ratio recompute
+     that ``contain`` triggers and renders the mask 1:1 with the
+     bitmap, avoiding sub-pixel interpolation softness. */
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
   user-select: none;
   -webkit-user-select: none;
   pointer-events: none;

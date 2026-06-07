@@ -790,11 +790,59 @@ const SEG_LABEL_MAX_W = 30;
 // Wider variant for vowel-chart cells. PHOIBLE inventories carry
 // many 2+ char vowel glyphs (diphthongs like ``ia``, ``oɛ̃`` and
 // combining-mark vowels like ``o̞``) that the consonant-grid's
-// 30 px MAX_W shrinks aggressively, with the combining marks
-// becoming unreadable at the shrunken size. The vowel chart's
-// data area is fluid (cells anchored by percentage) so giving
-// vowel cells extra horizontal room costs nothing in layout.
-const SEG_LABEL_MAX_W_VOWEL = 42;
+// 30 px MAX_W shrinks aggressively. The vowel chart's data area
+// is fluid (cells anchored by percentage) so vowel cells get a
+// slightly wider rasterizer budget than the consonant grid.
+const SEG_LABEL_MAX_W_VOWEL = 36;
+
+// IPA font stack used by the canvas rasterizer. Reads the CSS
+// custom property the buttons themselves consume so Charis IPA +
+// fallbacks reach the canvas paint instead of the system's
+// monospace fallback (which has thin combining-mark support and
+// produces visible blur on PHOIBLE diacritic stacks). Resolved
+// once at module load; if the CSS variable is missing for any
+// reason, falls through to the previous literal so the rasterizer
+// never throws.
+const SEG_FONT_FAMILY = (
+    getComputedStyle(document.documentElement)
+        .getPropertyValue("--font-ipa")
+        .trim()
+    || '"Noto Sans Mono", monospace'
+);
+// Promise that resolves once Charis IPA has attached to the page
+// (or immediately on browsers without ``document.fonts``). Drives
+// the one-shot re-rasterisation pass below so any seg-button
+// painted before Charis arrived (first-paint bootstrap bitmaps,
+// rendered against the system fallback) is rebuilt with the right
+// font instead of staying blurry forever under ``font-display:
+// swap``.
+const IPA_FONT_READY = (
+    typeof document.fonts !== "undefined" && document.fonts.load
+        ? document.fonts.load('14px "Charis IPA"').catch(() => undefined)
+        : Promise.resolve()
+);
+
+/** Re-rasterise every existing seg-button after Charis IPA loads
+ *  so the first-paint bitmaps swap to crisp Charis-shaped glyphs.
+ *  The rebuild reuses each button's ``data-rast-max-w`` budget so
+ *  the font-shrink loop picks the same final size that produced
+ *  the original layout (the box stays the same; only the strokes
+ *  sharpen). Newer buttons rendered after Charis loads already use
+ *  the right family from the start, so they no-op here. */
+IPA_FONT_READY.then(() => {
+    for (const [seg, btn] of state.seg_buttons) {
+        if (!btn || !btn.isConnected) continue;
+        const oldLabel = btn.querySelector(".rasterized-text");
+        if (!oldLabel) continue;
+        const maxW = Number(btn.dataset.rastMaxW) || SEG_LABEL_MAX_W;
+        const newLabel = createRasterizedLabel(
+            seg,
+            `14px ${SEG_FONT_FAMILY}`,
+            maxW,
+        );
+        oldLabel.replaceWith(newLabel);
+    }
+});
 
 function rasterizeText(text, font, maxWidth) {
     const measure = document.createElement("canvas").getContext("2d");
@@ -1185,12 +1233,13 @@ function _buildSegmentButton(seg, extraAttrs, maxWidth) {
     // Vowel cells override ``maxWidth`` via ``_buildVowelSegBtn``
     // because PHOIBLE vowels are often 2-3 characters wide and the
     // chart's fluid data area can absorb the extra width.
+    const rastMaxW = maxWidth != null ? maxWidth : SEG_LABEL_MAX_W;
+    // Store the rasterizer budget so the post-font-load
+    // re-rasterization pass can rebuild the bitmap with the same
+    // constraint that produced the initial paint.
+    btn.dataset.rastMaxW = String(rastMaxW);
     btn.appendChild(
-        createRasterizedLabel(
-            seg,
-            '14px "Noto Sans Mono", monospace',
-            maxWidth != null ? maxWidth : SEG_LABEL_MAX_W,
-        ),
+        createRasterizedLabel(seg, `14px ${SEG_FONT_FAMILY}`, rastMaxW),
     );
     if (extraAttrs) {
         for (const [k, v] of Object.entries(extraAttrs)) {
