@@ -62,6 +62,8 @@ CHIP_FONT_SIZE_PT: int = 10
 # references ``FONT_SIZE_MIN_PX`` below to enforce a shared floor
 # for the segment-button rasterizer's font-shrink loop. CSS variable
 # names mirror these tokens (``--font-size-base`` etc.).
+FONT_SIZE_ICON_PX: int = 16
+FONT_SIZE_HEADING_PX: int = 15
 FONT_SIZE_BASE_PX: int = 14
 FONT_SIZE_CONTROL_PX: int = 13
 FONT_SIZE_META_PX: int = 12
@@ -85,6 +87,14 @@ FONT_SIZE_MIN_PX: int = 10
 # localisation lands once. Stays lowercase for typographic
 # consistency with the chart's row / column labels.
 DIPHTHONG_TOGGLE_LABEL: str = "diphthongs"
+
+# Bundled-inventory stem the web app boots into and the build
+# script precomputes the bootstrap render for. The ``_features.json``
+# suffix is the bundled-inventory naming convention; consumers
+# append it themselves when building file paths. Single source so
+# the build-time bootstrap and the runtime default-pick never drift
+# to different files.
+DEFAULT_INVENTORY_STEM: str = "general_features"
 
 # Placeholder copy for non-ideal states. Each string is shown in
 # place of an empty result so the user always sees something

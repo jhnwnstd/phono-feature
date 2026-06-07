@@ -162,6 +162,12 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         "empty_natural_class_hint",
         "empty_shared_features_hint",
         "empty_phoible_search_hint",
+        # Bundled-inventory stem (DEFAULT_INVENTORY_STEM in
+        # constants.py). main.js reads it to pick the default
+        # post-bridge inventory; the build-time bootstrap
+        # precompute reads the same constant in Python so the two
+        # cannot drift.
+        "default_inventory_stem",
     }
     assert set(status_payload.keys()) == expected_keys
 

@@ -384,7 +384,16 @@ function loadPyodideScript() {
     });
 }
 
-const PREFERRED_DEFAULT_INVENTORY = "inventories/general_features.json";
+// Built from ``STATUS_TEXT.default_inventory_stem`` (relayed from
+// the ``DEFAULT_INVENTORY_STEM`` Python constant). Keeps the runtime
+// default-pick aligned with the build-time bootstrap precompute so
+// the two cannot drift to different files. Falls back to the
+// historical literal if the relay key is missing (e.g. an older
+// snapshot built before the relay landed).
+const PREFERRED_DEFAULT_INVENTORY = (
+    "inventories/" + (STATUS_TEXT.default_inventory_stem || "general_features")
+    + ".json"
+);
 
 /** Boot Pyodide + the engine bundle. `prerendered` indicates that
  *  applyBootstrap already painted the default inventory's DOM; in
@@ -860,12 +869,21 @@ const _segFontFamily = (
         .trim()
     || '"Noto Sans Mono", monospace'
 );
-// Natural seg-button label font size (CSS ``--font-size-control``
-// resolves to 13 px on the current ladder). The floor matches
-// ``constants.FONT_SIZE_MIN_PX`` so the shrink loop here stops at
-// the same point the rest of the app considers legible.
-const SEG_FONT_NATURAL_PX = 13;
-const SEG_FONT_FLOOR_PX = 10;
+// Natural seg-button label font size, read from the relayed
+// ``--font-size-control`` CSS variable so the canvas font-size
+// agrees with the rendered DOM font-size by construction. The
+// floor matches ``--font-size-min-px`` (the
+// ``constants.FONT_SIZE_MIN_PX`` Python value baked into the CSS
+// relay). Falls back to the historical literals if the variables
+// are missing (defensive read pattern matching the button-width
+// reads in ``applyPerGroupSegmentColumns``).
+const _rootCS = getComputedStyle(document.documentElement);
+const SEG_FONT_NATURAL_PX = (
+    parseFloat(_rootCS.getPropertyValue("--font-size-control")) || 13
+);
+const SEG_FONT_FLOOR_PX = (
+    parseFloat(_rootCS.getPropertyValue("--font-size-min-px")) || 10
+);
 // Inner width budget for seg-button text. ``--seg-btn-min-w`` is
 // 33 px; subtract the 1.5 px border on each side and leave 1 px of
 // breathing room so glyphs sit just inside the outline. Picked to

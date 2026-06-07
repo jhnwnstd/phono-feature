@@ -524,6 +524,7 @@ def _build_status_text_payload() -> dict[str, str]:
         # Same SSOT pattern: the desktop reads the constant by
         # import, the web reads via this status-text bake.
         from phonology_shared.presentation.constants import (
+            DEFAULT_INVENTORY_STEM,
             DIPHTHONG_TOGGLE_LABEL,
             EMPTY_NATURAL_CLASS_HINT,
             EMPTY_PHOIBLE_SEARCH_HINT,
@@ -534,6 +535,11 @@ def _build_status_text_payload() -> dict[str, str]:
         payload["empty_natural_class_hint"] = EMPTY_NATURAL_CLASS_HINT
         payload["empty_shared_features_hint"] = EMPTY_SHARED_FEATURES_HINT
         payload["empty_phoible_search_hint"] = EMPTY_PHOIBLE_SEARCH_HINT
+        # Bundled-inventory stem the web app boots into. Single
+        # source so the build-time bootstrap (below) and the
+        # runtime default-pick in main.js can never drift to
+        # different files.
+        payload["default_inventory_stem"] = DEFAULT_INVENTORY_STEM
         return payload
     finally:
         sys.modules.pop(module_name, None)
@@ -671,6 +677,8 @@ def generate_layout_css() -> None:
     lines.extend(
         [
             "  /* Font-size ladder (from constants.py). */",
+            f"  --font-size-icon: {constants_mod.FONT_SIZE_ICON_PX}px;",
+            f"  --font-size-heading: {constants_mod.FONT_SIZE_HEADING_PX}px;",
             f"  --font-size-base: {constants_mod.FONT_SIZE_BASE_PX}px;",
             f"  --font-size-control: {constants_mod.FONT_SIZE_CONTROL_PX}px;",
             f"  --font-size-meta: {constants_mod.FONT_SIZE_META_PX}px;",
@@ -850,7 +858,14 @@ def write_bootstrap() -> None:
     continues; main.js falls back to the bridge-driven render path.
     """
     print("Precomputing default inventory bootstrap...")
-    default_inv = INVENTORIES / "general_features.json"
+    # Single source of truth for the default-inventory stem;
+    # main.js reads the same value via the inlined status-text
+    # payload (see ``_build_status_text_payload``).
+    from phonology_shared.presentation.constants import (
+        DEFAULT_INVENTORY_STEM,
+    )
+
+    default_inv = INVENTORIES / f"{DEFAULT_INVENTORY_STEM}.json"
     if not default_inv.exists():
         print(f"  skipped: no default inventory at {default_inv}")
         return

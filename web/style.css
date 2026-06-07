@@ -160,7 +160,7 @@ body {
 #theme-btn {
   width: var(--control-h-md);
   padding: 0;
-  font-size: 16px;
+  font-size: var(--font-size-icon);
 }
 /* Colorblind toggle. Sits just before the theme button with a small
    gutter so the two icon buttons read as a paired chrome cluster
@@ -170,7 +170,7 @@ body {
 #cb-btn {
   width: var(--control-h-md);
   padding: 0;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   margin-right: 8px;
 }
 #cb-btn[aria-pressed="true"] {
@@ -189,7 +189,7 @@ body {
 #rename-btn {
   width: var(--control-h-md);
   padding: 0;
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 
 /* ---------- dialogs (rename, future modal flows) ---------- */
@@ -216,7 +216,7 @@ dialog form {
 }
 .dialog-title {
   font-weight: bold;
-  font-size: 15px;
+  font-size: var(--font-size-heading);
 }
 .dialog-label {
   font-size: var(--font-size-meta);
@@ -1701,7 +1701,7 @@ dialog input[type="text"]:focus-visible {
 }
 .loading-title {
   font-weight: bold;
-  font-size: 16px;
+  font-size: var(--font-size-icon);
   margin-bottom: var(--space-md);
 }
 .loading-status {
