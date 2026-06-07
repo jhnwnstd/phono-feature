@@ -154,13 +154,19 @@ def build_inventory_summary(
             vowel_segs = list(segs)
         else:
             consonant_groups.append({"name": manner, "segments": list(segs)})
+    # ``active_features`` drops columns where every segment is ``0``;
+    # both UIs use it to decide which feature rows to show. Without
+    # this filter, Hindi PHOIBLE renders a ``LowerLarynx`` row that
+    # cannot select any segment (Hindi has no implosives).
+    active = list(engine.active_features)
     return {
         "name": inventory_name,
         "provenance": provenance,
         "segments": list(engine.segments),
         "features": list(engine.features),
+        "active_features": active,
         "groups": consonant_groups,
-        "feature_groups": _grouped_features(list(engine.features)),
+        "feature_groups": _grouped_features(active),
         "vowel_chart": _vowel_chart_summary(engine, vowel_segs),
     }
 

@@ -412,6 +412,35 @@ class FeatureEngine:
         )
 
     @cached_property
+    def active_features(self) -> tuple[str, ...]:
+        """Features that are explicitly specified for at least one
+        segment in the inventory.
+
+        A feature qualifies when at least one segment has a value of
+        ``+`` or ``-``. Features that are uniformly ``0`` (or
+        unspecified) across every segment are dropped because there
+        is nothing to display: every segment is unmarked, so the
+        row carries no information and can never participate in a
+        query. Features with all-``-`` values stay (the inventory
+        does specify a value, and ``-`` queries still select segments).
+
+        Iterates raw inventory bundles so the case of feature keys
+        matches ``self.features`` and preserves the original feature
+        order so display layers keep their iteration model.
+
+        Both UIs consume this list to decide which feature rows to
+        show; before this lived on the engine, the desktop's
+        ``_populate_features`` had its own inline filter while the
+        web rendered every feature, producing visible drift.
+        """
+        used: set[str] = set()
+        for bundle in self._inventory.segments.values():
+            for feat, val in bundle.items():
+                if val == "+" or val == "-":
+                    used.add(feat)
+        return tuple(f for f in self._inventory.features if f in used)
+
+    @cached_property
     def grouped_segments(self) -> dict[str, list[str]]:
         """Display-grouped segments (Plosives, Fricatives, ...).
 

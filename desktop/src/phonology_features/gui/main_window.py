@@ -1190,12 +1190,11 @@ class MainWindow(QMainWindow):
         """
         if self.engine is None:
             return
-        active_feature_set: set[str] = set()
-        for seg_feats in self.engine.segments.values():
-            for f, v in seg_feats.items():
-                if v != "0":
-                    active_feature_set.add(f)
-        active_feature_set &= set(self.engine.features)
+        # Shared ``FeatureEngine.active_features`` drops features that
+        # are uniformly ``0`` across the inventory. Same property
+        # drives the web's filter via ``build_inventory_summary`` so
+        # the two UIs render the same rows.
+        active_feature_set: set[str] = set(self.engine.active_features)
         self._init_feature_pool()
         self._selected_features.clear()
         self._feat_rows = {}

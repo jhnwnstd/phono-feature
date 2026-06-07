@@ -1140,7 +1140,10 @@ function _buildConsonantGroup(group) {
     groupEl.className = "seg-group";
     const header = document.createElement("div");
     header.className = "seg-group-header";
-    header.textContent = group.name.toUpperCase();
+    // Render the shared payload string verbatim; the desktop and
+    // web must show the same title text. Bold + letter-spacing
+    // styling comes from CSS.
+    header.textContent = group.name;
     groupEl.appendChild(header);
     const row = document.createElement("div");
     row.className = "seg-row";
@@ -1805,7 +1808,10 @@ function _buildFeatureGroup(group) {
     groupEl.className = "feat-group";
     const header = document.createElement("div");
     header.className = "feat-group-header";
-    header.textContent = group.name.toUpperCase();
+    // Shared payload string verbatim: desktop and web both render
+    // ``FEATURE_GROUPS`` titles as ``Major Class`` / ``Laryngeal``
+    // etc. Styling is owned by CSS.
+    header.textContent = group.name;
     groupEl.appendChild(header);
     for (const feat of group.features) {
         groupEl.appendChild(_buildFeatureRow(feat));

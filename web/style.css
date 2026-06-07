@@ -712,7 +712,9 @@ dialog input[type="text"]:focus-visible {
 .seg-group-header {
   font-size: var(--font-size-label);
   font-weight: 600;
-  letter-spacing: 0.5px;
+  /* 1 px matches the desktop's QSS literal on the equivalent QLabel
+     so the two UIs render group headers at the same density. */
+  letter-spacing: 1px;
   color: var(--text-dim);
   padding: var(--space-xs) 2px var(--space-sm);
   overflow-wrap: anywhere;
@@ -1288,7 +1290,9 @@ dialog input[type="text"]:focus-visible {
 .feat-group-header {
   font-size: var(--font-size-label);
   font-weight: 600;
-  letter-spacing: 0.5px;
+  /* 1 px matches the desktop QSS literal on the equivalent QLabel
+     so the two UIs render group headers at the same density. */
+  letter-spacing: 1px;
   color: var(--text-dim);
   padding: var(--space-xs) 2px var(--space-sm);
   /* Titles fit at ``--min-feat-card-w``; ``overflow-wrap: normal``
