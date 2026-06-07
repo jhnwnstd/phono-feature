@@ -10,6 +10,46 @@ The HTML renderers live in ``phonology_shared.presentation.analysis``
 into the bundle at the same package path so imports resolve
 identically here and on the desktop, keeping one source of
 truth for analysis output.
+
+Bridge contract (single source of truth for the JS side; see
+``test_bridge_contract`` for the parity guard):
+
+- Every function declared at module scope is callable from
+  ``main.js`` via ``callBridge("function_name", ...args)``.
+- Arguments are converted by Pyodide from JS values to Python:
+  strings, numbers, booleans, lists, plain objects round-trip
+  natively. ``None`` maps to ``null``.
+- Return values must be JSON-serialisable plain types: ``str``,
+  ``int``, ``float``, ``bool``, ``None``, ``list``, ``dict``.
+  Dataclasses serialise via ``view_models.py``; enums serialise
+  as their string values (``StrEnum`` already does this); sets
+  are never returned (they become un-iterable PyProxies on the
+  JS side). The smoke test asserts the contract end-to-end by
+  round-tripping every payload through ``JSON.stringify``.
+- Errors should be raised as ``ValidationError`` (caught here and
+  turned into a structured JS-friendly object) or domain
+  exceptions; bare ``Exception`` becomes a generic JS Error.
+- No PyProxy objects leak across the bridge. If a helper needs
+  to manipulate a Python-side object, it stays Python-side and
+  returns a converted dict/list. The JS side never sees a
+  ``__class__`` attribute on a bridge return value.
+- Long-running calls (PHOIBLE load, large analysis) block the
+  Pyodide main thread today. A future worker migration moves the
+  entire bridge behind a postMessage boundary; the contract above
+  is the boundary that migration follows, so any new bridge
+  function added here MUST already obey it.
+
+Methods (current surface; keep alphabetised when adding):
+    analyze_features, analyze_segments, best_segment_n_cols_for_groups,
+    confirm_remove_feature_prompt, confirm_remove_segment_prompt,
+    get_cycle_ladder, get_download_filename, get_grid_state,
+    get_max_undo_depth, get_mode_status_text, get_move_keys,
+    get_setup_defaults, get_value_keys, load_inventory_json,
+    partition_segment_spillover, phoible_is_available,
+    phoible_is_ready, phoible_list_inventories, phoible_load_data,
+    phoible_preview_inventory, rename_current_inventory,
+    serialize_current_inventory, set_active_palette_mode,
+    set_active_theme, validation_report_html.
 """
 
 from __future__ import annotations

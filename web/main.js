@@ -761,24 +761,76 @@ function prewarmCommonAnalyses() {
     idle(step);
 }
 
-// Tracks an in-flight PHOIBLE data fetch so the dialog open path
-// shares a single fetch across rapid re-opens. Resolves to a
-// loaded bridge; rejects on fetch failure (clears the slot so the
-// next dialog open can retry).
+// PHOIBLE data load state. Three slots cover the lifecycle:
+// - ``_phoibleDataText`` caches the fetched JSON text once any
+//   path (background prefetch or dialog open) has it; the bridge
+//   parse step consumes it without a second network roundtrip.
+// - ``_phoibleDataFetch`` is the in-flight FETCH promise so
+//   concurrent callers (background prefetch + dialog open click)
+//   share a single network request.
+// - ``_phoibleDataLoad`` is the in-flight BRIDGE LOAD promise so
+//   the dialog open path can await whatever push is already in
+//   progress without queuing a duplicate parse.
+let _phoibleDataText = null;
+let _phoibleDataFetch = null;
 let _phoibleDataLoad = null;
 
-/** Fetch the PHOIBLE data payload and hand it to the bridge.
- *  Idempotent: simultaneous callers get the same promise. The
- *  dialog spinner stays up while this resolves; the data file is
- *  ~5 MB, so first-open is brief but visible. */
-function ensurePhoibleData() {
-    if (_phoibleDataLoad) return _phoibleDataLoad;
-    _phoibleDataLoad = (async () => {
+/** Single-flight fetch of the PHOIBLE data file. Cheap to retry;
+ *  on failure clears the promise slot so the next caller can try
+ *  again. Network only; does not touch the Pyodide bridge. */
+function _fetchPhoibleData() {
+    if (_phoibleDataText) return Promise.resolve(_phoibleDataText);
+    if (_phoibleDataFetch) return _phoibleDataFetch;
+    _phoibleDataFetch = (async () => {
         try {
             const url = assetUrl("phoible_data");
             const resp = await fetch(url);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const text = await resp.text();
+            _phoibleDataText = await resp.text();
+            return _phoibleDataText;
+        } catch (e) {
+            _phoibleDataFetch = null;
+            throw e;
+        }
+    })();
+    return _phoibleDataFetch;
+}
+
+/** Kick off the PHOIBLE data fetch when the browser is idle so
+ *  the dialog open path doesn't pay the ~5 MB download on first
+ *  click. The bridge LOAD step is left for the click path: the
+ *  ~500 ms JSON parse blocks the main thread (Pyodide runs there
+ *  today) and is best left until the user actually wants PHOIBLE
+ *  open, where the spinner explains the brief wait. A future
+ *  worker migration would let this also happen at idle. */
+function schedulePhoiblePrefetch() {
+    if (_phoibleDataText || _phoibleDataFetch) return;
+    if (!state.bridge) return;
+    try {
+        if (!callBridge("phoible_is_available")) return;
+        if (callBridge("phoible_is_ready")) return;
+    } catch {
+        return;
+    }
+    const idle = ("requestIdleCallback" in window)
+        ? (cb) => window.requestIdleCallback(cb, { timeout: 10_000 })
+        : (cb) => setTimeout(cb, 1500);
+    idle(() => {
+        _fetchPhoibleData().catch(() => {
+            /* silent; openDialog retries on click */
+        });
+    });
+}
+
+/** Ensure PHOIBLE is loaded into the bridge. Single-flight: the
+ *  dialog open path awaits whatever load is in progress, so a
+ *  click that lands while the bridge parse is mid-flight resolves
+ *  on the same call. */
+function ensurePhoibleData() {
+    if (_phoibleDataLoad) return _phoibleDataLoad;
+    _phoibleDataLoad = (async () => {
+        try {
+            const text = await _fetchPhoibleData();
             callBridge("phoible_load_data", text);
         } catch (e) {
             _phoibleDataLoad = null;
@@ -4915,6 +4967,12 @@ async function main() {
     try {
         await bootPyodide({ prerendered });
         prewarmCommonAnalyses();
+        // Idle-time fetch of the PHOIBLE data file so the first
+        // dialog open only pays the bridge parse cost (~500 ms),
+        // not the 5 MB download. Bridge load itself happens on
+        // dialog open since it blocks the main thread; a future
+        // worker migration would let it also happen during idle.
+        schedulePhoiblePrefetch();
     } catch (e) {
             console.error(e);
         setLoadingStatus(`Failed to load: ${e.message}`);
