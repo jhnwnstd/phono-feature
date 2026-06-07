@@ -131,14 +131,6 @@ def test_search_languages_dedups_case_variants() -> None:
     assert korean_hits == ["Korean"]
 
 
-def test_search_languages_iso_shortcut_bubbles_to_top() -> None:
-    """A 3-character query matching an ISO code surfaces the
-    language at the top of the result list."""
-    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
-    results = p.search_languages("jpn")
-    assert results[0] == "Japanese"
-
-
 def test_search_languages_empty_query_returns_empty() -> None:
     """Picker should never auto-populate on an empty query;
     returning [] keeps the dropdown closed until the user types."""

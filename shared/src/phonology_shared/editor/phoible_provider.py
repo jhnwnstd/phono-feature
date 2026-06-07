@@ -155,11 +155,6 @@ class PhoibleProvider:
         self._inventories: dict[str, InventoryDescriptor] = {}
         # Map language name (case-folded) -> list of inventory ids.
         self._by_language: dict[str, list[str]] = {}
-        # Map ISO 639-3 code (case-folded) -> language name; the
-        # autocomplete uses this so a user typing "kor" matches
-        # "Korean" without needing the prefix-aware search to know
-        # about ISO codes specifically.
-        self._iso_to_language: dict[str, str] = {}
         for entry in raw_inventories:
             if not isinstance(entry, Mapping):
                 continue
@@ -180,18 +175,6 @@ class PhoibleProvider:
             self._by_language.setdefault(
                 descriptor.language_name.casefold(), []
             ).append(inv_id)
-            if descriptor.iso_code:
-                iso_key = descriptor.iso_code.casefold()
-                existing_iso = self._iso_to_language.get(iso_key)
-                # Same case-prefer rule the language-name dedup uses
-                # below: keep the variant that has at least one
-                # lowercase letter so the ISO hit surfaces
-                # ``"Korean"`` instead of ``"KOREAN"``.
-                if existing_iso is None or (
-                    existing_iso.isupper()
-                    and not descriptor.language_name.isupper()
-                ):
-                    self._iso_to_language[iso_key] = descriptor.language_name
 
         # Sorted language-name list for fast prefix/substring scan.
         # PHOIBLE ships some language names in multiple case forms
@@ -335,7 +318,7 @@ class PhoibleProvider:
         self, query: str, limit: int = _DEFAULT_SEARCH_LIMIT
     ) -> list[str]:
         """Return language names matching ``query`` case-
-        insensitively against the language name or ISO code.
+        insensitively against the language name.
 
         Empty query returns an empty list; the dialog should not
         request results before the user has typed at least one
@@ -346,20 +329,10 @@ class PhoibleProvider:
         if not query:
             return []
         needle = query.casefold()
-        # ISO-code shortcut: a 3-character query that matches an
-        # ISO code directly bubbles the language name to the top.
         out: list[str] = []
-        seen: set[str] = set()
-        iso_hit = self._iso_to_language.get(needle)
-        if iso_hit is not None:
-            out.append(iso_hit)
-            seen.add(iso_hit)
         for name in self._language_names:
-            if name in seen:
-                continue
             if needle in name.casefold():
                 out.append(name)
-                seen.add(name)
                 if len(out) >= limit:
                     break
         return out

@@ -146,7 +146,7 @@ class PhoibleDialog(QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(14, 14, 14, 14)
 
-        hint = QLabel("Type a language name or ISO 639-3 code to begin.", self)
+        hint = QLabel("Type a language name to begin.", self)
         hint.setFont(QFont("Noto Sans", 9))
         set_css(hint, f"color: {C['text_dim']};")
         layout.addWidget(hint)
@@ -166,7 +166,7 @@ class PhoibleDialog(QDialog):
         label.setFont(QFont("Noto Sans", 10, QFont.Weight.DemiBold))
         row_layout.addWidget(label)
         self._search_edit = QLineEdit(row)
-        self._search_edit.setPlaceholderText("e.g. Korean, kor")
+        self._search_edit.setPlaceholderText("e.g. Korean")
         self._search_edit.setMinimumHeight(28)
         self._search_edit.textChanged.connect(self._on_search_text_changed)
         self._search_edit.installEventFilter(self)

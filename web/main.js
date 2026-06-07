@@ -761,6 +761,33 @@ function prewarmCommonAnalyses() {
     idle(step);
 }
 
+// Tracks an in-flight PHOIBLE data fetch so the dialog open path
+// shares a single fetch across rapid re-opens. Resolves to a
+// loaded bridge; rejects on fetch failure (clears the slot so the
+// next dialog open can retry).
+let _phoibleDataLoad = null;
+
+/** Fetch the PHOIBLE data payload and hand it to the bridge.
+ *  Idempotent: simultaneous callers get the same promise. The
+ *  dialog spinner stays up while this resolves; the data file is
+ *  ~5 MB, so first-open is brief but visible. */
+function ensurePhoibleData() {
+    if (_phoibleDataLoad) return _phoibleDataLoad;
+    _phoibleDataLoad = (async () => {
+        try {
+            const url = assetUrl("phoible_data");
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const text = await resp.text();
+            callBridge("phoible_load_data", text);
+        } catch (e) {
+            _phoibleDataLoad = null;
+            throw e;
+        }
+    })();
+    return _phoibleDataLoad;
+}
+
 function escapeHtml(s) {
     return s.replace(/[&<>"']/g, (c) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;",
@@ -2883,8 +2910,13 @@ function wirePhoiblePicker() {
     };
 
     const openDialog = async () => {
-        nodes.phoibleLoading.hidden = false;
-        nodes.phoibleActive.hidden = true;
+        // Open the dialog with the active panel only when PHOIBLE
+        // data is ready. Otherwise show the spinner briefly while
+        // the background preload (kicked off at boot) finishes;
+        // if no preload is running yet, this call starts one.
+        const ready = callBridge("phoible_is_ready");
+        nodes.phoibleLoading.hidden = ready;
+        nodes.phoibleActive.hidden = !ready;
         if (typeof dialog.showModal === "function") {
             dialog.showModal();
         } else {
@@ -2892,24 +2924,17 @@ function wirePhoiblePicker() {
         }
         resetState();
 
-        // Lazy-load the data payload on first open. The index ships
-        // in the bundle, so search + list work pre-load; generate
-        // and preview need the data file.
-        if (!callBridge("phoible_is_ready")) {
+        if (!ready) {
             try {
-                const url = assetUrl("phoible_data");
-                const resp = await fetch(url);
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const text = await resp.text();
-                callBridge("phoible_load_data", text);
+                await ensurePhoibleData();
             } catch (e) {
                 nodes.phoibleLoading.textContent =
                     `Could not load PHOIBLE data: ${e.message || e}`;
                 return;
             }
+            nodes.phoibleLoading.hidden = true;
+            nodes.phoibleActive.hidden = false;
         }
-        nodes.phoibleLoading.hidden = true;
-        nodes.phoibleActive.hidden = false;
         searchInput.focus();
     };
 
