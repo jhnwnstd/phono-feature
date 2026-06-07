@@ -768,6 +768,60 @@ function escapeHtml(s) {
     })[c]);
 }
 
+// Shared 2D context for canvas-based text-width measurement. One
+// per page (off-DOM, kept alive in module scope) so the seg-button
+// auto-shrink path doesn't allocate a fresh canvas per glyph.
+const _segMeasureCtx = document.createElement("canvas").getContext("2d");
+// Font family the seg-button measure + render uses. Reads the same
+// CSS variable the buttons themselves consume (Charis IPA first)
+// so the canvas measure agrees with the actual rendered metrics.
+const _segFontFamily = (
+    getComputedStyle(document.documentElement)
+        .getPropertyValue("--font-ipa")
+        .trim()
+    || '"Noto Sans Mono", monospace'
+);
+// Natural seg-button label font size (CSS ``--font-size-control``
+// resolves to 13 px on the current ladder). The floor matches
+// ``constants.FONT_SIZE_MIN_PX`` so the shrink loop here stops at
+// the same point the rest of the app considers legible.
+const SEG_FONT_NATURAL_PX = 13;
+const SEG_FONT_FLOOR_PX = 10;
+// Inner width budget for seg-button text. ``--seg-btn-min-w`` is
+// 33 px; subtract the 1.5 px border on each side and leave 1 px of
+// breathing room so glyphs sit just inside the outline. Picked to
+// match the empirical ``clientWidth`` of an unstyled seg-btn so
+// canvas measurement and DOM layout agree on the fit boundary.
+const SEG_FIT_BUDGET_PX = 30;
+
+/** Pick the largest font-size at which ``text`` fits inside the
+ *  seg-button's inner width budget. Mirrors the desktop's
+ *  ``QFontMetrics`` shrink for tie-bar affricates ``k+͡x+`` /
+ *  ``ɡ+͡ɣ+`` and multi-character PHOIBLE diphthongs. Returns the
+ *  picked font size in CSS pixels, or ``null`` when the natural
+ *  size already fits (caller skips the inline override).
+ *
+ *  Canvas measurement avoids DOM layout thrash and runs before the
+ *  button enters the tree, so the picked size lands with the first
+ *  paint. Charis IPA may not be loaded at measurement time; the
+ *  fallback monospace metrics are close enough that the shrunk
+ *  size still fits once Charis swaps in (``overflow: hidden`` on
+ *  ``.seg-btn`` clips any residual half-pixel overrun cleanly).
+ */
+function _pickSegFontSize(text) {
+    _segMeasureCtx.font = `${SEG_FONT_NATURAL_PX}px ${_segFontFamily}`;
+    if (_segMeasureCtx.measureText(text).width <= SEG_FIT_BUDGET_PX) {
+        return null;
+    }
+    for (let px = SEG_FONT_NATURAL_PX - 0.5; px >= SEG_FONT_FLOOR_PX; px -= 0.5) {
+        _segMeasureCtx.font = `${px}px ${_segFontFamily}`;
+        if (_segMeasureCtx.measureText(text).width <= SEG_FIT_BUDGET_PX) {
+            return px;
+        }
+    }
+    return SEG_FONT_FLOOR_PX;
+}
+
 /**
  * Rasterize ``text`` as a canvas-alpha mask and return a data URL
  * plus the natural (CSS-px) width and height.
@@ -1165,6 +1219,16 @@ function _buildSegmentButton(seg, extraAttrs) {
     // handles hover + keyboard focus uniformly.
     btn.title = `/${seg}/`;
     btn.textContent = seg;
+    // Wide glyphs (tie-bar affricates ``k+͡x+`` / ``ɡ+͡ɣ+``, PHOIBLE
+    // diphthong contours ``oɛ̃``, combining-mark stacks ``o̞̜``) get
+    // an inline ``font-size`` override so the glyph fits inside the
+    // 33-px button outline. The desktop mirrors this via Qt's auto
+    // text-fit on ``QPushButton``; the web does it with a one-shot
+    // canvas measurement so the picked size lands with first paint.
+    const fit = _pickSegFontSize(seg);
+    if (fit !== null) {
+        btn.style.fontSize = fit + "px";
+    }
     if (extraAttrs) {
         for (const [k, v] of Object.entries(extraAttrs)) {
             if (k.startsWith("data-")) btn.setAttribute(k, v);
