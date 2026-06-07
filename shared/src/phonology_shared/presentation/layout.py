@@ -704,21 +704,17 @@ def distribute_pane_widths(
     return seg_w, feat_w
 
 
-def vowel_chart_width(seg_pane_w: int) -> int:
+def vowel_chart_width() -> int:
     """The vowel chart's natural display width. The IPA chart is a
     fixed visualisation (one row-label column + six button columns)
-    so it doesn't grow with ``seg_pane_w``: that would just put
+    so it doesn't grow with seg-pane width: that would just put
     empty space around the buttons and steal width from the
-    consonant flow. Always returns ``VOWEL_NATURAL_W``; the
-    parameter is kept for signature symmetry with
-    :py:func:`should_stack_vowels` and so future per-pane growth
-    rules can land here without a call-site change.
+    consonant flow.
 
     When the seg pane is too narrow to host the chart beside the
     consonants, the caller drops to :py:func:`should_stack_vowels`
     and lays the chart out underneath instead.
     """
-    del seg_pane_w  # intentionally unused
     return VOWEL_NATURAL_W
 
 

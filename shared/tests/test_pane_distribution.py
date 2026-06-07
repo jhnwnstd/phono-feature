@@ -76,11 +76,9 @@ def test_distribute_seg_content_overrides_min() -> None:
 
 def test_vowel_width_is_constant_natural() -> None:
     # The chart is a fixed phonetic visualisation; it returns its
-    # natural width regardless of pane width. Tripwire on the
-    # exact value so a future bump to VOWEL_NATURAL_W lands as a
-    # deliberate test edit, not a silent drift.
-    for seg_pane_w in (0, 100, 480, 1200, 3840):
-        assert layout.vowel_chart_width(seg_pane_w) == 440
+    # natural width. Tripwire on the exact value so a future bump
+    # to VOWEL_NATURAL_W lands as a deliberate test edit.
+    assert layout.vowel_chart_width() == 440
 
 
 def test_vowel_natural_width_fits_label_column() -> None:

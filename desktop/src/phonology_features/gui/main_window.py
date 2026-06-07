@@ -548,9 +548,7 @@ class MainWindow(QMainWindow):
         # Seed with the per-pane width default; the splitter-drag
         # callback pushes the adapted value in later. We can't read
         # ``self._hsplit`` here because it's still being built.
-        self.vowel_chart_widget.set_target_width(
-            layout.vowel_chart_width(layout.SEG_MIN_W)
-        )
+        self.vowel_chart_widget.set_target_width(layout.vowel_chart_width())
         # Consonants take stretch so they fan out across whatever
         # width the seg pane has; vowels stay at their target width.
         self._seg_h_pair.addWidget(left_wrap, stretch=1)
@@ -1367,7 +1365,7 @@ class MainWindow(QMainWindow):
         method just wires the results into Qt.
 
         Decisions delegated:
-          * ``vowel_chart_width(seg_pane_w)`` → push into the chart
+          * ``vowel_chart_width()`` → push into the chart
             via ``set_target_width``.
           * ``should_stack_vowels(seg_pane_w)`` → flip the chart
             between the side-by-side slot (right of consonants) and
@@ -1382,8 +1380,7 @@ class MainWindow(QMainWindow):
         if seg_pane_w == self._last_seg_pane_w:
             return
         self._last_seg_pane_w = seg_pane_w
-        target_w = layout.vowel_chart_width(seg_pane_w)
-        self.vowel_chart_widget.set_target_width(target_w)
+        self.vowel_chart_widget.set_target_width(layout.vowel_chart_width())
         should_stack = layout.should_stack_vowels(seg_pane_w)
         if should_stack == self._seg_vowels_stacked:
             return

@@ -356,6 +356,7 @@ def _ipa_confusable_notes(canonical_seg: str) -> list[str]:
     return notes
 
 
+@lru_cache(maxsize=4096)
 def _canonicalize_name(s: str) -> str:
     """Apply the name-identity canonicalization (NFC, then strip).
 
@@ -369,6 +370,11 @@ def _canonicalize_name(s: str) -> str:
     LRM, RLM, BOM). Those survive canonicalization and create truly
     invisible distinct keys, so they are rejected separately via
     :py:func:`_disallowed_format_chars` rather than silently stripped.
+
+    LRU-cached because PHOIBLE materialization fires this 540k+ times
+    across 200 inventories on a working set of ~50 distinct feature
+    names per inventory (the segment + feature names are reused
+    cross-inventory). Pure function of ``s``; safe to cache.
     """
     return unicodedata.normalize("NFC", s).strip()
 

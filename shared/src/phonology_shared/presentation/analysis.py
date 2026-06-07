@@ -6,21 +6,18 @@ sanitizes segment symbols or feature names.
 
 from __future__ import annotations
 
+import functools
 import html
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
+from phonology_shared.presentation import palette as _palette
 from phonology_shared.presentation.constants import (
-    CHIP_BORDER_RADIUS_PX,
-    CHIP_FONT_SIZE_PT,
-    CHIP_MARGIN_PX,
-    CHIP_PADDING_CSS,
     MINUS_SIGN,
-    MONO_FAMILY_CSS,
     TagColor,
     sort_features,
     sort_spec,
-    tag_palettes,
+    tag_prefix,
 )
 from phonology_shared.presentation.mode_logic import VALIDATION_REPORT_HEADING
 from phonology_shared.presentation.palette import C
@@ -35,6 +32,17 @@ if TYPE_CHECKING:
 # --- chip + paragraph primitives ---------------------------------
 
 
+@functools.lru_cache(maxsize=2048)
+def _tag_cached(text: str, colour: TagColor, _version: int) -> str:
+    """Memoised inner body of :py:func:`_tag`. The ``_version`` arg
+    is the palette ``theme_version``, threaded through so a theme
+    toggle invalidates the cache. Working set is bounded (~300
+    entries per inventory: segments x 2 colours + features x 2
+    signs); maxsize=2048 covers the worst PHOIBLE inventory plus
+    headroom."""
+    return f"{tag_prefix(colour)}{html.escape(text)}</span>"
+
+
 def _tag(text: str, colour: TagColor) -> str:
     """Render a coloured inline chip. ``text`` is escaped here.
 
@@ -43,24 +51,33 @@ def _tag(text: str, colour: TagColor) -> str:
     wrap), so without nowrap a chip like ``/ɪ/`` can end up split
     across lines with ``/`` on one line and ``ɪ/`` on the next.
     """
-    palette = tag_palettes()
-    bg, fg = palette.get(colour, palette[TagColor.NEUTRAL])
-    return (
-        f"<span style='"
-        f"background:{bg}; color:{fg};"
-        f" border-radius:{CHIP_BORDER_RADIUS_PX}px;"
-        f" padding:{CHIP_PADDING_CSS};"
-        f" margin:{CHIP_MARGIN_PX}px;"
-        f" font-family:{MONO_FAMILY_CSS};"
-        f" font-size:{CHIP_FONT_SIZE_PT}pt;"
-        f" white-space:nowrap;'>"
-        f"{html.escape(text)}</span>"
-    )
+    return _tag_cached(text, colour, _palette.theme_version)
+
+
+def _tag_raw(escaped_text: str, colour: TagColor) -> str:
+    """Fast-path :py:func:`_tag` for callers that hold a
+    pre-escaped string (e.g. the engine's
+    ``escaped_segments`` / ``escaped_features`` maps). Skips
+    ``html.escape`` and goes directly to the prefix cache.
+    """
+    return f"{tag_prefix(colour)}{escaped_text}</span>"
 
 
 def _segment_chip(seg: str, colour: TagColor = TagColor.SEGMENT) -> str:
     """Render a segment symbol as a chip wrapped in slashes."""
     return _tag(f"/{seg}/", colour)
+
+
+def _segment_chip_strip(
+    segs: Sequence[str], colour: TagColor = TagColor.SEGMENT
+) -> str:
+    """Render ``segs`` as a single space-joined chip strip. Replaces
+    the inlined ``' '.join(_segment_chip(seg) for seg in ...)`` idiom
+    that appeared at 7 sites and benefits from passing a list to
+    ``str.join`` instead of a generator (avoids generator overhead;
+    ``str.join`` can pre-size the result buffer).
+    """
+    return " ".join([_segment_chip(seg, colour) for seg in segs])
 
 
 def _signed_feature_chip(value: str, feature: str) -> str:
@@ -154,29 +171,21 @@ def _render_spec_list(specs: Sequence[Mapping[str, str]]) -> str:
 # --- engine-side query helper ------------------------------------
 
 
-def _render_universal_spec() -> str:
-    """Markup for the universal-class spec line, shown when the
-    completed class is the entire inventory and the minimal spec
-    is the empty bundle.
-    """
-    return (
-        f"<p><b>Minimal specification:</b>"
-        f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"
-    )
-
-
 def _render_completion_specs(
     bundles: Sequence[Mapping[str, str]],
 ) -> str:
     """Render the minimal specs of a completion.
 
-    Dispatches to :py:func:`_render_universal_spec` when the
-    bundle is the universal-class empty bundle, otherwise to
-    :py:func:`_render_spec_list` (which handles the singular vs
-    "Minimal specifications (N)" headings and numbered rows).
+    Renders the universal-class line when the bundle is the empty
+    bundle (the completed class is the entire inventory), otherwise
+    dispatches to :py:func:`_render_spec_list` (which handles the
+    singular vs "Minimal specifications (N)" headings).
     """
     if bundles and not bundles[0]:
-        return _render_universal_spec()
+        return (
+            f"<p><b>Minimal specification:</b>"
+            f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"
+        )
     return _render_spec_list(bundles)
 
 
@@ -190,7 +199,7 @@ def _render_matching_segments(matching: Sequence[str]) -> str:
     if not matching:
         return f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
     n = len(matching)
-    chips = " ".join(_segment_chip(seg) for seg in matching)
+    chips = _segment_chip_strip(matching)
     return (
         f"<p><b>Matching {_plural(n, 'segment')} ({n}):</b></p>"
         f"<p>{chips}</p>"
@@ -223,21 +232,41 @@ def compute_contrastive(
     '0' bucket is included only when some segments are
     underspecified. Bucket order follows the caller's ``segs`` list
     so rendered chips align with selection order.
+
+    Iterates ``engine.active_features`` (uniformly-zero features
+    cannot be contrastive) and walks ``segs`` once per feature,
+    bucketing by direct lookup into the engine's per-feature segment
+    sets. Replaces the prior triple-scan that did three list
+    comprehensions over ``segs`` per feature.
     """
     result: dict[str, dict[str, list[str]]] = {}
     seg_set = set(segs)
-    for feat in engine.features:
-        plus_in = engine.plus_segs[feat] & seg_set
-        minus_in = engine.minus_segs[feat] & seg_set
-        if not (plus_in and minus_in):
+    n_segs = len(seg_set)
+    plus_segs = engine.plus_segs
+    minus_segs = engine.minus_segs
+    spec_segs = engine.spec_segs
+    for feat in engine.active_features:
+        feat_plus = plus_segs[feat]
+        feat_minus = minus_segs[feat]
+        if not (feat_plus & seg_set) or not (feat_minus & seg_set):
             continue
-        spec_in = engine.spec_segs[feat] & seg_set
+        feat_spec = spec_segs[feat]
+        plus_bucket: list[str] = []
+        minus_bucket: list[str] = []
+        zero_bucket: list[str] = []
+        for s in segs:
+            if s in feat_plus:
+                plus_bucket.append(s)
+            elif s in feat_minus:
+                minus_bucket.append(s)
+            elif s not in feat_spec:
+                zero_bucket.append(s)
         entry: dict[str, list[str]] = {
-            "+": [s for s in segs if s in plus_in],
-            "-": [s for s in segs if s in minus_in],
+            "+": plus_bucket,
+            "-": minus_bucket,
         }
-        if len(spec_in) < len(seg_set):
-            entry["0"] = [s for s in segs if s not in spec_in]
+        if len(feat_spec & seg_set) < n_segs:
+            entry["0"] = zero_bucket
         result[feat] = entry
     return result
 
@@ -260,18 +289,13 @@ def _render_completion_body(completion: NaturalClassCompletion) -> str:
     """
     if completion.status == "already_natural_class":
         return _render_completion_specs(completion.selected_minimal_bundles)
+    # Engine contract (NaturalClassCompletion docstring): additions
+    # is non-empty whenever status isn't "already_natural_class".
     # additions is tuple-of-tuples; current solver produces a single
-    # completion, but pick the first defensively if the shape ever
-    # widens.
-    if not completion.additions:
-        from phonology_shared.presentation.constants import (
-            EMPTY_NATURAL_CLASS_HINT,
-        )
-
-        return f"<p>{_muted_italic_span(EMPTY_NATURAL_CLASS_HINT)}</p>"
+    # completion, pick the first.
     additions = completion.additions[0]
     n = len(additions)
-    chips = " ".join(_segment_chip(seg, TagColor.NEUTRAL) for seg in additions)
+    chips = _segment_chip_strip(additions, TagColor.NEUTRAL)
     return (
         f"<p><b>{n} {_plural(n, 'segment')} needed for natural class:</b></p>"
         f"<p>{chips}</p>"
@@ -308,7 +332,7 @@ def _render_contrast_section(
     if contrastive:
         body = "".join(
             _render_contrast_row(feat, contrastive[feat])
-            for feat in sort_features(list(contrastive))
+            for feat in sort_features(contrastive)
         )
         return (
             "<p><b>Contrasting features:</b></p>"
@@ -353,8 +377,8 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
     line; chip-to-chip gaps stay breakable.
     """
     name_html = f"<b>{html.escape(feat)}</b>"
-    plus_chips = " ".join(_segment_chip(seg) for seg in groups["+"])
-    minus_chips = " ".join(_segment_chip(seg) for seg in groups["-"])
+    plus_chips = _segment_chip_strip(groups["+"])
+    minus_chips = _segment_chip_strip(groups["-"])
     plus_glyph = f"<span style='color:{C['plus']};font-weight:bold'>+</span>"
     minus_glyph = (
         f"<span style='color:{C['minus']};font-weight:bold'>"
@@ -366,9 +390,7 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
         f"<td style='{_CONTRAST_CELL_BASE}'>{minus_glyph}&nbsp;{minus_chips}</td>",
     ]
     if "0" in groups:
-        zero_chips = " ".join(
-            _segment_chip(seg, TagColor.NEUTRAL) for seg in groups["0"]
-        )
+        zero_chips = _segment_chip_strip(groups["0"], TagColor.NEUTRAL)
         zero_glyph = f"<span style='color:{C['text_dim']}'>0</span>"
         cells.append(
             f"<td style='{_CONTRAST_CELL_BASE}'>"
@@ -418,11 +440,9 @@ def render_selection_summary_seg(segs: list[str]) -> str:
         return ""
     count = len(segs)
     if count <= SELECTION_HEADER_MAX_CHIPS:
-        chips = " ".join(_segment_chip(seg) for seg in segs)
+        chips = _segment_chip_strip(segs)
     else:
-        head = " ".join(
-            _segment_chip(seg) for seg in segs[:SELECTION_HEADER_MAX_CHIPS]
-        )
+        head = _segment_chip_strip(segs[:SELECTION_HEADER_MAX_CHIPS])
         more = count - SELECTION_HEADER_MAX_CHIPS
         chips = f"{head} {_muted_italic_span(f'+{more} more')}"
     return f"<p><b>Selected ({count}):</b> {chips}</p>"

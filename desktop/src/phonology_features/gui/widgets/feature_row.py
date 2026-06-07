@@ -329,9 +329,7 @@ class FeatureRow(QWidget):
                 value,
                 shared,
                 contrastive=contrastive,
-                badge=feature_row_badge(
-                    value=value, shared=shared, contrastive=contrastive
-                ),
+                badge=feature_row_badge(value=value, contrastive=contrastive),
             )
         else:
             # State 3: neutral. Directly re-apply the neutral styles

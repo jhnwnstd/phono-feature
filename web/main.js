@@ -887,17 +887,30 @@ const SEG_FIT_BUDGET_PX = 30;
  *  size still fits once Charis swaps in (``overflow: hidden`` on
  *  ``.seg-btn`` clips any residual half-pixel overrun cleanly).
  */
+// Per-text font-size memo. The bounded set of glyphs that appear
+// on seg-buttons across all inventories is small (~few hundred
+// distinct IPA strings); rebuilding the measurement state +
+// shrink-loop per render thrashes the canvas font state needlessly.
+// Map is never evicted; cleared only when ``--font-ipa`` itself
+// changes (which never happens at runtime today).
+const _segFontSizeCache = new Map();
+
 function _pickSegFontSize(text) {
+    const cached = _segFontSizeCache.get(text);
+    if (cached !== undefined) return cached;
     _segMeasureCtx.font = `${SEG_FONT_NATURAL_PX}px ${_segFontFamily}`;
     if (_segMeasureCtx.measureText(text).width <= SEG_FIT_BUDGET_PX) {
+        _segFontSizeCache.set(text, null);
         return null;
     }
     for (let px = SEG_FONT_NATURAL_PX - 0.5; px >= SEG_FONT_FLOOR_PX; px -= 0.5) {
         _segMeasureCtx.font = `${px}px ${_segFontFamily}`;
         if (_segMeasureCtx.measureText(text).width <= SEG_FIT_BUDGET_PX) {
+            _segFontSizeCache.set(text, px);
             return px;
         }
     }
+    _segFontSizeCache.set(text, SEG_FONT_FLOOR_PX);
     return SEG_FONT_FLOOR_PX;
 }
 
@@ -1024,8 +1037,23 @@ function rasterizeText(text, font, maxWidth) {
  * yields nothing. Screen readers fall back to the host element's
  * ``aria-label`` (this span carries ``aria-hidden="true"``).
  */
+// Memo cache for ``rasterizeText`` output, keyed on
+// ``${text}|${font}|${maxWidth}``. The badge + chip glyphs that go
+// through ``createRasterizedLabel`` are a tiny bounded set (``·``,
+// ``+``, ``-``, mode-name letters); every analysis pass would
+// otherwise allocate a fresh canvas, run measureText/fillText/
+// toDataURL on the same input, and discard the result. Map never
+// evicts (the bounded set is <50 entries in practice).
+const _rasterCache = new Map();
+
 function createRasterizedLabel(text, font, maxWidth) {
-    const { dataUrl, width, height } = rasterizeText(text, font, maxWidth);
+    const key = text + "|" + font + "|" + (maxWidth != null ? maxWidth : "");
+    let cached = _rasterCache.get(key);
+    if (cached === undefined) {
+        cached = rasterizeText(text, font, maxWidth);
+        _rasterCache.set(key, cached);
+    }
+    const { dataUrl, width, height } = cached;
     const span = document.createElement("span");
     span.className = "rasterized-text";
     span.setAttribute("aria-hidden", "true");
@@ -1738,19 +1766,32 @@ function _appendVowelDiphthongToggle(chartEl, dataEl) {
  *  30 diphthongs without per-button wiring. */
 function _wireVowelDiphthongFocus(dataEl) {
     let currentSeg = null;
+    let currentFocused = null;
     const svg = dataEl.querySelector("svg.vowel-diphthong-arrows");
     if (!svg) return;
+    // Build seg -> SVG path[] map once; setFocus does Map lookups
+    // instead of two svg.querySelectorAll per pointer-enter (firing
+    // on every vowel hover otherwise).
+    const segToPaths = new Map();
+    for (const el of svg.querySelectorAll("[data-diphthong-seg]")) {
+        const seg = el.getAttribute("data-diphthong-seg");
+        if (!seg) continue;
+        const bucket = segToPaths.get(seg);
+        if (bucket) bucket.push(el);
+        else segToPaths.set(seg, [el]);
+    }
     const setFocus = (newSeg) => {
         if (newSeg === currentSeg) return;
         currentSeg = newSeg;
-        for (const el of svg.querySelectorAll(".is-focused")) {
-            el.classList.remove("is-focused");
+        if (currentFocused) {
+            for (const el of currentFocused) el.classList.remove("is-focused");
+            currentFocused = null;
         }
         if (!newSeg) return;
-        const matches = svg.querySelectorAll(
-            `[data-diphthong-seg="${CSS.escape(newSeg)}"]`,
-        );
+        const matches = segToPaths.get(newSeg);
+        if (!matches) return;
         for (const el of matches) el.classList.add("is-focused");
+        currentFocused = matches;
     };
     const segFromEvent = (ev) => {
         const btn = ev.target.closest(".seg-btn[data-seg]");
@@ -2071,7 +2112,9 @@ function activateMode(mode) {
             const selectedSet = new Set(state.selected_segments);
             for (const [seg, btn] of state.seg_buttons) {
                 const isSelected = selectedSet.has(seg);
-                btn.dataset.state = isSelected ? "selected" : "default";
+                const target = isSelected ? "selected" : "default";
+                if (btn.dataset.state === target) continue;
+                btn.dataset.state = target;
                 btn.setAttribute(
                     "aria-pressed", isSelected ? "true" : "false",
                 );
@@ -2189,8 +2232,13 @@ function _applyFeatureRowStates(featureRows) {
     }
 }
 
-/** Swap a feat-row badge's rasterized label in place. */
+/** Swap a feat-row badge's rasterized label in place. No-op when
+ *  the badge already carries ``text``; analysis passes that land
+ *  on the same row state (the common case after the engine
+ *  short-circuits identical selections) skip the DOM swap entirely. */
 function _setRasterizedBadge(badgeEl, text) {
+    if (badgeEl.dataset.label === text) return;
+    badgeEl.dataset.label = text;
     badgeEl.setAttribute("aria-label", text);
     badgeEl.replaceChildren(
         createRasterizedLabel(text, '12px "Noto Sans", sans-serif')
@@ -2260,12 +2308,33 @@ function setAnalysisTabs(tabs) {
         clearAnalysisTabs();
         return;
     }
+    // Skip ``innerHTML =`` writes when the payload is identical to
+    // the prior pass; ``innerHTML =`` discards + reparses even on
+    // identical strings, which is the common case when an
+    // FT→ST transition lands on the same selection.
     const selectionHtml = tabs.selection || "";
-    nodes.analysisSelection.innerHTML = selectionHtml;
+    const classHtml = tabs["class"] || "";
+    const featuresHtml = tabs.features || "";
+    const contrastsHtml = tabs.contrasts || "";
+    if (state.lastAnalysisHtml === undefined) state.lastAnalysisHtml = {};
+    const last = state.lastAnalysisHtml;
+    if (last.selection !== selectionHtml) {
+        nodes.analysisSelection.innerHTML = selectionHtml;
+        last.selection = selectionHtml;
+    }
     nodes.analysisSelection.hidden = selectionHtml.length === 0;
-    nodes.analysisContentClass.innerHTML = tabs["class"] || "";
-    nodes.analysisContentFeatures.innerHTML = tabs.features || "";
-    nodes.analysisContentContrasts.innerHTML = tabs.contrasts || "";
+    if (last.cls !== classHtml) {
+        nodes.analysisContentClass.innerHTML = classHtml;
+        last.cls = classHtml;
+    }
+    if (last.features !== featuresHtml) {
+        nodes.analysisContentFeatures.innerHTML = featuresHtml;
+        last.features = featuresHtml;
+    }
+    if (last.contrasts !== contrastsHtml) {
+        nodes.analysisContentContrasts.innerHTML = contrastsHtml;
+        last.contrasts = contrastsHtml;
+    }
     const contrastsEnabled = tabs.contrasts_enabled !== false;
     nodes.analysisTabContrasts.disabled = !contrastsEnabled;
     nodes.analysisTabContrasts.setAttribute(
@@ -2297,6 +2366,7 @@ function clearAnalysisTabs() {
     nodes.analysisTabContrasts.disabled = false;
     nodes.analysisTabContrasts.removeAttribute("aria-disabled");
     nodes.analysisTabClass.dataset.classState = "neutral";
+    state.lastAnalysisHtml = {};
     activateAnalysisTab("class");
 }
 

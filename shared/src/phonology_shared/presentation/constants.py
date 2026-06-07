@@ -1,8 +1,9 @@
 """Shared GUI constants, geometry, and tiny helpers."""
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from enum import StrEnum
 
+from phonology_shared.presentation import palette as _palette
 from phonology_shared.presentation.palette import C
 
 SETTINGS_ORG = "features"
@@ -123,8 +124,6 @@ def tag_palettes() -> dict[TagColor, tuple[str, str]]:
     dict lookups + a fresh dict + four fresh tuples per call. A
     theme toggle bumps ``theme_version`` and invalidates the cache.
     """
-    from phonology_shared.presentation import palette as _palette
-
     global _tag_palettes_cache
     version = _palette.theme_version
     if _tag_palettes_cache is not None and _tag_palettes_cache[0] == version:
@@ -137,6 +136,41 @@ def tag_palettes() -> dict[TagColor, tuple[str, str]]:
     }
     _tag_palettes_cache = (version, built)
     return built
+
+
+# Pre-baked inline-chip ``<span style='...'>`` prefix per (theme_version,
+# color). The hot path through ``_tag`` in analysis.py used to
+# interpolate 9 fields (bg, fg, 5 invariant CSS constants, etc.) per
+# call; the only thing that actually varies per (theme, color) is the
+# bg/fg pair, so the prefix is fully cacheable. Cache keyed on
+# ``palette.theme_version`` so a theme toggle invalidates it.
+_TAG_PREFIX_CACHE: dict[tuple[int, TagColor], str] = {}
+
+
+def tag_prefix(colour: TagColor) -> str:
+    """Return the pre-baked ``<span style='...'>`` prefix for ``colour``.
+
+    Callers concatenate ``tag_prefix(colour) + escaped_text + "</span>"``
+    instead of paying for a 9-field f-string interpolation per call.
+    """
+    version = _palette.theme_version
+    key = (version, colour)
+    cached = _TAG_PREFIX_CACHE.get(key)
+    if cached is not None:
+        return cached
+    palette = tag_palettes()
+    bg, fg = palette.get(colour, palette[TagColor.NEUTRAL])
+    prefix = (
+        f"<span style='background:{bg}; color:{fg};"
+        f" border-radius:{CHIP_BORDER_RADIUS_PX}px;"
+        f" padding:{CHIP_PADDING_CSS};"
+        f" margin:{CHIP_MARGIN_PX}px;"
+        f" font-family:{MONO_FAMILY_CSS};"
+        f" font-size:{CHIP_FONT_SIZE_PT}pt;"
+        f" white-space:nowrap;'>"
+    )
+    _TAG_PREFIX_CACHE[key] = prefix
+    return prefix
 
 
 BTN_W = 33
@@ -332,7 +366,7 @@ SUPRASEGMENTAL_FEATURES: frozenset[str] = frozenset(
 )
 
 
-def sort_features(features: list[str]) -> list[str]:
+def sort_features(features: Iterable[str]) -> list[str]:
     """Sort features by ``FEATURE_ORDER``; unknowns trail in original order."""
     unknown_index = len(FEATURE_ORDER)
     return sorted(
@@ -344,9 +378,7 @@ def sort_spec(spec: Mapping[str, str]) -> dict[str, str]:
     """Reorder a feature-bundle into canonical key order. Accepts any
     Mapping (incl. read-only views from the engine bundle cache);
     returns a fresh dict so callers can safely iterate."""
-    return {
-        feature: spec[feature] for feature in sort_features(list(spec.keys()))
-    }
+    return {feature: spec[feature] for feature in sort_features(spec)}
 
 
 def scrollbar_style() -> str:

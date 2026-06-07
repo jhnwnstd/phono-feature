@@ -20,6 +20,7 @@ table feeding :py:meth:`segment_distance`) build lazily via
 
 from __future__ import annotations
 
+import html
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -205,6 +206,21 @@ class FeatureEngine:
         self._bundle_cache: dict[
             frozenset[str], tuple[Mapping[str, str], ...]
         ] = {}
+        # Pre-escaped HTML-safe segment + feature labels. Analysis-pane
+        # chip rendering (analysis.py:_segment_chip / _signed_feature_chip)
+        # used to call html.escape on the same bounded set of strings
+        # hundreds of thousands of times per click (W1 profile: 174,900
+        # html.escape calls / 339 ms / 19% wall). Inventory is immutable
+        # so this table is safe to compute once at construction. Both
+        # maps are exposed read-only via :py:attr:`escaped_segments` /
+        # :py:attr:`escaped_features` so callers route through the
+        # fast-path :py:func:`analysis._tag_raw` when they hold a key.
+        self.escaped_segments: Mapping[str, str] = {
+            seg: html.escape(seg) for seg in inventory.segments
+        }
+        self.escaped_features: Mapping[str, str] = {
+            feat: html.escape(feat) for feat in inventory.features
+        }
 
     @classmethod
     def from_path(cls, path: str) -> FeatureEngine:

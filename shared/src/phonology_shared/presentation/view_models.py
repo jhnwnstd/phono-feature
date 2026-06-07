@@ -191,8 +191,11 @@ def summarize_segment_selection(
     * ``feature_rows``: per-feature visual-state payloads.
     """
     default_seg_states = _default_segment_states(engine)
-    default_feat_rows = _default_feature_rows(engine)
     if not segs:
+        # Only the empty-selection branch consumes
+        # ``default_feat_rows``; allocating it on every non-empty
+        # call cost ~30 ms / 1000 calls in the W1 profile.
+        default_feat_rows = _default_feature_rows(engine)
         empty_completion = engine.complete_to_minimal_natural_class([])
         return {
             "analysis_tabs": _seg_tabs(engine, [], {}, {}, empty_completion),
@@ -205,7 +208,7 @@ def summarize_segment_selection(
         }
     if len(segs) == 1:
         feats = engine.get_segment_features(segs[0])
-        completion = engine.complete_to_minimal_natural_class(list(segs))
+        completion = engine.complete_to_minimal_natural_class(segs)
         categories = engine.feature_categories(segs)
         row_states = _default_feature_rows(engine)
         for feat in engine.features:
@@ -239,9 +242,9 @@ def summarize_segment_selection(
             "segment_states": seg_states,
             "feature_rows": row_states,
         }
-    common = dict(engine.common_features(segs))
+    common = engine.common_features(segs)
     contrastive = compute_contrastive(engine, segs)
-    completion = engine.complete_to_minimal_natural_class(list(segs))
+    completion = engine.complete_to_minimal_natural_class(segs)
     suggested = list(completion.additions[0] if completion.additions else ())
     # Seven-way classification per feature (single source of truth
     # for the semantic state -- see ``FeatureCategory``). The view-
@@ -398,19 +401,67 @@ def _feat_tabs(
 NEUTRAL_BADGE: str = "·"
 
 
-def feature_row_badge(*, value: str, shared: bool, contrastive: bool) -> str:
+def feature_row_badge(*, value: str, contrastive: bool) -> str:
     """Return the badge glyph a FeatureRow should display given its
     semantic state. Standalone (no engine needed) so renderers can
     recompute the glyph during a theme refresh without re-running
     a summary. Mirrors the ``badge`` field in
     :py:func:`_feature_row_state`.
     """
-    del shared  # currently unused; kept for callsite symmetry
     if contrastive:
         return "±"
     if value:
         return MINUS_SIGN if value == "-" else value
     return NEUTRAL_BADGE
+
+
+def _build_feature_row_state(
+    value: str,
+    shared: bool,
+    contrastive: bool,
+    category: FeatureCategory,
+) -> FeatureRowState:
+    """Build a single :py:class:`FeatureRowState` payload. Used by
+    the module-level precomputed table; callers should not invoke
+    this directly — they go through :py:func:`_feature_row_state`
+    which dispatches to the table."""
+    return {
+        "value": value,
+        "shared": shared,
+        "contrastive": contrastive,
+        "category": str(category),
+        "badge": feature_row_badge(value=value, contrastive=contrastive),
+    }
+
+
+# Pre-computed FeatureRowState table. The key space is fully
+# bounded: ``value`` is in {"", "+", "-"}, ``shared`` /
+# ``contrastive`` are booleans, ``category`` is one of the seven
+# :py:class:`FeatureCategory` members. 3 * 2 * 2 * 7 = 84 possible
+# payloads. Profiling (W1: 58,300 calls / top tracemalloc site at
+# 3.7 KB retained) showed the constructor was rebuilding the same
+# 5-key dict tens of thousands of times per selection-summary pass;
+# this table collapses every call to a dict lookup. Read-only
+# semantics pinned by ``test_feature_row_state_is_cached_singleton``.
+_FEATURE_ROW_STATES: dict[
+    tuple[str, bool, bool, FeatureCategory], FeatureRowState
+] = {
+    (value, shared, contrastive, category): _build_feature_row_state(
+        value, shared, contrastive, category
+    )
+    for value in ("", "+", "-")
+    for shared in (False, True)
+    for contrastive in (False, True)
+    for category in FeatureCategory
+}
+
+#: Default-state row payload — value="" / not shared / not contrastive /
+#: ALL_ZERO category. Used by :py:func:`_default_feature_rows` so the
+#: outer dict is fresh per call (callers mutate which key maps to
+#: which state) but every value shares this single immutable payload.
+_DEFAULT_FEATURE_ROW_STATE: FeatureRowState = _FEATURE_ROW_STATES[
+    ("", False, False, FeatureCategory.ALL_ZERO)
+]
 
 
 def _feature_row_state(
@@ -426,20 +477,16 @@ def _feature_row_state(
     are derived presentation flags kept for backward compatibility
     with renderers that don't yet read the category.
 
+    Returns one of 84 cached singletons (see
+    :py:data:`_FEATURE_ROW_STATES`). Callers MUST NOT mutate the
+    returned dict; the cache is shared across all selections.
+
     Renderers should prefer ``category`` over the older flags when
     they need to distinguish underspec-involved states from purely
     explicit ones (e.g. ``UNDERSPEC_CONFLICT`` vs
     ``EXPLICIT_CONFLICT``).
     """
-    return {
-        "value": value,
-        "shared": shared,
-        "contrastive": contrastive,
-        "category": str(category),
-        "badge": feature_row_badge(
-            value=value, shared=shared, contrastive=contrastive
-        ),
-    }
+    return _FEATURE_ROW_STATES[(value, shared, contrastive, category)]
 
 
 def _default_segment_states(
@@ -451,7 +498,7 @@ def _default_segment_states(
 def _default_feature_rows(
     engine: FeatureEngine,
 ) -> dict[str, FeatureRowState]:
-    return {feat: _feature_row_state() for feat in engine.features}
+    return {feat: _DEFAULT_FEATURE_ROW_STATE for feat in engine.features}
 
 
 def _vowel_chart_summary(

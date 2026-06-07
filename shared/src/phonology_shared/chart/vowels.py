@@ -2316,14 +2316,31 @@ def build_vowel_chart_geometry(
     #   - centre of slot for middle rows (default centred anchor).
     # The renderer's ``data-row-tier`` attribute matches this
     # scheme so the cell box fills its slot.
+    # Classify every populated cell ONCE. Both ``_row_depth`` (the
+    # depth pre-pass below) and the later ``cell_meta`` loop need
+    # the same ``(display_kind, contrast_features, ordered_entries)``
+    # tuple; profiling (W2: 5252 calls / 259 ms across 200 PHOIBLE
+    # inventories) showed the classifier ran twice per cell. One
+    # build_vowel_chart_geometry call now produces one classification
+    # per cell, indexed by (row, col).
+    cell_classifications: dict[
+        tuple[int, int],
+        tuple[
+            VowelCellDisplayKind,
+            tuple[str, ...],
+            tuple[str, ...],
+        ],
+    ] = {
+        rc: _classify_vowel_cell_display(tuple(entries), norm_feats)
+        for rc, entries in occupied.items()
+    }
+
     def _row_depth(ri: int) -> int:
         max_depth = 1
-        for (r, _c), entries in occupied.items():
+        for (r, _c), _entries in occupied.items():
             if r != ri:
                 continue
-            display_kind, _, ord_entries = _classify_vowel_cell_display(
-                tuple(entries), norm_feats
-            )
+            display_kind, _, ord_entries = cell_classifications[(r, _c)]
             if display_kind in PAIR_DISPLAY_KINDS:
                 depth = 1
             elif display_kind == VowelCellDisplayKind.CONTRAST_SET:
@@ -2437,10 +2454,9 @@ def build_vowel_chart_geometry(
     ] = []
     cells_meta_by_row: dict[int, list[tuple[int, int, bool]]] = {}
     for ri, ci in sorted(occupied):
-        raw_entries = tuple(occupied[(ri, ci)])
-        display_kind, contrast_features, entries = (
-            _classify_vowel_cell_display(raw_entries, norm_feats)
-        )
+        display_kind, contrast_features, entries = cell_classifications[
+            (ri, ci)
+        ]
         is_pair_layout = display_kind in PAIR_DISPLAY_KINDS
         if ci >= 6:
             pair_side = 0
