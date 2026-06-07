@@ -64,6 +64,11 @@ desktop.ini
 desktop/inventories/blevins_features.json
 desktop/inventories/general_features.json
 
+# Local research notes / scratch docs. The ``docs/`` directory is
+# intentionally untracked; contributors keep personal references
+# (e.g. ``docs/research.md``) here without polluting the repo.
+docs/
+
 # Build artifacts under shared/: produced by web/scripts/bake_panphon
 # from the installed ``panphon`` package; regenerated on every web
 # build. The ``.generated`` suffix is the project's convention for
