@@ -32,13 +32,9 @@ from phonology_shared.chart.vowels import (
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.theory.feature_engine import FeatureEngine
 
-INVENTORIES_DIR = (
-    Path(__file__).resolve().parents[2] / "desktop" / "inventories"
-)
 
-
-def _engine(name: str) -> FeatureEngine:
-    path = INVENTORIES_DIR / name
+def _engine(inventories_dir: Path, name: str) -> FeatureEngine:
+    path = inventories_dir / name
     if not path.exists():
         pytest.skip(f"inventory not present: {name}")
     raw = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -59,11 +55,13 @@ def _vowel_segs(engine: FeatureEngine) -> list[str]:
         "hayes_features.json",
     ],
 )
-def test_vowel_placement_case_insensitive(inv_filename: str) -> None:
+def test_vowel_placement_case_insensitive(
+    inv_filename: str, inventories_dir: Path
+) -> None:
     """vowel_grid_pos and detect_vowel_profile must produce the
     same output whether the caller passes raw (PascalCase) feats or
     normalized (lowercase) feats."""
-    engine = _engine(inv_filename)
+    engine = _engine(inventories_dir, inv_filename)
     vowels = _vowel_segs(engine)
     if not vowels:
         pytest.skip(f"{inv_filename} has no vowels")
@@ -86,13 +84,15 @@ def test_vowel_placement_case_insensitive(inv_filename: str) -> None:
         ), f"/{seg}/ placement differs: raw={raw_p}, lower={lower_p}"
 
 
-def test_english_vowels_not_all_in_default_cell() -> None:
+def test_english_vowels_not_all_in_default_cell(
+    inventories_dir: Path,
+) -> None:
     """Regression: with case-insensitive lookup wired correctly, the
     English vowel chart MUST spread vowels across multiple cells.
     The original bug had every vowel landing in (row=3, col=2) =
     Open-mid Central because the lookups missed PascalCase keys.
     """
-    engine = _engine("english_features.json")
+    engine = _engine(inventories_dir, "english_features.json")
     vowels = _vowel_segs(engine)
     assert vowels, "English should have vowels"
     seg_feats = {s: dict(engine.segments[s]) for s in vowels}
@@ -111,7 +111,9 @@ def test_english_vowels_not_all_in_default_cell() -> None:
 # compute_placements: shared cell-grouping helper
 
 
-def test_compute_placements_general_tier_two_mid_splits_schwa_from_open_mid():
+def test_compute_placements_general_tier_two_mid_splits_schwa_from_open_mid(
+    inventories_dir: Path,
+):
     """The General inventory's ə (ATR=0) and ɜ (ATR=-) historically
     collapsed onto the same Open-mid Central cell because the Tier 1
     height inference could not tell them apart. The Tier 2 Mid
@@ -119,7 +121,7 @@ def test_compute_placements_general_tier_two_mid_splits_schwa_from_open_mid():
     inserted between Close-mid and Open-mid) while ɜ stays on
     Open-mid (logical row 4), so the renderer no longer stacks them.
     """
-    engine = _engine("general_features.json")
+    engine = _engine(inventories_dir, "general_features.json")
     vowels = _vowel_segs(engine)
     seg_feats = {s: dict(engine.segments[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
@@ -131,11 +133,13 @@ def test_compute_placements_general_tier_two_mid_splits_schwa_from_open_mid():
     assert placements["ɜ"].height.value == "Open-mid"
 
 
-def test_compute_placements_orders_by_confidence_desc():
+def test_compute_placements_orders_by_confidence_desc(
+    inventories_dir: Path,
+):
     """Within a collision cell, the highest-confidence vowel sorts
     first so the desktop renders it on top and the web stacks it at
     the top of the visible stack."""
-    engine = _engine("general_features.json")
+    engine = _engine(inventories_dir, "general_features.json")
     vowels = _vowel_segs(engine)
     seg_feats = {s: dict(engine.segments[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
@@ -464,7 +468,7 @@ def test_chart_geometry_handles_no_vowels() -> None:
     assert geometry.silhouette is not None
 
 
-def test_chart_geometry_omits_empty_rows() -> None:
+def test_chart_geometry_omits_empty_rows(inventories_dir: Path) -> None:
     """``build_vowel_chart_geometry`` skips height tiers that have
     no occupied cell. Without this, the web renderer would emit a
     "Close" row label for an inventory with no close vowels.
@@ -473,7 +477,7 @@ def test_chart_geometry_omits_empty_rows() -> None:
         build_vowel_chart_geometry,
     )
 
-    engine = _engine("english_features.json")
+    engine = _engine(inventories_dir, "english_features.json")
     vowel_segs = _vowel_segs(engine)
     seg_feats = {s: dict(engine.segments[s]) for s in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)
@@ -492,7 +496,9 @@ def test_chart_geometry_omits_empty_rows() -> None:
     assert chart_ys == sorted(chart_ys)
 
 
-def test_chart_geometry_cell_chart_x_within_bounds() -> None:
+def test_chart_geometry_cell_chart_x_within_bounds(
+    inventories_dir: Path,
+) -> None:
     """Every cell's ``chart_x`` lives in ``[0, 1]`` so the renderer's
     ``left: chart_x * 100%`` lands inside the data area. Replaces
     the legacy ``grid_col`` spacer-track check now that the grid
@@ -502,7 +508,7 @@ def test_chart_geometry_cell_chart_x_within_bounds() -> None:
         build_vowel_chart_geometry,
     )
 
-    engine = _engine("general_features.json")
+    engine = _engine(inventories_dir, "general_features.json")
     vowel_segs = _vowel_segs(engine)
     seg_feats = {s: dict(engine.segments[s]) for s in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)

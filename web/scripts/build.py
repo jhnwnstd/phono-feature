@@ -44,17 +44,17 @@ import zipfile
 from pathlib import Path
 from types import ModuleType
 
-ROOT = Path(__file__).resolve().parents[2]
-WEB_DIR = ROOT / "web"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+WEB_DIR = REPO_ROOT / "web"
 DIST = WEB_DIR / "dist"
-SHARED_SRC = ROOT / "shared" / "src"
+SHARED_SRC = REPO_ROOT / "shared" / "src"
 SHARED_PKG = SHARED_SRC / "phonology_shared"
 DATA_DIR = SHARED_PKG / "data"
 THEORY_DIR = SHARED_PKG / "theory"
 CHART_DIR = SHARED_PKG / "chart"
 PRESENTATION_DIR = SHARED_PKG / "presentation"
 EDITOR_DIR = SHARED_PKG / "editor"
-INVENTORIES = ROOT / "desktop" / "inventories"
+INVENTORIES = REPO_ROOT / "desktop" / "inventories"
 
 # Make the shared source tree importable as a normal package so the
 # ``spec_from_file_location`` side-loads below can transitively
@@ -253,7 +253,7 @@ def _is_gitignored(path: Path) -> bool:
     """
     result = subprocess.run(
         ["git", "check-ignore", "-q", str(path)],
-        cwd=ROOT,
+        cwd=REPO_ROOT,
         capture_output=True,
     )
     # 0 = ignored, 1 = not ignored, anything else = git error.

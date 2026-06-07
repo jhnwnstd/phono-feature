@@ -34,10 +34,6 @@ from phonology_shared.presentation.view_models import (
 )
 from phonology_shared.theory.feature_engine import FeatureEngine
 
-INVENTORIES_DIR = (
-    Path(__file__).resolve().parent.parent / ".." / "desktop" / "inventories"
-).resolve()
-
 BUNDLED_NAMES: list[str] = [
     "english",
     "hindi",
@@ -58,8 +54,10 @@ def inventory_name(request: pytest.FixtureRequest) -> str:
 
 
 @pytest.fixture(scope="module")
-def loaded(inventory_name: str) -> tuple[Inventory, FeatureEngine]:
-    path = INVENTORIES_DIR / f"{inventory_name}_features.json"
+def loaded(
+    inventory_name: str, inventories_dir: Path
+) -> tuple[Inventory, FeatureEngine]:
+    path = inventories_dir / f"{inventory_name}_features.json"
     raw = json.loads(path.read_text(encoding="utf-8-sig"))
     inv = Inventory.parse(raw, source=path.stem)
     return inv, FeatureEngine(inv)

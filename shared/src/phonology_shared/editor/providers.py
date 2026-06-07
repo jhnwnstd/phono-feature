@@ -8,10 +8,10 @@ feature list, the per-segment bundles, and any unresolved symbols
 the user needs to edit by hand.
 
 This module is pure Python with stdlib-only imports so it stays
-Pyodide-safe. Concrete providers (PanPhon today, possibly CMU dict
-or precomputed JSON tables later) live in client-specific packages
-because they may depend on optional dependencies the shared layer
-cannot assume.
+Pyodide-safe. Concrete providers (``PanPhonFeatureProvider`` on
+desktop, ``LookupTableProvider`` and ``PhoibleProvider`` shared
+between both UIs) live in client-specific packages because they
+may depend on optional dependencies the shared layer cannot assume.
 """
 
 from __future__ import annotations

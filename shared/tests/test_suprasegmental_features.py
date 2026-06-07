@@ -24,8 +24,8 @@ These tests pin three contracts:
   list as an "unknown" feature.
 
 The set itself follows the research note's guidance at
-``research.md``: keep the segmental core small and uniform, lift
-suprasegmental concerns to a separate tier.
+``docs/research.md``: keep the segmental core small and uniform,
+lift suprasegmental concerns to a separate tier.
 """
 
 from __future__ import annotations

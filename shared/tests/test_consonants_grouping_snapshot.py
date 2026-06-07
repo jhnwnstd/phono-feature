@@ -49,7 +49,9 @@ import pytest
 from phonology_shared.chart.consonants import group_segments
 from phonology_shared.data.inventory import Inventory
 
-INVENTORIES = Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+INVENTORIES_DIR = (
+    Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+)
 SNAPSHOT_PATH = (
     Path(__file__).resolve().parent
     / "data"
@@ -67,7 +69,7 @@ def _load_snapshot() -> dict[str, dict[str, list[str]]]:
 
 
 def _load_inventory(inventory_name: str) -> Inventory:
-    path = INVENTORIES / inventory_name
+    path = INVENTORIES_DIR / inventory_name
     if not path.exists():
         pytest.skip(f"missing inventory: {inventory_name}")
     raw = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -119,7 +121,7 @@ def test_snapshot_covers_every_bundled_inventory() -> None:
     """
     snapshot = _load_snapshot()
     bundled: set[str] = set()
-    for path in INVENTORIES.glob("*.json"):
+    for path in INVENTORIES_DIR.glob("*.json"):
         if path.name.startswith("_") or path.name.startswith("."):
             continue
         bundled.add(path.name)

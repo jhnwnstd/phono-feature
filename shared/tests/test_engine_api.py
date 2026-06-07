@@ -16,31 +16,12 @@ from phonology_shared.theory.feature_engine import FeatureEngine
 from phonology_shared.theory.geometry import GeometryAnalyzer
 
 
-def _find_repo_root() -> Path:
-    """Walk up from this file until we find the workspace root.
-
-    The bundled inventories ship with the desktop app at
-    ``desktop/inventories/``; the shared sources live at
-    ``shared/src/phonology_shared/``. The workspace root is the
-    first ancestor that contains both ``desktop`` and ``shared``
-    directories.
-    """
-    for ancestor in Path(__file__).resolve().parents:
-        if (ancestor / "desktop").is_dir() and (ancestor / "shared").is_dir():
-            return ancestor
-    raise RuntimeError("could not locate workspace root from test file")
-
-
-REPO_ROOT = _find_repo_root()
-HAYES_INVENTORY = str(
-    REPO_ROOT / "desktop" / "inventories" / "hayes_features.json"
-)
-
-
 @pytest.fixture(scope="module")
-def engine() -> FeatureEngine:
+def engine(inventories_dir: Path) -> FeatureEngine:
     """One Hayes-loaded engine shared across the module."""
-    return FeatureEngine.from_path(HAYES_INVENTORY)
+    return FeatureEngine.from_path(
+        str(inventories_dir / "hayes_features.json")
+    )
 
 
 # ----------------------------------------------------------------------

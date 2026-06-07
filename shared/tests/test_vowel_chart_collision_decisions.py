@@ -34,11 +34,13 @@ from phonology_shared.chart.vowels import (
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.theory.feature_engine import FeatureEngine
 
-INVENTORIES = Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+INVENTORIES_DIR = (
+    Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+)
 
 
 def _geometry(inventory_name: str) -> VowelChartGeometry:
-    path = INVENTORIES / inventory_name
+    path = INVENTORIES_DIR / inventory_name
     if not path.exists():
         pytest.skip(f"missing inventory: {inventory_name}")
     raw = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -112,7 +114,7 @@ def test_long_pair_classification_is_consistent_across_renderers() -> None:
     # Walk every bundled inventory; for every multi-entry cell,
     # assert LONG_PAIR matches the "only ``Long`` differs"
     # criterion explicitly.
-    for inv in sorted(INVENTORIES.glob("*.json")):
+    for inv in sorted(INVENTORIES_DIR.glob("*.json")):
         if inv.name.startswith("_"):
             continue
         raw = json.loads(inv.read_text(encoding="utf-8-sig"))
@@ -238,7 +240,7 @@ def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
     silhouette's structural invariant -- only the slanted left edge
     changes between top and bottom.
     """
-    for inv in sorted(INVENTORIES.glob("*.json")):
+    for inv in sorted(INVENTORIES_DIR.glob("*.json")):
         if inv.name.startswith("_"):
             continue
         raw = json.loads(inv.read_text(encoding="utf-8-sig"))
@@ -506,7 +508,7 @@ def test_view_model_serializes_display_kind() -> None:
         _vowel_chart_summary,
     )
 
-    path = INVENTORIES / "english_features.json"
+    path = INVENTORIES_DIR / "english_features.json"
     raw = json.loads(path.read_text(encoding="utf-8-sig"))
     engine = FeatureEngine(Inventory.parse(raw, source=str(path)))
     vowels = [
@@ -556,7 +558,7 @@ def test_bundled_inventories_placement_stable_under_extensions() -> None:
     deliberate snapshot update.
     """
     snapshot = _PLACEMENT_SNAPSHOT
-    for inv in sorted(INVENTORIES.glob("*.json")):
+    for inv in sorted(INVENTORIES_DIR.glob("*.json")):
         if inv.name.startswith("_") or inv.name.startswith("."):
             continue
         if inv.name not in snapshot:

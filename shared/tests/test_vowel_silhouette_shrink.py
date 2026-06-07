@@ -31,11 +31,6 @@ from phonology_shared.chart.vowels import (
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.theory.feature_engine import FeatureEngine
 
-INVENTORIES_DIR = (
-    Path(__file__).resolve().parents[2] / "desktop" / "inventories"
-)
-
-
 # ---------------------------------------------------------------------------
 # Stage 1 -- uniform shrink
 # ---------------------------------------------------------------------------
@@ -249,8 +244,8 @@ def test_compose_returns_canonical_when_factor_zero() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _engine(name: str) -> FeatureEngine:
-    path = INVENTORIES_DIR / name
+def _engine(inventories_dir: Path, name: str) -> FeatureEngine:
+    path = inventories_dir / name
     if not path.exists():
         pytest.skip(f"inventory not present: {name}")
     raw = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -263,11 +258,11 @@ def _vowel_segs(engine: FeatureEngine) -> list[str]:
     ]
 
 
-def test_hayes_silhouette_within_slant_cap() -> None:
+def test_hayes_silhouette_within_slant_cap(inventories_dir: Path) -> None:
     """The Hayes inventory's rendered silhouette must respect the
     Stage 2 cap on slant change relative to its canonical slant.
     """
-    engine = _engine("hayes_features.json")
+    engine = _engine(inventories_dir, "hayes_features.json")
     vowels = _vowel_segs(engine)
     if not vowels:
         pytest.skip("no vowels in inventory")

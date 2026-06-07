@@ -54,7 +54,7 @@ class FeatureValue(StrEnum):
     all-``0`` ``LowerLarynx`` row must read as "Hindi does not
     specify this feature", not "Hindi is uniformly ``-LowerLarynx``".
 
-    The research note at ``research.md`` argues the ternary
+    The research note at ``docs/research.md`` argues the ternary
     distinction is the single most important interoperability
     invariant between SPE-, PHOIBLE-, PanPhon-, and CLTS-style
     feature systems. Underspecification theory (Archangeli 1988;
