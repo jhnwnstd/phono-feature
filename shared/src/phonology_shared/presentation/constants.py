@@ -4,6 +4,12 @@ from collections.abc import Iterable, Mapping
 from enum import StrEnum
 
 from phonology_shared.presentation import palette as _palette
+from phonology_shared.presentation.feature_metadata import (
+    FEATURE_REGISTRY,
+    GROUP_ORDER,
+    feature_sort_key as _feature_sort_key,
+    iter_aliases_in_group,
+)
 from phonology_shared.presentation.palette import C
 
 SETTINGS_ORG = "features"
@@ -175,203 +181,84 @@ def tag_prefix(colour: TagColor) -> str:
 
 BTN_W = 33
 BTN_GAP = 4
-# Canonical feature display order. Features absent from this list trail
-# at the end in their original order.
+
+# ---------------------------------------------------------------------
+# Derived tables — single source of truth lives in
+# :py:mod:`phonology_shared.presentation.feature_metadata`.
+#
+# ``FEATURE_ORDER``, ``FEATURE_GROUPS``, and ``SUPRASEGMENTAL_FEATURES``
+# preserve their previous module-level names so existing consumers
+# (the desktop ``_populate_features`` loop, the view-model's
+# ``_grouped_features``, the analysis renderer's contrast-row sort,
+# the consonant-grouper tone guard, the suprasegmental tests) keep
+# working unchanged. Each table is now computed from
+# :py:data:`FEATURE_REGISTRY` at import: one entry per concept, with
+# every surface form (``LABIAL`` / ``Labial`` / ``lab`` / ...)
+# enumerated in the entry's ``aliases``. That collapses the prior
+# hand-maintained duplication and gives ``sort_features`` a real
+# canonical lookup so case variants of the same concept always
+# land at the same position.
+# ---------------------------------------------------------------------
+
+#: Feature ordering: every surface form of every registry entry,
+#: sorted by the entry's ``sort_key``. Place modifiers (Round,
+#: Anterior, High, ...) sort directly after their anchor (Labial,
+#: Coronal, Dorsal) by design. Unknown features (anything not
+#: registered) trail at the end — :py:func:`sort_features` handles
+#: that fallback via :py:func:`feature_sort_key`.
 FEATURE_ORDER: list[str] = [
-    # Major class
-    "Syllabic",
-    "Consonantal",
-    "Sonorant",
-    "Approximant",
-    # Laryngeal
-    "Voice",
-    "SpreadGl",
-    "ConstrGl",
-    # Manner
-    "Continuant",
-    "Strident",
-    "DelRel",
-    "Nasal",
-    "Lateral",
-    "Trill",
-    "Tap",
-    "Click",
-    # Place
-    "LABIAL",
-    "Round",
-    "Labiodental",
-    "CORONAL",
-    "Anterior",
-    "Distributed",
-    "DORSAL",
-    "High",
-    "Low",
-    "Back",
-    "Front",
-    # Pharyngeal and advanced tongue root
-    "ConstrPharynx",
-    "Pharyngeal",
-    "ATR",
-    "Tense",
-    # Prosodic
-    "Long",
-    "Stress",
-    "Tone",
-    "UpperRegister",
-    # PHOIBLE-canonical extensions. Same conceptual buckets as
-    # above; the existing all-caps anchors stay for the bundled
-    # Hayes inventory while these title-case names absorb the
-    # PHOIBLE provider's emitted columns.
-    "Labial",
-    "Coronal",
-    "Dorsal",
-    "Velaric",
-    "EpilaryngealSource",
-    "Fortis",
-    "Lenis",
-    "RaisedLarynxEjective",
-    "LoweredLarynxImplosive",
-    "RTR",
-    "HighTone",
-    "Short",
-]
-_FEATURE_ORDER_INDEX: dict[str, int] = {
-    feature: index for index, feature in enumerate(FEATURE_ORDER)
-}
-# Two-column feature panel layout. Each entry is
-# ``(group_title, member_features)``.
-FEATURE_GROUPS: list[tuple[str, list[str]]] = [
-    (
-        "Major Class",
-        [
-            "Syllabic",
-            "Consonantal",
-            "Sonorant",
-            "Approximant",
-        ],
-    ),
-    (
-        "Laryngeal",
-        [
-            "Voice",
-            "SpreadGl",
-            "ConstrGl",
-            # PHOIBLE-canonical additions
-            "EpilaryngealSource",
-            "Fortis",
-            "Lenis",
-            "RaisedLarynxEjective",
-            "LoweredLarynxImplosive",
-        ],
-    ),
-    (
-        "Manner",
-        [
-            "Continuant",
-            "Strident",
-            "DelRel",
-            "Nasal",
-            "Lateral",
-            "Trill",
-            "Tap",
-            "Click",
-            # PHOIBLE-canonical: ``Velaric`` is the click column
-            # under the app's canonical name.
-            "Velaric",
-        ],
-    ),
-    (
-        "Place",
-        [
-            "LABIAL",
-            "Round",
-            "Labiodental",
-            "CORONAL",
-            "Anterior",
-            "Distributed",
-            "DORSAL",
-            "High",
-            "Low",
-            "Back",
-            "Front",
-            # PHOIBLE-canonical: place-class features under their
-            # title-case names (Hayes uses the all-caps anchors
-            # above; both forms now find a home in this group).
-            "Labial",
-            "Coronal",
-            "Dorsal",
-        ],
-    ),
-    (
-        "Tongue-Root / Pharyngeal",
-        [
-            "ConstrPharynx",
-            "Pharyngeal",
-            "ATR",
-            "Tense",
-            # PHOIBLE-canonical: ``RTR`` is the partner of ``ATR``.
-            "RTR",
-        ],
-    ),
-    (
-        "Prosodic",
-        [
-            "Long",
-            "Stress",
-            "Tone",
-            "UpperRegister",
-            # PHOIBLE-canonical: ``HighTone`` is the tone column;
-            # ``Short`` is the length partner of ``Long``.
-            "HighTone",
-            "Short",
-        ],
-    ),
+    alias
+    for meta in sorted(
+        FEATURE_REGISTRY.values(), key=lambda m: m.sort_key
+    )
+    for alias in (meta.canonical, *meta.aliases)
 ]
 
-# Features the literature treats as TIER-SEPARATE from the segmental
-# core. Autosegmental phonology (Goldsmith 1976) and the 2024 CLTS
-# vector work agree: tone, length, stress and laryngeal register
-# belong on a suprasegmental tier, not on the segment row. The
-# software treatment here is lighter-weight than a full autosegmental
-# representation but still uses this set in two load-bearing places:
-#
-# - :py:func:`phonology_shared.chart.consonants.is_member`'s
-#   tone-phoneme guard reads from this set (any positive
-#   suprasegmental on a non-syllabic, non-consonantal segment routes
-#   the segment to the ``Tones`` group rather than to a manner
-#   class).
-# - Renderers that need to surface "the segmental natural class
-#   query Q matches the same segments whether suprasegmental S is
-#   ``+``, ``-``, or ``0``" can use this set to scope the query.
-#
-# Membership in :py:data:`FEATURE_ORDER` is NOT a parallel concept;
-# ``FEATURE_ORDER`` is display-only. A feature can be both
-# segmental and in the Prosodic display group (rare), or
-# suprasegmental but absent from a particular inventory (common,
-# e.g. Hindi has no ``HighTone``).
+#: Two-column feature panel layout. Each entry is
+#: ``(group_title, member_features)``. The member list collects
+#: every surface form of every registry entry tagged with that
+#: group, in ``sort_key`` order — so an inventory that ships either
+#: ``LABIAL`` (Hayes) or ``Labial`` (PHOIBLE) sees its feature
+#: routed to the Place group correctly.
+FEATURE_GROUPS: list[tuple[str, list[str]]] = [
+    (group_name, list(iter_aliases_in_group(group_name)))
+    for group_name in GROUP_ORDER
+]
+
+#: Features the literature treats as TIER-SEPARATE from the
+#: segmental core (autosegmental phonology, 2024 CLTS vector work).
+#: Now derived from the registry's ``is_suprasegmental`` flag, with
+#: every surface alias included so consumers can do plain set
+#: membership against any case variant.
+#:
+#: Two load-bearing consumers:
+#:
+#: - :py:func:`phonology_shared.chart.consonants.is_member`'s
+#:   tone-phoneme guard.
+#: - Renderers that scope natural-class queries away from the
+#:   suprasegmental tier.
+#:
+#: Membership here is NOT a parallel concept to
+#: :py:data:`FEATURE_ORDER`; the registry maintains both
+#: independently (a feature can be in the Prosodic display group
+#: yet not on the suprasegmental tier, or vice versa).
 SUPRASEGMENTAL_FEATURES: frozenset[str] = frozenset(
-    {
-        # Tone (autosegmental tier — Goldsmith 1976).
-        "Tone",
-        "HighTone",
-        "UpperRegister",
-        # Stress (prosodic tier).
-        "Stress",
-        # Length (timing tier in moraic phonology). ``Long`` is the
-        # SPE / Hayes column; ``Short`` is the PHOIBLE column that
-        # records the polarity explicitly.
-        "Long",
-        "Short",
-    }
+    alias
+    for meta in FEATURE_REGISTRY.values()
+    if meta.is_suprasegmental
+    for alias in (meta.canonical, *meta.aliases)
 )
 
 
 def sort_features(features: Iterable[str]) -> list[str]:
-    """Sort features by ``FEATURE_ORDER``; unknowns trail in original order."""
-    unknown_index = len(FEATURE_ORDER)
-    return sorted(
-        features, key=lambda f: _FEATURE_ORDER_INDEX.get(f, unknown_index)
-    )
+    """Sort features by their canonical position in
+    :py:data:`FEATURE_REGISTRY`. Unknowns trail at the end.
+
+    Aliases of the same canonical name share a sort position, so
+    ``sort_features(["LABIAL", "Labial"])`` produces an output
+    whose two entries are adjacent regardless of input order.
+    """
+    return sorted(features, key=_feature_sort_key)
 
 
 def sort_spec(spec: Mapping[str, str]) -> dict[str, str]:

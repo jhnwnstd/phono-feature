@@ -87,6 +87,10 @@ from dataclasses import dataclass, field, replace
 from enum import IntEnum, StrEnum
 
 from phonology_shared.presentation.constants import BTN_W
+from phonology_shared.presentation.feature_metadata import (
+    USE_VOWEL_PAIR,
+    features_for_use,
+)
 from phonology_shared.presentation.layout import (
     VOWEL_PAIR_GAP_PX,
     VOWEL_PAIR_SEPARATOR_PX,
@@ -170,9 +174,14 @@ class VowelCellDisplayKind(StrEnum):
 #: be displayed side by side rather than stacked. Everything outside
 #: this set is a position feature; cells whose entries differ on a
 #: position feature fall through to ``STACK``.
-_DISPLAY_CONTRAST_FEATURES: frozenset[str] = frozenset(
-    {"long", "nasal", "rhotic", "breathy", "creaky", "tone"}
-)
+#:
+#: Derived from
+#: :py:data:`phonology_shared.presentation.feature_metadata.FEATURE_REGISTRY`
+#: entries tagged with ``USE_VOWEL_PAIR`` so the contrast roster
+#: lives next to every other feature-name decision instead of being
+#: duplicated here. The current set: ``{long, nasal, rhotic,
+#: breathy, creaky, tone}``.
+_DISPLAY_CONTRAST_FEATURES: frozenset[str] = features_for_use(USE_VOWEL_PAIR)
 
 
 #: PAIR display kinds keyed by the single contrast feature that

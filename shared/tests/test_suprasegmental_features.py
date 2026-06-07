@@ -44,9 +44,13 @@ def test_suprasegmental_set_is_immutable() -> None:
 
 
 def test_suprasegmental_set_covers_canonical_columns() -> None:
-    """Tone, stress, length, and register columns must all appear.
-    A future refactor that drops one of these has to deliberately
-    edit this test."""
+    """Tone, stress, length, and register display names must all
+    appear. The set is derived from ``FEATURE_REGISTRY`` and now
+    includes every surface alias of each canonical entry too
+    (``hightone``, ``hitone``, ``Stress``, ``stress``, ...), so
+    consumers can do plain set membership against any case
+    variant. A future refactor that drops one of the expected
+    columns has to deliberately edit this test."""
     expected = {
         "Tone",
         "HighTone",
@@ -55,9 +59,11 @@ def test_suprasegmental_set_covers_canonical_columns() -> None:
         "Long",
         "Short",
     }
-    assert SUPRASEGMENTAL_FEATURES == expected, (
-        f"SUPRASEGMENTAL_FEATURES drifted; expected {sorted(expected)}, "
-        f"got {sorted(SUPRASEGMENTAL_FEATURES)}"
+    missing = expected - SUPRASEGMENTAL_FEATURES
+    assert not missing, (
+        f"SUPRASEGMENTAL_FEATURES drifted; expected each of "
+        f"{sorted(expected)} present, missing {sorted(missing)}; "
+        f"actual={sorted(SUPRASEGMENTAL_FEATURES)}"
     )
 
 

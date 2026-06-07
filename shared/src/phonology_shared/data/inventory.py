@@ -188,20 +188,48 @@ class _ValidationContext:
 def normalize_feature_key(key: str) -> str:
     """Fold a feature name to its canonical engine-side spelling.
 
-    Lowercases, collapses delimiters (``.``, ``_``, ``-``, space) to
-    empty, and rewrites a small set of common multi-word aliases so
-    engine consumers (matching, grouping, alias-collision detection at
-    parse time) see one operational identity for variants like
-    ``"DelRel"`` / ``"delayed_release"`` / ``"del.rel."``,
-    ``"r-colored"`` / ``"rhotacized"`` / ``"rhotic"``, or
-    ``"breathy voice"`` / ``"breathy"``. Memoized because the same
-    handful of names recur for every segment and every reload.
+    First consults
+    :py:data:`phonology_shared.presentation.feature_metadata.FEATURE_REGISTRY`
+    via ``resolve_canonical`` — every known alias (case variant,
+    delimiter variant, PanPhon short code, PHOIBLE long form,
+    semantic alias like ``periodicGlottalSource → voice``)
+    resolves through one shared table. Falls back to the historical
+    string-manipulation rules below for genuinely unregistered
+    inputs (user-created inventories with novel feature names),
+    preserving the prior contract that ``normalize_feature_key``
+    never raises for any string.
+
+    The two paths produce IDENTICAL output for every name the
+    registry knows, so engine consumers (matching, grouping,
+    alias-collision detection at parse time) and renderer
+    consumers (sort, group, suprasegmental check) always agree on
+    whether two surface forms are the same feature.
+
+    Memoized because the same handful of names recur for every
+    segment and every reload.
 
     Lives in :py:mod:`inventory` so :py:meth:`Inventory.parse` can
     detect alias collisions at the boundary without depending on
     the display layer; :py:mod:`segment_grouper` re-imports it for
     its own bundle normalisation.
     """
+    # Local import to keep the dependency direction one-way: data
+    # imports from presentation only here, at the metadata-resolver
+    # boundary. The opposite import (presentation.feature_metadata
+    # importing data.inventory) would be a cycle.
+    from phonology_shared.presentation.feature_metadata import (
+        resolve_canonical,
+    )
+
+    canonical = resolve_canonical(key)
+    if canonical is not None:
+        return canonical
+
+    # Fallback for unregistered features: the historical
+    # lower-case + delimiter-strip + small alias-fold rules. The
+    # registry's fold uses the same delimiter set, so a custom
+    # name like ``Foo_Bar`` deterministically becomes ``foobar``
+    # whether it's registered or not.
     k = key.lower()
     k = k.replace("del.rel.", "delrel")
     k = k.replace("delayed_release", "delrel")

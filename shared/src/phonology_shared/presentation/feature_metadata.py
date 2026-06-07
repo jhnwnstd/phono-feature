@@ -1,0 +1,746 @@
+"""Single source of truth for feature-name metadata.
+
+Three concerns previously kept their own parallel tables:
+
+- Display ordering (``FEATURE_ORDER`` in
+  :py:mod:`phonology_shared.presentation.constants`).
+- Display grouping (``FEATURE_GROUPS`` in the same module).
+- Suprasegmental classification (``SUPRASEGMENTAL_FEATURES``).
+
+Plus two import-time mapping tables (``PHOIBLE_TO_APP_FEATURE``,
+``PANPHON_TO_APP_FEATURE``) and a small inline alias table inside
+:py:func:`phonology_shared.data.inventory.normalize_feature_key`.
+
+Each table is keyed on a feature SURFACE NAME (e.g. ``"LABIAL"`` vs
+``"Labial"``), which forces every concept that has case variants to
+be enumerated repeatedly. There is no single place that answers "is
+``LABIAL`` and ``Labial`` the same feature?" from the renderer.
+
+This module replaces those parallel tables with one
+:py:class:`FeatureMetadata` registry keyed by the CANONICAL
+lowercase name. Each entry carries every surface form (``aliases``)
+that maps to that concept, so the resolver answers
+"``LABIAL``, ``Labial``, ``lab``, ``LAB`` all collapse to
+``labial``" in one lookup.
+
+Display-side consumers (sort, group, suprasegmental check) call
+into the resolver helpers below; the surface form rendered on the
+panel row stays whatever the inventory carried on disk (per the
+user's contract: Hayes' shouty ``LABIAL`` stays shouty; PHOIBLE's
+``Labial`` stays title-case; backend treats them as one concept).
+
+Place subfeatures sort adjacent to their anchor via the
+``subgroup`` + ``sort_key`` design: ``round.sort_key`` is one more
+than ``labial.sort_key``, so the renderer's natural sort lands
+modifiers right after the anchor without any visual hierarchy
+work.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
+from functools import lru_cache
+
+
+# ---------------------------------------------------------------------
+# System tags
+# ---------------------------------------------------------------------
+
+#: Tags identifying which provider's feature roster includes a given
+#: feature. Used by :py:meth:`FeatureMetadata.systems`.
+SYSTEM_HAYES = "hayes"
+SYSTEM_PHOIBLE = "phoible"
+SYSTEM_PANPHON = "panphon"
+
+#: Tags identifying which display / classification subsystem reads
+#: a given feature. Used by :py:meth:`FeatureMetadata.uses`.
+USE_CONSONANT = "consonant"           # consonants.py classifier
+USE_VOWEL = "vowel"                   # vowels.py inference
+USE_LARYNGEAL = "laryngeal"           # laryngeal display path
+USE_NATURAL_CLASS = "natural_class"   # natural-class queries
+USE_VOWEL_PAIR = "vowel_pair"         # in-cell contrast (long, nasal, etc.)
+
+
+# ---------------------------------------------------------------------
+# Group identifiers (parallel to FEATURE_GROUPS' titles)
+# ---------------------------------------------------------------------
+
+GROUP_MAJOR_CLASS = "Major Class"
+GROUP_LARYNGEAL = "Laryngeal"
+GROUP_MANNER = "Manner"
+GROUP_PLACE = "Place"
+GROUP_TONGUE_ROOT = "Tongue-Root / Pharyngeal"
+GROUP_PROSODIC = "Prosodic"
+
+#: Display order of groups in the Feature Pane. The legacy tables
+#: rendered groups in this same order; preserved here so derived
+#: ``FEATURE_GROUPS`` is byte-identical to the prior structure.
+GROUP_ORDER: tuple[str, ...] = (
+    GROUP_MAJOR_CLASS,
+    GROUP_LARYNGEAL,
+    GROUP_MANNER,
+    GROUP_PLACE,
+    GROUP_TONGUE_ROOT,
+    GROUP_PROSODIC,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureMetadata:
+    """One row in :py:data:`FEATURE_REGISTRY`.
+
+    ``canonical`` is the lowercase, delimiter-stripped key that
+    :py:func:`phonology_shared.data.inventory.normalize_feature_key`
+    produces for every alias in ``aliases``. The registry is keyed
+    on ``canonical``; ``aliases`` enumerates every surface form the
+    codebase has ever seen for this concept (Hayes' all-caps anchor,
+    PHOIBLE's title-case, PanPhon's short code, common typos).
+
+    ``sort_key`` is a small integer; smaller sorts earlier. Place
+    modifiers (``round``, ``anterior``, ``high``, etc.) carry
+    sort_keys directly after their anchor's so they cluster in the
+    rendered list.
+
+    ``group`` matches one of :py:data:`GROUP_ORDER`'s titles; the
+    derived ``FEATURE_GROUPS`` in
+    :py:mod:`phonology_shared.presentation.constants` collects
+    every alias of every entry tagged with each group.
+
+    ``subgroup`` is an optional anchor-name tag (``"labial"``,
+    ``"coronal"``, ``"dorsal"``, ``"laryngeal"``, ``"tongue_root"``).
+    Currently used only by tests / inspection; rendering is sort-
+    adjacency only (no visual hierarchy).
+
+    ``systems`` records which provider rosters include this
+    feature. Used by import-time mappings + the bake script's
+    completeness check.
+
+    ``uses`` records which display / classifier subsystem reads
+    the feature. Lets vowels.py / consonants.py / laryngeal display
+    consult the registry instead of carrying their own small
+    feature-name sets.
+
+    ``is_suprasegmental`` mirrors the existing
+    ``SUPRASEGMENTAL_FEATURES`` membership.
+    """
+
+    canonical: str
+    sort_key: int
+    group: str
+    aliases: tuple[str, ...] = ()
+    subgroup: str | None = None
+    systems: frozenset[str] = field(default_factory=frozenset)
+    uses: frozenset[str] = field(default_factory=frozenset)
+    is_suprasegmental: bool = False
+
+
+# ---------------------------------------------------------------------
+# The registry
+# ---------------------------------------------------------------------
+
+# ``sort_key`` blocks:
+#   100s = Major Class
+#   200s = Laryngeal
+#   300s = Manner
+#   400s = Place (with anchor-modifier adjacency)
+#   500s = Tongue-Root / Pharyngeal
+#   600s = Prosodic
+#
+# Gaps between entries leave room to insert new features in the
+# right neighbourhood without renumbering. Within a block, the
+# legacy ``FEATURE_ORDER`` ordering is preserved so the derived
+# table's membership matches the prior structure modulo Place's
+# anchor-first re-ordering (Labial -> Round -> Labiodental, etc.).
+_ALL_THREE = frozenset({SYSTEM_HAYES, SYSTEM_PHOIBLE, SYSTEM_PANPHON})
+_HAYES_PHOIBLE = frozenset({SYSTEM_HAYES, SYSTEM_PHOIBLE})
+_PHOIBLE_ONLY = frozenset({SYSTEM_PHOIBLE})
+_HAYES_ONLY = frozenset({SYSTEM_HAYES})
+
+FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
+    # --- Major class (100s) ---
+    "syllabic": FeatureMetadata(
+        canonical="syllabic",
+        sort_key=100,
+        group=GROUP_MAJOR_CLASS,
+        aliases=("Syllabic", "syl"),
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT, USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    "consonantal": FeatureMetadata(
+        canonical="consonantal",
+        sort_key=101,
+        group=GROUP_MAJOR_CLASS,
+        aliases=("Consonantal", "cons"),
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT, USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    "sonorant": FeatureMetadata(
+        canonical="sonorant",
+        sort_key=102,
+        group=GROUP_MAJOR_CLASS,
+        aliases=("Sonorant", "son"),
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "approximant": FeatureMetadata(
+        canonical="approximant",
+        sort_key=103,
+        group=GROUP_MAJOR_CLASS,
+        aliases=("Approximant",),
+        systems=_HAYES_PHOIBLE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    # --- Laryngeal (200s) ---
+    "voice": FeatureMetadata(
+        canonical="voice",
+        sort_key=200,
+        group=GROUP_LARYNGEAL,
+        aliases=("Voice", "voi", "periodicGlottalSource"),
+        systems=_ALL_THREE,
+        uses=frozenset(
+            {USE_CONSONANT, USE_LARYNGEAL, USE_NATURAL_CLASS}
+        ),
+    ),
+    "spreadgl": FeatureMetadata(
+        canonical="spreadgl",
+        sort_key=201,
+        group=GROUP_LARYNGEAL,
+        aliases=("SpreadGl", "sg", "spreadGlottis", "spread_glottis", "s.g."),
+        systems=_ALL_THREE,
+        uses=frozenset({USE_LARYNGEAL, USE_NATURAL_CLASS}),
+    ),
+    "constrgl": FeatureMetadata(
+        canonical="constrgl",
+        sort_key=202,
+        group=GROUP_LARYNGEAL,
+        aliases=(
+            "ConstrGl",
+            "cg",
+            "constrictedGlottis",
+            "constricted_glottis",
+            "c.g.",
+        ),
+        systems=_ALL_THREE,
+        uses=frozenset({USE_LARYNGEAL, USE_NATURAL_CLASS}),
+    ),
+    "epilaryngealsource": FeatureMetadata(
+        canonical="epilaryngealsource",
+        sort_key=203,
+        group=GROUP_LARYNGEAL,
+        aliases=("EpilaryngealSource", "epilaryngealSource"),
+        systems=_PHOIBLE_ONLY,
+        uses=frozenset({USE_LARYNGEAL}),
+    ),
+    "fortis": FeatureMetadata(
+        canonical="fortis",
+        sort_key=204,
+        group=GROUP_LARYNGEAL,
+        aliases=("Fortis",),
+        systems=_PHOIBLE_ONLY,
+        uses=frozenset({USE_LARYNGEAL}),
+    ),
+    "lenis": FeatureMetadata(
+        canonical="lenis",
+        sort_key=205,
+        group=GROUP_LARYNGEAL,
+        aliases=("Lenis",),
+        systems=_PHOIBLE_ONLY,
+        uses=frozenset({USE_LARYNGEAL}),
+    ),
+    "raisedlarynxejective": FeatureMetadata(
+        canonical="raisedlarynxejective",
+        sort_key=206,
+        group=GROUP_LARYNGEAL,
+        aliases=("RaisedLarynxEjective", "raisedLarynxEjective"),
+        systems=_PHOIBLE_ONLY,
+        uses=frozenset({USE_LARYNGEAL}),
+    ),
+    "loweredlarynximplosive": FeatureMetadata(
+        canonical="loweredlarynximplosive",
+        sort_key=207,
+        group=GROUP_LARYNGEAL,
+        aliases=("LoweredLarynxImplosive", "loweredLarynxImplosive"),
+        systems=_PHOIBLE_ONLY,
+        uses=frozenset({USE_LARYNGEAL}),
+    ),
+    "breathy": FeatureMetadata(
+        canonical="breathy",
+        sort_key=208,
+        group=GROUP_LARYNGEAL,
+        aliases=("Breathy", "breathy_voice", "breathyvoice", "breathyVoice"),
+        systems=_PHOIBLE_ONLY,
+        uses=frozenset({USE_LARYNGEAL, USE_VOWEL_PAIR}),
+    ),
+    "creaky": FeatureMetadata(
+        canonical="creaky",
+        sort_key=209,
+        group=GROUP_LARYNGEAL,
+        aliases=("Creaky", "creaky_voice", "creakyvoice", "creakyVoice"),
+        systems=_PHOIBLE_ONLY,
+        uses=frozenset({USE_LARYNGEAL, USE_VOWEL_PAIR}),
+    ),
+    # --- Manner (300s) ---
+    "continuant": FeatureMetadata(
+        canonical="continuant",
+        sort_key=300,
+        group=GROUP_MANNER,
+        aliases=("Continuant", "cont"),
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "strident": FeatureMetadata(
+        canonical="strident",
+        sort_key=301,
+        group=GROUP_MANNER,
+        aliases=("Strident", "strid"),
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "delrel": FeatureMetadata(
+        canonical="delrel",
+        sort_key=302,
+        group=GROUP_MANNER,
+        aliases=(
+            "DelRel",
+            "delayedRelease",
+            "delayed_release",
+            "del.rel.",
+            "del_rel",
+            "del-rel",
+        ),
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "nasal": FeatureMetadata(
+        canonical="nasal",
+        sort_key=303,
+        group=GROUP_MANNER,
+        aliases=("Nasal", "nas"),
+        systems=_ALL_THREE,
+        uses=frozenset(
+            {USE_CONSONANT, USE_VOWEL_PAIR, USE_NATURAL_CLASS}
+        ),
+    ),
+    "lateral": FeatureMetadata(
+        canonical="lateral",
+        sort_key=304,
+        group=GROUP_MANNER,
+        aliases=("Lateral", "lat"),
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "trill": FeatureMetadata(
+        canonical="trill",
+        sort_key=305,
+        group=GROUP_MANNER,
+        aliases=("Trill",),
+        systems=_HAYES_PHOIBLE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "tap": FeatureMetadata(
+        canonical="tap",
+        sort_key=306,
+        group=GROUP_MANNER,
+        aliases=("Tap",),
+        systems=_HAYES_PHOIBLE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "click": FeatureMetadata(
+        canonical="click",
+        sort_key=307,
+        group=GROUP_MANNER,
+        aliases=("Click",),
+        systems=_HAYES_ONLY,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "velaric": FeatureMetadata(
+        canonical="velaric",
+        sort_key=308,
+        group=GROUP_MANNER,
+        aliases=("Velaric",),
+        systems=frozenset({SYSTEM_PHOIBLE, SYSTEM_PANPHON}),
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "rhotic": FeatureMetadata(
+        canonical="rhotic",
+        sort_key=309,
+        group=GROUP_MANNER,
+        aliases=(
+            "Rhotic",
+            "rhotacized",
+            "r_colored",
+            "r-colored",
+            "rcolored",
+            "rcoloured",
+        ),
+        systems=frozenset(),
+        uses=frozenset({USE_VOWEL_PAIR}),
+    ),
+    # --- Place (400s) with anchor-modifier adjacency ---
+    "labial": FeatureMetadata(
+        canonical="labial",
+        sort_key=400,
+        group=GROUP_PLACE,
+        aliases=("LABIAL", "Labial", "lab"),
+        subgroup="labial",
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "round": FeatureMetadata(
+        canonical="round",
+        sort_key=401,
+        group=GROUP_PLACE,
+        aliases=("Round",),
+        subgroup="labial",
+        systems=_ALL_THREE,
+        uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    "labiodental": FeatureMetadata(
+        canonical="labiodental",
+        sort_key=402,
+        group=GROUP_PLACE,
+        aliases=("Labiodental",),
+        subgroup="labial",
+        systems=_HAYES_PHOIBLE,
+        uses=frozenset({USE_CONSONANT}),
+    ),
+    "coronal": FeatureMetadata(
+        canonical="coronal",
+        sort_key=410,
+        group=GROUP_PLACE,
+        aliases=("CORONAL", "Coronal", "cor"),
+        subgroup="coronal",
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "anterior": FeatureMetadata(
+        canonical="anterior",
+        sort_key=411,
+        group=GROUP_PLACE,
+        aliases=("Anterior", "ant"),
+        subgroup="coronal",
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+    ),
+    "distributed": FeatureMetadata(
+        canonical="distributed",
+        sort_key=412,
+        group=GROUP_PLACE,
+        aliases=("Distributed", "distr"),
+        subgroup="coronal",
+        systems=_ALL_THREE,
+        uses=frozenset({USE_CONSONANT}),
+    ),
+    "dorsal": FeatureMetadata(
+        canonical="dorsal",
+        sort_key=420,
+        group=GROUP_PLACE,
+        aliases=("DORSAL", "Dorsal"),
+        subgroup="dorsal",
+        systems=_HAYES_PHOIBLE,
+        uses=frozenset({USE_CONSONANT, USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    "high": FeatureMetadata(
+        canonical="high",
+        sort_key=421,
+        group=GROUP_PLACE,
+        aliases=("High", "hi"),
+        subgroup="dorsal",
+        systems=_ALL_THREE,
+        uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    "low": FeatureMetadata(
+        canonical="low",
+        sort_key=422,
+        group=GROUP_PLACE,
+        aliases=("Low", "lo"),
+        subgroup="dorsal",
+        systems=_ALL_THREE,
+        uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    "back": FeatureMetadata(
+        canonical="back",
+        sort_key=423,
+        group=GROUP_PLACE,
+        aliases=("Back",),
+        subgroup="dorsal",
+        systems=_ALL_THREE,
+        uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    "front": FeatureMetadata(
+        canonical="front",
+        sort_key=424,
+        group=GROUP_PLACE,
+        aliases=("Front",),
+        subgroup="dorsal",
+        systems=_HAYES_PHOIBLE,
+        uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    # --- Tongue-Root / Pharyngeal (500s) ---
+    "constrpharynx": FeatureMetadata(
+        canonical="constrpharynx",
+        sort_key=500,
+        group=GROUP_TONGUE_ROOT,
+        aliases=("ConstrPharynx",),
+        subgroup="tongue_root",
+        systems=_HAYES_ONLY,
+        uses=frozenset({USE_NATURAL_CLASS}),
+    ),
+    "pharyngeal": FeatureMetadata(
+        canonical="pharyngeal",
+        sort_key=501,
+        group=GROUP_TONGUE_ROOT,
+        aliases=("Pharyngeal",),
+        subgroup="tongue_root",
+        systems=_HAYES_ONLY,
+        uses=frozenset({USE_NATURAL_CLASS}),
+    ),
+    "atr": FeatureMetadata(
+        canonical="atr",
+        sort_key=502,
+        group=GROUP_TONGUE_ROOT,
+        aliases=("ATR", "advancedTongueRoot", "advanced_tongue_root"),
+        subgroup="tongue_root",
+        systems=_HAYES_PHOIBLE,
+        uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    "tense": FeatureMetadata(
+        canonical="tense",
+        sort_key=503,
+        group=GROUP_TONGUE_ROOT,
+        aliases=("Tense",),
+        subgroup="tongue_root",
+        systems=_ALL_THREE,
+        uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    "rtr": FeatureMetadata(
+        canonical="rtr",
+        sort_key=504,
+        group=GROUP_TONGUE_ROOT,
+        aliases=("RTR", "retractedTongueRoot", "retracted_tongue_root"),
+        subgroup="tongue_root",
+        systems=_PHOIBLE_ONLY,
+        uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
+    ),
+    # --- Prosodic / suprasegmental (600s) ---
+    "long": FeatureMetadata(
+        canonical="long",
+        sort_key=600,
+        group=GROUP_PROSODIC,
+        aliases=("Long",),
+        systems=_ALL_THREE,
+        uses=frozenset({USE_VOWEL_PAIR}),
+        is_suprasegmental=True,
+    ),
+    "short": FeatureMetadata(
+        canonical="short",
+        sort_key=601,
+        group=GROUP_PROSODIC,
+        aliases=("Short",),
+        systems=_PHOIBLE_ONLY,
+        uses=frozenset(),
+        is_suprasegmental=True,
+    ),
+    "stress": FeatureMetadata(
+        canonical="stress",
+        sort_key=602,
+        group=GROUP_PROSODIC,
+        aliases=("Stress",),
+        systems=_HAYES_PHOIBLE,
+        uses=frozenset(),
+        is_suprasegmental=True,
+    ),
+    "tone": FeatureMetadata(
+        canonical="tone",
+        sort_key=603,
+        group=GROUP_PROSODIC,
+        aliases=("Tone",),
+        systems=_HAYES_ONLY,
+        uses=frozenset({USE_VOWEL_PAIR}),
+        is_suprasegmental=True,
+    ),
+    "hightone": FeatureMetadata(
+        canonical="hightone",
+        sort_key=604,
+        group=GROUP_PROSODIC,
+        aliases=("HighTone", "hitone"),
+        systems=frozenset({SYSTEM_PHOIBLE, SYSTEM_PANPHON}),
+        uses=frozenset(),
+        is_suprasegmental=True,
+    ),
+    "upperregister": FeatureMetadata(
+        canonical="upperregister",
+        sort_key=605,
+        group=GROUP_PROSODIC,
+        aliases=("UpperRegister",),
+        systems=_HAYES_ONLY,
+        uses=frozenset(),
+        is_suprasegmental=True,
+    ),
+    "highregister": FeatureMetadata(
+        canonical="highregister",
+        sort_key=606,
+        group=GROUP_PROSODIC,
+        aliases=("HighRegister", "hireg"),
+        systems=frozenset({SYSTEM_PANPHON}),
+        uses=frozenset(),
+        is_suprasegmental=True,
+    ),
+}
+
+
+# ---------------------------------------------------------------------
+# Alias index (built once at import; resolves every surface form to
+# its canonical key).
+# ---------------------------------------------------------------------
+
+
+def _build_alias_index() -> dict[str, str]:
+    """Map every alias + canonical to the canonical key.
+
+    Two stages of folding:
+
+    - For each registry entry, every (alias OR canonical) maps to
+      that entry's canonical, looked up case-insensitively and
+      delimiter-insensitively (the same folding
+      :py:func:`phonology_shared.data.inventory.normalize_feature_key`
+      uses on the engine side).
+    - Stored keys are pre-folded so :py:func:`resolve_canonical` can
+      look up in one dict access without re-folding the input every
+      time.
+    """
+    index: dict[str, str] = {}
+    for meta in FEATURE_REGISTRY.values():
+        # The canonical form is already pre-folded; index identity-
+        # mapped so resolve_canonical("labial") returns "labial".
+        index[meta.canonical] = meta.canonical
+        for alias in meta.aliases:
+            folded = _fold_for_lookup(alias)
+            existing = index.get(folded)
+            if existing is not None and existing != meta.canonical:
+                raise ValueError(
+                    f"alias {alias!r} (folded={folded!r}) maps to two "
+                    f"canonical names: {existing!r} and {meta.canonical!r}"
+                )
+            index[folded] = meta.canonical
+    return index
+
+
+def _fold_for_lookup(s: str) -> str:
+    """Lowercase + strip the delimiters
+    :py:func:`phonology_shared.data.inventory.normalize_feature_key`
+    strips. Kept in sync with that function; the two ALWAYS produce
+    the same fold for the same input, so an alias registered here is
+    recognised by the engine's normaliser too.
+    """
+    k = s.lower()
+    return (
+        k.replace(".", "")
+        .replace("_", "")
+        .replace(" ", "")
+        .replace("-", "")
+    )
+
+
+_ALIAS_INDEX: Mapping[str, str] = _build_alias_index()
+
+
+# ---------------------------------------------------------------------
+# Public resolver helpers
+# ---------------------------------------------------------------------
+
+
+@lru_cache(maxsize=512)
+def resolve_canonical(raw_name: str) -> str | None:
+    """Return the canonical key for ``raw_name`` if the registry
+    knows it; otherwise ``None``.
+
+    Case-insensitive, delimiter-insensitive: ``LABIAL``, ``Labial``,
+    ``labial``, ``lab`` all return ``"labial"``. ``del.rel.``,
+    ``delayed_release``, ``DelRel`` all return ``"delrel"``.
+
+    Memoized; the bounded set of feature names sees this hit
+    thousands of times across a typical render.
+    """
+    return _ALIAS_INDEX.get(_fold_for_lookup(raw_name))
+
+
+def metadata_for(raw_name: str) -> FeatureMetadata | None:
+    """Return the full :py:class:`FeatureMetadata` for any surface
+    form of a registered feature, or ``None`` for unknown names."""
+    canonical = resolve_canonical(raw_name)
+    if canonical is None:
+        return None
+    return FEATURE_REGISTRY[canonical]
+
+
+def feature_sort_key(raw_name: str) -> int:
+    """Sort position for ``raw_name``. Unknown names trail at the
+    end (sort_key == ``len(FEATURE_REGISTRY)``) matching the prior
+    behaviour of
+    :py:func:`phonology_shared.presentation.constants.sort_features`.
+    """
+    meta = metadata_for(raw_name)
+    if meta is None:
+        return len(FEATURE_REGISTRY) * 100
+    return meta.sort_key
+
+
+def feature_group(raw_name: str) -> str:
+    """Group name for ``raw_name``. Unknown names fall in
+    ``"Other"`` (the same bucket
+    :py:func:`phonology_shared.presentation.view_models._grouped_features`
+    uses for ungrouped features).
+    """
+    meta = metadata_for(raw_name)
+    if meta is None:
+        return "Other"
+    return meta.group
+
+
+def is_suprasegmental(raw_name: str) -> bool:
+    """``True`` iff the registry tags this feature suprasegmental.
+    Unknown names default to ``False`` (segmental until proven
+    otherwise — matches the prior behaviour of
+    ``SUPRASEGMENTAL_FEATURES`` set membership).
+    """
+    meta = metadata_for(raw_name)
+    return bool(meta and meta.is_suprasegmental)
+
+
+def features_for_use(use: str) -> frozenset[str]:
+    """Return canonical names of every registry entry tagged with
+    ``use``. The vowel-pair display routing reads this set instead
+    of carrying its own ``_DISPLAY_CONTRAST_FEATURES`` set; the
+    consonant classifier likewise can scope on
+    ``USE_NATURAL_CLASS``.
+    """
+    return frozenset(
+        meta.canonical
+        for meta in FEATURE_REGISTRY.values()
+        if use in meta.uses
+    )
+
+
+def all_aliases(canonical: str) -> tuple[str, ...]:
+    """Surface forms registered for ``canonical`` (the canonical
+    name plus every alias). Used by derived-table builders in
+    :py:mod:`phonology_shared.presentation.constants`."""
+    meta = FEATURE_REGISTRY.get(canonical)
+    if meta is None:
+        return ()
+    return (meta.canonical, *meta.aliases)
+
+
+def iter_aliases_in_group(group: str) -> Iterable[str]:
+    """All surface forms (canonical + aliases) of every registry
+    entry tagged with ``group``, sorted by ``sort_key``. Used to
+    derive the ``FEATURE_GROUPS`` table in
+    :py:mod:`phonology_shared.presentation.constants`."""
+    for meta in sorted(
+        (m for m in FEATURE_REGISTRY.values() if m.group == group),
+        key=lambda m: m.sort_key,
+    ):
+        yield meta.canonical
+        yield from meta.aliases
