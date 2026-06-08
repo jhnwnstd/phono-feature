@@ -367,16 +367,33 @@ _DENSITY_TIER_ULTRA_THRESHOLD: int = 10
 _DENSITY_TIER_ULTRA_BTN_H: int = SEG_BTN_H - 8  # 18 px (matches CSS)
 
 
-def _effective_button_height_px(stack_depth: int) -> int:
+def effective_button_height_px(stack_depth: int) -> int:
     """Per-button rendered height for a stack of ``stack_depth``
     entries. Matches the CSS density-tier ladder so the geometry's
     natural-height computation tracks the actual rendered height.
+
+    Both renderers consume this to keep their per-button sizing in
+    lockstep with the geometry's ``natural_data_height_px``
+    request. Web CSS reads ``data-cell-density="dense"`` or
+    ``"ultra"`` and applies the calculated heights via
+    ``calc(var(--seg-btn-h) - 4px)`` / ``- 8px``. Desktop calls this
+    helper directly to set ``setFixedHeight`` on each stacked
+    button. Without parity here, a 7-deep stack renders 28 px
+    taller on desktop than web (canonical 26 px vs dense 22 px),
+    causing the chart layout to look "totally different" even
+    though both renderers consume the same shared geometry.
     """
     if stack_depth >= _DENSITY_TIER_ULTRA_THRESHOLD:
         return _DENSITY_TIER_ULTRA_BTN_H
     if stack_depth >= _DENSITY_TIER_DENSE_THRESHOLD:
         return _DENSITY_TIER_DENSE_BTN_H
     return SEG_BTN_H
+
+
+# Backward-compat alias for the previous private name. Internal
+# call-sites below still use this; external imports should use the
+# public ``effective_button_height_px``.
+_effective_button_height_px = effective_button_height_px
 
 
 #: Vertical breathing room between adjacent populated rows. Picked

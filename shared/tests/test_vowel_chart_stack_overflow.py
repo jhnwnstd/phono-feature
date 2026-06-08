@@ -339,15 +339,15 @@ def test_renderer_can_derive_button_height_from_slot() -> None:
     # And at the canonical natural height, the per-button height
     # matches the row's density-tier rendered height. For a 7-stack
     # the row activates the "dense" tier (22 px). Calling
-    # ``_effective_button_height_px`` from the geometry module
-    # exposes the same ladder the renderer follows, so the formula
+    # ``effective_button_height_px`` from the geometry module
+    # exposes the same ladder both renderers follow, so the formula
     # below comes out close to ``effective_h`` rather than the
     # canonical 26 px.
     from phonology_shared.chart.vowels_layout import (
-        _effective_button_height_px,
+        effective_button_height_px,
     )
 
-    effective_h = _effective_button_height_px(n)
+    effective_h = effective_button_height_px(n)
     canonical_slot_px = row.slot_height_norm * geom.natural_data_height_px
     canonical_per_button = (canonical_slot_px - (n - 1) * gap_px) / n
     assert effective_h - 2 <= canonical_per_button <= effective_h + 2, (

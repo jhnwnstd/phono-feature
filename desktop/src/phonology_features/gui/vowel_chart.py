@@ -56,9 +56,13 @@ from phonology_shared.chart.vowels import (
     detect_vowel_profile,
     vowel_silhouette,
 )
+from phonology_shared.chart.vowels_layout import (
+    effective_button_height_px,
+)
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
     REGION_CONSTRAINTS,
+    SEG_BTN_H,
     VOWEL_NATURAL_W,
     VOWEL_PAIR_GAP_PX,
 )
@@ -148,7 +152,15 @@ class VowelChartWidget(QWidget):
         # decision lives on the shared
         # ``VowelChartSilhouette.back_right_pixel_offset`` field so
         # the renderer does not need each cell's ``col``.
-        self._cells: list[tuple[QWidget, float, float, int]] = []
+        # ``tier`` is the row's anchor semantic from
+        # :py:class:`VowelChartRow` -- ``"top"`` / ``"bottom"`` /
+        # ``"middle"`` / ``"only"``. The layout pass uses it to
+        # decide whether the cell's stack hangs down from chart_y
+        # (top), rises up to chart_y (bottom), or centres on
+        # chart_y (middle / only). Web CSS expresses the same
+        # decision via ``data-row-tier`` rules with
+        # ``translate(..., 0%)`` / ``-100%`` / ``-50%``.
+        self._cells: list[tuple[QWidget, float, float, int, str]] = []
         self._cell_containers: list[QWidget] = []
         # Cached header styles, rebuilt by apply_theme each toggle.
         self._HDR_ACTIVE = ""
@@ -423,13 +435,23 @@ class VowelChartWidget(QWidget):
             lbl.show()
             self._row_labels.append((lbl, row.chart_y))
         # Data cells: collected with their chart_x / chart_y; the
-        # layout pass turns those into pixel positions.
+        # layout pass turns those into pixel positions. The cell's
+        # row tier (read from the shared ``VowelChartRow``) decides
+        # whether the cell anchors its top / centre / bottom on
+        # chart_y -- mirrors the web's ``data-row-tier`` CSS.
+        tier_by_row = {row.logical_row: row.tier for row in geometry.rows}
         for cell in geometry.cells:
             widget = self._build_cell(cell)
             if widget is None:
                 continue
             self._cells.append(
-                (widget, cell.chart_x, cell.chart_y, cell.pair_side)
+                (
+                    widget,
+                    cell.chart_x,
+                    cell.chart_y,
+                    cell.pair_side,
+                    tier_by_row.get(cell.row, "middle"),
+                )
             )
             # Wire focus tracking on every seg button this cell
             # exposes so the hover-gated diphthong arrow overlay
@@ -462,6 +484,15 @@ class VowelChartWidget(QWidget):
         Returns ``None`` if none of the segments have a backing
         button (defensive; should not happen in normal flow).
         """
+        # Buttons are pooled across renders, so an earlier render's
+        # density-tier ``setFixedHeight`` would otherwise leak into
+        # the current render. Reset every cell's buttons to the
+        # canonical height before dispatching; ``_fill_stack_layout``
+        # re-shrinks for dense / ultra stacks as needed.
+        for seg in cell.entries:
+            pooled = self._buttons.get(seg)
+            if pooled is not None:
+                pooled.setFixedHeight(SEG_BTN_H)
         if len(cell.entries) == 1:
             btn = self._buttons.get(cell.entries[0])
             if btn is None:
@@ -536,14 +567,30 @@ class VowelChartWidget(QWidget):
     def _fill_stack_layout(
         self, container: QWidget, cell: VowelChartCell
     ) -> QWidget | None:
-        """Default vertical-stack layout for STACK display kinds."""
+        """Default vertical-stack layout for STACK display kinds.
+
+        Density-tier-aware: when the stack reaches
+        :py:data:`_DENSITY_TIER_DENSE_THRESHOLD` (5+) or
+        :py:data:`_DENSITY_TIER_ULTRA_THRESHOLD` (10+) entries,
+        every button gets its height reduced via
+        :py:func:`effective_button_height_px` so the stack fits in
+        the slot the shared geometry allocated. Pre-fix the
+        desktop kept every button at the canonical ``SEG_BTN_H``
+        regardless of stack depth -- the web's CSS
+        ``data-cell-density`` rules shrank to 22 / 18 px while
+        desktop stayed at 26 px, making Korean PHOIBLE's 7-deep
+        Close-Front stack render 28 px taller on desktop and
+        throwing off the whole chart layout.
+        """
         layout = QVBoxLayout(container)
         layout.setSpacing(1)
         layout.setContentsMargins(0, 0, 0, 0)
+        per_btn_h = effective_button_height_px(len(cell.entries))
         added = False
         for seg in cell.entries:
             btn = self._buttons.get(seg)
             if btn is not None:
+                btn.setFixedHeight(per_btn_h)
                 btn.show()
                 layout.addWidget(btn)
                 added = True
@@ -633,14 +680,29 @@ class VowelChartWidget(QWidget):
         # shift in pixels means rounded/unrounded mates stay
         # exactly tangent at every row of the trapezoid.
         pair_shift_px = (BTN_W + VOWEL_PAIR_GAP_PX) // 2
-        for widget, cx, cy, pair_side in self._cells:
+        for widget, cx, cy, pair_side, tier in self._cells:
             widget.adjustSize()
             ww = widget.width()
             wh = widget.height()
             if ww > self._cell_w_hint:
                 self._cell_w_hint = ww
             px = dx + int(cx * dw) - ww // 2 + pair_side * pair_shift_px
-            py = dy + int(cy * dh) - wh // 2
+            # Tier-aware y-anchor. Mirrors the web CSS at
+            # ``web/style.css`` ``[data-row-tier]`` rules:
+            #   top    -> stack hangs DOWN from chart_y (anchor top)
+            #   bottom -> stack rises UP to chart_y (anchor bottom)
+            #   middle / only -> centre on chart_y
+            # Without this, a 7-deep Close (top) row stack centred on
+            # chart_y=0.08 extends half-stack ABOVE the silhouette
+            # top edge -- one of the divergences vs. the web for
+            # Korean PHOIBLE and other tall-stack inventories.
+            cy_px = dy + int(cy * dh)
+            if tier == "top":
+                py = cy_px
+            elif tier == "bottom":
+                py = cy_px - wh
+            else:
+                py = cy_px - wh // 2
             widget.move(px, py)
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: D401
