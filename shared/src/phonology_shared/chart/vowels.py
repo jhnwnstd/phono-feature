@@ -1575,6 +1575,20 @@ def vowel_grid_pos(
     )
     reason = f"{height.reason}; {backness.reason}; {rounding.reason}"
     flags = height.flags | backness.flags | rounding.flags
+    # Bounds-check post-condition. Pinning these here surfaces a
+    # placement bug at the placer with a clear segment-level
+    # message, rather than letting it propagate into the renderer
+    # where it would surface as either a clamped chart_xy or an
+    # IndexError on ROW_LABELS / _col_to_anchor.
+    assert 0 <= row < len(ROW_LABELS), (
+        f"placement row out of bounds: row={row}, "
+        f"ROW_LABELS={len(ROW_LABELS)}; reason={reason}"
+    )
+    # 9 logical columns: 0-5 pair slots, 6-8 neutral-round slots.
+    assert 0 <= col < 9, (
+        f"placement col out of bounds: col={col}, expected 0..8; "
+        f"reason={reason}"
+    )
     return VowelPlacement(
         row=row,
         col=col,

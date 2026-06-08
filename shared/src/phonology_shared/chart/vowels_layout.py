@@ -150,12 +150,24 @@ class VowelChartRow:
     DOWN, ``"bottom"`` rows anchor at chart_y and stacks rise UP,
     ``"middle"`` rows centre on chart_y. ``"only"`` is the
     single-row case (centre, with no other rows to grow into).
+
+    ``slot_height_norm`` is the row's allocated share of the
+    silhouette's vertical span in normalised ``[0, 1]`` units.
+    Sums across all populated rows equals
+    ``silhouette.bottom_y - silhouette.top_y``. The renderer
+    multiplies this by the data-area's rendered pixel height to
+    get the row's pixel budget; if the rendered chart is shorter
+    than ``natural_data_height_px`` (the geometry's request), the
+    renderer derives a smaller per-button height from this slot so
+    a tall stack fits without overflowing into adjacent rows or
+    outside the silhouette.
     """
 
     logical_row: int
     label: str
     chart_y: float
     tier: str = "middle"
+    slot_height_norm: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -339,6 +351,33 @@ class VowelChartGeometry:
 #: cell. Smaller than the inter-row gap because the stack reads as
 #: one cell, not several.
 _VOWEL_CELL_STACK_GAP_PX: int = 1
+
+#: Density tiers: per-button height when a cell's stack reaches the
+#: threshold entry count. Mirrors the CSS rules at
+#: ``web/style.css:1219-1234`` (``data-cell-density="dense"`` and
+#: ``"ultra"``). The geometry-side ``natural_data_height_px``
+#: computation reads this so the chart asks for the rendered pixel
+#: height instead of the canonical-button-size theoretical max --
+#: pre-fix, PHOIBLE inventories like !XU/UPSID (12-stack) were
+#: requesting 931 px while the CSS-rendered chart only needed
+#: ~250 px, forcing the panel-body to scroll unnecessarily.
+_DENSITY_TIER_DENSE_THRESHOLD: int = 5
+_DENSITY_TIER_DENSE_BTN_H: int = SEG_BTN_H - 4  # 22 px (matches CSS)
+_DENSITY_TIER_ULTRA_THRESHOLD: int = 10
+_DENSITY_TIER_ULTRA_BTN_H: int = SEG_BTN_H - 8  # 18 px (matches CSS)
+
+
+def _effective_button_height_px(stack_depth: int) -> int:
+    """Per-button rendered height for a stack of ``stack_depth``
+    entries. Matches the CSS density-tier ladder so the geometry's
+    natural-height computation tracks the actual rendered height.
+    """
+    if stack_depth >= _DENSITY_TIER_ULTRA_THRESHOLD:
+        return _DENSITY_TIER_ULTRA_BTN_H
+    if stack_depth >= _DENSITY_TIER_DENSE_THRESHOLD:
+        return _DENSITY_TIER_DENSE_BTN_H
+    return SEG_BTN_H
+
 
 #: Vertical breathing room between adjacent populated rows. Picked
 #: to read as a row break without overweighting the chart's chrome.
@@ -886,6 +925,12 @@ def _natural_data_area_size(
 
     # Height: per-row max stack depth, plus inter-row gaps and
     # vertical padding for the silhouette's top/bottom offset.
+    # Density-tier-aware: when the deepest cell in a row crosses
+    # the dense / ultra threshold, its rendered per-button height
+    # shrinks (matching the CSS rules). The natural-height request
+    # tracks the actual rendered height so the chart asks for what
+    # the renderer will draw, not the canonical-button theoretical
+    # max.
     row_heights: list[int] = []
     for ri in sorted(rows_in_use):
         depth = 1
@@ -895,8 +940,9 @@ def _natural_data_area_size(
             cell_depth = _cell_vertical_depth(c)
             if cell_depth > depth:
                 depth = cell_depth
+        per_btn_h = _effective_button_height_px(depth)
         row_heights.append(
-            depth * SEG_BTN_H + max(0, depth - 1) * _VOWEL_CELL_STACK_GAP_PX
+            depth * per_btn_h + max(0, depth - 1) * _VOWEL_CELL_STACK_GAP_PX
         )
 
     total_h = sum(row_heights) + (len(row_heights) - 1) * _VOWEL_ROW_GAP_PX
@@ -1028,11 +1074,15 @@ def build_vowel_chart_geometry(
         return max_depth
 
     row_depths = {ri: _row_depth(ri) for ri in populated_logical_rows}
+    slot_heights_by_row: dict[int, float] = {}
     if len(populated_logical_rows) == 1:
         display_y_by_row = {
             populated_logical_rows[0]: (silhouette.top_y + silhouette.bottom_y)
             / 2
         }
+        slot_heights_by_row[populated_logical_rows[0]] = (
+            silhouette.bottom_y - silhouette.top_y
+        )
     else:
         span = silhouette.bottom_y - silhouette.top_y
         total_depth = sum(row_depths.values())
@@ -1041,6 +1091,7 @@ def build_vowel_chart_geometry(
         last_index = len(populated_logical_rows) - 1
         for i, ri in enumerate(populated_logical_rows):
             slot_height = row_depths[ri] / total_depth * span
+            slot_heights_by_row[ri] = slot_height
             if i == 0:
                 # Top row anchors at the top of its slot.
                 display_y_by_row[ri] = cursor
@@ -1065,6 +1116,7 @@ def build_vowel_chart_geometry(
             label=ROW_LABELS[ri],
             chart_y=display_y_by_row[ri],
             tier=_row_tier.get(ri, "middle"),
+            slot_height_norm=slot_heights_by_row[ri],
         )
         for ri in populated_logical_rows
     )
@@ -1118,6 +1170,21 @@ def build_vowel_chart_geometry(
     # ``chart_x`` positions. No phonology re-decisions happen
     # below this point -- the cell COL/row are already final;
     # only their pixel-space position is still pending.
+    # Neutral cols (6/7/8) share a backness anchor with the paired
+    # cols at the same row (6 with 0/1, 7 with 2/3, 8 with 4/5).
+    # When both a neutral and a paired col are populated, the
+    # canonical ``pair_side=0`` for the neutral plus the
+    # ``pair_side=±1`` for the paired one only separate them by half
+    # a button width -- in practice they overlap.
+    # ``_neutral_to_paired_anchor`` maps each neutral col to its two
+    # paired siblings so we can detect the collision and reroute the
+    # neutral cell into the empty pair-side slot.
+    _neutral_to_paired_anchor: dict[int, tuple[int, int]] = {
+        6: (0, 1),  # front-neutral -> front-unr/front-rnd
+        7: (2, 3),  # central-neutral -> central-unr/central-rnd
+        8: (4, 5),  # back-neutral -> back-unr/back-rnd
+    }
+
     cell_meta: list[
         tuple[
             int,
@@ -1135,11 +1202,42 @@ def build_vowel_chart_geometry(
         ]
         is_pair_layout = display_kind in PAIR_DISPLAY_KINDS
         if ci >= 6:
-            pair_side = 0
+            # Neutral col baseline: pair_side=0 (anchor centre).
+            # Reroute when a paired col at the same anchor is also
+            # populated so the buttons don't overlap.
+            paired_lo, paired_hi = _neutral_to_paired_anchor[ci]
+            has_lo = (ri, paired_lo) in occupied
+            has_hi = (ri, paired_hi) in occupied
+            if has_lo and not has_hi:
+                # Only the unrounded pair member is taken. Send the
+                # neutral cell to the empty rounded position.
+                pair_side = +1
+            elif has_hi and not has_lo:
+                # Only the rounded pair member is taken. Send the
+                # neutral cell to the empty unrounded position --
+                # this is the canonical "default unrounded"
+                # semantics PHOIBLE neutral typically expresses.
+                pair_side = -1
+            else:
+                # Either both pair cols are populated (rare; the
+                # placer puts each unique feature shape in its own
+                # col) or neither is. Keep the anchor centre.
+                pair_side = 0
         else:
             sibling_ci = ci ^ 1
             has_sibling = (ri, sibling_ci) in occupied
-            if is_pair_layout and not has_sibling:
+            # When a lone paired cell shares its anchor with a
+            # populated neutral cell, snap the paired cell to its
+            # canonical pair-side. This lets the neutral cell take
+            # the empty pair-side (see neutral-col branch above)
+            # so both cells land at distinct rendered positions.
+            paired_low_col = ci & ~1
+            neutral_partner = (paired_low_col >> 1) + 6
+            has_neutral = (ri, neutral_partner) in occupied
+            if is_pair_layout and not has_sibling and not has_neutral:
+                # Lone pair cell with no neutral co-occupant: stay
+                # centred on the anchor (the canonical lone-pair
+                # rendering).
                 pair_side = 0
             else:
                 pair_side = 1 if ci % 2 else -1

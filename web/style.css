@@ -990,6 +990,15 @@ dialog input[type="text"]:focus-visible {
   width: 100%;
   height: 100%;
   pointer-events: none;
+  /* Clip stray Bézier control-point lift to the trapezoid /
+     triangle silhouette. Quadratic-Bézier arrows in the C3 fan-
+     out can curve outside the silhouette polygon when many
+     diphthongs share a (primary, secondary) cell pair; without
+     the clip-path those segments draw above / below the chart
+     outline and read as orphan arcs. The polygon coordinates
+     come from the same ``--vowel-<shape>-<corner>`` variables
+     the silhouette outline pseudo-elements use, so the arrow
+     overlay tracks the silhouette through every resize. */
   overflow: visible;
   /* Above the height-tier bands (z-index 1) and cells (z-index 1)
      so the arrows always render on top of the chart contents. */
@@ -1146,7 +1155,8 @@ dialog input[type="text"]:focus-visible {
 }
 .vowel-chart-data[data-shape="trapezoid"]::before,
 .vowel-chart-data[data-shape="trapezoid"]::after,
-.vowel-chart-data[data-shape="trapezoid"] .vowel-chart-row-bands {
+.vowel-chart-data[data-shape="trapezoid"] .vowel-chart-row-bands,
+.vowel-chart-data[data-shape="trapezoid"] .vowel-diphthong-arrows {
   clip-path: polygon(
     var(--vowel-trapezoid-top-left)     var(--vowel-trapezoid-top-y),
     var(--vowel-trapezoid-top-right)    var(--vowel-trapezoid-top-y),
@@ -1156,7 +1166,8 @@ dialog input[type="text"]:focus-visible {
 }
 .vowel-chart-data[data-shape="triangle"]::before,
 .vowel-chart-data[data-shape="triangle"]::after,
-.vowel-chart-data[data-shape="triangle"] .vowel-chart-row-bands {
+.vowel-chart-data[data-shape="triangle"] .vowel-chart-row-bands,
+.vowel-chart-data[data-shape="triangle"] .vowel-diphthong-arrows {
   clip-path: polygon(
     var(--vowel-triangle-top-left)     var(--vowel-triangle-top-y),
     var(--vowel-triangle-top-right)    var(--vowel-triangle-top-y),

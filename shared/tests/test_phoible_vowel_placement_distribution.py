@@ -73,11 +73,27 @@ def _ids_for_run(sample_ids: list[str], full_ids: list[str]) -> list[str]:
     return sample_ids
 
 
+# Cells with at least this many entries register on the
+# ``tall_cells`` column. Calibrated against the renderer's CSS
+# density tiers: ``data-cell-density="dense"`` activates at 5+,
+# which means once a cell hits 5 entries the rendered stack is no
+# longer "small enough to be unconditionally safe" -- it depends
+# on the actual data-area height to stay inside its slot. Phase 4
+# fix lets these cells SHRINK their per-button height to fit the
+# slot deterministically; the metric below tracks the population
+# that's eligible.
+_TALL_CELL_THRESHOLD = 5
+
+
 def _metrics_for_inventory(
     phoible_provider, inv_id: str
 ) -> dict[str, int | float] | None:
     """Compute the per-inventory metric record. ``None`` when the
     inventory has no vowels (the chart is not rendered)."""
+    from phonology_shared.chart.vowels_layout import (
+        build_vowel_chart_geometry,
+    )
+
     inv = materialize_phoible_inventory(phoible_provider, inv_id)
     seg_feats = {
         seg: dict(inv.segments[seg])
@@ -103,6 +119,18 @@ def _metrics_for_inventory(
     worst_cell = max(
         (len(cell_segs) for cell_segs in occupied.values()), default=0
     )
+    tall_cells = sum(
+        1
+        for cell_segs in occupied.values()
+        if len(cell_segs) >= _TALL_CELL_THRESHOLD
+    )
+    # Geometry-side natural height: what the chart asks the
+    # container to allocate. Phase 4 lowers this for inventories
+    # with tall cells because the per-cell ``max_button_height_px``
+    # hint shrinks the per-button height to fit the slot.
+    geom = build_vowel_chart_geometry(
+        vowels, profile, seg_feats, vowel_secondary=secondary_map
+    )
     return {
         "n_vowels": n,
         "default_anchor_pct": (
@@ -113,6 +141,8 @@ def _metrics_for_inventory(
         "conflict": flag_counts[PlacementFlag.CONFLICT],
         "collisions": cells_with_collisions,
         "worst_cell": worst_cell,
+        "tall_cells": tall_cells,
+        "natural_h_px": geom.natural_data_height_px,
     }
 
 
@@ -143,9 +173,14 @@ def test_phoible_vowel_placement_distribution(
             continue
         records.append((phoible_label_for(inv_id), metrics))
 
-    # Per-inventory rows (sorted by default_anchor_pct descending so
-    # the worst offenders come first in the captured output).
-    records.sort(key=lambda r: r[1]["default_anchor_pct"], reverse=True)
+    # Per-inventory rows: sort by tall_cells DESC then by
+    # natural_h_px DESC so the rendering-overflow risks surface at
+    # the top of the captured output -- those are the inventories
+    # Phase 4 is trying to make visually safe.
+    records.sort(
+        key=lambda r: (r[1]["tall_cells"], r[1]["natural_h_px"]),
+        reverse=True,
+    )
     with capsys.disabled():
         print(
             f"\nPHOIBLE vowel-placement distribution ("
@@ -159,10 +194,10 @@ def test_phoible_vowel_placement_distribution(
                 f"  {label:<40s} n_vowels={m['n_vowels']:>2} "
                 f"default_anchor={m['default_anchor_pct']:5.1f}%  "
                 f"divergent_split={m['divergent_split']:>2}  "
-                f"refined={m['refined']:>2}  "
-                f"conflict={m['conflict']:>2}  "
                 f"collisions={m['collisions']:>2}  "
-                f"worst_cell={m['worst_cell']:>2}"
+                f"worst_cell={m['worst_cell']:>2}  "
+                f"tall_cells={m['tall_cells']:>2}  "
+                f"natural_h_px={m['natural_h_px']:>4}"
             )
         if tail:
             print("  ...")
@@ -184,6 +219,8 @@ def test_phoible_vowel_placement_distribution(
             "conflict",
             "collisions",
             "worst_cell",
+            "tall_cells",
+            "natural_h_px",
         ):
             values = sorted(float(m[key]) for _, m in records)
             pcts = _percentiles(values, 0.5, 0.9, 0.99)

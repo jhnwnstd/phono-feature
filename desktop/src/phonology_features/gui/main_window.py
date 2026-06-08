@@ -333,8 +333,8 @@ class MainWindow(QMainWindow):
             return btn
 
         add_nav("Browse\u2026", self._browse_inventory)
-        add_nav("PHOIBLE", self._open_phoible_picker)
         add_nav("Builder", self._open_builder)
+        add_nav("PHOIBLE", self._open_phoible_picker)
         # Spacer pushes the theme toggle to the far right.
         spacer = QWidget(toolbar)
         spacer.setSizePolicy(

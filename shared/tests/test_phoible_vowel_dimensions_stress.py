@@ -32,11 +32,19 @@ import pytest
 # Hard caps. Any single inventory exceeding these breaks the test
 # and names the offender so we know whether to bump the cap or fix
 # upstream. Calibrated against the current snapshot's worst cases
-# (width max 302 px, height max 931 px, cell stack max 12) with a
-# small safety margin so a deliberate bake or policy change trips
-# the test and forces a documented decision.
+# (width max 302 px, height max 723 px after Phase 4 made the
+# natural-height calc density-tier-aware, cell stack max 12) with
+# a small safety margin so a deliberate bake or policy change
+# trips the test and forces a documented decision.
+#
+# Phase 4 dropped the empirical max from 931 px to 723 px by
+# accounting for the CSS density-tier per-button height shrinkage
+# in the natural-height calculation. The 800 px cap locks in the
+# improvement: a future regression where the calc forgets to use
+# the density tiers would push !XU/UPSID back over 800 and trip
+# this test.
 _NATURAL_WIDTH_HARD_CAP_PX = 400
-_NATURAL_HEIGHT_HARD_CAP_PX = 1000
+_NATURAL_HEIGHT_HARD_CAP_PX = 800
 _MAX_CELL_STACK_HARD_CAP = 13
 
 
