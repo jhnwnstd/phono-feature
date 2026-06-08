@@ -66,6 +66,7 @@ from phonology_shared.presentation.constants import (
     VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE,
     VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE,
 )
+from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
     MIN_VOWEL_CHART_W_PX,
     REGION_CONSTRAINTS,
@@ -73,6 +74,8 @@ from phonology_shared.presentation.layout import (
     VOWEL_PAIR_GAP_PX,
 )
 from phonology_shared.presentation.palette import C, VowelChartMode
+
+from .widgets.segment_button import SegmentButton
 
 # Public surface. The placement-layer types (Confidence,
 # VowelPlacement, VowelProfile) are NOT re-exported -- importers
@@ -191,12 +194,6 @@ class VowelChartWidget(QWidget):
     _PAD_R: ClassVar[int] = cs.VOWEL_CHART_PAD_R_PX
     _PAD_B: ClassVar[int] = cs.VOWEL_CHART_PAD_B_PX
     _ROW_LABEL_GAP_PX: ClassVar[int] = cs.VOWEL_CHART_ROW_LABEL_GAP_PX
-    # Height reserved below the silhouette for the diphthong chip
-    # strip (always-visible row of inline chips listing the
-    # inventory's diphthongs). When the inventory has no
-    # diphthongs the strip is hidden and the data area reclaims
-    # this space via :py:meth:`_chip_strip_height`.
-    _CHIP_STRIP_H_PX: ClassVar[int] = 30
 
     def __init__(
         self, parent: QWidget | None = None, *, btn_gap: int = 4
@@ -362,15 +359,21 @@ class VowelChartWidget(QWidget):
         self._diphthong_chip_strip.setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
-        # Keep a typed reference to the layout so subsequent
-        # populate/clear cycles don't need to call ``layout()``
-        # (which returns ``QLayout | None`` and forces a guard).
-        self._chip_strip_layout: QHBoxLayout = QHBoxLayout(
+        # Grid layout (not HBox) so dense inventories like Korean
+        # PHOIBLE (12 diphthongs) WRAP into multiple rows when the
+        # chart isn't wide enough to fit them all side by side.
+        # Pre-fix the HBox layout shrunk every chip to half its
+        # sizeHint width, clipping the segment text entirely
+        # (e.g. /io/ rendered as an empty pill) on the standard
+        # ~320 px chart width. The web side handles this with
+        # CSS flex-wrap; here we recompute the grid columns per
+        # ``_populate_diphthong_chip_strip`` based on the
+        # available width.
+        self._chip_strip_layout: QGridLayout = QGridLayout(
             self._diphthong_chip_strip
         )
         self._chip_strip_layout.setContentsMargins(0, 0, 0, 0)
         self._chip_strip_layout.setSpacing(4)
-        self._chip_strip_layout.addStretch(1)
         self._diphthong_chip_strip.hide()
         # Diphthong-arrow overlay: a transparent sibling child
         # widget that paints the arrows AFTER all the cell
@@ -524,10 +527,17 @@ class VowelChartWidget(QWidget):
         emits ``segment_clicked(seg)`` -- the owning MainWindow
         routes that through the same handler the pooled
         SegmentButton's ``clicked`` signal uses, so the chip is
-        a thin shortcut, not a parallel selection path."""
+        a thin shortcut, not a parallel selection path.
+
+        The grid wraps to multiple rows when the chart isn't
+        wide enough to fit every chip side-by-side. Columns are
+        computed from the data-area width / approximate chip
+        width so a wider chart packs more chips per row.
+        """
         layout = self._chip_strip_layout
-        # Clear prior chips. The trailing stretch (index 0 after
-        # clear-and-readd) keeps the row left-aligned.
+        # Clear prior chips by removing each widget from the
+        # grid. ``takeAt(0)`` works for grids the same way it
+        # works for box layouts.
         while layout.count():
             item = layout.takeAt(0)
             if item is None:
@@ -536,36 +546,40 @@ class VowelChartWidget(QWidget):
             if w is not None:
                 w.deleteLater()
         seen: set[str] = set()
-        chip_style = (
-            "QPushButton {"
-            f" font-size: {cs.VOWEL_CHART_COL_LABEL_FONT_PX}px;"
-            " padding: 2px 8px;"
-            " border-radius: 8px;"
-            f" border: 1px solid {C['border']};"
-            f" color: {C['text']};"
-            f" background: {C['bg']};"
-            " }"
-            "QPushButton:hover {"
-            f" border-color: {C['accent']};"
-            f" color: {C['accent']};"
-            " }"
-        )
+        unique_diphs: list[str] = []
         for d in self._diphthongs:
             if not d.segment or d.segment in seen:
                 continue
             seen.add(d.segment)
-            chip = QPushButton(d.segment, self._diphthong_chip_strip)
-            chip.setStyleSheet(chip_style)
-            chip.setFlat(True)
-            chip.setCursor(Qt.CursorShape.PointingHandCursor)
-            chip.setToolTip(f"Select /{d.segment}/")
+            unique_diphs.append(d.segment)
+        # Each chip is a standard ``SegmentButton`` -- same size
+        # (``BTN_W`` × ``SEG_BTN_H``), same font (Noto Sans with
+        # ``MONO_FAMILIES`` IPA chain), same shrink-font overflow
+        # policy that the chart cell buttons use. This unifies the
+        # chip + cell visual language and reuses the existing
+        # segment-state styling cache (selected, suggested,
+        # matched). Pre-fix the chips were bare ``QPushButton``
+        # with hand-tuned padding and a separate font chain --
+        # the IPA glyphs failed to render on systems without a
+        # broad-coverage system font, and the ad-hoc padding
+        # diverged from the chart's button geometry. Grid columns
+        # are derived from the data-area width / ``BTN_W`` +
+        # spacing, so a wider chart packs more chips per row.
+        dx, _dy, dw, _dh = self._data_area_rect()
+        del dx
+        chip_pitch = BTN_W + layout.spacing()
+        n_cols = max(1, dw // chip_pitch) if dw > 0 else 6
+        for idx, segment in enumerate(unique_diphs):
+            chip = SegmentButton(segment, self._diphthong_chip_strip)
+            chip.setToolTip(f"Select /{segment}/")
             chip.clicked.connect(
-                lambda _checked=False, s=d.segment: (
+                lambda _checked=False, s=segment: (
                     self.segment_clicked.emit(s)
                 )
             )
-            layout.addWidget(chip)
-        layout.addStretch(1)
+            row = idx // n_cols
+            col = idx % n_cols
+            layout.addWidget(chip, row, col)
 
     def _apply_display_mode_filter(self) -> None:
         """No-op: cell widgets are always visible.
@@ -998,12 +1012,32 @@ class VowelChartWidget(QWidget):
     def _chip_strip_height(self) -> int:
         """Vertical pixels reserved for the diphthong chip strip
         below the silhouette. Zero when the current inventory has
-        no diphthongs (chip strip hidden); ``_CHIP_STRIP_H_PX``
-        otherwise. Called by ``_data_area_rect`` so the
-        trapezoid shrinks to make room."""
+        no diphthongs (chip strip hidden); scales with the number
+        of rows the grid wraps into so dense inventories like
+        Korean PHOIBLE (12 diphthongs in 2 rows) get enough
+        vertical space for the chips. Called by
+        ``_data_area_rect`` so the trapezoid shrinks to make
+        room."""
         if not self._diphthongs:
             return 0
-        return self._CHIP_STRIP_H_PX
+        unique = {d.segment for d in self._diphthongs if d.segment}
+        if not unique:
+            return 0
+        # Mirror the column-count math in
+        # ``_populate_diphthong_chip_strip``: each chip is a
+        # ``SegmentButton`` so it has ``BTN_W`` × ``SEG_BTN_H``
+        # dimensions. Spacing comes from the grid layout. The
+        # data-area width depends on this method via
+        # ``_data_area_rect`` -> ``_chip_strip_height`` (circular),
+        # so we approximate via ``widget.width() - chrome``; a
+        # 1-col difference at the edge is fine because the
+        # layout pass rebuilds the chips with the exact ``dw``.
+        approx_dw = max(0, self.width() - VOWEL_LABEL_W - self._PAD_R)
+        spacing = self._chip_strip_layout.spacing()
+        chip_pitch = BTN_W + spacing
+        n_cols = max(1, approx_dw // chip_pitch) if approx_dw > 0 else 6
+        n_rows = max(1, math.ceil(len(unique) / n_cols))
+        return n_rows * SEG_BTN_H + (n_rows - 1) * spacing
 
     def _data_area_rect(self) -> tuple[int, int, int, int]:
         """``(x, y, width, height)`` of the trapezoidal segment
@@ -1043,7 +1077,7 @@ class VowelChartWidget(QWidget):
         # ``_data_area_rect`` already accounted for the missing
         # band via ``_chip_strip_height``.
         if self._diphthong_chip_strip.isVisible():
-            strip_h = self._CHIP_STRIP_H_PX
+            strip_h = self._chip_strip_height()
             strip_y = self.height() - self._PAD_B - strip_h
             self._diphthong_chip_strip.setGeometry(dx, strip_y, dw, strip_h)
         if self._title_label is not None:
@@ -1054,13 +1088,24 @@ class VowelChartWidget(QWidget):
         # exist on the current inventory). Sits in the right-edge
         # corner of the title row, mirroring the web's
         # ``.vowel-diphthong-toggle`` position above the data area.
+        #
+        # Pre-fix the y-position was
+        # ``(TITLE_H - btn_h) // 2`` which produces NEGATIVE y
+        # when the button's intrinsic height (21 px) exceeds
+        # ``TITLE_H`` (20 px) -- the top edge of the button got
+        # clipped above the widget. Now: floor at 0 + small
+        # vertical pad. The chart's overall layout already
+        # reserves ``TITLE_H + COL_HEADER_H`` above the data
+        # area, so a slightly-overhanging button still has space
+        # to fall down into the col-header band rather than off
+        # the top edge.
         if self._diphthong_toggle.isVisible():
             self._diphthong_toggle.adjustSize()
             tw_btn = self._diphthong_toggle.width()
             th_btn = self._diphthong_toggle.height()
             self._diphthong_toggle.move(
                 dx + dw - tw_btn,
-                (self._TITLE_H - th_btn) // 2,
+                max(2, (self._TITLE_H - th_btn) // 2),
             )
             self._diphthong_toggle.raise_()
         # Column headers: x in [0, 1] mapped across the data area,

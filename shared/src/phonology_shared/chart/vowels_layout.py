@@ -20,6 +20,7 @@ keep working.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
@@ -1339,8 +1340,19 @@ def _natural_data_area_size(
 
     rows_in_use: set[int] = {c.row for c in cells}
     max_row_w = 2 * BTN_W + VOWEL_PAIR_GAP_PX
+    # Pair-side shift gap: cells with pair_side != 0 sit offset
+    # from their canonical chart_x by ``VOWEL_PAIR_SHIFT_PX``. The
+    # rightmost cell's actual pixel extent therefore reaches
+    # ``chart_x * dw + pair_shift + cell_w/2``, which is what the
+    # data-area width must accommodate.
+    from phonology_shared.presentation.chart_style import (
+        VOWEL_PAIR_SHIFT_PX,
+    )
+
     for ri in rows_in_use:
-        # Buttons per backness slot at this row.
+        # Slot button-count summation (the legacy bound). Kept as
+        # a floor so single-slot rows still have minimum sensible
+        # width.
         slot_buttons: dict[int, int] = {0: 0, 1: 0, 2: 0}
         for c in cells:
             if c.row != ri:
@@ -1359,6 +1371,41 @@ def _natural_data_area_size(
             VOWEL_PAIR_SEPARATOR_PX
         )
         max_row_w = max(max_row_w, row_w)
+        # Position-aware lower bound: solve for the smallest dw
+        # that fits the rightmost cell + leftmost cell when each
+        # cell is projected at ``chart_x * dw + pair_side *
+        # pair_shift + cell_half_w``. Pre-fix this row solved for
+        # slot-internal width (sum of buttons) without checking
+        # that chart_x positions placed cells INSIDE [0, dw]; for
+        # Korean PHOIBLE close row /u uː/ at chart_x=0.85 the
+        # /uː/ button overflowed the right edge by ~17 px because
+        # natural_dw was set by slot sum (220 px) but cell
+        # projection needed ~270 px.
+        row_cells = [c for c in cells if c.row == ri]
+        for c in row_cells:
+            cell_half_w = (
+                _cell_button_width_count(c) * BTN_W
+                + max(0, _cell_button_width_count(c) - 1) * VOWEL_PAIR_GAP_PX
+            ) / 2.0
+            pair_offset = (
+                int(VOWEL_PAIR_SHIFT_PX) if c.pair_side else 0
+            ) * c.pair_side
+            # Right edge: chart_x * dw + pair_offset + cell_half_w
+            # must be <= dw, so dw >= (pair_offset + cell_half_w)
+            # / (1 - chart_x).
+            if c.chart_x < 1.0:
+                right_extent = pair_offset + cell_half_w
+                if right_extent > 0:
+                    needed = right_extent / (1.0 - c.chart_x)
+                    max_row_w = max(max_row_w, int(math.ceil(needed)))
+            # Left edge: chart_x * dw + pair_offset - cell_half_w
+            # must be >= 0, so dw >= (cell_half_w - pair_offset) /
+            # chart_x (when chart_x > 0).
+            if c.chart_x > 0.0:
+                left_extent = cell_half_w - pair_offset
+                if left_extent > 0:
+                    needed = left_extent / c.chart_x
+                    max_row_w = max(max_row_w, int(math.ceil(needed)))
 
     # Height: per-row max stack depth, plus inter-row gaps and
     # vertical padding for the silhouette's top/bottom offset.

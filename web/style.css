@@ -1132,17 +1132,24 @@ dialog input[type="text"]:focus-visible {
      ``.vowel-chart-data`` (the prior position) caused PHOIBLE
      Close-Back stacks to overlap the toggle's hit area, with the
      toggle's text getting drawn beneath the topmost cell button.
-     Outside the data area, the toggle has its own visual lane. */
+     Outside the data area, the toggle has its own visual lane.
+
+     ``top: 4px`` clears the chart-container's top edge so the
+     button outline isn't clipped (pre-fix at ``top: 2px`` the
+     rounded border touched the title row above and visually
+     bled into it). ``right: 6px`` matches the chart's right pad
+     so the button right-aligns with the silhouette's back edge
+     instead of overhanging into the panel gutter. */
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 4px;
+  right: 6px;
   z-index: 3;
-  padding: 1px 6px;
+  padding: 2px 8px;
   font-size: var(--font-size-micro);
   font-weight: 500;
   letter-spacing: 0.3px;
   color: var(--text-dim);
-  background: transparent;
+  background: var(--bg);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -1173,9 +1180,11 @@ dialog input[type="text"]:focus-visible {
   min-height: 0;
 }
 .vowel-diphthong-chips .seg-btn {
-  /* Slightly tighter than the chart's main buttons -- chips are
-     supplementary affordances, not the primary surface. */
-  height: calc(var(--seg-btn-h) - 4px);
+  /* Chips share the standard seg-btn size + font so dense
+     diphthong inventories wrap into multiple rows naturally
+     without any ad-hoc width tuning -- ``flex-wrap: wrap`` on
+     the parent + the standard button width is the single
+     source of truth. */
 }
 /* Trapezoid / triangle silhouette: OUTLINE only, no painted fill.
 

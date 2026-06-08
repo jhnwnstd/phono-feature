@@ -1494,12 +1494,186 @@ def compute_placements(
         # segments from.
         if PlacementFlag.DIPHTHONG not in placement.flags:
             occupied.setdefault((placement.row, placement.col), []).append(seg)
+    # SNAP DIPHTHONG SECONDARIES to the closest matching
+    # monophthong cell. PHOIBLE encodes the diphthong's secondary
+    # feature bundle with overlaid features from the PRIMARY (e.g.,
+    # /ua/'s secondary keeps ``round: +`` carried over from /u/).
+    # The placer interprets these features independently, so /ua/'s
+    # secondary lands at central-ROUNDED col 3 -- a virtual
+    # position with no monophthong button -- while standalone /a/
+    # lives at central-UNROUNDED col 2. Pre-snap the arrow tip
+    # missed /a/ by an entire column. Same drift for every Korean
+    # /u_/ and /i_/ diphthong.
+    #
+    # Snap rule: among MONOPHTHONG placements, find one whose
+    # BACKNESS GROUP (front: cols {0,1,6}; central: cols {2,3,7};
+    # back: cols {4,5,8}) matches the secondary and whose row is
+    # closest to the secondary's row. Ties break on column
+    # proximity. If no monophthong matches the backness group
+    # (Bilua-style inventories where all 20 secondaries are
+    # virtual), the secondary stays as computed -- the arrow
+    # terminates in empty space, which is the correct visual cue
+    # for a diphthong endpoint that doesn't exist as a standalone
+    # vowel.
+    _snap_diphthong_secondaries(placements, occupied)
+    # Post-snap degeneracy sweep. The snap can collapse a
+    # diphthong's primary and secondary onto the same cell when
+    # the inventory only has one monophthong in the secondary's
+    # backness group (Chinese /ou/: /o/ is absent so /ou/'s
+    # endpoints both snap to /u/). When that happens, demote the
+    # segment to a monophthong: clear the DIPHTHONG flag, drop the
+    # secondary, and add the segment to ``occupied`` so it renders
+    # as a regular vowel button at the collapsed cell rather than
+    # a zero-length arrow.
+    for seg, placement in list(placements.items()):
+        if PlacementFlag.DIPHTHONG not in placement.flags:
+            continue
+        sec = placement.secondary
+        if sec is None:
+            continue
+        if (placement.row, placement.col) != (sec.row, sec.col):
+            continue
+        demoted = replace(
+            placement,
+            flags=placement.flags - frozenset({PlacementFlag.DIPHTHONG}),
+            secondary=None,
+        )
+        placements[seg] = demoted
+        occupied.setdefault((demoted.row, demoted.col), []).append(seg)
     # Confidence DESCENDING (via negated int), segment ASCENDING
     # within the same confidence tier. A single ``reverse=True``
     # would also flip the segment direction.
     for key in occupied:
         occupied[key].sort(key=lambda s: (-int(placements[s].confidence), s))
     return occupied, placements
+
+
+_BACKNESS_GROUP_BY_COL: Mapping[int, str] = {
+    0: "front",
+    1: "front",
+    6: "front",
+    2: "central",
+    3: "central",
+    7: "central",
+    4: "back",
+    5: "back",
+    8: "back",
+}
+
+
+def _snap_diphthong_secondaries(
+    placements: dict[str, VowelPlacement],
+    occupied: dict[tuple[int, int], list[str]],
+) -> None:
+    """Re-target each diphthong's PRIMARY and SECONDARY placement
+    to the closest matching monophthong cell.
+
+    Both endpoints suffer the same PHOIBLE encoding drift: the
+    contour-vowel feature bundles carry overlaid features that
+    shift the placer's column verdict away from the standalone
+    monophthong. Concretely for Korean /io/, the primary bundle
+    encodes ``front +, round +`` which lands at front-rounded
+    (col 1) -- a virtual position with no /i/-like button -- even
+    though semantically /io/ starts at /i/ (col 6). Same shape
+    for the secondary side (already documented).
+
+    Snap rule (applied to both primary and secondary):
+
+    1. Groups monophthong cells by backness (front / central /
+       back) -- the rounding distinction collapses since /a/
+       (col 2, central-unrounded) and a hypothetical /a_rounded/
+       (col 3, central-rounded) both serve as targets for any
+       central endpoint regardless of how the placer encoded its
+       rounding.
+    2. For each diphthong endpoint, finds the closest matching
+       cell by ``(row_distance, col_distance)`` tuple.
+    3. Rewrites the endpoint's ``row`` / ``col`` to the snap
+       target.
+
+    Mutates ``placements`` in place. Each diphthong placement
+    record gets a freshly-built ``VowelPlacement`` with possibly
+    snapped ``(row, col)`` and possibly snapped ``secondary``.
+    """
+    if not occupied:
+        return
+    mono_cells_by_group: dict[str, list[tuple[int, int]]] = {
+        "front": [],
+        "central": [],
+        "back": [],
+    }
+    for (row, col), segs in occupied.items():
+        if not segs:
+            continue
+        group = _BACKNESS_GROUP_BY_COL.get(col)
+        if group is None:
+            continue
+        mono_cells_by_group[group].append((row, col))
+
+    def _snap_endpoint(
+        endpoint: VowelPlacement,
+        forbid: tuple[int, int] | None = None,
+    ) -> VowelPlacement:
+        """Snap ``endpoint`` to the closest matching monophthong
+        cell. If ``forbid`` is set, the snap target must NOT
+        equal that ``(row, col)`` -- prevents the diphthong's
+        secondary from collapsing onto its primary's snapped
+        position, which would render as a zero-length arrow.
+        Falls through to the original endpoint when no
+        acceptable candidate exists.
+        """
+        group = _BACKNESS_GROUP_BY_COL.get(endpoint.col)
+        if group is None:
+            return endpoint
+        candidates = mono_cells_by_group.get(group) or []
+        if not candidates:
+            return endpoint
+        allowed = [c for c in candidates if c != forbid] or candidates
+        target = min(
+            allowed,
+            key=lambda rc: (
+                abs(rc[0] - endpoint.row),
+                abs(rc[1] - endpoint.col),
+            ),
+        )
+        new_row, new_col = target
+        if (new_row, new_col) == (endpoint.row, endpoint.col):
+            return endpoint
+        return replace(endpoint, row=new_row, col=new_col)
+
+    for seg, placement in list(placements.items()):
+        if PlacementFlag.DIPHTHONG not in placement.flags:
+            continue
+        new_primary = _snap_endpoint(placement)
+        new_secondary = (
+            _snap_endpoint(
+                placement.secondary,
+                forbid=(new_primary.row, new_primary.col),
+            )
+            if placement.secondary is not None
+            else None
+        )
+        # Degeneracy check: if even with the forbid constraint
+        # the secondary collapses onto the primary (only one
+        # candidate cell exists in the secondary's backness
+        # group and it is the primary's), prefer the ORIGINAL
+        # secondary position over a zero-length arrow. The arrow
+        # then terminates in empty space rather than collapsing
+        # to a dot.
+        if (
+            new_secondary is not None
+            and (new_secondary.row, new_secondary.col)
+            == (new_primary.row, new_primary.col)
+            and placement.secondary is not None
+        ):
+            new_secondary = placement.secondary
+        if (new_primary.row, new_primary.col) != (
+            placement.row,
+            placement.col,
+        ) or new_secondary is not placement.secondary:
+            placements[seg] = replace(
+                new_primary,
+                secondary=new_secondary,
+            )
 
 
 # ---------------------------------------------------------------------------
