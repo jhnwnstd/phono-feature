@@ -86,6 +86,7 @@ from phonology_shared.presentation.constants import (
     FEATURE_ORDER,
     SETTINGS_APP,
     SETTINGS_ORG,
+    format_segment_accessible_label,
     scrollbar_style,
     sort_features,
 )
@@ -1130,6 +1131,11 @@ class MainWindow(QMainWindow):
                 lambda checked, s=seg: self._on_segment_clicked(s, checked)
             )
             btn.right_clicked.connect(self._on_segment_right_clicked)
+            # Accessible name for screen readers: ``/x/`` (IPA
+            # phoneme notation). Shared formatter so the web's
+            # ``aria-label="/x/"`` and desktop's
+            # ``setAccessibleName("/x/")`` stay in sync.
+            btn.setAccessibleName(format_segment_accessible_label(seg))
             self._seg_button_pool[seg] = btn
             return btn
         # Refresh theme on pool reuse: theme toggles skip orphaned

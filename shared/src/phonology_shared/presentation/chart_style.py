@@ -38,11 +38,13 @@ rather than just where it landed.
 from __future__ import annotations
 
 from phonology_shared.presentation.constants import (
+    BTN_W,
     FONT_SIZE_LABEL_PX,
 )
 from phonology_shared.presentation.layout import (
     SEG_BTN_H,
     SPACING_PX,
+    VOWEL_PAIR_GAP_PX,
 )
 
 # ---------------------------------------------------------------------------
@@ -78,6 +80,17 @@ VOWEL_CHART_TITLE_PADDING_PX: tuple[int, int, int, int] = (
     SPACING_PX["xs"],
     2,
 )
+
+#: Height (px) of the title strip / chrome row above the trapezoid.
+#: Pre-relay only the desktop had this as a literal (``_TITLE_H =
+#: 20``); the web sized it intrinsically via ``grid-template-rows:
+#: auto auto 1fr``. The chrome height is what the desktop reserves
+#: for the title row regardless of the title text length. Adopting
+#: 20 px as the canonical value lets the web's grid use the same
+#: min-height so cells above the trapezoid land at the same y on
+#: both UIs (especially relevant after the title font change
+#: shifted the intrinsic height by ~1-2 px).
+VOWEL_CHART_TITLE_H_PX: int = 20
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +128,47 @@ VOWEL_CHART_ROW_LABEL_FONT_WEIGHT: int = 500
 #: "Open-mid" labels fit comfortably with breathing room. Web
 #: switches from ``minmax(60px, auto)`` to a fixed 72 px column.
 VOWEL_CHART_ROW_LABEL_GUTTER_PX: int = 72
+
+#: Pixel gap between a row label's right edge and the silhouette's
+#: slanted left edge at that row. Pre-relay desktop used 10 px
+#: (``_ROW_LABEL_GAP_PX``); web used ``var(--space-md) + 2px`` =
+#: 10 px after the spacing-ladder resolved. The values matched by
+#: coincidence; pinning the canonical 10 px here so future tweaks
+#: to ``SPACING_PX["md"]`` don't silently desync the two UIs.
+VOWEL_CHART_ROW_LABEL_GAP_PX: int = 10
+
+
+# ---------------------------------------------------------------------------
+# Cell positioning math (pair-shift)
+# ---------------------------------------------------------------------------
+
+#: Half-stride (px) the renderer shifts a paired cell off its
+#: backness anchor so the unrounded mate sits left and the rounded
+#: mate sits right. Pre-relay desktop computed this inline as
+#: ``(BTN_W + VOWEL_PAIR_GAP_PX) // 2`` (integer floor) and the
+#: CSS repeated ``(var(--seg-btn-w) + var(--vowel-pair-gap)) / 2``
+#: in three transform rules. The math is the same today but a
+#: future ``BTN_W`` bump (different font, denser layout) would
+#: silently break the rounded/unrounded tangency contract on one
+#: side until everyone resynced. Single source here.
+VOWEL_PAIR_SHIFT_PX: float = (BTN_W + VOWEL_PAIR_GAP_PX) / 2
+
+
+# ---------------------------------------------------------------------------
+# Stack inter-button gap (vertical)
+# ---------------------------------------------------------------------------
+
+#: Pixel gap between vertically stacked buttons inside a single
+#: ``STACK``-display-kind cell. Both renderers consume this:
+#: desktop calls ``QVBoxLayout.setSpacing`` with it, web's CSS
+#: reads ``--vowel-cell-stack-gap`` baked from it, and the
+#: geometry's ``natural_data_height_px`` math reads it via the
+#: re-export at
+#: :py:data:`phonology_shared.chart.vowels_layout.VOWEL_CELL_STACK_GAP_PX`.
+#: Lives here (presentation layer) rather than in the chart
+#: module so build.py can bake it without dragging the chart/
+#: import chain into the build script.
+VOWEL_CELL_STACK_GAP_PX: int = 1
 
 
 # ---------------------------------------------------------------------------

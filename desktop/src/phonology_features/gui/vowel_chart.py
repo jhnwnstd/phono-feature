@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -60,7 +61,12 @@ from phonology_shared.chart.vowels_layout import (
     effective_button_height_px,
 )
 from phonology_shared.presentation import chart_style as cs
-from phonology_shared.presentation.constants import BTN_W
+from phonology_shared.presentation.constants import (
+    DIPHTHONG_TOGGLE_LABEL,
+    DIPHTHONG_TOGGLE_TOOLTIP_OFF,
+    DIPHTHONG_TOGGLE_TOOLTIP_ON,
+    VOWEL_CHART_ACCESSIBLE_NAME,
+)
 from phonology_shared.presentation.layout import (
     REGION_CONSTRAINTS,
     SEG_BTN_H,
@@ -106,15 +112,15 @@ class VowelChartWidget(QWidget):
     # rectangle. The bottom and right paddings give the trapezoid
     # silhouette a small inset from the widget border so the cells
     # at the open / back edges have visible breathing room.
-    _TITLE_H: ClassVar[int] = 20
+    # ``_TITLE_H`` + ``_ROW_LABEL_GAP_PX`` are wired through
+    # chart_style.py so the web's CSS ``--vowel-chart-title-h`` and
+    # ``--vowel-chart-row-label-gap`` cannot drift from these
+    # values. Pre-relay both were desktop-only literals.
+    _TITLE_H: ClassVar[int] = cs.VOWEL_CHART_TITLE_H_PX
     _COL_HEADER_H: ClassVar[int] = 18
     _PAD_R: ClassVar[int] = 12
     _PAD_B: ClassVar[int] = 10
-    # Pixel gap between a row label's right edge and the silhouette's
-    # slanted left edge at that row. Loose enough that the label and
-    # the trapezoid read as separate elements; web mirrors this via
-    # the ``--space-md`` token in ``style.css``.
-    _ROW_LABEL_GAP_PX: ClassVar[int] = 10
+    _ROW_LABEL_GAP_PX: ClassVar[int] = cs.VOWEL_CHART_ROW_LABEL_GAP_PX
 
     def __init__(
         self, parent: QWidget | None = None, *, btn_gap: int = 4
@@ -134,6 +140,10 @@ class VowelChartWidget(QWidget):
         # or inactive, leaving the trapezoid sitting on a white patch
         # against the inactive panel's grey bg.
         self.setStyleSheet("background: transparent;")
+        # Accessible name for screen readers. Shared constant so the
+        # web's ``aria-label="IPA vowel chart"`` and desktop's
+        # ``setAccessibleName`` stay in sync.
+        self.setAccessibleName(VOWEL_CHART_ACCESSIBLE_NAME)
         # The widget owns these directly; no layout manager. Children
         # are positioned absolutely from ``_layout_children``, which
         # runs on ``set_vowels`` and on every ``resizeEvent`` so the
@@ -199,6 +209,43 @@ class VowelChartWidget(QWidget):
         # respond to user attention.
         self._focused_seg: str | None = None
         self._show_all_arrows: bool = False
+        # Diphthong-arrows show-all toggle button. Mirrors the web's
+        # ``.vowel-diphthong-toggle`` (mounted in the chart title
+        # row when the inventory has any diphthongs). Hidden when
+        # ``self._diphthongs`` is empty.
+        self._diphthong_toggle = QPushButton(self)
+        self._diphthong_toggle.setCheckable(True)
+        self._diphthong_toggle.setText(DIPHTHONG_TOGGLE_LABEL)
+        self._diphthong_toggle.setToolTip(DIPHTHONG_TOGGLE_TOOLTIP_OFF)
+        self._diphthong_toggle.setAccessibleName(
+            DIPHTHONG_TOGGLE_LABEL,
+        )
+        self._diphthong_toggle.toggled.connect(
+            self._on_diphthong_toggle_clicked,
+        )
+        # Compact chip look so it matches the web's
+        # ``.vowel-diphthong-toggle``: small lowercase pill in the
+        # chart corner, not a full-size toolbar button. Sized to
+        # the label's natural width.
+        self._diphthong_toggle.setStyleSheet(
+            "QPushButton {"
+            f" font-size: {cs.VOWEL_CHART_COL_LABEL_FONT_PX}px;"
+            " padding: 2px 8px;"
+            " border-radius: 8px;"
+            f" border: 1px solid {C['border']};"
+            f" color: {C['text_dim']};"
+            f" background: {C['bg']};"
+            " }"
+            "QPushButton:hover {"
+            f" color: {C['text']};"
+            f" border-color: {C['accent']};"
+            " }"
+            "QPushButton:checked {"
+            f" color: {C['accent']};"
+            f" border-color: {C['accent']};"
+            " }"
+        )
+        self._diphthong_toggle.hide()
         # Height-tier band rectangles from the shared geometry.
         # Renderer iterates and fills; midpoint math + silhouette
         # clamps live in ``build_vowel_chart_geometry``.
@@ -278,7 +325,23 @@ class VowelChartWidget(QWidget):
         if self._show_all_arrows == on:
             return
         self._show_all_arrows = on
+        # Keep the toggle button's checked state in sync if the
+        # flag was flipped programmatically (e.g., a future
+        # keyboard shortcut). The signal connection above guards
+        # against re-entry via the block-signal toggle.
+        self._diphthong_toggle.blockSignals(True)
+        self._diphthong_toggle.setChecked(on)
+        self._diphthong_toggle.setToolTip(
+            DIPHTHONG_TOGGLE_TOOLTIP_ON if on else DIPHTHONG_TOGGLE_TOOLTIP_OFF
+        )
+        self._diphthong_toggle.blockSignals(False)
         self.update()
+
+    def _on_diphthong_toggle_clicked(self, checked: bool) -> None:
+        """Click handler for the chart-corner toggle. Drives
+        :py:meth:`set_show_all_diphthong_arrows` which updates the
+        flag, refreshes the tooltip, and repaints."""
+        self.set_show_all_diphthong_arrows(checked)
 
     def eventFilter(  # noqa: D401
         self, watched: QObject | None, event: QEvent | None
@@ -386,6 +449,10 @@ class VowelChartWidget(QWidget):
         self._silhouette = geometry.silhouette
         self._diphthongs = tuple(geometry.diphthongs)
         self._bands = tuple(geometry.bands)
+        # Show the diphthong toggle button only when the inventory
+        # actually has diphthongs (mirrors the web's
+        # ``_appendVowelDiphthongToggle`` guard at main.js).
+        self._diphthong_toggle.setVisible(bool(self._diphthongs))
         # Sizing policy: always pin width to
         # ``max(VOWEL_NATURAL_W, natural)`` so the chart never falls
         # below the canonical 440 px floor and grows for inventories
@@ -618,7 +685,11 @@ class VowelChartWidget(QWidget):
         throwing off the whole chart layout.
         """
         layout = QVBoxLayout(container)
-        layout.setSpacing(1)
+        # Gap pinned to chart_style.VOWEL_CELL_STACK_GAP_PX so the
+        # web's CSS ``gap`` and desktop's setSpacing read the same
+        # value. Same source the geometry's natural-height math
+        # uses, so stacks size identically across both UIs.
+        layout.setSpacing(cs.VOWEL_CELL_STACK_GAP_PX)
         layout.setContentsMargins(0, 0, 0, 0)
         per_btn_h = effective_button_height_px(len(cell.entries))
         added = False
@@ -677,6 +748,19 @@ class VowelChartWidget(QWidget):
             self._title_label.adjustSize()
             tw = self._title_label.width()
             self._title_label.move(dx + (dw - tw) // 2, 0)
+        # Diphthong-arrows toggle button (visible iff diphthongs
+        # exist on the current inventory). Sits in the right-edge
+        # corner of the title row, mirroring the web's
+        # ``.vowel-diphthong-toggle`` position above the data area.
+        if self._diphthong_toggle.isVisible():
+            self._diphthong_toggle.adjustSize()
+            tw_btn = self._diphthong_toggle.width()
+            th_btn = self._diphthong_toggle.height()
+            self._diphthong_toggle.move(
+                dx + dw - tw_btn,
+                (self._TITLE_H - th_btn) // 2,
+            )
+            self._diphthong_toggle.raise_()
         # Column headers: x in [0, 1] mapped across the data area,
         # then centred on each anchor.
         for lbl, x in self._col_labels:
@@ -714,7 +798,11 @@ class VowelChartWidget(QWidget):
         # (-1 unrounded, 0 unknown, +1 rounded). Keeping the pair
         # shift in pixels means rounded/unrounded mates stay
         # exactly tangent at every row of the trapezoid.
-        pair_shift_px = (BTN_W + VOWEL_PAIR_GAP_PX) // 2
+        # Pair-shift derived from chart_style so the formula lives
+        # in one place. CSS reads the same value via
+        # ``--vowel-pair-shift``; pre-relay both sides re-derived
+        # ``(BTN_W + VOWEL_PAIR_GAP_PX) / 2`` independently.
+        pair_shift_px = int(cs.VOWEL_PAIR_SHIFT_PX)
         for widget, cx, cy, pair_side, tier in self._cells:
             widget.adjustSize()
             ww = widget.width()

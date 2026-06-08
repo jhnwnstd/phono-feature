@@ -897,6 +897,11 @@ dialog input[type="text"]:focus-visible {
   letter-spacing: var(--vowel-chart-title-letter-spacing);
   color: var(--text-dim);
   padding: var(--vowel-chart-title-padding);
+  /* Pinned strip height so the title row reserves the same vertical
+     space as the desktop's ``_TITLE_H`` -- cells anchored from the
+     chart's top edge land at the same y on both UIs. */
+  min-height: var(--vowel-chart-title-h);
+  box-sizing: border-box;
 }
 .panel[data-active="true"] .vowel-chart-title {
   color: var(--text);
@@ -942,7 +947,9 @@ dialog input[type="text"]:focus-visible {
      desktop's ``_ROW_LABEL_GAP_PX`` in ``vowel_chart.py``. */
   position: absolute;
   top: calc(var(--row-y, 0) * 100%);
-  right: calc((1 - var(--row-left, 0)) * 100% + var(--space-md) + 2px);
+  right: calc(
+    (1 - var(--row-left, 0)) * 100% + var(--vowel-chart-row-label-gap)
+  );
   transform: translateY(-50%);
   text-align: right;
   font-size: var(--vowel-chart-row-label-font);
@@ -1196,11 +1203,7 @@ dialog input[type="text"]:focus-visible {
      the same rule centres the unrounded mate to the left and the
      rounded mate to the right of the backness anchor. */
   transform: translate(
-    calc(
-      -50% +
-        var(--pair-side, 0) *
-        (var(--seg-btn-w) + var(--vowel-pair-gap)) / 2
-    ),
+    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift)),
     -50%
   );
 }
@@ -1212,11 +1215,7 @@ dialog input[type="text"]:focus-visible {
    top edge, often overlapping the title. */
 .vowel-chart-cell[data-row-tier="top"] {
   transform: translate(
-    calc(
-      -50% +
-        var(--pair-side, 0) *
-        (var(--seg-btn-w) + var(--vowel-pair-gap)) / 2
-    ),
+    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift)),
     0%
   );
 }
@@ -1225,11 +1224,7 @@ dialog input[type="text"]:focus-visible {
    below. */
 .vowel-chart-cell[data-row-tier="bottom"] {
   transform: translate(
-    calc(
-      -50% +
-        var(--pair-side, 0) *
-        (var(--seg-btn-w) + var(--vowel-pair-gap)) / 2
-    ),
+    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift)),
     -100%
   );
 }
@@ -1264,7 +1259,10 @@ dialog input[type="text"]:focus-visible {
 .vowel-chart-cell-stack {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  /* Per-button gap pinned to ``VOWEL_CELL_STACK_GAP_PX`` so desktop
+     ``QVBoxLayout.setSpacing`` and the web's flex ``gap`` cannot
+     drift. */
+  gap: var(--vowel-cell-stack-gap, 1px);
   background: transparent;
 }
 /* Horizontal layout for a PAIR cell: two segments that share the

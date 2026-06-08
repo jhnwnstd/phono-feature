@@ -182,8 +182,56 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         "theme_values",
         "palette_mode_values",
         "match_mode_values",
+        # Accessibility strings: chart aria-label + per-segment
+        # button aria-label template. Web reads these via
+        # STATUS_TEXT; desktop imports the source constants
+        # (VOWEL_CHART_ACCESSIBLE_NAME + format_segment_accessible_label)
+        # directly. Pre-relay both were hardcoded inline.
+        "vowel_chart_accessible_name",
+        "seg_accessible_label_template",
+        # Diphthong-arrows toggle button tooltip strings. Two
+        # variants (off / on) reflect the toggle's checked state.
+        # Same wording on both UIs via the relay.
+        "diphthong_toggle_tooltip_off",
+        "diphthong_toggle_tooltip_on",
     }
     assert set(status_payload.keys()) == expected_keys
+
+
+def test_vowel_chart_accessible_name_matches_python(
+    status_payload: dict,
+) -> None:
+    """Chart aria-label string matches the shared Python constant."""
+    from phonology_shared.presentation.constants import (
+        VOWEL_CHART_ACCESSIBLE_NAME,
+    )
+
+    assert (
+        status_payload.get("vowel_chart_accessible_name")
+        == VOWEL_CHART_ACCESSIBLE_NAME
+    )
+
+
+def test_seg_accessible_label_template_round_trip(
+    status_payload: dict,
+) -> None:
+    """The per-button aria-label template interpolated with a
+    sample segment must equal what the shared formatter returns.
+    Drift would let the web announce ``[x]`` while the desktop
+    announces ``/x/`` (or vice versa)."""
+    from phonology_shared.presentation.constants import (
+        format_segment_accessible_label,
+    )
+
+    template = status_payload.get("seg_accessible_label_template")
+    assert template is not None
+    sample = "i"
+    web_rendered = template.replace("{seg}", sample)
+    desktop_rendered = format_segment_accessible_label(sample)
+    assert web_rendered == desktop_rendered, (
+        f"aria-label drift: web template -> {web_rendered!r} vs "
+        f"desktop formatter -> {desktop_rendered!r}"
+    )
 
 
 def test_mode_values_match_python_enum(

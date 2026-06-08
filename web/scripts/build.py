@@ -565,11 +565,14 @@ def _build_status_text_payload() -> dict[str, str]:
         from phonology_shared.presentation.constants import (
             DEFAULT_INVENTORY_STEM,
             DIPHTHONG_TOGGLE_LABEL,
+            DIPHTHONG_TOGGLE_TOOLTIP_OFF,
+            DIPHTHONG_TOGGLE_TOOLTIP_ON,
             EMPTY_NATURAL_CLASS_HINT,
             EMPTY_PHOIBLE_SEARCH_HINT,
             EMPTY_SHARED_FEATURES_HINT,
             MATCH_MODE_TOOLTIP_STRICT_ACTIVE,
             MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE,
+            VOWEL_CHART_ACCESSIBLE_NAME,
         )
 
         payload["diphthong_toggle_label"] = DIPHTHONG_TOGGLE_LABEL
@@ -590,6 +593,16 @@ def _build_status_text_payload() -> dict[str, str]:
         payload["match_mode_tooltip_wildcard_active"] = (
             MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE
         )
+        # Accessibility strings. Same SSOT pattern: shared Python
+        # constants drive both the web's aria-label attributes and
+        # the desktop's setAccessibleName calls.
+        payload["vowel_chart_accessible_name"] = VOWEL_CHART_ACCESSIBLE_NAME
+        # Per-segment aria label template -- the JS interpolates
+        # ``{seg}`` so a future change to the convention (e.g.
+        # square brackets) is one Python edit.
+        payload["seg_accessible_label_template"] = "/{seg}/"
+        payload["diphthong_toggle_tooltip_off"] = DIPHTHONG_TOGGLE_TOOLTIP_OFF
+        payload["diphthong_toggle_tooltip_on"] = DIPHTHONG_TOGGLE_TOOLTIP_ON
         # Enum value tables. JS previously hardcoded these as
         # ``Object.freeze({...})`` literals that silently drifted
         # if a Python member was renamed. Baking them via the
@@ -796,6 +809,19 @@ def generate_layout_css() -> None:
             (
                 f"  --vowel-chart-title-padding: {title_pad[0]}px "
                 f"{title_pad[1]}px {title_pad[2]}px {title_pad[3]}px;"
+            ),
+            (
+                "  --vowel-chart-title-h: "
+                f"{chart_style.VOWEL_CHART_TITLE_H_PX}px;"
+            ),
+            (
+                "  --vowel-chart-row-label-gap: "
+                f"{chart_style.VOWEL_CHART_ROW_LABEL_GAP_PX}px;"
+            ),
+            ("  --vowel-pair-shift: " f"{chart_style.VOWEL_PAIR_SHIFT_PX}px;"),
+            (
+                "  --vowel-cell-stack-gap: "
+                f"{chart_style.VOWEL_CELL_STACK_GAP_PX}px;"
             ),
             (
                 "  --vowel-chart-col-label-font: "

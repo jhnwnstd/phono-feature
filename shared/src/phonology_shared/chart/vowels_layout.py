@@ -347,10 +347,20 @@ class VowelChartGeometry:
     bands: tuple[VowelChartBand, ...] = ()
 
 
-#: Gap between vertically stacked segment buttons inside a single
-#: cell. Smaller than the inter-row gap because the stack reads as
-#: one cell, not several.
-_VOWEL_CELL_STACK_GAP_PX: int = 1
+#: Gap (px) between vertically stacked segment buttons. Canonical
+#: home lives in ``phonology_shared.presentation.chart_style`` as
+#: ``VOWEL_CELL_STACK_GAP_PX`` (presentation layer, so build.py can
+#: bake it without dragging chart/ imports). Re-exported here for
+#: the natural-height math below + any consumer that already
+#: imports from this module.
+from phonology_shared.presentation.chart_style import (  # noqa: E402
+    VOWEL_CELL_STACK_GAP_PX,
+)
+
+# Backward-compat alias for the old private name. Internal
+# call-sites below still use this; new code should use the
+# public symbol above.
+_VOWEL_CELL_STACK_GAP_PX: int = VOWEL_CELL_STACK_GAP_PX
 
 #: Density tiers: per-button height when a cell's stack reaches the
 #: threshold entry count. Mirrors the CSS rules at

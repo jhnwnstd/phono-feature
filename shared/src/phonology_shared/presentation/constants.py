@@ -88,6 +88,35 @@ FONT_SIZE_MIN_PX: int = 10
 # consistency with the chart's row / column labels.
 DIPHTHONG_TOGGLE_LABEL: str = "diphthongs"
 
+# Tooltip strings for the diphthong-arrows toggle button. Two
+# variants reflect the toggle's checked vs unchecked state. Same
+# wording on both UIs.
+DIPHTHONG_TOGGLE_TOOLTIP_OFF: str = (
+    "Show all diphthong arrows (hover a vowel to see one)"
+)
+DIPHTHONG_TOGGLE_TOOLTIP_ON: str = "Hide all-arrow overlay"
+
+# Accessible name for the vowel chart widget (web aria-label /
+# desktop QWidget.setAccessibleName). Screen readers announce
+# this when focus lands on the chart container so users know
+# where they are. Pre-relay the string was hardcoded in
+# ``web/main.js:1423`` and the desktop had no accessible name
+# at all.
+VOWEL_CHART_ACCESSIBLE_NAME: str = "IPA vowel chart"
+
+
+def format_segment_accessible_label(seg: str) -> str:
+    """Format a segment glyph for screen-reader announcement.
+
+    The slashed form ``/x/`` matches the IPA convention for a
+    phoneme and is what assistive tech reads aloud. Both renderers
+    set this on every pooled / created seg button -- web via
+    ``btn.setAttribute("aria-label", ...)``, desktop via
+    ``btn.setAccessibleName(...)``.
+    """
+    return f"/{seg}/"
+
+
 # Bundled-inventory stem the web app boots into and the build
 # script precomputes the bootstrap render for. The ``_features.json``
 # suffix is the bundled-inventory naming convention; consumers

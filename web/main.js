@@ -1366,7 +1366,16 @@ function _buildSegmentButton(seg, extraAttrs) {
     btn.dataset.seg = seg;
     btn.dataset.state = "default";
     btn.setAttribute("aria-pressed", "false");
-    btn.setAttribute("aria-label", `/${seg}/`);
+    // aria label template comes from shared
+    // ``format_segment_accessible_label`` via STATUS_TEXT so a
+    // future change to the IPA convention is one Python edit.
+    btn.setAttribute(
+        "aria-label",
+        (STATUS_TEXT.seg_accessible_label_template || "/{seg}/").replace(
+            "{seg}",
+            seg,
+        ),
+    );
     // No browser-native ``title`` tooltip: the button's textContent
     // already shows the glyph, and a hover bubble repeating
     // ``/${seg}/`` is pure redundancy that flickers on every
@@ -1420,7 +1429,10 @@ function _buildVowelChart(chart) {
     const chartEl = document.createElement("div");
     chartEl.className = "vowel-chart";
     chartEl.setAttribute("role", "grid");
-    chartEl.setAttribute("aria-label", "IPA vowel chart");
+    chartEl.setAttribute(
+        "aria-label",
+        STATUS_TEXT.vowel_chart_accessible_name || "IPA vowel chart",
+    );
 
     // Title sits in row 1, column 2 only -- centered over the data
     // area, NOT over the row-label gutter. Mirrors the desktop's
@@ -1789,28 +1801,28 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
  *  announce the state change. */
 function _appendVowelDiphthongToggle(chartEl, dataEl) {
     if (!dataEl.querySelector("svg.vowel-diphthong-arrows")) return;
+    const tooltipOff =
+        STATUS_TEXT.diphthong_toggle_tooltip_off ||
+        "Show all diphthong arrows (hover a vowel to see one)";
+    const tooltipOn =
+        STATUS_TEXT.diphthong_toggle_tooltip_on ||
+        "Hide all-arrow overlay";
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "vowel-diphthong-toggle";
     btn.setAttribute("aria-pressed", "false");
-    btn.setAttribute(
-        "title",
-        "Show all diphthong arrows (hover a vowel to see one)",
-    );
+    btn.setAttribute("title", tooltipOff);
     btn.textContent = STATUS_TEXT.diphthong_toggle_label || "diphthongs";
     btn.addEventListener("click", () => {
         const on = dataEl.dataset.showArrows === "all";
         if (on) {
             delete dataEl.dataset.showArrows;
             btn.setAttribute("aria-pressed", "false");
-            btn.setAttribute(
-                "title",
-                "Show all diphthong arrows (hover a vowel to see one)",
-            );
+            btn.setAttribute("title", tooltipOff);
         } else {
             dataEl.dataset.showArrows = "all";
             btn.setAttribute("aria-pressed", "true");
-            btn.setAttribute("title", "Hide all-arrow overlay");
+            btn.setAttribute("title", tooltipOn);
         }
     });
     // Attach to the chart's outer container (not the data area)
