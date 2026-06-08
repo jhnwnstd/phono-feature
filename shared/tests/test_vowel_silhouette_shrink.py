@@ -98,72 +98,121 @@ def test_stage2_no_op_when_stage1_saturates_uniformly() -> None:
 
 
 def test_stage2_pulls_in_underloaded_edge() -> None:
-    """If the bottom row has lots of remaining slack but the top
-    row has none, Stage 2 reduces ``bot_w`` only -- the slant
-    steepens but ``top_w`` stays put.
+    """Stage 2 helper with the slant cap explicitly enabled
+    (cap > 0): if the bottom row has lots of remaining slack but
+    the top row has none, Stage 2 reduces ``bot_w`` only -- the
+    slant steepens but ``top_w`` stays put.
+
+    The production default is ``_VOWEL_SLANT_CHANGE_CAP_FRAC =
+    0.0`` (Stage 2 disabled) so this test monkey-patches the cap
+    to its pre-redesign 0.30 value to validate the helper's
+    behaviour as a PURE FUNCTION. If Stage 2 is ever re-enabled
+    in production, the regression-guard test
+    ``test_stage2_disabled_by_default_for_silhouette_consistency``
+    will trip first to make the change deliberate.
     """
-    # Row 0 at t=0: stage1 width is stage1_top=0.97, min 0.97 -> no slack.
-    # Row 1 at t=1: stage1 width is stage1_bot=0.67, min 0.20 -> 0.47 slack.
-    row_data = [(0.0, 0.97), (1.0, 0.20)]
-    top, bot = _stage2_slant_tweak(
-        row_data,
-        stage1_top=0.97,
-        stage1_bot=0.67,
-        canonical_top_width=1.0,
-        canonical_bottom_width=0.7,
-    )
-    assert top == pytest.approx(0.97)
-    assert bot < 0.67
-    # Slant magnitude (top - bot) increased -- but capped.
-    assert (top - bot) <= (1.0 - 0.7) * (
-        1.0 + vowels_mod._VOWEL_SLANT_CHANGE_CAP_FRAC + 1e-9
-    )
+    saved = vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC
+    vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = 0.30
+    try:
+        # Row 0 at t=0: stage1 width is stage1_top=0.97, min 0.97 -> no slack.
+        # Row 1 at t=1: stage1 width is stage1_bot=0.67, min 0.20 -> 0.47 slack.
+        row_data = [(0.0, 0.97), (1.0, 0.20)]
+        top, bot = _stage2_slant_tweak(
+            row_data,
+            stage1_top=0.97,
+            stage1_bot=0.67,
+            canonical_top_width=1.0,
+            canonical_bottom_width=0.7,
+        )
+        assert top == pytest.approx(0.97)
+        assert bot < 0.67
+        # Slant magnitude (top - bot) increased -- but capped.
+        assert (top - bot) <= (1.0 - 0.7) * (
+            1.0 + vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC + 1e-9
+        )
+    finally:
+        vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = saved
 
 
 def test_stage2_respects_slant_cap_when_slack_is_abundant() -> None:
-    """A row with unlimited slack would let Stage 2 push the slant
-    arbitrarily; the cap stops it at a fixed fraction of the
-    canonical slant.
+    """Stage 2 helper with cap explicitly enabled: a row with
+    unlimited slack would let Stage 2 push the slant arbitrarily;
+    the cap stops it at a fixed fraction of the canonical slant.
+    Production default keeps Stage 2 OFF.
     """
-    # Stage 1 widths slack-free at top; bottom can absorb anything.
-    row_data = [(0.0, 0.97), (1.0, 0.0)]
-    canonical_top = 1.0
-    canonical_bot = 0.7
-    top, bot = _stage2_slant_tweak(
-        row_data,
-        stage1_top=0.97,
-        stage1_bot=0.67,
-        canonical_top_width=canonical_top,
-        canonical_bottom_width=canonical_bot,
-    )
-    cap = vowels_mod._VOWEL_SLANT_CHANGE_CAP_FRAC * (
-        canonical_top - canonical_bot
-    )
-    d_top = 0.97 - top
-    d_bot = 0.67 - bot
-    assert abs(d_top - d_bot) <= cap + 1e-9
-    # And the cap is binding for this case: |d_top - d_bot| should
-    # be at the cap (within float epsilon).
-    assert abs(d_top - d_bot) == pytest.approx(cap, rel=1e-6, abs=1e-9)
+    saved = vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC
+    vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = 0.30
+    try:
+        # Stage 1 widths slack-free at top; bottom can absorb anything.
+        row_data = [(0.0, 0.97), (1.0, 0.0)]
+        canonical_top = 1.0
+        canonical_bot = 0.7
+        top, bot = _stage2_slant_tweak(
+            row_data,
+            stage1_top=0.97,
+            stage1_bot=0.67,
+            canonical_top_width=canonical_top,
+            canonical_bottom_width=canonical_bot,
+        )
+        cap = vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC * (
+            canonical_top - canonical_bot
+        )
+        d_top = 0.97 - top
+        d_bot = 0.67 - bot
+        assert abs(d_top - d_bot) <= cap + 1e-9
+        # And the cap is binding for this case: |d_top - d_bot|
+        # should be at the cap (within float epsilon).
+        assert abs(d_top - d_bot) == pytest.approx(cap, rel=1e-6, abs=1e-9)
+    finally:
+        vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = saved
 
 
 def test_stage2_does_not_flip_slant_direction() -> None:
-    """The cap is symmetric so the slant may either steepen or
-    flatten, but the cap fraction is < 1.0 so the trapezoid cannot
-    invert -- bottom stays narrower than top in normal vowel
-    inventories.
+    """Stage 2 helper with cap explicitly enabled: the cap is
+    symmetric so the slant may either steepen or flatten, but the
+    cap fraction is < 1.0 so the trapezoid cannot invert --
+    bottom stays narrower than top in normal vowel inventories.
     """
-    row_data = [(0.0, 0.5), (1.0, 0.5)]
-    canonical_top = 1.0
-    canonical_bot = 0.7
-    top, bot = _stage2_slant_tweak(
-        row_data,
-        stage1_top=0.91,
-        stage1_bot=0.61,
-        canonical_top_width=canonical_top,
-        canonical_bottom_width=canonical_bot,
+    saved = vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC
+    vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = 0.30
+    try:
+        row_data = [(0.0, 0.5), (1.0, 0.5)]
+        canonical_top = 1.0
+        canonical_bot = 0.7
+        top, bot = _stage2_slant_tweak(
+            row_data,
+            stage1_top=0.91,
+            stage1_bot=0.61,
+            canonical_top_width=canonical_top,
+            canonical_bottom_width=canonical_bot,
+        )
+        assert top >= bot, "slant must not invert under the default cap"
+    finally:
+        vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = saved
+
+
+def test_stage2_disabled_by_default_for_silhouette_consistency() -> None:
+    """Regression guard: ``_VOWEL_SLANT_CHANGE_CAP_FRAC`` MUST
+    stay at ``0.0`` in production. Stage 2 (asymmetric slant
+    tweak) was disabled after user feedback that the silhouette
+    "felt different for every inventory" -- the cause was Stage
+    2's per-inventory asymmetric reshaping of the canonical
+    trapezoid. With the cap at 0, every inventory's silhouette
+    is either the canonical Close-to-Open trapezoid (sparse) or
+    a UNIFORMLY scaled copy of it (dense), preserving the IPA
+    visual identity across the chart set.
+
+    If Stage 2 is ever re-enabled, do it deliberately: bump this
+    constant in chart_style/vowels_layout, update this test to
+    document the new value + rationale, and visual-verify that
+    the per-inventory slant variation is desired.
+    """
+    assert vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC == 0.0, (
+        "Stage 2 slant tweak re-enabled! "
+        "_VOWEL_SLANT_CHANGE_CAP_FRAC must stay 0.0 to keep the "
+        "silhouette consistent across inventories. See the "
+        "test docstring for the rationale."
     )
-    assert top >= bot, "slant must not invert under the default cap"
 
 
 def test_stage2_disabled_returns_stage1() -> None:
@@ -193,29 +242,32 @@ def test_stage2_disabled_returns_stage1() -> None:
 
 
 def test_compose_stage2_strictly_dominates_stage1_when_slack_remains() -> None:
-    """End to end: a chart with asymmetric per-row slack must come
-    out narrower than Stage 1 alone would have produced.
+    """End to end with Stage 2 explicitly enabled: a chart with
+    asymmetric per-row slack comes out narrower than Stage 1
+    alone would have produced. Production default keeps Stage 2
+    OFF (see ``test_stage2_disabled_by_default_for_silhouette_consistency``)
+    -- this test documents the helper composition for the case
+    where Stage 2 is re-enabled deliberately.
     """
-    # Pin both rows so they have appreciable slack after Stage 1.
-    cells_meta_by_row = {0: [], 1: []}
-    display_y_by_row = {0: 0.0, 1: 1.0}
-    canonical_top, canonical_bot = 1.0, 0.7
-    # Patch _min_row_width_for_meta via monkey-patch is heavy; instead
-    # call the stage helpers directly with synthetic data and confirm
-    # the composition produces values >=, not just == to stage 1.
-    row_data = [(0.0, 0.97), (1.0, 0.20)]
-    stage1_top, stage1_bot = _stage1_uniform_shrink(
-        row_data, canonical_top, canonical_bot
-    )
-    stage2_top, stage2_bot = _stage2_slant_tweak(
-        row_data, stage1_top, stage1_bot, canonical_top, canonical_bot
-    )
-    # Width REDUCTIONS from Stage 1 to Stage 2:
-    assert stage2_top <= stage1_top + 1e-9
-    assert stage2_bot <= stage1_bot + 1e-9
-    # And at least one edge actually moved.
-    assert (stage1_top - stage2_top) + (stage1_bot - stage2_bot) > 1e-9
-    del cells_meta_by_row, display_y_by_row  # quiet unused-var lint
+    saved = vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC
+    vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = 0.30
+    try:
+        cells_meta_by_row = {0: [], 1: []}
+        display_y_by_row = {0: 0.0, 1: 1.0}
+        canonical_top, canonical_bot = 1.0, 0.7
+        row_data = [(0.0, 0.97), (1.0, 0.20)]
+        stage1_top, stage1_bot = _stage1_uniform_shrink(
+            row_data, canonical_top, canonical_bot
+        )
+        stage2_top, stage2_bot = _stage2_slant_tweak(
+            row_data, stage1_top, stage1_bot, canonical_top, canonical_bot
+        )
+        assert stage2_top <= stage1_top + 1e-9
+        assert stage2_bot <= stage1_bot + 1e-9
+        assert (stage1_top - stage2_top) + (stage1_bot - stage2_bot) > 1e-9
+        del cells_meta_by_row, display_y_by_row
+    finally:
+        vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = saved
 
 
 def test_compose_returns_canonical_when_factor_zero() -> None:
@@ -252,7 +304,13 @@ def test_hayes_silhouette_within_slant_cap(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """The Hayes inventory's rendered silhouette must respect the
-    Stage 2 cap on slant change relative to its canonical slant.
+    Stage 2 cap on slant change relative to the canonical
+    silhouette's own slant (computed via ``vowel_silhouette()`` so
+    the test reflects the actual baseline, not a derived formula).
+    With Stage 2 disabled (``_VOWEL_SLANT_CHANGE_CAP_FRAC = 0.0``)
+    the cap is 0, so the test asserts the slant is EXACTLY
+    canonical (within float epsilon). Stage 1's uniform shrink
+    preserves the slant by construction.
     """
     engine = bundled_engine("hayes")
     vowels = _vowel_segs(engine)
@@ -262,19 +320,78 @@ def test_hayes_silhouette_within_slant_cap(
     profile = detect_vowel_profile(vowels, seg_feats)
     geometry = build_vowel_chart_geometry(vowels, profile, seg_feats)
     sil = geometry.silhouette
-    # Canonical slant is the difference between the canonical
-    # top_width (1.0) and the canonical bottom_width for the
-    # inventory-adapted silhouette shape; the silhouette's own
-    # top_width / bottom_width are the rendered (post-shrink)
-    # values, so we compare the rendered slant against the
-    # canonical-bottom-width-derived ceiling.
     rendered_slant = sil.top_width - sil.bottom_width
-    canonical_slant = 1.0 - vowels_mod.TRAPEZOID_BOTTOM_WIDTH
+    canonical_sil = vowels_mod.vowel_silhouette(
+        vowels_mod.VowelChartShape.TRAPEZOID
+    )
+    canonical_slant = canonical_sil.top_width - canonical_sil.bottom_width
     max_allowed_delta = (
-        vowels_mod._VOWEL_SLANT_CHANGE_CAP_FRAC * canonical_slant
+        vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC * canonical_slant
     )
     assert abs(rendered_slant - canonical_slant) <= max_allowed_delta + 1e-9, (
         f"Hayes silhouette slant {rendered_slant:.4f} differs from "
         f"canonical {canonical_slant:.4f} by more than the cap "
         f"{max_allowed_delta:.4f}"
     )
+
+
+def test_silhouette_slant_canonical_across_bundled_inventories(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    """SILHOUETTE CONSISTENCY INVARIANT: with Stage 2 disabled
+    (``_VOWEL_SLANT_CHANGE_CAP_FRAC = 0.0``) every bundled
+    inventory's silhouette must preserve the canonical slant
+    exactly. Stage 1's uniform shrink narrows both top and
+    bottom edges by the SAME amount, so the slant
+    ``(top_width - bottom_width)`` is invariant.
+
+    This is what gives the IPA vowel chart a stable visual
+    identity across inventories: a 5-vowel Spanish chart and a
+    33-vowel Maximalist chart share the same trapezoid
+    proportions, with the dense one just slightly narrower
+    overall. Pre-fix the per-inventory Stage 2 tweak made each
+    chart's proportions drift, breaking that visual identity.
+
+    If this test fails, either Stage 2 was re-enabled or
+    Stage 1's math was changed -- both warrant a visual review
+    before landing.
+    """
+    canonical_sil = vowels_mod.vowel_silhouette(
+        vowels_mod.VowelChartShape.TRAPEZOID
+    )
+    canonical_slant = canonical_sil.top_width - canonical_sil.bottom_width
+    sample_inventories = (
+        "spanish",
+        "korean",
+        "english",
+        "hayes",
+        "maximalist_vowels",
+        "general",
+        "modern_standard_arabic",
+    )
+    drifts: list[tuple[str, float]] = []
+    for name in sample_inventories:
+        try:
+            engine = bundled_engine(name)
+        except (FileNotFoundError, KeyError, pytest.skip.Exception):
+            # bundled_engine raises pytest.skip when an
+            # inventory file isn't checked in (gitignored in
+            # CI). Skip just that inventory; keep scanning the
+            # rest so the invariant is still exercised.
+            continue
+        vowels = _vowel_segs(engine)
+        if not vowels:
+            continue
+        seg_feats = {s: dict(engine.segments[s]) for s in vowels}
+        profile = detect_vowel_profile(vowels, seg_feats)
+        geometry = build_vowel_chart_geometry(vowels, profile, seg_feats)
+        sil = geometry.silhouette
+        rendered_slant = sil.top_width - sil.bottom_width
+        drifts.append((name, rendered_slant - canonical_slant))
+    assert drifts, "no bundled inventories loaded -- fixture broken"
+    for name, drift in drifts:
+        assert abs(drift) < 1e-9, (
+            f"{name}: slant drifted from canonical "
+            f"by {drift:.6f} -- Stage 2 re-enabled or Stage 1 "
+            f"broke its uniform-shrink invariant"
+        )

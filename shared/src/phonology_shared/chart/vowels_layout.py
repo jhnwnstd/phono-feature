@@ -500,11 +500,25 @@ _VOWEL_SHRINK_FACTOR: float = 0.3
 #: proportions; Stage 2 then asks: with the new narrower trapezoid,
 #: is there still slack at the top OR the bottom that pure uniform
 #: shrink missed? If so, top and bottom are nudged inward by
-#: DIFFERENT amounts (changing the slant), capped here so the chart
-#: stays visually recognisable as the canonical IPA trapezoid.
-#: ``0.0`` disables Stage 2; ``1.0`` would let the slant double (or
-#: invert).
-_VOWEL_SLANT_CHANGE_CAP_FRAC: float = 0.30
+#: DIFFERENT amounts (changing the slant).
+#:
+#: SET TO 0.0: Stage 2 is DISABLED. The user reported that the
+#: silhouette "felt different for every inventory" -- the cause
+#: was Stage 2's asymmetric reshaping (per-inventory the top
+#: width and bottom width were nudged by different amounts,
+#: tilting the canonical trapezoid). Disabling Stage 2 means
+#: every inventory's silhouette is the canonical Close-to-Open
+#: trapezoid (no shrink for sparse inventories) OR a UNIFORMLY
+#: scaled copy of it (small uniform shrink for dense inventories
+#: that still need cells to fit). The slant is preserved across
+#: the entire bundled + PHOIBLE set.
+#:
+#: ``0.0`` disables Stage 2; ``1.0`` would let the slant double
+#: (or invert). Setting back above 0.0 re-enables the asymmetric
+#: tweak -- a regression test in test_vowel_silhouette_shrink.py
+#: asserts Stage 2 stays off so any future re-enablement is a
+#: deliberate edit.
+_VOWEL_SLANT_CHANGE_CAP_FRAC: float = 0.0
 
 #: Minimum visual separation between adjacent cells in the same
 #: row (expressed as a fraction of the canonical content width).
