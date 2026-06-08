@@ -1315,15 +1315,6 @@ class MainWindow(QMainWindow):
         self._feat_left_layout.addStretch()
         self._feat_right_layout.addStretch()
 
-    # Threshold at which the feature panel switches to compact row
-    # density so a high-feature inventory fits without scrolling. At
-    # 22 active features the worst-balanced column is ~12 rows; one
-    # row beyond that and the natural-height panel starts to overflow
-    # the typical 440-px top-pane budget at 720p. Tuned conservatively
-    # so Hayes (28) goes compact, Default-33 goes compact, and shorter
-    # inventories (Spanish ~16) stay comfortable.
-    _FEAT_COMPACT_THRESHOLD: int = 22
-
     def _apply_feature_density(self) -> None:
         """Flip every pooled :py:class:`FeatureRow` between comfortable
         and compact density based on the active feature count.
@@ -1332,9 +1323,11 @@ class MainWindow(QMainWindow):
         next inventory might re-activate a row that was hidden during
         this load, and we want a clean inherited density on the
         re-show path. The density set is idempotent, so the bulk apply
-        is cheap on rapid inventory swaps.
+        is cheap on rapid inventory swaps. Threshold lives in
+        :py:data:`layout.FEAT_COMPACT_THRESHOLD` so a future web
+        parity implementation reads the same number.
         """
-        compact = len(self._feat_rows) >= self._FEAT_COMPACT_THRESHOLD
+        compact = len(self._feat_rows) >= layout.FEAT_COMPACT_THRESHOLD
         for row in self._feat_row_pool.values():
             row.set_compact(compact)
 

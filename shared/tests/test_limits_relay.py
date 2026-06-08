@@ -32,6 +32,9 @@ from phonology_shared.data import (
     MAX_NAME_LENGTH,
     MAX_SEGMENTS,
 )
+from phonology_shared.editor.phoible_provider import (
+    PHOIBLE_PREVIEW_SEGMENT_LIMIT,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_SCRIPT = REPO_ROOT / "web" / "scripts" / "build.py"
@@ -80,6 +83,10 @@ def limits_payload() -> dict[str, int]:
         ("max_segments", MAX_SEGMENTS),
         ("max_name_length", MAX_NAME_LENGTH),
         ("max_inventory_file_bytes", MAX_INVENTORY_FILE_BYTES),
+        (
+            "phoible_preview_segment_limit",
+            PHOIBLE_PREVIEW_SEGMENT_LIMIT,
+        ),
     ],
 )
 def test_baked_limit_matches_python(
@@ -104,5 +111,6 @@ def test_payload_keys_exhaustive(limits_payload: dict[str, int]) -> None:
         "max_segments",
         "max_name_length",
         "max_inventory_file_bytes",
+        "phoible_preview_segment_limit",
     }
     assert set(limits_payload.keys()) == expected_keys

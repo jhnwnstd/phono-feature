@@ -435,11 +435,20 @@ def _build_limits_payload() -> dict[str, int]:
         raise RuntimeError(f"could not load {limits_path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    # PHOIBLE preview cap: how many IPA glyphs the picker preview
+    # shows before truncating with a "+N more" hint. Baked here so
+    # the bridge (api.phoible_preview_inventory) and the JS picker
+    # render share the same number.
+    from phonology_shared.editor.phoible_provider import (
+        PHOIBLE_PREVIEW_SEGMENT_LIMIT,
+    )
+
     return {
         "max_features": module.MAX_FEATURES,
         "max_segments": module.MAX_SEGMENTS,
         "max_name_length": module.MAX_NAME_LENGTH,
         "max_inventory_file_bytes": module.MAX_INVENTORY_FILE_BYTES,
+        "phoible_preview_segment_limit": PHOIBLE_PREVIEW_SEGMENT_LIMIT,
     }
 
 
@@ -551,6 +560,35 @@ def _build_status_text_payload() -> dict[str, str]:
         payload["match_mode_tooltip_wildcard_active"] = (
             MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE
         )
+        # Enum value tables. JS previously hardcoded these as
+        # ``Object.freeze({...})`` literals that silently drifted
+        # if a Python member was renamed. Baking them via the
+        # payload makes the Python enum the single source of
+        # truth; the parity test at
+        # ``shared/tests/test_status_text_relay.py`` confirms each
+        # member is present.
+        from phonology_shared.presentation.palette import (
+            PaletteMode,
+            Theme,
+        )
+        from phonology_shared.theory.feature_engine import MatchMode
+
+        # Dict KEYS are the Python enum's UPPER_SNAKE_CASE member
+        # names (matching the JS access pattern ``MODE.SEG_TO_FEAT``);
+        # VALUES are the wire-stable string values JS holds in
+        # ``state.mode`` and round-trips through the bridge.
+        payload["mode_values"] = {  # type: ignore[assignment]
+            m.name: m.value for m in module.Mode
+        }
+        payload["theme_values"] = {  # type: ignore[assignment]
+            t.name: t.value for t in Theme
+        }
+        payload["palette_mode_values"] = {  # type: ignore[assignment]
+            pm.name: pm.value for pm in PaletteMode
+        }
+        payload["match_mode_values"] = {  # type: ignore[assignment]
+            mm.name: mm.value for mm in MatchMode
+        }
         return payload
     finally:
         sys.modules.pop(module_name, None)

@@ -21,6 +21,13 @@ The mirrored functions:
 * ``classifyEditorSelection`` mirrors
   ``grid_logic.classify_selection``. The editor's remove-button
   enable rules key on its output.
+* ``fallbackModeSwitch`` mirrors
+  ``mode_logic.project_mode_transition``'s pre-bridge contract:
+  SEG → FEAT keeps the segment selection in ``saved_seg_state``
+  and clears the feat query; FEAT → SEG clears segments and keeps
+  the feature query in ``saved_feat_state``. Runs only during the
+  ~200 ms before the Pyodide bridge attaches; the real projection
+  takes over once the bridge is ready.
 """
 
 from __future__ import annotations
@@ -42,6 +49,9 @@ EXPECTED_BODY_HASHES = {
     ),
     "classifyEditorSelection": (
         "5a54ebca4044fdd6e95e91dcf8fe3b2f1750821f156e0b3ba7bf52461b617086"
+    ),
+    "fallbackModeSwitch": (
+        "1b03f949c99f570a8a7e2c0f4cab1949d8f63cd72a519aba91b0dbf7c5ec8cf2"
     ),
 }
 

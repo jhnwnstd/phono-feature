@@ -60,6 +60,15 @@ class PhoibleSnapshotNotAvailable(RuntimeError):
     """
 
 
+#: Number of IPA glyphs returned by the PHOIBLE preview payload
+#: before the picker dialog asks the user to commit a load. Sized
+#: so the picker's preview panel stays scannable -- larger
+#: inventories surface a "+N more" hint instead of the full list.
+#: Single source so the web bridge slice and any future desktop
+#: picker pagination read the same number.
+PHOIBLE_PREVIEW_SEGMENT_LIMIT: int = 50
+
+
 def _load_index_bytes() -> bytes:
     """Return the index JSON bytes from the package resources.
 

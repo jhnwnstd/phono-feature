@@ -262,12 +262,6 @@ function callBridge(fnName, ...args) {
     }
 }
 
-/** Top-level UI mode. Values match the desktop's Mode StrEnum. */
-const MODE = Object.freeze({
-    SEG_TO_FEAT: "seg_to_feat",
-    FEAT_TO_SEG: "feat_to_seg",
-});
-
 /** Baked at build time from ``mode_logic.mode_status_text`` so the
  *  pre-bridge fallback can't drift from the canonical Python.
  *  ``web/scripts/build.py:_build_status_text_payload`` writes the
@@ -275,6 +269,22 @@ const MODE = Object.freeze({
  *  freeze keeps the object immutable so a future bug can't reach
  *  back and edit a string in place. */
 const STATUS_TEXT = Object.freeze(readInlineJson("status-text", {}));
+
+/** Top-level UI mode. Values come from the relayed
+ *  ``STATUS_TEXT.mode_values`` baked from
+ *  ``mode_logic.Mode`` (single source of truth). The hardcoded
+ *  fallback below is defensive only -- exercised when the
+ *  inlined JSON is missing (e.g., older snapshot, offline rebuild).
+ *  The parity test at ``shared/tests/test_status_text_relay.py``
+ *  asserts every Python ``Mode`` member appears in the baked
+ *  payload, so a future rename to the Python enum trips at build
+ *  time rather than at user-click time. */
+const MODE = Object.freeze(
+    STATUS_TEXT.mode_values || {
+        SEG_TO_FEAT: "seg_to_feat",
+        FEAT_TO_SEG: "feat_to_seg",
+    },
+);
 
 function readInlineJson(elementId, fallback) {
     const el = document.getElementById(elementId);
@@ -4552,12 +4562,20 @@ function wireLabelPrompt() {
     });
 }
 
-const THEME = Object.freeze({ LIGHT: "light", DARK: "dark" });
+/** Theme values come from the relayed ``STATUS_TEXT.theme_values``
+ *  baked from ``palette.Theme`` (Python SSOT). Hardcoded fallback
+ *  only fires if the inlined JSON is missing. */
+const THEME = Object.freeze(
+    STATUS_TEXT.theme_values || { LIGHT: "light", DARK: "dark" },
+);
 
-/** localStorage is external input: anything other than the dark
- *  sentinel reads as light. */
+/** localStorage is external input: anything that isn't an
+ *  acknowledged theme value falls back to LIGHT. Validates
+ *  against the relayed list so a future Python addition (e.g.
+ *  a high-contrast theme) is accepted automatically once baked. */
 function normalizeTheme(value) {
-    return value === THEME.DARK ? THEME.DARK : THEME.LIGHT;
+    const known = new Set(Object.values(THEME));
+    return known.has(value) ? value : THEME.LIGHT;
 }
 
 /** Best-effort localStorage write. Persistence is a "nice to have";
@@ -4618,17 +4636,24 @@ function wireBugButton() {
     });
 }
 
-const PALETTE_MODE = Object.freeze({
-    STANDARD: "standard",
-    COLORBLIND: "colorblind",
-});
+/** Palette-mode values come from the relayed
+ *  ``STATUS_TEXT.palette_mode_values`` baked from
+ *  ``palette.PaletteMode`` (Python SSOT). Hardcoded fallback only
+ *  fires if the inlined JSON is missing. */
+const PALETTE_MODE = Object.freeze(
+    STATUS_TEXT.palette_mode_values || {
+        STANDARD: "standard",
+        COLORBLIND: "colorblind",
+    },
+);
 
-/** localStorage is external input: anything other than the
- *  colorblind sentinel reads as standard. */
+/** localStorage is external input: anything that isn't an
+ *  acknowledged palette-mode value falls back to STANDARD.
+ *  Validates against the relayed list so a future Python addition
+ *  is accepted automatically once baked. */
 function normalizePaletteMode(value) {
-    return value === PALETTE_MODE.COLORBLIND
-        ? PALETTE_MODE.COLORBLIND
-        : PALETTE_MODE.STANDARD;
+    const known = new Set(Object.values(PALETTE_MODE));
+    return known.has(value) ? value : PALETTE_MODE.STANDARD;
 }
 
 /**
@@ -4671,10 +4696,12 @@ function _syncBridgePaletteToStoredState() {
  *  (otherwise unselectable) because those features ARE queryable
  *  under wildcard — every segment matches.
  */
-const MATCH_MODE = Object.freeze({
-    STRICT: "strict",
-    WILDCARD: "wildcard",
-});
+const MATCH_MODE = Object.freeze(
+    STATUS_TEXT.match_mode_values || {
+        STRICT: "strict",
+        WILDCARD: "wildcard",
+    },
+);
 
 /** localStorage is external input: anything other than the
  *  wildcard sentinel reads as strict. */

@@ -396,6 +396,16 @@ FEAT_MIN_W: int = 480
 # Extra pixels beyond ``feat_content_w`` so feature cards don't sit
 # flush against the splitter handle / panel edge.
 FEAT_CUSHION_PX: int = 40
+# Threshold at which the feature panel switches to compact row
+# density so a high-feature inventory fits without scrolling. At
+# 22 active features the worst-balanced column is ~12 rows; one
+# row beyond that and the natural-height panel starts to overflow
+# the typical 440-px top-pane budget at 720p. Tuned conservatively
+# so Hayes (28) goes compact, Default-33 goes compact, and shorter
+# inventories (Spanish ~16) stay comfortable. Lives here (not in
+# ``main_window.py``) so a future web parity implementation reads
+# the same number rather than re-inventing it.
+FEAT_COMPACT_THRESHOLD: int = 22
 # Vowel chart natural display width: row-label gutter + 6 button
 # columns (BTN_W=33, BTN_GAP=4) + buffer for the longest IPA-chart
 # row labels ("Near-close", "Close-mid") and breathing room around

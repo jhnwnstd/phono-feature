@@ -173,8 +173,87 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         # Python constants directly.
         "match_mode_tooltip_strict_active",
         "match_mode_tooltip_wildcard_active",
+        # Enum value tables. JS used to hardcode these as
+        # ``Object.freeze({...})`` literals that silently drifted
+        # if a Python member was renamed. Baking each enum here
+        # lets the parity tests below assert the JS-side dicts
+        # mirror the Python enums exactly.
+        "mode_values",
+        "theme_values",
+        "palette_mode_values",
+        "match_mode_values",
     }
     assert set(status_payload.keys()) == expected_keys
+
+
+def test_mode_values_match_python_enum(
+    status_payload: dict,
+) -> None:
+    """Every Python ``Mode`` member appears in the baked payload
+    with its string value. Catches a future rename / addition that
+    would silently leave the JS-side ``MODE`` enum stale."""
+    actual = status_payload.get("mode_values")
+    assert isinstance(
+        actual, dict
+    ), f"mode_values must be a dict, got {type(actual).__name__}"
+    expected = {m.name: m.value for m in Mode}
+    assert (
+        actual == expected
+    ), f"mode_values drift: baked {actual!r} vs Mode {expected!r}"
+
+
+def test_theme_values_match_python_enum(
+    status_payload: dict,
+) -> None:
+    """Every Python ``Theme`` member appears in the baked payload."""
+    from phonology_shared.presentation.palette import Theme
+
+    actual = status_payload.get("theme_values")
+    assert isinstance(
+        actual, dict
+    ), f"theme_values must be a dict, got {type(actual).__name__}"
+    expected = {t.name: t.value for t in Theme}
+    assert (
+        actual == expected
+    ), f"theme_values drift: baked {actual!r} vs Theme {expected!r}"
+
+
+def test_palette_mode_values_match_python_enum(
+    status_payload: dict,
+) -> None:
+    """Every Python ``PaletteMode`` member appears in the baked
+    payload."""
+    from phonology_shared.presentation.palette import PaletteMode
+
+    actual = status_payload.get("palette_mode_values")
+    assert isinstance(actual, dict), (
+        f"palette_mode_values must be a dict, " f"got {type(actual).__name__}"
+    )
+    expected = {pm.name: pm.value for pm in PaletteMode}
+    assert actual == expected, (
+        f"palette_mode_values drift: baked {actual!r} vs "
+        f"PaletteMode {expected!r}"
+    )
+
+
+def test_match_mode_values_match_python_enum(
+    status_payload: dict,
+) -> None:
+    """Every Python ``MatchMode`` member appears in the baked
+    payload. Load-bearing: the wildcard-mode toggle, bridge cache
+    keys, and analyze_* payloads all depend on this string staying
+    in sync."""
+    from phonology_shared.theory.feature_engine import MatchMode
+
+    actual = status_payload.get("match_mode_values")
+    assert isinstance(
+        actual, dict
+    ), f"match_mode_values must be a dict, got {type(actual).__name__}"
+    expected = {mm.name: mm.value for mm in MatchMode}
+    assert actual == expected, (
+        f"match_mode_values drift: baked {actual!r} vs "
+        f"MatchMode {expected!r}"
+    )
 
 
 def test_minus_glyphs_match_python(

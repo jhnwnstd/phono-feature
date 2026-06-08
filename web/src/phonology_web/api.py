@@ -93,6 +93,7 @@ from phonology_shared.editor.lookup_provider import (
     LookupTableNotAvailable,
 )
 from phonology_shared.editor.phoible_provider import (
+    PHOIBLE_PREVIEW_SEGMENT_LIMIT,
     PhoibleProvider,
     PhoibleSnapshotNotAvailable,
     materialize_phoible_inventory,
@@ -467,9 +468,10 @@ def phoible_preview_inventory(inventory_id: str) -> dict[str, Any]:
     just to inspect the segment list).
 
     Shape: ``{descriptor, segments, feature_count}`` where
-    ``segments`` is the first 50 IPA glyphs and ``feature_count``
-    is the number of columns the materialised inventory carries
-    after the empty-column pruning step.
+    ``segments`` is the first
+    :py:data:`PHOIBLE_PREVIEW_SEGMENT_LIMIT` IPA glyphs and
+    ``feature_count`` is the number of columns the materialised
+    inventory carries after the empty-column pruning step.
     """
     provider = _phoible_provider()
     if provider is None or not getattr(provider, "has_data", False):
@@ -481,7 +483,7 @@ def phoible_preview_inventory(inventory_id: str) -> dict[str, Any]:
     segments = list(generated.segments.keys())
     return {
         "descriptor": _descriptor_to_dict(descriptor),
-        "segments": segments[:50],
+        "segments": segments[:PHOIBLE_PREVIEW_SEGMENT_LIMIT],
         "segment_total": len(segments),
         "feature_count": len(generated.features),
     }
