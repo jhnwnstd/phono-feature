@@ -1202,7 +1202,9 @@ function relayoutSegments() {
         ].join("|");
         if (key === _lastRelayoutKey) return;
         _lastRelayoutKey = key;
-        applyPerGroupSegmentColumns();
+        // Thread the already-queried row list through so the
+        // column-picker doesn't re-run the same querySelectorAll.
+        applyPerGroupSegmentColumns(rows);
         rebalanceSegmentSpillover();
     };
     if ("requestAnimationFrame" in window) {
@@ -1212,34 +1214,41 @@ function relayoutSegments() {
     }
 }
 
+// Per-button stride cached once at boot. Source of truth lives
+// in the CSS variables baked from ``constants.BTN_W`` /
+// ``constants.BTN_GAP`` by ``web/scripts/build.py``; reading them
+// per relayout walks the cascade on every splitter drag. NaN
+// values mean the read happened before the relay attached --
+// callers fall back to the literal defaults in that case.
+let _BTN_W_CSS = NaN;
+let _BTN_GAP_CSS = NaN;
+
+function _refreshButtonStrideCache() {
+    const rootCS = getComputedStyle(document.documentElement);
+    _BTN_W_CSS = parseFloat(rootCS.getPropertyValue("--seg-btn-w"));
+    _BTN_GAP_CSS = parseFloat(rootCS.getPropertyValue("--seg-btn-gap"));
+}
+
 /** Pick a column count per consonant group that avoids one-button
  *  orphan rows. Mirrors the desktop's per-group ``best_segment_n_cols``
  *  pass in ``SegmentGridWidget._do_relayout``: same Python helper, two
  *  call sites. Inline ``grid-template-columns`` per ``.seg-row``
  *  switches that row from the default ``flex-wrap`` to a grid with the
  *  computed count; default CSS still applies between layout passes for
- *  the brief window before this runs. */
-function applyPerGroupSegmentColumns() {
+ *  the brief window before this runs.
+ *
+ *  ``rows`` may be passed in by ``relayoutSegments`` (which has
+ *  already queried them); falls back to a fresh querySelectorAll
+ *  for callers that don't have a row list handy. */
+function applyPerGroupSegmentColumns(rows) {
     const grid = nodes.segGrid;
     if (!grid) return;
-    const rows = [...grid.querySelectorAll(".seg-row")];
+    if (!rows) rows = [...grid.querySelectorAll(".seg-row")];
     if (rows.length === 0) return;
     const sample = rows[0].querySelector(".seg-btn");
     if (!sample) return;
-    // Source of truth for the per-button stride: the CSS variables
-    // baked from ``constants.BTN_W`` / ``constants.BTN_GAP`` by
-    // ``web/scripts/build.py``. The numeric fallbacks are belt-and-
-    // suspenders for the pre-bridge boot window before layout.css
-    // is attached; in steady state the var() read wins.
-    const rootCS = getComputedStyle(document.documentElement);
-    const cssBtnW = parseFloat(
-        rootCS.getPropertyValue("--seg-btn-w"),
-    );
-    const cssGap = parseFloat(
-        rootCS.getPropertyValue("--seg-btn-gap"),
-    );
-    const btnW = sample.offsetWidth || cssBtnW || 33;
-    const gapPx = Number.isFinite(cssGap) ? cssGap : 4;
+    const btnW = sample.offsetWidth || _BTN_W_CSS || 33;
+    const gapPx = Number.isFinite(_BTN_GAP_CSS) ? _BTN_GAP_CSS : 4;
     // Consonant rows wrap around the floated vowel chart; use the
     // narrower "alongside vowels" width as the conservative ceiling
     // so groups above the float don't overflow horizontally.
@@ -1810,22 +1819,15 @@ function _appendVowelDiphthongChipStrip(chartEl, chart) {
  *  underlying vowel buttons. The control point lifts the curve
  *  outward from the chord so two arrows in opposite directions
  *  do not overlap on a straight line. */
-/** Overlay faint horizontal bands behind the vowel data area, one
- *  per populated height tier. Top/bottom + tinted come from
- *  ``chart.bands`` directly; the shared geometry layer owns the
- *  midpoint math and silhouette-clamp policy. */
+/** Mount the gradient backdrop for the silhouette interior.
+ *  Post-redesign this is a single ``<div>`` whose CSS rule
+ *  paints a top->bottom gradient (suggesting tongue lowering);
+ *  the pre-redesign per-row alternating tints were replaced by
+ *  one continuous fill. Skipped when the inventory has no cells
+ *  (nothing to back). */
 function _appendVowelHeightTierBands(dataEl, chart) {
-    // Post-redesign the bands container carries a single
-    // top->bottom gradient (CSS rule on ``.vowel-chart-row-bands``)
-    // instead of per-row alternating tints. We only need ONE empty
-    // container that fills the silhouette interior; the per-row
-    // ``.vowel-chart-row-band`` children are no longer needed.
-    // ``chart.bands`` is still emitted by the shared geometry for
-    // any future "per-band tinting" feature; renderer ignores it
-    // for now. Skip mounting the container entirely when there are
-    // no populated rows.
-    const bands = chart.bands;
-    if (!Array.isArray(bands) || bands.length === 0) return;
+    const cells = chart.cells;
+    if (!Array.isArray(cells) || cells.length === 0) return;
     const container = document.createElement("div");
     container.className = "vowel-chart-row-bands";
     container.setAttribute("aria-hidden", "true");
@@ -5582,6 +5584,10 @@ function registerServiceWorker() {
 
 async function main() {
     initNodes();
+    // Cache the baked --seg-btn-w / --seg-btn-gap CSS vars once
+    // so the per-relayout column picker doesn't walk the cascade
+    // on every splitter drag.
+    _refreshButtonStrideCache();
     // Restore the persisted vowel chart display mode BEFORE any
     // bootstrap render so the first paint reflects the user's
     // last-used mode. The chart toggle button is created per

@@ -968,7 +968,6 @@ def generate_layout_css() -> None:
                 "  --vowel-chart-data-min-h: "
                 f"{chart_style.VOWEL_CHART_DATA_MIN_H_PX}px;"
             ),
-            ("  --vowel-band-alpha: " f"{chart_style.VOWEL_BAND_ALPHA};"),
             (
                 "  --diphthong-arrow-stroke: "
                 f"{chart_style.DIPHTHONG_ARROW_STROKE_PX}px;"
@@ -976,10 +975,6 @@ def generate_layout_css() -> None:
             (
                 "  --diphthong-arrow-focused-alpha: "
                 f"{chart_style.DIPHTHONG_ARROW_FOCUSED_ALPHA};"
-            ),
-            (
-                "  --diphthong-arrow-show-all-alpha: "
-                f"{chart_style.DIPHTHONG_ARROW_SHOW_ALL_ALPHA};"
             ),
         ]
     )

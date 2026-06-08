@@ -612,14 +612,6 @@ def _vowel_chart_summary(
         # Height-tier bands. Renderers iterate and paint;
         # the midpoint math has already happened in the
         # geometry layer so both UIs share the same edge clamps.
-        "bands": [
-            {
-                "top_norm": band.top_norm,
-                "bottom_norm": band.bottom_norm,
-                "tinted": band.tinted,
-            }
-            for band in geometry.bands
-        ],
         "cells": [
             {
                 "row": cell.row,

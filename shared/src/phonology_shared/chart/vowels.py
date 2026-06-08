@@ -1417,10 +1417,23 @@ def compute_placements(
     """
     policy = policy or PlacementPolicy()
     secondary_feats = vowel_secondary or {}
+    # Normalize the per-segment feature bundles ONCE up front so
+    # the per-segment loop can call ``_vowel_grid_pos_normalized``
+    # (skipping the per-call lowercase dict allocation). Most
+    # callers pass ``engine.normalized_segment_feats`` whose keys
+    # are already lowercase -- this pass is a fast pure-Python
+    # dict-comp in that case -- but the tests pass raw inventory
+    # feats (PascalCase from PHOIBLE), so the contract has to
+    # tolerate both shapes.
+    norm_cache: dict[str, dict[str, str]] = {
+        seg: _normalize_feat_keys(norm_feats.get(seg, {})) for seg in segs
+    }
     occupied: dict[tuple[int, int], list[str]] = {}
     placements: dict[str, VowelPlacement] = {}
     for seg in segs:
-        placement = vowel_grid_pos(norm_feats.get(seg, {}), profile, policy)
+        placement = _vowel_grid_pos_normalized(
+            norm_cache[seg], profile, policy
+        )
         if seg in secondary_feats:
             secondary = vowel_grid_pos(secondary_feats[seg], profile, policy)
             # Suppress the secondary when it lands in the SAME
@@ -1503,6 +1516,13 @@ _order_pair_entries = _vowels_layout._order_pair_entries
 _natural_data_area_size = _vowels_layout._natural_data_area_size
 
 
+# Module-level so it isn't rebuilt per placement call. Maps the
+# backness axis verdict to its unrounded-pair column index; the
+# rounded mate is ``base + 1`` and the neutral-rounding row is
+# ``6 + base // 2``.
+_PLACE_TO_COLUMN: Mapping[str, int] = {"front": 0, "central": 2, "back": 4}
+
+
 def vowel_grid_pos(
     feats: Mapping[str, str],
     profile: VowelProfile,
@@ -1527,9 +1547,27 @@ def vowel_grid_pos(
     over the per-axis evidence. ``flags`` is the union of every
     axis's flag set so a renderer can short-circuit on the presence
     of (for example) ``CONFLICT`` without inspecting each axis.
+
+    Bulk callers (``compute_placements``) that already pass
+    lowercase keys should use :py:func:`_vowel_grid_pos_normalized`
+    directly to skip the per-call ``_normalize_feat_keys`` dict
+    allocation.
+    """
+    return _vowel_grid_pos_normalized(
+        _normalize_feat_keys(feats), profile, policy
+    )
+
+
+def _vowel_grid_pos_normalized(
+    normalized: Mapping[str, str],
+    profile: VowelProfile,
+    policy: PlacementPolicy | None = None,
+) -> VowelPlacement:
+    """Placement core. Caller MUST pass already-lowercase keys --
+    use :py:func:`vowel_grid_pos` for the safe wrapper that
+    normalizes first.
     """
     policy = policy or PlacementPolicy()
-    normalized = _normalize_feat_keys(feats)
     height = _infer_height(normalized, profile, policy)
     height = _refine_height_with_relative_features(height, normalized, policy)
     backness = _infer_backness(normalized, profile, policy)
@@ -1539,8 +1577,7 @@ def vowel_grid_pos(
     rounding = _infer_rounding(normalized, profile, policy)
 
     row = _ROW_LABEL_TO_INDEX[height.value]
-    place_to_column = {"front": 0, "central": 2, "back": 4}
-    base_col = place_to_column[backness.value]
+    base_col = _PLACE_TO_COLUMN[backness.value]
     # Cols 0..5 = (front-unr, front-rnd, central-unr, central-rnd,
     # back-unr, back-rnd). Cols 6..8 are the neutral-round slots
     # (front, central, back) the renderer drops at the backness

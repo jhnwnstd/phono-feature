@@ -1215,23 +1215,16 @@ dialog input[type="text"]:focus-visible {
    keeps the band container strictly inside the 1 px silhouette
    rim so bands never paint over the structural outline. */
 .vowel-chart-row-bands {
+  /* Single very-faint top->bottom gradient inside the silhouette
+     interior (suggests tongue lowering without the visual noise
+     of per-tier banded fills). One empty container; the gradient
+     does the visual work and survives the silhouette clip-path
+     below. ``inset: 1px`` keeps the gradient strictly inside the
+     1 px silhouette rim so it never paints over the outline. */
   position: absolute;
   inset: 1px;
   pointer-events: none;
   z-index: 1;
-}
-.vowel-chart-row-band {
-  position: absolute;
-  left: 0;
-  right: 0;
-}
-.vowel-chart-row-bands {
-  /* "Soft modern" interior: single very-faint top->bottom gradient
-     (suggests tongue lowering) instead of the pre-redesign
-     alternating per-row bands. The per-row ``.vowel-chart-row-band``
-     elements still mount but no longer carry their own background;
-     this container's gradient does the visual work and survives
-     the silhouette clip-path below. */
   background: linear-gradient(
     to bottom,
     color-mix(in srgb, var(--border) 4%, transparent),

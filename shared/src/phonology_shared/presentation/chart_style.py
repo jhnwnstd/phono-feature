@@ -379,38 +379,16 @@ VOWEL_CHART_DATA_MIN_H_PX: int = 8 * SEG_BTN_H
 
 
 # ---------------------------------------------------------------------------
-# Height-tier bands (faint horizontal stripes inside the silhouette)
-# ---------------------------------------------------------------------------
-
-#: Alpha (0..1) for the tinted band fill. Pre-audit both used
-#: ``color-mix(16 %, transparent)`` / ``setAlpha(40)``; pinning so
-#: the rebalance lever lives in one place.
-VOWEL_BAND_ALPHA: float = 0.16
-
-
-# ---------------------------------------------------------------------------
 # Diphthong arrows (curved arrows from primary to secondary cell)
 # ---------------------------------------------------------------------------
 
-#: Stroke width (px) for the curved arrow path. Pre-audit desktop
-#: used ``pen.setWidthF(1.75)`` (px); web used SVG
-#: ``stroke-width: 0.6`` with ``vector-effect: non-scaling-stroke``
-#: (also px after the no-scaling rule). The two values produced
-#: visibly different visual weight (desktop's lines read as much
-#: heavier). Standardising on 1.0 px.
+#: Stroke width (px) for the curved arrow path.
 DIPHTHONG_ARROW_STROKE_PX: float = 1.0
 
-#: Stroke + arrowhead opacity when the arrow's source vowel has
-#: focus / hover. Pre-audit desktop painted at 1.0; web rendered
-#: at 0.95. Adopting 0.95 so the curve doesn't fully overdraw the
-#: cell buttons it passes over.
+#: Stroke + arrowhead opacity in diphthong display mode (arrows
+#: are always-on in that mode; dimmed-other-arrows on hover is
+#: handled in the renderer, not via an alpha constant).
 DIPHTHONG_ARROW_FOCUSED_ALPHA: float = 0.95
-
-#: Stroke + arrowhead opacity in "show all arrows" mode (a toggle
-#: that reveals every diphthong simultaneously). Pre-audit desktop
-#: painted at 0.55; web at 0.70. Adopting 0.70 so the overview
-#: stays legible even when many arrows tangle.
-DIPHTHONG_ARROW_SHOW_ALL_ALPHA: float = 0.70
 
 #: Arrowhead length as a fraction of the data-area width.
 #: Pre-audit desktop fixed at 7 px (proportionally tiny on wide

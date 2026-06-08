@@ -44,16 +44,12 @@ from phonology_shared.chart.vowels import (
     COL_LABELS,
     PAIR_DISPLAY_KINDS,
     ROW_LABELS,
-    Confidence,
     VowelCellDisplayKind,
-    VowelChartBand,
     VowelChartCell,
     VowelChartDiphthong,
     VowelChartGeometry,
     VowelChartShape,
     VowelChartSilhouette,
-    VowelPlacement,
-    VowelProfile,
     build_vowel_chart_geometry,
     detect_vowel_profile,
     vowel_silhouette,
@@ -76,15 +72,12 @@ from phonology_shared.presentation.layout import (
 )
 from phonology_shared.presentation.palette import C, VowelChartMode
 
-# Re-exports preserved for any external importer that read these
-# from vowel_chart directly. Canonical definitions live in
-# vowel_layout.py so the web app sees the same values.
+# Public surface. The placement-layer types (Confidence,
+# VowelPlacement, VowelProfile) are NOT re-exported -- importers
+# pull them directly from ``phonology_shared.chart.vowels``.
 __all__ = [
     "VOWEL_LABEL_W",
-    "Confidence",
     "VowelChartWidget",
-    "VowelPlacement",
-    "VowelProfile",
 ]
 
 # Width floor for the row-label gutter. Lives in shared
@@ -355,10 +348,6 @@ class VowelChartWidget(QWidget):
         # the chart in ``_layout_children`` and raised to the
         # top of the sibling stack so its paintEvent runs last.
         self._diphthong_overlay = _DiphthongOverlay(self)
-        # Height-tier band rectangles from the shared geometry.
-        # Renderer iterates and fills; midpoint math + silhouette
-        # clamps live in ``build_vowel_chart_geometry``.
-        self._bands: tuple[VowelChartBand, ...] = ()
         # Floor for ``set_target_width``: the geometry's natural
         # data width plus this widget's chrome. Updated on every
         # :py:meth:`_render_geometry` call so external resize
@@ -587,9 +576,10 @@ class VowelChartWidget(QWidget):
         containers is essential; otherwise destroying the container
         would take the children with it.
 
-        Display state (focus, show-all-arrows, natural-width pin)
-        resets too so a wide-to-narrow inventory swap releases the
-        prior pin and a hovered seg does not persist across loads.
+        Transient display state (focus, natural-width pin) resets
+        too so a wide-to-narrow inventory swap releases the prior
+        pin and a hovered seg does not persist across loads. The
+        persistent ``_display_mode`` preference is preserved.
         """
         for btn in self._buttons.values():
             btn.setParent(None)
@@ -609,7 +599,6 @@ class VowelChartWidget(QWidget):
             container.deleteLater()
         self._cell_containers.clear()
         self._diphthongs = ()
-        self._bands = ()
         self._focused_seg = None
         # ``_display_mode`` persists across inventory loads (it's
         # a UI preference, not inventory data). Reset only the
@@ -664,7 +653,6 @@ class VowelChartWidget(QWidget):
         self._shape = geometry.shape
         self._silhouette = geometry.silhouette
         self._diphthongs = tuple(geometry.diphthongs)
-        self._bands = tuple(geometry.bands)
         # Show the diphthong toggle button + chip strip only when
         # the inventory actually has diphthongs (mirrors the web's
         # ``_appendVowelDiphthongToggle`` / chip-strip guards).

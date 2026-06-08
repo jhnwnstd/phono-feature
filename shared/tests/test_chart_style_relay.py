@@ -296,11 +296,6 @@ def test_chart_style_json_matches_python(
             "px",
         ),
         (
-            "--vowel-band-alpha",
-            chart_style.VOWEL_BAND_ALPHA,
-            "",
-        ),
-        (
             "--diphthong-arrow-stroke",
             chart_style.DIPHTHONG_ARROW_STROKE_PX,
             "px",
@@ -308,11 +303,6 @@ def test_chart_style_json_matches_python(
         (
             "--diphthong-arrow-focused-alpha",
             chart_style.DIPHTHONG_ARROW_FOCUSED_ALPHA,
-            "",
-        ),
-        (
-            "--diphthong-arrow-show-all-alpha",
-            chart_style.DIPHTHONG_ARROW_SHOW_ALL_ALPHA,
             "",
         ),
     ],
