@@ -281,6 +281,11 @@ def test_chart_style_json_matches_python(
             "px",
         ),
         (
+            "--vowel-silhouette-corner-radius-frac",
+            chart_style.VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
+            "",
+        ),
+        (
             "--vowel-silhouette-alpha",
             chart_style.VOWEL_SILHOUETTE_ALPHA,
             "",
@@ -339,6 +344,47 @@ def test_css_var_matches_python(
         f"CSS var {css_var} = {actual} drifted from chart_style "
         f"= {expected}"
     )
+
+
+def test_rounded_silhouette_points_relay(
+    built_dist: tuple[Path, Path],
+) -> None:
+    """Both shapes (trapezoid + triangle) emit a
+    ``--vowel-<shape>-rounded-points`` CSS variable carrying the
+    polygon-points string used by the soft-modern silhouette
+    redesign. Catches a build regression where the bake silently
+    drops the rounded-points emission (which would leave
+    ``clip-path: polygon(var(--vowel-trapezoid-rounded-points))``
+    as an invalid empty polygon and stack the panes vertically)."""
+    layout_css = built_dist[1].read_text(encoding="utf-8")
+    for shape in ("trapezoid", "triangle"):
+        var = f"--vowel-{shape}-rounded-points"
+        pattern = re.compile(rf"{re.escape(var)}:\s*([^;]+);")
+        match = pattern.search(layout_css)
+        assert match is not None, (
+            f"no {var} in dist/layout.css; verify build.py emits "
+            f"rounded_silhouette_polygon_points for the {shape} "
+            f"shape"
+        )
+        points = match.group(1).strip()
+        # Each point looks like "12.345% 67.890%". The polygon
+        # should have at least 4 corners * (segments_per_corner + 1)
+        # = 24 points (default 5 segments per corner), expressed
+        # as ", " separated entries.
+        entries = points.split(",")
+        assert len(entries) >= 16, (
+            f"{var} polygon has only {len(entries)} points; "
+            f"expected >= 16 for the rounded silhouette"
+        )
+        # First and last entries should be valid "X% Y%" pairs.
+        for entry in (entries[0], entries[-1]):
+            entry = entry.strip()
+            parts = entry.split()
+            assert len(parts) == 2
+            for part in parts:
+                assert part.endswith(
+                    "%"
+                ), f"{var} polygon entry {entry!r} not in %"
 
 
 def test_seg_group_header_padding_relay(

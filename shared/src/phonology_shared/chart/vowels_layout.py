@@ -701,6 +701,94 @@ def _stage2_slant_tweak(
     )
 
 
+def rounded_silhouette_polygon_points(
+    silhouette: VowelChartSilhouette,
+    radius_frac: float,
+    *,
+    segments_per_corner: int = 5,
+) -> str:
+    """Return a CSS ``clip-path: polygon()`` points string that
+    approximates the silhouette's outline with rounded corners.
+
+    The 4-corner polygon is replaced by ``4 *
+    (segments_per_corner + 1)`` points: at each corner, two
+    "inset" points sit ``radius_frac`` along each adjacent edge,
+    and the corner itself is approximated by a quadratic Bezier
+    curve between those inset points with the corner as control.
+    Sampling the curve at ``segments_per_corner + 1`` equally-
+    spaced ``t`` values yields a visually smooth round.
+
+    Used by ``build.py`` to bake a CSS variable consumed by the
+    web's ``clip-path: polygon(var(--vowel-<shape>-rounded-points))``.
+    Desktop's ``QPainterPath`` consumer uses the same
+    ``radius_frac`` source but calls Qt's native ``quadTo`` per
+    corner so the desktop path stays free of polygon-interpolation
+    artefacts. Both renderers share the radius source so their
+    corner rounding stays in lockstep.
+    """
+    # CCW traversal so the polygon interior sits on the right of
+    # each directed edge. Top-left -> bottom-left -> bottom-right
+    # -> top-right matches the silhouette's polygon definition
+    # used elsewhere in this file.
+    corners: tuple[tuple[float, float], ...] = (
+        (silhouette.top_left, silhouette.top_y),
+        (silhouette.bottom_left, silhouette.bottom_y),
+        (silhouette.bottom_right, silhouette.bottom_y),
+        (silhouette.top_right, silhouette.top_y),
+    )
+    n = len(corners)
+    points: list[tuple[float, float]] = []
+    import math
+
+    for i in range(n):
+        prev = corners[(i - 1) % n]
+        curr = corners[i]
+        nxt = corners[(i + 1) % n]
+        # Unit vectors from ``curr`` toward each neighbour.
+        dx_in = prev[0] - curr[0]
+        dy_in = prev[1] - curr[1]
+        len_in = math.hypot(dx_in, dy_in) or 1.0
+        dx_in /= len_in
+        dy_in /= len_in
+        dx_out = nxt[0] - curr[0]
+        dy_out = nxt[1] - curr[1]
+        len_out = math.hypot(dx_out, dy_out) or 1.0
+        dx_out /= len_out
+        dy_out /= len_out
+        # Inset points sit ``radius_frac`` along each edge from the
+        # corner. Clamp the radius so a very short edge can't push
+        # the inset past the edge's midpoint (would overlap the
+        # adjacent corner's arc).
+        r_in = min(radius_frac, len_in * 0.45)
+        r_out = min(radius_frac, len_out * 0.45)
+        p_in = (
+            curr[0] + r_in * dx_in,
+            curr[1] + r_in * dy_in,
+        )
+        p_out = (
+            curr[0] + r_out * dx_out,
+            curr[1] + r_out * dy_out,
+        )
+        # Quadratic Bezier sampled at ``segments_per_corner + 1``
+        # equally-spaced t values. The corner itself is the control
+        # point; t=0 emits ``p_in``, t=1 emits ``p_out``.
+        for s in range(segments_per_corner + 1):
+            t = s / segments_per_corner
+            one_minus_t = 1.0 - t
+            bx = (
+                one_minus_t * one_minus_t * p_in[0]
+                + 2.0 * one_minus_t * t * curr[0]
+                + t * t * p_out[0]
+            )
+            by = (
+                one_minus_t * one_minus_t * p_in[1]
+                + 2.0 * one_minus_t * t * curr[1]
+                + t * t * p_out[1]
+            )
+            points.append((bx, by))
+    return ", ".join(f"{x * 100:.3f}% {y * 100:.3f}%" for x, y in points)
+
+
 def _silhouette_with_widths(
     silhouette: VowelChartSilhouette,
     top_width: float,

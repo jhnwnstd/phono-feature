@@ -342,6 +342,23 @@ VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX: int = 2
 #: same visual weight as the app-wide ``--border-thin`` token.
 VOWEL_SILHOUETTE_STROKE_PX: float = 1.0
 
+#: Corner radius for the silhouette outline as a FRACTION of the
+#: data-area width. Pre-redesign the outline was a sharp 4-point
+#: polygon; the "soft modern" pass rounds every corner so the
+#: chart picks up the same radius language as the rest of the
+#: app's UI (rounded buttons, panels). Expressed as a fraction
+#: because CSS ``clip-path`` polygon coordinates resolve in the
+#: element's normalised coord space -- a fixed pixel radius
+#: would either need a JS recompute on every resize or a
+#: viewbox-based SVG element. Fraction gives ~5 px on a typical
+#: 280 px data area and ~8 px on a wide 440 px chart, which
+#: stays visually proportional. Both renderers consume the same
+#: value: web's ``rounded_silhouette_polygon_points`` helper
+#: expands each corner into ``segments_per_corner+1`` interpolated
+#: points along a quadratic Bezier; desktop's QPainterPath uses
+#: ``quadTo`` between the same per-corner inset points.
+VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC: float = 0.018
+
 #: Alpha (0..1) for the silhouette outline color. Pre-audit
 #: desktop set ``setAlpha(178)`` (~70 %); web used CSS
 #: ``color-mix(70%, transparent)``. Both expressed the same intent

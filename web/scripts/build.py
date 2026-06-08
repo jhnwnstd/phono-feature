@@ -653,10 +653,33 @@ def _vowel_corner_lines(shape: str) -> list[str]:
     :py:attr:`VowelChartSilhouette.back_right_pixel_offset` -- the
     same formula the desktop and web renderers apply at runtime, so
     the canonical bake stays aligned with the interactive renders.
+
+    Also emits ``--vowel-<shape>-rounded-points`` for the new
+    "soft modern" silhouette outline -- a polygon points string
+    with each corner replaced by ``segments_per_corner+1`` points
+    interpolated along a quadratic Bezier (see
+    ``rounded_silhouette_polygon_points``). CSS rules consume
+    this via ``clip-path: polygon(var(--vowel-<shape>-rounded-points))``.
     """
+    from phonology_shared.chart.vowels import (
+        VowelChartShape,
+        vowel_silhouette,
+    )
+    from phonology_shared.chart.vowels_layout import (
+        rounded_silhouette_polygon_points,
+    )
+    from phonology_shared.presentation.chart_style import (
+        VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
+    )
+
+    sil_obj = vowel_silhouette(VowelChartShape(shape))
     sil = _vowel_silhouette(shape)
     back_offset = sil["back_right_pixel_offset"]
     back_right_calc = f"calc({sil['top_right'] * 100:.3f}% + {back_offset}px)"
+    rounded_points = rounded_silhouette_polygon_points(
+        sil_obj,
+        VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
+    )
     return [
         f"  --vowel-{shape}-top-left: {sil['top_left'] * 100:.3f}%;",
         f"  --vowel-{shape}-top-right: {back_right_calc};",
@@ -664,6 +687,7 @@ def _vowel_corner_lines(shape: str) -> list[str]:
         f"  --vowel-{shape}-bottom-right: {back_right_calc};",
         f"  --vowel-{shape}-top-y: {sil['top_y'] * 100:.3f}%;",
         f"  --vowel-{shape}-bottom-y: {sil['bottom_y'] * 100:.3f}%;",
+        f"  --vowel-{shape}-rounded-points: {rounded_points};",
     ]
 
 
@@ -920,6 +944,10 @@ def generate_layout_css() -> None:
             (
                 "  --vowel-silhouette-stroke: "
                 f"{chart_style.VOWEL_SILHOUETTE_STROKE_PX}px;"
+            ),
+            (
+                "  --vowel-silhouette-corner-radius-frac: "
+                f"{chart_style.VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC};"
             ),
             (
                 "  --vowel-silhouette-alpha: "

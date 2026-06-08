@@ -1735,22 +1735,22 @@ function _buildVowelChart(chart) {
  *  ``chart.bands`` directly; the shared geometry layer owns the
  *  midpoint math and silhouette-clamp policy. */
 function _appendVowelHeightTierBands(dataEl, chart) {
+    // Post-redesign the bands container carries a single
+    // top->bottom gradient (CSS rule on ``.vowel-chart-row-bands``)
+    // instead of per-row alternating tints. We only need ONE empty
+    // container that fills the silhouette interior; the per-row
+    // ``.vowel-chart-row-band`` children are no longer needed.
+    // ``chart.bands`` is still emitted by the shared geometry for
+    // any future "per-band tinting" feature; renderer ignores it
+    // for now. Skip mounting the container entirely when there are
+    // no populated rows.
     const bands = chart.bands;
     if (!Array.isArray(bands) || bands.length === 0) return;
     const container = document.createElement("div");
     container.className = "vowel-chart-row-bands";
     container.setAttribute("aria-hidden", "true");
-    for (const b of bands) {
-        const band = document.createElement("div");
-        band.className = "vowel-chart-row-band";
-        if (b.tinted) band.classList.add("vowel-chart-row-band-tinted");
-        band.style.top = `${(b.top_norm * 100).toFixed(3)}%`;
-        band.style.height =
-            `${((b.bottom_norm - b.top_norm) * 100).toFixed(3)}%`;
-        container.appendChild(band);
-    }
-    // Prepend so the bands sit BEHIND row labels, cells, and the
-    // diphthong arrow overlay (which all share the data area).
+    // Prepend so the gradient sits BEHIND row labels, cells, and
+    // the diphthong arrow overlay (which all share the data area).
     dataEl.insertBefore(container, dataEl.firstChild);
 }
 
@@ -1779,7 +1779,14 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
     svg.setAttribute("viewBox", "0 0 100 100");
     svg.setAttribute("preserveAspectRatio", "none");
     svg.setAttribute("aria-hidden", "true");
-    for (const groupArrows of groups.values()) {
+    // 1.5 % of viewBox = arrowhead-tip inset along the tangent.
+    // The tip used to land exactly at the secondary cell's centre;
+    // the cell button's paint would then occlude the triangle on
+    // short arrows. Insetting moves the tip outside the cell
+    // button's outline so it stays visible regardless of paint
+    // order.
+    const TIP_INSET_USER_UNITS = 1.5;
+    for (const [groupKey, groupArrows] of groups.entries()) {
         const N = groupArrows.length;
         for (let i = 0; i < N; i++) {
             const d = groupArrows[i];
@@ -1815,44 +1822,53 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
             // For N=3: -1, 0, +1.  For N=4: -1, -1/3, +1/3, +1.
             const signedFactor =
                 N > 1 ? (i / (N - 1)) * 2 - 1 : 1;
-            // Magnitude grows with the absolute factor so the outer
-            // arrows arc more than the inner ones, keeping the inner
-            // arrows close to the chord and reducing tangle.
+            // Fan-out magnitude: outer arrows arc 1.3x base lift
+            // (factor 0.5 + 0.8); inner arrows arc 0.5x base lift.
+            // Pre-fix the spread was 0.7 + 0.5 (outer 1.2x, inner
+            // 0.7x), which left concentric arrows on busy clusters
+            // (Korean PHOIBLE /i/ -> 6 destinations) too close
+            // together to read individually.
             const lift =
-                baseLift * signedFactor * (0.7 + 0.5 * Math.abs(signedFactor));
+                baseLift * signedFactor * (0.5 + 0.8 * Math.abs(signedFactor));
             const nx = -dy / len;
             const ny = dx / len;
             const cx = mx + nx * lift;
             const cy = my + ny * lift;
-            const path = document.createElementNS(svgNS, "path");
-            path.setAttribute("d", `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`);
-            path.setAttribute("class", "vowel-diphthong-arrow");
-            path.dataset.diphthongSeg = d.segment;
-            svg.appendChild(path);
-            // Arrowhead: a small triangle at the end, oriented along
-            // the curve's tangent at the endpoint (approximated by
-            // the control-point-to-endpoint direction).
+            // Tangent at the endpoint approximated by the
+            // control-point-to-endpoint direction.
             const tx = bx - cx;
             const ty = by - cy;
             const tlen = Math.hypot(tx, ty) || 1;
             const ux = tx / tlen;
             const uy = ty / tlen;
-            // Perpendicular for arrowhead wings.
+            // Inset the curve's terminus + arrowhead tip back
+            // along the tangent so the tip never lands inside
+            // a cell button's painted area.
+            const tipX = bx - ux * TIP_INSET_USER_UNITS;
+            const tipY = by - uy * TIP_INSET_USER_UNITS;
+            const path = document.createElementNS(svgNS, "path");
+            path.setAttribute("d", `M ${ax} ${ay} Q ${cx} ${cy} ${tipX} ${tipY}`);
+            path.setAttribute("class", "vowel-diphthong-arrow");
+            path.dataset.diphthongSeg = d.segment;
+            // Stable structural id keys the focus map below so a
+            // future segment-glyph collision can't cross-fire.
+            // ``groupKey`` is the (primary, secondary) cell pair
+            // serialized; ``i`` distinguishes parallel arrows.
+            path.dataset.diphthongId = `${groupKey}-${i}`;
+            svg.appendChild(path);
+            // Arrowhead: a small triangle at the (inset) tip,
+            // oriented along the tangent.
             const px = -uy;
             const py = ux;
             // Arrowhead dimensions pinned to ``chart_style.py`` as
             // fractions of the data-area width. viewBox is 100x100
             // so the fraction * 100 = the SVG user-unit length.
-            // Pre-relay desktop used pixel-fixed 7 / 3.5 px which
-            // looked tiny on wide PHOIBLE charts.
             const headLen = CHART_STYLE.diphthong_arrowhead_len_frac * 100;
             const headHalfW = (
                 CHART_STYLE.diphthong_arrowhead_half_frac * 100
             );
-            const tipX = bx;
-            const tipY = by;
-            const baseX = bx - ux * headLen;
-            const baseY = by - uy * headLen;
+            const baseX = tipX - ux * headLen;
+            const baseY = tipY - uy * headLen;
             const leftX = baseX + px * headHalfW;
             const leftY = baseY + py * headHalfW;
             const rightX = baseX - px * headHalfW;
@@ -1865,6 +1881,7 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
             );
             head.setAttribute("class", "vowel-diphthong-arrowhead");
             head.dataset.diphthongSeg = d.segment;
+            head.dataset.diphthongId = `${groupKey}-${i}`;
             svg.appendChild(head);
         }
     }

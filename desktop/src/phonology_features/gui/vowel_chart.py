@@ -23,6 +23,7 @@ from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtGui import (
     QColor,
     QFont,
+    QLinearGradient,
     QPainter,
     QPainterPath,
     QPaintEvent,
@@ -890,19 +891,42 @@ class VowelChartWidget(QWidget):
         )
         top_right_x = back_right_x
         bottom_right_x = back_right_x
-        path = QPainterPath()
-        path.moveTo(top_left_x, top_y)
-        path.lineTo(top_right_x, top_y)
-        path.lineTo(bottom_right_x, bottom_y)
-        path.lineTo(bottom_left_x, bottom_y)
-        path.closeSubpath()
+        path = self._build_rounded_silhouette_path(
+            top_left_x,
+            top_y,
+            top_right_x,
+            top_y,
+            bottom_right_x,
+            bottom_y,
+            bottom_left_x,
+            bottom_y,
+            dw,
+            dh,
+        )
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        # Height-tier bands first so the silhouette outline (and
-        # the diphthong arrows) paint on top of the tints.
-        self._paint_height_tier_bands(painter, path, dx, dy, dw, dh)
+        # "Soft modern" interior: single top->bottom gradient
+        # instead of the alternating per-band tints. Paints first
+        # so the silhouette outline + diphthong arrows render on
+        # top.
+        self._paint_gradient_interior(painter, path)
+        # Accent glow when the seg pane is active: a wider, low-
+        # alpha pen pass behind the canonical 1 px stroke. Visually
+        # equivalent to the web's
+        # ``.panel[data-active="true"] .vowel-chart-data::before {
+        # filter: drop-shadow(...) }`` rule. Painted on top of the
+        # interior gradient, behind the canonical outline.
+        if self._last_headers_active:
+            glow_color = QColor(C["accent"])
+            glow_color.setAlphaF(0.32)
+            glow_pen = QPen(glow_color)
+            glow_pen.setWidthF(6.0)
+            glow_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            glow_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(glow_pen)
+            painter.drawPath(path)
         # Outline only, no painted fill: the trapezoid is a
-        # structural guide, not a coloured region. A 1.25 px alpha-
+        # structural guide, not a coloured region. A 1 px alpha-
         # blended stroke softens the silhouette so the cells inside
         # carry the visual weight; mirrors the web's muted
         # ``color-mix(in srgb, var(--border) 70%, transparent)``
@@ -920,43 +944,120 @@ class VowelChartWidget(QWidget):
         self._paint_diphthong_arrows(painter, dx, dy, dw, dh)
         painter.end()
 
-    def _paint_height_tier_bands(
+    @staticmethod
+    def _build_rounded_silhouette_path(
+        tl_x: float,
+        tl_y: float,
+        tr_x: float,
+        tr_y: float,
+        br_x: float,
+        br_y: float,
+        bl_x: float,
+        bl_y: float,
+        dw: float,
+        dh: float,
+    ) -> QPainterPath:
+        """Construct the silhouette ``QPainterPath`` with rounded
+        corners. Each corner is approximated by a quadratic Bezier
+        whose two endpoint "inset" points sit
+        ``VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC`` along each adjacent
+        edge from the corner; the corner itself is the control
+        point. Mirrors the web's
+        ``rounded_silhouette_polygon_points`` Bezier-per-corner
+        approximation so the desktop's outline matches the web's
+        ``clip-path: polygon(var(--vowel-<shape>-rounded-points))``
+        edge-for-edge.
+        """
+        corners = (
+            (tl_x, tl_y),
+            (bl_x, bl_y),
+            (br_x, br_y),
+            (tr_x, tr_y),
+        )
+        # Radius in pixels: web's polygon points use the same
+        # ``radius_frac`` applied uniformly to normalised x and y
+        # coords. Mirror that: scale by dw / dh respectively so
+        # the rounding looks identical on both UIs even when the
+        # chart's aspect ratio is non-square.
+        r_x = cs.VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC * dw
+        r_y = cs.VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC * dh
+        # Compute the inset points per corner; the path is then
+        # ``moveTo(p_in_0) [ lineTo(p_in_next) quadTo(curr_next,
+        # p_out_next) ]* closeSubpath``.
+        n = len(corners)
+        inset_in: list[tuple[float, float]] = []
+        inset_out: list[tuple[float, float]] = []
+        for i in range(n):
+            prev = corners[(i - 1) % n]
+            curr = corners[i]
+            nxt = corners[(i + 1) % n]
+            dx_in = prev[0] - curr[0]
+            dy_in = prev[1] - curr[1]
+            dx_out = nxt[0] - curr[0]
+            dy_out = nxt[1] - curr[1]
+            len_in = math.hypot(dx_in, dy_in) or 1.0
+            len_out = math.hypot(dx_out, dy_out) or 1.0
+            # Inset by the per-axis radius: x by r_x, y by r_y.
+            # Clamp to 45 % of the edge length so a tiny edge
+            # doesn't overlap the adjacent corner's arc.
+            scale_in = min(1.0, len_in * 0.45 / max(r_x, r_y))
+            scale_out = min(1.0, len_out * 0.45 / max(r_x, r_y))
+            ix_in = curr[0] + scale_in * r_x * (dx_in / len_in)
+            iy_in = curr[1] + scale_in * r_y * (dy_in / len_in)
+            ix_out = curr[0] + scale_out * r_x * (dx_out / len_out)
+            iy_out = curr[1] + scale_out * r_y * (dy_out / len_out)
+            inset_in.append((ix_in, iy_in))
+            inset_out.append((ix_out, iy_out))
+        path = QPainterPath()
+        # Start at the first corner's "outgoing" inset (post-arc
+        # point), then line+arc around the polygon.
+        path.moveTo(inset_out[0][0], inset_out[0][1])
+        for i in range(n):
+            nxt_idx = (i + 1) % n
+            # Line from this corner's outgoing inset to the next
+            # corner's incoming inset.
+            path.lineTo(inset_in[nxt_idx][0], inset_in[nxt_idx][1])
+            # Arc through the next corner via quadratic Bezier.
+            path.quadTo(
+                corners[nxt_idx][0],
+                corners[nxt_idx][1],
+                inset_out[nxt_idx][0],
+                inset_out[nxt_idx][1],
+            )
+        path.closeSubpath()
+        return path
+
+    def _paint_gradient_interior(
         self,
         painter: QPainter,
         silhouette_path: QPainterPath,
-        dx: int,
-        dy: int,
-        dw: int,
-        dh: int,
     ) -> None:
-        """Fill faint horizontal bands inside the silhouette to mark
-        height tiers. Geometry layer owns the midpoint math and
-        silhouette-clamp policy via ``VowelChartGeometry.bands``;
-        this pass just iterates and paints. The clip-path keeps
-        the tint inside the trapezoid.
+        """Fill the silhouette interior with a single very-faint
+        top->bottom linear gradient. Replaces the pre-redesign
+        alternating per-band tints (which read as uneven graph
+        paper on irregular inventories). Mirrors the web's CSS
+        rule on ``.vowel-chart-row-bands`` -- both renderers paint
+        ``border @ 4 % alpha`` at the top, ``border @ 14 % alpha``
+        at the bottom, suggesting tongue lowering without adding
+        visual noise.
         """
-        if dh <= 0 or not self._bands:
+        bounds = silhouette_path.boundingRect()
+        if bounds.height() <= 0:
             return
-        band_color = QColor(C["border"])
-        # Alpha from chart_style.VOWEL_BAND_ALPHA so the band tint
-        # cannot drift from the web's color-mix(16%) rule.
-        band_color.setAlphaF(cs.VOWEL_BAND_ALPHA)
+        top_color = QColor(C["border"])
+        top_color.setAlphaF(0.04)
+        bottom_color = QColor(C["border"])
+        bottom_color.setAlphaF(0.14)
+        gradient = QLinearGradient(
+            bounds.x(),
+            bounds.y(),
+            bounds.x(),
+            bounds.y() + bounds.height(),
+        )
+        gradient.setColorAt(0.0, top_color)
+        gradient.setColorAt(1.0, bottom_color)
         painter.save()
-        painter.setClipPath(silhouette_path)
-        for band in self._bands:
-            if not band.tinted:
-                continue
-            # round-to-nearest so the bands align with the same
-            # pixel rows as web CSS's percentage-based rectangles.
-            top_y = dy + round(band.top_norm * dh)
-            bot_y = dy + round(band.bottom_norm * dh)
-            painter.fillRect(
-                round(dx),
-                top_y,
-                round(dw),
-                bot_y - top_y,
-                band_color,
-            )
+        painter.fillPath(silhouette_path, gradient)
         painter.restore()
 
     def _paint_diphthong_arrows(
@@ -1018,7 +1119,12 @@ class VowelChartWidget(QWidget):
                     dw * cs.DIPHTHONG_LIFT_WIDTH_FRAC_CAP,
                     chord * cs.DIPHTHONG_LIFT_CHORD_FRAC,
                 )
-                lift = base_lift * signed * (0.7 + 0.5 * abs(signed))
+                # Fan-out: outer arrows arc 1.3x base lift (0.5 +
+                # 0.8 * 1.0); inner arrows arc 0.5x. Pre-fix was
+                # (0.7 + 0.5), which left concentric arrows on
+                # busy clusters (Korean PHOIBLE /i/ -> 6
+                # destinations) too close to read individually.
+                lift = base_lift * signed * (0.5 + 0.8 * abs(signed))
                 nx = -(by - ay) / chord
                 ny = (bx - ax) / chord
                 cx = mx + nx * lift
@@ -1033,30 +1139,39 @@ class VowelChartWidget(QWidget):
                 pen.setWidthF(cs.DIPHTHONG_ARROW_STROKE_PX)
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
-                path = QPainterPath()
-                path.moveTo(ax, ay)
-                path.quadTo(cx, cy, bx, by)
-                painter.drawPath(path)
-                # Arrowhead at the secondary end, oriented along the
-                # control-point-to-endpoint tangent. Length + half-
-                # width scale with chart width (fractions in
-                # chart_style.py) so the head stays proportional on
-                # narrow + wide charts alike.
+                # Arrowhead tangent + inset. Pre-fix the curve and
+                # arrowhead tip landed exactly at the secondary
+                # cell's centre, where the cell button's paint
+                # would occlude the triangle on short arrows.
+                # Inset the tip back along the tangent by 1.5 % of
+                # ``dw`` (matches the web's TIP_INSET_USER_UNITS)
+                # so the tip sits OUTSIDE the cell button outline.
                 tx = bx - cx
                 ty = by - cy
                 tlen = math.hypot(tx, ty) or 1.0
                 ux = tx / tlen
                 uy = ty / tlen
+                tip_inset = dw * 0.015
+                tip_x = bx - ux * tip_inset
+                tip_y = by - uy * tip_inset
+                path = QPainterPath()
+                path.moveTo(ax, ay)
+                path.quadTo(cx, cy, tip_x, tip_y)
+                painter.drawPath(path)
+                # Arrowhead at the inset tip, oriented along the
+                # tangent. Length + half-width scale with chart
+                # width so the head stays proportional on narrow
+                # + wide charts alike.
                 head_len = dw * cs.DIPHTHONG_ARROWHEAD_LEN_FRAC
                 head_half = dw * cs.DIPHTHONG_ARROWHEAD_HALF_FRAC
-                base_x = bx - ux * head_len
-                base_y = by - uy * head_len
+                base_x = tip_x - ux * head_len
+                base_y = tip_y - uy * head_len
                 left_x = base_x + (-uy) * head_half
                 left_y = base_y + ux * head_half
                 right_x = base_x - (-uy) * head_half
                 right_y = base_y - ux * head_half
                 head = QPainterPath()
-                head.moveTo(bx, by)
+                head.moveTo(tip_x, tip_y)
                 head.lineTo(left_x, left_y)
                 head.lineTo(right_x, right_y)
                 head.closeSubpath()

@@ -1211,33 +1211,47 @@ dialog input[type="text"]:focus-visible {
   left: 0;
   right: 0;
 }
-.vowel-chart-row-band-tinted {
-  /* Quiet alternating tint at ~16 % border opacity so the bands
-     suggest tier structure without reading as "graph paper". The
-     mix composes against the underlying ``::after`` surface fill,
-     so the bands track the seg-pane's active state automatically. */
-  background: color-mix(in srgb, var(--border) 16%, transparent);
+.vowel-chart-row-bands {
+  /* "Soft modern" interior: single very-faint top->bottom gradient
+     (suggests tongue lowering) instead of the pre-redesign
+     alternating per-row bands. The per-row ``.vowel-chart-row-band``
+     elements still mount but no longer carry their own background;
+     this container's gradient does the visual work and survives
+     the silhouette clip-path below. */
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--border) 4%, transparent),
+    color-mix(in srgb, var(--border) 14%, transparent)
+  );
 }
 .vowel-chart-data[data-shape="trapezoid"]::before,
 .vowel-chart-data[data-shape="trapezoid"]::after,
 .vowel-chart-data[data-shape="trapezoid"] .vowel-chart-row-bands,
 .vowel-chart-data[data-shape="trapezoid"] .vowel-diphthong-arrows {
-  clip-path: polygon(
-    var(--vowel-trapezoid-top-left)     var(--vowel-trapezoid-top-y),
-    var(--vowel-trapezoid-top-right)    var(--vowel-trapezoid-top-y),
-    var(--vowel-trapezoid-bottom-right) var(--vowel-trapezoid-bottom-y),
-    var(--vowel-trapezoid-bottom-left)  var(--vowel-trapezoid-bottom-y)
-  );
+  /* Rounded trapezoid silhouette: ``--vowel-trapezoid-rounded-points``
+     bakes ~24 points (5 per corner + 4 original corners) along a
+     quadratic Bezier so every corner reads as gently rounded
+     instead of sharp. Drops the previous 4-point polygon. The
+     points come from ``rounded_silhouette_polygon_points`` in
+     shared/vowels_layout.py so desktop's ``QPainterPath`` and
+     the web's clip-path stay in lockstep. */
+  clip-path: polygon(var(--vowel-trapezoid-rounded-points));
 }
 .vowel-chart-data[data-shape="triangle"]::before,
 .vowel-chart-data[data-shape="triangle"]::after,
 .vowel-chart-data[data-shape="triangle"] .vowel-chart-row-bands,
 .vowel-chart-data[data-shape="triangle"] .vowel-diphthong-arrows {
-  clip-path: polygon(
-    var(--vowel-triangle-top-left)     var(--vowel-triangle-top-y),
-    var(--vowel-triangle-top-right)    var(--vowel-triangle-top-y),
-    var(--vowel-triangle-bottom-right) var(--vowel-triangle-bottom-y),
-    var(--vowel-triangle-bottom-left)  var(--vowel-triangle-bottom-y)
+  clip-path: polygon(var(--vowel-triangle-rounded-points));
+}
+/* Accent glow when the segments pane is active. Drop-shadow on
+   the silhouette outline pseudo-element gives a soft accent halo
+   that fades the outline into the pane background, signalling
+   "this is the active surface" without adding any visual chrome.
+   Purely additive: when inactive the rule doesn't match and the
+   outline reads at its canonical 1 px / 70 % alpha. */
+.panel[data-active="true"] .vowel-chart-data::before {
+  filter: drop-shadow(
+    0 0 6px color-mix(in srgb, var(--accent) 32%, transparent)
   );
 }
 .vowel-chart-cell {
