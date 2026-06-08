@@ -82,19 +82,23 @@ FONT_SIZE_MICRO_PX: int = 10
 # the CSS ``font-size`` string in px steps.
 FONT_SIZE_MIN_PX: int = 10
 
-# Label for the vowel-chart "show all diphthong arrows" toggle
-# button. Single string consumed by both renderers so a rename or
+# Label for the vowel-chart display-mode toggle button (flips
+# between monophthong-only and diphthong-only chart rendering).
+# Single string consumed by both renderers so a rename or
 # localisation lands once. Stays lowercase for typographic
 # consistency with the chart's row / column labels.
 DIPHTHONG_TOGGLE_LABEL: str = "diphthongs"
 
-# Tooltip strings for the diphthong-arrows toggle button. Two
-# variants reflect the toggle's checked vs unchecked state. Same
-# wording on both UIs.
-DIPHTHONG_TOGGLE_TOOLTIP_OFF: str = (
-    "Show all diphthong arrows (hover a vowel to see one)"
+# Tooltip strings for the vowel-chart display-mode toggle.
+# Each variant describes what clicking the toggle will DO from
+# the current mode (so users see the destination, not the
+# current state).
+VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE: str = (
+    "Show the inventory's diphthong trajectories instead"
 )
-DIPHTHONG_TOGGLE_TOOLTIP_ON: str = "Hide all-arrow overlay"
+VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE: str = (
+    "Show the inventory's monophthongs instead"
+)
 
 # Accessible name for the vowel chart widget (web aria-label /
 # desktop QWidget.setAccessibleName). Screen readers announce

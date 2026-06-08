@@ -222,6 +222,20 @@ class MainWindow(QMainWindow):
             if saved_match_mode == str(MatchMode.WILDCARD)
             else MatchMode.STRICT
         )
+        # Restore the user's vowel-chart display-mode choice. The
+        # chart widget itself defaults to MONOPHTHONG; we apply
+        # the persisted value after construction below so the
+        # toggle button + cell filter pick up the right state.
+        from phonology_shared.presentation.palette import VowelChartMode
+
+        saved_vowel_mode = self._read_setting_str(
+            SettingsKey.VOWEL_CHART_MODE, str(VowelChartMode.MONOPHTHONG)
+        )
+        self._vowel_chart_mode: VowelChartMode = (
+            VowelChartMode.DIPHTHONG
+            if saved_vowel_mode == str(VowelChartMode.DIPHTHONG)
+            else VowelChartMode.MONOPHTHONG
+        )
         set_css(self, f"background-color: {C['bg']};")
         # 150 ms debounce for selection-change analysis.
         self._debounce = QTimer(self)
@@ -558,6 +572,21 @@ class MainWindow(QMainWindow):
         left_lay.addWidget(self.seg_grid_widget, stretch=1)
         self.vowel_chart_widget = VowelChartWidget(seg_content)
         self.vowel_chart_widget.hide()
+        # Restore the user's persisted display-mode choice and
+        # connect the change-signal so subsequent toggles
+        # persist via QSettings.
+        self.vowel_chart_widget.set_display_mode(self._vowel_chart_mode)
+        self.vowel_chart_widget.display_mode_changed.connect(
+            self._on_vowel_chart_display_mode_changed
+        )
+        # Diphthong chip strip: clicking a chip selects the
+        # diphthong via the same flow the pooled SegmentButton's
+        # ``clicked`` signal uses. Routing through ``btn.click()``
+        # preserves the mode-switch + selection-set side effects
+        # the chart cells would trigger directly.
+        self.vowel_chart_widget.segment_clicked.connect(
+            self._on_diphthong_chip_clicked
+        )
         # Seed with the per-pane width default; the splitter-drag
         # callback pushes the adapted value in later. We can't read
         # ``self._hsplit`` here because it's still being built.
@@ -1568,6 +1597,37 @@ class MainWindow(QMainWindow):
             MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE
             if is_wild
             else MATCH_MODE_TOOLTIP_STRICT_ACTIVE
+        )
+
+    def _on_diphthong_chip_clicked(self, seg: str) -> None:
+        """Forward a diphthong-chip-strip click through the same
+        flow a real chart-cell click uses. The pool's
+        ``SegmentButton`` for ``seg`` is checkable; calling
+        ``click()`` programmatically fires ``pressed`` then
+        ``clicked``, which the existing handlers
+        ``_on_segment_pressed`` and ``_on_segment_clicked`` are
+        already wired to."""
+        btn = self._seg_button_pool.get(seg)
+        if btn is None:
+            return
+        btn.click()
+
+    def _on_vowel_chart_display_mode_changed(self, mode_value: str) -> None:
+        """Persist the user's display-mode toggle so the choice
+        survives a relaunch. The vowel chart widget emits this
+        signal on every toggle click; the value is the str() of
+        the new ``VowelChartMode``."""
+        from phonology_shared.presentation.palette import VowelChartMode
+
+        try:
+            new_mode = VowelChartMode(mode_value)
+        except ValueError:
+            new_mode = VowelChartMode.MONOPHTHONG
+        self._vowel_chart_mode = new_mode
+        write_setting(
+            self._settings,
+            SettingsKey.VOWEL_CHART_MODE,
+            str(new_mode),
         )
 
     def _toggle_match_mode(self) -> None:

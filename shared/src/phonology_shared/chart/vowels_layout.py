@@ -32,6 +32,7 @@ from phonology_shared.chart.vowels import (
     _ROW_LABEL_TO_INDEX,
     COL_LABELS,
     ROW_LABELS,
+    PlacementFlag,
     PlacementPolicy,
     VowelCellDisplayKind,
     VowelChartShape,
@@ -135,6 +136,17 @@ class VowelChartCell:
     entries: tuple[str, ...]
     display_kind: VowelCellDisplayKind = VowelCellDisplayKind.STACK
     contrast_features: tuple[str, ...] = ()
+    # True when at least one of the cell's ``entries`` carries
+    # :py:attr:`PlacementFlag.DIPHTHONG` -- the placer sets this
+    # flag only on placements whose ``secondary`` lands in a
+    # DIFFERENT (row, col) from the primary, so pharyngealised
+    # monophthongs (Archi ``/aˤ /iˤ /``) whose secondary
+    # collapses back to the primary cell are excluded by
+    # construction. Renderers use this flag plus the active
+    # :py:class:`VowelChartMode` to filter cell visibility
+    # without re-deriving "is this a diphthong" from feature
+    # bundles or segment-string parsing.
+    is_diphthong: bool = False
 
 
 @dataclass(frozen=True)
@@ -1421,6 +1433,19 @@ def build_vowel_chart_geometry(
         cell_display_y = display_y_by_row[ri]
         row_width = _width_at_display_y(cell_display_y)
         chart_x = back + row_width * (anchor_x - back)
+        # ``is_diphthong`` is True when any of this cell's
+        # entries carries ``PlacementFlag.DIPHTHONG`` on its
+        # placement record. The placer sets that flag only when
+        # the segment's secondary lands in a different cell from
+        # its primary (post-degeneracy-filter), so
+        # pharyngealised monophthongs like Archi ``/aˤ /`` --
+        # whose secondary collapses to the primary cell -- are
+        # automatically excluded.
+        is_diphthong = any(
+            PlacementFlag.DIPHTHONG in placements[seg].flags
+            for seg in entries
+            if seg in placements
+        )
         cells.append(
             VowelChartCell(
                 row=ri,
@@ -1431,6 +1456,7 @@ def build_vowel_chart_geometry(
                 entries=entries,
                 display_kind=display_kind,
                 contrast_features=contrast_features,
+                is_diphthong=is_diphthong,
             )
         )
 

@@ -28,6 +28,7 @@ EXPECTED_KEYS: dict[str, str] = {
     "MODE": "mode",
     "LAST_INVENTORY": "last_inventory",
     "MATCH_MODE": "match_mode",
+    "VOWEL_CHART_MODE": "vowel_chart_mode",
 }
 
 

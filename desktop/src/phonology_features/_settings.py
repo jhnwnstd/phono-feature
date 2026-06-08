@@ -62,6 +62,12 @@ class SettingsKey(StrEnum):
     # Persists the user's "Allow underspecified" toolbar toggle so
     # the choice survives a relaunch.
     MATCH_MODE = "match_mode"
+    # VowelChartMode (monophthong / diphthong) -- which class of
+    # vowel segments the chart's silhouette area renders. The
+    # diphthong chip strip below the silhouette always renders the
+    # inventory's diphthongs regardless of this setting; the value
+    # only decides what fills the trapezoid.
+    VOWEL_CHART_MODE = "vowel_chart_mode"
 
 
 def write_setting(settings: Any, key: SettingsKey, value: Any) -> None:

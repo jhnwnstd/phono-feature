@@ -182,6 +182,11 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         "theme_values",
         "palette_mode_values",
         "match_mode_values",
+        # VowelChartMode (monophthong / diphthong) enum values
+        # baked alongside the other enum tables so the web's
+        # ``state.vowel_chart_mode`` string round-trips through the
+        # same SSOT path.
+        "vowel_chart_mode_values",
         # Accessibility strings: chart aria-label + per-segment
         # button aria-label template. Web reads these via
         # STATUS_TEXT; desktop imports the source constants
@@ -189,11 +194,11 @@ def test_payload_keys_exhaustive(status_payload: dict[str, str]) -> None:
         # directly. Pre-relay both were hardcoded inline.
         "vowel_chart_accessible_name",
         "seg_accessible_label_template",
-        # Diphthong-arrows toggle button tooltip strings. Two
-        # variants (off / on) reflect the toggle's checked state.
-        # Same wording on both UIs via the relay.
-        "diphthong_toggle_tooltip_off",
-        "diphthong_toggle_tooltip_on",
+        # Vowel-chart display-mode toggle tooltips. Each
+        # describes the DESTINATION (what clicking will do from
+        # the current mode), not the current state.
+        "vowel_chart_mode_tooltip_mono_active",
+        "vowel_chart_mode_tooltip_diphthong_active",
     }
     assert set(status_payload.keys()) == expected_keys
 
@@ -301,6 +306,47 @@ def test_match_mode_values_match_python_enum(
     assert actual == expected, (
         f"match_mode_values drift: baked {actual!r} vs "
         f"MatchMode {expected!r}"
+    )
+
+
+def test_vowel_chart_mode_values_match_python_enum(
+    status_payload: dict,
+) -> None:
+    """Every Python ``VowelChartMode`` member appears in the baked
+    payload. The web's display-mode toggle stores the value in
+    localStorage and round-trips it; a Python rename without a
+    rebuild would silently leave the JS holding a stale string."""
+    from phonology_shared.presentation.palette import VowelChartMode
+
+    actual = status_payload.get("vowel_chart_mode_values")
+    assert isinstance(actual, dict), (
+        f"vowel_chart_mode_values must be a dict, "
+        f"got {type(actual).__name__}"
+    )
+    expected = {vm.name: vm.value for vm in VowelChartMode}
+    assert actual == expected, (
+        f"vowel_chart_mode_values drift: baked {actual!r} vs "
+        f"VowelChartMode {expected!r}"
+    )
+
+
+def test_vowel_chart_mode_tooltips_match_python(
+    status_payload: dict,
+) -> None:
+    """The two display-mode tooltip strings (one per active
+    mode) must equal the shared Python constants byte-for-byte."""
+    from phonology_shared.presentation.constants import (
+        VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE,
+        VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE,
+    )
+
+    assert (
+        status_payload.get("vowel_chart_mode_tooltip_mono_active")
+        == VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE
+    )
+    assert (
+        status_payload.get("vowel_chart_mode_tooltip_diphthong_active")
+        == VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE
     )
 
 

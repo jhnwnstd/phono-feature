@@ -348,6 +348,12 @@ const state = {
     // querySelectorAll in the analysis hot path.
     seg_buttons: new Map(),  // seg -> HTMLButtonElement
     feat_rows: new Map(),    // feat -> { row, badge, plus, minus }
+    // Vowel chart display mode (monophthong / diphthong). Read
+    // from localStorage at boot via ``normalizeVowelChartMode``
+    // (see wireVowelChartModeToggle). Default = monophthong so
+    // the first paint stays clean even before localStorage is
+    // read.
+    vowel_chart_mode: "monophthong",
 };
 
 let BUNDLED_INVENTORIES = [];
@@ -629,6 +635,14 @@ function applyBootstrap() {
     state.inventory_name = info.name;
     state.segments = info.segments;
     state.features = info.features;
+    // Cache for mode-toggle re-render (see
+    // ``_rerenderVowelChart``). The summary is the canonical
+    // payload renderSegmentGrid consumes; stashing it lets a
+    // mode toggle repaint without re-running the bridge.
+    state.last_inventory_summary = {
+        groups: info.groups,
+        vowel_chart: info.vowel_chart,
+    };
     renderSegmentGrid(info.groups, info.vowel_chart);
     renderFeaturePanel(info.feature_groups);
     return true;
@@ -686,6 +700,12 @@ function applyInventoryInfo(info) {
     state.features = info.features;
     state.selected_segments = [];
     state.selected_features = emptyFeatureSpec();
+    // Cache for mode-toggle re-render (see
+    // ``_rerenderVowelChart``).
+    state.last_inventory_summary = {
+        groups: info.groups,
+        vowel_chart: info.vowel_chart,
+    };
     renderSegmentGrid(info.groups, info.vowel_chart);
     renderFeaturePanel(info.feature_groups);
     clearAnalysisTabs();
@@ -1654,6 +1674,13 @@ function _buildVowelChart(chart) {
     const rowTierByLogical = new Map(
         (chart.rows || []).map((r) => [r.logical_row, r.tier || "middle"]),
     );
+    // Vowel chart display mode: skip cells that don't match the
+    // active mode (monophthong / diphthong). ``cell.is_diphthong``
+    // is set shared-side from ``PlacementFlag.DIPHTHONG`` so the
+    // partition is byte-stable across renders.
+    const mode = state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
+    const showDiphthongCells = mode === VOWEL_CHART_MODE.DIPHTHONG;
+    dataEl.dataset.displayMode = mode;
     for (const cell of chart.cells) {
         // Multiple vowels can map to the same chart cell (the
         // classic case is ə / ɜ / ɚ all landing in open-mid central
@@ -1661,6 +1688,7 @@ function _buildVowelChart(chart) {
         // ``cell.segs``, sorted by descending placement confidence.
         const segs = cell.segs;
         if (!Array.isArray(segs) || segs.length === 0) continue;
+        if (Boolean(cell.is_diphthong) !== showDiphthongCells) continue;
         let target;
         if (segs.length === 1) {
             target = _buildVowelCellButton(segs[0]);
@@ -1726,10 +1754,49 @@ function _buildVowelChart(chart) {
     }
     _appendVowelDiphthongArrows(dataEl, chart);
     chartEl.appendChild(dataEl);
-    _appendVowelDiphthongToggle(chartEl, dataEl);
+    const hasDiphthongs = Array.isArray(chart.diphthongs)
+        && chart.diphthongs.length > 0;
+    _appendVowelChartModeToggle(chartEl, hasDiphthongs);
+    _appendVowelDiphthongChipStrip(chartEl, chart);
 
     groupEl.appendChild(chartEl);
     return groupEl;
+}
+
+/** Always-visible chip strip below the silhouette listing the
+ *  inventory's diphthong segments. Each chip is a normal seg-btn
+ *  so clicking it dispatches the same selection flow as any other
+ *  segment click. Renders nothing when the inventory has no
+ *  diphthongs. Visible in BOTH chart modes so users always see
+ *  the inventory's diphthongs and can select them even when the
+ *  trapezoid shows only monophthongs. */
+function _appendVowelDiphthongChipStrip(chartEl, chart) {
+    const arrows = chart.diphthongs;
+    if (!Array.isArray(arrows) || arrows.length === 0) return;
+    const strip = document.createElement("div");
+    strip.className = "vowel-diphthong-chips";
+    strip.setAttribute(
+        "aria-label",
+        "Diphthongs in this inventory",
+    );
+    // Order: source order from the geometry's ``diphthongs`` list
+    // (which preserves placement iteration order, stable across
+    // builds). Duplicate segments are skipped -- the same
+    // segment appears once per (primary, secondary) row in the
+    // arrows list when fan-out applies, but the chip strip wants
+    // one chip per unique segment.
+    const seen = new Set();
+    for (const d of arrows) {
+        if (!d.segment || seen.has(d.segment)) continue;
+        seen.add(d.segment);
+        const btn = _buildSegmentButton(d.segment);
+        // The chip carries the same data-seg as the chart's
+        // cells, so the existing delegated click handler on
+        // ``#seg-grid`` (wireSegmentDelegation) selects the
+        // diphthong without any new wiring.
+        strip.appendChild(btn);
+    }
+    chartEl.appendChild(strip);
 }
 
 /** Overlay a single ``<svg>`` on the vowel data area with one
@@ -1773,6 +1840,12 @@ function _appendVowelHeightTierBands(dataEl, chart) {
 function _appendVowelDiphthongArrows(dataEl, chart) {
     const arrows = chart.diphthongs;
     if (!Array.isArray(arrows) || arrows.length === 0) return;
+    // Arrows render ONLY in diphthong display mode. In monophthong
+    // mode the chart shows monophthong cells only; arrows would
+    // have nothing to attach to (the diphthong cells are hidden)
+    // and would point into empty silhouette space.
+    const mode = state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
+    if (mode !== VOWEL_CHART_MODE.DIPHTHONG) return;
     // The cell DOM elements need to be in the document and
     // browser-laid-out before we can read their bounding rects
     // for the arrow endpoint resolver. ``_buildVowelChart`` is
@@ -2010,44 +2083,70 @@ function _buildArrowsNow(dataEl, chart) {
     _wireVowelDiphthongFocus(dataEl);
 }
 
-/** A small chart-corner toggle that flips ``data-show-arrows``
- *  between ``"focus"`` (default; arrows visible only for the
- *  hovered / focused vowel) and ``"all"`` (every arrow visible at
- *  reduced opacity). Rendered only when the chart actually has
- *  diphthongs so monophthong-only inventories don't carry the
- *  extra chrome. The ``aria-pressed`` flips so screen readers
- *  announce the state change. */
-function _appendVowelDiphthongToggle(chartEl, dataEl) {
-    if (!dataEl.querySelector("svg.vowel-diphthong-arrows")) return;
-    const tooltipOff =
-        STATUS_TEXT.diphthong_toggle_tooltip_off ||
-        "Show all diphthong arrows (hover a vowel to see one)";
-    const tooltipOn =
-        STATUS_TEXT.diphthong_toggle_tooltip_on ||
-        "Hide all-arrow overlay";
+/** A small chart-corner toggle that flips the vowel chart between
+ *  monophthong and diphthong display modes. The button only
+ *  renders when the inventory actually has diphthongs so a pure-
+ *  monophthong inventory doesn't carry useless chrome. Click
+ *  updates ``state.vowel_chart_mode``, writes to localStorage,
+ *  and triggers a full chart re-render so the cell + arrow
+ *  filters re-apply. ``aria-pressed`` reflects diphthong mode
+ *  so screen readers announce the state change.
+ *
+ *  ``hasDiphthongs`` is passed in (rather than queried from the
+ *  SVG) because in monophthong mode no SVG exists yet; the
+ *  caller knows from ``chart.diphthongs.length > 0``.
+ */
+function _appendVowelChartModeToggle(chartEl, hasDiphthongs) {
+    if (!hasDiphthongs) return;
+    const tooltipMono =
+        STATUS_TEXT.vowel_chart_mode_tooltip_mono_active ||
+        "Show the inventory's diphthong trajectories instead";
+    const tooltipDiphthong =
+        STATUS_TEXT.vowel_chart_mode_tooltip_diphthong_active ||
+        "Show the inventory's monophthongs instead";
+    const mode = state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
+    const isDiphthong = mode === VOWEL_CHART_MODE.DIPHTHONG;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "vowel-diphthong-toggle";
-    btn.setAttribute("aria-pressed", "false");
-    btn.setAttribute("title", tooltipOff);
+    btn.setAttribute("aria-pressed", String(isDiphthong));
+    btn.setAttribute(
+        "title",
+        isDiphthong ? tooltipDiphthong : tooltipMono,
+    );
     btn.textContent = STATUS_TEXT.diphthong_toggle_label || "diphthongs";
     btn.addEventListener("click", () => {
-        const on = dataEl.dataset.showArrows === "all";
-        if (on) {
-            delete dataEl.dataset.showArrows;
-            btn.setAttribute("aria-pressed", "false");
-            btn.setAttribute("title", tooltipOff);
-        } else {
-            dataEl.dataset.showArrows = "all";
-            btn.setAttribute("aria-pressed", "true");
-            btn.setAttribute("title", tooltipOn);
-        }
+        const current =
+            state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
+        const next =
+            current === VOWEL_CHART_MODE.DIPHTHONG
+                ? VOWEL_CHART_MODE.MONOPHTHONG
+                : VOWEL_CHART_MODE.DIPHTHONG;
+        state.vowel_chart_mode = next;
+        safeStorageSet("vowel_chart_mode", next);
+        _rerenderVowelChart();
     });
     // Attach to the chart's outer container (not the data area)
     // so the toggle sits in the title row instead of competing
     // with Close-Back cell stacks for the top-right corner of the
     // data rectangle.
     chartEl.appendChild(btn);
+}
+
+/** Re-render the current vowel chart in place. Called when the
+ *  display mode toggles -- the chart needs to rebuild its cell
+ *  partition + arrow overlay to reflect the new mode. Locates
+ *  the chart container in the segments grid and asks
+ *  ``renderSegmentGrid`` to repaint with the cached groups
+ *  payload from the last analysis. */
+function _rerenderVowelChart() {
+    // Easiest path: re-run the same render entry the bridge
+    // calls. ``state.last_inventory_summary`` is the cached
+    // payload (set every time a fresh summary lands); falling
+    // back to a no-op when nothing has loaded yet.
+    const summary = state.last_inventory_summary;
+    if (!summary) return;
+    renderSegmentGrid(summary.groups, summary.vowel_chart);
 }
 
 /** Hover / focus wiring for the diphthong overlay. Default state
@@ -4994,6 +5093,28 @@ function normalizeMatchMode(value) {
         : MATCH_MODE.STRICT;
 }
 
+/** Vowel-chart display mode: which class of vowel segments the
+ *  chart's silhouette area renders. Values relayed from
+ *  ``palette.VowelChartMode`` (Python SSOT) via the inlined
+ *  STATUS_TEXT JSON. Default = monophthong (the cleaner first
+ *  paint; mirrors the previous "show all diphthong arrows = off"
+ *  default).
+ *
+ *  The diphthong chip strip below the silhouette always renders
+ *  the inventory's diphthongs regardless of mode -- this enum
+ *  only decides what fills the trapezoid. */
+const VOWEL_CHART_MODE = Object.freeze(
+    STATUS_TEXT.vowel_chart_mode_values || {
+        MONOPHTHONG: "monophthong",
+        DIPHTHONG: "diphthong",
+    },
+);
+
+function normalizeVowelChartMode(value) {
+    const known = new Set(Object.values(VOWEL_CHART_MODE));
+    return known.has(value) ? value : VOWEL_CHART_MODE.MONOPHTHONG;
+}
+
 /** Push the user's restored matching mode (set by
  *  wireMatchModeToggle before the bridge attached) into Python.
  *  Without this, all natural-class results stay on strict even
@@ -5461,6 +5582,15 @@ function registerServiceWorker() {
 
 async function main() {
     initNodes();
+    // Restore the persisted vowel chart display mode BEFORE any
+    // bootstrap render so the first paint reflects the user's
+    // last-used mode. The chart toggle button is created per
+    // render inside ``_buildVowelChart``; it reads
+    // ``state.vowel_chart_mode`` directly so no later sync is
+    // needed.
+    state.vowel_chart_mode = normalizeVowelChartMode(
+        safeStorageGet("vowel_chart_mode"),
+    );
     wireStatusbarBrand();
     wireBugButton();
     wireThemeToggle();

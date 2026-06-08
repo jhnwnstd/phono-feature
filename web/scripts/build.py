@@ -572,14 +572,14 @@ def _build_status_text_payload() -> dict[str, str]:
         from phonology_shared.presentation.constants import (
             DEFAULT_INVENTORY_STEM,
             DIPHTHONG_TOGGLE_LABEL,
-            DIPHTHONG_TOGGLE_TOOLTIP_OFF,
-            DIPHTHONG_TOGGLE_TOOLTIP_ON,
             EMPTY_NATURAL_CLASS_HINT,
             EMPTY_PHOIBLE_SEARCH_HINT,
             EMPTY_SHARED_FEATURES_HINT,
             MATCH_MODE_TOOLTIP_STRICT_ACTIVE,
             MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE,
             VOWEL_CHART_ACCESSIBLE_NAME,
+            VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE,
+            VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE,
         )
 
         payload["diphthong_toggle_label"] = DIPHTHONG_TOGGLE_LABEL
@@ -608,8 +608,15 @@ def _build_status_text_payload() -> dict[str, str]:
         # ``{seg}`` so a future change to the convention (e.g.
         # square brackets) is one Python edit.
         payload["seg_accessible_label_template"] = "/{seg}/"
-        payload["diphthong_toggle_tooltip_off"] = DIPHTHONG_TOGGLE_TOOLTIP_OFF
-        payload["diphthong_toggle_tooltip_on"] = DIPHTHONG_TOGGLE_TOOLTIP_ON
+        # Vowel-chart display-mode toggle tooltips. Each variant
+        # describes what clicking the toggle does FROM that state
+        # (the destination, not the current state).
+        payload["vowel_chart_mode_tooltip_mono_active"] = (
+            VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE
+        )
+        payload["vowel_chart_mode_tooltip_diphthong_active"] = (
+            VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE
+        )
         # Enum value tables. JS previously hardcoded these as
         # ``Object.freeze({...})`` literals that silently drifted
         # if a Python member was renamed. Baking them via the
@@ -620,6 +627,7 @@ def _build_status_text_payload() -> dict[str, str]:
         from phonology_shared.presentation.palette import (
             PaletteMode,
             Theme,
+            VowelChartMode,
         )
         from phonology_shared.theory.feature_engine import MatchMode
 
@@ -638,6 +646,9 @@ def _build_status_text_payload() -> dict[str, str]:
         }
         payload["match_mode_values"] = {  # type: ignore[assignment]
             mm.name: mm.value for mm in MatchMode
+        }
+        payload["vowel_chart_mode_values"] = {  # type: ignore[assignment]
+            vm.name: vm.value for vm in VowelChartMode
         }
         return payload
     finally:

@@ -897,8 +897,10 @@ dialog input[type="text"]:focus-visible {
   grid-template-columns: var(--vowel-chart-row-label-gutter) 1fr;
   /* Row 1: title (centred over the data column only).
      Row 2: column headers (Front / Central / Back).
-     Row 3: row-label gutter + data area. */
-  grid-template-rows: auto auto 1fr;
+     Row 3: row-label gutter + data area.
+     Row 4: always-visible diphthong chip strip (auto-sized;
+     empty when the inventory has no diphthongs). */
+  grid-template-rows: auto auto 1fr auto;
   /* Right + bottom insets pinned via
      ``chart_style.VOWEL_CHART_PAD_R_PX`` /
      ``VOWEL_CHART_PAD_B_PX`` so the back column (chart_x=1) and
@@ -1066,44 +1068,35 @@ dialog input[type="text"]:focus-visible {
   z-index: 2;
 }
 .vowel-diphthong-arrow {
-  /* Stroke + opacity pinned via ``chart_style.py``. Both
-     renderers consume the same numbers; pre-relay desktop had
-     1.75 px stroke + opacity 1.0 (focused) / 0.55 (show-all)
-     while web had 0.6 user-units + 0.95 / 0.7. */
+  /* Stroke + opacity pinned via ``chart_style.py``. Arrows
+     render only in diphthong display mode (the trapezoid then
+     shows the diphthong segments + their trajectories); in
+     monophthong mode the SVG isn't appended at all so this
+     ruleset never matches. Default opacity is the chart_style
+     focused-alpha because in diphthong mode the chart IS the
+     arrows -- no hover gating needed. */
   fill: none;
   stroke: var(--accent);
   stroke-width: var(--diphthong-arrow-stroke);
-  /* Default: hidden. Most PHOIBLE inventories have many
-     diphthongs (12 in Korean PHOIBLE, up to 30 elsewhere); an
-     always-on overlay reads as a tangle. The arrows light up on
-     hover / focus of the source vowel button (``.is-focused``
-     below) and can be shown all at once via the chart's "show
-     diphthong arrows" toggle (``data-show-arrows="all"``). */
-  opacity: 0;
-  transition: opacity 0.12s ease;
+  opacity: var(--diphthong-arrow-focused-alpha);
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
 .vowel-diphthong-arrowhead {
   fill: var(--accent);
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-.vowel-diphthong-arrow.is-focused {
-  opacity: var(--diphthong-arrow-focused-alpha);
-}
-.vowel-diphthong-arrowhead.is-focused {
   opacity: 1;
 }
-/* Show-all toggle on the chart fades every arrow in at the
-   parity opacity baked from chart_style.py. The hover-gated
-   ``.is-focused`` rule still applies on top so the active arrow
-   reads brightest. */
-.vowel-chart-data[data-show-arrows="all"] .vowel-diphthong-arrow {
-  opacity: var(--diphthong-arrow-show-all-alpha);
+/* Hover highlight: dim every other arrow when one is focused so
+   the user can follow a single trajectory cleanly in a busy
+   diphthong cluster. Pre-redesign the hover rule controlled
+   visibility; post-redesign it controls EMPHASIS only. */
+.vowel-chart-data:has(.vowel-diphthong-arrow.is-focused)
+  .vowel-diphthong-arrow:not(.is-focused) {
+  opacity: 0.25;
 }
-.vowel-chart-data[data-show-arrows="all"] .vowel-diphthong-arrowhead {
-  opacity: 0.8;
+.vowel-chart-data:has(.vowel-diphthong-arrowhead.is-focused)
+  .vowel-diphthong-arrowhead:not(.is-focused) {
+  opacity: 0.25;
 }
 /* Toggle button anchored at the data area's top-right corner.
    Stays unobtrusive (text-dim) until hovered/active; the
@@ -1140,6 +1133,27 @@ dialog input[type="text"]:focus-visible {
 .vowel-diphthong-toggle[aria-pressed="true"] {
   border-color: var(--accent);
   color: var(--accent);
+}
+/* Always-visible diphthong chip strip below the silhouette.
+   Lists the inventory's diphthong segments as small seg-btn
+   chips that can be clicked to select even when the chart is in
+   monophthong mode (and the diphthong cells are hidden inside
+   the trapezoid). Wraps when many diphthongs exist. */
+.vowel-diphthong-chips {
+  grid-row: 4;
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vowel-pair-gap, 2px);
+  padding: var(--space-xs) 2px 0 2px;
+  justify-content: flex-start;
+  align-items: center;
+  min-height: 0;
+}
+.vowel-diphthong-chips .seg-btn {
+  /* Slightly tighter than the chart's main buttons -- chips are
+     supplementary affordances, not the primary surface. */
+  height: calc(var(--seg-btn-h) - 4px);
 }
 /* Trapezoid / triangle silhouette: OUTLINE only, no painted fill.
 
