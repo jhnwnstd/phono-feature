@@ -710,6 +710,21 @@ def vowel_silhouette(
         bottom_right=back + pair_outer,
         top_width=top_row_width,
         bottom_width=bottom_row_width,
+        # Cell-extent fields (cascade source). Renderers position
+        # the silhouette edges at ``anchor * dw ± cell_outer_extent_px``
+        # so the silhouette wraps the outer cell edge flush at ANY
+        # data width, not just the canonical 232 px.
+        front_anchor_at_top=front_at_top,
+        front_anchor_at_bottom=front_at_bottom,
+        back_anchor=back,
+        # Constant pixel offset from a paired cell's centre to its
+        # outer edge: ``pair_shift`` (centre-to-mate-centre / 2)
+        # plus half a button width. This is the px adjustment the
+        # renderer adds to ``anchor * dw`` so the silhouette is
+        # flush with the outer cell edge at ANY data width.
+        cell_outer_extent_px=int(
+            round((BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 + BTN_W / 2.0)
+        ),
     )
 
 

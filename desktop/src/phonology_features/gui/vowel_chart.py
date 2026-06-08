@@ -56,6 +56,8 @@ from phonology_shared.chart.vowels import (
 )
 from phonology_shared.chart.vowels_layout import (
     effective_button_height_px,
+    silhouette_for_data_width,
+    silhouette_left_at_y,
 )
 from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.constants import (
@@ -1074,19 +1076,22 @@ class VowelChartWidget(QWidget):
         # so the two read as separate elements; web mirrors the value
         # in style.css.
         label_gap_px = self._ROW_LABEL_GAP_PX
-        for lbl, y, silhouette_left in self._row_labels:
+        # Recompute silhouette_left per render using the dw-corrected
+        # silhouette: the baked ``silhouette_left`` field on the row
+        # was computed at the canonical 232 px content width, but the
+        # rendered chart is content-driven (~228-320 px). Using the
+        # cascade helper keeps the label flush against the silhouette
+        # at any rendered width.
+        sil_for_dw = (
+            silhouette_for_data_width(self._silhouette, dw)
+            if self._silhouette is not None
+            else vowel_silhouette(self._shape)
+        )
+        for lbl, y, _stale_silhouette_left in self._row_labels:
             lbl.adjustSize()
             lh = lbl.height()
             py = dy + round(y * dh) - lh // 2
-            # ``silhouette_left`` is baked shared-side via
-            # ``silhouette_left_at_y`` so the value accounts for
-            # the rounded-corner insets and matches the rendered
-            # silhouette pixel-for-pixel. Pre-fix this method
-            # re-derived the value locally via the canonical
-            # linear interp between sil.top_left and bottom_left
-            # -- which IGNORED the corner rounding and left the
-            # label floating in the gap between the canonical
-            # corner and the rounded polygon edge.
+            silhouette_left = silhouette_left_at_y(sil_for_dw, y)
             anchor_x = dx + round(silhouette_left * dw)
             px = anchor_x - lbl.width() - label_gap_px
             lbl.move(max(0, px), py)
@@ -1167,22 +1172,24 @@ class VowelChartWidget(QWidget):
             # No inventory rendered yet -- use the canonical silhouette
             # so a pre-load paint still shows the trapezoid outline.
             sil = vowel_silhouette(self._shape)
-        # Round-to-nearest (not int truncate) so the silhouette
-        # corners align as closely as possible with the web's
-        # CSS clip-path coordinates, which use fractional
-        # percentages browser-resolved to sub-pixel positions.
+        # CASCADE: recompute the silhouette corners from the cell
+        # extent fields (front_anchor_at_*, back_anchor,
+        # cell_outer_extent_px) for the ACTUAL data width. This
+        # guarantees the silhouette wraps the outermost cells
+        # flush regardless of how wide the chart renders -- pre-
+        # cascade the corners were computed once at the canonical
+        # 232 px content width and drifted ~1 px at the rendered
+        # 228 / 320 px widths.
+        sil = silhouette_for_data_width(sil, dw)
         top_y = dy + round(sil.top_y * dh)
         bottom_y = dy + round(sil.bottom_y * dh)
         top_left_x = dx + round(sil.top_left * dw)
         bottom_left_x = dx + round(sil.bottom_left * dw)
-        # Back edge: ``top_right`` is the back ANCHOR (normalised);
-        # the fixed-pixel ``back_right_pixel_offset`` captures the
-        # rest. The same formula runs on the web (via the bridge
-        # payload), so both UIs land the line at the same place
-        # regardless of how wide the data area is rendered. The
-        # asymmetric pull-in (snap to back-vowel centre rather than
-        # the canonical pair-outer extent) is encoded in the offset
-        # by ``build_vowel_chart_geometry``; the renderer just adds.
+        # Back edge: now derived from ``back_anchor + extent_px / dw``
+        # via ``silhouette_for_data_width``; the legacy
+        # ``back_right_pixel_offset`` escape hatch still applies for
+        # any per-inventory tweak (default 0 -- the cascade math
+        # already enforces flush).
         back_right_x = (
             dx + round(sil.top_right * dw) + sil.back_right_pixel_offset
         )
@@ -1254,6 +1261,7 @@ class VowelChartWidget(QWidget):
         sil = self._silhouette
         if sil is None:
             sil = vowel_silhouette(self._shape)
+        sil = silhouette_for_data_width(sil, dw)
         top_y = dy + round(sil.top_y * dh)
         bottom_y = dy + round(sil.bottom_y * dh)
         top_left_x = dx + round(sil.top_left * dw)

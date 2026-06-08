@@ -607,6 +607,7 @@ def _vowel_chart_summary(
                 "chart_y": row.chart_y,
                 "tier": row.tier,
                 "silhouette_left": row.silhouette_left,
+                "silhouette_right": row.silhouette_right,
             }
             for row in geometry.rows
         ],

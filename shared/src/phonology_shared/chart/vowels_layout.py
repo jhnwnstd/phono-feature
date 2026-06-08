@@ -180,16 +180,23 @@ class VowelChartRow:
     chart_y: float
     tier: str = "middle"
     slot_height_norm: float = 0.0
-    # Silhouette's actual LEFT edge x at this row's ``chart_y``
-    # (normalised ``[0, 1]``), accounting for the top-left and
-    # bottom-left rounded-corner insets. Both renderers anchor
-    # the row label here so the label sits flush against the
-    # rendered silhouette regardless of corner rounding. Computed
-    # via :py:func:`silhouette_left_at_y` so the value tracks the
-    # same Bezier formula that
-    # :py:func:`rounded_silhouette_polygon_points` samples for the
-    # CSS clip-path / QPainterPath outline.
+    # Silhouette's actual LEFT and RIGHT edge x at this row's
+    # ``chart_y`` (normalised ``[0, 1]``), accounting for the
+    # rounded-corner insets at the top + bottom of the polygon.
+    # Both renderers consume these for row-label anchoring and
+    # any future right-edge label or alignment cue.
+    #
+    # IMPORTANT: these are stored at the CANONICAL data width
+    # (``_VOWEL_CONTENT_W_PX``). For accurate flush at the
+    # actual rendered ``dw``, renderers can recompute the
+    # silhouette via :py:func:`silhouette_for_data_width` and
+    # then call :py:func:`silhouette_left_at_y` /
+    # :py:func:`silhouette_right_at_y` with the corrected
+    # silhouette. The drift at non-canonical ``dw`` is small
+    # (~1 px) so callers that don't need pixel-perfect flush
+    # can use these baked values directly.
     silhouette_left: float = 0.0
+    silhouette_right: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -243,15 +250,45 @@ class VowelChartSilhouette:
     bottom_right: float
     top_width: float
     bottom_width: float
+    # CELL-EXTENT FIELDS (cascade source of truth).
+    #
+    # These four fields let renderers compute the silhouette's
+    # left / right edge POSITION IN PIXELS at any data width such
+    # that the silhouette wraps the outermost cell flush. The
+    # ``top_left/right`` etc. fields above remain for backward
+    # compatibility but represent the canonical-width approximation;
+    # ``silhouette_left_norm_at_y`` / ``silhouette_right_norm_at_y``
+    # are the canonical accessors that take the current data width
+    # into account.
+    #
+    # ``front_anchor_at_top`` / ``front_anchor_at_bottom`` are the
+    # front-cell BACKNESS ANCHOR at the silhouette's top and bottom
+    # y respectively (in [0, 1]). Cells in the front column at
+    # those rows centre on ``front_anchor_at_*  * dw``. The
+    # silhouette's actual left edge sits ``cell_outer_extent_px``
+    # to the LEFT of that centre so the front-most cell is flush
+    # against the silhouette stroke.
+    #
+    # ``back_anchor`` is the constant back-cell anchor (no row
+    # variation -- back cells stay at the same backness across all
+    # rows). Silhouette's right edge sits ``cell_outer_extent_px``
+    # to the RIGHT of ``back_anchor * dw``.
+    #
+    # ``cell_outer_extent_px`` is ``pair_shift_px + btn_w / 2`` --
+    # the fixed-pixel offset from a paired cell's centre to its
+    # outer edge. Both renderers consume this to position the
+    # silhouette so the math cascades: at any data width the
+    # silhouette is flush with the outermost cell by construction,
+    # not by coincidence at the canonical width.
+    front_anchor_at_top: float = 0.0
+    front_anchor_at_bottom: float = 0.0
+    back_anchor: float = 1.0
+    cell_outer_extent_px: int = 0
     # Optional fixed-pixel correction added at render time to the
-    # back silhouette edge. Renderers compute the back-edge x as
-    # ``dx + top_right * dw + back_right_pixel_offset``; the
-    # default ``0`` leaves the line at the canonical normalised
-    # position ``top_right * dw``. The field is a refactor hook for
-    # any future per-inventory back-edge tweak (e.g. snap-to-button
-    # styles, breathing-room tuning); both UIs already consume it
-    # through the shared formula so a value change here propagates
-    # to desktop and web without touching either renderer.
+    # back silhouette edge. Default ``0``. The cell-extent fields
+    # above made this hook largely vestigial -- the cascade math
+    # already enforces flush -- but it stays as an escape hatch
+    # for any future per-inventory tweak.
     back_right_pixel_offset: int = 0
 
 
@@ -812,6 +849,145 @@ def rounded_silhouette_polygon_points(
     return ", ".join(f"{x * 100:.3f}% {y * 100:.3f}%" for x, y in points)
 
 
+def silhouette_for_data_width(
+    silhouette: VowelChartSilhouette, data_w_px: int
+) -> VowelChartSilhouette:
+    """Return a copy of ``silhouette`` with the four corner fields
+    recomputed from the cell-extent fields (``front_anchor_at_*``,
+    ``back_anchor``, ``cell_outer_extent_px``) for the given
+    rendered data width in pixels.
+
+    THE CASCADE INVARIANT: cells are placed at
+    ``anchor * dw + sign * cell_outer_extent_px`` (where sign is
+    -1 for front, +1 for back, and ``cell_outer_extent_px =
+    pair_shift_px + btn_w/2``). The silhouette's corners must
+    follow the same formula or the silhouette and outermost cells
+    drift apart by the ratio of rendered-to-canonical width.
+
+    Pre-cascade behaviour: the corner fields were computed once
+    at geometry build time with a normalised pair-outer extent.
+    At the canonical 232 px content width the formula was flush;
+    at other widths (a 320 px chart, a 380 px chart) the
+    silhouette and the cells drifted by a few pixels. Front and
+    back drifted by the SAME amount, but the slanted front edge
+    made the gap more visually obvious there than at the
+    vertical back edge.
+
+    Post-cascade: every render pass calls this helper with the
+    actual ``dw`` it has measured (web ``getBoundingClientRect``,
+    desktop ``self.width()``) and the corners track the cells
+    flush by construction. Both renderers OVERRIDE the build-time
+    silhouette polygon by passing the corrected silhouette
+    through :py:func:`rounded_silhouette_polygon_points`.
+
+    For the build-time CSS fallback (no JS) the corner fields
+    keep the canonical-dw values populated by ``vowel_silhouette``
+    so an offline page still renders a reasonable silhouette.
+    """
+    if data_w_px <= 0:
+        return silhouette
+    extent_norm = silhouette.cell_outer_extent_px / data_w_px
+    return replace(
+        silhouette,
+        top_left=silhouette.front_anchor_at_top - extent_norm,
+        bottom_left=silhouette.front_anchor_at_bottom - extent_norm,
+        top_right=silhouette.back_anchor + extent_norm,
+        bottom_right=silhouette.back_anchor + extent_norm,
+    )
+
+
+def silhouette_right_at_y(
+    silhouette: VowelChartSilhouette,
+    chart_y: float,
+    corner_radius_frac: float = VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
+) -> float:
+    """Mirror of :py:func:`silhouette_left_at_y` for the back
+    (right) silhouette edge. Returns the silhouette's actual RIGHT
+    edge x at ``chart_y``, accounting for the top-right and
+    bottom-right rounded-corner insets.
+
+    For a canonical trapezoid the right edge is vertical (back
+    anchor doesn't slant per row), so this collapses to
+    ``silhouette.top_right`` (== ``silhouette.bottom_right``)
+    outside the corner regions. Within the rounded corners the
+    helper follows the same quadratic Bezier sampled by
+    :py:func:`rounded_silhouette_polygon_points`.
+
+    Both renderers consume this via ``VowelChartRow.silhouette_right``
+    (baked per row at geometry build time) so back-edge alignment
+    cues stay in lockstep with the rendered silhouette polygon.
+    """
+    import math
+
+    sil = silhouette
+    span_y = sil.bottom_y - sil.top_y
+    if span_y <= 0:
+        return sil.top_right
+    chart_y = max(sil.top_y, min(sil.bottom_y, chart_y))
+
+    # Canonical linear interpolation. For a normal trapezoid
+    # top_right == bottom_right (back edge vertical) so the
+    # canonical is constant.
+    t_linear = (chart_y - sil.top_y) / span_y
+    canonical = sil.top_right + (sil.bottom_right - sil.top_right) * t_linear
+
+    # --- top-right corner ---
+    # prev neighbour in CCW order = bottom-right (down the right
+    # edge); next neighbour = top-left (along the top edge,
+    # leftward).
+    tr_dx_in = sil.bottom_right - sil.top_right
+    tr_dy_in = sil.bottom_y - sil.top_y
+    tr_len_in = math.hypot(tr_dx_in, tr_dy_in) or 1.0
+    tr_dx_in_norm = tr_dx_in / tr_len_in
+    tr_dy_in_norm = tr_dy_in / tr_len_in
+    tr_r_in = min(corner_radius_frac, tr_len_in * 0.45)
+    tr_r_in_y_abs = abs(tr_r_in * tr_dy_in_norm)
+
+    tr_dx_out = sil.top_left - sil.top_right
+    tr_len_out = abs(tr_dx_out) or 1.0
+    tr_r_out = min(corner_radius_frac, tr_len_out * 0.45)
+
+    dy_top = chart_y - sil.top_y
+    if 0 <= dy_top < tr_r_in_y_abs and tr_r_in_y_abs > 0:
+        # y(t) = top_y + t^2 * tr_r_in_y_abs (corner mirror)
+        t = math.sqrt(dy_top / tr_r_in_y_abs)
+        t = max(0.0, min(1.0, t))
+        omt = 1.0 - t
+        x_in = sil.top_right + tr_r_in * tr_dx_in_norm  # p_in.x
+        x_curr = sil.top_right
+        x_out = sil.top_right - tr_r_out  # leftward
+        x_corner = omt * omt * x_in + 2.0 * omt * t * x_curr + t * t * x_out
+        # The right-side bezier curves LEFTWARD (inward) from the
+        # corner; use the smaller of canonical vs corner.
+        return min(canonical, x_corner)
+
+    # --- bottom-right corner ---
+    br_dx_in = sil.bottom_left - sil.bottom_right
+    br_len_in = abs(br_dx_in) or 1.0
+    br_r_in = min(corner_radius_frac, br_len_in * 0.45)
+
+    br_dx_out = sil.top_right - sil.bottom_right
+    br_dy_out = sil.top_y - sil.bottom_y
+    br_len_out = math.hypot(br_dx_out, br_dy_out) or 1.0
+    br_dx_out_norm = br_dx_out / br_len_out
+    br_dy_out_norm = br_dy_out / br_len_out
+    br_r_out = min(corner_radius_frac, br_len_out * 0.45)
+    br_r_out_y_abs = abs(br_r_out * br_dy_out_norm)
+
+    dy_bot = sil.bottom_y - chart_y
+    if 0 <= dy_bot < br_r_out_y_abs and br_r_out_y_abs > 0:
+        omt = math.sqrt(dy_bot / br_r_out_y_abs)
+        omt = max(0.0, min(1.0, omt))
+        t = 1.0 - omt
+        x_in = sil.bottom_right - br_r_in  # leftward along bottom
+        x_curr = sil.bottom_right
+        x_out = sil.bottom_right + br_r_out * br_dx_out_norm
+        x_corner = omt * omt * x_in + 2.0 * omt * t * x_curr + t * t * x_out
+        return min(canonical, x_corner)
+
+    return canonical
+
+
 def silhouette_left_at_y(
     silhouette: VowelChartSilhouette,
     chart_y: float,
@@ -938,6 +1114,12 @@ def _silhouette_with_widths(
         bottom_right=back + pair_outer,
         top_width=top_width,
         bottom_width=bottom_width,
+        # Cell-extent fields stay in lockstep with the corners so
+        # the cascade math (silhouette = anchor*dw +/- extent_px)
+        # tracks any shrink the slant-cap policy applies.
+        front_anchor_at_top=front_at_top,
+        front_anchor_at_bottom=front_at_bottom,
+        back_anchor=back,
     )
 
 
@@ -1359,6 +1541,9 @@ def build_vowel_chart_geometry(
             tier=_row_tier.get(ri, "middle"),
             slot_height_norm=slot_heights_by_row[ri],
             silhouette_left=silhouette_left_at_y(
+                silhouette, display_y_by_row[ri]
+            ),
+            silhouette_right=silhouette_right_at_y(
                 silhouette, display_y_by_row[ri]
             ),
         )

@@ -208,6 +208,89 @@ def test_silhouette_left_at_y_midpoint_matches_canonical_interp() -> None:
     )
 
 
+def test_silhouette_for_data_width_flush_with_back_cell_extent() -> None:
+    """The CASCADE invariant: at any data width, the silhouette's
+    top-right x in pixels equals the back-rounded cell's outer
+    right pixel. Pre-cascade the math drifted at non-canonical
+    widths; post-cascade ``silhouette_for_data_width`` recomputes
+    the corner from ``back_anchor + extent_px / dw`` so flush is
+    by construction.
+
+    Cell math: cell_right_px = anchor * dw + pair_shift_px + btn_w/2
+    Silhouette: top_right_norm * dw + back_right_pixel_offset
+    Cascade: top_right_norm == back_anchor + extent_px / dw
+            -> top_right_norm * dw == back_anchor * dw + extent_px
+    Flush iff: extent_px == pair_shift_px + btn_w/2."""
+    from phonology_shared.chart.vowels_layout import (
+        silhouette_for_data_width,
+    )
+    from phonology_shared.presentation.constants import BTN_W
+    from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
+
+    sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
+    pair_shift_px = (BTN_W + VOWEL_PAIR_GAP_PX) / 2
+    expected_extent = pair_shift_px + BTN_W / 2
+    # Test multiple data widths -- the cascade must hold at all.
+    for dw in (200, 232, 320, 440):
+        adjusted = silhouette_for_data_width(sil, dw)
+        silhouette_right_px = adjusted.top_right * dw
+        cell_right_px = adjusted.back_anchor * dw + expected_extent
+        assert abs(silhouette_right_px - cell_right_px) < 1.0, (
+            f"At dw={dw}: silhouette_right_px={silhouette_right_px}, "
+            f"cell_right_px={cell_right_px} -- cascade broken"
+        )
+
+
+def test_silhouette_for_data_width_flush_with_front_cell_extent() -> None:
+    """Mirror of the back-side invariant for the front side. At
+    any data width, the silhouette's top-left x in pixels equals
+    the front-unrounded cell's outer left pixel.
+
+    Cell math: cell_left_px = anchor * dw - pair_shift_px - btn_w/2
+    Silhouette: top_left_norm * dw
+    Cascade: top_left_norm == front_anchor_at_top - extent_px / dw
+            -> top_left_norm * dw == front_anchor_at_top * dw - extent_px
+    Flush iff: extent_px == pair_shift_px + btn_w/2."""
+    from phonology_shared.chart.vowels_layout import (
+        silhouette_for_data_width,
+    )
+    from phonology_shared.presentation.constants import BTN_W
+    from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
+
+    sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
+    pair_shift_px = (BTN_W + VOWEL_PAIR_GAP_PX) / 2
+    expected_extent = pair_shift_px + BTN_W / 2
+    for dw in (200, 232, 320, 440):
+        adjusted = silhouette_for_data_width(sil, dw)
+        silhouette_left_px = adjusted.top_left * dw
+        cell_left_px = adjusted.front_anchor_at_top * dw - expected_extent
+        assert abs(silhouette_left_px - cell_left_px) < 1.0, (
+            f"At dw={dw}: silhouette_left_px={silhouette_left_px}, "
+            f"cell_left_px={cell_left_px} -- cascade broken"
+        )
+
+
+def test_silhouette_for_data_width_symmetric_front_back_offset() -> None:
+    """Front and back silhouette edges should be inset/outset by
+    the SAME ``cell_outer_extent_px`` from their respective
+    anchors at any data width. Asymmetric offsets would
+    re-introduce the original bug (front gap, back flush)."""
+    from phonology_shared.chart.vowels_layout import (
+        silhouette_for_data_width,
+    )
+
+    sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
+    for dw in (200, 232, 320, 440):
+        adjusted = silhouette_for_data_width(sil, dw)
+        front_inset = adjusted.front_anchor_at_top - adjusted.top_left
+        back_outset = adjusted.top_right - adjusted.back_anchor
+        assert abs(front_inset - back_outset) < 1e-9, (
+            f"At dw={dw}: front_inset={front_inset}, "
+            f"back_outset={back_outset} -- asymmetry would surface as "
+            f"visible drift between front and back cells"
+        )
+
+
 def test_silhouette_left_at_y_just_past_top_corner_uses_canonical() -> None:
     """Just past the top-left corner's bezier y-extent the
     helper switches to the canonical linear interpolation. The

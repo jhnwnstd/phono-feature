@@ -1557,6 +1557,85 @@ function _buildVowelSegBtn(seg) {
  * (gui.vowel_layout.vowel_grid_pos) so it matches the desktop's
  * VowelChartWidget cell-for-cell.
  */
+/** Cascade: return a silhouette dict with its corner fields
+ *  recomputed for the given rendered data width in pixels. Mirrors
+ *  ``silhouette_for_data_width`` in
+ *  ``shared/.../chart/vowels_layout.py``.
+ *
+ *  The cell-extent fields (``front_anchor_at_top``,
+ *  ``front_anchor_at_bottom``, ``back_anchor``,
+ *  ``cell_outer_extent_px``) are the source of truth. The corners
+ *  are derived: ``anchor * dw + sign * extent_px`` translated
+ *  back to a [0, 1] fraction. At any data width the silhouette
+ *  wraps the outer cell edge flush by construction. */
+function _silhouetteForDataWidth(sil, dwPx) {
+    if (!sil || dwPx <= 0) return sil;
+    const extentPx = sil.cell_outer_extent_px || 0;
+    if (extentPx === 0) return sil;
+    const extentNorm = extentPx / dwPx;
+    const frontTop = sil.front_anchor_at_top ?? sil.top_left;
+    const frontBot = sil.front_anchor_at_bottom ?? sil.bottom_left;
+    const back = sil.back_anchor ?? sil.top_right;
+    return {
+        ...sil,
+        top_left: frontTop - extentNorm,
+        bottom_left: frontBot - extentNorm,
+        top_right: back + extentNorm,
+        bottom_right: back + extentNorm,
+    };
+}
+
+/** Cascade: port of ``rounded_silhouette_polygon_points`` in
+ *  ``shared/.../chart/vowels_layout.py``. Returns a CSS
+ *  ``clip-path: polygon()`` points string with the four corners
+ *  smoothed via quadratic Bezier. Must stay byte-identical to the
+ *  Python helper -- the test suite at
+ *  ``shared/tests/test_rounded_silhouette.py`` pins the polygon
+ *  output and any drift here would silently un-track the
+ *  rendered silhouette. */
+function _roundedSilhouettePolygonPoints(sil, radiusFrac, segmentsPerCorner) {
+    const seg = segmentsPerCorner ?? 5;
+    const corners = [
+        [sil.top_left, sil.top_y],
+        [sil.bottom_left, sil.bottom_y],
+        [sil.bottom_right, sil.bottom_y],
+        [sil.top_right, sil.top_y],
+    ];
+    const n = corners.length;
+    const points = [];
+    for (let i = 0; i < n; i++) {
+        const prev = corners[(i - 1 + n) % n];
+        const curr = corners[i];
+        const nxt = corners[(i + 1) % n];
+        let dxIn = prev[0] - curr[0];
+        let dyIn = prev[1] - curr[1];
+        const lenIn = Math.hypot(dxIn, dyIn) || 1.0;
+        dxIn /= lenIn; dyIn /= lenIn;
+        let dxOut = nxt[0] - curr[0];
+        let dyOut = nxt[1] - curr[1];
+        const lenOut = Math.hypot(dxOut, dyOut) || 1.0;
+        dxOut /= lenOut; dyOut /= lenOut;
+        const rIn = Math.min(radiusFrac, lenIn * 0.45);
+        const rOut = Math.min(radiusFrac, lenOut * 0.45);
+        const pInX = curr[0] + rIn * dxIn;
+        const pInY = curr[1] + rIn * dyIn;
+        const pOutX = curr[0] + rOut * dxOut;
+        const pOutY = curr[1] + rOut * dyOut;
+        for (let s = 0; s <= seg; s++) {
+            const t = s / seg;
+            const omt = 1.0 - t;
+            const bx = omt * omt * pInX
+                + 2.0 * omt * t * curr[0]
+                + t * t * pOutX;
+            const by = omt * omt * pInY
+                + 2.0 * omt * t * curr[1]
+                + t * t * pOutY;
+            points.push(`${(bx * 100).toFixed(3)}% ${(by * 100).toFixed(3)}%`);
+        }
+    }
+    return points.join(", ");
+}
+
 function _buildVowelChart(chart) {
     const groupEl = document.createElement("div");
     groupEl.className = "seg-group vowel-chart-group";
@@ -1654,31 +1733,44 @@ function _buildVowelChart(chart) {
     const sil = chart.silhouette;
     if (sil) {
         const shape = sil.shape || chart.shape || "trapezoid";
-        const setPct = (name, value) => {
+        // CASCADE: override the build-time baked
+        // ``--vowel-<shape>-rounded-points`` polygon with one
+        // recomputed for the ACTUAL rendered data width, so the
+        // silhouette wraps the outermost cells flush regardless
+        // of how wide the chart renders. The baked polygon was
+        // sized for the canonical 232 px content width; the
+        // chart now renders content-driven (~228-320 px) and the
+        // drift between baked-polygon corners and rendered cell
+        // edges is visible at the corners.
+        //
+        // We can't measure ``dataEl.clientWidth`` synchronously
+        // (DOM not laid out yet); defer via rAF + observe
+        // resize so the polygon tracks splitter drags too.
+        const radiusFrac = CHART_STYLE.silhouette_corner_radius_frac
+            ?? 0.018;
+        const refreshPolygon = () => {
+            const dw = dataEl.clientWidth || 0;
+            if (dw <= 0) return;
+            const silAdj = _silhouetteForDataWidth(sil, dw);
+            const polyStr = _roundedSilhouettePolygonPoints(
+                silAdj, radiusFrac,
+            );
             dataEl.style.setProperty(
-                `--vowel-${shape}-${name}`,
-                `${(value * 100).toFixed(3)}%`
+                `--vowel-${shape}-rounded-points`, polyStr,
             );
         };
-        setPct("top-y", sil.top_y);
-        setPct("bottom-y", sil.bottom_y);
-        setPct("top-left", sil.top_left);
-        setPct("bottom-left", sil.bottom_left);
-        // Back edge: ``top_right`` is the back ANCHOR (normalised);
-        // ``back_right_pixel_offset`` captures the fixed-pixel
-        // pair-shift that the percentage alone cannot represent at
-        // arbitrary data-area widths. Same formula on the desktop
-        // (``dx + sil.top_right * dw + sil.back_right_pixel_offset``)
-        // so the line lands on the same vowel button in both UIs.
-        // The asymmetric snap-to-back-vowel-centre logic lives in
-        // ``build_vowel_chart_geometry``; we just add.
-        const backRightCalc =
-            `calc(${(sil.top_right * 100).toFixed(3)}% + ${sil.back_right_pixel_offset}px)`;
-        dataEl.style.setProperty(`--vowel-${shape}-top-right`, backRightCalc);
-        dataEl.style.setProperty(
-            `--vowel-${shape}-bottom-right`,
-            backRightCalc,
-        );
+        requestAnimationFrame(refreshPolygon);
+        if (
+            !dataEl._silhouetteResizeObserver
+            && typeof ResizeObserver !== "undefined"
+        ) {
+            const obs = new ResizeObserver(() => {
+                if (!dataEl.isConnected) return;
+                requestAnimationFrame(refreshPolygon);
+            });
+            obs.observe(dataEl);
+            dataEl._silhouetteResizeObserver = obs;
+        }
     }
     // Per-row labels go INSIDE the data area so the slanted left
     // edge is the natural alignment reference (``right: 100%`` is

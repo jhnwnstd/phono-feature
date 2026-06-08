@@ -1438,6 +1438,9 @@ def hash_assets() -> None:
                 "diphthong_arrowhead_half_frac": (
                     chart_style_mod.DIPHTHONG_ARROWHEAD_HALF_FRAC
                 ),
+                "silhouette_corner_radius_frac": (
+                    chart_style_mod.VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC
+                ),
             },
             separators=(",", ":"),
         )

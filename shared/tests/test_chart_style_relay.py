@@ -115,6 +115,9 @@ def test_chart_style_json_matches_python(
         "diphthong_arrowhead_half_frac": (
             chart_style.DIPHTHONG_ARROWHEAD_HALF_FRAC
         ),
+        "silhouette_corner_radius_frac": (
+            chart_style.VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC
+        ),
     }
     assert payload == expected, (
         f"chart-style relay drifted: baked {payload!r} vs "
