@@ -173,7 +173,9 @@ class VowelChartWidget(QWidget):
         # chart_y (middle / only). Web CSS expresses the same
         # decision via ``data-row-tier`` rules with
         # ``translate(..., 0%)`` / ``-100%`` / ``-50%``.
-        self._cells: list[tuple[QWidget, float, float, int, str]] = []
+        self._cells: list[tuple[QWidget, float, float, int, str, int, int]] = (
+            []
+        )
         self._cell_containers: list[QWidget] = []
         # Cached header styles, rebuilt by apply_theme each toggle.
         self._HDR_ACTIVE = ""
@@ -484,17 +486,26 @@ class VowelChartWidget(QWidget):
         self.setMinimumHeight(natural_total_h)
         # Title (top, centred over the data area). Font + padding +
         # letter-spacing all from chart_style.py so the web's CSS and
-        # the desktop's Qt read the same numbers.
+        # the desktop's Qt read the same numbers. Letter-spacing
+        # lives on the ``QFont`` (not in the stylesheet) because
+        # Qt's QFontMetrics width calculation only includes spacing
+        # when set on the font itself; CSS-level letter-spacing
+        # rendered fine but the label's ``adjustSize()`` would
+        # undersize the bounding rect, clipping the first letter
+        # ("V" in "Vowels") on some inventories.
         title = QLabel(geometry.title, self)
         title_font = QFont("Noto Sans")
         title_font.setPixelSize(cs.VOWEL_CHART_TITLE_FONT_PX)
         title_font.setWeight(QFont.Weight(cs.VOWEL_CHART_TITLE_FONT_WEIGHT))
+        title_font.setLetterSpacing(
+            QFont.SpacingType.AbsoluteSpacing,
+            cs.VOWEL_CHART_TITLE_LETTER_SPACING_PX,
+        )
         title.setFont(title_font)
         _pad = cs.VOWEL_CHART_TITLE_PADDING_PX
         title.setStyleSheet(
             f"color: {C['text_dim']}; "
-            f"letter-spacing: {cs.VOWEL_CHART_TITLE_LETTER_SPACING_PX}px;"
-            f" padding: {_pad[0]}px {_pad[1]}px {_pad[2]}px {_pad[3]}px;"
+            f"padding: {_pad[0]}px {_pad[1]}px {_pad[2]}px {_pad[3]}px;"
         )
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.adjustSize()
@@ -558,6 +569,8 @@ class VowelChartWidget(QWidget):
                     cell.chart_y,
                     cell.pair_side,
                     tier_by_row.get(cell.row, "middle"),
+                    cell.row,
+                    cell.col,
                 )
             )
             # Wire focus tracking on every seg button this cell
@@ -813,7 +826,7 @@ class VowelChartWidget(QWidget):
         # ``--vowel-pair-shift``; pre-relay both sides re-derived
         # ``(BTN_W + VOWEL_PAIR_GAP_PX) / 2`` independently.
         pair_shift_px = int(cs.VOWEL_PAIR_SHIFT_PX)
-        for widget, cx, cy, pair_side, tier in self._cells:
+        for widget, cx, cy, pair_side, tier, _row, _col in self._cells:
             widget.adjustSize()
             ww = widget.width()
             wh = widget.height()
@@ -908,23 +921,10 @@ class VowelChartWidget(QWidget):
         # "Soft modern" interior: single top->bottom gradient
         # instead of the alternating per-band tints. Paints first
         # so the silhouette outline + diphthong arrows render on
-        # top.
+        # top. Active-state cue lives on the labels (text-dim ->
+        # text colour transition); the silhouette outline stays
+        # the same in both states.
         self._paint_gradient_interior(painter, path)
-        # Accent glow when the seg pane is active: a wider, low-
-        # alpha pen pass behind the canonical 1 px stroke. Visually
-        # equivalent to the web's
-        # ``.panel[data-active="true"] .vowel-chart-data::before {
-        # filter: drop-shadow(...) }`` rule. Painted on top of the
-        # interior gradient, behind the canonical outline.
-        if self._last_headers_active:
-            glow_color = QColor(C["accent"])
-            glow_color.setAlphaF(0.32)
-            glow_pen = QPen(glow_color)
-            glow_pen.setWidthF(6.0)
-            glow_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            glow_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            painter.setPen(glow_pen)
-            painter.drawPath(path)
         # Outline only, no painted fill: the trapezoid is a
         # structural guide, not a coloured region. A 1 px alpha-
         # blended stroke softens the silhouette so the cells inside
@@ -1069,10 +1069,73 @@ class VowelChartWidget(QWidget):
         dh: int,
     ) -> None:
         """Overlay one curved arrow per diphthong from primary to
-        secondary endpoint. Coordinates come pre-projected on each
-        ``VowelChartDiphthong``; mirrors the web SVG overlay."""
+        secondary endpoint. Endpoints land on the cell widget's
+        VISUAL centre when the (row, col) maps to a populated
+        cell; otherwise fall back to the shared geometry's
+        ``primary_chart_x`` / ``primary_chart_y`` anchor (e.g.,
+        PHOIBLE diphthongs whose secondary slot isn't populated).
+        Pre-fix the endpoints used the shared anchors directly,
+        which ignored the pair-shift and the row-tier
+        positioning, so arrows pointed to / from points that
+        didn't match where the cells were drawn.
+        """
         if not self._diphthongs:
             return
+        # Build a (row, col) -> cell-widget map from the
+        # widgets ``_layout_children`` has already positioned.
+        # Used as a FALLBACK when we can't find the specific
+        # segment-button inside the cell (e.g. for the
+        # secondary endpoint, which doesn't carry a segment
+        # name).
+        cell_widget_by_pos: dict[tuple[int, int], QWidget] = {}
+        for widget, _cx, _cy, _ps, _tier, row, col in self._cells:
+            cell_widget_by_pos[(row, col)] = widget
+
+        def _widget_centre_in_self(
+            target: QWidget,
+        ) -> tuple[float, float]:
+            """Return the target widget's visual centre in THIS
+            (VowelChartWidget) widget's coordinate system. The
+            widget may be a direct child of self (single-entry
+            cell == the button itself) or nested inside a cell
+            container (multi-entry stack / pair / contrast set);
+            ``mapTo`` handles either."""
+            rect = target.rect()
+            centre = target.mapTo(self, rect.center())
+            return (float(centre.x()), float(centre.y()))
+
+        def endpoint_primary(
+            row: int,
+            col: int,
+            segment: str,
+            chart_x: float,
+            chart_y: float,
+        ) -> tuple[float, float]:
+            # Specific segment-button INSIDE the cell takes
+            # precedence so each diphthong's arrow originates at
+            # its own button rather than the stack/pair
+            # container's centre. A stack of six /i/-family
+            # diphthongs at one cell has six buttons; the arrow
+            # for /ia/ must start at the /ia/ button.
+            btn = self._buttons.get(segment)
+            if btn is not None and btn.isVisible():
+                return _widget_centre_in_self(btn)
+            cell = cell_widget_by_pos.get((row, col))
+            if cell is not None:
+                return _widget_centre_in_self(cell)
+            return (dx + chart_x * dw, dy + chart_y * dh)
+
+        def endpoint_secondary(
+            row: int,
+            col: int,
+            chart_x: float,
+            chart_y: float,
+        ) -> tuple[float, float]:
+            cell = cell_widget_by_pos.get((row, col))
+            if cell is not None:
+                return _widget_centre_in_self(cell)
+            return (dx + chart_x * dw, dy + chart_y * dh)
+
         # Group arrows by their (primary, secondary) cell pair so
         # the fan-out distributes shared-pair arrows around the
         # chord (mirrors the web SVG overlay's C3 fan-out math).
@@ -1099,10 +1162,19 @@ class VowelChartWidget(QWidget):
                 is_focus = d.segment == focused
                 if not is_focus and not self._show_all_arrows:
                     continue
-                ax = dx + d.primary_chart_x * dw
-                ay = dy + d.primary_chart_y * dh
-                bx = dx + d.secondary_chart_x * dw
-                by = dy + d.secondary_chart_y * dh
+                ax, ay = endpoint_primary(
+                    d.primary_row,
+                    d.primary_col,
+                    d.segment,
+                    d.primary_chart_x,
+                    d.primary_chart_y,
+                )
+                bx, by = endpoint_secondary(
+                    d.secondary_row,
+                    d.secondary_col,
+                    d.secondary_chart_x,
+                    d.secondary_chart_y,
+                )
                 # Fan-out factor: -1, 0, +1 for n=3; -1, +1 for n=2;
                 # 0 for solo arrows. Outer arrows arc more than the
                 # inner ones to keep the bundle readable.

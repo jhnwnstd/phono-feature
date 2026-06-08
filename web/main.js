@@ -1709,6 +1709,19 @@ function _buildVowelChart(chart) {
         if (tier === "top" || tier === "bottom") {
             target.dataset.rowTier = tier;
         }
+        // Tag the cell with its logical (row, col) so the diphthong
+        // arrow builder can look up the cell's RENDERED centre by
+        // (primary_row, primary_col) and use that as the arrow
+        // endpoint. Without this lookup, the arrows used the
+        // shared geometry's ``chart_x`` / ``chart_y`` anchors
+        // directly, which DON'T account for the pair-shift
+        // (-1/0/+1 * pair_shift_px) or the row-tier transform
+        // (top-tier cells anchor TOP at chart_y, bottom-tier
+        // anchor BOTTOM, middle/only centre). Result: arrows
+        // pointed to / from positions that didn't match the
+        // cells the user sees.
+        target.dataset.cellRow = String(cell.row);
+        target.dataset.cellCol = String(cell.col);
         dataEl.appendChild(target);
     }
     _appendVowelDiphthongArrows(dataEl, chart);
@@ -1760,6 +1773,99 @@ function _appendVowelHeightTierBands(dataEl, chart) {
 function _appendVowelDiphthongArrows(dataEl, chart) {
     const arrows = chart.diphthongs;
     if (!Array.isArray(arrows) || arrows.length === 0) return;
+    // The cell DOM elements need to be in the document and
+    // browser-laid-out before we can read their bounding rects
+    // for the arrow endpoint resolver. ``_buildVowelChart`` is
+    // called BEFORE its return value is appended to the grid, so
+    // cells aren't measurable here yet. Schedule the arrow build
+    // for the next animation frame, by which point the chart is
+    // in the DOM and laid out.
+    requestAnimationFrame(() => _buildArrowsNow(dataEl, chart));
+    // Re-bake arrows when the data area resizes (splitter drag,
+    // window resize, pane swap). Pair-shift is a FIXED pixel
+    // offset; the cell centres in viewBox %-space therefore shift
+    // when dataAreaW / dataAreaH change. Without this observer
+    // the arrows would visibly desync from the cells after the
+    // first resize. The observer fires synchronously on resize;
+    // arrow rebuild is cheap (one SVG, one querySelectorAll over
+    // the small cell set).
+    if (!dataEl._arrowResizeObserver && typeof ResizeObserver !== "undefined") {
+        const obs = new ResizeObserver(() => {
+            if (!dataEl.isConnected) return;
+            requestAnimationFrame(() => _buildArrowsNow(dataEl, chart));
+        });
+        obs.observe(dataEl);
+        dataEl._arrowResizeObserver = obs;
+    }
+}
+
+function _buildArrowsNow(dataEl, chart) {
+    // If the dataEl was detached or replaced before the rAF fired,
+    // bail rather than spawning a phantom SVG.
+    if (!dataEl.isConnected) return;
+    const arrows = chart.diphthongs;
+    if (!Array.isArray(arrows) || arrows.length === 0) return;
+    // Drop any pre-existing overlay (rerender + resize paths
+    // re-invoke this function).
+    const prior = dataEl.querySelector("svg.vowel-diphthong-arrows");
+    if (prior) prior.remove();
+    // The endpoint resolver looks up the actual rendered position
+    // of the cell's content. Pre-fix the arrows used the shared
+    // geometry's ``primary_chart_x/y`` / ``secondary_chart_x/y``
+    // anchors, which DON'T account for:
+    //   1. The pair-shift (-1/0/+1 * pair_shift_px) the CSS
+    //      transform adds for rounded/unrounded mates.
+    //   2. The row-tier anchoring (top tier puts chart_y at the
+    //      cell TOP edge; bottom tier at the BOTTOM; middle/only
+    //      centred).
+    //   3. The SPECIFIC button inside a multi-entry cell. A stack
+    //      of six /i/-family diphthongs at one cell has six
+    //      buttons; the arrow for /ia/ should originate at the
+    //      /ia/ BUTTON's centre, not at the stack's centre.
+    //
+    // The lookup walks the DOM each call to find the matching
+    // button by segment string. For the primary endpoint we have
+    // the segment (``d.segment``); for the secondary endpoint we
+    // don't (it's a virtual position), so we fall back to the
+    // cell centre, then to the shared chart_x/chart_y.
+    //
+    // Coordinates returned in viewBox %-space so the existing
+    // ``viewBox="0 0 100 100"`` + ``preserveAspectRatio="none"``
+    // path math keeps working unchanged downstream.
+    const dataAreaW = dataEl.clientWidth || 1;
+    const dataAreaH = dataEl.clientHeight || 1;
+    const dataRect = dataEl.getBoundingClientRect();
+    const rectToViewbox = (rect) => {
+        const cx_px = rect.left - dataRect.left + rect.width / 2;
+        const cy_px = rect.top - dataRect.top + rect.height / 2;
+        return [
+            (cx_px / dataAreaW) * 100,
+            (cy_px / dataAreaH) * 100,
+        ];
+    };
+    const findCell = (row, col) => dataEl.querySelector(
+        `.vowel-chart-cell[data-cell-row="${row}"]`
+        + `[data-cell-col="${col}"]`
+    );
+    const endpointForPrimary = (row, col, segment, chart_x, chart_y) => {
+        const cellEl = findCell(row, col);
+        if (cellEl) {
+            // Specific button INSIDE the cell takes precedence so
+            // each diphthong's arrow originates at its own button
+            // rather than the stack/pair container's centre.
+            const btn = cellEl.querySelector(
+                `.seg-btn[data-seg="${CSS.escape(segment)}"]`
+            );
+            if (btn) return rectToViewbox(btn.getBoundingClientRect());
+            return rectToViewbox(cellEl.getBoundingClientRect());
+        }
+        return [chart_x * 100, chart_y * 100];
+    };
+    const endpointForSecondary = (row, col, chart_x, chart_y) => {
+        const cellEl = findCell(row, col);
+        if (cellEl) return rectToViewbox(cellEl.getBoundingClientRect());
+        return [chart_x * 100, chart_y * 100];
+    };
     // Group arrows that share the same primary -> secondary cell
     // pair so we can fan their control points across the
     // perpendicular axis; otherwise PHOIBLE inventories that have
@@ -1790,10 +1896,19 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
         const N = groupArrows.length;
         for (let i = 0; i < N; i++) {
             const d = groupArrows[i];
-            const ax = d.primary_chart_x * 100;
-            const ay = d.primary_chart_y * 100;
-            const bx = d.secondary_chart_x * 100;
-            const by = d.secondary_chart_y * 100;
+            const [ax, ay] = endpointForPrimary(
+                d.primary_row,
+                d.primary_col,
+                d.segment,
+                d.primary_chart_x,
+                d.primary_chart_y,
+            );
+            const [bx, by] = endpointForSecondary(
+                d.secondary_row,
+                d.secondary_col,
+                d.secondary_chart_x,
+                d.secondary_chart_y,
+            );
             // Control point: midpoint nudged perpendicular to the
             // chord. The base arc rise stays subtle on long arrows
             // and visible on short ones. When N > 1 share the same

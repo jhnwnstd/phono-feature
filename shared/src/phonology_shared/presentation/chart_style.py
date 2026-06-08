@@ -337,10 +337,13 @@ VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX: int = 2
 # ---------------------------------------------------------------------------
 
 #: Stroke width (device px) for the trapezoid silhouette outline.
-#: Pre-audit desktop used 1.25 px; web used a 1 px pseudo-element
-#: trick. Standardising on 1.0 px so the outline reads with the
-#: same visual weight as the app-wide ``--border-thin`` token.
-VOWEL_SILHOUETTE_STROKE_PX: float = 1.0
+#: Adopted 0.75 px after the "soft modern" pass; the outline
+#: should read as a quiet structural guide rather than a hard
+#: frame, especially now that the rounded corners draw the eye.
+#: Sub-pixel widths render fine with antialiasing on both Qt and
+#: the browser (the pseudo-element + drop-shadow trick on the
+#: web is no longer needed).
+VOWEL_SILHOUETTE_STROKE_PX: float = 0.75
 
 #: Corner radius for the silhouette outline as a FRACTION of the
 #: data-area width. Pre-redesign the outline was a sharp 4-point

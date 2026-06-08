@@ -1243,17 +1243,13 @@ dialog input[type="text"]:focus-visible {
 .vowel-chart-data[data-shape="triangle"] .vowel-diphthong-arrows {
   clip-path: polygon(var(--vowel-triangle-rounded-points));
 }
-/* Accent glow when the segments pane is active. Drop-shadow on
-   the silhouette outline pseudo-element gives a soft accent halo
-   that fades the outline into the pane background, signalling
-   "this is the active surface" without adding any visual chrome.
-   Purely additive: when inactive the rule doesn't match and the
-   outline reads at its canonical 1 px / 70 % alpha. */
-.panel[data-active="true"] .vowel-chart-data::before {
-  filter: drop-shadow(
-    0 0 6px color-mix(in srgb, var(--accent) 32%, transparent)
-  );
-}
+/* Silhouette outline stays as the canonical thin border-coloured
+   stroke regardless of pane-active state. An earlier "soft modern"
+   pass added an accent drop-shadow on the active state; the
+   colour read as too prominent against the IPA chart's quiet
+   visual language, so it was removed. The active-state cue
+   continues to come from the row / column / title labels
+   transitioning from ``--text-dim`` to ``--text``. */
 .vowel-chart-cell {
   position: absolute;
   z-index: 1;
