@@ -568,21 +568,25 @@ class VowelChartWidget(QWidget):
         layout.addStretch(1)
 
     def _apply_display_mode_filter(self) -> None:
-        """Show / hide cells based on the active display mode.
-        Cells with ``is_diphthong`` matching the mode render;
-        others are hidden via ``setVisible(False)``. The pooled
-        button instances stay alive; selection state is preserved
-        across mode switches because it's segment-keyed, not
-        widget-keyed."""
-        show_diphthong = self._display_mode == VowelChartMode.DIPHTHONG
-        for widget, *_, is_diphthong_cell in self._cells:
-            # ``widget`` may be the bare seg-button (single-entry
-            # cell) or a container (stack / pair / contrast set).
-            # ``setVisible(False)`` collapses Qt's layout pass
-            # painlessly in either case.
-            widget.setVisible(is_diphthong_cell == show_diphthong)
-        # The overlay reads the mode directly in its paintEvent
-        # to decide whether to paint arrows.
+        """No-op: cell widgets are always visible.
+
+        Post-architectural-fix the placer no longer puts diphthongs
+        into any chart cell (only monophthongs land in
+        ``occupied``), so every cell carries exclusively
+        monophthong segments. The display-mode toggle controls
+        only the ARROW overlay visibility (the overlay reads
+        ``self._display_mode`` in its paintEvent), not any cell
+        visibility.
+
+        Pre-fix the cell-level filter hid the entire cell when
+        its entries contained any diphthong; on Korean PHOIBLE
+        cell (0,6) packed /i, ia, ie, iɛ, iʌ, iː/ together so
+        monophthong mode hid /i/ along with the diphthongs --
+        user lost the singleton from the chart entirely. The
+        placer fix removes diphthongs from cell entries, so this
+        method has nothing to filter.
+        """
+        return
 
     def eventFilter(  # noqa: D401
         self, watched: QObject | None, event: QEvent | None

@@ -1473,7 +1473,27 @@ def compute_placements(
                     secondary=secondary,
                 )
         placements[seg] = placement
-        occupied.setdefault((placement.row, placement.col), []).append(seg)
+        # Only MONOPHTHONGS occupy chart cells. Diphthongs render
+        # exclusively as ARROWS + chip strip; their segment
+        # button does NOT sit in any chart cell.
+        #
+        # Pre-fix: a diphthong like Korean /ia/ landed in the same
+        # cell as /i/ (both at close-front). The cell stack showed
+        # /i, ia, ie, iɛ, iʌ, iː/ together. User feedback called
+        # this out -- the diphthong segments visually grouped with
+        # the singleton /i/ inside the chart stack, AND toggling
+        # diphthong-display mode hid the whole cell (so /i/
+        # disappeared from the monophthong view too).
+        #
+        # Post-fix: cells contain only monophthong entries. The
+        # diphthong's placement record stays in ``placements``
+        # (so the arrow-build loop can read its primary +
+        # secondary coords) but it does NOT add the segment to
+        # ``occupied``, so no cell carries it. The chip strip below
+        # the silhouette is the only place users SELECT diphthong
+        # segments from.
+        if PlacementFlag.DIPHTHONG not in placement.flags:
+            occupied.setdefault((placement.row, placement.col), []).append(seg)
     # Confidence DESCENDING (via negated int), segment ASCENDING
     # within the same confidence tier. A single ``reverse=True``
     # would also flip the segment direction.

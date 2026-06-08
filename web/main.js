@@ -1849,12 +1849,20 @@ function _buildVowelChart(chart) {
     const rowTierByLogical = new Map(
         (chart.rows || []).map((r) => [r.logical_row, r.tier || "middle"]),
     );
-    // Vowel chart display mode: skip cells that don't match the
-    // active mode (monophthong / diphthong). ``cell.is_diphthong``
-    // is set shared-side from ``PlacementFlag.DIPHTHONG`` so the
-    // partition is byte-stable across renders.
+    // Vowel chart display mode. Cells are ALWAYS rendered (only
+    // monophthongs land in cells; diphthongs render as arrows
+    // + chip strip per the shared placer's
+    // ``PlacementFlag.DIPHTHONG`` -> ``occupied`` skip). The mode
+    // dataset attribute drives CSS arrow visibility:
+    // monophthong mode hides arrows; diphthong mode shows them.
+    //
+    // Pre-fix the mode filter HID the entire cell when the cell
+    // contained any diphthong entry. Korean PHOIBLE had cells
+    // mixing /i/ + /ia ie iɛ iʌ/, so monophthong mode hid /i/
+    // along with the diphthongs -- user lost the singleton from
+    // the chart entirely. The placer fix removes diphthongs from
+    // cells, so this filter now always falls through.
     const mode = state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
-    const showDiphthongCells = mode === VOWEL_CHART_MODE.DIPHTHONG;
     dataEl.dataset.displayMode = mode;
     for (const cell of chart.cells) {
         // Multiple vowels can map to the same chart cell (the
@@ -1863,7 +1871,6 @@ function _buildVowelChart(chart) {
         // ``cell.segs``, sorted by descending placement confidence.
         const segs = cell.segs;
         if (!Array.isArray(segs) || segs.length === 0) continue;
-        if (Boolean(cell.is_diphthong) !== showDiphthongCells) continue;
         let target;
         if (segs.length === 1) {
             target = _buildVowelCellButton(segs[0]);

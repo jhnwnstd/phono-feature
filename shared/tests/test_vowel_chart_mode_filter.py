@@ -49,12 +49,22 @@ def _build_geometry(seg_feats, *, vowel_secondary=None):
 # ---------------------------------------------------------------------------
 
 
-def test_true_diphthong_cell_is_flagged() -> None:
-    """A cell containing a segment whose ``vowel_secondary`` puts
-    the secondary at a DIFFERENT (row, col) than the primary
-    must have ``is_diphthong=True``. Mirrors PHOIBLE's encoding
-    of e.g. Korean ``/ia/`` (primary close-front, secondary
-    open-central)."""
+def test_true_diphthong_does_not_occupy_a_cell() -> None:
+    """A segment whose ``vowel_secondary`` puts the secondary at
+    a DIFFERENT (row, col) than the primary is a TRUE diphthong
+    and renders as an arrow + chip strip entry exclusively. It
+    does NOT appear in any chart cell.
+
+    Mirrors PHOIBLE's encoding of e.g. Korean ``/ia/`` (primary
+    close-front, secondary open-central). The architectural fix
+    keeps /ia/ in ``placements`` (so the arrow build reads its
+    endpoints) but NOT in ``occupied``.
+
+    Pre-fix /ia/ landed in /i/'s cell, so the cell stack showed
+    /i/ and /ia/ together -- visually grouping the singleton
+    monophthong with the diphthong, contrary to the user's
+    mental model.
+    """
     seg_feats = {
         "i": {
             "high": "+",
@@ -93,17 +103,25 @@ def test_true_diphthong_cell_is_flagged() -> None:
     }
     geom = _build_geometry(seg_feats, vowel_secondary=vowel_secondary)
     by_seg = {seg: cell for cell in geom.cells for seg in cell.entries}
-    assert "ia" in by_seg, "diphthong segment should land in some cell"
-    diphthong_cell = by_seg["ia"]
-    assert diphthong_cell.is_diphthong, (
-        f"cell with /ia/ should be flagged as diphthong; "
-        f"entries={diphthong_cell.entries}"
+    assert "ia" not in by_seg, (
+        f"diphthong /ia/ must NOT occupy a cell; landed in "
+        f"{by_seg.get('ia').entries if 'ia' in by_seg else None!r}"
     )
-    # Monophthong cells stay unflagged.
-    if "i" in by_seg and by_seg["i"] is not diphthong_cell:
-        assert not by_seg["i"].is_diphthong
-    if "a" in by_seg and by_seg["a"] is not diphthong_cell:
-        assert not by_seg["a"].is_diphthong
+    # Monophthongs DO occupy cells.
+    assert "i" in by_seg, "monophthong /i/ should land in some cell"
+    assert "a" in by_seg, "monophthong /a/ should land in some cell"
+    # Cells contain only monophthongs, so no cell is flagged.
+    for cell in geom.cells:
+        assert not cell.is_diphthong, (
+            f"cell {cell.entries!r} should not be flagged as "
+            f"diphthong (diphthongs no longer occupy cells)"
+        )
+    # The diphthong is still in the geometry's diphthong list
+    # for arrow rendering.
+    assert any(d.segment == "ia" for d in geom.diphthongs), (
+        "diphthong /ia/ should appear in geometry.diphthongs for "
+        "arrow rendering even though it doesn't occupy a cell"
+    )
 
 
 def test_no_vowel_secondary_means_no_diphthongs() -> None:
@@ -174,12 +192,24 @@ except Exception:
     not _PHOIBLE_AVAILABLE,
     reason="PHOIBLE provider not importable",
 )
-def test_korean_phoible_partitions_cleanly() -> None:
-    """Korean PHOIBLE (id=2197) has both monophthongs and
-    diphthongs. After the geometry builds, the cell list must
-    partition: every diphthong-flagged cell should hold segments
-    whose placements carry the DIPHTHONG flag; every unflagged
-    cell should NOT."""
+def test_korean_phoible_diphthongs_render_as_arrows_not_cells() -> None:
+    """Korean PHOIBLE (id=2197) has 12 diphthongs (/io, iu, ia,
+    ie, iɛ, iʌ, ɯi, ua, ue, ui, uɛ, uʌ/) plus 16 monophthongs
+    (/i, ɯ, u, ɛ, e, əː, a, ʌ, o/ + their long counterparts).
+
+    After the placer architectural fix: diphthongs render as
+    ARROWS + chip strip; they don't occupy chart cells. Every
+    cell.entries contains only monophthongs. The diphthong
+    segments still appear in ``geom.diphthongs`` so the arrow
+    overlay can read their endpoint coords.
+
+    Pre-fix the diphthongs landed in the same cell as their
+    primary vowel: cell (0,5) packed /u, ua, ue, ui, uɛ, uʌ, uː/
+    together; the user complaint "singleton segments are
+    grouped as diphthongs" surfaced this. The fix removes
+    diphthongs from ``occupied`` so cells hold only true
+    monophthongs.
+    """
     p = PhoibleProvider()
     if not getattr(p, "has_data", False):
         pytest.skip("PHOIBLE data snapshot absent")
@@ -199,9 +229,6 @@ def test_korean_phoible_partitions_cleanly() -> None:
             vowel_secondary if isinstance(vowel_secondary, dict) else None
         ),
     )
-    # Cross-check against compute_placements: any segment with
-    # ``PlacementFlag.DIPHTHONG`` should sit in a cell flagged
-    # ``is_diphthong``.
     _occupied, placements = compute_placements(
         vowels,
         profile,
@@ -212,28 +239,37 @@ def test_korean_phoible_partitions_cleanly() -> None:
     )
     diphthong_segments = {
         seg
-        for seg, p in placements.items()
-        if PlacementFlag.DIPHTHONG in p.flags
+        for seg, pl in placements.items()
+        if PlacementFlag.DIPHTHONG in pl.flags
     }
     assert diphthong_segments, (
         "Korean PHOIBLE should have at least one diphthong; "
         "test fixture or PHOIBLE snapshot may have changed"
     )
+    # No diphthong-flagged segment may appear in any cell.entries.
+    cells_segs = {seg for cell in geom.cells for seg in cell.entries}
+    leaked = diphthong_segments & cells_segs
+    assert not leaked, (
+        f"diphthongs leaked into chart cells: {leaked!r}. The "
+        f"placer's PlacementFlag.DIPHTHONG gate in "
+        f"compute_placements should exclude these from ``occupied``."
+    )
+    # No cell carries the (now vestigial) is_diphthong flag.
     for cell in geom.cells:
-        cell_has_diphthong = any(
-            seg in diphthong_segments for seg in cell.entries
+        assert not cell.is_diphthong, (
+            f"cell {cell.entries!r} flagged as diphthong; "
+            f"diphthongs no longer occupy cells, so the flag "
+            f"should never be True"
         )
-        assert cell.is_diphthong == cell_has_diphthong, (
-            f"cell {cell.entries!r} is_diphthong={cell.is_diphthong} "
-            f"but contains diphthong-flagged segments? "
-            f"{cell_has_diphthong}"
-        )
-    # The partition should be non-trivial: both flagged and
-    # unflagged cells exist (Korean has both vowel classes).
-    flagged = [c for c in geom.cells if c.is_diphthong]
-    unflagged = [c for c in geom.cells if not c.is_diphthong]
-    assert flagged, "expected at least one diphthong cell in Korean"
-    assert unflagged, "expected at least one monophthong cell in Korean"
+    # Every diphthong segment is represented in geom.diphthongs.
+    geom_diph_segs = {d.segment for d in geom.diphthongs}
+    missing = diphthong_segments - geom_diph_segs
+    assert not missing, (
+        f"diphthongs missing from geom.diphthongs: {missing!r}. "
+        f"Arrow rendering depends on this list."
+    )
+    # Cells are non-empty (monophthongs still place).
+    assert geom.cells, "Korean monophthongs should populate cells"
 
 
 @pytest.mark.skipif(

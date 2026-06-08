@@ -185,10 +185,19 @@ def test_phoible_shaped_close_front_vowel_places_correctly():
 
 def test_diphthong_placement_carries_secondary_and_flag():
     """A PHOIBLE-shaped ``/ia/`` bundle: the primary places at a
-    Close Front cell and the final state at an Open Central / Front
-    cell. Both placements carry :py:attr:`PlacementFlag.DIPHTHONG`
-    so the renderer can detect the diphthong from either endpoint;
-    the collision dict tracks the primary only.
+    Close Front cell and the final state at an Open Central /
+    Front cell. Both placements carry
+    :py:attr:`PlacementFlag.DIPHTHONG` so the renderer can detect
+    the diphthong from either endpoint.
+
+    Diphthongs do NOT occupy chart cells -- they render as arrows
+    + chip strip exclusively. ``placements[seg]`` still carries
+    the segment's geometry (so the arrow can be drawn) but
+    ``occupied`` does NOT contain an entry for ``seg``. This is
+    the architectural fix that addressed the user complaint
+    "singleton segments are grouped as diphthongs": pre-fix
+    /ia/'s primary placement at /i/-cell caused it to share the
+    /i/ stack visually; post-fix /ia/ never enters any cell.
     """
     import phonology_shared.chart.vowels as vl
 
@@ -226,9 +235,13 @@ def test_diphthong_placement_carries_secondary_and_flag():
     assert placement.secondary.row == vl.ROW_LABELS.index(
         "Open"
     ), "final anchors at Open (low) tier"
-    # Collision dict tracks PRIMARY only; the secondary is purely a
-    # rendering hint.
-    assert occupied == {(placement.row, placement.col): ["ia"]}
+    # ``occupied`` must NOT contain /ia/ -- diphthongs render via
+    # arrows + chip strip, not cell occupancy.
+    assert occupied == {}, (
+        f"diphthongs must not occupy chart cells; got {occupied!r}. "
+        f"The placer's PlacementFlag.DIPHTHONG gate in "
+        f"compute_placements should skip the occupied.setdefault."
+    )
 
 
 def test_module_constants_are_tuples():
