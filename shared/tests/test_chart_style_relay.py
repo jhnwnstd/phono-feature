@@ -176,6 +176,21 @@ def test_chart_style_json_matches_python(
             "px",
         ),
         (
+            "--vowel-chart-col-header-h",
+            chart_style.VOWEL_CHART_COL_HEADER_H_PX,
+            "px",
+        ),
+        (
+            "--vowel-chart-pad-r",
+            chart_style.VOWEL_CHART_PAD_R_PX,
+            "px",
+        ),
+        (
+            "--vowel-chart-pad-b",
+            chart_style.VOWEL_CHART_PAD_B_PX,
+            "px",
+        ),
+        (
             "--vowel-chart-row-label-gap",
             chart_style.VOWEL_CHART_ROW_LABEL_GAP_PX,
             "px",

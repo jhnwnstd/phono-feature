@@ -867,7 +867,16 @@ dialog input[type="text"]:focus-visible {
      Row 2: column headers (Front / Central / Back).
      Row 3: row-label gutter + data area. */
   grid-template-rows: auto auto 1fr;
-  padding: var(--space-xs) 2px;
+  /* Right + bottom insets pinned via
+     ``chart_style.VOWEL_CHART_PAD_R_PX`` /
+     ``VOWEL_CHART_PAD_B_PX`` so the back column (chart_x=1) and
+     the open row don't sit flush against the chart's right /
+     bottom border on either UI. Top + left padding stay at the
+     compact ``--space-xs`` / 2px the chart had before; only the
+     two trapezoid-adjacent sides get the breathing room the
+     desktop has always added via ``_PAD_R`` / ``_PAD_B``. */
+  padding: var(--space-xs) var(--vowel-chart-pad-r)
+    var(--vowel-chart-pad-b) 2px;
   column-gap: var(--space-sm);
   row-gap: 2px;
   /* Anchor for the absolutely-positioned ``.vowel-diphthong-toggle``
@@ -914,7 +923,12 @@ dialog input[type="text"]:focus-visible {
   grid-row: 2;
   grid-column: 2;
   position: relative;
-  height: 1.4em;
+  /* Strip height pinned via ``chart_style.VOWEL_CHART_COL_HEADER_H_PX``
+     so desktop's ``_COL_HEADER_H = 18`` and the web's column-header
+     band have the same vertical reserve. Pre-relay the web used
+     ``1.4em`` (~14 px) while desktop reserved 18 px, leaving the
+     topmost vowel row 4 px lower on desktop. */
+  height: var(--vowel-chart-col-header-h);
 }
 .vowel-chart-col-label {
   position: absolute;

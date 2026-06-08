@@ -112,14 +112,13 @@ class VowelChartWidget(QWidget):
     # rectangle. The bottom and right paddings give the trapezoid
     # silhouette a small inset from the widget border so the cells
     # at the open / back edges have visible breathing room.
-    # ``_TITLE_H`` + ``_ROW_LABEL_GAP_PX`` are wired through
-    # chart_style.py so the web's CSS ``--vowel-chart-title-h`` and
-    # ``--vowel-chart-row-label-gap`` cannot drift from these
-    # values. Pre-relay both were desktop-only literals.
+    # All chrome dimensions wired through chart_style.py so the web's
+    # CSS ``--vowel-chart-*`` vars and these Qt class constants
+    # cannot drift. Pre-relay each was a desktop-only literal.
     _TITLE_H: ClassVar[int] = cs.VOWEL_CHART_TITLE_H_PX
-    _COL_HEADER_H: ClassVar[int] = 18
-    _PAD_R: ClassVar[int] = 12
-    _PAD_B: ClassVar[int] = 10
+    _COL_HEADER_H: ClassVar[int] = cs.VOWEL_CHART_COL_HEADER_H_PX
+    _PAD_R: ClassVar[int] = cs.VOWEL_CHART_PAD_R_PX
+    _PAD_B: ClassVar[int] = cs.VOWEL_CHART_PAD_B_PX
     _ROW_LABEL_GAP_PX: ClassVar[int] = cs.VOWEL_CHART_ROW_LABEL_GAP_PX
 
     def __init__(
@@ -275,8 +274,16 @@ class VowelChartWidget(QWidget):
         )
         self._HDR_ACTIVE = f"color: {C['text']}; {_col_ls}"
         self._HDR_INACTIVE = f"color: {C['text_dim']}; {_col_ls}"
-        self._ROW_ACTIVE = f"color: {C['text']}; padding-right: 4px;"
-        self._ROW_INACTIVE = f"color: {C['text_dim']}; padding-right: 4px;"
+        # Row labels: NO inline padding-right -- the gap to the
+        # silhouette comes entirely from
+        # ``chart_style.VOWEL_CHART_ROW_LABEL_GAP_PX`` applied at
+        # position time (web uses the same ``--vowel-chart-row-label-gap``
+        # value via its CSS ``right: calc(...)`` rule). Pre-relay
+        # desktop's extra 4 px padding-right stacked on top of the
+        # 10 px gap, leaving labels 14 px from the silhouette while
+        # web stayed at 10 px.
+        self._ROW_ACTIVE = f"color: {C['text']};"
+        self._ROW_INACTIVE = f"color: {C['text_dim']};"
 
     def apply_theme(self) -> None:
         """Re-style cached header strings against the active palette
@@ -762,11 +769,13 @@ class VowelChartWidget(QWidget):
             )
             self._diphthong_toggle.raise_()
         # Column headers: x in [0, 1] mapped across the data area,
-        # then centred on each anchor.
+        # then centred on each anchor. Uses round-to-nearest (not
+        # int truncate) so sub-pixel positions don't bias every
+        # cell leftward vs the web's fractional CSS percentages.
         for lbl, x in self._col_labels:
             lbl.adjustSize()
             lw = lbl.width()
-            px = dx + int(x * dw) - lw // 2
+            px = dx + round(x * dw) - lw // 2
             lbl.move(px, self._TITLE_H)
         # Row labels: positioned at chart_y, right-aligned against
         # the silhouette's slanted left edge at this row so the label
@@ -780,12 +789,12 @@ class VowelChartWidget(QWidget):
         for lbl, y in self._row_labels:
             lbl.adjustSize()
             lh = lbl.height()
-            py = dy + int(y * dh) - lh // 2
+            py = dy + round(y * dh) - lh // 2
             if sil is not None and sil.bottom_y > sil.top_y:
                 t = (y - sil.top_y) / (sil.bottom_y - sil.top_y)
                 t = max(0.0, min(1.0, t))
                 left_norm = sil.top_left + (sil.bottom_left - sil.top_left) * t
-                anchor_x = dx + int(left_norm * dw)
+                anchor_x = dx + round(left_norm * dw)
             else:
                 anchor_x = dx
             px = anchor_x - lbl.width() - label_gap_px
@@ -809,7 +818,9 @@ class VowelChartWidget(QWidget):
             wh = widget.height()
             if ww > self._cell_w_hint:
                 self._cell_w_hint = ww
-            px = dx + int(cx * dw) - ww // 2 + pair_side * pair_shift_px
+            # round-to-nearest so sub-pixel positions don't bias
+            # cells leftward / upward vs the web's float % CSS.
+            px = dx + round(cx * dw) - ww // 2 + pair_side * pair_shift_px
             # Tier-aware y-anchor. Mirrors the web CSS at
             # ``web/style.css`` ``[data-row-tier]`` rules:
             #   top    -> stack hangs DOWN from chart_y (anchor top)
@@ -819,7 +830,7 @@ class VowelChartWidget(QWidget):
             # chart_y=0.08 extends half-stack ABOVE the silhouette
             # top edge -- one of the divergences vs. the web for
             # Korean PHOIBLE and other tall-stack inventories.
-            cy_px = dy + int(cy * dh)
+            cy_px = dy + round(cy * dh)
             if tier == "top":
                 py = cy_px
             elif tier == "bottom":
@@ -858,10 +869,14 @@ class VowelChartWidget(QWidget):
             # No inventory rendered yet -- use the canonical silhouette
             # so a pre-load paint still shows the trapezoid outline.
             sil = vowel_silhouette(self._shape)
-        top_y = dy + int(sil.top_y * dh)
-        bottom_y = dy + int(sil.bottom_y * dh)
-        top_left_x = dx + int(sil.top_left * dw)
-        bottom_left_x = dx + int(sil.bottom_left * dw)
+        # Round-to-nearest (not int truncate) so the silhouette
+        # corners align as closely as possible with the web's
+        # CSS clip-path coordinates, which use fractional
+        # percentages browser-resolved to sub-pixel positions.
+        top_y = dy + round(sil.top_y * dh)
+        bottom_y = dy + round(sil.bottom_y * dh)
+        top_left_x = dx + round(sil.top_left * dw)
+        bottom_left_x = dx + round(sil.bottom_left * dw)
         # Back edge: ``top_right`` is the back ANCHOR (normalised);
         # the fixed-pixel ``back_right_pixel_offset`` captures the
         # rest. The same formula runs on the web (via the bridge
@@ -871,7 +886,7 @@ class VowelChartWidget(QWidget):
         # the canonical pair-outer extent) is encoded in the offset
         # by ``build_vowel_chart_geometry``; the renderer just adds.
         back_right_x = (
-            dx + int(sil.top_right * dw) + sil.back_right_pixel_offset
+            dx + round(sil.top_right * dw) + sil.back_right_pixel_offset
         )
         top_right_x = back_right_x
         bottom_right_x = back_right_x
@@ -931,13 +946,15 @@ class VowelChartWidget(QWidget):
         for band in self._bands:
             if not band.tinted:
                 continue
-            top_y = dy + band.top_norm * dh
-            bot_y = dy + band.bottom_norm * dh
+            # round-to-nearest so the bands align with the same
+            # pixel rows as web CSS's percentage-based rectangles.
+            top_y = dy + round(band.top_norm * dh)
+            bot_y = dy + round(band.bottom_norm * dh)
             painter.fillRect(
-                int(dx),
-                int(top_y),
-                int(dw),
-                int(bot_y - top_y),
+                round(dx),
+                top_y,
+                round(dw),
+                bot_y - top_y,
                 band_color,
             )
         painter.restore()

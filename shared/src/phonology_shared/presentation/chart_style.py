@@ -92,6 +92,28 @@ VOWEL_CHART_TITLE_PADDING_PX: tuple[int, int, int, int] = (
 #: shifted the intrinsic height by ~1-2 px).
 VOWEL_CHART_TITLE_H_PX: int = 20
 
+#: Height (px) of the column-header strip (Front / Central / Back).
+#: Pre-relay only the desktop had this as a literal
+#: (``_COL_HEADER_H = 18``); the web used ``height: 1.4em`` which
+#: resolved to ~14 px at the micro font, leaving the header row
+#: 4 px shorter on web. Adopting 18 px as the canonical value so
+#: the topmost vowel row sits at the same y on both UIs.
+VOWEL_CHART_COL_HEADER_H_PX: int = 18
+
+#: Pixel padding inside the chart widget's right edge. The
+#: desktop's ``_PAD_R = 12`` keeps cells at ``chart_x=1`` (back
+#: column) from sitting flush against the widget border. Web's
+#: ``.vowel-chart`` had only ``padding: ... 2px``, so back-column
+#: cells touched the chart container edge on web. Relaying this
+#: lets the web's CSS apply the same right inset to ``.vowel-chart``
+#: so both UIs leave the same breathing room around the silhouette.
+VOWEL_CHART_PAD_R_PX: int = 12
+
+#: Pixel padding inside the chart widget's bottom edge. Same
+#: rationale as :data:`VOWEL_CHART_PAD_R_PX`: open vowels (lowest
+#: row) shouldn't sit flush against the bottom border.
+VOWEL_CHART_PAD_B_PX: int = 10
+
 
 # ---------------------------------------------------------------------------
 # Column headers (Front / Central / Back)
