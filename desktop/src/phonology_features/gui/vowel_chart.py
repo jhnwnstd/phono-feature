@@ -94,6 +94,53 @@ __all__ = [
 VOWEL_LABEL_W = cs.VOWEL_CHART_ROW_LABEL_GUTTER_PX
 
 
+class _DiphthongOverlay(QWidget):
+    """Transparent overlay that paints the diphthong arrows ON TOP
+    of the chart's cell widgets.
+
+    Qt paints a widget's ``paintEvent`` BEFORE its child widgets
+    paint. If the diphthong arrows were drawn in the chart's own
+    ``paintEvent``, the cell buttons (children of the chart) would
+    render OVER the arrows and hide them. This overlay is the LAST
+    sibling appended to the chart, so it paints AFTER all the
+    cells and labels -- arrows stay visible above the buttons.
+
+    The overlay is transparent for mouse events so clicks pass
+    through to the cell buttons below.
+    """
+
+    def __init__(self, parent: VowelChartWidget) -> None:
+        super().__init__(parent)
+        self.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self._chart = parent
+
+    def paintEvent(self, event: QPaintEvent | None) -> None:  # noqa: D401
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        # Paint into the overlay's own coordinate system, which
+        # matches the parent chart's (overlay fills the chart
+        # rect). The chart's data-area rect is computed once and
+        # forwarded so the arrow math runs in the same coords the
+        # cell widgets use.
+        dx, dy, dw, dh = self._chart._data_area_rect()
+        # Clip arrows to the silhouette so a curved diphthong
+        # can't stray outside the trapezoid (e.g. into the
+        # row-label gutter). Mirrors the web's
+        # ``.vowel-diphthong-arrows { clip-path: polygon(...) }``
+        # rule.
+        silhouette_path = self._chart._build_silhouette_path_for_clip(
+            dx, dy, dw, dh
+        )
+        if silhouette_path is not None:
+            painter.setClipPath(silhouette_path)
+        self._chart._paint_diphthong_arrows(painter, dx, dy, dw, dh)
+        painter.end()
+
+
 class VowelChartWidget(QWidget):
     """Renders the shared :py:class:`VowelChartGeometry` as Qt
     widgets.
@@ -173,9 +220,18 @@ class VowelChartWidget(QWidget):
         # chart_y (middle / only). Web CSS expresses the same
         # decision via ``data-row-tier`` rules with
         # ``translate(..., 0%)`` / ``-100%`` / ``-50%``.
-        self._cells: list[tuple[QWidget, float, float, int, str, int, int]] = (
-            []
-        )
+        # Per-cell tuple:
+        #   (widget, chart_x, chart_y, pair_side, tier, row, col,
+        #    canonical_segment)
+        # ``canonical_segment`` is ``entries[0]`` of the source
+        # ``VowelChartCell`` (entries are sorted by descending
+        # placement confidence). Diphthong arrows targeting this
+        # cell as a secondary endpoint land on this segment's
+        # button so the arrowhead hits the visually canonical
+        # target rather than the cell's geometric centre.
+        self._cells: list[
+            tuple[QWidget, float, float, int, str, int, int, str]
+        ] = []
         self._cell_containers: list[QWidget] = []
         # Cached header styles, rebuilt by apply_theme each toggle.
         self._HDR_ACTIVE = ""
@@ -248,6 +304,14 @@ class VowelChartWidget(QWidget):
             " }"
         )
         self._diphthong_toggle.hide()
+        # Diphthong-arrow overlay: a transparent sibling child
+        # widget that paints the arrows AFTER all the cell
+        # buttons (Qt paints child widgets after the parent's
+        # paintEvent; cells then occlude anything drawn inside
+        # the chart's paintEvent). The overlay is sized to fill
+        # the chart in ``_layout_children`` and raised to the
+        # top of the sibling stack so its paintEvent runs last.
+        self._diphthong_overlay = _DiphthongOverlay(self)
         # Height-tier band rectangles from the shared geometry.
         # Renderer iterates and fills; midpoint math + silhouette
         # clamps live in ``build_vowel_chart_geometry``.
@@ -571,6 +635,7 @@ class VowelChartWidget(QWidget):
                     tier_by_row.get(cell.row, "middle"),
                     cell.row,
                     cell.col,
+                    cell.entries[0] if cell.entries else "",
                 )
             )
             # Wire focus tracking on every seg button this cell
@@ -765,6 +830,14 @@ class VowelChartWidget(QWidget):
         ``(chart_x, chart_y)``. Re-runs on every ``resizeEvent``.
         """
         dx, dy, dw, dh = self._data_area_rect()
+        # Diphthong-arrow overlay: cover the entire chart so the
+        # arrow painter can map cell coords in the chart's own
+        # coordinate system. Raised LAST so it sits at the top of
+        # the sibling stack and paints OVER every cell button.
+        if self._diphthong_overlay is not None:
+            self._diphthong_overlay.setGeometry(
+                0, 0, self.width(), self.height()
+            )
         if self._title_label is not None:
             self._title_label.adjustSize()
             tw = self._title_label.width()
@@ -826,7 +899,7 @@ class VowelChartWidget(QWidget):
         # ``--vowel-pair-shift``; pre-relay both sides re-derived
         # ``(BTN_W + VOWEL_PAIR_GAP_PX) / 2`` independently.
         pair_shift_px = int(cs.VOWEL_PAIR_SHIFT_PX)
-        for widget, cx, cy, pair_side, tier, _row, _col in self._cells:
+        for widget, cx, cy, pair_side, tier, _r, _c, _s in self._cells:
             widget.adjustSize()
             ww = widget.width()
             wh = widget.height()
@@ -852,6 +925,13 @@ class VowelChartWidget(QWidget):
             else:
                 py = cy_px - wh // 2
             widget.move(px, py)
+        # Raise the diphthong overlay LAST so it paints on top of
+        # all the cells / labels we just positioned. ``raise_()``
+        # moves the widget to the top of the sibling z-order;
+        # Qt then paints it last. Without this the overlay was
+        # added in __init__ before the cells, so cells sat on top.
+        if self._diphthong_overlay is not None:
+            self._diphthong_overlay.raise_()
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: D401
         super().resizeEvent(event)
@@ -941,8 +1021,54 @@ class VowelChartWidget(QWidget):
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
         painter.drawPath(path)
-        self._paint_diphthong_arrows(painter, dx, dy, dw, dh)
         painter.end()
+        # Diphthong arrows are painted by ``_diphthong_overlay``
+        # (a sibling child widget) so they render ON TOP of cell
+        # buttons. Qt paints a parent's ``paintEvent`` BEFORE its
+        # child widgets paint; painting arrows here would put
+        # them BEHIND the seg-button cells. Triggering an update
+        # on the overlay ensures it repaints in sync with the
+        # silhouette refresh.
+        if self._diphthong_overlay is not None:
+            self._diphthong_overlay.update()
+
+    def _build_silhouette_path_for_clip(
+        self,
+        dx: int,
+        dy: int,
+        dw: int,
+        dh: int,
+    ) -> QPainterPath | None:
+        """Return the silhouette outline as a closed
+        ``QPainterPath`` (rounded corners, same shape as the
+        silhouette pseudo-element on web). Used by the
+        diphthong-arrow overlay to clip arrows that would
+        otherwise curve outside the trapezoid into the row-label
+        gutter. Returns ``None`` when there's no silhouette to
+        clip against yet (initial paint before any inventory has
+        rendered)."""
+        sil = self._silhouette
+        if sil is None:
+            sil = vowel_silhouette(self._shape)
+        top_y = dy + round(sil.top_y * dh)
+        bottom_y = dy + round(sil.bottom_y * dh)
+        top_left_x = dx + round(sil.top_left * dw)
+        bottom_left_x = dx + round(sil.bottom_left * dw)
+        back_right_x = (
+            dx + round(sil.top_right * dw) + sil.back_right_pixel_offset
+        )
+        return self._build_rounded_silhouette_path(
+            top_left_x,
+            top_y,
+            back_right_x,
+            top_y,
+            back_right_x,
+            bottom_y,
+            bottom_left_x,
+            bottom_y,
+            dw,
+            dh,
+        )
 
     @staticmethod
     def _build_rounded_silhouette_path(
@@ -1081,36 +1207,39 @@ class VowelChartWidget(QWidget):
         """
         if not self._diphthongs:
             return
-        # Build a (row, col) -> cell-widget map from the
-        # widgets ``_layout_children`` has already positioned.
-        # Used as a FALLBACK when we can't find the specific
-        # segment-button inside the cell (e.g. for the
-        # secondary endpoint, which doesn't carry a segment
-        # name).
-        cell_widget_by_pos: dict[tuple[int, int], QWidget] = {}
-        for widget, _cx, _cy, _ps, _tier, row, col in self._cells:
-            cell_widget_by_pos[(row, col)] = widget
+        # (row, col) -> (cell_widget, canonical_segment) so the
+        # arrow target lookup can find the cell's CANONICAL
+        # SEGMENT button (entries[0], highest-confidence
+        # placement). Pre-fix the secondary endpoint landed on the
+        # cell's geometric centre, which for a multi-entry stack
+        # could sit 30+ px from the actual target button (e.g. /a/
+        # in a stack of /a, aː, ã, a̰/).
+        cell_by_pos: dict[tuple[int, int], tuple[QWidget, str]] = {}
+        for widget, _cx, _cy, _ps, _tier, row, col, canon_seg in self._cells:
+            cell_by_pos[(row, col)] = (widget, canon_seg)
 
-        def _widget_centre_in_self(
+        def _widget_centre_and_size(
             target: QWidget,
-        ) -> tuple[float, float]:
-            """Return the target widget's visual centre in THIS
-            (VowelChartWidget) widget's coordinate system. The
-            widget may be a direct child of self (single-entry
-            cell == the button itself) or nested inside a cell
-            container (multi-entry stack / pair / contrast set);
-            ``mapTo`` handles either."""
+        ) -> tuple[float, float, float, float]:
+            """Return ``(centre_x, centre_y, width, height)`` for
+            the target widget in THIS (VowelChartWidget) widget's
+            coordinate system."""
             rect = target.rect()
             centre = target.mapTo(self, rect.center())
-            return (float(centre.x()), float(centre.y()))
+            return (
+                float(centre.x()),
+                float(centre.y()),
+                float(rect.width()),
+                float(rect.height()),
+            )
 
-        def endpoint_primary(
+        def _primary_target(
             row: int,
             col: int,
             segment: str,
             chart_x: float,
             chart_y: float,
-        ) -> tuple[float, float]:
+        ) -> tuple[float, float, float, float]:
             # Specific segment-button INSIDE the cell takes
             # precedence so each diphthong's arrow originates at
             # its own button rather than the stack/pair
@@ -1119,22 +1248,49 @@ class VowelChartWidget(QWidget):
             # for /ia/ must start at the /ia/ button.
             btn = self._buttons.get(segment)
             if btn is not None and btn.isVisible():
-                return _widget_centre_in_self(btn)
-            cell = cell_widget_by_pos.get((row, col))
-            if cell is not None:
-                return _widget_centre_in_self(cell)
-            return (dx + chart_x * dw, dy + chart_y * dh)
+                return _widget_centre_and_size(btn)
+            entry = cell_by_pos.get((row, col))
+            if entry is not None:
+                return _widget_centre_and_size(entry[0])
+            return (dx + chart_x * dw, dy + chart_y * dh, 0.0, 0.0)
 
-        def endpoint_secondary(
+        def _secondary_target(
             row: int,
             col: int,
             chart_x: float,
             chart_y: float,
+        ) -> tuple[float, float, float, float]:
+            # Aim for the cell's CANONICAL segment button
+            # (entries[0]) so the arrowhead lands on the
+            # canonical-vowel button rather than the cell's
+            # geometric centre. For Korean /ia/ -> secondary cell
+            # holds /a, aː/; arrow now points to /a/ specifically.
+            entry = cell_by_pos.get((row, col))
+            if entry is not None:
+                cell_widget, canon_seg = entry
+                btn = self._buttons.get(canon_seg)
+                if btn is not None and btn.isVisible():
+                    return _widget_centre_and_size(btn)
+                return _widget_centre_and_size(cell_widget)
+            return (dx + chart_x * dw, dy + chart_y * dh, 0.0, 0.0)
+
+        def _rect_edge_offset(
+            w: float, h: float, ux: float, uy: float
         ) -> tuple[float, float]:
-            cell = cell_widget_by_pos.get((row, col))
-            if cell is not None:
-                return _widget_centre_in_self(cell)
-            return (dx + chart_x * dw, dy + chart_y * dh)
+            """Offset from a rectangle's centre to where a ray in
+            unit direction ``(ux, uy)`` exits the rectangle of
+            size ``w * h``. Used so arrows start/end at the
+            button's visible edge rather than its centre -- the
+            arrowhead now sits OUTSIDE the source button and the
+            tip touches the target button's edge."""
+            if w <= 0 or h <= 0:
+                return (0.0, 0.0)
+            hw = w / 2.0
+            hh = h / 2.0
+            tx = float("inf") if abs(ux) < 1e-9 else hw / abs(ux)
+            ty = float("inf") if abs(uy) < 1e-9 else hh / abs(uy)
+            t = min(tx, ty)
+            return (t * ux, t * uy)
 
         # Group arrows by their (primary, secondary) cell pair so
         # the fan-out distributes shared-pair arrows around the
@@ -1162,19 +1318,43 @@ class VowelChartWidget(QWidget):
                 is_focus = d.segment == focused
                 if not is_focus and not self._show_all_arrows:
                     continue
-                ax, ay = endpoint_primary(
+                ax_c, ay_c, aw, ah = _primary_target(
                     d.primary_row,
                     d.primary_col,
                     d.segment,
                     d.primary_chart_x,
                     d.primary_chart_y,
                 )
-                bx, by = endpoint_secondary(
+                bx_c, by_c, bw, bh = _secondary_target(
                     d.secondary_row,
                     d.secondary_col,
                     d.secondary_chart_x,
                     d.secondary_chart_y,
                 )
+                # Edge offset: start the arrow at the source
+                # button's EDGE (not its centre) in the chord
+                # direction; terminate at the target button's
+                # EDGE. The chord (centre->centre) gives the
+                # direction; ``_rect_edge_offset`` returns the
+                # vector from centre to the rectangle's exit
+                # point along that direction. Arrows now visibly
+                # emerge from the source button and end with the
+                # arrowhead touching the target button.
+                chord_dx = bx_c - ax_c
+                chord_dy = by_c - ay_c
+                chord_len = math.hypot(chord_dx, chord_dy) or 1.0
+                ux_chord = chord_dx / chord_len
+                uy_chord = chord_dy / chord_len
+                off_ax, off_ay = _rect_edge_offset(
+                    aw, ah, ux_chord, uy_chord
+                )
+                off_bx, off_by = _rect_edge_offset(
+                    bw, bh, -ux_chord, -uy_chord
+                )
+                ax = ax_c + off_ax
+                ay = ay_c + off_ay
+                bx = bx_c + off_bx
+                by = by_c + off_by
                 # Fan-out factor: -1, 0, +1 for n=3; -1, +1 for n=2;
                 # 0 for solo arrows. Outer arrows arc more than the
                 # inner ones to keep the bundle readable.
@@ -1182,20 +1362,12 @@ class VowelChartWidget(QWidget):
                 mx = (ax + bx) / 2
                 my = (ay + by) / 2
                 chord = math.hypot(bx - ax, by - ay) or 1.0
-                # Lift + opacity + stroke + arrowhead all from
-                # ``chart_style.py`` so desktop and web agree.
-                # Pre-relay desktop capped lift at 5 % of data
-                # width and stroked at 1.75 px / focused 1.0 /
-                # show-all 0.55; web used 8 % / 1 px / 0.95 / 0.7.
                 base_lift = min(
                     dw * cs.DIPHTHONG_LIFT_WIDTH_FRAC_CAP,
                     chord * cs.DIPHTHONG_LIFT_CHORD_FRAC,
                 )
                 # Fan-out: outer arrows arc 1.3x base lift (0.5 +
-                # 0.8 * 1.0); inner arrows arc 0.5x. Pre-fix was
-                # (0.7 + 0.5), which left concentric arrows on
-                # busy clusters (Korean PHOIBLE /i/ -> 6
-                # destinations) too close to read individually.
+                # 0.8 * 1.0); inner arrows arc 0.5x.
                 lift = base_lift * signed * (0.5 + 0.8 * abs(signed))
                 nx = -(by - ay) / chord
                 ny = (bx - ax) / chord
@@ -1211,39 +1383,33 @@ class VowelChartWidget(QWidget):
                 pen.setWidthF(cs.DIPHTHONG_ARROW_STROKE_PX)
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
-                # Arrowhead tangent + inset. Pre-fix the curve and
-                # arrowhead tip landed exactly at the secondary
-                # cell's centre, where the cell button's paint
-                # would occlude the triangle on short arrows.
-                # Inset the tip back along the tangent by 1.5 % of
-                # ``dw`` (matches the web's TIP_INSET_USER_UNITS)
-                # so the tip sits OUTSIDE the cell button outline.
+                # Tangent at the terminus approximated by the
+                # control-point-to-endpoint direction. Arrowhead
+                # tip sits at the terminus -- which is already at
+                # the target button's edge thanks to the edge
+                # offset above, so no extra tip-inset is needed.
                 tx = bx - cx
                 ty = by - cy
                 tlen = math.hypot(tx, ty) or 1.0
                 ux = tx / tlen
                 uy = ty / tlen
-                tip_inset = dw * 0.015
-                tip_x = bx - ux * tip_inset
-                tip_y = by - uy * tip_inset
                 path = QPainterPath()
                 path.moveTo(ax, ay)
-                path.quadTo(cx, cy, tip_x, tip_y)
+                path.quadTo(cx, cy, bx, by)
                 painter.drawPath(path)
-                # Arrowhead at the inset tip, oriented along the
+                # Arrowhead at the terminus, oriented along the
                 # tangent. Length + half-width scale with chart
-                # width so the head stays proportional on narrow
-                # + wide charts alike.
+                # width so the head stays proportional.
                 head_len = dw * cs.DIPHTHONG_ARROWHEAD_LEN_FRAC
                 head_half = dw * cs.DIPHTHONG_ARROWHEAD_HALF_FRAC
-                base_x = tip_x - ux * head_len
-                base_y = tip_y - uy * head_len
+                base_x = bx - ux * head_len
+                base_y = by - uy * head_len
                 left_x = base_x + (-uy) * head_half
                 left_y = base_y + ux * head_half
                 right_x = base_x - (-uy) * head_half
                 right_y = base_y - ux * head_half
                 head = QPainterPath()
-                head.moveTo(tip_x, tip_y)
+                head.moveTo(bx, by)
                 head.lineTo(left_x, left_y)
                 head.lineTo(right_x, right_y)
                 head.closeSubpath()

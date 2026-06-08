@@ -1835,36 +1835,61 @@ function _buildArrowsNow(dataEl, chart) {
     const dataAreaW = dataEl.clientWidth || 1;
     const dataAreaH = dataEl.clientHeight || 1;
     const dataRect = dataEl.getBoundingClientRect();
-    const rectToViewbox = (rect) => {
-        const cx_px = rect.left - dataRect.left + rect.width / 2;
-        const cy_px = rect.top - dataRect.top + rect.height / 2;
-        return [
-            (cx_px / dataAreaW) * 100,
-            (cy_px / dataAreaH) * 100,
-        ];
-    };
+    // Returns [cx_vb, cy_vb, w_vb, h_vb] in viewBox %-space for
+    // the given DOM rect. Width and height let the caller offset
+    // the endpoint by the rectangle's edge along the chord
+    // direction so arrows start/end at the button's outline, not
+    // its centre.
+    const rectToViewbox = (rect) => [
+        ((rect.left - dataRect.left + rect.width / 2) / dataAreaW) * 100,
+        ((rect.top - dataRect.top + rect.height / 2) / dataAreaH) * 100,
+        (rect.width / dataAreaW) * 100,
+        (rect.height / dataAreaH) * 100,
+    ];
     const findCell = (row, col) => dataEl.querySelector(
         `.vowel-chart-cell[data-cell-row="${row}"]`
         + `[data-cell-col="${col}"]`
     );
-    const endpointForPrimary = (row, col, segment, chart_x, chart_y) => {
+    // Each ``_target`` returns [centre_x_vb, centre_y_vb, w_vb, h_vb].
+    // Coordinates in viewBox %-space; widths/heights ditto.
+    // ``chart_x`` / ``chart_y`` fallback values land in the
+    // anchor position with zero width/height (no edge offset).
+    const primaryTarget = (row, col, segment, chart_x, chart_y) => {
         const cellEl = findCell(row, col);
         if (cellEl) {
-            // Specific button INSIDE the cell takes precedence so
-            // each diphthong's arrow originates at its own button
-            // rather than the stack/pair container's centre.
             const btn = cellEl.querySelector(
                 `.seg-btn[data-seg="${CSS.escape(segment)}"]`
             );
             if (btn) return rectToViewbox(btn.getBoundingClientRect());
             return rectToViewbox(cellEl.getBoundingClientRect());
         }
-        return [chart_x * 100, chart_y * 100];
+        return [chart_x * 100, chart_y * 100, 0, 0];
     };
-    const endpointForSecondary = (row, col, chart_x, chart_y) => {
+    const secondaryTarget = (row, col, chart_x, chart_y) => {
         const cellEl = findCell(row, col);
-        if (cellEl) return rectToViewbox(cellEl.getBoundingClientRect());
-        return [chart_x * 100, chart_y * 100];
+        if (cellEl) {
+            // Aim for the cell's CANONICAL segment button (first
+            // ``.seg-btn`` child -- entries are sorted descending
+            // by placement confidence).
+            const targetBtn = cellEl.querySelector(".seg-btn");
+            const rect = (targetBtn || cellEl).getBoundingClientRect();
+            return rectToViewbox(rect);
+        }
+        return [chart_x * 100, chart_y * 100, 0, 0];
+    };
+    // Offset from a rectangle's centre to where a ray in unit
+    // direction (ux, uy) exits the rectangle of size w*h. Used so
+    // arrows start/end at button EDGES rather than centres -- the
+    // arrowhead now sits outside the source and the tip touches
+    // the target button's edge.
+    const rectEdgeOffset = (w, h, ux, uy) => {
+        if (w <= 0 || h <= 0) return [0, 0];
+        const hw = w / 2;
+        const hh = h / 2;
+        const tx = Math.abs(ux) < 1e-9 ? Infinity : hw / Math.abs(ux);
+        const ty = Math.abs(uy) < 1e-9 ? Infinity : hh / Math.abs(uy);
+        const t = Math.min(tx, ty);
+        return [t * ux, t * uy];
     };
     // Group arrows that share the same primary -> secondary cell
     // pair so we can fan their control points across the
@@ -1885,105 +1910,86 @@ function _buildArrowsNow(dataEl, chart) {
     svg.setAttribute("viewBox", "0 0 100 100");
     svg.setAttribute("preserveAspectRatio", "none");
     svg.setAttribute("aria-hidden", "true");
-    // 1.5 % of viewBox = arrowhead-tip inset along the tangent.
-    // The tip used to land exactly at the secondary cell's centre;
-    // the cell button's paint would then occlude the triangle on
-    // short arrows. Insetting moves the tip outside the cell
-    // button's outline so it stays visible regardless of paint
-    // order.
-    const TIP_INSET_USER_UNITS = 1.5;
     for (const [groupKey, groupArrows] of groups.entries()) {
         const N = groupArrows.length;
         for (let i = 0; i < N; i++) {
             const d = groupArrows[i];
-            const [ax, ay] = endpointForPrimary(
+            const [ax_c, ay_c, aw, ah] = primaryTarget(
                 d.primary_row,
                 d.primary_col,
                 d.segment,
                 d.primary_chart_x,
                 d.primary_chart_y,
             );
-            const [bx, by] = endpointForSecondary(
+            const [bx_c, by_c, bw, bh] = secondaryTarget(
                 d.secondary_row,
                 d.secondary_col,
                 d.secondary_chart_x,
                 d.secondary_chart_y,
             );
+            // Edge offset: start the arrow at the source
+            // button's EDGE (not centre) in the chord direction;
+            // terminate at the target button's EDGE. Arrows now
+            // visibly emerge from the source button and the
+            // arrowhead tip touches the target button.
+            const chordDx = bx_c - ax_c;
+            const chordDy = by_c - ay_c;
+            const chordLen = Math.hypot(chordDx, chordDy) || 1;
+            const uxChord = chordDx / chordLen;
+            const uyChord = chordDy / chordLen;
+            const [offAx, offAy] = rectEdgeOffset(aw, ah, uxChord, uyChord);
+            const [offBx, offBy] = rectEdgeOffset(bw, bh, -uxChord, -uyChord);
+            const ax = ax_c + offAx;
+            const ay = ay_c + offAy;
+            const bx = bx_c + offBx;
+            const by = by_c + offBy;
             // Control point: midpoint nudged perpendicular to the
-            // chord. The base arc rise stays subtle on long arrows
-            // and visible on short ones. When N > 1 share the same
-            // pair (PHOIBLE length/nasal variants of one diphthong),
-            // distribute the signed lift across [-1, +1] so the
-            // group fans into N distinct curves around the chord
-            // instead of stacking on top of each other.
+            // chord (post edge offset).
             const mx = (ax + bx) / 2;
             const my = (ay + by) / 2;
             const dx = bx - ax;
             const dy = by - ay;
             const len = Math.hypot(dx, dy) || 1;
-            // Lift formula pinned to ``chart_style.py``:
-            // ``DIPHTHONG_LIFT_CHORD_FRAC * chord`` capped at
-            // ``DIPHTHONG_LIFT_WIDTH_FRAC_CAP * data_width`` (viewBox
-            // is 100x100 so the cap fraction multiplied by 100 maps
-            // directly to user-units). Both renderers now consume
-            // these same fractions; pre-relay desktop capped at 5 %
-            // of data width while web capped at 8 %.
             const baseLift = Math.min(
                 CHART_STYLE.diphthong_lift_width_frac_cap * 100,
                 len * CHART_STYLE.diphthong_lift_chord_frac,
             );
-            // For N=1: factor = 0 (single curve, normal side).
-            // For N=2: factors = -1, +1 (two opposite curves).
-            // For N=3: -1, 0, +1.  For N=4: -1, -1/3, +1/3, +1.
             const signedFactor =
                 N > 1 ? (i / (N - 1)) * 2 - 1 : 1;
-            // Fan-out magnitude: outer arrows arc 1.3x base lift
-            // (factor 0.5 + 0.8); inner arrows arc 0.5x base lift.
-            // Pre-fix the spread was 0.7 + 0.5 (outer 1.2x, inner
-            // 0.7x), which left concentric arrows on busy clusters
-            // (Korean PHOIBLE /i/ -> 6 destinations) too close
-            // together to read individually.
+            // Outer arrows arc 1.3x base lift (0.5 + 0.8);
+            // inner arrows arc 0.5x.
             const lift =
                 baseLift * signedFactor * (0.5 + 0.8 * Math.abs(signedFactor));
             const nx = -dy / len;
             const ny = dx / len;
             const cx = mx + nx * lift;
             const cy = my + ny * lift;
-            // Tangent at the endpoint approximated by the
+            // Tangent at the terminus approximated by the
             // control-point-to-endpoint direction.
             const tx = bx - cx;
             const ty = by - cy;
             const tlen = Math.hypot(tx, ty) || 1;
             const ux = tx / tlen;
             const uy = ty / tlen;
-            // Inset the curve's terminus + arrowhead tip back
-            // along the tangent so the tip never lands inside
-            // a cell button's painted area.
-            const tipX = bx - ux * TIP_INSET_USER_UNITS;
-            const tipY = by - uy * TIP_INSET_USER_UNITS;
             const path = document.createElementNS(svgNS, "path");
-            path.setAttribute("d", `M ${ax} ${ay} Q ${cx} ${cy} ${tipX} ${tipY}`);
+            path.setAttribute("d", `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`);
             path.setAttribute("class", "vowel-diphthong-arrow");
             path.dataset.diphthongSeg = d.segment;
-            // Stable structural id keys the focus map below so a
+            // Stable structural id (primary,secondary serialized
+            // plus group index) keys the focus map below so a
             // future segment-glyph collision can't cross-fire.
-            // ``groupKey`` is the (primary, secondary) cell pair
-            // serialized; ``i`` distinguishes parallel arrows.
             path.dataset.diphthongId = `${groupKey}-${i}`;
             svg.appendChild(path);
-            // Arrowhead: a small triangle at the (inset) tip,
+            // Arrowhead: a small triangle at the terminus,
             // oriented along the tangent.
             const px = -uy;
             const py = ux;
-            // Arrowhead dimensions pinned to ``chart_style.py`` as
-            // fractions of the data-area width. viewBox is 100x100
-            // so the fraction * 100 = the SVG user-unit length.
             const headLen = CHART_STYLE.diphthong_arrowhead_len_frac * 100;
             const headHalfW = (
                 CHART_STYLE.diphthong_arrowhead_half_frac * 100
             );
-            const baseX = tipX - ux * headLen;
-            const baseY = tipY - uy * headLen;
+            const baseX = bx - ux * headLen;
+            const baseY = by - uy * headLen;
             const leftX = baseX + px * headHalfW;
             const leftY = baseY + py * headHalfW;
             const rightX = baseX - px * headHalfW;
@@ -1991,7 +1997,7 @@ function _buildArrowsNow(dataEl, chart) {
             const head = document.createElementNS(svgNS, "path");
             head.setAttribute(
                 "d",
-                `M ${tipX} ${tipY} L ${leftX} ${leftY} ` +
+                `M ${bx} ${by} L ${leftX} ${leftY} ` +
                     `L ${rightX} ${rightY} Z`,
             );
             head.setAttribute("class", "vowel-diphthong-arrowhead");
