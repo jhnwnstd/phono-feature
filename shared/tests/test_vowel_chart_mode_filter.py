@@ -276,3 +276,68 @@ def test_archi_pharyngeals_not_flagged_as_diphthongs() -> None:
         f"monophthongs must be excluded by the placer's "
         f"degeneracy filter."
     )
+
+
+# ---------------------------------------------------------------------------
+# Cell.is_diphthong derivation invariant
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _PHOIBLE_AVAILABLE,
+    reason="PHOIBLE provider not importable",
+)
+def test_cell_is_diphthong_matches_placement_flag_invariant() -> None:
+    """INVARIANT: for every populated cell,
+    ``cell.is_diphthong == any(PlacementFlag.DIPHTHONG in
+    placements[seg].flags for seg in cell.entries)``.
+
+    The cell-level flag is computed in
+    ``build_vowel_chart_geometry`` by reading the placement-level
+    flags. The two layers are currently independent; this test
+    pins their relationship so a future refactor that touches
+    either layer can't drift them apart without failing CI.
+    """
+    p = PhoibleProvider()
+    if not getattr(p, "has_data", False):
+        pytest.skip("PHOIBLE data snapshot absent")
+    # Korean has a mix of diphthong and monophthong cells; ideal
+    # for exercising the invariant on both branches.
+    inv = materialize_phoible_inventory(p, "2197")
+    engine = FeatureEngine(inv)
+    vowels = list(engine.grouped_segments.get("Vowels", []))
+    if not vowels:
+        pytest.skip("Korean PHOIBLE has no vowels (unexpected)")
+    seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
+    profile = detect_vowel_profile(vowels, seg_feats)
+    vowel_secondary = inv.metadata.get("vowel_secondary")
+    geom = build_vowel_chart_geometry(
+        vowels,
+        profile,
+        seg_feats,
+        vowel_secondary=(
+            vowel_secondary if isinstance(vowel_secondary, dict) else None
+        ),
+    )
+    _occupied, placements = compute_placements(
+        vowels,
+        profile,
+        seg_feats,
+        vowel_secondary=(
+            vowel_secondary if isinstance(vowel_secondary, dict) else None
+        ),
+    )
+    for cell in geom.cells:
+        expected = any(
+            seg in placements
+            and PlacementFlag.DIPHTHONG in placements[seg].flags
+            for seg in cell.entries
+        )
+        assert cell.is_diphthong == expected, (
+            f"is_diphthong invariant broken at cell {cell.entries!r}: "
+            f"cell.is_diphthong={cell.is_diphthong} but "
+            f"any(placement DIPHTHONG flag)={expected}. The "
+            f"cell-level flag derivation in "
+            f"build_vowel_chart_geometry drifted from the "
+            f"placement-level flag in compute_placements."
+        )

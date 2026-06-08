@@ -527,18 +527,30 @@ def materialize_phoible_inventory(
         )
     }
     if generated.vowel_secondary:
-        # Canonicalise the diphthong segment keys through the SAME
-        # normalisation the engine applies to ``inventory.segments``
-        # via ``Inventory.parse``. PHOIBLE ships ~26% of inventories
-        # with NFD-form segments (the nasal vowels like ``ã`` arrive
-        # as ``a + U+0303``); the engine NFC-folds them at parse,
-        # so a raw-key copy here means ``vowel_secondary['ãi']``
+        # Canonicalise BOTH the diphthong segment key AND the
+        # feature bundle keys through the engine's normalisation
+        # (NFC for the segment, ``normalize_feature_key`` for the
+        # feature names). PHOIBLE ships ~26% of inventories with
+        # NFD-form segments (nasal vowels like ``ã`` arrive as
+        # ``a + U+0303``); the engine NFC-folds them at parse so
+        # a raw-key copy here means ``vowel_secondary['ãi']``
         # (NFD) misses ``inventory.segments['ãi']`` (NFC) on the
-        # lookup inside ``compute_placements``. Result before the
-        # fix: nasal diphthongs silently lost their secondary
+        # lookup inside ``compute_placements``. Result pre-fix:
+        # nasal diphthongs silently lost their secondary
         # placement and rendered as monophthongs.
+        #
+        # The feature-key normalisation defends against the same
+        # bug shape for FEATURE keys: if PHOIBLE ever shipped a
+        # feature name in NFD (or PascalCase, or with a delimiter
+        # variant), the lookup inside ``vowel_grid_pos`` would
+        # quietly miss and the segment would place at the
+        # default Open-mid-Central cell.
+        from phonology_shared.data.inventory import normalize_feature_key
+
         metadata["vowel_secondary"] = {
-            canonicalize_segment_label(seg): dict(bundle)
+            canonicalize_segment_label(seg): {
+                normalize_feature_key(k): v for k, v in bundle.items()
+            }
             for seg, bundle in generated.vowel_secondary.items()
         }
 

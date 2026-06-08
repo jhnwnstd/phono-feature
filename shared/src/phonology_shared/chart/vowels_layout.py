@@ -1809,7 +1809,22 @@ def build_vowel_chart_geometry(
         targeting an empty tier still points at a sensible vertical
         position; the silhouette may not visually extend to that y,
         but the arrow geometry stays defined.
+
+        Bounds: ``ri`` must be a valid index into ``ROW_LABELS``
+        (0..6) and ``ci`` must be a valid column index (0..8). A
+        malformed ``vowel_secondary`` payload could pass an
+        out-of-range row -- previously raised ``IndexError`` from
+        ``ROW_LABELS[ri]``; now returns the silhouette's centre as
+        a safe degenerate position so the caller can skip the
+        diphthong instead of crashing the whole geometry build.
         """
+        if not 0 <= ri < len(ROW_LABELS):
+            # Degenerate: caller should drop this diphthong. Return
+            # the silhouette's vertical midpoint so the geometry
+            # build doesn't crash.
+            return (back, (silhouette.top_y + silhouette.bottom_y) / 2.0)
+        if not 0 <= ci < 9:
+            return (back, (silhouette.top_y + silhouette.bottom_y) / 2.0)
         if ri in display_y_by_row:
             cy = display_y_by_row[ri]
         else:

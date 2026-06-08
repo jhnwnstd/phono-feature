@@ -1135,8 +1135,35 @@ function createRasterizedLabel(text, font, maxWidth) {
  * the pane would overflow after layout settles, rebalance moves
  * the bottom groups into a 2-column spillover at the bottom.
  */
+/** Disconnect every ResizeObserver attached to chart data
+ *  elements before the chart is destroyed. Without this the
+ *  observers keep firing on detached DOM, paint stale arrows
+ *  through stale closures over the OLD ``chart`` payload, and
+ *  leak references that prevent GC. Pattern added after a bug
+ *  where rapid inventory swaps (Korean -> Spanish -> Korean) left
+ *  phantom arrows from the previous inventory.
+ *
+ *  New observers should register under a ``data-*-observer``
+ *  property on ``dataEl`` so they're discovered by this helper
+ *  automatically.
+ */
+function _disconnectChartObservers(grid) {
+    if (!grid) return;
+    for (const dataEl of grid.querySelectorAll(".vowel-chart-data")) {
+        if (dataEl._arrowResizeObserver) {
+            dataEl._arrowResizeObserver.disconnect();
+            delete dataEl._arrowResizeObserver;
+        }
+        if (dataEl._silhouetteResizeObserver) {
+            dataEl._silhouetteResizeObserver.disconnect();
+            delete dataEl._silhouetteResizeObserver;
+        }
+    }
+}
+
 function renderSegmentGrid(groups, vowelChart) {
     const grid = nodes.segGrid;
+    _disconnectChartObservers(grid);
     grid.innerHTML = "";
     state.seg_buttons.clear();
     if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
@@ -1749,6 +1776,12 @@ function _buildVowelChart(chart) {
         const radiusFrac = CHART_STYLE.silhouette_corner_radius_frac
             ?? 0.018;
         const refreshPolygon = () => {
+            // ``dataEl`` may have been removed from the DOM
+            // between scheduling rAF and the callback firing
+            // (e.g., the user swapped inventories during the
+            // delay). Bail out so the closure doesn't paint
+            // onto detached DOM or leak the old chart's data.
+            if (!dataEl.isConnected) return;
             const dw = dataEl.clientWidth || 0;
             if (dw <= 0) return;
             const silAdj = _silhouetteForDataWidth(sil, dw);
@@ -2455,10 +2488,24 @@ function onSegmentClicked(seg) {
     // Optimistic visual flip so the click feels instant; the
     // bridge-driven runSegToFeat reconciles after the debounce
     // (possibly upgrading other buttons to suggested/matched).
-    const btn = state.seg_buttons.get(seg);
-    if (btn) {
-        btn.dataset.state = wasSelected ? "default" : "selected";
-        btn.setAttribute("aria-pressed", wasSelected ? "false" : "true");
+    //
+    // Flip EVERY ``.seg-btn[data-seg=seg]`` element, not just the
+    // one in ``state.seg_buttons``: the same segment can appear
+    // in MULTIPLE surfaces -- the consonant grid, the vowel
+    // chart cell, the diphthong chip strip -- and clicking any
+    // one of them must light up the others so the user sees a
+    // single coherent "selected" state across the chart. Pre-fix
+    // clicking a diphthong cell only lit the cell button, and the
+    // chip strip below the silhouette stayed default-coloured,
+    // making users think the chip was inert.
+    const nextState = wasSelected ? "default" : "selected";
+    const nextPressed = wasSelected ? "false" : "true";
+    const cssSafe = CSS.escape(seg);
+    for (const btn of document.querySelectorAll(
+        `.seg-btn[data-seg="${cssSafe}"]`,
+    )) {
+        btn.dataset.state = nextState;
+        btn.setAttribute("aria-pressed", nextPressed);
     }
     scheduleAnalysis();
 }

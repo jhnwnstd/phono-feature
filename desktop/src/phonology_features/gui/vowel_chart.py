@@ -1487,6 +1487,17 @@ class VowelChartWidget(QWidget):
             # canonical-vowel button rather than the cell's
             # geometric centre. For Korean /ia/ -> secondary cell
             # holds /a, aː/; arrow now points to /a/ specifically.
+            #
+            # The fallback chain (button -> cell widget -> projected
+            # chart_xy) is robust against mode-transition timing:
+            # the overlay's paintEvent early-returns when
+            # ``_display_mode != DIPHTHONG`` (see _DiphthongOverlay),
+            # so this code only runs when arrows SHOULD render. If
+            # ``btn.isVisible() == False`` here it means the button
+            # was reparented to a hidden cell -- the cell widget's
+            # geometry() still returns its layout position (Qt
+            # doesn't zero geometry on setVisible(False)), so the
+            # fallback is sensible.
             entry = cell_by_pos.get((row, col))
             if entry is not None:
                 cell_widget, canon_seg = entry

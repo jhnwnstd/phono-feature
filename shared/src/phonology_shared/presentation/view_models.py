@@ -624,6 +624,17 @@ def _vowel_chart_summary(
                 "segs": list(cell.entries),
                 "display_kind": cell.display_kind.value,
                 "contrast_features": list(cell.contrast_features),
+                # ``is_diphthong`` is the cell-level flag the
+                # web renderer's mode-toggle filter reads via
+                # ``Boolean(cell.is_diphthong)`` in main.js. A
+                # prior refactor (dead-code audit Round B) silently
+                # dropped this field, which made the diphthong
+                # display mode show an EMPTY chart on the web side
+                # because every cell evaluated to ``Boolean(undefined)
+                # === false`` and the filter skipped them all.
+                # ``test_wire_payload_completeness.py`` pins the
+                # field so any future silent dropout fails CI.
+                "is_diphthong": cell.is_diphthong,
             }
             for cell in geometry.cells
         ],

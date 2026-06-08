@@ -1102,14 +1102,23 @@ dialog input[type="text"]:focus-visible {
 /* Hover highlight: dim every other arrow when one is focused so
    the user can follow a single trajectory cleanly in a busy
    diphthong cluster. Pre-redesign the hover rule controlled
-   visibility; post-redesign it controls EMPHASIS only. */
-.vowel-chart-data:has(.vowel-diphthong-arrow.is-focused)
-  .vowel-diphthong-arrow:not(.is-focused) {
-  opacity: 0.25;
-}
-.vowel-chart-data:has(.vowel-diphthong-arrowhead.is-focused)
-  .vowel-diphthong-arrowhead:not(.is-focused) {
-  opacity: 0.25;
+   visibility; post-redesign it controls EMPHASIS only.
+
+   Gated on @supports(:has()) so the rule is a no-op on Safari <
+   17.5 (and any other browser without :has() support). The
+   degraded behaviour on those browsers is that hover doesn't
+   dim other arrows -- the focused arrow gets the default
+   focused-alpha and the others stay at the same focused-alpha.
+   Functional, just less visual cueing. */
+@supports selector(:has(*)) {
+  .vowel-chart-data:has(.vowel-diphthong-arrow.is-focused)
+    .vowel-diphthong-arrow:not(.is-focused) {
+    opacity: 0.25;
+  }
+  .vowel-chart-data:has(.vowel-diphthong-arrowhead.is-focused)
+    .vowel-diphthong-arrowhead:not(.is-focused) {
+    opacity: 0.25;
+  }
 }
 /* Toggle button anchored at the data area's top-right corner.
    Stays unobtrusive (text-dim) until hovered/active; the
