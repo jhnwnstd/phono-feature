@@ -1283,22 +1283,97 @@ function rebalanceSegmentSpillover() {
     // Reset to the pristine single-column state before measuring.
     while (spillover.firstChild) grid.appendChild(spillover.firstChild);
     if (spillover.parentElement) spillover.remove();
+    // Clear any prior column assignment so re-measure starts fresh.
+    spillover.style.removeProperty("--seg-spillover-cols");
 
     const available = grid.clientHeight;
-    if (grid.scrollHeight <= available) return;
-
     const consonants = [...grid.querySelectorAll(
         ":scope > .seg-group:not(.vowel-chart-group)",
     )];
     if (consonants.length === 0) return;
-    // Single source of truth for the partition decision: the desktop
-    // and web both call ``partition_groups_for_spillover`` in
-    // ``phonology_shared.presentation.layout``. JS measures the heights and
-    // available area; the bridge function computes ``main_count``.
+
+    // Bridge-aware path: call ``plan_segment_layout`` which returns
+    // the FULL plan (main_count + n_spillover_cols + per-group
+    // column assignment). Pre-migration the web called the legacy
+    // ``partition_segment_spillover`` which hardcoded 2 cols +
+    // sequential row pairing, so the desktop and web placed the
+    // same inventory differently. Falls back to the legacy
+    // partitioner when the bridge isn't ready yet (~200 ms boot).
+    if (state.bridge) {
+        const groupNames = consonants.map((el) => el.dataset.group || "");
+        const heights = consonants.map((el) => el.offsetHeight);
+        const widths = consonants.map((el) => el.offsetWidth);
+        const chartEl = grid.querySelector(".vowel-chart-group");
+        let chartRect = null;
+        if (chartEl) {
+            const gridBox = grid.getBoundingClientRect();
+            const cBox = chartEl.getBoundingClientRect();
+            chartRect = [
+                Math.round(cBox.left - gridBox.left),
+                Math.round(cBox.top - gridBox.top),
+                Math.round(cBox.width),
+                Math.round(cBox.height),
+            ];
+        }
+        // ``min_col_w`` matches what the desktop passes: the floor
+        // on a spillover column's width so a narrow pane still
+        // accepts at least one column. Use the canonical segment
+        // button stride.
+        const segBtnW = parseInt(
+            getComputedStyle(document.documentElement)
+                .getPropertyValue("--seg-btn-w") || "33",
+            10,
+        );
+        const plan = callBridge(
+            "plan_segment_layout",
+            groupNames,
+            heights,
+            widths,
+            grid.clientWidth,
+            available,
+            chartRect,
+            segBtnW,
+        );
+        if (!plan || plan.spillover_groups.length === 0) return;
+        // Surface the column count to CSS so the spillover region
+        // sizes its grid to ``repeat(N, 1fr)`` with the shared
+        // ``--seg-btn-gap`` between columns.
+        spillover.style.setProperty(
+            "--seg-spillover-cols",
+            String(plan.n_spillover_cols),
+        );
+        grid.appendChild(spillover);
+        // Walk spillover_groups in source order so the user reads
+        // column-major top-to-bottom. The bridge already sorted by
+        // LPT; the column_assignment array tells us where each
+        // group lands.
+        const spilloverIndex = new Map();
+        consonants.forEach((el, idx) => {
+            spilloverIndex.set(el.dataset.group || `__idx_${idx}`, el);
+        });
+        for (
+            let i = 0;
+            i < plan.spillover_groups.length;
+            i++
+        ) {
+            const name = plan.spillover_groups[i];
+            const col = plan.spillover_column_assignment[i];
+            const el = spilloverIndex.get(name);
+            if (!el) continue;
+            // Assign the destination column via CSS grid-column;
+            // groups stack within each column in source order.
+            el.style.gridColumn = String(col + 1);
+            spillover.appendChild(el);
+        }
+        return;
+    }
+
+    // Pre-bridge fallback: legacy 2-column partitioner. Hash-pinned
+    // by ``test_jsfallback_parity.py`` so this branch stays mirrored
+    // to the shared Python helper.
+    if (grid.scrollHeight <= available) return;
     const heights = consonants.map((el) => el.offsetHeight);
-    const mainCount = state.bridge
-        ? callBridge("partition_segment_spillover", heights, available)
-        : _fallbackPartitionSpillover(heights, available);
+    const mainCount = _fallbackPartitionSpillover(heights, available);
     if (mainCount >= consonants.length) return;
     grid.appendChild(spillover);
     for (let i = mainCount; i < consonants.length; i++) {
@@ -1329,6 +1404,11 @@ function _fallbackPartitionSpillover(heights, available, nCols = 2) {
 function _buildConsonantGroup(group) {
     const groupEl = document.createElement("div");
     groupEl.className = "seg-group";
+    // ``dataset.group`` carries the manner-class name so
+    // ``rebalanceSegmentSpillover`` can match the bridge's
+    // ``spillover_groups`` list to the right DOM node when
+    // reassigning groups to spillover columns.
+    groupEl.dataset.group = group.name;
     const header = document.createElement("div");
     header.className = "seg-group-header";
     // Render the shared payload string verbatim; the desktop and
@@ -2027,13 +2107,34 @@ function renderFeaturePanel(featureGroups) {
         c.className = "feat-col";
         return c;
     });
+    let totalRows = 0;
     for (const group of featureGroups) {
         const colIndex = Math.max(
             0, Math.min(columnCount - 1, group.column ?? 0),
         );
         cols[colIndex].appendChild(_buildFeatureGroup(group));
+        totalRows += (group.features || []).length;
     }
     for (const c of cols) list.appendChild(c);
+    applyFeatureDensity(totalRows);
+}
+
+/** Mirror of the desktop's ``MainWindow._apply_feature_density``:
+ *  when the active-feature count crosses
+ *  ``FEAT_COMPACT_THRESHOLD`` (relayed via LIMITS), the feature
+ *  pane switches to the compact tier so Hayes-28 / Default-33 /
+ *  PHOIBLE-large inventories fit without scroll. Pre-parity the
+ *  web had no compact mode and relied on the panel-body
+ *  scrollbar. */
+function applyFeatureDensity(featureCount) {
+    if (!nodes.featPanel) return;
+    const threshold = LIMITS.feat_compact_threshold || 22;
+    const compact = featureCount >= threshold;
+    if (compact) {
+        nodes.featPanel.dataset.density = "compact";
+    } else {
+        delete nodes.featPanel.dataset.density;
+    }
 }
 
 function _buildFeatureGroup(group) {
@@ -5069,16 +5170,36 @@ function clearAll() {
     setStatus(statusTextForMode(state.mode));
 }
 
-/** Clicks in empty panel space activate that panel's mode. */
+/** Press in empty panel space activates that panel's mode.
+ *  Uses ``mousedown`` (not ``click``) and accepts every button so
+ *  the gesture matches the desktop's QEvent.MouseButtonPress
+ *  event filter: any-button press, fires before release, no
+ *  cancellable-on-drag-off behaviour. Pre-parity the web listened
+ *  only for left-click on ``click`` (release-after-press), so
+ *  right-clicks on empty space did nothing on web while the
+ *  desktop switched modes. Right-click on empty space also gets
+ *  ``preventDefault`` so the browser context menu doesn't appear
+ *  over the inventory chrome. */
 function wirePanelClickMode() {
-    nodes.segPanel.addEventListener("click", (ev) => {
+    nodes.segPanel.addEventListener("mousedown", (ev) => {
         if (ev.target.closest("button")) return;
+        if (ev.button === 2) ev.preventDefault();
         activateMode(MODE.SEG_TO_FEAT);
     });
-    nodes.featPanel.addEventListener("click", (ev) => {
+    nodes.featPanel.addEventListener("mousedown", (ev) => {
         if (ev.target.closest("button")) return;
+        if (ev.button === 2) ev.preventDefault();
         activateMode(MODE.FEAT_TO_SEG);
     });
+    // Right-click on empty panel space: keep the contextmenu
+    // suppressed even when the mousedown handler missed (some
+    // browsers fire contextmenu without a preceding mousedown).
+    const blockEmptyContext = (ev) => {
+        if (ev.target.closest("button")) return;
+        ev.preventDefault();
+    };
+    nodes.segPanel.addEventListener("contextmenu", blockEmptyContext);
+    nodes.featPanel.addEventListener("contextmenu", blockEmptyContext);
 }
 
 /**
@@ -5093,18 +5214,21 @@ function wireSegmentDelegation() {
         const seg = btn.dataset.seg;
         if (seg) onSegmentClicked(seg);
     });
-    // Right-click copies the segment symbol. Mirrors the desktop
-    // ``SegmentButton.contextMenuEvent`` -> MainWindow handler.
-    // Gated to SEG_TO_FEAT mode because in FEAT_TO_SEG the buttons
-    // are display-only and a copy would be surprising. ev.preventDefault
-    // suppresses the browser context menu so the user doesn't see a
-    // phantom menu after the copy.
+    // Right-click on a segment button. Always suppress the browser
+    // native context menu (no "Save image / Inspect" over the
+    // inventory chrome -- mirrors the desktop's
+    // ``SegmentButton.contextMenuEvent`` which always calls
+    // ``event.accept()``). The copy gesture only fires in
+    // SEG_TO_FEAT mode; FEAT_TO_SEG is a documented no-op.
+    // Pre-fix the preventDefault was nested inside the mode guard
+    // so the browser menu appeared on top of the feature panel.
     nodes.segGrid.addEventListener("contextmenu", (ev) => {
         const btn = ev.target.closest(".seg-btn");
         if (!btn || !nodes.segGrid.contains(btn)) return;
         const seg = btn.dataset.seg;
-        if (!seg || state.mode !== MODE.SEG_TO_FEAT) return;
+        if (!seg) return;
         ev.preventDefault();
+        if (state.mode !== MODE.SEG_TO_FEAT) return;
         copySegmentToClipboard(seg);
     });
 }

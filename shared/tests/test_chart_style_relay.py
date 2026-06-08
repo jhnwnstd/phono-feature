@@ -206,6 +206,71 @@ def test_chart_style_json_matches_python(
             "px",
         ),
         (
+            "--seg-group-header-font",
+            chart_style.SEG_GROUP_HEADER_FONT_PX,
+            "px",
+        ),
+        (
+            "--seg-group-header-weight",
+            chart_style.SEG_GROUP_HEADER_FONT_WEIGHT,
+            "",
+        ),
+        (
+            "--seg-group-header-letter-spacing",
+            chart_style.SEG_GROUP_HEADER_LETTER_SPACING_PX,
+            "px",
+        ),
+        (
+            "--seg-group-gap",
+            chart_style.SEG_GROUP_GAP_PX,
+            "px",
+        ),
+        (
+            "--feat-row-padding-v",
+            chart_style.FEAT_ROW_PADDING_V_PX,
+            "px",
+        ),
+        (
+            "--feat-row-padding-h",
+            chart_style.FEAT_ROW_PADDING_H_PX,
+            "px",
+        ),
+        (
+            "--feat-row-gap",
+            chart_style.FEAT_ROW_GAP_PX,
+            "px",
+        ),
+        (
+            "--feat-btn-radius",
+            chart_style.FEAT_BTN_RADIUS_PX,
+            "px",
+        ),
+        (
+            "--feat-row-h-compact",
+            chart_style.FEAT_ROW_H_COMPACT_PX,
+            "px",
+        ),
+        (
+            "--feat-row-padding-v-compact",
+            chart_style.FEAT_ROW_PADDING_V_COMPACT_PX,
+            "px",
+        ),
+        (
+            "--border-thin",
+            chart_style.BORDER_PX["thin"],
+            "px",
+        ),
+        (
+            "--border-std",
+            chart_style.BORDER_PX["std"],
+            "px",
+        ),
+        (
+            "--border-thick",
+            chart_style.BORDER_PX["thick"],
+            "px",
+        ),
+        (
             "--vowel-chart-contrast-set-row-gap",
             chart_style.VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX,
             "px",
@@ -274,6 +339,24 @@ def test_css_var_matches_python(
         f"CSS var {css_var} = {actual} drifted from chart_style "
         f"= {expected}"
     )
+
+
+def test_seg_group_header_padding_relay(
+    built_dist: tuple[Path, Path],
+) -> None:
+    """seg-group-header padding bakes as a 4-value CSS shorthand."""
+    layout_css = built_dist[1].read_text(encoding="utf-8")
+    pattern = re.compile(r"--seg-group-header-padding:\s*([^;]+);")
+    match = pattern.search(layout_css)
+    assert (
+        match is not None
+    ), "no --seg-group-header-padding in dist/layout.css"
+    parts = [p.strip() for p in match.group(1).split()]
+    expected = chart_style.SEG_GROUP_HEADER_PADDING_PX
+    assert len(parts) == 4
+    for part, exp in zip(parts, expected, strict=True):
+        assert part.endswith("px")
+        assert int(part[:-2]) == exp
 
 
 def test_title_padding_relay(built_dist: tuple[Path, Path]) -> None:

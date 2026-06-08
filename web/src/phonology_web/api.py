@@ -114,6 +114,7 @@ from phonology_shared.presentation.analysis import render_validation_report
 from phonology_shared.presentation.layout import (
     best_segment_n_cols,
     partition_groups_for_spillover,
+    plan_seg_layout,
 )
 from phonology_shared.presentation.mode_logic import (
     mode_status_text,
@@ -879,8 +880,78 @@ def partition_segment_spillover(
     them here, and applies the returned main-flow count to the DOM.
     Same function the desktop calls during ``set_groups`` so a
     threshold change lands on both UIs at once.
+
+    Kept for backward compatibility with the pre-bridge fallback
+    (``_fallbackPartitionSpillover`` in main.js) and the hash-pin
+    test. Live JS calls should prefer :py:func:`plan_segment_layout`
+    so the spillover region uses the same 1-4 column policy the
+    desktop's ``plan_seg_layout`` returns.
     """
     return partition_groups_for_spillover(heights, available, n_spillover_cols)
+
+
+def plan_segment_layout(
+    group_names: list[str],
+    group_heights: list[int],
+    group_widths: list[int],
+    pane_w: int,
+    pane_h: int,
+    chart_rect: list[int] | None,
+    min_col_w: int,
+) -> dict[str, Any]:
+    """JS bridge to ``layout.plan_seg_layout``. JS measures each
+    consonant group's name / natural height / natural width, the
+    pane's clientWidth + clientHeight, the vowel chart's pane-local
+    rect (``[x, y, w, h]`` or ``None`` if absent), and the per-spill-
+    column minimum width; receives the complete layout plan.
+
+    Returned dict mirrors :py:class:`SegLayoutPlan`:
+
+    * ``main_groups`` -- group names that stay in the main flow.
+    * ``spillover_groups`` -- group names that spill below the main
+      flow + chart (empty list = no spillover).
+    * ``n_spillover_cols`` -- column count in the spillover region
+      (1..max_spillover_cols=4).
+    * ``spillover_column_assignment`` -- parallel to ``spillover_groups``;
+      each entry is the destination column index (0-indexed).
+    * ``spillover_rect`` -- ``[x, y, w, h]`` in pane-local pixels
+      (informational; the web renderer just needs n_spillover_cols
+      and column_assignment to apply ``grid-template-columns`` and
+      slot each spilled group).
+
+    Pre-relay the web bridge called the legacy
+    ``partition_groups_for_spillover`` with hardcoded 2 cols + the
+    fixed-pair-row scheme; desktop has migrated to ``plan_seg_layout``
+    which packs 1-4 columns via LPT bin-packing. The two surfaces
+    placed the same inventory differently. This function closes that
+    divergence by exposing the same plan to both.
+    """
+    chart_rect_t: tuple[int, int, int, int] | None
+    if chart_rect is None:
+        chart_rect_t = None
+    else:
+        chart_rect_t = (
+            int(chart_rect[0]),
+            int(chart_rect[1]),
+            int(chart_rect[2]),
+            int(chart_rect[3]),
+        )
+    plan = plan_seg_layout(
+        group_names=group_names,
+        group_heights=group_heights,
+        group_widths=group_widths,
+        pane_w=pane_w,
+        pane_h=pane_h,
+        chart_rect=chart_rect_t,
+        min_col_w=min_col_w,
+    )
+    return {
+        "main_groups": list(plan.main_groups),
+        "spillover_groups": list(plan.spillover_groups),
+        "n_spillover_cols": plan.n_spillover_cols,
+        "spillover_column_assignment": list(plan.spillover_column_assignment),
+        "spillover_rect": list(plan.spillover_rect),
+    }
 
 
 def best_segment_n_cols_for_groups(

@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 
 from phonology_features.gui.style_utils import set_css
 from phonology_features.gui.widgets.segment_button import SegmentButton
+from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation import layout as layout_mod
 from phonology_shared.presentation.constants import BTN_GAP, BTN_W
 from phonology_shared.presentation.layout import best_segment_n_cols
@@ -118,14 +119,23 @@ class SegmentGridWidget(QWidget):
         self._last_headers_active = None
         self._groups = groups
         self._buttons = buttons
+        # Manner-class header chrome (font, weight, letter-spacing,
+        # padding) lives in shared chart_style so the desktop QLabel
+        # styling and the web's ``.seg-group-header`` CSS rule read
+        # from one source. Pre-relay desktop used 8 pt Bold +
+        # (4,2,1,2) padding while web used 11px / 600 + (4,2,6,2).
+        hdr_font = QFont("Noto Sans")
+        hdr_font.setPixelSize(cs.SEG_GROUP_HEADER_FONT_PX)
+        hdr_font.setWeight(QFont.Weight(cs.SEG_GROUP_HEADER_FONT_WEIGHT))
+        pad = cs.SEG_GROUP_HEADER_PADDING_PX
         for manner in groups:
             hdr = QLabel(manner.upper())
-            hdr.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
+            hdr.setFont(hdr_font)
             set_css(
                 hdr,
                 f"color: {C['text_dim']};"
-                " letter-spacing: 1px;"
-                " padding: 4px 2px 1px 2px;",
+                f" letter-spacing: {cs.SEG_GROUP_HEADER_LETTER_SPACING_PX}px;"
+                f" padding: {pad[0]}px {pad[1]}px {pad[2]}px {pad[3]}px;",
             )
             hdr.setParent(self)
             self._headers.append(hdr)
@@ -285,6 +295,18 @@ class SegmentGridWidget(QWidget):
                 self._grid.addWidget(btn, button_row, button_col)
                 btn.show()
             grid_row += math.ceil(len(segs) / g_cols)
+            # Inter-group gap: reserve an extra-tall spacer row so the
+            # total vertical distance between this group's last button
+            # and the next group's header matches the web's
+            # ``.seg-group { margin-bottom: var(--seg-group-gap); }``.
+            # The grid's default row stride is ``BTN_GAP``; bumping
+            # this row to ``SEG_GROUP_GAP_PX`` (8 px) adds the
+            # remaining 4 px. Skipped on the very last group so the
+            # bottom of the grid doesn't carry a trailing empty row.
+            extra = max(0, cs.SEG_GROUP_GAP_PX - BTN_GAP)
+            if extra:
+                self._grid.setRowMinimumHeight(grid_row, extra)
+                grid_row += 1
 
         # Spillover: ``layout_plan.n_spillover_cols`` columns wide,
         # with the LPT column assignment supplied per group.

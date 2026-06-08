@@ -35,6 +35,7 @@ from phonology_shared.data import (
 from phonology_shared.editor.phoible_provider import (
     PHOIBLE_PREVIEW_SEGMENT_LIMIT,
 )
+from phonology_shared.presentation.layout import FEAT_COMPACT_THRESHOLD
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_SCRIPT = REPO_ROOT / "web" / "scripts" / "build.py"
@@ -87,6 +88,7 @@ def limits_payload() -> dict[str, int]:
             "phoible_preview_segment_limit",
             PHOIBLE_PREVIEW_SEGMENT_LIMIT,
         ),
+        ("feat_compact_threshold", FEAT_COMPACT_THRESHOLD),
     ],
 )
 def test_baked_limit_matches_python(
@@ -112,5 +114,6 @@ def test_payload_keys_exhaustive(limits_payload: dict[str, int]) -> None:
         "max_name_length",
         "max_inventory_file_bytes",
         "phoible_preview_segment_limit",
+        "feat_compact_threshold",
     }
     assert set(limits_payload.keys()) == expected_keys

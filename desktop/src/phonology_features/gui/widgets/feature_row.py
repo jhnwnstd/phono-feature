@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 
 from phonology_features.gui._themed_style_cache import styles_for_active_theme
 from phonology_features.gui.style_utils import set_css
+from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.layout import (
     FEAT_BADGE_W,
     FEAT_BADGE_W_COMPACT,
@@ -101,17 +102,23 @@ def _feature_row_btn_qss(*, is_plus: bool) -> str:
     active_bg = C["plus_bg"] if is_plus else C["minus_bg"]
     active_text = C["plus"] if is_plus else C["minus"]
     border = C["plus"] if is_plus else C["minus"]
+    # Border thickness + radius pinned via chart_style so the
+    # desktop QSS and web CSS read from one source. Pre-relay the
+    # 1.5 px border + 5 px radius were inline literals on both
+    # sides with no shared symbol.
+    _bw = cs.BORDER_PX["std"]
+    _br = cs.FEAT_BTN_RADIUS_PX
     return f"""
         QPushButton {{
             background: {C["analysis_bg"]};
             color: {C["text_dim"]};
-            border: 1.5px solid {C["border"]};
-            border-radius: 5px;
+            border: {_bw}px solid {C["border"]};
+            border-radius: {_br}px;
         }}
         QPushButton:hover {{
             background: {active_bg};
             color: {active_text};
-            border: 1.5px solid {border};
+            border: {_bw}px solid {border};
         }}
         QPushButton:checked {{
             background: {active_bg};
@@ -186,8 +193,19 @@ class FeatureRow(QWidget):
         self._panel_cache_valid: bool = False
         self._panel_cached_for: bool = False
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 3, 8, 3)
-        layout.setSpacing(4)
+        # Padding + inter-element gap sourced from
+        # ``chart_style.FEAT_ROW_*`` so the desktop's
+        # setContentsMargins / setSpacing and the web's CSS
+        # ``padding`` / ``gap`` read the same numbers. Pre-relay
+        # desktop hardcoded ``(8, 3, 8, 3)`` and ``4``; web used
+        # ``2px var(--space-md)`` and ``var(--space-xs)``.
+        layout.setContentsMargins(
+            cs.FEAT_ROW_PADDING_H_PX,
+            cs.FEAT_ROW_PADDING_V_PX,
+            cs.FEAT_ROW_PADDING_H_PX,
+            cs.FEAT_ROW_PADDING_V_PX,
+        )
+        layout.setSpacing(cs.FEAT_ROW_GAP_PX)
         self.name_label = QLabel(feature_name, self)
         # Academic small-caps for feature labels: the initial cap
         # stays at full height and the rest of the lowercase

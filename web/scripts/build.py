@@ -473,12 +473,19 @@ def _build_limits_payload() -> dict[str, int]:
         PHOIBLE_PREVIEW_SEGMENT_LIMIT,
     )
 
+    # Feature-pane compact-density threshold (also drives the
+    # desktop's set_compact toggle). Active feature count >= this
+    # value switches the feature panel to a denser row stride so
+    # high-feature inventories fit without scroll. Single source
+    # so the desktop's import and the JS bridge consumer agree.
+    layout_mod = _load_layout_module()
     return {
         "max_features": module.MAX_FEATURES,
         "max_segments": module.MAX_SEGMENTS,
         "max_name_length": module.MAX_NAME_LENGTH,
         "max_inventory_file_bytes": module.MAX_INVENTORY_FILE_BYTES,
         "phoible_preview_segment_limit": PHOIBLE_PREVIEW_SEGMENT_LIMIT,
+        "feat_compact_threshold": layout_mod.FEAT_COMPACT_THRESHOLD,
     }
 
 
@@ -698,6 +705,13 @@ def generate_layout_css() -> None:
         # Pane-width thresholds.
         f"  --seg-min-w: {mod.SEG_MIN_W}px;",
         f"  --feat-min-w: {mod.FEAT_MIN_W}px;",
+        # Cushion added to feat pane width by
+        # ``layout.distribute_pane_widths`` (desktop) so the cards
+        # don't sit flush against the splitter handle. Web grid
+        # adds the same cushion via
+        # ``calc(max-content + var(--feat-cushion))`` so both
+        # surfaces reserve the same right-edge breathing room.
+        f"  --feat-cushion: {mod.FEAT_CUSHION_PX}px;",
         f"  --min-feat-card-w: {mod.MIN_FEAT_CARD_W}px;",
         f"  --vowel-natural-w: {mod.VOWEL_NATURAL_W}px;",
         f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
@@ -835,6 +849,50 @@ def generate_layout_css() -> None:
                 "  --vowel-cell-stack-gap: "
                 f"{chart_style.VOWEL_CELL_STACK_GAP_PX}px;"
             ),
+            (
+                "  --seg-group-header-font: "
+                f"{chart_style.SEG_GROUP_HEADER_FONT_PX}px;"
+            ),
+            (
+                "  --seg-group-header-weight: "
+                f"{chart_style.SEG_GROUP_HEADER_FONT_WEIGHT};"
+            ),
+            (
+                "  --seg-group-header-letter-spacing: "
+                f"{chart_style.SEG_GROUP_HEADER_LETTER_SPACING_PX}px;"
+            ),
+            (
+                "  --seg-group-header-padding: "
+                + " ".join(
+                    f"{v}px" for v in chart_style.SEG_GROUP_HEADER_PADDING_PX
+                )
+                + ";"
+            ),
+            ("  --seg-group-gap: " f"{chart_style.SEG_GROUP_GAP_PX}px;"),
+            (
+                "  --feat-row-padding-v: "
+                f"{chart_style.FEAT_ROW_PADDING_V_PX}px;"
+            ),
+            (
+                "  --feat-row-padding-h: "
+                f"{chart_style.FEAT_ROW_PADDING_H_PX}px;"
+            ),
+            ("  --feat-row-gap: " f"{chart_style.FEAT_ROW_GAP_PX}px;"),
+            ("  --feat-btn-radius: " f"{chart_style.FEAT_BTN_RADIUS_PX}px;"),
+            (
+                "  --feat-row-h-compact: "
+                f"{chart_style.FEAT_ROW_H_COMPACT_PX}px;"
+            ),
+            (
+                "  --feat-row-padding-v-compact: "
+                f"{chart_style.FEAT_ROW_PADDING_V_COMPACT_PX}px;"
+            ),
+            ("  --feat-btn-w-compact: " f"{mod.FEAT_BTN_W_COMPACT}px;"),
+            ("  --feat-btn-h-compact: " f"{mod.FEAT_BTN_H_COMPACT}px;"),
+            ("  --feat-badge-w-compact: " f"{mod.FEAT_BADGE_W_COMPACT}px;"),
+            ("  --border-thin: " f"{chart_style.BORDER_PX['thin']}px;"),
+            ("  --border-std: " f"{chart_style.BORDER_PX['std']}px;"),
+            ("  --border-thick: " f"{chart_style.BORDER_PX['thick']}px;"),
             (
                 "  --vowel-chart-col-label-font: "
                 f"{chart_style.VOWEL_CHART_COL_LABEL_FONT_PX}px;"

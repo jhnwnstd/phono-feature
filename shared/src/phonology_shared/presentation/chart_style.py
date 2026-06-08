@@ -29,6 +29,35 @@ Categories:
   area refuses to compress further (small inventories like Spanish).
 * :data:`DIPHTHONG_ARROW_*` -- per-arrow stroke, opacity, arrowhead
   size, control-point lift formula.
+* :data:`SEG_GROUP_HEADER_*` -- consonant manner-class header
+  font / weight / letter-spacing / padding.
+* :data:`SEG_GROUP_GAP_PX` -- vertical gap between consecutive
+  manner-class groups in the consonant grid.
+* :data:`FEAT_ROW_*` -- feature-row padding, gap, button radius,
+  compact-tier height + padding.
+* :data:`BORDER_PX` -- border-thickness ladder for segment buttons.
+
+Deliberately out of scope (documented divergences, not bugs):
+
+* **Vowel chart layout** (web float vs desktop QHBoxLayout):
+  the web uses CSS ``float`` so consonant rows wrap around the
+  chart like text around an image; the desktop uses a fixed-width
+  HBox so the chart is a sibling column. Unifying these would
+  require either a position-absolute overlay on desktop or a
+  grid-template-columns rewrite on web -- both are structural
+  changes that go beyond a SSOT pass.
+* **Feature-card chrome (--feat-card-chrome-h)**: the constant
+  is relayed but not yet consumed by a CSS rule. Splitting it
+  into ``--feat-card-margin-top/bottom`` + ``--feat-card-title-h``
+  would let both surfaces derive 26 px from one source rather
+  than reconstructing it; deferred until a feature-pane chrome
+  redesign.
+* **Font-size cluster** (segment-button 9pt vs 13px,
+  feature-name 10pt vs 14px, etc.): Qt point sizes vs CSS pixel
+  sizes is a known cross-platform impedance. The shared
+  ``FONT_SIZE_*`` ladder already exists; widget-level fonts
+  could migrate to it but the visual delta is small and the
+  audit classified these as cosmetic.
 
 Pairing each constant with a docstring naming the divergence it
 closes lets the next contributor see why the literal was lifted
@@ -174,6 +203,103 @@ VOWEL_CHART_ROW_LABEL_GAP_PX: int = 10
 #: silently break the rounded/unrounded tangency contract on one
 #: side until everyone resynced. Single source here.
 VOWEL_PAIR_SHIFT_PX: float = (BTN_W + VOWEL_PAIR_GAP_PX) / 2
+
+
+# ---------------------------------------------------------------------------
+# Segment-grid: manner-class group headers (PLOSIVE, FRICATIVE, ...)
+# ---------------------------------------------------------------------------
+
+#: Font size (px) for the manner-class group header label. Pre-relay
+#: desktop used 8 pt (~10.7 px) while web used the shared label
+#: token (11 px). Adopting the shared token so high-DPI desktop
+#: displays don't shift the gap below the header.
+SEG_GROUP_HEADER_FONT_PX: int = FONT_SIZE_LABEL_PX
+
+#: Font weight for the group header. Pre-relay desktop used
+#: ``QFont.Weight.Bold`` (~700) while web used CSS ``font-weight:
+#: 600``. Adopting 600 (semibold) for consistency with the vowel
+#: chart's title weight and the rest of the axis-label rhythm.
+SEG_GROUP_HEADER_FONT_WEIGHT: int = 600
+
+#: Letter-spacing (px) on group headers. Both renderers used 1 px
+#: as a literal; pinning the canonical value here so a future
+#: tweak doesn't desync.
+SEG_GROUP_HEADER_LETTER_SPACING_PX: int = 1
+
+#: Padding tuple ``(top, right, bottom, left)`` in px around the
+#: manner-class header text. Pre-relay desktop used ``(4, 2, 1, 2)``
+#: (1 px bottom -- header sits almost flush against the first row);
+#: web used ``(4, 2, 6, 2)`` (--space-sm bottom -- header floats
+#: ~5 px above the first row). Adopting ``(4, 2, 2, 2)`` as the
+#: canonical mid-point: enough gap that the header doesn't read
+#: as clipped, tight enough that the manner-class label clearly
+#: belongs to the row below it.
+SEG_GROUP_HEADER_PADDING_PX: tuple[int, int, int, int] = (4, 2, 2, 2)
+
+#: Vertical gap (px) between consecutive manner-class groups in
+#: the consonant grid. Pre-relay desktop used the bare ``BTN_GAP``
+#: stride (4 px) while web added ``margin-bottom: --space-md``
+#: (8 px) to ``.seg-group``. Adopting 8 px so adjacent manner
+#: classes read as distinct sections.
+SEG_GROUP_GAP_PX: int = SPACING_PX["md"]
+
+
+# ---------------------------------------------------------------------------
+# Feature row (+/- buttons + badge + feature name)
+# ---------------------------------------------------------------------------
+
+#: Vertical padding (px) inside a feature row's content margins.
+#: Pre-relay desktop used ``setContentsMargins(8, 3, 8, 3)`` while
+#: web used CSS ``padding: 2px var(--space-md)``. Both pin the
+#: same horizontal padding (= --space-md = 8 px); the vertical
+#: value diverged (3 vs 2 px). Adopting 3 px so the row's inner
+#: chrome matches the desktop's row-stride math
+#: (``FEAT_ROW_H = 30 + 1`` spacing = 31 px).
+FEAT_ROW_PADDING_V_PX: int = 3
+
+#: Horizontal padding (px) inside a feature row. Already
+#: ``SPACING_PX["md"]`` on both sides; pinning here so the
+#: chart_style module is the one source for any future tweak.
+FEAT_ROW_PADDING_H_PX: int = SPACING_PX["md"]
+
+#: Gap (px) between the feature-name label, +/- buttons, and
+#: badge. Already ``SPACING_PX["xs"]`` on both sides; pinning here
+#: so desktop can read the constant instead of a literal ``4``.
+FEAT_ROW_GAP_PX: int = SPACING_PX["xs"]
+
+#: Border-radius (px) for the +/- buttons on a feature row.
+#: Pre-relay both sides used a literal ``5`` (no shared token).
+#: Promoting to a named constant so a future tweak lands once.
+FEAT_BTN_RADIUS_PX: int = 5
+
+#: Compact-tier row height (px). When the feature panel would
+#: otherwise overflow (feature count >= FEAT_COMPACT_THRESHOLD),
+#: rows shrink to this height to fit more in the same pane.
+#: Mirrors desktop ``_DENSITY_COMPACT.row_h``; pre-relay the web
+#: had no compact mode and relied on the panel scrollbar.
+FEAT_ROW_H_COMPACT_PX: int = 26
+
+#: Compact-tier vertical padding (px) inside a row. Mirrors
+#: desktop ``_DENSITY_COMPACT.margin_v`` (2 px vs NORMAL's 3 px).
+FEAT_ROW_PADDING_V_COMPACT_PX: int = 2
+
+
+# ---------------------------------------------------------------------------
+# Segment-button border thickness ladder
+# ---------------------------------------------------------------------------
+
+#: Border thickness ladder for segment buttons (and any other
+#: chart element with a state-driven outline). Pre-relay desktop
+#: hardcoded ``1.5px`` / ``2px`` / ``1px`` literals across every
+#: state in its QSS strings while web read ``--border-thin /
+#: --border-std / --border-thick`` tokens from theme.css. Adopting
+#: the web's token names so a future HiDPI sweep (e.g. switching
+#: ``std`` to an integer px) is one constant edit.
+BORDER_PX: dict[str, float] = {
+    "thin": 1.0,
+    "std": 1.5,
+    "thick": 2.0,
+}
 
 
 # ---------------------------------------------------------------------------

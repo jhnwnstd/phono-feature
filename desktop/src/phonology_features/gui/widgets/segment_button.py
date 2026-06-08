@@ -20,8 +20,12 @@ from PyQt6.QtWidgets import QPushButton, QSizePolicy, QWidget
 
 from phonology_features.gui._themed_style_cache import styles_for_active_theme
 from phonology_features.gui.style_utils import set_css
+from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.constants import MONO_FAMILIES
-from phonology_shared.presentation.layout import REGION_CONSTRAINTS
+from phonology_shared.presentation.layout import (
+    RADIUS_PX,
+    REGION_CONSTRAINTS,
+)
 from phonology_shared.presentation.palette import C
 from phonology_shared.presentation.view_models import SegmentState
 
@@ -105,13 +109,22 @@ class SegmentButton(QPushButton):
 
     @staticmethod
     def _build_styles() -> dict[SegmentState, str]:
+        # Border thickness ladder + border-radius sourced from
+        # ``chart_style`` so the desktop QSS and the web's
+        # ``--border-{thin,std,thick}`` / ``--radius-lg`` tokens
+        # cannot drift. Pre-relay desktop hardcoded 1px / 1.5px /
+        # 2px borders + 8 px radius across every state.
+        _thin = cs.BORDER_PX["thin"]
+        _std = cs.BORDER_PX["std"]
+        _thick = cs.BORDER_PX["thick"]
+        _br = RADIUS_PX["lg"]
         return {
             SegmentState.SELECTED: f"""
                 QPushButton {{
                     background-color: {C["seg_selected"]};
                     color: #FFFFFF;
-                    border: 2px solid {C["accent"]};
-                    border-radius: 8px;
+                    border: {_thick}px solid {C["accent"]};
+                    border-radius: {_br}px;
                     font-weight: bold;
                 }}
             """,
@@ -119,8 +132,8 @@ class SegmentButton(QPushButton):
                 QPushButton {{
                     background-color: {C["seg_matched"]};
                     color: #FFFFFF;
-                    border: 2px solid {C["accent"]};
-                    border-radius: 8px;
+                    border: {_thick}px solid {C["accent"]};
+                    border-radius: {_br}px;
                     font-weight: bold;
                 }}
             """,
@@ -128,33 +141,33 @@ class SegmentButton(QPushButton):
                 QPushButton {{
                     background-color: {C["seg_unmatched"]};
                     color: {C["text_dim"]};
-                    border: 1px solid {C["border"]};
-                    border-radius: 8px;
+                    border: {_thin}px solid {C["border"]};
+                    border-radius: {_br}px;
                 }}
             """,
             SegmentState.SUGGESTED: f"""
                 QPushButton {{
                     background-color: {C["accent_light"]};
                     color: {C["accent"]};
-                    border: 1.5px dashed {C["accent"]};
-                    border-radius: 8px;
+                    border: {_std}px dashed {C["accent"]};
+                    border-radius: {_br}px;
                 }}
             """,
             SegmentState.DEFAULT: f"""
                 QPushButton {{
                     background-color: {C["seg_default"]};
                     color: {C["text"]};
-                    border: 1.5px solid {C["border"]};
-                    border-radius: 8px;
+                    border: {_std}px solid {C["border"]};
+                    border-radius: {_br}px;
                 }}
                 QPushButton:hover {{
                     background-color: {C["accent_light"]};
-                    border: 1.5px solid {C["accent"]};
+                    border: {_std}px solid {C["accent"]};
                 }}
                 QPushButton:checked {{
                     background-color: {C["seg_selected"]};
                     color: #FFFFFF;
-                    border: 2px solid {C["accent"]};
+                    border: {_thick}px solid {C["accent"]};
                     font-weight: bold;
                 }}
             """,

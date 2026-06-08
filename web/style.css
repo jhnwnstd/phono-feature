@@ -28,6 +28,11 @@
    literals; naming them would spread the value across grep results
    without removing a decision. */
 :root {
+  /* --border-thin/--border-std/--border-thick are now relayed
+     from shared chart_style.BORDER_PX via layout.css so the
+     desktop segment-button QSS (1.5px / 2px / 1px literals) and
+     the web's tokens cannot drift. Keeping a defensive fallback
+     here only for the rare cases where layout.css hasn't loaded. */
   --border-thin: 1px;
   --border-std: 1.5px;
   --border-thick: 2px;
@@ -582,6 +587,13 @@ dialog input[type="text"]:focus-visible {
      at its content width (`max-content`) so it varies "some, not
      dramatically" with the inventory. ``--seg-min-w`` floors the
      seg pane on narrow windows. */
+  /* Feature column sized to ``max-content``. The shared
+     ``FEAT_CUSHION_PX`` (40 px) is added as right-padding on the
+     feature panel (see ``#feat-panel`` below) so the cards don't
+     sit flush against the splitter handle. CSS can't compute
+     ``calc(max-content + N)`` directly -- ``max-content`` is an
+     intrinsic sizing keyword, not a length -- so the cushion
+     rides on the column's contents rather than its track size. */
   grid-template-columns: minmax(var(--seg-min-w), 1fr) max-content;
   gap: var(--space-md);
   padding: var(--space-md);
@@ -599,13 +611,20 @@ dialog input[type="text"]:focus-visible {
 
 /* Spillover for consonant groups that don't fit in the segments
    pane (only triggers for large inventories like General IPA).
-   main.js's rebalanceSegmentSpillover moves the bottom groups
-   here in 2 content-width columns. The grid stays empty for
-   inventories that already fit. */
+   ``main.js:rebalanceSegmentSpillover`` calls the shared
+   ``plan_seg_layout`` bridge and writes the chosen column count
+   to ``--seg-spillover-cols`` on this element (1-4). Each spilled
+   ``.seg-group`` carries a ``grid-column`` inline style assigning
+   it to its destination column. The fallback (pre-bridge) keeps
+   2 columns so a partial first paint still has somewhere to land.
+   Column gap uses the shared ``--seg-btn-gap`` (4 px) so spilled
+   groups align with the matrix-style consonant rows above; pre-
+   migration the gap was a hardcoded 32 px (8x the BTN_GAP)
+   breaking the grid alignment. */
 .seg-spillover {
   display: grid;
-  grid-template-columns: auto auto;
-  column-gap: 32px;
+  grid-template-columns: repeat(var(--seg-spillover-cols, 2), 1fr);
+  column-gap: var(--seg-btn-gap);
   row-gap: 0;
   margin-top: 0;
   justify-content: start;
@@ -646,6 +665,14 @@ dialog input[type="text"]:focus-visible {
    relaxes this so the page stays scrollable on narrow viewports. */
 #feat-panel {
   min-width: var(--feat-min-w);
+  /* Mirror desktop's ``FEAT_CUSHION_PX`` (40 px) which
+     ``layout.distribute_pane_widths`` adds to the feature column's
+     allocated width so cards don't sit flush against the splitter
+     handle. Pre-relay the web's feat column claimed only
+     ``max-content``, leaving the cards crowded against the panel's
+     right edge. Adding it as right-padding here keeps the feat
+     grid-track sizing simple while reserving the same gutter. */
+  padding-right: var(--feat-cushion);
 }
 @media (max-width: 900px) {
   #feat-panel {
@@ -746,17 +773,22 @@ dialog input[type="text"]:focus-visible {
    layout.css so the threshold tracks the Python constant
    automatically; do not duplicate it here. */
 .seg-group {
-  margin-bottom: var(--space-md);
+  /* Inter-group gap pinned via chart_style.SEG_GROUP_GAP_PX so the
+     desktop's QGridLayout spacer (BTN_GAP fallback) and the web's
+     margin-bottom read from one source. */
+  margin-bottom: var(--seg-group-gap);
   min-width: 0;
 }
 .seg-group-header {
-  font-size: var(--font-size-label);
-  font-weight: 600;
-  /* 1 px matches the desktop's QSS literal on the equivalent QLabel
-     so the two UIs render group headers at the same density. */
-  letter-spacing: 1px;
+  /* Font + weight + letter-spacing + padding pinned via
+     chart_style.SEG_GROUP_HEADER_* so the desktop QLabel + QSS
+     and the web CSS rule cannot drift. Pre-relay desktop was
+     8pt Bold + (4,2,1,2); web was 11px / 600 + (4,2,6,2). */
+  font-size: var(--seg-group-header-font);
+  font-weight: var(--seg-group-header-weight);
+  letter-spacing: var(--seg-group-header-letter-spacing);
   color: var(--text-dim);
-  padding: var(--space-xs) 2px var(--space-sm);
+  padding: var(--seg-group-header-padding);
   overflow-wrap: anywhere;
 }
 .panel[data-active="true"] .seg-group-header {
@@ -1367,16 +1399,42 @@ dialog input[type="text"]:focus-visible {
 .feat-row {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  padding: 2px var(--space-md);
+  /* Gap + padding pinned via chart_style.FEAT_ROW_* so desktop
+     setSpacing / setContentsMargins and the web CSS rule cannot
+     drift. Pre-relay desktop used vertical 3 px / inter-gap 4 px
+     hardcoded literals; web used 2 px vertical / --space-xs gap.
+     Adopting 3 px vertical and the shared --space-xs (4 px) gap. */
+  gap: var(--feat-row-gap);
+  padding: var(--feat-row-padding-v) var(--feat-row-padding-h);
   border-radius: var(--radius-md);
-  /* Pin a minimum row height so the row never shrinks below the
-     badge / button outline; combined with ``.feat-group {
-     flex-shrink: 0; }`` above, this keeps every row visually
-     distinct on inventories with many features and lets the
-     ``.panel-body`` parent take the scrollbar. */
-  min-height: var(--feat-btn-h);
+  /* Pin the row height to the shared FEAT_ROW_H so the web's row
+     stride matches the desktop's setFixedHeight(_DENSITY_NORMAL.row_h).
+     ``--feat-row-h`` is 31 px (= row_h 30 + 1 px inter-row gap);
+     subtract the 1 px gap from the height since the flex column
+     adds no row-gap of its own. Pre-relay neither renderer used the
+     relayed FEAT_ROW_H, leading to ~3 px-per-row stride drift. */
+  height: calc(var(--feat-row-h) - 1px);
   flex-shrink: 0;
+}
+
+/* Compact density tier (active when the feature pane carries
+   ``data-density="compact"`` -- set by ``applyFeatureDensity``
+   in main.js when the active-feature count crosses
+   ``FEAT_COMPACT_THRESHOLD``). Mirrors the desktop's
+   ``FeatureRow.set_compact`` which shrinks row height + margin
+   so feature-heavy inventories (Hayes 28, PHOIBLE) fit in the
+   same pane without scrolling. */
+#feat-panel[data-density="compact"] .feat-row {
+  height: calc(var(--feat-row-h-compact) - 1px);
+  padding: var(--feat-row-padding-v-compact) var(--feat-row-padding-h);
+}
+#feat-panel[data-density="compact"] .feat-btn {
+  width: var(--feat-btn-w-compact);
+  height: var(--feat-btn-h-compact);
+}
+#feat-panel[data-density="compact"] .feat-badge {
+  width: var(--feat-badge-w-compact);
+  height: var(--feat-btn-h-compact);
 }
 
 /* Row backgrounds are mode-dependent. SEG mode (feat panel
@@ -1463,7 +1521,9 @@ dialog input[type="text"]:focus-visible {
   width: var(--feat-btn-w);
   height: var(--feat-btn-h);
   border: var(--border-std) solid var(--border);
-  border-radius: 5px;
+  /* Border-radius pinned via chart_style.FEAT_BTN_RADIUS_PX so the
+     desktop's QSS literal and the web rule read from one source. */
+  border-radius: var(--feat-btn-radius);
   background: var(--analysis-bg);
   color: var(--text-dim);
   font-weight: bold;
