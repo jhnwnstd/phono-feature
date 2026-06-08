@@ -858,7 +858,11 @@ dialog input[type="text"]:focus-visible {
    trapezoid (or triangle) clip-path. */
 .vowel-chart {
   display: grid;
-  grid-template-columns: minmax(60px, auto) 1fr;
+  /* Row-label gutter pinned to ``chart_style.VOWEL_CHART_ROW_LABEL_GUTTER_PX``
+     so desktop (Qt VOWEL_LABEL_W=72) and web read the same width.
+     Pre-relay the two values diverged (60 vs 72 px) and the trapezoid
+     sat at a different x-origin on each UI. */
+  grid-template-columns: var(--vowel-chart-row-label-gutter) 1fr;
   /* Row 1: title (centred over the data column only).
      Row 2: column headers (Front / Central / Back).
      Row 3: row-label gutter + data area. */
@@ -880,14 +884,19 @@ dialog input[type="text"]:focus-visible {
    area" together. ``VowelChartGeometry.title`` is the shared
    source of truth for the text. */
 .vowel-chart-title {
+  /* Font + padding + letter-spacing baked from
+     ``chart_style.py`` so desktop ``QFont`` and web CSS read the
+     same numbers. Pre-relay the two literals quietly diverged
+     (desktop 8pt/Bold/1px/asymmetric padding vs web
+     11px/600/0.5px/symmetric padding). */
   grid-row: 1;
   grid-column: 2;
   text-align: center;
-  font-size: var(--font-size-label);
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-size: var(--vowel-chart-title-font);
+  font-weight: var(--vowel-chart-title-weight);
+  letter-spacing: var(--vowel-chart-title-letter-spacing);
   color: var(--text-dim);
-  padding: var(--space-xs) 2px var(--space-xs);
+  padding: var(--vowel-chart-title-padding);
 }
 .panel[data-active="true"] .vowel-chart-title {
   color: var(--text);
@@ -906,9 +915,9 @@ dialog input[type="text"]:focus-visible {
   position: absolute;
   transform: translateX(-50%);
   text-align: center;
-  font-size: var(--font-size-micro);
+  font-size: var(--vowel-chart-col-label-font);
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--vowel-chart-col-label-letter-spacing);
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -920,7 +929,7 @@ dialog input[type="text"]:focus-visible {
      inside ``.vowel-chart-data`` (below) so they can right-align to
      the silhouette's slanted left edge; they overflow leftward into
      this track which keeps the chart wide enough to host them. */
-  min-height: calc(8 * var(--seg-btn-h));
+  min-height: var(--vowel-chart-data-min-h);
 }
 .vowel-chart-row-label {
   /* ``--row-y`` is the row's chart_y in [0, 1]; ``--row-left`` is
@@ -936,13 +945,12 @@ dialog input[type="text"]:focus-visible {
   right: calc((1 - var(--row-left, 0)) * 100% + var(--space-md) + 2px);
   transform: translateY(-50%);
   text-align: right;
-  font-size: var(--font-size-micro);
-  /* Row labels are AXIS labels, not section titles; the col
-     headers and the chart title carry the 600 weight reserved
-     for headings. Dropping row labels to 500 differentiates the
-     axis-label rhythm from the section-title rhythm without
-     changing size or colour. */
-  font-weight: 500;
+  font-size: var(--vowel-chart-row-label-font);
+  /* Row labels are AXIS labels, not section titles. The 500 weight
+     differentiates the axis-label rhythm from the section-title
+     rhythm; relayed from chart_style.py so desktop ``QFont`` and
+     web CSS pick the same weight. */
+  font-weight: var(--vowel-chart-row-label-weight);
   letter-spacing: 0.3px;
   color: var(--text-dim);
   white-space: nowrap;
@@ -972,7 +980,7 @@ dialog input[type="text"]:focus-visible {
      ``max()`` lets them grow past the floor without small
      inventories collapsing below it. */
   min-height: max(
-    calc(8 * var(--seg-btn-h)),
+    var(--vowel-chart-data-min-h),
     var(--vowel-natural-data-h, 0px)
   );
 }
@@ -1005,9 +1013,13 @@ dialog input[type="text"]:focus-visible {
   z-index: 2;
 }
 .vowel-diphthong-arrow {
+  /* Stroke + opacity pinned via ``chart_style.py``. Both
+     renderers consume the same numbers; pre-relay desktop had
+     1.75 px stroke + opacity 1.0 (focused) / 0.55 (show-all)
+     while web had 0.6 user-units + 0.95 / 0.7. */
   fill: none;
   stroke: var(--accent);
-  stroke-width: 0.6;
+  stroke-width: var(--diphthong-arrow-stroke);
   /* Default: hidden. Most PHOIBLE inventories have many
      diphthongs (12 in Korean PHOIBLE, up to 30 elsewhere); an
      always-on overlay reads as a tangle. The arrows light up on
@@ -1025,17 +1037,17 @@ dialog input[type="text"]:focus-visible {
   transition: opacity 0.12s ease;
 }
 .vowel-diphthong-arrow.is-focused {
-  opacity: 0.95;
+  opacity: var(--diphthong-arrow-focused-alpha);
 }
 .vowel-diphthong-arrowhead.is-focused {
   opacity: 1;
 }
 /* Show-all toggle on the chart fades every arrow in at the
-   parity opacity Direction A's polish pass set. The hover-gated
+   parity opacity baked from chart_style.py. The hover-gated
    ``.is-focused`` rule still applies on top so the active arrow
    reads brightest. */
 .vowel-chart-data[data-show-arrows="all"] .vowel-diphthong-arrow {
-  opacity: 0.7;
+  opacity: var(--diphthong-arrow-show-all-alpha);
 }
 .vowel-chart-data[data-show-arrows="all"] .vowel-diphthong-arrowhead {
   opacity: 0.8;
@@ -1279,7 +1291,10 @@ dialog input[type="text"]:focus-visible {
 .vowel-chart-cell-contrast-set {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--vowel-pair-gap, 2px) var(--vowel-pair-gap, 2px);
+  /* Row gap pinned via ``chart_style.VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX``
+     so desktop ``QGridLayout.setVerticalSpacing`` and web CSS read the
+     same number. Pre-relay desktop used 1 px while web used 2 px. */
+  gap: var(--vowel-chart-contrast-set-row-gap, 2px) var(--vowel-pair-gap, 2px);
   background: transparent;
 }
 .vowel-chart-cell-contrast-set[data-cell-size="3"] > :first-child {

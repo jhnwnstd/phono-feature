@@ -397,6 +397,36 @@ def _load_constants_module() -> ModuleType:
     return module
 
 
+def _load_chart_style_module() -> ModuleType:
+    """Side-load ``chart_style.py`` -- the vowel-chart visual policy
+    module. Same spec_from_file_location pattern as the other
+    loaders so the build runs against a bare interpreter; the
+    module imports ``constants.py`` and ``layout.py`` which we
+    therefore preload into ``sys.modules`` so the import succeeds.
+    """
+    # Preload deps so chart_style.py's top-level imports resolve.
+    constants_mod = _load_constants_module()
+    layout_mod = _load_layout_module()
+    # chart_style.py imports as
+    # ``phonology_shared.presentation.{constants,layout}`` so it
+    # finds an already-installed package -- but in the bare-CI
+    # build interpreter we side-load both. Inject the package
+    # path so the chart_style import line resolves.
+    sys.modules["phonology_shared.presentation.constants"] = constants_mod
+    sys.modules["phonology_shared.presentation.layout"] = layout_mod
+    chart_path = PRESENTATION_DIR / "chart_style.py"
+    spec = importlib.util.spec_from_file_location(
+        "_chart_style",
+        chart_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load {chart_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["_chart_style"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_inventory_setup_module() -> ModuleType:
     """Side-load ``inventory_setup.py`` so the HTML-bake step can
     substitute shared dialog strings (``SETUP_DIALOG_TITLE``,
@@ -736,6 +766,86 @@ def generate_layout_css() -> None:
             # ``rasterizeText`` reads this floor so the JS-side font-shrink
             # loop's lower bound stays in lockstep with the Python one.
             f"  --font-size-min-px: {constants_mod.FONT_SIZE_MIN_PX}px;",
+        ]
+    )
+    # Vowel-chart visual policy: title font / padding / letter-spacing,
+    # axis labels, contrast-set spacing, silhouette stroke + alpha,
+    # diphthong arrow stroke + opacity + arrowhead + lift formula.
+    # Single source of truth at
+    # ``shared/.../presentation/chart_style.py``; desktop reads via
+    # import, web reads via these CSS vars. Pre-relay these values
+    # quietly drifted (desktop title 8pt-Bold vs web 11px/600, arrow
+    # stroke 1.75 px vs 0.6 user-units, focused opacity 1.0 vs 0.95).
+    chart_style = _load_chart_style_module()
+    title_pad = chart_style.VOWEL_CHART_TITLE_PADDING_PX
+    lines.extend(
+        [
+            "  /* Vowel-chart visual policy (from chart_style.py). */",
+            (
+                "  --vowel-chart-title-font: "
+                f"{chart_style.VOWEL_CHART_TITLE_FONT_PX}px;"
+            ),
+            (
+                "  --vowel-chart-title-weight: "
+                f"{chart_style.VOWEL_CHART_TITLE_FONT_WEIGHT};"
+            ),
+            (
+                "  --vowel-chart-title-letter-spacing: "
+                f"{chart_style.VOWEL_CHART_TITLE_LETTER_SPACING_PX}px;"
+            ),
+            (
+                f"  --vowel-chart-title-padding: {title_pad[0]}px "
+                f"{title_pad[1]}px {title_pad[2]}px {title_pad[3]}px;"
+            ),
+            (
+                "  --vowel-chart-col-label-font: "
+                f"{chart_style.VOWEL_CHART_COL_LABEL_FONT_PX}px;"
+            ),
+            (
+                "  --vowel-chart-col-label-letter-spacing: "
+                f"{chart_style.VOWEL_CHART_COL_LABEL_LETTER_SPACING_PX}px;"
+            ),
+            (
+                "  --vowel-chart-row-label-font: "
+                f"{chart_style.VOWEL_CHART_ROW_LABEL_FONT_PX}px;"
+            ),
+            (
+                "  --vowel-chart-row-label-weight: "
+                f"{chart_style.VOWEL_CHART_ROW_LABEL_FONT_WEIGHT};"
+            ),
+            (
+                "  --vowel-chart-row-label-gutter: "
+                f"{chart_style.VOWEL_CHART_ROW_LABEL_GUTTER_PX}px;"
+            ),
+            (
+                "  --vowel-chart-contrast-set-row-gap: "
+                f"{chart_style.VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX}px;"
+            ),
+            (
+                "  --vowel-silhouette-stroke: "
+                f"{chart_style.VOWEL_SILHOUETTE_STROKE_PX}px;"
+            ),
+            (
+                "  --vowel-silhouette-alpha: "
+                f"{chart_style.VOWEL_SILHOUETTE_ALPHA};"
+            ),
+            (
+                "  --vowel-chart-data-min-h: "
+                f"{chart_style.VOWEL_CHART_DATA_MIN_H_PX}px;"
+            ),
+            ("  --vowel-band-alpha: " f"{chart_style.VOWEL_BAND_ALPHA};"),
+            (
+                "  --diphthong-arrow-stroke: "
+                f"{chart_style.DIPHTHONG_ARROW_STROKE_PX}px;"
+            ),
+            (
+                "  --diphthong-arrow-focused-alpha: "
+                f"{chart_style.DIPHTHONG_ARROW_FOCUSED_ALPHA};"
+            ),
+            (
+                "  --diphthong-arrow-show-all-alpha: "
+                f"{chart_style.DIPHTHONG_ARROW_SHOW_ALL_ALPHA};"
+            ),
         ]
     )
     # Per-region size contract emitted as ``--<key>-min-w/max-w/
@@ -1168,6 +1278,33 @@ def hash_assets() -> None:
         + json.dumps(_build_limits_payload(), separators=(",", ":"))
         + "</script>"
     )
+    # Vowel-chart visual constants the JS renderer consumes
+    # (lift formula + arrowhead fractions). The CSS-only values
+    # ride in the layout.css ``--vowel-*`` / ``--diphthong-*``
+    # vars; this block carries the numbers the SVG arrow path
+    # generator needs at runtime.
+    chart_style_mod = _load_chart_style_module()
+    chart_style_block = (
+        '<script id="chart-style" type="application/json">'
+        + json.dumps(
+            {
+                "diphthong_lift_chord_frac": (
+                    chart_style_mod.DIPHTHONG_LIFT_CHORD_FRAC
+                ),
+                "diphthong_lift_width_frac_cap": (
+                    chart_style_mod.DIPHTHONG_LIFT_WIDTH_FRAC_CAP
+                ),
+                "diphthong_arrowhead_len_frac": (
+                    chart_style_mod.DIPHTHONG_ARROWHEAD_LEN_FRAC
+                ),
+                "diphthong_arrowhead_half_frac": (
+                    chart_style_mod.DIPHTHONG_ARROWHEAD_HALF_FRAC
+                ),
+            },
+            separators=(",", ":"),
+        )
+        + "</script>"
+    )
     bootstrap_block = ""
     bootstrap_path = DIST / "bootstrap.json"
     if bootstrap_path.exists():
@@ -1190,6 +1327,7 @@ def hash_assets() -> None:
             f"{runtime_block}\n"
             + f"{status_block}\n"
             + f"{limits_block}\n"
+            + f"{chart_style_block}\n"
             + (f"{bootstrap_block}\n" if bootstrap_block else "")
             + f'<script type="module" src="{full_map["main.js"]}"></script>'
         ),

@@ -270,6 +270,21 @@ function callBridge(fnName, ...args) {
  *  back and edit a string in place. */
 const STATUS_TEXT = Object.freeze(readInlineJson("status-text", {}));
 
+/** Vowel-chart visual policy: lift formula and arrowhead
+ *  fractions the SVG arrow generator needs at runtime. Baked
+ *  from ``shared/.../presentation/chart_style.py`` via
+ *  ``_build_chart_style_block`` in ``web/scripts/build.py``.
+ *  Defensive defaults match the pre-relay literals in case the
+ *  inline JSON block is missing (older snapshot, offline build). */
+const CHART_STYLE = Object.freeze(
+    readInlineJson("chart-style", {
+        diphthong_lift_chord_frac: 0.18,
+        diphthong_lift_width_frac_cap: 0.08,
+        diphthong_arrowhead_len_frac: 0.025,
+        diphthong_arrowhead_half_frac: 0.014,
+    }),
+);
+
 /** Top-level UI mode. Values come from the relayed
  *  ``STATUS_TEXT.mode_values`` baked from
  *  ``mode_logic.Mode`` (single source of truth). The hardcoded
@@ -1692,7 +1707,17 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
             const dx = bx - ax;
             const dy = by - ay;
             const len = Math.hypot(dx, dy) || 1;
-            const baseLift = Math.min(8, len * 0.18);
+            // Lift formula pinned to ``chart_style.py``:
+            // ``DIPHTHONG_LIFT_CHORD_FRAC * chord`` capped at
+            // ``DIPHTHONG_LIFT_WIDTH_FRAC_CAP * data_width`` (viewBox
+            // is 100x100 so the cap fraction multiplied by 100 maps
+            // directly to user-units). Both renderers now consume
+            // these same fractions; pre-relay desktop capped at 5 %
+            // of data width while web capped at 8 %.
+            const baseLift = Math.min(
+                CHART_STYLE.diphthong_lift_width_frac_cap * 100,
+                len * CHART_STYLE.diphthong_lift_chord_frac,
+            );
             // For N=1: factor = 0 (single curve, normal side).
             // For N=2: factors = -1, +1 (two opposite curves).
             // For N=3: -1, 0, +1.  For N=4: -1, -1/3, +1/3, +1.
@@ -1723,8 +1748,15 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
             // Perpendicular for arrowhead wings.
             const px = -uy;
             const py = ux;
-            const headLen = 2.5;
-            const headHalfW = 1.4;
+            // Arrowhead dimensions pinned to ``chart_style.py`` as
+            // fractions of the data-area width. viewBox is 100x100
+            // so the fraction * 100 = the SVG user-unit length.
+            // Pre-relay desktop used pixel-fixed 7 / 3.5 px which
+            // looked tiny on wide PHOIBLE charts.
+            const headLen = CHART_STYLE.diphthong_arrowhead_len_frac * 100;
+            const headHalfW = (
+                CHART_STYLE.diphthong_arrowhead_half_frac * 100
+            );
             const tipX = bx;
             const tipY = by;
             const baseX = bx - ux * headLen;

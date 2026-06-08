@@ -59,6 +59,7 @@ from phonology_shared.chart.vowels import (
 from phonology_shared.chart.vowels_layout import (
     effective_button_height_px,
 )
+from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
     REGION_CONSTRAINTS,
@@ -79,9 +80,11 @@ __all__ = [
     "VowelProfile",
 ]
 
-# Width floor for the row-label gutter. Qt-only; the web sets its
-# row-label column via CSS ``minmax(60px, auto)``.
-VOWEL_LABEL_W = 72
+# Width floor for the row-label gutter. Lives in shared
+# ``chart_style.VOWEL_CHART_ROW_LABEL_GUTTER_PX`` so the web's CSS
+# grid-template-columns and desktop's gutter math read the same
+# value. Re-exported here for any existing importer.
+VOWEL_LABEL_W = cs.VOWEL_CHART_ROW_LABEL_GUTTER_PX
 
 
 class VowelChartWidget(QWidget):
@@ -215,8 +218,16 @@ class VowelChartWidget(QWidget):
         self._cell_w_hint: int = 36
 
     def _rebuild_style_cache(self) -> None:
-        self._HDR_ACTIVE = f"color: {C['text']};"
-        self._HDR_INACTIVE = f"color: {C['text_dim']};"
+        # Letter-spacing on the column headers pinned to
+        # ``chart_style.VOWEL_CHART_COL_LABEL_LETTER_SPACING_PX`` so
+        # desktop and web both render Front / Central / Back with
+        # the same tracking. Pre-relay desktop used 0 (no spacing).
+        _col_ls = (
+            f"letter-spacing: "
+            f"{cs.VOWEL_CHART_COL_LABEL_LETTER_SPACING_PX}px;"
+        )
+        self._HDR_ACTIVE = f"color: {C['text']}; {_col_ls}"
+        self._HDR_INACTIVE = f"color: {C['text_dim']}; {_col_ls}"
         self._ROW_ACTIVE = f"color: {C['text']}; padding-right: 4px;"
         self._ROW_INACTIVE = f"color: {C['text_dim']}; padding-right: 4px;"
 
@@ -396,12 +407,19 @@ class VowelChartWidget(QWidget):
         self.setMinimumWidth(effective_w)
         self.setMaximumWidth(effective_w)
         self.setMinimumHeight(natural_total_h)
-        # Title (top, centred over the data area).
+        # Title (top, centred over the data area). Font + padding +
+        # letter-spacing all from chart_style.py so the web's CSS and
+        # the desktop's Qt read the same numbers.
         title = QLabel(geometry.title, self)
-        title.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
+        title_font = QFont("Noto Sans")
+        title_font.setPixelSize(cs.VOWEL_CHART_TITLE_FONT_PX)
+        title_font.setWeight(QFont.Weight(cs.VOWEL_CHART_TITLE_FONT_WEIGHT))
+        title.setFont(title_font)
+        _pad = cs.VOWEL_CHART_TITLE_PADDING_PX
         title.setStyleSheet(
-            f"color: {C['text_dim']}; letter-spacing: 1px;"
-            " padding: 2px 2px 0 2px;"
+            f"color: {C['text_dim']}; "
+            f"letter-spacing: {cs.VOWEL_CHART_TITLE_LETTER_SPACING_PX}px;"
+            f" padding: {_pad[0]}px {_pad[1]}px {_pad[2]}px {_pad[3]}px;"
         )
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.adjustSize()
@@ -415,18 +433,32 @@ class VowelChartWidget(QWidget):
         # so the two tiers distinguish header from axis-label rhythm.
         # Mirrors the web's 600/500 font-weight split on
         # ``.vowel-chart-col-label`` vs ``.vowel-chart-row-label``.
+        # Col / row label fonts use chart_style.py so the desktop's
+        # Qt setPixelSize and the web's CSS font-size read the same
+        # number. Pre-relay desktop used 7pt Qt (~9 px at 96 DPI)
+        # while web used 11 px.
+        col_font = QFont("Noto Sans")
+        col_font.setPixelSize(cs.VOWEL_CHART_COL_LABEL_FONT_PX)
+        col_font.setWeight(QFont.Weight.DemiBold)
         for col in geometry.cols:
             lbl = QLabel(col.label, self)
-            lbl.setFont(QFont("Noto Sans", 7, QFont.Weight.DemiBold))
+            lbl.setFont(col_font)
             lbl.setStyleSheet(self._HDR_INACTIVE)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.adjustSize()
             lbl.show()
             self._col_labels.append((lbl, col.chart_x))
         # Row labels: positioned at chart_y on the left gutter.
+        # Weight 500 (Medium) per chart_style.py so axis labels
+        # read lighter than the col-header headings -- the
+        # 600/500 axis-vs-heading split the web docstring
+        # describes now applies on desktop too.
+        row_font = QFont("Noto Sans")
+        row_font.setPixelSize(cs.VOWEL_CHART_ROW_LABEL_FONT_PX)
+        row_font.setWeight(QFont.Weight(cs.VOWEL_CHART_ROW_LABEL_FONT_WEIGHT))
         for row in geometry.rows:
             lbl = QLabel(row.label, self)
-            lbl.setFont(QFont("Noto Sans", 7))
+            lbl.setFont(row_font)
             lbl.setStyleSheet(self._ROW_INACTIVE)
             lbl.setAlignment(
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -537,7 +569,10 @@ class VowelChartWidget(QWidget):
         """
         layout = QGridLayout(container)
         layout.setHorizontalSpacing(VOWEL_PAIR_GAP_PX)
-        layout.setVerticalSpacing(1)
+        # Vertical gap pinned via chart_style.py so desktop and web
+        # render the 2x2 grid with the same row-axis spacing.
+        # Pre-relay desktop used 1 px, web used 2 px.
+        layout.setVerticalSpacing(cs.VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX)
         layout.setContentsMargins(0, 0, 0, 0)
         added = False
         entries = list(cell.entries)
@@ -770,9 +805,11 @@ class VowelChartWidget(QWidget):
         # ``color-mix(in srgb, var(--border) 70%, transparent)``
         # treatment on ``.vowel-chart-data::before``.
         outline_color = QColor(C["border"])
-        outline_color.setAlpha(178)  # 70% opacity
+        # Alpha from chart_style.VOWEL_SILHOUETTE_ALPHA so web's
+        # color-mix(70%) and desktop's setAlpha pick the same value.
+        outline_color.setAlphaF(cs.VOWEL_SILHOUETTE_ALPHA)
         pen = QPen(outline_color)
-        pen.setWidthF(1.25)
+        pen.setWidthF(cs.VOWEL_SILHOUETTE_STROKE_PX)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
@@ -798,7 +835,9 @@ class VowelChartWidget(QWidget):
         if dh <= 0 or not self._bands:
             return
         band_color = QColor(C["border"])
-        band_color.setAlpha(40)  # ~16% opacity, same target as web
+        # Alpha from chart_style.VOWEL_BAND_ALPHA so the band tint
+        # cannot drift from the web's color-mix(16%) rule.
+        band_color.setAlphaF(cs.VOWEL_BAND_ALPHA)
         painter.save()
         painter.setClipPath(silhouette_path)
         for band in self._bands:
@@ -865,16 +904,28 @@ class VowelChartWidget(QWidget):
                 mx = (ax + bx) / 2
                 my = (ay + by) / 2
                 chord = math.hypot(bx - ax, by - ay) or 1.0
-                base_lift = min(dw * 0.05, chord * 0.18)
+                # Lift + opacity + stroke + arrowhead all from
+                # ``chart_style.py`` so desktop and web agree.
+                # Pre-relay desktop capped lift at 5 % of data
+                # width and stroked at 1.75 px / focused 1.0 /
+                # show-all 0.55; web used 8 % / 1 px / 0.95 / 0.7.
+                base_lift = min(
+                    dw * cs.DIPHTHONG_LIFT_WIDTH_FRAC_CAP,
+                    chord * cs.DIPHTHONG_LIFT_CHORD_FRAC,
+                )
                 lift = base_lift * signed * (0.7 + 0.5 * abs(signed))
                 nx = -(by - ay) / chord
                 ny = (bx - ax) / chord
                 cx = mx + nx * lift
                 cy = my + ny * lift
                 arrow_color = QColor(C["accent"])
-                arrow_color.setAlphaF(1.0 if is_focus else 0.55)
+                arrow_color.setAlphaF(
+                    cs.DIPHTHONG_ARROW_FOCUSED_ALPHA
+                    if is_focus
+                    else cs.DIPHTHONG_ARROW_SHOW_ALL_ALPHA
+                )
                 pen = QPen(arrow_color)
-                pen.setWidthF(1.75)
+                pen.setWidthF(cs.DIPHTHONG_ARROW_STROKE_PX)
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
                 path = QPainterPath()
@@ -882,14 +933,17 @@ class VowelChartWidget(QWidget):
                 path.quadTo(cx, cy, bx, by)
                 painter.drawPath(path)
                 # Arrowhead at the secondary end, oriented along the
-                # control-point-to-endpoint tangent.
+                # control-point-to-endpoint tangent. Length + half-
+                # width scale with chart width (fractions in
+                # chart_style.py) so the head stays proportional on
+                # narrow + wide charts alike.
                 tx = bx - cx
                 ty = by - cy
                 tlen = math.hypot(tx, ty) or 1.0
                 ux = tx / tlen
                 uy = ty / tlen
-                head_len = 7.0
-                head_half = 4.0
+                head_len = dw * cs.DIPHTHONG_ARROWHEAD_LEN_FRAC
+                head_half = dw * cs.DIPHTHONG_ARROWHEAD_HALF_FRAC
                 base_x = bx - ux * head_len
                 base_y = by - uy * head_len
                 left_x = base_x + (-uy) * head_half
