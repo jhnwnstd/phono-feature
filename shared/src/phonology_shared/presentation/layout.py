@@ -406,21 +406,43 @@ FEAT_CUSHION_PX: int = 40
 # ``main_window.py``) so a future web parity implementation reads
 # the same number rather than re-inventing it.
 FEAT_COMPACT_THRESHOLD: int = 22
-# Vowel chart natural display width: row-label gutter + 6 button
-# columns (BTN_W=33, BTN_GAP=4) + buffer for the longest IPA-chart
-# row labels ("Near-close", "Close-mid") and breathing room around
-# the trapezoid silhouette so cells do not sit flush against the
-# chart's outer edge. The chart is a fixed phonetic visualisation,
-# not a fluid grid, so it keeps the same width regardless of
-# seg-pane size and extra horizontal space goes to consonants.
+# Worst-case vowel chart width used by responsive-layout math
+# (``should_stack_vowels``, ``min_vowel_safe_window_w``,
+# ``would_overflow`` against the seg pane). Sized to cover the
+# widest PHOIBLE inventory (max ~302 px natural data width +
+# chrome ≈ 384 px) with comfortable slack.
 #
-# Sized to comfortably host the PHOIBLE worst-case data area
-# (max ~302 px natural width across all 3020 inventories) with
-# enough surrounding whitespace that the silhouette breathes. The
-# previous 380 px floor crowded small inventories (a 5-vowel
-# system at 100 px natural width sat in a 380 px container that
-# felt overshadowed by the rectangular chrome).
+# NOTE: this is a LAYOUT-MATH reference, NOT a per-render floor.
+# The actual rendered chart width is content-driven per renderer
+# via ``VOWEL_CHART_W_FLOOR`` in ``web/main.js`` and
+# ``desktop/.../gui/vowel_chart.py`` -- a small inventory renders
+# narrower than this constant. Keeping the layout math
+# conservative (assume worst case) preserves the stack-breakpoint
+# invariant: at ``VOWEL_STACK_W``, even the widest possible chart
+# fits side-by-side with the minimum consonant strip.
 VOWEL_NATURAL_W: int = 440
+
+# Canonical minimum width (px) for the rendered vowel chart on
+# EITHER platform. The shared geometry + chrome math agrees
+# cross-renderer, but each platform's final rendering can need a
+# small adjustment for box-model / border / sub-pixel quirks.
+# The pattern:
+#
+#   shared:  MIN_VOWEL_CHART_W_PX (this constant)
+#   web:     VOWEL_CHART_W_FLOOR = MIN + WEB_VOWEL_CHART_W_ADJ
+#   desktop: VOWEL_CHART_W_FLOOR = MIN + DESKTOP_VOWEL_CHART_W_ADJ
+#
+# Both renderers default their ``ADJ`` to 0 today (the shared
+# value is the canonical choice). Tune the renderer-side ``ADJ``
+# (NOT this constant) when one platform needs a small visual
+# nudge -- a scrollbar gutter on the web, a Qt frame on the
+# desktop, etc.
+#
+# Sized so the trapezoid + row-label gutter + chrome still read
+# as the canonical IPA chart for the smallest bundled inventory.
+# Above this floor the chart is content-driven (``max(floor,
+# natural_data_width_px + chrome)``).
+MIN_VOWEL_CHART_W_PX: int = 320
 # Within each backness (front, central, back), the unrounded/rounded
 # vowel pair sits in two grid columns. ``VOWEL_PAIR_GAP_PX`` is the
 # gap between the two mates -- small enough to read as a pair, not as
@@ -715,15 +737,20 @@ def distribute_pane_widths(
 
 
 def vowel_chart_width() -> int:
-    """The vowel chart's natural display width. The IPA chart is a
-    fixed visualisation (one row-label column + six button columns)
-    so it doesn't grow with seg-pane width: that would just put
-    empty space around the buttons and steal width from the
-    consonant flow.
+    """Worst-case vowel chart width used by responsive-layout
+    math (``should_stack_vowels``, ``min_vowel_safe_window_w``).
 
-    When the seg pane is too narrow to host the chart beside the
-    consonants, the caller drops to :py:func:`should_stack_vowels`
-    and lays the chart out underneath instead.
+    DEPRECATED for renderer use: the rendered chart width is now
+    content-driven per renderer, sized as
+    ``max(VOWEL_CHART_W_FLOOR, natural_data_width_px + chrome)``
+    in ``web/main.js`` and ``desktop/.../gui/vowel_chart.py``. A
+    small inventory's chart is much narrower than this function's
+    return value. Use it for outer-layout reservations (worst-case
+    "does the chart fit in the seg pane?") only.
+
+    Kept as a named accessor so the test suite + layout helpers
+    have a single symbol to import; equivalent to reading
+    ``VOWEL_NATURAL_W`` directly.
     """
     return VOWEL_NATURAL_W
 

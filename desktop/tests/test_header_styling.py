@@ -57,7 +57,7 @@ def test_vowel_chart_headers_bright_after_reload(window):
     window._load_path("inventories/hayes_features.json")
     widget = window.vowel_chart_widget
     labels = [lbl for lbl, _ in widget._col_labels] + [
-        lbl for lbl, _ in widget._row_labels
+        entry[0] for entry in widget._row_labels
     ]
     assert labels, "expected vowel-chart headers"
     for lbl in labels:

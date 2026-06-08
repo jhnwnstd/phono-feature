@@ -745,10 +745,13 @@ dialog input[type="text"]:focus-visible {
 .seg-vowels {
   float: right;
   margin: 0 0 var(--space-md) var(--space-xl);
-  /* Pinned at the chart's natural width to match the desktop's
-     ``layout.VOWEL_NATURAL_W`` (baked from Python into layout.css).
-     Extra horizontal space in the seg pane goes to consonants. */
-  width: var(--vowel-natural-w);
+  /* Width is set INLINE by the JS renderer at build time --
+     ``main.js:_buildVowelChart`` computes
+     ``max(VOWEL_CHART_W_FLOOR, natural_data_width_px + chrome)``
+     from the shared geometry. The web's floor is local to
+     ``main.js``; desktop has its own floor in
+     ``vowel_chart.py``. Extra horizontal space in the seg pane
+     goes to consonants. */
 }
 
 /* Below ``--vowel-stack-w``, the chart drops below the consonants
@@ -992,8 +995,18 @@ dialog input[type="text"]:focus-visible {
      slanted left edge -- so the labels follow the trapezoid inward
      when the chart shrinks but still read as a separate column,
      not as text crowded against the trapezoid stroke. Mirrors the
-     desktop's ``_ROW_LABEL_GAP_PX`` in ``vowel_chart.py``. */
+     desktop's ``_ROW_LABEL_GAP_PX`` in ``vowel_chart.py``.
+
+     ``z-index: 2`` puts the label TEXT above the silhouette
+     pseudo-elements (``::before`` + ``::after`` both at
+     z-index 0). Pre-fix small inventories (5-vowel Spanish,
+     7-vowel Korean) hit a corner case where the trapezoid's
+     rounded top-left arc tucked inward enough that the right
+     edge of the label glyphs ("Close", "Open") fell inside the
+     silhouette polygon and got painted over by ``::after``'s
+     opaque background. */
   position: absolute;
+  z-index: 2;
   top: calc(var(--row-y, 0) * 100%);
   right: calc(
     (1 - var(--row-left, 0)) * 100% + var(--vowel-chart-row-label-gap)

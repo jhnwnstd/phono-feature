@@ -65,9 +65,9 @@ from phonology_shared.presentation.constants import (
     VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE,
 )
 from phonology_shared.presentation.layout import (
+    MIN_VOWEL_CHART_W_PX,
     REGION_CONSTRAINTS,
     SEG_BTN_H,
-    VOWEL_NATURAL_W,
     VOWEL_PAIR_GAP_PX,
 )
 from phonology_shared.presentation.palette import C, VowelChartMode
@@ -85,6 +85,28 @@ __all__ = [
 # grid-template-columns and desktop's gutter math read the same
 # value. Re-exported here for any existing importer.
 VOWEL_LABEL_W = cs.VOWEL_CHART_ROW_LABEL_GUTTER_PX
+
+# Desktop's PLATFORM ADJUSTMENT to the shared canonical
+# chart-width floor (``MIN_VOWEL_CHART_W_PX`` in layout.py).
+# The architectural pattern: shared layer owns the canonical
+# math; each renderer adds its own platform-specific offset to
+# land at the rendered floor for THIS platform.
+#
+# Why a desktop-specific adjustment exists at all: Qt's frame
+# rendering (the splitter handle reserves border pixels), QFont
+# metrics rounding, QPainter sub-pixel anti-aliasing, QSizePolicy
+# integer enforcement. Tune this (NOT the shared constant) when
+# the rendered desktop chart needs a few px more (positive) or
+# less (negative) than the canonical. Set to 0 when no
+# adjustment is needed.
+#
+# The rendered chart width =
+#   max(MIN_VOWEL_CHART_W_PX + DESKTOP_VOWEL_CHART_W_ADJ,
+#       natural_data_width_px + chrome)
+# so the floor still steps aside for inventories whose content
+# needs more horizontal room.
+DESKTOP_VOWEL_CHART_W_ADJ: int = 0
+VOWEL_CHART_W_FLOOR: int = MIN_VOWEL_CHART_W_PX + DESKTOP_VOWEL_CHART_W_ADJ
 
 
 class _DiphthongOverlay(QWidget):
@@ -206,7 +228,15 @@ class VowelChartWidget(QWidget):
         # (chart_x for columns, chart_y for rows) so resize can
         # re-place them without re-fetching the geometry.
         self._col_labels: list[tuple[QLabel, float]] = []
-        self._row_labels: list[tuple[QLabel, float]] = []
+        # Per-row tuple: (label, chart_y, silhouette_left). The
+        # third field is the silhouette's actual LEFT edge x at
+        # this row's chart_y, accounting for rounded-corner
+        # insets (see shared ``silhouette_left_at_y``). The
+        # row-label layout positions the label's right edge at
+        # ``silhouette_left * dw - label_gap`` so the label sits
+        # flush against the rendered silhouette regardless of
+        # which corner the row is near.
+        self._row_labels: list[tuple[QLabel, float, float]] = []
         # Cell widgets (segment buttons or vbox stacks for collision
         # cells) carry their chart_x / chart_y plus a pair_side
         # signed multiplier (-1 / 0 / +1). The resize pass projects
@@ -394,13 +424,19 @@ class VowelChartWidget(QWidget):
     def set_target_width(self, w: int) -> None:
         """Push the chart's width from the outside (the seg-pane
         controller in ``main_window``) instead of pulling via
-        ``setFixedWidth`` once at construction. The external target
-        is clamped to ``self._natural_total_w``: if the current
-        inventory needs more horizontal room than ``w`` to fit its
-        cells side-by-side, the natural floor wins so callers can't
-        squeeze the chart below its content's needs.
+        ``setFixedWidth`` once at construction.
+
+        The chart's content drives its width: ``max(natural,
+        floor)``. The caller's ``w`` is IGNORED for sizing --
+        kept in the signature so layout callers can still cue a
+        repaint -- because the inventory's own
+        ``natural_data_width_px`` is the authoritative width
+        request. Pre-fix the caller's ``w`` (always
+        ``layout.VOWEL_NATURAL_W = 440``) clamped the floor at
+        440, so small inventories couldn't shrink to fit their
+        content.
         """
-        effective_w = max(w, self._natural_total_w)
+        effective_w = max(VOWEL_CHART_W_FLOOR, self._natural_total_w)
         self.setMinimumWidth(effective_w)
         self.setMaximumWidth(effective_w)
 
@@ -419,7 +455,7 @@ class VowelChartWidget(QWidget):
             )
         for lbl, _ in self._col_labels:
             lbl.setStyleSheet(header_style)
-        for lbl, _ in self._row_labels:
+        for lbl, *_ in self._row_labels:
             lbl.setStyleSheet(row_style)
         self._last_headers_active = active
 
@@ -590,7 +626,7 @@ class VowelChartWidget(QWidget):
         for lbl, _ in self._col_labels:
             lbl.deleteLater()
         self._col_labels.clear()
-        for lbl, _ in self._row_labels:
+        for lbl, *_ in self._row_labels:
             lbl.deleteLater()
         self._row_labels.clear()
         self._cells.clear()
@@ -660,20 +696,24 @@ class VowelChartWidget(QWidget):
         self._diphthong_toggle.setVisible(has_diphthongs)
         self._populate_diphthong_chip_strip()
         self._diphthong_chip_strip.setVisible(has_diphthongs)
-        # Sizing policy: always pin width to
-        # ``max(VOWEL_NATURAL_W, natural)`` so the chart never falls
-        # below the canonical 440 px floor and grows for inventories
-        # that need more horizontal room. Always pin height to
-        # ``max(min_h, natural)`` for the same reason on the vertical
-        # axis. The pin is unconditional so wide-to-narrow swaps
-        # actually shrink down to canonical (the conditional version
-        # left the widget unpinned between clear() and the next
-        # ``set_target_width`` call and Qt's default sizeHint
-        # collapsed the chart visually).
+        # Sizing policy: the chart's width is driven by the
+        # geometry's natural request plus chrome, with a small
+        # floor so the silhouette stays visually recognisable for
+        # the smallest inventories. Pre-fix the floor was
+        # ``VOWEL_NATURAL_W = 440 px``, which dominated every
+        # bundled inventory smaller than ~26 vowels -- a 5-vowel
+        # Spanish chart sat at 440 px with ~80 px of content,
+        # leaving the cells swimming in a vast empty trapezoid.
+        # The min == max pin is unconditional so wide-to-narrow
+        # swaps shrink (a conditional pin left the widget
+        # unsized between clear() and the next set_target_width
+        # call, collapsing the chart). Height keeps its
+        # ``REGION_CONSTRAINTS["vowel_chart"].min_h`` floor for
+        # comfortable trapezoid breathing room.
         chrome_w = VOWEL_LABEL_W + self._PAD_R
         chrome_h = self._TITLE_H + self._COL_HEADER_H + self._PAD_B
         self._natural_total_w = geometry.natural_data_width_px + chrome_w
-        effective_w = max(VOWEL_NATURAL_W, self._natural_total_w)
+        effective_w = max(VOWEL_CHART_W_FLOOR, self._natural_total_w)
         natural_total_h = max(
             REGION_CONSTRAINTS["vowel_chart"].min_h,
             geometry.natural_data_height_px + chrome_h,
@@ -748,7 +788,7 @@ class VowelChartWidget(QWidget):
             )
             lbl.adjustSize()
             lbl.show()
-            self._row_labels.append((lbl, row.chart_y))
+            self._row_labels.append((lbl, row.chart_y, row.silhouette_left))
         # Data cells: collected with their chart_x / chart_y; the
         # layout pass turns those into pixel positions. The cell's
         # row tier (read from the shared ``VowelChartRow``) decides
@@ -1033,19 +1073,21 @@ class VowelChartWidget(QWidget):
         # rendered yet. The gap keeps the label off the slant stroke
         # so the two read as separate elements; web mirrors the value
         # in style.css.
-        sil = self._silhouette
         label_gap_px = self._ROW_LABEL_GAP_PX
-        for lbl, y in self._row_labels:
+        for lbl, y, silhouette_left in self._row_labels:
             lbl.adjustSize()
             lh = lbl.height()
             py = dy + round(y * dh) - lh // 2
-            if sil is not None and sil.bottom_y > sil.top_y:
-                t = (y - sil.top_y) / (sil.bottom_y - sil.top_y)
-                t = max(0.0, min(1.0, t))
-                left_norm = sil.top_left + (sil.bottom_left - sil.top_left) * t
-                anchor_x = dx + round(left_norm * dw)
-            else:
-                anchor_x = dx
+            # ``silhouette_left`` is baked shared-side via
+            # ``silhouette_left_at_y`` so the value accounts for
+            # the rounded-corner insets and matches the rendered
+            # silhouette pixel-for-pixel. Pre-fix this method
+            # re-derived the value locally via the canonical
+            # linear interp between sil.top_left and bottom_left
+            # -- which IGNORED the corner rounding and left the
+            # label floating in the gap between the canonical
+            # corner and the rounded polygon edge.
+            anchor_x = dx + round(silhouette_left * dw)
             px = anchor_x - lbl.width() - label_gap_px
             lbl.move(max(0, px), py)
         # Cells: position concern (anchor) + display concern (pair

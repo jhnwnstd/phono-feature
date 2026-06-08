@@ -1142,26 +1142,28 @@ function renderSegmentGrid(groups, vowelChart) {
     if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
         const vowels = document.createElement("div");
         vowels.className = "seg-vowels";
-        // Growth policy: the slot stays at the canonical
-        // ``--vowel-natural-w`` when the inventory's content fits.
-        // When a row needs more horizontal room (a Long-pair cell
-        // sharing its backness slot with another cell, etc.), the
-        // shared geometry reports a larger ``natural_data_width_px``
-        // and the slot grows to fit. No shrinking yet -- sparse
-        // inventories keep the canonical slot so the consonant
-        // pane's flow remains stable.
+        // Sizing policy: actual width =
+        // ``max(VOWEL_CHART_W_FLOOR, natural + chrome)``. Sparse
+        // inventories (Spanish 5 vowels) shrink to the floor;
+        // dense ones (Hayes Universal 26 vowels) grow past it.
+        // Owned LOCALLY by the web renderer; desktop has its own
+        // parallel ``VOWEL_CHART_W_FLOOR`` in
+        // ``desktop/.../vowel_chart.py`` so the two platforms
+        // can tune independently. Chrome (row-label gutter +
+        // right padding) is read from the baked CSS vars so it
+        // tracks ``chart_style.py`` changes without a JS edit.
         if (typeof vowelChart.natural_data_width_px === "number") {
-            const chromeW = 60 + 8 + 4;
-            const naturalSlotW = vowelChart.natural_data_width_px + chromeW;
-            const canonicalSlotW =
-                parseInt(
-                    getComputedStyle(document.documentElement)
-                        .getPropertyValue("--vowel-natural-w"),
-                    10,
-                ) || 380;
-            if (naturalSlotW > canonicalSlotW) {
-                vowels.style.width = `${naturalSlotW}px`;
-            }
+            const cs = getComputedStyle(document.documentElement);
+            const chromeW =
+                (parseFloat(
+                    cs.getPropertyValue("--vowel-chart-row-label-gutter"),
+                ) || 72)
+                + (parseFloat(cs.getPropertyValue("--vowel-chart-pad-r"))
+                    || 12);
+            const naturalSlotW =
+                vowelChart.natural_data_width_px + chromeW;
+            vowels.style.width =
+                `${Math.max(_vowelChartWFloor(), naturalSlotW)}px`;
         }
         vowels.appendChild(_buildVowelChart(vowelChart));
         grid.appendChild(vowels);
@@ -1222,6 +1224,35 @@ function relayoutSegments() {
 // callers fall back to the literal defaults in that case.
 let _BTN_W_CSS = NaN;
 let _BTN_GAP_CSS = NaN;
+
+// Web's PLATFORM ADJUSTMENT to the shared canonical chart-width
+// floor (``MIN_VOWEL_CHART_W_PX`` in layout.py, relayed as
+// ``--min-vowel-chart-w`` via build.py). The architectural
+// pattern: shared layer owns the canonical math; each renderer
+// adds its own platform-specific offset to land at the rendered
+// floor for THIS platform.
+//
+// Why a web-specific adjustment exists at all: CSS box model
+// behaviour (border-box vs content-box rounding), CSS pixel
+// snapping at sub-pixel container widths, scrollbar gutters
+// reserved by ``.seg-panel``'s overflow rules. Tune this
+// (NOT the shared constant) when the rendered web chart needs a
+// few px more (positive) or less (negative) than the canonical.
+// Set to 0 when no adjustment is needed.
+//
+// The rendered chart width =
+//   max(MIN_VOWEL_CHART_W_PX + WEB_VOWEL_CHART_W_ADJ,
+//       natural_data_width_px + chrome)
+// so the floor still steps aside for inventories whose content
+// needs more horizontal room.
+const WEB_VOWEL_CHART_W_ADJ = 0;
+
+function _vowelChartWFloor() {
+    const rootCS = getComputedStyle(document.documentElement);
+    const baked = parseFloat(rootCS.getPropertyValue("--min-vowel-chart-w"));
+    const shared = Number.isFinite(baked) ? baked : 320;
+    return shared + WEB_VOWEL_CHART_W_ADJ;
+}
 
 function _refreshButtonStrideCache() {
     const rootCS = getComputedStyle(document.documentElement);
@@ -1667,8 +1698,18 @@ function _buildVowelChart(chart) {
         const rowLabel = document.createElement("div");
         rowLabel.className = "vowel-chart-row-label";
         rowLabel.textContent = row.label;
+        // ``row.silhouette_left`` is baked shared-side by
+        // ``silhouette_left_at_y`` so the value accounts for the
+        // rounded-corner insets at the top and bottom of the
+        // silhouette polygon. The label anchors to this value
+        // and lands flush against the rendered silhouette edge
+        // regardless of corner rounding. Fall back to the legacy
+        // linear interp only if the relay payload is missing the
+        // field (older bridge / offline build).
         let leftNorm;
-        if (silSpanY > 0) {
+        if (typeof row.silhouette_left === "number") {
+            leftNorm = row.silhouette_left;
+        } else if (silSpanY > 0) {
             const t = Math.min(
                 1, Math.max(0, (row.chart_y - silTopY) / silSpanY)
             );

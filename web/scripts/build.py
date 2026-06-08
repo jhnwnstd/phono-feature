@@ -748,7 +748,6 @@ def generate_layout_css() -> None:
         # surfaces reserve the same right-edge breathing room.
         f"  --feat-cushion: {mod.FEAT_CUSHION_PX}px;",
         f"  --min-feat-card-w: {mod.MIN_FEAT_CARD_W}px;",
-        f"  --vowel-natural-w: {mod.VOWEL_NATURAL_W}px;",
         f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
         f"  --vowel-pair-gap: {mod.VOWEL_PAIR_GAP_PX}px;",
         f"  --vowel-pair-separator: {mod.VOWEL_PAIR_SEPARATOR_PX}px;",
@@ -967,6 +966,15 @@ def generate_layout_css() -> None:
             (
                 "  --vowel-chart-data-min-h: "
                 f"{chart_style.VOWEL_CHART_DATA_MIN_H_PX}px;"
+            ),
+            (
+                # Shared canonical floor for the rendered chart
+                # width. JS reads this and adds its own
+                # ``WEB_VOWEL_CHART_W_ADJ`` -- see the parallel
+                # ``MIN_VOWEL_CHART_W_PX`` consumer in
+                # desktop/.../vowel_chart.py.
+                "  --min-vowel-chart-w: "
+                f"{mod.MIN_VOWEL_CHART_W_PX}px;"
             ),
             (
                 "  --diphthong-arrow-stroke: "

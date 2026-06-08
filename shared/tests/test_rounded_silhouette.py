@@ -135,3 +135,105 @@ def test_traversal_is_counterclockwise() -> None:
     # (within ~5 % of the corner).
     assert abs(first_x - expected_tl_x) < 10.0
     assert abs(first_y - expected_tl_y) < 10.0
+
+
+# ---------------------------------------------------------------------------
+# silhouette_left_at_y: row-label anchor tracking the rounded polygon
+# ---------------------------------------------------------------------------
+
+
+def test_silhouette_left_at_y_top_edge_matches_polygon_inset() -> None:
+    """At chart_y = sil.top_y the polygon's leftmost x is
+    ``top_left + r_in`` (the top-edge-side inset point of the
+    top-left corner's bezier). The row-label helper must return
+    the SAME value so a label anchored at this y lands flush
+    against the rendered polygon edge."""
+    from phonology_shared.chart.vowels_layout import (
+        silhouette_left_at_y,
+    )
+
+    sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
+    radius = VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC
+    actual = silhouette_left_at_y(sil, sil.top_y, radius)
+    # Polygon at y=top_y: leftmost point is p_in_top = (top_left +
+    # r_in_top, top_y). r_in_top = min(radius, top_edge_len * 0.45);
+    # for a normal trapezoid the top edge spans most of the chart
+    # so radius wins.
+    top_edge_len = sil.top_right - sil.top_left
+    r_in_top = min(radius, top_edge_len * 0.45)
+    expected = sil.top_left + r_in_top
+    assert abs(actual - expected) < 1e-6, (
+        f"silhouette_left_at_y at top_y returned {actual!r}; "
+        f"expected polygon p_in_top.x = {expected!r}"
+    )
+
+
+def test_silhouette_left_at_y_bottom_edge_matches_polygon_inset() -> None:
+    """At chart_y = sil.bottom_y the polygon's leftmost x is
+    ``bottom_left + r_out_bot`` (the bottom-edge-side inset
+    point of the bottom-left corner's bezier)."""
+    from phonology_shared.chart.vowels_layout import (
+        silhouette_left_at_y,
+    )
+
+    sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
+    radius = VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC
+    actual = silhouette_left_at_y(sil, sil.bottom_y, radius)
+    bot_edge_len = sil.bottom_right - sil.bottom_left
+    r_out_bot = min(radius, bot_edge_len * 0.45)
+    expected = sil.bottom_left + r_out_bot
+    assert abs(actual - expected) < 1e-6, (
+        f"silhouette_left_at_y at bottom_y returned {actual!r}; "
+        f"expected polygon p_out_bot.x = {expected!r}"
+    )
+
+
+def test_silhouette_left_at_y_midpoint_matches_canonical_interp() -> None:
+    """In the middle of the silhouette (away from both corners)
+    the polygon's left edge IS the canonical straight line
+    between top_left and bottom_left -- so the helper returns
+    the simple linear interpolation."""
+    from phonology_shared.chart.vowels_layout import (
+        silhouette_left_at_y,
+    )
+
+    sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
+    mid_y = (sil.top_y + sil.bottom_y) / 2.0
+    actual = silhouette_left_at_y(sil, mid_y)
+    t = (mid_y - sil.top_y) / (sil.bottom_y - sil.top_y)
+    expected = sil.top_left + (sil.bottom_left - sil.top_left) * t
+    assert abs(actual - expected) < 1e-6, (
+        f"silhouette_left_at_y at midpoint returned {actual!r}; "
+        f"expected canonical interp = {expected!r}"
+    )
+
+
+def test_silhouette_left_at_y_just_past_top_corner_uses_canonical() -> None:
+    """Just past the top-left corner's bezier y-extent the
+    helper switches to the canonical linear interpolation. The
+    transition is continuous: at the boundary the bezier endpoint
+    p_out lies ON the canonical line, so both formulas produce
+    the same x."""
+    import math
+
+    from phonology_shared.chart.vowels_layout import (
+        silhouette_left_at_y,
+    )
+
+    sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
+    radius = VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC
+    # y-extent of the top-left corner bezier: r_out * dy_out_norm
+    dx_out = sil.bottom_left - sil.top_left
+    dy_out = sil.bottom_y - sil.top_y
+    len_out = math.hypot(dx_out, dy_out) or 1.0
+    r_out = min(radius, len_out * 0.45)
+    r_out_y = r_out * (dy_out / len_out)
+    # Pick a y just past the corner region.
+    test_y = sil.top_y + r_out_y + 0.005
+    actual = silhouette_left_at_y(sil, test_y, radius)
+    t = (test_y - sil.top_y) / (sil.bottom_y - sil.top_y)
+    expected = sil.top_left + (sil.bottom_left - sil.top_left) * t
+    assert abs(actual - expected) < 1e-6, (
+        f"silhouette_left_at_y just past top corner returned "
+        f"{actual!r}; expected canonical interp = {expected!r}"
+    )

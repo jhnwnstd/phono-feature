@@ -180,6 +180,16 @@ class VowelChartRow:
     chart_y: float
     tier: str = "middle"
     slot_height_norm: float = 0.0
+    # Silhouette's actual LEFT edge x at this row's ``chart_y``
+    # (normalised ``[0, 1]``), accounting for the top-left and
+    # bottom-left rounded-corner insets. Both renderers anchor
+    # the row label here so the label sits flush against the
+    # rendered silhouette regardless of corner rounding. Computed
+    # via :py:func:`silhouette_left_at_y` so the value tracks the
+    # same Bezier formula that
+    # :py:func:`rounded_silhouette_polygon_points` samples for the
+    # CSS clip-path / QPainterPath outline.
+    silhouette_left: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -367,6 +377,7 @@ class VowelChartGeometry:
 #: imports from this module.
 from phonology_shared.presentation.chart_style import (  # noqa: E402
     VOWEL_CELL_STACK_GAP_PX,
+    VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
 )
 
 # Backward-compat alias for the old private name. Internal
@@ -799,6 +810,109 @@ def rounded_silhouette_polygon_points(
             )
             points.append((bx, by))
     return ", ".join(f"{x * 100:.3f}% {y * 100:.3f}%" for x, y in points)
+
+
+def silhouette_left_at_y(
+    silhouette: VowelChartSilhouette,
+    chart_y: float,
+    corner_radius_frac: float = VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
+) -> float:
+    """Return the silhouette's actual LEFT edge x (normalised
+    ``[0, 1]``) at the given ``chart_y``, accounting for
+    top-left and bottom-left rounded-corner insets.
+
+    Outside the corner regions the result is the canonical linear
+    interpolation between ``top_left`` and ``bottom_left``: the
+    rounded polygon's straight segment between
+    ``p_out_top`` and ``p_in_bot`` IS that same line, so the
+    canonical interp matches the polygon pixel-for-pixel away
+    from the corners.
+
+    Within the corner regions (chart_y within the y-extent of
+    the rounded curve) the result follows the SAME quadratic
+    Bezier sampled by :py:func:`rounded_silhouette_polygon_points`,
+    so a row label anchored to this value lands on the rendered
+    silhouette edge with no visible gap.
+
+    Both renderers consume this via ``VowelChartRow.silhouette_left``
+    (baked per row at build time); neither replicates the bezier
+    math locally.
+    """
+    import math
+
+    sil = silhouette
+    span_y = sil.bottom_y - sil.top_y
+    if span_y <= 0:
+        return sil.top_left
+    # Clamp y to the silhouette range; rows can sit at chart_y
+    # values outside [top_y, bottom_y] for non-bracket rows but
+    # the meaningful row anchors are inside.
+    chart_y = max(sil.top_y, min(sil.bottom_y, chart_y))
+
+    # Canonical linear interpolation (matches the polygon's
+    # straight segment between p_out_top and p_in_bot).
+    t_linear = (chart_y - sil.top_y) / span_y
+    canonical = sil.top_left + (sil.bottom_left - sil.top_left) * t_linear
+
+    # --- top-left corner ---
+    tl_dx_out = sil.bottom_left - sil.top_left
+    tl_dy_out = sil.bottom_y - sil.top_y
+    tl_len_out = math.hypot(tl_dx_out, tl_dy_out) or 1.0
+    tl_dx_out_norm = tl_dx_out / tl_len_out
+    tl_dy_out_norm = tl_dy_out / tl_len_out
+    tl_r_out = min(corner_radius_frac, tl_len_out * 0.45)
+    tl_r_out_y = tl_r_out * tl_dy_out_norm
+
+    # top edge (from top_left to top_right). For trapezoid this
+    # spans most of the chart; for triangle the top edge is
+    # narrower. Sets ``r_in`` for the top-left bezier.
+    tl_dx_in = sil.top_right - sil.top_left
+    tl_len_in = abs(tl_dx_in) or 1.0
+    tl_r_in = min(corner_radius_frac, tl_len_in * 0.45)
+
+    dy_top = chart_y - sil.top_y
+    if 0 <= dy_top < tl_r_out_y and tl_r_out_y > 0:
+        # Solve y(t) = top_y + t^2 * tl_r_out_y for t
+        t = math.sqrt(dy_top / tl_r_out_y)
+        t = max(0.0, min(1.0, t))
+        omt = 1.0 - t
+        x_in = sil.top_left + tl_r_in  # p_in.x
+        x_curr = sil.top_left  # control point x
+        x_out = sil.top_left + tl_r_out * tl_dx_out_norm  # p_out.x
+        x_corner = omt * omt * x_in + 2.0 * omt * t * x_curr + t * t * x_out
+        # x_corner is always >= canonical inside the corner region
+        # (the bezier curves rightward of the canonical line); use
+        # the corner value.
+        return max(canonical, x_corner)
+
+    # --- bottom-left corner ---
+    bl_dx_in = sil.top_left - sil.bottom_left
+    bl_dy_in = sil.top_y - sil.bottom_y
+    bl_len_in = math.hypot(bl_dx_in, bl_dy_in) or 1.0
+    bl_dx_in_norm = bl_dx_in / bl_len_in
+    bl_dy_in_norm = bl_dy_in / bl_len_in
+    bl_r_in = min(corner_radius_frac, bl_len_in * 0.45)
+    bl_r_in_y_abs = abs(bl_r_in * bl_dy_in_norm)
+
+    bl_dx_out = sil.bottom_right - sil.bottom_left
+    bl_len_out = abs(bl_dx_out) or 1.0
+    bl_r_out = min(corner_radius_frac, bl_len_out * 0.45)
+
+    dy_bot = sil.bottom_y - chart_y
+    if 0 <= dy_bot < bl_r_in_y_abs and bl_r_in_y_abs > 0:
+        # y(t) = bottom_y + (1-t)^2 * bl_r_in_y    (bl_r_in_y is negative)
+        # bottom_y - y(t) = (1-t)^2 * |bl_r_in_y|
+        # 1 - t = sqrt(dy_bot / |bl_r_in_y|)
+        omt = math.sqrt(dy_bot / bl_r_in_y_abs)
+        omt = max(0.0, min(1.0, omt))
+        t = 1.0 - omt
+        x_in = sil.bottom_left + bl_r_in * bl_dx_in_norm  # p_in.x
+        x_curr = sil.bottom_left  # control point
+        x_out = sil.bottom_left + bl_r_out  # p_out.x
+        x_corner = omt * omt * x_in + 2.0 * omt * t * x_curr + t * t * x_out
+        return max(canonical, x_corner)
+
+    return canonical
 
 
 def _silhouette_with_widths(
@@ -1244,6 +1358,9 @@ def build_vowel_chart_geometry(
             chart_y=display_y_by_row[ri],
             tier=_row_tier.get(ri, "middle"),
             slot_height_norm=slot_heights_by_row[ri],
+            silhouette_left=silhouette_left_at_y(
+                silhouette, display_y_by_row[ri]
+            ),
         )
         for ri in populated_logical_rows
     )
