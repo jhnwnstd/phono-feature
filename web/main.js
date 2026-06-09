@@ -2363,20 +2363,39 @@ function _appendVowelChartModeToggle(chartEl, hasDiphthongs) {
     chartEl.appendChild(btn);
 }
 
-/** Re-render the current vowel chart in place. Called when the
- *  display mode toggles -- the chart needs to rebuild its cell
- *  partition + arrow overlay to reflect the new mode. Locates
- *  the chart container in the segments grid and asks
- *  ``renderSegmentGrid`` to repaint with the cached groups
- *  payload from the last analysis. */
+/** Switch the vowel chart's display mode without rebuilding the
+ *  segment grid. The cells render identically in mono and diph
+ *  modes (diphthongs no longer occupy cells); only the SVG arrow
+ *  overlay differs. Toggle the data-display-mode attribute (CSS
+ *  reads it for any mode-specific styling) and add or remove the
+ *  arrow SVG accordingly. Falls back to a full rebuild only when
+ *  the chart container is missing (e.g. inventory has no vowels). */
 function _rerenderVowelChart() {
-    // Easiest path: re-run the same render entry the bridge
-    // calls. ``state.last_inventory_summary`` is the cached
-    // payload (set every time a fresh summary lands); falling
-    // back to a no-op when nothing has loaded yet.
+    const dataEl = nodes.segGrid.querySelector(".vowel-chart-data");
     const summary = state.last_inventory_summary;
-    if (!summary) return;
-    renderSegmentGrid(summary.groups, summary.vowel_chart);
+    if (!dataEl || !summary) {
+        if (summary) renderSegmentGrid(summary.groups, summary.vowel_chart);
+        return;
+    }
+    const mode = getVowelChartMode();
+    dataEl.dataset.displayMode = mode;
+    const prior = dataEl.querySelector("svg.vowel-diphthong-arrows");
+    if (mode === VOWEL_CHART_MODE.DIPHTHONG) {
+        if (!prior) {
+            _appendVowelDiphthongArrows(dataEl, summary.vowel_chart);
+            // Re-wire focus so hover/keyboard interactions land on
+            // the freshly-built arrows.
+            _wireVowelDiphthongFocus(dataEl);
+        }
+    } else if (prior) {
+        prior.remove();
+    }
+    // Update toggle button label + tooltip without rebuilding it.
+    const toggle = nodes.segGrid.querySelector(".vowel-diphthong-toggle");
+    if (toggle) {
+        const isDiph = mode === VOWEL_CHART_MODE.DIPHTHONG;
+        toggle.setAttribute("aria-pressed", String(isDiph));
+    }
 }
 
 /** Hover / focus wiring for the diphthong overlay. Default state
