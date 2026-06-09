@@ -926,12 +926,68 @@ const _segFontFamily = (
 // are missing (defensive read pattern matching the button-width
 // reads in ``applyPerGroupSegmentColumns``).
 const _rootCS = getComputedStyle(document.documentElement);
-const SEG_FONT_NATURAL_PX = (
-    parseFloat(_rootCS.getPropertyValue("--font-size-control")) || 13
-);
-const SEG_FONT_FLOOR_PX = (
-    parseFloat(_rootCS.getPropertyValue("--font-size-min-px")) || 10
-);
+
+/** Read a ``--*`` CSS length off the document root. ``fallback``
+ *  is returned only when the value is missing or unparseable;
+ *  ``0`` (a valid CSS length) passes through. */
+function parseCSSLength(varName, fallback) {
+    const v = parseFloat(_rootCS.getPropertyValue(varName));
+    return Number.isFinite(v) ? v : fallback;
+}
+
+/** ``<dialog>.showModal()`` with a graceful fallback for browsers
+ *  without dialog support. */
+function openDialog(dialog) {
+    if (typeof dialog.showModal === "function") {
+        dialog.showModal();
+    } else {
+        dialog.setAttribute("open", "");
+    }
+}
+
+/** Symmetric counterpart for ``openDialog``. */
+function closeDialog(dialog) {
+    if (typeof dialog.close === "function") {
+        dialog.close();
+    } else {
+        dialog.removeAttribute("open");
+    }
+}
+
+/** Active vowel-chart mode with a stable default so callers don't
+ *  have to repeat the ``|| MONOPHTHONG`` fallback. */
+function getVowelChartMode() {
+    return state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
+}
+
+/** Attach a ResizeObserver that fires ``callback`` once per
+ *  observed mutation. Stored on ``dataEl`` under ``key`` so a
+ *  later ``detachResizeObserver`` call (or
+ *  ``_disconnectChartObservers``) can disconnect it cleanly.
+ *  Idempotent: re-attaching the same key replaces the prior obs. */
+function attachResizeObserver(dataEl, key, callback) {
+    if (typeof ResizeObserver === "undefined") return;
+    detachResizeObserver(dataEl, key);
+    const obs = new ResizeObserver(() => {
+        if (!dataEl.isConnected) return;
+        requestAnimationFrame(() => {
+            if (dataEl.isConnected) callback();
+        });
+    });
+    obs.observe(dataEl);
+    dataEl[key] = obs;
+}
+
+function detachResizeObserver(dataEl, key) {
+    const prev = dataEl[key];
+    if (prev) {
+        prev.disconnect();
+        delete dataEl[key];
+    }
+}
+
+const SEG_FONT_NATURAL_PX = parseCSSLength("--font-size-control", 13);
+const SEG_FONT_FLOOR_PX = parseCSSLength("--font-size-min-px", 10);
 // Inner width budget for seg-button text. ``--seg-btn-min-w`` is
 // 33 px; subtract the 1.5 px border on each side and leave 1 px of
 // breathing room so glyphs sit just inside the outline. Picked to
@@ -1150,14 +1206,8 @@ function createRasterizedLabel(text, font, maxWidth) {
 function _disconnectChartObservers(grid) {
     if (!grid) return;
     for (const dataEl of grid.querySelectorAll(".vowel-chart-data")) {
-        if (dataEl._arrowResizeObserver) {
-            dataEl._arrowResizeObserver.disconnect();
-            delete dataEl._arrowResizeObserver;
-        }
-        if (dataEl._silhouetteResizeObserver) {
-            dataEl._silhouetteResizeObserver.disconnect();
-            delete dataEl._silhouetteResizeObserver;
-        }
+        detachResizeObserver(dataEl, "_arrowResizeObserver");
+        detachResizeObserver(dataEl, "_silhouetteResizeObserver");
     }
 }
 
@@ -1180,13 +1230,9 @@ function renderSegmentGrid(groups, vowelChart) {
         // right padding) is read from the baked CSS vars so it
         // tracks ``chart_style.py`` changes without a JS edit.
         if (typeof vowelChart.natural_data_width_px === "number") {
-            const cs = getComputedStyle(document.documentElement);
             const chromeW =
-                (parseFloat(
-                    cs.getPropertyValue("--vowel-chart-row-label-gutter"),
-                ) || 72)
-                + (parseFloat(cs.getPropertyValue("--vowel-chart-pad-r"))
-                    || 12);
+                parseCSSLength("--vowel-chart-row-label-gutter", 72)
+                + parseCSSLength("--vowel-chart-pad-r", 12);
             const naturalSlotW =
                 vowelChart.natural_data_width_px + chromeW;
             vowels.style.width =
@@ -1275,16 +1321,12 @@ let _BTN_GAP_CSS = NaN;
 const WEB_VOWEL_CHART_W_ADJ = 0;
 
 function _vowelChartWFloor() {
-    const rootCS = getComputedStyle(document.documentElement);
-    const baked = parseFloat(rootCS.getPropertyValue("--min-vowel-chart-w"));
-    const shared = Number.isFinite(baked) ? baked : 320;
-    return shared + WEB_VOWEL_CHART_W_ADJ;
+    return parseCSSLength("--min-vowel-chart-w", 320) + WEB_VOWEL_CHART_W_ADJ;
 }
 
 function _refreshButtonStrideCache() {
-    const rootCS = getComputedStyle(document.documentElement);
-    _BTN_W_CSS = parseFloat(rootCS.getPropertyValue("--seg-btn-w"));
-    _BTN_GAP_CSS = parseFloat(rootCS.getPropertyValue("--seg-btn-gap"));
+    _BTN_W_CSS = parseFloat(_rootCS.getPropertyValue("--seg-btn-w"));
+    _BTN_GAP_CSS = parseFloat(_rootCS.getPropertyValue("--seg-btn-gap"));
 }
 
 /** Pick a column count per consonant group that avoids one-button
@@ -1406,11 +1448,7 @@ function rebalanceSegmentSpillover() {
         // on a spillover column's width so a narrow pane still
         // accepts at least one column. Use the canonical segment
         // button stride.
-        const segBtnW = parseInt(
-            getComputedStyle(document.documentElement)
-                .getPropertyValue("--seg-btn-w") || "33",
-            10,
-        );
+        const segBtnW = Math.round(parseCSSLength("--seg-btn-w", 33));
         const plan = callBridge(
             "plan_segment_layout",
             groupNames,
@@ -1793,17 +1831,9 @@ function _buildVowelChart(chart) {
             );
         };
         requestAnimationFrame(refreshPolygon);
-        if (
-            !dataEl._silhouetteResizeObserver
-            && typeof ResizeObserver !== "undefined"
-        ) {
-            const obs = new ResizeObserver(() => {
-                if (!dataEl.isConnected) return;
-                requestAnimationFrame(refreshPolygon);
-            });
-            obs.observe(dataEl);
-            dataEl._silhouetteResizeObserver = obs;
-        }
+        attachResizeObserver(
+            dataEl, "_silhouetteResizeObserver", refreshPolygon,
+        );
     }
     // Per-row labels go INSIDE the data area so the slanted left
     // edge is the natural alignment reference (``right: 100%`` is
@@ -1862,7 +1892,7 @@ function _buildVowelChart(chart) {
     // along with the diphthongs -- user lost the singleton from
     // the chart entirely. The placer fix removes diphthongs from
     // cells, so this filter now always falls through.
-    const mode = state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
+    const mode = getVowelChartMode();
     dataEl.dataset.displayMode = mode;
     for (const cell of chart.cells) {
         // Multiple vowels can map to the same chart cell (the
@@ -2019,8 +2049,7 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
     // mode the chart shows monophthong cells only; arrows would
     // have nothing to attach to (the diphthong cells are hidden)
     // and would point into empty silhouette space.
-    const mode = state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
-    if (mode !== VOWEL_CHART_MODE.DIPHTHONG) return;
+    if (getVowelChartMode() !== VOWEL_CHART_MODE.DIPHTHONG) return;
     // The cell DOM elements need to be in the document and
     // browser-laid-out before we can read their bounding rects
     // for the arrow endpoint resolver. ``_buildVowelChart`` is
@@ -2037,14 +2066,9 @@ function _appendVowelDiphthongArrows(dataEl, chart) {
     // first resize. The observer fires synchronously on resize;
     // arrow rebuild is cheap (one SVG, one querySelectorAll over
     // the small cell set).
-    if (!dataEl._arrowResizeObserver && typeof ResizeObserver !== "undefined") {
-        const obs = new ResizeObserver(() => {
-            if (!dataEl.isConnected) return;
-            requestAnimationFrame(() => _buildArrowsNow(dataEl, chart));
-        });
-        obs.observe(dataEl);
-        dataEl._arrowResizeObserver = obs;
-    }
+    attachResizeObserver(
+        dataEl, "_arrowResizeObserver", () => _buildArrowsNow(dataEl, chart),
+    );
 }
 
 function _buildArrowsNow(dataEl, chart) {
@@ -2279,8 +2303,7 @@ function _appendVowelChartModeToggle(chartEl, hasDiphthongs) {
     const tooltipDiphthong =
         STATUS_TEXT.vowel_chart_mode_tooltip_diphthong_active ||
         "Show the inventory's monophthongs instead";
-    const mode = state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
-    const isDiphthong = mode === VOWEL_CHART_MODE.DIPHTHONG;
+    const isDiphthong = getVowelChartMode() === VOWEL_CHART_MODE.DIPHTHONG;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "vowel-diphthong-toggle";
@@ -2291,10 +2314,8 @@ function _appendVowelChartModeToggle(chartEl, hasDiphthongs) {
     );
     btn.textContent = STATUS_TEXT.diphthong_toggle_label || "diphthongs";
     btn.addEventListener("click", () => {
-        const current =
-            state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
         const next =
-            current === VOWEL_CHART_MODE.DIPHTHONG
+            getVowelChartMode() === VOWEL_CHART_MODE.DIPHTHONG
                 ? VOWEL_CHART_MODE.MONOPHTHONG
                 : VOWEL_CHART_MODE.DIPHTHONG;
         state.vowel_chart_mode = next;
@@ -2352,16 +2373,23 @@ function _wireVowelDiphthongFocus(dataEl) {
         if (newSeg === currentSeg) return;
         currentSeg = newSeg;
         if (currentFocused) {
-            for (const el of currentFocused) el.classList.remove("is-focused");
+            for (const el of currentFocused) {
+                if (el.isConnected) el.classList.remove("is-focused");
+            }
             currentFocused = null;
         }
         if (!newSeg) return;
-        const matches = segToPaths.get(newSeg);
-        if (!matches) return;
+        // Cached paths may have been removed if the chart re-rendered
+        // while a hover is active; filter to currently-live nodes.
+        const matches = (segToPaths.get(newSeg) || []).filter(
+            (el) => el.isConnected,
+        );
+        if (matches.length === 0) return;
         for (const el of matches) el.classList.add("is-focused");
         currentFocused = matches;
     };
     const segFromEvent = (ev) => {
+        if (!dataEl.isConnected) return null;
         const btn = ev.target.closest(".seg-btn[data-seg]");
         if (!btn || !dataEl.contains(btn)) return null;
         return btn.dataset.seg;
@@ -2373,9 +2401,6 @@ function _wireVowelDiphthongFocus(dataEl) {
     dataEl.addEventListener("pointerout", (ev) => {
         const seg = segFromEvent(ev);
         if (!seg) return;
-        // Leaving the seg-btn for an unrelated element clears focus;
-        // moving from the seg-btn to one of its own descendants
-        // (the rasterized label span) keeps the same focus.
         const next = ev.relatedTarget;
         if (next && next.closest && next.closest(".seg-btn[data-seg]")) {
             return;
@@ -3079,31 +3104,17 @@ function wireRename() {
     const errorBox = nodes.renameError;
     const cancelBtn = nodes.renameCancel;
 
-    const openDialog = () => {
+    const open = () => {
         input.value = state.inventory_name || "";
         errorBox.textContent = "";
-        // Native <dialog>.showModal traps focus and dims with ::backdrop.
-        // Fallback to show() if showModal is unavailable (very old browsers).
-        if (typeof dialog.showModal === "function") {
-            dialog.showModal();
-        } else {
-            dialog.setAttribute("open", "");
-        }
-        // Select-on-open so a confirming user can just retype the
-        // whole name without manually selecting it first.
+        openDialog(dialog);
+        // Select-on-open so a confirming user can just retype.
         requestAnimationFrame(() => input.select());
     };
+    const close = () => closeDialog(dialog);
 
-    const closeDialog = () => {
-        if (typeof dialog.close === "function") {
-            dialog.close();
-        } else {
-            dialog.removeAttribute("open");
-        }
-    };
-
-    nodes.renameBtn.addEventListener("click", openDialog);
-    cancelBtn.addEventListener("click", closeDialog);
+    nodes.renameBtn.addEventListener("click", open);
+    cancelBtn.addEventListener("click", close);
 
     form.addEventListener("submit", (ev) => {
         // method="dialog" would auto-close on submit; preventDefault
@@ -3116,7 +3127,7 @@ function wireRename() {
             state.inventory_name = result.name;
             setStatus(`Renamed to ${result.name}.`);
             errorBox.textContent = "";
-            closeDialog();
+            close();
         } catch (e) {
             errorBox.textContent = e.message || "Rename failed.";
             input.focus();
@@ -3282,7 +3293,7 @@ function wireSetupDialog() {
         );
     });
 
-    const openDialog = () => {
+    const open = () => {
         loadDefaultsOnce();
         nameInput.value = "";
         segInput.value = "";
@@ -3291,33 +3302,21 @@ function wireSetupDialog() {
         // option is.
         chosenProvider = null;
         cancelProviderRefresh();
-        // Default to the first preset (Default(33)) on open so the
-        // common case is one click. The user can switch to Custom
-        // and clear if they want to start blank.
+        // Default to the first preset on open so the common case
+        // is one click.
         if (presetPicker.options.length > 0) {
             presetPicker.selectedIndex = 0;
             applyPreset(presetPicker.value);
         }
         errorBox.textContent = "";
-        if (typeof dialog.showModal === "function") {
-            dialog.showModal();
-        } else {
-            dialog.setAttribute("open", "");
-        }
+        openDialog(dialog);
         requestAnimationFrame(() => nameInput.focus());
     };
-
-    const closeDialog = () => {
-        if (typeof dialog.close === "function") {
-            dialog.close();
-        } else {
-            dialog.removeAttribute("open");
-        }
-    };
+    const close = () => closeDialog(dialog);
 
     nodes.setupCancel.addEventListener("click", () => {
         cancelProviderRefresh();
-        closeDialog();
+        close();
     });
     presetPicker.addEventListener("change", () => {
         applyPreset(presetPicker.value);
@@ -3363,7 +3362,7 @@ function wireSetupDialog() {
                 + `${info.features.length} features)${sourceSuffix}.`,
             );
             errorBox.textContent = "";
-            closeDialog();
+            close();
             // If the builder editor is open it must re-fetch the new
             // grid; the engine swap invalidated the previous state.
             if (!nodes.editorView.hidden) {
@@ -3374,7 +3373,7 @@ function wireSetupDialog() {
         }
     });
 
-    return { open: openDialog };
+    return { open };
 }
 
 
@@ -3626,27 +3625,16 @@ function wirePhoiblePicker() {
         loadBtn.disabled = false;
     };
 
-    const closeDialog = () => {
-        if (typeof dialog.close === "function") {
-            dialog.close();
-        } else {
-            dialog.removeAttribute("open");
-        }
-    };
+    const close = () => closeDialog(dialog);
 
-    const openDialog = async () => {
-        // Open the dialog with the active panel only when PHOIBLE
-        // data is ready. Otherwise show the spinner briefly while
-        // the background preload (kicked off at boot) finishes;
-        // if no preload is running yet, this call starts one.
+    const open = async () => {
+        // Open with the active panel only when PHOIBLE data is
+        // ready; otherwise show the spinner while the background
+        // preload finishes (or start one if none is running yet).
         const ready = callBridge("phoible_is_ready");
         nodes.phoibleLoading.hidden = ready;
         nodes.phoibleActive.hidden = !ready;
-        if (typeof dialog.showModal === "function") {
-            dialog.showModal();
-        } else {
-            dialog.setAttribute("open", "");
-        }
+        openDialog(dialog);
         resetState();
 
         if (!ready) {
@@ -3676,7 +3664,7 @@ function wirePhoiblePicker() {
             setStatus("PHOIBLE data is not available in this build.");
             return;
         }
-        openDialog();
+        open();
     });
 
     // Autocomplete debounce.
@@ -3730,7 +3718,7 @@ function wirePhoiblePicker() {
         }
     });
 
-    nodes.phoibleCancel.addEventListener("click", closeDialog);
+    nodes.phoibleCancel.addEventListener("click", close);
 
     form.addEventListener("submit", (ev) => {
         ev.preventDefault();
@@ -3759,7 +3747,7 @@ function wirePhoiblePicker() {
                 + `${info.features.length} features).`,
             );
             errorBox.textContent = "";
-            closeDialog();
+            close();
             // If the editor is open, re-fetch its grid against the
             // new engine state.
             if (!nodes.editorView.hidden) {
