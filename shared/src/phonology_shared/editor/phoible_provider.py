@@ -156,19 +156,27 @@ class PhoibleProvider:
         # carries case-folded keys so the autocomplete matches
         # behave consistently regardless of input case.
         raw_inventories = index_table.get("inventories")
-        if not isinstance(raw_inventories, list):
+        if raw_inventories is None:
             raise ValueError(
-                "PHOIBLE index missing 'inventories' list; rerun "
+                "PHOIBLE index has no 'inventories' key; rerun "
                 "bake_phoible to regenerate"
             )
+        if not isinstance(raw_inventories, list):
+            raise ValueError(
+                "PHOIBLE index 'inventories' is "
+                f"{type(raw_inventories).__name__!s}, expected list; "
+                "rerun bake_phoible to regenerate"
+            )
         self._inventories: dict[str, InventoryDescriptor] = {}
-        # Map language name (case-folded) -> list of inventory ids.
         self._by_language: dict[str, list[str]] = {}
+        skipped_no_id = 0
         for entry in raw_inventories:
             if not isinstance(entry, Mapping):
+                skipped_no_id += 1
                 continue
             inv_id = str(entry.get("id", ""))
             if not inv_id:
+                skipped_no_id += 1
                 continue
             descriptor = InventoryDescriptor(
                 id=inv_id,
@@ -184,6 +192,11 @@ class PhoibleProvider:
             self._by_language.setdefault(
                 descriptor.language_name.casefold(), []
             ).append(inv_id)
+        if skipped_no_id and not self._inventories:
+            raise ValueError(
+                f"PHOIBLE index has {skipped_no_id} entries but none "
+                "have a usable 'id' field; rerun bake_phoible"
+            )
 
         # Sorted language-name list for fast prefix/substring scan.
         # PHOIBLE ships some language names in multiple case forms

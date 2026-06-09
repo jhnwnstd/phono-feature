@@ -61,12 +61,12 @@ from phonology_shared.chart.vowels_layout import (
 )
 from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.constants import (
+    BTN_W,
     DIPHTHONG_TOGGLE_LABEL,
     VOWEL_CHART_ACCESSIBLE_NAME,
     VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE,
     VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE,
 )
-from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
     MIN_VOWEL_CHART_W_PX,
     REGION_CONSTRAINTS,
