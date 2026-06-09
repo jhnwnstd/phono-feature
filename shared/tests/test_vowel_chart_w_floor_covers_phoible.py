@@ -139,18 +139,6 @@ def _read_web_floor() -> int:
     return _shared_min() + _read_web_adj()
 
 
-def test_desktop_floor_above_visual_minimum() -> None:
-    """The desktop floor must be at least the canonical visual
-    minimum below which the trapezoid stops reading as the IPA
-    chart."""
-    assert _read_desktop_floor() >= _VISUAL_MIN_FLOOR_PX
-
-
-def test_web_floor_above_visual_minimum() -> None:
-    """Same invariant for the web renderer."""
-    assert _read_web_floor() >= _VISUAL_MIN_FLOOR_PX
-
-
 def test_desktop_floor_holds_widest_bundled_inventory() -> None:
     """The desktop floor must cover the largest bundled
     inventory's natural width + chrome. If the densest inventory

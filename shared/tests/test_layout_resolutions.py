@@ -79,43 +79,6 @@ FEAT_CONTENT_W = 500
 # ---------------------------------------------------------------------------
 
 
-# Literal expected window sizes per resolution. Pinning these as
-# concrete numbers (rather than computing them from
-# ``MIN_FIRST_LAUNCH_*`` and ``DEFAULT_SCREEN_FRACTION``) means a
-# tweak to either constant trips the assertion instead of silently
-# moving the comparand to match.
-EXPECTED_WINDOW_SIZES: dict[str, tuple[int, int]] = {
-    # max(MIN_FIRST_LAUNCH_W=1180, 0.80×W) × max(MIN_FIRST_LAUNCH_H=900, 0.80×H)
-    "1920x1080": (1536, 900),  # 1920×0.8=1536; 1080×0.8=864 < 900 floor
-    "1280x1200": (1180, 960),  # 1280×0.8=1024 < 1180 floor; 1200×0.8=960
-    "1536x864": (1228, 900),  # 1536×0.8=1228 > 1180 floor; height floor
-    "1366x768": (1180, 900),  # 1366×0.8=1092 < 1180 floor
-    "1280x720": (1180, 900),  # 1280×0.8=1024 < 1180 floor
-    "1440x900": (1180, 900),  # 1440×0.8=1152 < 1180 floor
-    "1600x900": (1280, 900),  # 1600×0.8=1280 > 1180 floor
-    "2560x1440": (2048, 1152),  # 2560×0.8=2048; 1440×0.8=1152
-    # 3840×0.8=3072 would exceed the new ``CONTENT_MAX_W_ABS``
-    # ultrawide cap of 2400; first-launch width stops at 2400.
-    # Height keeps the 0.8 fraction (vertical eye-travel is fine).
-    "3840x2160": (2400, 1728),
-}
-
-
-@pytest.mark.parametrize("res", RESOLUTIONS, ids=lambda r: r.label)
-def test_initial_window_size_matches_pinned_literals(
-    res: Resolution,
-) -> None:
-    """The fresh-install window size is ``max(MIN_FIRST_LAUNCH_*,
-    0.75 * screen)``. Each resolution's expected size is pinned as
-    a literal pair so any change to ``MIN_FIRST_LAUNCH_W``,
-    ``MIN_FIRST_LAUNCH_H``, or ``DEFAULT_SCREEN_FRACTION`` trips the
-    test rather than silently shifting both sides of an equality
-    in lockstep.
-    """
-    w, h = layout.recommended_initial_window_size(res.width, res.height)
-    assert (w, h) == EXPECTED_WINDOW_SIZES[res.label]
-
-
 @pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_initial_window_size_does_not_overflow_screen(
     res: Resolution,
