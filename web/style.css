@@ -1310,6 +1310,23 @@ dialog input[type="text"]:focus-visible {
     calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift)),
     -50%
   );
+  transition: opacity 120ms ease-out;
+}
+/* In diphthong mode, dim:
+   1. Whole cells that are NOT diphthong endpoints (data-is-endpoint
+      attribute tagged in main.js).
+   2. Within endpoint long-pair / stack cells, dim every seg-btn
+      after the first. The canonical entry (first child) is the
+      arrow target; the long-vowel partner is visual noise.
+   The arrows then have clear visual anchors instead of competing
+   with non-target monophthongs for attention. */
+.vowel-chart-data[data-display-mode="diphthong"]
+  .vowel-chart-cell:not([data-is-endpoint="true"]) {
+  opacity: 0.35;
+}
+.vowel-chart-data[data-display-mode="diphthong"]
+  .vowel-chart-cell[data-is-endpoint="true"] .seg-btn:nth-child(n+2) {
+  opacity: 0.4;
 }
 /* Top-row cells anchor their TOP edge at chart_y so a multi-entry
    stack hangs DOWN from the row label instead of centring and

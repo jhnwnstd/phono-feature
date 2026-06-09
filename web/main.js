@@ -1928,6 +1928,15 @@ function _buildVowelChart(chart) {
     // cells, so this filter now always falls through.
     const mode = getVowelChartMode();
     dataEl.dataset.displayMode = mode;
+    // (row,col) pairs that are diphthong endpoints. CSS dims any
+    // cell NOT in this set when display mode is diphthong, so the
+    // arrows have visual anchors and long-pair partners drop into
+    // the background instead of competing with the trajectory.
+    const endpointCells = new Set();
+    for (const d of (chart.diphthongs || [])) {
+        endpointCells.add(`${d.primary_row},${d.primary_col}`);
+        endpointCells.add(`${d.secondary_row},${d.secondary_col}`);
+    }
     for (const cell of chart.cells) {
         // Multiple vowels can map to the same chart cell (the
         // classic case is ə / ɜ / ɚ all landing in open-mid central
@@ -1996,6 +2005,9 @@ function _buildVowelChart(chart) {
         // cells the user sees.
         target.dataset.cellRow = String(cell.row);
         target.dataset.cellCol = String(cell.col);
+        if (endpointCells.has(`${cell.row},${cell.col}`)) {
+            target.dataset.isEndpoint = "true";
+        }
         dataEl.appendChild(target);
     }
     _appendVowelDiphthongArrows(dataEl, chart);
@@ -2188,13 +2200,18 @@ function _buildArrowsNow(dataEl, chart) {
     // arrows start/end at button EDGES rather than centres -- the
     // arrowhead now sits outside the source and the tip touches
     // the target button's edge.
+    // Push the arrow endpoint ``ARROW_TIP_INSET_PX`` past the cell
+    // edge so a small visual gap separates the arrow from its
+    // target cell. Diagram convention: arrows that touch the cell
+    // border read as "merged"; a 4 px gap reads as "pointing at."
+    const ARROW_TIP_INSET_PX = 4;
     const rectEdgeOffset = (w, h, ux, uy) => {
         if (w <= 0 || h <= 0) return [0, 0];
         const hw = w / 2;
         const hh = h / 2;
         const tx = Math.abs(ux) < 1e-9 ? Infinity : hw / Math.abs(ux);
         const ty = Math.abs(uy) < 1e-9 ? Infinity : hh / Math.abs(uy);
-        const t = Math.min(tx, ty);
+        const t = Math.min(tx, ty) + ARROW_TIP_INSET_PX;
         return [t * ux, t * uy];
     };
     // Group arrows that share the same primary -> secondary cell

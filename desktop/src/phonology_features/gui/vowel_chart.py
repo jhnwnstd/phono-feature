@@ -1468,22 +1468,21 @@ class VowelChartWidget(QWidget):
                 return _widget_centre_and_size(cell_widget)
             return (dx + chart_x * dw, dy + chart_y * dh, 0.0, 0.0)
 
+        # Push the arrow endpoint ``_ARROW_TIP_INSET_PX`` past the
+        # cell edge so a small visual gap separates the arrow from
+        # its target cell. Matches the web's ``ARROW_TIP_INSET_PX``.
+        _ARROW_TIP_INSET_PX = 4
+
         def _rect_edge_offset(
             w: float, h: float, ux: float, uy: float
         ) -> tuple[float, float]:
-            """Offset from a rectangle's centre to where a ray in
-            unit direction ``(ux, uy)`` exits the rectangle of
-            size ``w * h``. Used so arrows start/end at the
-            button's visible edge rather than its centre -- the
-            arrowhead now sits OUTSIDE the source button and the
-            tip touches the target button's edge."""
             if w <= 0 or h <= 0:
                 return (0.0, 0.0)
             hw = w / 2.0
             hh = h / 2.0
             tx = float("inf") if abs(ux) < 1e-9 else hw / abs(ux)
             ty = float("inf") if abs(uy) < 1e-9 else hh / abs(uy)
-            t = min(tx, ty)
+            t = min(tx, ty) + _ARROW_TIP_INSET_PX
             return (t * ux, t * uy)
 
         # Group arrows by their (primary, secondary) cell pair so

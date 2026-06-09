@@ -247,16 +247,18 @@ VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX: int = 2
 # Silhouette (trapezoid outline + container floor)
 # ---------------------------------------------------------------------------
 
-#: Stroke width (device px) for the trapezoid silhouette. 1.0 is
-#: the minimum that stays clearly visible at 70% alpha on the
-#: post-shrink chart widths.
-VOWEL_SILHOUETTE_STROKE_PX: float = 1.0
+#: Stroke width (device px) for the trapezoid silhouette. 0.6 px
+#: reads as a context cue rather than a frame, letting the
+#: vowel buttons carry the visual weight; the prior 1.0 px stroke
+#: competed with the cells for attention.
+VOWEL_SILHOUETTE_STROKE_PX: float = 0.6
 
 #: Silhouette outline corner radius as a fraction of the data
-#: area width. Fraction (not pixels) so CSS clip-path resolves
-#: it natively without a per-resize JS recompute, and so the
-#: visual radius stays proportional across chart widths.
-VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC: float = 0.018
+#: area width. Bumped to 0.024 alongside the thinner stroke so
+#: the silhouette reads as a soft container rather than a hard
+#: frame. Fraction (not pixels) so CSS clip-path resolves it
+#: natively without a per-resize JS recompute.
+VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC: float = 0.024
 
 #: Alpha (0..1) for the silhouette outline color.
 VOWEL_SILHOUETTE_ALPHA: float = 0.70
