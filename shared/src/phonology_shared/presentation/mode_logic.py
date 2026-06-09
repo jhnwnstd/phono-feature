@@ -120,19 +120,12 @@ def mode_status_text(mode: Mode | str, *, has_engine: bool) -> str:
     return "Toggle feature values (+/−) to find matching segments."
 
 
-#: Portable template for the clipboard-copy status message.
-#: ``{seg}`` is the segment glyph the user copied. Python uses
-#: ``.format(seg=...)``; the web's main.js does the same substitution
-#: via ``String.prototype.replace`` so both UIs surface identical
-#: wording without round-tripping the bridge on every copy.
+#: Template for the clipboard-copy status; substituted in Python
+#: and in main.js so both UIs read the same wording.
 CLIPBOARD_COPY_MESSAGE_TEMPLATE: str = "Copied /{seg}/ to clipboard"
 
 
 def clipboard_copy_message(seg: str) -> str:
-    """Status-bar message after a segment is copied to the clipboard
-    via the segment button's right-click action. Both UIs surface
-    the same wording from :py:data:`CLIPBOARD_COPY_MESSAGE_TEMPLATE`.
-    """
     return CLIPBOARD_COPY_MESSAGE_TEMPLATE.format(seg=seg)
 
 

@@ -171,9 +171,8 @@ COLORBLIND_LIGHT = {
     "border": "#DADCE0",
     "text": "#202124",
     "text_dim": "#5F6368",
-    # Accent (was blue -> now purple). Same hex as ``seg_selected``
-    # so the brand colour and the "this segment is selected" colour
-    # stay visually unified.
+    # Accent matches ``seg_selected`` so the brand colour and the
+    # selected-segment colour stay visually unified.
     "accent": "#CC79A7",
     "accent_light": "#F3D6E8",
     # Segment-button states
@@ -190,7 +189,7 @@ COLORBLIND_LIGHT = {
     "neutral_bg": "#F3D6E8",
     "shared_plus": "#D6E8FF",
     "shared_minus": "#FFE8B5",
-    # Buttons (was blue -> now purple; danger stays orange).
+    # Primary buttons share the accent; danger stays orange.
     "btn_primary": "#CC79A7",
     "btn_primary_text": "#FFFFFF",
     "btn_primary_hover": "#9A4F7F",
@@ -235,7 +234,7 @@ COLORBLIND_DARK = {
     "border": "#3A3A3A",
     "text": "#E8EAED",
     "text_dim": "#B8B8B8",
-    # Accent (was pale blue -> pale purple, matching seg_selected).
+    # Accent matches seg_selected.
     "accent": "#D7A0D3",
     "accent_light": "#43243F",
     "seg_default": "#262626",

@@ -107,7 +107,7 @@ class FeatureMetadata:
     every alias of every entry tagged with each group.
 
     ``subgroup`` is an optional canonical-key pointer at another
-    registry entry that serves as this feature's "anchor" — the
+    registry entry that serves as this feature's "anchor": the
     head of an articulatory subcluster the modifier refines (e.g.
     ``"labial"`` for ``round`` / ``labiodental``; ``"voice"`` for
     ``fortis`` / ``lenis`` / ``breathy`` / ``creaky``;
@@ -731,7 +731,7 @@ def feature_group(raw_name: str) -> str:
 def is_suprasegmental(raw_name: str) -> bool:
     """``True`` iff the registry tags this feature suprasegmental.
     Unknown names default to ``False`` (segmental until proven
-    otherwise — matches the prior behaviour of
+    otherwise: matches the prior behaviour of
     ``SUPRASEGMENTAL_FEATURES`` set membership).
     """
     meta = metadata_for(raw_name)

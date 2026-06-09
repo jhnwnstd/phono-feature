@@ -5265,7 +5265,7 @@ function _syncBridgePaletteToStoredState() {
  *  ``+Voice`` query returns +Voice AND 0Voice segments. The
  *  feature pane also surfaces features that are uniformly ``0``
  *  (otherwise unselectable) because those features ARE queryable
- *  under wildcard — every segment matches.
+ *  under wildcard: every segment matches.
  */
 const MATCH_MODE = Object.freeze(
     STATUS_TEXT.match_mode_values || {

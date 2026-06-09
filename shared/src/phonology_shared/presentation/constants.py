@@ -19,13 +19,9 @@ from phonology_shared.presentation.palette import C
 SETTINGS_ORG = "features"
 SETTINGS_APP = "SegFeatureEngine"
 
-# Unicode minus (U+2212), not ASCII hyphen-minus (U+002D). Used
-# wherever we render the negative-feature symbol so it visually
-# matches the width and stroke weight of ``+``. Defined via the
-# explicit ``−`` codepoint escape so a future editor doesn't
-# accidentally replace the literal with a hyphen (U+002D), an
-# en-dash (U+2013), or an em-dash (U+2014) which all look similar
-# in some fonts.
+# Unicode minus (U+2212) so the negative-feature glyph matches
+# the width and stroke weight of ``+``. Escape (not literal) so
+# a future editor cannot quietly replace it with a look-alike.
 MINUS_SIGN: str = "\u2212"
 
 
@@ -100,12 +96,8 @@ VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE: str = (
     "Show the inventory's monophthongs instead"
 )
 
-# Accessible name for the vowel chart widget (web aria-label /
-# desktop QWidget.setAccessibleName). Screen readers announce
-# this when focus lands on the chart container so users know
-# where they are. Pre-relay the string was hardcoded in
-# ``web/main.js:1423`` and the desktop had no accessible name
-# at all.
+# Accessible name announced by screen readers when focus lands
+# on the chart container (web aria-label / Qt accessibleName).
 VOWEL_CHART_ACCESSIBLE_NAME: str = "IPA vowel chart"
 
 
@@ -121,12 +113,9 @@ def format_segment_accessible_label(seg: str) -> str:
     return f"/{seg}/"
 
 
-# Bundled-inventory stem the web app boots into and the build
-# script precomputes the bootstrap render for. The ``_features.json``
-# suffix is the bundled-inventory naming convention; consumers
-# append it themselves when building file paths. Single source so
-# the build-time bootstrap and the runtime default-pick never drift
-# to different files.
+# Bundled-inventory stem the web boots into and that build.py
+# precomputes the bootstrap render for. Single source so the
+# build-time bootstrap and the runtime default cannot drift.
 DEFAULT_INVENTORY_STEM: str = "general_features"
 
 # Hover-tooltip strings for the wildcard ("Allow underspecified")
@@ -247,7 +236,7 @@ BTN_W = 33
 BTN_GAP = 4
 
 # ---------------------------------------------------------------------
-# Derived tables — single source of truth lives in
+# Derived tables: single source of truth lives in
 # :py:mod:`phonology_shared.presentation.feature_metadata`.
 #
 # ``FEATURE_ORDER``, ``FEATURE_GROUPS``, and ``SUPRASEGMENTAL_FEATURES``
@@ -268,7 +257,7 @@ BTN_GAP = 4
 #: sorted by the entry's ``sort_key``. Place modifiers (Round,
 #: Anterior, High, ...) sort directly after their anchor (Labial,
 #: Coronal, Dorsal) by design. Unknown features (anything not
-#: registered) trail at the end — :py:func:`sort_features` handles
+#: registered) trail at the end: :py:func:`sort_features` handles
 #: that fallback via :py:func:`feature_sort_key`.
 FEATURE_ORDER: list[str] = [
     alias
@@ -279,7 +268,7 @@ FEATURE_ORDER: list[str] = [
 #: Two-column feature panel layout. Each entry is
 #: ``(group_title, member_features)``. The member list collects
 #: every surface form of every registry entry tagged with that
-#: group, in ``sort_key`` order — so an inventory that ships either
+#: group, in ``sort_key`` order: so an inventory that ships either
 #: ``LABIAL`` (Hayes) or ``Labial`` (PHOIBLE) sees its feature
 #: routed to the Place group correctly.
 FEATURE_GROUPS: list[tuple[str, list[str]]] = [

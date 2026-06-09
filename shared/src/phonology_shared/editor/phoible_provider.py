@@ -4,9 +4,9 @@
 Reads two JSON snapshots baked at build time by
 :py:mod:`web.scripts.bake_phoible`:
 
-* ``_phoible_index.generated.json`` — language list + inventory
+* ``_phoible_index.generated.json``: language list + inventory
   descriptors. Always loaded eagerly (95 KB gzipped).
-* ``_phoible_data.generated.json`` — per-inventory segment
+* ``_phoible_data.generated.json``: per-inventory segment
   bundles in positional encoding. Loaded eagerly on the desktop
   (disk read is free); the web bridge instead injects the bytes
   via :py:meth:`PhoibleProvider.load_data_payload` after a one-

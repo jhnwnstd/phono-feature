@@ -183,12 +183,8 @@ class VowelChartWidget(QWidget):
     # Chrome dimensions for the outer rectangular UI space. The
     # title / column headers stack at the top; row labels sit on
     # the left; the trapezoidal data area takes the remaining
-    # rectangle. The bottom and right paddings give the trapezoid
-    # silhouette a small inset from the widget border so the cells
-    # at the open / back edges have visible breathing room.
-    # All chrome dimensions wired through chart_style.py so the web's
-    # CSS ``--vowel-chart-*`` vars and these Qt class constants
-    # cannot drift. Pre-relay each was a desktop-only literal.
+    # Chrome dimensions wired through chart_style so the web's
+    # ``--vowel-chart-*`` CSS vars and these constants cannot drift.
     _TITLE_H: ClassVar[int] = cs.VOWEL_CHART_TITLE_H_PX
     _COL_HEADER_H: ClassVar[int] = cs.VOWEL_CHART_COL_HEADER_H_PX
     _PAD_R: ClassVar[int] = cs.VOWEL_CHART_PAD_R_PX
@@ -359,16 +355,8 @@ class VowelChartWidget(QWidget):
         self._diphthong_chip_strip.setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
-        # Grid layout (not HBox) so dense inventories like Korean
-        # PHOIBLE (12 diphthongs) WRAP into multiple rows when the
-        # chart isn't wide enough to fit them all side by side.
-        # Pre-fix the HBox layout shrunk every chip to half its
-        # sizeHint width, clipping the segment text entirely
-        # (e.g. /io/ rendered as an empty pill) on the standard
-        # ~320 px chart width. The web side handles this with
-        # CSS flex-wrap; here we recompute the grid columns per
-        # ``_populate_diphthong_chip_strip`` based on the
-        # available width.
+        # Grid so dense inventories wrap into multiple rows; HBox
+        # would shrink chips below their sizeHint and clip text.
         self._chip_strip_layout: QGridLayout = QGridLayout(
             self._diphthong_chip_strip
         )
@@ -427,20 +415,12 @@ class VowelChartWidget(QWidget):
         self._last_headers_active = None
 
     def set_target_width(self, w: int) -> None:
-        """Push the chart's width from the outside (the seg-pane
-        controller in ``main_window``) instead of pulling via
-        ``setFixedWidth`` once at construction.
+        """Width is content-driven via ``natural_data_width_px``.
 
-        The chart's content drives its width: ``max(natural,
-        floor)``. The caller's ``w`` is IGNORED for sizing --
-        kept in the signature so layout callers can still cue a
-        repaint -- because the inventory's own
-        ``natural_data_width_px`` is the authoritative width
-        request. Pre-fix the caller's ``w`` (always
-        ``layout.VOWEL_NATURAL_W = 440``) clamped the floor at
-        440, so small inventories couldn't shrink to fit their
-        content.
+        The ``w`` argument is accepted so the seg-pane controller
+        can cue a repaint but is not used for sizing.
         """
+        del w
         effective_w = max(VOWEL_CHART_W_FLOOR, self._natural_total_w)
         self.setMinimumWidth(effective_w)
         self.setMaximumWidth(effective_w)
@@ -552,19 +532,8 @@ class VowelChartWidget(QWidget):
                 continue
             seen.add(d.segment)
             unique_diphs.append(d.segment)
-        # Each chip is a standard ``SegmentButton`` -- same size
-        # (``BTN_W`` × ``SEG_BTN_H``), same font (Noto Sans with
-        # ``MONO_FAMILIES`` IPA chain), same shrink-font overflow
-        # policy that the chart cell buttons use. This unifies the
-        # chip + cell visual language and reuses the existing
-        # segment-state styling cache (selected, suggested,
-        # matched). Pre-fix the chips were bare ``QPushButton``
-        # with hand-tuned padding and a separate font chain --
-        # the IPA glyphs failed to render on systems without a
-        # broad-coverage system font, and the ad-hoc padding
-        # diverged from the chart's button geometry. Grid columns
-        # are derived from the data-area width / ``BTN_W`` +
-        # spacing, so a wider chart packs more chips per row.
+        # Chips reuse SegmentButton for visual + state parity
+        # with chart cells (size, IPA font chain, selection state).
         dx, _dy, dw, _dh = self._data_area_rect()
         del dx
         chip_pitch = BTN_W + layout.spacing()
@@ -582,23 +551,10 @@ class VowelChartWidget(QWidget):
             layout.addWidget(chip, row, col)
 
     def _apply_display_mode_filter(self) -> None:
-        """No-op: cell widgets are always visible.
+        """No-op: cells are always visible.
 
-        Post-architectural-fix the placer no longer puts diphthongs
-        into any chart cell (only monophthongs land in
-        ``occupied``), so every cell carries exclusively
-        monophthong segments. The display-mode toggle controls
-        only the ARROW overlay visibility (the overlay reads
-        ``self._display_mode`` in its paintEvent), not any cell
-        visibility.
-
-        Pre-fix the cell-level filter hid the entire cell when
-        its entries contained any diphthong; on Korean PHOIBLE
-        cell (0,6) packed /i, ia, ie, iɛ, iʌ, iː/ together so
-        monophthong mode hid /i/ along with the diphthongs --
-        user lost the singleton from the chart entirely. The
-        placer fix removes diphthongs from cell entries, so this
-        method has nothing to filter.
+        Diphthongs no longer occupy cells, so the mode toggle
+        only gates the arrow overlay (read in its paintEvent).
         """
         return
 
@@ -716,20 +672,9 @@ class VowelChartWidget(QWidget):
         self._diphthong_toggle.setVisible(has_diphthongs)
         self._populate_diphthong_chip_strip()
         self._diphthong_chip_strip.setVisible(has_diphthongs)
-        # Sizing policy: the chart's width is driven by the
-        # geometry's natural request plus chrome, with a small
-        # floor so the silhouette stays visually recognisable for
-        # the smallest inventories. Pre-fix the floor was
-        # ``VOWEL_NATURAL_W = 440 px``, which dominated every
-        # bundled inventory smaller than ~26 vowels -- a 5-vowel
-        # Spanish chart sat at 440 px with ~80 px of content,
-        # leaving the cells swimming in a vast empty trapezoid.
-        # The min == max pin is unconditional so wide-to-narrow
-        # swaps shrink (a conditional pin left the widget
-        # unsized between clear() and the next set_target_width
-        # call, collapsing the chart). Height keeps its
-        # ``REGION_CONSTRAINTS["vowel_chart"].min_h`` floor for
-        # comfortable trapezoid breathing room.
+        # Width is content-driven (natural + chrome) with a floor;
+        # min == max is unconditional so wide-to-narrow swaps
+        # shrink instead of leaving the widget unsized.
         chrome_w = VOWEL_LABEL_W + self._PAD_R
         chrome_h = self._TITLE_H + self._COL_HEADER_H + self._PAD_B
         self._natural_total_w = geometry.natural_data_width_px + chrome_w
@@ -741,15 +686,10 @@ class VowelChartWidget(QWidget):
         self.setMinimumWidth(effective_w)
         self.setMaximumWidth(effective_w)
         self.setMinimumHeight(natural_total_h)
-        # Title (top, centred over the data area). Font + padding +
-        # letter-spacing all from chart_style.py so the web's CSS and
-        # the desktop's Qt read the same numbers. Letter-spacing
-        # lives on the ``QFont`` (not in the stylesheet) because
-        # Qt's QFontMetrics width calculation only includes spacing
-        # when set on the font itself; CSS-level letter-spacing
-        # rendered fine but the label's ``adjustSize()`` would
-        # undersize the bounding rect, clipping the first letter
-        # ("V" in "Vowels") on some inventories.
+        # Letter-spacing must live on the QFont, not the stylesheet:
+        # QFontMetrics only includes spacing set on the font, so a
+        # stylesheet rule would undersize adjustSize() and clip
+        # the first glyph.
         title = QLabel(geometry.title, self)
         title_font = QFont("Noto Sans")
         title_font.setPixelSize(cs.VOWEL_CHART_TITLE_FONT_PX)
@@ -960,20 +900,10 @@ class VowelChartWidget(QWidget):
         :py:data:`_DENSITY_TIER_DENSE_THRESHOLD` (5+) or
         :py:data:`_DENSITY_TIER_ULTRA_THRESHOLD` (10+) entries,
         every button gets its height reduced via
-        :py:func:`effective_button_height_px` so the stack fits in
-        the slot the shared geometry allocated. Pre-fix the
-        desktop kept every button at the canonical ``SEG_BTN_H``
-        regardless of stack depth -- the web's CSS
-        ``data-cell-density`` rules shrank to 22 / 18 px while
-        desktop stayed at 26 px, making Korean PHOIBLE's 7-deep
-        Close-Front stack render 28 px taller on desktop and
-        throwing off the whole chart layout.
+        :py:func:`effective_button_height_px` to match the web's
+        ``data-cell-density`` CSS rules.
         """
         layout = QVBoxLayout(container)
-        # Gap pinned to chart_style.VOWEL_CELL_STACK_GAP_PX so the
-        # web's CSS ``gap`` and desktop's setSpacing read the same
-        # value. Same source the geometry's natural-height math
-        # uses, so stacks size identically across both UIs.
         layout.setSpacing(cs.VOWEL_CELL_STACK_GAP_PX)
         layout.setContentsMargins(0, 0, 0, 0)
         per_btn_h = effective_button_height_px(len(cell.entries))
@@ -1084,21 +1014,9 @@ class VowelChartWidget(QWidget):
             self._title_label.adjustSize()
             tw = self._title_label.width()
             self._title_label.move(dx + (dw - tw) // 2, 0)
-        # Diphthong-arrows toggle button (visible iff diphthongs
-        # exist on the current inventory). Sits in the right-edge
-        # corner of the title row, mirroring the web's
-        # ``.vowel-diphthong-toggle`` position above the data area.
-        #
-        # Pre-fix the y-position was
-        # ``(TITLE_H - btn_h) // 2`` which produces NEGATIVE y
-        # when the button's intrinsic height (21 px) exceeds
-        # ``TITLE_H`` (20 px) -- the top edge of the button got
-        # clipped above the widget. Now: floor at 0 + small
-        # vertical pad. The chart's overall layout already
-        # reserves ``TITLE_H + COL_HEADER_H`` above the data
-        # area, so a slightly-overhanging button still has space
-        # to fall down into the col-header band rather than off
-        # the top edge.
+        # Toggle anchors the title row's right edge. y floors at
+        # 2 so a button taller than TITLE_H spills into the
+        # col-header band rather than clipping above the widget.
         if self._diphthong_toggle.isVisible():
             self._diphthong_toggle.adjustSize()
             tw_btn = self._diphthong_toggle.width()
@@ -1455,26 +1373,16 @@ class VowelChartWidget(QWidget):
         dw: int,
         dh: int,
     ) -> None:
-        """Overlay one curved arrow per diphthong from primary to
-        secondary endpoint. Endpoints land on the cell widget's
-        VISUAL centre when the (row, col) maps to a populated
-        cell; otherwise fall back to the shared geometry's
-        ``primary_chart_x`` / ``primary_chart_y`` anchor (e.g.,
-        PHOIBLE diphthongs whose secondary slot isn't populated).
-        Pre-fix the endpoints used the shared anchors directly,
-        which ignored the pair-shift and the row-tier
-        positioning, so arrows pointed to / from points that
-        didn't match where the cells were drawn.
+        """Overlay one curved arrow per diphthong, using the
+        cell widget's visual centre when the (row, col) is
+        populated and the shared geometry's chart anchors as
+        fallback for unpopulated slots.
         """
         if not self._diphthongs:
             return
-        # (row, col) -> (cell_widget, canonical_segment) so the
-        # arrow target lookup can find the cell's CANONICAL
-        # SEGMENT button (entries[0], highest-confidence
-        # placement). Pre-fix the secondary endpoint landed on the
-        # cell's geometric centre, which for a multi-entry stack
-        # could sit 30+ px from the actual target button (e.g. /a/
-        # in a stack of /a, aː, ã, a̰/).
+        # Map to the canonical entry button so the arrow lands
+        # on the specific target glyph instead of the stack
+        # centre.
         cell_by_pos: dict[tuple[int, int], tuple[QWidget, str]] = {}
         for (
             widget,

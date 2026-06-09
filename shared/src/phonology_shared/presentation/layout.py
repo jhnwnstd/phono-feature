@@ -161,34 +161,15 @@ def partition_groups_for_spillover(
 
 
 # ---------------------------------------------------------------------------
-# Geometry-aware segment-pane layout (supersedes
-# ``partition_groups_for_spillover``).
+# Geometry-aware segment-pane layout.
 #
-# The old policy assumed (a) a single rectangular budget at the bottom
-# of the pane, (b) fixed 2-column spillover, and (c) "row N height =
-# max(group_heights[2N..2N+1])" fixed-pair packing. None of those match
-# the actual seg-pane geometry: the vowel chart occupies a fixed width
-# on the right (in side-by-side mode) and the "dead space" the user
-# wants reclaimed is the rectangle BELOW max(main_flow_bottom,
-# chart_bottom) -- a non-trivial function of both the chart's height
-# and how many groups stayed in the main flow.
-#
-# ``plan_seg_layout`` returns a ``SegLayoutPlan`` describing the
-# complete layout: which groups stay in the main single-column flow,
-# which go into the spillover, how many columns the spillover gets
-# (1..max_spillover_cols based on pane width), and which spillover
-# column each spilled group lands in. Column assignment uses Longest-
-# Processing-Time (LPT) bin-packing so the spillover's bounding height
-# is minimal -- strictly tighter than the old fixed-pair-row scheme.
-# Source order is preserved at render time: the column assignment is
-# computed by LPT but each column lists its groups in their original
-# index order so the user reads top-to-bottom in a column without
-# surprise.
-#
-# Sweep policy: the smallest k (number of groups in spillover) that
-# makes the whole layout fit wins. This preserves the historical
-# "spill only the tail" semantics so the user sees the maximum number
-# of groups in the natural single-column flow on top.
+# The dead space we reclaim is the rectangle below
+# ``max(main_flow_bottom, chart_bottom)``, a function of both the
+# chart's height and how many groups stayed in the main flow.
+# Column assignment uses LPT bin-packing for minimal spillover
+# height, but renders groups in source order so the user reads
+# top-to-bottom without surprise. The smallest ``k`` (groups in
+# spillover) that fits wins, preserving "spill only the tail."
 # ---------------------------------------------------------------------------
 
 
@@ -479,40 +460,20 @@ MIN_FIRST_LAUNCH_H: int = 900
 # the app a comfortable claim on the primary screen on first launch
 # without filling it edge-to-edge; the user can resize from there.
 DEFAULT_SCREEN_FRACTION: float = 0.80
-# Per-row strides inside the analysis pane. Sized to match what the
-# desktop AnalysisPanel and the web .analysis box actually render --
-# selection-chip strip + spacing, QTabBar + its margins, and outer
-# panel padding (top + bottom + the tab content's inner padding) --
-# so ``analysis_content_floor_h`` returns the same pixel count both
-# UIs need.
+# Per-row strides inside the analysis pane (selection-chip strip +
+# tab bar + outer padding). Shared so desktop and web reserve the
+# same height for the floor.
 ANALYSIS_SELECTION_STRIP_H: int = 38
 ANALYSIS_TAB_BAR_H: int = 36
 ANALYSIS_OUTER_PADDING_H: int = 54
-# Comfortable minimum count of feature-spec rows the analysis pane
-# always reserves room for. The user's stated requirement: the pane
-# must reliably show at least four minimal feature specs without
-# clipping or scrollbars, on any inventory.
+# Pane must reliably show at least four minimal feature specs.
 ANALYSIS_MIN_VISIBLE_ROWS: int = 4
 
 
 def analysis_content_floor_h() -> int:
-    """The analysis pane's stable minimum height. Pure function of
-    the row strides above -- no inventory inputs, no widget metrics.
-
-    Both UIs consume this:
-
-    * Desktop: ``AnalysisPanel.minimumSizeHint().height()`` reads
-      ``REGION_CONSTRAINTS['analysis_panel'].min_h``, which is set
-      to this value below; the Qt splitter then refuses to compress
-      the analysis pane past it.
-    * Web: ``build.py`` bakes ``--min-analysis-h`` to the same number;
-      ``style.css`` locks ``min-height == max-height == var(...)`` in
-      the resting state.
-
-    This is the value the user means by "the analysis pane should
-    reliably show four minimal feature specs". The cap on top-pane
-    minimums in ``geometry.fit_to_content`` uses this so the splitter
-    cannot starve the pane below this floor regardless of inventory.
+    """Analysis pane's minimum height for the four-feature-spec
+    requirement. Read by the Qt splitter floor and baked into the
+    web's ``--min-analysis-h``.
     """
     return (
         ANALYSIS_SELECTION_STRIP_H
@@ -535,38 +496,21 @@ MIN_ANALYSIS_H: int = (
     + 4 * 31  # ANALYSIS_MIN_VISIBLE_ROWS * FEAT_ROW_H
     + 54  # ANALYSIS_OUTER_PADDING_H
 )
-# Absolute floor for the splitter policy only -- used as the cap
-# inside ``top_pane_height`` when the entire window is so short that
-# even ``analysis_content_floor_h()`` would not fit. Widgets must
-# NEVER use this directly; ``AnalysisPanel.minimumSizeHint`` reads
-# the four-row floor above instead.
+# Splitter-only degenerate-case cap when the window is too short
+# even for ``analysis_content_floor_h()``. Widgets must not read
+# this directly.
 HARD_MIN_ANALYSIS_H: int = 60
-# Defensive floor for the top (seg / feat) pane in
-# ``top_pane_height``. The actual minimum heights are content-driven:
-# ``geometry_controller.fit_to_content`` calls the new
-# ``seg_grid_natural_height`` / ``feature_panel_natural_height``
-# helpers below to size each panel's ``setMinimumHeight`` against
-# its real inventory content. This floor is just degenerate-case
-# protection (e.g. an empty inventory whose ``sizeHint`` reports 0)
-# so the top pane doesn't fully collapse. The analysis pane
-# absorbs everything above the content-driven need by default
-# (the user's stated preference of "analysis as tall as it can be").
+# Degenerate-case floor for the top pane (real minimum is
+# content-driven via the seg_grid / feature_panel helpers).
 MIN_TOP_PANE_H: int = 200
 
 # ---------------------------------------------------------------------------
-# RAW DIMENSIONS: per-row / per-card pixel measurements shared by
-# desktop (Qt) and web (CSS). These are the single source of truth
-# both UIs consume; height-computation helpers below build everything
-# else from them. Centralised so the per-row stride doesn't drift
-# between widgets.py, geometry_controller.py, and the web stylesheet.
+# Raw per-row dimensions shared by desktop (Qt) and web (CSS).
+# Centralised so the per-row stride can't drift across renderers.
 # ---------------------------------------------------------------------------
 
-# Per-segment-button: fixed size set by ``widgets.SegmentButton``.
 SEG_BTN_H: int = 26
-# One row of the segment grid: button + ``BTN_GAP`` from constants.py.
-# Imported lazily inside the helper to avoid the cross-module dep at
-# module-load time.
-SEG_BTN_ROW_H: int = 30  # SEG_BTN_H (26) + BTN_GAP (4)
+SEG_BTN_ROW_H: int = 30  # SEG_BTN_H + BTN_GAP
 # Manner-class group header strip above each consonant group.
 SEG_GROUP_HEADER_H: int = 22
 

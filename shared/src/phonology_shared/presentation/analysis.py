@@ -322,7 +322,7 @@ def _render_completion_body(
     Hard concept boundary:
 
     * ``already_natural_class``: render
-      ``selected_minimal_bundles`` — minimal strict OR compatible
+      ``selected_minimal_bundles``: minimal strict OR compatible
       bundles depending on ``mode``.
     * ``one_minimal_completion`` / ``multiple_minimal_completions``:
       render the "N segments needed for X natural class" line
@@ -539,7 +539,7 @@ def render_class_tab_feat(
     matching segments (the result of the query) + count.
 
     Wildcard FEAT-mode queries get the ``wildcard matching``
-    badge for the same reason SEG-mode wildcard verdicts do —
+    badge for the same reason SEG-mode wildcard verdicts do ,
     the matching set differs in meaning even when it happens to
     coincide with the strict result.
     """

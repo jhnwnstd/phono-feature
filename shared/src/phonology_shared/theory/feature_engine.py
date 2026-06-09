@@ -63,7 +63,7 @@ class MatchMode(StrEnum):
     requested ``+``/``-`` unless its own feature value is the
     OPPOSITE explicit value. ``"0"`` on a segment is compatible
     with either polarity. A request of ``"0"`` carries no
-    constraint at all — wildcard mode reads it as "I don't care
+    constraint at all: wildcard mode reads it as "I don't care
     about this feature," not "show me unspecified segments."
     Users who want the latter stay in strict mode.
 
@@ -307,7 +307,7 @@ class FeatureEngine:
         WILDCARD: same shape, with the wildcard candidate set
         (``(f, "+")`` candidate iff no selected segment is
         explicitly ``-f``; symmetric for ``-``). The wildcard
-        verdict is more permissive — more selections qualify.
+        verdict is more permissive: more selections qualify.
 
         Skips the minimal-bundle enumeration; answers the
         decision question directly using the precomputed
@@ -364,14 +364,14 @@ class FeatureEngine:
         Both modes are membership-set intersections (vertical, not
         per-segment scans):
 
-        STRICT — ``+`` matches only ``plus_segs[f]``, ``-`` matches
+        STRICT: ``+`` matches only ``plus_segs[f]``, ``-`` matches
         only ``minus_segs[f]``, and a requested ``"0"`` matches
         only ``all - spec_segs[f]`` (segments with the feature
         explicitly absent or ``"0"``). This is the user-typed
         feat→seg query semantics and the round-trip rule
         :py:meth:`find_all_minimal_bundles` relies on.
 
-        WILDCARD — ``+`` excludes only ``minus_segs[f]``, ``-``
+        WILDCARD: ``+`` excludes only ``minus_segs[f]``, ``-``
         excludes only ``plus_segs[f]``, and a requested ``"0"`` is
         a no-op (no constraint added). ``"0"``-on-segment is
         compatible with either polarity; the only thing wildcard
@@ -466,7 +466,7 @@ class FeatureEngine:
         A feature qualifies when at least one segment has a value of
         ``+`` or ``-``. Features that are uniformly ``0`` (or
         unspecified) across every segment are dropped because under
-        STRICT matching they can never participate in a query — a
+        STRICT matching they can never participate in a query: a
         ``+f`` request returns the empty set if no segment is
         explicitly ``+f``. Features with all-``-`` values stay (the
         inventory does specify a value, and ``-`` queries still
@@ -491,7 +491,7 @@ class FeatureEngine:
     def active_features_for_mode(self, mode: MatchMode) -> tuple[str, ...]:
         """Active-feature list appropriate for ``mode``.
 
-        STRICT: identical to :py:attr:`active_features` — the
+        STRICT: identical to :py:attr:`active_features`: the
         all-``0`` filter applies.
 
         WILDCARD: the full inventory feature roster. Wildcard
@@ -572,13 +572,13 @@ class FeatureEngine:
         """Every minimal feature bundle that characterises ``segments``.
 
         Under STRICT (default): ``find_segments(B, mode=STRICT) ==
-        set(segments)`` — round-trip equality. Candidates are
+        set(segments)``: round-trip equality. Candidates are
         features where every selected segment shares the same
         explicit ``+`` / ``-`` (a ``"0"`` cell disqualifies the
         feature).
 
         Under WILDCARD: ``find_segments(B, mode=WILDCARD) ==
-        set(segments)`` — round-trip under wildcard semantics.
+        set(segments)``: round-trip under wildcard semantics.
         Candidates widen: a ``(f, "+")`` candidate exists whenever
         no selected segment is explicitly ``-f``; a ``(f, "-")``
         candidate exists whenever no selected segment is explicitly
@@ -597,7 +597,7 @@ class FeatureEngine:
         :py:meth:`complete_to_minimal_natural_class` for the
         active mode.
 
-        Memoised on ``(frozenset(segments), mode)`` — same selection
+        Memoised on ``(frozenset(segments), mode)``: same selection
         with different modes does not collide.
         """
         if not segments:
@@ -631,7 +631,7 @@ class FeatureEngine:
             # segments: (f, "+") rules out only minus_segs[f];
             # (f, "-") rules out only plus_segs[f]. ``"0"``
             # outside segments are NOT excluded by any constraint
-            # — wildcard tolerates them everywhere.
+            #: wildcard tolerates them everywhere.
             excludes_lookup: list[frozenset[str]] = [
                 (
                     (minus_segs[f] & outside_set)
@@ -677,7 +677,7 @@ class FeatureEngine:
             ]
             if not exc_idxs:
                 # This outside segment is excluded by NO candidate
-                # under the current mode — selection cannot be a
+                # under the current mode: selection cannot be a
                 # natural class.
                 self._bundle_cache[cache_key] = ()
                 return self._bundle_cache[cache_key]
@@ -886,10 +886,10 @@ class FeatureEngine:
         selected segment carries the OPPOSITE explicit value:
 
         - ``(f, '+')`` is a candidate iff
-          ``selected & minus_segs[f] == ∅`` — i.e. no member of
+          ``selected & minus_segs[f] == ∅``: i.e. no member of
           the selection is explicitly ``-f``.
         - ``(f, '-')`` is a candidate iff
-          ``selected & plus_segs[f] == ∅`` — i.e. no member is
+          ``selected & plus_segs[f] == ∅``: i.e. no member is
           explicitly ``+f``.
 
         A feature with no explicit value in the selection (every
@@ -1033,7 +1033,7 @@ class FeatureEngine:
         user-typed feat→seg semantics; round-trip exact.
 
         WILDCARD: same definition with wildcard matching. More
-        permissive — many selections that fail under strict
+        permissive: many selections that fail under strict
         succeed under wildcard (with shorter, "minimal compatible"
         bundles).
 

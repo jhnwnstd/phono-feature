@@ -1371,16 +1371,9 @@ def _natural_data_area_size(
             VOWEL_PAIR_SEPARATOR_PX
         )
         max_row_w = max(max_row_w, row_w)
-        # Position-aware lower bound: solve for the smallest dw
-        # that fits the rightmost cell + leftmost cell when each
-        # cell is projected at ``chart_x * dw + pair_side *
-        # pair_shift + cell_half_w``. Pre-fix this row solved for
-        # slot-internal width (sum of buttons) without checking
-        # that chart_x positions placed cells INSIDE [0, dw]; for
-        # Korean PHOIBLE close row /u uː/ at chart_x=0.85 the
-        # /uː/ button overflowed the right edge by ~17 px because
-        # natural_dw was set by slot sum (220 px) but cell
-        # projection needed ~270 px.
+        # Slot-sum alone underestimates when chart_x positions
+        # push a cell past either edge of [0, dw]; solve for the
+        # ``dw`` that keeps every cell's projected extent inside.
         row_cells = [c for c in cells if c.row == ri]
         for c in row_cells:
             cell_half_w = (
@@ -1390,17 +1383,11 @@ def _natural_data_area_size(
             pair_offset = (
                 int(VOWEL_PAIR_SHIFT_PX) if c.pair_side else 0
             ) * c.pair_side
-            # Right edge: chart_x * dw + pair_offset + cell_half_w
-            # must be <= dw, so dw >= (pair_offset + cell_half_w)
-            # / (1 - chart_x).
             if c.chart_x < 1.0:
                 right_extent = pair_offset + cell_half_w
                 if right_extent > 0:
                     needed = right_extent / (1.0 - c.chart_x)
                     max_row_w = max(max_row_w, int(math.ceil(needed)))
-            # Left edge: chart_x * dw + pair_offset - cell_half_w
-            # must be >= 0, so dw >= (cell_half_w - pair_offset) /
-            # chart_x (when chart_x > 0).
             if c.chart_x > 0.0:
                 left_extent = cell_half_w - pair_offset
                 if left_extent > 0:

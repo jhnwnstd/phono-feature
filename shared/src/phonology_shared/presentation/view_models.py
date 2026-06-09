@@ -97,7 +97,7 @@ AnalysisTabsPayload = TypedDict(
         # The :py:class:`MatchMode` value that produced this
         # payload's class verdict (a wire-stable string ``"strict"``
         # / ``"wildcard"``). Carried on every payload so renderers
-        # never confuse strict and wildcard results — the Class tab
+        # never confuse strict and wildcard results: the Class tab
         # uses it to badge wildcard verdicts and to pick the right
         # label for the minimal-bundle line.
         "matching_mode": str,
@@ -184,7 +184,7 @@ def build_inventory_summary(
             consonant_groups.append({"name": manner, "segments": list(segs)})
     # In STRICT mode this drops columns where every segment is ``0``
     # (a ``+f`` request would return ∅). In WILDCARD mode every
-    # feature stays — a request relaxes against unspecified values
+    # feature stays: a request relaxes against unspecified values
     # so the row IS interactable.
     active = list(engine.active_features_for_mode(mode))
     return {
@@ -266,10 +266,8 @@ def summarize_segment_selection(
                 )
         seg_states = _default_segment_states(engine)
         seg_states[segs[0]] = SegmentState.SELECTED
-        # ``additions`` is tuple-of-tuples (one tuple per distinct
-        # minimum completion). The strict-bundle solver always
-        # returns a single completion, so the seg-pane "suggested"
-        # highlight flattens additions[0] onto the seg states.
+        # Strict solver returns a single completion, so flatten
+        # additions[0] for the seg-pane suggested highlight.
         suggested_segs = (
             completion.additions[0] if completion.additions else ()
         )
@@ -467,7 +465,7 @@ def _build_feature_row_state(
 ) -> FeatureRowState:
     """Build a single :py:class:`FeatureRowState` payload. Used by
     the module-level precomputed table; callers should not invoke
-    this directly — they go through :py:func:`_feature_row_state`
+    this directly: they go through :py:func:`_feature_row_state`
     which dispatches to the table."""
     return {
         "value": value,
@@ -499,7 +497,7 @@ _FEATURE_ROW_STATES: dict[
     for category in FeatureCategory
 }
 
-#: Default-state row payload — value="" / not shared / not contrastive /
+#: Default-state row payload: value="" / not shared / not contrastive /
 #: ALL_ZERO category. Used by :py:func:`_default_feature_rows` so the
 #: outer dict is fresh per call (callers mutate which key maps to
 #: which state) but every value shares this single immutable payload.
@@ -624,28 +622,14 @@ def _vowel_chart_summary(
                 "segs": list(cell.entries),
                 "display_kind": cell.display_kind.value,
                 "contrast_features": list(cell.contrast_features),
-                # ``is_diphthong`` is the cell-level flag the
-                # web renderer's mode-toggle filter reads via
-                # ``Boolean(cell.is_diphthong)`` in main.js. A
-                # prior refactor (dead-code audit Round B) silently
-                # dropped this field, which made the diphthong
-                # display mode show an EMPTY chart on the web side
-                # because every cell evaluated to ``Boolean(undefined)
-                # === false`` and the filter skipped them all.
-                # ``test_wire_payload_completeness.py`` pins the
-                # field so any future silent dropout fails CI.
+                # Read by the web mode-toggle filter; pinned by
+                # test_wire_payload_completeness.py.
                 "is_diphthong": cell.is_diphthong,
             }
             for cell in geometry.cells
         ],
-        # Diphthong rendering hints; empty list for monophthong-only
-        # inventories. Renderers draw a curved arrow from
-        # ``(primary_chart_x, primary_chart_y)`` to
-        # ``(secondary_chart_x, secondary_chart_y)`` directly; the
-        # row / col fields are included for diagnostic use and the
-        # rendering stress suite, but the renderer does not look
-        # cells up by row/col any more (the projection survives
-        # secondary endpoints that fall on unpopulated cells).
+        # Curved arrow endpoints (chart_x/chart_y). Row/col are
+        # diagnostic; the renderer projects from the float coords.
         "diphthongs": [
             {
                 "segment": d.segment,

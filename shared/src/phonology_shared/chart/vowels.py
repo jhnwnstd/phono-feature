@@ -320,7 +320,7 @@ class VowelProfile:
     #: ignores ``tense`` as a height-split source when this is
     #: False, because a uniform polarity (every vowel coded
     #: ``-tense`` in a no-tense-contrast inventory) carries no
-    #: positive information about the split — PHOIBLE codes most
+    #: positive information about the split: PHOIBLE codes most
     #: non-tense-system vowels as ``tense=-`` by default, which
     #: under the old rule disagreed with the explicit ATR coding
     #: and fired SPLIT_SOURCE_DIVERGENCE on every vowel.
@@ -1473,58 +1473,15 @@ def compute_placements(
                     secondary=secondary,
                 )
         placements[seg] = placement
-        # Only MONOPHTHONGS occupy chart cells. Diphthongs render
-        # exclusively as ARROWS + chip strip; their segment
-        # button does NOT sit in any chart cell.
-        #
-        # Pre-fix: a diphthong like Korean /ia/ landed in the same
-        # cell as /i/ (both at close-front). The cell stack showed
-        # /i, ia, ie, iɛ, iʌ, iː/ together. User feedback called
-        # this out -- the diphthong segments visually grouped with
-        # the singleton /i/ inside the chart stack, AND toggling
-        # diphthong-display mode hid the whole cell (so /i/
-        # disappeared from the monophthong view too).
-        #
-        # Post-fix: cells contain only monophthong entries. The
-        # diphthong's placement record stays in ``placements``
-        # (so the arrow-build loop can read its primary +
-        # secondary coords) but it does NOT add the segment to
-        # ``occupied``, so no cell carries it. The chip strip below
-        # the silhouette is the only place users SELECT diphthong
-        # segments from.
+        # Diphthongs render as arrows + chip strip only, so they
+        # are kept out of ``occupied`` to prevent visual grouping
+        # with their primary-cell monophthong.
         if PlacementFlag.DIPHTHONG not in placement.flags:
             occupied.setdefault((placement.row, placement.col), []).append(seg)
-    # SNAP DIPHTHONG SECONDARIES to the closest matching
-    # monophthong cell. PHOIBLE encodes the diphthong's secondary
-    # feature bundle with overlaid features from the PRIMARY (e.g.,
-    # /ua/'s secondary keeps ``round: +`` carried over from /u/).
-    # The placer interprets these features independently, so /ua/'s
-    # secondary lands at central-ROUNDED col 3 -- a virtual
-    # position with no monophthong button -- while standalone /a/
-    # lives at central-UNROUNDED col 2. Pre-snap the arrow tip
-    # missed /a/ by an entire column. Same drift for every Korean
-    # /u_/ and /i_/ diphthong.
-    #
-    # Snap rule: among MONOPHTHONG placements, find one whose
-    # BACKNESS GROUP (front: cols {0,1,6}; central: cols {2,3,7};
-    # back: cols {4,5,8}) matches the secondary and whose row is
-    # closest to the secondary's row. Ties break on column
-    # proximity. If no monophthong matches the backness group
-    # (Bilua-style inventories where all 20 secondaries are
-    # virtual), the secondary stays as computed -- the arrow
-    # terminates in empty space, which is the correct visual cue
-    # for a diphthong endpoint that doesn't exist as a standalone
-    # vowel.
     _snap_diphthong_secondaries(placements, occupied)
-    # Post-snap degeneracy sweep. The snap can collapse a
-    # diphthong's primary and secondary onto the same cell when
-    # the inventory only has one monophthong in the secondary's
-    # backness group (Chinese /ou/: /o/ is absent so /ou/'s
-    # endpoints both snap to /u/). When that happens, demote the
-    # segment to a monophthong: clear the DIPHTHONG flag, drop the
-    # secondary, and add the segment to ``occupied`` so it renders
-    # as a regular vowel button at the collapsed cell rather than
-    # a zero-length arrow.
+    # Degeneracy after snap: when the secondary collapses to the
+    # primary cell, demote to monophthong so the segment renders
+    # as a button instead of a zero-length arrow.
     for seg, placement in list(placements.items()):
         if PlacementFlag.DIPHTHONG not in placement.flags:
             continue
@@ -1677,7 +1634,7 @@ def _snap_diphthong_secondaries(
 
 
 # ---------------------------------------------------------------------------
-# Render-ready chart geometry — extracted to
+# Render-ready chart geometry: extracted to
 # ``phonology_shared.chart.vowels_layout`` so the trapezoid silhouette
 # solver and per-cell positioning logic live in a single, greppable
 # file. The re-export below preserves backward compatibility with

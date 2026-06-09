@@ -1255,7 +1255,7 @@ class MainWindow(QMainWindow):
             return
         # Shared filter. STRICT drops features that are uniformly
         # ``0`` across the inventory (a +f request would return ∅).
-        # WILDCARD surfaces every feature — a request relaxes
+        # WILDCARD surfaces every feature: a request relaxes
         # against unspecified values, so the row IS interactable.
         # Same source the web bridge reads via
         # ``build_inventory_summary(..., mode=...)``.
@@ -1580,7 +1580,7 @@ class MainWindow(QMainWindow):
         checked state + tooltip. The accent fill comes from the
         ``:checked`` rule in :py:func:`_match_mode_btn_style`, so a
         theme or palette-mode swap that re-runs the style helper
-        propagates the new accent here automatically — no per-mode
+        propagates the new accent here automatically: no per-mode
         inline CSS to keep in sync.
 
         Tooltip strings come from the shared constants module so

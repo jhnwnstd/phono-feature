@@ -190,7 +190,7 @@ def normalize_feature_key(key: str) -> str:
 
     First consults
     :py:data:`phonology_shared.presentation.feature_metadata.FEATURE_REGISTRY`
-    via ``resolve_canonical`` — every known alias (case variant,
+    via ``resolve_canonical``: every known alias (case variant,
     delimiter variant, PanPhon short code, PHOIBLE long form,
     semantic alias like ``periodicGlottalSource → voice``)
     resolves through one shared table. Falls back to the historical

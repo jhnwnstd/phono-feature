@@ -36,26 +36,14 @@ DEFAULT_SEGMENTS: str = "p b t d k ɡ "
 # the dropdown supply fuller starting points.
 DEFAULT_FEATURES: str = "Syllabic\nConsonantal\n"
 
-# Shared dialog strings. Both UIs render the same setup modal/
-# dialog; previously each carried its own copy of these literals
-# (desktop ``dialogs.py``, web ``index.html``) which let them drift
-# ("New Inventory Setup" vs "New inventory" was the surface form).
+# Shared dialog strings (desktop dialog + web index.html both
+# render the same setup modal).
 SETUP_DIALOG_TITLE: str = "New inventory"
 SETUP_NAME_PLACEHOLDER: str = "e.g. My Language Inventory"
 
-# Named feature presets. Keys are the dropdown labels, values are
-# the feature lists. "Custom" is the no-fill option. The dict is
-# built in DROPDOWN ORDER (Python preserves insertion order); the
-# web setup dialog and the desktop builder both iterate this dict
-# and render the keys in the order they appear here.
-#
-# The Hayes list mirrors ``desktop/inventories/hayes_features.json``
-# verbatim. ``test_setup_presets.py`` pins the two together so the
-# inline copy cannot drift; the JSON is the authoritative source.
-#
-# The PHOIBLE list is generated from ``PHOIBLE_TO_APP_FEATURE``'s
-# values so any future bake refresh that adds or renames a feature
-# flows through to the dropdown automatically.
+# Feature-preset dropdown options. Insertion order = render order.
+# Hayes mirrors hayes_features.json (pinned by test_setup_presets).
+# PHOIBLE derives from PHOIBLE_TO_APP_FEATURE so bake refreshes flow.
 FEATURE_PRESETS: Mapping[str, list[str]] = {
     "Hayes": [
         "CORONAL",
