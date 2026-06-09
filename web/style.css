@@ -75,12 +75,17 @@ html[data-theme="dark"] { color-scheme: dark; }
 }
 :focus:not(:focus-visible) { outline: none; }
 
-/* Bridge-gated toolbar controls start disabled in HTML; main.js
-   enables them after Pyodide attaches. Style so the disabled state
-   reads as "loading" rather than "broken". */
-.toolbar :disabled {
+/* Two distinct dimmed states so a user can tell "wait" from
+   "no". ``[data-loading]`` keeps the progress cursor while
+   Pyodide attaches; a bare ``:disabled`` reads as not-allowed
+   so a user does not stare at it waiting. */
+.toolbar :disabled[data-loading="true"] {
   opacity: 0.55;
   cursor: progress;
+}
+.toolbar :disabled:not([data-loading="true"]) {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 html, body {
@@ -846,6 +851,11 @@ dialog input[type="text"]:focus-visible {
   background: var(--accent-light);
   border-color: var(--accent);
 }
+/* Border-style encodes the state in addition to color so users
+   with anomalous color vision can still tell selected (solid
+   thick), suggested (dashed), and unmatched (dotted) apart at a
+   glance. Border-style is a preattentive attribute (NN/G) just
+   like color, but the pair carries strictly more information. */
 .seg-btn[data-state="selected"],
 .seg-btn[data-state="matched"] {
   background: var(--seg-selected);
@@ -856,7 +866,7 @@ dialog input[type="text"]:focus-visible {
 .seg-btn[data-state="unmatched"] {
   background: var(--seg-unmatched);
   color: var(--text-dim);
-  border: var(--border-thin) solid var(--border);
+  border: var(--border-thin) dotted var(--border);
 }
 .seg-btn[data-state="suggested"] {
   background: var(--accent-light);
@@ -1472,6 +1482,22 @@ dialog input[type="text"]:focus-visible {
    ``FeatureRow.set_compact`` which shrinks row height + margin
    so feature-heavy inventories (Hayes 28, PHOIBLE) fit in the
    same pane without scrolling. */
+/* When the feature panel runs out of vertical space and compact
+   mode engages, surface a small badge in the title so the user
+   knows the row shrink was deliberate. Without this the silent
+   row-height drop reads as a layout bug. */
+#feat-panel[data-density="compact"] #feat-title::after {
+  content: "compact";
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: var(--font-size-micro);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--text-dim);
+  background: var(--analysis-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
 #feat-panel[data-density="compact"] .feat-row {
   height: calc(var(--feat-row-h-compact) - 1px);
   padding: var(--feat-row-padding-v-compact) var(--feat-row-padding-h);
@@ -1576,6 +1602,13 @@ dialog input[type="text"]:focus-visible {
   color: var(--text-dim);
   font-weight: bold;
   cursor: pointer;
+  transition: box-shadow 80ms ease-out;
+}
+/* 1px halo on hover gives the 28x24 px buttons a clear "clickable"
+   affordance beyond the polarity-fill that lands when the cursor
+   reaches them. */
+.feat-btn:hover {
+  box-shadow: 0 0 0 1px var(--accent);
 }
 .feat-btn[data-polarity="+"]:hover,
 .feat-btn[data-polarity="+"][data-active="true"] {
@@ -1713,6 +1746,17 @@ dialog input[type="text"]:focus-visible {
   background: var(--class-state-not-natural-bg);
   color: var(--class-state-not-natural-fg);
 }
+/* Redundant dot encoding so colorblind users see the verdict as a
+   shape (filled dot before the tab label) in addition to the
+   background color. Checkmark (natural) vs ballot-X (not). */
+.analysis-tab[data-class-state="natural"]::before {
+  content: "\2713\00a0";
+  font-weight: 700;
+}
+.analysis-tab[data-class-state="not_natural"]::before {
+  content: "\2716\00a0";
+  font-weight: 700;
+}
 .analysis-tab[data-class-state="natural"][aria-selected="true"] {
   /* Keep the coloured background even when the tab is active. The
      cue is more useful than the active-tab's panel colour. */
@@ -1768,19 +1812,26 @@ dialog input[type="text"]:focus-visible {
 }
 .statusbar > .statusbar-message {
   justify-self: start;
-  /* Grid + ellipsis pattern: the track is ``minmax(0, 1fr)`` (so
-     the track can shrink below min-content) and the item is
-     ``max-width: 100%`` with overflow + nowrap. Without the
-     ``max-width: 100%`` the span's content width still expands
-     the cell beyond its track allocation, pushing the brand off
-     the right edge on a 360 px viewport. The full string lives
-     on the element's ``title`` attribute for hover, set by
-     ``setStatus`` in main.js. */
+  /* See setStatus() in main.js: full string lives in ``title``
+     for hover when ellipsis clips. */
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Leading glyph driven by data-kind so success / warning / error
+   read distinctly even when the chrome bar is monochrome. The
+   message dataset attribute is set by setStatus(); default
+   (info) shows no glyph. */
+.statusbar > .statusbar-message[data-kind="success"]::before {
+  content: "\2713\00a0"; color: var(--plus);
+}
+.statusbar > .statusbar-message[data-kind="warning"]::before {
+  content: "\26a0\00a0"; color: var(--accent);
+}
+.statusbar > .statusbar-message[data-kind="error"]::before {
+  content: "\2716\00a0"; color: var(--minus);
 }
 .statusbar > .statusbar-brand {
   justify-self: end;

@@ -110,12 +110,16 @@ function initNodes() {
     }
 }
 
-const setStatus = (msg) => {
-    // Mirror the message into ``title`` so the full string is
-    // hoverable when the grid clips the visible text via
-    // ``text-overflow: ellipsis`` on a narrow viewport.
+const STATUS_KIND = Object.freeze({
+    info: "info", success: "success", warning: "warning", error: "error",
+});
+/** Update the status bar. ``kind`` drives a leading icon glyph so
+ *  success / error are visually distinct from informational
+ *  messages without relying on a colour change alone. */
+const setStatus = (msg, kind = STATUS_KIND.info) => {
     nodes.statusbar.textContent = msg;
     nodes.statusbar.title = msg;
+    nodes.statusbar.dataset.kind = kind;
 };
 const setLoadingStatus = (msg) => { nodes.loadingStatus.textContent = msg; };
 
@@ -433,6 +437,7 @@ const PREFERRED_DEFAULT_INVENTORY = (
  *  compile), and the inventory load skips a redundant re-render. */
 async function bootPyodide({ prerendered = false } = {}) {
     mark("boot:start");
+    markBridgeGatedControlsLoading();
 
     setLoadingStatus("Loading inventory list…");
     mark("manifest:start");
@@ -604,11 +609,20 @@ const BRIDGE_GATED_NODES = [
 
 /**
  * Toolbar controls that call into Python start disabled in HTML
- * and are re-enabled only after the bridge attaches. Keyboard tab
- * focus could otherwise activate them before Pyodide is ready.
+ * and are re-enabled only after the bridge attaches. ``data-loading``
+ * differentiates the pre-bridge wait cursor from the post-bridge
+ * "this action is unavailable" cursor.
  */
+function markBridgeGatedControlsLoading() {
+    for (const key of BRIDGE_GATED_NODES) {
+        nodes[key].setAttribute("data-loading", "true");
+    }
+}
 function enableBridgeGatedControls() {
-    for (const key of BRIDGE_GATED_NODES) nodes[key].disabled = false;
+    for (const key of BRIDGE_GATED_NODES) {
+        nodes[key].disabled = false;
+        nodes[key].removeAttribute("data-loading");
+    }
 }
 
 /**
@@ -936,12 +950,25 @@ function parseCSSLength(varName, fallback) {
 }
 
 /** ``<dialog>.showModal()`` with a graceful fallback for browsers
- *  without dialog support. */
+ *  without dialog support. Captures the previously-focused
+ *  element so ``closeDialog`` can restore focus to its trigger. */
 function openDialog(dialog) {
+    dialog._returnFocusTo = document.activeElement;
     if (typeof dialog.showModal === "function") {
         dialog.showModal();
     } else {
         dialog.setAttribute("open", "");
+        // Native <dialog> handles Escape and focus trap; the
+        // fallback path needs manual Escape wiring at least.
+        if (!dialog._escHandler) {
+            dialog._escHandler = (ev) => {
+                if (ev.key === "Escape") {
+                    ev.preventDefault();
+                    closeDialog(dialog);
+                }
+            };
+            dialog.addEventListener("keydown", dialog._escHandler);
+        }
     }
 }
 
@@ -952,6 +979,13 @@ function closeDialog(dialog) {
     } else {
         dialog.removeAttribute("open");
     }
+    // Restore focus to whatever triggered the dialog so keyboard
+    // users do not land on document.body after close.
+    const target = dialog._returnFocusTo;
+    if (target && typeof target.focus === "function") {
+        try { target.focus(); } catch { /* ignore */ }
+    }
+    dialog._returnFocusTo = null;
 }
 
 /** Active vowel-chart mode with a stable default so callers don't
@@ -2910,7 +2944,7 @@ function runFeatToSeg(token) {
 function _surfaceBridgeFailure(callName, err) {
     const msg = err && err.message ? err.message : String(err);
     console.error(`bridge ${callName} failed:`, err);
-    setStatus(`Analysis failed: ${msg.split("\n")[0]}`);
+    setStatus(`Analysis failed: ${msg.split("\n")[0]}`, STATUS_KIND.error);
 }
 
 /** Push the shared view-model's per-tab payload into the analysis
@@ -3085,7 +3119,7 @@ function downloadCurrentInventory() {
         // a synchronous revoke runs.
         setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (e) {
-        setStatus(`Download failed: ${e.message}`);
+        setStatus(`Download failed: ${e.message}`, STATUS_KIND.error);
     }
 }
 
@@ -3125,7 +3159,7 @@ function wireRename() {
         try {
             const result = callBridge("rename_current_inventory", newName);
             state.inventory_name = result.name;
-            setStatus(`Renamed to ${result.name}.`);
+            setStatus(`Renamed to ${result.name}.`, STATUS_KIND.success);
             errorBox.textContent = "";
             close();
         } catch (e) {
@@ -3661,7 +3695,10 @@ function wirePhoiblePicker() {
             // Replace the friendly title in case the bake step
             // never ran.
             button.title = "PHOIBLE data is not available in this build.";
-            setStatus("PHOIBLE data is not available in this build.");
+            setStatus(
+                "PHOIBLE data is not available in this build.",
+                STATUS_KIND.warning,
+            );
             return;
         }
         open();
@@ -5526,6 +5563,18 @@ function populateInventoryPicker() {
         const opt = document.createElement("option");
         opt.value = item.file;
         opt.textContent = item.label;
+        // Aria-label augments the visible label with the segment
+        // + feature counts so screen reader users hear the same
+        // metadata sighted users can glean from the status bar
+        // after a load.
+        const segs = item.segment_count;
+        const feats = item.feature_count;
+        if (typeof segs === "number" && typeof feats === "number") {
+            opt.setAttribute(
+                "aria-label",
+                `${item.label}, ${segs} segments, ${feats} features`,
+            );
+        }
         picker.appendChild(opt);
     }
     // Sync the picker's selected value to the preferred default.
@@ -5683,8 +5732,8 @@ function copySegmentToClipboard(seg) {
     // web-only so it stays inline.
     const tpl = STATUS_TEXT.clipboard_copy_template
         || "Copied /{seg}/ to clipboard";
-    const onOk = () => setStatus(tpl.replace("{seg}", seg));
-    const onFail = () => setStatus(`Could not copy /${seg}/`);
+    const onOk = () => setStatus(tpl.replace("{seg}", seg), STATUS_KIND.success);
+    const onFail = () => setStatus(`Could not copy /${seg}/`, STATUS_KIND.error);
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(seg).then(onOk, onFail);
         return;

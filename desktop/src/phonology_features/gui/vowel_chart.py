@@ -318,6 +318,10 @@ class VowelChartWidget(QWidget):
         self._diphthong_toggle.setAccessibleName(
             DIPHTHONG_TOGGLE_LABEL,
         )
+        self._diphthong_toggle.setAccessibleDescription(
+            "Toggle the vowel chart between monophthong-only and "
+            "diphthong-arrow display."
+        )
         self._diphthong_toggle.toggled.connect(
             self._on_diphthong_toggle_clicked,
         )

@@ -302,12 +302,19 @@ class MainWindow(QMainWindow):
     def _set_mode(self, mode: Mode | str) -> None:
         """Thin wrapper around the mode-controller transition.
 
-        Kept as a one-liner because it is called from many internal
-        sites (event filter, builder save handler, click handlers)
-        and the short name reads better at the call site than the
-        controller-qualified form.
+        Reparents keyboard focus to the active pane after the
+        transition so a Tab-navigating user lands in the pane
+        they just activated, not the one they came from.
         """
         self._mode_ctrl.set_mode(mode)
+        resolved = mode if isinstance(mode, Mode) else Mode(mode)
+        target = (
+            self.seg_grid_widget
+            if resolved == Mode.SEG_TO_FEAT
+            else self.feat_panel
+        )
+        if target is not None:
+            target.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _build_ui(self) -> None:
         self._build_toolbar()
@@ -528,6 +535,11 @@ class MainWindow(QMainWindow):
         self.clear_seg_btn.setFixedHeight(_CLEAR_BTN_H)
         self.clear_seg_btn.setFont(QFont("Noto Sans", 9))
         set_css(self.clear_seg_btn, _clear_btn_style())
+        self.clear_seg_btn.setAccessibleName("Clear segment selection")
+        self.clear_seg_btn.setAccessibleDescription(
+            "Deselects every segment in the segment pane and "
+            "resets the analysis view."
+        )
         self.clear_seg_btn.clicked.connect(self._clear_then_activate_segs)
         header.addWidget(self._seg_title)
         header.addStretch()
@@ -658,11 +670,21 @@ class MainWindow(QMainWindow):
         self._match_mode_btn.setFont(QFont("Noto Sans", 11))
         self._match_mode_btn.setCheckable(True)
         set_css(self._match_mode_btn, _match_mode_btn_style())
+        self._match_mode_btn.setAccessibleName("Wildcard matching mode")
+        self._match_mode_btn.setAccessibleDescription(
+            "Toggle between strict and wildcard feature matching. "
+            "Wildcard mode allows underspecified segments."
+        )
         self._match_mode_btn.clicked.connect(self._toggle_match_mode)
         self.clear_feat_btn = QPushButton("Clear", container)
         self.clear_feat_btn.setFixedHeight(_CLEAR_BTN_H)
         self.clear_feat_btn.setFont(QFont("Noto Sans", 9))
         set_css(self.clear_feat_btn, _clear_btn_style())
+        self.clear_feat_btn.setAccessibleName("Clear feature query")
+        self.clear_feat_btn.setAccessibleDescription(
+            "Resets every feature row to neutral and clears the "
+            "feature panel's natural-class query."
+        )
         self.clear_feat_btn.clicked.connect(self._clear_then_activate_feats)
         header.addWidget(self._feat_title)
         # Wildcard toggle sits adjacent to the FEATURES label so the

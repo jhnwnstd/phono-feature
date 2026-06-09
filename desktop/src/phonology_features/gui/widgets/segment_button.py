@@ -127,6 +127,9 @@ class SegmentButton(QPushButton):
                     border-radius: {_br}px;
                     font-weight: bold;
                 }}
+                QPushButton:hover {{
+                    border: {_thick}px solid {C["text"]};
+                }}
             """,
             SegmentState.MATCHED: f"""
                 QPushButton {{
@@ -136,13 +139,21 @@ class SegmentButton(QPushButton):
                     border-radius: {_br}px;
                     font-weight: bold;
                 }}
+                QPushButton:hover {{
+                    border: {_thick}px solid {C["text"]};
+                }}
             """,
             SegmentState.UNMATCHED: f"""
                 QPushButton {{
                     background-color: {C["seg_unmatched"]};
                     color: {C["text_dim"]};
-                    border: {_thin}px solid {C["border"]};
+                    border: {_thin}px dotted {C["border"]};
                     border-radius: {_br}px;
+                }}
+                QPushButton:hover {{
+                    background-color: {C["seg_default"]};
+                    color: {C["text"]};
+                    border: {_std}px solid {C["accent"]};
                 }}
             """,
             SegmentState.SUGGESTED: f"""
@@ -151,6 +162,9 @@ class SegmentButton(QPushButton):
                     color: {C["accent"]};
                     border: {_std}px dashed {C["accent"]};
                     border-radius: {_br}px;
+                }}
+                QPushButton:hover {{
+                    border: {_thick}px dashed {C["accent"]};
                 }}
             """,
             SegmentState.DEFAULT: f"""
