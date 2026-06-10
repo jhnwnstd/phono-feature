@@ -263,7 +263,7 @@ class VowelChartWidget(QWidget):
         # so ``_apply_display_mode_filter`` can flip per-cell
         # visibility without re-traversing the geometry.
         self._cells: list[
-            tuple[QWidget, float, float, int, str, int, int, str, bool]
+            tuple[QWidget, float, float, int, str, int, int, str, bool, float]
         ] = []
         self._cell_containers: list[QWidget] = []
         # Cached header styles, rebuilt by apply_theme each toggle.
@@ -774,6 +774,7 @@ class VowelChartWidget(QWidget):
                     cell.col,
                     cell.entries[0] if cell.entries else "",
                     cell.is_diphthong,
+                    cell.pair_shift_px,
                 )
             )
             # Wire focus tracking on every seg button this cell
@@ -1078,16 +1079,33 @@ class VowelChartWidget(QWidget):
         # in one place. CSS reads the same value via
         # ``--vowel-pair-shift``; pre-relay both sides re-derived
         # ``(BTN_W + VOWEL_PAIR_GAP_PX) / 2`` independently.
-        pair_shift_px = int(cs.VOWEL_PAIR_SHIFT_PX)
-        for widget, cx, cy, pair_side, tier, _r, _c, _s, _d in self._cells:
+        canonical_pair_shift_px = float(cs.VOWEL_PAIR_SHIFT_PX)
+        for (
+            widget,
+            cx,
+            cy,
+            pair_side,
+            tier,
+            _r,
+            _c,
+            _s,
+            _d,
+            cell_ps,
+        ) in self._cells:
             widget.adjustSize()
             ww = widget.width()
             wh = widget.height()
             if ww > self._cell_w_hint:
                 self._cell_w_hint = ww
+            shift_px = cell_ps if cell_ps > 0 else canonical_pair_shift_px
             # round-to-nearest so sub-pixel positions don't bias
             # cells leftward / upward vs the web's float % CSS.
-            px = dx + round(cx * dw) - ww // 2 + pair_side * pair_shift_px
+            px = (
+                dx
+                + round(cx * dw)
+                - ww // 2
+                + int(round(pair_side * shift_px))
+            )
             # Tier-aware y-anchor. Mirrors the web CSS at
             # ``web/style.css`` ``[data-row-tier]`` rules:
             #   top    -> stack hangs DOWN from chart_y (anchor top)
@@ -1398,6 +1416,7 @@ class VowelChartWidget(QWidget):
             col,
             canon_seg,
             _d,
+            _cps,
         ) in self._cells:
             cell_by_pos[(row, col)] = (widget, canon_seg)
 

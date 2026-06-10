@@ -148,6 +148,18 @@ class VowelChartCell:
     # without re-deriving "is this a diphthong" from feature
     # bundles or segment-string parsing.
     is_diphthong: bool = False
+    # Effective pair-side displacement in pixels. Defaults to the
+    # canonical ``VOWEL_PAIR_SHIFT_PX`` which is sized for single-
+    # button cells. When two paired cells at the SAME chart_x are
+    # both wider than a single button (PHOIBLE inventories with
+    # long_pair / nasal_pair / contrast_set cells at the back
+    # column where back-neutral auto-pairs with back-rounded),
+    # the geometry build elevates this to half the combined cell
+    # widths so the two cells stay tangent instead of overlapping
+    # by the cell-width-minus-canonical-shift delta (~33 px for
+    # two long_pair cells). Both web and desktop renderers read
+    # this per-cell value instead of the chart-style constant.
+    pair_shift_px: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -415,6 +427,7 @@ class VowelChartGeometry:
 #: imports from this module.
 from phonology_shared.presentation.chart_style import (  # noqa: E402
     VOWEL_CELL_STACK_GAP_PX,
+    VOWEL_PAIR_SHIFT_PX,
     VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
     VOWEL_SILHOUETTE_MAX_ASPECT,
 )
@@ -1272,6 +1285,80 @@ def _order_pair_entries(
     return entries
 
 
+def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
+    """Horizontal button count contributed by ``cell``. PAIR /
+    CONTRAST_SET cells take 2, STACK takes 1. Module-level so both
+    the conflict resolver and the natural-size calc share one
+    definition."""
+    if cell.display_kind in PAIR_DISPLAY_KINDS:
+        return 2
+    if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
+        return 2
+    return 1
+
+
+def _resolve_pair_shift_conflicts(
+    cells: list[VowelChartCell],
+) -> list[VowelChartCell]:
+    """Set ``cell.pair_shift_px`` to a per-cell value where the
+    canonical ``VOWEL_PAIR_SHIFT_PX`` would not keep two paired
+    cells tangent.
+
+    Same-chart_x + opposite pair_side pairs are placed at
+    ``cx*dw ± pair_shift_px``. They overlap iff the sum of their
+    half-widths exceeds ``2 * pair_shift_px``. The canonical
+    shift (17.5 px) is sized for single buttons; two long_pair
+    cells (68 px each) overshoot by ~33 px. Elevating
+    ``pair_shift_px`` on both members to
+    ``(half_a + half_b + gap) / 2`` makes them tangent.
+    """
+    canonical = float(VOWEL_PAIR_SHIFT_PX)
+    inter_cell_gap_px = 2.0
+    rows: dict[int, list[int]] = {}
+    for idx, c in enumerate(cells):
+        rows.setdefault(c.row, []).append(idx)
+    updated: dict[int, float] = {}
+    for row_indices in rows.values():
+        # Group cells by chart_x within tiny epsilon.
+        groups: dict[int, list[int]] = {}
+        for idx in row_indices:
+            key = round(cells[idx].chart_x * 1000)
+            groups.setdefault(key, []).append(idx)
+        for grouped in groups.values():
+            if len(grouped) < 2:
+                continue
+            # Only adjacent opposite-side cells need elevation;
+            # iterate all pairs in the group.
+            for i_idx, ai in enumerate(grouped):
+                for bi in grouped[i_idx + 1 :]:
+                    a, b = cells[ai], cells[bi]
+                    if a.pair_side * b.pair_side >= 0:
+                        continue
+                    half_a = (
+                        _cell_horizontal_button_count(a) * BTN_W
+                        + max(0, _cell_horizontal_button_count(a) - 1)
+                        * VOWEL_PAIR_GAP_PX
+                    ) / 2.0
+                    half_b = (
+                        _cell_horizontal_button_count(b) * BTN_W
+                        + max(0, _cell_horizontal_button_count(b) - 1)
+                        * VOWEL_PAIR_GAP_PX
+                    ) / 2.0
+                    needed = (half_a + half_b + inter_cell_gap_px) / 2.0
+                    if needed <= canonical:
+                        continue
+                    for k in (ai, bi):
+                        cur = updated.get(k, 0.0)
+                        if needed > cur:
+                            updated[k] = needed
+    if not updated:
+        return cells
+    return [
+        replace(c, pair_shift_px=updated[idx]) if idx in updated else c
+        for idx, c in enumerate(cells)
+    ]
+
+
 def _natural_data_area_size(
     cells: tuple[VowelChartCell, ...],
 ) -> tuple[int, int]:
@@ -1317,17 +1404,6 @@ def _natural_data_area_size(
         8: 2,
     }
 
-    def _cell_button_width_count(cell: VowelChartCell) -> int:
-        """Horizontal button count contributed by ``cell`` for slot
-        sizing. PAIR cells take 2; CONTRAST_SET takes 2 (2-column
-        grid); STACK takes 1.
-        """
-        if cell.display_kind in PAIR_DISPLAY_KINDS:
-            return 2
-        if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
-            return 2
-        return 1
-
     def _cell_vertical_depth(cell: VowelChartCell) -> int:
         """Vertical row count contributed by ``cell`` for height
         sizing. PAIR cells are 1 row; CONTRAST_SET is
@@ -1359,7 +1435,7 @@ def _natural_data_area_size(
             if c.row != ri:
                 continue
             slot = col_to_slot[c.col]
-            slot_buttons[slot] += _cell_button_width_count(c)
+            slot_buttons[slot] += _cell_horizontal_button_count(c)
         populated_slots = [s for s, n in slot_buttons.items() if n > 0]
         if not populated_slots:
             continue
@@ -1376,14 +1452,22 @@ def _natural_data_area_size(
         # push a cell past either edge of [0, dw]; solve for the
         # ``dw`` that keeps every cell's projected extent inside.
         row_cells = [c for c in cells if c.row == ri]
+        cell_geom: list[tuple[float, float, float]] = (
+            []
+        )  # (chart_x, pair_off, half_w)
         for c in row_cells:
             cell_half_w = (
-                _cell_button_width_count(c) * BTN_W
-                + max(0, _cell_button_width_count(c) - 1) * VOWEL_PAIR_GAP_PX
+                _cell_horizontal_button_count(c) * BTN_W
+                + max(0, _cell_horizontal_button_count(c) - 1)
+                * VOWEL_PAIR_GAP_PX
             ) / 2.0
-            pair_offset = (
-                int(VOWEL_PAIR_SHIFT_PX) if c.pair_side else 0
-            ) * c.pair_side
+            shift = (
+                c.pair_shift_px
+                if c.pair_shift_px > 0
+                else float(VOWEL_PAIR_SHIFT_PX)
+            )
+            pair_offset = (shift if c.pair_side else 0) * c.pair_side
+            cell_geom.append((c.chart_x, pair_offset, cell_half_w))
             if c.chart_x < 1.0:
                 right_extent = pair_offset + cell_half_w
                 if right_extent > 0:
@@ -1394,6 +1478,33 @@ def _natural_data_area_size(
                 if left_extent > 0:
                     needed = left_extent / c.chart_x
                     max_row_w = max(max_row_w, int(math.ceil(needed)))
+        # Inter-cell non-overlap: every pair of cells in this row
+        # must fit without their pixel boxes intersecting. Bound:
+        #   (xb - xa) * dw + (off_b - off_a) >= half_a + half_b + gap
+        # When ``xa < xb`` (different anchors) solve for ``dw``.
+        # When ``xa == xb`` the constraint becomes
+        # ``off_b - off_a >= half_a + half_b + gap`` and is dw-
+        # independent; we cannot fix it by widening the chart.
+        # Two cells at the same anchor with opposite pair_side
+        # and both wider than a single button (typical PHOIBLE
+        # pair-display at the back-rounded column) trigger this
+        # static overlap; the renderer accepts it for now.
+        inter_cell_gap_px = 2.0
+        for i in range(len(cell_geom)):
+            xa, oa, ha = cell_geom[i]
+            for j in range(i + 1, len(cell_geom)):
+                xb, ob, hb = cell_geom[j]
+                if xa < xb:
+                    chart_x_diff = xb - xa
+                    needed_px = ha + hb + oa - ob + inter_cell_gap_px
+                elif xb < xa:
+                    chart_x_diff = xa - xb
+                    needed_px = ha + hb + ob - oa + inter_cell_gap_px
+                else:
+                    continue
+                if needed_px > 0:
+                    needed_dw = needed_px / chart_x_diff
+                    max_row_w = max(max_row_w, int(math.ceil(needed_dw)))
 
     # Height: per-row max stack depth, plus inter-row gaps and
     # vertical padding for the silhouette's top/bottom offset.
@@ -1828,6 +1939,16 @@ def build_vowel_chart_geometry(
         )
         for ci, label in enumerate(COL_LABELS)
     )
+
+    # Resolve same-anchor pair-shift conflicts. Two paired cells
+    # (opposite pair_side, same chart_x) overlap if their canonical
+    # pair_shift cannot accommodate the combined cell widths.
+    # PHOIBLE auto-pairs back-neutral with back-rounded; with
+    # long_pair / contrast_set on both sides each cell is 68 px
+    # wide while pair_shift is 17.5 px, so the cells overlap by
+    # ~33 px. Elevate ``pair_shift_px`` on both members so they
+    # stay tangent.
+    cells = _resolve_pair_shift_conflicts(cells)
 
     natural_w, natural_h = _natural_data_area_size(tuple(cells))
 

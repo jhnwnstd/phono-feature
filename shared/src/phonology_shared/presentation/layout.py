@@ -423,7 +423,11 @@ VOWEL_NATURAL_W: int = 440
 # as the canonical IPA chart for the smallest bundled inventory.
 # Above this floor the chart is content-driven (``max(floor,
 # natural_data_width_px + chrome)``).
-MIN_VOWEL_CHART_W_PX: int = 320
+# Bumped from 320 to 380 to envelope the no-overlap-driven natural
+# widths after the inter-cell constraint kicked in: Hayes Universal
+# now requests 290 px data + 84 px chrome = 374 px chart-width
+# minimum (was 232 + 84 = 316 px pre-constraint).
+MIN_VOWEL_CHART_W_PX: int = 380
 # Within each backness (front, central, back), the unrounded/rounded
 # vowel pair sits in two grid columns. ``VOWEL_PAIR_GAP_PX`` is the
 # gap between the two mates -- small enough to read as a pair, not as

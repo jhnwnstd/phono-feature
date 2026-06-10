@@ -1980,6 +1980,14 @@ function _buildVowelChart(chart) {
         target.style.left = (cell.chart_x * 100) + "%";
         target.style.top = (cell.chart_y * 100) + "%";
         target.style.setProperty("--pair-side", String(cell.pair_side));
+        // Per-cell pair shift overrides the CSS constant when the
+        // geometry detected a wide-cell same-anchor collision.
+        // 0 means use the canonical --vowel-pair-shift.
+        if (cell.pair_shift_px && cell.pair_shift_px > 0) {
+            target.style.setProperty(
+                "--vowel-pair-shift", `${cell.pair_shift_px}px`,
+            );
+        }
         // Tag the row tier so CSS can anchor cells differently by
         // tier (top / bottom / middle / only) comes from the
         // shared geometry so the renderer never re-derives it.
