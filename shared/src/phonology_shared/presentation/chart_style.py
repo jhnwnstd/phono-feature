@@ -267,6 +267,19 @@ VOWEL_SILHOUETTE_ALPHA: float = 0.70
 #: still draw a recognisable trapezoid.
 VOWEL_CHART_DATA_MIN_H_PX: int = 8 * SEG_BTN_H
 
+#: Maximum silhouette aspect ratio (width / height). When natural
+#: sizing produces an over-wide silhouette (sparse inventories
+#: like Spanish, MSA, Lango where dw is set by chrome but the
+#: populated row count is small), ``build_vowel_chart_geometry``
+#: grows ``natural_data_height_px`` until aspect lands at this
+#: ceiling. The canonical IPA chart aspect is 10:7 (~1.43:1, per
+#: the Wikipedia blank vowel trapezoid SVG at 1000x700). 1.8
+#: empirically lets the "looks fine" cluster (Korean PHOIBLE
+#: 1.81, Hayes 1.53, German 1.53) pass through unchanged while
+#: catching the 2.35+ outliers (Spanish 2.35, MSA 3.29) that
+#: read as visually over-stretched.
+VOWEL_SILHOUETTE_MAX_ASPECT: float = 1.8
+
 
 # ---------------------------------------------------------------------------
 # Diphthong arrows (curved arrows from primary to secondary cell)

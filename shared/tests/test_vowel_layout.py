@@ -903,3 +903,57 @@ def test_placement_carries_normalized_coordinates(profile):
         profile,
     )
     assert central_unr.x == 0.5
+
+
+# ---------------------------------------------------------------------------
+# Silhouette aspect ratio ceiling
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "inv_name",
+    [
+        "english",
+        "german",
+        "hayes",
+        "hindi",
+        "korean",
+        "spanish",
+        "modern_standard_arabic",
+        "japanese",
+    ],
+)
+def test_silhouette_aspect_within_ceiling(
+    inv_name: str,
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    """Every bundled inventory's silhouette aspect (width / height)
+    must stay at or below ``VOWEL_SILHOUETTE_MAX_ASPECT``. The
+    geometry builder grows ``natural_data_height_px`` when natural
+    sizing would overshoot the ceiling. Catches a future change
+    that disables the ceiling or breaks the dh-growth path.
+    """
+    from phonology_shared.chart.vowels import build_vowel_chart_geometry
+    from phonology_shared.presentation.chart_style import (
+        VOWEL_SILHOUETTE_MAX_ASPECT,
+    )
+
+    engine = bundled_engine(inv_name)
+    vowels = _vowel_segs(engine)
+    if not vowels:
+        pytest.skip(f"{inv_name} has no vowels")
+    seg_feats = {s: dict(engine.segments[s]) for s in vowels}
+    profile = detect_vowel_profile(vowels, seg_feats)
+    geom = build_vowel_chart_geometry(vowels, profile, seg_feats)
+    sil = geom.silhouette
+    sil_h = (sil.bottom_y - sil.top_y) * geom.natural_data_height_px
+    assert sil_h > 0
+    aspect = geom.natural_data_width_px / sil_h
+    # Small epsilon for the ceil() rounding the ceiling enforcer uses.
+    assert aspect <= VOWEL_SILHOUETTE_MAX_ASPECT + 0.05, (
+        f"{inv_name} silhouette aspect {aspect:.3f} exceeds the "
+        f"ceiling {VOWEL_SILHOUETTE_MAX_ASPECT}; pre-fix this was "
+        "common for sparse inventories like Spanish (2.35) and "
+        "Modern Standard Arabic (3.29). The geometry builder must "
+        "grow natural_data_height_px to bring the aspect down."
+    )

@@ -416,6 +416,7 @@ class VowelChartGeometry:
 from phonology_shared.presentation.chart_style import (  # noqa: E402
     VOWEL_CELL_STACK_GAP_PX,
     VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
+    VOWEL_SILHOUETTE_MAX_ASPECT,
 )
 
 # Backward-compat alias for the old private name. Internal
@@ -1829,6 +1830,22 @@ def build_vowel_chart_geometry(
     )
 
     natural_w, natural_h = _natural_data_area_size(tuple(cells))
+
+    # Cap the silhouette's aspect ratio at the canonical-IPA-friendly
+    # ceiling. Sparse inventories (Spanish 5-vowel, MSA 6-vowel)
+    # have their dw set by chrome and bottom-row content while dh
+    # stays small, producing silhouettes 2 to 3x as wide as the
+    # canonical 10:7. Growing natural_h pulls the aspect back down
+    # without touching cell positions or dw. Dense inventories
+    # already at or below the ceiling are unaffected.
+    sil_y_span = _HEIGHT_Y["Open"] - _HEIGHT_Y["Close"]  # 0.84
+    if sil_y_span > 0:
+        current_sil_h = sil_y_span * natural_h
+        if current_sil_h > 0:
+            aspect = natural_w / current_sil_h
+            if aspect > VOWEL_SILHOUETTE_MAX_ASPECT:
+                needed_sil_h = natural_w / VOWEL_SILHOUETTE_MAX_ASPECT
+                natural_h = int(math.ceil(needed_sil_h / sil_y_span))
 
     def _project_to_chart_xy(ri: int, ci: int) -> tuple[float, float]:
         """Project a logical (row, col) to its (chart_x, chart_y)
