@@ -46,6 +46,12 @@ Issues = "https://github.com/jhnwnstd/phono-feature/issues"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# PEP 561 marker so downstream consumers (web, desktop) trust the
+# in-source type annotations under mypy strict mode instead of
+# falling back to Any for every imported symbol.
+phonology_shared = ["py.typed"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"

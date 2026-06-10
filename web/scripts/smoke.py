@@ -100,7 +100,11 @@ def main() -> int:
                 continue
             try:
                 exe = browser_type.executable_path
-            except Exception:
+            except AttributeError:
+                # Older Playwright versions don't expose this property
+                # on the BrowserType class; treat as "driver missing"
+                # rather than swallowing every exception class (which
+                # masked real Playwright import errors).
                 exe = ""
             if not exe or not Path(exe).exists():
                 print(f"SKIP: {label}: driver not installed at {exe!r}")
@@ -130,6 +134,11 @@ def run_for_browser(browser_type, label: str) -> int:
     follow-up assertions. One page session per browser keeps the
     Pyodide boot cost amortised.
     """
+    # Local import so the module loads cleanly even without
+    # Playwright installed; main() reports the missing dep before
+    # any run_for_browser call.
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
     browser = browser_type.launch(headless=True)
     ctx = browser.new_context(viewport={"width": 1280, "height": 720})
     page = ctx.new_page()
@@ -153,7 +162,10 @@ def run_for_browser(browser_type, label: str) -> int:
             "() => document.querySelectorAll('.seg-btn').length > 0",
             timeout=BOOT_TIMEOUT_MS,
         )
-    except Exception as e:
+    except PlaywrightTimeoutError as e:
+        # Only catch the boot-timeout case; KeyboardInterrupt and
+        # any genuine Playwright bug should propagate so the smoke
+        # run can be killed cleanly or the bug surfaces in CI.
         print(f"  FAIL: bridge never booted: {e}", file=sys.stderr)
         _dump_errors(console_errors, page_errors)
         browser.close()

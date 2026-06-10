@@ -127,7 +127,12 @@ class PanPhonFeatureProvider:
         for symbol in segments:
             try:
                 parsed = self._ft.word_fts(symbol)
-            except Exception as exc:
+            except (KeyError, ValueError, RuntimeError, TypeError) as exc:
+                # Narrow exception set so KeyboardInterrupt and
+                # SystemExit propagate; PanPhon raises these four
+                # types for unknown segments / malformed feature
+                # tables, and any other class is a genuine bug
+                # that should surface, not silently warn.
                 unresolved.append(symbol)
                 warnings.append(f"{symbol!r}: PanPhon lookup failed: {exc}")
                 continue

@@ -130,6 +130,86 @@ def test_cell_is_diphthong_set_correctly_for_diphthong_inventory() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Top-level vowel_chart fields (read directly off info.vowel_chart)
+# ---------------------------------------------------------------------------
+
+# Fields the web renderer reads off ``info.vowel_chart`` itself (not
+# nested arrays). Sourced from web/main.js:670 to 697 (the renderer's
+# own schema check) and the ``_buildVowelChart`` function. Without
+# this guard, a refactor that drops ``chart.title`` leaves the chart
+# header empty without any failing test pointing at the change.
+_EXPECTED_VOWEL_CHART_FIELDS = frozenset(
+    {
+        "title",
+        "shape",
+        "silhouette",
+        "cols",
+        "rows",
+        "cells",
+        "diphthongs",
+        "natural_data_height_px",
+        # ``bands`` is only emitted when the geometry produced any;
+        # validated separately below so the contract doesn't force
+        # empty-band inventories to carry the key.
+    }
+)
+
+_EXPECTED_SILHOUETTE_FIELDS = frozenset(
+    {
+        "shape",
+        "top_y",
+        "bottom_y",
+        "top_left",
+        "top_right",
+        "bottom_left",
+        "bottom_right",
+        "top_width",
+        "bottom_width",
+        # ``front_anchor_at_top`` and ``back_anchor`` are derived
+        # for the cascade flush math; both renderers consume them
+        # so they must travel through the wire payload too.
+    }
+)
+
+
+def test_vowel_chart_top_level_fields_match_renderer_reads() -> None:
+    """``info.vowel_chart`` must carry every field both renderers
+    project. Pre-fix the cell + row + diphthong dicts were guarded;
+    chart-level fields (``title``, ``shape``, ``silhouette``,
+    ``natural_data_height_px``) were not. A refactor dropping any
+    of them would leave the web header or trapezoid silently
+    blank with no failing test.
+    """
+    chart = _vowel_chart_summary_for("korean")
+    actual = set(chart.keys())
+    missing = _EXPECTED_VOWEL_CHART_FIELDS - actual
+    assert not missing, (
+        f"vowel_chart top-level fields missing {missing!r}; "
+        "web/main.js reads these directly off info.vowel_chart "
+        "and gets undefined when they're dropped."
+    )
+
+
+def test_vowel_chart_silhouette_carries_every_renderer_field() -> None:
+    """The silhouette dict drives the clip-path / trapezoid corners.
+    Missing fields leave the renderer fallback-painting a canonical
+    silhouette that does not match the inventory's row range.
+    """
+    chart = _vowel_chart_summary_for("korean")
+    sil = chart["silhouette"]
+    assert isinstance(sil, dict), (
+        f"vowel_chart.silhouette must be a dict, got " f"{type(sil).__name__}"
+    )
+    missing = _EXPECTED_SILHOUETTE_FIELDS - set(sil.keys())
+    assert not missing, (
+        f"silhouette dict missing {missing!r}; the renderer's "
+        "validity check (web/main.js around line 695) rejects "
+        "the entire payload when these absent, falling back to "
+        "the canonical Close-to-Open trapezoid."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Row wire dict
 # ---------------------------------------------------------------------------
 

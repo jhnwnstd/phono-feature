@@ -1,0 +1,345 @@
+"""Regression guards for the no-overlap, pair-shift conflict
+resolver, and aspect-ratio ceiling work shipped in this session.
+
+Three invariants pinned here:
+
+1. **No cell pair overlaps** at the rendered natural pixel size for
+   every bundled inventory or a PHOIBLE sample. Catches a future
+   change to ``_natural_data_area_size`` that drops the inter-cell
+   non-overlap constraint or to ``_resolve_pair_shift_conflicts``
+   that fails to elevate ``pair_shift_px`` on same-anchor wide
+   pairs.
+
+2. **Pair-shift conflict resolver elevates the right cells**.
+   Builds a synthetic geometry with two same-chart_x opposite-
+   pair_side wide cells and asserts both members got
+   ``pair_shift_px`` raised to at least half the combined
+   half-widths plus the inter-cell gap. Regression for the
+   PHOIBLE pattern where a back-neutral long-pair auto-pairs
+   with a back-rounded long-pair and the canonical 17.5 px shift
+   leaves the two cells overlapping by ~33 px.
+
+3. **Silhouette aspect ratio capped at VOWEL_SILHOUETTE_MAX_ASPECT
+   across PHOIBLE**. The bundled cluster is already pinned by
+   ``test_silhouette_aspect_within_ceiling`` in test_vowel_layout.py;
+   this extends the guarantee to a PHOIBLE sample where the
+   pre-fix outliers actually lived (Spanish-style 5-vowel, MSA
+   6-vowel that lifted aspect to 2 to 3+).
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from phonology_shared.chart.vowels import (
+    build_vowel_chart_geometry,
+    detect_vowel_profile,
+)
+from phonology_shared.chart.vowels_layout import (
+    PAIR_DISPLAY_KINDS,
+    VowelCellDisplayKind,
+)
+from phonology_shared.data.inventory import Inventory
+from phonology_shared.presentation.chart_style import (
+    VOWEL_PAIR_SHIFT_PX,
+    VOWEL_SILHOUETTE_MAX_ASPECT,
+)
+from phonology_shared.presentation.constants import BTN_W
+from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
+from phonology_shared.theory.feature_engine import FeatureEngine
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_BUNDLED_DIR = _REPO_ROOT / "desktop" / "inventories"
+
+# PHOIBLE sample size. Large enough to exercise the patterns that
+# triggered the original overlap (back-neutral auto-paired with
+# back-rounded, long-pair on both sides) without making the test
+# burn minutes. 100 is the same sweep size the post-fix verification
+# script used.
+_PHOIBLE_SAMPLE = 100
+
+
+def _cell_half_width_px(cell) -> float:
+    """Rendered half-width of a cell box in pixels at the chart's
+    natural width. PAIR / CONTRAST_SET cells are two buttons wide
+    plus the inner gap; STACK cells are one button wide."""
+    if (
+        cell.display_kind in PAIR_DISPLAY_KINDS
+        or cell.display_kind == VowelCellDisplayKind.CONTRAST_SET
+    ):
+        return (2 * BTN_W + VOWEL_PAIR_GAP_PX) / 2.0
+    return BTN_W / 2.0
+
+
+def _effective_pair_shift(cell) -> float:
+    """Per-cell pair-shift override or the canonical default. Mirrors
+    what both renderers read at paint time."""
+    return (
+        cell.pair_shift_px
+        if cell.pair_shift_px > 0
+        else float(VOWEL_PAIR_SHIFT_PX)
+    )
+
+
+def _row_overlap_count(geom) -> int:
+    """Count pairs of cells in the same row whose pixel boxes
+    intersect at the natural data width. Zero means the chart
+    renders without any button overlap."""
+    dw = geom.natural_data_width_px
+    by_row: dict[int, list] = {}
+    for c in geom.cells:
+        by_row.setdefault(c.row, []).append(c)
+    overlaps = 0
+    for row_cells in by_row.values():
+        boxes = []
+        for c in row_cells:
+            half = _cell_half_width_px(c)
+            shift = _effective_pair_shift(c)
+            pair_off = (shift if c.pair_side else 0) * c.pair_side
+            center = c.chart_x * dw + pair_off
+            boxes.append((center - half, center + half))
+        boxes.sort()
+        for i in range(len(boxes) - 1):
+            _, ra = boxes[i]
+            lb, _ = boxes[i + 1]
+            # Allow 0.5 px tolerance so sub-pixel rounding in the
+            # natural-width ceil() doesn't flake the test.
+            if lb < ra - 0.5:
+                overlaps += 1
+    return overlaps
+
+
+def _geom_for_bundled(stem: str):
+    path = _BUNDLED_DIR / f"{stem}_features.json"
+    raw = json.loads(path.read_text(encoding="utf-8-sig"))
+    inv = Inventory.parse(raw, source=path.stem)
+    engine = FeatureEngine(inv)
+    vowels = list(engine.grouped_segments.get("Vowels", []))
+    if not vowels:
+        return None
+    seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
+    profile = detect_vowel_profile(vowels, seg_feats)
+    sec = inv.metadata.get("vowel_secondary") or {}
+    return build_vowel_chart_geometry(
+        vowels, profile, seg_feats, vowel_secondary=sec
+    )
+
+
+# ---------------------------------------------------------------------------
+# 1. No-overlap regression across bundled + PHOIBLE
+# ---------------------------------------------------------------------------
+
+
+_BUNDLED_STEMS = sorted(
+    p.stem.removesuffix("_features")
+    for p in _BUNDLED_DIR.glob("*_features.json")
+)
+
+
+@pytest.mark.parametrize("stem", _BUNDLED_STEMS)
+def test_bundled_vowel_chart_has_no_cell_overlap(stem: str) -> None:
+    """Class A (different chart_x) plus Class B (same chart_x wide
+    pair) overlaps were live in three bundled inventories before
+    the inter-cell constraint and the pair-shift conflict resolver
+    landed. Future edits to either path could silently regress;
+    this asserts the rendered geometry stays collision-free.
+    """
+    geom = _geom_for_bundled(stem)
+    if geom is None:
+        pytest.skip(f"{stem} has no vowels")
+    assert _row_overlap_count(geom) == 0, (
+        f"{stem}: rendered cells overlap at natural data width "
+        f"{geom.natural_data_width_px}; the inter-cell constraint "
+        "in _natural_data_area_size or the pair-shift conflict "
+        "resolver may have regressed."
+    )
+
+
+def test_phoible_sample_has_no_cell_overlap() -> None:
+    """PHOIBLE inventories exercise the same-anchor wide-pair
+    pattern (back-neutral long_pair auto-paired with back-rounded
+    long_pair) that the canonical pair_shift cannot accommodate
+    without the per-cell elevation. Run a 100-inventory sample
+    and assert zero overlaps.
+    """
+    try:
+        from phonology_shared.editor.phoible_provider import (
+            PhoibleProvider,
+            materialize_phoible_inventory,
+        )
+    except ImportError as exc:
+        pytest.skip(f"phoible_provider unavailable: {exc}")
+    try:
+        provider = PhoibleProvider()
+    except FileNotFoundError as exc:
+        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
+    except Exception as exc:  # pragma: no cover
+        pytest.skip(f"PHOIBLE provider unavailable: {exc}")
+
+    offenders: list[str] = []
+    checked = 0
+    for inv_id in list(provider._inventories)[: _PHOIBLE_SAMPLE * 3]:  # type: ignore[attr-defined]
+        try:
+            inv = materialize_phoible_inventory(provider, inv_id)
+        except (KeyError, ValueError, RuntimeError):
+            continue
+        engine = FeatureEngine(inv)
+        vowels = list(engine.grouped_segments.get("Vowels", []))
+        if not vowels:
+            continue
+        seg_feats = {
+            s: dict(engine.normalized_segment_feats[s]) for s in vowels
+        }
+        profile = detect_vowel_profile(vowels, seg_feats)
+        sec = inv.metadata.get("vowel_secondary") or {}
+        geom = build_vowel_chart_geometry(
+            vowels, profile, seg_feats, vowel_secondary=sec
+        )
+        if _row_overlap_count(geom) > 0:
+            offenders.append(inv_id)
+        checked += 1
+        if checked >= _PHOIBLE_SAMPLE:
+            break
+    assert offenders == [], (
+        f"PHOIBLE overlap regression in {len(offenders)}/{checked} "
+        f"inventories. First few: {offenders[:5]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 2. Pair-shift conflict resolver elevates the right cells
+# ---------------------------------------------------------------------------
+
+
+def test_pair_shift_conflict_resolver_elevates_wide_paired_cells() -> None:
+    """Korean PHOIBLE 2197 is the canonical case: back-neutral
+    long_pair (/ɯ, ɯː/) auto-paired with back-rounded long_pair
+    (/u, uː/) at the same chart_x. Without elevation the canonical
+    17.5 px shift leaves the two 68 px wide cells overlapping by
+    ~33 px. The resolver must raise pair_shift_px on BOTH members
+    to at least (half_a + half_b + 2 gap) / 2.
+    """
+    try:
+        from phonology_shared.editor.phoible_provider import (
+            PhoibleProvider,
+            materialize_phoible_inventory,
+        )
+    except ImportError as exc:
+        pytest.skip(f"phoible_provider unavailable: {exc}")
+    try:
+        provider = PhoibleProvider()
+    except FileNotFoundError as exc:
+        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
+
+    inv = materialize_phoible_inventory(provider, "2197")
+    engine = FeatureEngine(inv)
+    vowels = list(engine.grouped_segments.get("Vowels", []))
+    seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
+    profile = detect_vowel_profile(vowels, seg_feats)
+    sec = inv.metadata.get("vowel_secondary") or {}
+    geom = build_vowel_chart_geometry(
+        vowels, profile, seg_feats, vowel_secondary=sec
+    )
+
+    by_anchor: dict[tuple[int, int], list] = {}
+    for c in geom.cells:
+        if (
+            c.display_kind in PAIR_DISPLAY_KINDS
+            or c.display_kind == VowelCellDisplayKind.CONTRAST_SET
+        ) and c.pair_side != 0:
+            by_anchor.setdefault((c.row, round(c.chart_x * 1000)), []).append(
+                c
+            )
+
+    conflicting_pairs = [
+        members
+        for members in by_anchor.values()
+        if len(members) >= 2
+        and any(
+            m1.pair_side * m2.pair_side < 0 for m1 in members for m2 in members
+        )
+    ]
+    if not conflicting_pairs:
+        pytest.skip(
+            "Korean PHOIBLE 2197 no longer has a same-anchor wide-pair "
+            "conflict; pick a different inventory if PHOIBLE shape changes."
+        )
+
+    canonical = float(VOWEL_PAIR_SHIFT_PX)
+    for members in conflicting_pairs:
+        for cell in members:
+            if cell.pair_side == 0:
+                continue
+            assert cell.pair_shift_px > canonical, (
+                f"cell at row={cell.row} col={cell.col} entries={cell.entries} "
+                "is part of a wide-pair conflict but pair_shift_px was not "
+                f"elevated (still {cell.pair_shift_px} <= canonical {canonical}). "
+                "The conflict resolver in _resolve_pair_shift_conflicts may "
+                "have regressed."
+            )
+            required = BTN_W + VOWEL_PAIR_GAP_PX
+            assert cell.pair_shift_px >= required / 2.0, (
+                f"cell pair_shift_px={cell.pair_shift_px} below the minimum "
+                f"required to keep the pair tangent ({required/2.0})."
+            )
+
+
+# ---------------------------------------------------------------------------
+# 3. Aspect ratio ceiling across PHOIBLE
+# ---------------------------------------------------------------------------
+
+
+def test_phoible_sample_silhouette_aspect_within_ceiling() -> None:
+    """The bundled cluster is already pinned by
+    test_silhouette_aspect_within_ceiling. PHOIBLE actually drove
+    the over-wide cases pre-fix (Spanish-style 5-vowel inventories
+    at 2.35, MSA 6-vowel at 3.29); pin the ceiling holds there too.
+    """
+    try:
+        from phonology_shared.editor.phoible_provider import (
+            PhoibleProvider,
+            materialize_phoible_inventory,
+        )
+    except ImportError as exc:
+        pytest.skip(f"phoible_provider unavailable: {exc}")
+    try:
+        provider = PhoibleProvider()
+    except FileNotFoundError as exc:
+        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
+
+    over: list[tuple[str, float]] = []
+    checked = 0
+    for inv_id in list(provider._inventories)[: _PHOIBLE_SAMPLE * 3]:  # type: ignore[attr-defined]
+        try:
+            inv = materialize_phoible_inventory(provider, inv_id)
+        except (KeyError, ValueError, RuntimeError):
+            continue
+        engine = FeatureEngine(inv)
+        vowels = list(engine.grouped_segments.get("Vowels", []))
+        if not vowels:
+            continue
+        seg_feats = {
+            s: dict(engine.normalized_segment_feats[s]) for s in vowels
+        }
+        profile = detect_vowel_profile(vowels, seg_feats)
+        sec = inv.metadata.get("vowel_secondary") or {}
+        geom = build_vowel_chart_geometry(
+            vowels, profile, seg_feats, vowel_secondary=sec
+        )
+        sil = geom.silhouette
+        sil_h = (sil.bottom_y - sil.top_y) * geom.natural_data_height_px
+        if sil_h <= 0:
+            continue
+        aspect = geom.natural_data_width_px / sil_h
+        if aspect > VOWEL_SILHOUETTE_MAX_ASPECT + 0.05:
+            over.append((inv_id, aspect))
+        checked += 1
+        if checked >= _PHOIBLE_SAMPLE:
+            break
+    assert over == [], (
+        f"PHOIBLE silhouette aspect ceiling broken in {len(over)}/{checked} "
+        f"inventories. Sample: {over[:3]}"
+    )

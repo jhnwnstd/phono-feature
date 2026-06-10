@@ -882,6 +882,7 @@ def atomic_write_json(path: str | os.PathLike[str], data: Any) -> None:
         prefix=".tmp_inv_", suffix=".json", dir=directory
     )
 
+    success = False
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(rendered)
@@ -890,14 +891,20 @@ def atomic_write_json(path: str | os.PathLike[str], data: Any) -> None:
 
         os.replace(tmp_path, path)
         _fsync_directory_best_effort(directory)
-
-    except BaseException as e:
-        _log.error("atomic write failed: %s: %s", basename, e)
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
-        raise
+        success = True
+    finally:
+        # ``finally`` rather than ``except BaseException`` so the
+        # temp file is removed on KeyboardInterrupt / SystemExit
+        # without those non-error signals being silently logged
+        # as "atomic write failed". The success flag distinguishes
+        # the clean path (nothing to remove; tmp_path was renamed
+        # by os.replace) from the failure path (tmp_path may still
+        # exist and would otherwise leak into the directory).
+        if not success:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
     _log.info("atomic write complete: %s", basename)
 
