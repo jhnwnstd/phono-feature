@@ -14,7 +14,9 @@ plus an end-to-end check against the real Hayes inventory through
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from typing import Any
 
 import pytest
 
@@ -28,6 +30,24 @@ from phonology_shared.chart.vowels import (
     detect_vowel_profile,
 )
 from phonology_shared.theory.feature_engine import FeatureEngine
+
+
+@contextmanager
+def patched_module_attr(module: Any, name: str, value: Any) -> Iterator[None]:
+    """Restore ``module.name`` to its prior value when the block
+    exits, even on test failure or KeyboardInterrupt. Replaces the
+    boilerplate ``saved = mod.X; mod.X = new; try: ...; finally:
+    mod.X = saved`` pattern. The context-managed form makes the
+    test-local mutation visually contained and removes a class of
+    "saved-but-never-restored" bugs in future test additions.
+    """
+    saved = getattr(module, name)
+    setattr(module, name, value)
+    try:
+        yield
+    finally:
+        setattr(module, name, saved)
+
 
 # Stage 1: uniform shrink
 
@@ -76,9 +96,9 @@ def test_stage2_disabled_returns_stage1() -> None:
     """Setting the cap fraction to 0 turns Stage 2 off; the function
     returns Stage 1's widths verbatim.
     """
-    saved = vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC
-    vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = 0.0
-    try:
+    with patched_module_attr(
+        vowels_layout_mod, "_VOWEL_SLANT_CHANGE_CAP_FRAC", 0.0
+    ):
         row_data = [(0.0, 0.5), (1.0, 0.5)]
         top, bot = _stage2_slant_tweak(
             row_data,
@@ -89,8 +109,6 @@ def test_stage2_disabled_returns_stage1() -> None:
         )
         assert top == pytest.approx(0.91)
         assert bot == pytest.approx(0.61)
-    finally:
-        vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = saved
 
 
 # Composition: _compute_shrunken_widths runs both stages
@@ -98,9 +116,7 @@ def test_stage2_disabled_returns_stage1() -> None:
 
 def test_compose_returns_canonical_when_factor_zero() -> None:
     """``_VOWEL_SHRINK_FACTOR = 0`` disables both stages at once."""
-    saved = vowels_layout_mod._VOWEL_SHRINK_FACTOR
-    vowels_layout_mod._VOWEL_SHRINK_FACTOR = 0.0
-    try:
+    with patched_module_attr(vowels_layout_mod, "_VOWEL_SHRINK_FACTOR", 0.0):
         top, bot = _compute_shrunken_widths(
             cells_meta_by_row={0: []},
             display_y_by_row={0: 0.5},
@@ -111,8 +127,6 @@ def test_compose_returns_canonical_when_factor_zero() -> None:
         )
         assert top == pytest.approx(1.0)
         assert bot == pytest.approx(0.7)
-    finally:
-        vowels_layout_mod._VOWEL_SHRINK_FACTOR = saved
 
 
 # End-to-end: real inventory through build_vowel_chart_geometry

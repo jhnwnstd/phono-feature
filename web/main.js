@@ -1955,6 +1955,9 @@ function _buildVowelChart(chart) {
             // grid; STACK falls back to a vertical column.
             const kind = cell.display_kind || "stack";
             switch (kind) {
+                case "stack":
+                    target = _buildVowelCellStack(segs);
+                    break;
                 case "long_pair":
                 case "nasal_pair":
                 case "rhotic_pair":
@@ -1966,6 +1969,15 @@ function _buildVowelChart(chart) {
                     target = _buildVowelCellContrastSet(segs);
                     break;
                 default:
+                    // Unknown kind from the bridge: log + fall back so
+                    // the chart still renders, but a future Python-side
+                    // VowelCellDisplayKind variant addition surfaces in
+                    // the console instead of silently displaying as STACK.
+                    console.warn(
+                        `vowel cell display_kind "${kind}" not handled `
+                        + `by the web renderer; falling back to STACK. `
+                        + `Update the switch in _buildVowelChart.`,
+                    );
                     target = _buildVowelCellStack(segs);
             }
         }
