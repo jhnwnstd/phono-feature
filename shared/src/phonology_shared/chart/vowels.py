@@ -140,17 +140,17 @@ class VowelCellDisplayKind(StrEnum):
     backness) grid; this enum chooses the layout INSIDE the cell
     once two or more vowels share the same slot.
 
-    * ``STACK`` -- default: vertical stack, one button per row. Used
+    * ``STACK`` (default): vertical stack, one button per row. Used
       when the entries differ on a non-display feature (or on no
       feature at all) so vertical stacking is the safe arrangement.
     * ``LONG_PAIR`` / ``NASAL_PAIR`` / ``RHOTIC_PAIR`` /
-      ``PHONATION_PAIR`` / ``TONE_PAIR`` -- side-by-side: two
+      ``PHONATION_PAIR`` / ``TONE_PAIR`` (side-by-side): two
       buttons in a horizontal row, marked member on the right. The
       five PAIR kinds share the same physical layout; the kind
       records WHICH non-position feature drove the contrast so the
       renderer (or downstream tooling) can read it without
       re-deriving from the entries.
-    * ``CONTRAST_SET`` -- 2x2 grid (for 3-4 entries) when the
+    * ``CONTRAST_SET``: 2x2 grid (for 3-4 entries) when the
       entries differ on more than one display feature (e.g. long x
       nasal). Renderer decides the 2D arrangement; ``entries`` is
       passed through in input order.
@@ -1436,8 +1436,8 @@ def compute_placements(
     # the per-segment loop can call ``_vowel_grid_pos_normalized``
     # (skipping the per-call lowercase dict allocation). Most
     # callers pass ``engine.normalized_segment_feats`` whose keys
-    # are already lowercase -- this pass is a fast pure-Python
-    # dict-comp in that case -- but the tests pass raw inventory
+    # are already lowercase (this pass is a fast pure-Python
+    # dict-comp in that case), but the tests pass raw inventory
     # feats (PascalCase from PHOIBLE), so the contract has to
     # tolerate both shapes.
     norm_cache: dict[str, dict[str, str]] = {
@@ -1530,14 +1530,14 @@ def _snap_diphthong_secondaries(
     shift the placer's column verdict away from the standalone
     monophthong. Concretely for Korean /io/, the primary bundle
     encodes ``front +, round +`` which lands at front-rounded
-    (col 1) -- a virtual position with no /i/-like button -- even
+    (col 1, a virtual position with no /i/-like button), even
     though semantically /io/ starts at /i/ (col 6). Same shape
     for the secondary side (already documented).
 
     Snap rule (applied to both primary and secondary):
 
     1. Groups monophthong cells by backness (front / central /
-       back) -- the rounding distinction collapses since /a/
+       back); the rounding distinction collapses since /a/
        (col 2, central-unrounded) and a hypothetical /a_rounded/
        (col 3, central-rounded) both serve as targets for any
        central endpoint regardless of how the placer encoded its
@@ -1572,7 +1572,7 @@ def _snap_diphthong_secondaries(
     ) -> VowelPlacement:
         """Snap ``endpoint`` to the closest matching monophthong
         cell. If ``forbid`` is set, the snap target must NOT
-        equal that ``(row, col)`` -- prevents the diphthong's
+        equal that ``(row, col)``; prevents the diphthong's
         secondary from collapsing onto its primary's snapped
         position, which would render as a zero-length arrow.
         Falls through to the original endpoint when no

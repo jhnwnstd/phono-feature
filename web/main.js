@@ -292,7 +292,7 @@ const CHART_STYLE = Object.freeze(
 /** Top-level UI mode. Values come from the relayed
  *  ``STATUS_TEXT.mode_values`` baked from
  *  ``mode_logic.Mode`` (single source of truth). The hardcoded
- *  fallback below is defensive only -- exercised when the
+ *  fallback below is defensive only; exercised when the
  *  inlined JSON is missing (e.g., older snapshot, offline rebuild).
  *  The parity test at ``shared/tests/test_status_text_relay.py``
  *  asserts every Python ``Mode`` member appears in the baked
@@ -1129,7 +1129,7 @@ function rasterizeText(text, font, maxWidth) {
     // glyph is drawn so the ink bbox sits dead-centre in the
     // canvas. Because the span inherits the canvas dimensions and
     // the seg button flex-centres the span, the ink centre lines up
-    // with the button centre for every glyph -- regardless of
+    // with the button centre for every glyph, regardless of
     // whether the glyph has a descender (``p``), an ascender (``t``),
     // a tie-bar combining mark (``t͡ʃ``), or neither (``o``).
     //
@@ -1284,7 +1284,7 @@ function renderSegmentGrid(groups, vowelChart) {
 // Cached signature of the last successful relayout pass. When the
 // grid width, vowel-chart width, row count, and per-row segment
 // counts are all unchanged, the math below would produce the same
-// answer -- we early-return. Catches: (a) double-firing at startup
+// answer; we early-return. Catches: (a) double-firing at startup
 // (renderSegmentGrid + the initial resize listener), (b) idempotent
 // re-runs on pane activation when width didn't actually change.
 let _lastRelayoutKey = "";
@@ -1688,7 +1688,7 @@ function _silhouetteForDataWidth(sil, dwPx) {
  *  ``shared/.../chart/vowels_layout.py``. Returns a CSS
  *  ``clip-path: polygon()`` points string with the four corners
  *  smoothed via quadratic Bezier. Must stay byte-identical to the
- *  Python helper -- the test suite at
+ *  Python helper; the test suite at
  *  ``shared/tests/test_rounded_silhouette.py`` pins the polygon
  *  output and any drift here would silently un-track the
  *  rendered silhouette. */
@@ -1752,7 +1752,7 @@ function _buildVowelChart(chart) {
         STATUS_TEXT.vowel_chart_accessible_name || "IPA vowel chart",
     );
 
-    // Title sits in row 1, column 2 only -- centered over the data
+    // Title sits in row 1, column 2 only; centered over the data
     // area, NOT over the row-label gutter. Mirrors the desktop's
     // manual ``move(dx + (dw - tw) // 2, 0)`` placement; the
     // shared ``VowelChartGeometry`` documents this as the contract
@@ -1790,7 +1790,7 @@ function _buildVowelChart(chart) {
 
     // Row labels: emitted into the data area below so each label can
     // sit just outside the silhouette's SLANTED left edge at its
-    // chart_y -- following the trapezoid inward as it shrinks. The
+    // chart_y, following the trapezoid inward as it shrinks. The
     // empty placeholder in grid column 1 keeps the chart's left
     // gutter wide enough to host the label text (which overflows
     // leftward out of the data area into this reserved track).
@@ -1923,7 +1923,7 @@ function _buildVowelChart(chart) {
     // Pre-fix the mode filter HID the entire cell when the cell
     // contained any diphthong entry. Korean PHOIBLE had cells
     // mixing /i/ + /ia ie iɛ iʌ/, so monophthong mode hid /i/
-    // along with the diphthongs -- user lost the singleton from
+    // along with the diphthongs; user lost the singleton from
     // the chart entirely. The placer fix removes diphthongs from
     // cells, so this filter now always falls through.
     const mode = getVowelChartMode();
@@ -2047,7 +2047,7 @@ function _appendVowelDiphthongChipStrip(chartEl, chart) {
     );
     // Order: source order from the geometry's ``diphthongs`` list
     // (which preserves placement iteration order, stable across
-    // builds). Duplicate segments are skipped -- the same
+    // builds). Duplicate segments are skipped; the same
     // segment appears once per (primary, secondary) row in the
     // arrows list when fan-out applies, but the chip strip wants
     // one chip per unique segment.
@@ -2195,7 +2195,7 @@ function _buildArrowsNow(dataEl, chart) {
         const cellEl = findCell(row, col);
         if (cellEl) {
             // Aim for the cell's CANONICAL segment button (first
-            // ``.seg-btn`` child -- entries are sorted descending
+            // ``.seg-btn`` child; entries are sorted descending
             // by placement confidence).
             const targetBtn = cellEl.querySelector(".seg-btn");
             const rect = (targetBtn || cellEl).getBoundingClientRect();
@@ -2205,7 +2205,7 @@ function _buildArrowsNow(dataEl, chart) {
     };
     // Offset from a rectangle's centre to where a ray in unit
     // direction (ux, uy) exits the rectangle of size w*h. Used so
-    // arrows start/end at button EDGES rather than centres -- the
+    // arrows start/end at button EDGES rather than centres; the
     // arrowhead now sits outside the source and the tip touches
     // the target button's edge.
     // Push the arrow endpoint ``ARROW_TIP_INSET_PX`` past the cell
@@ -2601,8 +2601,8 @@ function onSegmentClicked(seg) {
     //
     // Flip EVERY ``.seg-btn[data-seg=seg]`` element, not just the
     // one in ``state.seg_buttons``: the same segment can appear
-    // in MULTIPLE surfaces -- the consonant grid, the vowel
-    // chart cell, the diphthong chip strip -- and clicking any
+    // in MULTIPLE surfaces (the consonant grid, the vowel
+    // chart cell, the diphthong chip strip), and clicking any
     // one of them must light up the others so the user sees a
     // single coherent "selected" state across the chart. Pre-fix
     // clicking a diphthong cell only lit the cell button, and the
@@ -2859,7 +2859,7 @@ function activateMode(mode) {
     // click-burst debounce and paint the new mode's segment states
     // in a single synchronous pass. Without this, segments would
     // sit at their pre-switch state for 30 ms after the chrome
-    // already changed -- the source of the flicker users see.
+    // already changed; the source of the flicker users see.
     if (state.bridge) runAnalysis();
     else clearAnalysisTabs();
 
@@ -5359,7 +5359,7 @@ function normalizeMatchMode(value) {
  *  default).
  *
  *  The diphthong chip strip below the silhouette always renders
- *  the inventory's diphthongs regardless of mode -- this enum
+ *  the inventory's diphthongs regardless of mode; this enum
  *  only decides what fills the trapezoid. */
 const VOWEL_CHART_MODE = Object.freeze(
     STATUS_TEXT.vowel_chart_mode_values || {
@@ -5745,7 +5745,7 @@ function wireSegmentDelegation() {
     });
     // Right-click on a segment button. Always suppress the browser
     // native context menu (no "Save image / Inspect" over the
-    // inventory chrome -- mirrors the desktop's
+    // inventory chrome; mirrors the desktop's
     // ``SegmentButton.contextMenuEvent`` which always calls
     // ``event.accept()``). The copy gesture only fires in
     // SEG_TO_FEAT mode; FEAT_TO_SEG is a documented no-op.

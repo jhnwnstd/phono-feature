@@ -103,7 +103,7 @@ def _read_desktop_adj() -> int:
     )
     assert match is not None, (
         "DESKTOP_VOWEL_CHART_W_ADJ literal not found in desktop's "
-        "vowel_chart.py -- has the constant moved or been renamed?"
+        "vowel_chart.py; has the constant moved or been renamed?"
     )
     return int(match.group(1))
 
@@ -119,7 +119,7 @@ def _read_web_adj() -> int:
         re.MULTILINE,
     )
     assert match is not None, (
-        "WEB_VOWEL_CHART_W_ADJ literal not found in web/main.js -- "
+        "WEB_VOWEL_CHART_W_ADJ literal not found in web/main.js; "
         "has the constant moved or been renamed?"
     )
     return int(match.group(1))
@@ -144,7 +144,7 @@ def test_desktop_floor_holds_widest_bundled_inventory() -> None:
     inventory's natural width + chrome. If the densest inventory
     needs more horizontal room than the floor provides, the
     renderer falls back to the natural width (``max(floor,
-    natural + chrome)``) and the back-column cells fit -- but
+    natural + chrome)``) and the back-column cells fit, but
     the floor SHOULD be at least this large so small + medium
     inventories also stay above the visual minimum."""
     widest = _max_natural_chart_w_across_bundled()

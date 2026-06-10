@@ -12,19 +12,16 @@ from __future__ import annotations
 
 from phonology_shared.presentation import layout
 
-# ---------------------------------------------------------------------------
 # distribute_pane_widths
-# ---------------------------------------------------------------------------
 
 
 def test_distribute_seg_absorbs_extra_width_at_typical_desktop() -> None:
-    # Typical 1920×1080 workspace, ~1440 px window. Feat pane should
-    # land at content + cushion; seg gets the rest. Literal numbers
-    # so a bump to FEAT_CUSHION_PX (40 -> something else) trips here.
+    # Literal numbers so a bump to FEAT_CUSHION_PX (40 to something
+    # else) trips here.
     seg_w, feat_w = layout.distribute_pane_widths(
         1440, seg_content_w=500, feat_content_w=600
     )
-    assert feat_w == 640  # 600 + FEAT_CUSHION_PX (40)
+    assert feat_w == 640
     assert seg_w == 800
 
 
@@ -50,28 +47,21 @@ def test_distribute_seg_respects_floor_on_narrow_window() -> None:
 
 
 def test_distribute_segments_get_almost_all_4k_extra() -> None:
-    # On a 4K-class window the feat pane stays modest while seg
-    # soaks up the rest.
     seg_w, feat_w = layout.distribute_pane_widths(
         3000, seg_content_w=500, feat_content_w=700
     )
-    assert feat_w == 740  # 700 + FEAT_CUSHION_PX (40)
-    # Seg should be much larger than feat at this width.
+    assert feat_w == 740
     assert seg_w > 2 * feat_w
 
 
 def test_distribute_seg_content_overrides_min() -> None:
-    # If the segment content's own sizeHint is wider than the min
-    # floor, seg never shrinks below that.
     seg_w, _ = layout.distribute_pane_widths(
         1000, seg_content_w=900, feat_content_w=300
     )
     assert seg_w >= 900
 
 
-# ---------------------------------------------------------------------------
 # vowel_chart_width
-# ---------------------------------------------------------------------------
 
 
 def test_vowel_chart_natural_width_matches_label_column_budget() -> None:
@@ -81,13 +71,11 @@ def test_vowel_chart_natural_width_matches_label_column_budget() -> None:
     6 button columns + label-column gutter + breathing room. Both
     checks ride one engine state read so they're consolidated."""
     assert layout.vowel_chart_width() == 440
-    btn_strip = 6 * (33 + 4)  # six button cols + five gaps + trailing
+    btn_strip = 6 * (33 + 4)
     assert layout.VOWEL_NATURAL_W >= btn_strip + 64
 
 
-# ---------------------------------------------------------------------------
 # should_stack_vowels / should_collapse_single_column
-# ---------------------------------------------------------------------------
 
 
 def test_should_stack_vowels_at_threshold() -> None:
@@ -102,18 +90,16 @@ def test_should_collapse_single_column_at_threshold() -> None:
     assert not layout.should_collapse_single_column(layout.COLLAPSE_W + 1)
 
 
-# ---------------------------------------------------------------------------
 # recommended_initial_window_size
-# ---------------------------------------------------------------------------
 
 
 def test_initial_size_floored_on_small_screen() -> None:
-    # Below the floor (e.g. 1366×768 laptop), the function returns
+    # Below the floor (e.g. 1366x768 laptop), the function returns
     # the floor; ``clamp_size_to_screen`` will then trim down to fit.
     # Width floor is now 1120 (vowel-safe minimum) instead of 1400.
     w, h = layout.recommended_initial_window_size(1366, 768)
-    assert w == layout.MIN_FIRST_LAUNCH_W  # vowel-safe floor
-    assert h == 900  # MIN_FIRST_LAUNCH_H
+    assert w == layout.MIN_FIRST_LAUNCH_W
+    assert h == 900
 
 
 def test_initial_size_at_default_fraction_on_large_screen() -> None:
@@ -127,8 +113,6 @@ def test_initial_size_at_default_fraction_on_large_screen() -> None:
 
 
 def test_best_n_cols_single_row_when_group_fits() -> None:
-    # Group fits in one row → use exactly group_size columns; no
-    # row is short.
     assert layout.best_segment_n_cols(8, 12) == 8
 
 
@@ -139,7 +123,7 @@ def test_best_n_cols_avoids_orphan_at_max() -> None:
 
 
 def test_best_n_cols_keeps_full_columns_when_no_orphan() -> None:
-    # 14 buttons in 12 cols leaves 2 in the second row — fine, no
+    # 14 buttons in 12 cols leaves 2 in the second row; fine, no
     # orphan to dodge.
     assert layout.best_segment_n_cols(14, 12) == 12
 
@@ -158,21 +142,19 @@ def test_best_n_cols_floors_at_1() -> None:
 
 
 def test_initial_size_picks_floor_when_fraction_smaller() -> None:
-    # 1920×1080 monitor: 80% = 1536×864. Width floor 1400 doesn't
+    # 1920x1080 monitor: 80% = 1536x864. Width floor 1400 doesn't
     # bind (1536 > 1400); height floor 900 binds because 864 < 900.
     w, h = layout.recommended_initial_window_size(1920, 1080)
     assert w == 1536
-    assert h == 900  # MIN_FIRST_LAUNCH_H
+    assert h == 900
 
 
-# ---------------------------------------------------------------------------
 # Single-source-of-truth checkpoint:
 # The web side reads these constants via the generated dist/layout.css
 # (``web/scripts/build.py:generate_layout_css``). The CSS file's
 # numerical values must always match the Python module. This pair of
 # tests fails the moment they drift, so the build can't ship inconsistent
 # numbers across the two UIs.
-# ---------------------------------------------------------------------------
 
 
 def test_collapse_w_matches_css_media_query() -> None:

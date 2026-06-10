@@ -398,7 +398,7 @@ def _load_constants_module() -> ModuleType:
 
 
 def _load_chart_style_module() -> ModuleType:
-    """Side-load ``chart_style.py`` -- the vowel-chart visual policy
+    """Side-load ``chart_style.py``: the vowel-chart visual policy
     module. Same spec_from_file_location pattern as the other
     loaders so the build runs against a bare interpreter; the
     module imports ``constants.py`` and ``layout.py`` which we
@@ -409,7 +409,7 @@ def _load_chart_style_module() -> ModuleType:
     layout_mod = _load_layout_module()
     # chart_style.py imports as
     # ``phonology_shared.presentation.{constants,layout}`` so it
-    # finds an already-installed package -- but in the bare-CI
+    # finds an already-installed package, but in the bare-CI
     # build interpreter we side-load both. Inject the package
     # path so the chart_style import line resolves.
     sys.modules["phonology_shared.presentation.constants"] = constants_mod
@@ -604,7 +604,7 @@ def _build_status_text_payload() -> dict[str, str]:
         # constants drive both the web's aria-label attributes and
         # the desktop's setAccessibleName calls.
         payload["vowel_chart_accessible_name"] = VOWEL_CHART_ACCESSIBLE_NAME
-        # Per-segment aria label template -- the JS interpolates
+        # Per-segment aria label template. The JS interpolates
         # ``{seg}`` so a future change to the convention (e.g.
         # square brackets) is one Python edit.
         payload["seg_accessible_label_template"] = "/{seg}/"
@@ -661,12 +661,12 @@ def _vowel_corner_lines(shape: str) -> list[str]:
     directly. The back edge (top-right / bottom-right) is emitted as
     a ``calc()`` that mixes the back-anchor percentage with the
     pixel-offset captured in
-    :py:attr:`VowelChartSilhouette.back_right_pixel_offset` -- the
+    :py:attr:`VowelChartSilhouette.back_right_pixel_offset`; the
     same formula the desktop and web renderers apply at runtime, so
     the canonical bake stays aligned with the interactive renders.
 
     Also emits ``--vowel-<shape>-rounded-points`` for the new
-    "soft modern" silhouette outline -- a polygon points string
+    "soft modern" silhouette outline: a polygon points string
     with each corner replaced by ``segments_per_corner+1`` points
     interpolated along a quadratic Bezier (see
     ``rounded_silhouette_polygon_points``). CSS rules consume
@@ -970,7 +970,7 @@ def generate_layout_css() -> None:
             (
                 # Shared canonical floor for the rendered chart
                 # width. JS reads this and adds its own
-                # ``WEB_VOWEL_CHART_W_ADJ`` -- see the parallel
+                # ``WEB_VOWEL_CHART_W_ADJ``; see the parallel
                 # ``MIN_VOWEL_CHART_W_PX`` consumer in
                 # desktop/.../vowel_chart.py.
                 "  --min-vowel-chart-w: "
@@ -1335,7 +1335,7 @@ def hash_assets() -> None:
     # matching placeholder so the page reads sensibly even if served
     # raw, but this substitution is what guarantees parity after a
     # future change to the shared string. The presence check asserts
-    # the placeholder block exists at all -- if a future ``index.html``
+    # the placeholder block exists at all; if a future ``index.html``
     # edit drops the block, the bake fails loudly instead of producing
     # silently empty status text.
     statusbar_marker = '<span id="statusbar" class="statusbar-message">'

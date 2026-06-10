@@ -62,7 +62,7 @@ class PhoibleSnapshotNotAvailable(RuntimeError):
 
 #: Number of IPA glyphs returned by the PHOIBLE preview payload
 #: before the picker dialog asks the user to commit a load. Sized
-#: so the picker's preview panel stays scannable -- larger
+#: so the picker's preview panel stays scannable; larger
 #: inventories surface a "+N more" hint instead of the full list.
 #: Single source so the web bridge slice and any future desktop
 #: picker pagination read the same number.
@@ -407,8 +407,8 @@ class PhoibleProvider:
             # single ``zip`` per segment.
             resolved[sym] = dict(zip(features, encoded, strict=False))
 
-        # Decode the diphthong secondary bundles for this
-        # inventory, if any, in the same pre-prune feature space.
+        # Pre-prune feature space so secondaries align with primaries
+        # when the column-pruning step below drops sparse features.
         encoded_secondary = self._vowel_secondary_by_inventory.get(
             inventory_id, {}
         )

@@ -190,7 +190,7 @@ def test_diphthong_placement_carries_secondary_and_flag():
     :py:attr:`PlacementFlag.DIPHTHONG` so the renderer can detect
     the diphthong from either endpoint.
 
-    Diphthongs do NOT occupy chart cells -- they render as arrows
+    Diphthongs do NOT occupy chart cells; they render as arrows
     + chip strip exclusively. ``placements[seg]`` still carries
     the segment's geometry (so the arrow can be drawn) but
     ``occupied`` does NOT contain an entry for ``seg``. This is
@@ -235,7 +235,7 @@ def test_diphthong_placement_carries_secondary_and_flag():
     assert placement.secondary.row == vl.ROW_LABELS.index(
         "Open"
     ), "final anchors at Open (low) tier"
-    # ``occupied`` must NOT contain /ia/ -- diphthongs render via
+    # ``occupied`` must NOT contain /ia/; diphthongs render via
     # arrows + chip strip, not cell occupancy.
     assert occupied == {}, (
         f"diphthongs must not occupy chart cells; got {occupied!r}. "

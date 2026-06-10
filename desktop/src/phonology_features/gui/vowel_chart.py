@@ -78,7 +78,7 @@ from phonology_shared.presentation.palette import C, VowelChartMode
 from .widgets.segment_button import SegmentButton
 
 # Public surface. The placement-layer types (Confidence,
-# VowelPlacement, VowelProfile) are NOT re-exported -- importers
+# VowelPlacement, VowelProfile) are NOT re-exported; importers
 # pull them directly from ``phonology_shared.chart.vowels``.
 __all__ = [
     "VOWEL_LABEL_W",
@@ -123,7 +123,7 @@ class _DiphthongOverlay(QWidget):
     ``paintEvent``, the cell buttons (children of the chart) would
     render OVER the arrows and hide them. This overlay is the LAST
     sibling appended to the chart, so it paints AFTER all the
-    cells and labels -- arrows stay visible above the buttons.
+    cells and labels; arrows stay visible above the buttons.
 
     The overlay is transparent for mouse events so clicks pass
     through to the cell buttons below.
@@ -243,7 +243,7 @@ class VowelChartWidget(QWidget):
         # ``VowelChartSilhouette.back_right_pixel_offset`` field so
         # the renderer does not need each cell's ``col``.
         # ``tier`` is the row's anchor semantic from
-        # :py:class:`VowelChartRow` -- ``"top"`` / ``"bottom"`` /
+        # :py:class:`VowelChartRow`: ``"top"`` / ``"bottom"`` /
         # ``"middle"`` / ``"only"``. The layout pass uses it to
         # decide whether the cell's stack hangs down from chart_y
         # (top), rises up to chart_y (bottom), or centres on
@@ -350,7 +350,7 @@ class VowelChartWidget(QWidget):
         self._diphthong_toggle.hide()
         # Always-visible chip strip below the silhouette listing
         # the inventory's diphthong segments. Visible in BOTH
-        # display modes so users always see + can select the
+        # display modes so users always see and can select the
         # diphthongs (in monophthong mode the trapezoid hides
         # diphthong cells; the strip is the only on-chart
         # affordance). Empty when the inventory has no
@@ -400,7 +400,7 @@ class VowelChartWidget(QWidget):
         )
         self._HDR_ACTIVE = f"color: {C['text']}; {_col_ls}"
         self._HDR_INACTIVE = f"color: {C['text_dim']}; {_col_ls}"
-        # Row labels: NO inline padding-right -- the gap to the
+        # Row labels: NO inline padding-right. The gap to the
         # silhouette comes entirely from
         # ``chart_style.VOWEL_CHART_ROW_LABEL_GAP_PX`` applied at
         # position time (web uses the same ``--vowel-chart-row-label-gap``
@@ -451,7 +451,7 @@ class VowelChartWidget(QWidget):
     # PyQt6 signal for display-mode changes. The owning
     # MainWindow connects to this to persist the user's choice
     # via QSettings ``VOWEL_CHART_MODE``. Declared at class scope
-    # via ``pyqtSignal`` -- but that import requires PyQt6.QtCore.
+    # via ``pyqtSignal``, but that import requires PyQt6.QtCore.
     # Connection lives in main_window.py.
     display_mode_changed = pyqtSignal(str)
 
@@ -508,7 +508,7 @@ class VowelChartWidget(QWidget):
     def _populate_diphthong_chip_strip(self) -> None:
         """Refill the chip strip with one chip per unique
         diphthong segment in the current inventory. Chip click
-        emits ``segment_clicked(seg)`` -- the owning MainWindow
+        emits ``segment_clicked(seg)``; the owning MainWindow
         routes that through the same handler the pooled
         SegmentButton's ``clicked`` signal uses, so the chip is
         a thin shortcut, not a parallel selection path.
@@ -519,9 +519,6 @@ class VowelChartWidget(QWidget):
         width so a wider chart packs more chips per row.
         """
         layout = self._chip_strip_layout
-        # Clear prior chips by removing each widget from the
-        # grid. ``takeAt(0)`` works for grids the same way it
-        # works for box layouts.
         while layout.count():
             item = layout.takeAt(0)
             if item is None:
@@ -555,7 +552,7 @@ class VowelChartWidget(QWidget):
             layout.addWidget(chip, row, col)
 
     def _apply_display_mode_filter(self) -> None:
-        """No-op: cells are always visible.
+        """No-op. Cells are always visible.
 
         Diphthongs no longer occupy cells, so the mode toggle
         only gates the arrow overlay (read in its paintEvent).
@@ -641,7 +638,7 @@ class VowelChartWidget(QWidget):
 
         The geometry pass (placement, collision grouping, and
         physical-coordinate arithmetic) all happens in
-        :py:mod:`vowel_layout`; this method only translates the
+        :py:mod:`vowel_layout`. This method only translates the
         result into widget calls.
 
         ``vowel_secondary`` carries final-state feature bundles for
@@ -737,7 +734,7 @@ class VowelChartWidget(QWidget):
             self._col_labels.append((lbl, col.chart_x))
         # Row labels: positioned at chart_y on the left gutter.
         # Weight 500 (Medium) per chart_style.py so axis labels
-        # read lighter than the col-header headings -- the
+        # read lighter than the col-header headings; the
         # 600/500 axis-vs-heading split the web docstring
         # describes now applies on desktop too.
         row_font = QFont("Noto Sans")
@@ -757,7 +754,7 @@ class VowelChartWidget(QWidget):
         # layout pass turns those into pixel positions. The cell's
         # row tier (read from the shared ``VowelChartRow``) decides
         # whether the cell anchors its top / centre / bottom on
-        # chart_y -- mirrors the web's ``data-row-tier`` CSS.
+        # chart_y; mirrors the web's ``data-row-tier`` CSS.
         tier_by_row = {row.logical_row: row.tier for row in geometry.rows}
         for cell in geometry.cells:
             widget = self._build_cell(cell)
@@ -801,14 +798,14 @@ class VowelChartWidget(QWidget):
 
         Dispatches on ``cell.display_kind``:
 
-        * Single entry -> the raw button (no container).
-        * PAIR kind (long / nasal / rhotic / phonation / tone) ->
+        * Single entry: the raw button (no container).
+        * PAIR kind (long / nasal / rhotic / phonation / tone):
           horizontal hbox with the two entries side-by-side, marked
           member on the right per the shared classifier's ordering
           convention.
-        * CONTRAST_SET -> 2-column grid (3 entries: first spans both
+        * CONTRAST_SET: 2-column grid (3 entries: first spans both
           columns on row 0; 4 entries: 2x2 in entry order).
-        * STACK (default) -> vertical vbox with all entries.
+        * STACK (default): vertical vbox with all entries.
 
         Returns ``None`` if none of the segments have a backing
         button (defensive; should not happen in normal flow).
@@ -963,10 +960,11 @@ class VowelChartWidget(QWidget):
         # ``SegmentButton`` so it has ``BTN_W`` × ``SEG_BTN_H``
         # dimensions. Spacing comes from the grid layout. The
         # data-area width depends on this method via
-        # ``_data_area_rect`` -> ``_chip_strip_height`` (circular),
-        # so we approximate via ``widget.width() - chrome``; a
-        # 1-col difference at the edge is fine because the
-        # layout pass rebuilds the chips with the exact ``dw``.
+        # ``_data_area_rect`` calls ``_chip_strip_height``
+        # (circular), so we approximate via
+        # ``widget.width() - chrome``; a 1-col difference at the
+        # edge is fine because the layout pass rebuilds the chips
+        # with the exact ``dw``.
         approx_dw = max(0, self.width() - VOWEL_LABEL_W - self._PAD_R)
         spacing = self._chip_strip_layout.spacing()
         chip_pitch = BTN_W + spacing
@@ -1008,7 +1006,7 @@ class VowelChartWidget(QWidget):
             )
         # Diphthong chip strip: sits in the band BELOW the data
         # area (above ``_PAD_B``). Spans the full data-area
-        # width. Hidden when the inventory has no diphthongs --
+        # width. Hidden when the inventory has no diphthongs;
         # ``_data_area_rect`` already accounted for the missing
         # band via ``_chip_strip_height``.
         if self._diphthong_chip_strip.isVisible():
@@ -1051,7 +1049,7 @@ class VowelChartWidget(QWidget):
         # Recompute silhouette_left per render using the dw-corrected
         # silhouette: the baked ``silhouette_left`` field on the row
         # was computed at the canonical 232 px content width, but the
-        # rendered chart is content-driven (~228-320 px). Using the
+        # rendered chart is content-driven (~228 to 320 px). Using the
         # cascade helper keeps the label flush against the silhouette
         # at any rendered width.
         sil_for_dw = (
@@ -1113,7 +1111,7 @@ class VowelChartWidget(QWidget):
             #   middle / only -> centre on chart_y
             # Without this, a 7-deep Close (top) row stack centred on
             # chart_y=0.08 extends half-stack ABOVE the silhouette
-            # top edge -- one of the divergences vs. the web for
+            # top edge; one of the divergences vs. the web for
             # Korean PHOIBLE and other tall-stack inventories.
             cy_px = dy + round(cy * dh)
             if tier == "top":
@@ -1158,14 +1156,14 @@ class VowelChartWidget(QWidget):
         # position to the bottommost row's front position.
         sil = self._silhouette
         if sil is None:
-            # No inventory rendered yet -- use the canonical silhouette
+            # No inventory rendered yet; use the canonical silhouette
             # so a pre-load paint still shows the trapezoid outline.
             sil = vowel_silhouette(self._shape)
         # CASCADE: recompute the silhouette corners from the cell
         # extent fields (front_anchor_at_*, back_anchor,
         # cell_outer_extent_px) for the ACTUAL data width. This
         # guarantees the silhouette wraps the outermost cells
-        # flush regardless of how wide the chart renders -- pre-
+        # flush regardless of how wide the chart renders. Pre-
         # cascade the corners were computed once at the canonical
         # 232 px content width and drifted ~1 px at the rendered
         # 228 / 320 px widths.
@@ -1177,7 +1175,7 @@ class VowelChartWidget(QWidget):
         # Back edge: now derived from ``back_anchor + extent_px / dw``
         # via ``silhouette_for_data_width``; the legacy
         # ``back_right_pixel_offset`` escape hatch still applies for
-        # any per-inventory tweak (default 0 -- the cascade math
+        # any per-inventory tweak (default 0; the cascade math
         # already enforces flush).
         back_right_x = (
             dx + round(sil.top_right * dw) + sil.back_right_pixel_offset
@@ -1200,12 +1198,12 @@ class VowelChartWidget(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         # "Soft modern" interior: single top->bottom gradient
         # instead of the alternating per-band tints. Paints first
-        # so the silhouette outline + diphthong arrows render on
-        # top. Active-state cue lives on the labels (text-dim ->
+        # so the silhouette outline and diphthong arrows render on
+        # top. Active-state cue lives on the labels (text-dim to
         # text colour transition); the silhouette outline stays
         # the same in both states.
         self._paint_gradient_interior(painter, path)
-        # Outline only, no painted fill: the trapezoid is a
+        # Outline only, no painted fill. The trapezoid is a
         # structural guide, not a coloured region. A 1 px alpha-
         # blended stroke softens the silhouette so the cells inside
         # carry the visual weight; mirrors the web's muted
@@ -1363,7 +1361,7 @@ class VowelChartWidget(QWidget):
         top->bottom linear gradient. Replaces the pre-redesign
         alternating per-band tints (which read as uneven graph
         paper on irregular inventories). Mirrors the web's CSS
-        rule on ``.vowel-chart-row-bands`` -- both renderers paint
+        rule on ``.vowel-chart-row-bands``; both renderers paint
         ``border @ 4 % alpha`` at the top, ``border @ 14 % alpha``
         at the bottom, suggesting tongue lowering without adding
         visual noise.
@@ -1465,7 +1463,7 @@ class VowelChartWidget(QWidget):
             # Aim for the cell's CANONICAL segment button
             # (entries[0]) so the arrowhead lands on the
             # canonical-vowel button rather than the cell's
-            # geometric centre. For Korean /ia/ -> secondary cell
+            # geometric centre. For Korean /ia/ the secondary cell
             # holds /a, aː/; arrow now points to /a/ specifically.
             #
             # The fallback chain (button -> cell widget -> projected
@@ -1474,7 +1472,7 @@ class VowelChartWidget(QWidget):
             # ``_display_mode != DIPHTHONG`` (see _DiphthongOverlay),
             # so this code only runs when arrows SHOULD render. If
             # ``btn.isVisible() == False`` here it means the button
-            # was reparented to a hidden cell -- the cell widget's
+            # was reparented to a hidden cell; the cell widget's
             # geometry() still returns its layout position (Qt
             # doesn't zero geometry on setVisible(False)), so the
             # fallback is sensible.
@@ -1522,7 +1520,7 @@ class VowelChartWidget(QWidget):
         # Two opacity tiers in diphthong mode (the only mode in
         # which arrows render at all):
         # - default: every arrow paints at focused alpha (the chart
-        #   IS the arrows in this mode -- nothing else to gate on)
+        #   IS the arrows in this mode; nothing else to gate on)
         # - hover/focus: matching arrow stays at focused alpha,
         #   non-matching arrows dim so the user can follow a
         #   single trajectory cleanly in a busy cluster
@@ -1553,7 +1551,7 @@ class VowelChartWidget(QWidget):
                 # Edge offset: start the arrow at the source
                 # button's EDGE (not its centre) in the chord
                 # direction; terminate at the target button's
-                # EDGE. The chord (centre->centre) gives the
+                # EDGE. The chord (centre to centre) gives the
                 # direction; ``_rect_edge_offset`` returns the
                 # vector from centre to the rectangle's exit
                 # point along that direction. Arrows now visibly
@@ -1605,7 +1603,7 @@ class VowelChartWidget(QWidget):
                 painter.setPen(pen)
                 # Tangent at the terminus approximated by the
                 # control-point-to-endpoint direction. Arrowhead
-                # tip sits at the terminus -- which is already at
+                # tip sits at the terminus, which is already at
                 # the target button's edge thanks to the edge
                 # offset above, so no extra tip-inset is needed.
                 tx = bx - cx

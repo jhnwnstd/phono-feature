@@ -52,7 +52,7 @@ def test_segment_grid_widget_is_preferred_minimum_expanding(
 ) -> None:
     """``SegmentGridWidget`` declares Preferred horizontally (the
     parent splitter sets the bound) and MinimumExpanding vertically
-    so the widget claims left_wrap's full available height -- the
+    so the widget claims left_wrap's full available height; the
     height beyond the natural consonant content becomes the spillover
     policy's budget instead of stranded space.
     """

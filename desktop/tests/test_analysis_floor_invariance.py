@@ -9,7 +9,7 @@ never has to grow to accommodate large analysis output.
 These tests pin the user-facing contracts:
 
 1. ``AnalysisPanel.minimumSizeHint().height()`` is the same integer
-   regardless of which inventory is loaded -- the user's complaint
+   regardless of which inventory is loaded; the user's complaint
    that "the analysis pane size depends on whichever inventory was
    loaded first" must no longer reproduce.
 
@@ -103,7 +103,6 @@ def test_inventory_swap_preserves_vsplit_sizes(
     against: the analysis pane height changing every time you pick
     a different inventory from the dropdown.
     """
-    # Settle initial layout.
     qapp.processEvents()
     # Pretend the user has interacted (or settings restored), so
     # ``has_saved_splitter`` is True and we go through

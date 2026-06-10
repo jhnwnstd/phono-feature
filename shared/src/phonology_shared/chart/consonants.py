@@ -117,7 +117,7 @@ DERIVED_BREAKOUTS: list[tuple[str, str, dict[str, str]]] = [
 
 # Fact-based breakouts populated after :py:class:`LaryngealKind` is
 # declared (further down). The table is a list of
-# ``(display name, parent group, target laryngeal kind)`` -- see
+# ``(display name, parent group, target laryngeal kind)``; see
 # :py:data:`_FACT_BREAKOUTS` for the actual entries.
 _MERGE_PARENT: dict[str, str] = {
     "Sibilant Affricates": "Affricates",
@@ -258,7 +258,7 @@ class PlaceRank(IntEnum):
     distinctions are encoded by ``distributed``: ``[+distributed]``
     aligns with laminal dental and postalveolar contacts and
     ``[-distributed]`` aligns with apical alveolar and retroflex
-    contacts -- the derivation does not require literal
+    contacts; the derivation does not require literal
     ``apical`` / ``laminal`` primitives. The inventory never
     declares a ``"uvular"`` or ``"retroflex"`` feature; those are
     display labels :py:func:`derive_place` emits.
@@ -332,7 +332,7 @@ def derive_place(
     ``labial``/``labiodental``, ``coronal``/``anterior``/
     ``distributed``, ``dorsal``/``high``/``back``/``low``/``front``,
     ``pharyngeal``/``constrpharynx``/``radical``/``rtr``,
-    ``epilaryngeal``/``aryepiglottic``, ``constrgl`` -- never any
+    ``epilaryngeal``/``aryepiglottic``, ``constrgl``; never any
     invented ``"uvular"``/``"retroflex"``/etc. primitives.
 
     Check order matters: epiglottal evidence is detected BEFORE
@@ -547,20 +547,20 @@ class SecondaryKind(StrEnum):
 
     Evidence the derivation accepts:
 
-      * ``LABIALIZED`` -- explicit ``+secondarylabial``, OR
+      * ``LABIALIZED``: explicit ``+secondarylabial``, OR
         ``+round`` on a non-vowel (the practical labialisation cue),
         OR the optional ``+labialized`` alias when an inventory
         supplies it.
-      * ``PALATALIZED`` -- explicit ``+secondarydorsal`` combined
+      * ``PALATALIZED``: explicit ``+secondarydorsal`` combined
         with ``+high`` and front-leaning evidence (``+front`` or
         ``-back``), OR the optional ``+palatalized`` alias. A bare
         primary ``+dorsal`` segment is NOT treated as secondarily
         palatalised; the inventory must declare secondary place.
-      * ``VELARIZED`` -- explicit ``+secondarydorsal`` combined
+      * ``VELARIZED``: explicit ``+secondarydorsal`` combined
         with ``+high +back``, OR the optional ``+velarized`` alias.
         Same discipline as palatalised: no inference from primary
         ``+dorsal`` alone.
-      * ``PHARYNGEALIZED`` -- explicit ``+secondarypharyngeal`` or
+      * ``PHARYNGEALIZED``: explicit ``+secondarypharyngeal`` or
         ``+secondaryradical``, OR pharyngeal evidence (
         ``+pharyngeal`` / ``+constrpharynx`` / ``+radical +rtr``)
         layered onto a segment whose primary place is already an
@@ -584,7 +584,7 @@ def derive_secondary_articulations(
 ) -> frozenset[SecondaryKind]:
     """Derive secondary articulation display facts.
 
-    Always returns an empty set for vowels (``+syllabic``) -- the
+    Always returns an empty set for vowels (``+syllabic``); the
     grouper does not surface secondary articulation on vowel
     cells. For consonants, the function reads ``feats`` against
     the rules documented on :py:class:`SecondaryKind` and returns
@@ -614,14 +614,14 @@ def derive_secondary_articulations(
     back = feats.get("back", "0")
     front = feats.get("front", "0")
 
-    # PALATALIZED -- only from explicit secondary-dorsal evidence
+    # PALATALIZED: only from explicit secondary-dorsal evidence
     # (or alias), never from primary +dorsal alone.
     if (
         secondary_dorsal and high == "+" and (front == "+" or back == "-")
     ) or feats.get("palatalized", "0") == "+":
         out.add(SecondaryKind.PALATALIZED)
 
-    # VELARIZED -- same discipline as palatalised.
+    # VELARIZED: same discipline as palatalised.
     if (secondary_dorsal and high == "+" and back == "+") or feats.get(
         "velarized", "0"
     ) == "+":
@@ -697,14 +697,14 @@ def _segment_sort_key(
     ``profile`` is threaded into :py:func:`derive_place` so the
     place rank reflects the inventory's palatal/velar convention.
     Without it, the function falls back to Hayes-style behaviour
-    -- compatible with every call site that has not yet been
-    profile-threaded.
+    (compatible with every call site that has not yet been
+    profile-threaded).
 
     An earlier attempt inserted a typed
     :py:class:`LaryngealKind` slot right after place rank. That
     made phonation dominate the sub-place discriminators and
     split every voiceless / voiced pair across the entire VELAR
-    cluster -- a regression versus the IPA-conventional pair
+    cluster; a regression versus the IPA-conventional pair
     display. The typed-fact infrastructure (PlaceRank,
     LaryngealKind, SecondaryKind) is still consumed by the
     fact-based breakouts and by future renderers; the

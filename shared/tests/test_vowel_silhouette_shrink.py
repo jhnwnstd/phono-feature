@@ -29,9 +29,7 @@ from phonology_shared.chart.vowels import (
 )
 from phonology_shared.theory.feature_engine import FeatureEngine
 
-# ---------------------------------------------------------------------------
-# Stage 1 -- uniform shrink
-# ---------------------------------------------------------------------------
+# Stage 1: uniform shrink
 
 
 def test_stage1_preserves_slant() -> None:
@@ -40,7 +38,6 @@ def test_stage1_preserves_slant() -> None:
     """
     canonical_top = 1.0
     canonical_bot = 0.7
-    # One interior row whose min_w eats some slack.
     row_data = [(0.5, 0.7)]
     top, bot = _stage1_uniform_shrink(row_data, canonical_top, canonical_bot)
     assert top < canonical_top
@@ -48,16 +45,14 @@ def test_stage1_preserves_slant() -> None:
     assert top - bot == pytest.approx(canonical_top - canonical_bot)
 
 
-# ---------------------------------------------------------------------------
-# Stage 2 -- slant tweak with hard cap
-# ---------------------------------------------------------------------------
+# Stage 2: slant tweak with hard cap
 
 
 def test_stage2_disabled_by_default_for_silhouette_consistency() -> None:
     """Regression guard: ``_VOWEL_SLANT_CHANGE_CAP_FRAC`` MUST
     stay at ``0.0`` in production. Stage 2 (asymmetric slant
     tweak) was disabled after user feedback that the silhouette
-    "felt different for every inventory" -- the cause was Stage
+    "felt different for every inventory"; the cause was Stage
     2's per-inventory asymmetric reshaping of the canonical
     trapezoid. With the cap at 0, every inventory's silhouette
     is either the canonical Close-to-Open trapezoid (sparse) or
@@ -98,9 +93,7 @@ def test_stage2_disabled_returns_stage1() -> None:
         vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC = saved
 
 
-# ---------------------------------------------------------------------------
-# Composition -- _compute_shrunken_widths runs both stages
-# ---------------------------------------------------------------------------
+# Composition: _compute_shrunken_widths runs both stages
 
 
 def test_compose_returns_canonical_when_factor_zero() -> None:
@@ -122,9 +115,7 @@ def test_compose_returns_canonical_when_factor_zero() -> None:
         vowels_layout_mod._VOWEL_SHRINK_FACTOR = saved
 
 
-# ---------------------------------------------------------------------------
 # End-to-end: real inventory through build_vowel_chart_geometry
-# ---------------------------------------------------------------------------
 
 
 def _vowel_segs(engine: FeatureEngine) -> list[str]:
@@ -186,7 +177,7 @@ def test_silhouette_slant_canonical_across_bundled_inventories(
     chart's proportions drift, breaking that visual identity.
 
     If this test fails, either Stage 2 was re-enabled or
-    Stage 1's math was changed -- both warrant a visual review
+    Stage 1's math was changed; both warrant a visual review
     before landing.
     """
     canonical_sil = vowels_mod.vowel_silhouette(
@@ -207,10 +198,10 @@ def test_silhouette_slant_canonical_across_bundled_inventories(
         try:
             engine = bundled_engine(name)
         except (FileNotFoundError, KeyError, pytest.skip.Exception):
-            # bundled_engine raises pytest.skip when an
-            # inventory file isn't checked in (gitignored in
-            # CI). Skip just that inventory; keep scanning the
-            # rest so the invariant is still exercised.
+            # bundled_engine raises pytest.skip when an inventory file
+            # isn't checked in (gitignored in CI). Skip just that
+            # inventory; keep scanning the rest so the invariant is
+            # still exercised.
             continue
         vowels = _vowel_segs(engine)
         if not vowels:
@@ -221,10 +212,10 @@ def test_silhouette_slant_canonical_across_bundled_inventories(
         sil = geometry.silhouette
         rendered_slant = sil.top_width - sil.bottom_width
         drifts.append((name, rendered_slant - canonical_slant))
-    assert drifts, "no bundled inventories loaded -- fixture broken"
+    assert drifts, "no bundled inventories loaded; fixture broken"
     for name, drift in drifts:
         assert abs(drift) < 1e-9, (
             f"{name}: slant drifted from canonical "
-            f"by {drift:.6f} -- Stage 2 re-enabled or Stage 1 "
+            f"by {drift:.6f}; Stage 2 re-enabled or Stage 1 "
             f"broke its uniform-shrink invariant"
         )

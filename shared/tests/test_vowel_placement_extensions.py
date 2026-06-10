@@ -153,11 +153,11 @@ def test_negative_rtr_does_not_force_positive_atr_equivalence(
     """``rtr=-`` alone (with ``atr=0`` or with ``atr=-``) does NOT
     drive a divergence flag. Theory: ``+rtr`` (retracted tongue
     root) DOES imply ``-atr`` so the inversion fires there; ``-rtr``
-    (not retracted) does NOT imply ``+atr`` -- a vowel can be
+    (not retracted) does NOT imply ``+atr``; a vowel can be
     neither advanced nor retracted. PHOIBLE encodes most non-
     ATR-system vowels as ``atr=- rtr=-``, which under the prior
     rule fired SPLIT_SOURCE_DIVERGENCE on every PHOIBLE inventory's
-    every vowel because the inversion ``-rtr -> +atr-equiv``
+    every vowel because the inversion ``-rtr to +atr-equiv``
     disagreed with the explicit ``atr=-``. The diagnostic in
     ``test_phoible_vowel_placement_distribution`` surfaced this
     one-line bug.
@@ -219,7 +219,7 @@ def test_uniform_polarity_split_source_does_not_drive_divergence() -> None:
     Theory: a PHOIBLE inventory often codes every vowel ``tense=+``
     and every vowel ``atr=-`` because both features are stored
     columns even when the inventory makes no contrast on them.
-    The old rule -- "tense and atr disagree on this vowel" -- fired
+    The old rule ("tense and atr disagree on this vowel") fired
     SPLIT_SOURCE_DIVERGENCE on every vowel of such inventories.
     The new rule: only count a source's value as a real source-
     claim when the inventory contrasts on that feature.
@@ -292,8 +292,8 @@ def test_underspec_height_inventory_does_not_crash(
 
     - The placer does NOT crash on any vowel.
     - Every vowel lands on the Open-mid default row (height
-      underspecified -> default anchor).
-    - Vowels still distribute across the backness axis -- the
+      underspecified to default anchor).
+    - Vowels still distribute across the backness axis; the
       placer reads ``front``/``back`` even when height is fully
       absent. So the chart is not COMPLETELY collapsed to a
       single cell; just the height dimension is.
@@ -304,7 +304,6 @@ def test_underspec_height_inventory_does_not_crash(
     hit this branch on PHOIBLE.
     """
     cases = [
-        # (label, features)
         ("front_unround", {"front": "+", "back": "-", "round": "-"}),
         ("front_round", {"front": "+", "back": "-", "round": "+"}),
         ("central_unround", {"front": "-", "back": "-", "round": "-"}),
@@ -330,7 +329,7 @@ def test_underspec_height_inventory_does_not_crash(
         )
         assert PlacementFlag.DEFAULT_ANCHOR in placement.flags
 
-    # Vowels still distribute across columns -- not all in one cell.
+    # Vowels still distribute across columns; not all in one cell.
     columns = {p.col for p in placements}
     assert len(columns) >= 3, (
         f"backness axis collapsed to {columns!r}; the placer "
@@ -340,7 +339,7 @@ def test_underspec_height_inventory_does_not_crash(
 
 def test_raised_promotes_row(relative_height_profile):
     """Open-mid base row with ``+raised`` is nudged one step
-    closer (-> Mid). ``+raised`` adds
+    closer (to Mid). ``+raised`` adds
     :py:attr:`PlacementFlag.REFINED`.
     """
     base = vowel_grid_pos(
@@ -371,7 +370,7 @@ def test_raised_promotes_row(relative_height_profile):
 
 def test_lowered_demotes_row(relative_height_profile):
     """Close base row with ``+lowered`` is nudged one step more
-    open (-> Near-close). The base must come from ``+tense`` so the
+    open (to Near-close). The base must come from ``+tense`` so the
     underspecified Close-Mid fallback does not interfere.
     """
     base = vowel_grid_pos(
@@ -423,7 +422,7 @@ def test_raised_and_lowered_conflict_is_noop(relative_height_profile):
 
 
 def test_advanced_moves_column_one_step(relative_backness_profile):
-    """Back ``+advanced`` -> central; central ``+advanced`` ->
+    """Back ``+advanced`` to central; central ``+advanced`` to
     front.
     """
     back_to_central = vowel_grid_pos(
@@ -456,7 +455,7 @@ def test_advanced_moves_column_one_step(relative_backness_profile):
 
 
 def test_retracted_moves_column_one_step(relative_backness_profile):
-    """Front ``+retracted`` -> central."""
+    """Front ``+retracted`` to central."""
     front_to_central = vowel_grid_pos(
         {
             "high": "+",

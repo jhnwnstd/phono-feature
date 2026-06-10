@@ -576,7 +576,7 @@ class MainWindow(QMainWindow):
         self.seg_grid_widget = SegmentGridWidget(left_wrap)
         # Stretch=1 + ``MinimumExpanding`` vertical policy on the widget
         # (set inside SegmentGridWidget.__init__) lets the consonant
-        # grid absorb whatever vertical space left_wrap holds -- so
+        # grid absorb whatever vertical space left_wrap holds, so
         # the spillover algorithm sees the FULL available column-of-
         # consonants height as its budget instead of just the
         # natural-content height. No trailing ``addStretch`` so the
@@ -1677,7 +1677,7 @@ class MainWindow(QMainWindow):
         """Apply the SEG-mode summary to the panels. The shared
         ``summarize_segment_selection`` returns a total payload --
         every segment in ``segment_states``, every feature in
-        ``feature_rows`` -- so the empty-selection case needs no
+        ``feature_rows``; so the empty-selection case needs no
         special branch here; it's just the payload returned for an
         empty ``segs`` list. The web bridge path is the same shape.
         """
@@ -1746,7 +1746,7 @@ class MainWindow(QMainWindow):
 
         Clear is "make the selection empty", not a distinct UI state.
         The view-model's empty-selection payload produces the default
-        placeholder text -- same shape as app launch -- so the post-
+        placeholder text (same shape as app launch), so the post-
         clear analysis re-renders through the normal pipeline:
         :py:meth:`ModeController.apply_phases` schedules the deferred
         refresh on a mode change; the same-mode branch refreshes

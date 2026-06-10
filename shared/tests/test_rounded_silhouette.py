@@ -39,7 +39,7 @@ def _parse_points(points_str: str) -> list[tuple[float, float]]:
 
 def test_canonical_trapezoid_emits_expected_point_count() -> None:
     """A canonical trapezoid with the default segments_per_corner
-    (5) emits ``4 * (5 + 1) = 24`` points -- one set per corner."""
+    (5) emits ``4 * (5 + 1) = 24`` points: one set per corner."""
     sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
     pts_str = rounded_silhouette_polygon_points(
         sil, VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC
@@ -159,14 +159,14 @@ def test_silhouette_for_data_width_flush_with_back_cell_extent() -> None:
     sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
     pair_shift_px = (BTN_W + VOWEL_PAIR_GAP_PX) / 2
     expected_extent = pair_shift_px + BTN_W / 2
-    # Test multiple data widths -- the cascade must hold at all.
+    # Test multiple data widths; the cascade must hold at all.
     for dw in (200, 232, 320, 440):
         adjusted = silhouette_for_data_width(sil, dw)
         silhouette_right_px = adjusted.top_right * dw
         cell_right_px = adjusted.back_anchor * dw + expected_extent
         assert abs(silhouette_right_px - cell_right_px) < 1.0, (
             f"At dw={dw}: silhouette_right_px={silhouette_right_px}, "
-            f"cell_right_px={cell_right_px} -- cascade broken"
+            f"cell_right_px={cell_right_px}; cascade broken"
         )
 
 
@@ -195,7 +195,7 @@ def test_silhouette_for_data_width_flush_with_front_cell_extent() -> None:
         cell_left_px = adjusted.front_anchor_at_top * dw - expected_extent
         assert abs(silhouette_left_px - cell_left_px) < 1.0, (
             f"At dw={dw}: silhouette_left_px={silhouette_left_px}, "
-            f"cell_left_px={cell_left_px} -- cascade broken"
+            f"cell_left_px={cell_left_px}; cascade broken"
         )
 
 
@@ -215,6 +215,6 @@ def test_silhouette_for_data_width_symmetric_front_back_offset() -> None:
         back_outset = adjusted.top_right - adjusted.back_anchor
         assert abs(front_inset - back_outset) < 1e-9, (
             f"At dw={dw}: front_inset={front_inset}, "
-            f"back_outset={back_outset} -- asymmetry would surface as "
+            f"back_outset={back_outset}; asymmetry would surface as "
             f"visible drift between front and back cells"
         )

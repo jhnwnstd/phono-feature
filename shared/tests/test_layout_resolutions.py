@@ -131,7 +131,7 @@ def test_pane_widths_sum_to_window_width(res: Resolution) -> None:
     """``distribute_pane_widths`` should hand out the full window
     width when both content sizes are below their minimum-driven
     floor. Otherwise the extra goes to the seg pane (its policy)
-    and the sum still equals the window width — the splitter has
+    and the sum still equals the window width; the splitter has
     no dead pixels."""
     win_w, _ = layout.recommended_initial_window_size(res.width, res.height)
     seg_w, feat_w = layout.distribute_pane_widths(
@@ -164,7 +164,7 @@ def test_feat_pane_is_content_driven_at_every_resolution(
     cushion)``). Same literal 540 px at every resolution
     (FEAT_CONTENT_W 500 + FEAT_CUSHION_PX 40); only the seg pane
     absorbs extra width on wide screens. Literal pin so a bump
-    to FEAT_CUSHION_PX (40 → something else) trips the assertion
+    to FEAT_CUSHION_PX (40 to something else) trips the assertion
     rather than silently shifting both sides."""
     win_w, _ = layout.recommended_initial_window_size(res.width, res.height)
     _, feat_w = layout.distribute_pane_widths(
@@ -183,7 +183,7 @@ def test_feat_pane_is_content_driven_at_every_resolution(
 @pytest.mark.parametrize("res", _REPS, ids=lambda r: r.label)
 def test_vowel_chart_layout_decision(res: Resolution) -> None:
     """At every supported resolution the seg pane is wide enough
-    to host the vowel chart beside the consonants — when the
+    to host the vowel chart beside the consonants, when the
     geometry controller applies its content-aware vowel-safe floor.
 
     ``recommended_initial_window_size`` returns the pre-inventory
@@ -218,7 +218,7 @@ def test_window_does_not_collapse_to_single_column(
     ``layout.COLLAPSE_W``. All nine targeted monitor resolutions
     are above the 900-px floor, so the page stays in the two-pane
     side-by-side layout. The desktop has no analogue but the helper
-    is here for parity — a failure means we'd be hitting the mobile
+    is here for parity; a failure means we'd be hitting the mobile
     layout on a real monitor."""
     win_w, _ = layout.recommended_initial_window_size(res.width, res.height)
     assert not layout.should_collapse_single_column(
@@ -306,7 +306,7 @@ def test_smallest_targeted_resolution_width_fits_screen() -> None:
 def test_seg_pane_fans_out_at_4k() -> None:
     """At 4K, the recommended window is capped at 2400 px wide
     (``CONTENT_MAX_W_ABS``). Feat lands at 540 px (FEAT_CONTENT_W
-    500 + FEAT_CUSHION_PX 40); seg gets the remaining 1860 px —
+    500 + FEAT_CUSHION_PX 40); seg gets the remaining 1860 px;
     the cap stops the fan-out from going past the useful-content
     width even though the screen has room to spare."""
     win_w, _ = layout.recommended_initial_window_size(3840, 2160)
@@ -322,7 +322,7 @@ def test_seg_pane_fans_out_at_4k() -> None:
 def test_seg_pane_stays_at_min_at_low_end_laptop() -> None:
     """At 1366×768, the window is preferred at 1120 wide (the new
     vowel-safe floor). With feat 540 px and seg-min 480 px, seg
-    pane gets 580 px — just under VOWEL_STACK_W (620), so for
+    pane gets 580 px, just under VOWEL_STACK_W (620), so for
     typical-content inventories the chart would stack here. The
     content-driven floor in ``fit_to_content`` pushes the actual
     initial window up to the vowel-safe-per-inventory minimum."""
@@ -360,7 +360,7 @@ def test_feat_floor_binds_when_content_is_small() -> None:
 def test_seg_floor_binds_when_window_is_narrow() -> None:
     """When the window is narrower than ``seg_content_w +
     feat_w``, the seg pane clamps to ``max(SEG_MIN_W,
-    seg_content_w)`` — splitter overflow rather than letting seg
+    seg_content_w)``: splitter overflow rather than letting seg
     drop below its content."""
     seg_w, feat_w = layout.distribute_pane_widths(
         800, seg_content_w=500, feat_content_w=500
@@ -384,7 +384,7 @@ def test_pane_widths_clamp_to_floor_when_window_below_minimal_sum() -> None:
 
 def test_seg_min_floor_binds_when_no_content_pressure() -> None:
     """With zero content pressure (both content widths tiny), the
-    seg pane still gets at least ``SEG_MIN_W`` — pins the
+    seg pane still gets at least ``SEG_MIN_W``; pins the
     ``max(SEG_MIN_W, ...)`` floor regardless of content."""
     seg_w, feat_w = layout.distribute_pane_widths(
         1400, seg_content_w=100, feat_content_w=100
@@ -477,7 +477,7 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
             fraction_driven_h.add(res.label)
     # Floor-driven height: 0.80 × screen < 900, i.e. screen < 1125.
     # 1280×1200 moves to the fraction-driven bucket (0.80 × 1200 = 960
-    # exceeds the 900 floor) — at 80% the fraction begins to bind one
+    # exceeds the 900 floor); at 80% the fraction begins to bind one
     # resolution earlier than at 75%.
     assert floor_driven_h == {
         "1920x1080",
@@ -494,7 +494,7 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
 def test_tall_narrow_1280x1200_fits_screen_width() -> None:
     """1280×1200 is a non-16:9 aspect (taller than wide for
     desktop). With the lower vowel-safe floor (1120), the width
-    now FITS the 1280 screen — no horizontal overshoot. Height is
+    now FITS the 1280 screen; no horizontal overshoot. Height is
     fraction-driven at 80% (0.80 × 1200 = 960 above the 900 floor).
     """
     w, h = layout.recommended_initial_window_size(1280, 1200)
@@ -588,8 +588,8 @@ def test_top_pane_height_degrades_to_hard_floor_on_short_window() -> None:
 
 def test_top_pane_height_passes_through_when_room_to_spare() -> None:
     """When the vsplit is comfortably tall, the top pane gets
-    exactly its content-driven need. Analysis gets the leftover
-    — the user's stated "as tall as it can be" preference."""
+    exactly its content-driven need. Analysis gets the leftover:
+    the user's stated "as tall as it can be" preference."""
     top_h = layout.top_pane_height(top_need_h=540, total=900)
     assert top_h == 540
     analysis_h = 900 - top_h
@@ -635,7 +635,7 @@ def test_recommended_window_size_independent_of_device_pixel_ratio(
 ) -> None:
     """``recommended_initial_window_size`` takes LOGICAL pixels and
     returns LOGICAL pixels. The device pixel ratio is irrelevant
-    at this layer — Qt is responsible for translating logical to
+    at this layer; Qt is responsible for translating logical to
     device pixels when it paints. Verified by computing the same
     result for the same (logical-resolution) screen at every DPR.
     """
@@ -738,7 +738,7 @@ def test_inventory_has_features_within_reasonable_bound(
     name: str,
 ) -> None:
     """Feature count caps the feature-pane content width. A
-    typical inventory has 25–35 features. A bump past 50 would
+    typical inventory has 25 to 35 features. A bump past 50 would
     blow past the 540-px ``feat_w`` the resolution matrix
     assumes."""
     data = _load_inventory(f"{name}_features")

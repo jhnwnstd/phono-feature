@@ -56,7 +56,7 @@ _CELL_COUNT_HARD_CAP = 24
 # shared/tests/conftest.py.
 #
 # Geometric-invariant tests (b1, b2, b4, b5) consume
-# ``phoible_inventory_ids_sample`` -- the properties pinned
+# ``phoible_inventory_ids_sample``; the properties pinned
 # (chart_xy bounds, silhouette containment, cell-count cap,
 # segment disjointness) depend on feature-distribution space.
 # ``test_b3`` (diphthong endpoint validity) consumes

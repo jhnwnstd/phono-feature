@@ -596,8 +596,8 @@ dialog input[type="text"]:focus-visible {
      ``FEAT_CUSHION_PX`` (40 px) is added as right-padding on the
      feature panel (see ``#feat-panel`` below) so the cards don't
      sit flush against the splitter handle. CSS can't compute
-     ``calc(max-content + N)`` directly -- ``max-content`` is an
-     intrinsic sizing keyword, not a length -- so the cushion
+     ``calc(max-content + N)`` directly; ``max-content`` is an
+     intrinsic sizing keyword, not a length, so the cushion
      rides on the column's contents rather than its track size. */
   grid-template-columns: minmax(var(--seg-min-w), 1fr) max-content;
   gap: var(--space-md);
@@ -954,7 +954,7 @@ dialog input[type="text"]:focus-visible {
   color: var(--text-dim);
   padding: var(--vowel-chart-title-padding);
   /* Pinned strip height so the title row reserves the same vertical
-     space as the desktop's ``_TITLE_H`` -- cells anchored from the
+     space as the desktop's ``_TITLE_H``, so cells anchored from the
      chart's top edge land at the same y on both UIs. */
   min-height: var(--vowel-chart-title-h);
   box-sizing: border-box;
@@ -1002,7 +1002,7 @@ dialog input[type="text"]:focus-visible {
      the silhouette's left edge at that y, also in [0, 1]. The label
      sits at the same vertical position as its data cells, with its
      RIGHT edge a comfortable gap to the left of the silhouette's
-     slanted left edge -- so the labels follow the trapezoid inward
+     slanted left edge, so the labels follow the trapezoid inward
      when the chart shrinks but still read as a separate column,
      not as text crowded against the trapezoid stroke. Mirrors the
      desktop's ``_ROW_LABEL_GAP_PX`` in ``vowel_chart.py``.
@@ -1097,7 +1097,7 @@ dialog input[type="text"]:focus-visible {
      monophthong mode the SVG isn't appended at all so this
      ruleset never matches. Default opacity is the chart_style
      focused-alpha because in diphthong mode the chart IS the
-     arrows -- no hover gating needed. */
+     arrows; no hover gating needed. */
   fill: none;
   stroke: var(--accent);
   stroke-width: var(--diphthong-arrow-stroke);
@@ -1117,7 +1117,7 @@ dialog input[type="text"]:focus-visible {
    Gated on @supports(:has()) so the rule is a no-op on Safari <
    17.5 (and any other browser without :has() support). The
    degraded behaviour on those browsers is that hover doesn't
-   dim other arrows -- the focused arrow gets the default
+   dim other arrows; the focused arrow gets the default
    focused-alpha and the others stay at the same focused-alpha.
    Functional, just less visual cueing. */
 @supports selector(:has(*)) {
@@ -1192,7 +1192,7 @@ dialog input[type="text"]:focus-visible {
 .vowel-diphthong-chips .seg-btn {
   /* Chips share the standard seg-btn size + font so dense
      diphthong inventories wrap into multiple rows naturally
-     without any ad-hoc width tuning -- ``flex-wrap: wrap`` on
+     without any ad-hoc width tuning; ``flex-wrap: wrap`` on
      the parent + the standard button width is the single
      source of truth. */
 }
@@ -1388,7 +1388,7 @@ dialog input[type="text"]:focus-visible {
 }
 /* Horizontal layout for a PAIR cell: two segments that share the
    same vowel-space position (same row, same col) but differ on a
-   single in-cell-contrast feature -- long, nasal, rhotic, breathy
+   single in-cell-contrast feature: long, nasal, rhotic, breathy
    or creaky (phonation), tone. Length and the other contrasts are
    display attributes on the same position, so the pair lays out
    side-by-side rather than stacking vertically. ``data-pair-kind``
@@ -1493,7 +1493,7 @@ dialog input[type="text"]:focus-visible {
 }
 
 /* Compact density tier (active when the feature pane carries
-   ``data-density="compact"`` -- set by ``applyFeatureDensity``
+   ``data-density="compact"``, set by ``applyFeatureDensity``
    in main.js when the active-feature count crosses
    ``FEAT_COMPACT_THRESHOLD``). Mirrors the desktop's
    ``FeatureRow.set_compact`` which shrinks row height + margin

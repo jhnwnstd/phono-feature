@@ -157,7 +157,7 @@ def test_absent_key_segment_matches_like_explicit_zero() -> None:
 # inventory. The superset invariant only holds for requests that
 # stick to explicit polarities (a requested ``"0"`` becomes a no-op
 # under wildcard but a real filter under strict, so wildcard would
-# be a SUPERSET — that direction is already covered by the
+# be a SUPERSET; that direction is already covered by the
 # synthetic table above and excluded here to keep the parametrise
 # focused on the headline property).
 _HAYES_SUPERSET_SPECS: list[dict[str, str]] = [

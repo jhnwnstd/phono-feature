@@ -8,14 +8,14 @@ refactor:
      path, which rejects the same literals via
      :py:func:`_reject_non_finite`).
   2. The function accepts :py:class:`os.PathLike` paths (e.g.
-     :py:class:`pathlib.Path`) -- no string coercion required at
+     :py:class:`pathlib.Path`); no string coercion required at
      call sites.
   3. JSON is pre-encoded so a serialization error never leaves a
      temp file behind in the target directory.
 
 The previously existing atomicity contract (no truncation on
 failure, tmp cleanup on exception, replace + dir fsync) is covered
-in :py:mod:`desktop/tests/test_inventory_contract.py` -- these
+in :py:mod:`desktop/tests/test_inventory_contract.py`; these
 tests do not duplicate that coverage.
 """
 

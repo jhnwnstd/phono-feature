@@ -6,8 +6,8 @@ is a BASELINE, not a freeze: deliberate improvements to the grouper
 alias-aware feature read) are expected to drift the snapshot, and
 the right response is to regenerate it and review the diff for
 whether the new grouping is better. The test fails so unintended
-REGRESSIONS surface -- a refactor that splits Plosives in half by
-accident, a code-path that drops Sibilants entirely -- not so that
+REGRESSIONS surface (a refactor that splits Plosives in half by
+accident, a code-path that drops Sibilants entirely), not so that
 every change is blocked.
 
 Snapshot file: :file:`shared/tests/data/consonants_grouping_snapshot.json`.

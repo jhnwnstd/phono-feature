@@ -21,7 +21,7 @@ Tests:
   the user's reported desktop behaviour) and that every retained
   feature has at least one explicit ``+`` / ``-``.
 - ``test_bundled_english_keeps_all_specified_features`` regression
-  against the bundled English inventory — every feature with
+  against the bundled English inventory: every feature with
   explicit values must survive the filter.
 """
 

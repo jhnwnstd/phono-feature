@@ -6,12 +6,12 @@ visitor, and parsing 105k rows on every Pyodide cold start would
 dominate the boot time. Pre-computing at build time produces two
 artifacts the runtime consumes via plain JSON parse:
 
-* ``_phoible_index.generated.json`` — language + inventory
+* ``_phoible_index.generated.json``: language + inventory
   metadata only (~150-250 KB raw). Bundled into
   ``python_bundle.zip`` so the picker autocomplete lights up at
   app boot without a second fetch.
 
-* ``_phoible_data.generated.json`` — per-inventory segment
+* ``_phoible_data.generated.json``: per-inventory segment
   bundles in compact positional encoding (~1.5-2.5 MB raw,
   ~500-700 KB gzipped). Shipped as a separate static asset under
   ``web/dist/`` and lazy-loaded on first PHOIBLE click so the

@@ -24,7 +24,7 @@ verified empirically before commit):
 - **E3 Default-anchor ceiling**: for inventories with >= 7 vowels,
   at most 20% collapse to the Open-mid Central default anchor.
   Smaller inventories are exempt because they are genuinely
-  feature-sparse (Buwal/PHOIBLE: 2 vowels, both at default — that
+  feature-sparse (Buwal/PHOIBLE: 2 vowels, both at default; that
   is the inventory, not a placement bug).
 
 - **E4 Diphthong NFC parity**: every diphthong segment in
@@ -161,7 +161,7 @@ def test_e3_default_anchor_ceiling_for_large_inventories(
     underspecified by design).
 
     The 35% threshold accommodates the documented long-tail case
-    (Miyako/EA: 10 vowels, 30% at default - the Eurasian
+    (Miyako/EA: 10 vowels, 30% at default; the Eurasian
     Phonologies source records Miyako's vowels with sparse
     height/backness features) while still tripping on a genuine
     regression (a normalizer break that collapses many vowels

@@ -15,8 +15,6 @@ from phonology_shared.presentation.layout import partition_groups_for_spillover
 
 
 def test_everything_fits_keeps_all_groups_in_main() -> None:
-    # Three 100-tall groups in a 400-tall pane: ample headroom; no
-    # group should be pushed into the spillover.
     assert (
         partition_groups_for_spillover([100, 100, 100], available_height=400)
         == 3
@@ -24,20 +22,18 @@ def test_everything_fits_keeps_all_groups_in_main() -> None:
 
 
 def test_one_group_overflow_moves_the_last_to_spillover() -> None:
-    # 4 × 100 = 400, available = 350 → bottom group goes to spillover.
-    # main: 3 × 100 = 300; spillover: 1 group in a row of 2, row height
-    # = max(100) = 100. Total = 400 — still over budget.
-    # Drop another: main 2 × 100 = 200; spillover 2 in a row of 2,
-    # row height = 100. Total = 300 ≤ 350. main_count = 2.
+    # 4 x 100 = 400, available = 350; bottom group goes to spillover.
+    # main: 3 x 100 = 300; spillover: 1 group in a row of 2, row height
+    # = max(100) = 100. Total = 400, still over budget.
+    # Drop another: main 2 x 100 = 200; spillover 2 in a row of 2,
+    # row height = 100. Total = 300 <= 350. main_count = 2.
     assert partition_groups_for_spillover([100, 100, 100, 100], 350) == 2
 
 
 def test_pair_packing_uses_row_max_height() -> None:
-    # Uneven heights: the spillover-row height is the taller of the
-    # pair, so a tall+short pair counts as the tall one's height.
     # [200, 50, 50] with available = 150: main 1 (h=200) + spillover
-    # max(50, 50)=50 → 250 > 150; drop main to 0: spillover row =
-    # max(200, 50)=200 + max(50)=50 → still over. Returns 0 — every
+    # max(50, 50)=50 -> 250 > 150; drop main to 0: spillover row =
+    # max(200, 50)=200 + max(50)=50, still over. Returns 0; every
     # group went to spillover and it still wouldn't fit, but the
     # function is honest about the partition rather than expanding
     # available_height.
@@ -45,9 +41,7 @@ def test_pair_packing_uses_row_max_height() -> None:
 
 
 def test_three_column_spillover_packs_three_per_row() -> None:
-    # 6 × 100 in a 250-tall pane with 3-col spillover: spillover
-    # rows pack 3 groups each. main=0 → 2 rows of 3 × max(100)=100 →
-    # 200 ≤ 250. Returns 0.
+    # main=0; 2 rows of 3 x max(100)=100, total 200 <= 250. Returns 0.
     assert (
         partition_groups_for_spillover(
             [100, 100, 100, 100, 100, 100],

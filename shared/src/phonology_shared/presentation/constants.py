@@ -106,7 +106,7 @@ def format_segment_accessible_label(seg: str) -> str:
 
     The slashed form ``/x/`` matches the IPA convention for a
     phoneme and is what assistive tech reads aloud. Both renderers
-    set this on every pooled / created seg button -- web via
+    set this on every pooled / created seg button: web via
     ``btn.setAttribute("aria-label", ...)``, desktop via
     ``btn.setAccessibleName(...)``.
     """

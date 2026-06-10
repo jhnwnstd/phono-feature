@@ -31,7 +31,7 @@ def _drain(qapp, times: int = 4) -> None:
 
 
 def test_seg_panel_cannot_collapse_below_min(qapp) -> None:
-    """Manual splitter drag to seg=0 must clamp at SEG_MIN_W —
+    """Manual splitter drag to seg=0 must clamp at SEG_MIN_W;
     ``setMinimumWidth`` + ``setCollapsible(False)`` enforces it."""
     _wipe_settings()
     from phonology_features.gui.main_window import MainWindow
@@ -52,7 +52,7 @@ def test_seg_panel_cannot_collapse_below_min(qapp) -> None:
 
 
 def test_feat_panel_cannot_collapse_below_min(qapp) -> None:
-    """Same guard on the other side — feat content has hard min."""
+    """Same guard on the other side; feat content has hard min."""
     _wipe_settings()
     from phonology_features.gui.main_window import MainWindow
 
@@ -70,8 +70,8 @@ def test_feat_panel_cannot_collapse_below_min(qapp) -> None:
 
 
 def test_vowel_stack_recovers_after_widening(qapp) -> None:
-    """User drags the seg pane below ``VOWEL_STACK_W`` → vowels
-    stack below. User widens the window again → vowels recover
+    """User drags the seg pane below ``VOWEL_STACK_W`` and vowels
+    stack below. User widens the window again and vowels recover
     beside consonants. Previously the ``splitterMoved`` signal was
     the only update path, so a window-resize back to wide left the
     stack flag stuck True. Now an event filter on the seg panel
@@ -91,7 +91,7 @@ def test_vowel_stack_recovers_after_widening(qapp) -> None:
     _drain(qapp)
     assert w._seg_vowels_stacked is True
     # Resize the WINDOW so the seg pane auto-grows past the
-    # threshold — splitterMoved doesn't fire on auto-redistribution.
+    # threshold; splitterMoved doesn't fire on auto-redistribution.
     w.resize(2400, 900)
     _drain(qapp)
     assert w.seg_panel.width() > layout.VOWEL_STACK_W
@@ -107,7 +107,7 @@ def test_feat_panel_recovers_after_shrink_and_grow(qapp) -> None:
     """Symmetric height recovery. Shrinking the window drives the
     vsplit's analysis pane to its floor, which forces the top
     section to give up height. Growing the window back has to
-    restore the feat pane to its content-derived minimum — without
+    restore the feat pane to its content-derived minimum; without
     the content-driven ``setMinimumHeight`` on each panel, Qt's
     stretch policy (analysis=1, top=0) gave all the new space to
     analysis and left feat squeezed.
@@ -144,7 +144,7 @@ def test_feat_panel_recovers_after_shrink_and_grow(qapp) -> None:
 #      inputs (sanity).
 #   2. ``should_stack_vowels`` (a threshold helper) agrees with
 #      ``would_overflow`` applied to the shipped inventory's natural
-#      content widths -- the threshold is the canonical answer; the
+#      content widths; the threshold is the canonical answer; the
 #      predicate is the reason. Drift between them would mean a
 #      future "tweak VOWEL_STACK_W" edit produced visual overflow.
 # ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@ def test_match_mode_btn_has_tooltip(window) -> None:
 def test_tooltip_event_shows_text(window) -> None:
     """Synthetic ``QEvent.ToolTip`` at the button's centre fires
     ``QToolTip``. The visible popover's text equals the button's
-    tooltip — proves Qt's tooltip pipeline is unblocked for this
+    tooltip; proves Qt's tooltip pipeline is unblocked for this
     widget end-to-end (event delivery + tooltip-system lookup +
     popover display)."""
     window.show()

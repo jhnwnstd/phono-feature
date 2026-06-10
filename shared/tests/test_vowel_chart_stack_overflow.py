@@ -210,7 +210,7 @@ def test_neutral_col_does_not_collide_with_pair_col_at_same_anchor() -> None:
     they MUST land at distinct rendered positions. Pre-fix, Korean
     PHOIBLE / SPA / UPSID had segments at col 5 (back-rnd) and col 8
     (back-neu) BOTH at chart_x=0.853 with overlapping pair-shift
-    offsets -- buttons rendered fully on top of each other.
+    offsets; buttons rendered fully on top of each other.
 
     The geometry's pair-side discipline must guarantee that any two
     cells sharing the same backness anchor land at distinct
@@ -224,7 +224,7 @@ def test_neutral_col_does_not_collide_with_pair_col_at_same_anchor() -> None:
     )
 
     # Synthetic inventory with both col 1 (front-rounded) and col 6
-    # (front-neutral) populated at Close row -- exact shape of the
+    # (front-neutral) populated at Close row: exact shape of the
     # Korean/PHOIBLE row=0 collision.
     seg_feats = {
         "y": {  # front rounded -> col 1, ps=+1
@@ -286,7 +286,7 @@ def test_neutral_col_does_not_collide_with_pair_col_at_same_anchor() -> None:
     # rendered centres so the buttons don't visually overlap.
     assert gap_px >= BTN_W, (
         f"col 1 and col 6 rendered {gap_px:.1f} px apart but the "
-        f"button width is {BTN_W} px -- buttons overlap by "
+        f"button width is {BTN_W} px; buttons overlap by "
         f"{BTN_W - gap_px:.1f} px. Pre-fix Korean PHOIBLE renders "
         f"the 6-deep neutral stack at chart_x and the 2-deep pair "
         f"stack at chart_x + {pair_shift_px} px, but {pair_shift_px} "

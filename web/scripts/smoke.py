@@ -274,7 +274,7 @@ def _assert_no_overlap_js(
     Returns 0 if no element matching ``selector_a`` intersects any
     element matching ``selector_b`` (1-px tolerance to absorb sub-
     pixel boundary touches), 1 otherwise with details to stderr.
-    Skips pairs where one side is empty -- the panel may simply not
+    Skips pairs where one side is empty; the panel may simply not
     contain that selector at the current viewport.
     """
     overlaps = page.evaluate(

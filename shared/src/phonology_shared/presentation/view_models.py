@@ -292,7 +292,7 @@ def summarize_segment_selection(
     completion = engine.complete_to_minimal_natural_class(segs, mode=mode)
     suggested = list(completion.additions[0] if completion.additions else ())
     # Seven-way classification per feature (single source of truth
-    # for the semantic state -- see ``FeatureCategory``). The view-
+    # for the semantic state, see ``FeatureCategory``). The view-
     # model surfaces the category on every row so renderers can
     # distinguish ``UNDERSPEC_CONFLICT`` from ``EXPLICIT_CONFLICT``
     # etc. without reinventing the classification.

@@ -1,8 +1,8 @@
 """Canonical list of bundled inventory stems.
 
 Lives in its own importable module (not conftest.py) so tests that
-need the list at collection time -- specifically
-:py:func:`pytest.mark.parametrize` decorators -- can ``from
+need the list at collection time, specifically
+:py:func:`pytest.mark.parametrize` decorators, can ``from
 tests._inventory_names import BUNDLED_INVENTORY_NAMES``. Pytest's
 conftest.py is not a regular Python module (the fixture system
 loads it directly), so importing constants from it across files

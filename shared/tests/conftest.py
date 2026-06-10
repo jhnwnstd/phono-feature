@@ -6,7 +6,7 @@ need the path depend on the ``inventories_dir`` fixture; tests
 that need a parsed :py:class:`Inventory` or constructed
 :py:class:`FeatureEngine` depend on
 :py:func:`bundled_inventory` / :py:func:`bundled_engine`. The
-fixtures consolidate the JSON-load → parse → engine chain that
+fixtures consolidate the JSON-load to parse to engine chain that
 previously appeared as a per-file ``_engine`` / ``_load_bundled``
 helper across five test modules.
 
@@ -33,7 +33,7 @@ import pytest
 # either through the fixture chain (consumers needing the actual
 # list at runtime) or directly via
 # ``tests._inventory_names.BUNDLED_INVENTORY_NAMES`` (needed at
-# pytest collection time -- conftest.py is not importable as a
+# pytest collection time; conftest.py is not importable as a
 # regular module).
 from _inventory_names import BUNDLED_INVENTORY_NAMES  # noqa: F401
 

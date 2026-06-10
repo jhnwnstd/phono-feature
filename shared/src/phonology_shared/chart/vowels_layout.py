@@ -138,7 +138,7 @@ class VowelChartCell:
     display_kind: VowelCellDisplayKind = VowelCellDisplayKind.STACK
     contrast_features: tuple[str, ...] = ()
     # True when at least one of the cell's ``entries`` carries
-    # :py:attr:`PlacementFlag.DIPHTHONG` -- the placer sets this
+    # :py:attr:`PlacementFlag.DIPHTHONG`; the placer sets this
     # flag only on placements whose ``secondary`` lands in a
     # DIFFERENT (row, col) from the primary, so pharyngealised
     # monophthongs (Archi ``/aˤ /iˤ /``) whose secondary
@@ -283,7 +283,7 @@ class VowelChartSilhouette:
     # against the silhouette stroke.
     #
     # ``back_anchor`` is the constant back-cell anchor (no row
-    # variation -- back cells stay at the same backness across all
+    # variation; back cells stay at the same backness across all
     # rows). Silhouette's right edge sits ``cell_outer_extent_px``
     # to the RIGHT of ``back_anchor * dw``.
     #
@@ -299,8 +299,8 @@ class VowelChartSilhouette:
     cell_outer_extent_px: int = 0
     # Optional fixed-pixel correction added at render time to the
     # back silhouette edge. Default ``0``. The cell-extent fields
-    # above made this hook largely vestigial -- the cascade math
-    # already enforces flush -- but it stays as an escape hatch
+    # above made this hook largely vestigial (the cascade math
+    # already enforces flush), but it stays as an escape hatch
     # for any future per-inventory tweak.
     back_right_pixel_offset: int = 0
 
@@ -518,7 +518,7 @@ _VOWEL_SHRINK_FACTOR: float = 0.3
 #: DIFFERENT amounts (changing the slant).
 #:
 #: SET TO 0.0: Stage 2 is DISABLED. The user reported that the
-#: silhouette "felt different for every inventory" -- the cause
+#: silhouette "felt different for every inventory"; the cause
 #: was Stage 2's asymmetric reshaping (per-inventory the top
 #: width and bottom width were nudged by different amounts,
 #: tilting the canonical trapezoid). Disabling Stage 2 means
@@ -530,7 +530,7 @@ _VOWEL_SHRINK_FACTOR: float = 0.3
 #:
 #: ``0.0`` disables Stage 2; ``1.0`` would let the slant double
 #: (or invert). Setting back above 0.0 re-enables the asymmetric
-#: tweak -- a regression test in test_vowel_silhouette_shrink.py
+#: tweak; a regression test in test_vowel_silhouette_shrink.py
 #: asserts Stage 2 stays off so any future re-enablement is a
 #: deliberate edit.
 _VOWEL_SLANT_CHANGE_CAP_FRAC: float = 0.0
@@ -614,7 +614,7 @@ def _min_row_width_for_meta(
         anchor_a = canonical_anchor[col_a]
         anchor_b = canonical_anchor[col_b]
         if anchor_b <= anchor_a:
-            # Same backness slot -- pair_side handles separation.
+            # Same backness slot; pair_side handles separation.
             continue
         half_a = long_pair_half if lp_a else single_half
         half_b = long_pair_half if lp_b else single_half
@@ -644,13 +644,13 @@ def _compute_shrunken_widths(
     """Compute shrunken silhouette ``(top_width, bottom_width)`` in
     two conceptual stages.
 
-    **Stage 1 -- uniform shrink.** Both widths drop by the same
+    **Stage 1 (uniform shrink).** Both widths drop by the same
     amount, set by the most-constrained row's slack between its
     canonical row_width and its minimum-required row_width. The
     trapezoid keeps its canonical proportions while pulling inward
     as a whole; the slant stays constant.
 
-    **Stage 2 -- slant tweak.** With Stage 1's narrower trapezoid in
+    **Stage 2 (slant tweak).** With Stage 1's narrower trapezoid in
     hand, rows that still have slack let us nudge the top OR the
     bottom further inward by DIFFERENT amounts. This changes the
     slant; :py:data:`_VOWEL_SLANT_CHANGE_CAP_FRAC` caps the change
@@ -721,8 +721,8 @@ def _stage2_slant_tweak(
     """Stage 2: with Stage 1's narrower trapezoid, see how much more
     width each edge can lose by nudging top and bottom independently.
 
-    Solves a 2-variable LP -- maximise ``d_top + d_bot`` (the area
-    removed in this pass, modulo the constant span/2) -- with three
+    Solves a 2-variable LP that maximises ``d_top + d_bot`` (the area
+    removed in this pass, modulo the constant span/2) subject to three
     families of constraints:
 
     1. Per-row slack. After Stage 1, each row at ``t`` still has
@@ -740,7 +740,7 @@ def _stage2_slant_tweak(
     feasible polygon, which is the intersection of two binding
     constraints. We enumerate every pair, accept feasible
     intersections, and keep the best score. With ~10 constraints
-    for a 7-row chart this is O(100) trivial 2x2 solves -- cheap
+    for a 7-row chart this is O(100) trivial 2x2 solves, cheap
     enough to skip a dedicated LP dependency.
     """
     if _VOWEL_SLANT_CHANGE_CAP_FRAC <= 0.0:
@@ -1757,14 +1757,14 @@ def build_vowel_chart_geometry(
     # ordering, and compute col / pair_side. The display layer
     # needs these to size the silhouette before it can fix cell
     # ``chart_x`` positions. No phonology re-decisions happen
-    # below this point -- the cell COL/row are already final;
+    # below this point; the cell COL/row are already final,
     # only their pixel-space position is still pending.
     # Neutral cols (6/7/8) share a backness anchor with the paired
     # cols at the same row (6 with 0/1, 7 with 2/3, 8 with 4/5).
     # When both a neutral and a paired col are populated, the
     # canonical ``pair_side=0`` for the neutral plus the
     # ``pair_side=±1`` for the paired one only separate them by half
-    # a button width -- in practice they overlap.
+    # a button width; in practice they overlap.
     # ``_neutral_to_paired_anchor`` maps each neutral col to its two
     # paired siblings so we can detect the collision and reroute the
     # neutral cell into the empty pair-side slot.
@@ -1901,7 +1901,7 @@ def build_vowel_chart_geometry(
         # the segment's secondary lands in a different cell from
         # its primary (post-degeneracy-filter), so
         # pharyngealised monophthongs like Archi ``/aˤ /`` --
-        # whose secondary collapses to the primary cell -- are
+        # whose secondary collapses to the primary cell are
         # automatically excluded.
         is_diphthong = any(
             PlacementFlag.DIPHTHONG in placements[seg].flags
@@ -1985,7 +1985,7 @@ def build_vowel_chart_geometry(
         Bounds: ``ri`` must be a valid index into ``ROW_LABELS``
         (0..6) and ``ci`` must be a valid column index (0..8). A
         malformed ``vowel_secondary`` payload could pass an
-        out-of-range row -- previously raised ``IndexError`` from
+        out-of-range row; previously raised ``IndexError`` from
         ``ROW_LABELS[ri]``; now returns the silhouette's centre as
         a safe degenerate position so the caller can skip the
         diphthong instead of crashing the whole geometry build.

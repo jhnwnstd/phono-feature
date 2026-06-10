@@ -12,7 +12,7 @@ metadata. These tests catch regressions across the contract:
   on disk, baked PHOIBLE feature names, PanPhon's short codes).
 - The legacy folds inside
   :py:func:`phonology_shared.data.inventory.normalize_feature_key`
-  (``del.rel. → delrel``, ``r-colored → rhotic``, etc.) keep
+  (``del.rel.`` to ``delrel``, ``r-colored`` to ``rhotic``, etc.) keep
   producing values the registry recognises.
 - Place subgrouping puts each modifier's ``sort_key`` immediately
   after its anchor's, so the rendered Place group clusters by
@@ -195,7 +195,7 @@ def test_registry_covers_panphon_mapping_values() -> None:
 #
 # These tests pin the current column order as a literal tuple in
 # the test file. A future edit that reorders or inserts requires
-# updating these tests (and re-baking every snapshot — the safer
+# updating these tests (and re-baking every snapshot; the safer
 # fix is usually to append to the end of the mapping rather than
 # rotate). Each failure points at the exact mitigation in its
 # message.
@@ -263,9 +263,9 @@ def test_phoible_column_order_is_pinned() -> None:
     actual = tuple(PHOIBLE_TO_APP_FEATURE.keys())
     assert actual == _PHOIBLE_COLUMN_ORDER, (
         "PHOIBLE_TO_APP_FEATURE column order changed. The order IS "
-        "the positional encoding of every baked snapshot — rotating "
+        "the positional encoding of every baked snapshot; rotating "
         "it silently corrupts the engine's feature lookup. To fix:\n"
-        "  (a) restore the previous order (preferred — append new "
+        "  (a) restore the previous order (preferred; append new "
         "columns to the end instead of inserting), OR\n"
         "  (b) re-bake every PHOIBLE snapshot and update "
         "_PHOIBLE_COLUMN_ORDER in this test to match.\n"
@@ -310,7 +310,7 @@ def test_panphon_column_order_is_pinned() -> None:
 
     PanPhon's load-time path also consults the mapping by key
     (``PANPHON_TO_APP_FEATURE.get(short_code)``), so a key rename
-    breaks the runtime lookup too — the test catches that case as
+    breaks the runtime lookup too; the test catches that case as
     well.
     """
     from phonology_shared.editor.panphon_features import (
@@ -376,7 +376,7 @@ def test_SUPRASEGMENTAL_FEATURES_includes_every_alias() -> None:
 
 
 # ---------------------------------------------------------------
-# Subgrouping (sort adjacency only — no visual hierarchy)
+# Subgrouping (sort adjacency only; no visual hierarchy)
 # ---------------------------------------------------------------
 
 
@@ -397,7 +397,7 @@ def test_modifiers_sort_directly_after_their_anchor() -> None:
       sub-clusters rather than five strangers at the bottom of the
       Laryngeal group.
     - Any future subgroup-anchored cluster inherits the contract
-      automatically — no per-group special case here.
+      automatically; no per-group special case here.
 
     Catches a regression where an edit reorders an anchor below
     its modifiers and the pane's adjacency promise breaks silently.
@@ -425,7 +425,7 @@ def test_modifiers_sort_directly_after_their_anchor() -> None:
 
 def test_sort_features_canonicalises_case_variants() -> None:
     """``sort_features(["LABIAL", "Labial"])`` lands both case
-    variants adjacent in the output — the fundamental visual fix
+    variants adjacent in the output: the fundamental visual fix
     for Hayes-vs-PHOIBLE drift."""
     out = sort_features(["LABIAL", "Round", "Labial", "Voice"])
     # Voice (200s) sorts before any Place feature; the two LABIAL

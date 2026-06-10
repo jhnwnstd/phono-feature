@@ -19,23 +19,23 @@ reads via custom properties baked into ``dist/index.html`` by
 
 Categories:
 
-* :data:`VOWEL_CHART_TITLE_*` -- font, weight, letter-spacing,
+* :data:`VOWEL_CHART_TITLE_*`: font, weight, letter-spacing,
   padding for the "VOWELS" title row.
-* :data:`VOWEL_CHART_COL_LABEL_*` -- col header tracking + font.
-* :data:`VOWEL_CHART_ROW_LABEL_*` -- row label font + gutter width.
-* :data:`VOWEL_CHART_CONTRAST_SET_*` -- 2x2 contrast-set spacing.
-* :data:`VOWEL_SILHOUETTE_*` -- trapezoid outline stroke + alpha.
-* :data:`VOWEL_CHART_DATA_MIN_H_PX` -- floor below which the data
+* :data:`VOWEL_CHART_COL_LABEL_*`: col header tracking + font.
+* :data:`VOWEL_CHART_ROW_LABEL_*`: row label font + gutter width.
+* :data:`VOWEL_CHART_CONTRAST_SET_*`: 2x2 contrast-set spacing.
+* :data:`VOWEL_SILHOUETTE_*`: trapezoid outline stroke + alpha.
+* :data:`VOWEL_CHART_DATA_MIN_H_PX`: floor below which the data
   area refuses to compress further (small inventories like Spanish).
-* :data:`DIPHTHONG_ARROW_*` -- per-arrow stroke, opacity, arrowhead
+* :data:`DIPHTHONG_ARROW_*`: per-arrow stroke, opacity, arrowhead
   size, control-point lift formula.
-* :data:`SEG_GROUP_HEADER_*` -- consonant manner-class header
+* :data:`SEG_GROUP_HEADER_*`: consonant manner-class header
   font / weight / letter-spacing / padding.
-* :data:`SEG_GROUP_GAP_PX` -- vertical gap between consecutive
+* :data:`SEG_GROUP_GAP_PX`: vertical gap between consecutive
   manner-class groups in the consonant grid.
-* :data:`FEAT_ROW_*` -- feature-row padding, gap, button radius,
+* :data:`FEAT_ROW_*`: feature-row padding, gap, button radius,
   compact-tier height + padding.
-* :data:`BORDER_PX` -- border-thickness ladder for segment buttons.
+* :data:`BORDER_PX`: border-thickness ladder for segment buttons.
 
 Deliberately out of scope (documented divergences, not bugs):
 
@@ -44,7 +44,7 @@ Deliberately out of scope (documented divergences, not bugs):
   chart like text around an image; the desktop uses a fixed-width
   HBox so the chart is a sibling column. Unifying these would
   require either a position-absolute overlay on desktop or a
-  grid-template-columns rewrite on web -- both are structural
+  grid-template-columns rewrite on web; both are structural
   changes that go beyond a SSOT pass.
 * **Feature-card chrome (--feat-card-chrome-h)**: the constant
   is relayed but not yet consumed by a CSS rule. Splitting it
@@ -266,6 +266,7 @@ VOWEL_SILHOUETTE_ALPHA: float = 0.70
 #: Minimum data-area height so tiny inventories (5-vowel Spanish)
 #: still draw a recognisable trapezoid.
 VOWEL_CHART_DATA_MIN_H_PX: int = 8 * SEG_BTN_H
+
 
 #: Maximum silhouette aspect ratio (width / height). When natural
 #: sizing produces an over-wide silhouette (sparse inventories

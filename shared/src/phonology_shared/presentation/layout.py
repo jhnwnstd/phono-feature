@@ -90,8 +90,6 @@ def distribute_feature_groups(
         c = cost(name)
         if c > 0:
             unpinned_with_cost.append((name, c))
-    # Sort by cost descending; ties broken by iteration order, which
-    # is what ``key`` on a stable sort preserves implicitly.
     unpinned_with_cost.sort(key=lambda pair: -pair[1])
 
     for name, c in unpinned_with_cost:
@@ -278,7 +276,7 @@ def plan_seg_layout(
     # Step 2: pick spillover column count from the full pane width.
     # Spillover always claims the full pane width (sits below both
     # main flow and chart), so it doesn't depend on which groups are
-    # spilled -- it's a property of the pane.
+    # spilled; it's a property of the pane.
     n_cols_max = max(
         1, (pane_w + spillover_gutter) // (min_col_w + spillover_gutter)
     )
@@ -290,10 +288,10 @@ def plan_seg_layout(
         rejected_flag)`` for spilling the last ``k`` groups.
 
         ``rejected_flag`` is non-zero when one of the spilled groups
-        is too wide for ``col_w`` -- the caller skips this ``k``.
+        is too wide for ``col_w``; the caller skips this ``k``.
         """
         spill_indices = list(range(n - k, n))
-        # Width check first -- if any group is too wide, this k is
+        # Width check first; if any group is too wide, this k is
         # infeasible regardless of how heights pack.
         for idx in spill_indices:
             if group_widths[idx] > col_w:
@@ -396,7 +394,7 @@ FEAT_COMPACT_THRESHOLD: int = 22
 # NOTE: this is a LAYOUT-MATH reference, NOT a per-render floor.
 # The actual rendered chart width is content-driven per renderer
 # via ``VOWEL_CHART_W_FLOOR`` in ``web/main.js`` and
-# ``desktop/.../gui/vowel_chart.py`` -- a small inventory renders
+# ``desktop/.../gui/vowel_chart.py``; a small inventory renders
 # narrower than this constant. Keeping the layout math
 # conservative (assume worst case) preserves the stack-breakpoint
 # invariant: at ``VOWEL_STACK_W``, even the widest possible chart
@@ -416,7 +414,7 @@ VOWEL_NATURAL_W: int = 440
 # Both renderers default their ``ADJ`` to 0 today (the shared
 # value is the canonical choice). Tune the renderer-side ``ADJ``
 # (NOT this constant) when one platform needs a small visual
-# nudge -- a scrollbar gutter on the web, a Qt frame on the
+# nudge: a scrollbar gutter on the web, a Qt frame on the
 # desktop, etc.
 #
 # Sized so the trapezoid + row-label gutter + chrome still read
@@ -430,7 +428,7 @@ VOWEL_NATURAL_W: int = 440
 MIN_VOWEL_CHART_W_PX: int = 380
 # Within each backness (front, central, back), the unrounded/rounded
 # vowel pair sits in two grid columns. ``VOWEL_PAIR_GAP_PX`` is the
-# gap between the two mates -- small enough to read as a pair, not as
+# gap between the two mates: small enough to read as a pair, not as
 # unrelated symbols. ``VOWEL_PAIR_SEPARATOR_PX`` is the extra width
 # inserted between adjacent pairs (front-rnd <-> central-unr,
 # central-rnd <-> back-unr) so the boundary between backness columns
@@ -495,7 +493,7 @@ def analysis_content_floor_h() -> int:
 # A function call would be cleaner but module-level CSS-relay code
 # reads this as a literal, so it stays a module-level int.
 MIN_ANALYSIS_H: int = (
-    38  # ANALYSIS_SELECTION_STRIP_H -- inline to keep type 'int'
+    38  # ANALYSIS_SELECTION_STRIP_H, inline to keep type 'int'
     + 36  # ANALYSIS_TAB_BAR_H
     + 4 * 31  # ANALYSIS_MIN_VISIBLE_ROWS * FEAT_ROW_H
     + 54  # ANALYSIS_OUTER_PADDING_H
@@ -1051,7 +1049,7 @@ REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
     ),
     # Analysis panel: floor is the comfortable four-row minimum from
     # ``analysis_content_floor_h``; the same value the web locks via
-    # ``--min-analysis-h``. The pane is non-resizable -- its tabs
+    # ``--min-analysis-h``. The pane is non-resizable; its tabs
     # scroll their content internally when overflow occurs.
     # ``HARD_MIN_ANALYSIS_H`` is reserved for the worst-case-window
     # degenerate path inside ``top_pane_height`` and MUST NOT be used
@@ -1075,7 +1073,7 @@ REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
 # (``VOWEL_STACK_W = 620``, ``COLLAPSE_W = 900``). Thresholds are
 # cheap and explicit but answer the wrong question: "is the window
 # narrower than 620 px?" instead of "would my content actually
-# overlap?". The predicates below answer the latter -- they consume
+# overlap?". The predicates below answer the latter; they consume
 # only the relevant content metrics and the available space.
 #
 # Threshold helpers (``should_stack_vowels`` etc.) stay as fast paths

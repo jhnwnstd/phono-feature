@@ -67,7 +67,7 @@ def test_summarize_segment_selection_multi_matches_engine(
     assert "LABIAL" in summary["contrastive"]
     # Under strict natural-class semantics, ``suggested`` is the
     # smallest set of segments whose addition makes the union a
-    # strict natural class -- i.e. a class for which some feature
+    # strict natural class; i.e. a class for which some feature
     # bundle round-trips exactly via ``find_segments``. For
     # /b/ /d/ /ɡ/ in Hayes the union with the suggestion must be
     # a strict natural class. Pin the size > 0 condition and the
@@ -110,24 +110,24 @@ def test_feature_categories_for_english_j_i_capital_ɪ(
 ) -> None:
     """User-reported scenario, pinned: selecting /j/ /i/ /ɪ/ in
     English. Tense's values across the selection are ``+`` (/i/),
-    ``-`` (/ɪ/), and ``'0'`` (/j/) -- the canonical
+    ``-`` (/ɪ/), and ``'0'`` (/j/), the canonical
     ``UNDERSPEC_CONFLICT`` case. Front and High are both ``+`` on
-    all three -- ``ALL_PLUS``. The feature-row state surfaces the
+    all three, the ``ALL_PLUS`` category. The feature-row state surfaces the
     category so renderers can show
     underspec-conflict distinctly from explicit-conflict.
     """
     engine = bundled_engine("english")
     summary = summarize_segment_selection(engine, ["j", "i", "ɪ"])
-    # Tense: +, -, 0 across the three -> UNDERSPEC_CONFLICT
+    # Tense: +, -, 0 across the three: UNDERSPEC_CONFLICT
     tense = summary["feature_rows"]["Tense"]
     assert tense["category"] == "underspec_conflict"
     assert tense["contrastive"] is True
     assert tense["shared"] is False
-    # Front: all three are + -> ALL_PLUS
+    # Front: all three are +: ALL_PLUS
     front = summary["feature_rows"]["Front"]
     assert front["category"] == "all_plus"
     assert front["shared"] is True
-    # High: all three are + -> ALL_PLUS
+    # High: all three are +: ALL_PLUS
     assert summary["feature_rows"]["High"]["category"] == "all_plus"
     # /j i ɪ/ is a STRICT natural class via the {Front:+, High:+}
     # bundle (the only features categorically ALL_PLUS that are
@@ -172,7 +172,7 @@ def test_complete_to_minimal_natural_class_blevins_affricate_strict_closure(
     """Pinning: under strict natural-class semantics,
     ``complete_to_minimal_natural_class([b͡v, d͡z, t͡s])`` returns
     a completion that, when added, makes the union a STRICT
-    natural class -- i.e. some feature bundle strictly round-trips
+    natural class; i.e. some feature bundle strictly round-trips
     to it via the default ``find_segments``.
 
     Historical note: a previous version of the engine used
@@ -185,7 +185,7 @@ def test_complete_to_minimal_natural_class_blevins_affricate_strict_closure(
     (typically the full strict-common matchers minus the
     selection). The trade is the round-trip invariant: the bundle
     the engine reports for the completed set, when typed into
-    feat→seg, returns exactly that set.
+    feat then seg, returns exactly that set.
 
     Skipped in CI when ``blevins_features.json`` is gitignored.
     """
@@ -226,16 +226,16 @@ def test_summarize_feature_query_always_returns_find_segments(
 ) -> None:
     """**FEAT-mode display invariant**: the matches returned by
     ``summarize_feature_query`` are always exactly
-    ``engine.find_segments(spec)`` -- the strict matches of the
+    ``engine.find_segments(spec)``: the strict matches of the
     active query. The set returned therefore always forms a
     strict natural class characterised by the query itself.
 
-    The SEG→FEAT seg-selection round-trip is preserved by
+    The SEG to FEAT seg-selection round-trip is preserved by
     ``mode_logic.project_mode_transition`` (origin flag +
-    saved-seg-state restore on FEAT→SEG return), NOT by altering
+    saved-seg-state restore on FEAT to SEG return), NOT by altering
     the FEAT-mode matches. An earlier "projected_segments"
     override violated this invariant on non-natural-class seg
-    selections (e.g. SEG /j i/ → FEAT showed /j i/ highlighted
+    selections (e.g. SEG /j i/ to FEAT showed /j i/ highlighted
     even though /j i/ are not a natural class) and is no longer
     permitted.
     """
@@ -316,8 +316,8 @@ def test_analysis_tabs_seg_multi_natural_class(
 ) -> None:
     """Multi-segment SEG selection that IS a natural class: tab
     state goes ``"natural"`` so the UI paints the Class tab green.
-    Picking every voiced obstruent in Hayes — voiced stops + voiced
-    fricatives — yields a real natural class definable by the
+    Picking every voiced obstruent in Hayes (voiced stops + voiced
+    fricatives) yields a real natural class definable by the
     feature ``+Voice``."""
     engine = bundled_engine("hayes")
     voiced = engine.find_segments({"Voice": "+"})

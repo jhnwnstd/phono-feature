@@ -47,7 +47,7 @@ def test_project_mode_transition_feat_to_seg(
     )
     assert transition.saved_feat_state == spec
     assert transition.selected_features == {}
-    # FEAT→SEG carries the natural class (the strict matches of
+    # FEAT to SEG carries the natural class (the strict matches of
     # the query) over as the new SEG selection. The user sees in
     # SEG the same segments they were just inspecting in FEAT.
     assert sorted(transition.selected_segments) == sorted(
@@ -58,9 +58,9 @@ def test_project_mode_transition_feat_to_seg(
 def test_feat_to_seg_carries_natural_class_over(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
-    """**FEAT→SEG carry-over invariant**: switching from FEAT to
+    """**FEAT to SEG carry-over invariant**: switching from FEAT to
     SEG sets the SEG selection to the natural class the FEAT
-    query picked out -- the same segments that were highlighted
+    query picked out; the same segments that were highlighted
     in FEAT mode.
     """
     engine = bundled_engine("english")
@@ -87,7 +87,7 @@ def test_feat_to_seg_projection_is_always_a_natural_class(
     segments highlighted in the segment grid are by construction
     a natural class characterised by the active query. Switching
     to SEG mode must therefore land on a selection that the SEG
-    analysis reports as a natural class -- otherwise the display
+    analysis reports as a natural class; otherwise the display
     contradicts the engine.
 
     Pinned across a fan of representative queries so a future
@@ -116,7 +116,7 @@ def test_feat_to_seg_projection_is_always_a_natural_class(
             continue
         is_nc, bundles = engine.is_natural_class(landed)
         assert is_nc, (
-            f"FEAT→SEG landed on {landed} (from query {spec}) and "
+            f"FEAT to SEG landed on {landed} (from query {spec}) and "
             f"the SEG analysis reports NOT a natural class. The "
             f"display in FEAT mode says these segments form a "
             f"class; the SEG analysis must agree."
@@ -126,7 +126,7 @@ def test_feat_to_seg_projection_is_always_a_natural_class(
         assert bundles
         for b in bundles:
             assert sorted(engine.find_segments(dict(b))) == sorted(landed), (
-                f"FEAT→SEG round-trip broken: bundle {dict(b)} for "
+                f"FEAT to SEG round-trip broken: bundle {dict(b)} for "
                 f"{landed} did not strictly round-trip."
             )
 

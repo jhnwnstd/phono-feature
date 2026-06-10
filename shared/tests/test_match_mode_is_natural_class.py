@@ -21,13 +21,11 @@ from phonology_shared.theory.feature_engine import (
     MatchMode,
 )
 
-# ----------------------------------------------------------------------
 # Synthetic three-segment inventory used by the targeted cases below.
 # ``m`` is voiced but carries ``Voice: "0"``; under strict {b, m} is
 # not a natural class (Voice splits + and 0), but under wildcard
 # ``{Voice: "+"}`` matches both because "0" is compatible with any
 # polarity.
-# ----------------------------------------------------------------------
 _FEATURES = ["Voice", "Nasal"]
 _SEGMENTS = {
     "p": {"Voice": "-", "Nasal": "-"},
@@ -48,9 +46,7 @@ def _synthetic_engine() -> FeatureEngine:
     return FeatureEngine(inv)
 
 
-# ----------------------------------------------------------------------
 # Targeted contract on the synthetic p/b/m inventory.
-# ----------------------------------------------------------------------
 
 
 def test_synthetic_strict_nc_for_singleton_b() -> None:
@@ -86,7 +82,7 @@ def test_synthetic_strict_not_nc_for_b_and_m() -> None:
 def test_synthetic_wildcard_nc_for_b_and_m() -> None:
     """{b, m} IS a wildcard natural class on the p/b/m inventory.
     Under wildcard matching ``{Voice: '+'}`` matches every segment
-    that is not explicitly ``-Voice`` — that's b (explicitly ``+``)
+    that is not explicitly ``-Voice``: b (explicitly ``+``)
     and m (``"0"``, compatible with either polarity), while p is
     ruled out (explicitly ``-Voice``). This is the headline
     semantic shift wildcard mode brings to ``is_natural_class``.
@@ -99,7 +95,7 @@ def test_synthetic_wildcard_nc_for_b_and_m() -> None:
 
 def test_synthetic_wildcard_bundle_for_b_and_m_is_voice_plus() -> None:
     """The wildcard minimal bundle for {b, m} on the p/b/m
-    inventory must be exactly ``{Voice: '+'}`` — one feature,
+    inventory must be exactly ``{Voice: '+'}``: one feature,
     minimal, and the only one that distinguishes {b, m} from p
     under wildcard rules. Any bundle that adds Nasal (or another
     feature) would not be minimal; any bundle without Voice would
@@ -115,12 +111,10 @@ def test_synthetic_wildcard_bundle_for_b_and_m_is_voice_plus() -> None:
     assert dict(bundles[0]) == {"Voice": "+"}
 
 
-# ----------------------------------------------------------------------
 # Bundle-level round-trip: every wildcard bundle re-matches the
 # input selection under wildcard semantics. This is the wildcard
 # analogue of the strict-mode round-trip rule that
 # ``find_all_minimal_bundles`` rests on.
-# ----------------------------------------------------------------------
 
 
 def test_synthetic_wildcard_bundles_round_trip() -> None:
@@ -143,12 +137,10 @@ def test_synthetic_wildcard_bundles_round_trip() -> None:
         )
 
 
-# ----------------------------------------------------------------------
 # Empty-selection contract: under BOTH modes the empty list is not
 # a natural class. This matches the contract pinned by the
 # existing empty-segments tests for the strict path; wildcard must
 # not silently flip that verdict.
-# ----------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -160,7 +152,7 @@ def test_empty_selection_is_not_nc_in_either_mode(
     mode: MatchMode,
 ) -> None:
     """An empty selection returns ``(False, ())`` regardless of
-    mode. No bundle B satisfies ``find_segments(B) == set()`` —
+    mode. No bundle B satisfies ``find_segments(B) == set()``:
     even the universal-class empty bundle matches every segment,
     so the empty set has no characterising spec. Wildcard does not
     change the candidate space here; the empty-input early-return
@@ -172,7 +164,6 @@ def test_empty_selection_is_not_nc_in_either_mode(
     assert bundles == ()
 
 
-# ----------------------------------------------------------------------
 # Wildcard NC is a superset of strict NC: any selection that is a
 # strict NC must also be a wildcard NC. Fanned out across a list
 # of Hayes selections covering singletons, pairs, and small groups.
@@ -180,7 +171,6 @@ def test_empty_selection_is_not_nc_in_either_mode(
 # the bundled Hayes inventory (verified at authoring time); if a
 # selection ever stops being a strict NC, the strict baseline
 # assertion will surface the change before the wildcard claim runs.
-# ----------------------------------------------------------------------
 
 
 _HAYES_STRICT_NC_SELECTIONS = [
@@ -216,7 +206,7 @@ def test_strict_nc_implies_wildcard_nc(
     (where ``S`` has no explicit value on ``f``) typically combine
     to a wildcard bundle that excludes every outside segment via
     its opposite-explicit value. Hayes is rich enough to satisfy
-    this — every segment carries an explicit value for the
+    this: every segment carries an explicit value for the
     contrastive features. The implication CAN fail on
     pathologically underspec inventories where some outside segment
     is uniformly ``0`` and no constraint can exclude it; those

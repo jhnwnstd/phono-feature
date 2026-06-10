@@ -12,7 +12,7 @@ and routed both UIs through the shared view-model. This test pins
 the contract so the drift can't return:
 
 - ``feature_groups`` in the bridge payload contains exactly
-  ``engine.active_features`` — never more.
+  ``engine.active_features``; never more.
 - The payload also carries ``active_features`` as a top-level
   list so a renderer that needs the active set without diving
   into the grouped structure can read it directly.

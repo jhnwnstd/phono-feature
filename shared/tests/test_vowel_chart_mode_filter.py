@@ -2,7 +2,7 @@
 
 The two-mode vowel chart (monophthong vs diphthong) filters cell
 visibility by ``VowelChartCell.is_diphthong``. The flag must be
-set ONLY for cells whose entries include true diphthongs --
+set ONLY for cells whose entries include true diphthongs:
 segments whose secondary placement lands in a different (row,
 col) from the primary.
 
@@ -61,7 +61,7 @@ def test_true_diphthong_does_not_occupy_a_cell() -> None:
     endpoints) but NOT in ``occupied``.
 
     Pre-fix /ia/ landed in /i/'s cell, so the cell stack showed
-    /i/ and /ia/ together -- visually grouping the singleton
+    /i/ and /ia/ together, visually grouping the singleton
     monophthong with the diphthong, contrary to the user's
     mental model.
     """
@@ -209,6 +209,7 @@ def test_korean_phoible_diphthongs_render_as_arrows_not_cells() -> None:
     grouped as diphthongs" surfaced this. The fix removes
     diphthongs from ``occupied`` so cells hold only true
     monophthongs.
+
     """
     p = PhoibleProvider()
     if not getattr(p, "has_data", False):
@@ -278,7 +279,7 @@ def test_korean_phoible_diphthongs_render_as_arrows_not_cells() -> None:
 )
 def test_archi_pharyngeals_not_flagged_as_diphthongs() -> None:
     """Archi (PHOIBLE id=228) contains pharyngealised vowels
-    /aˤ/, /iˤ/, /uˤ/, /eˤ/, /oˤ/ -- these appear in
+    /aˤ/, /iˤ/, /uˤ/, /eˤ/, /oˤ/; these appear in
     ``vowel_secondary`` but their secondary collapses to the
     primary cell, so the placer's degeneracy filter excludes
     them from ``PlacementFlag.DIPHTHONG``. The cell classifier
@@ -302,7 +303,7 @@ def test_archi_pharyngeals_not_flagged_as_diphthongs() -> None:
             vowel_secondary if isinstance(vowel_secondary, dict) else None
         ),
     )
-    # Archi has no TRUE diphthongs -- every cell should be
+    # Archi has no TRUE diphthongs; every cell should be
     # unflagged regardless of how many vowels appear in
     # ``vowel_secondary``.
     flagged = [c for c in geom.cells if c.is_diphthong]

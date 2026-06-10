@@ -6,7 +6,7 @@ durability, and the alias-collision check in segment_grouper.
 
 Every test here exercises the SINGLE entry point ``Inventory.parse``
 (or a thin wrapper). The engine cannot accept anything the parser
-rejects, and the builder cannot save anything the parser rejects --
+rejects, and the builder cannot save anything the parser rejects;
 the parser is the contract.
 """
 
@@ -94,7 +94,7 @@ def test_parse_rejects_aliased_feature_names() -> None:
     """Two distinct literal feature names that collapse to the same
     canonical key under ``normalize_feature_key`` (e.g. ``"DelRel"`` and
     ``"delayed_release"``) would later raise ``AliasCollisionError``
-    inside ``engine.grouped_segments`` -- uncaught, that escapes
+    inside ``engine.grouped_segments``; uncaught, that escapes
     ``_load_path`` and can crash app startup via the last-inventory
     restore. The parser must reject this at the boundary so the
     "parse == valid" contract holds end-to-end.
@@ -168,11 +168,8 @@ def test_alias_aware_bundle_folds_r_colored_to_declared_rhotic() -> None:
     assert "Rhotic" in inv.segments["a"]
     assert "Rhotic" in inv.segments["b"]
     assert "Rhotic" in inv.segments["c"]
-    # Folded key is the declared canonical name; the alias spelling
-    # does not survive in the stored bundle.
     assert "r-colored" not in inv.segments["a"]
     assert "rhotacized" not in inv.segments["b"]
-    # Values land where the alias key carried them.
     assert inv.feature_value("a", "Rhotic") == "+"
     assert inv.feature_value("b", "Rhotic") == "-"
     assert inv.feature_value("c", "Rhotic") == "0"
@@ -255,7 +252,6 @@ def test_engine_consumers_never_raise_on_parsed_inventory() -> None:
         {"features": ["Voice", "Nasal"], "segments": {"p": {"Voice": "-"}}}
     )
     eng = FeatureEngine(parsed)
-    # Both consumers must succeed for ANY parsed Inventory.
     _ = eng.grouped_segments
     _ = eng.normalized_segment_feats
 
@@ -273,7 +269,6 @@ def test_parse_canonicalizes_feature_names_to_nfc() -> None:
     nfd = unicodedata.normalize("NFD", "Café")
     assert nfd != "Café", "NFD form must differ as Python strings"
     inv = Inventory.parse({"features": [nfd], "segments": {}})
-    # Stored as NFC.
     assert inv.features == ("Café",)
 
 
@@ -322,7 +317,7 @@ def test_parse_canonicalizes_segment_keys() -> None:
 
 def test_parse_rejects_nfc_nfd_segment_collision() -> None:
     """Two visually-identical segment keys (NFC vs NFD) must not
-    silently merge -- that would discard one segment's bundle."""
+    silently merge; that would discard one segment's bundle."""
     import unicodedata
 
     nfc = "é"
@@ -381,12 +376,11 @@ def test_parse_rejects_too_many_segments() -> None:
 def test_load_rejects_duplicate_json_keys(tmp_path: Path) -> None:
     """``json.load`` silently keeps the LAST value for a duplicate
     key. For an inventory file with two segments named ``"p"`` that
-    means losing one segment's bundle entirely with no warning --
+    means losing one segment's bundle entirely with no warning;
     classic pre-parser data loss. The ``object_pairs_hook`` in
     ``Inventory.load`` catches this at decode time so the user gets
     a clear ValidationError instead."""
     target = tmp_path / "dup.json"
-    # Two "p" entries; json.load would normally keep the second.
     target.write_text(
         '{"features": ["V"], '
         '"segments": {"p": {"V": "+"}, "p": {"V": "-"}}}'
@@ -400,7 +394,7 @@ def test_load_rejects_duplicate_json_keys(tmp_path: Path) -> None:
 
 def test_load_rejects_duplicate_features_key(tmp_path: Path) -> None:
     """Duplicate top-level keys are the same data-loss class as
-    duplicate segment keys -- check the hook applies at every depth."""
+    duplicate segment keys; check the hook applies at every depth."""
     target = tmp_path / "dup.json"
     target.write_text('{"features": ["V"], "features": ["X"], "segments": {}}')
     with pytest.raises(ValidationError) as ex:
@@ -412,12 +406,11 @@ def test_load_handles_utf8_bom_transparently(tmp_path: Path) -> None:
     """Files exported from Windows Notepad / Excel / many other
     tools commonly include a UTF-8 BOM. Pre-fix the parser produced
     a cryptic ``invalid JSON (Unexpected UTF-8 BOM (decode using
-    utf-8-sig))`` error -- accurate but unhelpful for a linguist.
+    utf-8-sig))`` error; accurate but unhelpful for a linguist.
     Fix: open with ``utf-8-sig`` codec which silently consumes a
     leading BOM and behaves like ``utf-8`` for files without one.
     """
     target = tmp_path / "bom.json"
-    # Hand-write the file with a BOM prefix.
     target.write_bytes(
         b"\xef\xbb\xbf"
         + b'{"features": ["Voice"], "segments": {"p": {"Voice": "-"}}}'
@@ -430,7 +423,7 @@ def test_load_handles_utf8_bom_transparently(tmp_path: Path) -> None:
 def test_parse_rejects_surrogate_in_segment_name() -> None:
     """A lone surrogate code point (U+DCFF etc.) NFC-survives but
     cannot be UTF-8 encoded; ``inv.write_atomic`` would
-    UnicodeEncodeError every save attempt -- a save lockout where
+    UnicodeEncodeError every save attempt; a save lockout where
     the inventory loads fine but can never be persisted. Reject at
     the parser boundary so the user never reaches that state."""
     with pytest.raises(ValidationError) as ex:
@@ -453,7 +446,7 @@ def test_parse_rejects_control_char_in_name() -> None:
 
 def test_parse_rejects_per_segment_feature_when_features_empty() -> None:
     """An inventory with ``features=[]`` AND per-segment feature
-    keys was silently accepted -- the cross-check short-circuited
+    keys was silently accepted; the cross-check short-circuited
     when ``declared`` was empty. Result: segments carry ghost data
     that ``feature_value`` can never reach (raises KeyError because
     the feature isn't in ``inv.features``). Now rejected."""
@@ -522,7 +515,7 @@ def test_segment_ascii_g_normalized_to_script_g() -> None:
 
 def test_segment_ascii_apostrophe_normalized_to_modifier_letter() -> None:
     """ASCII ``'`` (U+0027) in a segment label is folded to the
-    canonical IPA ``ʼ`` (U+02BC) -- the modern IPA ejective marker."""
+    canonical IPA ``ʼ`` (U+02BC); the modern IPA ejective marker."""
     inv = Inventory.parse({"features": ["V"], "segments": {"p'": {"V": "-"}}})
     assert "pʼ" in inv.segments
     assert "p'" not in inv.segments
@@ -530,7 +523,7 @@ def test_segment_ascii_apostrophe_normalized_to_modifier_letter() -> None:
 
 def test_segment_r_left_alone() -> None:
     """``r`` is the legitimate IPA alveolar trill character;
-    DON'T fold it to ``ɹ`` (turned r, the approximant) -- that
+    DON'T fold it to ``ɹ`` (turned r, the approximant); that
     would silently change the meaning of users' inventories."""
     inv = Inventory.parse({"features": ["V"], "segments": {"r": {"V": "+"}}})
     assert "r" in inv.segments
@@ -566,7 +559,7 @@ def test_ascii_g_and_script_g_in_one_inventory_is_collision() -> None:
 def test_advisory_fires_for_ascii_colon_in_segment_label() -> None:
     """ASCII colon (U+003A) in a segment label is almost always a
     typing substitute for the IPA length mark U+02D0. The advisory
-    is informational only -- the inventory still loads."""
+    is informational only; the inventory still loads."""
     inv = Inventory.parse({"features": ["V"], "segments": {"a:": {"V": "+"}}})
     assert any(
         "U+003A" in a and "U+02D0" in a for a in inv.advisories
@@ -575,7 +568,7 @@ def test_advisory_fires_for_ascii_colon_in_segment_label() -> None:
 
 def test_no_ascii_colon_advisory_when_proper_length_mark_used() -> None:
     """A segment using the canonical IPA length mark must NOT fire
-    the advisory -- the whole point of the advisory is to flag
+    the advisory; the whole point of the advisory is to flag
     likely paste mistakes, not penalize correct IPA notation."""
     inv = Inventory.parse({"features": ["V"], "segments": {"aː": {"V": "+"}}})
     assert not any("U+003A" in a for a in inv.advisories)
@@ -585,7 +578,7 @@ def test_bundled_inventories_produce_no_ipa_confusable_advisories() -> None:
     """Bundled inventories use canonical IPA (``ɡ͡b`` not ``g͡b``;
     ``pʼ`` not ``p'``; ``ɹ`` or ``r`` according to the inventory's
     intent), so the IPA-confusable advisory should never fire on a
-    bundled load -- otherwise users see scary notes every time
+    bundled load; otherwise users see scary notes every time
     they open the app."""
     for fname in (
         "hayes_features.json",
@@ -597,8 +590,6 @@ def test_bundled_inventories_produce_no_ipa_confusable_advisories() -> None:
         if not path.exists():
             continue
         inv = Inventory.load(str(path))
-        # Size advisories are checked separately; this test guards
-        # specifically against IPA-confusable false positives.
         confusable_advisories = [
             a
             for a in inv.advisories
@@ -615,7 +606,7 @@ def test_bundled_inventories_produce_no_ipa_confusable_advisories() -> None:
 # ---------------------------------------------------------------------------
 def test_ipa_segment_labels_survive_round_trip() -> None:
     """Linguistically plausible IPA segment labels must round-trip
-    through ``parse → to_json_dict → parse`` with their canonical
+    through ``parse to to_json_dict to parse`` with their canonical
     names byte-for-byte unchanged. Stress cases:
 
       - combining diacritics (n̪, m̥, ã)
@@ -651,12 +642,10 @@ def test_ipa_segment_labels_survive_round_trip() -> None:
     ]
     segments = {seg: {"V": "+"} for seg in ipa_labels}
     inv1 = Inventory.parse({"features": ["V"], "segments": segments})
-    # All labels survive parse with their original spelling.
     for seg in ipa_labels:
         assert (
             seg in inv1.segments
         ), f"label {seg!r} ({[hex(ord(c)) for c in seg]}) lost in parse"
-    # Round-trip through serialization.
     serialized = inv1.to_json_dict()
     inv2 = Inventory.parse(serialized)
     assert set(inv2.segments.keys()) == set(ipa_labels), (
@@ -683,7 +672,6 @@ def test_ipa_nfd_segment_normalizes_to_nfc() -> None:
     inv_from_nfd = Inventory.parse(
         {"features": ["V"], "segments": {nfd: {"V": "+"}}}
     )
-    # Both produce the same canonical key.
     assert list(inv_from_nfc.segments) == list(inv_from_nfd.segments)
     assert nfc in inv_from_nfd.segments
 
@@ -703,11 +691,10 @@ def test_ipa_serialization_keeps_unicode_readable() -> None:
         }
     )
     out = inv.to_json_dict()
-    # Confirm to_json_dict carries IPA glyphs as-is in the dict.
     assert "aː" in out["segments"]
     assert "t͡ʃ" in out["segments"]
-    # And that json.dumps(..., ensure_ascii=False) keeps them
-    # readable -- ``atomic_write_json`` uses this serializer.
+    # ``atomic_write_json`` uses ``ensure_ascii=False``; verify that
+    # serializer keeps IPA glyphs readable rather than escaping them.
     text = _json.dumps(out, indent=2, ensure_ascii=False)
     assert "ː" in text
     assert "t͡ʃ" in text
@@ -764,13 +751,12 @@ def test_parse_canonicalizes_inventory_name() -> None:
         }
     )
     assert inv.name == "Café"
-    # And the metadata round-trips with the canonical form.
     assert inv.metadata["name"] == "Café"
 
 
 def test_parse_caps_overlong_inventory_name() -> None:
     """A 5000-char inventory name would destroy the title bar /
-    status strip. Truncate (don't reject -- the inventory is
+    status strip. Truncate (don't reject; the inventory is
     otherwise fine) so the user still gets a working load."""
     inv = Inventory.parse(
         {
@@ -863,7 +849,6 @@ def test_parse_missing_feature_in_bundle_defaults_to_zero() -> None:
     )
     assert inv.feature_value("p", "Voice") == "-"
     assert inv.feature_value("p", "Nasal") == "0"
-    # On-disk shape unchanged: Nasal is NOT auto-inserted.
     assert "Nasal" not in inv.segments["p"]
 
 
@@ -916,7 +901,7 @@ def test_parse_rejects_non_integer_schema_version() -> None:
 
 
 def test_parse_rejects_bool_as_schema_version() -> None:
-    # ``bool`` is a subclass of ``int``; without an explicit reject
+    # ``bool`` is a subclass of ``int``; without an explicit reject,
     # ``True`` would pass the integer check and read as version 1.
     with pytest.raises(ValidationError):
         Inventory.parse(
@@ -930,7 +915,6 @@ def test_schema_version_round_trips_on_write() -> None:
     inv = Inventory.parse({"features": [], "segments": {}})
     out = inv.to_json_dict()
     assert out["schema_version"] == 1
-    # And not duplicated into metadata.
     assert "schema_version" not in out["metadata"]
 
 
@@ -1093,7 +1077,6 @@ def test_engine_caches_cannot_desync_from_mutation() -> None:
     }
     inv = Inventory.parse(inv_raw)
     eng = FeatureEngine(inv)
-    # Mutating the original raw dict must not affect the engine.
     inv_raw["segments"]["p"]["Voice"] = "+"  # type: ignore[index]
     assert eng.get_feature_value("p", "Voice") == "-"
     assert "p" not in eng.plus_segs["Voice"]
@@ -1168,16 +1151,14 @@ def test_bundle_cache_results_are_immutable() -> None:
     ``list[dict[str, str]]`` and a caller mutation would silently
     corrupt the cache for every subsequent call on the same input.
     The current contract: both the outer container AND the inner
-    bundles refuse mutation -- pinned behaviourally by attempting
+    bundles refuse mutation; pinned behaviourally by attempting
     each mutation and asserting it raises.
     """
     eng = FeatureEngine.from_path(HAYES)
     segs = ["b", "d", "ɡ"]
     bundles_a = eng.find_all_minimal_bundles(segs)
-    # Outer container: no append (tuples raise AttributeError).
     with pytest.raises(AttributeError):
         bundles_a.append({"X": "+"})  # type: ignore[attr-defined]
-    # Inner bundles: read-only mapping refuses __setitem__.
     if bundles_a:
         with pytest.raises(TypeError):
             # Two ignore codes because mypy's narrowing differs by
@@ -1214,19 +1195,18 @@ def test_find_all_minimal_bundles_bitmask_matches_naive() -> None:
         ["f", "s"],
         ["a", "e", "i", "o", "u"],
         ["l"],
-        ["b"],  # singleton -- common path
+        ["b"],  # singleton, common path
     )
     for segs in seg_lists:
         bundles = eng.find_all_minimal_bundles(segs)
         # Every returned bundle must STRICTLY characterise S
-        # exactly (default ``find_segments`` -- the round-trip
+        # exactly (default ``find_segments``; the round-trip
         # invariant the analysis-pane spec rendering rests on).
         for bundle in bundles:
             recovered = set(eng.find_segments(bundle))
             assert recovered == set(
                 segs
             ), f"bundle {bundle} for {segs} recovered {recovered}"
-        # All bundles must be the same size (minimal).
         sizes = {len(b) for b in bundles}
         assert len(sizes) <= 1, f"non-uniform bundle sizes for {segs}: {sizes}"
 
@@ -1255,7 +1235,8 @@ def test_geometry_analyzer_resets_between_runs() -> None:
     analyzer = GeometryAnalyzer(eng)
     analyzer.analyze()
     first_deps = dict(analyzer.dependencies)
-    # Poison the dict with a fake entry and re-run; analyze must drop it.
+    # Poisoning with a fake entry pins the contract that analyze()
+    # clears stale state before each run rather than merging into it.
     analyzer.dependencies["FakeFeature"] = {
         "parent": "FakeParent",
         "coverage": 1.0,
@@ -1294,8 +1275,6 @@ def test_atomic_write_cleans_up_tmp_on_failure(
     real_replace = os.replace
 
     def fail_replace(src: str, dst: str) -> None:
-        # Remove the tmp file to simulate a crash partway through;
-        # the cleanup branch should swallow the missing-tmp gracefully.
         raise OSError("simulated rename failure")
 
     monkeypatch.setattr(os, "replace", fail_replace)
@@ -1326,7 +1305,7 @@ def test_round_trip_preserves_top_level_metadata(tmp_path: Path) -> None:
     """Some bundled inventories (e.g. ``general_features.json``) store
     ``name``/``version``/``notes`` at the top level rather than under
     a ``metadata`` object. ``to_json_dict`` must not silently drop
-    them on round-trip -- the parser harvests both conventions into
+    them on round-trip; the parser harvests both conventions into
     ``Inventory.metadata`` and ``to_json_dict`` writes them all back
     under the canonical ``metadata`` key."""
     raw = {
@@ -1346,8 +1325,8 @@ def test_round_trip_preserves_top_level_metadata(tmp_path: Path) -> None:
 
 
 def test_explicit_metadata_wins_over_top_level_collision() -> None:
-    """If both shapes set ``name``, the explicit metadata object wins
-    -- it's the more deliberate, structured location."""
+    """If both shapes set ``name``, the explicit metadata object wins;
+    it's the more deliberate, structured location."""
     inv = Inventory.parse(
         {
             "name": "top-level",
@@ -1373,7 +1352,7 @@ def test_from_grid_accepts_unicode_minus() -> None:
 
 def test_from_grid_rejects_unknown_cell_value() -> None:
     """The old builder silently rewrote unknown values to '0'. New
-    contract: unknown values are an error -- they shouldn't reach the
+    contract: unknown values are an error; they shouldn't reach the
     save path in the first place, so surfacing them is the bug-hunting
     behaviour."""
     with pytest.raises(ValidationError):
@@ -1465,7 +1444,7 @@ def test_analysis_copy_translates_unicode_minus_to_ascii(
     # The display layer puts U+2212 in the HTML; verify the copy
     # path turns it into ASCII '-' in both mime payloads. The
     # show()+processEvents() bit is required for selectAll() to
-    # establish a real selection under the offscreen QPA -- an
+    # establish a real selection under the offscreen QPA; an
     # unrealised widget produces an empty selection and Qt then
     # crashes deep in createMimeDataFromSelection.
     edit.setHtml(
@@ -1486,7 +1465,7 @@ def test_analysis_copy_translates_unicode_minus_to_ascii(
     assert mime.hasHtml()
     assert "−" not in mime.html(), "HTML payload still contains U+2212 minus"
 
-    # Sanity: a selection with no U+2212 still produces a usable mime
+    # Selection with no U+2212 must still produce a usable mime
     # (the fast path returns the original; we don't care which branch
     # ran, only that the output is right).
     edit.clear()
@@ -1568,8 +1547,8 @@ def test_bulk_cycle_whole_table_under_100ms(tmp_path: Path) -> None:
         f"regression vs <100 ms target. Did vertical header drift "
         f"back to ResizeToContents?"
     )
-    # Bulk cycle dirtied the grid; close_builder_silent skips the
-    # unsaved-changes modal that would block forever in offscreen mode.
+    # close_builder_silent skips the unsaved-changes modal that would
+    # block forever in offscreen mode after the dirty bulk cycle.
     close_builder_silent(b)
 
 
@@ -1783,7 +1762,7 @@ def test_worker_non_oserror_clears_save_in_flight(
     """The save worker catches BaseException, not just OSError. If
     any other exception slipped through, the daemon thread would die
     silently, ``_save_finished`` would never fire, and
-    ``_save_in_flight`` would be stuck True forever -- a permanent
+    ``_save_in_flight`` would be stuck True forever; a permanent
     save lockout. Reproduce by monkey-patching write_atomic to raise
     TypeError."""
     import os as _os
@@ -1897,15 +1876,14 @@ def test_builder_save_runs_off_main_thread(tmp_path: Path) -> None:
     b = InventoryBuilder(load_path=HAYES)
     target = tmp_path / "saved.json"
     b._write_json(str(target))
-    # Save was scheduled; spin the event loop briefly so the timer
-    # callback fires (worker -> QTimer.singleShot(0)).
+    # Spin the event loop briefly so the timer callback fires
+    # (worker scheduled via QTimer.singleShot(0)).
     deadline = _time.monotonic() + 2.0
     while _time.monotonic() < deadline and b._save_in_flight:
         app.processEvents()
         _time.sleep(0.01)
     assert target.exists(), "background save never produced the file"
     assert not b._save_in_flight, "in-flight flag not cleared"
-    # File is a valid Inventory.
     reloaded = Inventory.load(str(target))
     assert len(reloaded.features) > 0
     b.close()
@@ -1916,7 +1894,7 @@ def test_edit_during_in_flight_save_preserves_dirty(
 ) -> None:
     """The snapshot handed to the save worker is fixed at the moment
     ``_to_inventory()`` ran. Any edit made *after* the snapshot but
-    *before* the worker finishes is NOT in the file on disk -- so the
+    *before* the worker finishes is NOT in the file on disk, so the
     completion handler must not clear ``_dirty``. Before the fix, the
     completion handler unconditionally cleared the flag, silently
     marking post-snapshot edits as saved and losing them at close.
@@ -1950,13 +1928,12 @@ def test_edit_during_in_flight_save_preserves_dirty(
     b = InventoryBuilder(load_path=HAYES)
     target = tmp_path / "out.json"
     b._write_json(str(target))
-    # Snapshot is committed; _dirty cleared by the save-start path.
     assert b._save_in_flight, "worker should still be running"
     assert not b._dirty, "snapshot commit should have cleared _dirty"
 
-    # Edit a cell while the worker is still writing the OLD snapshot.
-    # Route through _set_cell_value so it goes through _commit_edit
-    # (the real edit chokepoint), the same path a user click takes.
+    # Route through _set_cell_value so the edit goes through
+    # _commit_edit (the real edit chokepoint), the same path a user
+    # click takes while the worker is still writing the OLD snapshot.
     item = b._table.item(0, 0)
     assert item is not None
     new = "-" if item.text() == "+" else "+"
@@ -1977,7 +1954,7 @@ def test_edit_during_in_flight_save_preserves_dirty(
 def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
     """A failed write leaves in-memory state diverged from the file on
     disk. ``_dirty`` is cleared at save-start (snapshot commit), so on
-    worker failure the completion handler must restore it -- otherwise
+    worker failure the completion handler must restore it; otherwise
     the close guard would let the user discard their unsaved changes.
     """
     import os as _os
@@ -2021,7 +1998,7 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Defensive QSettings reads at startup -- a corrupt or wrong-typed
+# Defensive QSettings reads at startup. A corrupt or wrong-typed
 # value must NEVER prevent the app from launching.
 # ---------------------------------------------------------------------------
 def test_safe_read_setting_recovers_from_systemerror() -> None:
@@ -2048,7 +2025,7 @@ def test_safe_read_setting_recovers_from_systemerror() -> None:
 
 def test_safe_read_setting_recovers_from_module_not_found() -> None:
     """Same shape as SystemError but for an old import path that
-    no longer exists -- e.g. an enum class moved between modules."""
+    no longer exists; e.g. an enum class moved between modules."""
     from phonology_features._settings import safe_read_setting
 
     class FakeSettings:
@@ -2069,7 +2046,7 @@ def test_safe_read_setting_recovers_from_module_not_found() -> None:
 
 def test_safe_read_setting_rejects_wrong_type_without_removing() -> None:
     """A wrong-typed value (e.g. a hand-edited INI replaced a QSize
-    with a string) falls back to default but is NOT removed -- the
+    with a string) falls back to default but is NOT removed; the
     user may have set it deliberately and we just don't know how
     to use it yet."""
     from PyQt6.QtCore import QSize
@@ -2161,7 +2138,7 @@ def test_inventories_dir_resolves_to_bundled_dir() -> None:
     package-layout change that moves the controller deeper or
     shallower must update the ``..`` count, or the dropdown silently
     populates from an empty / wrong directory. Regression for the
-    ``gui/`` -> ``gui/controllers/`` move that left the old three-up
+    ``gui/`` to ``gui/controllers/`` move that left the old three-up
     walk landing inside ``desktop/src/`` instead of ``desktop/``.
     """
     from phonology_features.gui.controllers.inventory_dir import (
@@ -2233,7 +2210,7 @@ def test_stale_tmp_files_swept_on_dropdown_populate(tmp_path: Path) -> None:
     ), "fresh tmp file (possibly an in-flight save) must not be touched"
     assert (
         legit.exists()
-    ), "non-tmp file got swept -- the filter is too aggressive"
+    ), "non-tmp file got swept; the filter is too aggressive"
 
 
 def test_main_viewer_falls_back_when_current_inventory_deleted(
@@ -2355,7 +2332,7 @@ def test_main_viewer_loads_freshly_saved_builder_inventory(
     assert w._current_path is None
     builder._write_json(str(target))
 
-    # Drain the background save -- _on_builder_save_finished fires
+    # Drain the background save; _on_builder_save_finished fires
     # via the queued _save_finished signal back on the main thread.
     deadline = _time.monotonic() + 3.0
     while builder._save_in_flight and _time.monotonic() < deadline:
@@ -2570,21 +2547,21 @@ def test_user_splitter_drag_promotes_to_owned(tmp_path: Path) -> None:
 
 def test_bundle_search_largest_inventory_under_50ms() -> None:
     """Performance guard for ``find_all_minimal_bundles`` on the
-    biggest bundled inventory (``general_features.json`` -- 135
+    biggest bundled inventory (``general_features.json``: 135
     segments x 30 features, the deepest candidate-feature search
     space we ship). Runs a mix of small / medium / large target sets
     so a regression in any one shape gets caught.
 
     Current measured total on a developer laptop is ~1-2 ms across
     these five queries. 50 ms gives ~25x dev headroom and ~5-10x CI
-    headroom -- enough to tolerate slow virtualized runners while
+    headroom; enough to tolerate slow virtualized runners while
     still catching the regression patterns the search relies on:
       - bitmask encoding reverted to Python set ops (~7-10x per the
         comment at find_all_minimal_bundles).
       - branch-and-bound pruning broken (often 100x+ on hard inputs).
       - per-engine memoization cache disabled.
 
-    Engine-only -- no GUI, no QApplication, so it stays cheap.
+    Engine-only: no GUI, no QApplication, so it stays cheap.
     """
     import time as _time
 

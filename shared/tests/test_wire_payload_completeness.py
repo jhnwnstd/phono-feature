@@ -1,7 +1,7 @@
 """Pins the wire-payload shape against the web renderer's reads.
 
 The web app consumes the inventory summary via
-``view_models.build_inventory_summary`` -> JSON serialisation ->
+``view_models.build_inventory_summary`` to JSON serialisation to
 ``web/main.js`` field reads. When a Python refactor drops a field
 the JS silently reads ``undefined`` and the affected feature breaks
 without a test failing.
@@ -9,7 +9,7 @@ without a test failing.
 Concrete prior incident: the dead-code audit (Round B) dropped
 ``cell.is_diphthong`` from the cell wire dict. ``web/main.js:1833``
 still read it for the mode-toggle filter, which then silently
-treated every cell as a monophthong -- the diphthong display mode
+treated every cell as a monophthong; the diphthong display mode
 showed an EMPTY chart on the web side until a visual audit caught
 it.
 
@@ -92,7 +92,7 @@ def test_cell_wire_dict_contains_every_field_web_reads() -> None:
     missing = _EXPECTED_CELL_FIELDS - actual_fields
     extra = actual_fields - _EXPECTED_CELL_FIELDS
     assert not missing, (
-        f"cell wire dict is missing {missing!r} -- web/main.js "
+        f"cell wire dict is missing {missing!r}; web/main.js "
         f"reads these fields and gets undefined when they're "
         f"dropped. Add to view_models.py _vowel_chart_summary."
     )
@@ -100,7 +100,7 @@ def test_cell_wire_dict_contains_every_field_web_reads() -> None:
     # the JS will ignore. Just log them so we notice drift.
     if extra:
         pytest.skip(
-            f"cell wire dict has extra fields {extra!r} -- update "
+            f"cell wire dict has extra fields {extra!r}; update "
             f"_EXPECTED_CELL_FIELDS if these are intentional."
         )
 
@@ -113,7 +113,7 @@ def test_cell_is_diphthong_set_correctly_for_diphthong_inventory() -> None:
     Korean PHOIBLE has the canonical diphthong set but isn't
     bundled. The bundled korean inventory has no diphthongs
     (vowel_secondary absent), so every cell should report
-    ``is_diphthong: false`` -- which still confirms the field
+    ``is_diphthong: false``, which still confirms the field
     is present + serialised correctly.
     """
     chart = _vowel_chart_summary_for("korean")
@@ -194,13 +194,13 @@ def test_diphthong_wire_dict_shape_against_renderer() -> None:
     summary = _vowel_chart_summary(
         engine, list(engine.grouped_segments.get("Vowels", []))
     )
-    # Spanish has no diphthongs -- the list is empty. Build a
+    # Spanish has no diphthongs; the list is empty. Build a
     # synthetic geometry to exercise the diphthong dict shape.
     vowels = list(engine.grouped_segments.get("Vowels", []))
     seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
     # Pick two real Spanish vowels with distinct placements.
-    # /i/ (close-front) -> /a/ (open-central) is a valid synthetic
+    # /i/ (close-front) to /a/ (open-central) is a valid synthetic
     # diphthong primary/secondary pair.
     synthetic_secondary = {}
     if "i" in seg_feats and "a" in seg_feats:
@@ -211,7 +211,7 @@ def test_diphthong_wire_dict_shape_against_renderer() -> None:
     if not geom.diphthongs:
         pytest.skip(
             "synthetic diphthong was suppressed by degeneracy "
-            "filter -- check spanish vowel set"
+            "filter; check spanish vowel set"
         )
     # Serialise via view_models so we test the wire path end-to-end.
     summary2 = _vowel_chart_summary(engine, vowels)
@@ -222,7 +222,7 @@ def test_diphthong_wire_dict_shape_against_renderer() -> None:
     d0 = geom.diphthongs[0]
     actual_keys = set()
     # Pull from the actual view_models serialisation by re-building
-    # an artificial summary -- this is the equivalent dict shape
+    # an artificial summary; this is the equivalent dict shape
     # the wire would carry.
     from dataclasses import fields as dc_fields
 
@@ -256,7 +256,7 @@ def test_web_js_cell_field_reads_match_expected_set() -> None:
     snake_case here.
     """
     text = _WEB_MAIN_JS.read_text(encoding="utf-8")
-    # Match cell.<word> but skip cellEl. / cellNode. etc -- we
+    # Match cell.<word> but skip cellEl. / cellNode. etc; we
     # care about the variable named exactly ``cell``.
     pattern = re.compile(
         r"\bcell\.([a-z_][a-z0-9_]*)\b(?!\.)",

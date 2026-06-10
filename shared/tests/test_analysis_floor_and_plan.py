@@ -4,8 +4,8 @@ geometry-aware segment-pane layout planner.
 These tests pin the two invariants the desktop fix depends on:
 
 1. ``analysis_content_floor_h()`` is a pure function of the
-   ``ANALYSIS_*`` and ``FEAT_ROW_H`` constants -- no inventory
-   inputs, identical value across any call sequence -- and matches
+   ``ANALYSIS_*`` and ``FEAT_ROW_H`` constants (no inventory
+   inputs, identical value across any call sequence) and matches
    ``MIN_ANALYSIS_H``. Both UIs lock to this floor; if the helper
    drifts from the constant, the web's ``--min-analysis-h`` and the
    desktop's ``minimumSizeHint`` will disagree.
@@ -21,9 +21,7 @@ from __future__ import annotations
 
 from phonology_shared.presentation import layout as L
 
-# ---------------------------------------------------------------------------
 # Analysis floor
-# ---------------------------------------------------------------------------
 
 
 def test_analysis_content_floor_h_matches_min_analysis_h() -> None:
@@ -52,7 +50,7 @@ def test_analysis_content_floor_h_decomposition_matches_constants() -> None:
 
 
 def test_analysis_content_floor_h_is_pure() -> None:
-    """No hidden inventory state -- repeated calls return the same
+    """No hidden inventory state; repeated calls return the same
     integer. This is the property the user means by 'should not depend
     accidentally on whatever inventory was loaded first'.
     """
@@ -81,7 +79,7 @@ def test_top_pane_height_reserves_the_analysis_floor() -> None:
     """
     floor = L.analysis_content_floor_h()
     for total in (900, 1080, 1200, 1440):
-        # top_need_h asks for the entire window -- the cap is what
+        # top_need_h asks for the entire window; the cap is what
         # protects the analysis pane.
         top_h = L.top_pane_height(top_need_h=total, total=total)
         assert total - top_h >= floor, (
@@ -105,9 +103,7 @@ def test_top_pane_height_degrades_to_hard_floor_on_tiny_window() -> None:
     assert tiny - top_h >= L.HARD_MIN_ANALYSIS_H
 
 
-# ---------------------------------------------------------------------------
 # plan_seg_layout: geometry-aware segment-pane layout
-# ---------------------------------------------------------------------------
 
 
 def _heights(values: list[int]) -> list[int]:
@@ -139,7 +135,7 @@ def test_plan_no_spillover_when_main_flow_fits() -> None:
 def test_plan_spillover_kicks_in_when_main_overflows() -> None:
     """Five 100 px groups in a 350 px pane: smallest k that fits is
     the one that leaves <= 350 in main + spillover combined. Group
-    widths are 80 px -- well within the spillover column width at the
+    widths are 80 px, well within the spillover column width at the
     chosen pane width / min_col_w combination."""
     names = _names(5)
     plan = L.plan_seg_layout(
@@ -153,16 +149,6 @@ def test_plan_spillover_kicks_in_when_main_overflows() -> None:
     )
     assert plan.main_groups + plan.spillover_groups == tuple(names)
     assert len(plan.spillover_groups) > 0
-    # Smallest-k sweep: prefer to keep groups in main flow. With 100 px
-    # groups in a 350 px pane, k=2 lets main_flow=300 (3 groups) and
-    # spillover bounding = max(2 cols of 1 each) = 100 -> 300+100=400
-    # which still doesn't fit. k=3: main=200, spillover=2 cols of
-    # [100,100] and [100] -> bounding=200, total=400. Still 400. With
-    # 2 cols and 3 spilled: LPT puts heights [100,100,100] into 2
-    # cols as [100,100] and [100] => bounding=200. Main=200. Total=400.
-    # Hmm doesn't fit either. k=4: main=100, spillover [100,100,100,100]
-    # into 2 cols -> [100,100] and [100,100] => bounding=200. Total=300.
-    # OK that fits at k=4.
     assert plan.n_spillover_cols >= 1
 
 
@@ -172,11 +158,11 @@ def test_plan_uses_chart_rect_to_position_spillover() -> None:
     names = _names(4)
     plan = L.plan_seg_layout(
         names,
-        _heights([50, 50, 50, 50]),  # short groups
+        _heights([50, 50, 50, 50]),
         [200, 200, 200, 200],
         pane_w=800,
         pane_h=600,
-        chart_rect=(420, 0, 380, 240),  # chart 240 px tall
+        chart_rect=(420, 0, 380, 240),
         min_col_w=100,
     )
     # Main flow + chart fit; no spillover required.
@@ -186,13 +172,13 @@ def test_plan_uses_chart_rect_to_position_spillover() -> None:
 
 
 def test_plan_column_count_scales_with_width() -> None:
-    """Wide pane -> more spillover columns; narrow pane -> fewer.
+    """Wide pane to more spillover columns; narrow pane to fewer.
     Capped at ``max_spillover_cols`` so even an ultrawide doesn't
     fan groups into a strip.
     """
     names = _names(6)
     heights = _heights([100] * 6)
-    widths = [80] * 6  # small enough to fit in narrow columns
+    widths = [80] * 6
     narrow = L.plan_seg_layout(
         names,
         heights,
@@ -316,7 +302,7 @@ def test_plan_rejects_oversized_groups() -> None:
     plan = L.plan_seg_layout(
         names,
         _heights([200, 100, 100, 100]),
-        [80, 80, 80, 500],  # last group too wide for any narrow col
+        [80, 80, 80, 500],
         pane_w=400,
         pane_h=250,
         chart_rect=None,
@@ -334,10 +320,10 @@ def test_plan_fallback_returns_all_main_when_nothing_fits() -> None:
     names = _names(3)
     plan = L.plan_seg_layout(
         names,
-        _heights([500, 500, 500]),  # huge groups
+        _heights([500, 500, 500]),
         [80, 80, 80],
         pane_w=400,
-        pane_h=300,  # tiny pane
+        pane_h=300,
         chart_rect=None,
         min_col_w=100,
     )
@@ -362,7 +348,7 @@ def test_plan_mismatched_input_lengths_raises() -> None:
     with pytest.raises(ValueError):
         L.plan_seg_layout(
             ["a", "b"],
-            [100, 100, 100],  # wrong length
+            [100, 100, 100],
             [50, 50],
             pane_w=400,
             pane_h=300,

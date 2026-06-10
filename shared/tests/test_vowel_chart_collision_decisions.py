@@ -6,7 +6,7 @@ QVBoxLayout / QHBoxLayout, which lay children out in flow without
 absolute positioning. The web renders the same cells with CSS flex;
 a regression in the per-child styling (e.g. the cell-anchor positioning
 class accidentally applied to flex items) would yank every child to
-the same spot and visually overlap the segments -- the schwa /
+the same spot and visually overlap the segments: the schwa /
 rhotic-schwa overlap bug. These tests pin the shared payload so any
 divergence shows up here first instead of in the rendered chart.
 
@@ -112,7 +112,7 @@ def test_long_pair_classification_is_consistent_across_renderers() -> None:
     caught by the shared payload first.
     """
     # Walk every bundled inventory; for every multi-entry cell,
-    # assert LONG_PAIR matches the "only ``Long`` differs"
+    # LONG_PAIR must match the "only ``Long`` differs"
     # criterion explicitly.
     for inv in sorted(INVENTORIES_DIR.glob("*.json")):
         if inv.name.startswith("_"):
@@ -143,7 +143,7 @@ def test_long_pair_classification_is_consistent_across_renderers() -> None:
             )
             is_long_pair = cell.display_kind == VowelCellDisplayKind.LONG_PAIR
             assert is_long_pair is differs_only_on_long, (
-                f"{inv.name}: cell {cell.entries} -- LONG_PAIR="
+                f"{inv.name}: cell {cell.entries}; LONG_PAIR="
                 f"{is_long_pair} but differs_only_on_long="
                 f"{differs_only_on_long}; the shared classification is "
                 f"out of sync with the criterion the renderers expect"
@@ -212,7 +212,7 @@ def test_silhouette_front_edge_does_not_adapt_to_front_vowels() -> None:
     canonical extent computed from ``top_width`` / ``bottom_width``,
     NOT pulled in to hug the frontmost present front vowel. This
     test pins that the left edge is purely a function of the shrunken
-    widths (Stage 1 + Stage 2) -- no front-vowel-specific
+    widths (Stage 1 + Stage 2); no front-vowel-specific
     adaptation kicks in.
     """
     from phonology_shared.chart.vowels import (
@@ -237,7 +237,7 @@ def test_silhouette_front_edge_does_not_adapt_to_front_vowels() -> None:
 def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
     """Whatever back extent the adaptation picks, the right edge stays
     a vertical line: ``top_right == bottom_right``. This is the
-    silhouette's structural invariant -- only the slanted left edge
+    silhouette's structural invariant; only the slanted left edge
     changes between top and bottom.
     """
     for inv in sorted(INVENTORIES_DIR.glob("*.json")):
@@ -270,6 +270,7 @@ def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
 # pure-Python classifier; the renderer-side tests live in their own
 # files but consume the same :py:class:`VowelCellDisplayKind` values
 # verified here.
+
 # ---------------------------------------------------------------------------
 
 
@@ -415,7 +416,7 @@ def test_classify_long_plus_nasal_is_contrast_set() -> None:
 
 def test_classify_differs_on_position_feature_is_stack() -> None:
     """Entries differing on a position feature (``high``) fall
-    through to ``STACK`` -- vertical stack is the safe default when
+    through to ``STACK``; vertical stack is the safe default when
     a non-display feature distinguishes the entries.
     """
     from phonology_shared.chart.vowels import (

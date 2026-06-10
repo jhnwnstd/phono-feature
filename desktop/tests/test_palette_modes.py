@@ -11,7 +11,7 @@ toggle product to stay coherent:
 2. **Hex format**: every value is a 7-char ``#RRGGBB`` string.
 
 3. **Color-mapping rule**: standard mode's blue keys map to purple
-   in colorblind mode; green -> blue; red -> orange; gray stays.
+   in colorblind mode; green to blue; red to orange; gray stays.
 
 4. **Round-trip stability**: any sequence of theme / palette-mode
    toggles ending back at (light, standard) reproduces the LIGHT
@@ -242,7 +242,7 @@ def test_palette_values_are_valid_hex() -> None:
 
 @pytest.mark.parametrize("key", BLUE_TO_PURPLE)
 def test_blue_keys_map_to_purple_in_colorblind(key: str) -> None:
-    """Blue family in standard -> purple family in colorblind, for
+    """Blue family in standard becomes purple family in colorblind, for
     every key that semantically reads as 'positive / selected /
     accent'. The mapping holds in both light and dark variants.
     """
@@ -268,7 +268,7 @@ def test_blue_keys_map_to_purple_in_colorblind(key: str) -> None:
 
 @pytest.mark.parametrize("key", GREEN_TO_BLUE)
 def test_green_keys_map_to_blue_in_colorblind(key: str) -> None:
-    """Green family in standard -> blue in colorblind, for every key
+    """Green family in standard becomes blue in colorblind, for every key
     that means 'positive / +'.
     """
     assert (
@@ -291,7 +291,7 @@ def test_green_keys_map_to_blue_in_colorblind(key: str) -> None:
 
 @pytest.mark.parametrize("key", RED_TO_ORANGE)
 def test_red_keys_map_to_orange_in_colorblind(key: str) -> None:
-    """Red family in standard -> orange (or yellow) in colorblind.
+    """Red family in standard becomes orange (or yellow) in colorblind.
     Accepts yellow because the dark-mode orange shades sometimes
     land in the yellow range under HSL classification.
     """
@@ -365,7 +365,6 @@ def test_set_theme_and_mode_populates_active_palette(
     assert (
         dict(C) == expected
     ), f"order theme->mode: C did not match {theme}/{mode}"
-    # Reverse the order and re-check.
     set_palette_mode(mode)
     set_theme(theme)
     assert (
@@ -386,7 +385,7 @@ def test_theme_version_increments_on_every_change() -> None:
     set_palette_mode("colorblind")
     assert _palette.theme_version > v2
     v3 = _palette.theme_version
-    # Even no-op toggles bump it -- conservative invalidation is
+    # Even no-op toggles bump it; conservative invalidation is
     # cheaper than building a "no, nothing changed" diff.
     set_theme("dark")
     assert _palette.theme_version > v3
@@ -485,7 +484,7 @@ def test_mainwindow_user_path_cb_then_dark_then_uncb_then_undark(
     app: QApplication,
 ) -> None:
     """Repros the user's reported stuck-state path:
-    standard/light -> colorblind -> +dark -> -colorblind -> -dark.
+    standard/light, colorblind, +dark, -colorblind, -dark.
     Final state must be standard/light with the canonical LIGHT
     palette, no stale colors anywhere in ``C``.
     """
@@ -576,8 +575,8 @@ def test_mainwindow_geometry_stable_across_palette_toggles(
     after_back = snapshot()
     assert (
         after_cb == before
-    ), f"colorblind toggle moved chrome: {before} -> {after_cb}"
+    ), f"colorblind toggle moved chrome: {before} to {after_cb}"
     assert (
         after_back == before
-    ), f"second toggle didn't restore chrome: {before} -> {after_back}"
+    ), f"second toggle didn't restore chrome: {before} to {after_back}"
     w.close()

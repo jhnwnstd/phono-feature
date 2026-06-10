@@ -27,9 +27,7 @@ from phonology_shared.chart.consonants import (
     detect_consonant_profile,
 )
 
-# ---------------------------------------------------------------------------
 # derive_place: each example describes one articulatory target.
-# ---------------------------------------------------------------------------
 
 
 def test_place_bilabial_from_labial_only() -> None:
@@ -131,7 +129,7 @@ def test_place_epiglottal_from_explicit_aryepiglottic() -> None:
 
 def test_place_pharyngeal_subset_does_not_match_epiglottal() -> None:
     """``+radical +rtr`` without ``+constrpharynx`` stays at the
-    pharyngeal rule -- the epiglottal triple is strict."""
+    pharyngeal rule; the epiglottal triple is strict."""
     assert derive_place({"radical": "+", "rtr": "+"}) == PlaceRank.PHARYNGEAL
 
 
@@ -169,9 +167,7 @@ def test_place_constrgl_overrides_oral_evidence() -> None:
     assert derive_place({"constrgl": "+", "labial": "+"}) == PlaceRank.GLOTTAL
 
 
-# ---------------------------------------------------------------------------
 # derive_laryngeal_kind: conventional-first, aliases fill in the gaps.
-# ---------------------------------------------------------------------------
 
 
 def test_laryngeal_plain_voiceless_from_voice_minus_only() -> None:
@@ -210,7 +206,7 @@ def test_laryngeal_creaky_from_constrgl_plus_voice_plus_non_stop() -> None:
 
 
 def test_laryngeal_ejective_requires_obstruent_base() -> None:
-    """Conventional path: ``-voice, +constrgl, -sonorant`` ->
+    """Conventional path: ``-voice, +constrgl, -sonorant`` to
     EJECTIVE."""
     assert (
         derive_laryngeal_kind({"voice": "-", "constrgl": "+", "sonorant": "-"})
@@ -220,7 +216,7 @@ def test_laryngeal_ejective_requires_obstruent_base() -> None:
 
 def test_laryngeal_implosive_requires_stop_obstruent_base() -> None:
     """Conventional path: ``+voice, +constrgl, -continuant,
-    -sonorant`` -> IMPLOSIVE."""
+    -sonorant`` to IMPLOSIVE."""
     assert (
         derive_laryngeal_kind(
             {
@@ -282,7 +278,7 @@ def test_laryngeal_unknown_when_no_evidence() -> None:
 def test_laryngeal_conventional_wins_over_alias() -> None:
     """When both the conventional features and an alias are
     present, the conventional path takes precedence (the user's
-    explicit guidance: aliases fill in *when underspecified*).
+    explicit guidance: aliases fill in when underspecified).
     Here, ``+voice -constrgl -spreadgl`` derives PLAIN_VOICED and
     that result is final even though ``+ejective`` is also set."""
     assert (
@@ -291,10 +287,8 @@ def test_laryngeal_conventional_wins_over_alias() -> None:
     )
 
 
-# ---------------------------------------------------------------------------
 # derive_secondary_articulations: derive from real features only, never
 # from invented "velarized" / "palatalized" primitives.
-# ---------------------------------------------------------------------------
 
 
 def test_secondary_empty_for_vowels() -> None:
@@ -398,7 +392,7 @@ def test_secondary_pharyngealized_from_pharyngeal_layered_on_oral_place() -> (
     triggers PHARYNGEALIZED. The primary stays alveolar; the
     pharyngealisation is the secondary fact."""
     # +radical +rtr triggers pharyngeal evidence per the centralised
-    # helper, layered onto an alveolar primary -> pharyngealized.
+    # helper, layered onto an alveolar primary to pharyngealized.
     feats = {
         "syllabic": "-",
         "coronal": "+",
@@ -414,7 +408,7 @@ def test_secondary_pharyngealized_from_pharyngeal_layered_on_oral_place() -> (
 
 def test_secondary_pharyngealized_not_on_primary_pharyngeal() -> None:
     """A segment whose primary place is already PHARYNGEAL is NOT
-    also tagged as secondarily pharyngealised -- the secondary
+    also tagged as secondarily pharyngealised; the secondary
     label only makes sense layered onto another oral place."""
     feats = {"syllabic": "-", "pharyngeal": "+"}
     assert SecondaryKind.PHARYNGEALIZED not in derive_secondary_articulations(
@@ -474,7 +468,6 @@ def test_secondary_no_inference_from_just_dorsal_features() -> None:
     )
 
 
-# ---------------------------------------------------------------------------
 # Profile-aware palatal/velar discrimination.
 #
 # Mirrors the vowel-chart pattern where ``+coronal`` substitutes for
@@ -485,7 +478,6 @@ def test_secondary_no_inference_from_just_dorsal_features() -> None:
 # general feature-system inventory uses ``+front`` and ``-back`` alone.
 # Without the profile, ``derive_place`` defaults to Hayes-style behaviour
 # so every existing call site keeps working.
-# ---------------------------------------------------------------------------
 
 
 _AMBIGUOUS_PALATAL_OR_ADVANCED_VELAR = {
@@ -565,7 +557,7 @@ def test_derive_place_default_profile_is_hayes_style() -> None:
 
 def test_derive_place_general_profile_minus_back_alone_is_palatal() -> None:
     """``+dorsal +high -back`` (no ``+front``) still triggers
-    PALATAL under general-style logic -- the rule is ``+high AND
+    PALATAL under general-style logic; the rule is ``+high AND
     (+front OR -back)``, either alone is enough."""
     general = ConsonantProfile(dorsals_use_anterior=False)
     feats = {"dorsal": "+", "high": "+", "back": "-"}
@@ -573,8 +565,8 @@ def test_derive_place_general_profile_minus_back_alone_is_palatal() -> None:
 
 
 def test_derive_place_general_profile_plus_back_is_velar() -> None:
-    """``+dorsal +high +back`` lands at VELAR under both profiles
-    -- no palatal evidence, so the discriminator never matters."""
+    """``+dorsal +high +back`` lands at VELAR under both profiles;
+    no palatal evidence, so the discriminator never matters."""
     general = ConsonantProfile(dorsals_use_anterior=False)
     feats = {"dorsal": "+", "high": "+", "back": "+"}
     assert derive_place(feats, general) == PlaceRank.VELAR

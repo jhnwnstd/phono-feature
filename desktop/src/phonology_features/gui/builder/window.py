@@ -1402,7 +1402,7 @@ class InventoryBuilder(QMainWindow):
         )
         # Seed the grid from the parsed bundle directly. Previously
         # ``_rebuild_table()`` created an all-zero grid and the loop
-        # below replaced every cell with the loaded value -- doubling
+        # below replaced every cell with the loaded value, doubling
         # the ``make_cell`` work (each cell is a QTableWidgetItem
         # construction + setTextAlignment + setFlags + style_cell).
         # On Hayes (140 segs x 28 features = 3920 cells) that was the

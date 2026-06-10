@@ -1,7 +1,7 @@
 """Regression test for :py:mod:`phonology_features.gui.builder.save_controller`.
 
 Pins the invariant that ``save_finished`` fires no matter what the
-worker raises — including ``BaseException`` subclasses. Without that
+worker raises, including ``BaseException`` subclasses. Without that
 invariant the daemon thread dies silently, ``save_in_flight`` stays
 True forever, and the user is locked out of further saves until
 the app restarts.
@@ -28,7 +28,7 @@ INVENTORIES_DIR = Path(__file__).resolve().parents[1] / "inventories"
 
 class _CustomBaseError(BaseException):
     """BaseException subclass that the inner ``except Exception``
-    deliberately does not catch — exactly the case the finally block
+    deliberately does not catch; exactly the case the finally block
     is there to handle.
     """
 
@@ -54,9 +54,9 @@ def _make_controller(
         save_controller_module, "show_warning", lambda *a, **kw: None
     )
     inventory = _load_inventory()
-    # Make sure the engine can load the inventory we're handing the
-    # controller; a snapshot returning an unbuildable Inventory would
-    # fail at validation rather than reaching the worker.
+    # A snapshot returning an unbuildable Inventory would fail at
+    # validation rather than reaching the worker; pre-validate here
+    # so the test reliably exercises the worker error path.
     FeatureEngine(inventory)
 
     class _ExplodingInventory:
@@ -85,7 +85,7 @@ def test_worker_emits_completion_on_ordinary_exception(
         assert controller.wait_for_save(timeout_ms=3000)
         assert controller.save_in_flight is False
         # Failure path re-dirties so the close guard reflects the
-        # unsaved state — locks in the contract at the error branch.
+        # unsaved state; locks in the contract at the error branch.
         assert controller.dirty is True
     finally:
         parent.deleteLater()
@@ -106,7 +106,7 @@ def test_worker_emits_completion_on_base_exception(
     try:
         controller.request_save(str(tmp_path / "out.json"))
         assert controller.wait_for_save(timeout_ms=3000), (
-            "save_finished never fired — daemon thread died silently and "
+            "save_finished never fired; daemon thread died silently and "
             "save_in_flight is stuck on True"
         )
         assert controller.save_in_flight is False

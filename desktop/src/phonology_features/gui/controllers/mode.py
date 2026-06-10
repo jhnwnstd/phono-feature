@@ -60,12 +60,12 @@ class ModeController:
 
         Split into two stages so the mode-toggle click feels snappy:
 
-        * **Visible stage** -- panel chrome, row interactivity,
+        * **Visible stage**: panel chrome, row interactivity,
           segment-button states, feature-row states, status text.
           Everything that paints the new mode's framing. Held inside
           a single ``setUpdatesEnabled(False/True)`` so the user sees
           one clean swap, not a flicker as each piece changes.
-        * **Deferred stage** -- ``refresh_analysis``, which re-renders
+        * **Deferred stage**: ``refresh_analysis``, which re-renders
           the analysis pane (heavy ``setHtml`` work, ~30 ms on the
           slower direction). Posted to the next event-loop tick via
           ``QTimer.singleShot(0, ...)``. The user sees the mode swap
@@ -176,7 +176,8 @@ class ModeController:
         """Set each segment button to its final state for the new mode.
 
         Two short-circuits keep the per-button cost minimal during a
-        mode switch -- the dominant flash budget in the visible stage:
+        mode switch; this is the dominant flash budget in the visible
+        stage:
 
         1. **Skip the no-op case.** When transitioning into FEAT
            mode AND the projected query is non-empty, the deferred
@@ -232,7 +233,7 @@ class ModeController:
     def refresh_analysis(self) -> None:
         """Apply the active mode's summary to the panels. The shared
         view-model returns a total payload for any input (including
-        empty selection), so this is a straight dispatch -- no
+        empty selection), so this is a straight dispatch; no
         special empty-state branch. The user-pressed-Clear path
         still goes through :py:meth:`AnalysisPanel.clear` (the
         documented full-reset sink that forces the Class tab); the

@@ -161,7 +161,7 @@ def test_list_inventories_merges_case_variants() -> None:
     inventories = p.list_inventories("Korean")
     ids = {inv.id for inv in inventories}
     assert ids == {"1", "2", "9"}
-    # Same dispatch on uppercase input — the picker's autocomplete
+    # Same dispatch on uppercase input; the picker's autocomplete
     # may surface either form depending on user input.
     assert {inv.id for inv in p.list_inventories("KOREAN")} == ids
 
@@ -209,7 +209,7 @@ def test_generate_prunes_unused_features() -> None:
     table = {
         **_STUB_DATA,
         "inventories": {
-            "1": {"p": "00", "i": "00"},  # all zero → both pruned
+            "1": {"p": "00", "i": "00"},
         },
     }
     index = {
@@ -225,8 +225,8 @@ def test_generate_prunes_unused_features() -> None:
 
 
 def test_generate_unknown_inventory_id_raises_keyerror() -> None:
-    """Unknown id → KeyError; the bridge layer translates that to
-    a ValidationError the dialog shows to the user."""
+    """Unknown id raises KeyError; the bridge layer translates that
+    to a ValidationError the dialog shows to the user."""
     p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
     with pytest.raises(KeyError, match="42"):
         p.generate("42")

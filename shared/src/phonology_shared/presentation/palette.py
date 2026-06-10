@@ -34,7 +34,7 @@ class PaletteMode(StrEnum):
 
 
 class VowelChartMode(StrEnum):
-    """Vowel chart display mode -- which class of vowel segments
+    """Vowel chart display mode: which class of vowel segments
     the chart's silhouette area renders.
 
     * ``MONOPHTHONG`` shows monophthong cells; diphthong cells and

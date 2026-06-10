@@ -37,7 +37,7 @@ class ModeTransition:
 
     * **SEG → FEAT.** The seg selection projects to a
       common-features query (``project_segments_to_features``).
-      The FEAT-mode display shows ``find_segments(query)`` --
+      The FEAT-mode display shows ``find_segments(query)``:
       the strict matches of that query, by construction a
       natural class characterised by the query itself.
     * **FEAT → SEG.** The natural class highlighted in FEAT
@@ -49,7 +49,7 @@ class ModeTransition:
     switching modes always recomputes the target mode's state
     from the outgoing mode's analytical content (selection /
     query), never from cached pre-mode-switch state. This keeps
-    the per-pane invariants aligned -- FEAT-mode highlights are a
+    the per-pane invariants aligned: FEAT-mode highlights are a
     natural class, and the SEG selection after a FEAT→SEG switch
     is the same natural class.
     """
