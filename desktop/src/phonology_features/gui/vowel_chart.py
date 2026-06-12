@@ -223,13 +223,17 @@ class VowelChartWidget(QWidget):
         # (chart_x for columns, chart_y for rows) so resize can
         # re-place them without re-fetching the geometry.
         self._col_labels: list[tuple[QLabel, float]] = []
-        # Per-row tuple: (label, chart_y). The row-label layout
-        # derives the silhouette's actual LEFT edge per render via
-        # the dw-corrected cascade (``silhouette_for_data_width`` +
-        # ``silhouette_left_at_y``); the baked per-row value on the
-        # shared geometry is the canonical-width approximation the
-        # web consumes directly.
-        self._row_labels: list[tuple[QLabel, float]] = []
+        # Per-row tuple: (label, chart_y, tier). The row-label
+        # layout derives the silhouette's actual LEFT edge per
+        # render via the dw-corrected cascade
+        # (``silhouette_for_data_width`` + ``silhouette_left_at_y``);
+        # the baked per-row value on the shared geometry is the
+        # canonical-width approximation the web consumes directly.
+        # ``tier`` shifts the label by half a button on top / bottom
+        # rows so it centres on the anchor button row like the
+        # middle labels do (those rows' cells anchor an EDGE on
+        # chart_y and grow inward).
+        self._row_labels: list[tuple[QLabel, float, str]] = []
         # Cell widgets (segment buttons or vbox stacks for collision
         # cells) carry their chart_x / chart_y plus a pair_side
         # signed multiplier (-1 / 0 / +1). The resize pass projects
@@ -305,10 +309,8 @@ class VowelChartWidget(QWidget):
         # web's ``.vowel-diphthong-toggle``: mounted in the title
         # row when the inventory has any diphthongs, hidden when
         # ``self._diphthongs`` is empty. Click flips between
-        # monophthong and diphthong modes; persisted via
-        # ``VOWEL_CHART_MODE`` in QSettings (the chart widget
-        # emits ``display_mode_changed`` so the owning
-        # MainWindow can write the setting).
+        # monophthong and diphthong modes. Per-inventory state:
+        # ``set_vowels`` resets it to MONOPHTHONG on every load.
         self._diphthong_toggle = QPushButton(self)
         self._diphthong_toggle.setCheckable(True)
         self._diphthong_toggle.setText(DIPHTHONG_TOGGLE_LABEL)
@@ -446,13 +448,6 @@ class VowelChartWidget(QWidget):
             lbl.setStyleSheet(row_style)
         self._last_headers_active = active
 
-    # PyQt6 signal for display-mode changes. The owning
-    # MainWindow connects to this to persist the user's choice
-    # via QSettings ``VOWEL_CHART_MODE``. Declared at class scope
-    # via ``pyqtSignal``, but that import requires PyQt6.QtCore.
-    # Connection lives in main_window.py.
-    display_mode_changed = pyqtSignal(str)
-
     def set_display_mode(self, mode: VowelChartMode | str) -> None:
         """Switch the vowel chart between monophthong and diphthong
         display modes. The trapezoid renders monophthong cells in
@@ -471,9 +466,9 @@ class VowelChartWidget(QWidget):
         self._display_mode = mode
         is_diphthong = mode == VowelChartMode.DIPHTHONG
         # Keep the toggle button's checked state in sync if the
-        # mode was flipped programmatically (e.g., persisted
-        # value restored at startup). ``blockSignals`` prevents
-        # re-entry via the toggled signal.
+        # mode was flipped programmatically (the per-load reset in
+        # ``set_vowels``). ``blockSignals`` prevents re-entry via
+        # the toggled signal.
         self._diphthong_toggle.blockSignals(True)
         self._diphthong_toggle.setChecked(is_diphthong)
         self._diphthong_toggle.setToolTip(
@@ -488,13 +483,11 @@ class VowelChartWidget(QWidget):
 
     def _on_diphthong_toggle_clicked(self, checked: bool) -> None:
         """Click handler: flip the display mode based on the
-        button's new checked state. Calls ``set_display_mode``
-        and emits the change signal so MainWindow can persist."""
+        button's new checked state."""
         next_mode = (
             VowelChartMode.DIPHTHONG if checked else VowelChartMode.MONOPHTHONG
         )
         self.set_display_mode(next_mode)
-        self.display_mode_changed.emit(str(next_mode))
 
     # PyQt signal fired when a chip in the diphthong chip strip
     # is clicked. The MainWindow connects to this and routes the
@@ -644,6 +637,12 @@ class VowelChartWidget(QWidget):
         endpoints are stored on the widget so :py:meth:`paintEvent`
         can draw a curved arrow between the two cells.
         """
+        # Display mode is per-inventory state. A diphthong filter
+        # toggled for the previous inventory must not carry over and
+        # grey out the next one, which may not even have diphthongs
+        # to toggle (the toggle itself hides in that case, leaving
+        # no way out of the stale filter).
+        self.set_display_mode(VowelChartMode.MONOPHTHONG)
         self.clear()
         self._buttons = dict(buttons)
         profile = detect_vowel_profile(segs, norm_feats)
@@ -747,7 +746,7 @@ class VowelChartWidget(QWidget):
             )
             lbl.adjustSize()
             lbl.show()
-            self._row_labels.append((lbl, row.chart_y))
+            self._row_labels.append((lbl, row.chart_y, row.tier))
         # Data cells: collected with their chart_x / chart_y; the
         # layout pass turns those into pixel positions. The cell's
         # row tier (read from the shared ``VowelChartRow``) decides
@@ -1055,10 +1054,20 @@ class VowelChartWidget(QWidget):
             if self._silhouette is not None
             else vowel_silhouette(self._shape)
         )
-        for lbl, y in self._row_labels:
+        for lbl, y, tier in self._row_labels:
             lbl.adjustSize()
             lh = lbl.height()
             py = dy + round(y * dh) - lh // 2
+            # Top / bottom tiers anchor their cells' EDGE on chart_y
+            # and grow inward, so a label centred on chart_y aligns
+            # with the stack edge, not the button row. Shift by half
+            # a button so the label centres on the anchor button row
+            # exactly like the middle-tier labels; mirrors the web's
+            # ``[data-row-tier]`` row-label rules.
+            if tier == "top":
+                py += SEG_BTN_H // 2
+            elif tier == "bottom":
+                py -= SEG_BTN_H // 2
             silhouette_left = silhouette_left_at_y(sil_for_dw, y)
             anchor_x = dx + round(silhouette_left * dw)
             px = anchor_x - lbl.width() - label_gap_px

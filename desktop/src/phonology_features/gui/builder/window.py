@@ -172,6 +172,11 @@ class InventoryBuilder(QMainWindow):
         # this run's provider name.
         self._feature_source: str | None = None
         self._feature_source_version: str | None = None
+        # Full metadata carried from a loaded inventory (everything
+        # except ``name``); merged back on save so stamps the grid
+        # cannot edit (PHOIBLE provenance, diphthong
+        # ``vowel_secondary`` bundles) survive a builder round-trip.
+        self._extra_metadata: dict[str, Any] = {}
         self._build_ui()
         # SaveController owns save_in_flight / dirty / draining_save
         # state plus the cross-thread save_finished / save_drained
@@ -1199,9 +1204,13 @@ class InventoryBuilder(QMainWindow):
                 item = self._table.item(r, c)
                 row.append(item.text() if item is not None else "0")
             cells.append(row)
-        metadata: dict[str, str] | None = None
+        # Start from the carried metadata (PHOIBLE stamps,
+        # vowel_secondary, any user keys) and overlay the live
+        # provenance fields; the setup-dialog path has no carried
+        # metadata and keeps its prior behaviour.
+        metadata: dict[str, Any] = dict(self._extra_metadata)
         if self._feature_source:
-            metadata = {"feature_source": self._feature_source}
+            metadata["feature_source"] = self._feature_source
             if self._feature_source_version:
                 metadata["feature_source_version"] = (
                     self._feature_source_version
@@ -1211,7 +1220,7 @@ class InventoryBuilder(QMainWindow):
             features=self._features,
             segments=self._segments,
             cells=cells,
-            metadata=metadata,
+            metadata=metadata or None,
         )
 
     # ------------------------------------------------------------------
@@ -1402,6 +1411,23 @@ class InventoryBuilder(QMainWindow):
                 + "\n".join(f"• {issue}" for issue in e.issues),
             )
             return
+        self.load_inventory(inventory, path=path)
+
+    def load_inventory(
+        self, inventory: Inventory, path: str | None = None
+    ) -> None:
+        """Seed the grid from an already-validated ``Inventory``.
+
+        ``path`` is the backing file when the inventory came from
+        disk; ``None`` for in-memory inventories (the PHOIBLE
+        picker's materialised result, a renamed-but-unsaved one),
+        in which case Save routes through Save As. Public so
+        MainWindow can hand the builder the ACTIVE in-memory
+        inventory: a PHOIBLE load has no file path, and the builder
+        previously fell back to the new-inventory setup dialog,
+        which made "load from PHOIBLE, then edit, then save
+        locally" impossible.
+        """
         self._inv_name = inventory.name
         self._features = list(inventory.features)
         self._segments = list(inventory.segments.keys())
@@ -1419,6 +1445,16 @@ class InventoryBuilder(QMainWindow):
         self._feature_source_version = (
             str(loaded_version) if isinstance(loaded_version, str) else None
         )
+        # Carry the FULL metadata mapping (everything except
+        # ``name``, which the grid's name field owns) so the next
+        # save round-trips it. Keeping only ``feature_source`` here
+        # used to silently drop the PHOIBLE stamps and the
+        # ``vowel_secondary`` diphthong bundles, so editing a
+        # PHOIBLE inventory in the builder erased its diphthong
+        # arrows on save.
+        self._extra_metadata = {
+            k: v for k, v in inventory.metadata.items() if k != "name"
+        }
         # Seed the grid from the parsed bundle directly. Previously
         # ``_rebuild_table()`` created an all-zero grid and the loop
         # below replaced every cell with the loaded value, doubling

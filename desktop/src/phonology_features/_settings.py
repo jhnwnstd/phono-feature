@@ -67,7 +67,6 @@ class SettingsKey(StrEnum):
     # diphthong chip strip below the silhouette always renders the
     # inventory's diphthongs regardless of this setting; the value
     # only decides what fills the trapezoid.
-    VOWEL_CHART_MODE = "vowel_chart_mode"
 
 
 def write_setting(settings: Any, key: SettingsKey, value: Any) -> None:

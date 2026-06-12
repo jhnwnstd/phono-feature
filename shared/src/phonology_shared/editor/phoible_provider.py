@@ -541,7 +541,14 @@ def materialize_phoible_inventory(
         "feature_source": (
             f"{provider.version} / {descriptor.language_name}"
             f" / {descriptor.source_short}"
-        )
+        ),
+        # Plain-text informational stamps, like ``feature_source``:
+        # the status-bar composer reads these so it can show the
+        # language and source without re-parsing the display name
+        # (which carries the full dialect parenthetical). Not a
+        # database lock; the user can edit or delete them.
+        "phoible_language": descriptor.language_name,
+        "phoible_source": descriptor.source_short,
     }
     if generated.vowel_secondary:
         # Canonicalise BOTH the diphthong segment key AND the
@@ -598,3 +605,25 @@ def default_phoible_provider() -> PhoibleProvider:
     an install repair gets a fresh attempt.
     """
     return PhoibleProvider()
+
+
+def phoible_loaded_message(inventory: Inventory) -> str:
+    """Terse status-bar line for a just-loaded PHOIBLE inventory.
+
+    The materialised display name carries the full dialect
+    parenthetical (useful in the dropdown and on save), but a
+    status line built from it reads as clutter:
+    "Loaded Korean (Standard Korean (spoken in and around Seoul))
+    [PHOIBLE] (48 segments, 37 features)." This composes the
+    essentials only: language, source, and the counts. Shared so
+    both status bars render the identical line.
+    """
+    language = str(
+        inventory.metadata.get("phoible_language") or inventory.name
+    )
+    source = str(inventory.metadata.get("phoible_source") or "PHOIBLE")
+    return (
+        f"Loaded {language} [{source}]: "
+        f"{len(inventory.segments)} segments, "
+        f"{len(inventory.features)} features."
+    )

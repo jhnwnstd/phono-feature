@@ -97,6 +97,7 @@ from phonology_shared.editor.phoible_provider import (
     PhoibleProvider,
     PhoibleSnapshotNotAvailable,
     materialize_phoible_inventory,
+    phoible_loaded_message,
 )
 from phonology_shared.editor.providers import (
     FeatureProvider,
@@ -546,9 +547,14 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     # surfaces show the same chip text.
     feature_source = inventory.metadata.get("feature_source") or "PHOIBLE"
     provenance = f"{feature_source} / {inventory.name}"
-    return build_inventory_summary(
+    summary = build_inventory_summary(
         _engine, _inventory_name, provenance, mode=_match_mode
     )
+    # Status-bar line composed shared-side (language + source +
+    # counts) so both UIs show the identical terse message instead
+    # of each wrapping the full dialect-bearing display name.
+    summary["status"] = phoible_loaded_message(inventory)
+    return summary
 
 
 def create_new_inventory(
@@ -739,15 +745,31 @@ def commit_inventory_from_grid(
 
     ``cells`` is indexed as ``cells[feature_index][segment_index]``.
 
+    The active inventory's metadata (minus ``name``) is carried
+    through to the rebuilt inventory: the grid cannot edit stamps
+    like the PHOIBLE provenance or the diphthong
+    ``vowel_secondary`` bundles, and dropping them meant a builder
+    round-trip of a PHOIBLE inventory silently erased its
+    diphthong arrows. Mirrors the desktop builder's
+    ``_extra_metadata`` carry.
+
     Raises :py:class:`ValidationError` if the grid is not a valid
     inventory.
     """
     global _engine, _inventory_name
+    base_metadata: dict[str, Any] | None = None
+    if _engine is not None:
+        base_metadata = {
+            k: v
+            for k, v in _engine.inventory.metadata.items()
+            if k != "name"
+        }
     inventory = grid_to_inventory(
         name=name,
         features=features,
         segments=segments,
         cells=cells,
+        metadata=base_metadata,
     )
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name

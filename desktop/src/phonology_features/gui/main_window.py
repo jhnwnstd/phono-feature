@@ -79,6 +79,7 @@ from phonology_features.gui.widgets import (
     SegmentState,
 )
 from phonology_shared.data.inventory import Inventory, ValidationError
+from phonology_shared.editor.phoible_provider import phoible_loaded_message
 from phonology_shared.presentation import layout
 from phonology_shared.presentation.analysis import render_validation_report
 from phonology_shared.presentation.constants import (
@@ -221,20 +222,6 @@ class MainWindow(QMainWindow):
             MatchMode.WILDCARD
             if saved_match_mode == str(MatchMode.WILDCARD)
             else MatchMode.STRICT
-        )
-        # Restore the user's vowel-chart display-mode choice. The
-        # chart widget itself defaults to MONOPHTHONG; we apply
-        # the persisted value after construction below so the
-        # toggle button + cell filter pick up the right state.
-        from phonology_shared.presentation.palette import VowelChartMode
-
-        saved_vowel_mode = self._read_setting_str(
-            SettingsKey.VOWEL_CHART_MODE, str(VowelChartMode.MONOPHTHONG)
-        )
-        self._vowel_chart_mode: VowelChartMode = (
-            VowelChartMode.DIPHTHONG
-            if saved_vowel_mode == str(VowelChartMode.DIPHTHONG)
-            else VowelChartMode.MONOPHTHONG
         )
         set_css(self, f"background-color: {C['bg']};")
         # 150 ms debounce for selection-change analysis.
@@ -584,13 +571,10 @@ class MainWindow(QMainWindow):
         left_lay.addWidget(self.seg_grid_widget, stretch=1)
         self.vowel_chart_widget = VowelChartWidget(seg_content)
         self.vowel_chart_widget.hide()
-        # Restore the user's persisted display-mode choice and
-        # connect the change-signal so subsequent toggles
-        # persist via QSettings.
-        self.vowel_chart_widget.set_display_mode(self._vowel_chart_mode)
-        self.vowel_chart_widget.display_mode_changed.connect(
-            self._on_vowel_chart_display_mode_changed
-        )
+        # The diphthong display mode is per-inventory state: the
+        # widget starts in MONOPHTHONG and ``set_vowels`` resets it
+        # on every inventory load, so no persisted value is
+        # restored here.
         # Diphthong chip strip: clicking a chip selects the
         # diphthong via the same flow the pooled SegmentButton's
         # ``clicked`` signal uses. Routing through ``btn.click()``
@@ -871,10 +855,21 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def _on_inventory_selected(self, index: int) -> None:
-        """Load the inventory chosen from the dropdown."""
-        path = self.inventory_combo.itemData(index)
-        if path:
-            self._load_path(path)
+        """Load the inventory chosen from the dropdown.
+
+        Item data is either a file path (bundled / saved entries) or
+        a ``("phoible", name)`` tuple for the session's PHOIBLE
+        group, which reloads from the in-memory cache instead of
+        reopening the picker.
+        """
+        data = self.inventory_combo.itemData(index)
+        if isinstance(data, tuple) and len(data) == 2 and data[0] == "phoible":
+            cached = self._inv_dir.get_phoible_entry(data[1])
+            if cached is not None:
+                self._adopt_phoible_inventory(cached)
+            return
+        if data:
+            self._load_path(data)
 
     def _browse_inventory(self) -> None:
         """Open a file dialog and load the chosen JSON."""
@@ -935,23 +930,27 @@ class MainWindow(QMainWindow):
         inventory = dialog.chosen_inventory
         if inventory is None:
             return
-        # Engine swap mirrors :py:meth:`_load_path` after a
-        # successful ``Inventory.load`` (the picker has no file path
-        # to register or remember). Grouping/normalization caches
-        # live on the engine, so the new engine starts with fresh
-        # caches.
+        self._adopt_phoible_inventory(inventory)
+
+    def _adopt_phoible_inventory(self, inventory: Inventory) -> None:
+        """Swap the engine to a PHOIBLE-materialised inventory and
+        register it in the dropdown's session PHOIBLE group.
+
+        Shared by the picker's accept path and the dropdown's
+        re-select path so a once-searched inventory loads
+        identically both times. Engine swap mirrors
+        :py:meth:`_load_path` after a successful ``Inventory.load``
+        (there is no file path to register or remember);
+        grouping/normalization caches live on the engine, so the
+        new engine starts with fresh caches.
+        """
         self.engine = FeatureEngine(inventory)
-        # ``Inventory.metadata['feature_source']`` carries the bake-
-        # time provenance ("PHOIBLE", "PanPhon", etc.). The PHOIBLE
-        # picker dialog stamps this on each materialised inventory.
-        feature_source = inventory.metadata.get("feature_source") or "PHOIBLE"
-        provenance = f"{feature_source} / {inventory.name}"
-        base_msg = inventory_loaded_message(
-            name=inventory.name,
-            n_segments=len(self.engine.segments),
-            n_features=len(self.engine.features),
-        )
-        msg = f"{base_msg}  [{provenance}]"
+        # Terse shared composition: language + source + counts. The
+        # full display name (with the dialect parenthetical) stays
+        # on the inventory itself for the dropdown and save flows;
+        # repeating it here alongside the provenance string made the
+        # status line unreadably long.
+        msg = phoible_loaded_message(inventory)
         if inventory.advisories:
             self.status.showMessage(f"{msg} Note: {inventory.advisories[0]}")
             for note in inventory.advisories:
@@ -964,8 +963,10 @@ class MainWindow(QMainWindow):
             self.status.showMessage(msg)
         # Clear any path-based registration so the inventory combo
         # does not point at a stale file when the user later picks
-        # a bundled entry.
+        # a bundled entry, then cache + select the PHOIBLE entry so
+        # it can be reloaded without reopening the picker.
         self._current_path = None
+        self._inv_dir.add_phoible_entry(inventory)
         self._populate_after_load()
 
     def _open_builder(self) -> None:
@@ -998,6 +999,14 @@ class MainWindow(QMainWindow):
             builder = InventoryBuilder(
                 parent=self, load_path=self._current_path
             )
+        elif self.engine is not None:
+            # In-memory inventory with no backing file (PHOIBLE
+            # picker load). Seed the builder from the live engine so
+            # "load from PHOIBLE, then edit, then save locally"
+            # works; Save routes through Save As because there is no
+            # path to overwrite.
+            builder = InventoryBuilder(parent=self)
+            builder.load_inventory(self.engine.inventory)
         else:
             builder = InventoryBuilder(parent=self)
             if not builder.show_setup_dialog():
@@ -1633,24 +1642,6 @@ class MainWindow(QMainWindow):
         if btn is None:
             return
         btn.click()
-
-    def _on_vowel_chart_display_mode_changed(self, mode_value: str) -> None:
-        """Persist the user's display-mode toggle so the choice
-        survives a relaunch. The vowel chart widget emits this
-        signal on every toggle click; the value is the str() of
-        the new ``VowelChartMode``."""
-        from phonology_shared.presentation.palette import VowelChartMode
-
-        try:
-            new_mode = VowelChartMode(mode_value)
-        except ValueError:
-            new_mode = VowelChartMode.MONOPHTHONG
-        self._vowel_chart_mode = new_mode
-        write_setting(
-            self._settings,
-            SettingsKey.VOWEL_CHART_MODE,
-            str(new_mode),
-        )
 
     def _toggle_match_mode(self) -> None:
         """Flip strict↔wildcard, persist the choice, refresh the

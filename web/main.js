@@ -354,11 +354,9 @@ const state = {
     // querySelectorAll in the analysis hot path.
     seg_buttons: new Map(),  // seg -> HTMLButtonElement
     feat_rows: new Map(),    // feat -> { row, badge, plus, minus }
-    // Vowel chart display mode (monophthong / diphthong). Read
-    // from localStorage at boot via ``normalizeVowelChartMode``
-    // (see wireVowelChartModeToggle). Default = monophthong so
-    // the first paint stays clean even before localStorage is
-    // read.
+    // Vowel chart display mode (monophthong / diphthong).
+    // Per-inventory state: ``applyInventoryInfo`` resets it to
+    // monophthong on every load, so it is never persisted.
     vowel_chart_mode: "monophthong",
 };
 
@@ -716,6 +714,11 @@ function applyInventoryInfo(info) {
     state.features = info.features;
     state.selected_segments = [];
     state.selected_features = emptyFeatureSpec();
+    // Diphthong display mode is per-inventory state: a filter
+    // toggled for the previous inventory must not carry over and
+    // grey out the next one (which may not even render the toggle).
+    // Mirrors the desktop's per-load reset in ``set_vowels``.
+    state.vowel_chart_mode = VOWEL_CHART_MODE.MONOPHTHONG;
     // Cache for mode-toggle re-render (see
     // ``_rerenderVowelChart``).
     state.last_inventory_summary = {
@@ -1910,6 +1913,14 @@ function _buildVowelChart(chart) {
         }
         rowLabel.style.setProperty("--row-y", String(row.chart_y));
         rowLabel.style.setProperty("--row-left", leftNorm.toFixed(5));
+        // Top / bottom tiers anchor their cells' EDGE on chart_y
+        // and grow inward; the tier attribute lets CSS shift the
+        // label half a button so it centres on the anchor button
+        // row like the middle-tier labels (mirrors the desktop's
+        // tier-aware label offset in ``_layout_children``).
+        if (row.tier === "top" || row.tier === "bottom") {
+            rowLabel.dataset.rowTier = row.tier;
+        }
         dataEl.appendChild(rowLabel);
     }
     const rowTierByLogical = new Map(
@@ -2391,8 +2402,10 @@ function _appendVowelChartModeToggle(chartEl, hasDiphthongs) {
             getVowelChartMode() === VOWEL_CHART_MODE.DIPHTHONG
                 ? VOWEL_CHART_MODE.MONOPHTHONG
                 : VOWEL_CHART_MODE.DIPHTHONG;
+        // Per-inventory state; deliberately NOT persisted to
+        // localStorage. ``applyInventoryInfo`` resets the mode on
+        // every load, so a stored value could only ever conflict.
         state.vowel_chart_mode = next;
-        safeStorageSet("vowel_chart_mode", next);
         _rerenderVowelChart();
     });
     // Attach to the chart's outer container (not the data area)
@@ -3151,10 +3164,10 @@ function wireUploadDownload() {
         }
         const text = await file.text();
         await loadInventoryText(text, file.name);
-        // An uploaded file replaces the engine state, so the
-        // PHOIBLE synthetic entry (if any) no longer reflects what
-        // is loaded.
-        clearLoadedSyntheticOption();
+        // An uploaded file replaces the engine state; deselect the
+        // dropdown so no bundled or PHOIBLE entry claims to be the
+        // loaded one. The PHOIBLE group itself stays available.
+        nodes.inventoryPicker.selectedIndex = -1;
         ev.target.value = "";
     });
     // Save-as lives on the editor toolbar only; the main toolbar
@@ -3692,6 +3705,12 @@ function wirePhoiblePicker() {
         }
         nodes.phoibleInventories.hidden = false;
         pickInventory(defaultId);
+        // Continue the no-mouse flow: focus the preselected radio so
+        // arrow keys walk the source cards (native radio-group
+        // semantics fire ``change`` -> pickInventory) and Enter
+        // submits the form, which is the Load action.
+        const checked = radios.querySelector("input:checked");
+        if (checked) checked.focus();
     };
 
     const pickInventory = (inventoryId) => {
@@ -3838,12 +3857,16 @@ function wirePhoiblePicker() {
                 "load_phoible_inventory", selectedInventoryId,
             );
             applyInventoryInfo(info);
-            // Reflect the loaded PHOIBLE inventory in the toolbar
-            // dropdown so the user does not see a stale bundled
-            // name sitting above the engine state.
-            setLoadedSyntheticOption(info.name);
+            // Cache the loaded inventory in the toolbar dropdown's
+            // PHOIBLE group so it can be reloaded later without
+            // searching again.
+            addPhoibleDropdownEntry(selectedInventoryId, info.name);
+            // Terse shared-side composition (language + source +
+            // counts); the fallback covers an older bridge without
+            // the field.
             setStatus(
-                `Loaded ${info.name} `
+                info.status
+                || `Loaded ${info.name} `
                 + `(${info.segments.length} segments, `
                 + `${info.features.length} features).`,
             );
@@ -5388,11 +5411,6 @@ const VOWEL_CHART_MODE = Object.freeze(
     },
 );
 
-function normalizeVowelChartMode(value) {
-    const known = new Set(Object.values(VOWEL_CHART_MODE));
-    return known.has(value) ? value : VOWEL_CHART_MODE.MONOPHTHONG;
-}
-
 /** Push the user's restored matching mode (set by
  *  wireMatchModeToggle before the bridge attached) into Python.
  *  Without this, all natural-class results stay on strict even
@@ -5561,60 +5579,75 @@ function wireThemeToggle() {
     });
 }
 
-// Synthetic option value used to mark the PHOIBLE-loaded entry in
-// the toolbar dropdown. Distinct from every bundled inventory file
+// Option-value prefix marking the session's PHOIBLE entries in the
+// toolbar dropdown. Distinct from every bundled inventory file
 // path so the change handler can disambiguate.
-const LOADED_OPTION_VALUE = "__loaded__";
+const PHOIBLE_OPTION_PREFIX = "phoible:";
 
-/** Prepend (or update) a single ``<option>`` at the top of the
- *  inventory dropdown that reflects the currently loaded
- *  non-bundled inventory (today: PHOIBLE). The option lives inside
- *  an ``<optgroup>`` for visual separation; native ``<select>``
- *  styling on WebKit is limited and the optgroup is the most
- *  portable visual cue. Idempotent: re-calling with the same name
- *  just updates the label and re-selects. */
-function setLoadedSyntheticOption(name) {
+/** Session cache of PHOIBLE-loaded inventories shown in the
+ *  toolbar dropdown: inventory id -> display name. Rendered as a
+ *  "PHOIBLE" optgroup at the END of the picker so a once-searched
+ *  inventory reloads without reopening the picker dialog, while
+ *  staying visually apart from (not interspersed with) the bundled
+ *  entries; saving it locally produces a regular entry through the
+ *  normal flows. Not persisted across page loads. */
+const phoibleDropdownEntries = new Map();
+
+/** Rebuild the dropdown's "PHOIBLE" optgroup from the session
+ *  cache. Re-appending an existing group moves it back to the end
+ *  after a full picker rebuild. */
+function renderPhoibleDropdownGroup() {
     const picker = nodes.inventoryPicker;
-    let group = picker.querySelector(`optgroup[data-loaded]`);
-    let opt;
-    if (group) {
-        opt = group.querySelector("option");
-    } else {
-        group = document.createElement("optgroup");
-        group.setAttribute("data-loaded", "true");
-        group.label = "Loaded";
-        opt = document.createElement("option");
-        opt.value = LOADED_OPTION_VALUE;
-        group.appendChild(opt);
-        picker.prepend(group);
+    let group = picker.querySelector("optgroup[data-phoible]");
+    if (!phoibleDropdownEntries.size) {
+        if (group) group.remove();
+        return;
     }
-    opt.textContent = name;
-    picker.value = LOADED_OPTION_VALUE;
+    if (!group) {
+        group = document.createElement("optgroup");
+        group.setAttribute("data-phoible", "true");
+        group.label = "PHOIBLE";
+    }
+    group.innerHTML = "";
+    for (const [id, name] of phoibleDropdownEntries) {
+        const opt = document.createElement("option");
+        opt.value = PHOIBLE_OPTION_PREFIX + id;
+        opt.textContent = name;
+        group.appendChild(opt);
+    }
+    picker.appendChild(group);
 }
 
-/** Remove the synthetic ``Loaded`` optgroup if present. Called from
- *  the change handler whenever the user picks a bundled inventory
- *  so the toolbar dropdown returns to its plain shape. */
-function clearLoadedSyntheticOption() {
-    const group = nodes.inventoryPicker.querySelector(
-        "optgroup[data-loaded]",
-    );
-    if (group) group.remove();
+/** Cache a picker-loaded PHOIBLE inventory in the dropdown and
+ *  select its entry. Idempotent per inventory id. */
+function addPhoibleDropdownEntry(inventoryId, name) {
+    phoibleDropdownEntries.set(String(inventoryId), name);
+    renderPhoibleDropdownGroup();
+    nodes.inventoryPicker.value = PHOIBLE_OPTION_PREFIX + inventoryId;
 }
 
 function wireInventoryPicker() {
     nodes.inventoryPicker.addEventListener("change", () => {
         const value = nodes.inventoryPicker.value;
-        if (value === LOADED_OPTION_VALUE) {
-            // The synthetic option represents the already-loaded
-            // engine state; selecting it again is a no-op. The
-            // event still fires (e.g. when programmatic code sets
-            // the picker.value), so we early-return cleanly.
+        if (value.startsWith(PHOIBLE_OPTION_PREFIX)) {
+            // Session PHOIBLE entry: reload through the bridge.
+            // The data payload is already in memory, so this is a
+            // cheap re-materialisation, not a new search or fetch.
+            const id = value.slice(PHOIBLE_OPTION_PREFIX.length);
+            try {
+                const info = callBridge("load_phoible_inventory", id);
+                applyInventoryInfo(info);
+                setStatus(info.status || `Loaded ${info.name}.`);
+            } catch (e) {
+                setStatus(
+                    e.message || "Could not load inventory.",
+                    STATUS_KIND.error,
+                );
+            }
             return;
         }
         const item = BUNDLED_INVENTORIES.find((i) => i.file === value);
         if (item) {
-            clearLoadedSyntheticOption();
             loadBundledInventory(item);
         }
     });
@@ -5641,6 +5674,9 @@ function populateInventoryPicker() {
         }
         picker.appendChild(opt);
     }
+    // Re-append the session PHOIBLE group after the rebuild wiped
+    // the picker's children.
+    renderPhoibleDropdownGroup();
     // Sync the picker's selected value to the preferred default.
     // Without this the browser auto-selects <option>[0] while
     // pickDefaultInventory loads a different inventory into the
@@ -5876,15 +5912,6 @@ async function main() {
     // so the per-relayout column picker doesn't walk the cascade
     // on every splitter drag.
     _refreshButtonStrideCache();
-    // Restore the persisted vowel chart display mode BEFORE any
-    // bootstrap render so the first paint reflects the user's
-    // last-used mode. The chart toggle button is created per
-    // render inside ``_buildVowelChart``; it reads
-    // ``state.vowel_chart_mode`` directly so no later sync is
-    // needed.
-    state.vowel_chart_mode = normalizeVowelChartMode(
-        safeStorageGet("vowel_chart_mode"),
-    );
     wireStatusbarBrand();
     wireBugButton();
     wireThemeToggle();

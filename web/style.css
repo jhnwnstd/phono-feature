@@ -390,6 +390,12 @@ dialog input[type="text"]:focus-visible {
   gap: var(--space-sm);
   padding: var(--space-md);
 }
+/* The author ``display: flex`` above beats the UA's
+   ``[hidden] { display: none }``, which kept the spinner running
+   permanently; restate the hidden rule at higher specificity. */
+.phoible-loading[hidden] {
+  display: none;
+}
 .phoible-spinner {
   /* Pure-CSS spinner: a 14 px ring with one accent-coloured arc.
      Animation runs at a sedate rate so it reads as ``loading``
@@ -404,11 +410,6 @@ dialog input[type="text"]:focus-visible {
 }
 @keyframes phoible-spin {
   to { transform: rotate(360deg); }
-}
-.phoible-hint {
-  color: var(--text-dim);
-  font-size: 0.9em;
-  margin: 0 0 var(--space-sm) 0;
 }
 .phoible-fieldset {
   /* Strip the default fieldset chrome so the layout is identical
@@ -563,6 +564,12 @@ dialog input[type="text"]:focus-visible {
   gap: 4px;
   padding: 0;
   margin: 0;
+  /* Fixed height (three chip rows) so arrowing between sources
+     with different segment counts never resizes the dialog; the
+     overflow scrolls instead. */
+  height: calc(4.2em + 8px);
+  overflow-y: auto;
+  align-content: flex-start;
 }
 .phoible-segments li {
   display: inline;
@@ -1038,6 +1045,17 @@ dialog input[type="text"]:focus-visible {
 .panel[data-active="true"] .vowel-chart-row-label {
   color: var(--text);
 }
+/* Top / bottom tiers anchor their cells' EDGE on chart_y and grow
+   inward, so a label centred on chart_y aligns with the stack edge
+   instead of the button row. Shift by half a button so the label
+   centres on the anchor button row exactly like the middle-tier
+   labels; mirrors the desktop's tier-aware offset. */
+.vowel-chart-row-label[data-row-tier="top"] {
+  top: calc(var(--row-y, 0) * 100% + var(--seg-btn-h) / 2);
+}
+.vowel-chart-row-label[data-row-tier="bottom"] {
+  top: calc(var(--row-y, 0) * 100% - var(--seg-btn-h) / 2);
+}
 
 /* Trapezoid / triangle segment-display space.
 
@@ -1503,22 +1521,6 @@ dialog input[type="text"]:focus-visible {
    ``FeatureRow.set_compact`` which shrinks row height + margin
    so feature-heavy inventories (Hayes 28, PHOIBLE) fit in the
    same pane without scrolling. */
-/* When the feature panel runs out of vertical space and compact
-   mode engages, surface a small badge in the title so the user
-   knows the row shrink was deliberate. Without this the silent
-   row-height drop reads as a layout bug. */
-#feat-panel[data-density="compact"] #feat-title::after {
-  content: "compact";
-  margin-left: 6px;
-  padding: 1px 6px;
-  font-size: var(--font-size-micro);
-  font-weight: 500;
-  letter-spacing: 0.3px;
-  color: var(--text-dim);
-  background: var(--analysis-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
 #feat-panel[data-density="compact"] .feat-row {
   height: calc(var(--feat-row-h-compact) - 1px);
   padding: var(--feat-row-padding-v-compact) var(--feat-row-padding-h);

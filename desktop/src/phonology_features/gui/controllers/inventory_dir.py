@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QComboBox
 
     from phonology_features.gui.main_window import MainWindow
+    from phonology_shared.data.inventory import Inventory
 
 _log = get_logger(__name__)
 
@@ -104,6 +105,14 @@ class InventoryDirController:
         # has loaded, deduplicated, capped. Not persisted across
         # sessions (starts empty each launch).
         self.recent_paths: list[str] = []
+        # Session cache of PHOIBLE-loaded inventories, keyed by
+        # display name. Rendered as a "PHOIBLE" group at the END of
+        # the dropdown so a once-searched inventory can be reloaded
+        # without reopening the picker, while staying visually apart
+        # from the on-disk entries (it becomes a regular entry once
+        # the user saves it locally). Insertion-ordered; not
+        # persisted across sessions.
+        self.phoible_inventories: dict[str, Inventory] = {}
         # Parent set to the window so the watcher / timer get torn
         # down when MainWindow closes.
         self._watcher = QFileSystemWatcher(window)
@@ -222,10 +231,43 @@ class InventoryDirController:
                         ),
                         userData=path,
                     )
+            self._append_phoible_section()
             idx = self._combo.findData(previous_path) if previous_path else 0
             self._combo.setCurrentIndex(max(idx, 0))
         finally:
             self._combo.blockSignals(False)
+
+    def _append_phoible_section(self) -> None:
+        """Append the session's PHOIBLE entries under a disabled
+        "PHOIBLE" heading at the end of the dropdown. No-op when
+        nothing has been loaded from the picker yet."""
+        if not self.phoible_inventories:
+            return
+        self._combo.insertSeparator(self._combo.count())
+        self._combo.addItem("PHOIBLE", userData=None)
+        model = self._combo.model()
+        if isinstance(model, QStandardItemModel):
+            header = model.item(self._combo.count() - 1)
+            if header is not None:
+                header.setEnabled(False)
+        for name in self.phoible_inventories:
+            self._combo.addItem(name, userData=("phoible", name))
+
+    def add_phoible_entry(self, inventory: Inventory) -> None:
+        """Cache a picker-loaded PHOIBLE inventory and select its
+        dropdown entry. Re-loading the same inventory just refreshes
+        the cached object."""
+        self.phoible_inventories[inventory.name] = inventory
+        self.populate_dropdown()
+        idx = self._combo.findData(("phoible", inventory.name))
+        if idx >= 0:
+            self._combo.blockSignals(True)
+            self._combo.setCurrentIndex(idx)
+            self._combo.blockSignals(False)
+
+    def get_phoible_entry(self, name: str) -> Inventory | None:
+        """Cached PHOIBLE inventory for a dropdown entry, if any."""
+        return self.phoible_inventories.get(name)
 
     # ------------------------------------------------------------------
     # Load registration / MRU

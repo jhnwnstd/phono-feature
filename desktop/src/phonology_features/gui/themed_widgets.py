@@ -15,7 +15,15 @@ swap).
 from __future__ import annotations
 
 from PyQt6.QtCore import QEvent, QRectF, Qt
-from PyQt6.QtGui import QColor, QEnterEvent, QFont, QPainter, QPaintEvent, QPen
+from PyQt6.QtGui import (
+    QColor,
+    QEnterEvent,
+    QFont,
+    QPainter,
+    QPaintEvent,
+    QPen,
+    QResizeEvent,
+)
 from PyQt6.QtWidgets import (
     QFrame,
     QLabel,
@@ -98,10 +106,23 @@ class _BrandedStatusBar(QStatusBar):
         # clipping the message glyphs at 200% / 300% scale. The 22-px
         # floor preserves the historic toolbar-baseline alignment.
         self.setMinimumHeight(self._BAR_HEIGHT)
+        # Full message text; the label renders an elided view of it
+        # sized to the space the brand leaves over (see
+        # ``_update_elided_message``).
+        self._full_message = ""
         self._message_label = QLabel("", self)
         self._message_label.setFont(self._FONT)
         self._message_label.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        # ``Ignored`` horizontal policy so a long message can never
+        # widen the label past its layout slot: QLabel's minimum
+        # size otherwise tracks the text width, and an oversized
+        # message pushed the brand out of the bar instead of
+        # eliding. The brand keeps its full width (stretch 0); the
+        # message takes whatever remains and clips with an ellipsis.
+        self._message_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
         self._brand = QLabel("Language Doodad", self)
         self._brand.setFont(self._FONT)
@@ -126,15 +147,33 @@ class _BrandedStatusBar(QStatusBar):
     def showMessage(self, text: str, timeout: int = 0) -> None:  # type: ignore[override]
         """Override that doesn't call super() (which would hide
         left-section widgets). ``timeout`` is ignored; the app never
-        uses auto-clear.
+        uses auto-clear. The full text lives in the tooltip; the
+        label shows an elided view fitted to the available width.
         """
-        self._message_label.setText(text)
+        self._full_message = text
+        self._message_label.setToolTip(text)
+        self._update_elided_message()
 
     def clearMessage(self) -> None:
+        self._full_message = ""
+        self._message_label.setToolTip("")
         self._message_label.setText("")
 
     def currentMessage(self) -> str:
-        return self._message_label.text()
+        return self._full_message
+
+    def _update_elided_message(self) -> None:
+        fm = self._message_label.fontMetrics()
+        width = max(0, self._message_label.width() - 4)
+        self._message_label.setText(
+            fm.elidedText(
+                self._full_message, Qt.TextElideMode.ElideRight, width
+            )
+        )
+
+    def resizeEvent(self, event: QResizeEvent | None) -> None:
+        super().resizeEvent(event)
+        self._update_elided_message()
 
 
 class _ThemedHandle(QSplitterHandle):

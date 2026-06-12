@@ -152,11 +152,6 @@ class PhoibleDialog(QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(14, 14, 14, 14)
 
-        hint = QLabel("Type a language name to begin.", self)
-        hint.setFont(QFont("Noto Sans", 9))
-        set_css(hint, f"color: {C['text_dim']};")
-        layout.addWidget(hint)
-
         layout.addWidget(self._build_search_row())
         layout.addWidget(self._build_results_list(), stretch=1)
         layout.addWidget(self._build_source_section(), stretch=1)
@@ -206,6 +201,10 @@ class PhoibleDialog(QDialog):
             QListWidget.SelectionMode.SingleSelection
         )
         self._sources.currentItemChanged.connect(self._on_source_changed)
+        # Enter (or double-click) on a source loads it, completing
+        # the no-mouse flow: type, Enter to pick the language, arrow
+        # keys over the sources, Enter to load.
+        self._sources.itemActivated.connect(self._on_source_activated)
         wrap_layout.addWidget(self._sources)
         return wrap
 
@@ -221,6 +220,14 @@ class PhoibleDialog(QDialog):
         self._segments_label = QLabel("", wrap)
         self._segments_label.setFont(QFont("Noto Sans Mono", 10))
         self._segments_label.setWordWrap(True)
+        self._segments_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        # Fixed three-line height so arrowing between sources with
+        # different segment counts never resizes the dialog; a
+        # longer sample clips (the full inventory loads anyway).
+        fm = self._segments_label.fontMetrics()
+        self._segments_label.setFixedHeight(fm.lineSpacing() * 3 + 4)
         set_css(self._segments_label, f"color: {C['text_dim']};")
         wrap_layout.addWidget(self._segments_label)
         return wrap
@@ -331,6 +338,12 @@ class PhoibleDialog(QDialog):
             if descriptor.id == default_id:
                 default_row = i
         self._sources.setCurrentRow(default_row)
+        # Hand focus to the source list so the keyboard flow
+        # continues without the mouse: arrows move between sources,
+        # Enter loads the highlighted one. Typing a new search means
+        # clicking or tabbing back to the input, which matches how
+        # pickers behave once a choice list is on screen.
+        self._sources.setFocus()
 
     def _format_source_item(self, descriptor: InventoryDescriptor) -> str:
         head = f"{descriptor.source_short}"
@@ -377,6 +390,11 @@ class PhoibleDialog(QDialog):
             trail = f"   ... +{len(segments) - len(sample)} more"
         self._segments_label.setText(" ".join(sample) + trail)
         self._load_btn.setEnabled(True)
+
+    def _on_source_activated(self, _item: QListWidgetItem) -> None:
+        """Enter / double-click on a source card loads it directly."""
+        if self._load_btn.isEnabled():
+            self._on_load_clicked()
 
     # ------------------------------------------------------------------
     # Load
