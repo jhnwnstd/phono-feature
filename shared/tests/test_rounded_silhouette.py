@@ -218,3 +218,99 @@ def test_silhouette_for_data_width_symmetric_front_back_offset() -> None:
             f"back_outset={back_outset}; asymmetry would surface as "
             f"visible drift between front and back cells"
         )
+
+
+def _edge_x_from_polygon(
+    chain: list[tuple[float, float]], y_pct: float
+) -> float | None:
+    """Boundary x (in percent) at ``y_pct`` by walking a polygon
+    chain whose y values are nondecreasing. Returns ``None`` when
+    ``y_pct`` falls outside the chain's y range."""
+    for (x0, y0), (x1, y1) in zip(chain, chain[1:]):
+        lo, hi = min(y0, y1), max(y0, y1)
+        if lo <= y_pct <= hi:
+            if hi == lo:
+                return (x0 + x1) / 2.0
+            t = (y_pct - y0) / (y1 - y0)
+            return x0 + t * (x1 - x0)
+    return None
+
+
+def _assert_edge_helpers_match_polygon(sil: VowelChartSilhouette) -> None:
+    """Core assertion shared by the parametrised edge tests: the
+    analytic ``silhouette_left_at_y`` / ``silhouette_right_at_y``
+    helpers and a densely sampled ``rounded_silhouette_polygon_points``
+    describe the same boundary. The two edge helpers are mirrored
+    hand-written bezier math; this is the cross-check that keeps a
+    one-sided edit from silently desynchronising them from the
+    polygon both renderers actually draw."""
+    from phonology_shared.chart.vowels_layout import (
+        silhouette_left_at_y,
+        silhouette_right_at_y,
+    )
+
+    spc = 64  # dense sampling so the polygon approximates the bezier
+    pts = _parse_points(
+        rounded_silhouette_polygon_points(
+            sil, VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC, segments_per_corner=spc
+        )
+    )
+    per_corner = spc + 1
+    # CCW traversal: top-left arc, bottom-left arc, bottom-right
+    # arc, top-right arc. Left boundary = first two arcs walked
+    # top to bottom; right boundary = last two arcs reversed.
+    left_chain = pts[: 2 * per_corner]
+    right_chain = list(reversed(pts[2 * per_corner :]))
+    span = sil.bottom_y - sil.top_y
+    n_samples = 80
+    for i in range(n_samples + 1):
+        chart_y = sil.top_y + span * i / n_samples
+        y_pct = chart_y * 100.0
+        expected_left = _edge_x_from_polygon(left_chain, y_pct)
+        if expected_left is not None:
+            got_left = silhouette_left_at_y(sil, chart_y) * 100.0
+            assert abs(got_left - expected_left) < 0.2, (
+                f"left edge at chart_y={chart_y:.4f}: helper "
+                f"{got_left:.4f}% vs polygon {expected_left:.4f}%"
+            )
+        expected_right = _edge_x_from_polygon(right_chain, y_pct)
+        if expected_right is not None:
+            got_right = silhouette_right_at_y(sil, chart_y) * 100.0
+            assert abs(got_right - expected_right) < 0.2, (
+                f"right edge at chart_y={chart_y:.4f}: helper "
+                f"{got_right:.4f}% vs polygon {expected_right:.4f}%"
+            )
+
+
+def test_edge_helpers_match_polygon_canonical_trapezoid() -> None:
+    _assert_edge_helpers_match_polygon(
+        vowel_silhouette(VowelChartShape.TRAPEZOID)
+    )
+
+
+def test_edge_helpers_match_polygon_triangle() -> None:
+    _assert_edge_helpers_match_polygon(
+        vowel_silhouette(VowelChartShape.TRIANGLE)
+    )
+
+
+def test_edge_helpers_match_polygon_narrow_row_range() -> None:
+    """An inventory populating only the middle tiers gets a less
+    slanted silhouette; the corner regions move with it."""
+    _assert_edge_helpers_match_polygon(
+        vowel_silhouette(VowelChartShape.TRAPEZOID, 2, 4)
+    )
+
+
+def test_edge_helpers_match_polygon_shrunken_widths() -> None:
+    """The shrink solver rebuilds corners via
+    ``_silhouette_with_widths``; the edge helpers must track the
+    rebuilt silhouette, since that is the one the geometry bakes
+    into ``VowelChartRow.silhouette_left`` / ``silhouette_right``."""
+    from phonology_shared.chart.vowels_layout import _silhouette_with_widths
+
+    sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
+    shrunk = _silhouette_with_widths(
+        sil, sil.top_width * 0.85, sil.bottom_width * 0.85
+    )
+    _assert_edge_helpers_match_polygon(shrunk)

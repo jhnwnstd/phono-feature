@@ -20,7 +20,6 @@ table feeding :py:meth:`segment_distance`) build lazily via
 
 from __future__ import annotations
 
-import html
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -247,21 +246,6 @@ class FeatureEngine:
             tuple[frozenset[str], MatchMode],
             tuple[Mapping[str, str], ...],
         ] = {}
-        # Pre-escaped HTML-safe segment + feature labels. Analysis-pane
-        # chip rendering (analysis.py:_segment_chip / _signed_feature_chip)
-        # used to call html.escape on the same bounded set of strings
-        # hundreds of thousands of times per click (W1 profile: 174,900
-        # html.escape calls / 339 ms / 19% wall). Inventory is immutable
-        # so this table is safe to compute once at construction. Both
-        # maps are exposed read-only via :py:attr:`escaped_segments` /
-        # :py:attr:`escaped_features` so callers route through the
-        # fast-path :py:func:`analysis._tag_raw` when they hold a key.
-        self.escaped_segments: Mapping[str, str] = {
-            seg: html.escape(seg) for seg in inventory.segments
-        }
-        self.escaped_features: Mapping[str, str] = {
-            feat: html.escape(feat) for feat in inventory.features
-        }
 
     @classmethod
     def from_path(cls, path: str) -> FeatureEngine:
@@ -292,66 +276,6 @@ class FeatureEngine:
     def _validate_feature(self, feature: str) -> None:
         if feature not in self.features:
             raise KeyError(f"Feature '{feature}' not found in inventory")
-
-    def _is_natural_class_bool(
-        self,
-        segments: list[str],
-        *,
-        mode: MatchMode = MatchMode.STRICT,
-    ) -> bool:
-        """Fast boolean: does ``segments`` form a natural class?
-
-        STRICT: a set ``S`` is a natural class iff some bundle
-        ``B`` satisfies ``find_segments(B, mode=STRICT) == S``.
-
-        WILDCARD: same shape, with the wildcard candidate set
-        (``(f, "+")`` candidate iff no selected segment is
-        explicitly ``-f``; symmetric for ``-``). The wildcard
-        verdict is more permissive: more selections qualify.
-
-        Skips the minimal-bundle enumeration; answers the
-        decision question directly using the precomputed
-        membership sets. Complexity ``O(F + O*C)``.
-        """
-        if not segments:
-            # ``∅`` is not a natural class under either mode: no
-            # bundle ``B`` satisfies ``find_segments(B) == ∅``.
-            return False
-        selected: frozenset[str] = frozenset(segments)
-        cached = self._bundle_cache.get((selected, mode))
-        if cached is not None:
-            return len(cached) > 0
-        all_segments = self._all_segments
-        if not selected <= all_segments:
-            bad = next(iter(selected - all_segments))
-            raise KeyError(f"Segment '{bad}' not in inventory")
-        outside = all_segments - selected
-        if not outside:
-            return True
-        plus_segs = self.plus_segs
-        minus_segs = self.minus_segs
-        if mode is MatchMode.WILDCARD:
-            covered: set[str] = set()
-            for feat, val in self._wildcard_candidate_constraints(selected):
-                # Wildcard (f, +) excludes only explicit -f
-                # segments; (f, -) excludes only explicit +f.
-                if val == "+":
-                    covered |= minus_segs[feat] & outside
-                else:
-                    covered |= plus_segs[feat] & outside
-                if covered == outside:
-                    return True
-            return covered == outside
-        candidates = self._strict_candidate_constraints(selected)
-        covered = set()
-        for feat, val in candidates.items():
-            if val == "+":
-                covered |= outside - plus_segs[feat]
-            else:
-                covered |= outside - minus_segs[feat]
-            if covered == outside:
-                return True
-        return covered == outside
 
     def _find_segments_unsorted(
         self,
@@ -480,13 +404,14 @@ class FeatureEngine:
         on the existing strict-only semantics so existing
         consumers (the feature pane, the analysis renderer)
         remain backward-compatible without a mode argument.
+
+        Derived from :py:attr:`spec_segs` so the membership caches
+        stay the single definition of "explicitly specified",
+        matching :py:attr:`contrastive_features`.
         """
-        used: set[str] = set()
-        for bundle in self._inventory.segments.values():
-            for feat, val in bundle.items():
-                if val == "+" or val == "-":
-                    used.add(feat)
-        return tuple(f for f in self._inventory.features if f in used)
+        return tuple(
+            f for f in self._inventory.features if self.spec_segs[f]
+        )
 
     def active_features_for_mode(self, mode: MatchMode) -> tuple[str, ...]:
         """Active-feature list appropriate for ``mode``.
@@ -508,9 +433,14 @@ class FeatureEngine:
 
         Lives on the engine so the cache is tied to engine identity.
         Callers do not have to remember to invalidate when swapping
-        inventories; they swap engines instead.
+        inventories; they swap engines instead. Passes the engine's
+        cached normalized bundles so the inventory is normalized
+        exactly once per engine, not once per grouping.
         """
-        return group_segments(self._inventory.segments)
+        return group_segments(
+            self._inventory.segments,
+            normalized=self.normalized_segment_feats,
+        )
 
     @cached_property
     def normalized_segment_feats(self) -> dict[str, dict[str, str]]:
@@ -598,7 +528,9 @@ class FeatureEngine:
         active mode.
 
         Memoised on ``(frozenset(segments), mode)``: same selection
-        with different modes does not collide.
+        with different modes does not collide. Truncated results
+        (searches that hit ``max_bundles``) are never cached, so the
+        cache stays a pure function of ``(selection, mode)``.
         """
         if not segments:
             return ()
@@ -692,9 +624,16 @@ class FeatureEngine:
         old_to_bit = [0] * n_candidates
         for new_idx, old_idx in enumerate(order):
             old_to_bit[old_idx] = 1 << new_idx
-        excluder_bits = [
-            sum(old_to_bit[i] for i in exc_idxs) for exc_idxs in raw_excluders
-        ]
+        # Many outside segments share an exclusion pattern (identical
+        # candidate sets rule them out), and duplicate masks impose
+        # the same coverage constraint. Deduplicate once so the
+        # search scans each distinct constraint exactly once.
+        excluder_bits = sorted(
+            {
+                sum(old_to_bit[i] for i in exc_idxs)
+                for exc_idxs in raw_excluders
+            }
+        )
         ordered_pairs = [candidate_pairs[i] for i in order]
         n = n_candidates
         all_remaining = [0] * (n + 1)
@@ -711,14 +650,18 @@ class FeatureEngine:
                 if bits & (1 << i)
             }
 
-        def backtrack(idx: int, depth: int, chosen_bits: int) -> bool:
+        # ``uncovered`` threads the still-unsatisfied excluder masks
+        # down the recursion: choosing a candidate filters out every
+        # mask it covers, so the satisfaction check is "is the list
+        # empty" and the feasibility prunes scan only constraints
+        # that can still fail. The previous shape rescanned the full
+        # excluder list three times per node, which made wildcard
+        # single-segment clicks cost seconds on dense inventories.
+        def backtrack(
+            idx: int, depth: int, chosen_bits: int, uncovered: list[int]
+        ) -> bool:
             nonlocal best_size
-            satisfied = True
-            for eb in excluder_bits:
-                if not (eb & chosen_bits):
-                    satisfied = False
-                    break
-            if satisfied:
+            if not uncovered:
                 if best_size is None or depth < best_size:
                     best_size = depth
                     results.clear()
@@ -730,22 +673,30 @@ class FeatureEngine:
                 return True
             if idx >= n:
                 return True
+            # ``uncovered`` masks are disjoint from ``chosen_bits``
+            # by construction, so feasibility only needs the
+            # remaining candidate bits.
             remaining_bits = all_remaining[idx]
-            for eb in excluder_bits:
-                if not (eb & (chosen_bits | remaining_bits)):
+            for eb in uncovered:
+                if not (eb & remaining_bits):
                     return True
             bit = 1 << idx
-            if not backtrack(idx + 1, depth + 1, chosen_bits | bit):
+            still = [eb for eb in uncovered if not (eb & bit)]
+            if not backtrack(idx + 1, depth + 1, chosen_bits | bit, still):
                 return False
             remaining_without = all_remaining[idx + 1]
-            for eb in excluder_bits:
-                if not (eb & (chosen_bits | remaining_without)):
+            for eb in uncovered:
+                if not (eb & remaining_without):
                     return True
-            return backtrack(idx + 1, depth, chosen_bits)
+            return backtrack(idx + 1, depth, chosen_bits, uncovered)
 
-        backtrack(0, 0, 0)
+        backtrack(0, 0, 0, excluder_bits)
         frozen = tuple(MappingProxyType(b) for b in results)
-        self._bundle_cache[cache_key] = frozen
+        # Only memoize complete searches. A capped search returns a
+        # truncated tuple; caching it would poison later calls made
+        # with a higher (or default) ``max_bundles``.
+        if len(results) < max_bundles:
+            self._bundle_cache[cache_key] = frozen
         return frozen
 
     def compute_natural_class(
@@ -802,6 +753,13 @@ class FeatureEngine:
         """
         if not segments:
             return {}
+        # Validate like every other segment-accepting entry point.
+        # A stale selection surviving an inventory switch must raise,
+        # not silently skew ``n`` and classify everything as
+        # ALL_ZERO / UNDERSPEC_*.
+        for seg in segments:
+            if seg not in self._all_segments:
+                raise KeyError(f"Segment '{seg}' not in inventory")
         selected: frozenset[str] = frozenset(segments)
         plus_segs = self.plus_segs
         minus_segs = self.minus_segs
@@ -840,7 +798,6 @@ class FeatureEngine:
         explicit value on it. Delegates to
         :py:meth:`_strict_candidate_constraints` so the strict-NC
         contract has one source of truth across this method,
-        :py:meth:`_is_natural_class_bool`,
         :py:meth:`find_all_minimal_bundles`, and
         :py:meth:`complete_to_minimal_natural_class`.
         """

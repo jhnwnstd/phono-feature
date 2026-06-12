@@ -491,3 +491,17 @@ def test_is_suprasegmental_recognises_aliases() -> None:
     assert is_suprasegmental("hitone") is True  # PanPhon short code
     assert is_suprasegmental("Voice") is False
     assert is_suprasegmental("LABIAL") is False
+
+
+def test_normalize_feature_key_matches_registry_for_every_alias() -> None:
+    """The engine-side fold and the registry resolver answer
+    identically for every name the registry knows. The docstring of
+    ``normalize_feature_key`` asserts this identity; this test
+    enforces it so the two paths cannot drift."""
+    for canonical, meta in FEATURE_REGISTRY.items():
+        for name in (canonical, *meta.aliases):
+            assert normalize_feature_key(name) == resolve_canonical(name), (
+                f"{name!r}: normalize_feature_key gives "
+                f"{normalize_feature_key(name)!r}, registry gives "
+                f"{resolve_canonical(name)!r}"
+            )

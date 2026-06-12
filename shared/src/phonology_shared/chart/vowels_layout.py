@@ -25,7 +25,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from phonology_shared.chart.vowels import (
+    _BACKNESS_GROUP_BY_COL,
     _BACKNESS_X,
+    _CANONICAL_CONTENT_W_PX,
     _DISPLAY_CONTRAST_FEATURES,
     _HEIGHT_Y,
     _PAIR_KIND_FOR_FEATURE,
@@ -33,6 +35,8 @@ from phonology_shared.chart.vowels import (
     _ROW_LABEL_TO_INDEX,
     COL_LABELS,
     ROW_LABELS,
+    TRAPEZOID_BOTTOM_WIDTH,
+    TRIANGLE_BOTTOM_WIDTH,
     PlacementFlag,
     PlacementPolicy,
     VowelCellDisplayKind,
@@ -41,7 +45,12 @@ from phonology_shared.chart.vowels import (
     _normalize_feat_keys,
     compute_placements,
     infer_vowel_shape,
-    vowel_silhouette,
+)
+from phonology_shared.presentation.chart_style import (
+    VOWEL_CELL_STACK_GAP_PX,
+    VOWEL_PAIR_SHIFT_PX,
+    VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
+    VOWEL_SILHOUETTE_MAX_ASPECT,
 )
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
@@ -157,9 +166,11 @@ class VowelChartCell:
     # the geometry build elevates this to half the combined cell
     # widths so the two cells stay tangent instead of overlapping
     # by the cell-width-minus-canonical-shift delta (~33 px for
-    # two long_pair cells). Both web and desktop renderers read
-    # this per-cell value instead of the chart-style constant.
-    pair_shift_px: float = 0.0
+    # two long_pair cells). Always populated with the effective
+    # value, so both renderers and the sizing math read it
+    # UNCONDITIONALLY; no consumer re-implements a "0 means
+    # canonical" fallback.
+    pair_shift_px: float = float(VOWEL_PAIR_SHIFT_PX)
 
 
 @dataclass(frozen=True)
@@ -422,34 +433,26 @@ class VowelChartGeometry:
 #: Gap (px) between vertically stacked segment buttons. Canonical
 #: home lives in ``phonology_shared.presentation.chart_style`` as
 #: ``VOWEL_CELL_STACK_GAP_PX`` (presentation layer, so build.py can
-#: bake it without dragging chart/ imports). Re-exported here for
-#: the natural-height math below + any consumer that already
-#: imports from this module.
-from phonology_shared.presentation.chart_style import (  # noqa: E402
-    VOWEL_CELL_STACK_GAP_PX,
-    VOWEL_PAIR_SHIFT_PX,
-    VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
-    VOWEL_SILHOUETTE_MAX_ASPECT,
-)
-
-# Backward-compat alias for the old private name. Internal
-# call-sites below still use this; new code should use the
-# public symbol above.
+#: bake it without dragging chart/ imports); imported in the top
+#: import block. The private alias below is kept for consumers of
+#: the old name.
 _VOWEL_CELL_STACK_GAP_PX: int = VOWEL_CELL_STACK_GAP_PX
 
 #: Density tiers: per-button height when a cell's stack reaches the
-#: threshold entry count. Mirrors the CSS rules at
-#: ``web/style.css:1219-1234`` (``data-cell-density="dense"`` and
-#: ``"ultra"``). The geometry-side ``natural_data_height_px``
-#: computation reads this so the chart asks for the rendered pixel
-#: height instead of the canonical-button-size theoretical max --
-#: pre-fix, PHOIBLE inventories like !XU/UPSID (12-stack) were
-#: requesting 931 px while the CSS-rendered chart only needed
+#: threshold entry count. SINGLE SOURCE for all three consumers:
+#: this module's ``natural_data_height_px`` computation, the web's
+#: CSS rules (relayed by build.py as ``--vowel-cell-dense-h`` /
+#: ``--vowel-cell-ultra-h``), and the web's per-cell tier choice in
+#: main.js (thresholds relayed in the ``chart-style`` inline JSON).
+#: The geometry reads these so the chart asks for the rendered
+#: pixel height instead of the canonical-button-size theoretical
+#: max; before that, PHOIBLE inventories like !XU/UPSID (12-stack)
+#: requested 931 px while the CSS-rendered chart only needed
 #: ~250 px, forcing the panel-body to scroll unnecessarily.
-_DENSITY_TIER_DENSE_THRESHOLD: int = 5
-_DENSITY_TIER_DENSE_BTN_H: int = SEG_BTN_H - 4  # 22 px (matches CSS)
-_DENSITY_TIER_ULTRA_THRESHOLD: int = 10
-_DENSITY_TIER_ULTRA_BTN_H: int = SEG_BTN_H - 8  # 18 px (matches CSS)
+DENSITY_TIER_DENSE_THRESHOLD: int = 5
+DENSITY_TIER_DENSE_BTN_H: int = SEG_BTN_H - 4  # 22 px
+DENSITY_TIER_ULTRA_THRESHOLD: int = 10
+DENSITY_TIER_ULTRA_BTN_H: int = SEG_BTN_H - 8  # 18 px
 
 
 def effective_button_height_px(stack_depth: int) -> int:
@@ -468,10 +471,10 @@ def effective_button_height_px(stack_depth: int) -> int:
     causing the chart layout to look "totally different" even
     though both renderers consume the same shared geometry.
     """
-    if stack_depth >= _DENSITY_TIER_ULTRA_THRESHOLD:
-        return _DENSITY_TIER_ULTRA_BTN_H
-    if stack_depth >= _DENSITY_TIER_DENSE_THRESHOLD:
-        return _DENSITY_TIER_DENSE_BTN_H
+    if stack_depth >= DENSITY_TIER_ULTRA_THRESHOLD:
+        return DENSITY_TIER_ULTRA_BTN_H
+    if stack_depth >= DENSITY_TIER_DENSE_THRESHOLD:
+        return DENSITY_TIER_DENSE_BTN_H
     return SEG_BTN_H
 
 
@@ -492,12 +495,25 @@ _VOWEL_DATA_AREA_VERTICAL_PADDING_PX: int = SEG_BTN_H
 
 #: Reference content width (px) used to convert cell pixel sizes
 #: into the normalised ``[0, 1]`` coordinate space the silhouette
-#: lives in. Matches the canonical anchor derivation in
-#: :py:func:`_derive_backness_anchors` so cell-extent math stays
-#: consistent with chart_x.
-_VOWEL_CONTENT_W_PX: float = float(
-    3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
-)
+#: lives in. Single definition lives in :py:mod:`.vowels` next to
+#: the anchor derivation so cell-extent math stays consistent with
+#: chart_x.
+_VOWEL_CONTENT_W_PX: float = _CANONICAL_CONTENT_W_PX
+
+#: Column-semantics views derived from the single source
+#: ``vowels._BACKNESS_GROUP_BY_COL`` (the inference layer owns the
+#: 9-column scheme: 0/1 front pair, 2/3 central pair, 4/5 back
+#: pair, 6/7/8 neutral-round). Built once at import so the sizing
+#: and projection passes never rebuild per-call dict literals, and
+#: a future column-scheme change lands in one place.
+_COL_TO_ANCHOR: dict[int, float] = {
+    col: _BACKNESS_X[key] for col, key in _BACKNESS_GROUP_BY_COL.items()
+}
+_BACKNESS_SLOT_ORDER: tuple[str, ...] = ("front", "central", "back")
+_COL_TO_SLOT: dict[int, int] = {
+    col: _BACKNESS_SLOT_ORDER.index(key)
+    for col, key in _BACKNESS_GROUP_BY_COL.items()
+}
 
 #: How aggressively the silhouette's top_width and bottom_width
 #: shrink toward each row's minimum-required width. ``0.0`` keeps
@@ -543,45 +559,93 @@ _VOWEL_SLANT_CHANGE_CAP_FRAC: float = 0.0
 _VOWEL_MIN_CELL_GAP_NORM: float = VOWEL_PAIR_SEPARATOR_PX / _VOWEL_CONTENT_W_PX
 
 
-def _row_content_extent(
-    cells: tuple[VowelChartCell, ...],
-    row: int,
-) -> tuple[float, float] | None:
-    """Leftmost and rightmost normalised x extent of the cells at
-    ``row``. Returns ``None`` when the row has no cells.
+def vowel_silhouette(
+    shape: VowelChartShape,
+    top_logical_row: int = 0,
+    bottom_logical_row: int | None = None,
+) -> VowelChartSilhouette:
+    """Compute the silhouette for an inventory whose populated
+    rows span ``top_logical_row`` to ``bottom_logical_row``
+    (inclusive, indices into :py:data:`ROW_LABELS`).
 
-    Cell widths are taken as the rendered button or Long-pair-
-    container size, converted to normalised coords via the
-    canonical content-width reference.
+    Defaults reproduce the canonical 7-row Close-to-Open silhouette
+    (used by :py:func:`web/scripts/build.py` to bake fallback CSS
+    variables). Inventory-adaptive callers pass the actual
+    populated row range so the silhouette top and bottom widths
+    track the IPA narrowness of the rows actually rendered: an
+    inventory whose lowest row is Open-mid carries a wider bottom
+    edge than one with a true Open vowel.
+
+    The silhouette top edge always sits at the Close anchor
+    (``_HEIGHT_Y["Close"]``) and the bottom edge at the Open anchor
+    (``_HEIGHT_Y["Open"]``) so the data area is fully used
+    regardless of which rows are populated; the
+    inventory-adaptive part is only the widths at those edges.
     """
-    row_cells = [c for c in cells if c.row == row]
-    if not row_cells:
-        return None
-    pair_shift = (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _VOWEL_CONTENT_W_PX
-    single_half = (BTN_W / 2.0) / _VOWEL_CONTENT_W_PX
-    long_pair_half = (
-        (2 * BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _VOWEL_CONTENT_W_PX
+    if bottom_logical_row is None:
+        bottom_logical_row = len(ROW_LABELS) - 1
+    front = _BACKNESS_X["front"]
+    back = _BACKNESS_X["back"]
+    pair_outer = _PAIR_OUTER_EXTENT
+    bottom_width_canonical = (
+        TRIANGLE_BOTTOM_WIDTH
+        if shape == VowelChartShape.TRIANGLE
+        else TRAPEZOID_BOTTOM_WIDTH
     )
-    lefts: list[float] = []
-    rights: list[float] = []
-    for cell in row_cells:
-        is_pair = cell.display_kind in PAIR_DISPLAY_KINDS
-        half = long_pair_half if is_pair else single_half
-        center = cell.chart_x + cell.pair_side * pair_shift
-        lefts.append(center - half)
-        rights.append(center + half)
-    return min(lefts), max(rights)
+    top_logical_y = _HEIGHT_Y[ROW_LABELS[top_logical_row]]
+    bottom_logical_y = _HEIGHT_Y[ROW_LABELS[bottom_logical_row]]
+    top_row_width = 1.0 - (1.0 - bottom_width_canonical) * top_logical_y
+    bottom_row_width = 1.0 - (1.0 - bottom_width_canonical) * bottom_logical_y
+    front_at_top = back + top_row_width * (front - back)
+    front_at_bottom = back + bottom_row_width * (front - back)
+    y_anchor_top = _HEIGHT_Y["Close"]
+    y_anchor_bottom = _HEIGHT_Y["Open"]
+    return VowelChartSilhouette(
+        shape=shape,
+        top_y=y_anchor_top,
+        bottom_y=y_anchor_bottom,
+        top_left=front_at_top - pair_outer,
+        # ``top_right`` / ``bottom_right`` are the canonical back-
+        # edge position in normalised x: the back anchor plus the
+        # pair-outer extent so the line sits where a back-rounded
+        # mate's outer right edge WOULD be. Renderers multiply by
+        # the data-area width; on charts wider than the canonical
+        # content width the line drifts slightly past the button,
+        # which is the intended visual spacing.
+        top_right=back + pair_outer,
+        bottom_left=front_at_bottom - pair_outer,
+        bottom_right=back + pair_outer,
+        top_width=top_row_width,
+        bottom_width=bottom_row_width,
+        # Cell-extent fields (cascade source). Renderers position
+        # the silhouette edges at ``anchor * dw ± cell_outer_extent_px``
+        # so the silhouette wraps the outer cell edge flush at ANY
+        # data width, not just the canonical 232 px.
+        front_anchor_at_top=front_at_top,
+        front_anchor_at_bottom=front_at_bottom,
+        back_anchor=back,
+        # Constant pixel offset from a paired cell's centre to its
+        # outer edge: ``pair_shift`` (centre-to-mate-centre / 2)
+        # plus half a button width. This is the px adjustment the
+        # renderer adds to ``anchor * dw`` so the silhouette is
+        # flush with the outer cell edge at ANY data width.
+        cell_outer_extent_px=int(
+            round((BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 + BTN_W / 2.0)
+        ),
+    )
 
 
 def _min_row_width_for_meta(
-    row_cells: list[tuple[int, int, bool]],
+    row_cells: list[tuple[float, int, bool]],
 ) -> float:
     """Lower bound on ``row_width`` such that the row's cells do
     not overlap given back-anchored projection.
 
-    Each tuple is ``(col, pair_side, is_long_pair)``; the cell's
-    horizontal extent is its half-width plus its pair-side offset
-    from the row's projected anchor. With back-anchored projection
+    Each tuple is ``(anchor_x, pair_side, is_long_pair)`` where
+    ``anchor_x`` is the cell's EFFECTIVE backness anchor (after any
+    Open-row central migration); the cell's horizontal extent is
+    its half-width plus its pair-side offset from the row's
+    projected anchor. With back-anchored projection
     ``chart_x = back + W * (anchor - back)``, the distance between
     two cells at adjacent anchors scales linearly with ``W``; this
     function solves for the minimum ``W`` such that every adjacent
@@ -590,29 +654,16 @@ def _min_row_width_for_meta(
     """
     if len(row_cells) < 2:
         return 0.0
-    canonical_anchor: dict[int, float] = {
-        0: _BACKNESS_X["front"],
-        1: _BACKNESS_X["front"],
-        6: _BACKNESS_X["front"],
-        2: _BACKNESS_X["central"],
-        3: _BACKNESS_X["central"],
-        7: _BACKNESS_X["central"],
-        4: _BACKNESS_X["back"],
-        5: _BACKNESS_X["back"],
-        8: _BACKNESS_X["back"],
-    }
     pair_shift = (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _VOWEL_CONTENT_W_PX
     single_half = (BTN_W / 2.0) / _VOWEL_CONTENT_W_PX
     long_pair_half = (
         (2 * BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _VOWEL_CONTENT_W_PX
     )
-    sorted_meta = sorted(row_cells, key=lambda c: canonical_anchor[c[0]])
+    sorted_meta = sorted(row_cells, key=lambda c: c[0])
     min_w = 0.0
-    for (col_a, ps_a, lp_a), (col_b, ps_b, lp_b) in zip(
+    for (anchor_a, ps_a, lp_a), (anchor_b, ps_b, lp_b) in zip(
         sorted_meta, sorted_meta[1:]
     ):
-        anchor_a = canonical_anchor[col_a]
-        anchor_b = canonical_anchor[col_b]
         if anchor_b <= anchor_a:
             # Same backness slot; pair_side handles separation.
             continue
@@ -634,7 +685,7 @@ def _min_row_width_for_meta(
 
 
 def _compute_shrunken_widths(
-    cells_meta_by_row: dict[int, list[tuple[int, int, bool]]],
+    cells_meta_by_row: dict[int, list[tuple[float, int, bool]]],
     display_y_by_row: dict[int, float],
     top_y: float,
     bottom_y: float,
@@ -827,8 +878,6 @@ def rounded_silhouette_polygon_points(
     )
     n = len(corners)
     points: list[tuple[float, float]] = []
-    import math
-
     for i in range(n):
         prev = corners[(i - 1) % n]
         curr = corners[i]
@@ -946,8 +995,6 @@ def silhouette_right_at_y(
     (baked per row at geometry build time) so back-edge alignment
     cues stay in lockstep with the rendered silhouette polygon.
     """
-    import math
-
     sil = silhouette
     span_y = sil.bottom_y - sil.top_y
     if span_y <= 0:
@@ -978,10 +1025,18 @@ def silhouette_right_at_y(
 
     dy_top = chart_y - sil.top_y
     if 0 <= dy_top < tr_r_in_y_abs and tr_r_in_y_abs > 0:
-        # y(t) = top_y + t^2 * tr_r_in_y_abs (corner mirror)
-        t = math.sqrt(dy_top / tr_r_in_y_abs)
-        t = max(0.0, min(1.0, t))
-        omt = 1.0 - t
+        # The arc runs from p_in ON THE RIGHT EDGE (t=0, at
+        # y = top_y + r_in_y) up to p_out ON THE TOP EDGE (t=1, at
+        # y = top_y), so y(t) = top_y + (1-t)^2 * tr_r_in_y_abs and
+        # the parameter solves as 1 - t = sqrt(dy / r). The first
+        # version of this mirror inverted the mapping (t =
+        # sqrt(dy / r)), which returned the edge x values at the
+        # WRONG arc ends: the topmost row read the silhouette right
+        # edge as the un-rounded corner x. Caught by the polygon
+        # parity tests in test_rounded_silhouette.py.
+        omt = math.sqrt(dy_top / tr_r_in_y_abs)
+        omt = max(0.0, min(1.0, omt))
+        t = 1.0 - omt
         x_in = sil.top_right + tr_r_in * tr_dx_in_norm  # p_in.x
         x_curr = sil.top_right
         x_out = sil.top_right - tr_r_out  # leftward
@@ -1005,9 +1060,15 @@ def silhouette_right_at_y(
 
     dy_bot = sil.bottom_y - chart_y
     if 0 <= dy_bot < br_r_out_y_abs and br_r_out_y_abs > 0:
-        omt = math.sqrt(dy_bot / br_r_out_y_abs)
-        omt = max(0.0, min(1.0, omt))
-        t = 1.0 - omt
+        # The arc runs from p_in ON THE BOTTOM EDGE (t=0, at
+        # y = bottom_y) up to p_out ON THE RIGHT EDGE (t=1, at
+        # y = bottom_y - r_out_y), so y(t) = bottom_y - t^2 *
+        # br_r_out_y_abs and t = sqrt(dy / r). Same inverted-
+        # parameter mirror bug as the top-right corner; see the
+        # comment there and the polygon parity tests.
+        t = math.sqrt(dy_bot / br_r_out_y_abs)
+        t = max(0.0, min(1.0, t))
+        omt = 1.0 - t
         x_in = sil.bottom_right - br_r_in  # leftward along bottom
         x_curr = sil.bottom_right
         x_out = sil.bottom_right + br_r_out * br_dx_out_norm
@@ -1043,8 +1104,6 @@ def silhouette_left_at_y(
     (baked per row at build time); neither replicates the bezier
     math locally.
     """
-    import math
-
     sil = silhouette
     span_y = sil.bottom_y - sil.top_y
     if span_y <= 0:
@@ -1173,7 +1232,10 @@ def _classify_vowel_cell_display(
     """Pick a :py:class:`VowelCellDisplayKind` for ``entries``.
 
     Pure classifier over canonical feature bundles: no coordinate
-    knowledge, no renderer knowledge. Returns ``(kind,
+    knowledge, no renderer knowledge. ``norm_feats`` must carry
+    ALREADY-NORMALIZED (lowercase-keyed) bundles; the geometry
+    build normalizes the inventory once and shares the result
+    between the placer and this classifier. Returns ``(kind,
     contrast_features, ordered_entries)`` where
     ``contrast_features`` is the sorted tuple of in-cell-contrast
     features the entries differ on (``()`` for ``STACK``) and
@@ -1200,9 +1262,7 @@ def _classify_vowel_cell_display(
     """
     if len(entries) < 2:
         return VowelCellDisplayKind.STACK, (), entries
-    bundles = [
-        _normalize_feat_keys(norm_feats.get(seg, {})) for seg in entries
-    ]
+    bundles = [dict(norm_feats.get(seg, {})) for seg in entries]
     all_keys: set[str] = set()
     for b in bundles:
         all_keys.update(b)
@@ -1391,19 +1451,6 @@ def _natural_data_area_size(
             SEG_BTN_H + _VOWEL_DATA_AREA_VERTICAL_PADDING_PX,
         )
 
-    # col -> backness slot (front=0, central=1, back=2).
-    col_to_slot: dict[int, int] = {
-        0: 0,
-        1: 0,
-        6: 0,
-        2: 1,
-        3: 1,
-        7: 1,
-        4: 2,
-        5: 2,
-        8: 2,
-    }
-
     def _cell_vertical_depth(cell: VowelChartCell) -> int:
         """Vertical row count contributed by ``cell`` for height
         sizing. PAIR cells are 1 row; CONTRAST_SET is
@@ -1418,14 +1465,10 @@ def _natural_data_area_size(
     rows_in_use: set[int] = {c.row for c in cells}
     max_row_w = 2 * BTN_W + VOWEL_PAIR_GAP_PX
     # Pair-side shift gap: cells with pair_side != 0 sit offset
-    # from their canonical chart_x by ``VOWEL_PAIR_SHIFT_PX``. The
+    # from their canonical chart_x by their ``pair_shift_px``. The
     # rightmost cell's actual pixel extent therefore reaches
     # ``chart_x * dw + pair_shift + cell_w/2``, which is what the
     # data-area width must accommodate.
-    from phonology_shared.presentation.chart_style import (
-        VOWEL_PAIR_SHIFT_PX,
-    )
-
     for ri in rows_in_use:
         # Slot button-count summation (the legacy bound). Kept as
         # a floor so single-slot rows still have minimum sensible
@@ -1434,7 +1477,7 @@ def _natural_data_area_size(
         for c in cells:
             if c.row != ri:
                 continue
-            slot = col_to_slot[c.col]
+            slot = _COL_TO_SLOT[c.col]
             slot_buttons[slot] += _cell_horizontal_button_count(c)
         populated_slots = [s for s, n in slot_buttons.items() if n > 0]
         if not populated_slots:
@@ -1461,12 +1504,7 @@ def _natural_data_area_size(
                 + max(0, _cell_horizontal_button_count(c) - 1)
                 * VOWEL_PAIR_GAP_PX
             ) / 2.0
-            shift = (
-                c.pair_shift_px
-                if c.pair_shift_px > 0
-                else float(VOWEL_PAIR_SHIFT_PX)
-            )
-            pair_offset = (shift if c.pair_side else 0) * c.pair_side
+            pair_offset = c.pair_shift_px * c.pair_side
             cell_geom.append((c.chart_x, pair_offset, cell_half_w))
             if c.chart_x < 1.0:
                 right_extent = pair_offset + cell_half_w
@@ -1533,6 +1571,130 @@ def _natural_data_area_size(
     return max_row_w, total_h
 
 
+#: Maps each neutral col to its two paired siblings. Neutral cols
+#: (6/7/8) share a backness anchor with the paired cols at the same
+#: row (6 with 0/1, 7 with 2/3, 8 with 4/5). When both a neutral and
+#: a paired col are populated, the canonical ``pair_side=0`` for the
+#: neutral plus the ``pair_side=±1`` for the paired one only
+#: separate them by half a button width; in practice they overlap,
+#: so :py:func:`_assign_pair_sides` reroutes the neutral cell into
+#: the empty pair-side slot.
+_NEUTRAL_TO_PAIRED: dict[int, tuple[int, int]] = {
+    6: (0, 1),  # front-neutral -> front-unr/front-rnd
+    7: (2, 3),  # central-neutral -> central-unr/central-rnd
+    8: (4, 5),  # back-neutral -> back-unr/back-rnd
+}
+
+#: One populated cell's layout metadata: ``(row, col, entries,
+#: display_kind, contrast_features, pair_side, anchor_x)`` where
+#: ``anchor_x`` is the cell's EFFECTIVE backness anchor after the
+#: Open-row central migration.
+_CellMeta = tuple[
+    int,
+    int,
+    tuple[str, ...],
+    VowelCellDisplayKind,
+    tuple[str, ...],
+    int,
+    float,
+]
+
+
+def _assign_pair_sides(
+    occupied: Mapping[tuple[int, int], list[str]],
+    cell_classifications: Mapping[
+        tuple[int, int],
+        tuple[VowelCellDisplayKind, tuple[str, ...], tuple[str, ...]],
+    ],
+    open_front_populated: bool,
+) -> tuple[list[_CellMeta], dict[int, list[tuple[float, int, bool]]]]:
+    """Assign each populated cell its pair side and effective
+    backness anchor.
+
+    Neutral cols (6/7/8) baseline at ``pair_side=0`` (anchor
+    centre) and reroute into an empty pair-side slot when exactly
+    one of their paired siblings is populated, so the two cells
+    land at distinct rendered positions. Paired cols snap to their
+    canonical side whenever a sibling or a neutral co-occupant is
+    present; a lone pair-layout cell with neither stays centred on
+    the anchor.
+
+    Returns ``(cell_meta, cells_meta_by_row)``: the per-cell tuples
+    the projection pass consumes, and the per-row ``(anchor_x,
+    pair_side, is_pair_layout)`` lists the shrink solver feeds to
+    :py:func:`_min_row_width_for_meta`. Carrying the EFFECTIVE
+    anchor (including the Open-row migration) keeps the shrink
+    floor consistent with where cells actually render.
+    """
+    open_row_index = _ROW_LABEL_TO_INDEX["Open"]
+    cell_meta: list[_CellMeta] = []
+    cells_meta_by_row: dict[int, list[tuple[float, int, bool]]] = {}
+    for ri, ci in sorted(occupied):
+        display_kind, contrast_features, entries = cell_classifications[
+            (ri, ci)
+        ]
+        is_pair_layout = display_kind in PAIR_DISPLAY_KINDS
+        if ci >= 6:
+            # Neutral col baseline: pair_side=0 (anchor centre).
+            # Reroute when a paired col at the same anchor is also
+            # populated so the buttons don't overlap.
+            paired_lo, paired_hi = _NEUTRAL_TO_PAIRED[ci]
+            has_lo = (ri, paired_lo) in occupied
+            has_hi = (ri, paired_hi) in occupied
+            if has_lo and not has_hi:
+                # Only the unrounded pair member is taken. Send the
+                # neutral cell to the empty rounded position.
+                pair_side = +1
+            elif has_hi and not has_lo:
+                # Only the rounded pair member is taken. Send the
+                # neutral cell to the empty unrounded position;
+                # this is the canonical "default unrounded"
+                # semantics PHOIBLE neutral typically expresses.
+                pair_side = -1
+            else:
+                # Either both pair cols are populated (rare; the
+                # placer puts each unique feature shape in its own
+                # col) or neither is. Keep the anchor centre.
+                pair_side = 0
+        else:
+            sibling_ci = ci ^ 1
+            has_sibling = (ri, sibling_ci) in occupied
+            # When a lone paired cell shares its anchor with a
+            # populated neutral cell, snap the paired cell to its
+            # canonical pair-side. This lets the neutral cell take
+            # the empty pair-side (see neutral-col branch above)
+            # so both cells land at distinct rendered positions.
+            paired_low_col = ci & ~1
+            neutral_partner = (paired_low_col >> 1) + 6
+            has_neutral = (ri, neutral_partner) in occupied
+            if is_pair_layout and not has_sibling and not has_neutral:
+                # Lone pair cell with no neutral co-occupant: stay
+                # centred on the anchor (the canonical lone-pair
+                # rendering).
+                pair_side = 0
+            else:
+                pair_side = 1 if ci % 2 else -1
+        if ri == open_row_index and ci in (2, 3) and not open_front_populated:
+            anchor_x = _BACKNESS_X["front"]
+        else:
+            anchor_x = _COL_TO_ANCHOR[ci]
+        cell_meta.append(
+            (
+                ri,
+                ci,
+                entries,
+                display_kind,
+                contrast_features,
+                pair_side,
+                anchor_x,
+            )
+        )
+        cells_meta_by_row.setdefault(ri, []).append(
+            (anchor_x, pair_side, is_pair_layout)
+        )
+    return cell_meta, cells_meta_by_row
+
+
 def build_vowel_chart_geometry(
     segs: list[str],
     profile: VowelProfile,
@@ -1561,8 +1723,22 @@ def build_vowel_chart_geometry(
     Renderers attach the result directly: no placement decisions
     and no coordinate arithmetic happen at the UI layer.
     """
+    # Normalize every bundle exactly once. The placer and the
+    # display classifier both need lowercase-keyed bundles; before
+    # this was hoisted, each build normalized the inventory twice
+    # (once inside compute_placements, once per multi-entry cell in
+    # the classifier), pure allocation churn on the interactive
+    # inventory-switch path.
+    norm_cache: dict[str, dict[str, str]] = {
+        seg: _normalize_feat_keys(norm_feats.get(seg, {})) for seg in segs
+    }
     occupied, placements = compute_placements(
-        segs, profile, norm_feats, policy, vowel_secondary=vowel_secondary
+        segs,
+        profile,
+        norm_feats,
+        policy,
+        vowel_secondary=vowel_secondary,
+        norm_cache=norm_cache,
     )
 
     populated_logical_rows = sorted({row for (row, _) in occupied})
@@ -1636,7 +1812,7 @@ def build_vowel_chart_geometry(
             tuple[str, ...],
         ],
     ] = {
-        rc: _classify_vowel_cell_display(tuple(entries), norm_feats)
+        rc: _classify_vowel_cell_display(tuple(entries), norm_cache)
         for rc, entries in occupied.items()
     }
 
@@ -1693,161 +1869,44 @@ def build_vowel_chart_geometry(
             populated_logical_rows[0]: "top",
             populated_logical_rows[-1]: "bottom",
         }
-    rows = tuple(
-        VowelChartRow(
-            logical_row=ri,
-            label=ROW_LABELS[ri],
-            chart_y=display_y_by_row[ri],
-            tier=_row_tier.get(ri, "middle"),
-            slot_height_norm=slot_heights_by_row[ri],
-            silhouette_left=silhouette_left_at_y(
-                silhouette, display_y_by_row[ri]
-            ),
-            silhouette_right=silhouette_right_at_y(
-                silhouette, display_y_by_row[ri]
-            ),
-        )
-        for ri in populated_logical_rows
-    )
-
-    def _width_at_display_y(y: float) -> float:
-        """Linear interp between silhouette top and bottom widths
-        at the given display y. Unifies position (silhouette) and
-        display (cell y) at the cell projection step so cells lie
-        on the silhouette slant by construction.
-        """
-        if silhouette.bottom_y == silhouette.top_y:
-            return silhouette.top_width
-        t = (y - silhouette.top_y) / (silhouette.bottom_y - silhouette.top_y)
-        return silhouette.top_width * (1.0 - t) + silhouette.bottom_width * t
 
     back = _BACKNESS_X["back"]
-
-    # Map ``col`` to its backness anchor. Pair side (unrounded vs
-    # rounded) is handled separately by the renderer as a fixed
-    # pixel shift so the within-pair gap stays constant regardless
-    # of how narrow a row becomes inside the trapezoid. Cols 6..8
-    # are the neutral-round slots that sit on the anchor centre
-    # with no L/R shift.
-    _col_to_anchor: dict[int, float] = {
-        0: _BACKNESS_X["front"],
-        1: _BACKNESS_X["front"],
-        2: _BACKNESS_X["central"],
-        3: _BACKNESS_X["central"],
-        4: _BACKNESS_X["back"],
-        5: _BACKNESS_X["back"],
-        6: _BACKNESS_X["front"],
-        7: _BACKNESS_X["central"],
-        8: _BACKNESS_X["back"],
-    }
     open_row_index = _ROW_LABEL_TO_INDEX["Open"]
-    # Open-row front-pair cells (cols 0 / 1) take priority for the
-    # bottom-left of the trapezoid. When they are empty, the Open
-    # central pair migrates leftward to occupy that visual slot
-    # (a one-low-vowel inventory's central /a/ should not sit at
-    # the geometric midpoint of the narrowed bottom edge). When
-    # the front pair IS populated, central stays at its true
-    # central anchor so the two cells do not collide.
-    open_front_populated = (open_row_index, 0) in occupied or (
-        open_row_index,
-        1,
-    ) in occupied
+    # Open-row front cells take priority for the bottom-left of the
+    # trapezoid. When they are all empty, the Open central pair
+    # migrates leftward to occupy that visual slot (a one-low-vowel
+    # inventory's central /a/ should not sit at the geometric
+    # midpoint of the narrowed bottom edge). When ANY front cell is
+    # populated, central stays at its true central anchor so the
+    # two cells do not collide. The front-neutral col (6) counts
+    # alongside the pair cols (0/1) because it occupies the same
+    # front anchor; without it, a front vowel with unspecified
+    # rounding plus a central /a/ would stack two cells on one
+    # anchor with overlap no resolver can fix.
+    open_front_populated = any(
+        (open_row_index, c) in occupied for c in (0, 1, 6)
+    )
 
-    # First pass: classify each cell's display kind, resolve
-    # ordering, and compute col / pair_side. The display layer
-    # needs these to size the silhouette before it can fix cell
+    # First pass: pair side + effective backness anchor per
+    # populated cell (module-level helper so the collision policy
+    # is unit-testable in isolation). The display layer needs
+    # these to size the silhouette before it can fix cell
     # ``chart_x`` positions. No phonology re-decisions happen
-    # below this point; the cell COL/row are already final,
-    # only their pixel-space position is still pending.
-    # Neutral cols (6/7/8) share a backness anchor with the paired
-    # cols at the same row (6 with 0/1, 7 with 2/3, 8 with 4/5).
-    # When both a neutral and a paired col are populated, the
-    # canonical ``pair_side=0`` for the neutral plus the
-    # ``pair_side=±1`` for the paired one only separate them by half
-    # a button width; in practice they overlap.
-    # ``_neutral_to_paired_anchor`` maps each neutral col to its two
-    # paired siblings so we can detect the collision and reroute the
-    # neutral cell into the empty pair-side slot.
-    _neutral_to_paired_anchor: dict[int, tuple[int, int]] = {
-        6: (0, 1),  # front-neutral -> front-unr/front-rnd
-        7: (2, 3),  # central-neutral -> central-unr/central-rnd
-        8: (4, 5),  # back-neutral -> back-unr/back-rnd
-    }
-
-    cell_meta: list[
-        tuple[
-            int,
-            int,
-            tuple[str, ...],
-            VowelCellDisplayKind,
-            tuple[str, ...],
-            int,
-        ]
-    ] = []
-    cells_meta_by_row: dict[int, list[tuple[int, int, bool]]] = {}
-    for ri, ci in sorted(occupied):
-        display_kind, contrast_features, entries = cell_classifications[
-            (ri, ci)
-        ]
-        is_pair_layout = display_kind in PAIR_DISPLAY_KINDS
-        if ci >= 6:
-            # Neutral col baseline: pair_side=0 (anchor centre).
-            # Reroute when a paired col at the same anchor is also
-            # populated so the buttons don't overlap.
-            paired_lo, paired_hi = _neutral_to_paired_anchor[ci]
-            has_lo = (ri, paired_lo) in occupied
-            has_hi = (ri, paired_hi) in occupied
-            if has_lo and not has_hi:
-                # Only the unrounded pair member is taken. Send the
-                # neutral cell to the empty rounded position.
-                pair_side = +1
-            elif has_hi and not has_lo:
-                # Only the rounded pair member is taken. Send the
-                # neutral cell to the empty unrounded position --
-                # this is the canonical "default unrounded"
-                # semantics PHOIBLE neutral typically expresses.
-                pair_side = -1
-            else:
-                # Either both pair cols are populated (rare; the
-                # placer puts each unique feature shape in its own
-                # col) or neither is. Keep the anchor centre.
-                pair_side = 0
-        else:
-            sibling_ci = ci ^ 1
-            has_sibling = (ri, sibling_ci) in occupied
-            # When a lone paired cell shares its anchor with a
-            # populated neutral cell, snap the paired cell to its
-            # canonical pair-side. This lets the neutral cell take
-            # the empty pair-side (see neutral-col branch above)
-            # so both cells land at distinct rendered positions.
-            paired_low_col = ci & ~1
-            neutral_partner = (paired_low_col >> 1) + 6
-            has_neutral = (ri, neutral_partner) in occupied
-            if is_pair_layout and not has_sibling and not has_neutral:
-                # Lone pair cell with no neutral co-occupant: stay
-                # centred on the anchor (the canonical lone-pair
-                # rendering).
-                pair_side = 0
-            else:
-                pair_side = 1 if ci % 2 else -1
-        cell_meta.append(
-            (
-                ri,
-                ci,
-                entries,
-                display_kind,
-                contrast_features,
-                pair_side,
-            )
-        )
-        cells_meta_by_row.setdefault(ri, []).append(
-            (ci, pair_side, is_pair_layout)
-        )
+    # below this point; the cell col/row are already final, only
+    # their pixel-space position is still pending.
+    cell_meta, cells_meta_by_row = _assign_pair_sides(
+        occupied, cell_classifications, open_front_populated
+    )
 
     # Shrink silhouette widths so the trapezoid tracks the actual
     # content. With back-anchored cell projection, the shrunken
     # widths also pull cell anchors inward by the same factor, so
     # the silhouette and the cells stay aligned by construction.
+    # Runs BEFORE the rows tuple is built so the baked per-row
+    # ``silhouette_left`` / ``silhouette_right`` values match the
+    # geometry's FINAL silhouette; an earlier ordering baked
+    # pre-shrink edges, leaving the web's row labels floating off
+    # the drawn outline while the desktop recomputed locally.
     shrunken_top_w, shrunken_bot_w = _compute_shrunken_widths(
         cells_meta_by_row,
         display_y_by_row,
@@ -1875,10 +1934,37 @@ def build_vowel_chart_geometry(
     # future per-inventory policy lands in this slot without touching
     # the renderers.
 
-    # Second pass: project cells using the final silhouette
-    # widths. PAIR cells without an opposite-rounding sibling
-    # render centred on their anchor (pair_side=0); regular pairs
-    # and lone PAIR cells with a sibling keep canonical pair_side.
+    rows = tuple(
+        VowelChartRow(
+            logical_row=ri,
+            label=ROW_LABELS[ri],
+            chart_y=display_y_by_row[ri],
+            tier=_row_tier.get(ri, "middle"),
+            slot_height_norm=slot_heights_by_row[ri],
+            silhouette_left=silhouette_left_at_y(
+                silhouette, display_y_by_row[ri]
+            ),
+            silhouette_right=silhouette_right_at_y(
+                silhouette, display_y_by_row[ri]
+            ),
+        )
+        for ri in populated_logical_rows
+    )
+
+    def _width_at_display_y(y: float) -> float:
+        """Linear interp between silhouette top and bottom widths
+        at the given display y. Unifies position (silhouette) and
+        display (cell y) at the cell projection step so cells lie
+        on the silhouette slant by construction. Defined after the
+        shrink pass so it always reads the FINAL silhouette.
+        """
+        if silhouette.bottom_y == silhouette.top_y:
+            return silhouette.top_width
+        t = (y - silhouette.top_y) / (silhouette.bottom_y - silhouette.top_y)
+        return silhouette.top_width * (1.0 - t) + silhouette.bottom_width * t
+
+    # Second pass: project cells using the final silhouette widths
+    # and the effective anchors assigned in the first pass.
     cells: list[VowelChartCell] = []
     for (
         ri,
@@ -1887,11 +1973,8 @@ def build_vowel_chart_geometry(
         display_kind,
         contrast_features,
         pair_side,
+        anchor_x,
     ) in cell_meta:
-        if ri == open_row_index and ci in (2, 3) and not open_front_populated:
-            anchor_x = _BACKNESS_X["front"]
-        else:
-            anchor_x = _col_to_anchor[ci]
         cell_display_y = display_y_by_row[ri]
         row_width = _width_at_display_y(cell_display_y)
         chart_x = back + row_width * (anchor_x - back)
@@ -1982,21 +2065,13 @@ def build_vowel_chart_geometry(
         position; the silhouette may not visually extend to that y,
         but the arrow geometry stays defined.
 
-        Bounds: ``ri`` must be a valid index into ``ROW_LABELS``
-        (0..6) and ``ci`` must be a valid column index (0..8). A
-        malformed ``vowel_secondary`` payload could pass an
-        out-of-range row; previously raised ``IndexError`` from
-        ``ROW_LABELS[ri]``; now returns the silhouette's centre as
-        a safe degenerate position so the caller can skip the
-        diphthong instead of crashing the whole geometry build.
+        Bounds are guaranteed at the source: every placement row
+        and col, secondaries included, comes through
+        ``_vowel_grid_pos_normalized``, whose post-conditions pin
+        ``0 <= row < len(ROW_LABELS)`` and ``0 <= col < 9``, and
+        the snap pass only retargets to occupied cells in that
+        same range.
         """
-        if not 0 <= ri < len(ROW_LABELS):
-            # Degenerate: caller should drop this diphthong. Return
-            # the silhouette's vertical midpoint so the geometry
-            # build doesn't crash.
-            return (back, (silhouette.top_y + silhouette.bottom_y) / 2.0)
-        if not 0 <= ci < 9:
-            return (back, (silhouette.top_y + silhouette.bottom_y) / 2.0)
         if ri in display_y_by_row:
             cy = display_y_by_row[ri]
         else:
@@ -2004,7 +2079,7 @@ def build_vowel_chart_geometry(
         if ri == open_row_index and ci in (2, 3) and not open_front_populated:
             anchor_x = _BACKNESS_X["front"]
         else:
-            anchor_x = _col_to_anchor[ci]
+            anchor_x = _COL_TO_ANCHOR[ci]
         row_w = _width_at_display_y(cy)
         return back + row_w * (anchor_x - back), cy
 

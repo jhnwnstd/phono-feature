@@ -109,6 +109,7 @@ class ModeController:
             selected_segments=list(self._w._selected_segments),
             selected_features=dict(self._w._selected_features),
             engine=self._w.engine,
+            match_mode=self._w._match_mode,
         )
         self.saved_seg_state = transition.saved_seg_state
         self.saved_feat_state = transition.saved_feat_state

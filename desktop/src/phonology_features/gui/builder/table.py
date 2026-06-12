@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import ClassVar
 
-from PyQt6.QtCore import QModelIndex, QRect, Qt
+from PyQt6.QtCore import QItemSelection, QModelIndex, QRect, Qt
 from PyQt6.QtGui import (
     QBrush,
     QColor,
@@ -116,6 +116,18 @@ class _BulkCycleTable(QTableWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._bulk_cycle_cb: Callable[[QTableWidgetItem], None] | None = None
+        # General-case selection membership, rebuilt at most once
+        # per selection change (see ``selectionChanged``) instead of
+        # on every paint pass: during a drag-selection every mouse
+        # move repaints, and rebuilding a Hayes-sized rectangle's
+        # set per paint did thousands of inserts per tick.
+        self._sel_cells_cache: set[tuple[int, int]] | None = None
+
+    def selectionChanged(
+        self, selected: QItemSelection, deselected: QItemSelection
+    ) -> None:
+        self._sel_cells_cache = None
+        super().selectionChanged(selected, deselected)
 
     def set_bulk_cycle_callback(
         self, cb: Callable[[QTableWidgetItem], None]
@@ -187,17 +199,23 @@ class _BulkCycleTable(QTableWidget):
         # set, then for each selected cell draw its edges on sides
         # whose neighbour isn't also selected. Drawing happens AFTER
         # super().paintEvent so the border lands above Qt's gridlines.
-        cells: set[tuple[int, int]] = set()
-        for col_idx in sel_cols:
-            c = col_idx.column()
-            for ri in range(n_rows):
-                cells.add((ri, c))
-        for row_idx in sel_rows:
-            ri = row_idx.row()
-            for ci in range(n_cols):
-                cells.add((ri, ci))
-        for idx in sel_model.selectedIndexes():
-            cells.add((idx.row(), idx.column()))
+        # The set is cached across paints and invalidated by
+        # ``selectionChanged``, so a drag-selection's per-mouse-move
+        # repaints reuse one membership build.
+        cells = self._sel_cells_cache
+        if cells is None:
+            cells = set()
+            for col_idx in sel_cols:
+                c = col_idx.column()
+                for ri in range(n_rows):
+                    cells.add((ri, c))
+            for row_idx in sel_rows:
+                ri = row_idx.row()
+                for ci in range(n_cols):
+                    cells.add((ri, ci))
+            for idx in sel_model.selectedIndexes():
+                cells.add((idx.row(), idx.column()))
+            self._sel_cells_cache = cells
         if not cells:
             return
         painter = QPainter(self.viewport())

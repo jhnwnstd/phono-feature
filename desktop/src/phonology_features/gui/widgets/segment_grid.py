@@ -48,10 +48,10 @@ class SegmentGridWidget(QWidget):
     the current widget width on resize.
     """
 
-    # Upper bound on segment-grid column count. Picked above the
-    # largest manner-class group in any bundled inventory so every
-    # group can fit on one row when the pane is wide enough.
-    MAX_COLS = 30
+    # Upper bound on segment-grid column count. Read from the shared
+    # constant so the height predictor (``seg_pane_n_cols``) and
+    # Qt's actual layout can never disagree on the cap.
+    MAX_COLS = layout_mod.SEG_GRID_MAX_COLS
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)

@@ -148,7 +148,7 @@ class FeatureRow(QWidget):
     # ``palette.theme_version`` -> styles dict (BADGE_*, ROW_*,
     # NAME_*). Shared invalidation contract with SegmentButton via
     # :py:func:`_themed_style_cache.styles_for_active_theme`.
-    _styles_cache: ClassVar[dict[int, dict[str, str]]] = {}
+    _styles_cache: ClassVar[dict[tuple[str, str], dict[str, str]]] = {}
     # Instance attrs populated by ``_build_styles`` via setattr from
     # the cached theme dict; declared here so mypy sees them.
     _BADGE_CONTRASTIVE: str = ""

@@ -32,11 +32,6 @@ MAX_SEGMENTS: int = 200
 # index.html at build time) so the two surfaces agree on which
 # files are out of bounds.
 MAX_INVENTORY_FILE_BYTES: int = 5 * 1024 * 1024
-# Backwards-compat alias for in-engine callers; new code should
-# use ``MAX_INVENTORY_FILE_BYTES``. Kept so a downstream test that
-# pins the old name doesn't break, but the value is now the
-# shared 5 MB cap.
-MAX_FILE_BYTES: int = MAX_INVENTORY_FILE_BYTES
 
 # Soft thresholds. Sit above the largest bundled inventory (Hayes 140
 # segments, General 30 features) but below the hard caps so the

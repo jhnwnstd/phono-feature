@@ -447,9 +447,10 @@ VOWEL_STACK_W: int = 680
 COLLAPSE_W: int = 900
 # First-launch window-size floor. The width is the minimum needed to
 # keep the vowel chart alongside (not stacked below) the consonant
-# grid: ``VOWEL_STACK_W`` (620 px floor for the seg pane to host the
-# chart side-by-side) plus the minimum feat-pane width (480 px) plus
-# the splitter handle and a few pixels of safety margin = 1120 px.
+# grid: ``VOWEL_STACK_W`` (the seg-pane floor for hosting the chart
+# side-by-side) plus ``FEAT_MIN_W`` plus the splitter handle and a
+# few pixels of safety margin. Expressed via the constants by name
+# so a threshold retune cannot leave this prose stale.
 # At this floor, ``distribute_pane_widths`` gives the seg pane just
 # enough room for vowels-alongside; anything narrower would force
 # the chart to stack. Bigger inventories get a content-driven size
@@ -485,19 +486,10 @@ def analysis_content_floor_h() -> int:
     )
 
 
-# Preferred analysis-pane height. Identical to the floor since the
-# floor is the four-row comfortable minimum; kept as a distinct name
-# so existing callers reading "preferred" semantics stay valid. The
-# ``MIN_ANALYSIS_H`` constant is preserved for back-compat (web build
-# relays it as ``--min-analysis-h``); the value is now computed.
-# A function call would be cleaner but module-level CSS-relay code
-# reads this as a literal, so it stays a module-level int.
-MIN_ANALYSIS_H: int = (
-    38  # ANALYSIS_SELECTION_STRIP_H, inline to keep type 'int'
-    + 36  # ANALYSIS_TAB_BAR_H
-    + 4 * 31  # ANALYSIS_MIN_VISIBLE_ROWS * FEAT_ROW_H
-    + 54  # ANALYSIS_OUTER_PADDING_H
-)
+# ``MIN_ANALYSIS_H`` (the preferred analysis-pane height, relayed to
+# the web as ``--min-analysis-h``) is defined below FEAT_ROW_H as
+# ``analysis_content_floor_h()`` so the floor has exactly one
+# definition.
 # Splitter-only degenerate-case cap when the window is too short
 # even for ``analysis_content_floor_h()``. Widgets must not read
 # this directly.
@@ -515,10 +507,24 @@ SEG_BTN_H: int = 26
 SEG_BTN_ROW_H: int = 30  # SEG_BTN_H + BTN_GAP
 # Manner-class group header strip above each consonant group.
 SEG_GROUP_HEADER_H: int = 22
+# Hard cap on segment-grid columns regardless of pane width; rows
+# wider than this read poorly. Single source for the desktop
+# widget's ``SegmentGridWidget.MAX_COLS`` and the shared
+# ``seg_pane_n_cols`` predictor, so the height math and Qt's actual
+# layout can never disagree on the cap.
+SEG_GRID_MAX_COLS: int = 30
 
 # Per-feature-row: ``FeatureRow`` is 30 px (24-px buttons + 3+3 margins)
 # with 1 px inter-row spacing. Sum is the stride for height math.
 FEAT_ROW_H: int = 31
+# Preferred analysis-pane height. Identical to the floor since the
+# floor is the four-row comfortable minimum; kept as a distinct name
+# so existing callers reading "preferred" semantics stay valid. The
+# web build relays it as ``--min-analysis-h`` by reading this module
+# attribute, so the computed int works exactly like a literal, and
+# editing any of the four floor constants now moves every consumer
+# (desktop splitter floor, web CSS var, region constraints) together.
+MIN_ANALYSIS_H: int = analysis_content_floor_h()
 # Feature card chrome: card top margin (6) + title (14) + bottom (6).
 FEAT_CARD_CHROME_H: int = 26
 # Feature-row button + badge dimensions. Two density tiers: NORMAL
@@ -750,7 +756,7 @@ def min_vowel_safe_window_w(feat_content_w: int) -> int:
     """Smallest window width that keeps the vowel chart side-by-side
     with the consonant grid for a given feat content size.
 
-    The seg pane needs at least ``VOWEL_STACK_W`` (620 px) to host the
+    The seg pane needs at least ``VOWEL_STACK_W`` to host the
     chart alongside; below that the chart stacks under consonants.
     The feat pane's width is content-driven via ``distribute_pane_widths``
     (``max(FEAT_MIN_W, feat_content_w + FEAT_CUSHION_PX)``), so the
@@ -823,14 +829,15 @@ def best_segment_n_cols(group_size: int, max_cols: int) -> int:
         return 1
     if group_size <= max_cols:
         return group_size
-    for n_cols in range(max_cols, 1, -1):
+    # The sweep includes 1: a single column always has remainder 0,
+    # so the no-orphan guarantee holds at every max_cols. Without it,
+    # max_cols == 2 with any odd group_size > 2 fell through to the
+    # exact orphan row this function promises to avoid (only the
+    # n_cols=2 candidate was tried, and its remainder is 1).
+    for n_cols in range(max_cols, 0, -1):
         remainder = group_size % n_cols
         if remainder == 0 or remainder >= 2:
             return n_cols
-    # Theoretical fallback: every remainder was 1 somehow.
-    # ``group_size % 2`` is 0 or 1, so n_cols=2 above already covers
-    # every group_size > 2; we only reach here for group_size in
-    # {2, 3} where the loop short-circuits anyway.
     return max_cols
 
 
@@ -853,10 +860,7 @@ def seg_pane_n_cols(seg_pane_w: int) -> int:
     """
     # Per-button stride is button width plus the inter-button gap.
     cols = (seg_pane_w + BTN_GAP) // (BTN_W + BTN_GAP)
-    # The widget's own MAX_COLS=30 cap; replicated here so this
-    # function is the canonical answer even when the widget is not
-    # available (web build, headless tests).
-    return max(1, min(int(cols), 30))
+    return max(1, min(int(cols), SEG_GRID_MAX_COLS))
 
 
 def seg_grid_natural_height(
@@ -1070,9 +1074,9 @@ REGION_CONSTRAINTS: Mapping[str, RegionConstraint] = {
 # CONTENT-DRIVEN BREAKPOINT PREDICATES
 #
 # Layout decisions historically keyed off pixel thresholds
-# (``VOWEL_STACK_W = 620``, ``COLLAPSE_W = 900``). Thresholds are
+# (``VOWEL_STACK_W``, ``COLLAPSE_W``). Thresholds are
 # cheap and explicit but answer the wrong question: "is the window
-# narrower than 620 px?" instead of "would my content actually
+# narrower than the stack threshold?" instead of "would my content actually
 # overlap?". The predicates below answer the latter; they consume
 # only the relevant content metrics and the available space.
 #
@@ -1097,12 +1101,15 @@ def would_overflow(
     CSS gap); a final trailing gap is NOT included since most layouts
     only emit gaps BETWEEN children.
 
+    Boundary semantics: an EXACT fit is not an overflow (strict
+    greater-than below).
+
     >>> would_overflow(800, [480, 320], gap=8)
     True
     >>> would_overflow(810, [480, 320], gap=10)
-    True
-    >>> would_overflow(820, [480, 320], gap=10)
     False
+    >>> would_overflow(809, [480, 320], gap=10)
+    True
     """
     if not children_natural_w:
         return False

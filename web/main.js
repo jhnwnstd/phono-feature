@@ -286,6 +286,8 @@ const CHART_STYLE = Object.freeze(
         diphthong_lift_width_frac_cap: 0.08,
         diphthong_arrowhead_len_frac: 0.025,
         diphthong_arrowhead_half_frac: 0.014,
+        vowel_cell_dense_threshold: 5,
+        vowel_cell_ultra_threshold: 10,
     }),
 );
 
@@ -1992,14 +1994,14 @@ function _buildVowelChart(chart) {
         target.style.left = (cell.chart_x * 100) + "%";
         target.style.top = (cell.chart_y * 100) + "%";
         target.style.setProperty("--pair-side", String(cell.pair_side));
-        // Per-cell pair shift overrides the CSS constant when the
-        // geometry detected a wide-cell same-anchor collision.
-        // 0 means use the canonical --vowel-pair-shift.
-        if (cell.pair_shift_px && cell.pair_shift_px > 0) {
-            target.style.setProperty(
-                "--vowel-pair-shift", `${cell.pair_shift_px}px`,
-            );
-        }
+        // Per-cell pair shift. The geometry always populates the
+        // effective value (canonical for unconflicted cells,
+        // elevated when a wide-cell same-anchor collision was
+        // resolved), so the renderer applies it unconditionally;
+        // no "0 means canonical" sentinel to re-implement here.
+        target.style.setProperty(
+            "--vowel-pair-shift", `${cell.pair_shift_px}px`,
+        );
         // Tag the row tier so CSS can anchor cells differently by
         // tier (top / bottom / middle / only) comes from the
         // shared geometry so the renderer never re-derives it.
@@ -2531,21 +2533,27 @@ function _buildVowelCellButton(seg) {
 function _buildVowelCellStack(segs) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-stack";
-    if (segs.length >= 10) {
+    // Density thresholds relayed from the shared
+    // ``vowels_layout`` tier constants (the same ladder that
+    // drives the geometry's natural-height request); the literals
+    // are offline-build fallbacks only.
+    const denseThreshold = CHART_STYLE.vowel_cell_dense_threshold ?? 5;
+    const ultraThreshold = CHART_STYLE.vowel_cell_ultra_threshold ?? 10;
+    if (segs.length >= ultraThreshold) {
         // Pathological-cell tier (PHOIBLE worst case is 12 in
         // !XU/UPSID). The standard dense tier still produces a
-        // ~250 px stack at 10+ entries; pack tighter.
+        // ~250 px stack at this depth; pack tighter.
         cell.dataset.cellDensity = "ultra";
-    } else if (segs.length >= 5) {
-        // Crowded-cell density tier: 5-9 entries shrink so the
-        // stack stays within the typical row height.
+    } else if (segs.length >= denseThreshold) {
+        // Crowded-cell density tier: shrink so the stack stays
+        // within the typical row height.
         cell.dataset.cellDensity = "dense";
     }
     // Affordance: the shrunk buttons read as "are they broken"
     // without a tooltip explaining the intentional packing. Set
     // a ``title`` on the cell so hovering anywhere over the stack
     // shows the count + the full segment list.
-    if (segs.length >= 5) {
+    if (segs.length >= denseThreshold) {
         cell.title = `${segs.length} segments share this cell: ${segs.join(" ")}`;
     }
     for (const seg of segs) {

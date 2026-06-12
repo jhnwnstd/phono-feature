@@ -768,17 +768,30 @@ def _is_laryngeal_candidate(feats: dict[str, str]) -> bool:
 
 def group_segments(
     inventory: Mapping[str, Mapping[str, str]],
+    *,
+    normalized: Mapping[str, dict[str, str]] | None = None,
 ) -> dict[str, list[str]]:
     """Assign every segment to a phonological display group.
 
     Returns ``{group_label: [symbol, ...]}`` in ``DISPLAY_ORDER``.
+
+    ``normalized`` optionally carries the per-segment bundles
+    already passed through :py:func:`normalize_feature_bundle`.
+    Callers that hold the engine's cached
+    ``normalized_segment_feats`` pass it so the inventory is not
+    re-normalized on every grouping (this sits on the interactive
+    inventory-switch path).
     """
     if not inventory:
         return {}
-    norm: dict[str, dict[str, str]] = {
-        sym: normalize_feature_bundle(feats)
-        for sym, feats in inventory.items()
-    }
+    norm: Mapping[str, dict[str, str]] = (
+        normalized
+        if normalized is not None
+        else {
+            sym: normalize_feature_bundle(feats)
+            for sym, feats in inventory.items()
+        }
+    )
     active_features: set[str] = set()
     for feats in norm.values():
         for k, v in feats.items():
@@ -1005,20 +1018,15 @@ def group_segments(
         for g in present:
             merged.extend(assignment.pop(g))
         assignment.setdefault(new_label, []).extend(merged)
-    initial_group: dict[str, str] = {}
-    for gname, members in assignment.items():
-        for sym in members:
-            initial_group[sym] = gname
-    for gname in list(assignment.keys()):
-        if gname not in assignment:
-            continue
-        origin_set = frozenset(
-            initial_group.get(sym, gname) for sym in assignment[gname]
-        )
-        relabel = _RELABEL_PATTERNS.get(origin_set)
-        if relabel is not None and relabel != gname:
-            members = assignment.pop(gname)
-            assignment.setdefault(relabel, []).extend(members)
+    # Relabel-by-origin happens ONLY in the pass above, which fires
+    # when every origin group is simultaneously small. Groups
+    # combined later by _MERGE_PARENT keep the parent's label: a
+    # small Trills group absorbed into a large Central Approximants
+    # displays as Central Approximants, not Rhotics. A second
+    # origin-set relabel pass used to sit here, but it rebuilt its
+    # origin map from the already-merged assignment, so it could
+    # never fire; the bundled-inventory grouping snapshot pins the
+    # parent-label behaviour as the intended one.
     for pair, label in _DERIVED_MERGES:
         present = [g for g in sorted(pair) if g in assignment]
         if len(present) < 2:

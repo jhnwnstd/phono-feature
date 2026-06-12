@@ -733,6 +733,14 @@ def generate_layout_css() -> None:
     """
     print("Generating layout.css from layout.py...")
     mod = _load_layout_module()
+    # Vowel-cell density tiers live in the chart layer (they feed
+    # the geometry's natural-height request); imported here so the
+    # rendered CSS heights come from the same source.
+    from phonology_shared.chart.vowels_layout import (
+        DENSITY_TIER_DENSE_BTN_H,
+        DENSITY_TIER_ULTRA_BTN_H,
+    )
+
     lines: list[str] = [
         "/* AUTO-GENERATED from shared/src/phonology_shared/presentation/layout.py",
         " * by web/scripts/build.py. Do not edit by hand. */",
@@ -753,7 +761,7 @@ def generate_layout_css() -> None:
         f"  --vowel-pair-separator: {mod.VOWEL_PAIR_SEPARATOR_PX}px;",
         # Silhouette corners for both shapes, in the data area's
         # normalised ``[0, 1]`` coordinate space. Derived in
-        # ``vowel_layout.vowel_trapezoid_corners`` so the silhouette
+        # ``vowels_layout.vowel_silhouette`` so the silhouette
         # outline exactly hugs the back-anchored cell positions:
         # the right edge is vertical at the back-pair's outer edge
         # and the left edge slants from front-close-left to
@@ -774,6 +782,13 @@ def generate_layout_css() -> None:
         f"  --seg-btn-h: {mod.SEG_BTN_H}px;",
         f"  --seg-btn-row-h: {mod.SEG_BTN_ROW_H}px;",
         f"  --seg-group-header-h: {mod.SEG_GROUP_HEADER_H}px;",
+        # Vowel-cell density-tier button heights. Relayed from
+        # ``vowels_layout`` (the same constants that drive
+        # ``natural_data_height_px``) so the requested chart height
+        # and the rendered stack height cannot drift; a hand-edited
+        # mismatch here once forced spurious panel scrolling.
+        f"  --vowel-cell-dense-h: {DENSITY_TIER_DENSE_BTN_H}px;",
+        f"  --vowel-cell-ultra-h: {DENSITY_TIER_ULTRA_BTN_H}px;",
         f"  --feat-row-h: {mod.FEAT_ROW_H}px;",
         f"  --feat-card-chrome-h: {mod.FEAT_CARD_CHROME_H}px;",
         # Feature-row button + badge sizing. Mirrors the desktop's
@@ -1417,11 +1432,16 @@ def hash_assets() -> None:
         + "</script>"
     )
     # Vowel-chart visual constants the JS renderer consumes
-    # (lift formula + arrowhead fractions). The CSS-only values
-    # ride in the layout.css ``--vowel-*`` / ``--diphthong-*``
-    # vars; this block carries the numbers the SVG arrow path
-    # generator needs at runtime.
+    # (lift formula, arrowhead fractions, density-tier thresholds).
+    # The CSS-only values ride in the layout.css ``--vowel-*`` /
+    # ``--diphthong-*`` vars; this block carries the numbers
+    # main.js needs at runtime.
     chart_style_mod = _load_chart_style_module()
+    from phonology_shared.chart.vowels_layout import (
+        DENSITY_TIER_DENSE_THRESHOLD,
+        DENSITY_TIER_ULTRA_THRESHOLD,
+    )
+
     chart_style_block = (
         '<script id="chart-style" type="application/json">'
         + json.dumps(
@@ -1440,6 +1460,17 @@ def hash_assets() -> None:
                 ),
                 "silhouette_corner_radius_frac": (
                     chart_style_mod.VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC
+                ),
+                # Stack-density thresholds; the per-tier heights ride
+                # in layout.css as ``--vowel-cell-dense-h`` /
+                # ``--vowel-cell-ultra-h``. Relayed so main.js's
+                # tier choice and the shared geometry's
+                # natural-height math read the same ladder.
+                "vowel_cell_dense_threshold": (
+                    DENSITY_TIER_DENSE_THRESHOLD
+                ),
+                "vowel_cell_ultra_threshold": (
+                    DENSITY_TIER_ULTRA_THRESHOLD
                 ),
             },
             separators=(",", ":"),

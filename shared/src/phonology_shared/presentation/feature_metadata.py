@@ -648,7 +648,7 @@ def _build_alias_index() -> dict[str, str]:
         # mapped so resolve_canonical("labial") returns "labial".
         index[meta.canonical] = meta.canonical
         for alias in meta.aliases:
-            folded = _fold_for_lookup(alias)
+            folded = fold_feature_name(alias)
             existing = index.get(folded)
             if existing is not None and existing != meta.canonical:
                 raise ValueError(
@@ -659,12 +659,13 @@ def _build_alias_index() -> dict[str, str]:
     return index
 
 
-def _fold_for_lookup(s: str) -> str:
-    """Lowercase + strip the delimiters
+def fold_feature_name(s: str) -> str:
+    """Lowercase + strip delimiter characters (``.``, ``_``, space,
+    ``-``). The single fold both the registry's alias index and the
+    fallback path of
     :py:func:`phonology_shared.data.inventory.normalize_feature_key`
-    strips. Kept in sync with that function; the two ALWAYS produce
-    the same fold for the same input, so an alias registered here is
-    recognised by the engine's normaliser too.
+    use, so the engine and the renderer cannot drift on what counts
+    as the same spelling.
     """
     k = s.lower()
     return (
@@ -692,7 +693,7 @@ def resolve_canonical(raw_name: str) -> str | None:
     Memoized; the bounded set of feature names sees this hit
     thousands of times across a typical render.
     """
-    return _ALIAS_INDEX.get(_fold_for_lookup(raw_name))
+    return _ALIAS_INDEX.get(fold_feature_name(raw_name))
 
 
 def metadata_for(raw_name: str) -> FeatureMetadata | None:

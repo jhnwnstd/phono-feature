@@ -154,3 +154,15 @@ class InventoryProvider(Protocol):
         status bar without aborting the New flow.
         """
         ...
+
+    def descriptor(self, inventory_id: str) -> InventoryDescriptor | None:
+        """Return the :py:class:`InventoryDescriptor` for a known
+        ``inventory_id``, or ``None`` for an unknown one.
+
+        Part of the contract because the shared materialisation
+        helper (``materialize_phoible_inventory``) reads the
+        descriptor to compose the inventory's display name and
+        provenance metadata; a provider without it would type-check
+        against the picker flow and then crash at materialise time.
+        """
+        ...

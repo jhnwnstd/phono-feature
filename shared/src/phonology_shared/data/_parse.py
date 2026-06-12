@@ -26,8 +26,7 @@ Pipeline (every phase is pure; the
      to validated bundles. Bundle feature keys are folded onto the
      declared canonical names via the :py:class:`_FeatureTable`.
   4. :py:func:`_assemble_inventory` -> the final
-     :py:class:`Inventory` (metadata, name, advisories, derived
-     indexes).
+     :py:class:`Inventory` (metadata, name, advisories).
 
 :py:func:`run_parse` orchestrates the four phases and is the single
 entry point :py:meth:`Inventory.parse` calls.
@@ -100,6 +99,11 @@ class _FeatureTable:
     names: tuple[str, ...]
     declared: frozenset[str]
     normalized_to_canonical: Mapping[str, str]
+    # True when the features slot failed wholesale (missing key, not
+    # a list, over the cap). Bundle-key resolution skips per-key
+    # "not declared" errors against an invalid table; thousands of
+    # them would bury the one actionable features-level message.
+    invalid: bool = False
 
 
 def _validate_features(
@@ -117,7 +121,10 @@ def _validate_features(
     declared canonical name.
     """
     empty = _FeatureTable(
-        names=(), declared=frozenset(), normalized_to_canonical={}
+        names=(),
+        declared=frozenset(),
+        normalized_to_canonical={},
+        invalid=True,
     )
     if not isinstance(features_raw, list):
         ctx.error(
@@ -319,6 +326,13 @@ def _resolve_bundle_feature_key(
     aliased = feature_table.normalized_to_canonical.get(normalized)
     if aliased is not None:
         return aliased
+    if feature_table.invalid:
+        # The features slot already failed wholesale and recorded
+        # the actionable error. Reporting every bundle key as "not
+        # declared" against the placeholder table would emit one
+        # issue per cell (thousands on a dense inventory) for a
+        # single root cause.
+        return None
     ctx.error(
         _IssueCodes.BUNDLE_FEATURE_NOT_DECLARED,
         ("segments", canonical_seg, raw_feature_name),
@@ -580,11 +594,42 @@ def _decode_top_level(
         segments_raw = raw["segments"]
 
     explicit_metadata = raw.get("metadata")
+    if "metadata" in raw and not isinstance(explicit_metadata, dict):
+        # Anything other than an object would be silently dropped by
+        # assembly and then lost on the next save. The module rejects
+        # silent data loss everywhere else (duplicate keys, alias
+        # collisions); a stray string or list here gets the same
+        # treatment.
+        ctx.error(
+            _IssueCodes.METADATA_NOT_OBJECT,
+            ("metadata",),
+            f"'metadata' must be an object, "
+            f"got {type(explicit_metadata).__name__}",
+        )
     explicit_metadata_view: Mapping[str, Any] | None = (
         MappingProxyType(dict(explicit_metadata))
         if isinstance(explicit_metadata, dict)
         else None
     )
+
+    # The display name may live in the explicit metadata object or as
+    # a top-level extra; assembly falls back to "Untitled Inventory"
+    # for a MISSING name, which is fine, but a present non-string
+    # name would be silently replaced (and the original lost on
+    # round-trip), so it is rejected here while issues can still be
+    # collected.
+    raw_name: Any = None
+    if explicit_metadata_view is not None and "name" in explicit_metadata_view:
+        raw_name = explicit_metadata_view["name"]
+    elif "name" in raw:
+        raw_name = raw["name"]
+    if raw_name is not None and not isinstance(raw_name, str):
+        ctx.error(
+            _IssueCodes.METADATA_NAME_NOT_STRING,
+            ("metadata", "name"),
+            f"inventory name must be a string, "
+            f"got {type(raw_name).__name__} ({raw_name!r})",
+        )
 
     return _RawInventory(
         schema_version=schema_version,
@@ -602,8 +647,8 @@ def _assemble_inventory(
     segments_view: Mapping[str, Mapping[str, FeatureValue]],
 ) -> Inventory:
     """Final phase: collect metadata, canonicalise the inventory
-    name, gather advisories, build derived indexes, return the
-    immutable :py:class:`Inventory`.
+    name, gather advisories, return the immutable
+    :py:class:`Inventory`.
 
     Runs only after both per-field validators have completed
     without errors (the caller already raised
@@ -654,21 +699,12 @@ def _assemble_inventory(
     for canonical_seg in segments_view:
         advisories.extend(_ipa_confusable_notes(canonical_seg))
 
-    feature_index = MappingProxyType(
-        {name: i for i, name in enumerate(feature_table.names)}
-    )
-    segment_index = MappingProxyType(
-        {seg: i for i, seg in enumerate(segments_view)}
-    )
-
     return cls(
         name=canonical_name,
         metadata=MappingProxyType(metadata),
         features=feature_table.names,
         segments=segments_view,
         advisories=tuple(advisories),
-        feature_index=feature_index,
-        segment_index=segment_index,
     )
 
 
@@ -692,7 +728,10 @@ def run_parse(
         _validate_features(raw_inv.features, ctx)
         if raw_inv.features is not None
         else _FeatureTable(
-            names=(), declared=frozenset(), normalized_to_canonical={}
+            names=(),
+            declared=frozenset(),
+            normalized_to_canonical={},
+            invalid=True,
         )
     )
     segments_view = (

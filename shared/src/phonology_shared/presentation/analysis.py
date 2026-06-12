@@ -60,15 +60,6 @@ def _tag(text: str, colour: TagColor) -> str:
     return _tag_cached(text, colour, _palette.theme_version)
 
 
-def _tag_raw(escaped_text: str, colour: TagColor) -> str:
-    """Fast-path :py:func:`_tag` for callers that hold a
-    pre-escaped string (e.g. the engine's
-    ``escaped_segments`` / ``escaped_features`` maps). Skips
-    ``html.escape`` and goes directly to the prefix cache.
-    """
-    return f"{tag_prefix(colour)}{escaped_text}</span>"
-
-
 def _segment_chip(seg: str, colour: TagColor = TagColor.SEGMENT) -> str:
     """Render a segment symbol as a chip wrapped in slashes."""
     return _tag(f"/{seg}/", colour)

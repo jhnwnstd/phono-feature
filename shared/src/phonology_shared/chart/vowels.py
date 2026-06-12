@@ -85,6 +85,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from enum import IntEnum, StrEnum
+from typing import Any
 
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.feature_metadata import (
@@ -500,6 +501,16 @@ _HEIGHT_Y: dict[str, float] = {
 }
 
 
+#: Canonical content width in pixels: three backness pair slots
+#: (each an unrounded + rounded button pair) plus the two
+#: inter-slot separators. The single definition every normalised
+#: fraction below divides by; the layout module re-exports it as
+#: ``_VOWEL_CONTENT_W_PX``.
+_CANONICAL_CONTENT_W_PX: float = float(
+    3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
+)
+
+
 def _derive_backness_anchors() -> tuple[dict[str, float], float]:
     """Derive backness anchors and the trapezoid bottom-width from
     real layout pixels.
@@ -524,7 +535,7 @@ def _derive_backness_anchors() -> tuple[dict[str, float], float]:
     no hand-picked fractions, no magic numbers.
     """
     backness_w = 2 * BTN_W + VOWEL_PAIR_GAP_PX
-    content_w = 3 * backness_w + 2 * VOWEL_PAIR_SEPARATOR_PX
+    content_w = _CANONICAL_CONTENT_W_PX
     front_centre = backness_w / 2.0
     central_centre = backness_w + VOWEL_PAIR_SEPARATOR_PX + backness_w / 2.0
     back_centre = content_w - backness_w / 2.0
@@ -547,9 +558,7 @@ _BACKNESS_X, _DERIVED_BOTTOM_WIDTH = _derive_backness_anchors()
 #: the trapezoid (no overlap, no gratuitous gap). Signed so a
 #: renderer can apply ``x + pair_offset`` directly.
 _PAIR_OFFSET_HALF: float = (
-    (BTN_W + VOWEL_PAIR_GAP_PX)
-    / 2.0
-    / (3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX)
+    (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _CANONICAL_CONTENT_W_PX
 )
 
 
@@ -638,166 +647,18 @@ TRAPEZOID_BOTTOM_WIDTH: float = _DERIVED_BOTTOM_WIDTH
 #: Triangle bottom edge: one backness column wide. Derived from
 #: the same pixel constants so the lowest row of a triangle chart
 #: still has finite horizontal extent for a single vowel pair.
-TRIANGLE_BOTTOM_WIDTH: float = (2 * BTN_W + VOWEL_PAIR_GAP_PX) / (
-    3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
-)
+TRIANGLE_BOTTOM_WIDTH: float = (
+    2 * BTN_W + VOWEL_PAIR_GAP_PX
+) / _CANONICAL_CONTENT_W_PX
 #: Outer envelope of a single backness pair, expressed as a
 #: fraction of the canonical content width (i.e. the distance
 #: from the pair's anchor centre to the outer edge of either
 #: rounded or unrounded button). The renderer subtracts this from
 #: the front anchor to find the silhouette left edge (still
 #: normalised; the front edge keeps the canonical extent).
-_PAIR_OUTER_EXTENT: float = ((BTN_W + VOWEL_PAIR_GAP_PX) / 2 + BTN_W / 2) / (
-    3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
-)
-
-
-def vowel_silhouette(
-    shape: VowelChartShape,
-    top_logical_row: int = 0,
-    bottom_logical_row: int | None = None,
-) -> VowelChartSilhouette:
-    """Compute the silhouette for an inventory whose populated
-    rows span ``top_logical_row`` to ``bottom_logical_row``
-    (inclusive, indices into :py:data:`ROW_LABELS`).
-
-    Defaults reproduce the canonical 7-row Close-to-Open silhouette
-    (used by :py:func:`web/scripts/build.py` to bake fallback CSS
-    variables). Inventory-adaptive callers pass the actual
-    populated row range so the silhouette top and bottom widths
-    track the IPA narrowness of the rows actually rendered: an
-    inventory whose lowest row is Open-mid carries a wider bottom
-    edge than one with a true Open vowel.
-
-    The silhouette top edge always sits at the Close anchor
-    (``_HEIGHT_Y["Close"]``) and the bottom edge at the Open anchor
-    (``_HEIGHT_Y["Open"]``) so the data area is fully used
-    regardless of which rows are populated; the
-    inventory-adaptive part is only the widths at those edges.
-    """
-    if bottom_logical_row is None:
-        bottom_logical_row = len(ROW_LABELS) - 1
-    front = _BACKNESS_X["front"]
-    back = _BACKNESS_X["back"]
-    pair_outer = _PAIR_OUTER_EXTENT
-    bottom_width_canonical = (
-        TRIANGLE_BOTTOM_WIDTH
-        if shape == VowelChartShape.TRIANGLE
-        else TRAPEZOID_BOTTOM_WIDTH
-    )
-    top_logical_y = _HEIGHT_Y[ROW_LABELS[top_logical_row]]
-    bottom_logical_y = _HEIGHT_Y[ROW_LABELS[bottom_logical_row]]
-    top_row_width = 1.0 - (1.0 - bottom_width_canonical) * top_logical_y
-    bottom_row_width = 1.0 - (1.0 - bottom_width_canonical) * bottom_logical_y
-    front_at_top = back + top_row_width * (front - back)
-    front_at_bottom = back + bottom_row_width * (front - back)
-    y_anchor_top = _HEIGHT_Y["Close"]
-    y_anchor_bottom = _HEIGHT_Y["Open"]
-    return VowelChartSilhouette(
-        shape=shape,
-        top_y=y_anchor_top,
-        bottom_y=y_anchor_bottom,
-        top_left=front_at_top - pair_outer,
-        # ``top_right`` / ``bottom_right`` are the canonical back-
-        # edge position in normalised x: the back anchor plus the
-        # pair-outer extent so the line sits where a back-rounded
-        # mate's outer right edge WOULD be. Renderers multiply by
-        # the data-area width; on charts wider than the canonical
-        # content width the line drifts slightly past the button,
-        # which is the intended visual spacing.
-        top_right=back + pair_outer,
-        bottom_left=front_at_bottom - pair_outer,
-        bottom_right=back + pair_outer,
-        top_width=top_row_width,
-        bottom_width=bottom_row_width,
-        # Cell-extent fields (cascade source). Renderers position
-        # the silhouette edges at ``anchor * dw ± cell_outer_extent_px``
-        # so the silhouette wraps the outer cell edge flush at ANY
-        # data width, not just the canonical 232 px.
-        front_anchor_at_top=front_at_top,
-        front_anchor_at_bottom=front_at_bottom,
-        back_anchor=back,
-        # Constant pixel offset from a paired cell's centre to its
-        # outer edge: ``pair_shift`` (centre-to-mate-centre / 2)
-        # plus half a button width. This is the px adjustment the
-        # renderer adds to ``anchor * dw`` so the silhouette is
-        # flush with the outer cell edge at ANY data width.
-        cell_outer_extent_px=int(
-            round((BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 + BTN_W / 2.0)
-        ),
-    )
-
-
-def vowel_trapezoid_corners(
-    shape: VowelChartShape,
-    top_logical_row: int = 0,
-    bottom_logical_row: int | None = None,
-) -> dict[str, float]:
-    """Legacy corners-as-dict helper. Returns the same six values
-    (``top_left``, ``top_right``, ``bottom_left``, ``bottom_right``,
-    ``top_y``, ``bottom_y``) that pre-silhouette callers consumed,
-    derived via :py:func:`vowel_silhouette` so inventory-adaptive
-    parameters work transparently. New callers should prefer
-    :py:func:`vowel_silhouette` and access the dataclass fields
-    directly.
-    """
-    sil = vowel_silhouette(shape, top_logical_row, bottom_logical_row)
-    return {
-        "top_left": sil.top_left,
-        "top_right": sil.top_right,
-        "bottom_left": sil.bottom_left,
-        "bottom_right": sil.bottom_right,
-        "top_y": sil.top_y,
-        "bottom_y": sil.bottom_y,
-    }
-
-
-def project_to_chart_xy(
-    x: float,
-    y: float,
-    pair_offset: float,
-    shape: VowelChartShape,
-) -> tuple[float, float]:
-    """Project an abstract-vowel-space point onto the chart's
-    silhouette.
-
-    ``x`` (0.0 front, 1.0 back), ``y`` (0.0 close, 1.0 open), and
-    ``pair_offset`` (signed within-pair shift) come from
-    :py:class:`VowelPlacement`. Returns ``(chart_x, chart_y)``
-    where both values land in ``[0, 1]`` for renderers that drop
-    cells via ``left: calc(chart_x * 100%)`` / ``top: calc(chart_y
-    * 100%)``.
-
-    The projection is **back-anchored**: the back column sits at
-    a constant ``chart_x`` across every row (so the silhouette's
-    right edge can be drawn as a single vertical line that the
-    back vowels are flush against). Cells to the left of the back
-    anchor migrate toward it as the row narrows; the front column
-    migrates the most. The formula is
-
-        chart_x = back + row_width * (x - back)
-
-    so ``x = back`` is a fixed point and ``x < back`` shifts right
-    by ``(1 - row_width) * (back - x)`` as ``y`` grows. ``x``
-    values to the right of the back anchor (i.e. positions inside
-    the back pair's pixel envelope) ride the same formula but
-    contract slightly so the back pair's outer extent also stays
-    flush with the silhouette right edge.
-
-    Pair offset is included for backward compatibility but is now
-    applied by the renderer in pixels (see
-    :py:class:`VowelChartCell.pair_side`); call this method with
-    ``pair_offset = 0.0`` to obtain the pure backness-anchor
-    projection.
-    """
-    if shape == VowelChartShape.TRIANGLE:
-        bottom_width = TRIANGLE_BOTTOM_WIDTH
-    else:
-        bottom_width = TRAPEZOID_BOTTOM_WIDTH
-    row_width = 1.0 - (1.0 - bottom_width) * y
-    back = _BACKNESS_X["back"]
-    chart_x = back + row_width * (x + pair_offset - back)
-    return chart_x, y
+_PAIR_OUTER_EXTENT: float = (
+    (BTN_W + VOWEL_PAIR_GAP_PX) / 2 + BTN_W / 2
+) / _CANONICAL_CONTENT_W_PX
 
 
 def infer_vowel_shape(profile: VowelProfile) -> VowelChartShape:
@@ -1397,6 +1258,8 @@ def compute_placements(
     norm_feats: Mapping[str, Mapping[str, str]],
     policy: PlacementPolicy | None = None,
     vowel_secondary: Mapping[str, Mapping[str, str]] | None = None,
+    *,
+    norm_cache: Mapping[str, Mapping[str, str]] | None = None,
 ) -> tuple[dict[tuple[int, int], list[str]], dict[str, VowelPlacement]]:
     """Place every vowel and group by (row, col) cell.
 
@@ -1411,6 +1274,12 @@ def compute_placements(
     both placements carry :py:attr:`PlacementFlag.DIPHTHONG`. The
     collision-cell map (``occupied``) only tracks PRIMARY
     placements; secondaries live purely as a rendering hint.
+
+    ``norm_cache`` optionally carries already-normalized (lowercase
+    keyed) bundles for every segment in ``segs``. Callers that
+    normalize once up front (the geometry build, which also feeds
+    the same bundles to the display classifier) pass it to skip a
+    second full normalization pass over the inventory.
 
     Degenerate-secondary suppression: when the secondary projection
     collapses to the SAME ``(row, col)`` cell as the primary (PHOIBLE
@@ -1440,9 +1309,10 @@ def compute_placements(
     # dict-comp in that case), but the tests pass raw inventory
     # feats (PascalCase from PHOIBLE), so the contract has to
     # tolerate both shapes.
-    norm_cache: dict[str, dict[str, str]] = {
-        seg: _normalize_feat_keys(norm_feats.get(seg, {})) for seg in segs
-    }
+    if norm_cache is None:
+        norm_cache = {
+            seg: _normalize_feat_keys(norm_feats.get(seg, {})) for seg in segs
+        }
     occupied: dict[tuple[int, int], list[str]] = {}
     placements: dict[str, VowelPlacement] = {}
     for seg in segs:
@@ -1637,49 +1507,54 @@ def _snap_diphthong_secondaries(
 # Render-ready chart geometry: extracted to
 # ``phonology_shared.chart.vowels_layout`` so the trapezoid silhouette
 # solver and per-cell positioning logic live in a single, greppable
-# file. The re-export below preserves backward compatibility with
-# existing imports that read these symbols directly from
-# ``phonology_shared.chart.vowels``.
+# file. The names below stay importable from this module for backward
+# compatibility, resolved LAZILY via the PEP 562 module __getattr__:
+# an eager ``import vowels_layout`` here would dereference a partially
+# initialized module whenever ``vowels_layout`` happens to be imported
+# first in a fresh interpreter (it imports THIS module at its top), so
+# the first import order decided whether the process crashed. Lazy
+# resolution defers the lookup to first attribute access, by which
+# point both module bodies have finished executing.
 # ---------------------------------------------------------------------------
 
-# Imported late so ``vowels_layout`` can import the inference-layer
-# symbols above (avoids a circular import at module load).
-from phonology_shared.chart import (  # noqa: E402
-    vowels_layout as _vowels_layout,
+_LAYOUT_REEXPORTS: frozenset[str] = frozenset(
+    {
+        "VOWEL_CHART_TITLE",
+        "PAIR_DISPLAY_KINDS",
+        "VowelChartCell",
+        "VowelChartRow",
+        "VowelChartColHeader",
+        "VowelChartSilhouette",
+        "VowelChartDiphthong",
+        "VowelChartBand",
+        "VowelChartGeometry",
+        "build_vowel_chart_geometry",
+        "vowel_silhouette",
+        "_VOWEL_CELL_STACK_GAP_PX",
+        "_VOWEL_ROW_GAP_PX",
+        "_VOWEL_DATA_AREA_VERTICAL_PADDING_PX",
+        "_VOWEL_CONTENT_W_PX",
+        "_VOWEL_SHRINK_FACTOR",
+        "_VOWEL_SLANT_CHANGE_CAP_FRAC",
+        "_VOWEL_MIN_CELL_GAP_NORM",
+        "_min_row_width_for_meta",
+        "_compute_shrunken_widths",
+        "_stage1_uniform_shrink",
+        "_stage2_slant_tweak",
+        "_silhouette_with_widths",
+        "_classify_vowel_cell_display",
+        "_order_pair_entries",
+        "_natural_data_area_size",
+    }
 )
 
-VOWEL_CHART_TITLE = _vowels_layout.VOWEL_CHART_TITLE
-PAIR_DISPLAY_KINDS = _vowels_layout.PAIR_DISPLAY_KINDS
-VowelChartCell = _vowels_layout.VowelChartCell
-VowelChartRow = _vowels_layout.VowelChartRow
-VowelChartColHeader = _vowels_layout.VowelChartColHeader
-VowelChartSilhouette = _vowels_layout.VowelChartSilhouette
-VowelChartDiphthong = _vowels_layout.VowelChartDiphthong
-VowelChartBand = _vowels_layout.VowelChartBand
-VowelChartGeometry = _vowels_layout.VowelChartGeometry
-build_vowel_chart_geometry = _vowels_layout.build_vowel_chart_geometry
 
-# Layout-tier helpers + tunables, re-exported so existing tests that
-# reach into the privates (test_vowel_silhouette_shrink) continue to
-# work via the original import path.
-_VOWEL_CELL_STACK_GAP_PX = _vowels_layout._VOWEL_CELL_STACK_GAP_PX
-_VOWEL_ROW_GAP_PX = _vowels_layout._VOWEL_ROW_GAP_PX
-_VOWEL_DATA_AREA_VERTICAL_PADDING_PX = (
-    _vowels_layout._VOWEL_DATA_AREA_VERTICAL_PADDING_PX
-)
-_VOWEL_CONTENT_W_PX = _vowels_layout._VOWEL_CONTENT_W_PX
-_VOWEL_SHRINK_FACTOR = _vowels_layout._VOWEL_SHRINK_FACTOR
-_VOWEL_SLANT_CHANGE_CAP_FRAC = _vowels_layout._VOWEL_SLANT_CHANGE_CAP_FRAC
-_VOWEL_MIN_CELL_GAP_NORM = _vowels_layout._VOWEL_MIN_CELL_GAP_NORM
-_row_content_extent = _vowels_layout._row_content_extent
-_min_row_width_for_meta = _vowels_layout._min_row_width_for_meta
-_compute_shrunken_widths = _vowels_layout._compute_shrunken_widths
-_stage1_uniform_shrink = _vowels_layout._stage1_uniform_shrink
-_stage2_slant_tweak = _vowels_layout._stage2_slant_tweak
-_silhouette_with_widths = _vowels_layout._silhouette_with_widths
-_classify_vowel_cell_display = _vowels_layout._classify_vowel_cell_display
-_order_pair_entries = _vowels_layout._order_pair_entries
-_natural_data_area_size = _vowels_layout._natural_data_area_size
+def __getattr__(name: str) -> Any:
+    if name in _LAYOUT_REEXPORTS:
+        from phonology_shared.chart import vowels_layout
+
+        return getattr(vowels_layout, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # Module-level so it isn't rebuilt per placement call. Maps the

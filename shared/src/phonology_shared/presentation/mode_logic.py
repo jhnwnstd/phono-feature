@@ -19,7 +19,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from phonology_shared.theory.feature_engine import FeatureEngine
+    from phonology_shared.theory.feature_engine import FeatureEngine, MatchMode
 
 
 class Mode(StrEnum):
@@ -67,12 +67,22 @@ def project_mode_transition(
     selected_segments: list[str],
     selected_features: Mapping[str, str],
     engine: FeatureEngine | None,
+    match_mode: MatchMode | None = None,
 ) -> ModeTransition:
     """Project the outgoing mode into the incoming one.
 
     ``saved_*`` means "state remembered from the mode we just left".
     ``selected_*`` means "state that should be active immediately
     after the switch in the target mode".
+
+    ``match_mode`` is the active strict/wildcard toggle. The FEAT
+    pane's highlight is mode-aware (``summarize_feature_query``
+    threads it), so the FEAT to SEG projection must run the same
+    semantics: with wildcard active, a strict projection here would
+    silently drop every segment that matched only through an
+    unspecified value, breaking the contract that the post-switch
+    SEG selection equals the set the user was just inspecting.
+    ``None`` falls back to the engine's strict default.
 
     See :py:class:`ModeTransition` for the cross-mode contract.
     """
@@ -90,9 +100,16 @@ def project_mode_transition(
     else:
         saved_feat_state = dict(selected_features)
         if selected_features and engine is not None:
-            saved_seg_state = list(
-                engine.find_segments(dict(selected_features))
-            )
+            if match_mode is None:
+                saved_seg_state = list(
+                    engine.find_segments(dict(selected_features))
+                )
+            else:
+                saved_seg_state = list(
+                    engine.find_segments(
+                        dict(selected_features), mode=match_mode
+                    )
+                )
         else:
             saved_seg_state = []
 

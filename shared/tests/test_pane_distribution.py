@@ -392,3 +392,30 @@ def test_style_css_has_no_hardcoded_analysis_height() -> None:
         "web/style.css still contains a literal `min-height: 220px`;"
         " the relayed --min-analysis-h must be the only source"
     )
+
+
+def test_best_segment_n_cols_never_orphans_at_two_cols() -> None:
+    """max_cols=2 with an odd group larger than 2 used to fall
+    through to the orphan row (only n_cols=2 was tried and its
+    remainder is 1); the sweep now includes the single-column
+    fallback, which always has remainder 0."""
+    for group_size in (3, 5, 7, 9):
+        n_cols = layout.best_segment_n_cols(group_size, 2)
+        assert group_size % n_cols != 1, (
+            f"group_size={group_size}, max_cols=2 -> n_cols={n_cols} "
+            f"leaves a single-button final row"
+        )
+
+
+def test_best_segment_n_cols_no_orphan_across_grid() -> None:
+    """Exhaustive sweep: the no-orphan contract holds for every
+    realistic (group_size, max_cols) pair."""
+    for group_size in range(1, 61):
+        for max_cols in range(1, 31):
+            n_cols = layout.best_segment_n_cols(group_size, max_cols)
+            assert 1 <= n_cols <= max(1, max_cols)
+            if group_size > n_cols:
+                assert group_size % n_cols != 1, (
+                    f"orphan at group_size={group_size}, "
+                    f"max_cols={max_cols}, n_cols={n_cols}"
+                )

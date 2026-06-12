@@ -223,15 +223,13 @@ class VowelChartWidget(QWidget):
         # (chart_x for columns, chart_y for rows) so resize can
         # re-place them without re-fetching the geometry.
         self._col_labels: list[tuple[QLabel, float]] = []
-        # Per-row tuple: (label, chart_y, silhouette_left). The
-        # third field is the silhouette's actual LEFT edge x at
-        # this row's chart_y, accounting for rounded-corner
-        # insets (see shared ``silhouette_left_at_y``). The
-        # row-label layout positions the label's right edge at
-        # ``silhouette_left * dw - label_gap`` so the label sits
-        # flush against the rendered silhouette regardless of
-        # which corner the row is near.
-        self._row_labels: list[tuple[QLabel, float, float]] = []
+        # Per-row tuple: (label, chart_y). The row-label layout
+        # derives the silhouette's actual LEFT edge per render via
+        # the dw-corrected cascade (``silhouette_for_data_width`` +
+        # ``silhouette_left_at_y``); the baked per-row value on the
+        # shared geometry is the canonical-width approximation the
+        # web consumes directly.
+        self._row_labels: list[tuple[QLabel, float]] = []
         # Cell widgets (segment buttons or vbox stacks for collision
         # cells) carry their chart_x / chart_y plus a pair_side
         # signed multiplier (-1 / 0 / +1). The resize pass projects
@@ -749,7 +747,7 @@ class VowelChartWidget(QWidget):
             )
             lbl.adjustSize()
             lbl.show()
-            self._row_labels.append((lbl, row.chart_y, row.silhouette_left))
+            self._row_labels.append((lbl, row.chart_y))
         # Data cells: collected with their chart_x / chart_y; the
         # layout pass turns those into pixel positions. The cell's
         # row tier (read from the shared ``VowelChartRow``) decides
@@ -899,8 +897,8 @@ class VowelChartWidget(QWidget):
         """Default vertical-stack layout for STACK display kinds.
 
         Density-tier-aware: when the stack reaches
-        :py:data:`_DENSITY_TIER_DENSE_THRESHOLD` (5+) or
-        :py:data:`_DENSITY_TIER_ULTRA_THRESHOLD` (10+) entries,
+        :py:data:`DENSITY_TIER_DENSE_THRESHOLD` (5+) or
+        :py:data:`DENSITY_TIER_ULTRA_THRESHOLD` (10+) entries,
         every button gets its height reduced via
         :py:func:`effective_button_height_px` to match the web's
         ``data-cell-density`` CSS rules.
@@ -1046,18 +1044,18 @@ class VowelChartWidget(QWidget):
         # so the two read as separate elements; web mirrors the value
         # in style.css.
         label_gap_px = self._ROW_LABEL_GAP_PX
-        # Recompute silhouette_left per render using the dw-corrected
-        # silhouette: the baked ``silhouette_left`` field on the row
-        # was computed at the canonical 232 px content width, but the
-        # rendered chart is content-driven (~228 to 320 px). Using the
-        # cascade helper keeps the label flush against the silhouette
-        # at any rendered width.
+        # Compute silhouette_left per render using the dw-corrected
+        # silhouette: the baked per-row field on the shared geometry
+        # is exact at the canonical 232 px content width, but the
+        # rendered chart is content-driven (~228 to 320 px). The
+        # cascade helper keeps the label flush against the
+        # silhouette at any rendered width.
         sil_for_dw = (
             silhouette_for_data_width(self._silhouette, dw)
             if self._silhouette is not None
             else vowel_silhouette(self._shape)
         )
-        for lbl, y, _stale_silhouette_left in self._row_labels:
+        for lbl, y in self._row_labels:
             lbl.adjustSize()
             lh = lbl.height()
             py = dy + round(y * dh) - lh // 2
@@ -1073,11 +1071,10 @@ class VowelChartWidget(QWidget):
         # (-1 unrounded, 0 unknown, +1 rounded). Keeping the pair
         # shift in pixels means rounded/unrounded mates stay
         # exactly tangent at every row of the trapezoid.
-        # Pair-shift derived from chart_style so the formula lives
-        # in one place. CSS reads the same value via
-        # ``--vowel-pair-shift``; pre-relay both sides re-derived
-        # ``(BTN_W + VOWEL_PAIR_GAP_PX) / 2`` independently.
-        canonical_pair_shift_px = float(cs.VOWEL_PAIR_SHIFT_PX)
+        # Per-cell ``pair_shift_px`` always carries the effective
+        # value (canonical for unconflicted cells, elevated when the
+        # geometry build resolved a same-anchor collision), so the
+        # renderer reads it unconditionally.
         for (
             widget,
             cx,
@@ -1095,7 +1092,7 @@ class VowelChartWidget(QWidget):
             wh = widget.height()
             if ww > self._cell_w_hint:
                 self._cell_w_hint = ww
-            shift_px = cell_ps if cell_ps > 0 else canonical_pair_shift_px
+            shift_px = cell_ps
             # round-to-nearest so sub-pixel positions don't bias
             # cells leftward / upward vs the web's float % CSS.
             px = (
@@ -1223,12 +1220,15 @@ class VowelChartWidget(QWidget):
         # Diphthong arrows are painted by ``_diphthong_overlay``
         # (a sibling child widget) so they render ON TOP of cell
         # buttons. Qt paints a parent's ``paintEvent`` BEFORE its
-        # child widgets paint; painting arrows here would put
-        # them BEHIND the seg-button cells. Triggering an update
-        # on the overlay ensures it repaints in sync with the
-        # silhouette refresh.
-        if self._diphthong_overlay is not None:
-            self._diphthong_overlay.update()
+        # child widgets paint, and the backing store repaints
+        # children intersecting any dirty parent region, so the
+        # overlay refreshes with the silhouette automatically. Do
+        # NOT call ``self._diphthong_overlay.update()`` here: the
+        # overlay is translucent and chart-sized, so its repaint
+        # dirties the chart beneath it, which re-enters this
+        # paintEvent, scheduling another overlay update, a
+        # self-sustaining repaint loop that burns CPU while the
+        # chart is idle.
 
     def _build_silhouette_path_for_clip(
         self,

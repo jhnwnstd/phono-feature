@@ -229,11 +229,13 @@ def summarize_segment_selection(
     ``suggested`` and the class verdict are mode-DEPENDENT.
     """
     mode_str = str(mode)
-    default_seg_states = _default_segment_states(engine)
     if not segs:
-        # Only the empty-selection branch consumes
-        # ``default_feat_rows``; allocating it on every non-empty
-        # call cost ~30 ms / 1000 calls in the W1 profile.
+        # Only the empty-selection branch consumes the default
+        # tables; allocating them on every non-empty call cost
+        # ~30 ms / 1000 calls in the W1 profile for the feature
+        # rows, and the segment-state dict is larger still (up to
+        # ~120 keys vs ~24).
+        default_seg_states = _default_segment_states(engine)
         default_feat_rows = _default_feature_rows(engine)
         empty_completion = engine.complete_to_minimal_natural_class(
             [], mode=mode
@@ -315,7 +317,9 @@ def summarize_segment_selection(
             row_states[feat] = _feature_row_state(category=cat)
     selected = set(segs)
     suggested_set = set(suggested)
-    seg_states = _default_segment_states(engine)
+    # Built directly from the loop; a defaults table here would be
+    # pure churn since every key is overwritten.
+    seg_states = {}
     for seg in engine.segments:
         if seg in selected:
             seg_states[seg] = SegmentState.SELECTED

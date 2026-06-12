@@ -6,8 +6,7 @@ Three invariants drive every test in this file:
      an inventory equivalent to ``inv`` (same features, same
      segments, same per-feature values).
   2. **Closed feature set.** Every key in every validated bundle is a
-     declared feature; every declared feature appears in the
-     ``feature_index``.
+     declared feature.
   3. **Acceptance is symmetric with rejection.** A malformed input
      (e.g. an undeclared feature inside a bundle) raises
      :py:class:`ValidationError` and the error carries at least one
@@ -139,17 +138,6 @@ def test_bundle_keys_are_declared_features(
             assert (
                 feat in declared
             ), f"undeclared feature {feat!r} survived in {seg!r}"
-
-
-@given(_well_formed_inventory())
-@settings(max_examples=50, deadline=None)
-def test_feature_index_covers_features(
-    raw: dict[str, object],
-) -> None:
-    inv = Inventory.parse(raw)
-    assert set(inv.feature_index) == set(inv.features)
-    for i, name in enumerate(inv.features):
-        assert inv.feature_index[name] == i
 
 
 @given(_well_formed_inventory())

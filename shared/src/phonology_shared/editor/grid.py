@@ -18,11 +18,16 @@ from phonology_shared.data.inventory import (
     canonicalize_feature_label,
     canonicalize_segment_label,
 )
+from phonology_shared.presentation.constants import MINUS_SIGN
 
 # Display form of the negative cell value. U+2212 MATHEMATICAL MINUS
 # SIGN, chosen for typographic symmetry with the plus glyph. The grid
 # renders this; the on-disk JSON uses ASCII hyphen-minus instead.
-MINUS_DISPLAY: str = "−"
+# Aliased from the single escaped definition in
+# ``presentation.constants`` so a look-alike substitution (U+2010,
+# ASCII hyphen) cannot silently split the builder's minus from the
+# analysis pane's minus.
+MINUS_DISPLAY: str = MINUS_SIGN
 
 # Serialized form. ASCII U+002D HYPHEN-MINUS, what every external
 # tool (regex, jq, spreadsheets, code) expects to see in JSON values.

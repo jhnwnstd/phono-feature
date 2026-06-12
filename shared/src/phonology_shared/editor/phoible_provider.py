@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -35,7 +36,11 @@ from phonology_shared.editor.inventory_providers import (
     InventoryDescriptor,
     InventoryProvider,
 )
-from phonology_shared.editor.providers import GeneratedInventory
+from phonology_shared.editor.providers import (
+    GeneratedInventory,
+    prune_unused_features,
+    restrict_bundles,
+)
 
 _INDEX_FILENAME = "_phoible_index.generated.json"
 _DATA_FILENAME = "_phoible_data.generated.json"
@@ -219,16 +224,29 @@ class PhoibleProvider:
             existing = by_folded.get(key)
             if existing is None or (existing.isupper() and not name.isupper()):
                 by_folded[key] = name
-        self._language_names: list[str] = sorted(
-            by_folded.values(), key=lambda s: s.casefold()
+        # ``(folded, display)`` pairs sorted by the folded key (the
+        # display form's own casefold, so the order matches the old
+        # display-sorted list). The folds were already computed for
+        # the dedup map above; keeping them means every debounced
+        # autocomplete keystroke scans precomputed folds instead of
+        # re-casefolding all ~2,700 names per query.
+        self._language_search_index: list[tuple[str, str]] = sorted(
+            by_folded.items()
         )
+        self._language_names: list[str] = [
+            display for _folded, display in self._language_search_index
+        ]
 
         # Optional data payload. ``_segments_by_inventory`` is the
         # decoded form keyed by inventory id; ``_feature_names``
         # is the canonical column list used to decode positional
-        # bundle strings.
+        # bundle strings. All three attributes are initialized here
+        # so the index-only boot state (web bridge before the lazy
+        # data fetch lands) is a fully-constructed object; the
+        # invariant must not depend on a completed ingest.
         self._feature_names: tuple[str, ...] = ()
         self._segments_by_inventory: dict[str, Mapping[str, str]] = {}
+        self._vowel_secondary_by_inventory: dict[str, Mapping[str, str]] = {}
         if data_table is None:
             raw_data = _try_load_data_bytes()
             if raw_data is not None:
@@ -282,8 +300,8 @@ class PhoibleProvider:
                 "PHOIBLE data table missing 'feature_names' "
                 "list-of-strings; rerun bake_phoible to regenerate"
             )
-        self._feature_names = tuple(feature_names)
-        n = len(self._feature_names)
+        names = tuple(feature_names)
+        n = len(names)
 
         raw_invs = data.get("inventories")
         if not isinstance(raw_invs, Mapping):
@@ -307,7 +325,6 @@ class PhoibleProvider:
                     continue
                 bundles[sym] = encoded
             decoded[str(inv_id)] = bundles
-        self._segments_by_inventory = decoded
 
         # Vowel diphthong secondary bundles. Sparse: most
         # inventories have none and stay absent from the map. The
@@ -330,6 +347,15 @@ class PhoibleProvider:
                     bundles[sym] = encoded
                 if bundles:
                     secondary_decoded[str(inv_id)] = bundles
+
+        # Assign all three together only after validation and
+        # decoding fully succeeded. Assigning piecemeal above would
+        # let a failed ingest leave the provider half-loaded: new
+        # feature names zipped against the old segment table
+        # silently mis-assigns every value on the next generate(),
+        # and ``has_data`` would gate open on a broken payload.
+        self._feature_names = names
+        self._segments_by_inventory = decoded
         self._vowel_secondary_by_inventory = secondary_decoded
 
     # ------------------------------------------------------------------
@@ -352,9 +378,9 @@ class PhoibleProvider:
             return []
         needle = query.casefold()
         out: list[str] = []
-        for name in self._language_names:
-            if needle in name.casefold():
-                out.append(name)
+        for folded, display in self._language_search_index:
+            if needle in folded:
+                out.append(display)
                 if len(out) >= limit:
                     break
         return out
@@ -419,33 +445,11 @@ class PhoibleProvider:
         }
 
         if resolved:
-            used = {
-                feat
-                for bundle in resolved.values()
-                for feat, value in bundle.items()
-                if value in ("+", "-")
-            }
-            # Secondary bundles count as "used" too; otherwise a
-            # diphthong that distinguishes itself only on the final
-            # half (e.g. /aɪ/ where the initial vowel matches an
-            # existing monophthong) would lose its discriminator.
-            for bundle in secondary.values():
-                for feat, value in bundle.items():
-                    if value in ("+", "-"):
-                        used.add(feat)
-            features = tuple(feat for feat in features if feat in used)
-            resolved = {
-                seg: {
-                    feat: val for feat, val in bundle.items() if feat in used
-                }
-                for seg, bundle in resolved.items()
-            }
-            secondary = {
-                seg: {
-                    feat: val for feat, val in bundle.items() if feat in used
-                }
-                for seg, bundle in secondary.items()
-            }
+            features = prune_unused_features(
+                features, resolved, extra_bundles=secondary.values()
+            )
+            resolved = restrict_bundles(resolved, features)
+            secondary = restrict_bundles(secondary, features)
 
         return GeneratedInventory(
             features=features,
@@ -523,7 +527,7 @@ def materialize_phoible_inventory(
     error surface expects (``ValidationError`` on web,
     ``QMessageBox`` on desktop).
     """
-    descriptor = provider.descriptor(inventory_id)  # type: ignore[attr-defined]
+    descriptor = provider.descriptor(inventory_id)
     if descriptor is None:
         raise KeyError(f"unknown PHOIBLE inventory id {inventory_id!r}")
     generated = provider.generate(inventory_id)
@@ -573,3 +577,24 @@ def materialize_phoible_inventory(
         segments={seg: dict(b) for seg, b in generated.segments.items()},
         metadata=metadata,
     )
+
+
+@lru_cache(maxsize=1)
+def default_phoible_provider() -> PhoibleProvider:
+    """Process-wide memoized provider built from the packaged
+    snapshot.
+
+    Construction parses the ~830 KB index plus the ~5 MB data
+    snapshot and ingests ~3,000 inventories (roughly 100-200 ms on
+    a fast machine, several times that under Pyodide), so callers
+    on interactive paths must not construct per use: the desktop's
+    PHOIBLE picker opens at toolbar-click time and used to re-pay
+    the full parse on every open. The web bridge keeps its own
+    memoized registry; this accessor gives the desktop the same
+    provider lifetime so the two surfaces share one pattern.
+
+    Raises :py:class:`PhoibleSnapshotNotAvailable` when the index
+    is not packaged; the exception is not cached, so a retry after
+    an install repair gets a fresh attempt.
+    """
+    return PhoibleProvider()

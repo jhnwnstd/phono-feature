@@ -54,6 +54,7 @@ from phonology_shared.editor.inventory_providers import InventoryDescriptor
 from phonology_shared.editor.phoible_provider import (
     PhoibleProvider,
     PhoibleSnapshotNotAvailable,
+    default_phoible_provider,
     materialize_phoible_inventory,
 )
 from phonology_shared.presentation.palette import C
@@ -76,14 +77,19 @@ def create_phoible_dialog(
     is available; return ``None`` if the bake has not run on this
     checkout.
 
-    The toolbar button calls this once at click time and surfaces
-    the ``None`` result as a friendly status-bar message. The
+    The toolbar button calls this at click time and surfaces the
+    ``None`` result as a friendly status-bar message. The
     construction failure is not an error: a developer checkout that
     has never run ``web/scripts/bake_phoible.py`` simply does not
     have PHOIBLE available, and the dialog must not crash.
+
+    The provider comes from the process-wide memoized accessor:
+    constructing it parses ~6 MB of packaged JSON (~100-200 ms),
+    and doing that synchronously inside the click handler froze
+    the UI on every dialog open, not just the first.
     """
     try:
-        provider = PhoibleProvider()
+        provider = default_phoible_provider()
     except PhoibleSnapshotNotAvailable:
         return None
     return PhoibleDialog(provider, parent)

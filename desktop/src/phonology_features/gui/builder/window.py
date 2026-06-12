@@ -938,11 +938,30 @@ class InventoryBuilder(QMainWindow):
             self._table.selectRow(row)
 
     def _on_corner_clicked(self) -> None:
-        """Toggle select-all when the table corner is clicked."""
+        """Toggle select-all when the table corner is clicked.
+
+        The everything-selected check sums the selection model's
+        range sizes instead of ``len(selectedItems())``:
+        materialising a Python wrapper per selected cell is
+        O(rows*cols) on a select-all state (~3,900 items on a
+        Hayes-sized grid), a cost this file's cycle helpers already
+        avoid on every other interactive path.
+        """
         rows = self._table.rowCount()
         cols = self._table.columnCount()
         total = rows * cols
-        if total > 0 and len(self._table.selectedItems()) == total:
+        sel_model = self._table.selectionModel()
+        selected_count = 0
+        if sel_model is not None:
+            selection = sel_model.selection()
+            # Indexed access: the PyQt6 stubs do not expose
+            # QItemSelection's iterator protocol.
+            for i in range(len(selection)):
+                r = selection[i]
+                selected_count += (r.bottom() - r.top() + 1) * (
+                    r.right() - r.left() + 1
+                )
+        if total > 0 and selected_count == total:
             self._table.clearSelection()
         else:
             self._table.selectAll()

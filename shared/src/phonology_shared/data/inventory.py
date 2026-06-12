@@ -13,16 +13,16 @@ from __future__ import annotations
 import json
 import logging
 import os
+import stat
 import tempfile
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from functools import lru_cache
-from types import MappingProxyType
 from typing import Any
 
-from phonology_shared.data.limits import MAX_FILE_BYTES
+from phonology_shared.data.limits import MAX_INVENTORY_FILE_BYTES
 
 _log = logging.getLogger(__name__)
 
@@ -135,6 +135,10 @@ class _IssueCodes:
     SEGMENT_KEY_INVISIBLE_CHAR = "segment.key_invisible_char"
     SEGMENT_KEY_COLLISION = "segment.key_canonical_collision"
 
+    # Metadata validation.
+    METADATA_NOT_OBJECT = "inventory.metadata_not_object"
+    METADATA_NAME_NOT_STRING = "inventory.metadata_name_not_string"
+
     # Per-bundle validation.
     BUNDLE_NOT_OBJECT = "segment.bundle_not_object"
     BUNDLE_FEATURE_KEY_TYPE = "segment.bundle_feature_key_type"
@@ -218,6 +222,7 @@ def normalize_feature_key(key: str) -> str:
     # boundary. The opposite import (presentation.feature_metadata
     # importing data.inventory) would be a cycle.
     from phonology_shared.presentation.feature_metadata import (
+        fold_feature_name,
         resolve_canonical,
     )
 
@@ -225,24 +230,15 @@ def normalize_feature_key(key: str) -> str:
     if canonical is not None:
         return canonical
 
-    # Fallback for unregistered features: the historical
-    # lower-case + delimiter-strip + small alias-fold rules. The
-    # registry's fold uses the same delimiter set, so a custom
-    # name like ``Foo_Bar`` deterministically becomes ``foobar``
-    # whether it's registered or not.
-    k = key.lower()
-    k = k.replace("del.rel.", "delrel")
-    k = k.replace("delayed_release", "delrel")
-    k = k.replace("s.g.", "spreadgl")
-    k = k.replace("c.g.", "constrgl")
-    k = k.replace(".", "").replace("_", "").replace(" ", "").replace("-", "")
-    if k in ("rcolored", "rcoloured", "rhotacized"):
-        return "rhotic"
-    if k == "breathyvoice":
-        return "breathy"
-    if k == "creakyvoice":
-        return "creaky"
-    return k
+    # Fallback for unregistered features: the same lowercase +
+    # delimiter-strip fold the registry's alias index uses, so a
+    # custom name like ``Foo_Bar`` deterministically becomes
+    # ``foobar`` whether it's registered or not. The historical
+    # special-case aliases that used to live here (``del.rel.``,
+    # ``rcolored``, ``breathyvoice``, ...) are all registered, so
+    # the resolver above handles them; a parity test in
+    # ``test_feature_metadata.py`` pins that identity.
+    return fold_feature_name(key)
 
 
 class AliasCollisionError(ValueError):
@@ -278,37 +274,20 @@ def normalize_feature_bundle(
     catches the same situation at parse time so engine consumers
     don't have to defend against the collision downstream.
     """
-    result: dict[str, str] = {}
-    collisions: dict[str, list[str]] = {}
-    for k, v in feat_dict.items():
-        canonical = normalize_feature_key(k)
-        if canonical in result and k not in collisions.get(canonical, ()):
-            collisions.setdefault(canonical, []).append(
-                _find_existing_alias(feat_dict, result, canonical, exclude=k)
-            )
-            collisions[canonical].append(k)
-        result[canonical] = v
+    groups: dict[str, list[str]] = {}
+    for k in feat_dict:
+        groups.setdefault(normalize_feature_key(k), []).append(k)
+    collisions = {
+        canonical: originals
+        for canonical, originals in groups.items()
+        if len(originals) > 1
+    }
     if collisions:
         raise AliasCollisionError(collisions)
-    return result
-
-
-def _find_existing_alias(
-    feat_dict: Mapping[str, str],
-    result: Mapping[str, str],
-    canonical: str,
-    *,
-    exclude: str,
-) -> str:
-    """Recover the original key that produced ``canonical`` (other
-    than ``exclude``). Used to build a helpful collision report."""
-    for k in feat_dict:
-        if k == exclude:
-            continue
-        if normalize_feature_key(k) == canonical:
-            return k
-    # Unreachable when called from the collision path.
-    return canonical
+    return {
+        canonical: feat_dict[originals[0]]
+        for canonical, originals in groups.items()
+    }
 
 
 # Domain-specific identity folding for segment labels. ``r`` is
@@ -610,11 +589,6 @@ class Inventory:
     * ``advisories``: soft observations collected by the parser. Not
       errors; surfaced in the status bar so the user knows when an
       inventory is outside the usual operating range.
-    * ``feature_index`` / ``segment_index``: derived
-      :py:class:`MappingProxyType` lookups built during parse so
-      engine code can resolve a feature or segment to its position
-      in O(1) instead of scanning the tuple. Read-only; the parse
-      pipeline is the only writer.
 
     Missing-feature semantics: a segment bundle may omit a declared
     feature; readers treat the omission as ``"0"``. The parser does
@@ -627,12 +601,6 @@ class Inventory:
     features: tuple[str, ...]
     segments: Mapping[str, Mapping[str, str]]
     advisories: tuple[str, ...] = field(default=())
-    feature_index: Mapping[str, int] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-    segment_index: Mapping[str, int] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
 
     @classmethod
     def parse(cls, raw: Any, *, source: str | None = None) -> Inventory:
@@ -705,7 +673,8 @@ class Inventory:
         """Read and parse a JSON inventory file.
 
         Raises :py:class:`ValidationError` (with ``source=path`` in
-        messages) on any problem. :py:class:`OSError` and
+        messages) on any problem. :py:class:`OSError`,
+        :py:class:`UnicodeDecodeError`, and
         :py:class:`json.JSONDecodeError` are wrapped as ValidationError
         so callers only need one exception type.
         """
@@ -719,17 +688,18 @@ class Inventory:
             size = os.path.getsize(path)
         except OSError:
             size = 0
-        if size > MAX_FILE_BYTES:
+        if size > MAX_INVENTORY_FILE_BYTES:
+            limit_mb = MAX_INVENTORY_FILE_BYTES // (1024 * 1024)
             _log.warning(
                 "inventory load failed: %s: file too large (%d bytes > %d)",
                 basename,
                 size,
-                MAX_FILE_BYTES,
+                MAX_INVENTORY_FILE_BYTES,
             )
             raise ValidationError(
                 (
                     f"{path}: file is {size // (1024 * 1024)} MB, "
-                    f"larger than the {MAX_FILE_BYTES // (1024 * 1024)} MB limit",
+                    f"larger than the {limit_mb} MB limit",
                 )
             )
         try:
@@ -743,6 +713,21 @@ class Inventory:
         except FileNotFoundError as e:
             _log.warning("inventory load failed: %s: file not found", basename)
             raise ValidationError((f"{path}: file not found",)) from e
+        except UnicodeDecodeError as e:
+            # UnicodeDecodeError subclasses ValueError, not OSError,
+            # so without this clause it would escape raw and break
+            # the ValidationError-only contract GUI callers rely on.
+            _log.warning(
+                "inventory load failed: %s: not valid UTF-8 (%s)",
+                basename,
+                e,
+            )
+            raise ValidationError(
+                (
+                    f"{path}: file is not UTF-8 encoded; "
+                    f"re-save it as UTF-8 and load it again",
+                )
+            ) from e
         except OSError as e:
             _log.warning("inventory load failed: %s: %s", basename, e)
             raise ValidationError((f"{path}: {e}",)) from e
@@ -827,13 +812,11 @@ class Inventory:
             raise KeyError(f"Segment '{segment}' not in inventory")
         if feature not in self.features:
             raise KeyError(f"Feature '{feature}' not in inventory")
-        raw = self.segments[segment].get(feature, FeatureValue.ZERO)
-        # Defensive cast: inner bundles built by parse already carry
-        # FeatureValue, but other producers (test fixtures, dict
-        # round-trips through view_models) may still hand in raw
-        # strings. Convert through the enum so the return type is
-        # honest.
-        return raw if isinstance(raw, FeatureValue) else FeatureValue(raw)
+        # Bundles carry FeatureValue by the parse invariant
+        # (parse/from_grid are the only producers). The enum call is
+        # an identity lookup for members; it narrows the declared
+        # ``Mapping[str, str]`` field type to the typed enum.
+        return FeatureValue(self.segments[segment].get(feature, "0"))
 
 
 def atomic_write_json(path: str | os.PathLike[str], data: Any) -> None:
@@ -888,6 +871,20 @@ def atomic_write_json(path: str | os.PathLike[str], data: Any) -> None:
             f.write(rendered)
             f.flush()
             os.fsync(f.fileno())
+
+        # mkstemp creates the temp file owner-only (0600), and
+        # os.replace transplants that mode onto the destination.
+        # Without this chmod every save would silently strip
+        # group/other permissions from the user's file. Preserve an
+        # existing destination's mode; for a brand-new file apply
+        # the process umask to the conventional 0o666.
+        try:
+            mode = stat.S_IMODE(os.stat(path).st_mode)
+        except FileNotFoundError:
+            umask = os.umask(0)
+            os.umask(umask)
+            mode = 0o666 & ~umask
+        os.chmod(tmp_path, mode)
 
         os.replace(tmp_path, path)
         _fsync_directory_best_effort(directory)

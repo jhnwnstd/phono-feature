@@ -16,7 +16,7 @@ may depend on optional dependencies the shared layer cannot assume.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -115,6 +115,52 @@ class FeatureProvider(Protocol):
         status bar without aborting the New-inventory flow.
         """
         ...
+
+
+def prune_unused_features(
+    features: tuple[str, ...],
+    resolved: Mapping[str, Mapping[str, str]],
+    *,
+    extra_bundles: Iterable[Mapping[str, str]] = (),
+) -> tuple[str, ...]:
+    """Feature columns at least one resolved bundle specifies with
+    ``"+"`` or ``"-"``, in their original order.
+
+    The single pruning rule every provider's ``generate`` applies
+    (mirrors PanPhon's behaviour: a small inventory should not
+    carry every column the source ships). Returns ``features``
+    unchanged when ``resolved`` is empty so an empty inventory
+    still has columns to show. ``extra_bundles`` lets the PHOIBLE
+    provider count its diphthong secondary bundles as used;
+    otherwise a diphthong distinguished only by its final half
+    would lose its discriminator.
+    """
+    if not resolved:
+        return features
+    used = {
+        feat
+        for bundle in resolved.values()
+        for feat, value in bundle.items()
+        if value in ("+", "-")
+    }
+    for bundle in extra_bundles:
+        for feat, value in bundle.items():
+            if value in ("+", "-"):
+                used.add(feat)
+    return tuple(feat for feat in features if feat in used)
+
+
+def restrict_bundles(
+    bundles: Mapping[str, Mapping[str, str]],
+    features: tuple[str, ...],
+) -> dict[str, Mapping[str, str]]:
+    """Project every bundle onto the (post-prune) ``features``."""
+    keep = set(features)
+    out: dict[str, Mapping[str, str]] = {
+        seg: {feat: val for feat, val in bundle.items() if feat in keep}
+        for seg, bundle in bundles.items()
+    }
+    return out
 
 
 def blank_bundle(features: tuple[str, ...]) -> dict[str, str]:

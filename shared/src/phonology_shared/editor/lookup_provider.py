@@ -26,7 +26,11 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from phonology_shared.editor.providers import GeneratedInventory
+from phonology_shared.editor.providers import (
+    GeneratedInventory,
+    prune_unused_features,
+    restrict_bundles,
+)
 
 # Filename of the build-baked snapshot. Co-located with this module
 # so Pyodide's importlib.resources lookup works against the package
@@ -195,19 +199,8 @@ class LookupFeatureProvider:
             resolved[symbol] = dict(bundle)
 
         if resolved:
-            used = {
-                feat
-                for bundle in resolved.values()
-                for feat, value in bundle.items()
-                if value in ("+", "-")
-            }
-            features = tuple(feat for feat in features if feat in used)
-            resolved = {
-                seg: {
-                    feat: val for feat, val in bundle.items() if feat in used
-                }
-                for seg, bundle in resolved.items()
-            }
+            features = prune_unused_features(features, resolved)
+            resolved = restrict_bundles(resolved, features)
 
         return GeneratedInventory(
             features=features,

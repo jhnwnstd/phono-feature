@@ -477,7 +477,7 @@ def phoible_preview_inventory(inventory_id: str) -> dict[str, Any]:
     provider = _phoible_provider()
     if provider is None or not getattr(provider, "has_data", False):
         return {}
-    descriptor = provider.descriptor(inventory_id)  # type: ignore[attr-defined]
+    descriptor = provider.descriptor(inventory_id)
     if descriptor is None:
         return {}
     generated = provider.generate(inventory_id)
@@ -856,6 +856,7 @@ def project_mode_switch(
         selected_segments=list(selected_segments),
         selected_features=dict(selected_features),
         engine=_require_engine(),
+        match_mode=_match_mode,
     )
     return {
         "saved_seg_state": transition.saved_seg_state,

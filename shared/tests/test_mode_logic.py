@@ -155,3 +155,51 @@ def test_mode_status_texts() -> None:
     assert mode_status_text(Mode.FEAT_TO_SEG, has_engine=True).startswith(
         "Toggle feature values"
     )
+
+
+def test_feat_to_seg_honours_wildcard_match_mode(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    """With the wildcard toggle active, the FEAT pane highlights the
+    wildcard class; the FEAT to SEG switch must carry exactly that
+    set over, not the (smaller) strict set. A strict projection here
+    silently dropped every segment that matched only through an
+    unspecified value, which is precisely the case wildcard mode
+    exists for."""
+    from phonology_shared.theory.feature_engine import MatchMode
+
+    engine = bundled_engine("hayes")
+    # Find a spec whose strict and wildcard matches differ so the
+    # assertion is meaningful regardless of inventory tweaks.
+    spec = None
+    for feat in engine.features:
+        candidate = {feat: "+"}
+        strict = engine.find_segments(candidate)
+        wildcard = engine.find_segments(candidate, mode=MatchMode.WILDCARD)
+        if strict != wildcard:
+            spec = candidate
+            break
+    assert spec is not None, "no feature distinguishes strict from wildcard"
+
+    transition = project_mode_transition(
+        Mode.FEAT_TO_SEG,
+        Mode.SEG_TO_FEAT,
+        selected_segments=[],
+        selected_features=spec,
+        engine=engine,
+        match_mode=MatchMode.WILDCARD,
+    )
+    assert sorted(transition.selected_segments) == sorted(
+        engine.find_segments(spec, mode=MatchMode.WILDCARD)
+    )
+    # The default stays strict so existing callers are unaffected.
+    default_transition = project_mode_transition(
+        Mode.FEAT_TO_SEG,
+        Mode.SEG_TO_FEAT,
+        selected_segments=[],
+        selected_features=spec,
+        engine=engine,
+    )
+    assert sorted(default_transition.selected_segments) == sorted(
+        engine.find_segments(spec)
+    )
