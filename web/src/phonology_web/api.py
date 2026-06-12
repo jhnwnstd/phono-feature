@@ -760,9 +760,7 @@ def commit_inventory_from_grid(
     base_metadata: dict[str, Any] | None = None
     if _engine is not None:
         base_metadata = {
-            k: v
-            for k, v in _engine.inventory.metadata.items()
-            if k != "name"
+            k: v for k, v in _engine.inventory.metadata.items() if k != "name"
         }
     inventory = grid_to_inventory(
         name=name,

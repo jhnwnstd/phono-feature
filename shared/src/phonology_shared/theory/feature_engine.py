@@ -409,9 +409,7 @@ class FeatureEngine:
         stay the single definition of "explicitly specified",
         matching :py:attr:`contrastive_features`.
         """
-        return tuple(
-            f for f in self._inventory.features if self.spec_segs[f]
-        )
+        return tuple(f for f in self._inventory.features if self.spec_segs[f])
 
     def active_features_for_mode(self, mode: MatchMode) -> tuple[str, ...]:
         """Active-feature list appropriate for ``mode``.

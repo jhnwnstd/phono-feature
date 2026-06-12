@@ -1466,12 +1466,8 @@ def hash_assets() -> None:
                 # ``--vowel-cell-ultra-h``. Relayed so main.js's
                 # tier choice and the shared geometry's
                 # natural-height math read the same ladder.
-                "vowel_cell_dense_threshold": (
-                    DENSITY_TIER_DENSE_THRESHOLD
-                ),
-                "vowel_cell_ultra_threshold": (
-                    DENSITY_TIER_ULTRA_THRESHOLD
-                ),
+                "vowel_cell_dense_threshold": (DENSITY_TIER_DENSE_THRESHOLD),
+                "vowel_cell_ultra_threshold": (DENSITY_TIER_ULTRA_THRESHOLD),
             },
             separators=(",", ":"),
         )
