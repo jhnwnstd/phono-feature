@@ -21,7 +21,12 @@ from typing import Any
 import pytest
 
 from phonology_shared.chart import vowels as vowels_mod
-from phonology_shared.chart import vowels_layout as vowels_layout_mod
+
+# Patch target: the module that OWNS the shrink tunables. Patching
+# the compat facade would rebind the facade's alias while the solver
+# kept reading its own module global, so the patches below would
+# silently stop biting.
+from phonology_shared.chart.vowel_geometry import outline as vowels_layout_mod
 from phonology_shared.chart.vowels import (
     _compute_shrunken_widths,
     _stage1_uniform_shrink,
