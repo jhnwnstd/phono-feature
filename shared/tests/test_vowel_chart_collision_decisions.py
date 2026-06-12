@@ -155,23 +155,27 @@ def test_long_pair_classification_is_consistent_across_renderers() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_silhouette_back_edge_at_canonical_normalised_extent() -> None:
-    """Silhouette back edge sits at the canonical ``back + pair_outer``
-    normalised position for every inventory; ``back_right_pixel_offset``
-    is the shared render-time hook for future tweaks but stays ``0``
-    by default so the rendered line is purely ``top_right * dw``.
+def test_silhouette_back_edge_at_reserved_extent() -> None:
+    """Silhouette back edge sits at ``back + extent`` where the
+    extent is the canonical pair-outer reserve GROWN just enough to
+    wrap the widest back-most cell (the outline is the hard
+    boundary for the buttons; single-button inventories keep the
+    canonical 33 px). ``back_right_pixel_offset`` remains the
+    shared render-time hook for future tweaks but stays ``0`` so
+    the rendered line is purely ``top_right * dw``.
 
     The earlier inventory-adaptive snap-to-button-centre policy was
-    reverted (the visual intersected the button); the refactor
-    (single shared field consumed by both renderers via
-    ``dx + top_right * dw + back_right_pixel_offset``) is preserved.
+    reverted (the visual intersected the button); extent growth is
+    the opposite direction: the line moves OUTWARD to contain the
+    button, never through it.
     """
     from phonology_shared.chart.vowels import (
         _BACKNESS_X,
         _PAIR_OUTER_EXTENT,
     )
+    from phonology_shared.chart.vowels_layout import _VOWEL_CONTENT_W_PX
 
-    canonical_back_edge = _BACKNESS_X["back"] + _PAIR_OUTER_EXTENT
+    canonical_extent_px = _PAIR_OUTER_EXTENT * _VOWEL_CONTENT_W_PX
     for name in (
         "english_features.json",
         "hayes_features.json",
@@ -179,12 +183,27 @@ def test_silhouette_back_edge_at_canonical_normalised_extent() -> None:
     ):
         geom = _geometry(name)
         sil = geom.silhouette
-        assert sil.top_right == pytest.approx(canonical_back_edge, abs=1e-6)
-        assert sil.bottom_right == pytest.approx(canonical_back_edge, abs=1e-6)
+        assert sil.cell_outer_extent_px >= canonical_extent_px - 1
+        expected_back_edge = _BACKNESS_X["back"] + (
+            sil.cell_outer_extent_px / _VOWEL_CONTENT_W_PX
+        )
+        assert sil.top_right == pytest.approx(expected_back_edge, abs=1e-6)
+        assert sil.bottom_right == pytest.approx(expected_back_edge, abs=1e-6)
         assert sil.back_right_pixel_offset == 0, (
             f"{name}: back_right_pixel_offset should be the hook "
             f"default (0), not an inventory-driven snap value"
         )
+    # Singleton-edge inventories sit at the canonical reserve plus
+    # the uniform breathing margin; further growth only happens when
+    # a wide edge cell actually needs the room.
+    import math
+
+    from phonology_shared.chart.vowels_layout import _CONFINE_MARGIN_PX
+
+    spanish = _geometry("spanish_features.json").silhouette
+    assert spanish.cell_outer_extent_px == math.ceil(
+        canonical_extent_px + _CONFINE_MARGIN_PX
+    )
 
 
 def test_vowel_silhouette_builder_matches_per_inventory_back_edge() -> None:
@@ -207,28 +226,29 @@ def test_vowel_silhouette_builder_matches_per_inventory_back_edge() -> None:
     assert sil.back_right_pixel_offset == 0
 
 
-def test_silhouette_front_edge_does_not_adapt_to_front_vowels() -> None:
-    """The aesthetic asymmetry: the front (left) edge stays at its
-    canonical extent computed from ``top_width`` / ``bottom_width``,
-    NOT pulled in to hug the frontmost present front vowel. This
-    test pins that the left edge is purely a function of the shrunken
-    widths (Stage 1 + Stage 2); no front-vowel-specific
-    adaptation kicks in.
+def test_silhouette_front_edge_tracks_extent_not_vowel_identity() -> None:
+    """The front (left) edge is the front anchor minus the reserved
+    FRONT extent: it never adapts to which front vowel happens to be
+    present, only to how WIDE the front-most cells are (the outline
+    is the hard boundary for the buttons, so wide edge cells grow
+    the reserved extent; see ``_grow_outline_extent``). Pins that
+    the corners stay a pure function of the shrunken widths plus
+    the per-side extent fields.
     """
-    from phonology_shared.chart.vowels import (
-        _BACKNESS_X,
-        _PAIR_OUTER_EXTENT,
-    )
+    from phonology_shared.chart.vowels import _BACKNESS_X
+    from phonology_shared.chart.vowels_layout import _VOWEL_CONTENT_W_PX
 
     geom = _geometry("hayes_features.json")
     sil = geom.silhouette
     back = _BACKNESS_X["back"]
     front = _BACKNESS_X["front"]
-    expected_top_left = (
-        back + sil.top_width * (front - back) - _PAIR_OUTER_EXTENT
+    front_extent_px = sil.front_cell_outer_extent_px or (
+        sil.cell_outer_extent_px
     )
+    front_extent = front_extent_px / _VOWEL_CONTENT_W_PX
+    expected_top_left = back + sil.top_width * (front - back) - front_extent
     expected_bottom_left = (
-        back + sil.bottom_width * (front - back) - _PAIR_OUTER_EXTENT
+        back + sil.bottom_width * (front - back) - front_extent
     )
     assert sil.top_left == pytest.approx(expected_top_left, abs=1e-6)
     assert sil.bottom_left == pytest.approx(expected_bottom_left, abs=1e-6)

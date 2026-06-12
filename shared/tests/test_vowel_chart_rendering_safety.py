@@ -30,9 +30,11 @@ Three invariants pinned here:
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from _inventory_names import BUNDLED_INVENTORY_NAMES
 
 from phonology_shared.chart.vowels import (
     build_vowel_chart_geometry,
@@ -343,3 +345,136 @@ def test_phoible_sample_silhouette_aspect_within_ceiling() -> None:
         f"PHOIBLE silhouette aspect ceiling broken in {len(over)}/{checked} "
         f"inventories. Sample: {over[:3]}"
     )
+
+
+def test_row_label_anchors_divorced_from_cell_positions() -> None:
+    """Row labels anchor to the silhouette outline at THEIR OWN y.
+
+    Top / bottom tiers shift the label half a button inward so it
+    centres on the anchor button row; the baked silhouette edge
+    fields must be evaluated at that shifted ``label_y``, not at the
+    cells' ``chart_y``. Evaluating at chart_y while rendering at
+    label_y let the slanted, corner-rounded edge eat the label gap
+    (Lomongo's "Open" label hugged the outline while "Close" kept
+    its padding).
+    """
+    from phonology_shared.chart.vowels import detect_vowel_profile
+    from phonology_shared.chart.vowels_layout import (
+        build_vowel_chart_geometry,
+        silhouette_left_at_y,
+        silhouette_right_at_y,
+    )
+    from phonology_shared.presentation.layout import SEG_BTN_H
+
+    # Lomongo-shaped five-vowel system: /i e a o u/.
+    feats = {
+        "i": {
+            "high": "+",
+            "low": "-",
+            "front": "+",
+            "back": "-",
+            "round": "-",
+        },
+        "e": {
+            "high": "-",
+            "low": "-",
+            "front": "+",
+            "back": "-",
+            "round": "-",
+        },
+        "a": {
+            "high": "-",
+            "low": "+",
+            "front": "-",
+            "back": "-",
+            "round": "-",
+        },
+        "o": {
+            "high": "-",
+            "low": "-",
+            "front": "-",
+            "back": "+",
+            "round": "+",
+        },
+        "u": {
+            "high": "+",
+            "low": "-",
+            "front": "-",
+            "back": "+",
+            "round": "+",
+        },
+    }
+    segs = list(feats)
+    geom = build_vowel_chart_geometry(
+        segs, detect_vowel_profile(segs, feats), feats
+    )
+    assert geom.natural_data_height_px > 0
+    half_btn_norm = (SEG_BTN_H / 2.0) / geom.natural_data_height_px
+    tiers = {r.tier for r in geom.rows}
+    assert {"top", "bottom"} <= tiers
+    for row in geom.rows:
+        if row.tier == "top":
+            expected_label_y = row.chart_y + half_btn_norm
+        elif row.tier == "bottom":
+            expected_label_y = row.chart_y - half_btn_norm
+        else:
+            expected_label_y = row.chart_y
+        assert row.label_y == pytest.approx(expected_label_y), row.label
+        # The baked edge fields follow the LABEL, not the cells.
+        assert row.silhouette_left == pytest.approx(
+            silhouette_left_at_y(geom.silhouette, row.label_y)
+        ), row.label
+        assert row.silhouette_right == pytest.approx(
+            silhouette_right_at_y(geom.silhouette, row.label_y)
+        ), row.label
+
+
+@pytest.mark.parametrize("name", BUNDLED_INVENTORY_NAMES)
+def test_button_boxes_confined_to_outline(
+    name: str, bundled_engine: Callable[[str], FeatureEngine]
+) -> None:
+    """The vowel-space outline is the HARD boundary for the segment
+    buttons: every rendered button box stays inside the dw-corrected
+    outline (rounded corners included) at the geometry's natural
+    size. Before the confinement pass, wide pair cells shifted to a
+    pair side overhung by up to ~45 px and slant / corner overhangs
+    of 3 to 8 px were routine (English /i/, German /iː/, Lomongo's
+    open row).
+    """
+    from phonology_shared.chart.vowels import detect_vowel_profile
+    from phonology_shared.chart.vowels_layout import (
+        _cell_box_px,
+        build_vowel_chart_geometry,
+        silhouette_for_data_width,
+        silhouette_left_at_y,
+        silhouette_right_at_y,
+    )
+
+    engine = bundled_engine(name)
+    vowels = engine.grouped_segments.get("Vowels", [])
+    if not vowels:
+        pytest.skip(f"{name} has no vowels")
+    feats = engine.normalized_segment_feats
+    geom = build_vowel_chart_geometry(
+        vowels, detect_vowel_profile(vowels, feats), feats
+    )
+    assert geom.cells
+    dw, dh = geom.natural_data_width_px, geom.natural_data_height_px
+    sil = silhouette_for_data_width(geom.silhouette, dw)
+    tiers = {r.logical_row: r.tier for r in geom.rows}
+    for cell in geom.cells:
+        left, top, right, bottom = _cell_box_px(
+            cell, tiers.get(cell.row, "middle"), dw, dh
+        )
+        for yy in (top, (top + bottom) / 2.0, bottom):
+            yn = min(max(yy / dh, sil.top_y), sil.bottom_y)
+            edge_l = silhouette_left_at_y(sil, yn) * dw
+            edge_r = silhouette_right_at_y(sil, yn) * dw
+            assert left >= edge_l - 0.51, (
+                f"{name}: {cell.entries} left edge {left:.1f} outside "
+                f"outline {edge_l:.1f}"
+            )
+            assert right <= edge_r + 0.51, (
+                f"{name}: {cell.entries} right edge {right:.1f} outside "
+                f"outline {edge_r:.1f}"
+            )

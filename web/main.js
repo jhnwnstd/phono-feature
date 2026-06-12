@@ -1677,13 +1677,21 @@ function _silhouetteForDataWidth(sil, dwPx) {
     const extentPx = sil.cell_outer_extent_px || 0;
     if (extentPx === 0) return sil;
     const extentNorm = extentPx / dwPx;
+    // Per-side extents: the outline-growth pass reserves the front
+    // and back edges independently (a wide back-edge group must
+    // not float the front edge away from single-button front
+    // cells). 0 / absent means "mirror the back extent", which is
+    // the historical symmetric payload.
+    const frontExtentNorm = (sil.front_cell_outer_extent_px || 0) > 0
+        ? sil.front_cell_outer_extent_px / dwPx
+        : extentNorm;
     const frontTop = sil.front_anchor_at_top ?? sil.top_left;
     const frontBot = sil.front_anchor_at_bottom ?? sil.bottom_left;
     const back = sil.back_anchor ?? sil.top_right;
     return {
         ...sil,
-        top_left: frontTop - extentNorm,
-        bottom_left: frontBot - extentNorm,
+        top_left: frontTop - frontExtentNorm,
+        bottom_left: frontBot - frontExtentNorm,
         top_right: back + extentNorm,
         bottom_right: back + extentNorm,
     };
@@ -1911,16 +1919,18 @@ function _buildVowelChart(chart) {
         } else {
             leftNorm = 0;
         }
-        rowLabel.style.setProperty("--row-y", String(row.chart_y));
+        // ``row.label_y`` is the shared geometry's label anchor:
+        // chart_y shifted by half a button on top / bottom tiers so
+        // the label centres on the anchor button row, with
+        // ``row.silhouette_left`` evaluated at that SAME y so the
+        // label-to-outline gap stays constant. Label placement is
+        // deliberately divorced from cell positioning; falling back
+        // to chart_y covers an older bridge payload.
+        const labelY = typeof row.label_y === "number"
+            ? row.label_y
+            : row.chart_y;
+        rowLabel.style.setProperty("--row-y", String(labelY));
         rowLabel.style.setProperty("--row-left", leftNorm.toFixed(5));
-        // Top / bottom tiers anchor their cells' EDGE on chart_y
-        // and grow inward; the tier attribute lets CSS shift the
-        // label half a button so it centres on the anchor button
-        // row like the middle-tier labels (mirrors the desktop's
-        // tier-aware label offset in ``_layout_children``).
-        if (row.tier === "top" || row.tier === "bottom") {
-            rowLabel.dataset.rowTier = row.tier;
-        }
         dataEl.appendChild(rowLabel);
     }
     const rowTierByLogical = new Map(
@@ -2005,6 +2015,12 @@ function _buildVowelChart(chart) {
         target.style.left = (cell.chart_x * 100) + "%";
         target.style.top = (cell.chart_y * 100) + "%";
         target.style.setProperty("--pair-side", String(cell.pair_side));
+        // Hard-boundary confinement offset (px); 0 for cells the
+        // outline already contains. Applied inside the transform
+        // calc alongside the pair shift.
+        if (cell.nudge_px) {
+            target.style.setProperty("--cell-nudge", `${cell.nudge_px}px`);
+        }
         // Per-cell pair shift. The geometry always populates the
         // effective value (canonical for unconflicted cells,
         // elevated when a wide-cell same-anchor collision was

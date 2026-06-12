@@ -1045,17 +1045,6 @@ dialog input[type="text"]:focus-visible {
 .panel[data-active="true"] .vowel-chart-row-label {
   color: var(--text);
 }
-/* Top / bottom tiers anchor their cells' EDGE on chart_y and grow
-   inward, so a label centred on chart_y aligns with the stack edge
-   instead of the button row. Shift by half a button so the label
-   centres on the anchor button row exactly like the middle-tier
-   labels; mirrors the desktop's tier-aware offset. */
-.vowel-chart-row-label[data-row-tier="top"] {
-  top: calc(var(--row-y, 0) * 100% + var(--seg-btn-h) / 2);
-}
-.vowel-chart-row-label[data-row-tier="bottom"] {
-  top: calc(var(--row-y, 0) * 100% - var(--seg-btn-h) / 2);
-}
 
 /* Trapezoid / triangle segment-display space.
 
@@ -1325,7 +1314,7 @@ dialog input[type="text"]:focus-visible {
      the same rule centres the unrounded mate to the left and the
      rounded mate to the right of the backness anchor. */
   transform: translate(
-    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift)),
+    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift) + var(--cell-nudge, 0px)),
     -50%
   );
   transition: opacity 120ms ease-out;
@@ -1354,7 +1343,7 @@ dialog input[type="text"]:focus-visible {
    top edge, often overlapping the title. */
 .vowel-chart-cell[data-row-tier="top"] {
   transform: translate(
-    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift)),
+    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift) + var(--cell-nudge, 0px)),
     0%
   );
 }
@@ -1363,7 +1352,7 @@ dialog input[type="text"]:focus-visible {
    below. */
 .vowel-chart-cell[data-row-tier="bottom"] {
   transform: translate(
-    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift)),
+    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift) + var(--cell-nudge, 0px)),
     -100%
   );
 }

@@ -171,6 +171,19 @@ class VowelChartCell:
     # UNCONDITIONALLY; no consumer re-implements a "0 means
     # canonical" fallback.
     pair_shift_px: float = float(VOWEL_PAIR_SHIFT_PX)
+    # Signed horizontal confinement offset in pixels, applied by
+    # both renderers on top of the anchor + pair shift:
+    # ``centre = chart_x * dw + pair_side * pair_shift_px +
+    # nudge_px``. Written only by the hard-boundary pass
+    # (:py:func:`_confine_cells_to_outline`) to pull a button box
+    # inside the outline when its corner overhangs the slanted
+    # front edge or a rounded corner arc. A PIXEL offset rather
+    # than a chart_x delta so the width solver keeps seeing the
+    # true anchor; expressing confinement as anchor movement made
+    # near-coincident anchors look separable-by-widening and blew
+    # the solved chart width up to ~900 px on dense PHOIBLE
+    # inventories.
+    nudge_px: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -204,11 +217,23 @@ class VowelChartRow:
     chart_y: float
     tier: str = "middle"
     slot_height_norm: float = 0.0
+    # Display y for the ROW LABEL (normalised ``[0, 1]``). Equal to
+    # ``chart_y`` for middle / only tiers; shifted inward by half a
+    # button height (in units of ``natural_data_height_px``) on top
+    # and bottom tiers, whose cells anchor an EDGE on chart_y and
+    # grow inward, so the label centres on the anchor button row
+    # like the middle-tier labels do. Defaults to 0.0 only for
+    # hand-built test fixtures; the geometry build always populates
+    # it.
+    label_y: float = 0.0
     # Silhouette's actual LEFT and RIGHT edge x at this row's
-    # ``chart_y`` (normalised ``[0, 1]``), accounting for the
+    # ``label_y`` (normalised ``[0, 1]``), accounting for the
     # rounded-corner insets at the top + bottom of the polygon.
-    # Both renderers consume these for row-label anchoring and
-    # any future right-edge label or alignment cue.
+    # Evaluated at the LABEL's y (not the cells' chart_y) so the
+    # label-to-outline gap stays constant: label placement is
+    # deliberately divorced from cell positioning, which can sit
+    # off the outline (anchor migration, pair shifts) without
+    # dragging the labels with it.
     #
     # IMPORTANT: these are stored at the CANONICAL data width
     # (``_VOWEL_CONTENT_W_PX``). For accurate flush at the
@@ -308,6 +333,14 @@ class VowelChartSilhouette:
     front_anchor_at_bottom: float = 0.0
     back_anchor: float = 1.0
     cell_outer_extent_px: int = 0
+    # Optional FRONT-side extent override. ``0`` means "mirror
+    # ``cell_outer_extent_px``" (the historical symmetric
+    # behaviour). The outline-growth pass sets the two sides
+    # independently so a wide back-edge group (same-anchor tangent
+    # pairs on dense PHOIBLE inventories need ~70 px) does not
+    # float the front edge away from ordinary single-button front
+    # cells.
+    front_cell_outer_extent_px: int = 0
     # Optional fixed-pixel correction added at render time to the
     # back silhouette edge. Default ``0``. The cell-extent fields
     # above made this hook largely vestigial (the cascade math
@@ -965,10 +998,15 @@ def silhouette_for_data_width(
     if data_w_px <= 0:
         return silhouette
     extent_norm = silhouette.cell_outer_extent_px / data_w_px
+    front_extent_norm = (
+        silhouette.front_cell_outer_extent_px / data_w_px
+        if silhouette.front_cell_outer_extent_px
+        else extent_norm
+    )
     return replace(
         silhouette,
-        top_left=silhouette.front_anchor_at_top - extent_norm,
-        bottom_left=silhouette.front_anchor_at_bottom - extent_norm,
+        top_left=silhouette.front_anchor_at_top - front_extent_norm,
+        bottom_left=silhouette.front_anchor_at_bottom - front_extent_norm,
         top_right=silhouette.back_anchor + extent_norm,
         bottom_right=silhouette.back_anchor + extent_norm,
     )
@@ -1419,6 +1457,197 @@ def _resolve_pair_shift_conflicts(
     ]
 
 
+def _cell_vertical_depth(cell: VowelChartCell) -> int:
+    """Vertical row count contributed by ``cell``. PAIR cells are 1
+    row; CONTRAST_SET is ``ceil(entries / 2)``; STACK is
+    ``len(entries)``. Module-level so the height sizing and the
+    outline-confinement box math share one definition.
+    """
+    if cell.display_kind in PAIR_DISPLAY_KINDS:
+        return 1
+    if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
+        return (len(cell.entries) + 1) // 2
+    return len(cell.entries)
+
+
+def _cell_box_px(
+    cell: VowelChartCell, tier: str, dw: int, dh: int
+) -> tuple[float, float, float, float]:
+    """The cell's rendered button box ``(left, top, right, bottom)``
+    in data-area pixels at the given rendered size.
+
+    Mirrors BOTH renderers' placement math (desktop
+    ``_layout_children``; web ``--pair-side`` / ``data-row-tier``
+    CSS): centre at ``chart_x * dw`` plus the signed pair shift,
+    width from the horizontal button count, height from the stack
+    depth at the density-tier button height, and the row-tier
+    vertical anchoring (top rows hang DOWN from chart_y, bottom
+    rows rise UP, middle / only centre). The confinement pass and
+    the containment tests use this one definition, so "inside the
+    outline" is judged against the same boxes the renderers draw.
+    """
+    n_h = _cell_horizontal_button_count(cell)
+    ww = n_h * BTN_W + (n_h - 1) * VOWEL_PAIR_GAP_PX
+    depth = _cell_vertical_depth(cell)
+    eff_h = _effective_button_height_px(depth)
+    wh = depth * eff_h + (depth - 1) * _VOWEL_CELL_STACK_GAP_PX
+    left = (
+        cell.chart_x * dw
+        - ww / 2.0
+        + cell.pair_side * cell.pair_shift_px
+        + cell.nudge_px
+    )
+    cy = cell.chart_y * dh
+    if tier == "top":
+        top = cy
+    elif tier == "bottom":
+        top = cy - wh
+    else:
+        top = cy - wh / 2.0
+    return left, top, left + ww, top + wh
+
+
+#: Safety inset (px) the confinement pass keeps between a button box
+#: and the outline. Absorbs the renderers' integer rounding (round-
+#: to-nearest on the centre plus the floor-divided half width can
+#: land a box ~1.5 px outside the float position).
+_CONFINE_MARGIN_PX: float = 2.0
+
+#: Confinement iterations. Nudges are shift-only (no chart resize),
+#: so a second pass only verifies the first converged; the audit
+#: across the bundled + PHOIBLE catalogues converges in one.
+_CONFINE_MAX_PASSES: int = 2
+
+
+def _grow_outline_extent(
+    cells: list[VowelChartCell],
+    silhouette: VowelChartSilhouette,
+) -> VowelChartSilhouette:
+    """Outline accommodates content: grow the reserved cell extent
+    to wrap the widest edge cell.
+
+    ``cell_outer_extent_px`` assumes a single button beside the
+    anchor (pair shift + half a button, 33 px). Wide cells on a
+    pair side (long / nasal pairs, contrast sets, especially
+    same-anchor tangent pairs with an elevated shift) reach up to
+    ~70 px past their anchor; no chart width can absorb a back-
+    anchor overhang (the back edge moves with the anchor), so the
+    outline itself must reserve the room. Only the cells that BIND
+    an edge matter: the front-most and back-most group of each row.
+    The cascade fields are per-geometry data both renderers already
+    consume, so the grown extent flows to the drawn outline with no
+    renderer changes; the corner fields are updated to the matching
+    canonical-width approximation for the baked consumers (row
+    labels, offline CSS fallback).
+    """
+    canonical = float(silhouette.cell_outer_extent_px)
+    front_reach = canonical
+    back_reach = canonical
+    by_row: dict[int, list[VowelChartCell]] = {}
+    for c in cells:
+        by_row.setdefault(c.row, []).append(c)
+    for row_cells in by_row.values():
+        front_x = min(c.chart_x for c in row_cells)
+        back_x = max(c.chart_x for c in row_cells)
+        for c in row_cells:
+            n_h = _cell_horizontal_button_count(c)
+            ww = n_h * BTN_W + (n_h - 1) * VOWEL_PAIR_GAP_PX
+            off = c.pair_side * c.pair_shift_px + c.nudge_px
+            if abs(c.chart_x - front_x) < 1e-9:
+                front_reach = max(
+                    front_reach, ww / 2.0 - off + _CONFINE_MARGIN_PX
+                )
+            if abs(c.chart_x - back_x) < 1e-9:
+                back_reach = max(
+                    back_reach, off + ww / 2.0 + _CONFINE_MARGIN_PX
+                )
+    back_needed = int(math.ceil(back_reach))
+    front_needed = int(math.ceil(front_reach))
+    if (
+        back_needed <= silhouette.cell_outer_extent_px
+        and front_needed <= silhouette.cell_outer_extent_px
+    ):
+        return silhouette
+    back_norm = back_needed / _VOWEL_CONTENT_W_PX
+    front_norm = front_needed / _VOWEL_CONTENT_W_PX
+    return replace(
+        silhouette,
+        top_left=silhouette.front_anchor_at_top - front_norm,
+        bottom_left=silhouette.front_anchor_at_bottom - front_norm,
+        top_right=silhouette.back_anchor + back_norm,
+        bottom_right=silhouette.back_anchor + back_norm,
+        cell_outer_extent_px=back_needed,
+        front_cell_outer_extent_px=front_needed,
+    )
+
+
+def _confine_cells_to_outline(
+    cells: list[VowelChartCell],
+    tier_by_row: Mapping[int, str],
+    silhouette: VowelChartSilhouette,
+    dw: int,
+    dh: int,
+) -> tuple[list[VowelChartCell], bool]:
+    """HARD-BOUNDARY pass: nudge cells inward until every button box
+    sits inside the rendered outline.
+
+    The placement pipeline is propose-then-confine: the inference
+    layer proposes anchors, the projection maps them into the
+    trapezoid, :py:func:`_grow_outline_extent` reserves room for
+    the wide edge groups, and this pass closes the residual escape
+    modes the anchor model cannot express: a box's corner
+    overhanging the slanted front edge even when its centre is
+    inside (~4 px), top / bottom rows overlapping the rounded-
+    corner arcs (~8 px), and renderer integer rounding (~1 px).
+
+    Residuals are bounded and small, so confinement is SHIFT-ONLY:
+    it writes the cells' ``nudge_px`` pixel offset and never feeds
+    back into the chart's solved width. Same-anchor groups move
+    TOGETHER so pair tangency (including an elevated
+    ``pair_shift_px``) is preserved. Edges are evaluated on the
+    dw-corrected silhouette (what the renderers draw), corner arcs
+    included, sampled at the box's top, middle, and bottom.
+
+    Returns ``(cells, changed)``.
+    """
+    sil = silhouette_for_data_width(silhouette, dw)
+    out = list(cells)
+    groups: dict[tuple[int, int], list[int]] = {}
+    for i, c in enumerate(out):
+        groups.setdefault((c.row, round(c.chart_x * 1000)), []).append(i)
+    changed = False
+    for idxs in groups.values():
+        push_right = 0.0
+        push_left = 0.0
+        for i in idxs:
+            c = out[i]
+            left, top, right, bottom = _cell_box_px(
+                c, tier_by_row.get(c.row, "middle"), dw, dh
+            )
+            for yy in (top, (top + bottom) / 2.0, bottom):
+                yn = min(max(yy / dh, sil.top_y), sil.bottom_y)
+                edge_l = (
+                    silhouette_left_at_y(sil, yn) * dw + _CONFINE_MARGIN_PX
+                )
+                edge_r = (
+                    silhouette_right_at_y(sil, yn) * dw - _CONFINE_MARGIN_PX
+                )
+                push_right = max(push_right, edge_l - left)
+                push_left = max(push_left, right - edge_r)
+        if push_right <= 0.0 and push_left <= 0.0:
+            continue
+        if push_right > 0.0 and push_left > 0.0:
+            # Wider than the outline at this row even after the
+            # extent growth; centre so neither side wins.
+            shift_px = (push_right - push_left) / 2.0
+        else:
+            shift_px = push_right if push_right > 0.0 else -push_left
+        for i in idxs:
+            out[i] = replace(out[i], nudge_px=out[i].nudge_px + shift_px)
+        changed = True
+    return out, changed
+
+
 def _natural_data_area_size(
     cells: tuple[VowelChartCell, ...],
 ) -> tuple[int, int]:
@@ -1450,17 +1679,6 @@ def _natural_data_area_size(
             2 * BTN_W + VOWEL_PAIR_GAP_PX,
             SEG_BTN_H + _VOWEL_DATA_AREA_VERTICAL_PADDING_PX,
         )
-
-    def _cell_vertical_depth(cell: VowelChartCell) -> int:
-        """Vertical row count contributed by ``cell`` for height
-        sizing. PAIR cells are 1 row; CONTRAST_SET is
-        ``ceil(entries / 2)``; STACK is ``len(entries)``.
-        """
-        if cell.display_kind in PAIR_DISPLAY_KINDS:
-            return 1
-        if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
-            return (len(cell.entries) + 1) // 2
-        return len(cell.entries)
 
     rows_in_use: set[int] = {c.row for c in cells}
     max_row_w = 2 * BTN_W + VOWEL_PAIR_GAP_PX
@@ -1504,7 +1722,7 @@ def _natural_data_area_size(
                 + max(0, _cell_horizontal_button_count(c) - 1)
                 * VOWEL_PAIR_GAP_PX
             ) / 2.0
-            pair_offset = c.pair_shift_px * c.pair_side
+            pair_offset = c.pair_shift_px * c.pair_side + c.nudge_px
             cell_geom.append((c.chart_x, pair_offset, cell_half_w))
             if c.chart_x < 1.0:
                 right_extent = pair_offset + cell_half_w
@@ -1934,22 +2152,9 @@ def build_vowel_chart_geometry(
     # future per-inventory policy lands in this slot without touching
     # the renderers.
 
-    rows = tuple(
-        VowelChartRow(
-            logical_row=ri,
-            label=ROW_LABELS[ri],
-            chart_y=display_y_by_row[ri],
-            tier=_row_tier.get(ri, "middle"),
-            slot_height_norm=slot_heights_by_row[ri],
-            silhouette_left=silhouette_left_at_y(
-                silhouette, display_y_by_row[ri]
-            ),
-            silhouette_right=silhouette_right_at_y(
-                silhouette, display_y_by_row[ri]
-            ),
-        )
-        for ri in populated_logical_rows
-    )
+    # The rows tuple is built AFTER the natural sizing below so the
+    # per-row label anchors can convert the half-button tier shift
+    # into normalised units of the final natural height.
 
     def _width_at_display_y(y: float) -> float:
         """Linear interp between silhouette top and bottom widths
@@ -2033,6 +2238,11 @@ def build_vowel_chart_geometry(
     # stay tangent.
     cells = _resolve_pair_shift_conflicts(cells)
 
+    # Outline accommodates content: reserve enough edge extent for
+    # the widest front-most / back-most cells before anything else
+    # consumes the silhouette (sizes, labels, renderers).
+    silhouette = _grow_outline_extent(cells, silhouette)
+
     natural_w, natural_h = _natural_data_area_size(tuple(cells))
 
     # Cap the silhouette's aspect ratio at the canonical-IPA-friendly
@@ -2050,6 +2260,58 @@ def build_vowel_chart_geometry(
             if aspect > VOWEL_SILHOUETTE_MAX_ASPECT:
                 needed_sil_h = natural_w / VOWEL_SILHOUETTE_MAX_ASPECT
                 natural_h = int(math.ceil(needed_sil_h / sil_y_span))
+
+    # HARD-BOUNDARY confinement: the outline bounds the buttons.
+    # Placement above is propose-only; the extent growth reserved
+    # room for the wide edge groups, and this pass nudges the small
+    # residual overhangs (slant, corner arcs, rounding) inward.
+    # Shift-only: nudges never feed back into the solved size.
+    for _ in range(_CONFINE_MAX_PASSES):
+        cells, confine_changed = _confine_cells_to_outline(
+            cells, _row_tier, silhouette, natural_w, natural_h
+        )
+        if not confine_changed:
+            break
+
+    def _label_y_for(ri: int) -> float:
+        """Row label's display y: the row's chart_y, shifted by half
+        a button on top / bottom tiers so the label centres on the
+        anchor button row (those tiers anchor their cells' EDGE on
+        chart_y and grow inward). Label PLACEMENT is otherwise fully
+        divorced from cell positioning: the silhouette edge fields
+        below are evaluated at this same y, so the label's gap to
+        the outline stays constant regardless of where the row's
+        buttons land inside it.
+        """
+        y = display_y_by_row[ri]
+        if natural_h <= 0:
+            return y
+        half_btn_norm = (SEG_BTN_H / 2.0) / natural_h
+        tier = _row_tier.get(ri, "middle")
+        if tier == "top":
+            return y + half_btn_norm
+        if tier == "bottom":
+            return y - half_btn_norm
+        return y
+
+    label_y_by_row = {ri: _label_y_for(ri) for ri in populated_logical_rows}
+    rows = tuple(
+        VowelChartRow(
+            logical_row=ri,
+            label=ROW_LABELS[ri],
+            chart_y=display_y_by_row[ri],
+            tier=_row_tier.get(ri, "middle"),
+            slot_height_norm=slot_heights_by_row[ri],
+            label_y=label_y_by_row[ri],
+            silhouette_left=silhouette_left_at_y(
+                silhouette, label_y_by_row[ri]
+            ),
+            silhouette_right=silhouette_right_at_y(
+                silhouette, label_y_by_row[ri]
+            ),
+        )
+        for ri in populated_logical_rows
+    )
 
     def _project_to_chart_xy(ri: int, ci: int) -> tuple[float, float]:
         """Project a logical (row, col) to its (chart_x, chart_y)

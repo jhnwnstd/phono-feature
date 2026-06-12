@@ -629,10 +629,14 @@ def _vowel_chart_summary(
                 # Read by the web mode-toggle filter; pinned by
                 # test_wire_payload_completeness.py.
                 "is_diphthong": cell.is_diphthong,
-                # 0.0 means use the canonical CSS --vowel-pair-shift;
-                # nonzero means the geometry elevated the shift to
-                # resolve a same-anchor wide-cell collision.
+                # Always the effective pair-side displacement; the
+                # geometry elevates it to resolve same-anchor
+                # wide-cell collisions.
                 "pair_shift_px": cell.pair_shift_px,
+                # Hard-boundary confinement offset (px) applied on
+                # top of the pair shift so the button box stays
+                # inside the outline.
+                "nudge_px": cell.nudge_px,
             }
             for cell in geometry.cells
         ],

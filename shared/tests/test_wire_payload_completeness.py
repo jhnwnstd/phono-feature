@@ -76,6 +76,7 @@ _EXPECTED_CELL_FIELDS = frozenset(
         "contrast_features",
         "is_diphthong",
         "pair_shift_px",
+        "nudge_px",
     }
 )
 

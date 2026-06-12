@@ -265,7 +265,19 @@ class VowelChartWidget(QWidget):
         # so ``_apply_display_mode_filter`` can flip per-cell
         # visibility without re-traversing the geometry.
         self._cells: list[
-            tuple[QWidget, float, float, int, str, int, int, str, bool, float]
+            tuple[
+                QWidget,
+                float,
+                float,
+                int,
+                str,
+                int,
+                int,
+                str,
+                bool,
+                float,
+                float,
+            ]
         ] = []
         self._cell_containers: list[QWidget] = []
         # Cached header styles, rebuilt by apply_theme each toggle.
@@ -769,6 +781,7 @@ class VowelChartWidget(QWidget):
                     cell.entries[0] if cell.entries else "",
                     cell.is_diphthong,
                     cell.pair_shift_px,
+                    cell.nudge_px,
                 )
             )
             # Wire focus tracking on every seg button this cell
@@ -1057,18 +1070,26 @@ class VowelChartWidget(QWidget):
         for lbl, y, tier in self._row_labels:
             lbl.adjustSize()
             lh = lbl.height()
-            py = dy + round(y * dh) - lh // 2
             # Top / bottom tiers anchor their cells' EDGE on chart_y
             # and grow inward, so a label centred on chart_y aligns
-            # with the stack edge, not the button row. Shift by half
-            # a button so the label centres on the anchor button row
-            # exactly like the middle-tier labels; mirrors the web's
-            # ``[data-row-tier]`` row-label rules.
-            if tier == "top":
-                py += SEG_BTN_H // 2
-            elif tier == "bottom":
-                py -= SEG_BTN_H // 2
-            silhouette_left = silhouette_left_at_y(sil_for_dw, y)
+            # with the stack edge, not the button row. Shift the
+            # label's y by half a button so it centres on the anchor
+            # button row like the middle-tier labels, then evaluate
+            # the silhouette edge AT THE LABEL'S OWN y: anchoring on
+            # the row's chart_y while drawing at the shifted y let
+            # the slanted (and corner-rounded) edge eat the gap, so
+            # the Open label hugged the outline. Label placement is
+            # deliberately divorced from where the row's buttons sit
+            # inside the outline.
+            label_y = y
+            if dh > 0:
+                half_btn_norm = (SEG_BTN_H / 2.0) / dh
+                if tier == "top":
+                    label_y = y + half_btn_norm
+                elif tier == "bottom":
+                    label_y = y - half_btn_norm
+            py = dy + round(label_y * dh) - lh // 2
+            silhouette_left = silhouette_left_at_y(sil_for_dw, label_y)
             anchor_x = dx + round(silhouette_left * dw)
             px = anchor_x - lbl.width() - label_gap_px
             lbl.move(max(0, px), py)
@@ -1095,20 +1116,23 @@ class VowelChartWidget(QWidget):
             _s,
             _d,
             cell_ps,
+            cell_nudge,
         ) in self._cells:
             widget.adjustSize()
             ww = widget.width()
             wh = widget.height()
             if ww > self._cell_w_hint:
                 self._cell_w_hint = ww
-            shift_px = cell_ps
+            # ``cell_nudge`` is the shared hard-boundary confinement
+            # offset; applied with the pair shift so the box stays
+            # inside the outline exactly as the geometry computed.
             # round-to-nearest so sub-pixel positions don't bias
             # cells leftward / upward vs the web's float % CSS.
             px = (
                 dx
                 + round(cx * dw)
                 - ww // 2
-                + int(round(pair_side * shift_px))
+                + int(round(pair_side * cell_ps + cell_nudge))
             )
             # Tier-aware y-anchor. Mirrors the web CSS at
             # ``web/style.css`` ``[data-row-tier]`` rules:
@@ -1424,6 +1448,7 @@ class VowelChartWidget(QWidget):
             canon_seg,
             _d,
             _cps,
+            _nudge,
         ) in self._cells:
             cell_by_pos[(row, col)] = (widget, canon_seg)
 
