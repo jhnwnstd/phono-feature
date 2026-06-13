@@ -31,12 +31,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from phonology_shared.chart.vowel_geometry.cell_boxes import (
+    _VOWEL_ROW_GAP_PX,
     _anchor_group_key,
     _cell_box_px,
     _cell_width_px,
     _natural_data_area_size,
     _resolve_pair_shift_conflicts,
-    vertical_depth,
+    content_height_px,
 )
 from phonology_shared.chart.vowel_geometry.display_slots import (
     _OPEN_ROW_INDEX,
@@ -305,17 +306,22 @@ def _plan_rows(
     silhouette: VowelChartSilhouette,
 ) -> RowPlan:
     """Distribute the populated rows in the silhouette span
-    proportional to per-row content depth (the deepest cell's button
-    rows, via the shared :py:func:`..cell_boxes.vertical_depth`)."""
-    depths: dict[int, int] = {ri: 1 for ri in plan.populated_rows}
+    proportional to per-row rendered content height (the tallest
+    cell's pixel height via the shared
+    :py:func:`..cell_boxes.content_height_px`). Pixel heights, not
+    button counts: the density tiers make per-button height vary
+    across rows, and weighting by count starves shallow canonical
+    rows next to a deep ultra row until their cells overlap.
+    """
+    weights: dict[int, int] = {}
     for (ri, _ci), classification in classifications.items():
-        depth = vertical_depth(
+        h = content_height_px(
             classification.kind, len(classification.entries)
         )
-        if depth > depths[ri]:
-            depths[ri] = depth
+        if h > weights.get(ri, 0):
+            weights[ri] = h
     return distribute_rows(
-        plan.populated_rows, depths, silhouette.top_y, silhouette.bottom_y
+        plan.populated_rows, weights, silhouette.top_y, silhouette.bottom_y
     )
 
 
@@ -412,6 +418,7 @@ def _project_cells(
 def _fit_outline_and_size(
     cells: list[VowelChartCell],
     silhouette: VowelChartSilhouette,
+    row_plan: RowPlan,
 ) -> SizedChart:
     """Reserve outline extent for the widest edge cells, then settle
     the natural size.
@@ -421,6 +428,17 @@ def _fit_outline_and_size(
     growing natural_h pulls the aspect back down without touching
     cell positions or dw; dense inventories at or below the ceiling
     are unaffected.
+
+    The row-fit floor then guarantees THE ROW-FIT INVARIANT: at
+    natural size, every row's proportional slot covers its rendered
+    content. The rows live in the silhouette span (``sil_y_span`` of
+    natural_h), so the height request must put at least the summed
+    row heights plus inter-row gaps inside that span; the
+    content-plus-padding estimate from ``_natural_data_area_size``
+    alone undershoots it by the padding-to-span ratio and deep
+    inventories' rows overlap their neighbours at natural size.
+    Both floors only ever grow ``natural_h``, so applying them in
+    sequence satisfies both.
     """
     silhouette = _grow_outline_extent(cells, silhouette)
     natural_w, natural_h = _natural_data_area_size(tuple(cells))
@@ -432,6 +450,10 @@ def _fit_outline_and_size(
             if aspect > VOWEL_SILHOUETTE_MAX_ASPECT:
                 needed_sil_h = natural_w / VOWEL_SILHOUETTE_MAX_ASPECT
                 natural_h = int(math.ceil(needed_sil_h / sil_y_span))
+        rows_px = sum(row_plan.weight[ri] for ri in row_plan.rows)
+        gaps_px = (len(row_plan.rows) - 1) * _VOWEL_ROW_GAP_PX
+        row_fit_h = int(math.ceil((rows_px + gaps_px) / sil_y_span))
+        natural_h = max(natural_h, row_fit_h)
     return SizedChart(
         silhouette=silhouette, natural_w=natural_w, natural_h=natural_h
     )
@@ -518,7 +540,7 @@ def build_vowel_chart_geometry(
     row_plan = _plan_rows(plan, classifications, silhouette)
     silhouette = _solve_outline(slot_plan, row_plan, silhouette)
     cells = _project_cells(slot_plan, row_plan, silhouette, plan.placements)
-    sized = _fit_outline_and_size(cells, silhouette)
+    sized = _fit_outline_and_size(cells, silhouette, row_plan)
     cells = _confine_cells(cells, row_plan, sized)
 
     # Furniture bakes against the FINAL silhouette and natural size:

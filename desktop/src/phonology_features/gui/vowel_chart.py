@@ -280,6 +280,19 @@ class VowelChartWidget(QWidget):
             ]
         ] = []
         self._cell_containers: list[QWidget] = []
+        # Stack cells registered for the render-time slot clamp:
+        # (container, buttons, depth, slot_height_norm). The layout
+        # pass derives each stack's per-button height from its row's
+        # slot budget at the CURRENT rendered height, so a chart
+        # rendered shorter than its natural request shrinks the deep
+        # stacks (down to the shared legibility floor) instead of
+        # letting them invade the neighbouring rows.
+        self._stack_cells: list[tuple[QWidget, list[QWidget], int, float]] = (
+            []
+        )
+        # Row -> slot_height_norm from the current geometry; read by
+        # ``_fill_stack_layout`` when registering stack cells.
+        self._slot_norm_by_row: dict[int, float] = {}
         # Cached header styles, rebuilt by apply_theme each toggle.
         self._HDR_ACTIVE = ""
         self._HDR_INACTIVE = ""
@@ -610,6 +623,8 @@ class VowelChartWidget(QWidget):
             lbl.deleteLater()
         self._row_labels.clear()
         self._cells.clear()
+        self._stack_cells.clear()
+        self._slot_norm_by_row.clear()
         self._last_headers_active = None
         for container in self._cell_containers:
             container.deleteLater()
@@ -765,6 +780,12 @@ class VowelChartWidget(QWidget):
         # whether the cell anchors its top / centre / bottom on
         # chart_y; mirrors the web's ``data-row-tier`` CSS.
         tier_by_row = {row.logical_row: row.tier for row in geometry.rows}
+        # Slot budgets for the render-time clamp; must be populated
+        # BEFORE the cells are built so ``_fill_stack_layout`` can
+        # register each stack with its row's share of the span.
+        self._slot_norm_by_row = {
+            row.logical_row: row.slot_height_norm for row in geometry.rows
+        }
         for cell in geometry.cells:
             widget = self._build_cell(cell)
             if widget is None:
@@ -920,13 +941,28 @@ class VowelChartWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         per_btn_h = effective_button_height_px(len(cell.entries))
         added = False
+        btns: list[QWidget] = []
         for seg in cell.entries:
             btn = self._buttons.get(seg)
             if btn is not None:
                 btn.setFixedHeight(per_btn_h)
                 btn.show()
                 layout.addWidget(btn)
+                btns.append(btn)
                 added = True
+        if added:
+            # Register for the slot clamp in ``_layout_children``:
+            # the tier height set above is the natural-size value;
+            # the layout pass re-derives it from the row's slot
+            # budget whenever the rendered height differs.
+            self._stack_cells.append(
+                (
+                    container,
+                    btns,
+                    len(btns),
+                    self._slot_norm_by_row.get(cell.row, 0.0),
+                )
+            )
         # Affordance: dense / ultra cells visually shrink their
         # buttons; without a tooltip, users read the packing as a
         # rendering bug. Mirror the web's title attribute on the
@@ -1093,6 +1129,28 @@ class VowelChartWidget(QWidget):
             anchor_x = dx + round(silhouette_left * dw)
             px = anchor_x - lbl.width() - label_gap_px
             lbl.move(max(0, px), py)
+        # Render-time slot clamp. The geometry's row-fit invariant
+        # guarantees every slot covers its stack at NATURAL size;
+        # when the rendered data area is shorter, the density-tier
+        # height would overflow the slot and invade the rows below
+        # (top tiers hang down) or above (bottom tiers rise up).
+        # Re-derive each stack's per-button height from its row's
+        # slot budget at the current ``dh``, floored at the shared
+        # legibility minimum; past the floor, the pane's scrolling
+        # absorbs the overflow. Mirrors the web's ``--cell-btn-h``
+        # resize pass.
+        for container, btns, depth, slot_norm in self._stack_cells:
+            if slot_norm <= 0.0 or depth <= 0:
+                continue
+            tier_h = effective_button_height_px(depth)
+            budget = (
+                slot_norm * dh - (depth - 1) * cs.VOWEL_CELL_STACK_GAP_PX
+            ) / depth
+            h = max(cs.VOWEL_BTN_MIN_H_PX, min(tier_h, int(budget)))
+            if btns[0].height() != h:
+                for btn in btns:
+                    btn.setFixedHeight(h)
+                container.adjustSize()
         # Cells: position concern (anchor) + display concern (pair
         # shift). ``chart_x`` / ``chart_y`` are the backness anchor
         # already projected through the chart silhouette; the pair

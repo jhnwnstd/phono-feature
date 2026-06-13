@@ -1383,6 +1383,18 @@ dialog input[type="text"]:focus-visible {
   height: var(--vowel-cell-ultra-h, calc(var(--seg-btn-h) - 8px));
   border-radius: var(--radius-md);
 }
+/* Render-time slot clamp. main.js sets ``data-clamped`` plus
+   ``--cell-btn-h`` on a stack whose row slot, at the CURRENT
+   rendered chart height, is too short for the density-tier button
+   height; the per-button height then comes from the slot budget
+   (floored at the shared legibility minimum) so deep stacks shrink
+   instead of invading the neighbouring rows. Equal specificity to
+   the density rules above, so this rule must stay BELOW them for
+   the clamp to win when both match. Mirrors the desktop's
+   ``setFixedHeight`` clamp in ``_layout_children``. */
+.vowel-chart-cell-stack[data-clamped] > .seg-btn {
+  height: var(--cell-btn-h);
+}
 /* Vertical stack for cells holding multiple vowels (e.g. ə / ɜ / ɚ
    all landing in open-mid central). Mirrors the desktop's
    QVBoxLayout collision handling so each vowel stays independently

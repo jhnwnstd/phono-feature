@@ -288,6 +288,7 @@ const CHART_STYLE = Object.freeze(
         diphthong_arrowhead_half_frac: 0.014,
         vowel_cell_dense_threshold: 5,
         vowel_cell_ultra_threshold: 10,
+        vowel_btn_min_h_px: 14,
     }),
 );
 
@@ -1876,6 +1877,11 @@ function _buildVowelChart(chart) {
             dataEl.style.setProperty(
                 `--vowel-${shape}-rounded-points`, polyStr,
             );
+            // Same trigger set as the polygon (first layout +
+            // every resize): re-derive the stack button heights
+            // from the rows' slot budgets at the height we just
+            // measured.
+            _refreshVowelStackClamp(dataEl);
         };
         requestAnimationFrame(refreshPolygon);
         attachResizeObserver(
@@ -1936,6 +1942,11 @@ function _buildVowelChart(chart) {
     const rowTierByLogical = new Map(
         (chart.rows || []).map((r) => [r.logical_row, r.tier || "middle"]),
     );
+    const slotNormByLogical = new Map(
+        (chart.rows || []).map(
+            (r) => [r.logical_row, r.slot_height_norm || 0],
+        ),
+    );
     // Vowel chart display mode. Cells are ALWAYS rendered (only
     // monophthongs land in cells; diphthongs render as arrows
     // + chip strip per the shared placer's
@@ -1979,7 +1990,9 @@ function _buildVowelChart(chart) {
             const kind = cell.display_kind || "stack";
             switch (kind) {
                 case "stack":
-                    target = _buildVowelCellStack(segs);
+                    target = _buildVowelCellStack(
+                        segs, slotNormByLogical.get(cell.row),
+                    );
                     break;
                 case "long_pair":
                 case "nasal_pair":
@@ -2001,7 +2014,9 @@ function _buildVowelChart(chart) {
                         + `by the web renderer; falling back to STACK. `
                         + `Update the switch in _buildVowelChart.`,
                     );
-                    target = _buildVowelCellStack(segs);
+                    target = _buildVowelCellStack(
+                        segs, slotNormByLogical.get(cell.row),
+                    );
             }
         }
         // Position concern: backness anchor projected through the
@@ -2559,9 +2574,17 @@ function _buildVowelCellButton(seg) {
  *  bug). The desktop's QVBoxLayout does the right thing
  *  automatically because Qt's layout managers do not rely on
  *  absolute positioning. */
-function _buildVowelCellStack(segs) {
+function _buildVowelCellStack(segs, slotNorm) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-stack";
+    // Slot-clamp metadata: the resize pass
+    // (``_refreshVowelStackClamp``) re-derives this stack's
+    // per-button height from its row's slot budget whenever the
+    // rendered chart is shorter than the natural request.
+    if (typeof slotNorm === "number" && slotNorm > 0) {
+        cell.dataset.slotNorm = String(slotNorm);
+        cell.dataset.stackDepth = String(segs.length);
+    }
     // Density thresholds relayed from the shared
     // ``vowels_layout`` tier constants (the same ladder that
     // drives the geometry's natural-height request); the literals
@@ -2589,6 +2612,52 @@ function _buildVowelCellStack(segs) {
         cell.appendChild(_buildVowelSegBtn(seg));
     }
     return cell;
+}
+
+/** Re-derive per-button heights for vowel stacks from their rows'
+ *  slot budgets at the CURRENT rendered chart height. The shared
+ *  geometry's row-fit invariant guarantees every slot covers its
+ *  stack at natural size; rendered shorter, the density-tier height
+ *  would overflow the slot and invade the neighbouring rows (top
+ *  tiers hang down, bottom tiers rise up). The clamp floors at the
+ *  relayed legibility minimum (``vowel_btn_min_h_px``); past the
+ *  floor the panel's scrolling absorbs the overflow. Mirrors the
+ *  desktop's ``setFixedHeight`` clamp in ``_layout_children``. */
+function _refreshVowelStackClamp(dataEl) {
+    const dh = dataEl.clientHeight || 0;
+    if (dh <= 0) return;
+    const minH = CHART_STYLE.vowel_btn_min_h_px ?? 14;
+    const denseThreshold = CHART_STYLE.vowel_cell_dense_threshold ?? 5;
+    const ultraThreshold = CHART_STYLE.vowel_cell_ultra_threshold ?? 10;
+    const styles = getComputedStyle(dataEl);
+    const readPx = (name, fallback) => {
+        const v = parseFloat(styles.getPropertyValue(name));
+        return Number.isFinite(v) ? v : fallback;
+    };
+    const segBtnH = readPx("--seg-btn-h", 26);
+    const denseH = readPx("--vowel-cell-dense-h", segBtnH - 4);
+    const ultraH = readPx("--vowel-cell-ultra-h", segBtnH - 8);
+    const gap = readPx("--vowel-cell-stack-gap", 1);
+    const stacks = dataEl.querySelectorAll(
+        ".vowel-chart-cell-stack[data-slot-norm]",
+    );
+    for (const cell of stacks) {
+        const slotNorm = parseFloat(cell.dataset.slotNorm);
+        const depth = parseInt(cell.dataset.stackDepth, 10);
+        if (!(slotNorm > 0) || !(depth > 0)) continue;
+        const tierH = depth >= ultraThreshold
+            ? ultraH
+            : depth >= denseThreshold ? denseH : segBtnH;
+        const budget = (slotNorm * dh - (depth - 1) * gap) / depth;
+        const h = Math.max(minH, Math.min(tierH, Math.floor(budget)));
+        if (h < tierH) {
+            cell.dataset.clamped = "";
+            cell.style.setProperty("--cell-btn-h", h + "px");
+        } else {
+            delete cell.dataset.clamped;
+            cell.style.removeProperty("--cell-btn-h");
+        }
+    }
 }
 
 /** Build a horizontal container for a vowel-chart cell whose two

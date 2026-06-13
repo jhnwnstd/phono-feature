@@ -791,40 +791,49 @@ class RowPlan:
     silhouette span: each row's display y anchor, its slot height,
     its render tier (``top`` rows anchor their content's top edge on
     the y and grow DOWN, ``bottom`` rows grow UP, ``middle`` /
-    ``only`` centre), and its content depth in button rows."""
+    ``only`` centre), and its weight (the row's rendered content
+    height in pixels, the quantity the slots are proportional to)."""
 
     rows: tuple[int, ...]
     display_y: Mapping[int, float]
     slot_height: Mapping[int, float]
     tier: Mapping[int, str]
-    depth: Mapping[int, int]
+    weight: Mapping[int, int]
 
 
 def distribute_rows(
     populated_rows: tuple[int, ...],
-    depths: Mapping[int, int],
+    weights: Mapping[int, int],
     top_y: float,
     bottom_y: float,
 ) -> RowPlan:
     """Distribute row anchors in the silhouette's vertical span
-    PROPORTIONAL TO PER-ROW CONTENT DEPTH so a row with a tall stack
-    (Korean PHOIBLE has 7 entries at Close-Back) gets enough
-    vertical room before the next row starts; distributed evenly
-    instead, a deep stack at the Close row overruns the rows below
-    it and visually invades their cells.
+    PROPORTIONAL TO PER-ROW RENDERED CONTENT HEIGHT so a row with a
+    tall stack (Korean PHOIBLE has 7 entries at Close-Back) gets
+    enough vertical room before the next row starts; distributed
+    evenly instead, a deep stack at the Close row overruns the rows
+    below it and visually invades their cells.
 
-    Each row gets a slot whose height is ``depth / total_depth`` of
-    the span. The row's y anchor sits at the top of its slot for the
-    topmost row, the bottom of its slot for the bottommost row, and
-    the centre for middle rows; the matching tier string tells
+    ``weights`` must be the rows' content heights in PIXELS (the
+    pipeline computes them via ``cell_boxes.content_height_px``),
+    not raw button counts: per-button height is density-tier
+    dependent (26 / 22 / 18 px), so a 12-button ultra stack costs
+    less per button than a 2-button canonical stack and raw counts
+    over-allocate the deep row while starving its shallow
+    neighbours into overlap. This module stays cell-blind: the
+    weights arrive as abstract numbers.
+
+    Each row gets a slot whose height is ``weight / total_weight``
+    of the span. The row's y anchor sits at the top of its slot for
+    the topmost row, the bottom of its slot for the bottommost row,
+    and the centre for middle rows; the matching tier string tells
     renderers which way the content grows, so the cell box fills its
     slot without crossing the silhouette's top or bottom edge.
 
     Preconditions the pipeline guarantees: ``populated_rows`` is
     non-empty (the empty inventory short-circuits before any row
-    math) and every row's depth is at least 1 (``_plan_rows`` seeds
-    1 even for rows whose deepest cell is a single button), so
-    ``total_depth`` is never zero.
+    math) and every row's weight is at least one button height, so
+    ``total_weight`` is never zero.
     """
     if len(populated_rows) == 1:
         only = populated_rows[0]
@@ -833,16 +842,16 @@ def distribute_rows(
             display_y={only: (top_y + bottom_y) / 2},
             slot_height={only: bottom_y - top_y},
             tier={only: "only"},
-            depth=dict(depths),
+            weight=dict(weights),
         )
     span = bottom_y - top_y
-    total_depth = sum(depths[ri] for ri in populated_rows)
+    total_weight = sum(weights[ri] for ri in populated_rows)
     display_y: dict[int, float] = {}
     slot_height: dict[int, float] = {}
     cursor = top_y
     last_index = len(populated_rows) - 1
     for i, ri in enumerate(populated_rows):
-        height = depths[ri] / total_depth * span
+        height = weights[ri] / total_weight * span
         slot_height[ri] = height
         if i == 0:
             # Top row anchors at the top of its slot.
@@ -862,5 +871,5 @@ def distribute_rows(
         display_y=display_y,
         slot_height=slot_height,
         tier=tier,
-        depth=dict(depths),
+        weight=dict(weights),
     )

@@ -21,7 +21,24 @@ from __future__ import annotations
 # Hard caps.
 MAX_NAME_LENGTH: int = 256
 MAX_FEATURES: int = 40
-MAX_SEGMENTS: int = 200
+# Sized just above the realistic ceiling: PHOIBLE's largest
+# inventory is !Xoo at 161 segments and the largest bundled is
+# Hayes at 141. The display surfaces are stress-verified at this
+# cap (vowel chart row-fit invariant, segment-pane spillover,
+# feature-pane density tiers), so anything the validator admits is
+# guaranteed a non-buggy render.
+MAX_SEGMENTS: int = 180
+
+# Per-class caps, enforced wherever a grid becomes an Inventory and
+# on load. Classification is feature-driven (the chart layer's
+# ``group_segments`` is the single source), so these are checked by
+# ``chart.consonants.validate_class_caps`` rather than the parse
+# layer (data must not import chart). Sized to the PHOIBLE maxima
+# the display logic is verified against: So has exactly 50 vowels
+# and !Xoo has 133 consonants, the densest real charts the vowel
+# space and segment pane are tested to render cleanly.
+MAX_VOWELS: int = 50
+MAX_CONSONANTS: int = 135
 
 # A bundled inventory at MAX_SEGMENTS x MAX_FEATURES with realistic
 # value tokens lands around 40 KB serialized. 5 MB is ~125x the

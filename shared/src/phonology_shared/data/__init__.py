@@ -17,20 +17,24 @@ from phonology_shared.data.inventory import (
 from phonology_shared.data.limits import (
     ADVISORY_FEATURE_THRESHOLD,
     ADVISORY_SEGMENT_THRESHOLD,
+    MAX_CONSONANTS,
     MAX_FEATURES,
     MAX_INVENTORY_FILE_BYTES,
     MAX_NAME_LENGTH,
     MAX_SEGMENTS,
+    MAX_VOWELS,
 )
 
 __all__ = [
     "ADVISORY_FEATURE_THRESHOLD",
     "ADVISORY_SEGMENT_THRESHOLD",
     "Inventory",
+    "MAX_CONSONANTS",
     "MAX_FEATURES",
     "MAX_INVENTORY_FILE_BYTES",
     "MAX_NAME_LENGTH",
     "MAX_SEGMENTS",
+    "MAX_VOWELS",
     "VALID_VALUES",
     "ValidationError",
     "canonicalize_feature_label",

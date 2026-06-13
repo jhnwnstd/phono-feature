@@ -1080,3 +1080,52 @@ def group_segments(
         for name in DISPLAY_ORDER
         if assignment.get(name)
     }
+
+
+def validate_class_caps(
+    inventory: Mapping[str, Mapping[str, str]],
+    *,
+    normalized: Mapping[str, dict[str, str]] | None = None,
+) -> list[str]:
+    """Check the per-class hard caps (``MAX_VOWELS`` /
+    ``MAX_CONSONANTS`` from :py:mod:`phonology_shared.data.limits`).
+
+    Returns user-facing messages, one per violated cap; empty means
+    the inventory is within bounds. Counting goes through
+    :py:func:`group_segments` so "vowel" means exactly what the
+    display surfaces mean by it (the rule-ordered group table with
+    its membership guards), and "consonant" is every non-vowel
+    segment. A simpler ``syllabic == '+'`` predicate would drift
+    from the grouping the charts actually render.
+
+    This lives next to the classifier rather than in the data
+    layer's parse validation because the data layer must not import
+    chart code; callers raise
+    :py:class:`phonology_shared.data.inventory.ValidationError` with
+    the returned messages wherever a grid becomes an
+    :py:class:`~phonology_shared.data.inventory.Inventory` (builder
+    save, new-inventory create, PHOIBLE materialization) and after
+    every JSON load. The caps are sized so all PHOIBLE inventories
+    pass (So has exactly ``MAX_VOWELS`` vowels; !Xoo has 133
+    consonants under the 135 cap); the display surfaces are
+    stress-verified at these counts.
+
+    ``normalized`` optionally carries pre-normalized bundles, same
+    contract as :py:func:`group_segments`.
+    """
+    groups = group_segments(inventory, normalized=normalized)
+    n_total = sum(len(segs) for segs in groups.values())
+    n_vowels = len(groups.get("Vowels", []))
+    n_consonants = n_total - n_vowels
+    messages: list[str] = []
+    if n_vowels > MAX_VOWELS:
+        messages.append(
+            f"inventory has {n_vowels} vowels; "
+            f"hard cap is {MAX_VOWELS}"
+        )
+    if n_consonants > MAX_CONSONANTS:
+        messages.append(
+            f"inventory has {n_consonants} consonants; "
+            f"hard cap is {MAX_CONSONANTS}"
+        )
+    return messages

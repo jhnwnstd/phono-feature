@@ -267,6 +267,16 @@ VOWEL_SILHOUETTE_ALPHA: float = 0.70
 #: still draw a recognisable trapezoid.
 VOWEL_CHART_DATA_MIN_H_PX: int = 8 * SEG_BTN_H
 
+#: Legibility floor for a stacked vowel button's rendered height.
+#: When the rendered chart is shorter than the geometry's natural
+#: request, both renderers derive per-button heights from the row's
+#: ``slot_height_norm`` budget so deep stacks shrink instead of
+#: invading the neighbouring rows; below this floor an IPA glyph
+#: stops being readable, so the clamp bottoms out here and the
+#: pane's scrolling absorbs the rest. Content-driven pixel floor,
+#: not a layout ratio.
+VOWEL_BTN_MIN_H_PX: int = 14
+
 
 #: Maximum silhouette aspect ratio (width / height). When natural
 #: sizing produces an over-wide silhouette (sparse inventories

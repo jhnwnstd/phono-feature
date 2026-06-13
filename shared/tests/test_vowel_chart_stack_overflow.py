@@ -8,9 +8,10 @@ is shorter than ``natural_data_height_px``:
   row's normalised allocation of the silhouette's vertical span.
 - Slot heights sum to ``silhouette.bottom_y - silhouette.top_y``
   (the trapezoid's full vertical span).
-- Each row's slot is proportional to its max stack depth, so a row
-  containing a 7-entry stack gets 7x the height of a row with a
-  1-entry stack.
+- Each row's slot is proportional to its rendered content height in
+  pixels (density tiers included), so a row containing a 7-entry
+  dense stack gets ~6.2x the height of a row with one canonical
+  button rather than a raw 7x that would starve the shallow rows.
 - Renderers multiply ``slot_height_norm`` by the actual rendered
   data-area pixel height to derive the row's pixel budget and pick
   a per-button height that fits the stack inside.
@@ -26,8 +27,12 @@ field and shrinks the per-button height when the slot is tight.
 
 from __future__ import annotations
 
+from phonology_shared.chart.vowel_geometry.cell_boxes import (
+    content_height_px,
+)
 from phonology_shared.chart.vowels import (
     PlacementPolicy,
+    VowelCellDisplayKind,
     VowelProfile,
     detect_vowel_profile,
 )
@@ -160,13 +165,14 @@ def test_geometry_emits_slot_height_norm_per_row() -> None:
 
 
 def test_deeper_row_gets_proportionally_larger_slot() -> None:
-    """A row holding a 7-entry stack must receive 7x the slot
-    height of a row holding a 1-entry stack. Pins the proportional
-    allocation so a renderer derived per-button height from
-    ``slot_height_norm × container_px / stack_depth`` will produce
-    the same per-button size in both rows: the row's slot is sized
-    to make the stack render at canonical button height when the
-    chart is at its natural pixel height.
+    """Row slots must be proportional to RENDERED CONTENT HEIGHT in
+    pixels (``content_height_px``), not raw stack depth: per-button
+    height is density-tier dependent, so a 7-entry dense stack
+    (22 px per button) costs less than 7x a canonical single button
+    (26 px). Depth-proportional slots over-allocate the deep row and
+    starve its shallow neighbours until their cells overlap; the
+    pixel weighting plus the pipeline's row-fit floor guarantee
+    every slot covers its stack at natural size.
     """
     vowels, seg_feats = _tall_middle_stack_inventory()
     profile = _profile_for(seg_feats)
@@ -198,9 +204,13 @@ def test_deeper_row_gets_proportionally_larger_slot() -> None:
     assert shallow_candidates, "synthetic should produce 1-deep rows"
     shallow_slot = rows_by_logical[shallow_candidates[0]].slot_height_norm
     ratio = deepest_slot / shallow_slot
-    assert 6.5 < ratio < 7.5, (
+    expected = content_height_px(
+        VowelCellDisplayKind.STACK, 7
+    ) / content_height_px(VowelCellDisplayKind.STACK, 1)
+    assert abs(ratio - expected) < 0.01, (
         f"deepest row slot / shallowest row slot = {ratio:.2f}; "
-        f"expected ~7.0 (proportional to depth ratio)"
+        f"expected ~{expected:.2f} (proportional to the rows' "
+        f"rendered pixel heights, density tiers included)"
     )
 
 

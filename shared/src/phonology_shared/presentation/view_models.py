@@ -610,6 +610,12 @@ def _vowel_chart_summary(
                 "tier": row.tier,
                 "silhouette_left": row.silhouette_left,
                 "silhouette_right": row.silhouette_right,
+                # Row's share of the silhouette span; the renderer's
+                # slot clamp derives per-button heights from it when
+                # the rendered chart is shorter than the natural
+                # request, so deep stacks shrink instead of invading
+                # the neighbouring rows.
+                "slot_height_norm": row.slot_height_norm,
             }
             for row in geometry.rows
         ],

@@ -207,6 +207,30 @@ def _cell_vertical_depth(cell: VowelChartCell) -> int:
     return vertical_depth(cell.display_kind, len(cell.entries))
 
 
+def content_height_px(kind: VowelCellDisplayKind, n_entries: int) -> int:
+    """Rendered pixel height of a cell's button block: ``depth``
+    button rows at the density-tier height with the stack gap
+    between them.
+
+    NOT monotonic in entry count: a 10-entry stack renders SHORTER
+    than a 9-entry one because the ultra tier drops the per-button
+    height from 22 to 18 px. Per-row maxima must therefore compare
+    heights via this function, never raw depths; comparing depths
+    lets the 9-deep cell overflow a slot sized for the 10-deep one.
+    """
+    depth = vertical_depth(kind, n_entries)
+    eff_h = effective_button_height_px(depth)
+    return depth * eff_h + (depth - 1) * _VOWEL_CELL_STACK_GAP_PX
+
+
+def _cell_height_px(cell: VowelChartCell) -> int:
+    """:py:func:`content_height_px` for an already-built cell. The
+    vertical mate of :py:func:`_cell_width_px`: the one height
+    formula the box rect, the natural sizing, and the pipeline's
+    row weighting share."""
+    return content_height_px(cell.display_kind, len(cell.entries))
+
+
 def _cell_box_px(
     cell: VowelChartCell, tier: str, dw: int, dh: int
 ) -> tuple[float, float, float, float]:
@@ -224,9 +248,7 @@ def _cell_box_px(
     outline" is judged against the same boxes the renderers draw.
     """
     ww = _cell_width_px(cell)
-    depth = _cell_vertical_depth(cell)
-    eff_h = effective_button_height_px(depth)
-    wh = depth * eff_h + (depth - 1) * _VOWEL_CELL_STACK_GAP_PX
+    wh = _cell_height_px(cell)
     left = (
         cell.chart_x * dw
         - ww / 2.0
@@ -341,21 +363,17 @@ def _natural_data_area_size(
                     needed_dw = needed_px / chart_x_diff
                     max_row_w = max(max_row_w, int(math.ceil(needed_dw)))
 
-    # Height: per-row max stack depth, plus inter-row gaps and
-    # vertical padding for the silhouette's top/bottom offset.
-    # Density-tier-aware: when the deepest cell in a row crosses
-    # the dense / ultra threshold, its rendered per-button height
-    # shrinks (matching the CSS rules). The natural-height request
-    # tracks the actual rendered height so the chart asks for what
-    # the renderer will draw, not the canonical-button theoretical
-    # max.
-    row_heights: list[int] = []
-    for row_cells in cells_by_row.values():
-        depth = max(_cell_vertical_depth(c) for c in row_cells)
-        per_btn_h = effective_button_height_px(depth)
-        row_heights.append(
-            depth * per_btn_h + (depth - 1) * _VOWEL_CELL_STACK_GAP_PX
-        )
+    # Height: per-row max rendered cell height, plus inter-row gaps
+    # and vertical padding for the silhouette's top/bottom offset.
+    # Density-tier-aware via ``_cell_height_px`` (the maximum is
+    # taken over HEIGHTS, not depths; see ``content_height_px`` for
+    # why the two orderings disagree around the tier thresholds), so
+    # the chart asks for what the renderer will draw, not the
+    # canonical-button theoretical max.
+    row_heights: list[int] = [
+        max(_cell_height_px(c) for c in row_cells)
+        for row_cells in cells_by_row.values()
+    ]
 
     total_h = sum(row_heights) + (len(row_heights) - 1) * _VOWEL_ROW_GAP_PX
     total_h += _VOWEL_DATA_AREA_VERTICAL_PADDING_PX

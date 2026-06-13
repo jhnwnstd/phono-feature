@@ -1468,6 +1468,10 @@ def hash_assets() -> None:
                 # natural-height math read the same ladder.
                 "vowel_cell_dense_threshold": (DENSITY_TIER_DENSE_THRESHOLD),
                 "vowel_cell_ultra_threshold": (DENSITY_TIER_ULTRA_THRESHOLD),
+                # Legibility floor for the render-time slot clamp
+                # (``_refreshVowelStackClamp``); below it, scrolling
+                # beats shrinking.
+                "vowel_btn_min_h_px": chart_style_mod.VOWEL_BTN_MIN_H_PX,
             },
             separators=(",", ":"),
         )

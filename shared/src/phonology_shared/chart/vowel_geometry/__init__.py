@@ -50,6 +50,18 @@ into the anchor instead, near-coincident anchors look separable by
 widening and the width solver inflates dense PHOIBLE charts to
 several times their natural width.
 
+THE ROW-FIT INVARIANT (vertical mate of the cascade): row slots
+are distributed proportional to each row's rendered content height
+in PIXELS (``cell_boxes.content_height_px``, density tiers
+included; raw button counts misallocate because per-button height
+varies by tier), and ``pipeline._fit_outline_and_size`` floors the
+natural height so the silhouette span covers the summed row
+heights plus gaps. At natural size every slot therefore covers its
+content; rendered SHORTER than natural, both renderers re-derive
+per-button heights from ``VowelChartRow.slot_height_norm`` (down
+to ``chart_style.VOWEL_BTN_MIN_H_PX``) so deep stacks shrink
+instead of invading neighbouring rows.
+
 THE CASCADE INVARIANT (``outline.silhouette_for_data_width``):
 cells render at ``anchor * dw + sign * extent_px``, so the
 silhouette's corner fields must be recomputed for the ACTUAL
