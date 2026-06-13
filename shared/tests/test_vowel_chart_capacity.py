@@ -25,6 +25,8 @@ same thing.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from phonology_shared.chart.vowel_geometry.cell_boxes import (
@@ -107,16 +109,32 @@ def _assert_no_overlap_and_contained(geom: object, label: str) -> None:
             )
 
 
+def _phoible_provider_or_skip() -> object:
+    """The packaged PHOIBLE provider, or a clean skip when the bake
+    snapshot is absent (gitignored on fresh checkouts). Mirrors the
+    conftest ``phoible_provider`` fixture's skip semantics so these
+    module-level helpers degrade the same way."""
+    try:
+        from phonology_shared.editor.phoible_provider import (
+            default_phoible_provider,
+        )
+    except ImportError as exc:  # pragma: no cover
+        pytest.skip(f"phoible_provider unavailable: {exc}")
+    try:
+        return default_phoible_provider()
+    except Exception as exc:  # pragma: no cover
+        pytest.skip(f"PHOIBLE snapshot not baked: {exc}")
+
+
 def _phoible_vowels(name: str) -> dict[str, dict[str, str]]:
     """Materialize a named PHOIBLE inventory and return its vowel
     bundles. Skips if PHOIBLE data is unavailable in the test env."""
     from phonology_shared.editor.phoible_provider import (
-        default_phoible_provider,
         materialize_phoible_inventory,
     )
 
-    prov = default_phoible_provider()
-    for inv_id in prov._inventories:
+    prov = _phoible_provider_or_skip()
+    for inv_id in prov._inventories:  # type: ignore[attr-defined]
         inv = materialize_phoible_inventory(prov, inv_id)
         if inv.name == name:
             eng = FeatureEngine(inv)
@@ -213,13 +231,12 @@ def test_caps_admit_the_densest_phoible_inventories() -> None:
     inventory trips here."""
     from phonology_shared.chart.consonants import validate_class_caps
     from phonology_shared.editor.phoible_provider import (
-        default_phoible_provider,
         materialize_phoible_inventory,
     )
 
-    prov = default_phoible_provider()
+    prov = _phoible_provider_or_skip()
     seen: dict[str, int] = {}
-    for inv_id in prov._inventories:
+    for inv_id in prov._inventories:  # type: ignore[attr-defined]
         inv = materialize_phoible_inventory(prov, inv_id)
         if inv.name in ("So [PHOIBLE]", "!Xóõ [PHOIBLE]"):
             messages = validate_class_caps(inv.segments)
@@ -235,22 +252,21 @@ def test_caps_admit_the_densest_phoible_inventories() -> None:
     }, f"expected both reference inventories, found {sorted(seen)}"
 
 
-def test_bundled_inventories_within_caps() -> None:
+def test_bundled_inventories_within_caps(inventories_dir: Path) -> None:
     """Every bundled inventory stays within the per-class caps, so a
-    cap change that would reject a shipped inventory fails here."""
-    import glob
+    cap change that would reject a shipped inventory fails here.
 
+    Uses the shared ``inventories_dir`` fixture (resolved relative to
+    the test file) so the path is portable across machines and CI;
+    skips cleanly if the corpus is absent on a fresh checkout."""
     from phonology_shared.chart.consonants import validate_class_caps
 
     paths = sorted(
-        p
-        for p in glob.glob(
-            "/home/tc/projects/phono-feature/desktop/inventories/*.json"
-        )
-        if "_schema" not in p
+        p for p in inventories_dir.glob("*.json") if p.stem != "_schema"
     )
-    assert paths, "no bundled inventories found"
+    if not paths:
+        pytest.skip("bundled inventory corpus not present")
     for path in paths:
-        inv = Inventory.load(path)
+        inv = Inventory.load(str(path))
         messages = validate_class_caps(inv.segments)
-        assert messages == [], f"{path}: {messages}"
+        assert messages == [], f"{path.name}: {messages}"
