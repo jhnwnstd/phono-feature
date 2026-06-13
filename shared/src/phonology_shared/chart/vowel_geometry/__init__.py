@@ -45,9 +45,10 @@ front-most / back-most cells (no chart width can absorb a
 back-anchor overhang, because the back edge moves with the
 anchor); finally residual overhangs (slant, corner arcs, renderer
 rounding) are nudged inward as per-cell pixel offsets. Nudges are
-shift-only and never feed back into the solved size; expressing
-confinement as anchor movement instead of pixel offsets once blew
-the solved chart width up to ~900 px on dense PHOIBLE inventories.
+shift-only and must never feed back into the solved size: folded
+into the anchor instead, near-coincident anchors look separable by
+widening and the width solver inflates dense PHOIBLE charts to
+several times their natural width.
 
 THE CASCADE INVARIANT (``outline.silhouette_for_data_width``):
 cells render at ``anchor * dw + sign * extent_px``, so the

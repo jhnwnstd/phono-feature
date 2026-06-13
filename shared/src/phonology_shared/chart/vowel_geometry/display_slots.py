@@ -42,6 +42,10 @@ _COL_TO_SLOT: dict[int, int] = {
     for col, key in _BACKNESS_GROUP_BY_COL.items()
 }
 
+#: Logical index of the Open row, the one row with placement
+#: special-casing (see :py:func:`effective_anchor_x`).
+_OPEN_ROW_INDEX: int = _ROW_LABEL_TO_INDEX["Open"]
+
 #: PAIR display kinds; renderers lay these out as one horizontal
 #: row of two buttons. Shared by ``_cell_natural_size`` and both
 #: renderer dispatches.
@@ -93,7 +97,9 @@ def _classify_vowel_cell_display(
     """
     if len(entries) < 2:
         return VowelCellDisplayKind.STACK, (), entries
-    bundles = [dict(norm_feats.get(seg, {})) for seg in entries]
+    bundles: list[Mapping[str, str]] = [
+        norm_feats.get(seg, {}) for seg in entries
+    ]
     all_keys: set[str] = set()
     for b in bundles:
         all_keys.update(b)
@@ -127,9 +133,21 @@ def _classify_vowel_cell_display(
     return VowelCellDisplayKind.STACK, (), entries
 
 
+#: The single feature whose ``+`` value marks the right-hand member
+#: of each simple pair kind. PHONATION_PAIR is deliberately absent:
+#: it covers the joint breathy/creaky contrast and orders on
+#: modality instead (see :py:func:`_order_pair_entries`).
+_PAIR_KIND_TO_FEATURE: dict[VowelCellDisplayKind, str] = {
+    VowelCellDisplayKind.LONG_PAIR: "long",
+    VowelCellDisplayKind.NASAL_PAIR: "nasal",
+    VowelCellDisplayKind.RHOTIC_PAIR: "rhotic",
+    VowelCellDisplayKind.TONE_PAIR: "tone",
+}
+
+
 def _order_pair_entries(
     entries: tuple[str, ...],
-    bundles: list[dict[str, str]],
+    bundles: list[Mapping[str, str]],
     kind: VowelCellDisplayKind,
 ) -> tuple[str, ...]:
     """Reorder a 2-entry PAIR tuple so the "marked" member sits on
@@ -142,14 +160,8 @@ def _order_pair_entries(
     single contrast. The reordering is stable: ties keep input
     order.
     """
-    feature_for_kind = {
-        VowelCellDisplayKind.LONG_PAIR: "long",
-        VowelCellDisplayKind.NASAL_PAIR: "nasal",
-        VowelCellDisplayKind.RHOTIC_PAIR: "rhotic",
-        VowelCellDisplayKind.TONE_PAIR: "tone",
-    }
-    if kind in feature_for_kind:
-        feat = feature_for_kind[kind]
+    if kind in _PAIR_KIND_TO_FEATURE:
+        feat = _PAIR_KIND_TO_FEATURE[kind]
         a_val = bundles[0].get(feat)
         b_val = bundles[1].get(feat)
         if a_val == "+" and b_val != "+":
@@ -157,10 +169,8 @@ def _order_pair_entries(
         return entries
     if kind == VowelCellDisplayKind.PHONATION_PAIR:
 
-        def _is_modal(b: dict[str, str]) -> bool:
-            return b.get("breathy") not in ("+",) and b.get("creaky") not in (
-                "+",
-            )
+        def _is_modal(b: Mapping[str, str]) -> bool:
+            return b.get("breathy") != "+" and b.get("creaky") != "+"
 
         if _is_modal(bundles[0]) and not _is_modal(bundles[1]):
             return entries
@@ -190,11 +200,16 @@ _NEUTRAL_TO_PAIRED: dict[int, tuple[int, int]] = {
     8: (4, 5),  # back-neutral -> back-unr/back-rnd
 }
 
+#: Inverse view of ``_NEUTRAL_TO_PAIRED``: paired col -> the neutral
+#: col sharing its backness anchor. Derived rather than written out
+#: so the two maps cannot drift.
+_PAIRED_TO_NEUTRAL: dict[int, int] = {
+    paired: neutral
+    for neutral, pair in _NEUTRAL_TO_PAIRED.items()
+    for paired in pair
+}
 
-#: One populated cell's layout metadata: ``(row, col, entries,
-#: display_kind, contrast_features, pair_side, anchor_x)`` where
-#: ``anchor_x`` is the cell's EFFECTIVE backness anchor after the
-#: Open-row central migration.
+
 @dataclass(frozen=True)
 class CellClassification:
     """One cell's display-kind verdict from
@@ -213,10 +228,10 @@ def classify_cells(
 ) -> dict[tuple[int, int], CellClassification]:
     """Classify every populated cell exactly once.
 
-    Both the row-depth pre-pass and the slot assignment need the
-    same verdict; profiling (W2: 5252 calls / 259 ms across 200
-    PHOIBLE inventories) showed the classifier used to run twice
-    per cell.
+    The row-depth pre-pass and the slot assignment both consume the
+    same verdict; classifying here and handing the table to both
+    keeps the classifier, the dominant cost when sweeping large
+    PHOIBLE inventories, at one run per cell instead of two.
     """
     out: dict[tuple[int, int], CellClassification] = {}
     for rc, entries in occupied.items():
@@ -243,8 +258,7 @@ def effective_anchor_x(
     assignment AND the diphthong projection so the two can never
     disagree about where a cell's anchor is.
     """
-    open_row_index = _ROW_LABEL_TO_INDEX["Open"]
-    if row == open_row_index and col in (2, 3) and not open_front_populated:
+    if row == _OPEN_ROW_INDEX and col in (2, 3) and not open_front_populated:
         return _BACKNESS_X["front"]
     return _COL_TO_ANCHOR[col]
 
@@ -323,20 +337,17 @@ def _assign_pair_sides(
                 # col) or neither is. Keep the anchor centre.
                 pair_side = 0
         else:
-            sibling_ci = ci ^ 1
-            has_sibling = (ri, sibling_ci) in occupied
-            # When a lone paired cell shares its anchor with a
-            # populated neutral cell, snap the paired cell to its
-            # canonical pair-side. This lets the neutral cell take
-            # the empty pair-side (see neutral-col branch above)
-            # so both cells land at distinct rendered positions.
-            paired_low_col = ci & ~1
-            neutral_partner = (paired_low_col >> 1) + 6
-            has_neutral = (ri, neutral_partner) in occupied
+            # Pair cols come in (unrounded, rounded) couples at
+            # consecutive even/odd indices, so XOR-1 is the sibling.
+            has_sibling = (ri, ci ^ 1) in occupied
+            # A lone paired cell sharing its anchor with a populated
+            # neutral cell snaps to its canonical side so the
+            # neutral cell can take the empty one (see the neutral
+            # branch above) and both land at distinct positions.
+            has_neutral = (ri, _PAIRED_TO_NEUTRAL[ci]) in occupied
             if is_pair_layout and not has_sibling and not has_neutral:
-                # Lone pair cell with no neutral co-occupant: stay
-                # centred on the anchor (the canonical lone-pair
-                # rendering).
+                # Lone pair cell with no co-occupant: stay centred
+                # on the anchor (the canonical lone-pair rendering).
                 pair_side = 0
             else:
                 pair_side = 1 if ci % 2 else -1

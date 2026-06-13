@@ -31,13 +31,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from phonology_shared.chart.vowel_geometry.cell_boxes import (
+    _anchor_group_key,
     _cell_box_px,
-    _cell_horizontal_button_count,
+    _cell_width_px,
     _natural_data_area_size,
     _resolve_pair_shift_conflicts,
     vertical_depth,
 )
 from phonology_shared.chart.vowel_geometry.display_slots import (
+    _OPEN_ROW_INDEX,
     CellClassification,
     SlotPlan,
     _assign_pair_sides,
@@ -69,7 +71,6 @@ from phonology_shared.chart.vowel_geometry.outline import (
 )
 from phonology_shared.chart.vowels import (
     _HEIGHT_Y,
-    _ROW_LABEL_TO_INDEX,
     PlacementFlag,
     PlacementPolicy,
     VowelChartShape,
@@ -82,8 +83,6 @@ from phonology_shared.chart.vowels import (
 from phonology_shared.presentation.chart_style import (
     VOWEL_SILHOUETTE_MAX_ASPECT,
 )
-from phonology_shared.presentation.constants import BTN_W
-from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
 
 #: Safety inset (px) the confinement pass keeps between a button box
 #: and the outline. Absorbs the renderers' integer rounding (round-
@@ -128,8 +127,7 @@ def _grow_outline_extent(
         front_x = min(c.chart_x for c in row_cells)
         back_x = max(c.chart_x for c in row_cells)
         for c in row_cells:
-            n_h = _cell_horizontal_button_count(c)
-            ww = n_h * BTN_W + (n_h - 1) * VOWEL_PAIR_GAP_PX
+            ww = _cell_width_px(c)
             off = c.pair_side * c.pair_shift_px + c.nudge_px
             if abs(c.chart_x - front_x) < 1e-9:
                 front_reach = max(
@@ -192,15 +190,19 @@ def _confine_cells_to_outline(
     out = list(cells)
     groups: dict[tuple[int, int], list[int]] = {}
     for i, c in enumerate(out):
-        groups.setdefault((c.row, round(c.chart_x * 1000)), []).append(i)
+        groups.setdefault((c.row, _anchor_group_key(c.chart_x)), []).append(i)
     changed = False
     for idxs in groups.values():
         push_right = 0.0
         push_left = 0.0
         for i in idxs:
             c = out[i]
+            # Every cell's row is populated, so the tier mapping is
+            # total over them; a KeyError here means a caller built
+            # cells and rows from different plans, which should fail
+            # loudly rather than confine against a guessed tier.
             left, top, right, bottom = _cell_box_px(
-                c, tier_by_row.get(c.row, "middle"), dw, dh
+                c, tier_by_row[c.row], dw, dh
             )
             for yy in (top, (top + bottom) / 2.0, bottom):
                 yn = min(max(yy / dh, sil.top_y), sil.bottom_y)
@@ -260,9 +262,9 @@ def _plan_placements(
     """Run the inference layer once and derive the shared facts.
 
     Normalizes every bundle exactly once: the placer and the display
-    classifier both need lowercase-keyed bundles; before this was
-    hoisted, each build normalized the inventory twice, pure
-    allocation churn on the interactive inventory-switch path.
+    classifier both need lowercase-keyed bundles, and sharing one
+    cache here keeps the interactive inventory-switch path free of
+    a second full re-normalization (pure allocation churn).
 
     ``open_front_populated``: Open-row front cells take priority for
     the bottom-left of the trapezoid. When they are all empty, the
@@ -285,7 +287,6 @@ def _plan_placements(
         vowel_secondary=vowel_secondary,
         norm_cache=norm_cache,
     )
-    open_row_index = _ROW_LABEL_TO_INDEX["Open"]
     return PlacementPlan(
         occupied=occupied,
         placements=placements,
@@ -293,7 +294,7 @@ def _plan_placements(
         populated_rows=tuple(sorted({row for (row, _) in occupied})),
         shape=infer_vowel_shape(profile),
         open_front_populated=any(
-            (open_row_index, c) in occupied for c in (0, 1, 6)
+            (_OPEN_ROW_INDEX, c) in occupied for c in (0, 1, 6)
         ),
     )
 
@@ -348,13 +349,13 @@ def _solve_outline(
         )
     # The back edge stays at the canonical pair-outer default set by
     # ``vowel_silhouette``: the line sits at the back-rounded mate's
-    # outer right edge so back vowels stay flush against (but not
-    # crossing) the silhouette. An earlier policy snapped the line
-    # to the rightmost back-vowel BUTTON CENTRE per inventory; the
-    # visual intersected the buttons, which we rejected. The shared
-    # ``back_right_pixel_offset`` field / formula stays in place so
-    # any future per-inventory policy lands in that slot without
-    # touching the renderers.
+    # outer right edge so back vowels sit flush against, never
+    # crossing, the silhouette. Snapping it to the rightmost
+    # back-vowel button centre per inventory is rejected design
+    # space (the line cuts through the buttons); the
+    # ``back_right_pixel_offset`` field is the slot where any future
+    # per-inventory back-edge policy lands without touching the
+    # renderers.
     return silhouette
 
 

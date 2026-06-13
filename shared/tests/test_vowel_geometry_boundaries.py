@@ -22,8 +22,7 @@ _PKG_PREFIX = "phonology_shared.chart.vowel_geometry"
 
 #: Allowed intra-package import edges. A module may import only from
 #: the layers listed here (plus anything OUTSIDE the package, which
-#: these tests do not police). ``furniture`` is listed ahead of its
-#: extraction so the rule exists the moment the module does.
+#: these tests do not police).
 _ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "model": frozenset(),
     "display_slots": frozenset({"model"}),
@@ -75,6 +74,7 @@ def test_layer_imports_respect_dependency_rules() -> None:
         "display_slots",
         "cell_boxes",
         "outline",
+        "furniture",
         "pipeline",
     }
     for name, tree in modules.items():
@@ -132,13 +132,11 @@ def test_outline_knows_nothing_about_cells() -> None:
 
 
 def test_furniture_never_reads_cell_positions() -> None:
-    """Labels and chrome anchor to rows + the outline only. The
-    module is created by the orchestrator decomposition; until then
-    the rule holds vacuously."""
-    path = _PKG_DIR / "furniture.py"
-    if not path.exists():
-        return
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    """Labels and chrome anchor to rows + the outline only; cell
+    positions must never leak into their placement (a label that
+    follows a button drifts off the outline the moment the button
+    is nudged or pair-shifted)."""
+    tree = ast.parse((_PKG_DIR / "furniture.py").read_text(encoding="utf-8"))
     assert "VowelChartCell" not in _identifiers(tree), (
         "furniture.py references VowelChartCell; labels must be placed "
         "from rows + outline only, never from button positions"

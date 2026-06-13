@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from phonology_shared.chart.vowel_geometry.display_slots import (
+    _BACKNESS_SLOT_ORDER,
     effective_anchor_x,
 )
 from phonology_shared.chart.vowel_geometry.model import (
@@ -49,18 +50,21 @@ def build_col_headers(
     topmost row's projected backness anchor (front migrates inward
     as the silhouette narrows; central shifts toward the back anchor
     too; back stays flush with the vertical right edge).
+
+    ``COL_LABELS`` and ``_BACKNESS_SLOT_ORDER`` are index-aligned
+    (front, central, back), so the zip below pairs each header
+    label with its anchor key.
     """
-    _col_label_to_anchor_key = ("front", "central", "back")
     return tuple(
         VowelChartColHeader(
             label=label,
             chart_x=project_anchor_x(
                 silhouette,
-                _BACKNESS_X[_col_label_to_anchor_key[ci]],
+                _BACKNESS_X[anchor_key],
                 silhouette.top_y,
             ),
         )
-        for ci, label in enumerate(COL_LABELS)
+        for label, anchor_key in zip(COL_LABELS, _BACKNESS_SLOT_ORDER)
     )
 
 
@@ -77,7 +81,7 @@ def _label_y_for(row: int, row_plan: RowPlan, natural_h: int) -> float:
     if natural_h <= 0:
         return y
     half_btn_norm = (SEG_BTN_H / 2.0) / natural_h
-    tier = row_plan.tier.get(row, "middle")
+    tier = row_plan.tier[row]
     if tier == "top":
         return y + half_btn_norm
     if tier == "bottom":
@@ -103,7 +107,7 @@ def build_rows(
             logical_row=ri,
             label=ROW_LABELS[ri],
             chart_y=row_plan.display_y[ri],
-            tier=row_plan.tier.get(ri, "middle"),
+            tier=row_plan.tier[ri],
             slot_height_norm=row_plan.slot_height[ri],
             label_y=label_y_by_row[ri],
             silhouette_left=silhouette_left_at_y(

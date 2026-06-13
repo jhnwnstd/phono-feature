@@ -50,11 +50,11 @@ _VOWEL_CELL_STACK_GAP_PX: int = VOWEL_CELL_STACK_GAP_PX
 #: CSS rules (relayed by build.py as ``--vowel-cell-dense-h`` /
 #: ``--vowel-cell-ultra-h``), and the web's per-cell tier choice in
 #: main.js (thresholds relayed in the ``chart-style`` inline JSON).
-#: The geometry reads these so the chart asks for the rendered
-#: pixel height instead of the canonical-button-size theoretical
-#: max; before that, PHOIBLE inventories like !XU/UPSID (12-stack)
-#: requested 931 px while the CSS-rendered chart only needed
-#: ~250 px, forcing the panel-body to scroll unnecessarily.
+#: The geometry sizes its natural-height request from these so it
+#: asks for what the renderer actually draws; sized from the
+#: canonical button height instead, a 12-deep stack (PHOIBLE
+#: !Xu / UPSID) requests 931 px where the rendered chart needs only
+#: ~250 px, forcing the panel body to scroll for nothing.
 DENSITY_TIER_DENSE_THRESHOLD: int = 5
 DENSITY_TIER_DENSE_BTN_H: int = SEG_BTN_H - 4  # 22 px
 DENSITY_TIER_ULTRA_THRESHOLD: int = 10
@@ -69,13 +69,13 @@ def effective_button_height_px(stack_depth: int) -> int:
     Both renderers consume this to keep their per-button sizing in
     lockstep with the geometry's ``natural_data_height_px``
     request. Web CSS reads ``data-cell-density="dense"`` or
-    ``"ultra"`` and applies the calculated heights via
-    ``calc(var(--seg-btn-h) - 4px)`` / ``- 8px``. Desktop calls this
-    helper directly to set ``setFixedHeight`` on each stacked
-    button. Without parity here, a 7-deep stack renders 28 px
-    taller on desktop than web (canonical 26 px vs dense 22 px),
-    causing the chart layout to look "totally different" even
-    though both renderers consume the same shared geometry.
+    ``"ultra"`` and applies the same heights via
+    ``calc(var(--seg-btn-h) - 4px)`` / ``- 8px``; desktop calls
+    this helper directly to set ``setFixedHeight`` on each stacked
+    button. Without the parity a 7-deep stack renders 28 px taller
+    on desktop than on the web (canonical 26 px vs dense 22 px)
+    and the two charts visibly disagree despite consuming the same
+    shared geometry.
     """
     if stack_depth >= DENSITY_TIER_ULTRA_THRESHOLD:
         return DENSITY_TIER_ULTRA_BTN_H
@@ -84,9 +84,8 @@ def effective_button_height_px(stack_depth: int) -> int:
     return SEG_BTN_H
 
 
-# Backward-compat alias for the previous private name. Internal
-# call-sites below still use this; external imports should use the
-# public ``effective_button_height_px``.
+#: Compat alias for the pre-rename private spelling, re-exported by
+#: the ``vowels_layout`` facade for legacy import sites.
 _effective_button_height_px = effective_button_height_px
 
 
@@ -99,6 +98,11 @@ _VOWEL_ROW_GAP_PX: int = 6
 #: button centres without clipping their tops.
 _VOWEL_DATA_AREA_VERTICAL_PADDING_PX: int = SEG_BTN_H
 
+#: Minimum visible daylight (px) between two cells in the same row.
+#: Shared by the pair-shift conflict resolver and the width solver
+#: so "tangent" means the same thing in both.
+_INTER_CELL_GAP_PX: float = 2.0
+
 
 def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
     """Horizontal button count contributed by ``cell``. PAIR /
@@ -110,6 +114,25 @@ def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
     if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
         return 2
     return 1
+
+
+def _cell_width_px(cell: VowelChartCell) -> int:
+    """Rendered pixel width of the cell's button block: ``n``
+    buttons side by side with the pair gap between them. The one
+    width formula every consumer shares (the box rect, the conflict
+    resolver, the natural sizing, the pipeline's extent growth) so
+    "how wide is this cell" can never fork."""
+    n_h = _cell_horizontal_button_count(cell)
+    return n_h * BTN_W + (n_h - 1) * VOWEL_PAIR_GAP_PX
+
+
+def _anchor_group_key(chart_x: float) -> int:
+    """Quantised anchor identity: cells whose ``chart_x`` agree to
+    the nearest thousandth share a backness anchor. The conflict
+    resolver and the confinement pass group by this key so
+    same-anchor cells are handled as one column and pair tangency
+    survives any shift applied to the group."""
+    return round(chart_x * 1000)
 
 
 def _resolve_pair_shift_conflicts(
@@ -128,16 +151,14 @@ def _resolve_pair_shift_conflicts(
     ``(half_a + half_b + gap) / 2`` makes them tangent.
     """
     canonical = float(VOWEL_PAIR_SHIFT_PX)
-    inter_cell_gap_px = 2.0
     rows: dict[int, list[int]] = {}
     for idx, c in enumerate(cells):
         rows.setdefault(c.row, []).append(idx)
     updated: dict[int, float] = {}
     for row_indices in rows.values():
-        # Group cells by chart_x within tiny epsilon.
         groups: dict[int, list[int]] = {}
         for idx in row_indices:
-            key = round(cells[idx].chart_x * 1000)
+            key = _anchor_group_key(cells[idx].chart_x)
             groups.setdefault(key, []).append(idx)
         for grouped in groups.values():
             if len(grouped) < 2:
@@ -149,17 +170,9 @@ def _resolve_pair_shift_conflicts(
                     a, b = cells[ai], cells[bi]
                     if a.pair_side * b.pair_side >= 0:
                         continue
-                    half_a = (
-                        _cell_horizontal_button_count(a) * BTN_W
-                        + max(0, _cell_horizontal_button_count(a) - 1)
-                        * VOWEL_PAIR_GAP_PX
-                    ) / 2.0
-                    half_b = (
-                        _cell_horizontal_button_count(b) * BTN_W
-                        + max(0, _cell_horizontal_button_count(b) - 1)
-                        * VOWEL_PAIR_GAP_PX
-                    ) / 2.0
-                    needed = (half_a + half_b + inter_cell_gap_px) / 2.0
+                    half_a = _cell_width_px(a) / 2.0
+                    half_b = _cell_width_px(b) / 2.0
+                    needed = (half_a + half_b + _INTER_CELL_GAP_PX) / 2.0
                     if needed <= canonical:
                         continue
                     for k in (ai, bi):
@@ -178,9 +191,9 @@ def vertical_depth(kind: VowelCellDisplayKind, n_entries: int) -> int:
     """Vertical row count a cell of ``kind`` with ``n_entries``
     contributes. PAIR kinds are 1 row; CONTRAST_SET is
     ``ceil(entries / 2)``; STACK is ``len(entries)``. The single
-    definition the height sizing, the confinement box math, and the
-    pipeline's row-depth pre-pass all share; it used to exist twice
-    (here and inline in the orchestrator) and could drift.
+    definition shared by the height sizing, the confinement box
+    math, and the pipeline's row-depth pre-pass, so the three can
+    never disagree on how tall a cell renders.
     """
     if kind in PAIR_DISPLAY_KINDS:
         return 1
@@ -210,10 +223,9 @@ def _cell_box_px(
     the containment tests use this one definition, so "inside the
     outline" is judged against the same boxes the renderers draw.
     """
-    n_h = _cell_horizontal_button_count(cell)
-    ww = n_h * BTN_W + (n_h - 1) * VOWEL_PAIR_GAP_PX
+    ww = _cell_width_px(cell)
     depth = _cell_vertical_depth(cell)
-    eff_h = _effective_button_height_px(depth)
+    eff_h = effective_button_height_px(depth)
     wh = depth * eff_h + (depth - 1) * _VOWEL_CELL_STACK_GAP_PX
     left = (
         cell.chart_x * dw
@@ -263,26 +275,21 @@ def _natural_data_area_size(
             SEG_BTN_H + _VOWEL_DATA_AREA_VERTICAL_PADDING_PX,
         )
 
-    rows_in_use: set[int] = {c.row for c in cells}
+    cells_by_row: dict[int, list[VowelChartCell]] = {}
+    for c in cells:
+        cells_by_row.setdefault(c.row, []).append(c)
+
     max_row_w = 2 * BTN_W + VOWEL_PAIR_GAP_PX
-    # Pair-side shift gap: cells with pair_side != 0 sit offset
-    # from their canonical chart_x by their ``pair_shift_px``. The
-    # rightmost cell's actual pixel extent therefore reaches
-    # ``chart_x * dw + pair_shift + cell_w/2``, which is what the
-    # data-area width must accommodate.
-    for ri in rows_in_use:
-        # Slot button-count summation (the legacy bound). Kept as
-        # a floor so single-slot rows still have minimum sensible
-        # width.
+    for row_cells in cells_by_row.values():
+        # Slot button-count floor: each backness slot contributes
+        # its buttons + gaps, slots are separated by the pair
+        # separator. Keeps single-slot rows at a sensible minimum
+        # width even when the projection constraints below are lax.
         slot_buttons: dict[int, int] = {0: 0, 1: 0, 2: 0}
-        for c in cells:
-            if c.row != ri:
-                continue
+        for c in row_cells:
             slot = _COL_TO_SLOT[c.col]
             slot_buttons[slot] += _cell_horizontal_button_count(c)
         populated_slots = [s for s, n in slot_buttons.items() if n > 0]
-        if not populated_slots:
-            continue
         slot_widths = [
             slot_buttons[s] * BTN_W
             + max(0, slot_buttons[s] - 1) * VOWEL_PAIR_GAP_PX
@@ -292,28 +299,22 @@ def _natural_data_area_size(
             VOWEL_PAIR_SEPARATOR_PX
         )
         max_row_w = max(max_row_w, row_w)
-        # Slot-sum alone underestimates when chart_x positions
-        # push a cell past either edge of [0, dw]; solve for the
-        # ``dw`` that keeps every cell's projected extent inside.
-        row_cells = [c for c in cells if c.row == ri]
-        cell_geom: list[tuple[float, float, float]] = (
-            []
-        )  # (chart_x, pair_off, half_w)
+        # The slot floor underestimates when a cell's pixel extent
+        # (pair shift + nudge + half its width past a chart_x near
+        # an edge) sticks out of [0, dw]; solve each edge constraint
+        # for the dw that keeps the extent inside.
+        cell_geom: list[tuple[float, float, float]] = []
         for c in row_cells:
-            cell_half_w = (
-                _cell_horizontal_button_count(c) * BTN_W
-                + max(0, _cell_horizontal_button_count(c) - 1)
-                * VOWEL_PAIR_GAP_PX
-            ) / 2.0
+            half_w = _cell_width_px(c) / 2.0
             pair_offset = c.pair_shift_px * c.pair_side + c.nudge_px
-            cell_geom.append((c.chart_x, pair_offset, cell_half_w))
+            cell_geom.append((c.chart_x, pair_offset, half_w))
             if c.chart_x < 1.0:
-                right_extent = pair_offset + cell_half_w
+                right_extent = pair_offset + half_w
                 if right_extent > 0:
                     needed = right_extent / (1.0 - c.chart_x)
                     max_row_w = max(max_row_w, int(math.ceil(needed)))
             if c.chart_x > 0.0:
-                left_extent = cell_half_w - pair_offset
+                left_extent = half_w - pair_offset
                 if left_extent > 0:
                     needed = left_extent / c.chart_x
                     max_row_w = max(max_row_w, int(math.ceil(needed)))
@@ -321,24 +322,19 @@ def _natural_data_area_size(
         # must fit without their pixel boxes intersecting. Bound:
         #   (xb - xa) * dw + (off_b - off_a) >= half_a + half_b + gap
         # When ``xa < xb`` (different anchors) solve for ``dw``.
-        # When ``xa == xb`` the constraint becomes
-        # ``off_b - off_a >= half_a + half_b + gap`` and is dw-
-        # independent; we cannot fix it by widening the chart.
-        # Two cells at the same anchor with opposite pair_side
-        # and both wider than a single button (typical PHOIBLE
-        # pair-display at the back-rounded column) trigger this
-        # static overlap; the renderer accepts it for now.
-        inter_cell_gap_px = 2.0
+        # When ``xa == xb`` the needed separation is dw-independent
+        # and widening cannot help, which is why same-anchor overlap
+        # is handled by the pair-shift conflict resolver instead.
         for i in range(len(cell_geom)):
             xa, oa, ha = cell_geom[i]
             for j in range(i + 1, len(cell_geom)):
                 xb, ob, hb = cell_geom[j]
                 if xa < xb:
                     chart_x_diff = xb - xa
-                    needed_px = ha + hb + oa - ob + inter_cell_gap_px
+                    needed_px = ha + hb + oa - ob + _INTER_CELL_GAP_PX
                 elif xb < xa:
                     chart_x_diff = xa - xb
-                    needed_px = ha + hb + ob - oa + inter_cell_gap_px
+                    needed_px = ha + hb + ob - oa + _INTER_CELL_GAP_PX
                 else:
                     continue
                 if needed_px > 0:
@@ -354,17 +350,11 @@ def _natural_data_area_size(
     # the renderer will draw, not the canonical-button theoretical
     # max.
     row_heights: list[int] = []
-    for ri in sorted(rows_in_use):
-        depth = 1
-        for c in cells:
-            if c.row != ri:
-                continue
-            cell_depth = _cell_vertical_depth(c)
-            if cell_depth > depth:
-                depth = cell_depth
-        per_btn_h = _effective_button_height_px(depth)
+    for row_cells in cells_by_row.values():
+        depth = max(_cell_vertical_depth(c) for c in row_cells)
+        per_btn_h = effective_button_height_px(depth)
         row_heights.append(
-            depth * per_btn_h + max(0, depth - 1) * _VOWEL_CELL_STACK_GAP_PX
+            depth * per_btn_h + (depth - 1) * _VOWEL_CELL_STACK_GAP_PX
         )
 
     total_h = sum(row_heights) + (len(row_heights) - 1) * _VOWEL_ROW_GAP_PX

@@ -50,9 +50,9 @@ class VowelChartCell:
       (web) or the equivalent ``move()`` (Qt).
     * ``pair_side``: ``-1`` for the unrounded mate, ``+1`` for the
       rounded mate, ``0`` for an unrounded/rounded-unknown cell.
-      The renderer applies a FIXED PIXEL shift of
-      ``pair_side * (BTN_W + VOWEL_PAIR_GAP_PX) / 2`` on top of
-      the anchor so paired mates are always exactly tangent
+      The renderer offsets the cell from its anchor by the FIXED
+      PIXEL amount ``pair_side * pair_shift_px + nudge_px`` (see
+      those fields below) so paired mates stay exactly tangent
       regardless of the row's effective width.
 
     ``row`` / ``col`` are the abstract logical placement (0..5
@@ -127,14 +127,13 @@ class VowelChartCell:
     # both renderers on top of the anchor + pair shift:
     # ``centre = chart_x * dw + pair_side * pair_shift_px +
     # nudge_px``. Written only by the hard-boundary pass
-    # (:py:func:`_confine_cells_to_outline`) to pull a button box
+    # (``pipeline._confine_cells_to_outline``) to pull a button box
     # inside the outline when its corner overhangs the slanted
-    # front edge or a rounded corner arc. A PIXEL offset rather
-    # than a chart_x delta so the width solver keeps seeing the
-    # true anchor; expressing confinement as anchor movement made
-    # near-coincident anchors look separable-by-widening and blew
-    # the solved chart width up to ~900 px on dense PHOIBLE
-    # inventories.
+    # front edge or a rounded corner arc. It MUST stay a pixel
+    # offset, never a chart_x delta: confinement folded into the
+    # anchor makes near-coincident anchors look separable by
+    # widening, and the width solver then inflates dense PHOIBLE
+    # charts to several times their natural width (~900 px).
     nudge_px: float = 0.0
 
 
@@ -256,11 +255,12 @@ class VowelChartSilhouette:
     # These four fields let renderers compute the silhouette's
     # left / right edge POSITION IN PIXELS at any data width such
     # that the silhouette wraps the outermost cell flush. The
-    # ``top_left/right`` etc. fields above remain for backward
-    # compatibility but represent the canonical-width approximation;
-    # ``silhouette_left_norm_at_y`` / ``silhouette_right_norm_at_y``
-    # are the canonical accessors that take the current data width
-    # into account.
+    # ``top_left/right`` etc. fields above carry the
+    # canonical-width approximation for consumers with no live
+    # width (the offline CSS fallback, the baked per-row label
+    # fields); renderers with a measured width pass the silhouette
+    # through ``outline.silhouette_for_data_width`` first, which
+    # recomputes those corners from the fields below.
     #
     # ``front_anchor_at_top`` / ``front_anchor_at_bottom`` are the
     # front-cell BACKNESS ANCHOR at the silhouette's top and bottom

@@ -71,22 +71,20 @@ _VOWEL_SHRINK_FACTOR: float = 0.3
 #: shrink missed? If so, top and bottom are nudged inward by
 #: DIFFERENT amounts (changing the slant).
 #:
-#: SET TO 0.0: Stage 2 is DISABLED. The user reported that the
-#: silhouette "felt different for every inventory"; the cause
-#: was Stage 2's asymmetric reshaping (per-inventory the top
-#: width and bottom width were nudged by different amounts,
-#: tilting the canonical trapezoid). Disabling Stage 2 means
-#: every inventory's silhouette is the canonical Close-to-Open
-#: trapezoid (no shrink for sparse inventories) OR a UNIFORMLY
-#: scaled copy of it (small uniform shrink for dense inventories
-#: that still need cells to fit). The slant is preserved across
-#: the entire bundled + PHOIBLE set.
+#: CURRENTLY 0.0, WHICH DISABLES STAGE 2. Asymmetric reshaping
+#: makes the silhouette read differently per inventory (each one
+#: tilts the canonical trapezoid by its own amount), defeating the
+#: chart's at-a-glance familiarity. With Stage 2 off, every
+#: inventory's silhouette is the canonical Close-to-Open trapezoid
+#: (no shrink for sparse inventories) or a UNIFORMLY scaled copy of
+#: it (small uniform shrink for dense inventories that still need
+#: cells to fit); the slant is constant across the entire bundled +
+#: PHOIBLE set.
 #:
-#: ``0.0`` disables Stage 2; ``1.0`` would let the slant double
-#: (or invert). Setting back above 0.0 re-enables the asymmetric
-#: tweak; a regression test in test_vowel_silhouette_shrink.py
-#: asserts Stage 2 stays off so any future re-enablement is a
-#: deliberate edit.
+#: ``1.0`` would let the slant double (or invert). A regression
+#: test in test_vowel_silhouette_shrink.py pins the 0.0 so
+#: re-enabling the asymmetric tweak is a deliberate edit, not a
+#: drive-by.
 _VOWEL_SLANT_CHANGE_CAP_FRAC: float = 0.0
 
 #: Minimum visual separation between adjacent cells in the same
@@ -379,6 +377,25 @@ def _stage2_slant_tweak(
     )
 
 
+def _quad_bezier_1d(
+    p_in: float, ctrl: float, p_out: float, t: float, one_minus_t: float
+) -> float:
+    """One coordinate of a quadratic Bezier at parameter ``t``.
+
+    ``one_minus_t`` is passed in rather than recomputed: the corner
+    evaluators derive it FIRST (via sqrt) and ``t`` from it, and
+    ``1.0 - (1.0 - x)`` is not bit-identical to ``x`` in floating
+    point. The polygon string, the edge evaluators, and the JS
+    ports must agree to the last bit for the parity tests to hold,
+    so every caller hands over its exact ``(t, one_minus_t)`` pair.
+    """
+    return (
+        one_minus_t * one_minus_t * p_in
+        + 2.0 * one_minus_t * t * ctrl
+        + t * t * p_out
+    )
+
+
 def rounded_silhouette_polygon_points(
     silhouette: VowelChartSilhouette,
     radius_frac: float,
@@ -451,16 +468,8 @@ def rounded_silhouette_polygon_points(
         for s in range(segments_per_corner + 1):
             t = s / segments_per_corner
             one_minus_t = 1.0 - t
-            bx = (
-                one_minus_t * one_minus_t * p_in[0]
-                + 2.0 * one_minus_t * t * curr[0]
-                + t * t * p_out[0]
-            )
-            by = (
-                one_minus_t * one_minus_t * p_in[1]
-                + 2.0 * one_minus_t * t * curr[1]
-                + t * t * p_out[1]
-            )
+            bx = _quad_bezier_1d(p_in[0], curr[0], p_out[0], t, one_minus_t)
+            by = _quad_bezier_1d(p_in[1], curr[1], p_out[1], t, one_minus_t)
             points.append((bx, by))
     return ", ".join(f"{x * 100:.3f}% {y * 100:.3f}%" for x, y in points)
 
@@ -470,35 +479,31 @@ def silhouette_for_data_width(
 ) -> VowelChartSilhouette:
     """Return a copy of ``silhouette`` with the four corner fields
     recomputed from the cell-extent fields (``front_anchor_at_*``,
-    ``back_anchor``, ``cell_outer_extent_px``) for the given
+    ``back_anchor``, the two extent px fields) for the given
     rendered data width in pixels.
 
-    THE CASCADE INVARIANT: cells are placed at
-    ``anchor * dw + sign * cell_outer_extent_px`` (where sign is
-    -1 for front, +1 for back, and ``cell_outer_extent_px =
-    pair_shift_px + btn_w/2``). The silhouette's corners must
-    follow the same formula or the silhouette and outermost cells
-    drift apart by the ratio of rendered-to-canonical width.
+    THE CASCADE INVARIANT: cells render at
+    ``anchor * dw + sign * extent_px`` (sign -1 for front, +1 for
+    back), a mixed normalised + pixel formula. The corner fields
+    are purely normalised, so they can be flush with that formula
+    at exactly one width; the build bakes them at the canonical
+    content width, and at any other rendered width the fixed pixel
+    extent corresponds to a different normalised offset, opening a
+    few pixels of drift between the outline and the outermost
+    cells (the same on both sides, but the slanted front edge
+    makes it visually obvious).
 
-    Pre-cascade behaviour: the corner fields were computed once
-    at geometry build time with a normalised pair-outer extent.
-    At the canonical 232 px content width the formula was flush;
-    at other widths (a 320 px chart, a 380 px chart) the
-    silhouette and the cells drifted by a few pixels. Front and
-    back drifted by the SAME amount, but the slanted front edge
-    made the gap more visually obvious there than at the
-    vertical back edge.
+    Every render pass therefore calls this helper with the ``dw``
+    it actually measured (web ``getBoundingClientRect``, desktop
+    ``self.width()``) and rebuilds the polygon from the result via
+    :py:func:`rounded_silhouette_polygon_points`; the corners then
+    track the cells flush at every width by construction. The
+    baked canonical-width corners stay on the geometry for
+    consumers with no live width: the offline CSS fallback and the
+    per-row label fields.
 
-    Post-cascade: every render pass calls this helper with the
-    actual ``dw`` it has measured (web ``getBoundingClientRect``,
-    desktop ``self.width()``) and the corners track the cells
-    flush by construction. Both renderers OVERRIDE the build-time
-    silhouette polygon by passing the corrected silhouette
-    through :py:func:`rounded_silhouette_polygon_points`.
-
-    For the build-time CSS fallback (no JS) the corner fields
-    keep the canonical-dw values populated by ``vowel_silhouette``
-    so an offline page still renders a reasonable silhouette.
+    A ``front_cell_outer_extent_px`` of ``0`` means "mirror the
+    back extent", so the symmetric default costs no second field.
     """
     if data_w_px <= 0:
         return silhouette
@@ -570,20 +575,20 @@ def silhouette_right_at_y(
     if 0 <= dy_top < tr_r_in_y_abs and tr_r_in_y_abs > 0:
         # The arc runs from p_in ON THE RIGHT EDGE (t=0, at
         # y = top_y + r_in_y) up to p_out ON THE TOP EDGE (t=1, at
-        # y = top_y), so y(t) = top_y + (1-t)^2 * tr_r_in_y_abs and
-        # the parameter solves as 1 - t = sqrt(dy / r). The first
-        # version of this mirror inverted the mapping (t =
-        # sqrt(dy / r)), which returned the edge x values at the
-        # WRONG arc ends: the topmost row read the silhouette right
-        # edge as the un-rounded corner x. Caught by the polygon
-        # parity tests in test_rounded_silhouette.py.
+        # y = top_y): y(t) = top_y + (1-t)^2 * tr_r_in_y_abs, so
+        # the parameter solves as 1 - t = sqrt(dy / r). Note the
+        # inversion: t GROWS as y approaches the top edge. Solving
+        # t = sqrt(dy / r) instead reads the arc backwards and
+        # hands the topmost row the un-rounded corner x; the
+        # polygon parity tests in test_rounded_silhouette.py pin
+        # the orientation.
         omt = math.sqrt(dy_top / tr_r_in_y_abs)
         omt = max(0.0, min(1.0, omt))
         t = 1.0 - omt
         x_in = sil.top_right + tr_r_in * tr_dx_in_norm  # p_in.x
         x_curr = sil.top_right
         x_out = sil.top_right - tr_r_out  # leftward
-        x_corner = omt * omt * x_in + 2.0 * omt * t * x_curr + t * t * x_out
+        x_corner = _quad_bezier_1d(x_in, x_curr, x_out, t, omt)
         # The right-side bezier curves LEFTWARD (inward) from the
         # corner; use the smaller of canonical vs corner.
         return min(canonical, x_corner)
@@ -603,19 +608,19 @@ def silhouette_right_at_y(
 
     dy_bot = sil.bottom_y - chart_y
     if 0 <= dy_bot < br_r_out_y_abs and br_r_out_y_abs > 0:
-        # The arc runs from p_in ON THE BOTTOM EDGE (t=0, at
+        # Here the arc runs from p_in ON THE BOTTOM EDGE (t=0, at
         # y = bottom_y) up to p_out ON THE RIGHT EDGE (t=1, at
-        # y = bottom_y - r_out_y), so y(t) = bottom_y - t^2 *
-        # br_r_out_y_abs and t = sqrt(dy / r). Same inverted-
-        # parameter mirror bug as the top-right corner; see the
-        # comment there and the polygon parity tests.
+        # y = bottom_y - r_out_y): y(t) = bottom_y - t^2 *
+        # br_r_out_y_abs, so t = sqrt(dy / r). The same orientation
+        # trap as the top-right corner applies, mirrored; see the
+        # comment there.
         t = math.sqrt(dy_bot / br_r_out_y_abs)
         t = max(0.0, min(1.0, t))
         omt = 1.0 - t
         x_in = sil.bottom_right - br_r_in  # leftward along bottom
         x_curr = sil.bottom_right
         x_out = sil.bottom_right + br_r_out * br_dx_out_norm
-        x_corner = omt * omt * x_in + 2.0 * omt * t * x_curr + t * t * x_out
+        x_corner = _quad_bezier_1d(x_in, x_curr, x_out, t, omt)
         return min(canonical, x_corner)
 
     return canonical
@@ -686,7 +691,7 @@ def silhouette_left_at_y(
         x_in = sil.top_left + tl_r_in  # p_in.x
         x_curr = sil.top_left  # control point x
         x_out = sil.top_left + tl_r_out * tl_dx_out_norm  # p_out.x
-        x_corner = omt * omt * x_in + 2.0 * omt * t * x_curr + t * t * x_out
+        x_corner = _quad_bezier_1d(x_in, x_curr, x_out, t, omt)
         # x_corner is always >= canonical inside the corner region
         # (the bezier curves rightward of the canonical line); use
         # the corner value.
@@ -716,7 +721,7 @@ def silhouette_left_at_y(
         x_in = sil.bottom_left + bl_r_in * bl_dx_in_norm  # p_in.x
         x_curr = sil.bottom_left  # control point
         x_out = sil.bottom_left + bl_r_out  # p_out.x
-        x_corner = omt * omt * x_in + 2.0 * omt * t * x_curr + t * t * x_out
+        x_corner = _quad_bezier_1d(x_in, x_curr, x_out, t, omt)
         return max(canonical, x_corner)
 
     return canonical
@@ -804,9 +809,9 @@ def distribute_rows(
     """Distribute row anchors in the silhouette's vertical span
     PROPORTIONAL TO PER-ROW CONTENT DEPTH so a row with a tall stack
     (Korean PHOIBLE has 7 entries at Close-Back) gets enough
-    vertical room before the next row starts. Even distribution let
-    a 7-button stack at row 0 overlap rows 2/4/5 below; the stack
-    visually invaded the Close-mid / Open-mid cells.
+    vertical room before the next row starts; distributed evenly
+    instead, a deep stack at the Close row overruns the rows below
+    it and visually invades their cells.
 
     Each row gets a slot whose height is ``depth / total_depth`` of
     the span. The row's y anchor sits at the top of its slot for the
@@ -814,6 +819,12 @@ def distribute_rows(
     the centre for middle rows; the matching tier string tells
     renderers which way the content grows, so the cell box fills its
     slot without crossing the silhouette's top or bottom edge.
+
+    Preconditions the pipeline guarantees: ``populated_rows`` is
+    non-empty (the empty inventory short-circuits before any row
+    math) and every row's depth is at least 1 (``_plan_rows`` seeds
+    1 even for rows whose deepest cell is a single button), so
+    ``total_depth`` is never zero.
     """
     if len(populated_rows) == 1:
         only = populated_rows[0]
