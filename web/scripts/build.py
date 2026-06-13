@@ -482,6 +482,10 @@ def _build_limits_payload() -> dict[str, int]:
     return {
         "max_features": module.MAX_FEATURES,
         "max_segments": module.MAX_SEGMENTS,
+        # Per-class caps for the web builder's live counter; the
+        # bridge enforces them too, so the JS read is display-only.
+        "max_vowels": module.MAX_VOWELS,
+        "max_consonants": module.MAX_CONSONANTS,
         "max_name_length": module.MAX_NAME_LENGTH,
         "max_inventory_file_bytes": module.MAX_INVENTORY_FILE_BYTES,
         "phoible_preview_segment_limit": PHOIBLE_PREVIEW_SEGMENT_LIMIT,

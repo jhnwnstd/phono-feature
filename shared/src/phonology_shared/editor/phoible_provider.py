@@ -32,6 +32,7 @@ from phonology_shared.data.inventory import (
     Inventory,
     canonicalize_segment_label,
 )
+from phonology_shared.editor.grid import enforce_class_caps
 from phonology_shared.editor.inventory_providers import (
     InventoryDescriptor,
     InventoryProvider,
@@ -578,12 +579,20 @@ def materialize_phoible_inventory(
             for seg, bundle in generated.vowel_secondary.items()
         }
 
-    return Inventory.from_grid(
+    inventory = Inventory.from_grid(
         name=name,
         features=list(generated.features),
         segments={seg: dict(b) for seg, b in generated.segments.items()},
         metadata=metadata,
     )
+    # Defensive guard: every packaged PHOIBLE inventory is within the
+    # per-class caps by construction (So is the densest vowel set at
+    # exactly MAX_VOWELS; !Xoo the densest consonant set, under the
+    # cap), so this never fires today. It stays so a future snapshot
+    # refresh that introduces an over-class inventory fails loudly at
+    # materialization rather than rendering a broken chart.
+    enforce_class_caps(inventory.segments)
+    return inventory
 
 
 @lru_cache(maxsize=1)

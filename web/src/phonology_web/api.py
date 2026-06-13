@@ -80,7 +80,9 @@ from phonology_shared.editor.grid import (  # noqa: F401
     VALUE_KEYS,
     confirm_remove_feature_prompt,
     confirm_remove_segment_prompt,
+    enforce_class_caps,
     grid_to_inventory,
+    normalize_minus,
     validate_new_feature_label,
     validate_new_segment_label,
 )
@@ -118,6 +120,7 @@ from phonology_shared.presentation.layout import (
     plan_seg_layout,
 )
 from phonology_shared.presentation.mode_logic import (
+    inventory_cap_status,
     mode_status_text,
     project_mode_transition,
 )
@@ -201,6 +204,11 @@ def load_inventory_json(
     # source label prepended.
     raw = parse_inventory_json_text(json_text, source_label)
     inventory = Inventory.parse(raw, source=source_label)
+    # The parse layer caps the TOTAL segment count; the per-class
+    # caps are feature-driven and live one layer up (data must not
+    # import chart), so enforce them here, after the structural
+    # parse, before the engine swaps in.
+    enforce_class_caps(inventory.segments)
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name or source_label
     _invalidate_analysis_caches()
@@ -626,6 +634,10 @@ def create_new_inventory(
         segments=grid,
         metadata=metadata if metadata else None,
     )
+    # Per-class caps: the total cap fires in ``validate_setup``
+    # above, but vowel/consonant class is feature-driven, so it
+    # cannot be known until the bundles are resolved here.
+    enforce_class_caps(inventory.segments)
     _engine = FeatureEngine(inventory)
     _inventory_name = inventory.name
     _invalidate_analysis_caches()
@@ -725,6 +737,46 @@ def get_grid_state() -> dict[str, Any]:
         "features": features,
         "segments": segments,
         "cells": cells,
+    }
+
+
+def inventory_cap_status_for_grid(
+    segments: list[str],
+    features: list[str],
+    cells: list[list[str]],
+) -> dict[str, Any]:
+    """Live vowel / consonant / total counts for the web builder's
+    cap counter.
+
+    Counts through the same shared classifier the desktop counter
+    and the save-time enforcement use, so the three never disagree
+    about which side a segment falls on. Unlike
+    :py:func:`commit_inventory_from_grid` this does NOT validate or
+    adopt anything: it classifies the in-progress grid as-is (an
+    over-cap or otherwise invalid grid still gets a count so the
+    counter can warn before the user tries to save), so it never
+    raises on a half-built inventory.
+
+    ``cells`` is indexed ``cells[feature_index][segment_index]``,
+    matching the commit path; ``"0"`` cells are dropped so a
+    segment with no positive features classifies the same way it
+    would once saved.
+    """
+    bundles: dict[str, dict[str, str]] = {}
+    for c, seg in enumerate(segments):
+        bundle: dict[str, str] = {}
+        for r, feat in enumerate(features):
+            val = normalize_minus(cells[r][c])
+            if val != "0":
+                bundle[feat] = val
+        bundles[seg] = bundle
+    status = inventory_cap_status(bundles)
+    return {
+        "n_vowels": status.n_vowels,
+        "n_consonants": status.n_consonants,
+        "n_total": status.n_total,
+        "severity": status.severity,
+        "text": status.text,
     }
 
 

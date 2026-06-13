@@ -287,9 +287,7 @@ class VowelChartWidget(QWidget):
         # rendered shorter than its natural request shrinks the deep
         # stacks (down to the shared legibility floor) instead of
         # letting them invade the neighbouring rows.
-        self._stack_cells: list[tuple[QWidget, list[QWidget], int, float]] = (
-            []
-        )
+        self._stack_cells: list[tuple[QWidget, list[QWidget], int, float]] = []
         # Row -> slot_height_norm from the current geometry; read by
         # ``_fill_stack_layout`` when registering stack cells.
         self._slot_norm_by_row: dict[int, float] = {}

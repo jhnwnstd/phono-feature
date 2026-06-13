@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 
 from phonology_shared.data.inventory import normalize_feature_bundle
+from phonology_shared.data.limits import MAX_CONSONANTS, MAX_VOWELS
 
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.
@@ -1120,8 +1121,7 @@ def validate_class_caps(
     messages: list[str] = []
     if n_vowels > MAX_VOWELS:
         messages.append(
-            f"inventory has {n_vowels} vowels; "
-            f"hard cap is {MAX_VOWELS}"
+            f"inventory has {n_vowels} vowels; " f"hard cap is {MAX_VOWELS}"
         )
     if n_consonants > MAX_CONSONANTS:
         messages.append(

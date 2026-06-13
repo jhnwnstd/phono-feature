@@ -78,6 +78,11 @@ LIGHT = {
     "border": "#DADCE0",
     "text": "#202124",
     "text_dim": "#5F6368",
+    # Status cues for the builder's live cap counter: amber as a
+    # count nears its cap, red once it is at/over. Shared so the
+    # desktop QLabel and the web counter (relayed to CSS) agree.
+    "status_warn": "#B45309",
+    "status_error": "#B91C1C",
     # Accent + selection
     "accent": "#2563EB",
     "accent_light": "#D6E8FF",
@@ -171,6 +176,11 @@ COLORBLIND_LIGHT = {
     "border": "#DADCE0",
     "text": "#202124",
     "text_dim": "#5F6368",
+    # Cap-counter status cues: orange (warn) and vermillion (error),
+    # kept in the Wong-derived warm family so they stay distinct
+    # under deuteranopia / protanopia.
+    "status_warn": "#E69F00",
+    "status_error": "#D55E00",
     # Accent matches ``seg_selected`` so the brand colour and the
     # selected-segment colour stay visually unified.
     "accent": "#CC79A7",
@@ -234,6 +244,11 @@ COLORBLIND_DARK = {
     "border": "#3A3A3A",
     "text": "#E8EAED",
     "text_dim": "#B8B8B8",
+    # Cap-counter status cues (colorblind dark): brightened orange
+    # and vermillion so they stay legible on the dark panel and
+    # distinct from each other under deuteranopia / protanopia.
+    "status_warn": "#F0A202",
+    "status_error": "#FF6E40",
     # Accent matches seg_selected.
     "accent": "#D7A0D3",
     "accent_light": "#43243F",
@@ -293,6 +308,11 @@ DARK = {
     "border": "#3A3A3A",
     "text": "#E8EAED",
     "text_dim": "#B8B8B8",
+    # Cap-counter status cues (dark): amber as a count nears its cap,
+    # a light red once at/over so it stays readable on the dark
+    # panel where the light-mode #B91C1C would be too dim.
+    "status_warn": "#F0A202",
+    "status_error": "#F87171",
     # Accent + selection
     "accent": "#60A5FA",
     "accent_light": "#2F4F6F",

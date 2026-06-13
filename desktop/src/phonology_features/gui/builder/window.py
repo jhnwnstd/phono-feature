@@ -17,6 +17,7 @@ from phonology_shared.presentation.mode_logic import (
     UNDO_NOTHING_MESSAGE,
     added_feature_message,
     added_segment_message,
+    inventory_cap_status,
     redid_message,
     removed_feature_message,
     removed_segment_message,
@@ -467,9 +468,43 @@ class InventoryBuilder(QMainWindow):
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
         )
         self.setStatusBar(self._status)
+        # Live cap counter, pinned to the right so transient
+        # showMessage() text never overwrites it. Populated by
+        # ``_refresh_cap_counter`` on every grid mutation; hidden
+        # until a grid exists.
+        self._cap_label = QLabel()
+        self._cap_label.setVisible(False)
+        self._status.addPermanentWidget(self._cap_label)
         self._status.showMessage(
             "Create a new inventory or open an existing one."
         )
+
+    def _refresh_cap_counter(self) -> None:
+        """Recompute and restyle the vowel / consonant / total
+        counter from the live grid. Cheap at the capped sizes, so
+        it runs on every mutation (build, add / remove, cell edit)
+        rather than tracking deltas. Colours come from the shared
+        palette so the desktop and web counters read identically."""
+        if not self._segments:
+            self._cap_label.setVisible(False)
+            return
+        segments: dict[str, dict[str, str]] = {}
+        for c, seg in enumerate(self._segments):
+            bundle: dict[str, str] = {}
+            for r, feat in enumerate(self._features):
+                item = self._table.item(r, c)
+                val = item.text() if item is not None else "0"
+                if val != "0":
+                    bundle[feat] = val
+            segments[seg] = bundle
+        status = inventory_cap_status(segments)
+        color = {
+            "warn": C["status_warn"],
+            "error": C["status_error"],
+        }.get(status.severity, C["text_dim"])
+        self._cap_label.setStyleSheet(f"color: {color}; padding: 0 8px;")
+        self._cap_label.setText(status.text)
+        self._cap_label.setVisible(True)
 
     # Setup dialog
     def show_setup_dialog(self) -> bool:
@@ -631,6 +666,7 @@ class InventoryBuilder(QMainWindow):
                     if bundle is not None:
                         value = bundle.get(feat, "0")
                 self._table.setItem(r, c, make_cell(value))
+        self._refresh_cap_counter()
 
     # Direct-entry keyboard shortcuts. Derived from the shared
     # :py:data:`VALUE_KEYS` constant in grid_logic so the desktop
@@ -850,6 +886,11 @@ class InventoryBuilder(QMainWindow):
         if len(self._undo_stack) > _MAX_UNDO_DEPTH:
             self._undo_stack.pop(0)
         self._dirty = True
+        # Cell edits can flip a feature (e.g. syllabic) that
+        # reclassifies a segment between vowel and consonant, so the
+        # counter must refresh on value changes, not just structural
+        # add / remove.
+        self._refresh_cap_counter()
 
     def _undo(self) -> None:
         """Reverse the most recent batch and move it to the redo stack."""
@@ -861,6 +902,7 @@ class InventoryBuilder(QMainWindow):
         self._redo_stack.append(edit)
         self._dirty = True
         self._status.showMessage(undid_message(len(edit.cells)))
+        self._refresh_cap_counter()
 
     def _redo(self) -> None:
         """Re-apply the most recently undone batch."""
@@ -872,6 +914,7 @@ class InventoryBuilder(QMainWindow):
         self._undo_stack.append(edit)
         self._dirty = True
         self._status.showMessage(redid_message(len(edit.cells)))
+        self._refresh_cap_counter()
 
     def _replay_edit(self, edit: _BulkEdit, *, use_old: bool) -> None:
         """Apply ``edit`` to the grid (``use_old`` for undo, the
@@ -1111,6 +1154,7 @@ class InventoryBuilder(QMainWindow):
             self._table.setItem(r, col, make_cell("0"))
         self._dirty = True
         self._status.showMessage(added_segment_message(seg))
+        self._refresh_cap_counter()
 
     def _add_feature(self) -> None:
         """Prompt for a new feature and add a row.
@@ -1143,6 +1187,7 @@ class InventoryBuilder(QMainWindow):
             self._table.setItem(row, c, make_cell("0"))
         self._dirty = True
         self._status.showMessage(added_feature_message(feat))
+        self._refresh_cap_counter()
 
     def _remove_segment(self) -> None:
         """Remove the header-selected column (segment)."""
@@ -1163,6 +1208,7 @@ class InventoryBuilder(QMainWindow):
         self._dirty = True
         self._clear_remove_selection()
         self._status.showMessage(removed_segment_message(seg))
+        self._refresh_cap_counter()
 
     def _remove_feature(self) -> None:
         """Remove the header-selected row (feature)."""
@@ -1183,6 +1229,7 @@ class InventoryBuilder(QMainWindow):
         self._dirty = True
         self._clear_remove_selection()
         self._status.showMessage(removed_feature_message(feat))
+        self._refresh_cap_counter()
 
     # Serialization (save / load)
     def _to_inventory(self) -> Inventory:

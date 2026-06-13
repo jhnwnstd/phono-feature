@@ -138,6 +138,39 @@ def test_validate_setup_collects_all_problems():
     assert fields == ["segments", "features"]
 
 
+def test_validate_setup_rejects_over_cap_segments():
+    """The New Inventory dialog fails immediately on an over-cap
+    segment count rather than waiting for the grid build."""
+    from phonology_shared.data.limits import MAX_SEGMENTS
+
+    segs = " ".join(f"s{i}" for i in range(MAX_SEGMENTS + 1))
+    result = validate_setup("X", segs, "Voice")
+    assert not result.ok
+    issue = next(i for i in result.issues if i.field == "segments")
+    assert issue.code == "over_cap"
+    assert str(MAX_SEGMENTS) in issue.message
+
+
+def test_validate_setup_rejects_over_cap_features():
+    from phonology_shared.data.limits import MAX_FEATURES
+
+    feats = " ".join(f"F{i}" for i in range(MAX_FEATURES + 1))
+    result = validate_setup("X", "p", feats)
+    assert not result.ok
+    issue = next(i for i in result.issues if i.field == "features")
+    assert issue.code == "over_cap"
+
+
+def test_validate_setup_allows_counts_at_cap():
+    """At-cap counts are valid; only OVER the cap is refused."""
+    from phonology_shared.data.limits import MAX_FEATURES, MAX_SEGMENTS
+
+    segs = " ".join(f"s{i}" for i in range(MAX_SEGMENTS))
+    feats = " ".join(f"F{i}" for i in range(MAX_FEATURES))
+    result = validate_setup("X", segs, feats)
+    assert result.ok
+
+
 def test_validate_setup_per_entry_length_cap():
     """A pasted wall of prose with no recognized delimiter parses
     to one over-long entry; the cap catches it before it reaches

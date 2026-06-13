@@ -80,6 +80,7 @@ const NODE_IDS = Object.freeze({
     editorRemoveFeatBtn: "editor-remove-feat-btn",
     editorNameInput: "editor-name-input",
     editorFileLabel: "editor-file-label",
+    editorCapCounter: "editor-cap-counter",
     editorGridScroll: "editor-grid-scroll",
     editorGridCorner: "editor-grid-corner",
     editorGridCols: "editor-grid-cols",
@@ -3226,7 +3227,9 @@ const LIMITS = Object.freeze(
     readInlineJson("limits", {
         max_inventory_file_bytes: 5 * 1024 * 1024,
         max_features: 40,
-        max_segments: 200,
+        max_segments: 180,
+        max_vowels: 50,
+        max_consonants: 135,
         max_name_length: 256,
     }),
 );
@@ -4245,6 +4248,7 @@ function refreshEditorFromCurrent() {
     nodes.editorFileLabel.textContent = "(unsaved)";
     renderEditorGrid();
     repaintFocused();
+    refreshEditorCapCounter();
     setEditorStatus(
         `${editorState.segments.length} segments × `
         + `${editorState.features.length} features. `
@@ -4716,6 +4720,9 @@ function commitEdit(targets, value) {
     if (cells.length === 0) return;
     pushUndoEdit({ cells, new: value });
     markEditorDirty();
+    // A value change can flip syllabic (or another classifying
+    // feature) and move a segment between vowel and consonant.
+    scheduleEditorCapRefresh();
 }
 
 function pushUndoEdit(edit) {
@@ -4734,6 +4741,8 @@ function applyEdit(edit, useOld) {
         editorState.cells[r][c] = value;
         paintCell(cellNode(r, c), value);
     }
+    // Undo / redo restores values that can reclassify segments.
+    scheduleEditorCapRefresh();
 }
 
 // Both UIs read these status templates from STATUS_TEXT (baked
@@ -5125,6 +5134,7 @@ function addSegmentToState(seg) {
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
+    scheduleEditorCapRefresh();
     setEditorStatus(_formatTpl(
         "added_segment_template", "Added segment '{seg}'.", { seg },
     ));
@@ -5138,6 +5148,7 @@ function addFeatureToState(feat) {
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
+    scheduleEditorCapRefresh();
     setEditorStatus(_formatTpl(
         "added_feature_template", "Added feature '{feat}'.", { feat },
     ));
@@ -5158,6 +5169,7 @@ function removeSelectedSegment() {
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
+    scheduleEditorCapRefresh();
     setEditorStatus(_formatTpl(
         "removed_segment_template", "Removed segment '{seg}'.", { seg },
     ));
@@ -5174,6 +5186,7 @@ function removeSelectedFeature() {
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
+    scheduleEditorCapRefresh();
     setEditorStatus(_formatTpl(
         "removed_feature_template", "Removed feature '{feat}'.", { feat },
     ));
@@ -5229,6 +5242,51 @@ function commitAndDownload() {
 
 function setEditorStatus(msg) {
     nodes.editorStatus.textContent = msg;
+}
+
+// Live cap counter. Classification needs the shared Python
+// ``group_segments`` (the single source the charts and the
+// save-time enforcement use), so the count comes from a bridge
+// call rather than a JS re-implementation. Debounced because cell
+// cycling can fire in quick succession; a 120 ms coalesce keeps a
+// rapid bulk edit to one round-trip without the counter visibly
+// lagging the grid.
+let _capRefreshTimer = null;
+
+function scheduleEditorCapRefresh() {
+    if (_capRefreshTimer !== null) clearTimeout(_capRefreshTimer);
+    _capRefreshTimer = setTimeout(() => {
+        _capRefreshTimer = null;
+        refreshEditorCapCounter();
+    }, 120);
+}
+
+function refreshEditorCapCounter() {
+    const counter = nodes.editorCapCounter;
+    if (!counter) return;
+    if (!editorState.open || editorState.segments.length === 0) {
+        counter.hidden = true;
+        return;
+    }
+    let status;
+    try {
+        status = callBridge(
+            "inventory_cap_status_for_grid",
+            editorState.segments,
+            editorState.features,
+            editorState.cells,
+        );
+    } catch {
+        // Bridge not ready (editor opened pre-boot) or a transient
+        // marshalling failure: leave the last good counter in place
+        // rather than blanking it.
+        return;
+    }
+    counter.textContent = status.text;
+    // ``data-severity`` drives the warn / error colour in style.css
+    // (ok = default muted text). Mirrors the desktop's palette map.
+    counter.dataset.severity = status.severity;
+    counter.hidden = false;
 }
 
 /**

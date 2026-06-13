@@ -79,6 +79,7 @@ from phonology_features.gui.widgets import (
     SegmentState,
 )
 from phonology_shared.data.inventory import Inventory, ValidationError
+from phonology_shared.editor.grid import enforce_class_caps
 from phonology_shared.editor.phoible_provider import phoible_loaded_message
 from phonology_shared.presentation import layout
 from phonology_shared.presentation.analysis import render_validation_report
@@ -1060,6 +1061,12 @@ class MainWindow(QMainWindow):
         _log.info("load path: %s", fname)
         try:
             inventory = Inventory.load(path)
+            # Per-class caps: the total cap is enforced inside
+            # ``Inventory.load``; the vowel/consonant split is
+            # feature-driven and lives one layer up, so check it
+            # here, inside the same try so it surfaces through the
+            # identical validation-report channel.
+            enforce_class_caps(inventory.segments)
         except ValidationError as e:
             # Inventory.load already logged the failure category; here
             # we just record what the GUI did about it.

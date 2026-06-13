@@ -10,7 +10,11 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from phonology_shared.data.limits import MAX_NAME_LENGTH
+from phonology_shared.data.limits import (
+    MAX_FEATURES,
+    MAX_NAME_LENGTH,
+    MAX_SEGMENTS,
+)
 from phonology_shared.editor.phoible_features import PHOIBLE_TO_APP_FEATURE
 
 # Delimiters :py:func:`infer_split` tries, in no particular order.
@@ -227,6 +231,13 @@ def _too_long(field: str, offender: str) -> str:
     )
 
 
+def _over_count(field: str, count: int, cap: int) -> str:
+    return (
+        f"You entered {count} {field}; the hard cap is {cap}. "
+        f"Remove some entries and try again."
+    )
+
+
 def validate_setup(
     raw_name: str, segments_text: str, features_text: str
 ) -> SetupResult:
@@ -240,6 +251,13 @@ def validate_setup(
     * Segments and features text are split via
       :py:func:`infer_split`. An empty post-split list is an error.
     * Each entry must not exceed :py:data:`MAX_NAME_LENGTH`.
+    * The total segment / feature counts must not exceed
+      :py:data:`MAX_SEGMENTS` / :py:data:`MAX_FEATURES`. The parse
+      layer rejects an over-cap total too, but catching it here lets
+      the New Inventory dialog fail immediately on the typed text
+      rather than after building the grid (and the per-class vowel /
+      consonant caps, which need resolved feature bundles, still
+      land at ``Inventory.from_grid`` time).
 
     Returns a :py:class:`SetupResult` with every problem found, not
     just the first. The caller decides whether to abort or which
@@ -252,8 +270,24 @@ def validate_setup(
 
     if not segments:
         issues.append(SetupIssue("segments", "empty", _MSG_NO_SEGMENTS))
+    elif len(segments) > MAX_SEGMENTS:
+        issues.append(
+            SetupIssue(
+                "segments",
+                "over_cap",
+                _over_count("segments", len(segments), MAX_SEGMENTS),
+            )
+        )
     if not features:
         issues.append(SetupIssue("features", "empty", _MSG_NO_FEATURES))
+    elif len(features) > MAX_FEATURES:
+        issues.append(
+            SetupIssue(
+                "features",
+                "over_cap",
+                _over_count("features", len(features), MAX_FEATURES),
+            )
+        )
 
     # Per-entry length cap. The desktop dialog short-circuits on the
     # first offender per field; we collect every offending field so

@@ -2062,6 +2062,27 @@ progress {
   font-size: var(--font-size-meta);
   padding: 0 var(--space-sm);
 }
+/* Live vowel / consonant / total counter. Text is built by the
+   shared mode_logic helper (via the bridge) so the wording matches
+   the desktop status-bar counter; the colour escalates as a count
+   nears its cap. ``--status-warn`` / ``--status-error`` are baked
+   from palette.py (all four themes) into theme.css, so this stays
+   theme- and colorblind-aware without per-rule overrides. */
+.editor-cap-counter {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: var(--font-size-meta);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.editor-cap-counter[data-severity="warn"] {
+  color: var(--status-warn);
+  font-weight: 600;
+}
+.editor-cap-counter[data-severity="error"] {
+  color: var(--status-error);
+  font-weight: 600;
+}
 /* Four-pane frozen-header layout mirroring Qt's QTableWidget:
    corner / column-headers / row-headers / data each live in their
    own pane so the headers can't overlay the data the way CSS sticky

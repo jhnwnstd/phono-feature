@@ -222,6 +222,10 @@ _EXPECTED_ROW_FIELDS = frozenset(
         "tier",
         "silhouette_left",
         "silhouette_right",
+        # Read by the web slot clamp (``_refreshVowelStackClamp``)
+        # to shrink deep stacks when the rendered chart is shorter
+        # than the natural request.
+        "slot_height_norm",
     }
 )
 

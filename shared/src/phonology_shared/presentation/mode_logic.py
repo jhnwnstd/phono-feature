@@ -18,6 +18,13 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from phonology_shared.chart.consonants import group_segments
+from phonology_shared.data.limits import (
+    MAX_CONSONANTS,
+    MAX_SEGMENTS,
+    MAX_VOWELS,
+)
+
 if TYPE_CHECKING:
     from phonology_shared.theory.feature_engine import FeatureEngine, MatchMode
 
@@ -264,6 +271,77 @@ def added_feature_message(feat: str) -> str:
 def removed_feature_message(feat: str) -> str:
     """Builder status after removing a feature row."""
     return REMOVED_FEATURE_TEMPLATE.format(feat=feat)
+
+
+#: Fraction of a cap at which the live builder counter turns from
+#: neutral to warning, so the user sees the ceiling approaching
+#: before an add is refused. Below it the counter reads "ok".
+_CAP_WARN_FRACTION: float = 0.9
+
+
+@dataclass(frozen=True)
+class InventoryCapStatus:
+    """Live vowel / consonant / total counts for the builder counter,
+    classified against the hard caps.
+
+    ``severity`` is ``"error"`` when any count is AT or OVER its cap
+    (the next add of that class is refused), ``"warn"`` when any
+    count has reached :py:data:`_CAP_WARN_FRACTION` of its cap, and
+    ``"ok"`` otherwise. ``text`` is the ready-to-render one-line
+    summary both UIs display; the counts are exposed too so a
+    frontend can style the individual figures if it wants."""
+
+    n_vowels: int
+    n_consonants: int
+    n_total: int
+    severity: str
+    text: str
+
+
+def inventory_cap_status(
+    segments: Mapping[str, Mapping[str, str]],
+    *,
+    normalized: Mapping[str, dict[str, str]] | None = None,
+) -> InventoryCapStatus:
+    """Build the live cap-counter view model for a builder grid.
+
+    Counts vowels through :py:func:`group_segments` (the single
+    source of "what is a vowel" the charts render) and treats every
+    other segment as a consonant, exactly as
+    :py:func:`phonology_shared.chart.consonants.validate_class_caps`
+    does, so the counter and the save-time enforcement can never
+    disagree about which side a segment falls on. Cheap to recompute
+    on each grid mutation at the capped inventory sizes (<=180
+    segments). ``normalized`` forwards pre-normalized bundles when
+    the caller already holds them.
+    """
+    groups = group_segments(segments, normalized=normalized)
+    n_total = sum(len(segs) for segs in groups.values())
+    n_vowels = len(groups.get("Vowels", []))
+    n_consonants = n_total - n_vowels
+    pairs = (
+        (n_vowels, MAX_VOWELS),
+        (n_consonants, MAX_CONSONANTS),
+        (n_total, MAX_SEGMENTS),
+    )
+    if any(count >= cap for count, cap in pairs):
+        severity = "error"
+    elif any(count >= _CAP_WARN_FRACTION * cap for count, cap in pairs):
+        severity = "warn"
+    else:
+        severity = "ok"
+    text = (
+        f"Vowels {n_vowels}/{MAX_VOWELS} · "
+        f"Consonants {n_consonants}/{MAX_CONSONANTS} · "
+        f"Total {n_total}/{MAX_SEGMENTS}"
+    )
+    return InventoryCapStatus(
+        n_vowels=n_vowels,
+        n_consonants=n_consonants,
+        n_total=n_total,
+        severity=severity,
+        text=text,
+    )
 
 
 def palette_toggle_tooltip(*, is_colorblind: bool) -> str:

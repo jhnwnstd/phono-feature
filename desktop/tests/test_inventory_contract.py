@@ -497,10 +497,25 @@ def test_advisory_fires_for_unusually_many_features() -> None:
 
 
 def test_advisory_fires_for_unusually_many_segments() -> None:
-    # Above the advisory threshold (175) but below the hard cap (200).
-    segs: dict[str, dict[str, str]] = {f"s{i}": {} for i in range(180)}
+    # Above the advisory threshold (175) but below the hard cap (180)
+    # so the inventory parses and surfaces the advisory rather than
+    # being rejected outright.
+    segs: dict[str, dict[str, str]] = {f"s{i}": {} for i in range(178)}
     inv = Inventory.parse({"features": ["V"], "segments": segs})
     assert any("segment" in a.lower() for a in inv.advisories)
+
+
+def test_parse_rejects_over_cap_segment_count() -> None:
+    """One past ``MAX_SEGMENTS`` is refused at parse with the stable
+    over-cap code, so an oversized file is rejected before any UI
+    sees it (the structural backstop behind the dialog-time check)."""
+    from phonology_shared.data.limits import MAX_SEGMENTS
+
+    segs = {f"s{i}": {} for i in range(MAX_SEGMENTS + 1)}
+    with pytest.raises(ValidationError) as excinfo:
+        Inventory.parse({"features": ["V"], "segments": segs})
+    codes = {vi.code for vi in excinfo.value.validation_issues}
+    assert "segments.over_cap" in codes
 
 
 def test_segment_ascii_g_normalized_to_script_g() -> None:

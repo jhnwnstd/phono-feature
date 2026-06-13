@@ -13,8 +13,10 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
+from phonology_shared.chart.consonants import validate_class_caps
 from phonology_shared.data.inventory import (
     Inventory,
+    ValidationError,
     canonicalize_feature_label,
     canonicalize_segment_label,
 )
@@ -286,12 +288,37 @@ def grid_to_inventory(
             feats[feat] = val
         segments_dict[seg] = feats
 
-    return Inventory.from_grid(
+    inventory = Inventory.from_grid(
         name=name,
         features=list(features),
         segments=segments_dict,
         metadata=metadata,
     )
+    enforce_class_caps(inventory.segments)
+    return inventory
+
+
+def enforce_class_caps(
+    segments: Mapping[str, Mapping[str, str]],
+    *,
+    normalized: Mapping[str, dict[str, str]] | None = None,
+) -> None:
+    """Raise :py:class:`ValidationError` if ``segments`` exceeds the
+    per-class hard caps (``MAX_VOWELS`` / ``MAX_CONSONANTS``).
+
+    The single enforcement seam every "grid becomes an Inventory"
+    path and every load path funnels through, so the desktop
+    builder, the web editor, PHOIBLE materialization, and JSON
+    opens all reject an over-class inventory with identical wording.
+    Delegates the counting to
+    :py:func:`phonology_shared.chart.consonants.validate_class_caps`
+    (the classifier is the single source of "what is a vowel") and
+    wraps the messages in the same exception type the structural
+    parse validation raises, so callers need only one except clause.
+    """
+    messages = validate_class_caps(segments, normalized=normalized)
+    if messages:
+        raise ValidationError(tuple(messages))
 
 
 # Selection shape -----------------------------------------------------
