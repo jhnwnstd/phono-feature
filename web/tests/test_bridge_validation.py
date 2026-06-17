@@ -15,6 +15,7 @@ net for any path the per-function validators miss.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from phonology_shared.data import (
     Inventory,
     ValidationError,
 )
+from phonology_shared.data.limits import MAX_CONSONANTS, MAX_VOWELS
 from phonology_shared.theory import FeatureEngine
 from phonology_web import api as bridge
 
@@ -186,3 +188,71 @@ def test_require_engine_raises_validation_error_when_unloaded() -> None:
     with pytest.raises(ValidationError) as ex:
         bridge._require_engine()
     assert "load" in " ".join(ex.value.issues).lower()
+
+
+# ----- per-class cap enforcement at the web seams -----------------
+
+
+def test_cap_status_endpoint_matches_shared_counter() -> None:
+    """``inventory_cap_status_for_grid`` is the live-counter bridge
+    endpoint; its counts and severity must match the shared
+    ``inventory_cap_status`` for the same grid. cells is indexed
+    ``cells[feature_index][segment_index]``."""
+    from phonology_shared.presentation.mode_logic import (
+        inventory_cap_status,
+    )
+
+    segments = ["i", "a", "p", "t"]
+    features = ["syllabic", "consonantal"]
+    # i, a are vowels (syllabic +); p, t are consonants.
+    cells = [
+        ["+", "+", "0", "0"],  # syllabic row
+        ["0", "0", "+", "+"],  # consonantal row
+    ]
+    out = bridge.inventory_cap_status_for_grid(segments, features, cells)
+    assert out["n_vowels"] == 2
+    assert out["n_consonants"] == 2
+    assert out["n_total"] == 4
+    bundles = {
+        "i": {"syllabic": "+"},
+        "a": {"syllabic": "+"},
+        "p": {"consonantal": "+"},
+        "t": {"consonantal": "+"},
+    }
+    ref = inventory_cap_status(bundles)
+    assert out["severity"] == ref.severity
+    assert out["text"] == ref.text
+
+
+def test_load_inventory_json_rejects_over_vowel_cap() -> None:
+    """The web JSON-load seam enforces the per-class vowel cap (the
+    same enforce_class_caps the desktop load and grid-commit paths
+    call), so an over-vowel file is refused before the engine swaps
+    in."""
+    n = MAX_VOWELS + 1
+    payload = {
+        "features": ["syllabic"],
+        "segments": {f"v{i}": {"syllabic": "+"} for i in range(n)},
+    }
+    with pytest.raises(ValidationError) as ex:
+        bridge.load_inventory_json(json.dumps(payload), "over-vowels")
+    assert "vowel" in " ".join(ex.value.issues).lower()
+
+
+def test_load_inventory_json_rejects_over_consonant_cap() -> None:
+    """Same seam, consonant side: an over-consonant file is refused."""
+    n = MAX_CONSONANTS + 1
+    plosive = {
+        "consonantal": "+",
+        "continuant": "-",
+        "sonorant": "-",
+        "nasal": "-",
+        "delrel": "-",
+    }
+    payload = {
+        "features": list(plosive),
+        "segments": {f"c{i}": dict(plosive) for i in range(n)},
+    }
+    with pytest.raises(ValidationError) as ex:
+        bridge.load_inventory_json(json.dumps(payload), "over-cons")
+    assert "consonant" in " ".join(ex.value.issues).lower()

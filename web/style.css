@@ -1361,11 +1361,12 @@ dialog input[type="text"]:focus-visible {
    slightly shorter seg-btn so the column reads as a stack rather
    than overflowing the row. Width stays at the canonical
    ``--seg-btn-w`` so the chart's visual rhythm matches the
-   consonant grid; only the row height tightens to fit more
-   buttons in a stack. */
-.vowel-chart-cell-stack[data-cell-density="dense"] {
-  gap: 0;
-}
+   consonant grid; only the per-button HEIGHT tightens. The
+   inter-button gap stays the shared ``--vowel-cell-stack-gap``
+   (1px) at every tier: the shared geometry's content_height_px and
+   the desktop QVBoxLayout both use that gap unconditionally, so
+   zeroing it here would fork the vertical layout constant and make
+   web stacks render shorter than desktop. */
 .vowel-chart-cell-stack[data-cell-density="dense"] > .seg-btn {
   /* Relayed from vowels_layout.DENSITY_TIER_DENSE_BTN_H via
      layout.css; the calc fallback covers a stale build missing
@@ -1373,11 +1374,8 @@ dialog input[type="text"]:focus-visible {
   height: var(--vowel-cell-dense-h, calc(var(--seg-btn-h) - 4px));
 }
 /* Pathological-cell tier for 10+ entry stacks (PHOIBLE worst case
-   is 12 in one cell on !XU/UPSID). Pack tighter still on the
-   vertical axis; width still matches the consonant grid. */
-.vowel-chart-cell-stack[data-cell-density="ultra"] {
-  gap: 0;
-}
+   is 12 in one cell on !XU/UPSID). Per-button height tightens
+   further; width and the shared gap are unchanged. */
 .vowel-chart-cell-stack[data-cell-density="ultra"] > .seg-btn {
   /* Relayed from vowels_layout.DENSITY_TIER_ULTRA_BTN_H. */
   height: var(--vowel-cell-ultra-h, calc(var(--seg-btn-h) - 8px));

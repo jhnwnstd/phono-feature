@@ -135,6 +135,16 @@ def _anchor_group_key(chart_x: float) -> int:
     return round(chart_x * 1000)
 
 
+def _cell_pair_offset_px(cell: VowelChartCell) -> float:
+    """Signed horizontal offset (px) from the cell's anchor to its
+    rendered centre: the pair-side shift plus the confinement nudge.
+    The one offset formula the box rect, the natural sizing, and the
+    pipeline's extent growth share, so "how far is this cell pushed
+    off its anchor" can never fork (the vertical-axis mate of
+    :py:func:`_cell_width_px`)."""
+    return cell.pair_side * cell.pair_shift_px + cell.nudge_px
+
+
 def _resolve_pair_shift_conflicts(
     cells: list[VowelChartCell],
 ) -> list[VowelChartCell]:
@@ -249,12 +259,7 @@ def _cell_box_px(
     """
     ww = _cell_width_px(cell)
     wh = _cell_height_px(cell)
-    left = (
-        cell.chart_x * dw
-        - ww / 2.0
-        + cell.pair_side * cell.pair_shift_px
-        + cell.nudge_px
-    )
+    left = cell.chart_x * dw - ww / 2.0 + _cell_pair_offset_px(cell)
     cy = cell.chart_y * dh
     if tier == "top":
         top = cy
@@ -328,7 +333,7 @@ def _natural_data_area_size(
         cell_geom: list[tuple[float, float, float]] = []
         for c in row_cells:
             half_w = _cell_width_px(c) / 2.0
-            pair_offset = c.pair_shift_px * c.pair_side + c.nudge_px
+            pair_offset = _cell_pair_offset_px(c)
             cell_geom.append((c.chart_x, pair_offset, half_w))
             if c.chart_x < 1.0:
                 right_extent = pair_offset + half_w

@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import pytest
 
-from phonology_shared.chart.consonants import validate_class_caps
+from phonology_shared.chart.consonants import (
+    count_segment_classes,
+    validate_class_caps,
+)
 from phonology_shared.data.inventory import ValidationError
 from phonology_shared.data.limits import MAX_CONSONANTS, MAX_VOWELS
 from phonology_shared.editor.grid import enforce_class_caps
@@ -35,6 +38,12 @@ def _vowels(n: int) -> dict[str, dict[str, str]]:
 
 def _consonants(n: int) -> dict[str, dict[str, str]]:
     return {f"c{i}": dict(_PLOSIVE) for i in range(n)}
+
+
+def _tones(n: int) -> dict[str, dict[str, str]]:
+    # group_segments routes ``hightone: +`` segments to the disjoint
+    # ``Tones`` class (Chao tone letters), neither vowel nor consonant.
+    return {f"t{i}": {"hightone": "+"} for i in range(n)}
 
 
 def test_validate_class_caps_passes_at_boundary():
@@ -101,9 +110,47 @@ def test_cap_status_errors_at_cap():
     assert status.severity == "error"
 
 
-def test_cap_status_consonant_count_is_non_vowel():
-    """Consonants are counted as every non-vowel segment, matching
-    ``validate_class_caps`` so the counter and the save-time check
-    never disagree."""
-    status = inventory_cap_status({**_vowels(4), **_consonants(7)})
-    assert status.n_consonants == status.n_total - status.n_vowels == 7
+def test_cap_status_consonant_count_excludes_vowels_and_tones():
+    """Consonants are every segment that is neither a vowel nor a
+    tone letter. Tones count toward the total but not the consonant
+    cap, so the three figures need not sum."""
+    status = inventory_cap_status(
+        {**_vowels(4), **_consonants(7), **_tones(3)}
+    )
+    assert status.n_vowels == 4
+    assert status.n_consonants == 7
+    assert status.n_total == 14
+
+
+def test_tone_letters_are_not_counted_as_consonants():
+    """Regression: tone letters must NOT inflate the consonant count.
+    group_segments puts them in a disjoint ``Tones`` class; folding
+    them into ``n_total - n_vowels`` (the pre-fix formula) counted
+    them as consonants and could falsely reject an inventory whose
+    real consonant count is under the cap."""
+    nv, nc, nt = count_segment_classes({**_consonants(130), **_tones(8)})
+    assert nv == 0
+    assert nc == 130  # NOT 138
+    assert nt == 138  # tones still count toward the total
+
+
+def test_class_caps_admit_max_consonants_plus_tones():
+    """130 real consonants + a rich tone tier stays admissible: the
+    pre-fix formula reported 138 consonants and falsely tripped
+    MAX_CONSONANTS=135. With tones excluded it passes."""
+    segments = {**_consonants(MAX_CONSONANTS - 5), **_tones(8)}
+    assert validate_class_caps(segments) == []
+
+
+def test_counter_and_validator_share_one_count():
+    """The live counter and the save-time validator must agree on
+    the class split for the same inventory (both route through
+    count_segment_classes)."""
+    segments = {**_vowels(12), **_consonants(40), **_tones(2)}
+    nv, nc, nt = count_segment_classes(segments)
+    status = inventory_cap_status(segments)
+    assert (status.n_vowels, status.n_consonants, status.n_total) == (
+        nv,
+        nc,
+        nt,
+    )

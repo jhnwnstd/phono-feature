@@ -86,6 +86,7 @@ from phonology_shared.editor.grid import (
     classify_selection,
     confirm_remove_feature_prompt,
     confirm_remove_segment_prompt,
+    enforce_class_caps,
     grid_to_inventory,
     remove_target_for_shape,
     validate_new_feature_label,
@@ -1450,6 +1451,13 @@ class InventoryBuilder(QMainWindow):
         """
         try:
             inventory = Inventory.load(path)
+            # Per-class caps are enforced one layer above the parse
+            # contract (data must not import chart), so apply them
+            # here inside the same try, matching the viewer's
+            # ``main_window._load_path`` and the web load seam: all
+            # three load paths must agree on which files are
+            # admissible, not just the eventual Save.
+            enforce_class_caps(inventory.segments)
         except ValidationError as e:
             show_warning(
                 self,

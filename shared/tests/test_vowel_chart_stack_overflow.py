@@ -366,3 +366,67 @@ def test_renderer_can_derive_button_height_from_slot() -> None:
         f"slot allocation drifted from the rendered button-height "
         f"contract"
     )
+
+
+def test_slot_clamp_shrinks_and_floors_below_natural() -> None:
+    """The render-time slot clamp both renderers implement (desktop
+    gui/vowel_chart.py:_layout_children, web main.js
+    _refreshVowelStackClamp) is:
+
+        h = max(VOWEL_BTN_MIN_H_PX, min(tier_h, int(budget)))
+        budget = (slot_height_norm * H - (depth - 1) * gap) / depth
+
+    Pin the two behaviours that matter and that the existing
+    ``_can_derive`` test does NOT cover: (1) on a constrained pane
+    the clamp shrinks the button BELOW its density-tier height, and
+    (2) on a tiny pane it bottoms out at the shared legibility floor
+    rather than collapsing toward zero.
+    """
+    from phonology_shared.chart.vowels_layout import (
+        effective_button_height_px,
+    )
+    from phonology_shared.presentation.chart_style import (
+        VOWEL_BTN_MIN_H_PX,
+        VOWEL_CELL_STACK_GAP_PX,
+    )
+
+    vowels, seg_feats = _tall_middle_stack_inventory()
+    geom = build_vowel_chart_geometry(
+        vowels, _profile_for(seg_feats), seg_feats, policy=PlacementPolicy()
+    )
+    rows_by_logical = {r.logical_row: r for r in geom.rows}
+    deepest_row_idx = max(
+        rows_by_logical,
+        key=lambda r: max(len(c.entries) for c in geom.cells if c.row == r),
+    )
+    row = rows_by_logical[deepest_row_idx]
+    n = max(len(c.entries) for c in geom.cells if c.row == deepest_row_idx)
+    gap = VOWEL_CELL_STACK_GAP_PX
+    tier_h = effective_button_height_px(n)
+
+    def clamp(container_h: int) -> tuple[float, int]:
+        budget = (row.slot_height_norm * container_h - (n - 1) * gap) / n
+        return budget, max(VOWEL_BTN_MIN_H_PX, min(tier_h, int(budget)))
+
+    # (1) Constrained pane (half natural height): the unclamped
+    # min(tier_h, budget) must drop below the tier height, i.e. the
+    # clamp genuinely shrinks the stack instead of overflowing.
+    budget_half, _ = clamp(geom.natural_data_height_px // 2)
+    assert min(tier_h, int(budget_half)) < tier_h, (
+        f"at half height the {n}-stack budget {budget_half:.1f}px did "
+        f"not fall below the tier height {tier_h}px; the clamp would "
+        f"not shrink and the stack would overflow its slot"
+    )
+
+    # (2) Tiny pane: pick H small enough that the raw budget is below
+    # the floor, then assert the clamp bottoms out exactly at the
+    # shared legibility floor (never 0 or negative).
+    tiny_h = int(
+        (n * (VOWEL_BTN_MIN_H_PX - 1) + (n - 1) * gap) / row.slot_height_norm
+    )
+    budget_tiny, clamped_tiny = clamp(tiny_h)
+    assert budget_tiny < VOWEL_BTN_MIN_H_PX  # fixture sanity
+    assert clamped_tiny == VOWEL_BTN_MIN_H_PX, (
+        f"clamped per-button height {clamped_tiny}px should bottom out "
+        f"at the {VOWEL_BTN_MIN_H_PX}px legibility floor on a tiny pane"
+    )

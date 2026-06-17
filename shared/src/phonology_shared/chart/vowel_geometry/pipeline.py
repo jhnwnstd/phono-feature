@@ -6,8 +6,9 @@ pipeline is propose-then-confine:
 1. ``_plan_placements``: the inference layer proposes logical slots.
 2. ``classify_cells`` + ``_assign_pair_sides`` (display_slots):
    coordinate-free arrangement.
-3. ``_plan_rows`` (depths via cell_boxes, distribution via outline):
-   vertical structure.
+3. ``_plan_rows`` (per-row rendered pixel heights via
+   ``cell_boxes.content_height_px``, distribution via
+   ``outline.distribute_rows``): vertical structure.
 4. ``_solve_outline``: the boundary adapts to the rows' width
    demands (shrink).
 5. ``_project_cells``: anchors map into the outline; pair-shift
@@ -34,6 +35,7 @@ from phonology_shared.chart.vowel_geometry.cell_boxes import (
     _VOWEL_ROW_GAP_PX,
     _anchor_group_key,
     _cell_box_px,
+    _cell_pair_offset_px,
     _cell_width_px,
     _natural_data_area_size,
     _resolve_pair_shift_conflicts,
@@ -129,7 +131,7 @@ def _grow_outline_extent(
         back_x = max(c.chart_x for c in row_cells)
         for c in row_cells:
             ww = _cell_width_px(c)
-            off = c.pair_side * c.pair_shift_px + c.nudge_px
+            off = _cell_pair_offset_px(c)
             if abs(c.chart_x - front_x) < 1e-9:
                 front_reach = max(
                     front_reach, ww / 2.0 - off + _CONFINE_MARGIN_PX

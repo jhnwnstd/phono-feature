@@ -275,7 +275,7 @@ class VowelChartSilhouette:
     # rows). Silhouette's right edge sits ``cell_outer_extent_px``
     # to the RIGHT of ``back_anchor * dw``.
     #
-    # ``cell_outer_extent_px`` is ``pair_shift_px + btn_w / 2`` --
+    # ``cell_outer_extent_px`` is ``pair_shift_px + btn_w / 2``:
     # the fixed-pixel offset from a paired cell's centre to its
     # outer edge. Both renderers consume this to position the
     # silhouette so the math cascades: at any data width the

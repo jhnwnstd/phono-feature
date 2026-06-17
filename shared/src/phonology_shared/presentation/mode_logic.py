@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from phonology_shared.chart.consonants import group_segments
+from phonology_shared.chart.consonants import count_segment_classes
 from phonology_shared.data.limits import (
     MAX_CONSONANTS,
     MAX_SEGMENTS,
@@ -305,20 +305,20 @@ def inventory_cap_status(
 ) -> InventoryCapStatus:
     """Build the live cap-counter view model for a builder grid.
 
-    Counts vowels through :py:func:`group_segments` (the single
-    source of "what is a vowel" the charts render) and treats every
-    other segment as a consonant, exactly as
-    :py:func:`phonology_shared.chart.consonants.validate_class_caps`
-    does, so the counter and the save-time enforcement can never
-    disagree about which side a segment falls on. Cheap to recompute
-    on each grid mutation at the capped inventory sizes (<=180
-    segments). ``normalized`` forwards pre-normalized bundles when
-    the caller already holds them.
+    Class counts come from
+    :py:func:`phonology_shared.chart.consonants.count_segment_classes`
+    (the single source the save-time
+    :py:func:`~phonology_shared.chart.consonants.validate_class_caps`
+    gate also uses), so the counter and the enforcement can never
+    disagree about which side a segment falls on, tone letters
+    included (counted toward the total, never toward the consonant
+    cap). Cheap to recompute on each grid mutation at the capped
+    inventory sizes (<=180 segments). ``normalized`` forwards
+    pre-normalized bundles when the caller already holds them.
     """
-    groups = group_segments(segments, normalized=normalized)
-    n_total = sum(len(segs) for segs in groups.values())
-    n_vowels = len(groups.get("Vowels", []))
-    n_consonants = n_total - n_vowels
+    n_vowels, n_consonants, n_total = count_segment_classes(
+        segments, normalized=normalized
+    )
     pairs = (
         (n_vowels, MAX_VOWELS),
         (n_consonants, MAX_CONSONANTS),
