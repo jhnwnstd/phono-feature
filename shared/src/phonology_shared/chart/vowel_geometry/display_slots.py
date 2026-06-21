@@ -18,21 +18,23 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from phonology_shared.chart.vowels import (
+from phonology_shared.chart.vowel_space import (
     _BACKNESS_GROUP_BY_COL,
     _BACKNESS_X,
+    _ROW_LABEL_TO_INDEX,
+)
+from phonology_shared.chart.vowels import (
     _DISPLAY_CONTRAST_FEATURES,
     _PAIR_KIND_FOR_FEATURE,
-    _ROW_LABEL_TO_INDEX,
     VowelCellDisplayKind,
 )
 
 #: Column-semantics views derived from the single source
-#: ``vowels._BACKNESS_GROUP_BY_COL`` (the inference layer owns the
-#: 9-column scheme: 0/1 front pair, 2/3 central pair, 4/5 back
-#: pair, 6/7/8 neutral-round). Built once at import so the sizing
-#: and projection passes never rebuild per-call dict literals, and
-#: a future column-scheme change lands in one place.
+#: ``vowel_space._BACKNESS_GROUP_BY_COL`` (the coordinate-system
+#: module owns the 9-column scheme: 0/1 front pair, 2/3 central
+#: pair, 4/5 back pair, 6/7/8 neutral-round). Built once at import
+#: so the sizing and projection passes never rebuild per-call dict
+#: literals, and a future column-scheme change lands in one place.
 _COL_TO_ANCHOR: dict[int, float] = {
     col: _BACKNESS_X[key] for col, key in _BACKNESS_GROUP_BY_COL.items()
 }

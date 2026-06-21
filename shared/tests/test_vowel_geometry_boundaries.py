@@ -143,78 +143,13 @@ def test_furniture_never_reads_cell_positions() -> None:
     )
 
 
-def test_vowels_layout_is_a_pure_facade() -> None:
-    """The compat facade must never re-accrete logic: a docstring,
-    import statements, and ``__all__`` are the only allowed
-    statements."""
-    tree = ast.parse(
-        (_CHART_DIR / "vowels_layout.py").read_text(encoding="utf-8")
-    )
-    body = list(tree.body)
-    if (
-        body
-        and isinstance(body[0], ast.Expr)
-        and isinstance(body[0].value, ast.Constant)
-    ):
-        body = body[1:]  # module docstring
-    for node in body:
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
-            continue
-        if (
-            isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-            and node.targets[0].id == "__all__"
-        ):
-            continue
-        raise AssertionError(
-            f"vowels_layout.py contains a non-import statement at line "
-            f"{node.lineno} ({type(node).__name__}); the facade must "
-            f"stay a pure re-export mirror of chart.vowel_geometry"
-        )
-
-
-def test_facade_mirrors_legacy_surface() -> None:
-    """Every name the lazy shim in ``vowels.py`` resolves, plus every
-    symbol any repo file imports from ``vowels_layout`` directly,
-    must exist on the facade."""
-    import phonology_shared.chart.vowels as vowels
-    import phonology_shared.chart.vowels_layout as facade
-
-    direct_imports = {
-        # desktop/src/phonology_features/gui/vowel_chart.py
-        "effective_button_height_px",
-        "silhouette_for_data_width",
-        "silhouette_left_at_y",
-        # web/scripts/build.py
-        "rounded_silhouette_polygon_points",
-        "DENSITY_TIER_DENSE_BTN_H",
-        "DENSITY_TIER_DENSE_THRESHOLD",
-        "DENSITY_TIER_ULTRA_BTN_H",
-        "DENSITY_TIER_ULTRA_THRESHOLD",
-        # shared/tests/*
-        "build_vowel_chart_geometry",
-        "silhouette_right_at_y",
-        "_cell_box_px",
-        "PAIR_DISPLAY_KINDS",
-        "VowelCellDisplayKind",
-        "VowelChartSilhouette",
-        "_VOWEL_CONTENT_W_PX",
-        "_CONFINE_MARGIN_PX",
-        "_silhouette_with_widths",
-    }
-    for name in sorted(vowels._LAYOUT_REEXPORTS | direct_imports):
-        assert hasattr(facade, name), (
-            f"vowels_layout facade is missing {name!r}; a legacy import "
-            f"site or the vowels.py lazy shim would break"
-        )
-
-
-def test_vowels_module_keeps_lazy_boundary() -> None:
-    """``vowels.py`` must never import the layout side at module
-    top: an eager import re-creates the import-order crash the lazy
-    ``__getattr__`` shim exists to prevent (vowels_layout and the
-    vowel_geometry modules import ``vowels`` at THEIR tops)."""
+def test_vowels_module_does_not_import_rendering() -> None:
+    """``vowels.py`` is the inference layer. It may import the
+    coordinate foundation (``vowel_space``) but must NOT import the
+    rendering package (``vowel_geometry``) or the deleted compat
+    facade (``vowels_layout``): inference sits BELOW rendering, so an
+    upward import would invert the layering (it once forced a lazy
+    ``__getattr__`` shim to dodge the resulting circular import)."""
     tree = ast.parse((_CHART_DIR / "vowels.py").read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.ImportFrom) and node.module:
@@ -224,3 +159,32 @@ def test_vowels_module_keeps_lazy_boundary() -> None:
             for alias in node.names:
                 assert "vowels_layout" not in alias.name
                 assert "vowel_geometry" not in alias.name
+
+
+def test_vowel_space_is_foundational() -> None:
+    """``vowel_space`` is the low coordinate-system layer that both
+    the inference module (``vowels``) and the rendering package
+    (``vowel_geometry``) sit on, so it must import NOTHING from them
+    or from ``consonants``. It depends only outward, on the
+    presentation pixel constants its anchors are derived from. An
+    import from a higher layer here would re-create the inverted
+    dependency this whole split exists to remove."""
+    tree = ast.parse(
+        (_CHART_DIR / "vowel_space.py").read_text(encoding="utf-8")
+    )
+    forbidden = {"vowels", "vowel_geometry", "consonants"}
+    modules: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            modules.append(node.module)
+        elif isinstance(node, ast.Import):
+            modules.extend(alias.name for alias in node.names)
+    for module in modules:
+        assert "vowel_geometry" not in module, (
+            f"vowel_space.py imports {module!r}; the foundation layer "
+            f"must not depend on the rendering package"
+        )
+        assert module.split(".")[-1] not in forbidden, (
+            f"vowel_space.py imports {module!r}; the foundation layer "
+            f"must not depend on inference or grouping"
+        )

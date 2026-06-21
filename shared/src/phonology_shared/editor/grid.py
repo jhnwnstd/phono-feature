@@ -13,7 +13,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
-from phonology_shared.chart.consonants import validate_class_caps
+from phonology_shared.chart.segment_classes import validate_class_caps
 from phonology_shared.data.inventory import (
     Inventory,
     ValidationError,

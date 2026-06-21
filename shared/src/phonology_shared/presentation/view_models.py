@@ -10,10 +10,10 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from phonology_shared.chart.vowels import (
+from phonology_shared.chart.vowel_geometry import (
     build_vowel_chart_geometry,
-    detect_vowel_profile,
 )
+from phonology_shared.chart.vowels import detect_vowel_profile
 from phonology_shared.presentation.analysis import (
     compute_contrastive,
     render_class_tab_feat,

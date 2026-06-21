@@ -15,11 +15,12 @@ count, ordering, and clamp behaviour on tiny edges.
 
 from __future__ import annotations
 
-from phonology_shared.chart.vowels import VowelChartShape, vowel_silhouette
-from phonology_shared.chart.vowels_layout import (
+from phonology_shared.chart.vowel_geometry import (
     VowelChartSilhouette,
     rounded_silhouette_polygon_points,
+    vowel_silhouette,
 )
+from phonology_shared.chart.vowels import VowelChartShape
 from phonology_shared.presentation.chart_style import (
     VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
 )
@@ -150,9 +151,7 @@ def test_silhouette_for_data_width_flush_with_back_cell_extent() -> None:
     Cascade: top_right_norm == back_anchor + extent_px / dw
             -> top_right_norm * dw == back_anchor * dw + extent_px
     Flush iff: extent_px == pair_shift_px + btn_w/2."""
-    from phonology_shared.chart.vowels_layout import (
-        silhouette_for_data_width,
-    )
+    from phonology_shared.chart.vowel_geometry import silhouette_for_data_width
     from phonology_shared.presentation.constants import BTN_W
     from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
 
@@ -180,9 +179,7 @@ def test_silhouette_for_data_width_flush_with_front_cell_extent() -> None:
     Cascade: top_left_norm == front_anchor_at_top - extent_px / dw
             -> top_left_norm * dw == front_anchor_at_top * dw - extent_px
     Flush iff: extent_px == pair_shift_px + btn_w/2."""
-    from phonology_shared.chart.vowels_layout import (
-        silhouette_for_data_width,
-    )
+    from phonology_shared.chart.vowel_geometry import silhouette_for_data_width
     from phonology_shared.presentation.constants import BTN_W
     from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
 
@@ -204,9 +201,7 @@ def test_silhouette_for_data_width_symmetric_front_back_offset() -> None:
     the SAME ``cell_outer_extent_px`` from their respective
     anchors at any data width. Asymmetric offsets would
     re-introduce the original bug (front gap, back flush)."""
-    from phonology_shared.chart.vowels_layout import (
-        silhouette_for_data_width,
-    )
+    from phonology_shared.chart.vowel_geometry import silhouette_for_data_width
 
     sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
     for dw in (200, 232, 320, 440):
@@ -244,7 +239,7 @@ def _assert_edge_helpers_match_polygon(sil: VowelChartSilhouette) -> None:
     hand-written bezier math; this is the cross-check that keeps a
     one-sided edit from silently desynchronising them from the
     polygon both renderers actually draw."""
-    from phonology_shared.chart.vowels_layout import (
+    from phonology_shared.chart.vowel_geometry import (
         silhouette_left_at_y,
         silhouette_right_at_y,
     )
@@ -307,7 +302,9 @@ def test_edge_helpers_match_polygon_shrunken_widths() -> None:
     ``_silhouette_with_widths``; the edge helpers must track the
     rebuilt silhouette, since that is the one the geometry bakes
     into ``VowelChartRow.silhouette_left`` / ``silhouette_right``."""
-    from phonology_shared.chart.vowels_layout import _silhouette_with_widths
+    from phonology_shared.chart.vowel_geometry.outline import (
+        _silhouette_with_widths,
+    )
 
     sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
     shrunk = _silhouette_with_widths(

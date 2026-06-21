@@ -32,13 +32,13 @@ from phonology_shared.chart.vowel_geometry.outline import (
     silhouette_left_at_y,
     silhouette_right_at_y,
 )
-from phonology_shared.chart.vowels import (
+from phonology_shared.chart.vowel_space import (
     _BACKNESS_X,
     _HEIGHT_Y,
     COL_LABELS,
     ROW_LABELS,
-    VowelPlacement,
 )
+from phonology_shared.chart.vowels import VowelPlacement
 from phonology_shared.presentation.layout import SEG_BTN_H
 
 

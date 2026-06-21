@@ -85,41 +85,29 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from enum import IntEnum, StrEnum
-from typing import Any
 
-from phonology_shared.presentation.constants import BTN_W
+from phonology_shared.chart.vowel_space import (
+    _BACKNESS_ADVANCED_STEP,
+    _BACKNESS_GROUP_BY_COL,
+    _BACKNESS_RETRACTED_STEP,
+    _BACKNESS_X,
+    _HEIGHT_LOWERED_STEP,
+    _HEIGHT_RAISED_STEP,
+    _HEIGHT_Y,
+    _PAIR_OFFSET_HALF,
+    _PLACE_TO_COLUMN,
+    _ROW_LABEL_TO_INDEX,
+    ROW_LABELS,
+)
 from phonology_shared.presentation.feature_metadata import (
     USE_VOWEL_PAIR,
     features_for_use,
 )
-from phonology_shared.presentation.layout import (
-    VOWEL_PAIR_GAP_PX,
-    VOWEL_PAIR_SEPARATOR_PX,
-)
 
-# The seven height tiers of the maximalist vowel chart, in row
-# order. Tuple is (label, +high, +low, +tense-or-atr): the feature
-# bundle that canonically populates the row. The ``Mid`` row sits
-# between Close-mid and Open-mid as a Tier 2 display slot for
-# [-high, -low] vowels whose tense/ATR is unspecified (display
-# inference only; engine logic still treats those as
-# underspecified). Used by the chart widget to label rows and by
-# tests to spot-check that placement maps correctly. Immutable so
-# importers cannot mutate the shared singleton.
-VOWEL_HEIGHT: tuple[tuple[str, str, str, str | None], ...] = (
-    ("Close", "+", "-", "+"),
-    ("Near-close", "+", "-", "-"),
-    ("Close-mid", "-", "-", "+"),
-    ("Mid", "-", "-", None),
-    ("Open-mid", "-", "-", "-"),
-    ("Near-open", "-", "+", "-"),
-    ("Open", "-", "+", None),
-)
-ROW_LABELS: tuple[str, ...] = tuple(label for label, *_ in VOWEL_HEIGHT)
-
-# Column labels in display order. The rendered chart is 6 columns
-# wide because each place alternates (unrounded, rounded).
-COL_LABELS: tuple[str, ...] = ("Front", "Central", "Back")
+# The vowel-space coordinate system (axes, anchors, trapezoid
+# widths, axis adjacency) lives in ``chart.vowel_space``; the names
+# this module needs are imported above. This file is the INFERENCE
+# layer: it places feature bundles onto that coordinate system.
 
 
 class Confidence(IntEnum):
@@ -483,88 +471,6 @@ def _feature_state(feats: Mapping[str, str], key: str) -> FeatureState:
 #: Reverse of ``ROW_LABELS`` so axis evidence carrying a row label
 #: ("Close", "Open-mid", ...) can be turned back into a row index
 #: without an O(n) scan on every placement.
-# Normalized abstract-vowel-space coordinates exposed on
-# :py:class:`VowelPlacement`. Seven rows distributed at uniform
-# 0.14 spacing across [0.08, 0.92] so the top button at Close and
-# the bottom button at Open never clip against the data area's
-# top or bottom edge, and the silhouette has visible padding above
-# and below the cells. ``Mid`` sits midway at 0.50 between
-# Close-mid and Open-mid.
-_HEIGHT_Y: dict[str, float] = {
-    "Close": 0.08,
-    "Near-close": 0.22,
-    "Close-mid": 0.36,
-    "Mid": 0.50,
-    "Open-mid": 0.64,
-    "Near-open": 0.78,
-    "Open": 0.92,
-}
-
-
-#: Canonical content width in pixels: three backness pair slots
-#: (each an unrounded + rounded button pair) plus the two
-#: inter-slot separators. The single definition every normalised
-#: fraction below divides by; the layout module re-exports it as
-#: ``_VOWEL_CONTENT_W_PX``.
-_CANONICAL_CONTENT_W_PX: float = float(
-    3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX
-)
-
-
-def _derive_backness_anchors() -> tuple[dict[str, float], float]:
-    """Derive backness anchors and the trapezoid bottom-width from
-    real layout pixels.
-
-    The TOP row of the chart needs to fit three backness columns
-    (front, central, back), each holding an unrounded + rounded
-    pair of segment buttons, plus a separator between adjacent
-    backness columns. The BOTTOM row of the trapezoid needs to fit
-    at least two backness columns + one separator so a typical
-    open-row inventory (front + back, no central) still has room
-    for its cells.
-
-    Returns:
-        ``(anchors, bottom_width)`` where ``anchors`` maps
-        ``"front"`` / ``"central"`` / ``"back"`` to a normalised
-        x in ``[0, 1]`` (the column centre for the TOP, widest
-        row), and ``bottom_width`` is the trapezoid's bottom edge
-        as a fraction of the top edge.
-
-    The numbers fall out of the existing pixel constants
-    (``BTN_W``, ``VOWEL_PAIR_GAP_PX``, ``VOWEL_PAIR_SEPARATOR_PX``):
-    no hand-picked fractions, no magic numbers.
-    """
-    backness_w = 2 * BTN_W + VOWEL_PAIR_GAP_PX
-    content_w = _CANONICAL_CONTENT_W_PX
-    front_centre = backness_w / 2.0
-    central_centre = backness_w + VOWEL_PAIR_SEPARATOR_PX + backness_w / 2.0
-    back_centre = content_w - backness_w / 2.0
-    anchors = {
-        "front": front_centre / content_w,
-        "central": central_centre / content_w,
-        "back": back_centre / content_w,
-    }
-    min_bottom_content = 2 * backness_w + VOWEL_PAIR_SEPARATOR_PX
-    bottom_width = min_bottom_content / content_w
-    return anchors, bottom_width
-
-
-_BACKNESS_X, _DERIVED_BOTTOM_WIDTH = _derive_backness_anchors()
-
-#: Half-width of the signed offset that separates the rounded
-#: mate from its unrounded partner inside a backness anchor.
-#: Derived from the pixel constants so the two mates are exactly
-#: one button-width apart centre-to-centre on the widest row of
-#: the trapezoid (no overlap, no gratuitous gap). Signed so a
-#: renderer can apply ``x + pair_offset`` directly.
-_PAIR_OFFSET_HALF: float = (
-    (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _CANONICAL_CONTENT_W_PX
-)
-
-
-_ROW_LABEL_TO_INDEX: dict[str, int] = {
-    label: i for i, label in enumerate(ROW_LABELS)
-}
 
 
 def _normalize_feat_keys(feats: Mapping[str, str]) -> dict[str, str]:
@@ -637,28 +543,6 @@ def detect_vowel_profile(
         has_centralized="centralized" in active,
         has_peripheral="peripheral" in active,
     )
-
-
-#: Width of the trapezoid's bottom edge as a fraction of its top
-#: edge. Derived (:py:func:`_derive_backness_anchors`) from the
-#: pixel constants so the bottom row has just enough room for two
-#: backness columns plus the inter-column separator.
-TRAPEZOID_BOTTOM_WIDTH: float = _DERIVED_BOTTOM_WIDTH
-#: Triangle bottom edge: one backness column wide. Derived from
-#: the same pixel constants so the lowest row of a triangle chart
-#: still has finite horizontal extent for a single vowel pair.
-TRIANGLE_BOTTOM_WIDTH: float = (
-    2 * BTN_W + VOWEL_PAIR_GAP_PX
-) / _CANONICAL_CONTENT_W_PX
-#: Outer envelope of a single backness pair, expressed as a
-#: fraction of the canonical content width (i.e. the distance
-#: from the pair's anchor centre to the outer edge of either
-#: rounded or unrounded button). The renderer subtracts this from
-#: the front anchor to find the silhouette left edge (still
-#: normalised; the front edge keeps the canonical extent).
-_PAIR_OUTER_EXTENT: float = (
-    (BTN_W + VOWEL_PAIR_GAP_PX) / 2 + BTN_W / 2
-) / _CANONICAL_CONTENT_W_PX
 
 
 def infer_vowel_shape(profile: VowelProfile) -> VowelChartShape:
@@ -1099,26 +983,6 @@ def _infer_rounding(
     )
 
 
-#: Single-step "lowered" move on the height axis: each key is the
-#: base row, value is the row one step more open. Rows at the
-#: bottom of the chart (``Open``) have no further lowering target.
-_HEIGHT_LOWERED_STEP: dict[str, str] = {
-    "Close": "Near-close",
-    "Near-close": "Close-mid",
-    "Close-mid": "Mid",
-    "Mid": "Open-mid",
-    "Open-mid": "Near-open",
-    "Near-open": "Open",
-}
-
-#: Inverse of :py:data:`_HEIGHT_LOWERED_STEP` ("raised" goes one
-#: step more close). Computed once so the refinement helper does
-#: not rebuild the table on every call.
-_HEIGHT_RAISED_STEP: dict[str, str] = {
-    v: k for k, v in _HEIGHT_LOWERED_STEP.items()
-}
-
-
 def _refine_height_with_relative_features(
     base: AxisEvidence,
     feats: Mapping[str, str],
@@ -1168,21 +1032,6 @@ def _refine_height_with_relative_features(
         reason=new_reason,
         flags=base.flags | frozenset({PlacementFlag.REFINED}),
     )
-
-
-#: Single-step "advance" move on the backness axis: each key is the
-#: base column, value is the column one step more front. ``front``
-#: has no further advancement target.
-_BACKNESS_ADVANCED_STEP: dict[str, str] = {
-    "back": "central",
-    "central": "front",
-}
-
-#: Inverse of :py:data:`_BACKNESS_ADVANCED_STEP` ("retracted" goes
-#: one step more back).
-_BACKNESS_RETRACTED_STEP: dict[str, str] = {
-    v: k for k, v in _BACKNESS_ADVANCED_STEP.items()
-}
 
 
 def _refine_backness_with_relative_features(
@@ -1375,19 +1224,6 @@ def compute_placements(
     return occupied, placements
 
 
-_BACKNESS_GROUP_BY_COL: Mapping[int, str] = {
-    0: "front",
-    1: "front",
-    6: "front",
-    2: "central",
-    3: "central",
-    7: "central",
-    4: "back",
-    5: "back",
-    8: "back",
-}
-
-
 def _snap_diphthong_secondaries(
     placements: dict[str, VowelPlacement],
     occupied: dict[tuple[int, int], list[str]],
@@ -1501,67 +1337,6 @@ def _snap_diphthong_secondaries(
                 new_primary,
                 secondary=new_secondary,
             )
-
-
-# ---------------------------------------------------------------------------
-# Render-ready chart geometry: extracted to
-# ``phonology_shared.chart.vowels_layout`` so the trapezoid silhouette
-# solver and per-cell positioning logic live in a single, greppable
-# file. The names below stay importable from this module for backward
-# compatibility, resolved LAZILY via the PEP 562 module __getattr__:
-# an eager ``import vowels_layout`` here would dereference a partially
-# initialized module whenever ``vowels_layout`` happens to be imported
-# first in a fresh interpreter (it imports THIS module at its top), so
-# the first import order decided whether the process crashed. Lazy
-# resolution defers the lookup to first attribute access, by which
-# point both module bodies have finished executing.
-# ---------------------------------------------------------------------------
-
-_LAYOUT_REEXPORTS: frozenset[str] = frozenset(
-    {
-        "VOWEL_CHART_TITLE",
-        "PAIR_DISPLAY_KINDS",
-        "VowelChartCell",
-        "VowelChartRow",
-        "VowelChartColHeader",
-        "VowelChartSilhouette",
-        "VowelChartDiphthong",
-        "VowelChartBand",
-        "VowelChartGeometry",
-        "build_vowel_chart_geometry",
-        "vowel_silhouette",
-        "_VOWEL_CELL_STACK_GAP_PX",
-        "_VOWEL_ROW_GAP_PX",
-        "_VOWEL_DATA_AREA_VERTICAL_PADDING_PX",
-        "_VOWEL_CONTENT_W_PX",
-        "_VOWEL_SHRINK_FACTOR",
-        "_VOWEL_SLANT_CHANGE_CAP_FRAC",
-        "_VOWEL_MIN_CELL_GAP_NORM",
-        "_min_row_width_for_meta",
-        "_compute_shrunken_widths",
-        "_stage1_uniform_shrink",
-        "_stage2_slant_tweak",
-        "_silhouette_with_widths",
-        "_classify_vowel_cell_display",
-        "_order_pair_entries",
-        "_natural_data_area_size",
-    }
-)
-
-
-def __getattr__(name: str) -> Any:
-    if name in _LAYOUT_REEXPORTS:
-        from phonology_shared.chart import vowels_layout
-
-        return getattr(vowels_layout, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-# Module-level so it isn't rebuilt per placement call. Maps the
-# backness axis verdict to its unrounded-pair column index; the
-# rounded mate is ``base + 1`` and the neutral-rounding row is
-# ``6 + base // 2``.
-_PLACE_TO_COLUMN: Mapping[str, int] = {"front": 0, "central": 2, "back": 4}
 
 
 def vowel_grid_pos(

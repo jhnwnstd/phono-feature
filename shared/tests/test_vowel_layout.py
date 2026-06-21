@@ -156,6 +156,7 @@ def test_phoible_shaped_close_front_vowel_places_correctly():
     a future refactor of the placement reader cannot silently
     regress PHOIBLE compatibility.
     """
+    import phonology_shared.chart.vowel_space as vsp
     import phonology_shared.chart.vowels as vl
 
     feats = {
@@ -174,13 +175,13 @@ def test_phoible_shaped_close_front_vowel_places_correctly():
     profile = vl.detect_vowel_profile(["i_test"], feats)
     occupied, placements = vl.compute_placements(["i_test"], profile, feats)
     placement = placements["i_test"]
-    assert placement.row == vl.ROW_LABELS.index("Close"), (
+    assert placement.row == vsp.ROW_LABELS.index("Close"), (
         f"PHOIBLE +High maps to Close height tier, got "
-        f"{vl.ROW_LABELS[placement.row]}"
+        f"{vsp.ROW_LABELS[placement.row]}"
     )
     # Front column index (front anchor) per
     # ``COL_LABELS == ("Front", "Central", "Back")``.
-    assert vl.COL_LABELS[0] == "Front"
+    assert vsp.COL_LABELS[0] == "Front"
 
 
 def test_diphthong_placement_carries_secondary_and_flag():
@@ -199,6 +200,7 @@ def test_diphthong_placement_carries_secondary_and_flag():
     /ia/'s primary placement at /i/-cell caused it to share the
     /i/ stack visually; post-fix /ia/ never enters any cell.
     """
+    import phonology_shared.chart.vowel_space as vsp
     import phonology_shared.chart.vowels as vl
 
     primary = {
@@ -229,10 +231,10 @@ def test_diphthong_placement_carries_secondary_and_flag():
     assert placement.secondary is not None
     assert vl.PlacementFlag.DIPHTHONG in placement.flags
     assert vl.PlacementFlag.DIPHTHONG in placement.secondary.flags
-    assert placement.row == vl.ROW_LABELS.index(
+    assert placement.row == vsp.ROW_LABELS.index(
         "Close"
     ), "primary anchors at Close (high) tier"
-    assert placement.secondary.row == vl.ROW_LABELS.index(
+    assert placement.secondary.row == vsp.ROW_LABELS.index(
         "Open"
     ), "final anchors at Open (low) tier"
     # ``occupied`` must NOT contain /ia/; diphthongs render via
@@ -247,17 +249,17 @@ def test_diphthong_placement_carries_secondary_and_flag():
 def test_module_constants_are_tuples():
     """ROW_LABELS / COL_LABELS / VOWEL_HEIGHT are exported as
     tuples so importers cannot mutate the shared singletons."""
-    import phonology_shared.chart.vowels as vl
+    import phonology_shared.chart.vowel_space as vsp
 
-    assert isinstance(vl.ROW_LABELS, tuple)
-    assert isinstance(vl.COL_LABELS, tuple)
-    assert isinstance(vl.VOWEL_HEIGHT, tuple)
+    assert isinstance(vsp.ROW_LABELS, tuple)
+    assert isinstance(vsp.COL_LABELS, tuple)
+    assert isinstance(vsp.VOWEL_HEIGHT, tuple)
     # Spot-check shape so a future re-shape is a deliberate break.
     # Seven height tiers since the Tier 2 Mid row landed between
     # Close-mid and Open-mid.
-    assert len(vl.ROW_LABELS) == 7
-    assert "Mid" in vl.ROW_LABELS
-    assert vl.COL_LABELS == ("Front", "Central", "Back")
+    assert len(vsp.ROW_LABELS) == 7
+    assert "Mid" in vsp.ROW_LABELS
+    assert vsp.COL_LABELS == ("Front", "Central", "Back")
 
 
 # PascalCase normalization
@@ -455,7 +457,7 @@ def test_chart_geometry_handles_no_vowels() -> None:
     Both renderers already guard on ``cells.length > 0`` before
     drawing anything so the user simply sees no vowel chart.
     """
-    from phonology_shared.chart.vowels import (
+    from phonology_shared.chart.vowel_geometry import (
         VOWEL_CHART_TITLE,
         build_vowel_chart_geometry,
     )
@@ -481,7 +483,7 @@ def test_chart_geometry_omits_empty_rows(
     no occupied cell. Without this, the web renderer would emit a
     "Close" row label for an inventory with no close vowels.
     """
-    from phonology_shared.chart.vowels import (
+    from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
     )
 
@@ -512,7 +514,7 @@ def test_chart_geometry_cell_chart_x_within_bounds(
     the legacy ``grid_col`` spacer-track check now that the grid
     positions live in the renderer, not the geometry payload.
     """
-    from phonology_shared.chart.vowels import (
+    from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
     )
 
@@ -759,9 +761,11 @@ def test_long_pair_stays_side_by_side_and_grows_chart() -> None:
     :py:attr:`VowelChartGeometry.natural_data_width_px`; the
     renderer grows the chart slot so all cells stay legible.
     """
+    from phonology_shared.chart.vowel_geometry import (
+        build_vowel_chart_geometry,
+    )
     from phonology_shared.chart.vowels import (
         VowelCellDisplayKind,
-        build_vowel_chart_geometry,
         detect_vowel_profile,
     )
 
@@ -933,7 +937,9 @@ def test_silhouette_aspect_within_ceiling(
     sizing would overshoot the ceiling. Catches a future change
     that disables the ceiling or breaks the dh-growth path.
     """
-    from phonology_shared.chart.vowels import build_vowel_chart_geometry
+    from phonology_shared.chart.vowel_geometry import (
+        build_vowel_chart_geometry,
+    )
     from phonology_shared.presentation.chart_style import (
         VOWEL_SILHOUETTE_MAX_ASPECT,
     )

@@ -72,8 +72,8 @@ from phonology_shared.chart.vowel_geometry.outline import (
     silhouette_right_at_y,
     vowel_silhouette,
 )
+from phonology_shared.chart.vowel_space import _HEIGHT_Y
 from phonology_shared.chart.vowels import (
-    _HEIGHT_Y,
     PlacementFlag,
     PlacementPolicy,
     VowelChartShape,

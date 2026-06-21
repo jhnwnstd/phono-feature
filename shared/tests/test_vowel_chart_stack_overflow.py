@@ -27,6 +27,7 @@ field and shrinks the per-button height when the slot is tight.
 
 from __future__ import annotations
 
+from phonology_shared.chart.vowel_geometry import build_vowel_chart_geometry
 from phonology_shared.chart.vowel_geometry.cell_boxes import (
     content_height_px,
 )
@@ -35,9 +36,6 @@ from phonology_shared.chart.vowels import (
     VowelCellDisplayKind,
     VowelProfile,
     detect_vowel_profile,
-)
-from phonology_shared.chart.vowels_layout import (
-    build_vowel_chart_geometry,
 )
 
 
@@ -229,7 +227,7 @@ def test_neutral_col_does_not_collide_with_pair_col_at_same_anchor() -> None:
     neutral, high-pair) and at most two of them paired, no two
     populated cells should ever end up at the same pair-side.
     """
-    from phonology_shared.chart.vowels_layout import (
+    from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
     )
 
@@ -353,7 +351,7 @@ def test_renderer_can_derive_button_height_from_slot() -> None:
     # exposes the same ladder both renderers follow, so the formula
     # below comes out close to ``effective_h`` rather than the
     # canonical 26 px.
-    from phonology_shared.chart.vowels_layout import (
+    from phonology_shared.chart.vowel_geometry import (
         effective_button_height_px,
     )
 
@@ -382,7 +380,7 @@ def test_slot_clamp_shrinks_and_floors_below_natural() -> None:
     (2) on a tiny pane it bottoms out at the shared legibility floor
     rather than collapsing toward zero.
     """
-    from phonology_shared.chart.vowels_layout import (
+    from phonology_shared.chart.vowel_geometry import (
         effective_button_height_px,
     )
     from phonology_shared.presentation.chart_style import (

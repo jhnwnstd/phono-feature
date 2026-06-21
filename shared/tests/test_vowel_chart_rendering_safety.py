@@ -36,13 +36,13 @@ from pathlib import Path
 import pytest
 from _inventory_names import BUNDLED_INVENTORY_NAMES
 
-from phonology_shared.chart.vowels import (
-    build_vowel_chart_geometry,
-    detect_vowel_profile,
-)
-from phonology_shared.chart.vowels_layout import (
+from phonology_shared.chart.vowel_geometry import (
     PAIR_DISPLAY_KINDS,
+    build_vowel_chart_geometry,
+)
+from phonology_shared.chart.vowels import (
     VowelCellDisplayKind,
+    detect_vowel_profile,
 )
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.chart_style import (
@@ -358,12 +358,12 @@ def test_row_label_anchors_divorced_from_cell_positions() -> None:
     (Lomongo's "Open" label hugged the outline while "Close" kept
     its padding).
     """
-    from phonology_shared.chart.vowels import detect_vowel_profile
-    from phonology_shared.chart.vowels_layout import (
+    from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
         silhouette_left_at_y,
         silhouette_right_at_y,
     )
+    from phonology_shared.chart.vowels import detect_vowel_profile
     from phonology_shared.presentation.layout import SEG_BTN_H
 
     # Lomongo-shaped five-vowel system: /i e a o u/.
@@ -441,14 +441,14 @@ def test_button_boxes_confined_to_outline(
     of 3 to 8 px were routine (English /i/, German /iː/, Lomongo's
     open row).
     """
-    from phonology_shared.chart.vowels import detect_vowel_profile
-    from phonology_shared.chart.vowels_layout import (
-        _cell_box_px,
+    from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
         silhouette_for_data_width,
         silhouette_left_at_y,
         silhouette_right_at_y,
     )
+    from phonology_shared.chart.vowel_geometry.cell_boxes import _cell_box_px
+    from phonology_shared.chart.vowels import detect_vowel_profile
 
     engine = bundled_engine(name)
     vowels = engine.grouped_segments.get("Vowels", [])

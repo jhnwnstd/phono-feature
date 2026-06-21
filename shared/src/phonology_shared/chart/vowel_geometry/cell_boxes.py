@@ -39,9 +39,8 @@ from phonology_shared.presentation.layout import (
 #: Gap (px) between vertically stacked segment buttons. Canonical
 #: home lives in ``phonology_shared.presentation.chart_style`` as
 #: ``VOWEL_CELL_STACK_GAP_PX`` (presentation layer, so build.py can
-#: bake it without dragging chart/ imports); imported in the top
-#: import block. The private alias below is kept for consumers of
-#: the old name.
+#: bake it without dragging chart/ imports); aliased to the
+#: module-private spelling this file's box math reads.
 _VOWEL_CELL_STACK_GAP_PX: int = VOWEL_CELL_STACK_GAP_PX
 
 #: Density tiers: per-button height when a cell's stack reaches the
@@ -82,11 +81,6 @@ def effective_button_height_px(stack_depth: int) -> int:
     if stack_depth >= DENSITY_TIER_DENSE_THRESHOLD:
         return DENSITY_TIER_DENSE_BTN_H
     return SEG_BTN_H
-
-
-#: Compat alias for the pre-rename private spelling, re-exported by
-#: the ``vowels_layout`` facade for legacy import sites.
-_effective_button_height_px = effective_button_height_px
 
 
 #: Vertical breathing room between adjacent populated rows. Picked

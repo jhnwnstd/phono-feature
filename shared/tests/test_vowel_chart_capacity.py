@@ -29,6 +29,12 @@ from pathlib import Path
 
 import pytest
 
+from phonology_shared.chart.vowel_geometry import (
+    build_vowel_chart_geometry,
+    silhouette_for_data_width,
+    silhouette_left_at_y,
+    silhouette_right_at_y,
+)
 from phonology_shared.chart.vowel_geometry.cell_boxes import (
     _cell_box_px,
     _cell_height_px,
@@ -37,12 +43,6 @@ from phonology_shared.chart.vowels import (
     PlacementPolicy,
     VowelProfile,
     detect_vowel_profile,
-)
-from phonology_shared.chart.vowels_layout import (
-    build_vowel_chart_geometry,
-    silhouette_for_data_width,
-    silhouette_left_at_y,
-    silhouette_right_at_y,
 )
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.theory.feature_engine import FeatureEngine
@@ -229,7 +229,7 @@ def test_caps_admit_the_densest_phoible_inventories() -> None:
     the class-cap check. This pins the cap values against the data
     they were chosen for, so lowering a cap below a shipping PHOIBLE
     inventory trips here."""
-    from phonology_shared.chart.consonants import validate_class_caps
+    from phonology_shared.chart.segment_classes import validate_class_caps
     from phonology_shared.editor.phoible_provider import (
         materialize_phoible_inventory,
     )
@@ -259,7 +259,7 @@ def test_bundled_inventories_within_caps(inventories_dir: Path) -> None:
     Uses the shared ``inventories_dir`` fixture (resolved relative to
     the test file) so the path is portable across machines and CI;
     skips cleanly if the corpus is absent on a fresh checkout."""
-    from phonology_shared.chart.consonants import validate_class_caps
+    from phonology_shared.chart.segment_classes import validate_class_caps
 
     paths = sorted(
         p for p in inventories_dir.glob("*.json") if p.stem != "_schema"

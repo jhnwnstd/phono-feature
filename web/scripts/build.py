@@ -676,13 +676,11 @@ def _vowel_corner_lines(shape: str) -> list[str]:
     ``rounded_silhouette_polygon_points``). CSS rules consume
     this via ``clip-path: polygon(var(--vowel-<shape>-rounded-points))``.
     """
-    from phonology_shared.chart.vowels import (
-        VowelChartShape,
+    from phonology_shared.chart.vowel_geometry import (
+        rounded_silhouette_polygon_points,
         vowel_silhouette,
     )
-    from phonology_shared.chart.vowels_layout import (
-        rounded_silhouette_polygon_points,
-    )
+    from phonology_shared.chart.vowels import VowelChartShape
     from phonology_shared.presentation.chart_style import (
         VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
     )
@@ -711,10 +709,8 @@ def _vowel_silhouette(shape: str) -> dict[str, float | int]:
     :py:func:`vowel_layout.vowel_silhouette` so the bake's numbers
     match what ``build_vowel_chart_geometry`` produces for an
     inventory-free chart."""
-    from phonology_shared.chart.vowels import (
-        VowelChartShape,
-        vowel_silhouette,
-    )
+    from phonology_shared.chart.vowel_geometry import vowel_silhouette
+    from phonology_shared.chart.vowels import VowelChartShape
 
     sil = vowel_silhouette(VowelChartShape(shape))
     return {
@@ -740,7 +736,7 @@ def generate_layout_css() -> None:
     # Vowel-cell density tiers live in the chart layer (they feed
     # the geometry's natural-height request); imported here so the
     # rendered CSS heights come from the same source.
-    from phonology_shared.chart.vowels_layout import (
+    from phonology_shared.chart.vowel_geometry import (
         DENSITY_TIER_DENSE_BTN_H,
         DENSITY_TIER_ULTRA_BTN_H,
     )
@@ -765,7 +761,7 @@ def generate_layout_css() -> None:
         f"  --vowel-pair-separator: {mod.VOWEL_PAIR_SEPARATOR_PX}px;",
         # Silhouette corners for both shapes, in the data area's
         # normalised ``[0, 1]`` coordinate space. Derived in
-        # ``vowels_layout.vowel_silhouette`` so the silhouette
+        # ``vowel_geometry.vowel_silhouette`` so the silhouette
         # outline exactly hugs the back-anchored cell positions:
         # the right edge is vertical at the back-pair's outer edge
         # and the left edge slants from front-close-left to
@@ -787,7 +783,7 @@ def generate_layout_css() -> None:
         f"  --seg-btn-row-h: {mod.SEG_BTN_ROW_H}px;",
         f"  --seg-group-header-h: {mod.SEG_GROUP_HEADER_H}px;",
         # Vowel-cell density-tier button heights. Relayed from
-        # ``vowels_layout`` (the same constants that drive
+        # ``vowel_geometry`` (the same constants that drive
         # ``natural_data_height_px``) so the requested chart height
         # and the rendered stack height cannot drift; a hand-edited
         # mismatch here once forced spurious panel scrolling.
@@ -1441,7 +1437,7 @@ def hash_assets() -> None:
     # ``--diphthong-*`` vars; this block carries the numbers
     # main.js needs at runtime.
     chart_style_mod = _load_chart_style_module()
-    from phonology_shared.chart.vowels_layout import (
+    from phonology_shared.chart.vowel_geometry import (
         DENSITY_TIER_DENSE_THRESHOLD,
         DENSITY_TIER_ULTRA_THRESHOLD,
     )

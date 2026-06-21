@@ -76,10 +76,13 @@ density-tier values relay through ``layout.css`` variables and the
 Changing the outline math or the density ladder means updating
 those surfaces in the same commit.
 
-COMPATIBILITY: ``chart/vowels_layout.py`` is a pure re-export
-facade of the old single-module namespace, and ``chart/vowels.py``
-lazily resolves layout names through it; new code imports from this
-package directly.
+FOUNDATION: the coordinate system this package projects onto (row
+and backness anchors, trapezoid widths, axis adjacency) lives in
+``chart/vowel_space.py``; ``outline``, ``display_slots``, and
+``furniture`` import those constants from there, not from the
+inference module. ``vowel_space`` -> {this package, ``chart.vowels``}
+is the dependency direction: the coordinate system is the low layer
+both rendering and inference sit on.
 """
 
 from phonology_shared.chart.vowel_geometry.cell_boxes import (

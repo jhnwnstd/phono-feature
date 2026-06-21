@@ -27,7 +27,6 @@ from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 
 from phonology_shared.data.inventory import normalize_feature_bundle
-from phonology_shared.data.limits import MAX_CONSONANTS, MAX_VOWELS
 
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.
@@ -1083,81 +1082,7 @@ def group_segments(
     }
 
 
-def count_segment_classes(
-    inventory: Mapping[str, Mapping[str, str]],
-    *,
-    normalized: Mapping[str, dict[str, str]] | None = None,
-) -> tuple[int, int, int]:
-    """Return ``(n_vowels, n_consonants, n_total)`` for ``inventory``.
-
-    The single source of the class counts both the hard-cap
-    validator and the live builder counter consume, so the two can
-    never disagree about which side a segment falls on. Counting
-    goes through :py:func:`group_segments` so each class means
-    exactly what the charts render.
-
-    ``n_consonants`` is every segment that is neither a vowel NOR a
-    suprasegmental tone letter: the ``Tones`` group (Chao tone
-    letters, e.g. PHOIBLE !Xoo) is a disjoint THIRD class, not a
-    consonant, so folding it into the consonant count would inflate
-    it against :py:data:`~phonology_shared.data.limits.MAX_CONSONANTS`.
-    ``n_total`` counts every segment, tones included, since they
-    occupy the inventory and the chart's tone tier and so count
-    toward :py:data:`~phonology_shared.data.limits.MAX_SEGMENTS`.
-
-    ``normalized`` optionally carries pre-normalized bundles, same
-    contract as :py:func:`group_segments`.
-    """
-    groups = group_segments(inventory, normalized=normalized)
-    n_total = sum(len(segs) for segs in groups.values())
-    n_vowels = len(groups.get("Vowels", []))
-    n_tones = len(groups.get("Tones", []))
-    n_consonants = n_total - n_vowels - n_tones
-    return n_vowels, n_consonants, n_total
-
-
-def validate_class_caps(
-    inventory: Mapping[str, Mapping[str, str]],
-    *,
-    normalized: Mapping[str, dict[str, str]] | None = None,
-) -> list[str]:
-    """Check the per-class hard caps (``MAX_VOWELS`` /
-    ``MAX_CONSONANTS`` from :py:mod:`phonology_shared.data.limits`).
-
-    Returns user-facing messages, one per violated cap; empty means
-    the inventory is within bounds. Class counts come from
-    :py:func:`count_segment_classes` (vowels and consonants per the
-    chart's own grouping, tone letters excluded from both), so the
-    save-time gate and the live counter share one definition. A
-    simpler ``syllabic == '+'`` predicate would drift from the
-    grouping the charts actually render.
-
-    This lives next to the classifier rather than in the data
-    layer's parse validation because the data layer must not import
-    chart code; callers raise
-    :py:class:`phonology_shared.data.inventory.ValidationError` with
-    the returned messages wherever a grid becomes an
-    :py:class:`~phonology_shared.data.inventory.Inventory` (builder
-    save, new-inventory create, PHOIBLE materialization) and after
-    every JSON load. The caps are sized so all PHOIBLE inventories
-    pass (So has exactly ``MAX_VOWELS`` vowels; !Xoo has 130
-    consonants, under the 135 cap, plus 3 tone letters); the display
-    surfaces are stress-verified at these counts.
-
-    ``normalized`` optionally carries pre-normalized bundles, same
-    contract as :py:func:`group_segments`.
-    """
-    n_vowels, n_consonants, _ = count_segment_classes(
-        inventory, normalized=normalized
-    )
-    messages: list[str] = []
-    if n_vowels > MAX_VOWELS:
-        messages.append(
-            f"inventory has {n_vowels} vowels; " f"hard cap is {MAX_VOWELS}"
-        )
-    if n_consonants > MAX_CONSONANTS:
-        messages.append(
-            f"inventory has {n_consonants} consonants; "
-            f"hard cap is {MAX_CONSONANTS}"
-        )
-    return messages
+# Per-class cap counting and validation moved to
+# ``chart.segment_classes``: that is application cap POLICY, not the
+# grouping algorithm this module owns. ``segment_classes`` imports
+# ``group_segments`` from here.

@@ -199,10 +199,10 @@ def phoible_build_geometry(phoible_provider) -> Callable[[str], object]:
     :py:func:`detect_vowel_profile`, and calls
     :py:func:`build_vowel_chart_geometry`.
     """
-    from phonology_shared.chart.vowels import (
+    from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
-        detect_vowel_profile,
     )
+    from phonology_shared.chart.vowels import detect_vowel_profile
     from phonology_shared.editor.phoible_provider import (
         materialize_phoible_inventory,
     )

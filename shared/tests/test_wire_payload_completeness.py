@@ -26,8 +26,8 @@ from pathlib import Path
 
 import pytest
 
+from phonology_shared.chart.vowel_geometry import build_vowel_chart_geometry
 from phonology_shared.chart.vowels import detect_vowel_profile
-from phonology_shared.chart.vowels_layout import build_vowel_chart_geometry
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.view_models import (
     build_inventory_summary,

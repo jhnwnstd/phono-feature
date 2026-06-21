@@ -40,24 +40,26 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_shared.chart.vowels import (
-    COL_LABELS,
+from phonology_shared.chart.vowel_geometry import (
     PAIR_DISPLAY_KINDS,
-    ROW_LABELS,
-    VowelCellDisplayKind,
     VowelChartCell,
     VowelChartDiphthong,
     VowelChartGeometry,
-    VowelChartShape,
     VowelChartSilhouette,
     build_vowel_chart_geometry,
-    detect_vowel_profile,
-    vowel_silhouette,
-)
-from phonology_shared.chart.vowels_layout import (
     effective_button_height_px,
     silhouette_for_data_width,
     silhouette_left_at_y,
+    vowel_silhouette,
+)
+from phonology_shared.chart.vowel_space import (
+    COL_LABELS,
+    ROW_LABELS,
+)
+from phonology_shared.chart.vowels import (
+    VowelCellDisplayKind,
+    VowelChartShape,
+    detect_vowel_profile,
 )
 from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.constants import (

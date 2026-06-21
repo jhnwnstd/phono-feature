@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from phonology_shared.chart.consonants import (
+from phonology_shared.chart.segment_classes import (
     count_segment_classes,
     validate_class_caps,
 )

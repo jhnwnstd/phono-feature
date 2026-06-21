@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from phonology_shared.chart.consonants import count_segment_classes
+from phonology_shared.chart.segment_classes import count_segment_classes
 from phonology_shared.data.limits import (
     MAX_CONSONANTS,
     MAX_SEGMENTS,

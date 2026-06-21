@@ -26,14 +26,14 @@ from phonology_shared.chart import vowels as vowels_mod
 # the compat facade would rebind the facade's alias while the solver
 # kept reading its own module global, so the patches below would
 # silently stop biting.
-from phonology_shared.chart.vowel_geometry import outline as vowels_layout_mod
-from phonology_shared.chart.vowels import (
+from phonology_shared.chart.vowel_geometry import build_vowel_chart_geometry
+from phonology_shared.chart.vowel_geometry import outline as outline_mod
+from phonology_shared.chart.vowel_geometry.outline import (
     _compute_shrunken_widths,
     _stage1_uniform_shrink,
     _stage2_slant_tweak,
-    build_vowel_chart_geometry,
-    detect_vowel_profile,
 )
+from phonology_shared.chart.vowels import detect_vowel_profile
 from phonology_shared.theory.feature_engine import FeatureEngine
 
 
@@ -85,11 +85,11 @@ def test_stage2_disabled_by_default_for_silhouette_consistency() -> None:
     visual identity across the chart set.
 
     If Stage 2 is ever re-enabled, do it deliberately: bump this
-    constant in chart_style/vowels_layout, update this test to
+    constant in chart_style/outline, update this test to
     document the new value + rationale, and visual-verify that
     the per-inventory slant variation is desired.
     """
-    assert vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC == 0.0, (
+    assert outline_mod._VOWEL_SLANT_CHANGE_CAP_FRAC == 0.0, (
         "Stage 2 slant tweak re-enabled! "
         "_VOWEL_SLANT_CHANGE_CAP_FRAC must stay 0.0 to keep the "
         "silhouette consistent across inventories. See the "
@@ -101,9 +101,7 @@ def test_stage2_disabled_returns_stage1() -> None:
     """Setting the cap fraction to 0 turns Stage 2 off; the function
     returns Stage 1's widths verbatim.
     """
-    with patched_module_attr(
-        vowels_layout_mod, "_VOWEL_SLANT_CHANGE_CAP_FRAC", 0.0
-    ):
+    with patched_module_attr(outline_mod, "_VOWEL_SLANT_CHANGE_CAP_FRAC", 0.0):
         row_data = [(0.0, 0.5), (1.0, 0.5)]
         top, bot = _stage2_slant_tweak(
             row_data,
@@ -121,7 +119,7 @@ def test_stage2_disabled_returns_stage1() -> None:
 
 def test_compose_returns_canonical_when_factor_zero() -> None:
     """``_VOWEL_SHRINK_FACTOR = 0`` disables both stages at once."""
-    with patched_module_attr(vowels_layout_mod, "_VOWEL_SHRINK_FACTOR", 0.0):
+    with patched_module_attr(outline_mod, "_VOWEL_SHRINK_FACTOR", 0.0):
         top, bot = _compute_shrunken_widths(
             cells_meta_by_row={0: []},
             display_y_by_row={0: 0.5},
@@ -164,12 +162,12 @@ def test_hayes_silhouette_within_slant_cap(
     geometry = build_vowel_chart_geometry(vowels, profile, seg_feats)
     sil = geometry.silhouette
     rendered_slant = sil.top_width - sil.bottom_width
-    canonical_sil = vowels_mod.vowel_silhouette(
+    canonical_sil = outline_mod.vowel_silhouette(
         vowels_mod.VowelChartShape.TRAPEZOID
     )
     canonical_slant = canonical_sil.top_width - canonical_sil.bottom_width
     max_allowed_delta = (
-        vowels_layout_mod._VOWEL_SLANT_CHANGE_CAP_FRAC * canonical_slant
+        outline_mod._VOWEL_SLANT_CHANGE_CAP_FRAC * canonical_slant
     )
     assert abs(rendered_slant - canonical_slant) <= max_allowed_delta + 1e-9, (
         f"Hayes silhouette slant {rendered_slant:.4f} differs from "
@@ -199,7 +197,7 @@ def test_silhouette_slant_canonical_across_bundled_inventories(
     Stage 1's math was changed; both warrant a visual review
     before landing.
     """
-    canonical_sil = vowels_mod.vowel_silhouette(
+    canonical_sil = outline_mod.vowel_silhouette(
         vowels_mod.VowelChartShape.TRAPEZOID
     )
     canonical_slant = canonical_sil.top_width - canonical_sil.bottom_width

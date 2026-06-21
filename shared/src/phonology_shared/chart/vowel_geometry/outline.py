@@ -27,7 +27,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from phonology_shared.chart.vowel_geometry.model import VowelChartSilhouette
-from phonology_shared.chart.vowels import (
+from phonology_shared.chart.vowel_space import (
     _BACKNESS_X,
     _CANONICAL_CONTENT_W_PX,
     _HEIGHT_Y,
@@ -35,8 +35,8 @@ from phonology_shared.chart.vowels import (
     ROW_LABELS,
     TRAPEZOID_BOTTOM_WIDTH,
     TRIANGLE_BOTTOM_WIDTH,
-    VowelChartShape,
 )
+from phonology_shared.chart.vowels import VowelChartShape
 from phonology_shared.presentation.chart_style import (
     VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
 )

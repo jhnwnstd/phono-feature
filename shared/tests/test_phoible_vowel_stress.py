@@ -33,8 +33,8 @@ from __future__ import annotations
 
 import pytest
 
+from phonology_shared.chart.vowel_space import ROW_LABELS
 from phonology_shared.chart.vowels import (
-    ROW_LABELS,
     PlacementFlag,
     compute_placements,
     detect_vowel_profile,

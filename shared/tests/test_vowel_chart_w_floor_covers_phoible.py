@@ -31,13 +31,8 @@ import json
 import re
 from pathlib import Path
 
-# Import order: ``vowels`` first so its late re-export of
-# ``vowels_layout`` symbols (at the bottom of vowels.py) completes
-# without partial-init drama.
-from phonology_shared.chart.vowels import (
-    build_vowel_chart_geometry,
-    detect_vowel_profile,
-)
+from phonology_shared.chart.vowel_geometry import build_vowel_chart_geometry
+from phonology_shared.chart.vowels import detect_vowel_profile
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.chart_style import (
     VOWEL_CHART_PAD_R_PX,
