@@ -220,6 +220,11 @@ _EXPECTED_ROW_FIELDS = frozenset(
         "label",
         "chart_y",
         "tier",
+        # Label anchor y (chart_y + the half-button top/bottom shift
+        # from the shared ``label_midpoint_norm``): web/main.js reads
+        # it for ``--row-y`` so the Close/Open labels centre on the
+        # anchor button row instead of the stack edge.
+        "label_y",
         "silhouette_left",
         "silhouette_right",
         # Read by the web slot clamp (``_refreshVowelStackClamp``)

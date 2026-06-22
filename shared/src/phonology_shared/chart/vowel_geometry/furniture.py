@@ -68,25 +68,48 @@ def build_col_headers(
     )
 
 
-def _label_y_for(row: int, row_plan: RowPlan, natural_h: int) -> float:
-    """Row label's display y: the row's chart_y, shifted by half a
-    button on top / bottom tiers so the label centres on the anchor
-    button row (those tiers anchor their cells' EDGE on chart_y and
-    grow inward). Label PLACEMENT is otherwise fully divorced from
-    cell positioning: the silhouette edge fields are evaluated at
-    this same y, so the label's gap to the outline stays constant
-    regardless of where the row's buttons land inside it.
+def label_midpoint_norm(
+    chart_y: float, tier: str, data_height_px: float
+) -> float:
+    """The normalised y a row label centres on.
+
+    Middle / only rows centre on the row's ``chart_y``. Top and
+    bottom rows anchor their cells' EDGE on ``chart_y`` and grow
+    inward, so a label drawn at ``chart_y`` lines up with the
+    stack's edge, not its first button row; shifting it inward by
+    half a button height re-centres it on the anchor button row.
+    ``data_height_px`` is the data area's pixel height the shift is
+    taken against, so the shift is exactly ``SEG_BTN_H / 2`` rendered
+    pixels.
+
+    THE SINGLE definition of the close/open label-centring shift,
+    used by both renderers so it cannot drift between them: the
+    desktop calls it with its live data-area height every layout
+    pass; the web consumes the value baked here onto
+    :py:attr:`VowelChartRow.label_y` (its data area renders at the
+    natural height). Implementing it separately per renderer is what
+    left the web's Close / Open labels uncentred.
     """
-    y = row_plan.display_y[row]
-    if natural_h <= 0:
-        return y
-    half_btn_norm = (SEG_BTN_H / 2.0) / natural_h
-    tier = row_plan.tier[row]
+    if data_height_px <= 0:
+        return chart_y
+    half_btn_norm = (SEG_BTN_H / 2.0) / data_height_px
     if tier == "top":
-        return y + half_btn_norm
+        return chart_y + half_btn_norm
     if tier == "bottom":
-        return y - half_btn_norm
-    return y
+        return chart_y - half_btn_norm
+    return chart_y
+
+
+def _label_y_for(row: int, row_plan: RowPlan, natural_h: int) -> float:
+    """:py:func:`label_midpoint_norm` for a planned row at natural
+    size; bakes :py:attr:`VowelChartRow.label_y`. The silhouette edge
+    fields are evaluated at this same y, so a label's gap to the
+    outline stays constant regardless of where the row's buttons
+    land inside it (label placement is divorced from cell position).
+    """
+    return label_midpoint_norm(
+        row_plan.display_y[row], row_plan.tier[row], natural_h
+    )
 
 
 def build_rows(

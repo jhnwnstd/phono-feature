@@ -48,6 +48,7 @@ from phonology_shared.chart.vowel_geometry import (
     VowelChartSilhouette,
     build_vowel_chart_geometry,
     effective_button_height_px,
+    label_midpoint_norm,
     silhouette_for_data_width,
     silhouette_left_at_y,
     vowel_silhouette,
@@ -1106,24 +1107,17 @@ class VowelChartWidget(QWidget):
         for lbl, y, tier in self._row_labels:
             lbl.adjustSize()
             lh = lbl.height()
-            # Top / bottom tiers anchor their cells' EDGE on chart_y
-            # and grow inward, so a label centred on chart_y aligns
-            # with the stack edge, not the button row. Shift the
-            # label's y by half a button so it centres on the anchor
-            # button row like the middle-tier labels, then evaluate
-            # the silhouette edge AT THE LABEL'S OWN y: anchoring on
-            # the row's chart_y while drawing at the shifted y let
-            # the slanted (and corner-rounded) edge eat the gap, so
-            # the Open label hugged the outline. Label placement is
-            # deliberately divorced from where the row's buttons sit
-            # inside the outline.
-            label_y = y
-            if dh > 0:
-                half_btn_norm = (SEG_BTN_H / 2.0) / dh
-                if tier == "top":
-                    label_y = y + half_btn_norm
-                elif tier == "bottom":
-                    label_y = y - half_btn_norm
+            # Centre the label on its anchor button row via the shared
+            # ``label_midpoint_norm`` (top / bottom tiers anchor their
+            # cells' EDGE on chart_y and grow inward, so an unshifted
+            # label would sit on the stack edge, not the button row).
+            # Recomputed against the LIVE ``dh`` each layout pass since
+            # the desktop chart resizes; the same function bakes the
+            # web's ``row.label_y`` at the natural height. The
+            # silhouette edge is then evaluated AT THE LABEL'S OWN y
+            # so the label-to-outline gap stays constant: label
+            # placement is divorced from where the row's buttons land.
+            label_y = label_midpoint_norm(y, tier, dh)
             py = dy + round(label_y * dh) - lh // 2
             silhouette_left = silhouette_left_at_y(sil_for_dw, label_y)
             anchor_x = dx + round(silhouette_left * dw)
