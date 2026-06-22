@@ -28,6 +28,28 @@ if TYPE_CHECKING:
     from phonology_features.gui.main_window import MainWindow
     from phonology_shared.data.inventory import Inventory
 
+#: Prefix marking a dropdown entry as a session PHOIBLE inventory.
+#: The combo's userData is otherwise an absolute file path, so this
+#: string namespace cannot collide. It MUST be a string, not a tuple:
+#: ``QComboBox.findData`` cannot match tuple userData against the
+#: dropdown's ``QStandardItemModel`` (it silently returns -1), which
+#: broke selecting a just-loaded PHOIBLE inventory.
+_PHOIBLE_KEY_PREFIX = "phoible::"
+
+
+def phoible_entry_key(name: str) -> str:
+    """Combo userData for a session PHOIBLE entry named ``name``."""
+    return f"{_PHOIBLE_KEY_PREFIX}{name}"
+
+
+def phoible_entry_name(data: object) -> str | None:
+    """The PHOIBLE inventory name in a combo userData value, or
+    ``None`` when the value is a file path (bundled / saved entry)."""
+    if isinstance(data, str) and data.startswith(_PHOIBLE_KEY_PREFIX):
+        return data[len(_PHOIBLE_KEY_PREFIX) :]
+    return None
+
+
 _log = get_logger(__name__)
 
 # Cap on MRU history. ~10 covers any realistic switching pattern;
@@ -251,7 +273,7 @@ class InventoryDirController:
             if header is not None:
                 header.setEnabled(False)
         for name in self.phoible_inventories:
-            self._combo.addItem(name, userData=("phoible", name))
+            self._combo.addItem(name, userData=phoible_entry_key(name))
 
     def add_phoible_entry(self, inventory: Inventory) -> None:
         """Cache a picker-loaded PHOIBLE inventory and select its
@@ -259,7 +281,7 @@ class InventoryDirController:
         the cached object."""
         self.phoible_inventories[inventory.name] = inventory
         self.populate_dropdown()
-        idx = self._combo.findData(("phoible", inventory.name))
+        idx = self._combo.findData(phoible_entry_key(inventory.name))
         if idx >= 0:
             self._combo.blockSignals(True)
             self._combo.setCurrentIndex(idx)

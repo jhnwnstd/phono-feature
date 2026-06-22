@@ -193,6 +193,17 @@ class VowelChartWidget(QWidget):
     _PAD_R: ClassVar[int] = cs.VOWEL_CHART_PAD_R_PX
     _PAD_B: ClassVar[int] = cs.VOWEL_CHART_PAD_B_PX
     _ROW_LABEL_GAP_PX: ClassVar[int] = cs.VOWEL_CHART_ROW_LABEL_GAP_PX
+    # Horizontal slack added to the centred title label so the first
+    # glyph's left side bearing is never clipped. ``adjustSize``
+    # measures glyph ADVANCES, which exclude side bearings; with
+    # AlignCenter a left-overhanging glyph (the 'V' of "VOWELS")
+    # would otherwise paint past the content rect and Qt would clip
+    # it. Half lands on each side, so this covers a bearing up to
+    # half its value. A content-driven floor, hence a px constant.
+    _TITLE_BEARING_SLACK_PX: ClassVar[int] = 4
+    # Vertical gap between the diphthong chip strip and the toggle
+    # button that sits below it.
+    _TOGGLE_GAP_PX: ClassVar[int] = 2
 
     def __init__(
         self, parent: QWidget | None = None, *, btn_gap: int = 4
@@ -552,10 +563,15 @@ class VowelChartWidget(QWidget):
             unique_diphs.append(d.segment)
         # Chips reuse SegmentButton for visual + state parity
         # with chart cells (size, IPA font chain, selection state).
+        # Columns derive from the BOTTOM-edge width (the strip is
+        # tucked under the bottom-most vowel-space line), not the
+        # full data-area width, so wrapping matches the rendered
+        # strip geometry.
         dx, _dy, dw, _dh = self._data_area_rect()
-        del dx
+        _cx, cw = self._bottom_edge_span(dx, dw)
+        del dx, _cx
         chip_pitch = BTN_W + layout.spacing()
-        n_cols = max(1, dw // chip_pitch) if dw > 0 else 6
+        n_cols = max(1, cw // chip_pitch) if cw > 0 else 6
         for idx, segment in enumerate(unique_diphs):
             chip = SegmentButton(segment, self._diphthong_chip_strip)
             chip.setToolTip(f"Select /{segment}/")
@@ -1013,25 +1029,59 @@ class VowelChartWidget(QWidget):
         # edge is fine because the layout pass rebuilds the chips
         # with the exact ``dw``.
         approx_dw = max(0, self.width() - VOWEL_LABEL_W - self._PAD_R)
+        # Wrap against the BOTTOM-edge width (the chips tuck under the
+        # bottom-most vowel-space line, not the full data column), so
+        # the reserved height matches the layout pass's narrower strip.
+        _cx, approx_cw = self._bottom_edge_span(VOWEL_LABEL_W, approx_dw)
+        del _cx
         spacing = self._chip_strip_layout.spacing()
         chip_pitch = BTN_W + spacing
-        n_cols = max(1, approx_dw // chip_pitch) if approx_dw > 0 else 6
+        n_cols = max(1, approx_cw // chip_pitch) if approx_cw > 0 else 6
         n_rows = max(1, math.ceil(len(unique) / n_cols))
         return n_rows * SEG_BTN_H + (n_rows - 1) * spacing
+
+    def _toggle_band_height(self) -> int:
+        """Vertical pixels reserved below the chip strip for the
+        diphthong toggle, which now sits under the chips (flush
+        right). Zero when the inventory has no diphthongs (toggle
+        hidden), so monophthong-only charts keep their full data
+        area."""
+        if not self._diphthongs:
+            return 0
+        return self._diphthong_toggle.sizeHint().height() + self._TOGGLE_GAP_PX
+
+    def _bottom_edge_span(self, dx: int, dw: int) -> tuple[int, int]:
+        """Pixel ``(x, width)`` of the trapezoid's bottom edge inside
+        the data area, used to tuck the diphthong chip strip under the
+        bottom-most vowel-space line. Falls back to the full data area
+        when no silhouette is rendered yet or the bottom edge is
+        degenerate (a triangle's single bottom point)."""
+        if self._silhouette is None or dw <= 0:
+            return dx, dw
+        sil = silhouette_for_data_width(self._silhouette, dw)
+        bl = min(max(sil.bottom_left, 0.0), 1.0)
+        br = min(max(sil.bottom_right, 0.0), 1.0)
+        if br <= bl:
+            return dx, dw
+        return dx + round(bl * dw), round((br - bl) * dw)
 
     def _data_area_rect(self) -> tuple[int, int, int, int]:
         """``(x, y, width, height)`` of the trapezoidal segment
         display space inside the rectangular widget. The chrome
         (title, column headers, row label gutter, right / bottom
-        padding, chip strip) is excluded so labels sit OUTSIDE
-        the silhouette.
+        padding, chip strip, toggle band) is excluded so labels sit
+        OUTSIDE the silhouette.
         """
         x = VOWEL_LABEL_W
         y = self._TITLE_H + self._COL_HEADER_H
         w = max(0, self.width() - x - self._PAD_R)
         h = max(
             0,
-            self.height() - y - self._PAD_B - self._chip_strip_height(),
+            self.height()
+            - y
+            - self._PAD_B
+            - self._chip_strip_height()
+            - self._toggle_band_height(),
         )
         return x, y, w, h
 
@@ -1051,30 +1101,42 @@ class VowelChartWidget(QWidget):
             self._diphthong_overlay.setGeometry(
                 0, 0, self.width(), self.height()
             )
-        # Diphthong chip strip: sits in the band BELOW the data
-        # area (above ``_PAD_B``). Spans the full data-area
-        # width. Hidden when the inventory has no diphthongs;
-        # ``_data_area_rect`` already accounted for the missing
-        # band via ``_chip_strip_height``.
+        # Diphthong chip strip: sits in the band BELOW the data area,
+        # tucked under the trapezoid's bottom edge (``_bottom_edge_span``)
+        # so the chips never run wider than the bottom-most vowel-space
+        # line. The toggle band sits below it (``_toggle_band_height``).
+        # Hidden when the inventory has no diphthongs; ``_data_area_rect``
+        # already reserved the band via ``_chip_strip_height`` +
+        # ``_toggle_band_height``.
         if self._diphthong_chip_strip.isVisible():
             strip_h = self._chip_strip_height()
-            strip_y = self.height() - self._PAD_B - strip_h
-            self._diphthong_chip_strip.setGeometry(dx, strip_y, dw, strip_h)
+            strip_y = (
+                self.height()
+                - self._PAD_B
+                - self._toggle_band_height()
+                - strip_h
+            )
+            cx, cw = self._bottom_edge_span(dx, dw)
+            self._diphthong_chip_strip.setGeometry(cx, strip_y, cw, strip_h)
         if self._title_label is not None:
             self._title_label.adjustSize()
-            tw = self._title_label.width()
+            # ``adjustSize`` sizes the label from glyph advances, which
+            # omit the first glyph's left side bearing; AlignCenter then
+            # paints the 'V' of "VOWELS" a hair left of the content rect
+            # and Qt clips it to the label bounds. Widen by a small
+            # slack so the centred text keeps the bearing on both sides.
+            tw = self._title_label.width() + self._TITLE_BEARING_SLACK_PX
+            self._title_label.resize(tw, self._title_label.height())
             self._title_label.move(dx + (dw - tw) // 2, 0)
-        # Toggle anchors the title row's right edge. y floors at
-        # 2 so a button taller than TITLE_H spills into the
-        # col-header band rather than clipping above the widget.
+        # Toggle now sits BELOW the chip strip, flush against the data
+        # area's right edge (its prior horizontal anchor). y floors at
+        # 0 so it never spills above the widget on a tiny chart.
         if self._diphthong_toggle.isVisible():
             self._diphthong_toggle.adjustSize()
             tw_btn = self._diphthong_toggle.width()
             th_btn = self._diphthong_toggle.height()
-            self._diphthong_toggle.move(
-                dx + dw - tw_btn,
-                max(2, (self._TITLE_H - th_btn) // 2),
-            )
+            toggle_y = max(0, self.height() - self._PAD_B - th_btn)
+            self._diphthong_toggle.move(dx + dw - tw_btn, toggle_y)
             self._diphthong_toggle.raise_()
         # Column headers: x in [0, 1] mapped across the data area,
         # then centred on each anchor. Uses round-to-nearest (not

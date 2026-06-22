@@ -152,9 +152,10 @@ def test_mode_status_texts() -> None:
     assert mode_status_text(Mode.SEG_TO_FEAT, has_engine=True).startswith(
         "Click a segment"
     )
-    assert mode_status_text(Mode.FEAT_TO_SEG, has_engine=True).startswith(
-        "Toggle feature values"
-    )
+    # FEAT mode intentionally shows no status-bar hint: the analysis
+    # pane's empty state already explains the +/- toggle, so repeating
+    # it on the bottom border was redundant.
+    assert mode_status_text(Mode.FEAT_TO_SEG, has_engine=True) == ""
 
 
 def test_feat_to_seg_honours_wildcard_match_mode(

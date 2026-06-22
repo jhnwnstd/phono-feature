@@ -853,6 +853,18 @@ dialog input[type="text"]:focus-visible {
   font-variant-ligatures: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* The bundled Charis IPA subset ships ONE weight (400). The
+     selected/matched state below requests ``font-weight: bold``
+     for parity with the desktop SegmentButton, which has the full
+     system Charis SIL (a real Bold face). With no bold face in the
+     web subset the browser would synthesise faux bold: an
+     algorithmic smear that reads as a blurry white glyph on the
+     saturated blue selected fill. ``font-synthesis: none`` makes
+     the bold request fall back to the crisp 400 face instead; the
+     selected emphasis still reads clearly from the fill, white
+     text, and thick accent border. If a Charis IPA Bold subset is
+     ever bundled, the ``bold`` request then picks it up for real. */
+  font-synthesis: none;
 }
 .seg-btn:hover {
   background: var(--accent-light);
@@ -919,8 +931,11 @@ dialog input[type="text"]:focus-visible {
      Row 2: column headers (Front / Central / Back).
      Row 3: row-label gutter + data area.
      Row 4: always-visible diphthong chip strip (auto-sized;
-     empty when the inventory has no diphthongs). */
-  grid-template-rows: auto auto 1fr auto;
+     empty when the inventory has no diphthongs), constrained to
+     the trapezoid's bottom-edge span.
+     Row 5: diphthong display-mode toggle, right-aligned below the
+     chip strip (absent when the inventory has no diphthongs). */
+  grid-template-rows: auto auto 1fr auto auto;
   /* Right + bottom insets pinned via
      ``chart_style.VOWEL_CHART_PAD_R_PX`` /
      ``VOWEL_CHART_PAD_B_PX`` so the back column (chart_x=1) and
@@ -1137,30 +1152,17 @@ dialog input[type="text"]:focus-visible {
     opacity: 0.25;
   }
 }
-/* Toggle button anchored at the data area's top-right corner.
-   Stays unobtrusive (text-dim) until hovered/active; the
-   ``aria-pressed`` state flips the visual to the accent border so
-   the active state reads at a glance. ``pointer-events: auto``
-   wins over the SVG overlay below (which has pointer-events:
-   none). */
+/* Diphthong display-mode toggle. Sits in its own grid row (row 5)
+   BELOW the chip strip, right-aligned to the data column's right
+   edge (the silhouette's back edge). Absent from the DOM when the
+   inventory has no diphthongs. Stays unobtrusive (text-dim) until
+   hovered/active; the ``aria-pressed`` state flips the visual to
+   the accent border so the active state reads at a glance. */
 .vowel-diphthong-toggle {
-  /* Pinned to the chart's outer container (``.vowel-chart``) at
-     the top-right corner of the title row. Sitting inside
-     ``.vowel-chart-data`` (the prior position) caused PHOIBLE
-     Close-Back stacks to overlap the toggle's hit area, with the
-     toggle's text getting drawn beneath the topmost cell button.
-     Outside the data area, the toggle has its own visual lane.
-
-     ``top: 4px`` clears the chart-container's top edge so the
-     button outline isn't clipped (pre-fix at ``top: 2px`` the
-     rounded border touched the title row above and visually
-     bled into it). ``right: 6px`` matches the chart's right pad
-     so the button right-aligns with the silhouette's back edge
-     instead of overhanging into the panel gutter. */
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  z-index: 3;
+  grid-row: 5;
+  grid-column: 2;
+  justify-self: end;
+  margin-top: 2px;
   padding: 2px 8px;
   font-size: var(--font-size-micro);
   font-weight: 500;
@@ -1191,10 +1193,23 @@ dialog input[type="text"]:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: var(--vowel-pair-gap, 2px);
-  padding: var(--space-xs) 2px 0 2px;
+  padding: var(--space-xs) 0 0 0;
   justify-content: flex-start;
   align-items: center;
   min-height: 0;
+  /* Constrain the chips to the trapezoid's BOTTOM edge so they
+     sit under the bottom-most vowel-space line, not the full
+     data-column width. ``--vowel-bottom-left`` / ``--vowel-bottom-right``
+     are the silhouette's bottom corners as [0, 1] fractions of the
+     data-area width, set per render by the JS silhouette refresh
+     (the same pass that recomputes the clip-path). The fallback
+     (0 .. 1 = full width) holds for the one frame before that runs
+     and for any inventory whose silhouette omits the fields. */
+  margin-left: calc(var(--vowel-bottom-left, 0) * 100%);
+  width: calc(
+    (var(--vowel-bottom-right, 1) - var(--vowel-bottom-left, 0)) * 100%
+  );
+  box-sizing: border-box;
 }
 .vowel-diphthong-chips .seg-btn {
   /* Chips share the standard seg-btn size + font so dense
@@ -1624,13 +1639,16 @@ dialog input[type="text"]:focus-visible {
   color: var(--text-dim);
   font-weight: bold;
   cursor: pointer;
-  transition: box-shadow 80ms ease-out;
-}
-/* 1px halo on hover gives the 28x24 px buttons a clear "clickable"
-   affordance beyond the polarity-fill that lands when the cursor
-   reaches them. */
-.feat-btn:hover {
-  box-shadow: 0 0 0 1px var(--accent);
+  /* Transition the polarity recolor (below) so hover fades in the
+     +/- colour smoothly. The hover affordance is the polarity fill
+     itself, matching the desktop FeatureRow QSS. An accent halo is
+     deliberately NOT used: accent is the SELECT colour (segment
+     selection, the focus ring), and a feature button's state is its
+     polarity, not selection. Painting accent here read as a stray
+     blue ring around the +/- buttons (pink/amber under the
+     colourblind palette) instead of the green/red polarity scheme. */
+  transition: background 80ms ease-out, border-color 80ms ease-out,
+    color 80ms ease-out;
 }
 .feat-btn[data-polarity="+"]:hover,
 .feat-btn[data-polarity="+"][data-active="true"] {
@@ -2126,6 +2144,26 @@ progress {
   font-weight: bold;
 }
 .editor-grid-pane-rows .editor-grid th { text-align: right; }
+/* Inline segment-rename input (right-click a column header). Fills
+   the header cell so the edit reads as renaming that column in
+   place; the value commits on blur or Enter. */
+.editor-rename-input {
+  width: 100%;
+  min-width: 28px;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+}
+.editor-rename-input:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
 /* Cell value styling. Same semantics as the desktop's
    _cell_brushes: + on green, minus on red, 0 on a dim neutral.
    Read-only this iteration; the click-to-cycle wiring lands next. */

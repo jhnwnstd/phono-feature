@@ -267,6 +267,29 @@ function callBridge(fnName, ...args) {
     }
 }
 
+/** The user-facing message for an error thrown by a bridge call.
+ *
+ *  Pyodide surfaces a raised Python exception as a ``PythonError``
+ *  whose ``.message`` is the WHOLE traceback ("Traceback (most
+ *  recent call last): ... ModuleA.ValidationError: real message").
+ *  Showing that verbatim in a dialog or status bar dumps a code
+ *  traceback at the user. This pulls out the last line and strips
+ *  the leading dotted exception-class prefix, leaving just the
+ *  message the Python side intended. Plain JS errors (single-line
+ *  ``.message``) pass straight through.
+ */
+function bridgeErrorMessage(e, fallback) {
+    const raw = e && e.message ? String(e.message) : "";
+    const lines = raw.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (lines.length === 0) return fallback;
+    let last = lines[lines.length - 1];
+    const m = last.match(
+        /^[\w.]+(?:Error|Exception|Warning):\s*(.*)$/,
+    );
+    if (m) last = m[1];
+    return last || fallback;
+}
+
 /** Baked at build time from ``mode_logic.mode_status_text`` so the
  *  pre-bridge fallback can't drift from the canonical Python.
  *  ``web/scripts/build.py:_build_status_text_payload`` writes the
@@ -772,7 +795,7 @@ async function loadInventoryText(text, sourceLabel) {
         );
         prewarmCommonAnalyses();
     } catch (e) {
-        const issues = e.message ? [e.message] : ["unknown error"];
+        const issues = [bridgeErrorMessage(e, "unknown error")];
         // Delegate to the shared renderer so the Class tab here
         // and the desktop analysis pane produce byte-identical
         // markup (red heading + escaped <p> per issue). The
@@ -1878,6 +1901,22 @@ function _buildVowelChart(chart) {
             dataEl.style.setProperty(
                 `--vowel-${shape}-rounded-points`, polyStr,
             );
+            // Publish the silhouette's bottom-edge corners (as [0, 1]
+            // fractions of the data width) so the diphthong chip strip
+            // can constrain itself to the bottom-most vowel-space line
+            // instead of the full data-column width. Set on the chart
+            // container so the strip (a grid sibling, not a child of
+            // dataEl) inherits them. Clamped to [0, 1] so a cell-extent
+            // overshoot past the data area doesn't push the chips into
+            // the right pad.
+            const botLeft = Math.min(Math.max(silAdj.bottom_left, 0), 1);
+            const botRight = Math.min(Math.max(silAdj.bottom_right, 0), 1);
+            chartEl.style.setProperty(
+                "--vowel-bottom-left", botLeft.toFixed(5),
+            );
+            chartEl.style.setProperty(
+                "--vowel-bottom-right", botRight.toFixed(5),
+            );
             // Same trigger set as the polygon (first layout +
             // every resize): re-derive the stack button heights
             // from the rows' slot budgets at the height we just
@@ -2440,10 +2479,9 @@ function _appendVowelChartModeToggle(chartEl, hasDiphthongs) {
         state.vowel_chart_mode = next;
         _rerenderVowelChart();
     });
-    // Attach to the chart's outer container (not the data area)
-    // so the toggle sits in the title row instead of competing
-    // with Close-Back cell stacks for the top-right corner of the
-    // data rectangle.
+    // Attach to the chart's outer container (not the data area):
+    // CSS places it in grid row 5, right-aligned below the
+    // diphthong chip strip (see ``.vowel-diphthong-toggle``).
     chartEl.appendChild(btn);
 }
 
@@ -3328,7 +3366,7 @@ function wireRename() {
             errorBox.textContent = "";
             close();
         } catch (e) {
-            errorBox.textContent = e.message || "Rename failed.";
+            errorBox.textContent = bridgeErrorMessage(e, "Rename failed.");
             input.focus();
         }
     });
@@ -3568,7 +3606,9 @@ function wireSetupDialog() {
                 refreshEditorFromCurrent();
             }
         } catch (e) {
-            errorBox.textContent = e.message || "Could not create inventory.";
+            errorBox.textContent = bridgeErrorMessage(
+                e, "Could not create inventory.",
+            );
         }
     });
 
@@ -3847,7 +3887,8 @@ function wirePhoiblePicker() {
                 await ensurePhoibleData();
             } catch (e) {
                 nodes.phoibleLoading.textContent =
-                    `Could not load PHOIBLE data: ${e.message || e}`;
+                    "Could not load PHOIBLE data: "
+                    + bridgeErrorMessage(e, String(e));
                 return;
             }
             nodes.phoibleLoading.hidden = true;
@@ -3966,7 +4007,9 @@ function wirePhoiblePicker() {
                 refreshEditorFromCurrent();
             }
         } catch (e) {
-            errorBox.textContent = e.message || "Could not load inventory.";
+            errorBox.textContent = bridgeErrorMessage(
+                e, "Could not load inventory.",
+            );
         }
     });
 }
@@ -4163,6 +4206,8 @@ function wireBuilderEditor(setupDialog) {
     // (<td>, column <th>, row <th>, corner) inside any of the four panes.
     nodes.editorGridScroll.addEventListener("mousedown", onGridMouseDown);
     nodes.editorGridScroll.addEventListener("keydown", onGridKeyDown);
+    // Right-click a column header to rename that segment inline.
+    nodes.editorGridScroll.addEventListener("contextmenu", onGridContextMenu);
     // Scroll sync: the data pane is the scroll source; the column-
     // and row-header panes mirror its scrollLeft/scrollTop so the
     // headers track the viewport without overlaying the data.
@@ -4226,7 +4271,9 @@ function refreshEditorFromCurrent() {
     try {
         snapshot = callBridge("get_grid_state");
     } catch (e) {
-        setEditorStatus(`Could not load grid: ${e.message}`);
+        setEditorStatus(
+            `Could not load grid: ${bridgeErrorMessage(e, "error")}`,
+        );
         return;
     }
     editorState.name = snapshot.name;
@@ -4251,9 +4298,7 @@ function refreshEditorFromCurrent() {
     refreshEditorCapCounter();
     setEditorStatus(
         `${editorState.segments.length} segments × `
-        + `${editorState.features.length} features. `
-        + "Click a cell to select; click again to cycle. "
-        + "Shift-click for range, Ctrl-click to toggle.",
+        + `${editorState.features.length} features`,
     );
 }
 
@@ -4718,7 +4763,7 @@ function commitEdit(targets, value) {
         paintCell(cellNode(r, c), value);
     }
     if (cells.length === 0) return;
-    pushUndoEdit({ cells, new: value });
+    pushUndoEdit({ kind: "cells", cells, new: value });
     markEditorDirty();
     // A value change can flip syllabic (or another classifying
     // feature) and move a segment between vowel and consonant.
@@ -4761,21 +4806,123 @@ function _formatTpl(key, fallback, vars) {
     return tpl;
 }
 
+// Structural-edit primitives -----------------------------------------
+//
+// Add / remove segment, add / remove feature, and rename segment are
+// all undoable, sharing the one undo stack with cell edits. Each
+// records enough to reconstruct the prior state (the removed column /
+// row values, the old name) so undo and redo are exact inverses.
+// Mirrors the desktop builder's structural-edit records.
+
+function _insertSegmentAt(index, seg, col) {
+    editorState.segments.splice(index, 0, seg);
+    for (let r = 0; r < editorState.cells.length; r++) {
+        editorState.cells[r].splice(index, 0, col[r] ?? ZERO_VALUE);
+    }
+}
+
+function _removeSegmentAt(index) {
+    const col = editorState.cells.map((row) => row[index]);
+    editorState.segments.splice(index, 1);
+    for (const row of editorState.cells) row.splice(index, 1);
+    return col;
+}
+
+function _insertFeatureAt(index, feat, row) {
+    editorState.features.splice(index, 0, feat);
+    editorState.cells.splice(index, 0, row.slice());
+}
+
+function _removeFeatureAt(index) {
+    const row = editorState.cells[index].slice();
+    editorState.features.splice(index, 1);
+    editorState.cells.splice(index, 1);
+    return row;
+}
+
+/** Re-run a structural edit after undo (or re-apply on first push is
+ *  not needed; the mutating handler did that). Returns true when it
+ *  handled a structural kind so the caller can rebuild the grid. */
+function _applyStructural(edit, revert) {
+    switch (edit.kind) {
+        case "segAdd":
+            if (revert) _removeSegmentAt(edit.index);
+            else _insertSegmentAt(edit.index, edit.seg, edit.col);
+            return true;
+        case "segRemove":
+            if (revert) _insertSegmentAt(edit.index, edit.seg, edit.col);
+            else _removeSegmentAt(edit.index);
+            return true;
+        case "featAdd":
+            if (revert) _removeFeatureAt(edit.index);
+            else _insertFeatureAt(edit.index, edit.feat, edit.row);
+            return true;
+        case "featRemove":
+            if (revert) _insertFeatureAt(edit.index, edit.feat, edit.row);
+            else _removeFeatureAt(edit.index);
+            return true;
+        case "segRename":
+            editorState.segments[edit.index] =
+                revert ? edit.oldName : edit.newName;
+            return true;
+        default:
+            return false;
+    }
+}
+
+/** Reverse an edit (undo) or re-apply it (redo). ``revert`` true =
+ *  undo. Cell edits paint in place; structural edits rebuild the
+ *  grid + selection + cap counter. */
+function _stepEdit(edit, revert) {
+    if (_applyStructural(edit, revert)) {
+        renderEditorGrid();
+        clearSelection();
+        scheduleEditorCapRefresh();
+        return;
+    }
+    // "cells" kind (or a legacy entry with no kind).
+    applyEdit(edit, revert);
+}
+
+function _editDescription(edit) {
+    switch (edit.kind) {
+        case "segAdd": return `add of segment '${edit.seg}'`;
+        case "segRemove": return `removal of segment '${edit.seg}'`;
+        case "featAdd": return `add of feature '${edit.feat}'`;
+        case "featRemove": return `removal of feature '${edit.feat}'`;
+        case "segRename":
+            return `rename of '${edit.oldName}' to '${edit.newName}'`;
+        default: {
+            const n = edit.cells.length;
+            return `${n} cell change${_pluralS(n)}`;
+        }
+    }
+}
+
+function _undoRedoMessage(edit, isUndo) {
+    if (edit.kind === undefined || edit.kind === "cells") {
+        const n = edit.cells.length;
+        return _formatTpl(
+            isUndo ? "undid_template" : "redid_template",
+            isUndo
+                ? "Undid {n} cell change{plural}."
+                : "Redid {n} cell change{plural}.",
+            { n, plural: _pluralS(n) },
+        );
+    }
+    return `${isUndo ? "Undid" : "Redid"} ${_editDescription(edit)}.`;
+}
+
 function undo() {
     const edit = editorState.undoStack.pop();
     if (edit === undefined) {
         setEditorStatus(STATUS_TEXT.undo_nothing_message || "Nothing to undo.");
         return;
     }
-    applyEdit(edit, true);
+    _stepEdit(edit, true);
     editorState.redoStack.push(edit);
     markEditorDirty();
-    const n = edit.cells.length;
-    setEditorStatus(_formatTpl(
-        "undid_template",
-        "Undid {n} cell change{plural}.",
-        { n, plural: _pluralS(n) },
-    ));
+    setEditorStatus(_undoRedoMessage(edit, true));
 }
 
 function redo() {
@@ -4784,15 +4931,10 @@ function redo() {
         setEditorStatus(STATUS_TEXT.redo_nothing_message || "Nothing to redo.");
         return;
     }
-    applyEdit(edit, false);
+    _stepEdit(edit, false);
     editorState.undoStack.push(edit);
     markEditorDirty();
-    const n = edit.cells.length;
-    setEditorStatus(_formatTpl(
-        "redid_template",
-        "Redid {n} cell change{plural}.",
-        { n, plural: _pluralS(n) },
-    ));
+    setEditorStatus(_undoRedoMessage(edit, false));
 }
 
 // Mouse handling -------------------------------------------------------
@@ -5126,11 +5268,96 @@ function cellFromFirstSelected() {
  * Mutates editorState in place and re-renders the grid (which
  * also clears any stale selection that referenced the old shape).
  */
+/** Right-click a column header to edit (rename) that segment inline.
+ *  Mirrors the desktop builder's header double-click rename. The
+ *  edit commits on blur ("clicking away sets whatever the segment
+ *  currently is") or Enter, and cancels on Escape. A real change is
+ *  pushed onto the undo stack so Ctrl-Z reverts it. */
+function onGridContextMenu(ev) {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    const th = target.closest("th[data-col]");
+    if (th === null || !nodes.editorGridCols.contains(th)) return;
+    ev.preventDefault();
+    const c = Number(th.dataset.col);
+    if (!Number.isInteger(c) || c < 0 || c >= editorState.segments.length) {
+        return;
+    }
+    startSegmentRename(th, c);
+}
+
+function startSegmentRename(th, c) {
+    if (th.querySelector("input") !== null) return;  // already editing
+    const oldName = editorState.segments[c];
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "editor-rename-input";
+    input.value = oldName;
+    input.setAttribute("aria-label", `Rename segment ${oldName}`);
+    th.textContent = "";
+    th.appendChild(input);
+    input.focus();
+    input.select();
+    let settled = false;
+    const finish = (cancel) => {
+        if (settled) return;
+        settled = true;
+        const proposed = cancel ? oldName : input.value.trim();
+        commitSegmentRename(c, oldName, proposed);
+    };
+    input.addEventListener("blur", () => finish(false));
+    input.addEventListener("keydown", (kev) => {
+        // Keep the grid's own key handler (cycle / move / undo) from
+        // also firing while the rename input has focus.
+        kev.stopPropagation();
+        if (kev.key === "Enter") {
+            kev.preventDefault();
+            input.blur();
+        } else if (kev.key === "Escape") {
+            kev.preventDefault();
+            finish(true);
+        }
+    });
+}
+
+function commitSegmentRename(c, oldName, proposed) {
+    // No change, empty, or a duplicate of another segment: restore the
+    // header text and leave the model (and undo stack) untouched.
+    const duplicate = editorState.segments.some(
+        (s, i) => i !== c && s === proposed,
+    );
+    if (proposed === "" || proposed === oldName || duplicate) {
+        renderEditorGrid();
+        if (duplicate) {
+            setEditorStatus(
+                `Segment '${proposed}' already exists; rename cancelled.`,
+            );
+        }
+        return;
+    }
+    editorState.segments[c] = proposed;
+    pushUndoEdit({
+        kind: "segRename", index: c, oldName, newName: proposed,
+    });
+    renderEditorGrid();
+    clearSelection();
+    markEditorDirty();
+    scheduleEditorCapRefresh();
+    setEditorStatus(`Renamed segment '${oldName}' to '${proposed}'.`);
+}
+
 function addSegmentToState(seg) {
+    const index = editorState.segments.length;
     editorState.segments.push(seg);
     for (const row of editorState.cells) {
         row.push(ZERO_VALUE);
     }
+    pushUndoEdit({
+        kind: "segAdd",
+        index,
+        seg,
+        col: editorState.cells.map(() => ZERO_VALUE),
+    });
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
@@ -5141,10 +5368,13 @@ function addSegmentToState(seg) {
 }
 
 function addFeatureToState(feat) {
-    editorState.features.push(feat);
-    editorState.cells.push(
-        Array.from({ length: editorState.segments.length }, () => ZERO_VALUE),
+    const index = editorState.features.length;
+    const row = Array.from(
+        { length: editorState.segments.length }, () => ZERO_VALUE,
     );
+    editorState.features.push(feat);
+    editorState.cells.push(row.slice());
+    pushUndoEdit({ kind: "featAdd", index, feat, row });
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
@@ -5162,10 +5392,14 @@ function removeSelectedSegment() {
     // wording matches the desktop's ``ask_question`` body exactly.
     const prompt = callBridge("confirm_remove_segment_prompt", seg);
     if (!confirm(prompt)) return;
+    // Capture the column values BEFORE the splice so undo can restore
+    // the segment with its feature values intact.
+    const col = editorState.cells.map((row) => row[c]);
     editorState.segments.splice(c, 1);
     for (const row of editorState.cells) {
         row.splice(c, 1);
     }
+    pushUndoEdit({ kind: "segRemove", index: c, seg, col });
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
@@ -5181,8 +5415,12 @@ function removeSelectedFeature() {
     const feat = editorState.features[r];
     const prompt = callBridge("confirm_remove_feature_prompt", feat);
     if (!confirm(prompt)) return;
+    // Capture the row values BEFORE the splice so undo can restore the
+    // feature with its per-segment values intact.
+    const row = editorState.cells[r].slice();
     editorState.features.splice(r, 1);
     editorState.cells.splice(r, 1);
+    pushUndoEdit({ kind: "featRemove", index: r, feat, row });
     renderEditorGrid();
     clearSelection();
     markEditorDirty();
@@ -5230,7 +5468,7 @@ function commitAndDownload() {
             editorState.cells,
         );
     } catch (e) {
-        setEditorStatus(`Save failed: ${e.message}`);
+        setEditorStatus(`Save failed: ${bridgeErrorMessage(e, "error")}`);
         return;
     }
     editorState.dirty = false;
@@ -5379,7 +5617,9 @@ function wireLabelPrompt() {
                 pending.existing,
             );
         } catch (e) {
-            nodes.labelPromptError.textContent = e.message || "Invalid label.";
+            nodes.labelPromptError.textContent = bridgeErrorMessage(
+                e, "Invalid label.",
+            );
             nodes.labelPromptInput.focus();
             return;
         }

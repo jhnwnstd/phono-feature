@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     # is pure cost (PyQt6.QtGui.QRegion drags in extra Qt symbols).
     from PyQt6.QtGui import QRegion
 
-from PyQt6.QtCore import QEvent, QModelIndex, QObject, Qt
+from PyQt6.QtCore import QEvent, QModelIndex, QObject, QPoint, Qt
 from PyQt6.QtGui import (
     QCloseEvent,
     QFont,
@@ -65,6 +65,9 @@ from phonology_features.gui.builder.edits import (
     _MAX_UNDO_DEPTH,
     _BulkEdit,
     _CellPrev,
+    _FeatureEdit,
+    _RenameEdit,
+    _SegmentEdit,
 )
 from phonology_features.gui.builder.grid import (
     cycle_value,
@@ -95,6 +98,10 @@ from phonology_shared.editor.grid import (
 from phonology_shared.presentation.palette import C
 
 _log = get_logger(__name__)
+
+# Any single undoable action: a cell-value batch or one of the
+# structural edits (add / remove segment or feature, rename segment).
+_Edit = _BulkEdit | _SegmentEdit | _FeatureEdit | _RenameEdit
 
 # Builder toolbar button height. Matches the main-window toolbar so
 # the two surfaces feel like one chrome family at the 1x baseline.
@@ -163,10 +170,12 @@ class InventoryBuilder(QMainWindow):
         # cost on every event.
         self._rm_seg_enabled_state: bool | None = None
         self._rm_feat_enabled_state: bool | None = None
-        # Undo / redo: each entry is one batch (the cell edits produced
-        # by a single user action). Cleared on table rebuild.
-        self._undo_stack: list[_BulkEdit] = []
-        self._redo_stack: list[_BulkEdit] = []
+        # Undo / redo: each entry is one user action. Cell edits are
+        # ``_BulkEdit`` batches; structural edits (add / remove
+        # segment or feature, rename segment) carry their own records
+        # so Ctrl-Z reverses them too. Cleared on table rebuild.
+        self._undo_stack: list[_Edit] = []
+        self._redo_stack: list[_Edit] = []
         # Provenance for the eventual ``_to_inventory`` save. Set by
         # ``show_setup_dialog`` when the user picks a bootstrap
         # provider (PanPhon, etc.); cleared on ``_load_existing`` so
@@ -443,6 +452,7 @@ class InventoryBuilder(QMainWindow):
             # user click fires sectionClicked exactly once. Same haptic
             # as a QPushButton; no need to wire sectionDoubleClicked.
             h_header.sectionClicked.connect(self._on_col_header_clicked)
+            self._wire_col_header_rename(h_header)
         if v_header:
             v_header.sectionClicked.connect(self._on_row_header_clicked)
         # Single source of truth for rm-button enabled/disabled state:
@@ -649,6 +659,7 @@ class InventoryBuilder(QMainWindow):
             h_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             h_header.setMinimumSectionSize(32)
             h_header.sectionClicked.connect(self._on_col_header_clicked)
+            self._wire_col_header_rename(h_header)
         # clear() can replace the selectionModel too; re-wire it here.
         sel_model = self._table.selectionModel()
         if sel_model is not None:
@@ -880,6 +891,18 @@ class InventoryBuilder(QMainWindow):
         """
         if not edit.cells:
             return
+        self._push_undo(edit)
+        # Cell edits can flip a feature (e.g. syllabic) that
+        # reclassifies a segment between vowel and consonant, so the
+        # counter must refresh on value changes, not just structural
+        # add / remove.
+        self._refresh_cap_counter()
+
+    def _push_undo(self, edit: _Edit) -> None:
+        """Record any edit (cell batch or structural) on the undo
+        stack, drop the redo history, cap the depth, and mark dirty.
+        Single entry point so cell and structural edits share one
+        lifecycle."""
         self._undo_stack.append(edit)
         # A new edit invalidates any redo history; same convention as
         # most editors (you can't redo into a divergent timeline).
@@ -887,35 +910,76 @@ class InventoryBuilder(QMainWindow):
         if len(self._undo_stack) > _MAX_UNDO_DEPTH:
             self._undo_stack.pop(0)
         self._dirty = True
-        # Cell edits can flip a feature (e.g. syllabic) that
-        # reclassifies a segment between vowel and consonant, so the
-        # counter must refresh on value changes, not just structural
-        # add / remove.
-        self._refresh_cap_counter()
 
     def _undo(self) -> None:
-        """Reverse the most recent batch and move it to the redo stack."""
+        """Reverse the most recent edit and move it to the redo stack."""
         if not self._undo_stack:
             self._status.showMessage(UNDO_NOTHING_MESSAGE)
             return
         edit = self._undo_stack.pop()
-        self._replay_edit(edit, use_old=True)
+        self._apply_edit(edit, revert=True)
         self._redo_stack.append(edit)
         self._dirty = True
-        self._status.showMessage(undid_message(len(edit.cells)))
+        self._status.showMessage(self._edit_status(edit, undo=True))
         self._refresh_cap_counter()
 
     def _redo(self) -> None:
-        """Re-apply the most recently undone batch."""
+        """Re-apply the most recently undone edit."""
         if not self._redo_stack:
             self._status.showMessage(REDO_NOTHING_MESSAGE)
             return
         edit = self._redo_stack.pop()
-        self._replay_edit(edit, use_old=False)
+        self._apply_edit(edit, revert=False)
         self._undo_stack.append(edit)
         self._dirty = True
-        self._status.showMessage(redid_message(len(edit.cells)))
+        self._status.showMessage(self._edit_status(edit, undo=False))
         self._refresh_cap_counter()
+
+    def _apply_edit(self, edit: _Edit, *, revert: bool) -> None:
+        """Dispatch an undo (``revert=True``) or redo to the right
+        replay path. Cell batches restore values in place; structural
+        edits insert or remove the column / row, or restore the
+        header label, as the inverse of what they originally did."""
+        if isinstance(edit, _BulkEdit):
+            self._replay_edit(edit, use_old=revert)
+            return
+        if isinstance(edit, _SegmentEdit):
+            # ``added`` XOR ``revert``: present after add-redo and
+            # after removal-undo; absent after add-undo and
+            # removal-redo.
+            if edit.added != revert:
+                self._insert_segment_at(edit.index, edit.segment, edit.values)
+            else:
+                self._remove_segment_at(edit.index)
+            # Column count changed: any header selection now points at
+            # a shifted / missing column, so drop it.
+            self._clear_remove_selection()
+            return
+        if isinstance(edit, _FeatureEdit):
+            if edit.added != revert:
+                self._insert_feature_at(edit.index, edit.feature, edit.values)
+            else:
+                self._remove_feature_at(edit.index)
+            self._clear_remove_selection()
+            return
+        # _RenameEdit
+        self._rename_segment_at(edit.index, edit.old if revert else edit.new)
+
+    def _edit_status(self, edit: _Edit, *, undo: bool) -> str:
+        """Status-bar line for an undo / redo of ``edit``. Cell
+        batches reuse the shared count templates; structural edits
+        name the action."""
+        if isinstance(edit, _BulkEdit):
+            fmt = undid_message if undo else redid_message
+            return fmt(len(edit.cells))
+        verb = "Undid" if undo else "Redid"
+        if isinstance(edit, _SegmentEdit):
+            action = "add" if edit.added else "removal"
+            return f"{verb} {action} of segment '{edit.segment}'."
+        if isinstance(edit, _FeatureEdit):
+            action = "add" if edit.added else "removal"
+            return f"{verb} {action} of feature '{edit.feature}'."
+        return f"{verb} rename of '{edit.old}' to '{edit.new}'."
 
     def _replay_edit(self, edit: _BulkEdit, *, use_old: bool) -> None:
         """Apply ``edit`` to the grid (``use_old`` for undo, the
@@ -1123,6 +1187,56 @@ class InventoryBuilder(QMainWindow):
         self._set_rm_feat_enabled(target == "feature")
 
     # Add / remove segments and features
+    # Structural-edit primitives. Each mutates the model lists +
+    # QTableWidget in lockstep; the undo machinery and the
+    # user-facing add / remove / rename handlers all go through these
+    # so a structural change and its inverse touch identical state.
+    def _insert_segment_at(
+        self, index: int, seg: str, values: tuple[str, ...]
+    ) -> None:
+        self._segments.insert(index, seg)
+        self._table.insertColumn(index)
+        self._table.setHorizontalHeaderItem(index, QTableWidgetItem(seg))
+        for r, val in enumerate(values):
+            self._table.setItem(r, index, make_cell(val))
+
+    def _remove_segment_at(self, index: int) -> None:
+        self._table.removeColumn(index)
+        self._segments.pop(index)
+
+    def _capture_segment_values(self, col: int) -> tuple[str, ...]:
+        """The column's per-feature cell text, for an undoable removal."""
+        out: list[str] = []
+        for r in range(len(self._features)):
+            item = self._table.item(r, col)
+            out.append(item.text() if item is not None else "0")
+        return tuple(out)
+
+    def _insert_feature_at(
+        self, index: int, feat: str, values: tuple[str, ...]
+    ) -> None:
+        self._features.insert(index, feat)
+        self._table.insertRow(index)
+        self._table.setVerticalHeaderItem(index, QTableWidgetItem(feat))
+        for c, val in enumerate(values):
+            self._table.setItem(index, c, make_cell(val))
+
+    def _remove_feature_at(self, index: int) -> None:
+        self._table.removeRow(index)
+        self._features.pop(index)
+
+    def _capture_feature_values(self, row: int) -> tuple[str, ...]:
+        """The row's per-segment cell text, for an undoable removal."""
+        out: list[str] = []
+        for c in range(len(self._segments)):
+            item = self._table.item(row, c)
+            out.append(item.text() if item is not None else "0")
+        return tuple(out)
+
+    def _rename_segment_at(self, index: int, name: str) -> None:
+        self._segments[index] = name
+        self._table.setHorizontalHeaderItem(index, QTableWidgetItem(name))
+
     def _add_segment(self) -> None:
         """Prompt for a new segment and add a column.
 
@@ -1147,13 +1261,12 @@ class InventoryBuilder(QMainWindow):
         except ValueError as e:
             self._status.showMessage(str(e))
             return
-        self._segments.append(seg)
-        col = self._table.columnCount()
-        self._table.insertColumn(col)
-        self._table.setHorizontalHeaderItem(col, QTableWidgetItem(seg))
-        for r in range(len(self._features)):
-            self._table.setItem(r, col, make_cell("0"))
-        self._dirty = True
+        col = len(self._segments)
+        values = tuple("0" for _ in self._features)
+        self._insert_segment_at(col, seg, values)
+        self._push_undo(
+            _SegmentEdit(index=col, segment=seg, values=values, added=True)
+        )
         self._status.showMessage(added_segment_message(seg))
         self._refresh_cap_counter()
 
@@ -1180,13 +1293,12 @@ class InventoryBuilder(QMainWindow):
         except ValueError as e:
             self._status.showMessage(str(e))
             return
-        self._features.append(feat)
-        row = self._table.rowCount()
-        self._table.insertRow(row)
-        self._table.setVerticalHeaderItem(row, QTableWidgetItem(feat))
-        for c in range(len(self._segments)):
-            self._table.setItem(row, c, make_cell("0"))
-        self._dirty = True
+        row = len(self._features)
+        values = tuple("0" for _ in self._segments)
+        self._insert_feature_at(row, feat, values)
+        self._push_undo(
+            _FeatureEdit(index=row, feature=feat, values=values, added=True)
+        )
         self._status.showMessage(added_feature_message(feat))
         self._refresh_cap_counter()
 
@@ -1204,9 +1316,11 @@ class InventoryBuilder(QMainWindow):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        self._segments.pop(col)
-        self._table.removeColumn(col)
-        self._dirty = True
+        values = self._capture_segment_values(col)
+        self._remove_segment_at(col)
+        self._push_undo(
+            _SegmentEdit(index=col, segment=seg, values=values, added=False)
+        )
         self._clear_remove_selection()
         self._status.showMessage(removed_segment_message(seg))
         self._refresh_cap_counter()
@@ -1225,11 +1339,62 @@ class InventoryBuilder(QMainWindow):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        self._features.pop(row)
-        self._table.removeRow(row)
-        self._dirty = True
+        values = self._capture_feature_values(row)
+        self._remove_feature_at(row)
+        self._push_undo(
+            _FeatureEdit(index=row, feature=feat, values=values, added=False)
+        )
         self._clear_remove_selection()
         self._status.showMessage(removed_feature_message(feat))
+        self._refresh_cap_counter()
+
+    def _wire_col_header_rename(self, h_header: QHeaderView) -> None:
+        """Enable right-click-to-rename on the segment column headers.
+        Re-applied on every table rebuild (the header view is
+        recreated by ``clear()``)."""
+        h_header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        h_header.customContextMenuRequested.connect(
+            self._on_col_header_context_menu
+        )
+
+    def _on_col_header_context_menu(self, pos: QPoint) -> None:
+        """Right-click a segment column header to rename it. Mirrors
+        the web editor's right-click-to-rename on a column header."""
+        h_header = self._table.horizontalHeader()
+        if h_header is None:
+            return
+        col = h_header.logicalIndexAt(pos)
+        if col < 0 or col >= len(self._segments):
+            return
+        self._rename_segment_dialog(col)
+
+    def _rename_segment_dialog(self, col: int) -> None:
+        """Prompt for a new label for the segment at ``col`` and apply
+        it as an undoable rename. Empty, unchanged, or duplicate names
+        are rejected (the latter with a status note)."""
+        from PyQt6.QtWidgets import QInputDialog
+
+        old = self._segments[col]
+        dlg = QInputDialog(self)
+        dlg.setWindowTitle("Rename Segment")
+        dlg.setLabelText("Segment symbol (IPA):")
+        dlg.setTextValue(old)
+        center_on_parent(dlg, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        proposed = dlg.textValue().strip()
+        if proposed == "" or proposed == old:
+            return
+        if any(
+            s == proposed for i, s in enumerate(self._segments) if i != col
+        ):
+            self._status.showMessage(
+                f"Segment '{proposed}' already exists; rename cancelled."
+            )
+            return
+        self._rename_segment_at(col, proposed)
+        self._push_undo(_RenameEdit(index=col, old=old, new=proposed))
+        self._status.showMessage(f"Renamed segment '{old}' to '{proposed}'.")
         self._refresh_cap_counter()
 
     # Serialization (save / load)

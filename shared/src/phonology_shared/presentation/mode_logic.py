@@ -141,7 +141,10 @@ def mode_status_text(mode: Mode | str, *, has_engine: bool) -> str:
         return "Select an inventory from the dropdown to begin."
     if Mode(mode) == Mode.SEG_TO_FEAT:
         return "Click a segment to inspect its features."
-    return "Toggle feature values (+/−) to find matching segments."
+    # FEAT mode: the analysis pane's empty state already says how to
+    # query ("Toggle feature values to query the inventory."), so the
+    # status bar stays quiet rather than repeating it.
+    return ""
 
 
 #: Template for the clipboard-copy status; substituted in Python

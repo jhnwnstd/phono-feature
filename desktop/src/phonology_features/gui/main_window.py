@@ -8,7 +8,6 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
-from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import (
@@ -54,6 +53,7 @@ from phonology_features._settings import (
 from phonology_features.gui.controllers.geometry import GeometryController
 from phonology_features.gui.controllers.inventory_dir import (
     InventoryDirController,
+    phoible_entry_name,
 )
 from phonology_features.gui.controllers.mode import ModeController
 from phonology_features.gui.controllers.theme import (
@@ -859,13 +859,14 @@ class MainWindow(QMainWindow):
         """Load the inventory chosen from the dropdown.
 
         Item data is either a file path (bundled / saved entries) or
-        a ``("phoible", name)`` tuple for the session's PHOIBLE
-        group, which reloads from the in-memory cache instead of
-        reopening the picker.
+        a ``phoible::<name>`` key for the session's PHOIBLE group,
+        which reloads from the in-memory cache instead of reopening
+        the picker.
         """
         data = self.inventory_combo.itemData(index)
-        if isinstance(data, tuple) and len(data) == 2 and data[0] == "phoible":
-            cached = self._inv_dir.get_phoible_entry(data[1])
+        phoible_name = phoible_entry_name(data)
+        if phoible_name is not None:
+            cached = self._inv_dir.get_phoible_entry(phoible_name)
             if cached is not None:
                 self._adopt_phoible_inventory(cached)
             return
@@ -952,16 +953,15 @@ class MainWindow(QMainWindow):
         # repeating it here alongside the provenance string made the
         # status line unreadably long.
         msg = phoible_loaded_message(inventory)
-        if inventory.advisories:
-            self.status.showMessage(f"{msg} Note: {inventory.advisories[0]}")
-            for note in inventory.advisories:
-                _log.info(
-                    "inventory advisory (phoible %s): %s",
-                    inventory.name,
-                    note,
-                )
-        else:
-            self.status.showMessage(msg)
+        # Advisories go to the log only (see _load_path); the status
+        # bar stays terse.
+        for note in inventory.advisories:
+            _log.info(
+                "inventory advisory (phoible %s): %s",
+                inventory.name,
+                note,
+            )
+        self.status.showMessage(msg)
         # Clear any path-based registration so the inventory combo
         # does not point at a stale file when the user later picks
         # a bundled entry, then cache + select the PHOIBLE entry so
@@ -1081,27 +1081,20 @@ class MainWindow(QMainWindow):
         # No manual invalidation needed.
         self.engine = FeatureEngine(inventory)
         name = inventory.name
-        feature_source = inventory.metadata.get("feature_source")
-        provenance = (
-            f"{feature_source} / {name}"
-            if feature_source
-            else f"bundled / {Path(fname).stem}"
-        )
         base_msg = inventory_loaded_message(
             name=name,
             n_segments=len(self.engine.segments),
             n_features=len(self.engine.features),
         )
-        msg = f"{base_msg}  [{provenance}]"
-        if inventory.advisories:
-            # Show the first advisory inline; the rest go to the log so
-            # we don't truncate or wrap the status bar. Empty for every
-            # bundled inventory.
-            self.status.showMessage(f"{msg} Note: {inventory.advisories[0]}")
-            for note in inventory.advisories:
-                _log.info("inventory advisory: %s: %s", fname, note)
-        else:
-            self.status.showMessage(base_msg)
+        # Advisories (e.g. "unusually large feature set") go to the
+        # LOG only, not the status bar: they are diagnostics, not
+        # something the user needs pinned to the window chrome.
+        # Provenance ("bundled / ...") is likewise dropped from the
+        # bar; the inventory name lives in the Select Inventory
+        # dropdown instead.
+        for note in inventory.advisories:
+            _log.info("inventory advisory: %s: %s", fname, note)
+        self.status.showMessage(base_msg)
         self._inv_dir.register_loaded_path(path)
         self._populate_after_load()
 

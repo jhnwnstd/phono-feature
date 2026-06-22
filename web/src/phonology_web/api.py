@@ -214,13 +214,10 @@ def load_inventory_json(
     _invalidate_analysis_caches()
     # ``source_label`` is the user-facing label the picker passed
     # (bundled inventory title / uploaded filename / PHOIBLE
-    # composite). Carry it through as the provenance so the chip
-    # tracks the chosen pick.
-    provenance = (
-        f"bundled / {source_label}"
-        if source_label and source_label != "uploaded"
-        else "uploaded"
-    )
+    # composite). The chip shows the inventory NAME, not a
+    # "source / name" composite: the source-type prefix
+    # ("bundled / ") is noise the user does not need.
+    provenance = source_label or "uploaded"
     return build_inventory_summary(
         _engine, _inventory_name, provenance, mode=_match_mode
     )

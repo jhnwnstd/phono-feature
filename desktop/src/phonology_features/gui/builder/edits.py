@@ -53,6 +53,43 @@ class _BulkEdit:
     new: str
 
 
+@dataclass(frozen=True)
+class _SegmentEdit:
+    """An undoable add OR removal of a segment column. ``added`` is
+    True for an add (undo removes the column, redo re-inserts it),
+    False for a removal (undo re-inserts, redo removes). ``values``
+    carries the column's per-feature cell values so a removal can be
+    undone with the data intact; for an add they are all ``"0"``.
+    ``index`` is the column position the edit acted on."""
+
+    index: int
+    segment: str
+    values: tuple[str, ...]
+    added: bool
+
+
+@dataclass(frozen=True)
+class _FeatureEdit:
+    """An undoable add OR removal of a feature row. Mirror of
+    :py:class:`_SegmentEdit` on the row axis; ``values`` carries the
+    row's per-segment cell values."""
+
+    index: int
+    feature: str
+    values: tuple[str, ...]
+    added: bool
+
+
+@dataclass(frozen=True)
+class _RenameEdit:
+    """An undoable segment rename. ``old`` / ``new`` are the column's
+    header label before and after; ``index`` is the column."""
+
+    index: int
+    old: str
+    new: str
+
+
 # Re-export the shared cap under the package-internal name so
 # existing callers (window.py's ``_undo_stack`` cap check) keep
 # working without churn.
