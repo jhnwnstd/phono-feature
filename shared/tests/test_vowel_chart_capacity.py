@@ -32,8 +32,8 @@ import pytest
 from phonology_shared.chart.vowel_geometry import (
     build_vowel_chart_geometry,
     silhouette_for_data_width,
-    silhouette_left_at_y,
-    silhouette_right_at_y,
+    straight_left_at_y,
+    straight_right_at_y,
 )
 from phonology_shared.chart.vowel_geometry.cell_boxes import (
     _cell_box_px,
@@ -86,8 +86,12 @@ def _assert_no_overlap_and_contained(geom: object, label: str) -> None:
         boxes.append((left, top, right, bottom, cell.entries))
         for yy in (top, (top + bottom) / 2.0, bottom):
             yn = min(max(yy / dh, sil.top_y), sil.bottom_y)
-            edge_l = silhouette_left_at_y(sil, yn) * dw
-            edge_r = silhouette_right_at_y(sil, yn) * dw
+            # Containment is against the STRAIGHT trapezoid edges; the
+            # rounded corners are cosmetic. These vowel-only synthetics
+            # are not crowded enough to hit the confinement cap, so the
+            # straight edge holds within the rounding epsilon.
+            edge_l = straight_left_at_y(sil, yn) * dw
+            edge_r = straight_right_at_y(sil, yn) * dw
             assert left >= edge_l - 0.51, (
                 f"{label}: {cell.entries} left {left:.1f} escapes outline "
                 f"{edge_l:.1f}"

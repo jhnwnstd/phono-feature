@@ -522,6 +522,48 @@ def silhouette_for_data_width(
     )
 
 
+def straight_right_at_y(
+    silhouette: VowelChartSilhouette, chart_y: float
+) -> float:
+    """The RIGHT edge x at ``chart_y`` along the STRAIGHT trapezoid
+    side: the linear interpolation between the top-right and
+    bottom-right corners, with NO rounded-corner inset. For a
+    trapezoid the back edge is vertical, so this is the constant
+    back-edge x at every row.
+
+    This is the boundary cell CONFINEMENT uses: the rounded corners
+    are a cosmetic stroke, not a containment edge, and confining the
+    vertical back column against them shoves the top / bottom cells
+    inward and breaks the column's alignment. Row LABELS instead use
+    the rounded :py:func:`silhouette_right_at_y` so they hug the
+    visible stroke. Both share this linear interp as their
+    corner-free base.
+    """
+    sil = silhouette
+    span_y = sil.bottom_y - sil.top_y
+    if span_y <= 0:
+        return sil.top_right
+    t = (max(sil.top_y, min(sil.bottom_y, chart_y)) - sil.top_y) / span_y
+    return sil.top_right + (sil.bottom_right - sil.top_right) * t
+
+
+def straight_left_at_y(
+    silhouette: VowelChartSilhouette, chart_y: float
+) -> float:
+    """The LEFT edge x at ``chart_y`` along the STRAIGHT (slanted)
+    trapezoid side, with NO rounded-corner inset. The confinement
+    boundary mate of :py:func:`straight_right_at_y`; see it for why
+    cells confine to the straight edge while labels track the rounded
+    :py:func:`silhouette_left_at_y`.
+    """
+    sil = silhouette
+    span_y = sil.bottom_y - sil.top_y
+    if span_y <= 0:
+        return sil.top_left
+    t = (max(sil.top_y, min(sil.bottom_y, chart_y)) - sil.top_y) / span_y
+    return sil.top_left + (sil.bottom_left - sil.top_left) * t
+
+
 def silhouette_right_at_y(
     silhouette: VowelChartSilhouette,
     chart_y: float,
@@ -549,11 +591,10 @@ def silhouette_right_at_y(
         return sil.top_right
     chart_y = max(sil.top_y, min(sil.bottom_y, chart_y))
 
-    # Canonical linear interpolation. For a normal trapezoid
-    # top_right == bottom_right (back edge vertical) so the
-    # canonical is constant.
-    t_linear = (chart_y - sil.top_y) / span_y
-    canonical = sil.top_right + (sil.bottom_right - sil.top_right) * t_linear
+    # Canonical (straight-edge) value, before the corner bezier.
+    # For a normal trapezoid the back edge is vertical so this is
+    # constant.
+    canonical = straight_right_at_y(sil, chart_y)
 
     # --- top-right corner ---
     # prev neighbour in CCW order = bottom-right (down the right
@@ -663,8 +704,7 @@ def silhouette_left_at_y(
 
     # Canonical linear interpolation (matches the polygon's
     # straight segment between p_out_top and p_in_bot).
-    t_linear = (chart_y - sil.top_y) / span_y
-    canonical = sil.top_left + (sil.bottom_left - sil.top_left) * t_linear
+    canonical = straight_left_at_y(sil, chart_y)
 
     # --- top-left corner ---
     tl_dx_out = sil.bottom_left - sil.top_left

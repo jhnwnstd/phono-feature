@@ -68,8 +68,8 @@ from phonology_shared.chart.vowel_geometry.outline import (
     distribute_rows,
     project_anchor_x,
     silhouette_for_data_width,
-    silhouette_left_at_y,
-    silhouette_right_at_y,
+    straight_left_at_y,
+    straight_right_at_y,
     vowel_silhouette,
 )
 from phonology_shared.chart.vowel_space import _HEIGHT_Y
@@ -176,16 +176,27 @@ def _confine_cells_to_outline(
     the wide edge groups, and this pass closes the residual escape
     modes the anchor model cannot express: a box's corner
     overhanging the slanted front edge even when its centre is
-    inside (~4 px), top / bottom rows overlapping the rounded-
-    corner arcs (~8 px), and renderer integer rounding (~1 px).
+    inside (~4 px), and renderer integer rounding (~1 px).
+
+    Confinement is against the STRAIGHT trapezoid edges
+    (:py:func:`straight_left_at_y` / :py:func:`straight_right_at_y`),
+    NOT the rounded-corner polygon. The rounded corners are a
+    cosmetic stroke, not a containment boundary: confining against
+    them shoved the top / bottom rows inward by ~one corner radius,
+    which broke the vertical back column's alignment and pushed the
+    Open-row front pair into the central cell. A rounded button
+    corner tucked a few pixels inside a rounded silhouette corner
+    reads fine; a misaligned column does not. The back edge is
+    vertical, so every back cell confines to the same x and the
+    column stays aligned by construction.
 
     Residuals are bounded and small, so confinement is SHIFT-ONLY:
     it writes the cells' ``nudge_px`` pixel offset and never feeds
     back into the chart's solved width. Same-anchor groups move
     TOGETHER so pair tangency (including an elevated
     ``pair_shift_px``) is preserved. Edges are evaluated on the
-    dw-corrected silhouette (what the renderers draw), corner arcs
-    included, sampled at the box's top, middle, and bottom.
+    dw-corrected silhouette (what the renderers draw), sampled at
+    the box's top, middle, and bottom.
 
     Returns ``(cells, changed)``.
     """
@@ -194,27 +205,63 @@ def _confine_cells_to_outline(
     groups: dict[tuple[int, int], list[int]] = {}
     for i, c in enumerate(out):
         groups.setdefault((c.row, _anchor_group_key(c.chart_x)), []).append(i)
-    changed = False
-    for idxs in groups.values():
-        push_right = 0.0
-        push_left = 0.0
+
+    # Anchor-free horizontal extent per group (the box position with the
+    # confinement nudge stripped: nudge shifts a box rigidly, so
+    # ``box_x - nudge`` recovers the anchor + pair-shift position). These
+    # are stable across passes and feed the neighbour caps below.
+    anchor_free: dict[tuple[int, int], tuple[float, float]] = {}
+    group_nudge: dict[tuple[int, int], float] = {}
+    for key, idxs in groups.items():
+        lefts: list[float] = []
+        rights: list[float] = []
         for i in idxs:
             c = out[i]
             # Every cell's row is populated, so the tier mapping is
             # total over them; a KeyError here means a caller built
             # cells and rows from different plans, which should fail
             # loudly rather than confine against a guessed tier.
+            left, _, right, _ = _cell_box_px(c, tier_by_row[c.row], dw, dh)
+            lefts.append(left - c.nudge_px)
+            rights.append(right - c.nudge_px)
+        anchor_free[key] = (min(lefts), max(rights))
+        group_nudge[key] = out[idxs[0]].nudge_px
+
+    # Per-row inward-shift lanes. The proposed (anchor + pair-shift)
+    # positions never overlap, so a group may move toward a row neighbour
+    # by at most HALF the anchor-free gap between them: even if both
+    # adjacent groups move maximally they only meet at the midpoint
+    # (touching, never overlapping). Confinement can clear the outline but
+    # may not manufacture an inter-cell overlap; at a row too crowded to
+    # both clear the slant AND keep the gap, the bounded straight-edge
+    # overhang is the lesser evil versus stacked glyphs.
+    lane_hi: dict[tuple[int, int], float] = {k: float("inf") for k in groups}
+    lane_lo: dict[tuple[int, int], float] = {k: float("-inf") for k in groups}
+    rows_to_keys: dict[int, list[tuple[int, int]]] = {}
+    for key in groups:
+        rows_to_keys.setdefault(key[0], []).append(key)
+    for ks in rows_to_keys.values():
+        ks.sort(key=lambda k: anchor_free[k][0])
+        for left_k, right_k in zip(ks, ks[1:]):
+            half_gap = max(
+                0.0, (anchor_free[right_k][0] - anchor_free[left_k][1]) / 2.0
+            )
+            lane_hi[left_k] = min(lane_hi[left_k], half_gap)
+            lane_lo[right_k] = max(lane_lo[right_k], -half_gap)
+
+    changed = False
+    for key, idxs in groups.items():
+        push_right = 0.0
+        push_left = 0.0
+        for i in idxs:
+            c = out[i]
             left, top, right, bottom = _cell_box_px(
                 c, tier_by_row[c.row], dw, dh
             )
             for yy in (top, (top + bottom) / 2.0, bottom):
                 yn = min(max(yy / dh, sil.top_y), sil.bottom_y)
-                edge_l = (
-                    silhouette_left_at_y(sil, yn) * dw + _CONFINE_MARGIN_PX
-                )
-                edge_r = (
-                    silhouette_right_at_y(sil, yn) * dw - _CONFINE_MARGIN_PX
-                )
+                edge_l = straight_left_at_y(sil, yn) * dw + _CONFINE_MARGIN_PX
+                edge_r = straight_right_at_y(sil, yn) * dw - _CONFINE_MARGIN_PX
                 push_right = max(push_right, edge_l - left)
                 push_left = max(push_left, right - edge_r)
         if push_right <= 0.0 and push_left <= 0.0:
@@ -225,6 +272,13 @@ def _confine_cells_to_outline(
             shift_px = (push_right - push_left) / 2.0
         else:
             shift_px = push_right if push_right > 0.0 else -push_left
+        # Clamp the resulting TOTAL nudge into the group's lane so the
+        # shift clears the outline but never crosses into a row neighbour.
+        target = group_nudge[key] + shift_px
+        target = min(lane_hi[key], max(lane_lo[key], target))
+        shift_px = target - group_nudge[key]
+        if abs(shift_px) < 1e-9:
+            continue
         for i in idxs:
             out[i] = replace(out[i], nudge_px=out[i].nudge_px + shift_px)
         changed = True

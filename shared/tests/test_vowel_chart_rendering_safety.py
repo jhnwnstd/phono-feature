@@ -429,23 +429,40 @@ def test_row_label_anchors_divorced_from_cell_positions() -> None:
         ), row.label
 
 
+# Confinement clears the STRAIGHT trapezoid edges (the rounded
+# corners are cosmetic). At a row too crowded to both clear the
+# slant AND keep a gap to the neighbour, the inward nudge is capped
+# so it never manufactures an overlap, leaving a small straight-edge
+# overhang instead. The cap bounds that overhang; the audit across
+# bundled + PHOIBLE peaks near 5 px, so 8 px leaves margin without
+# masking a genuine escape (which the strict data-area check below
+# catches anyway).
+_STRAIGHT_EDGE_OVERHANG_TOL_PX = 8.0
+
+
 @pytest.mark.parametrize("name", BUNDLED_INVENTORY_NAMES)
 def test_button_boxes_confined_to_outline(
     name: str, bundled_engine: Callable[[str], FeatureEngine]
 ) -> None:
-    """The vowel-space outline is the HARD boundary for the segment
-    buttons: every rendered button box stays inside the dw-corrected
-    outline (rounded corners included) at the geometry's natural
-    size. Before the confinement pass, wide pair cells shifted to a
-    pair side overhung by up to ~45 px and slant / corner overhangs
-    of 3 to 8 px were routine (English /i/, German /iː/, Lomongo's
-    open row).
+    """Buttons stay inside the chart and inside the STRAIGHT
+    trapezoid. The straight edges are the structural boundary;
+    the rounded corners are a cosmetic stroke, so a button corner
+    may sit a few px inside a rounded corner. Two checks:
+
+    * Data area is a HARD boundary: every box stays within
+      ``[0, dw]`` (a button must never escape the chart into the
+      row-label gutter). Strict.
+    * The straight trapezoid edges are confined to within
+      :py:data:`_STRAIGHT_EDGE_OVERHANG_TOL_PX` (the crowded-row
+      cap; see its note). Before confinement, wide pair cells
+      overhung by ~45 px and slant overhangs of 3 to 8 px were
+      routine.
     """
     from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
         silhouette_for_data_width,
-        silhouette_left_at_y,
-        silhouette_right_at_y,
+        straight_left_at_y,
+        straight_right_at_y,
     )
     from phonology_shared.chart.vowel_geometry.cell_boxes import _cell_box_px
     from phonology_shared.chart.vowels import detect_vowel_profile
@@ -466,15 +483,100 @@ def test_button_boxes_confined_to_outline(
         left, top, right, bottom = _cell_box_px(
             cell, tiers.get(cell.row, "middle"), dw, dh
         )
+        # Hard boundary: inside the data area.
+        assert left >= -0.51 and right <= dw + 0.51, (
+            f"{name}: {cell.entries} box [{left:.1f}, {right:.1f}] "
+            f"escapes the data area [0, {dw}]"
+        )
         for yy in (top, (top + bottom) / 2.0, bottom):
             yn = min(max(yy / dh, sil.top_y), sil.bottom_y)
-            edge_l = silhouette_left_at_y(sil, yn) * dw
-            edge_r = silhouette_right_at_y(sil, yn) * dw
-            assert left >= edge_l - 0.51, (
-                f"{name}: {cell.entries} left edge {left:.1f} outside "
-                f"outline {edge_l:.1f}"
+            edge_l = straight_left_at_y(sil, yn) * dw
+            edge_r = straight_right_at_y(sil, yn) * dw
+            tol = _STRAIGHT_EDGE_OVERHANG_TOL_PX
+            assert left >= edge_l - tol, (
+                f"{name}: {cell.entries} left {left:.1f} overhangs the "
+                f"straight edge {edge_l:.1f} by > {tol}px"
             )
-            assert right <= edge_r + 0.51, (
-                f"{name}: {cell.entries} right edge {right:.1f} outside "
-                f"outline {edge_r:.1f}"
+            assert right <= edge_r + tol, (
+                f"{name}: {cell.entries} right {right:.1f} overhangs the "
+                f"straight edge {edge_r:.1f} by > {tol}px"
             )
+
+
+@pytest.mark.parametrize("name", BUNDLED_INVENTORY_NAMES)
+def test_vowel_columns_stay_vertically_aligned(
+    name: str, bundled_engine: Callable[[str], FeatureEngine]
+) -> None:
+    """Cells sharing a backness anchor render in a straight vertical
+    column: they must carry the SAME confinement ``nudge_px``.
+
+    Pins the Universal-inventory regression where the rounded-corner
+    confinement shoved the Close / Open back vowels (``ɯ``/``u``,
+    ``ɑ``/``ɒ``) left of the middle back vowels while the anchors
+    were identical. Confining to the straight (vertical) back edge
+    keeps the nudge uniform down the column.
+    """
+    from phonology_shared.chart.vowel_geometry import (
+        build_vowel_chart_geometry,
+    )
+    from phonology_shared.chart.vowel_geometry.cell_boxes import (
+        _anchor_group_key,
+    )
+    from phonology_shared.chart.vowels import detect_vowel_profile
+
+    engine = bundled_engine(name)
+    vowels = engine.grouped_segments.get("Vowels", [])
+    if not vowels:
+        pytest.skip(f"{name} has no vowels")
+    feats = engine.normalized_segment_feats
+    geom = build_vowel_chart_geometry(
+        vowels, detect_vowel_profile(vowels, feats), feats
+    )
+    by_anchor: dict[int, set[float]] = {}
+    for cell in geom.cells:
+        by_anchor.setdefault(_anchor_group_key(cell.chart_x), set()).add(
+            round(cell.nudge_px, 3)
+        )
+    for anchor, nudges in by_anchor.items():
+        assert len(nudges) == 1, (
+            f"{name}: cells at backness anchor {anchor} have differing "
+            f"nudges {sorted(nudges)}; the column is not vertical"
+        )
+
+
+@pytest.mark.parametrize("name", BUNDLED_INVENTORY_NAMES)
+def test_no_vowel_cell_overlap(
+    name: str, bundled_engine: Callable[[str], FeatureEngine]
+) -> None:
+    """No two vowel button boxes overlap by more than a rounding
+    epsilon at natural size. Pins the Universal-inventory ``ɶ``/``a``
+    regression (the confinement nudge used to push the Open-row
+    front pair into the central cell)."""
+    from phonology_shared.chart.vowel_geometry import (
+        build_vowel_chart_geometry,
+    )
+    from phonology_shared.chart.vowel_geometry.cell_boxes import _cell_box_px
+    from phonology_shared.chart.vowels import detect_vowel_profile
+
+    engine = bundled_engine(name)
+    vowels = engine.grouped_segments.get("Vowels", [])
+    if not vowels:
+        pytest.skip(f"{name} has no vowels")
+    feats = engine.normalized_segment_feats
+    geom = build_vowel_chart_geometry(
+        vowels, detect_vowel_profile(vowels, feats), feats
+    )
+    dw, dh = geom.natural_data_width_px, geom.natural_data_height_px
+    tiers = {r.logical_row: r.tier for r in geom.rows}
+    boxes = [
+        (_cell_box_px(c, tiers[c.row], dw, dh), c.entries) for c in geom.cells
+    ]
+    for i in range(len(boxes)):
+        (la, ta, ra, ba), ea = boxes[i]
+        for j in range(i + 1, len(boxes)):
+            (lb, tb, rb, bb), eb = boxes[j]
+            ix = min(ra, rb) - max(la, lb)
+            iy = min(ba, bb) - max(ta, tb)
+            assert not (
+                ix > 0.5 and iy > 0.5
+            ), f"{name}: {ea} and {eb} overlap by {ix:.1f}x{iy:.1f}px"

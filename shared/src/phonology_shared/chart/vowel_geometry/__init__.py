@@ -113,6 +113,8 @@ from phonology_shared.chart.vowel_geometry.outline import (
     silhouette_for_data_width,
     silhouette_left_at_y,
     silhouette_right_at_y,
+    straight_left_at_y,
+    straight_right_at_y,
     vowel_silhouette,
 )
 from phonology_shared.chart.vowel_geometry.pipeline import (
@@ -140,5 +142,7 @@ __all__ = [
     "silhouette_for_data_width",
     "silhouette_left_at_y",
     "silhouette_right_at_y",
+    "straight_left_at_y",
+    "straight_right_at_y",
     "vowel_silhouette",
 ]
