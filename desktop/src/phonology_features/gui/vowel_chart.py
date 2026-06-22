@@ -1116,8 +1116,10 @@ class VowelChartWidget(QWidget):
                 - self._toggle_band_height()
                 - strip_h
             )
-            cx, cw = self._bottom_edge_span(dx, dw)
-            self._diphthong_chip_strip.setGeometry(cx, strip_y, cw, strip_h)
+            chip_x, chip_w = self._bottom_edge_span(dx, dw)
+            self._diphthong_chip_strip.setGeometry(
+                chip_x, strip_y, chip_w, strip_h
+            )
         if self._title_label is not None:
             self._title_label.adjustSize()
             # ``adjustSize`` sizes the label from glyph advances, which
