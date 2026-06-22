@@ -19,6 +19,8 @@ from phonology_shared.editor.inventory_providers import InventoryProvider
 from phonology_shared.editor.phoible_provider import (
     PhoibleProvider,
     PhoibleSnapshotNotAvailable,
+    materialize_phoible_inventory,
+    phoible_loaded_message,
 )
 
 # Minimal-but-realistic stub. Two features (Syllabic, Consonantal),
@@ -56,6 +58,7 @@ _STUB_INDEX: dict[str, object] = {
             "source_short": "PHOIBLE",
             "source_description": "Curated PHOIBLE inventory",
             "segment_count": 2,
+            "source_page_url": "https://phoible.org/sources/kor_lee1993",
         },
         {
             "id": "9",
@@ -415,3 +418,45 @@ def test_materialize_normalises_vowel_secondary_keys_to_engine_form() -> None:
     # And explicitly: NFD input lands as NFC in both maps.
     assert "ãi" in inv.segments
     assert "ãi" in vs
+
+
+def test_source_url_threads_to_descriptor_and_metadata() -> None:
+    """An inventory whose index entry carries ``source_page_url``
+    exposes it on the descriptor AND stamps it into the
+    materialised inventory's metadata as ``phoible_source_url``, so
+    both UIs can render the "Source" link from one shared field."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    descriptor = p.descriptor("2")
+    assert descriptor is not None
+    assert descriptor.source_url == "https://phoible.org/sources/kor_lee1993"
+    inv = materialize_phoible_inventory(p, "2")
+    assert (
+        inv.metadata["phoible_source_url"]
+        == "https://phoible.org/sources/kor_lee1993"
+    )
+
+
+def test_source_url_absent_leaves_no_metadata_stamp() -> None:
+    """An inventory whose index entry omits ``source_page_url`` (a
+    bare-checkout bake, or a provider without the mapping) gets an
+    empty descriptor URL and NO ``phoible_source_url`` metadata key,
+    so the UI hides the link rather than rendering a dead one."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    descriptor = p.descriptor("1")
+    assert descriptor is not None
+    assert descriptor.source_url == ""
+    inv = materialize_phoible_inventory(p, "1")
+    assert "phoible_source_url" not in inv.metadata
+
+
+def test_phoible_loaded_message_format() -> None:
+    """The status line drops the old "Loaded" prefix and uses the
+    ``language [source]: N segments × M features`` shape (multiplied,
+    no trailing period) the bottom border now shows."""
+    p = PhoibleProvider(index_table=_STUB_INDEX, data_table=_STUB_DATA)
+    inv = materialize_phoible_inventory(p, "2")
+    msg = phoible_loaded_message(inv)
+    assert msg == "Korean [PHOIBLE]: 2 segments × 2 features"
+    assert not msg.startswith("Loaded")
+    assert "," not in msg
+    assert not msg.endswith(".")

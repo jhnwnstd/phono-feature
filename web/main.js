@@ -8,6 +8,7 @@
 
 const NODE_IDS = Object.freeze({
     statusbar: "statusbar",
+    statusbarSource: "statusbar-source",
     loadingStatus: "loading-status",
     loadingOverlay: "loading-overlay",
     inventoryPicker: "inventory-picker",
@@ -754,6 +755,30 @@ function applyInventoryInfo(info) {
     renderFeaturePanel(info.feature_groups);
     clearAnalysisTabs();
     _applyProvenanceChip(info.provenance);
+    // PHOIBLE inventories carry a source-page URL; any other load
+    // (bundled, uploaded, built) leaves it undefined, which hides the
+    // statusbar "Source" link, so the link always reflects the
+    // currently loaded inventory.
+    setStatusSourceLink(info.source_url);
+}
+
+/** Show or hide the statusbar "Source" hyperlink for the loaded
+ *  inventory. ``url`` is a baked phoible.org page; empty / absent
+ *  hides the link (non-PHOIBLE inventories). The summary text itself
+ *  is set separately via ``setStatus``; this link sits beside it at
+ *  the bottom border, mirroring the desktop status bar. */
+function setStatusSourceLink(url) {
+    const link = nodes.statusbarSource;
+    if (!link) return;
+    const clean = typeof url === "string" ? url.trim() : "";
+    if (!clean) {
+        link.removeAttribute("href");
+        link.hidden = true;
+        return;
+    }
+    link.href = clean;
+    link.title = `PHOIBLE source: ${clean}`;
+    link.hidden = false;
 }
 
 /** Paint the persistent inventory-source badge next to the

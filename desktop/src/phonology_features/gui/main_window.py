@@ -1106,6 +1106,16 @@ class MainWindow(QMainWindow):
         """
         self._mode_ctrl.saved_seg_state = []
         self._mode_ctrl.saved_feat_state = {}
+        # Refresh the status-bar "Source" link for the freshly-loaded
+        # inventory. PHOIBLE inventories carry ``phoible_source_url``;
+        # any other inventory (bundled, built, uploaded) has none, so
+        # this also clears the link on a non-PHOIBLE load.
+        source_url = ""
+        if self.engine is not None:
+            source_url = str(
+                self.engine.inventory.metadata.get("phoible_source_url", "")
+            )
+        self.status.set_source_link(source_url)
         with self._batched_updates():
             self._populate_segments()
             self._populate_features()

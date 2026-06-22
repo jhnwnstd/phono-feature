@@ -21,6 +21,7 @@ from PyQt6.QtGui import (
     QFont,
     QPainter,
     QPaintEvent,
+    QPalette,
     QPen,
     QResizeEvent,
 )
@@ -129,9 +130,38 @@ class _BrandedStatusBar(QStatusBar):
         self._brand.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
+        # "Source" hyperlink for a loaded PHOIBLE inventory. Sits as
+        # a permanent widget to the LEFT of the brand (added first), so
+        # it reads as part of the loaded-inventory summary at the
+        # right of the bar. Hidden until ``set_source_link`` is given a
+        # URL; a non-PHOIBLE inventory clears it.
+        self._source_link = QLabel("", self)
+        self._source_link.setFont(self._FONT)
+        self._source_link.setTextFormat(Qt.TextFormat.RichText)
+        self._source_link.setOpenExternalLinks(True)
+        self._source_link.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        self._source_link.hide()
         self.addWidget(self._message_label, 1)
+        self.addPermanentWidget(self._source_link, 0)
         self.addPermanentWidget(self._brand, 0)
         self.apply_theme()
+
+    def set_source_link(self, url: str) -> None:
+        """Show a ``Source`` hyperlink to ``url`` (a PHOIBLE source or
+        inventory page), or hide the link when ``url`` is empty (a
+        non-PHOIBLE inventory). Idempotent."""
+        url = (url or "").strip()
+        if not url:
+            self._source_link.clear()
+            self._source_link.hide()
+            return
+        # ``url`` is a baked phoible.org link, not user input; still,
+        # only http(s) URLs are ever emitted, so no escaping beyond
+        # the quote attribute is needed.
+        self._source_link.setText(f'<a href="{url}">Source</a>')
+        self._source_link.show()
 
     def apply_theme(self) -> None:
         """Re-apply palette-dependent styles. Called on theme toggle."""
@@ -143,6 +173,13 @@ class _BrandedStatusBar(QStatusBar):
         self._brand.setStyleSheet(
             f"color: {C['text_dim']}; font-style: italic; padding: 0 4px;"
         )
+        # The ``<a>`` tag picks up the accent colour for the link text
+        # via the widget's palette link role; padding matches the
+        # brand so the two right-pinned items sit on the same rhythm.
+        self._source_link.setStyleSheet("padding: 0 4px;")
+        link_palette = self._source_link.palette()
+        link_palette.setColor(QPalette.ColorRole.Link, QColor(C["accent"]))
+        self._source_link.setPalette(link_palette)
 
     def showMessage(self, text: str, timeout: int = 0) -> None:  # type: ignore[override]
         """Override that doesn't call super() (which would hide

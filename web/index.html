@@ -148,7 +148,11 @@
 </section>
 
 <footer class="statusbar" aria-live="polite">
-  <span id="statusbar" class="statusbar-message">Select an inventory from the dropdown to begin.</span>
+  <span class="statusbar-left">
+    <span id="statusbar" class="statusbar-message">Select an inventory from the dropdown to begin.</span>
+    <a id="statusbar-source" class="statusbar-source" hidden
+       target="_blank" rel="noopener noreferrer">Source</a>
+  </span>
   <button id="bug-btn" type="button" class="statusbar-bug-btn"
           aria-label="Report a bug" title="Report a bug">🐛&nbsp;Report a bug</button>
   <span class="statusbar-brand" id="statusbar-brand"

@@ -37,8 +37,8 @@ def test_phoible_load_status_is_terse(korean_with_diphthongs: dict) -> None:
     """The status line shows language, source, and counts; not the
     full dialect-bearing display name."""
     status = korean_with_diphthongs["status"]
-    assert status.startswith("Loaded Korean [")
-    assert "segments," in status and "features." in status
+    assert status.startswith("Korean [")
+    assert "segments ×" in status and "features" in status
     # The dialect parenthetical stays out of the status line.
     assert "(Korean" not in status
 

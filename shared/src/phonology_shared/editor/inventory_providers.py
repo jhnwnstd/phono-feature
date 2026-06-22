@@ -80,6 +80,10 @@ class InventoryDescriptor:
             Picker uses this to default-select the median sized
             entry so a stray marginal source does not become the
             user's first impression.
+        source_url: Optional URL to the provider's web page
+            documenting this inventory's bibliographic source(s)
+            (for PHOIBLE, a phoible.org source or inventory page).
+            Empty when the provider exposes no such page.
     """
 
     id: str
@@ -90,6 +94,7 @@ class InventoryDescriptor:
     source_short: str
     source_description: str
     segment_count: int
+    source_url: str = ""
 
 
 @runtime_checkable

@@ -559,6 +559,10 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     # counts) so both UIs show the identical terse message instead
     # of each wrapping the full dialect-bearing display name.
     summary["status"] = phoible_loaded_message(inventory)
+    # phoible.org page documenting this inventory's source(s); the UI
+    # renders it as a "Source" link beside the summary. Empty for the
+    # rare inventory whose source mapping is missing.
+    summary["source_url"] = inventory.metadata.get("phoible_source_url", "")
     return summary
 
 

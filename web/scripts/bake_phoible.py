@@ -46,6 +46,25 @@ DEFAULT_OUT_DATA = EDITOR_DIR / "_phoible_data.generated.json"
 DEFAULT_INPUT = (
     REPO_ROOT / "web" / "scripts" / "phoible_cache" / "phoible.csv.gz"
 )
+#: PHOIBLE's InventoryID -> BibtexKey mapping, vendored from
+#: ``phoible/dev`` (``mappings/InventoryID-Bibtex.csv``). Gives the
+#: per-inventory bibliographic source(s) the main CSV omits, so each
+#: loaded inventory can link to its phoible.org source page.
+DEFAULT_BIBTEX = (
+    REPO_ROOT
+    / "web"
+    / "scripts"
+    / "phoible_cache"
+    / "InventoryID-Bibtex.csv.gz"
+)
+
+#: phoible.org page bases. A single-source inventory links straight to
+#: that source's reference page (the slug is the lower-cased BibtexKey,
+#: e.g. ``kor_lee1993``); a multi-source inventory links to its own
+#: inventory page, which lists every source, since no single source
+#: page represents it.
+PHOIBLE_SOURCE_PAGE_BASE = "https://phoible.org/sources/"
+PHOIBLE_INVENTORY_PAGE_BASE = "https://phoible.org/inventories/view/"
 
 # Hard-coded PHOIBLE 2.0 metadata. Tracks the upstream release the
 # vendored CSV came from; refresh this if the cache is ever
@@ -115,8 +134,44 @@ def _source_info(source: str) -> tuple[str, str]:
     return SOURCE_INFO.get(source, (source.upper(), ""))
 
 
+def _load_inventory_bibkeys(path: Path) -> dict[str, list[str]]:
+    """Read the vendored InventoryID -> BibtexKey mapping and return
+    ``{inventory_id: [bibkey, ...]}`` preserving file order and
+    dropping duplicates. Missing file yields an empty mapping so a
+    bare checkout still bakes (source URLs then fall back to the
+    inventory page).
+    """
+    out: dict[str, list[str]] = defaultdict(list)
+    if not path.exists():
+        return out
+    with _open_csv(path) as f:
+        for row in csv.DictReader(f):
+            inv_id = (row.get("InventoryID") or "").strip()
+            bibkey = (row.get("BibtexKey") or "").strip()
+            if not inv_id or not bibkey or bibkey == "NA":
+                continue
+            keys = out[inv_id]
+            if bibkey not in keys:
+                keys.append(bibkey)
+    return out
+
+
+def _inventory_source_url(inv_id: str, bibkeys: list[str]) -> str:
+    """The phoible.org page that documents an inventory's source(s).
+
+    Exactly one source -> that source's reference page (the slug is
+    the lower-cased BibtexKey, matching how phoible.org links them).
+    Zero or many sources -> the inventory's own page, which lists all
+    of them, since no single source page stands for the inventory.
+    """
+    if len(bibkeys) == 1:
+        return PHOIBLE_SOURCE_PAGE_BASE + bibkeys[0].lower()
+    return PHOIBLE_INVENTORY_PAGE_BASE + inv_id
+
+
 def bake_tables(
     csv_path: Path = DEFAULT_INPUT,
+    bibtex_path: Path = DEFAULT_BIBTEX,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, int]]:
     """Stream the PHOIBLE CSV and return (index, data, stats).
 
@@ -143,6 +198,10 @@ def bake_tables(
 
     feature_columns = list(PHOIBLE_TO_APP_FEATURE.keys())
     feature_names = [PHOIBLE_TO_APP_FEATURE[c] for c in feature_columns]
+
+    # Per-inventory bibliographic source(s), used to derive each
+    # inventory's phoible.org source-page link.
+    inv_bibkeys = _load_inventory_bibkeys(bibtex_path)
 
     # Per-inventory accumulators.
     inv_meta: dict[str, dict[str, Any]] = {}
@@ -200,6 +259,12 @@ def bake_tables(
                     "source": source,
                     "source_short": source_short,
                     "source_description": source_description,
+                    # phoible.org page documenting this inventory's
+                    # bibliographic source(s); see
+                    # ``_inventory_source_url``.
+                    "source_page_url": _inventory_source_url(
+                        inv_id, inv_bibkeys.get(inv_id, [])
+                    ),
                     # filled in after the streaming pass
                     "segment_count": 0,
                 }
@@ -294,12 +359,19 @@ def bake_tables(
         },
     }
 
+    source_pages = sum(
+        1
+        for m in inv_meta.values()
+        if m["source_page_url"].startswith(PHOIBLE_SOURCE_PAGE_BASE)
+    )
     stats = {
         "rows_total": rows_total,
         "rows_skipped_empty_phoneme": skipped_no_phoneme,
         "inventory_count": len(inv_meta),
         "language_count": len(languages),
         "contour_values_normalized": contour_normalized,
+        "source_page_links": source_pages,
+        "inventory_page_links": len(inv_meta) - source_pages,
     }
     return index, data, stats
 
@@ -311,6 +383,15 @@ def main() -> int:
         type=Path,
         default=DEFAULT_INPUT,
         help=f"PHOIBLE CSV(.gz) path (default: {DEFAULT_INPUT})",
+    )
+    parser.add_argument(
+        "--bibtex",
+        type=Path,
+        default=DEFAULT_BIBTEX,
+        help=(
+            "InventoryID -> BibtexKey mapping CSV(.gz) path "
+            f"(default: {DEFAULT_BIBTEX})"
+        ),
     )
     parser.add_argument(
         "--out-index",
@@ -336,7 +417,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        index, data, stats = bake_tables(args.input)
+        index, data, stats = bake_tables(args.input, args.bibtex)
     except FileNotFoundError as exc:
         sys.stderr.write(f"bake_phoible: {exc}\n")
         return 1
@@ -357,6 +438,10 @@ def main() -> int:
         f"{stats['language_count']} languages, "
         f"{stats['inventory_count']} inventories, "
         f"{stats['contour_values_normalized']} contour cells normalized"
+    )
+    print(
+        f"  source links: {stats['source_page_links']} source pages, "
+        f"{stats['inventory_page_links']} inventory pages"
     )
     print(f"  index: {idx_kb:.1f} KB -> {args.out_index}")
     print(f"  data : {data_kb:.1f} KB -> {args.out_data}")

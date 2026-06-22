@@ -193,6 +193,7 @@ class PhoibleProvider:
                 source_short=str(entry.get("source_short", "PHOIBLE")),
                 source_description=str(entry.get("source_description", "")),
                 segment_count=int(entry.get("segment_count", 0)),
+                source_url=str(entry.get("source_page_url", "")),
             )
             self._inventories[inv_id] = descriptor
             self._by_language.setdefault(
@@ -551,6 +552,11 @@ def materialize_phoible_inventory(
         "phoible_language": descriptor.language_name,
         "phoible_source": descriptor.source_short,
     }
+    if descriptor.source_url:
+        # phoible.org page documenting this inventory's source(s),
+        # surfaced as a "Source" link beside the loaded-inventory
+        # summary on both UIs. Plain-text informational stamp.
+        metadata["phoible_source_url"] = descriptor.source_url
     if generated.vowel_secondary:
         # Canonicalise BOTH the diphthong segment key AND the
         # feature bundle keys through the engine's normalisation
@@ -632,7 +638,7 @@ def phoible_loaded_message(inventory: Inventory) -> str:
     )
     source = str(inventory.metadata.get("phoible_source") or "PHOIBLE")
     return (
-        f"Loaded {language} [{source}]: "
-        f"{len(inventory.segments)} segments, "
-        f"{len(inventory.features)} features."
+        f"{language} [{source}]: "
+        f"{len(inventory.segments)} segments × "
+        f"{len(inventory.features)} features"
     )

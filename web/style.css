@@ -1850,27 +1850,47 @@ dialog input[type="text"]:focus-visible {
   align-items: center;
   gap: var(--space-lg);
 }
-.statusbar > .statusbar-message {
+/* Left grid track: the transient status message plus the persistent
+   "Source" link for a loaded PHOIBLE inventory, kept together so the
+   link reads as part of the inventory summary. The message ellipsizes
+   when space is tight; the link never shrinks. */
+.statusbar > .statusbar-left {
   justify-self: start;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.statusbar-message {
   /* See setStatus() in main.js: full string lives in ``title``
      for hover when ellipsis clips. */
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.statusbar-source {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.statusbar-source:hover {
+  text-decoration: none;
 }
 /* Leading glyph driven by data-kind so success / warning / error
    read distinctly even when the chrome bar is monochrome. The
    message dataset attribute is set by setStatus(); default
    (info) shows no glyph. */
-.statusbar > .statusbar-message[data-kind="success"]::before {
+.statusbar-message[data-kind="success"]::before {
   content: "\2713\00a0"; color: var(--plus);
 }
-.statusbar > .statusbar-message[data-kind="warning"]::before {
+.statusbar-message[data-kind="warning"]::before {
   content: "\26a0\00a0"; color: var(--accent);
 }
-.statusbar > .statusbar-message[data-kind="error"]::before {
+.statusbar-message[data-kind="error"]::before {
   content: "\2716\00a0"; color: var(--minus);
 }
 .statusbar > .statusbar-brand {
