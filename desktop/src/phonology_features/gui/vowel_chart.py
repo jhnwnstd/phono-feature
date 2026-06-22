@@ -193,14 +193,6 @@ class VowelChartWidget(QWidget):
     _PAD_R: ClassVar[int] = cs.VOWEL_CHART_PAD_R_PX
     _PAD_B: ClassVar[int] = cs.VOWEL_CHART_PAD_B_PX
     _ROW_LABEL_GAP_PX: ClassVar[int] = cs.VOWEL_CHART_ROW_LABEL_GAP_PX
-    # Horizontal slack added to the centred title label so the first
-    # glyph's left side bearing is never clipped. ``adjustSize``
-    # measures glyph ADVANCES, which exclude side bearings; with
-    # AlignCenter a left-overhanging glyph (the 'V' of "VOWELS")
-    # would otherwise paint past the content rect and Qt would clip
-    # it. Half lands on each side, so this covers a bearing up to
-    # half its value. A content-driven floor, hence a px constant.
-    _TITLE_BEARING_SLACK_PX: ClassVar[int] = 4
     # Vertical gap between the diphthong chip strip and the toggle
     # button that sits below it.
     _TOGGLE_GAP_PX: ClassVar[int] = 2
@@ -1121,15 +1113,18 @@ class VowelChartWidget(QWidget):
                 chip_x, strip_y, chip_w, strip_h
             )
         if self._title_label is not None:
-            self._title_label.adjustSize()
-            # ``adjustSize`` sizes the label from glyph advances, which
-            # omit the first glyph's left side bearing; AlignCenter then
-            # paints the 'V' of "VOWELS" a hair left of the content rect
-            # and Qt clips it to the label bounds. Widen by a small
-            # slack so the centred text keeps the bearing on both sides.
-            tw = self._title_label.width() + self._TITLE_BEARING_SLACK_PX
-            self._title_label.resize(tw, self._title_label.height())
-            self._title_label.move(dx + (dw - tw) // 2, 0)
+            # Give the title the FULL data-area box and let its
+            # AlignCenter centre the text. This mirrors the web (the
+            # title is grid column 2, centred over the data area) and
+            # is positionally stable: the box is always
+            # ``[dx, dx + dw]``, so the heading sits at the same place
+            # for every inventory of a given chart width instead of
+            # drifting with the label's measured advance width. The
+            # full-width box also leaves ample slack on both sides, so
+            # the first glyph's side bearing (the 'V' of "VOWELS") is
+            # never clipped, which is what the earlier
+            # adjustSize-based placement got wrong.
+            self._title_label.setGeometry(dx, 0, dw, self._TITLE_H)
         # Toggle now sits BELOW the chip strip, flush against the data
         # area's right edge (its prior horizontal anchor). y floors at
         # 0 so it never spills above the widget on a tiny chart.

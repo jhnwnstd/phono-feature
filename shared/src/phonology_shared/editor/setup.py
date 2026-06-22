@@ -205,12 +205,7 @@ def normalize_setup_name(raw: str) -> str:
 # accepted delimiters explicitly because the most common failure
 # mode is "I pasted a wall of text with no recognized delimiter
 # and got one giant entry".
-_MSG_NO_SEGMENTS = (
-    "The segments box is empty, or none of the recognized "
-    "delimiters were found. Separate segments with any of: "
-    "newline, space, tab, comma, semicolon, or pipe. "
-    "Press Tab in an empty box for a quick-start set."
-)
+_MSG_NO_SEGMENTS = "Input segments to build inventory."
 _MSG_NO_FEATURES = (
     "The features box is empty, or none of the recognized "
     "delimiters were found. Separate features with any of: "

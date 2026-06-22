@@ -120,7 +120,7 @@ def test_validate_setup_empty_segments_is_issue():
     assert "segments" in fields
     issue = next(i for i in result.issues if i.field == "segments")
     assert issue.code == "empty"
-    assert "newline" in issue.message  # mentions accepted delimiters
+    assert issue.message == "Input segments to build inventory."
 
 
 def test_validate_setup_empty_features_is_issue():

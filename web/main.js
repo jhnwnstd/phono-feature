@@ -5344,6 +5344,18 @@ function commitSegmentRename(c, oldName, proposed) {
     markEditorDirty();
     scheduleEditorCapRefresh();
     setEditorStatus(`Renamed segment '${oldName}' to '${proposed}'.`);
+    // Restore grid focus so Ctrl-Z undoes the rename immediately.
+    focusEditorGrid();
+}
+
+/** Return keyboard focus to the grid after a toolbar- or
+ *  context-menu-driven structural edit (add / remove / rename). The
+ *  undo keydown handler is scoped to ``#editor-grid-scroll``; without
+ *  this, focus stays on the toolbar button (or the rename input) and
+ *  the user has to click a cell before Ctrl-Z / Ctrl-Y do anything.
+ *  Restoring focus lets undo / redo work immediately after the edit. */
+function focusEditorGrid() {
+    nodes.editorGridScroll.focus();
 }
 
 function addSegmentToState(seg) {
@@ -5365,6 +5377,7 @@ function addSegmentToState(seg) {
     setEditorStatus(_formatTpl(
         "added_segment_template", "Added segment '{seg}'.", { seg },
     ));
+    focusEditorGrid();
 }
 
 function addFeatureToState(feat) {
@@ -5382,6 +5395,7 @@ function addFeatureToState(feat) {
     setEditorStatus(_formatTpl(
         "added_feature_template", "Added feature '{feat}'.", { feat },
     ));
+    focusEditorGrid();
 }
 
 function removeSelectedSegment() {
@@ -5407,6 +5421,9 @@ function removeSelectedSegment() {
     setEditorStatus(_formatTpl(
         "removed_segment_template", "Removed segment '{seg}'.", { seg },
     ));
+    // Restore grid focus so Ctrl-Z undoes the deletion immediately,
+    // without the user first clicking a cell.
+    focusEditorGrid();
 }
 
 function removeSelectedFeature() {
@@ -5428,6 +5445,9 @@ function removeSelectedFeature() {
     setEditorStatus(_formatTpl(
         "removed_feature_template", "Removed feature '{feat}'.", { feat },
     ));
+    // Restore grid focus so Ctrl-Z undoes the deletion immediately,
+    // without the user first clicking a cell.
+    focusEditorGrid();
 }
 
 /** Write ``value`` to the selection (or the focused cell when

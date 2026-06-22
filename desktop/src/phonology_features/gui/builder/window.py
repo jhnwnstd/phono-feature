@@ -1269,6 +1269,9 @@ class InventoryBuilder(QMainWindow):
         )
         self._status.showMessage(added_segment_message(seg))
         self._refresh_cap_counter()
+        # Return focus to the table so Ctrl-Z undoes this immediately
+        # (the undo shortcut is scoped to the table's event filter).
+        self._table.setFocus()
 
     def _add_feature(self) -> None:
         """Prompt for a new feature and add a row.
@@ -1301,6 +1304,7 @@ class InventoryBuilder(QMainWindow):
         )
         self._status.showMessage(added_feature_message(feat))
         self._refresh_cap_counter()
+        self._table.setFocus()
 
     def _remove_segment(self) -> None:
         """Remove the header-selected column (segment)."""
@@ -1324,6 +1328,11 @@ class InventoryBuilder(QMainWindow):
         self._clear_remove_selection()
         self._status.showMessage(removed_segment_message(seg))
         self._refresh_cap_counter()
+        # Return focus to the table so Ctrl-Z undoes the deletion
+        # immediately, without the user first clicking a cell (the
+        # undo shortcut is scoped to the table's event filter, and the
+        # toolbar button held focus through the removal).
+        self._table.setFocus()
 
     def _remove_feature(self) -> None:
         """Remove the header-selected row (feature)."""
@@ -1347,6 +1356,7 @@ class InventoryBuilder(QMainWindow):
         self._clear_remove_selection()
         self._status.showMessage(removed_feature_message(feat))
         self._refresh_cap_counter()
+        self._table.setFocus()
 
     def _wire_col_header_rename(self, h_header: QHeaderView) -> None:
         """Enable right-click-to-rename on the segment column headers.
@@ -1396,6 +1406,8 @@ class InventoryBuilder(QMainWindow):
         self._push_undo(_RenameEdit(index=col, old=old, new=proposed))
         self._status.showMessage(f"Renamed segment '{old}' to '{proposed}'.")
         self._refresh_cap_counter()
+        # Return focus to the table so Ctrl-Z undoes the rename now.
+        self._table.setFocus()
 
     # Serialization (save / load)
     def _to_inventory(self) -> Inventory:
