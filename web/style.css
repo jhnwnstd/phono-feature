@@ -625,10 +625,10 @@ dialog input[type="text"]:focus-visible {
   display: none;
 }
 .phoible-summary {
-  /* A short dim caption ("Sample of the inventory · N features"); the
-     selected source card already carries the segment count, dialect,
-     and source name, so this line adds only what the card does not
-     (the feature count) and never repeats it. One line, elided. */
+  /* A short dim caption ("N features"); the selected source card
+     already carries the segment count, dialect, and source name, so
+     this line adds only the one datum the card lacks (the feature
+     count) and never repeats anything. One line, elided. */
   color: var(--text-dim);
   font-size: 0.85em;
   white-space: nowrap;

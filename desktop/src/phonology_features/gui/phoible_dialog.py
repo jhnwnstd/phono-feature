@@ -121,7 +121,14 @@ class PhoibleDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Load inventory from PHOIBLE")
-        self.setMinimumSize(540, 540)
+        # Fixed minimum width; the height tracks content (via
+        # ``adjustSize`` after each list change) so a language with one
+        # source makes a short dialog instead of stranding ~200 px of
+        # empty space below a lone card. The source list caps + scrolls
+        # for many sources, so the dialog never grows without bound. The
+        # modest height floor keeps the initial (pre-search) dialog from
+        # collapsing to just the search box.
+        self.setMinimumSize(540, 360)
         self.setWindowModality(Qt.WindowModality.WindowModal)
 
         self._provider = provider
@@ -161,7 +168,7 @@ class PhoibleDialog(QDialog):
         # picked. Now the spare space goes to the source list, the part
         # the user actually works in.
         layout.addWidget(self._build_results_list())
-        layout.addWidget(self._build_source_section(), stretch=1)
+        layout.addWidget(self._build_source_section())
         layout.addWidget(self._build_preview_section())
         layout.addWidget(self._build_buttons())
 
@@ -187,18 +194,12 @@ class PhoibleDialog(QDialog):
         wrap_layout.setContentsMargins(0, 0, 0, 0)
         self._results = QListWidget(wrap)
         self._results.setFont(QFont("Noto Sans", 10))
-        # Size to the number of matches (so one match is a one-row box,
-        # not a tall empty pane) but never taller than ~6 rows, after
-        # which it scrolls. ``Maximum`` vertical policy keeps it at that
-        # content height; the source list below absorbs the spare space.
-        self._results.setSizeAdjustPolicy(
-            QListWidget.SizeAdjustPolicy.AdjustToContents
-        )
+        # Height is set from the match count after each search (see
+        # ``_size_list_to_content``) so one match is a one-row box, not
+        # a tall empty pane, and many matches cap + scroll. Fixed
+        # vertical policy so that explicit height is honoured.
         self._results.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum
-        )
-        self._results.setMaximumHeight(
-            self._results.fontMetrics().lineSpacing() * 6 + 8
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
         )
         self._results.itemActivated.connect(self._on_language_activated)
         self._results.itemClicked.connect(self._on_language_activated)
@@ -215,7 +216,13 @@ class PhoibleDialog(QDialog):
         wrap_layout.addWidget(title)
         self._sources = QListWidget(wrap)
         self._sources.setFont(QFont("Noto Sans", 10))
-        self._sources.setMinimumHeight(140)
+        # Height is set from the source count after each language pick
+        # (see ``_size_list_to_content``) so one source is a short box,
+        # not a tall empty pane, and many sources cap + scroll. Fixed
+        # vertical policy so that explicit height is honoured.
+        self._sources.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
         self._sources.setSelectionMode(
             QListWidget.SelectionMode.SingleSelection
         )
@@ -296,11 +303,13 @@ class PhoibleDialog(QDialog):
             # too, so the dialog gives responsive feedback that nothing
             # is chosen rather than stranding the previous source rows.
             self._clear_sources()
+            self._fit_to_content()
             return
         for name in self._provider.search_languages(query, limit=20):
             QListWidgetItem(name, self._results)
         if self._results.count() > 0:
             self._results.setCurrentRow(0)
+        self._fit_to_content()
 
     def eventFilter(self, obj: QObject | None, event: QEvent | None) -> bool:
         """Forward Up / Down / Enter from the search field to the
@@ -335,6 +344,29 @@ class PhoibleDialog(QDialog):
     # Source-card flow
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _size_list_to_content(lst: QListWidget, cap: int) -> None:
+        """Pin a list's height to its row count (capped at ``cap`` rows,
+        after which it scrolls). Explicit, deterministic sizing rather
+        than ``AdjustToContents``, whose sizeHint did not reliably track
+        multi-line rows. An empty list collapses to zero height."""
+        n = lst.count()
+        if n == 0:
+            lst.setFixedHeight(0)
+            return
+        row_h = lst.sizeHintForRow(0)
+        frame = 2 * lst.frameWidth()
+        lst.setFixedHeight(row_h * min(n, cap) + frame + 2)
+
+    def _fit_to_content(self) -> None:
+        """Resize the dialog so its height tracks the visible content:
+        compact for a one-source language, capped + scrolling for many.
+        Each list is sized to its rows first, so the dialog never
+        strands empty space below them."""
+        self._size_list_to_content(self._results, 6)
+        self._size_list_to_content(self._sources, 6)
+        self.adjustSize()
+
     def _clear_sources(self) -> None:
         """Reset the source pane to its empty state: no rows, nothing
         selected, blank summary, Load disabled."""
@@ -352,6 +384,7 @@ class PhoibleDialog(QDialog):
             self._summary.setText(
                 f"PHOIBLE has no inventories for {language!r}."
             )
+            self._fit_to_content()
             return
         # Default selection: the first listed source, matching the
         # order the rows render in (the provider already orders the
@@ -369,6 +402,7 @@ class PhoibleDialog(QDialog):
         # clicking or tabbing back to the input, which matches how
         # pickers behave once a choice list is on screen.
         self._sources.setFocus()
+        self._fit_to_content()
 
     def _format_source_item(self, descriptor: InventoryDescriptor) -> str:
         head = f"{descriptor.source_short}"
@@ -404,12 +438,11 @@ class PhoibleDialog(QDialog):
         segments = list(generated.segments.keys())
         # Caption only what the selected source ROW does not already
         # show. That row carries the source name, segment count, and
-        # dialect, so repeating them here would print the same facts
-        # twice; the feature count is the one datum the row lacks, and
-        # "Sample segments" frames the glyphs below.
-        self._summary.setText(
-            f"Sample segments · {len(generated.features)} features"
-        )
+        # dialect; the feature count is the one datum it lacks, so show
+        # just that. The glyphs below are self-evidently the segments
+        # (with a "+N more" cue), so no "segments" label is needed and
+        # the word never appears twice on screen.
+        self._summary.setText(f"{len(generated.features)} features")
         sample = segments[:50]
         trail = ""
         if len(segments) > len(sample):

@@ -3375,11 +3375,11 @@ function wirePhoiblePicker() {
         const { segments, segment_total, feature_count } = preview;
         // Caption only what the selected source card does NOT already
         // show. The card carries the source name, segment count, and
-        // dialect, so repeating "N segments"/dialect here would print
-        // the same facts twice; the feature count is the one datum the
-        // card lacks, and "Sample segments" frames the chips below.
-        nodes.phoibleSummary.textContent =
-            `Sample segments · ${feature_count} features`;
+        // dialect; the feature count is the one datum it lacks, so show
+        // just that. The chips below are self-evidently the segments
+        // (with a "+N more" sample cue), so no "segments" label is
+        // needed and the word never appears twice on screen.
+        nodes.phoibleSummary.textContent = `${feature_count} features`;
         const ul = nodes.phoibleSegments;
         ul.innerHTML = "";
         for (const sym of segments) {
