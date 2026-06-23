@@ -970,7 +970,13 @@ dialog input[type="text"]:focus-visible {
   padding: var(--space-xs) var(--vowel-chart-pad-r)
     var(--vowel-chart-pad-b) 2px;
   column-gap: var(--space-sm);
-  row-gap: 2px;
+  /* No grid row-gap: the title and column-header strips reserve
+     their own height and position their text internally (the headers
+     bottom-anchor a fixed gap above the data area), and the diphthong
+     rows carry their own top padding. A uniform row-gap would stack
+     on top of those and re-introduce the very title/header crowding
+     this layout is tuned to avoid. */
+  row-gap: 0;
 }
 /* Mirrors the desktop's ``QLabel(geometry.title)`` placed at the
    top, centred over the data area. The desktop's
@@ -1020,6 +1026,12 @@ dialog input[type="text"]:focus-visible {
 }
 .vowel-chart-col-label {
   position: absolute;
+  /* Bottom-anchor the headers a modest gap above the data area so
+     most of the strip's height becomes breathing room between them
+     and the "VOWELS" title, and only a small gap separates them from
+     the trapezoid below. Mirrors the desktop's bottom-anchored
+     ``move`` in ``_layout_children``. */
+  bottom: var(--vowel-chart-col-label-gap-bottom);
   transform: translateX(-50%);
   text-align: center;
   font-size: var(--vowel-chart-col-label-font);
@@ -1104,17 +1116,19 @@ dialog input[type="text"]:focus-visible {
   );
 }
 
-/* "Diphthongs" section label, shown above the chip strip only when
-   the inventory has diphthongs. Reads like the column headers:
-   small + dim. */
+/* "Diphthongs" section header, shown above the chip strip only when
+   the inventory has diphthongs. Styled like the segment-class headers
+   (.seg-group-header) via the same SEG_GROUP_HEADER_* tokens so it
+   reads as a peer of the other class labels rather than incidental
+   grey text. */
 .vowel-diphthong-label {
   grid-row: 4;
   grid-column: 2;
-  font-size: var(--vowel-chart-col-label-font);
-  font-weight: 600;
-  letter-spacing: var(--vowel-chart-col-label-letter-spacing);
+  font-size: var(--seg-group-header-font);
+  font-weight: var(--seg-group-header-weight);
+  letter-spacing: var(--seg-group-header-letter-spacing);
   color: var(--text-dim);
-  padding: var(--space-xs) 0 0 0;
+  padding: var(--seg-group-header-padding);
 }
 .panel[data-active="true"] .vowel-diphthong-label {
   color: var(--text);
@@ -1128,9 +1142,16 @@ dialog input[type="text"]:focus-visible {
   grid-column: 2;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--vowel-pair-gap, 2px);
-  padding: 2px 0 0 0;
+  /* Same gap as the segment grid (``--seg-btn-gap``) so the chips
+     share the seg-button rhythm horizontally and between wrapped
+     rows, and matches the desktop FlowLayout's ``BTN_GAP``. */
+  gap: var(--seg-btn-gap);
+  padding: 0;
   justify-content: flex-start;
+  /* Pack wrapped rows from the top so a multi-row strip (dense
+     diphthong inventories) grows downward instead of distributing
+     blank space between rows. */
+  align-content: flex-start;
   align-items: center;
   min-height: 0;
 }

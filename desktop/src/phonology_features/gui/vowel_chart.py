@@ -18,7 +18,7 @@ import math
 from collections.abc import Mapping
 from typing import ClassVar
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, QRect, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
     QFont,
@@ -33,6 +33,8 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
+    QLayoutItem,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -61,7 +63,7 @@ from phonology_shared.chart.vowels import (
 )
 from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.constants import (
-    BTN_W,
+    BTN_GAP,
     VOWEL_CHART_ACCESSIBLE_NAME,
 )
 from phonology_shared.presentation.layout import (
@@ -109,6 +111,99 @@ VOWEL_LABEL_W = cs.VOWEL_CHART_ROW_LABEL_GUTTER_PX
 # needs more horizontal room.
 DESKTOP_VOWEL_CHART_W_ADJ: int = 0
 VOWEL_CHART_W_FLOOR: int = MIN_VOWEL_CHART_W_PX + DESKTOP_VOWEL_CHART_W_ADJ
+
+
+class FlowLayout(QLayout):
+    """Left-packed, line-wrapping layout.
+
+    Lays its items out left to right at their natural size and wraps
+    to a new line when the next item would overflow the available
+    width, every line packed flush left with a fixed ``gap`` between
+    items and between lines. This is the Qt counterpart of the web
+    diphthong strip's ``display: flex; flex-wrap: wrap``: both UIs
+    therefore pack chips identically (tight, left-aligned, wrapping)
+    rather than the old grid's stretch-to-fill columns.
+
+    Crucially the layout REFLOWS on every ``setGeometry`` (i.e. on
+    resize) and reports :py:meth:`heightForWidth`, so the owning
+    widget can reserve exactly the height the wrapped lines need. The
+    old fixed-grid placement froze each chip's row/column at build
+    time and then disagreed with a later width-based height estimate,
+    which is what made dense diphthong inventories overlap.
+    """
+
+    def __init__(self, parent: QWidget | None = None, gap: int = 0) -> None:
+        super().__init__(parent)
+        self._items: list[QLayoutItem] = []
+        self._gap = gap
+        self.setContentsMargins(0, 0, 0, 0)
+
+    # -- QLayout plumbing ------------------------------------------
+    def addItem(self, item: QLayoutItem | None) -> None:  # noqa: D102
+        if item is not None:
+            self._items.append(item)
+
+    def count(self) -> int:  # noqa: D102
+        return len(self._items)
+
+    def itemAt(self, index: int) -> QLayoutItem | None:  # noqa: D102
+        if 0 <= index < len(self._items):
+            return self._items[index]
+        return None
+
+    def takeAt(self, index: int) -> QLayoutItem | None:  # noqa: D102
+        if 0 <= index < len(self._items):
+            return self._items.pop(index)
+        return None
+
+    def expandingDirections(self) -> Qt.Orientation:  # noqa: D102
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: D102
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: D102
+        return self._do_layout(QRect(0, 0, width, 0), apply=False)
+
+    def setGeometry(self, rect: QRect) -> None:  # noqa: D102
+        super().setGeometry(rect)
+        self._do_layout(rect, apply=True)
+
+    def sizeHint(self) -> QSize:  # noqa: D102
+        return self.minimumSize()
+
+    def minimumSize(self) -> QSize:  # noqa: D102
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        margins = self.contentsMargins()
+        size += QSize(
+            margins.left() + margins.right(),
+            margins.top() + margins.bottom(),
+        )
+        return size
+
+    # -- core flow -------------------------------------------------
+    def _do_layout(self, rect: QRect, *, apply: bool) -> int:
+        """Place items (when ``apply``) or just measure; return the
+        total wrapped height in pixels."""
+        x = rect.x()
+        y = rect.y()
+        line_height = 0
+        for item in self._items:
+            hint = item.sizeHint()
+            next_x = x + hint.width()
+            if next_x > rect.right() + 1 and line_height > 0:
+                # Overflow: wrap to the next line.
+                x = rect.x()
+                y = y + line_height + self._gap
+                next_x = x + hint.width()
+                line_height = 0
+            if apply:
+                item.setGeometry(QRect(QPoint(x, y), hint))
+            x = next_x + self._gap
+            line_height = max(line_height, hint.height())
+        return (y + line_height) - rect.y()
 
 
 class VowelChartWidget(QWidget):
@@ -254,11 +349,17 @@ class VowelChartWidget(QWidget):
         # NOT placed in the trapezoid; the chip strip below the chart
         # lists them. Empty for monophthong-only inventories.
         self._diphthongs: tuple[str, ...] = ()
-        # "Diphthongs" section label above the chip strip. Shown only
-        # when the inventory has diphthongs.
-        self._diphthong_label = QLabel("Diphthongs", self)
-        self._diphthong_label.setFont(QFont("Noto Sans", 9))
-        self._diphthong_label.setStyleSheet(f"color: {C['text_dim']};")
+        # "Diphthongs" section header above the chip strip, styled like
+        # the segment-class headers (uppercase, semibold, tracked) via
+        # the shared SEG_GROUP_HEADER_* tokens so it reads as a peer of
+        # the other class labels instead of incidental grey text.
+        # Shown only when the inventory has diphthongs.
+        diph_font = QFont("Noto Sans")
+        diph_font.setPixelSize(cs.SEG_GROUP_HEADER_FONT_PX)
+        diph_font.setWeight(QFont.Weight(cs.SEG_GROUP_HEADER_FONT_WEIGHT))
+        self._diphthong_label = QLabel("DIPHTHONGS", self)
+        self._diphthong_label.setFont(diph_font)
+        self._diphthong_label.setStyleSheet(self._diphthong_label_qss())
         self._diphthong_label.hide()
         # Chip strip below the silhouette listing the inventory's
         # diphthong segments as selectable buttons. Empty (hidden)
@@ -267,13 +368,16 @@ class VowelChartWidget(QWidget):
         self._diphthong_chip_strip.setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
-        # Grid so dense inventories wrap into multiple rows; HBox
-        # would shrink chips below their sizeHint and clip text.
-        self._chip_strip_layout: QGridLayout = QGridLayout(
-            self._diphthong_chip_strip
+        # FlowLayout packs the chips tight and left-aligned and wraps
+        # to new lines when the strip isn't wide enough, mirroring the
+        # web strip's ``flex-wrap``. It reflows on resize and reports
+        # ``heightForWidth``, so the reserved footer height always
+        # matches the laid-out lines (dense inventories no longer
+        # overlap). ``BTN_GAP`` matches the segment grid's spacing so
+        # the chips share the seg-button rhythm.
+        self._chip_strip_layout = FlowLayout(
+            self._diphthong_chip_strip, gap=BTN_GAP
         )
-        self._chip_strip_layout.setContentsMargins(0, 0, 0, 0)
-        self._chip_strip_layout.setSpacing(4)
         self._diphthong_chip_strip.hide()
         # Floor for ``set_target_width``: the geometry's natural
         # data width plus this widget's chrome. Updated on every
@@ -311,12 +415,23 @@ class VowelChartWidget(QWidget):
         self._ROW_ACTIVE = f"color: {C['text']};"
         self._ROW_INACTIVE = f"color: {C['text_dim']};"
 
+    def _diphthong_label_qss(self) -> str:
+        """Stylesheet for the "DIPHTHONGS" header, matching the
+        segment-class headers' colour, tracking, and padding (the
+        font weight + size are set separately on the QLabel)."""
+        pad = cs.SEG_GROUP_HEADER_PADDING_PX
+        return (
+            f"color: {C['text_dim']};"
+            f" letter-spacing: {cs.SEG_GROUP_HEADER_LETTER_SPACING_PX}px;"
+            f" padding: {pad[0]}px {pad[1]}px {pad[2]}px {pad[3]}px;"
+        )
+
     def apply_theme(self) -> None:
         """Re-style cached header strings against the active palette
         and force the next ``set_headers_active`` to re-apply.
         """
         self._rebuild_style_cache()
-        self._diphthong_label.setStyleSheet(f"color: {C['text_dim']};")
+        self._diphthong_label.setStyleSheet(self._diphthong_label_qss())
         self._last_headers_active = None
 
     def set_target_width(self, w: int) -> None:
@@ -364,9 +479,9 @@ class VowelChartWidget(QWidget):
         SegmentButton's ``clicked`` signal uses, so the chip is
         a thin shortcut, not a parallel selection path.
 
-        The grid wraps to multiple rows when the chart isn't wide
-        enough to fit every chip side-by-side; columns are computed
-        from the data-area width / approximate chip width.
+        The FlowLayout wraps the chips to new lines on its own when
+        the strip isn't wide enough, so this method only has to add
+        them in order; placement and wrapping happen at layout time.
         """
         layout = self._chip_strip_layout
         while layout.count():
@@ -385,11 +500,7 @@ class VowelChartWidget(QWidget):
             unique_diphs.append(seg)
         # Chips reuse SegmentButton for visual + state parity with
         # chart cells (size, IPA font chain, selection state).
-        dx, _dy, dw, _dh = self._data_area_rect()
-        del dx
-        chip_pitch = BTN_W + layout.spacing()
-        n_cols = max(1, dw // chip_pitch) if dw > 0 else 6
-        for idx, segment in enumerate(unique_diphs):
+        for segment in unique_diphs:
             chip = SegmentButton(segment, self._diphthong_chip_strip)
             chip.setToolTip(f"Select /{segment}/")
             chip.clicked.connect(
@@ -397,9 +508,7 @@ class VowelChartWidget(QWidget):
                     self.segment_clicked.emit(s)
                 )
             )
-            row = idx // n_cols
-            col = idx % n_cols
-            layout.addWidget(chip, row, col)
+            layout.addWidget(chip)
 
     def clear(self) -> None:
         """Remove all buttons, labels, and collision containers.
@@ -773,27 +882,23 @@ class VowelChartWidget(QWidget):
 
     def _chip_strip_height(self) -> int:
         """Vertical pixels the diphthong chip strip needs. Zero when
-        the inventory has no diphthongs; scales with the number of
-        rows the chip grid wraps into so dense inventories (Korean
-        PHOIBLE, 12 diphthongs) get enough room."""
+        the inventory has no diphthongs; otherwise the exact height
+        the FlowLayout wraps into at the data-area width, so dense
+        inventories (Korean PHOIBLE, 12 diphthongs) get precisely the
+        room they occupy and never overlap."""
         if not self._diphthongs:
             return 0
-        unique = {seg for seg in self._diphthongs if seg}
-        if not unique:
-            return 0
-        # Mirror the column-count math in
-        # ``_populate_diphthong_chip_strip``: each chip is a
-        # ``SegmentButton`` (``BTN_W`` x ``SEG_BTN_H``) plus the grid
-        # spacing. ``_data_area_rect`` depends on this height, so we
-        # approximate the width via ``widget.width() - chrome`` to
-        # avoid a circular call; a 1-col difference at the edge is
-        # harmless since the layout pass rebuilds with the exact dw.
-        approx_dw = max(0, self.width() - VOWEL_LABEL_W - self._PAD_R)
-        spacing = self._chip_strip_layout.spacing()
-        chip_pitch = BTN_W + spacing
-        n_cols = max(1, approx_dw // chip_pitch) if approx_dw > 0 else 6
-        n_rows = max(1, math.ceil(len(unique) / n_cols))
-        return n_rows * SEG_BTN_H + (n_rows - 1) * spacing
+        # The data-area WIDTH does not depend on the footer height
+        # (only the data-area height does), so this is the same width
+        # the chip strip is laid out at, with no circular call back
+        # into ``_data_area_rect``. Asking the FlowLayout itself for
+        # ``heightForWidth`` keeps the reserved height and the actual
+        # wrapped lines in lock-step (the old grid estimate could
+        # disagree with the built layout and overlap).
+        strip_w = max(0, self.width() - VOWEL_LABEL_W - self._PAD_R)
+        if strip_w <= 0:
+            return SEG_BTN_H
+        return max(SEG_BTN_H, self._chip_strip_layout.heightForWidth(strip_w))
 
     def _footer_height(self) -> int:
         """Total height reserved below the trapezoid for the diphthong
@@ -858,11 +963,19 @@ class VowelChartWidget(QWidget):
         # then centred on each anchor. Uses round-to-nearest (not
         # int truncate) so sub-pixel positions don't bias every
         # cell leftward vs the web's fractional CSS percentages.
+        # Bottom-anchored in the header strip a modest gap above the
+        # data area, so most of the strip's height becomes breathing
+        # room between the labels and the "VOWELS" title above.
+        col_label_y = (
+            self._TITLE_H
+            + self._COL_HEADER_H
+            - cs.VOWEL_CHART_COL_LABEL_GAP_BOTTOM_PX
+        )
         for lbl, x in self._col_labels:
             lbl.adjustSize()
             lw = lbl.width()
             px = dx + round(x * dw) - lw // 2
-            lbl.move(px, self._TITLE_H)
+            lbl.move(px, col_label_y - lbl.height())
         # Row labels: positioned at chart_y, right-aligned against
         # the silhouette's slanted left edge at this row so the label
         # follows the trapezoid inward as it shrinks. Falls back to

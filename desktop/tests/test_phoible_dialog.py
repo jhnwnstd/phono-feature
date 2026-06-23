@@ -118,8 +118,8 @@ def test_load_click_materializes_inventory_via_shared_path(
         assert inv is not None
         # Name follows ``<language> [(<dialect>)] [<source_short>]``;
         # we only check the bracketed source tag without pinning the
-        # exact source default, which is data-driven (median
-        # segment-count rule).
+        # exact source default (the first listed source, per the
+        # provider's source/id ordering).
         assert inv.name.startswith("Korean")
         assert inv.name.endswith("]")
         # Provenance metadata is the contract the desktop and web

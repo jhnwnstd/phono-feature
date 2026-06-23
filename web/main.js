@@ -340,12 +340,6 @@ function readInlineJson(elementId, fallback) {
     }
 }
 
-function statusTextForMode(mode) {
-    return state.bridge
-        ? callBridge("get_mode_status_text", mode)
-        : (STATUS_TEXT[mode] || STATUS_TEXT.no_engine || "");
-}
-
 /**
  * Feature-spec maps use a null prototype because feature names come
  * from user-uploaded inventories: a hostile key like "__proto__"
@@ -549,7 +543,9 @@ async function bootPyodide({ prerendered = false } = {}) {
     // Idempotent: prerendered path hid the overlay early; the
     // non-prerendered path hides it here once the DOM is ready.
     nodes.loadingOverlay.classList.add("hidden");
-    setStatus(statusTextForMode(state.mode));
+    // The status bar shows ONLY the loaded-inventory summary, which
+    // ``loadBundledInventory`` above already set; mode hints live in
+    // the analysis pane, not the bottom border.
 
     mark("boot:end");
     measure("Manifest fetch", "manifest:start", "manifest:end");
@@ -784,7 +780,7 @@ async function loadInventoryText(text, sourceLabel) {
         const info = callBridge("load_inventory_json", text, sourceLabel);
         applyInventoryInfo(info);
         const loadedTpl = STATUS_TEXT.inventory_loaded_template
-            || "{name}: {n_segments} segments, {n_features} features.";
+            || "{name}: {n_segments} segments × {n_features} features";
         setStatus(
             loadedTpl
                 .replace("{name}", info.name)
@@ -2518,7 +2514,8 @@ function activateMode(mode) {
         }
     }
 
-    setStatus(statusTextForMode(mode));
+    // The bottom border keeps showing the loaded-inventory summary
+    // across mode switches; mode hints belong to the analysis pane.
 
     // Mode switch is a discrete one-off event; bypass the 30 ms
     // click-burst debounce and paint the new mode's segment states
@@ -3228,16 +3225,24 @@ function wirePhoiblePicker() {
     // typist doesn't trigger a bridge call per keystroke.
     const SEARCH_DEBOUNCE_MS = 150;
 
+    // Clear the source side of the picker (inventory cards + preview)
+    // back to "nothing chosen". Used when the language field is
+    // emptied, when a language has no inventories, and as part of a
+    // full dialog reset.
+    const clearInventorySelection = () => {
+        nodes.phoibleInventories.hidden = true;
+        nodes.phoibleRadios.innerHTML = "";
+        nodes.phoiblePreview.hidden = true;
+        selectedInventoryId = null;
+        loadBtn.disabled = true;
+    };
+
     const resetState = () => {
         searchInput.value = "";
         nodes.phoibleResults.hidden = true;
         nodes.phoibleResults.innerHTML = "";
-        nodes.phoibleInventories.hidden = true;
-        nodes.phoibleRadios.innerHTML = "";
-        nodes.phoiblePreview.hidden = true;
         errorBox.textContent = "";
-        selectedInventoryId = null;
-        loadBtn.disabled = true;
+        clearInventorySelection();
         if (searchTimer) {
             window.clearTimeout(searchTimer);
             searchTimer = 0;
@@ -3322,20 +3327,14 @@ function wirePhoiblePicker() {
         const radios = nodes.phoibleRadios;
         radios.innerHTML = "";
         if (!invs || invs.length === 0) {
-            nodes.phoibleInventories.hidden = true;
-            nodes.phoiblePreview.hidden = true;
-            selectedInventoryId = null;
-            loadBtn.disabled = true;
+            clearInventorySelection();
             return;
         }
-        // Default selection: the inventory with the median segment
-        // count. Avoids a stray marginal source being the user's
-        // first impression. Alphabetical tiebreak is baked into the
-        // bridge's list ordering.
-        const sorted = invs
-            .slice()
-            .sort((a, b) => a.segment_count - b.segment_count);
-        const defaultId = sorted[Math.floor(sorted.length / 2)].id;
+        // Default selection: the first listed source, matching the
+        // order the cards render in (the bridge already orders the
+        // list by source then id, so "first" is stable and is what
+        // the user sees highlighted at the top).
+        const defaultId = invs[0].id;
         for (const inv of invs) {
             radios.appendChild(_buildSourceCard(inv, defaultId, pickInventory));
         }
@@ -3428,8 +3427,18 @@ function wirePhoiblePicker() {
     searchInput.addEventListener("input", () => {
         if (searchTimer) {
             window.clearTimeout(searchTimer);
+            searchTimer = 0;
         }
         const query = searchInput.value;
+        if (query.trim() === "") {
+            // Deleting the typed language resets the source selection
+            // too, so the picker gives responsive feedback that nothing
+            // is chosen rather than stranding the previous source cards.
+            nodes.phoibleResults.hidden = true;
+            nodes.phoibleResults.innerHTML = "";
+            clearInventorySelection();
+            return;
+        }
         searchTimer = window.setTimeout(() => {
             const matches = callBridge(
                 "phoible_search_languages", query, 20,
@@ -5646,7 +5655,8 @@ function clearAll() {
         rec.minus.dataset.active = "false";
         delete rec.row.dataset.queryValue;
     }
-    setStatus(statusTextForMode(state.mode));
+    // Clearing the selection leaves the inventory loaded, so the
+    // bottom border keeps its inventory summary untouched.
 }
 
 /** Press in empty panel space activates that panel's mode.

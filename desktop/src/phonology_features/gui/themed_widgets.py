@@ -207,7 +207,6 @@ class _BrandedStatusBar(QStatusBar):
         # beside the (short) summary yet a long transient message
         # still elides instead of shoving the brand off the bar.
         fm = self._message_label.fontMetrics()
-        content_w = fm.horizontalAdvance(self._full_message)
         source_w = (
             self._source_link.sizeHint().width()
             if self._source_link.isVisible()
@@ -216,14 +215,29 @@ class _BrandedStatusBar(QStatusBar):
         brand_w = self._brand.sizeHint().width()
         # Reserve the source + brand widths plus a margin allowance for
         # item spacing and the bar's content margins.
-        avail = self.width() - source_w - brand_w - 32
-        target = max(0, min(content_w, avail))
-        self._message_label.setText(
-            fm.elidedText(
-                self._full_message, Qt.TextElideMode.ElideRight, target
-            )
+        avail = max(0, self.width() - source_w - brand_w - 32)
+        # Drive the box from the label's natural sizeHint, not the raw
+        # pen advance. The advance omits the QLabel render slack (the
+        # trailing glyph's right bearing and the widget's text padding),
+        # so a box sized to the advance clipped the final glyph (the
+        # "s" of "features"), which read as the Source link covering it.
+        self._message_label.setText(self._full_message)
+        natural_w = self._message_label.sizeHint().width()
+        if natural_w <= avail:
+            # The whole summary fits: show it in full, unclipped.
+            self._message_label.setFixedWidth(natural_w)
+            return
+        # Too long for the room left over: elide. Keep the same render
+        # slack out of the elide budget so the elided string plus its
+        # ellipsis stays inside the box and never spills toward Source.
+        slack = natural_w - fm.horizontalAdvance(self._full_message)
+        elided = fm.elidedText(
+            self._full_message,
+            Qt.TextElideMode.ElideRight,
+            max(0, avail - slack),
         )
-        self._message_label.setFixedWidth(target)
+        self._message_label.setText(elided)
+        self._message_label.setFixedWidth(avail)
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:
         super().resizeEvent(event)

@@ -160,7 +160,7 @@ def clipboard_copy_message(seg: str) -> str:
 #: ``STATUS_TEXT`` so the web can substitute locally and stay
 #: byte-identical to the desktop's rendering of the same load.
 INVENTORY_LOADED_TEMPLATE: str = (
-    "{name}: {n_segments} segments, {n_features} features."
+    "{name}: {n_segments} segments × {n_features} features"
 )
 
 

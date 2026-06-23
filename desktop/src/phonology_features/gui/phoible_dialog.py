@@ -273,6 +273,10 @@ class PhoibleDialog(QDialog):
         query = self._search_edit.text().strip()
         self._results.clear()
         if not query:
+            # Deleting the typed language resets the source selection
+            # too, so the dialog gives responsive feedback that nothing
+            # is chosen rather than stranding the previous source rows.
+            self._clear_sources()
             return
         for name in self._provider.search_languages(query, limit=20):
             QListWidgetItem(name, self._results)
@@ -312,32 +316,34 @@ class PhoibleDialog(QDialog):
     # Source-card flow
     # ------------------------------------------------------------------
 
+    def _clear_sources(self) -> None:
+        """Reset the source pane to its empty state: no rows, nothing
+        selected, blank summary, Load disabled."""
+        self._sources.clear()
+        self._selected_inventory_id = None
+        self._summary.setText("")
+        self._segments_label.setText("")
+        self._load_btn.setEnabled(False)
+
     def _on_language_activated(self, item: QListWidgetItem) -> None:
         language = item.text()
         inventories = self._provider.list_inventories(language)
-        self._sources.clear()
-        self._selected_inventory_id = None
+        self._clear_sources()
         if not inventories:
             self._summary.setText(
                 f"PHOIBLE has no inventories for {language!r}."
             )
-            self._segments_label.setText("")
-            self._load_btn.setEnabled(False)
             return
-        # Default selection: median-segment-count source. Avoids a
-        # stray marginal source becoming the user's first impression.
-        # Mirrors the web picker's identical default rule.
-        sorted_by_size = sorted(inventories, key=lambda d: d.segment_count)
-        default_id = sorted_by_size[len(sorted_by_size) // 2].id
-        default_row = 0
-        for i, descriptor in enumerate(inventories):
+        # Default selection: the first listed source, matching the
+        # order the rows render in (the provider already orders the
+        # list by source then id, so "first" is stable and is what
+        # the user sees highlighted at the top).
+        for descriptor in inventories:
             item = QListWidgetItem(
                 self._format_source_item(descriptor), self._sources
             )
             item.setData(_INVENTORY_ID_ROLE, descriptor.id)
-            if descriptor.id == default_id:
-                default_row = i
-        self._sources.setCurrentRow(default_row)
+        self._sources.setCurrentRow(0)
         # Hand focus to the source list so the keyboard flow
         # continues without the mouse: arrows move between sources,
         # Enter loads the highlighted one. Typing a new search means

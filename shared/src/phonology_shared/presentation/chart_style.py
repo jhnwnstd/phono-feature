@@ -102,7 +102,16 @@ VOWEL_CHART_TITLE_PADDING_PX: tuple[int, int, int, int] = (
 VOWEL_CHART_TITLE_H_PX: int = 20
 
 #: Height (px) of the column-header strip (Front / Central / Back).
-VOWEL_CHART_COL_HEADER_H_PX: int = 18
+#: The strip is taller than the label line so the labels can sit low
+#: in it (bottom-anchored via :data:`VOWEL_CHART_COL_LABEL_GAP_BOTTOM_PX`),
+#: putting generous space between them and the "VOWELS" title above
+#: and only a modest gap to the trapezoid below.
+VOWEL_CHART_COL_HEADER_H_PX: int = 26
+
+#: Gap (px) between the column headers and the top of the data area.
+#: The labels bottom-anchor in their strip this far above the chart,
+#: so most of the strip's height becomes breathing room above them.
+VOWEL_CHART_COL_LABEL_GAP_BOTTOM_PX: int = 3
 
 #: Right-edge padding inside the chart widget so back-column
 #: cells at ``chart_x=1`` don't sit flush against the border.

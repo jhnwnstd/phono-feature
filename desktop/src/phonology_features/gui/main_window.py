@@ -496,9 +496,12 @@ class MainWindow(QMainWindow):
             f"background: {C['panel']}; border-top: 1px solid {C['border']};"
         )
         self.setStatusBar(self.status)
-        self.status.showMessage(
-            mode_status_text(Mode.SEG_TO_FEAT, has_engine=False)
-        )
+        # The bottom border shows ONLY the loaded-inventory summary
+        # (name, segment x feature counts, Source link for PHOIBLE).
+        # The "select an inventory" prompt lives in the segment pane's
+        # own hint label, so the status bar starts empty rather than
+        # echoing a mode hint here.
+        self.status.showMessage("")
 
     def _build_segment_panel(self, parent: QWidget | None = None) -> QFrame:
         """Build the left (segment) panel: title, Clear button, scroll

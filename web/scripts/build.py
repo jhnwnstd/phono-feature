@@ -862,6 +862,10 @@ def generate_layout_css() -> None:
                 f"{chart_style.VOWEL_CHART_COL_HEADER_H_PX}px;"
             ),
             (
+                "  --vowel-chart-col-label-gap-bottom: "
+                f"{chart_style.VOWEL_CHART_COL_LABEL_GAP_BOTTOM_PX}px;"
+            ),
+            (
                 "  --vowel-chart-pad-r: "
                 f"{chart_style.VOWEL_CHART_PAD_R_PX}px;"
             ),
