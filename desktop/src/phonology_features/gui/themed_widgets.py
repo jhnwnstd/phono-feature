@@ -27,6 +27,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QFrame,
+    QHBoxLayout,
     QLabel,
     QSizePolicy,
     QSplitter,
@@ -161,8 +162,19 @@ class _BrandedStatusBar(QStatusBar):
         self._brand.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
-        self.addWidget(self._message_label, 0)
-        self.addWidget(self._source_link, 0)
+        # Message + Source share one tight container so the gap between
+        # the inventory summary and the Source link is small and under
+        # our control. QStatusBar.addWidget keeps a fixed ~6 px between
+        # separate items that cannot be reduced via the status bar's own
+        # layout, which left a wide gap after "features"; a private
+        # QHBoxLayout here closes it without overlap.
+        self._left_group = QWidget(self)
+        left_layout = QHBoxLayout(self._left_group)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+        left_layout.addWidget(self._message_label)
+        left_layout.addWidget(self._source_link)
+        self.addWidget(self._left_group, 0)
         self.addWidget(self._spacer, 1)
         self.addPermanentWidget(self._brand, 0)
         self.apply_theme()

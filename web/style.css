@@ -465,6 +465,13 @@ dialog input[type="text"]:focus-visible {
   flex-direction: column;
   min-height: 0;
 }
+/* The author ``display: flex`` above beats the UA's
+   ``[hidden] { display: none }`` (equal specificity, later wins), so
+   restate the hidden rule or the empty source list would show before a
+   language is picked. Mirrors the ``.phoible-active[hidden]`` guard. */
+.phoible-fieldset[hidden] {
+  display: none;
+}
 .phoible-fieldset > legend {
   /* Match the existing dialog-label visual weight. */
   font-weight: 600;
@@ -613,6 +620,12 @@ dialog input[type="text"]:focus-visible {
   flex: 0 0 auto;
   padding-top: var(--space-xs);
   border-top: var(--border-std) solid var(--border);
+}
+/* Same ``[hidden]`` guard: ``display: flex`` would otherwise override
+   the hidden attribute and show an empty preview (summary + citation)
+   before a source is selected. */
+.phoible-preview[hidden] {
+  display: none;
 }
 .phoible-summary {
   font-weight: bold;
@@ -1175,6 +1188,10 @@ dialog input[type="text"]:focus-visible {
   letter-spacing: var(--seg-group-header-letter-spacing);
   color: var(--text-dim);
   padding: var(--seg-group-header-padding);
+  /* Centered over the chip row below so the diphthong section reads as
+     a balanced block under the trapezoid rather than jammed against
+     the left gutter. */
+  text-align: center;
 }
 .panel[data-active="true"] .vowel-diphthong-label {
   color: var(--text);
@@ -1193,7 +1210,9 @@ dialog input[type="text"]:focus-visible {
      rows, and matches the desktop FlowLayout's ``BTN_GAP``. */
   gap: var(--seg-btn-gap);
   padding: 0;
-  justify-content: flex-start;
+  /* Centered so a small set of diphthong chips sits balanced under the
+     chart instead of bunched against the left edge. */
+  justify-content: center;
   /* Pack wrapped rows from the top so a multi-row strip (dense
      diphthong inventories) grows downward instead of distributing
      blank space between rows. */

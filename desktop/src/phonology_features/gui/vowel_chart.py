@@ -132,10 +132,19 @@ class FlowLayout(QLayout):
     which is what made dense diphthong inventories overlap.
     """
 
-    def __init__(self, parent: QWidget | None = None, gap: int = 0) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        gap: int = 0,
+        center: bool = False,
+    ) -> None:
         super().__init__(parent)
         self._items: list[QLayoutItem] = []
         self._gap = gap
+        # When True each wrapped line is centered horizontally in the
+        # available width, so a small set of chips sits balanced rather
+        # than packed against the left edge.
+        self._center = center
         self.setContentsMargins(0, 0, 0, 0)
 
     # -- QLayout plumbing ------------------------------------------
@@ -186,24 +195,40 @@ class FlowLayout(QLayout):
     # -- core flow -------------------------------------------------
     def _do_layout(self, rect: QRect, *, apply: bool) -> int:
         """Place items (when ``apply``) or just measure; return the
-        total wrapped height in pixels."""
-        x = rect.x()
-        y = rect.y()
+        total wrapped height in pixels. Items are grouped into lines
+        first so each line can be placed (left-packed or centered) once
+        its full width is known."""
+        lines: list[tuple[list[tuple[QLayoutItem, QSize]], int, int]] = []
+        cur: list[tuple[QLayoutItem, QSize]] = []
+        cur_w = 0
         line_height = 0
         for item in self._items:
             hint = item.sizeHint()
-            next_x = x + hint.width()
-            if next_x > rect.right() + 1 and line_height > 0:
-                # Overflow: wrap to the next line.
-                x = rect.x()
-                y = y + line_height + self._gap
-                next_x = x + hint.width()
+            add_w = hint.width() if not cur else self._gap + hint.width()
+            if cur and cur_w + add_w > rect.width():
+                lines.append((cur, cur_w, line_height))
+                cur = []
+                cur_w = 0
                 line_height = 0
-            if apply:
-                item.setGeometry(QRect(QPoint(x, y), hint))
-            x = next_x + self._gap
+                add_w = hint.width()
+            cur.append((item, hint))
+            cur_w += add_w
             line_height = max(line_height, hint.height())
-        return (y + line_height) - rect.y()
+        if cur:
+            lines.append((cur, cur_w, line_height))
+
+        y = rect.y()
+        total = 0
+        for items, width, height in lines:
+            if apply:
+                offset = (rect.width() - width) // 2 if self._center else 0
+                x = rect.x() + max(0, offset)
+                for item, hint in items:
+                    item.setGeometry(QRect(QPoint(x, y), hint))
+                    x += hint.width() + self._gap
+            total = (y + height) - rect.y()
+            y += height + self._gap
+        return total
 
 
 class VowelChartWidget(QWidget):
@@ -329,6 +354,8 @@ class VowelChartWidget(QWidget):
         self._HDR_INACTIVE = ""
         self._ROW_ACTIVE = ""
         self._ROW_INACTIVE = ""
+        self._DIPH_ACTIVE = ""
+        self._DIPH_INACTIVE = ""
         self._rebuild_style_cache()
         # Last ``active`` value styled into the headers; cleared by
         # clear() and apply_theme() to force a re-style.
@@ -359,7 +386,12 @@ class VowelChartWidget(QWidget):
         diph_font.setWeight(QFont.Weight(cs.SEG_GROUP_HEADER_FONT_WEIGHT))
         self._diphthong_label = QLabel("DIPHTHONGS", self)
         self._diphthong_label.setFont(diph_font)
-        self._diphthong_label.setStyleSheet(self._diphthong_label_qss())
+        # Centered over the chip row so the diphthong section reads as a
+        # balanced block under the trapezoid rather than left-jammed.
+        self._diphthong_label.setAlignment(
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+        )
+        self._diphthong_label.setStyleSheet(self._DIPH_INACTIVE)
         self._diphthong_label.hide()
         # Chip strip below the silhouette listing the inventory's
         # diphthong segments as selectable buttons. Empty (hidden)
@@ -376,7 +408,7 @@ class VowelChartWidget(QWidget):
         # overlap). ``BTN_GAP`` matches the segment grid's spacing so
         # the chips share the seg-button rhythm.
         self._chip_strip_layout = FlowLayout(
-            self._diphthong_chip_strip, gap=BTN_GAP
+            self._diphthong_chip_strip, gap=BTN_GAP, center=True
         )
         self._diphthong_chip_strip.hide()
         # Floor for ``set_target_width``: the geometry's natural
@@ -414,24 +446,33 @@ class VowelChartWidget(QWidget):
         # web stayed at 10 px.
         self._ROW_ACTIVE = f"color: {C['text']};"
         self._ROW_INACTIVE = f"color: {C['text_dim']};"
-
-    def _diphthong_label_qss(self) -> str:
-        """Stylesheet for the "DIPHTHONGS" header, matching the
-        segment-class headers' colour, tracking, and padding (the
-        font weight + size are set separately on the QLabel)."""
-        pad = cs.SEG_GROUP_HEADER_PADDING_PX
-        return (
-            f"color: {C['text_dim']};"
-            f" letter-spacing: {cs.SEG_GROUP_HEADER_LETTER_SPACING_PX}px;"
-            f" padding: {pad[0]}px {pad[1]}px {pad[2]}px {pad[3]}px;"
+        # "DIPHTHONGS" header: same segment-class-header tracking +
+        # padding, and the SAME active/inactive colour swap as the
+        # column headers so it brightens with the pane instead of
+        # sitting permanently dimmer than the other class names.
+        _diph_pad = cs.SEG_GROUP_HEADER_PADDING_PX
+        _diph_fmt = (
+            f" letter-spacing: "
+            f"{cs.SEG_GROUP_HEADER_LETTER_SPACING_PX}px;"
+            f" padding: {_diph_pad[0]}px {_diph_pad[1]}px"
+            f" {_diph_pad[2]}px {_diph_pad[3]}px;"
         )
+        self._DIPH_ACTIVE = f"color: {C['text']};{_diph_fmt}"
+        self._DIPH_INACTIVE = f"color: {C['text_dim']};{_diph_fmt}"
 
     def apply_theme(self) -> None:
         """Re-style cached header strings against the active palette
         and force the next ``set_headers_active`` to re-apply.
         """
         self._rebuild_style_cache()
-        self._diphthong_label.setStyleSheet(self._diphthong_label_qss())
+        # Repaint the diphthong header immediately for the current
+        # active state; the other headers re-apply on the forced
+        # ``set_headers_active`` triggered by clearing the dedup below.
+        self._diphthong_label.setStyleSheet(
+            self._DIPH_ACTIVE
+            if self._last_headers_active
+            else self._DIPH_INACTIVE
+        )
         self._last_headers_active = None
 
     def set_target_width(self, w: int) -> None:
@@ -462,6 +503,9 @@ class VowelChartWidget(QWidget):
             lbl.setStyleSheet(header_style)
         for lbl, *_ in self._row_labels:
             lbl.setStyleSheet(row_style)
+        self._diphthong_label.setStyleSheet(
+            self._DIPH_ACTIVE if active else self._DIPH_INACTIVE
+        )
         self._last_headers_active = active
 
     # PyQt signal fired when a chip in the diphthong chip strip
