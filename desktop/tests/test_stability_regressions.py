@@ -125,3 +125,30 @@ def test_reopen_keeps_new_builder_reference_when_old_destroyed(
     second._save_in_flight = False
     second.close()
     qapp.processEvents()
+
+
+def test_deferred_mode_refresh_safe_after_window_deleted(qapp) -> None:
+    """The fire-and-forget ``QTimer.singleShot`` that schedules the
+    deferred analysis refresh can fire one tick after the window is
+    torn down (toggle mode, then immediately close). The callback must
+    bail when the underlying C++ object is already deleted instead of
+    crashing with "wrapped C/C++ object has been deleted"."""
+    from pathlib import Path
+
+    from PyQt6 import sip
+
+    from phonology_features.gui.main_window import MainWindow
+
+    inv = str(_INV_DIR / "hayes_features.json")
+    w = MainWindow()
+    w._load_path(inv)
+    ctrl = w._mode_ctrl
+
+    # Tear down the window's C++ object while the Python wrappers (held
+    # by the controller's bound method) live on, exactly the state a
+    # pending singleShot fires in during shutdown.
+    sip.delete(w)
+    assert sip.isdeleted(w)
+
+    # Must not raise: the guard short-circuits on the deleted window.
+    ctrl._deferred_refresh_analysis()

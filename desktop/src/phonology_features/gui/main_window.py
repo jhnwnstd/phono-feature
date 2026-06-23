@@ -1000,7 +1000,7 @@ class MainWindow(QMainWindow):
         # the NEW builder. Disconnecting both severs the old instance
         # cleanly. Guarded because a signal may already be disconnected.
         if self._builder is not None:
-            for signal, slot in () if True else (
+            for signal, slot in (
                 (self._builder._save_finished, self._on_builder_save_finished),
                 (self._builder.destroyed, self._on_builder_destroyed),
             ):
