@@ -245,10 +245,6 @@ def serialize_current_inventory() -> str:
     )
 
 
-def get_current_inventory_name() -> str:
-    return _inventory_name or "inventory"
-
-
 def get_download_filename() -> str:
     """Suggested download filename for the active inventory.
 

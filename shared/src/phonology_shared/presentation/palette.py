@@ -454,12 +454,6 @@ def get_theme_name() -> str:
     return _active_theme
 
 
-#: Accepted natural-class verdict labels, derived from
-#: :py:class:`ClassState`. Kept as a string frozenset for callers
-#: that predate the enum.
-ALLOWED_CLASS_STATES: frozenset[str] = frozenset(ClassState)
-
-
 def class_state_palette_keys(
     state: str | ClassState,
 ) -> tuple[str, str] | None:

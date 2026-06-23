@@ -105,13 +105,6 @@ def _muted_italic_p(text: str) -> str:
     return f"<p>{_muted_italic_span(text)}</p>"
 
 
-def _yes_no(yes: bool) -> str:
-    """Yes/No verdict in the palette's positive / negative colour."""
-    colour = C["plus"] if yes else C["minus"]
-    label = "Yes" if yes else "No"
-    return f"<span style='color:{colour}'>{label}</span>"
-
-
 def _plural(n: int, singular: str, plural: str | None = None) -> str:
     """English pluralisation: ``_plural(1, "segment")`` -> "segment",
     ``_plural(2, "segment")`` -> "segments"."""
@@ -478,17 +471,6 @@ def render_selection_summary_seg(segs: list[str]) -> str:
         more = count - SELECTION_HEADER_MAX_CHIPS
         chips = f"{head} {_muted_italic_span(f'+{more} more')}"
     return f"<p><b>Selected ({count}):</b> {chips}</p>"
-
-
-def render_selection_summary_feat(feature_dict: dict[str, str]) -> str:
-    """Persistent header content for FEAT-mode queries."""
-    if not feature_dict:
-        return _muted_italic_p("Toggle feature values to query the inventory.")
-    chips = " ".join(
-        _signed_feature_chip(value, feature)
-        for feature, value in sort_spec(feature_dict).items()
-    )
-    return f"<p><b>Query:</b> {chips}</p>"
 
 
 def _wildcard_badge() -> str:

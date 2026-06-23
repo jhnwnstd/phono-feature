@@ -89,24 +89,6 @@ PHOIBLE_TO_APP_FEATURE: Mapping[str, str] = {
 }
 
 
-#: Identity columns PHOIBLE carries that are NOT feature values;
-#: the bake script consumes these for the inventory index but
-#: never bakes them into per-segment bundles.
-PHOIBLE_IDENTITY_COLUMNS: tuple[str, ...] = (
-    "InventoryID",
-    "Glottocode",
-    "ISO6393",
-    "LanguageName",
-    "SpecificDialect",
-    "GlyphID",
-    "Phoneme",
-    "Allophones",
-    "Marginal",
-    "SegmentClass",
-    "Source",
-)
-
-
 def normalize_phoible_value(value: str) -> str:
     """Coerce a PHOIBLE feature cell to the app's three-valued
     vocabulary (``"+"`` / ``"-"`` / ``"0"``).

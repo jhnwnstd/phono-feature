@@ -138,9 +138,7 @@ class VowelChartWidget(QWidget):
     # below it.
     _FOOTER_GAP_PX: ClassVar[int] = 2
 
-    def __init__(
-        self, parent: QWidget | None = None, *, btn_gap: int = 4
-    ) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         # Width is externally clamped by ``set_target_width`` to the
         # constraint table's fixed value; height grows with row count.

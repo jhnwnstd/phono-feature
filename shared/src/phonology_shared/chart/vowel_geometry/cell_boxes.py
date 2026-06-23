@@ -206,11 +206,6 @@ def vertical_depth(kind: VowelCellDisplayKind, n_entries: int) -> int:
     return n_entries
 
 
-def _cell_vertical_depth(cell: VowelChartCell) -> int:
-    """:py:func:`vertical_depth` for an already-built cell."""
-    return vertical_depth(cell.display_kind, len(cell.entries))
-
-
 def content_height_px(kind: VowelCellDisplayKind, n_entries: int) -> int:
     """Rendered pixel height of a cell's button block: ``depth``
     button rows at the density-tier height with the stack gap

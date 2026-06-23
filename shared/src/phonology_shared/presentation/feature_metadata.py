@@ -717,18 +717,6 @@ def feature_sort_key(raw_name: str) -> int:
     return meta.sort_key
 
 
-def feature_group(raw_name: str) -> str:
-    """Group name for ``raw_name``. Unknown names fall in
-    ``"Other"`` (the same bucket
-    :py:func:`phonology_shared.presentation.view_models._grouped_features`
-    uses for ungrouped features).
-    """
-    meta = metadata_for(raw_name)
-    if meta is None:
-        return "Other"
-    return meta.group
-
-
 def is_suprasegmental(raw_name: str) -> bool:
     """``True`` iff the registry tags this feature suprasegmental.
     Unknown names default to ``False`` (segmental until proven

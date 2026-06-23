@@ -235,9 +235,6 @@ class PhoibleProvider:
         self._language_search_index: list[tuple[str, str]] = sorted(
             by_folded.items()
         )
-        self._language_names: list[str] = [
-            display for _folded, display in self._language_search_index
-        ]
 
         # Optional data payload. ``_segments_by_inventory`` is the
         # decoded form keyed by inventory id; ``_feature_names``

@@ -201,14 +201,6 @@ class _BrandedStatusBar(QStatusBar):
         self._message_label.setToolTip(text)
         self._update_elided_message()
 
-    def clearMessage(self) -> None:
-        self._full_message = ""
-        self._message_label.setToolTip("")
-        self._message_label.setText("")
-
-    def currentMessage(self) -> str:
-        return self._full_message
-
     def _update_elided_message(self) -> None:
         # Size the message to its content, capped to the room the
         # source link + brand leave over, so the source sits right
