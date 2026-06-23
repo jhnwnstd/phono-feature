@@ -816,7 +816,11 @@ def group_segments(
         )
 
     def is_member(
-        group_name: str, seg_feats: dict[str, str], spec: dict[str, str]
+        group_name: str,
+        seg_feats: dict[str, str],
+        spec: dict[str, str],
+        is_vowel_phoneme: bool,
+        is_tone_phoneme: bool,
     ) -> bool:
         """Test whether a segment matches a group spec.
 
@@ -855,18 +859,11 @@ def group_segments(
         membership (e.g. Nasals). That matches the IPA convention
         and the bundled-inventory snapshot.
         """
-        is_vowel_phoneme = (
-            seg_feats.get("syllabic", "0") == "+"
-            and seg_feats.get("consonantal", "0") != "+"
-        )
-        # Tone-phoneme: positive tone with no consonantal /
-        # syllabic major-class anchor. Suprasegmental by nature so
-        # never carries a segmental class membership.
-        is_tone_phoneme = (
-            seg_feats.get("hightone", "0") == "+"
-            and seg_feats.get("consonantal", "0") != "+"
-            and seg_feats.get("syllabic", "0") != "+"
-        )
+        # ``is_vowel_phoneme`` / ``is_tone_phoneme`` are per-SEGMENT
+        # major-class facts (independent of group / spec), so the
+        # caller computes them once per segment and threads them in
+        # rather than this matcher recomputing them for every group
+        # it is tested against.
         if group_name == "Vowels":
             if not is_vowel_phoneme:
                 return False
@@ -897,6 +894,18 @@ def group_segments(
         """
         if seg_feats.get("click", "0") == "+":
             return "Clicks"
+        # Per-segment major-class facts: computed ONCE here and passed
+        # into every ``is_member`` test for this segment (the matcher
+        # used to recompute them per group, the hottest redundancy on
+        # the inventory-switch path).
+        consonantal = seg_feats.get("consonantal", "0")
+        syllabic = seg_feats.get("syllabic", "0")
+        is_vowel_phoneme = syllabic == "+" and consonantal != "+"
+        is_tone_phoneme = (
+            seg_feats.get("hightone", "0") == "+"
+            and consonantal != "+"
+            and syllabic != "+"
+        )
         matches = [
             (
                 name,
@@ -904,7 +913,9 @@ def group_segments(
                 sum(1 for f in spec if f in active_features),
             )
             for name, spec in PRIMARY_GROUPS
-            if is_member(name, seg_feats, spec)
+            if is_member(
+                name, seg_feats, spec, is_vowel_phoneme, is_tone_phoneme
+            )
         ]
         if not matches:
             return ""

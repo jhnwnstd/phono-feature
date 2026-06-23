@@ -274,20 +274,26 @@ def normalize_feature_bundle(
     catches the same situation at parse time so engine consumers
     don't have to defend against the collision downstream.
     """
-    groups: dict[str, list[str]] = {}
-    for k in feat_dict:
-        groups.setdefault(normalize_feature_key(k), []).append(k)
-    collisions = {
-        canonical: originals
-        for canonical, originals in groups.items()
-        if len(originals) > 1
-    }
-    if collisions:
-        raise AliasCollisionError(collisions)
-    return {
-        canonical: feat_dict[originals[0]]
-        for canonical, originals in groups.items()
-    }
+    # Single pass: fold each key and keep the first value per canonical
+    # key. The common case (no two keys collapsing to one canonical) is
+    # one dict build with no intermediate list-of-originals allocation.
+    # This sits on the interactive inventory-switch path (called once
+    # per segment per engine build), so the fast path matters.
+    out: dict[str, str] = {}
+    for k, v in feat_dict.items():
+        canonical = normalize_feature_key(k)
+        if canonical in out:
+            # Rare collision: two distinct input keys fold to one
+            # canonical key. Re-scan to name every colliding group so
+            # the raised error matches the exhaustive form exactly.
+            groups: dict[str, list[str]] = {}
+            for kk in feat_dict:
+                groups.setdefault(normalize_feature_key(kk), []).append(kk)
+            raise AliasCollisionError(
+                {c: o for c, o in groups.items() if len(o) > 1}
+            )
+        out[canonical] = v
+    return out
 
 
 # Domain-specific identity folding for segment labels. ``r`` is
