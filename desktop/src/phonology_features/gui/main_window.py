@@ -497,11 +497,12 @@ class MainWindow(QMainWindow):
         )
         self.setStatusBar(self.status)
         # The bottom border shows ONLY the loaded-inventory summary
-        # (name, segment x feature counts, Source link for PHOIBLE).
-        # The "select an inventory" prompt lives in the segment pane's
-        # own hint label, so the status bar starts empty rather than
-        # echoing a mode hint here.
-        self.status.showMessage("")
+        # (name, segment x feature counts, Source link for PHOIBLE),
+        # set via ``set_summary`` so it persists across mode toggles,
+        # focus, and hover. The "select an inventory" prompt lives in
+        # the segment pane's own hint label, so the status bar starts
+        # empty rather than echoing a mode hint here.
+        self.status.set_summary("")
 
     def _build_segment_panel(self, parent: QWidget | None = None) -> QFrame:
         """Build the left (segment) panel: title, Clear button, scroll
@@ -964,7 +965,7 @@ class MainWindow(QMainWindow):
                 inventory.name,
                 note,
             )
-        self.status.showMessage(msg)
+        self.status.set_summary(msg)
         # Clear any path-based registration so the inventory combo
         # does not point at a stale file when the user later picks
         # a bundled entry, then cache + select the PHOIBLE entry so
@@ -1097,7 +1098,7 @@ class MainWindow(QMainWindow):
         # dropdown instead.
         for note in inventory.advisories:
             _log.info("inventory advisory: %s: %s", fname, note)
-        self.status.showMessage(base_msg)
+        self.status.set_summary(base_msg)
         self._inv_dir.register_loaded_path(path)
         self._populate_after_load()
 
@@ -1586,7 +1587,10 @@ class MainWindow(QMainWindow):
         if clipboard is None or status is None:
             return
         clipboard.setText(segment)
-        status.showMessage(clipboard_copy_message(segment), 0)
+        # Transient confirmation: shows briefly, then auto-reverts to
+        # the persistent inventory summary so copying never leaves the
+        # bottom border stuck on "Copied ...".
+        status.showMessage(clipboard_copy_message(segment), 2500)
 
     def _on_segment_pressed(self) -> None:
         """Mouse press on a segment button: switch to seg mode before

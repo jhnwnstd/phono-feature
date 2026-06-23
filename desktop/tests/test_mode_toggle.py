@@ -231,3 +231,60 @@ def test_mode_switch_preserves_features_tab(window, qapp):
     assert window.analysis.tabs.currentIndex() == (
         window.analysis._TAB_FEATURES_IDX
     ), "Round-trip back to SEG must still preserve Features tab"
+
+
+# ---------------------------------------------------------------------------
+# Status-bar persistence: the bottom-border inventory summary is the
+# single source of truth for that bar and must survive mode toggles,
+# hover/focus StatusTip events, and transient messages. These guard the
+# class of "the summary vanished when I toggled / copied / hovered" bugs.
+# ---------------------------------------------------------------------------
+
+
+def test_status_summary_survives_mode_toggle(window):
+    """The loaded-inventory summary stays put across a seg<->feat
+    toggle. Regression: the mode switch used to push the per-mode hint
+    (empty for FEAT) into the bar, blanking the summary."""
+    bar = window.status
+    summary = bar._summary
+    assert summary, "an inventory summary should be set after load"
+    window._set_mode("feat_to_seg")
+    assert bar._full_message == summary, "FEAT toggle blanked the summary"
+    window._set_mode("seg_to_feat")
+    assert bar._full_message == summary, "SEG toggle lost the summary"
+
+
+def test_status_summary_survives_empty_status_tip(window):
+    """A Qt StatusTip with empty text (posted on hover-leave / focus
+    change) must not blank the summary."""
+    from PyQt6.QtGui import QStatusTipEvent
+    from PyQt6.QtWidgets import QApplication
+
+    bar = window.status
+    summary = bar._summary
+    assert summary
+    QApplication.sendEvent(bar, QStatusTipEvent(""))
+    assert bar._full_message == summary, "an empty StatusTip blanked the bar"
+
+
+def test_transient_message_reverts_to_summary(window):
+    """A transient message shows over the summary, then reverts to it
+    instead of leaving the bar stuck on the transient text."""
+    bar = window.status
+    summary = bar._summary
+    assert summary
+    bar.showMessage("Copied /a/", 0)
+    assert bar._full_message == "Copied /a/"
+    bar._revert_to_summary()
+    assert bar._full_message == summary, "did not revert to the summary"
+
+
+def test_new_summary_replaces_sticky_transient(window):
+    """A fresh load (set_summary) cancels any transient still on
+    screen, so the new inventory line wins immediately."""
+    bar = window.status
+    bar.showMessage("Cannot load foo.json: bad", 0)
+    assert bar._full_message.startswith("Cannot load")
+    new = "English [X]: 44 segments × 37 features"
+    bar.set_summary(new)
+    assert bar._full_message == new

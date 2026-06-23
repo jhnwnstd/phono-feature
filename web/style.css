@@ -391,17 +391,35 @@ dialog input[type="text"]:focus-visible {
 .phoible-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
   padding: var(--space-md);
   border: var(--border-std) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg);
-  /* Take the dialog's slack and scroll internally so the fixed-height
-     window never grows; ``min-height: 0`` lets this flex child shrink
-     below its content so the overflow actually scrolls. */
+  /* Take the dialog's slack but do NOT scroll here: the panel is a
+     plain container. The single scroll region is the source-card list
+     (#phoible-radios) below, which shrinks to fit and scrolls on its
+     own. A panel-level overflow would stack a second, redundant
+     scrollbar on top of that nested one. ``min-height: 0`` lets this
+     flex child shrink so its children can be height-constrained. */
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+}
+/* The active region fills the panel and lays its sections out with
+   ONE consistent gap, replacing the old plain-block stack whose
+   sections butted together unevenly. */
+.phoible-active {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  flex: 1;
+  min-height: 0;
+}
+/* The author ``display: flex`` above beats the UA's
+   ``[hidden] { display: none }`` (equal specificity, later wins), so
+   restate the hidden rule or the region would show before the bridge
+   is ready. Mirrors the ``.phoible-loading[hidden]`` guard. */
+.phoible-active[hidden] {
+  display: none;
 }
 .phoible-loading {
   color: var(--text-dim);
@@ -439,6 +457,13 @@ dialog input[type="text"]:focus-visible {
   border: 0;
   padding: 0;
   margin: 0;
+  /* Flex column so the source-card list inside can be the single
+     shrink-and-scroll region: the legend stays fixed and
+     #phoible-radios takes the remaining height. ``min-height: 0``
+     lets it shrink below its content so the list actually scrolls. */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .phoible-fieldset > legend {
   /* Match the existing dialog-label visual weight. */
@@ -466,6 +491,10 @@ dialog input[type="text"]:focus-visible {
   list-style: none;
   margin: 0;
   padding: 4px 0;
+  /* Fixed slot: the search dropdown scrolls within its own 180 px cap
+     and never grows the dialog. ``flex: 0 0 auto`` keeps it from
+     shrinking when the source list below competes for height. */
+  flex: 0 0 auto;
   max-height: 180px;
   overflow-y: auto;
   border: var(--border-std) solid var(--border);
@@ -502,7 +531,14 @@ dialog input[type="text"]:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  max-height: 240px;
+  /* The ONE scroll region for source cards. It sits at its natural
+     height when a language has few sources (no scrollbar, slack falls
+     below the preview) and shrinks + scrolls when a language has many,
+     so the fixed-height dialog never needs a second outer scrollbar.
+     ``min-height: 0`` is what lets the flex item shrink below its
+     content height. */
+  flex: 0 1 auto;
+  min-height: 0;
   overflow-y: auto;
   /* Match the input + result list radius so the chooser feels like
      one continuous control rather than a stack of detached pills. */
@@ -545,6 +581,11 @@ dialog input[type="text"]:focus-visible {
 }
 .phoible-source-name {
   font-weight: 600;
+  /* A long source name wraps within the card instead of overflowing
+     or shoving the segment count off the row. ``min-width: 0`` lets
+     it shrink inside the flex header. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .phoible-source-segs {
   color: var(--text-dim);
@@ -565,7 +606,12 @@ dialog input[type="text"]:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  padding-top: var(--space-sm);
+  /* Fixed slot pinned below the source list; the divider line plus a
+     small inset separate it from the cards. The inter-section gap
+     above comes from the parent's flex ``gap``, so only a modest
+     padding sits between the divider and the summary text. */
+  flex: 0 0 auto;
+  padding-top: var(--space-xs);
   border-top: var(--border-std) solid var(--border);
 }
 .phoible-summary {

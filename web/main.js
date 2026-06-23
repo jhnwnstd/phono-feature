@@ -526,11 +526,16 @@ async function bootPyodide({ prerendered = false } = {}) {
     mark("inventory:start");
     const defaultItem = pickDefaultInventory(BUNDLED_INVENTORIES);
     if (prerendered) {
-        // DOM is already populated by applyBootstrap; just sync the
-        // engine state so subsequent bridge calls operate on a
-        // matching inventory.
+        // DOM is already populated by applyBootstrap, so we don't
+        // re-render the panels; we sync the engine state AND reflect
+        // the loaded inventory in the status bar. Without the latter
+        // the "Almost ready..." boot placeholder set above would
+        // linger even though an inventory is on screen (the
+        // non-prerendered path sets it via loadInventoryText).
         const text = await fetchInventoryText(defaultItem.file);
-        callBridge("load_inventory_json", text, defaultItem.label);
+        const info = callBridge("load_inventory_json", text, defaultItem.label);
+        setInventoryStatus(info);
+        setStatusSourceLink(info.source_url);
         const hasPending =
             state.selected_segments.length > 0
             || Object.keys(state.selected_features).length > 0;
@@ -544,8 +549,10 @@ async function bootPyodide({ prerendered = false } = {}) {
     // non-prerendered path hides it here once the DOM is ready.
     nodes.loadingOverlay.classList.add("hidden");
     // The status bar shows ONLY the loaded-inventory summary, which
-    // ``loadBundledInventory`` above already set; mode hints live in
-    // the analysis pane, not the bottom border.
+    // both boot paths above set via ``setInventoryStatus`` (the
+    // prerendered branch directly, the other through
+    // loadBundledInventory). Mode hints live in the analysis pane,
+    // not the bottom border.
 
     mark("boot:end");
     measure("Manifest fetch", "manifest:start", "manifest:end");
@@ -775,18 +782,26 @@ function _applyProvenanceChip(provenance) {
     chip.hidden = false;
 }
 
+/** Set the bottom-border status to the loaded-inventory summary
+ *  (name, segment x feature counts). The single source of truth for
+ *  the inventory line: every load path routes through here so the bar
+ *  cannot diverge in format or linger on a boot placeholder. */
+function setInventoryStatus(info) {
+    const loadedTpl = STATUS_TEXT.inventory_loaded_template
+        || "{name}: {n_segments} segments × {n_features} features";
+    setStatus(
+        loadedTpl
+            .replace("{name}", info.name)
+            .replace("{n_segments}", String(info.segments.length))
+            .replace("{n_features}", String(info.features.length))
+    );
+}
+
 async function loadInventoryText(text, sourceLabel) {
     try {
         const info = callBridge("load_inventory_json", text, sourceLabel);
         applyInventoryInfo(info);
-        const loadedTpl = STATUS_TEXT.inventory_loaded_template
-            || "{name}: {n_segments} segments × {n_features} features";
-        setStatus(
-            loadedTpl
-                .replace("{name}", info.name)
-                .replace("{n_segments}", String(info.segments.length))
-                .replace("{n_features}", String(info.features.length))
-        );
+        setInventoryStatus(info);
         prewarmCommonAnalyses();
     } catch (e) {
         const issues = [bridgeErrorMessage(e, "unknown error")];

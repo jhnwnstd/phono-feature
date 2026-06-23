@@ -17,7 +17,6 @@ from PyQt6.QtCore import QTimer
 from phonology_features.gui.widgets import SegmentState
 from phonology_shared.presentation.mode_logic import (
     Mode,
-    mode_status_text,
     project_mode_transition,
 )
 from phonology_shared.presentation.palette import C
@@ -61,10 +60,13 @@ class ModeController:
         Split into two stages so the mode-toggle click feels snappy:
 
         * **Visible stage**: panel chrome, row interactivity,
-          segment-button states, feature-row states, status text.
-          Everything that paints the new mode's framing. Held inside
-          a single ``setUpdatesEnabled(False/True)`` so the user sees
-          one clean swap, not a flicker as each piece changes.
+          segment-button states, feature-row states. Everything that
+          paints the new mode's framing. Held inside a single
+          ``setUpdatesEnabled(False/True)`` so the user sees one clean
+          swap, not a flicker as each piece changes. The status bar is
+          deliberately NOT touched here: it shows only the persistent
+          inventory summary, and mode hints live in the segment pane's
+          own hint label, not the bottom border.
         * **Deferred stage**: ``refresh_analysis``, which re-renders
           the analysis pane (heavy ``setHtml`` work, ~30 ms on the
           slower direction). Posted to the next event-loop tick via
@@ -85,7 +87,6 @@ class ModeController:
             self.apply_row_interactivity()
             self.restore_segment_selection()
             self.restore_feature_selection()
-            self.update_status_message()
         QTimer.singleShot(0, self._deferred_refresh_analysis)
 
     def _deferred_refresh_analysis(self) -> None:
@@ -257,9 +258,3 @@ class ModeController:
             row.set_interactive(not is_s2f)
         self._w._clear_segments(silent=True)
         self._w._clear_features(silent=True)
-
-    def update_status_message(self) -> None:
-        """Show the per-mode helper text in the status bar."""
-        self._w.status.showMessage(
-            mode_status_text(self.mode, has_engine=self._w.engine is not None)
-        )

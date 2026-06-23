@@ -14,7 +14,7 @@ swap).
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, QRectF, Qt
+from PyQt6.QtCore import QEvent, QRectF, Qt, QTimer
 from PyQt6.QtGui import (
     QColor,
     QEnterEvent,
@@ -111,6 +111,17 @@ class _BrandedStatusBar(QStatusBar):
         # sized to the space the brand leaves over (see
         # ``_update_elided_message``).
         self._full_message = ""
+        # The persistent inventory summary: the one line the bar shows
+        # by default. Transient messages (clipboard feedback, errors,
+        # and Qt ``StatusTip`` hover events) float above it and revert
+        # back to it, so the summary is the single source of truth for
+        # the bottom-border text and can never be left stranded blank.
+        self._summary = ""
+        # Single-shot timer that reverts a timed transient message to
+        # the summary once it elapses.
+        self._revert_timer = QTimer(self)
+        self._revert_timer.setSingleShot(True)
+        self._revert_timer.timeout.connect(self._revert_to_summary)
         self._message_label = QLabel("", self)
         self._message_label.setFont(self._FONT)
         self._message_label.setAlignment(
@@ -191,12 +202,50 @@ class _BrandedStatusBar(QStatusBar):
         link_palette.setColor(QPalette.ColorRole.Link, QColor(C["accent"]))
         self._source_link.setPalette(link_palette)
 
-    def showMessage(self, text: str, timeout: int = 0) -> None:  # type: ignore[override]
-        """Override that doesn't call super() (which would hide
-        left-section widgets). ``timeout`` is ignored; the app never
-        uses auto-clear. The full text lives in the tooltip; the
-        label shows an elided view fitted to the available width.
+    def set_summary(self, text: str) -> None:
+        """Set the persistent inventory summary, the bar's default
+        line. It survives mode toggles, focus changes, hover, and
+        transient messages, all of which fall back to it. This is the
+        only method that writes a lasting bottom-border message; a
+        successful load calls it and immediately cancels any transient
+        message still on screen.
         """
+        self._summary = text or ""
+        self._revert_timer.stop()
+        self._show(self._summary)
+
+    def showMessage(  # type: ignore[override]
+        self, text: str = "", timeout: int = 0
+    ) -> None:
+        """Show a TRANSIENT message over the persistent summary.
+
+        Deliberately does not call ``super()`` (which would hide the
+        brand + source widgets). Empty ``text`` reverts to the summary,
+        so a Qt ``StatusTip`` (posted with an empty string when the
+        pointer leaves a widget, and the historic cause of the bar
+        going blank on a pane toggle) or an explicit clear can never
+        strand the bar. A positive ``timeout`` (ms) auto-reverts to the
+        summary; ``timeout == 0`` keeps the message until the next
+        summary set or empty call (sticky load errors use this).
+        """
+        text = text or ""
+        if not text:
+            self._revert_timer.stop()
+            self._show(self._summary)
+            return
+        self._show(text)
+        if timeout > 0:
+            self._revert_timer.start(timeout)
+        else:
+            self._revert_timer.stop()
+
+    def _revert_to_summary(self) -> None:
+        self._show(self._summary)
+
+    def _show(self, text: str) -> None:
+        """Render ``text`` into the managed label (elided to fit). The
+        full text lives in the tooltip; the label shows an elided view
+        fitted to the available width."""
         self._full_message = text
         self._message_label.setToolTip(text)
         self._update_elided_message()

@@ -71,19 +71,22 @@ COL_LABELS: tuple[str, ...] = ("Front", "Central", "Back")
 
 # Normalized abstract-vowel-space coordinates exposed on
 # :py:class:`phonology_shared.chart.vowels.VowelPlacement`. Seven
-# rows distributed at uniform 0.14 spacing across [0.08, 0.92] so
+# rows distributed at uniform 0.15 spacing across [0.05, 0.95] so
 # the top button at Close and the bottom button at Open never clip
 # against the data area's top or bottom edge, and the silhouette has
-# visible padding above and below the cells. ``Mid`` sits midway at
+# a small visible padding above and below the cells. The padding is
+# deliberately modest (0.05, not a larger fraction) so the trapezoid
+# top sits close to the Front / Central / Back column labels rather
+# than floating a wide empty band below them. ``Mid`` sits midway at
 # 0.50 between Close-mid and Open-mid.
 _HEIGHT_Y: dict[str, float] = {
-    "Close": 0.08,
-    "Near-close": 0.22,
-    "Close-mid": 0.36,
+    "Close": 0.05,
+    "Near-close": 0.20,
+    "Close-mid": 0.35,
     "Mid": 0.50,
-    "Open-mid": 0.64,
-    "Near-open": 0.78,
-    "Open": 0.92,
+    "Open-mid": 0.65,
+    "Near-open": 0.80,
+    "Open": 0.95,
 }
 
 
