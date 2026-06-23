@@ -3278,11 +3278,12 @@ function wirePhoiblePicker() {
             highlightedIndex = -1;
             return;
         }
-        // Clamp + wrap. Letting ArrowDown past the end roll to the
-        // top is the convention in dropdown menus; same for
-        // ArrowUp past the start.
-        if (newIndex < 0) newIndex = items.length - 1;
-        if (newIndex >= items.length) newIndex = 0;
+        // Clamp at the ends; no wrap. Rolling past the last item back
+        // to the first (and vice versa) is disorienting when scanning
+        // a result list, so ArrowDown stops at the bottom and ArrowUp
+        // stops at the top.
+        if (newIndex < 0) newIndex = 0;
+        if (newIndex >= items.length) newIndex = items.length - 1;
         if (highlightedIndex >= 0 && highlightedIndex < items.length) {
             items[highlightedIndex].classList.remove("is-highlighted");
             items[highlightedIndex].setAttribute("aria-selected", "false");
@@ -3371,10 +3372,14 @@ function wirePhoiblePicker() {
             loadBtn.disabled = true;
             return;
         }
-        const { descriptor, segments, segment_total, feature_count } = preview;
+        const { segments, segment_total, feature_count } = preview;
+        // Caption only what the selected source card does NOT already
+        // show. The card carries the source name, segment count, and
+        // dialect, so repeating "N segments"/dialect here would print
+        // the same facts twice; the feature count is the one datum the
+        // card lacks, and "Sample segments" frames the chips below.
         nodes.phoibleSummary.textContent =
-            `${segment_total} segments · ${feature_count} features`
-            + (descriptor.dialect ? ` · ${descriptor.dialect}` : "");
+            `Sample segments · ${feature_count} features`;
         const ul = nodes.phoibleSegments;
         ul.innerHTML = "";
         for (const sym of segments) {
@@ -3463,11 +3468,11 @@ function wirePhoiblePicker() {
     });
 
     // Keyboard navigation for the autocomplete dropdown. ArrowDown
-    // and ArrowUp wrap through the result list; Enter picks the
-    // highlighted entry (or the first one when nothing is yet
-    // highlighted but results are visible); Escape closes the
-    // dropdown without committing. Default Tab behaviour is kept
-    // so the user can leave the dropdown open and tab to the
+    // and ArrowUp move through the result list and stop at the ends
+    // (no wrap); Enter picks the highlighted entry (or the first one
+    // when nothing is yet highlighted but results are visible); Escape
+    // closes the dropdown without committing. Default Tab behaviour is
+    // kept so the user can leave the dropdown open and tab to the
     // inventory radios if they prefer.
     searchInput.addEventListener("keydown", (ev) => {
         const ul = nodes.phoibleResults;
@@ -3497,6 +3502,41 @@ function wirePhoiblePicker() {
             ul.hidden = true;
             highlightedIndex = -1;
         }
+    });
+
+    // Source-card navigation. A native radio group WRAPS on the arrow
+    // keys (past the last source rolls to the first), which the user
+    // found disorienting when selecting an inventory. Intercept the
+    // arrows and clamp at the ends instead, moving + checking +
+    // previewing the target source. ``preventDefault`` suppresses the
+    // browser's built-in wrapping radio navigation.
+    nodes.phoibleRadios.addEventListener("keydown", (ev) => {
+        if (
+            ev.key !== "ArrowDown" && ev.key !== "ArrowUp"
+            && ev.key !== "ArrowLeft" && ev.key !== "ArrowRight"
+        ) {
+            return;
+        }
+        const radios = Array.from(
+            nodes.phoibleRadios.querySelectorAll('input[type="radio"]')
+        );
+        if (radios.length < 2) return;
+        ev.preventDefault();
+        let idx = radios.findIndex(
+            (r) => r.checked || r === document.activeElement
+        );
+        if (idx < 0) idx = 0;
+        const forward = ev.key === "ArrowDown" || ev.key === "ArrowRight";
+        const next = forward
+            ? Math.min(idx + 1, radios.length - 1)
+            : Math.max(idx - 1, 0);
+        if (next === idx) return;
+        const radio = radios[next];
+        // Programmatic ``checked`` does not fire ``change``, so drive
+        // the preview explicitly (same path the change handler uses).
+        radio.checked = true;
+        radio.focus();
+        pickInventory(radio.value);
     });
 
     nodes.phoibleCancel.addEventListener("click", close);

@@ -301,29 +301,35 @@
         <ul id="phoible-results" class="phoible-results" hidden
             role="listbox"></ul>
 
-        <fieldset id="phoible-inventories" class="phoible-fieldset" hidden
-                  role="radiogroup">
-          <legend>Inventory source</legend>
-          <div id="phoible-radios"></div>
-        </fieldset>
+        <!-- A plain div, not a <fieldset>: fieldsets have a long
+             standing flexbox bug where they refuse to shrink their
+             content, which broke the source list's scroll region. The
+             radiogroup semantics are preserved with role + the label
+             wired via aria-labelledby. -->
+        <div id="phoible-inventories" class="phoible-fieldset" hidden>
+          <div class="phoible-src-label" id="phoible-src-label">
+            Inventory source
+          </div>
+          <div id="phoible-radios" role="radiogroup"
+               aria-labelledby="phoible-src-label"></div>
+        </div>
 
         <div id="phoible-preview" hidden class="phoible-preview">
           <div id="phoible-summary" class="phoible-summary"
                aria-live="polite"></div>
           <ul id="phoible-segments" class="phoible-segments"
               aria-label="Sample segments"></ul>
-          <div class="phoible-citation">
-            <a id="phoible-cite" href="PHOIBLE_LICENSE.txt"
-               target="_blank" rel="noopener">
-              Powered by PHOIBLE 2.0
-            </a>
-          </div>
         </div>
       </div>
     </div>
 
     <div class="dialog-error" id="phoible-error" role="alert"></div>
     <div class="dialog-actions">
+      <!-- Attribution anchored in the footer so it stays in one fixed
+           place at the bottom rather than riding the preview, which
+           appears and shifts as the user picks a source. -->
+      <a id="phoible-cite" class="phoible-cite" href="PHOIBLE_LICENSE.txt"
+         target="_blank" rel="noopener">Powered by PHOIBLE 2.0</a>
       <button type="button" id="phoible-cancel" value="cancel">Cancel</button>
       <button type="submit" id="phoible-load" value="load" disabled>
         Load inventory

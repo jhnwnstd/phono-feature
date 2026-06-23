@@ -369,22 +369,27 @@ dialog input[type="text"]:focus-visible {
    pattern as ``.setup-dialog``. */
 
 .phoible-picker {
-  /* Fixed width + height so selecting different inventory sources
-     (which swaps the preview summary + segment list) never resizes
-     the dialog. The variable regions (results, source cards, the
-     segment preview) each scroll within their own fixed slot, so a
-     large inventory scrolls instead of growing the window. Clamped
-     to the viewport so it still fits small screens. */
+  /* Fixed WIDTH, content-driven HEIGHT capped at a max. The dialog is
+     exactly as tall as its content (no dead space when a language has
+     few sources) and stops growing at the cap, after which the source
+     list scrolls. Switching SOURCES never resizes it (the preview is a
+     fixed height); only switching LANGUAGES, which changes the source
+     count, does, and that is a deliberate action. The dialog is the
+     flex column so its single child form can shrink and hand the
+     overflow to the one inner scroll region (#phoible-radios). */
   width: min(600px, calc(100vw - var(--space-xl) * 2));
-  height: min(560px, calc(100vh - var(--space-xl) * 2));
+  max-height: min(560px, calc(100vh - var(--space-xl) * 2));
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
-/* The form fills the fixed-height dialog; the panel takes the slack
-   and its inner sections scroll rather than growing the dialog. */
 .phoible-picker > #phoible-picker-form {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* ``min-height: 0`` lets the form shrink below its content when the
+     dialog hits its cap, so the overflow flows into the source list's
+     scroll region rather than past the dialog edge. */
+  min-height: 0;
   box-sizing: border-box;
 }
 
@@ -395,23 +400,21 @@ dialog input[type="text"]:focus-visible {
   border: var(--border-std) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg);
-  /* Take the dialog's slack but do NOT scroll here: the panel is a
-     plain container. The single scroll region is the source-card list
-     (#phoible-radios) below, which shrinks to fit and scrolls on its
-     own. A panel-level overflow would stack a second, redundant
-     scrollbar on top of that nested one. ``min-height: 0`` lets this
-     flex child shrink so its children can be height-constrained. */
-  flex: 1;
+  /* Sizes to content, but shrinks (``flex: 0 1 auto`` + ``min-height:
+     0``) when the dialog hits its cap so the overflow reaches the one
+     scroll region below (#phoible-radios). No panel-level overflow: a
+     second scrollbar on top of the list's would be redundant. */
+  flex: 0 1 auto;
   min-height: 0;
 }
-/* The active region fills the panel and lays its sections out with
-   ONE consistent gap, replacing the old plain-block stack whose
-   sections butted together unevenly. */
+/* The active region lays its sections out with ONE consistent gap,
+   replacing the old plain-block stack whose sections butted together
+   unevenly. ``min-height: 0`` keeps the shrink chain intact down to
+   the source list. */
 .phoible-active {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  flex: 1;
   min-height: 0;
 }
 /* The author ``display: flex`` above beats the UA's
@@ -451,16 +454,11 @@ dialog input[type="text"]:focus-visible {
   to { transform: rotate(360deg); }
 }
 .phoible-fieldset {
-  /* Strip the default fieldset chrome so the layout is identical
-     to the prior div-with-role version; the fieldset/legend pair
-     is here for the screen-reader semantics, not the borders. */
-  border: 0;
-  padding: 0;
-  margin: 0;
-  /* Flex column so the source-card list inside can be the single
-     shrink-and-scroll region: the legend stays fixed and
-     #phoible-radios takes the remaining height. ``min-height: 0``
-     lets it shrink below its content so the list actually scrolls. */
+  /* The source-list group (a plain div, not a fieldset). Flex column
+     so the label stays fixed and the list (#phoible-radios) is the one
+     shrink-and-scroll region. ``min-height: 0`` lets it shrink below
+     its content so, when the dialog is capped, the list scrolls
+     instead of the dialog overflowing. */
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -472,11 +470,10 @@ dialog input[type="text"]:focus-visible {
 .phoible-fieldset[hidden] {
   display: none;
 }
-.phoible-fieldset > legend {
+.phoible-src-label {
   /* Match the existing dialog-label visual weight. */
   font-weight: 600;
   color: var(--text);
-  padding: 0;
   margin-bottom: var(--space-xs);
 }
 .phoible-panel input[type="text"] {
@@ -538,12 +535,12 @@ dialog input[type="text"]:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  /* The ONE scroll region for source cards. It sits at its natural
-     height when a language has few sources (no scrollbar, slack falls
-     below the preview) and shrinks + scrolls when a language has many,
-     so the fixed-height dialog never needs a second outer scrollbar.
-     ``min-height: 0`` is what lets the flex item shrink below its
-     content height. */
+  /* The ONE scroll region for source cards. ``flex: 0 1 auto`` sizes
+     it to its cards (so a language with few sources makes a short
+     dialog, no dead space) and lets it shrink + scroll when a language
+     has many sources and the dialog is capped, so the dialog never
+     needs a second outer scrollbar. ``min-height: 0`` is what lets the
+     flex item shrink below its content height. */
   flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -628,9 +625,12 @@ dialog input[type="text"]:focus-visible {
   display: none;
 }
 .phoible-summary {
-  font-weight: bold;
-  /* One line, elided: a long dialect-bearing name must not wrap to a
-     second line and nudge the fixed-height preview. */
+  /* A short dim caption ("Sample of the inventory · N features"); the
+     selected source card already carries the segment count, dialect,
+     and source name, so this line adds only what the card does not
+     (the feature count) and never repeats it. One line, elided. */
+  color: var(--text-dim);
+  font-size: 0.85em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -659,18 +659,27 @@ dialog input[type="text"]:focus-visible {
 .phoible-segments li {
   display: inline;
 }
-.phoible-citation {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-md);
+/* The shared ``.dialog-error`` reserves 18 px so a late error does not
+   jolt the layout. In this dialog that reserve is dead space at the
+   bottom whenever there is no error (the common case), so collapse it
+   while empty; it expands to fit when an error is actually shown. */
+#phoible-picker .dialog-error:empty {
+  min-height: 0;
+}
+/* PHOIBLE attribution pinned in the dialog footer. ``margin-right:
+   auto`` parks it at the left while the Cancel / Load buttons stay
+   right (the shared ``.dialog-actions`` is ``justify-content:
+   flex-end``). Dim by default so it reads as a footnote, not a control
+   competing with the Load button. */
+.phoible-cite {
+  margin-right: auto;
+  align-self: center;
   font-size: 0.85em;
   color: var(--text-dim);
-}
-.phoible-citation a {
-  color: var(--accent);
   text-decoration: none;
 }
-.phoible-citation a:hover {
+.phoible-cite:hover {
+  color: var(--accent);
   text-decoration: underline;
 }
 

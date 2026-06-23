@@ -44,6 +44,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -153,7 +154,13 @@ class PhoibleDialog(QDialog):
         layout.setContentsMargins(14, 14, 14, 14)
 
         layout.addWidget(self._build_search_row())
-        layout.addWidget(self._build_results_list(), stretch=1)
+        # The results list sizes to its matches (no stretch); the
+        # source list takes all the spare height. Previously both got
+        # ``stretch=1``, so the autocomplete grabbed half the dialog and
+        # sat near-empty (one match in a tall box) once a language was
+        # picked. Now the spare space goes to the source list, the part
+        # the user actually works in.
+        layout.addWidget(self._build_results_list())
         layout.addWidget(self._build_source_section(), stretch=1)
         layout.addWidget(self._build_preview_section())
         layout.addWidget(self._build_buttons())
@@ -180,7 +187,19 @@ class PhoibleDialog(QDialog):
         wrap_layout.setContentsMargins(0, 0, 0, 0)
         self._results = QListWidget(wrap)
         self._results.setFont(QFont("Noto Sans", 10))
-        self._results.setMinimumHeight(120)
+        # Size to the number of matches (so one match is a one-row box,
+        # not a tall empty pane) but never taller than ~6 rows, after
+        # which it scrolls. ``Maximum`` vertical policy keeps it at that
+        # content height; the source list below absorbs the spare space.
+        self._results.setSizeAdjustPolicy(
+            QListWidget.SizeAdjustPolicy.AdjustToContents
+        )
+        self._results.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum
+        )
+        self._results.setMaximumHeight(
+            self._results.fontMetrics().lineSpacing() * 6 + 8
+        )
         self._results.itemActivated.connect(self._on_language_activated)
         self._results.itemClicked.connect(self._on_language_activated)
         wrap_layout.addWidget(self._results)
@@ -383,13 +402,14 @@ class PhoibleDialog(QDialog):
         # counts and the materialization happens on Load.
         generated = self._provider.generate(inv_id)
         segments = list(generated.segments.keys())
-        summary_parts = [
-            f"{len(segments)} segments",
-            f"{len(generated.features)} features",
-        ]
-        if descriptor.dialect:
-            summary_parts.append(descriptor.dialect)
-        self._summary.setText("    ".join(summary_parts))
+        # Caption only what the selected source ROW does not already
+        # show. That row carries the source name, segment count, and
+        # dialect, so repeating them here would print the same facts
+        # twice; the feature count is the one datum the row lacks, and
+        # "Sample segments" frames the glyphs below.
+        self._summary.setText(
+            f"Sample segments · {len(generated.features)} features"
+        )
         sample = segments[:50]
         trail = ""
         if len(segments) > len(sample):
