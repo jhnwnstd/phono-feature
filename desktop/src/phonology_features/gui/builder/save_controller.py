@@ -258,7 +258,23 @@ class _SaveController(QObject):
                 # Disconnect raises TypeError if the signal-slot pair
                 # is no longer connected. Benign: nothing to clean up.
                 pass
-        return not self.save_in_flight
+        completed = not self.save_in_flight
+        if not completed:
+            # Timed out: the worker is still running (a stuck disk /
+            # network share) or died without emitting. Release the
+            # re-entrancy guard so the user is not locked out of saving
+            # for the rest of the session; without this, ``save_in_flight``
+            # stays True forever and every later save is silently
+            # rejected. A late ``save_finished`` is handled idempotently
+            # (it just re-clears the flag and emits ``save_drained`` into
+            # no listener).
+            _log.warning(
+                "save drain timed out after %d ms; releasing the "
+                "in-flight guard so saving is not locked out",
+                timeout_ms,
+            )
+            self.save_in_flight = False
+        return completed
 
     def check_unsaved(self) -> bool:
         """Return True if it's OK to discard changes (or there are

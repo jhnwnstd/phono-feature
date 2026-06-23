@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from PyQt6 import sip
 from PyQt6.QtCore import QTimer
 
 from phonology_features.gui.widgets import SegmentState
@@ -96,7 +97,16 @@ class ModeController:
         between scheduling and firing (rapid toggles); the
         ``refresh_analysis`` body already reads the live mode and
         selections so this is safe to call unconditionally.
+
+        The ``QTimer.singleShot`` that schedules this is fire-and-forget
+        and cannot be cancelled, so it can still fire one tick after the
+        window has been torn down (toggle mode, then immediately close).
+        ``refresh_analysis`` touches the window's widgets, so bail if
+        Qt has already deleted the underlying C++ object to avoid a
+        "wrapped C/C++ object has been deleted" crash on shutdown.
         """
+        if sip.isdeleted(self._w):
+            return
         self.refresh_analysis()
 
     def save_outgoing_state(self, target_mode: Mode | str) -> None:

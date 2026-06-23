@@ -990,11 +990,24 @@ class MainWindow(QMainWindow):
             self._builder.raise_()
             self._builder.activateWindow()
             return
-        # Drop any stale (closed-but-not-yet-deleted) reference
-        # before constructing the new builder. Without this the old
-        # instance's _save_finished connection lingers alongside the
-        # new one's, and a save fires the handler twice.
+        # Drop any stale (closed-but-not-yet-deleted) reference before
+        # constructing the new builder, and DISCONNECT its signals
+        # first. Without the disconnect: (a) a still-running save on the
+        # old builder could fire ``_on_builder_save_finished`` after the
+        # new builder is wired to the same slot; and (b) when Qt finally
+        # collects the deleteLater'd old builder, its ``destroyed`` would
+        # call ``_on_builder_destroyed`` and null out the reference to
+        # the NEW builder. Disconnecting both severs the old instance
+        # cleanly. Guarded because a signal may already be disconnected.
         if self._builder is not None:
+            for signal, slot in () if True else (
+                (self._builder._save_finished, self._on_builder_save_finished),
+                (self._builder.destroyed, self._on_builder_destroyed),
+            ):
+                try:
+                    signal.disconnect(slot)
+                except (TypeError, RuntimeError):
+                    pass
             self._builder.deleteLater()
             self._builder = None
 
@@ -1184,13 +1197,23 @@ class MainWindow(QMainWindow):
             self.vowel_chart_widget.clear()
             self.vowel_chart_widget.hide()
         self._seg_buttons = {**consonant_buttons, **vowel_buttons}
-        # Detach inactive pool entries (hide before setParent(None) so
-        # they don't briefly become top-level windows).
+        # Evict pool entries the new inventory does not use: detach them
+        # AND drop them from the pool so it cannot grow without bound.
+        # Without the drop, every unique segment ever loaded stays alive
+        # as a hidden orphaned button forever, so a long session of
+        # inventory loads (PHOIBLE browsing churns through thousands of
+        # distinct segments) leaks memory until the app degrades. Shared
+        # segments were already reused above while building the active
+        # set, so only the genuinely unused leftovers are pruned here.
+        # ``hide()`` before ``setParent(None)`` so a button never briefly
+        # becomes a top-level window; ``deleteLater`` frees it once the
+        # current event cycle unwinds.
         active = set(self._seg_buttons)
-        for sym, btn in self._seg_button_pool.items():
-            if sym not in active and btn.parent() is not None:
-                btn.hide()
-                btn.setParent(None)
+        for sym in [s for s in self._seg_button_pool if s not in active]:
+            btn = self._seg_button_pool.pop(sym)
+            btn.hide()
+            btn.setParent(None)
+            btn.deleteLater()
 
     def _get_or_create_seg_button(self, seg: str) -> SegmentButton:
         """Return a SegmentButton for ``seg``, creating it on first use.
@@ -1212,9 +1235,10 @@ class MainWindow(QMainWindow):
             btn.setAccessibleName(format_segment_accessible_label(seg))
             self._seg_button_pool[seg] = btn
             return btn
-        # Refresh theme on pool reuse: theme toggles skip orphaned
-        # entries, so a pooled button may carry stylesheets from a
-        # prior palette. No-op when already current.
+        # Refresh theme on pool reuse defensively: a button reused from
+        # the previously loaded inventory should already carry the
+        # current palette, but re-applying is a cheap no-op when current
+        # and guards against any missed toggle.
         btn.apply_theme()
         btn.setChecked(False)
         btn.set_state(SegmentState.DEFAULT)
