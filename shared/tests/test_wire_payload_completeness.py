@@ -6,13 +6,6 @@ The web app consumes the inventory summary via
 the JS silently reads ``undefined`` and the affected feature breaks
 without a test failing.
 
-Concrete prior incident: the dead-code audit (Round B) dropped
-``cell.is_diphthong`` from the cell wire dict. ``web/main.js:1833``
-still read it for the mode-toggle filter, which then silently
-treated every cell as a monophthong; the diphthong display mode
-showed an EMPTY chart on the web side until a visual audit caught
-it.
-
 This test pins the fields web/main.js reads from each list/dict in
 the wire payload. Any future refactor that drops one of these
 fields fails CI; the test failure points at the dropped field +
@@ -74,7 +67,6 @@ _EXPECTED_CELL_FIELDS = frozenset(
         "segs",
         "display_kind",
         "contrast_features",
-        "is_diphthong",
         "pair_shift_px",
         "nudge_px",
     }
@@ -83,8 +75,7 @@ _EXPECTED_CELL_FIELDS = frozenset(
 
 def test_cell_wire_dict_contains_every_field_web_reads() -> None:
     """The cells[] entries in the wire payload contain every
-    field ``web/main.js`` reads via ``cell.<name>``. Pre-fix this
-    test would have caught the missing ``is_diphthong`` field.
+    field ``web/main.js`` reads via ``cell.<name>``.
     """
     chart = _vowel_chart_summary_for("korean")
     cells = chart["cells"]
@@ -103,30 +94,6 @@ def test_cell_wire_dict_contains_every_field_web_reads() -> None:
         pytest.skip(
             f"cell wire dict has extra fields {extra!r}; update "
             f"_EXPECTED_CELL_FIELDS if these are intentional."
-        )
-
-
-def test_cell_is_diphthong_set_correctly_for_diphthong_inventory() -> None:
-    """End-to-end smoke for the critical bug: a bundled inventory
-    that contains diphthong-flagged cells must report
-    ``is_diphthong: true`` for those cells in the wire payload.
-
-    Korean PHOIBLE has the canonical diphthong set but isn't
-    bundled. The bundled korean inventory has no diphthongs
-    (vowel_secondary absent), so every cell should report
-    ``is_diphthong: false``, which still confirms the field
-    is present + serialised correctly.
-    """
-    chart = _vowel_chart_summary_for("korean")
-    cells = chart["cells"]
-    for cell in cells:
-        assert "is_diphthong" in cell, (
-            f"cell at row={cell.get('row')} col={cell.get('col')} "
-            f"missing is_diphthong field"
-        )
-        assert isinstance(cell["is_diphthong"], bool), (
-            f"is_diphthong must be a bool, got "
-            f"{type(cell['is_diphthong']).__name__}"
         )
 
 
@@ -252,46 +219,22 @@ def test_row_wire_dict_contains_every_field_web_reads() -> None:
 # Diphthong wire dict
 # ---------------------------------------------------------------------------
 
-_EXPECTED_DIPHTHONG_FIELDS = frozenset(
-    {
-        "segment",
-        "primary_row",
-        "primary_col",
-        "secondary_row",
-        "secondary_col",
-        "primary_chart_x",
-        "primary_chart_y",
-        "secondary_chart_x",
-        "secondary_chart_y",
-    }
-)
 
-
-def test_diphthong_wire_dict_shape_against_renderer() -> None:
-    """Diphthong arrow endpoint dict must match what
-    ``web/main.js`` ``_buildArrowsNow`` expects. The desktop
-    consumer reads the same shape from
-    ``geometry.diphthongs`` directly."""
-    # Bundled inventories don't have diphthongs (vowel_secondary
-    # is PHOIBLE-only); synthesize a tiny inventory by directly
-    # calling the geometry builder with a vowel_secondary map.
+def test_diphthong_wire_shape_is_list_of_segment_strings() -> None:
+    """``geometry.diphthongs`` (and its wire serialisation) is a plain
+    list of segment-name strings. Both UIs render those as chips below
+    the vowel space; there is no per-arrow endpoint dict anymore."""
     from phonology_shared.presentation.view_models import (
         _vowel_chart_summary,
     )
 
     inv = _load_bundled("spanish")
     engine = FeatureEngine(inv)
-    summary = _vowel_chart_summary(
-        engine, list(engine.grouped_segments.get("Vowels", []))
-    )
-    # Spanish has no diphthongs; the list is empty. Build a
-    # synthetic geometry to exercise the diphthong dict shape.
     vowels = list(engine.grouped_segments.get("Vowels", []))
     seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
-    # Pick two real Spanish vowels with distinct placements.
-    # /i/ (close-front) to /a/ (open-central) is a valid synthetic
-    # diphthong primary/secondary pair.
+    # Spanish has no diphthongs; inject a synthetic contour (/i/ -> /a/)
+    # so the list is non-empty and we can check the element type.
     synthetic_secondary = {}
     if "i" in seg_feats and "a" in seg_feats:
         synthetic_secondary["i"] = dict(seg_feats["a"])
@@ -303,29 +246,11 @@ def test_diphthong_wire_dict_shape_against_renderer() -> None:
             "synthetic diphthong was suppressed by degeneracy "
             "filter; check spanish vowel set"
         )
-    # Serialise via view_models so we test the wire path end-to-end.
-    summary2 = _vowel_chart_summary(engine, vowels)
-    # Use the geom directly to inspect the dict shape (view_models
-    # serialises only what is in geometry.diphthongs which we
-    # don't override). Confirm shape parity:
-    expected_keys = _EXPECTED_DIPHTHONG_FIELDS
-    d0 = geom.diphthongs[0]
-    actual_keys = set()
-    # Pull from the actual view_models serialisation by re-building
-    # an artificial summary; this is the equivalent dict shape
-    # the wire would carry.
-    from dataclasses import fields as dc_fields
-
-    for f in dc_fields(d0):
-        actual_keys.add(f.name)
-    missing = expected_keys - actual_keys
-    assert not missing, (
-        f"VowelChartDiphthong dataclass missing fields {missing!r}; "
-        f"the web wire dict needs them for arrow endpoints. Update "
-        f"the dataclass + the _vowel_chart_summary serialisation."
-    )
-    # Silence "assigned but unused" warnings.
-    del summary, summary2
+    assert all(isinstance(seg, str) for seg in geom.diphthongs)
+    # And the wire payload mirrors that: a JSON list of strings.
+    summary = _vowel_chart_summary(engine, vowels)
+    assert isinstance(summary["diphthongs"], list)
+    assert all(isinstance(seg, str) for seg in summary["diphthongs"])
 
 
 # ---------------------------------------------------------------------------

@@ -369,8 +369,23 @@ dialog input[type="text"]:focus-visible {
    pattern as ``.setup-dialog``. */
 
 .phoible-picker {
-  min-width: min(520px, calc(100vw - var(--space-xl) * 2));
-  max-width: min(640px, calc(100vw - var(--space-xl) * 2));
+  /* Fixed width + height so selecting different inventory sources
+     (which swaps the preview summary + segment list) never resizes
+     the dialog. The variable regions (results, source cards, the
+     segment preview) each scroll within their own fixed slot, so a
+     large inventory scrolls instead of growing the window. Clamped
+     to the viewport so it still fits small screens. */
+  width: min(600px, calc(100vw - var(--space-xl) * 2));
+  height: min(560px, calc(100vh - var(--space-xl) * 2));
+  box-sizing: border-box;
+}
+/* The form fills the fixed-height dialog; the panel takes the slack
+   and its inner sections scroll rather than growing the dialog. */
+.phoible-picker > #phoible-picker-form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .phoible-panel {
@@ -381,6 +396,12 @@ dialog input[type="text"]:focus-visible {
   border: var(--border-std) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg);
+  /* Take the dialog's slack and scroll internally so the fixed-height
+     window never grows; ``min-height: 0`` lets this flex child shrink
+     below its content so the overflow actually scrolls. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .phoible-loading {
   color: var(--text-dim);
@@ -549,6 +570,11 @@ dialog input[type="text"]:focus-visible {
 }
 .phoible-summary {
   font-weight: bold;
+  /* One line, elided: a long dialect-bearing name must not wrap to a
+     second line and nudge the fixed-height preview. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .phoible-segments {
   font-family: var(--mono-family, ui-monospace, monospace);
@@ -930,11 +956,8 @@ dialog input[type="text"]:focus-visible {
   /* Row 1: title (centred over the data column only).
      Row 2: column headers (Front / Central / Back).
      Row 3: row-label gutter + data area.
-     Row 4: always-visible diphthong chip strip (auto-sized;
-     empty when the inventory has no diphthongs), constrained to
-     the trapezoid's bottom-edge span.
-     Row 5: diphthong display-mode toggle, right-aligned below the
-     chip strip (absent when the inventory has no diphthongs). */
+     Row 4: "Diphthongs" label (absent when none).
+     Row 5: diphthong chip strip (absent when none). */
   grid-template-rows: auto auto 1fr auto auto;
   /* Right + bottom insets pinned via
      ``chart_style.VOWEL_CHART_PAD_R_PX`` /
@@ -948,10 +971,6 @@ dialog input[type="text"]:focus-visible {
     var(--vowel-chart-pad-b) 2px;
   column-gap: var(--space-sm);
   row-gap: 2px;
-  /* Anchor for the absolutely-positioned ``.vowel-diphthong-toggle``
-     so it sits in the chart's title row corner instead of
-     overlapping Close-Back cell stacks inside the data area. */
-  position: relative;
 }
 /* Mirrors the desktop's ``QLabel(geometry.title)`` placed at the
    top, centred over the data area. The desktop's
@@ -1085,138 +1104,35 @@ dialog input[type="text"]:focus-visible {
   );
 }
 
-/* Diphthong arrow overlay. One SVG per chart sits above all cells
-   and draws a curved arrow per (primary -> secondary) placement
-   pair. ``pointer-events: none`` so clicks land on the underlying
-   vowel buttons; ``preserveAspectRatio: none`` lets the 100x100
-   viewBox stretch to the data area's actual pixel rectangle so
-   arrow endpoints land on the same chart_x / chart_y the cells
-   themselves use. */
-.vowel-diphthong-arrows {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  /* Clip stray Bézier control-point lift to the trapezoid /
-     triangle silhouette. Quadratic-Bézier arrows in the C3 fan-
-     out can curve outside the silhouette polygon when many
-     diphthongs share a (primary, secondary) cell pair; without
-     the clip-path those segments draw above / below the chart
-     outline and read as orphan arcs. The polygon coordinates
-     come from the same ``--vowel-<shape>-<corner>`` variables
-     the silhouette outline pseudo-elements use, so the arrow
-     overlay tracks the silhouette through every resize. */
-  overflow: visible;
-  /* Above the height-tier bands (z-index 1) and cells (z-index 1)
-     so the arrows always render on top of the chart contents. */
-  z-index: 2;
-}
-.vowel-diphthong-arrow {
-  /* Stroke + opacity pinned via ``chart_style.py``. Arrows
-     render only in diphthong display mode (the trapezoid then
-     shows the diphthong segments + their trajectories); in
-     monophthong mode the SVG isn't appended at all so this
-     ruleset never matches. Default opacity is the chart_style
-     focused-alpha because in diphthong mode the chart IS the
-     arrows; no hover gating needed. */
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: var(--diphthong-arrow-stroke);
-  opacity: var(--diphthong-arrow-focused-alpha);
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-}
-.vowel-diphthong-arrowhead {
-  fill: var(--accent);
-  opacity: 1;
-}
-/* Hover highlight: dim every other arrow when one is focused so
-   the user can follow a single trajectory cleanly in a busy
-   diphthong cluster. Pre-redesign the hover rule controlled
-   visibility; post-redesign it controls EMPHASIS only.
-
-   Gated on @supports(:has()) so the rule is a no-op on Safari <
-   17.5 (and any other browser without :has() support). The
-   degraded behaviour on those browsers is that hover doesn't
-   dim other arrows; the focused arrow gets the default
-   focused-alpha and the others stay at the same focused-alpha.
-   Functional, just less visual cueing. */
-@supports selector(:has(*)) {
-  .vowel-chart-data:has(.vowel-diphthong-arrow.is-focused)
-    .vowel-diphthong-arrow:not(.is-focused) {
-    opacity: 0.25;
-  }
-  .vowel-chart-data:has(.vowel-diphthong-arrowhead.is-focused)
-    .vowel-diphthong-arrowhead:not(.is-focused) {
-    opacity: 0.25;
-  }
-}
-/* Diphthong display-mode toggle. Sits in its own grid row (row 5)
-   BELOW the chip strip, right-aligned to the data column's right
-   edge (the silhouette's back edge). Absent from the DOM when the
-   inventory has no diphthongs. Stays unobtrusive (text-dim) until
-   hovered/active; the ``aria-pressed`` state flips the visual to
-   the accent border so the active state reads at a glance. */
-.vowel-diphthong-toggle {
-  grid-row: 5;
+/* "Diphthongs" section label, shown above the chip strip only when
+   the inventory has diphthongs. Reads like the column headers:
+   small + dim. */
+.vowel-diphthong-label {
+  grid-row: 4;
   grid-column: 2;
-  justify-self: end;
-  margin-top: 2px;
-  padding: 2px 8px;
-  font-size: var(--font-size-micro);
-  font-weight: 500;
-  letter-spacing: 0.3px;
+  font-size: var(--vowel-chart-col-label-font);
+  font-weight: 600;
+  letter-spacing: var(--vowel-chart-col-label-letter-spacing);
   color: var(--text-dim);
-  background: var(--bg);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  pointer-events: auto;
+  padding: var(--space-xs) 0 0 0;
 }
-.vowel-diphthong-toggle:hover {
-  border-color: var(--border);
+.panel[data-active="true"] .vowel-diphthong-label {
   color: var(--text);
 }
-.vowel-diphthong-toggle[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-/* Always-visible diphthong chip strip below the silhouette.
-   Lists the inventory's diphthong segments as small seg-btn
-   chips that can be clicked to select even when the chart is in
-   monophthong mode (and the diphthong cells are hidden inside
-   the trapezoid). Wraps when many diphthongs exist. */
+/* Diphthong chip strip below the vowel space: the inventory's
+   diphthong segments as small seg-btn chips (clicking one selects
+   it via the delegated #seg-grid handler). Wraps when many exist.
+   Absent from the DOM when the inventory has no diphthongs. */
 .vowel-diphthong-chips {
-  grid-row: 4;
+  grid-row: 5;
   grid-column: 2;
   display: flex;
   flex-wrap: wrap;
   gap: var(--vowel-pair-gap, 2px);
-  padding: var(--space-xs) 0 0 0;
+  padding: 2px 0 0 0;
   justify-content: flex-start;
   align-items: center;
   min-height: 0;
-  /* Constrain the chips to the trapezoid's BOTTOM edge so they
-     sit under the bottom-most vowel-space line, not the full
-     data-column width. ``--vowel-bottom-left`` / ``--vowel-bottom-right``
-     are the silhouette's bottom corners as [0, 1] fractions of the
-     data-area width, set per render by the JS silhouette refresh
-     (the same pass that recomputes the clip-path). The fallback
-     (0 .. 1 = full width) holds for the one frame before that runs
-     and for any inventory whose silhouette omits the fields. */
-  margin-left: calc(var(--vowel-bottom-left, 0) * 100%);
-  width: calc(
-    (var(--vowel-bottom-right, 1) - var(--vowel-bottom-left, 0)) * 100%
-  );
-  box-sizing: border-box;
-}
-.vowel-diphthong-chips .seg-btn {
-  /* Chips share the standard seg-btn size + font so dense
-     diphthong inventories wrap into multiple rows naturally
-     without any ad-hoc width tuning; ``flex-wrap: wrap`` on
-     the parent + the standard button width is the single
-     source of truth. */
 }
 /* Trapezoid / triangle silhouette: OUTLINE only, no painted fill.
 
@@ -1296,8 +1212,7 @@ dialog input[type="text"]:focus-visible {
 }
 .vowel-chart-data[data-shape="trapezoid"]::before,
 .vowel-chart-data[data-shape="trapezoid"]::after,
-.vowel-chart-data[data-shape="trapezoid"] .vowel-chart-row-bands,
-.vowel-chart-data[data-shape="trapezoid"] .vowel-diphthong-arrows {
+.vowel-chart-data[data-shape="trapezoid"] .vowel-chart-row-bands {
   /* Rounded trapezoid silhouette: ``--vowel-trapezoid-rounded-points``
      bakes ~24 points (5 per corner + 4 original corners) along a
      quadratic Bezier so every corner reads as gently rounded
@@ -1309,8 +1224,7 @@ dialog input[type="text"]:focus-visible {
 }
 .vowel-chart-data[data-shape="triangle"]::before,
 .vowel-chart-data[data-shape="triangle"]::after,
-.vowel-chart-data[data-shape="triangle"] .vowel-chart-row-bands,
-.vowel-chart-data[data-shape="triangle"] .vowel-diphthong-arrows {
+.vowel-chart-data[data-shape="triangle"] .vowel-chart-row-bands {
   clip-path: polygon(var(--vowel-triangle-rounded-points));
 }
 /* Silhouette outline stays as the canonical thin border-coloured
@@ -1333,22 +1247,6 @@ dialog input[type="text"]:focus-visible {
     -50%
   );
   transition: opacity 120ms ease-out;
-}
-/* In diphthong mode, dim:
-   1. Whole cells that are NOT diphthong endpoints (data-is-endpoint
-      attribute tagged in main.js).
-   2. Within endpoint long-pair / stack cells, dim every seg-btn
-      after the first. The canonical entry (first child) is the
-      arrow target; the long-vowel partner is visual noise.
-   The arrows then have clear visual anchors instead of competing
-   with non-target monophthongs for attention. */
-.vowel-chart-data[data-display-mode="diphthong"]
-  .vowel-chart-cell:not([data-is-endpoint="true"]) {
-  opacity: 0.35;
-}
-.vowel-chart-data[data-display-mode="diphthong"]
-  .vowel-chart-cell[data-is-endpoint="true"] .seg-btn:nth-child(n+2) {
-  opacity: 0.4;
 }
 /* Top-row cells anchor their TOP edge at chart_y so a multi-entry
    stack hangs DOWN from the row label instead of centring and

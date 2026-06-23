@@ -15,11 +15,10 @@ geometry object from the bridge.
 from __future__ import annotations
 
 import math
-from collections import defaultdict
 from collections.abc import Mapping
 from typing import ClassVar
 
-from PyQt6.QtCore import QEvent, QObject, Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
     QFont,
@@ -34,7 +33,6 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -43,7 +41,6 @@ from PyQt6.QtWidgets import (
 from phonology_shared.chart.vowel_geometry import (
     PAIR_DISPLAY_KINDS,
     VowelChartCell,
-    VowelChartDiphthong,
     VowelChartGeometry,
     VowelChartSilhouette,
     build_vowel_chart_geometry,
@@ -65,10 +62,7 @@ from phonology_shared.chart.vowels import (
 from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.constants import (
     BTN_W,
-    DIPHTHONG_TOGGLE_LABEL,
     VOWEL_CHART_ACCESSIBLE_NAME,
-    VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE,
-    VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE,
 )
 from phonology_shared.presentation.layout import (
     MIN_VOWEL_CHART_W_PX,
@@ -76,7 +70,7 @@ from phonology_shared.presentation.layout import (
     SEG_BTN_H,
     VOWEL_PAIR_GAP_PX,
 )
-from phonology_shared.presentation.palette import C, VowelChartMode
+from phonology_shared.presentation.palette import C
 
 from .widgets.segment_button import SegmentButton
 
@@ -117,59 +111,6 @@ DESKTOP_VOWEL_CHART_W_ADJ: int = 0
 VOWEL_CHART_W_FLOOR: int = MIN_VOWEL_CHART_W_PX + DESKTOP_VOWEL_CHART_W_ADJ
 
 
-class _DiphthongOverlay(QWidget):
-    """Transparent overlay that paints the diphthong arrows ON TOP
-    of the chart's cell widgets.
-
-    Qt paints a widget's ``paintEvent`` BEFORE its child widgets
-    paint. If the diphthong arrows were drawn in the chart's own
-    ``paintEvent``, the cell buttons (children of the chart) would
-    render OVER the arrows and hide them. This overlay is the LAST
-    sibling appended to the chart, so it paints AFTER all the
-    cells and labels; arrows stay visible above the buttons.
-
-    The overlay is transparent for mouse events so clicks pass
-    through to the cell buttons below.
-    """
-
-    def __init__(self, parent: VowelChartWidget) -> None:
-        super().__init__(parent)
-        self.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self._chart = parent
-
-    def paintEvent(self, event: QPaintEvent | None) -> None:  # noqa: D401
-        # Skip arrow painting entirely when the chart is in
-        # monophthong mode: the diphthong cells are hidden so
-        # arrows have nothing to attach to and would point into
-        # empty silhouette space.
-        if self._chart._display_mode != VowelChartMode.DIPHTHONG:
-            return
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        # Paint into the overlay's own coordinate system, which
-        # matches the parent chart's (overlay fills the chart
-        # rect). The chart's data-area rect is computed once and
-        # forwarded so the arrow math runs in the same coords the
-        # cell widgets use.
-        dx, dy, dw, dh = self._chart._data_area_rect()
-        # Clip arrows to the silhouette so a curved diphthong
-        # can't stray outside the trapezoid (e.g. into the
-        # row-label gutter). Mirrors the web's
-        # ``.vowel-diphthong-arrows { clip-path: polygon(...) }``
-        # rule.
-        silhouette_path = self._chart._build_silhouette_path_for_clip(
-            dx, dy, dw, dh
-        )
-        if silhouette_path is not None:
-            painter.setClipPath(silhouette_path)
-        self._chart._paint_diphthong_arrows(painter, dx, dy, dw, dh)
-        painter.end()
-
-
 class VowelChartWidget(QWidget):
     """Renders the shared :py:class:`VowelChartGeometry` as Qt
     widgets.
@@ -193,9 +134,9 @@ class VowelChartWidget(QWidget):
     _PAD_R: ClassVar[int] = cs.VOWEL_CHART_PAD_R_PX
     _PAD_B: ClassVar[int] = cs.VOWEL_CHART_PAD_B_PX
     _ROW_LABEL_GAP_PX: ClassVar[int] = cs.VOWEL_CHART_ROW_LABEL_GAP_PX
-    # Vertical gap between the diphthong chip strip and the toggle
-    # button that sits below it.
-    _TOGGLE_GAP_PX: ClassVar[int] = 2
+    # Vertical gap between the "Diphthongs" label and the chip strip
+    # below it.
+    _FOOTER_GAP_PX: ClassVar[int] = 2
 
     def __init__(
         self, parent: QWidget | None = None, *, btn_gap: int = 4
@@ -260,16 +201,10 @@ class VowelChartWidget(QWidget):
         # ``translate(..., 0%)`` / ``-100%`` / ``-50%``.
         # Per-cell tuple:
         #   (widget, chart_x, chart_y, pair_side, tier, row, col,
-        #    canonical_segment, is_diphthong)
+        #    canonical_segment, pair_shift_px, nudge_px)
         # ``canonical_segment`` is ``entries[0]`` of the source
         # ``VowelChartCell`` (entries are sorted by descending
-        # placement confidence). Diphthong arrows targeting this
-        # cell as a secondary endpoint land on this segment's
-        # button so the arrowhead hits the visually canonical
-        # target rather than the cell's geometric centre.
-        # ``is_diphthong`` mirrors ``VowelChartCell.is_diphthong``
-        # so ``_apply_display_mode_filter`` can flip per-cell
-        # visibility without re-traversing the geometry.
+        # placement confidence).
         self._cells: list[
             tuple[
                 QWidget,
@@ -280,7 +215,6 @@ class VowelChartWidget(QWidget):
                 int,
                 int,
                 str,
-                bool,
                 float,
                 float,
             ]
@@ -318,72 +252,19 @@ class VowelChartWidget(QWidget):
         # narrow bottom; one whose lowest row is Open-mid carries
         # a wider bottom edge). ``None`` before the first render.
         self._silhouette: VowelChartSilhouette | None = None
-        # Diphthong overlay. ``_diphthongs`` carries the pre-projected
-        # primary/secondary chart coordinates per arrow; the paint
-        # pass reads them directly with no anchor-lookup dict.
-        self._diphthongs: tuple[VowelChartDiphthong, ...] = ()
-        # Currently hovered / focused vowel seg, or None when the
-        # mouse is outside every cell. In diphthong mode this
-        # drives the per-arrow focus highlight (focused arrow at
-        # full opacity, others dimmed); in monophthong mode no
-        # arrows render so this stays decorative.
-        self._focused_seg: str | None = None
-        # Vowel chart display mode: which class of vowel segments
-        # the chart's silhouette area renders. The diphthong chip
-        # strip below the silhouette always shows the inventory's
-        # diphthongs regardless of mode; this field only decides
-        # what fills the trapezoid.
-        self._display_mode: VowelChartMode = VowelChartMode.MONOPHTHONG
-        # Vowel-chart display-mode toggle button. Mirrors the
-        # web's ``.vowel-diphthong-toggle``: mounted in the title
-        # row when the inventory has any diphthongs, hidden when
-        # ``self._diphthongs`` is empty. Click flips between
-        # monophthong and diphthong modes. Per-inventory state:
-        # ``set_vowels`` resets it to MONOPHTHONG on every load.
-        self._diphthong_toggle = QPushButton(self)
-        self._diphthong_toggle.setCheckable(True)
-        self._diphthong_toggle.setText(DIPHTHONG_TOGGLE_LABEL)
-        self._diphthong_toggle.setToolTip(VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE)
-        self._diphthong_toggle.setAccessibleName(
-            DIPHTHONG_TOGGLE_LABEL,
-        )
-        self._diphthong_toggle.setAccessibleDescription(
-            "Toggle the vowel chart between monophthong-only and "
-            "diphthong-arrow display."
-        )
-        self._diphthong_toggle.toggled.connect(
-            self._on_diphthong_toggle_clicked,
-        )
-        # Compact chip look so it matches the web's
-        # ``.vowel-diphthong-toggle``: small lowercase pill in the
-        # chart corner, not a full-size toolbar button. Sized to
-        # the label's natural width.
-        self._diphthong_toggle.setStyleSheet(
-            "QPushButton {"
-            f" font-size: {cs.VOWEL_CHART_COL_LABEL_FONT_PX}px;"
-            " padding: 2px 8px;"
-            " border-radius: 8px;"
-            f" border: 1px solid {C['border']};"
-            f" color: {C['text_dim']};"
-            f" background: {C['bg']};"
-            " }"
-            "QPushButton:hover {"
-            f" color: {C['text']};"
-            f" border-color: {C['accent']};"
-            " }"
-            "QPushButton:checked {"
-            f" color: {C['accent']};"
-            f" border-color: {C['accent']};"
-            " }"
-        )
-        self._diphthong_toggle.hide()
-        # Always-visible chip strip below the silhouette listing
-        # the inventory's diphthong segments. Visible in BOTH
-        # display modes so users always see and can select the
-        # diphthongs (in monophthong mode the trapezoid hides
-        # diphthong cells; the strip is the only on-chart
-        # affordance). Empty when the inventory has no
-        # diphthongs.
+        # Diphthong segment names for the current inventory. They are
+        # NOT placed in the trapezoid; the chip strip below the chart
+        # lists them. Empty for monophthong-only inventories.
+        self._diphthongs: tuple[str, ...] = ()
+        # "Diphthongs" section label above the chip strip. Shown only
+        # when the inventory has diphthongs.
+        self._diphthong_label = QLabel("Diphthongs", self)
+        self._diphthong_label.setFont(QFont("Noto Sans", 9))
+        self._diphthong_label.setStyleSheet(f"color: {C['text_dim']};")
+        self._diphthong_label.hide()
+        # Chip strip below the silhouette listing the inventory's
+        # diphthong segments as selectable buttons. Empty (hidden)
+        # when the inventory has no diphthongs.
         self._diphthong_chip_strip = QWidget(self)
         self._diphthong_chip_strip.setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, True
@@ -396,14 +277,6 @@ class VowelChartWidget(QWidget):
         self._chip_strip_layout.setContentsMargins(0, 0, 0, 0)
         self._chip_strip_layout.setSpacing(4)
         self._diphthong_chip_strip.hide()
-        # Diphthong-arrow overlay: a transparent sibling child
-        # widget that paints the arrows AFTER all the cell
-        # buttons (Qt paints child widgets after the parent's
-        # paintEvent; cells then occlude anything drawn inside
-        # the chart's paintEvent). The overlay is sized to fill
-        # the chart in ``_layout_children`` and raised to the
-        # top of the sibling stack so its paintEvent runs last.
-        self._diphthong_overlay = _DiphthongOverlay(self)
         # Floor for ``set_target_width``: the geometry's natural
         # data width plus this widget's chrome. Updated on every
         # :py:meth:`_render_geometry` call so external resize
@@ -445,6 +318,7 @@ class VowelChartWidget(QWidget):
         and force the next ``set_headers_active`` to re-apply.
         """
         self._rebuild_style_cache()
+        self._diphthong_label.setStyleSheet(f"color: {C['text_dim']};")
         self._last_headers_active = None
 
     def set_target_width(self, w: int) -> None:
@@ -477,47 +351,6 @@ class VowelChartWidget(QWidget):
             lbl.setStyleSheet(row_style)
         self._last_headers_active = active
 
-    def set_display_mode(self, mode: VowelChartMode | str) -> None:
-        """Switch the vowel chart between monophthong and diphthong
-        display modes. The trapezoid renders monophthong cells in
-        MONOPHTHONG mode (diphthong cells + arrows hidden) and
-        diphthong cells + their trajectory arrows in DIPHTHONG
-        mode (monophthong cells hidden). The chip strip below the
-        silhouette ALWAYS shows the inventory's diphthongs
-        regardless of mode."""
-        if isinstance(mode, str) and not isinstance(mode, VowelChartMode):
-            try:
-                mode = VowelChartMode(mode)
-            except ValueError:
-                mode = VowelChartMode.MONOPHTHONG
-        if self._display_mode == mode:
-            return
-        self._display_mode = mode
-        is_diphthong = mode == VowelChartMode.DIPHTHONG
-        # Keep the toggle button's checked state in sync if the
-        # mode was flipped programmatically (the per-load reset in
-        # ``set_vowels``). ``blockSignals`` prevents re-entry via
-        # the toggled signal.
-        self._diphthong_toggle.blockSignals(True)
-        self._diphthong_toggle.setChecked(is_diphthong)
-        self._diphthong_toggle.setToolTip(
-            VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE
-            if is_diphthong
-            else VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE
-        )
-        self._diphthong_toggle.blockSignals(False)
-        # Apply the cell-visibility filter and repaint.
-        self._apply_display_mode_filter()
-        self.update()
-
-    def _on_diphthong_toggle_clicked(self, checked: bool) -> None:
-        """Click handler: flip the display mode based on the
-        button's new checked state."""
-        next_mode = (
-            VowelChartMode.DIPHTHONG if checked else VowelChartMode.MONOPHTHONG
-        )
-        self.set_display_mode(next_mode)
-
     # PyQt signal fired when a chip in the diphthong chip strip
     # is clicked. The MainWindow connects to this and routes the
     # click through the standard segment-selection flow so the
@@ -533,10 +366,9 @@ class VowelChartWidget(QWidget):
         SegmentButton's ``clicked`` signal uses, so the chip is
         a thin shortcut, not a parallel selection path.
 
-        The grid wraps to multiple rows when the chart isn't
-        wide enough to fit every chip side-by-side. Columns are
-        computed from the data-area width / approximate chip
-        width so a wider chart packs more chips per row.
+        The grid wraps to multiple rows when the chart isn't wide
+        enough to fit every chip side-by-side; columns are computed
+        from the data-area width / approximate chip width.
         """
         layout = self._chip_strip_layout
         while layout.count():
@@ -548,22 +380,17 @@ class VowelChartWidget(QWidget):
                 w.deleteLater()
         seen: set[str] = set()
         unique_diphs: list[str] = []
-        for d in self._diphthongs:
-            if not d.segment or d.segment in seen:
+        for seg in self._diphthongs:
+            if not seg or seg in seen:
                 continue
-            seen.add(d.segment)
-            unique_diphs.append(d.segment)
-        # Chips reuse SegmentButton for visual + state parity
-        # with chart cells (size, IPA font chain, selection state).
-        # Columns derive from the BOTTOM-edge width (the strip is
-        # tucked under the bottom-most vowel-space line), not the
-        # full data-area width, so wrapping matches the rendered
-        # strip geometry.
+            seen.add(seg)
+            unique_diphs.append(seg)
+        # Chips reuse SegmentButton for visual + state parity with
+        # chart cells (size, IPA font chain, selection state).
         dx, _dy, dw, _dh = self._data_area_rect()
-        _cx, cw = self._bottom_edge_span(dx, dw)
-        del dx, _cx
+        del dx
         chip_pitch = BTN_W + layout.spacing()
-        n_cols = max(1, cw // chip_pitch) if cw > 0 else 6
+        n_cols = max(1, dw // chip_pitch) if dw > 0 else 6
         for idx, segment in enumerate(unique_diphs):
             chip = SegmentButton(segment, self._diphthong_chip_strip)
             chip.setToolTip(f"Select /{segment}/")
@@ -576,37 +403,6 @@ class VowelChartWidget(QWidget):
             col = idx % n_cols
             layout.addWidget(chip, row, col)
 
-    def _apply_display_mode_filter(self) -> None:
-        """No-op. Cells are always visible.
-
-        Diphthongs no longer occupy cells, so the mode toggle
-        only gates the arrow overlay (read in its paintEvent).
-        """
-        return
-
-    def eventFilter(  # noqa: D401
-        self, watched: QObject | None, event: QEvent | None
-    ) -> bool:
-        """Track which vowel seg-btn the cursor / keyboard focus
-        is on so :py:meth:`_paint_diphthong_arrows` knows which
-        arrow to paint. The chart installs this filter on every
-        button it lands during :py:meth:`_render_geometry`."""
-        if event is None or watched is None:
-            return super().eventFilter(watched, event)
-        kind = event.type()
-        seg = getattr(watched, "segment", None)
-        if not isinstance(seg, str):
-            return super().eventFilter(watched, event)
-        if kind in (QEvent.Type.HoverEnter, QEvent.Type.FocusIn):
-            if self._focused_seg != seg:
-                self._focused_seg = seg
-                self.update()
-        elif kind in (QEvent.Type.HoverLeave, QEvent.Type.FocusOut):
-            if self._focused_seg == seg:
-                self._focused_seg = None
-                self.update()
-        return super().eventFilter(watched, event)
-
     def clear(self) -> None:
         """Remove all buttons, labels, and collision containers.
         Buttons are detached (not destroyed) since they belong to
@@ -614,10 +410,8 @@ class VowelChartWidget(QWidget):
         containers is essential; otherwise destroying the container
         would take the children with it.
 
-        Transient display state (focus, natural-width pin) resets
-        too so a wide-to-narrow inventory swap releases the prior
-        pin and a hovered seg does not persist across loads. The
-        persistent ``_display_mode`` preference is preserved.
+        Transient display state (the natural-width pin) resets too so
+        a wide-to-narrow inventory swap releases the prior pin.
         """
         for btn in self._buttons.values():
             btn.setParent(None)
@@ -639,10 +433,8 @@ class VowelChartWidget(QWidget):
             container.deleteLater()
         self._cell_containers.clear()
         self._diphthongs = ()
-        self._focused_seg = None
-        # ``_display_mode`` persists across inventory loads (it's
-        # a UI preference, not inventory data). Reset only the
-        # transient focus + cell state above.
+        self._diphthong_label.hide()
+        self._diphthong_chip_strip.hide()
         self._natural_total_w = 0
         # Release the prior render's width pin so the next inventory
         # can pick its own size; without this, switching from a wide
@@ -669,16 +461,10 @@ class VowelChartWidget(QWidget):
         result into widget calls.
 
         ``vowel_secondary`` carries final-state feature bundles for
-        PHOIBLE diphthong segments. When present, the per-diphthong
-        endpoints are stored on the widget so :py:meth:`paintEvent`
-        can draw a curved arrow between the two cells.
+        PHOIBLE diphthong segments. When present, those segments are
+        listed as chips below the chart (they are not placed in the
+        trapezoid).
         """
-        # Display mode is per-inventory state. A diphthong filter
-        # toggled for the previous inventory must not carry over and
-        # grey out the next one, which may not even have diphthongs
-        # to toggle (the toggle itself hides in that case, leaving
-        # no way out of the stale filter).
-        self.set_display_mode(VowelChartMode.MONOPHTHONG)
         self.clear()
         self._buttons = dict(buttons)
         profile = detect_vowel_profile(segs, norm_feats)
@@ -699,18 +485,26 @@ class VowelChartWidget(QWidget):
         self._shape = geometry.shape
         self._silhouette = geometry.silhouette
         self._diphthongs = tuple(geometry.diphthongs)
-        # Show the diphthong toggle button + chip strip only when
-        # the inventory actually has diphthongs (mirrors the web's
-        # ``_appendVowelDiphthongToggle`` / chip-strip guards).
+        # Show the "Diphthongs" label + chip strip only when the
+        # inventory actually has diphthongs (mirrors the web guard).
         has_diphthongs = bool(self._diphthongs)
-        self._diphthong_toggle.setVisible(has_diphthongs)
         self._populate_diphthong_chip_strip()
+        self._diphthong_label.setVisible(has_diphthongs)
         self._diphthong_chip_strip.setVisible(has_diphthongs)
         # Width is content-driven (natural + chrome) with a floor;
         # min == max is unconditional so wide-to-narrow swaps
         # shrink instead of leaving the widget unsized.
         chrome_w = VOWEL_LABEL_W + self._PAD_R
-        chrome_h = self._TITLE_H + self._COL_HEADER_H + self._PAD_B
+        # The diphthong footer (label + chip strip) is reserved ON TOP
+        # of the trapezoid's natural height, so the data area keeps its
+        # full height and the vowel cells never get squeezed into
+        # overlap when the inventory has diphthongs.
+        chrome_h = (
+            self._TITLE_H
+            + self._COL_HEADER_H
+            + self._PAD_B
+            + self._footer_height()
+        )
         self._natural_total_w = geometry.natural_data_width_px + chrome_w
         effective_w = max(VOWEL_CHART_W_FLOOR, self._natural_total_w)
         natural_total_h = max(
@@ -809,27 +603,10 @@ class VowelChartWidget(QWidget):
                     cell.row,
                     cell.col,
                     cell.entries[0] if cell.entries else "",
-                    cell.is_diphthong,
                     cell.pair_shift_px,
                     cell.nudge_px,
                 )
             )
-            # Wire focus tracking on every seg button this cell
-            # exposes so the hover-gated diphthong arrow overlay
-            # knows which segment the user is attending to. The
-            # event filter is idempotent via the WA_Hover attribute
-            # + a single ``installEventFilter`` per button instance.
-            for seg in cell.entries:
-                btn = self._buttons.get(seg)
-                if btn is None:
-                    continue
-                btn.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-                btn.installEventFilter(self)
-        # Show/hide cells based on the active display mode; must
-        # run AFTER cells are appended to ``self._cells`` and
-        # BEFORE the first paint so the layout pass sees the
-        # final visibility state.
-        self._apply_display_mode_filter()
         self._layout_children()
         self.update()
 
@@ -997,83 +774,52 @@ class VowelChartWidget(QWidget):
         return container
 
     def _chip_strip_height(self) -> int:
-        """Vertical pixels reserved for the diphthong chip strip
-        below the silhouette. Zero when the current inventory has
-        no diphthongs (chip strip hidden); scales with the number
-        of rows the grid wraps into so dense inventories like
-        Korean PHOIBLE (12 diphthongs in 2 rows) get enough
-        vertical space for the chips. Called by
-        ``_data_area_rect`` so the trapezoid shrinks to make
-        room."""
+        """Vertical pixels the diphthong chip strip needs. Zero when
+        the inventory has no diphthongs; scales with the number of
+        rows the chip grid wraps into so dense inventories (Korean
+        PHOIBLE, 12 diphthongs) get enough room."""
         if not self._diphthongs:
             return 0
-        unique = {d.segment for d in self._diphthongs if d.segment}
+        unique = {seg for seg in self._diphthongs if seg}
         if not unique:
             return 0
         # Mirror the column-count math in
         # ``_populate_diphthong_chip_strip``: each chip is a
-        # ``SegmentButton`` so it has ``BTN_W`` × ``SEG_BTN_H``
-        # dimensions. Spacing comes from the grid layout. The
-        # data-area width depends on this method via
-        # ``_data_area_rect`` calls ``_chip_strip_height``
-        # (circular), so we approximate via
-        # ``widget.width() - chrome``; a 1-col difference at the
-        # edge is fine because the layout pass rebuilds the chips
-        # with the exact ``dw``.
+        # ``SegmentButton`` (``BTN_W`` x ``SEG_BTN_H``) plus the grid
+        # spacing. ``_data_area_rect`` depends on this height, so we
+        # approximate the width via ``widget.width() - chrome`` to
+        # avoid a circular call; a 1-col difference at the edge is
+        # harmless since the layout pass rebuilds with the exact dw.
         approx_dw = max(0, self.width() - VOWEL_LABEL_W - self._PAD_R)
-        # Wrap against the BOTTOM-edge width (the chips tuck under the
-        # bottom-most vowel-space line, not the full data column), so
-        # the reserved height matches the layout pass's narrower strip.
-        _cx, approx_cw = self._bottom_edge_span(VOWEL_LABEL_W, approx_dw)
-        del _cx
         spacing = self._chip_strip_layout.spacing()
         chip_pitch = BTN_W + spacing
-        n_cols = max(1, approx_cw // chip_pitch) if approx_cw > 0 else 6
+        n_cols = max(1, approx_dw // chip_pitch) if approx_dw > 0 else 6
         n_rows = max(1, math.ceil(len(unique) / n_cols))
         return n_rows * SEG_BTN_H + (n_rows - 1) * spacing
 
-    def _toggle_band_height(self) -> int:
-        """Vertical pixels reserved below the chip strip for the
-        diphthong toggle, which now sits under the chips (flush
-        right). Zero when the inventory has no diphthongs (toggle
-        hidden), so monophthong-only charts keep their full data
-        area."""
+    def _footer_height(self) -> int:
+        """Total height reserved below the trapezoid for the diphthong
+        footer (the "Diphthongs" label + the chip strip). Zero for
+        monophthong-only inventories. Reserved on top of the data
+        area's natural height so the vowel cells never get squeezed."""
         if not self._diphthongs:
             return 0
-        return self._diphthong_toggle.sizeHint().height() + self._TOGGLE_GAP_PX
-
-    def _bottom_edge_span(self, dx: int, dw: int) -> tuple[int, int]:
-        """Pixel ``(x, width)`` of the trapezoid's bottom edge inside
-        the data area, used to tuck the diphthong chip strip under the
-        bottom-most vowel-space line. Falls back to the full data area
-        when no silhouette is rendered yet or the bottom edge is
-        degenerate (a triangle's single bottom point)."""
-        if self._silhouette is None or dw <= 0:
-            return dx, dw
-        sil = silhouette_for_data_width(self._silhouette, dw)
-        bl = min(max(sil.bottom_left, 0.0), 1.0)
-        br = min(max(sil.bottom_right, 0.0), 1.0)
-        if br <= bl:
-            return dx, dw
-        return dx + round(bl * dw), round((br - bl) * dw)
+        label_h = self._diphthong_label.sizeHint().height()
+        return label_h + self._FOOTER_GAP_PX + self._chip_strip_height()
 
     def _data_area_rect(self) -> tuple[int, int, int, int]:
         """``(x, y, width, height)`` of the trapezoidal segment
         display space inside the rectangular widget. The chrome
         (title, column headers, row label gutter, right / bottom
-        padding, chip strip, toggle band) is excluded so labels sit
-        OUTSIDE the silhouette.
+        padding, diphthong footer) is excluded so labels sit OUTSIDE
+        the silhouette.
         """
         x = VOWEL_LABEL_W
         y = self._TITLE_H + self._COL_HEADER_H
         w = max(0, self.width() - x - self._PAD_R)
         h = max(
             0,
-            self.height()
-            - y
-            - self._PAD_B
-            - self._chip_strip_height()
-            - self._toggle_band_height(),
+            self.height() - y - self._PAD_B - self._footer_height(),
         )
         return x, y, w, h
 
@@ -1085,32 +831,17 @@ class VowelChartWidget(QWidget):
         ``(chart_x, chart_y)``. Re-runs on every ``resizeEvent``.
         """
         dx, dy, dw, dh = self._data_area_rect()
-        # Diphthong-arrow overlay: cover the entire chart so the
-        # arrow painter can map cell coords in the chart's own
-        # coordinate system. Raised LAST so it sits at the top of
-        # the sibling stack and paints OVER every cell button.
-        if self._diphthong_overlay is not None:
-            self._diphthong_overlay.setGeometry(
-                0, 0, self.width(), self.height()
-            )
-        # Diphthong chip strip: sits in the band BELOW the data area,
-        # tucked under the trapezoid's bottom edge (``_bottom_edge_span``)
-        # so the chips never run wider than the bottom-most vowel-space
-        # line. The toggle band sits below it (``_toggle_band_height``).
-        # Hidden when the inventory has no diphthongs; ``_data_area_rect``
-        # already reserved the band via ``_chip_strip_height`` +
-        # ``_toggle_band_height``.
-        if self._diphthong_chip_strip.isVisible():
+        # Diphthong footer: a "Diphthongs" label then the chip strip,
+        # stacked in the band BELOW the data area (which
+        # ``_data_area_rect`` already reserved via ``_footer_height``).
+        # Absent when the inventory has no diphthongs.
+        if self._diphthongs:
             strip_h = self._chip_strip_height()
-            strip_y = (
-                self.height()
-                - self._PAD_B
-                - self._toggle_band_height()
-                - strip_h
-            )
-            chip_x, chip_w = self._bottom_edge_span(dx, dw)
+            label_h = self._diphthong_label.sizeHint().height()
+            footer_top = self.height() - self._PAD_B - self._footer_height()
+            self._diphthong_label.setGeometry(dx, footer_top, dw, label_h)
             self._diphthong_chip_strip.setGeometry(
-                chip_x, strip_y, chip_w, strip_h
+                dx, footer_top + label_h + self._FOOTER_GAP_PX, dw, strip_h
             )
         if self._title_label is not None:
             # Give the title the FULL data-area box and let its
@@ -1125,16 +856,6 @@ class VowelChartWidget(QWidget):
             # never clipped, which is what the earlier
             # adjustSize-based placement got wrong.
             self._title_label.setGeometry(dx, 0, dw, self._TITLE_H)
-        # Toggle now sits BELOW the chip strip, flush against the data
-        # area's right edge (its prior horizontal anchor). y floors at
-        # 0 so it never spills above the widget on a tiny chart.
-        if self._diphthong_toggle.isVisible():
-            self._diphthong_toggle.adjustSize()
-            tw_btn = self._diphthong_toggle.width()
-            th_btn = self._diphthong_toggle.height()
-            toggle_y = max(0, self.height() - self._PAD_B - th_btn)
-            self._diphthong_toggle.move(dx + dw - tw_btn, toggle_y)
-            self._diphthong_toggle.raise_()
         # Column headers: x in [0, 1] mapped across the data area,
         # then centred on each anchor. Uses round-to-nearest (not
         # int truncate) so sub-pixel positions don't bias every
@@ -1225,7 +946,6 @@ class VowelChartWidget(QWidget):
             _r,
             _c,
             _s,
-            _d,
             cell_ps,
             cell_nudge,
         ) in self._cells:
@@ -1262,13 +982,6 @@ class VowelChartWidget(QWidget):
             else:
                 py = cy_px - wh // 2
             widget.move(px, py)
-        # Raise the diphthong overlay LAST so it paints on top of
-        # all the cells / labels we just positioned. ``raise_()``
-        # moves the widget to the top of the sibling z-order;
-        # Qt then paints it last. Without this the overlay was
-        # added in __init__ before the cells, so cells sat on top.
-        if self._diphthong_overlay is not None:
-            self._diphthong_overlay.raise_()
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: D401
         super().resizeEvent(event)
@@ -1361,57 +1074,6 @@ class VowelChartWidget(QWidget):
         painter.setPen(pen)
         painter.drawPath(path)
         painter.end()
-        # Diphthong arrows are painted by ``_diphthong_overlay``
-        # (a sibling child widget) so they render ON TOP of cell
-        # buttons. Qt paints a parent's ``paintEvent`` BEFORE its
-        # child widgets paint, and the backing store repaints
-        # children intersecting any dirty parent region, so the
-        # overlay refreshes with the silhouette automatically. Do
-        # NOT call ``self._diphthong_overlay.update()`` here: the
-        # overlay is translucent and chart-sized, so its repaint
-        # dirties the chart beneath it, which re-enters this
-        # paintEvent, scheduling another overlay update, a
-        # self-sustaining repaint loop that burns CPU while the
-        # chart is idle.
-
-    def _build_silhouette_path_for_clip(
-        self,
-        dx: int,
-        dy: int,
-        dw: int,
-        dh: int,
-    ) -> QPainterPath | None:
-        """Return the silhouette outline as a closed
-        ``QPainterPath`` (rounded corners, same shape as the
-        silhouette pseudo-element on web). Used by the
-        diphthong-arrow overlay to clip arrows that would
-        otherwise curve outside the trapezoid into the row-label
-        gutter. Returns ``None`` when there's no silhouette to
-        clip against yet (initial paint before any inventory has
-        rendered)."""
-        sil = self._silhouette
-        if sil is None:
-            sil = vowel_silhouette(self._shape)
-        sil = silhouette_for_data_width(sil, dw)
-        top_y = dy + round(sil.top_y * dh)
-        bottom_y = dy + round(sil.bottom_y * dh)
-        top_left_x = dx + round(sil.top_left * dw)
-        bottom_left_x = dx + round(sil.bottom_left * dw)
-        back_right_x = (
-            dx + round(sil.top_right * dw) + sil.back_right_pixel_offset
-        )
-        return self._build_rounded_silhouette_path(
-            top_left_x,
-            top_y,
-            back_right_x,
-            top_y,
-            back_right_x,
-            bottom_y,
-            bottom_left_x,
-            bottom_y,
-            dw,
-            dh,
-        )
 
     @staticmethod
     def _build_rounded_silhouette_path(
@@ -1528,252 +1190,3 @@ class VowelChartWidget(QWidget):
         painter.save()
         painter.fillPath(silhouette_path, gradient)
         painter.restore()
-
-    def _paint_diphthong_arrows(
-        self,
-        painter: QPainter,
-        dx: int,
-        dy: int,
-        dw: int,
-        dh: int,
-    ) -> None:
-        """Overlay one curved arrow per diphthong, using the
-        cell widget's visual centre when the (row, col) is
-        populated and the shared geometry's chart anchors as
-        fallback for unpopulated slots.
-        """
-        if not self._diphthongs:
-            return
-        # Map to the canonical entry button so the arrow lands
-        # on the specific target glyph instead of the stack
-        # centre.
-        cell_by_pos: dict[tuple[int, int], tuple[QWidget, str]] = {}
-        for (
-            widget,
-            _cx,
-            _cy,
-            _ps,
-            _tier,
-            row,
-            col,
-            canon_seg,
-            _d,
-            _cps,
-            _nudge,
-        ) in self._cells:
-            cell_by_pos[(row, col)] = (widget, canon_seg)
-
-        def _widget_centre_and_size(
-            target: QWidget,
-        ) -> tuple[float, float, float, float]:
-            """Return ``(centre_x, centre_y, width, height)`` for
-            the target widget in THIS (VowelChartWidget) widget's
-            coordinate system."""
-            rect = target.rect()
-            centre = target.mapTo(self, rect.center())
-            return (
-                float(centre.x()),
-                float(centre.y()),
-                float(rect.width()),
-                float(rect.height()),
-            )
-
-        def _primary_target(
-            row: int,
-            col: int,
-            segment: str,
-            chart_x: float,
-            chart_y: float,
-        ) -> tuple[float, float, float, float]:
-            # Specific segment-button INSIDE the cell takes
-            # precedence so each diphthong's arrow originates at
-            # its own button rather than the stack/pair
-            # container's centre. A stack of six /i/-family
-            # diphthongs at one cell has six buttons; the arrow
-            # for /ia/ must start at the /ia/ button.
-            btn = self._buttons.get(segment)
-            if btn is not None and btn.isVisible():
-                return _widget_centre_and_size(btn)
-            entry = cell_by_pos.get((row, col))
-            if entry is not None:
-                return _widget_centre_and_size(entry[0])
-            return (dx + chart_x * dw, dy + chart_y * dh, 0.0, 0.0)
-
-        def _secondary_target(
-            row: int,
-            col: int,
-            chart_x: float,
-            chart_y: float,
-        ) -> tuple[float, float, float, float]:
-            # Aim for the cell's CANONICAL segment button
-            # (entries[0]) so the arrowhead lands on the
-            # canonical-vowel button rather than the cell's
-            # geometric centre. For Korean /ia/ the secondary cell
-            # holds /a, aː/; arrow now points to /a/ specifically.
-            #
-            # The fallback chain (button -> cell widget -> projected
-            # chart_xy) is robust against mode-transition timing:
-            # the overlay's paintEvent early-returns when
-            # ``_display_mode != DIPHTHONG`` (see _DiphthongOverlay),
-            # so this code only runs when arrows SHOULD render. If
-            # ``btn.isVisible() == False`` here it means the button
-            # was reparented to a hidden cell; the cell widget's
-            # geometry() still returns its layout position (Qt
-            # doesn't zero geometry on setVisible(False)), so the
-            # fallback is sensible.
-            entry = cell_by_pos.get((row, col))
-            if entry is not None:
-                cell_widget, canon_seg = entry
-                btn = self._buttons.get(canon_seg)
-                if btn is not None and btn.isVisible():
-                    return _widget_centre_and_size(btn)
-                return _widget_centre_and_size(cell_widget)
-            return (dx + chart_x * dw, dy + chart_y * dh, 0.0, 0.0)
-
-        # Push the arrow endpoint ``_ARROW_TIP_INSET_PX`` past the
-        # cell edge so a small visual gap separates the arrow from
-        # its target cell. Matches the web's ``ARROW_TIP_INSET_PX``.
-        _ARROW_TIP_INSET_PX = 4
-
-        def _rect_edge_offset(
-            w: float, h: float, ux: float, uy: float
-        ) -> tuple[float, float]:
-            if w <= 0 or h <= 0:
-                return (0.0, 0.0)
-            hw = w / 2.0
-            hh = h / 2.0
-            tx = float("inf") if abs(ux) < 1e-9 else hw / abs(ux)
-            ty = float("inf") if abs(uy) < 1e-9 else hh / abs(uy)
-            t = min(tx, ty) + _ARROW_TIP_INSET_PX
-            return (t * ux, t * uy)
-
-        # Group arrows by their (primary, secondary) cell pair so
-        # the fan-out distributes shared-pair arrows around the
-        # chord (mirrors the web SVG overlay's C3 fan-out math).
-        groups: dict[
-            tuple[tuple[int, int], tuple[int, int]],
-            list[VowelChartDiphthong],
-        ] = defaultdict(list)
-        for d in self._diphthongs:
-            groups[
-                (
-                    (d.primary_row, d.primary_col),
-                    (d.secondary_row, d.secondary_col),
-                )
-            ].append(d)
-
-        # Two opacity tiers in diphthong mode (the only mode in
-        # which arrows render at all):
-        # - default: every arrow paints at focused alpha (the chart
-        #   IS the arrows in this mode; nothing else to gate on)
-        # - hover/focus: matching arrow stays at focused alpha,
-        #   non-matching arrows dim so the user can follow a
-        #   single trajectory cleanly in a busy cluster
-        focused = self._focused_seg
-        # When any arrow's segment is currently focused, dim the
-        # others so the user can follow a single trajectory in a
-        # busy cluster.
-        has_focus = focused is not None and any(
-            d.segment == focused for arrows in groups.values() for d in arrows
-        )
-        for arrows in groups.values():
-            n = len(arrows)
-            for i, d in enumerate(arrows):
-                is_focus = d.segment == focused
-                ax_c, ay_c, aw, ah = _primary_target(
-                    d.primary_row,
-                    d.primary_col,
-                    d.segment,
-                    d.primary_chart_x,
-                    d.primary_chart_y,
-                )
-                bx_c, by_c, bw, bh = _secondary_target(
-                    d.secondary_row,
-                    d.secondary_col,
-                    d.secondary_chart_x,
-                    d.secondary_chart_y,
-                )
-                # Edge offset: start the arrow at the source
-                # button's EDGE (not its centre) in the chord
-                # direction; terminate at the target button's
-                # EDGE. The chord (centre to centre) gives the
-                # direction; ``_rect_edge_offset`` returns the
-                # vector from centre to the rectangle's exit
-                # point along that direction. Arrows now visibly
-                # emerge from the source button and end with the
-                # arrowhead touching the target button.
-                chord_dx = bx_c - ax_c
-                chord_dy = by_c - ay_c
-                chord_len = math.hypot(chord_dx, chord_dy) or 1.0
-                ux_chord = chord_dx / chord_len
-                uy_chord = chord_dy / chord_len
-                off_ax, off_ay = _rect_edge_offset(aw, ah, ux_chord, uy_chord)
-                off_bx, off_by = _rect_edge_offset(
-                    bw, bh, -ux_chord, -uy_chord
-                )
-                ax = ax_c + off_ax
-                ay = ay_c + off_ay
-                bx = bx_c + off_bx
-                by = by_c + off_by
-                # Fan-out factor: -1, 0, +1 for n=3; -1, +1 for n=2;
-                # 0 for solo arrows. Outer arrows arc more than the
-                # inner ones to keep the bundle readable.
-                signed = (i / (n - 1)) * 2 - 1 if n > 1 else 1.0
-                mx = (ax + bx) / 2
-                my = (ay + by) / 2
-                chord = math.hypot(bx - ax, by - ay) or 1.0
-                base_lift = min(
-                    dw * cs.DIPHTHONG_LIFT_WIDTH_FRAC_CAP,
-                    chord * cs.DIPHTHONG_LIFT_CHORD_FRAC,
-                )
-                # Fan-out: outer arrows arc 1.3x base lift (0.5 +
-                # 0.8 * 1.0); inner arrows arc 0.5x.
-                lift = base_lift * signed * (0.5 + 0.8 * abs(signed))
-                nx = -(by - ay) / chord
-                ny = (bx - ax) / chord
-                cx = mx + nx * lift
-                cy = my + ny * lift
-                arrow_color = QColor(C["accent"])
-                # Default: focused-alpha. When ANOTHER arrow is
-                # hovered, dim this one so the focused arrow
-                # stands out. Mirrors the web's `:has(...)`
-                # selector behaviour.
-                if has_focus and not is_focus:
-                    arrow_color.setAlphaF(0.25)
-                else:
-                    arrow_color.setAlphaF(cs.DIPHTHONG_ARROW_FOCUSED_ALPHA)
-                pen = QPen(arrow_color)
-                pen.setWidthF(cs.DIPHTHONG_ARROW_STROKE_PX)
-                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-                painter.setPen(pen)
-                # Tangent at the terminus approximated by the
-                # control-point-to-endpoint direction. Arrowhead
-                # tip sits at the terminus, which is already at
-                # the target button's edge thanks to the edge
-                # offset above, so no extra tip-inset is needed.
-                tx = bx - cx
-                ty = by - cy
-                tlen = math.hypot(tx, ty) or 1.0
-                ux = tx / tlen
-                uy = ty / tlen
-                path = QPainterPath()
-                path.moveTo(ax, ay)
-                path.quadTo(cx, cy, bx, by)
-                painter.drawPath(path)
-                # Arrowhead at the terminus, oriented along the
-                # tangent. Length + half-width scale with chart
-                # width so the head stays proportional.
-                head_len = dw * cs.DIPHTHONG_ARROWHEAD_LEN_FRAC
-                head_half = dw * cs.DIPHTHONG_ARROWHEAD_HALF_FRAC
-                base_x = bx - ux * head_len
-                base_y = by - uy * head_len
-                left_x = base_x + (-uy) * head_half
-                left_y = base_y + ux * head_half
-                right_x = base_x - (-uy) * head_half
-                right_y = base_y - ux * head_half
-                head = QPainterPath()
-                head.moveTo(bx, by)
-                head.lineTo(left_x, left_y)
-                head.lineTo(right_x, right_y)
-                head.closeSubpath()
-                painter.fillPath(head, arrow_color)

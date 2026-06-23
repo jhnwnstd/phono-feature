@@ -54,9 +54,9 @@ def test_chart_style_inline_json(built_dist: Path) -> None:
     assert match is not None
     payload = json.loads(match.group(1))
     for key in (
-        "diphthong_lift_chord_frac",
-        "diphthong_arrowhead_len_frac",
         "silhouette_corner_radius_frac",
+        "vowel_cell_dense_threshold",
+        "vowel_btn_min_h_px",
     ):
         assert key in payload
 

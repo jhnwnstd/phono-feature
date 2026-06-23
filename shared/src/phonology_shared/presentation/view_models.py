@@ -639,9 +639,6 @@ def _vowel_chart_summary(
                 "segs": list(cell.entries),
                 "display_kind": cell.display_kind.value,
                 "contrast_features": list(cell.contrast_features),
-                # Read by the web mode-toggle filter; pinned by
-                # test_wire_payload_completeness.py.
-                "is_diphthong": cell.is_diphthong,
                 # Always the effective pair-side displacement; the
                 # geometry elevates it to resolve same-anchor
                 # wide-cell collisions.
@@ -653,22 +650,9 @@ def _vowel_chart_summary(
             }
             for cell in geometry.cells
         ],
-        # Curved arrow endpoints (chart_x/chart_y). Row/col are
-        # diagnostic; the renderer projects from the float coords.
-        "diphthongs": [
-            {
-                "segment": d.segment,
-                "primary_row": d.primary_row,
-                "primary_col": d.primary_col,
-                "secondary_row": d.secondary_row,
-                "secondary_col": d.secondary_col,
-                "primary_chart_x": d.primary_chart_x,
-                "primary_chart_y": d.primary_chart_y,
-                "secondary_chart_x": d.secondary_chart_x,
-                "secondary_chart_y": d.secondary_chart_y,
-            }
-            for d in geometry.diphthongs
-        ],
+        # Diphthong segment names. Renderers list them as labelled
+        # chips below the vowel space; they are not placed in cells.
+        "diphthongs": list(geometry.diphthongs),
     }
 
 

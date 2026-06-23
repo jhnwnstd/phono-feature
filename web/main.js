@@ -299,18 +299,14 @@ function bridgeErrorMessage(e, fallback) {
  *  back and edit a string in place. */
 const STATUS_TEXT = Object.freeze(readInlineJson("status-text", {}));
 
-/** Vowel-chart visual policy: lift formula and arrowhead
- *  fractions the SVG arrow generator needs at runtime. Baked
- *  from ``shared/.../presentation/chart_style.py`` via
+/** Vowel-chart visual policy: the stack-density thresholds and the
+ *  legibility floor the renderer needs at runtime. Baked from
+ *  ``shared/.../presentation/chart_style.py`` via
  *  ``_build_chart_style_block`` in ``web/scripts/build.py``.
  *  Defensive defaults match the pre-relay literals in case the
  *  inline JSON block is missing (older snapshot, offline build). */
 const CHART_STYLE = Object.freeze(
     readInlineJson("chart-style", {
-        diphthong_lift_chord_frac: 0.18,
-        diphthong_lift_width_frac_cap: 0.08,
-        diphthong_arrowhead_len_frac: 0.025,
-        diphthong_arrowhead_half_frac: 0.014,
         vowel_cell_dense_threshold: 5,
         vowel_cell_ultra_threshold: 10,
         vowel_btn_min_h_px: 14,
@@ -380,10 +376,6 @@ const state = {
     // querySelectorAll in the analysis hot path.
     seg_buttons: new Map(),  // seg -> HTMLButtonElement
     feat_rows: new Map(),    // feat -> { row, badge, plus, minus }
-    // Vowel chart display mode (monophthong / diphthong).
-    // Per-inventory state: ``applyInventoryInfo`` resets it to
-    // monophthong on every load, so it is never persisted.
-    vowel_chart_mode: "monophthong",
 };
 
 let BUNDLED_INVENTORIES = [];
@@ -675,14 +667,6 @@ function applyBootstrap() {
     state.inventory_name = info.name;
     state.segments = info.segments;
     state.features = info.features;
-    // Cache for mode-toggle re-render (see
-    // ``_rerenderVowelChart``). The summary is the canonical
-    // payload renderSegmentGrid consumes; stashing it lets a
-    // mode toggle repaint without re-running the bridge.
-    state.last_inventory_summary = {
-        groups: info.groups,
-        vowel_chart: info.vowel_chart,
-    };
     renderSegmentGrid(info.groups, info.vowel_chart);
     renderFeaturePanel(info.feature_groups);
     return true;
@@ -740,17 +724,6 @@ function applyInventoryInfo(info) {
     state.features = info.features;
     state.selected_segments = [];
     state.selected_features = emptyFeatureSpec();
-    // Diphthong display mode is per-inventory state: a filter
-    // toggled for the previous inventory must not carry over and
-    // grey out the next one (which may not even render the toggle).
-    // Mirrors the desktop's per-load reset in ``set_vowels``.
-    state.vowel_chart_mode = VOWEL_CHART_MODE.MONOPHTHONG;
-    // Cache for mode-toggle re-render (see
-    // ``_rerenderVowelChart``).
-    state.last_inventory_summary = {
-        groups: info.groups,
-        vowel_chart: info.vowel_chart,
-    };
     renderSegmentGrid(info.groups, info.vowel_chart);
     renderFeaturePanel(info.feature_groups);
     clearAnalysisTabs();
@@ -1043,12 +1016,6 @@ function closeDialog(dialog) {
     dialog._returnFocusTo = null;
 }
 
-/** Active vowel-chart mode with a stable default so callers don't
- *  have to repeat the ``|| MONOPHTHONG`` fallback. */
-function getVowelChartMode() {
-    return state.vowel_chart_mode || VOWEL_CHART_MODE.MONOPHTHONG;
-}
-
 /** Attach a ResizeObserver that fires ``callback`` once per
  *  observed mutation. Stored on ``dataEl`` under ``key`` so a
  *  later ``detachResizeObserver`` call (or
@@ -1282,11 +1249,9 @@ function createRasterizedLabel(text, font, maxWidth) {
  */
 /** Disconnect every ResizeObserver attached to chart data
  *  elements before the chart is destroyed. Without this the
- *  observers keep firing on detached DOM, paint stale arrows
- *  through stale closures over the OLD ``chart`` payload, and
- *  leak references that prevent GC. Pattern added after a bug
- *  where rapid inventory swaps (Korean -> Spanish -> Korean) left
- *  phantom arrows from the previous inventory.
+ *  observers keep firing on detached DOM through stale closures
+ *  over the OLD ``chart`` payload and leak references that prevent
+ *  GC.
  *
  *  New observers should register under a ``data-*-observer``
  *  property on ``dataEl`` so they're discovered by this helper
@@ -1295,7 +1260,6 @@ function createRasterizedLabel(text, font, maxWidth) {
 function _disconnectChartObservers(grid) {
     if (!grid) return;
     for (const dataEl of grid.querySelectorAll(".vowel-chart-data")) {
-        detachResizeObserver(dataEl, "_arrowResizeObserver");
         detachResizeObserver(dataEl, "_silhouetteResizeObserver");
     }
 }
@@ -1926,22 +1890,6 @@ function _buildVowelChart(chart) {
             dataEl.style.setProperty(
                 `--vowel-${shape}-rounded-points`, polyStr,
             );
-            // Publish the silhouette's bottom-edge corners (as [0, 1]
-            // fractions of the data width) so the diphthong chip strip
-            // can constrain itself to the bottom-most vowel-space line
-            // instead of the full data-column width. Set on the chart
-            // container so the strip (a grid sibling, not a child of
-            // dataEl) inherits them. Clamped to [0, 1] so a cell-extent
-            // overshoot past the data area doesn't push the chips into
-            // the right pad.
-            const botLeft = Math.min(Math.max(silAdj.bottom_left, 0), 1);
-            const botRight = Math.min(Math.max(silAdj.bottom_right, 0), 1);
-            chartEl.style.setProperty(
-                "--vowel-bottom-left", botLeft.toFixed(5),
-            );
-            chartEl.style.setProperty(
-                "--vowel-bottom-right", botRight.toFixed(5),
-            );
             // Same trigger set as the polygon (first layout +
             // every resize): re-derive the stack button heights
             // from the rows' slot budgets at the height we just
@@ -2012,30 +1960,8 @@ function _buildVowelChart(chart) {
             (r) => [r.logical_row, r.slot_height_norm || 0],
         ),
     );
-    // Vowel chart display mode. Cells are ALWAYS rendered (only
-    // monophthongs land in cells; diphthongs render as arrows
-    // + chip strip per the shared placer's
-    // ``PlacementFlag.DIPHTHONG`` -> ``occupied`` skip). The mode
-    // dataset attribute drives CSS arrow visibility:
-    // monophthong mode hides arrows; diphthong mode shows them.
-    //
-    // Pre-fix the mode filter HID the entire cell when the cell
-    // contained any diphthong entry. Korean PHOIBLE had cells
-    // mixing /i/ + /ia ie iɛ iʌ/, so monophthong mode hid /i/
-    // along with the diphthongs; user lost the singleton from
-    // the chart entirely. The placer fix removes diphthongs from
-    // cells, so this filter now always falls through.
-    const mode = getVowelChartMode();
-    dataEl.dataset.displayMode = mode;
-    // (row,col) pairs that are diphthong endpoints. CSS dims any
-    // cell NOT in this set when display mode is diphthong, so the
-    // arrows have visual anchors and long-pair partners drop into
-    // the background instead of competing with the trajectory.
-    const endpointCells = new Set();
-    for (const d of (chart.diphthongs || [])) {
-        endpointCells.add(`${d.primary_row},${d.primary_col}`);
-        endpointCells.add(`${d.secondary_row},${d.secondary_col}`);
-    }
+    // Only monophthongs land in cells (the shared placer skips
+    // diphthongs; they are listed as chips below the chart).
     for (const cell of chart.cells) {
         // Multiple vowels can map to the same chart cell (the
         // classic case is ə / ɜ / ɚ all landing in open-mid central
@@ -2121,82 +2047,41 @@ function _buildVowelChart(chart) {
         if (tier === "top" || tier === "bottom") {
             target.dataset.rowTier = tier;
         }
-        // Tag the cell with its logical (row, col) so the diphthong
-        // arrow builder can look up the cell's RENDERED centre by
-        // (primary_row, primary_col) and use that as the arrow
-        // endpoint. Without this lookup, the arrows used the
-        // shared geometry's ``chart_x`` / ``chart_y`` anchors
-        // directly, which DON'T account for the pair-shift
-        // (-1/0/+1 * pair_shift_px) or the row-tier transform
-        // (top-tier cells anchor TOP at chart_y, bottom-tier
-        // anchor BOTTOM, middle/only centre). Result: arrows
-        // pointed to / from positions that didn't match the
-        // cells the user sees.
-        target.dataset.cellRow = String(cell.row);
-        target.dataset.cellCol = String(cell.col);
-        if (endpointCells.has(`${cell.row},${cell.col}`)) {
-            target.dataset.isEndpoint = "true";
-        }
         dataEl.appendChild(target);
     }
-    _appendVowelDiphthongArrows(dataEl, chart);
     chartEl.appendChild(dataEl);
-    const hasDiphthongs = Array.isArray(chart.diphthongs)
-        && chart.diphthongs.length > 0;
-    _appendVowelChartModeToggle(chartEl, hasDiphthongs);
     _appendVowelDiphthongChipStrip(chartEl, chart);
 
     groupEl.appendChild(chartEl);
     return groupEl;
 }
 
-/** Always-visible chip strip below the silhouette listing the
- *  inventory's diphthong segments. Each chip is a normal seg-btn
- *  so clicking it dispatches the same selection flow as any other
- *  segment click. Renders nothing when the inventory has no
- *  diphthongs. Visible in BOTH chart modes so users always see
- *  the inventory's diphthongs and can select them even when the
- *  trapezoid shows only monophthongs. */
+/** Below the vowel space: a "Diphthongs" label followed by one
+ *  chip per diphthong segment. Each chip is a normal seg-btn, so
+ *  clicking it dispatches the same selection flow as any other
+ *  segment (the delegated ``#seg-grid`` handler keys off data-seg).
+ *  Renders nothing when the inventory has no diphthongs. */
 function _appendVowelDiphthongChipStrip(chartEl, chart) {
-    const arrows = chart.diphthongs;
-    if (!Array.isArray(arrows) || arrows.length === 0) return;
+    const diphthongs = chart.diphthongs;
+    if (!Array.isArray(diphthongs) || diphthongs.length === 0) return;
+    const label = document.createElement("div");
+    label.className = "vowel-diphthong-label";
+    label.textContent = "Diphthongs";
+    chartEl.appendChild(label);
     const strip = document.createElement("div");
     strip.className = "vowel-diphthong-chips";
-    strip.setAttribute(
-        "aria-label",
-        "Diphthongs in this inventory",
-    );
-    // Order: source order from the geometry's ``diphthongs`` list
-    // (which preserves placement iteration order, stable across
-    // builds). Duplicate segments are skipped; the same
-    // segment appears once per (primary, secondary) row in the
-    // arrows list when fan-out applies, but the chip strip wants
-    // one chip per unique segment.
+    strip.setAttribute("aria-label", "Diphthongs in this inventory");
+    // ``chart.diphthongs`` is the geometry's segment list (stable
+    // order, no duplicates); dedup defensively anyway.
     const seen = new Set();
-    for (const d of arrows) {
-        if (!d.segment || seen.has(d.segment)) continue;
-        seen.add(d.segment);
-        const btn = _buildSegmentButton(d.segment);
-        // The chip carries the same data-seg as the chart's
-        // cells, so the existing delegated click handler on
-        // ``#seg-grid`` (wireSegmentDelegation) selects the
-        // diphthong without any new wiring.
-        strip.appendChild(btn);
+    for (const seg of diphthongs) {
+        if (!seg || seen.has(seg)) continue;
+        seen.add(seg);
+        strip.appendChild(_buildSegmentButton(seg));
     }
     chartEl.appendChild(strip);
 }
 
-/** Overlay a single ``<svg>`` on the vowel data area with one
- *  arrow per diphthong: a curved Bezier from the primary cell to
- *  the secondary cell, with a small chevron arrowhead at the end.
- *
- *  The SVG sits in the same SVG coordinate system as the data
- *  area's CSS percentages (viewBox 0 to 100); cell endpoints come
- *  from the cell array's normalized ``chart_x`` / ``chart_y``.
- *  ``pointer-events: none`` so the arrows do not block clicks on
- *  underlying vowel buttons. The control point lifts the curve
- *  outward from the chord so two arrows in opposite directions
- *  do not overlap on a straight line. */
 /** Mount the gradient backdrop for the silhouette interior.
  *  Post-redesign this is a single ``<div>`` whose CSS rule
  *  paints a top->bottom gradient (suggesting tongue lowering);
@@ -2212,408 +2097,6 @@ function _appendVowelHeightTierBands(dataEl, chart) {
     // Prepend so the gradient sits BEHIND row labels, cells, and
     // the diphthong arrow overlay (which all share the data area).
     dataEl.insertBefore(container, dataEl.firstChild);
-}
-
-/** Overlay an SVG layer of curved-arrow diphthong glides. Geometry
- *  ships each endpoint pre-projected; the bounds + no-self-loop
- *  invariants are pinned by ``test_phoible_vowel_rendering_stress``. */
-function _appendVowelDiphthongArrows(dataEl, chart) {
-    const arrows = chart.diphthongs;
-    if (!Array.isArray(arrows) || arrows.length === 0) return;
-    // Arrows render ONLY in diphthong display mode. In monophthong
-    // mode the chart shows monophthong cells only; arrows would
-    // have nothing to attach to (the diphthong cells are hidden)
-    // and would point into empty silhouette space.
-    if (getVowelChartMode() !== VOWEL_CHART_MODE.DIPHTHONG) return;
-    // The cell DOM elements need to be in the document and
-    // browser-laid-out before we can read their bounding rects
-    // for the arrow endpoint resolver. ``_buildVowelChart`` is
-    // called BEFORE its return value is appended to the grid, so
-    // cells aren't measurable here yet. Schedule the arrow build
-    // for the next animation frame, by which point the chart is
-    // in the DOM and laid out.
-    requestAnimationFrame(() => _buildArrowsNow(dataEl, chart));
-    // Re-bake arrows when the data area resizes (splitter drag,
-    // window resize, pane swap). Pair-shift is a FIXED pixel
-    // offset; the cell centres in viewBox %-space therefore shift
-    // when dataAreaW / dataAreaH change. Without this observer
-    // the arrows would visibly desync from the cells after the
-    // first resize. The observer fires synchronously on resize;
-    // arrow rebuild is cheap (one SVG, one querySelectorAll over
-    // the small cell set).
-    attachResizeObserver(
-        dataEl, "_arrowResizeObserver", () => _buildArrowsNow(dataEl, chart),
-    );
-}
-
-function _buildArrowsNow(dataEl, chart) {
-    // If the dataEl was detached or replaced before the rAF fired,
-    // bail rather than spawning a phantom SVG.
-    if (!dataEl.isConnected) return;
-    const arrows = chart.diphthongs;
-    if (!Array.isArray(arrows) || arrows.length === 0) return;
-    // Drop any pre-existing overlay (rerender + resize paths
-    // re-invoke this function).
-    const prior = dataEl.querySelector("svg.vowel-diphthong-arrows");
-    if (prior) prior.remove();
-    // The endpoint resolver looks up the actual rendered position
-    // of the cell's content. Pre-fix the arrows used the shared
-    // geometry's ``primary_chart_x/y`` / ``secondary_chart_x/y``
-    // anchors, which DON'T account for:
-    //   1. The pair-shift (-1/0/+1 * pair_shift_px) the CSS
-    //      transform adds for rounded/unrounded mates.
-    //   2. The row-tier anchoring (top tier puts chart_y at the
-    //      cell TOP edge; bottom tier at the BOTTOM; middle/only
-    //      centred).
-    //   3. The SPECIFIC button inside a multi-entry cell. A stack
-    //      of six /i/-family diphthongs at one cell has six
-    //      buttons; the arrow for /ia/ should originate at the
-    //      /ia/ BUTTON's centre, not at the stack's centre.
-    //
-    // The lookup walks the DOM each call to find the matching
-    // button by segment string. For the primary endpoint we have
-    // the segment (``d.segment``); for the secondary endpoint we
-    // don't (it's a virtual position), so we fall back to the
-    // cell centre, then to the shared chart_x/chart_y.
-    //
-    // Coordinates returned in viewBox %-space so the existing
-    // ``viewBox="0 0 100 100"`` + ``preserveAspectRatio="none"``
-    // path math keeps working unchanged downstream.
-    const dataAreaW = dataEl.clientWidth || 1;
-    const dataAreaH = dataEl.clientHeight || 1;
-    const dataRect = dataEl.getBoundingClientRect();
-    // Returns [cx_vb, cy_vb, w_vb, h_vb] in viewBox %-space for
-    // the given DOM rect. Width and height let the caller offset
-    // the endpoint by the rectangle's edge along the chord
-    // direction so arrows start/end at the button's outline, not
-    // its centre.
-    const rectToViewbox = (rect) => [
-        ((rect.left - dataRect.left + rect.width / 2) / dataAreaW) * 100,
-        ((rect.top - dataRect.top + rect.height / 2) / dataAreaH) * 100,
-        (rect.width / dataAreaW) * 100,
-        (rect.height / dataAreaH) * 100,
-    ];
-    const findCell = (row, col) => dataEl.querySelector(
-        `.vowel-chart-cell[data-cell-row="${row}"]`
-        + `[data-cell-col="${col}"]`
-    );
-    // Each ``_target`` returns [centre_x_vb, centre_y_vb, w_vb, h_vb].
-    // Coordinates in viewBox %-space; widths/heights ditto.
-    // ``chart_x`` / ``chart_y`` fallback values land in the
-    // anchor position with zero width/height (no edge offset).
-    const primaryTarget = (row, col, segment, chart_x, chart_y) => {
-        const cellEl = findCell(row, col);
-        if (cellEl) {
-            const btn = cellEl.querySelector(
-                `.seg-btn[data-seg="${CSS.escape(segment)}"]`
-            );
-            if (btn) return rectToViewbox(btn.getBoundingClientRect());
-            return rectToViewbox(cellEl.getBoundingClientRect());
-        }
-        return [chart_x * 100, chart_y * 100, 0, 0];
-    };
-    const secondaryTarget = (row, col, chart_x, chart_y) => {
-        const cellEl = findCell(row, col);
-        if (cellEl) {
-            // Aim for the cell's CANONICAL segment button (first
-            // ``.seg-btn`` child; entries are sorted descending
-            // by placement confidence).
-            const targetBtn = cellEl.querySelector(".seg-btn");
-            const rect = (targetBtn || cellEl).getBoundingClientRect();
-            return rectToViewbox(rect);
-        }
-        return [chart_x * 100, chart_y * 100, 0, 0];
-    };
-    // Offset from a rectangle's centre to where a ray in unit
-    // direction (ux, uy) exits the rectangle of size w*h. Used so
-    // arrows start/end at button EDGES rather than centres; the
-    // arrowhead now sits outside the source and the tip touches
-    // the target button's edge.
-    // Push the arrow endpoint ``ARROW_TIP_INSET_PX`` past the cell
-    // edge so a small visual gap separates the arrow from its
-    // target cell. Diagram convention: arrows that touch the cell
-    // border read as "merged"; a 4 px gap reads as "pointing at."
-    const ARROW_TIP_INSET_PX = 4;
-    const rectEdgeOffset = (w, h, ux, uy) => {
-        if (w <= 0 || h <= 0) return [0, 0];
-        const hw = w / 2;
-        const hh = h / 2;
-        const tx = Math.abs(ux) < 1e-9 ? Infinity : hw / Math.abs(ux);
-        const ty = Math.abs(uy) < 1e-9 ? Infinity : hh / Math.abs(uy);
-        const t = Math.min(tx, ty) + ARROW_TIP_INSET_PX;
-        return [t * ux, t * uy];
-    };
-    // Group arrows that share the same primary -> secondary cell
-    // pair so we can fan their control points across the
-    // perpendicular axis; otherwise PHOIBLE inventories that have
-    // multiple distinct diphthongs at one pair would render N
-    // curves literally on top of each other.
-    const groups = new Map();
-    for (const d of arrows) {
-        const key =
-            `${d.primary_row},${d.primary_col}` +
-            `->${d.secondary_row},${d.secondary_col}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(d);
-    }
-    const svgNS = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("class", "vowel-diphthong-arrows");
-    svg.setAttribute("viewBox", "0 0 100 100");
-    svg.setAttribute("preserveAspectRatio", "none");
-    svg.setAttribute("aria-hidden", "true");
-    for (const [groupKey, groupArrows] of groups.entries()) {
-        const N = groupArrows.length;
-        for (let i = 0; i < N; i++) {
-            const d = groupArrows[i];
-            const [ax_c, ay_c, aw, ah] = primaryTarget(
-                d.primary_row,
-                d.primary_col,
-                d.segment,
-                d.primary_chart_x,
-                d.primary_chart_y,
-            );
-            const [bx_c, by_c, bw, bh] = secondaryTarget(
-                d.secondary_row,
-                d.secondary_col,
-                d.secondary_chart_x,
-                d.secondary_chart_y,
-            );
-            // Edge offset: start the arrow at the source
-            // button's EDGE (not centre) in the chord direction;
-            // terminate at the target button's EDGE. Arrows now
-            // visibly emerge from the source button and the
-            // arrowhead tip touches the target button.
-            const chordDx = bx_c - ax_c;
-            const chordDy = by_c - ay_c;
-            const chordLen = Math.hypot(chordDx, chordDy) || 1;
-            const uxChord = chordDx / chordLen;
-            const uyChord = chordDy / chordLen;
-            const [offAx, offAy] = rectEdgeOffset(aw, ah, uxChord, uyChord);
-            const [offBx, offBy] = rectEdgeOffset(bw, bh, -uxChord, -uyChord);
-            const ax = ax_c + offAx;
-            const ay = ay_c + offAy;
-            const bx = bx_c + offBx;
-            const by = by_c + offBy;
-            // Control point: midpoint nudged perpendicular to the
-            // chord (post edge offset).
-            const mx = (ax + bx) / 2;
-            const my = (ay + by) / 2;
-            const dx = bx - ax;
-            const dy = by - ay;
-            const len = Math.hypot(dx, dy) || 1;
-            const baseLift = Math.min(
-                CHART_STYLE.diphthong_lift_width_frac_cap * 100,
-                len * CHART_STYLE.diphthong_lift_chord_frac,
-            );
-            const signedFactor =
-                N > 1 ? (i / (N - 1)) * 2 - 1 : 1;
-            // Outer arrows arc 1.3x base lift (0.5 + 0.8);
-            // inner arrows arc 0.5x.
-            const lift =
-                baseLift * signedFactor * (0.5 + 0.8 * Math.abs(signedFactor));
-            const nx = -dy / len;
-            const ny = dx / len;
-            const cx = mx + nx * lift;
-            const cy = my + ny * lift;
-            // Tangent at the terminus approximated by the
-            // control-point-to-endpoint direction.
-            const tx = bx - cx;
-            const ty = by - cy;
-            const tlen = Math.hypot(tx, ty) || 1;
-            const ux = tx / tlen;
-            const uy = ty / tlen;
-            const path = document.createElementNS(svgNS, "path");
-            path.setAttribute("d", `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`);
-            path.setAttribute("class", "vowel-diphthong-arrow");
-            path.dataset.diphthongSeg = d.segment;
-            // Stable structural id (primary,secondary serialized
-            // plus group index) keys the focus map below so a
-            // future segment-glyph collision can't cross-fire.
-            path.dataset.diphthongId = `${groupKey}-${i}`;
-            svg.appendChild(path);
-            // Arrowhead: a small triangle at the terminus,
-            // oriented along the tangent.
-            const px = -uy;
-            const py = ux;
-            const headLen = CHART_STYLE.diphthong_arrowhead_len_frac * 100;
-            const headHalfW = (
-                CHART_STYLE.diphthong_arrowhead_half_frac * 100
-            );
-            const baseX = bx - ux * headLen;
-            const baseY = by - uy * headLen;
-            const leftX = baseX + px * headHalfW;
-            const leftY = baseY + py * headHalfW;
-            const rightX = baseX - px * headHalfW;
-            const rightY = baseY - py * headHalfW;
-            const head = document.createElementNS(svgNS, "path");
-            head.setAttribute(
-                "d",
-                `M ${bx} ${by} L ${leftX} ${leftY} ` +
-                    `L ${rightX} ${rightY} Z`,
-            );
-            head.setAttribute("class", "vowel-diphthong-arrowhead");
-            head.dataset.diphthongSeg = d.segment;
-            head.dataset.diphthongId = `${groupKey}-${i}`;
-            svg.appendChild(head);
-        }
-    }
-    dataEl.appendChild(svg);
-    _wireVowelDiphthongFocus(dataEl);
-}
-
-/** A small chart-corner toggle that flips the vowel chart between
- *  monophthong and diphthong display modes. The button only
- *  renders when the inventory actually has diphthongs so a pure-
- *  monophthong inventory doesn't carry useless chrome. Click
- *  updates ``state.vowel_chart_mode``, writes to localStorage,
- *  and triggers a full chart re-render so the cell + arrow
- *  filters re-apply. ``aria-pressed`` reflects diphthong mode
- *  so screen readers announce the state change.
- *
- *  ``hasDiphthongs`` is passed in (rather than queried from the
- *  SVG) because in monophthong mode no SVG exists yet; the
- *  caller knows from ``chart.diphthongs.length > 0``.
- */
-function _appendVowelChartModeToggle(chartEl, hasDiphthongs) {
-    if (!hasDiphthongs) return;
-    const tooltipMono =
-        STATUS_TEXT.vowel_chart_mode_tooltip_mono_active ||
-        "Show the inventory's diphthong trajectories instead";
-    const tooltipDiphthong =
-        STATUS_TEXT.vowel_chart_mode_tooltip_diphthong_active ||
-        "Show the inventory's monophthongs instead";
-    const isDiphthong = getVowelChartMode() === VOWEL_CHART_MODE.DIPHTHONG;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "vowel-diphthong-toggle";
-    btn.setAttribute("aria-pressed", String(isDiphthong));
-    btn.setAttribute(
-        "title",
-        isDiphthong ? tooltipDiphthong : tooltipMono,
-    );
-    btn.textContent = STATUS_TEXT.diphthong_toggle_label || "diphthongs";
-    btn.addEventListener("click", () => {
-        const next =
-            getVowelChartMode() === VOWEL_CHART_MODE.DIPHTHONG
-                ? VOWEL_CHART_MODE.MONOPHTHONG
-                : VOWEL_CHART_MODE.DIPHTHONG;
-        // Per-inventory state; deliberately NOT persisted to
-        // localStorage. ``applyInventoryInfo`` resets the mode on
-        // every load, so a stored value could only ever conflict.
-        state.vowel_chart_mode = next;
-        _rerenderVowelChart();
-    });
-    // Attach to the chart's outer container (not the data area):
-    // CSS places it in grid row 5, right-aligned below the
-    // diphthong chip strip (see ``.vowel-diphthong-toggle``).
-    chartEl.appendChild(btn);
-}
-
-/** Switch the vowel chart's display mode without rebuilding the
- *  segment grid. The cells render identically in mono and diph
- *  modes (diphthongs no longer occupy cells); only the SVG arrow
- *  overlay differs. Toggle the data-display-mode attribute (CSS
- *  reads it for any mode-specific styling) and add or remove the
- *  arrow SVG accordingly. Falls back to a full rebuild only when
- *  the chart container is missing (e.g. inventory has no vowels). */
-function _rerenderVowelChart() {
-    const dataEl = nodes.segGrid.querySelector(".vowel-chart-data");
-    const summary = state.last_inventory_summary;
-    if (!dataEl || !summary) {
-        if (summary) renderSegmentGrid(summary.groups, summary.vowel_chart);
-        return;
-    }
-    const mode = getVowelChartMode();
-    dataEl.dataset.displayMode = mode;
-    const prior = dataEl.querySelector("svg.vowel-diphthong-arrows");
-    if (mode === VOWEL_CHART_MODE.DIPHTHONG) {
-        if (!prior) {
-            _appendVowelDiphthongArrows(dataEl, summary.vowel_chart);
-            // Re-wire focus so hover/keyboard interactions land on
-            // the freshly-built arrows.
-            _wireVowelDiphthongFocus(dataEl);
-        }
-    } else if (prior) {
-        prior.remove();
-    }
-    // Update toggle button label + tooltip without rebuilding it.
-    const toggle = nodes.segGrid.querySelector(".vowel-diphthong-toggle");
-    if (toggle) {
-        const isDiph = mode === VOWEL_CHART_MODE.DIPHTHONG;
-        toggle.setAttribute("aria-pressed", String(isDiph));
-    }
-}
-
-/** Hover / focus wiring for the diphthong overlay. Default state
- *  hides every arrow (CSS opacity 0); when the user hovers or
- *  keyboard-focuses a vowel seg-btn, the SVG paths whose
- *  ``data-diphthong-seg`` matches the button's ``data-seg`` get
- *  the ``is-focused`` class for one frame of visibility. Mouse-out
- *  and keyboard-blur clear the class. A single delegation listener
- *  on the data area scales to inventories with up to 50 vowels and
- *  30 diphthongs without per-button wiring. */
-function _wireVowelDiphthongFocus(dataEl) {
-    let currentSeg = null;
-    let currentFocused = null;
-    const svg = dataEl.querySelector("svg.vowel-diphthong-arrows");
-    if (!svg) return;
-    // Build seg -> SVG path[] map once; setFocus does Map lookups
-    // instead of two svg.querySelectorAll per pointer-enter (firing
-    // on every vowel hover otherwise).
-    const segToPaths = new Map();
-    for (const el of svg.querySelectorAll("[data-diphthong-seg]")) {
-        const seg = el.getAttribute("data-diphthong-seg");
-        if (!seg) continue;
-        const bucket = segToPaths.get(seg);
-        if (bucket) bucket.push(el);
-        else segToPaths.set(seg, [el]);
-    }
-    const setFocus = (newSeg) => {
-        if (newSeg === currentSeg) return;
-        currentSeg = newSeg;
-        if (currentFocused) {
-            for (const el of currentFocused) {
-                if (el.isConnected) el.classList.remove("is-focused");
-            }
-            currentFocused = null;
-        }
-        if (!newSeg) return;
-        // Cached paths may have been removed if the chart re-rendered
-        // while a hover is active; filter to currently-live nodes.
-        const matches = (segToPaths.get(newSeg) || []).filter(
-            (el) => el.isConnected,
-        );
-        if (matches.length === 0) return;
-        for (const el of matches) el.classList.add("is-focused");
-        currentFocused = matches;
-    };
-    const segFromEvent = (ev) => {
-        if (!dataEl.isConnected) return null;
-        const btn = ev.target.closest(".seg-btn[data-seg]");
-        if (!btn || !dataEl.contains(btn)) return null;
-        return btn.dataset.seg;
-    };
-    dataEl.addEventListener("pointerover", (ev) => {
-        const seg = segFromEvent(ev);
-        if (seg) setFocus(seg);
-    });
-    dataEl.addEventListener("pointerout", (ev) => {
-        const seg = segFromEvent(ev);
-        if (!seg) return;
-        const next = ev.relatedTarget;
-        if (next && next.closest && next.closest(".seg-btn[data-seg]")) {
-            return;
-        }
-        setFocus(null);
-    });
-    dataEl.addEventListener("focusin", (ev) => {
-        const seg = segFromEvent(ev);
-        if (seg) setFocus(seg);
-    });
-    dataEl.addEventListener("focusout", (ev) => {
-        if (segFromEvent(ev)) setFocus(null);
-    });
 }
 
 /** Build a single vowel-cell button from an IPA segment string. */
@@ -5821,23 +5304,6 @@ function normalizeMatchMode(value) {
         ? MATCH_MODE.WILDCARD
         : MATCH_MODE.STRICT;
 }
-
-/** Vowel-chart display mode: which class of vowel segments the
- *  chart's silhouette area renders. Values relayed from
- *  ``palette.VowelChartMode`` (Python SSOT) via the inlined
- *  STATUS_TEXT JSON. Default = monophthong (the cleaner first
- *  paint; mirrors the previous "show all diphthong arrows = off"
- *  default).
- *
- *  The diphthong chip strip below the silhouette always renders
- *  the inventory's diphthongs regardless of mode; this enum
- *  only decides what fills the trapezoid. */
-const VOWEL_CHART_MODE = Object.freeze(
-    STATUS_TEXT.vowel_chart_mode_values || {
-        MONOPHTHONG: "monophthong",
-        DIPHTHONG: "diphthong",
-    },
-);
 
 /** Push the user's restored matching mode (set by
  *  wireMatchModeToggle before the bridge attached) into Python.

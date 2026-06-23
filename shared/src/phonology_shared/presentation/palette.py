@@ -33,33 +33,6 @@ class PaletteMode(StrEnum):
     COLORBLIND = "colorblind"
 
 
-class VowelChartMode(StrEnum):
-    """Vowel chart display mode: which class of vowel segments
-    the chart's silhouette area renders.
-
-    * ``MONOPHTHONG`` shows monophthong cells; diphthong cells and
-      their arrows are hidden. The chart answers "what
-      monophthongs are in this inventory" cleanly.
-    * ``DIPHTHONG`` shows diphthong cells and their trajectory
-      arrows; monophthong cells are hidden. The chart answers
-      "where does each diphthong glide from / to".
-
-    Diphthongs remain ordinary segments for the engine, feature
-    queries, natural-class logic, selection, and analysis. This
-    enum drives the vowel chart's visualisation only.
-
-    The inventory's diphthong segments are surfaced as a chip
-    strip below the silhouette in BOTH modes so users can always
-    see + select them regardless of which mode is active.
-
-    Default is MONOPHTHONG (matches the existing "show all
-    diphthong arrows = off" default; the cleaner first paint).
-    """
-
-    MONOPHTHONG = "monophthong"
-    DIPHTHONG = "diphthong"
-
-
 class ClassState(StrEnum):
     """Natural-class verdict for the analysis panel's Class tab.
     Drives both the tab's colour cue and the

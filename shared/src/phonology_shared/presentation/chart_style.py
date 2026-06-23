@@ -1,15 +1,13 @@
 """Vowel-chart visual policy: every constant the renderers consume.
 
-The vowel chart's chrome (title, axis labels, silhouette outline,
-diphthong arrows) and behaviour (focused / show-all opacity, lift
-geometry) need to render the same on the desktop's Qt widget and
-the web's DOM / SVG. Before this module the two renderers held
-parallel literals that quietly drifted: title font 8pt-Bold (Qt)
-vs 11px / 600 (CSS), arrow stroke 1.75 px vs 0.6 SVG user-units,
-focused opacity 1.0 vs 0.95, etc. An audit surfaced ~25 visible
-mismatches; this module centralises them so both renderers consume
-the same numbers via direct import (desktop) or the build-time
-relay into CSS custom properties (web).
+The vowel chart's chrome (title, axis labels, silhouette outline)
+needs to render the same on the desktop's Qt widget and the web's
+DOM. Before this module the two renderers held parallel literals
+that quietly drifted: title font 8pt-Bold (Qt) vs 11px / 600 (CSS),
+etc. An audit surfaced ~25 visible mismatches; this module
+centralises them so both renderers consume the same numbers via
+direct import (desktop) or the build-time relay into CSS custom
+properties (web).
 
 The audit's choice of canonical value adopts the web's recent
 tuning for PHOIBLE-scale inventories where the values diverged.
@@ -27,8 +25,6 @@ Categories:
 * :data:`VOWEL_SILHOUETTE_*`: trapezoid outline stroke + alpha.
 * :data:`VOWEL_CHART_DATA_MIN_H_PX`: floor below which the data
   area refuses to compress further (small inventories like Spanish).
-* :data:`DIPHTHONG_ARROW_*`: per-arrow stroke, opacity, arrowhead
-  size, control-point lift formula.
 * :data:`SEG_GROUP_HEADER_*`: consonant manner-class header
   font / weight / letter-spacing / padding.
 * :data:`SEG_GROUP_GAP_PX`: vertical gap between consecutive
@@ -290,31 +286,3 @@ VOWEL_BTN_MIN_H_PX: int = 14
 #: catching the 2.35+ outliers (Spanish 2.35, MSA 3.29) that
 #: read as visually over-stretched.
 VOWEL_SILHOUETTE_MAX_ASPECT: float = 1.8
-
-
-# ---------------------------------------------------------------------------
-# Diphthong arrows (curved arrows from primary to secondary cell)
-# ---------------------------------------------------------------------------
-
-#: Stroke width (px) for the curved arrow path.
-DIPHTHONG_ARROW_STROKE_PX: float = 1.0
-
-#: Stroke + arrowhead opacity in diphthong display mode (arrows
-#: are always-on in that mode; dimmed-other-arrows on hover is
-#: handled in the renderer, not via an alpha constant).
-DIPHTHONG_ARROW_FOCUSED_ALPHA: float = 0.95
-
-#: Arrowhead length as a fraction of the data-area width so it
-#: scales with the chart instead of pinning to pixels.
-DIPHTHONG_ARROWHEAD_LEN_FRAC: float = 0.025
-
-#: Arrowhead half-width perpendicular to the chord tangent.
-DIPHTHONG_ARROWHEAD_HALF_FRAC: float = 0.014
-
-#: Base lift for the quadratic-Bezier control point, as a
-#: fraction of the chord length.
-DIPHTHONG_LIFT_CHORD_FRAC: float = 0.18
-
-#: Lift cap (fraction of data-area width). Keeps fan-out arrows
-#: from the same source cell visually distinguishable.
-DIPHTHONG_LIFT_WIDTH_FRAC_CAP: float = 0.08

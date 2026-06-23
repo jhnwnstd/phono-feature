@@ -51,7 +51,7 @@ from phonology_shared.chart.vowel_geometry.display_slots import (
 from phonology_shared.chart.vowel_geometry.furniture import (
     build_bands,
     build_col_headers,
-    build_diphthong_overlay,
+    build_diphthong_segments,
     build_rows,
 )
 from phonology_shared.chart.vowel_geometry.model import (
@@ -74,7 +74,6 @@ from phonology_shared.chart.vowel_geometry.outline import (
 )
 from phonology_shared.chart.vowel_space import _HEIGHT_Y
 from phonology_shared.chart.vowels import (
-    PlacementFlag,
     PlacementPolicy,
     VowelChartShape,
     VowelPlacement,
@@ -423,30 +422,20 @@ def _project_cells(
     slot_plan: SlotPlan,
     row_plan: RowPlan,
     silhouette: VowelChartSilhouette,
-    placements: Mapping[str, VowelPlacement],
 ) -> list[VowelChartCell]:
     """Project each slot's effective anchor through the final
-    silhouette, flag diphthong cells, and resolve same-anchor
-    pair-shift conflicts. No phonology re-decisions happen here; the
-    slots' row/col are already final, only their pixel-space
-    position is pending.
+    silhouette and resolve same-anchor pair-shift conflicts. No
+    phonology re-decisions happen here; the slots' row/col are
+    already final, only their pixel-space position is pending.
+
+    Diphthongs never reach this function: the placer skips them from
+    slots (they render as chips below the chart), so every slot here
+    is a monophthong cell.
     """
     cells: list[VowelChartCell] = []
     for slot in slot_plan.slots:
         cell_display_y = row_plan.display_y[slot.row]
         chart_x = project_anchor_x(silhouette, slot.anchor_x, cell_display_y)
-        # ``is_diphthong`` is True when any of this cell's entries
-        # carries ``PlacementFlag.DIPHTHONG`` on its placement
-        # record. The placer sets that flag only when the segment's
-        # secondary lands in a different cell from its primary
-        # (post-degeneracy-filter), so pharyngealised monophthongs
-        # whose secondary collapses to the primary cell are
-        # automatically excluded.
-        is_diphthong = any(
-            PlacementFlag.DIPHTHONG in placements[seg].flags
-            for seg in slot.entries
-            if seg in placements
-        )
         cells.append(
             VowelChartCell(
                 row=slot.row,
@@ -457,7 +446,6 @@ def _project_cells(
                 entries=slot.entries,
                 display_kind=slot.display_kind,
                 contrast_features=slot.contrast_features,
-                is_diphthong=is_diphthong,
             )
         )
     # Same-anchor pair-shift conflicts: two paired cells (opposite
@@ -593,15 +581,15 @@ def build_vowel_chart_geometry(
     )
     row_plan = _plan_rows(plan, classifications, silhouette)
     silhouette = _solve_outline(slot_plan, row_plan, silhouette)
-    cells = _project_cells(slot_plan, row_plan, silhouette, plan.placements)
+    cells = _project_cells(slot_plan, row_plan, silhouette)
     sized = _fit_outline_and_size(cells, silhouette, row_plan)
     cells = _confine_cells(cells, row_plan, sized)
 
     # Furniture bakes against the FINAL silhouette and natural size:
-    # rows carry label anchors evaluated at label_y; headers and the
-    # diphthong overlay read only widths and y bounds, which the
-    # extent growth never modifies, so passing the post-growth
-    # silhouette is identical to the pre-growth one for them.
+    # rows carry label anchors evaluated at label_y; headers read only
+    # widths and y bounds, which the extent growth never modifies, so
+    # passing the post-growth silhouette is identical to the pre-growth
+    # one for them.
     rows = build_rows(row_plan, sized.silhouette, sized.natural_h)
     return VowelChartGeometry(
         title=VOWEL_CHART_TITLE,
@@ -612,11 +600,6 @@ def build_vowel_chart_geometry(
         cells=tuple(cells),
         natural_data_width_px=sized.natural_w,
         natural_data_height_px=sized.natural_h,
-        diphthongs=build_diphthong_overlay(
-            plan.placements,
-            row_plan,
-            sized.silhouette,
-            plan.open_front_populated,
-        ),
+        diphthongs=build_diphthong_segments(plan.placements),
         bands=build_bands(rows, sized.silhouette),
     )

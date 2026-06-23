@@ -156,60 +156,37 @@ def test_b2_cells_sit_inside_silhouette(
     )
 
 
-def test_b3_diphthongs_have_distinct_well_defined_endpoints(
+def test_b3_diphthongs_are_unique_inventory_segments(
     phoible_build_geometry: Callable[[str], object],
     phoible_label_for: Callable[[str], str],
     phoible_inventory_ids_full: list[str],
 ) -> None:
-    """Every diphthong has distinct primary and secondary endpoints
-    (no degenerate self-loops after the suppression in
-    ``compute_placements``) and both ``chart_x`` / ``chart_y`` pairs
-    fall in ``[0, 1]`` so the renderer can position the arrow with
-    a simple percentage transform. The endpoints no longer need
-    to correspond to populated cells; the geometry projects them
-    independently via ``_project_to_chart_xy``."""
-    offenders: list[tuple[str, str, tuple[int, int], tuple[int, int]]] = []
-    bounds_offenders: list[tuple[str, str, float, float, float, float]] = []
+    """``geometry.diphthongs`` is a tuple of unique, non-empty segment
+    strings. They are the inventory's contour vowels (the placer's
+    degeneracy filter already dropped contours that collapse to a
+    single cell), surfaced as chips below the vowel space rather than
+    placed in the trapezoid."""
+    empty_offenders: list[str] = []
+    dup_offenders: list[tuple[str, str]] = []
     for inv_id in phoible_inventory_ids_full:
         geom = phoible_build_geometry(inv_id)
         if geom is None:
             continue
-        for d in geom.diphthongs:
-            primary = (d.primary_row, d.primary_col)
-            secondary = (d.secondary_row, d.secondary_col)
-            if primary == secondary:
-                offenders.append(
-                    (
-                        phoible_label_for(inv_id),
-                        d.segment,
-                        primary,
-                        secondary,
-                    )
-                )
-            if not (
-                0.0 <= d.primary_chart_x <= 1.0
-                and 0.0 <= d.primary_chart_y <= 1.0
-                and 0.0 <= d.secondary_chart_x <= 1.0
-                and 0.0 <= d.secondary_chart_y <= 1.0
-            ):
-                bounds_offenders.append(
-                    (
-                        phoible_label_for(inv_id),
-                        d.segment,
-                        d.primary_chart_x,
-                        d.primary_chart_y,
-                        d.secondary_chart_x,
-                        d.secondary_chart_y,
-                    )
-                )
-    assert not offenders, (
-        f"degenerate diphthongs (primary == secondary) in "
-        f"{len(offenders)} placements; first 5: {offenders[:5]}"
+        seen: set[str] = set()
+        for seg in geom.diphthongs:
+            if not isinstance(seg, str) or not seg:
+                empty_offenders.append(phoible_label_for(inv_id))
+            if seg in seen:
+                dup_offenders.append((phoible_label_for(inv_id), seg))
+            seen.add(seg)
+    assert not empty_offenders, (
+        f"empty / non-string diphthong entries in "
+        f"{len(empty_offenders)} inventories; first 5: "
+        f"{empty_offenders[:5]}"
     )
-    assert not bounds_offenders, (
-        f"diphthong endpoints outside [0, 1] in "
-        f"{len(bounds_offenders)} placements; first 5: "
-        f"{bounds_offenders[:5]}"
+    assert not dup_offenders, (
+        f"duplicate diphthong entries in {len(dup_offenders)} "
+        f"placements; first 5: {dup_offenders[:5]}"
     )
 
 

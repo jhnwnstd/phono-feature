@@ -98,17 +98,6 @@ class VowelChartCell:
     entries: tuple[str, ...]
     display_kind: VowelCellDisplayKind = VowelCellDisplayKind.STACK
     contrast_features: tuple[str, ...] = ()
-    # True when at least one of the cell's ``entries`` carries
-    # :py:attr:`PlacementFlag.DIPHTHONG`; the placer sets this
-    # flag only on placements whose ``secondary`` lands in a
-    # DIFFERENT (row, col) from the primary, so pharyngealised
-    # monophthongs (Archi ``/aˤ /iˤ /``) whose secondary
-    # collapses back to the primary cell are excluded by
-    # construction. Renderers use this flag plus the active
-    # :py:class:`VowelChartMode` to filter cell visibility
-    # without re-deriving "is this a diphthong" from feature
-    # bundles or segment-string parsing.
-    is_diphthong: bool = False
     # Effective pair-side displacement in pixels. Defaults to the
     # canonical ``VOWEL_PAIR_SHIFT_PX`` which is sized for single-
     # button cells. When two paired cells at the SAME chart_x are
@@ -302,39 +291,6 @@ class VowelChartSilhouette:
 
 
 @dataclass(frozen=True, slots=True)
-class VowelChartDiphthong:
-    """One diphthong's primary -> secondary endpoint pair, with the
-    grid coordinates the renderer uses to position the arrow.
-
-    The endpoint's ``(row, col)`` keys identify the logical cells;
-    ``primary_chart_x`` / ``primary_chart_y`` and
-    ``secondary_chart_x`` / ``secondary_chart_y`` are the projected
-    fractional positions (``[0, 1]``) the renderer applies directly.
-    Carrying the projection here (rather than asking the renderer to
-    look up cells in :py:attr:`VowelChartGeometry.cells`) decouples
-    the diphthong overlay from cell population: a secondary that
-    points to an unpopulated logical slot (PHOIBLE diphthong glides
-    landing on a row/col the inventory does not otherwise specify)
-    still gets a valid endpoint.
-
-    The geometry builder computes the projection through the same
-    silhouette + row-distribution math the populated cells use, so
-    the arrow lands at the would-be cell position regardless of
-    whether a vowel actually populates that slot.
-    """
-
-    segment: str
-    primary_row: int
-    primary_col: int
-    secondary_row: int
-    secondary_col: int
-    primary_chart_x: float = 0.0
-    primary_chart_y: float = 0.0
-    secondary_chart_x: float = 0.0
-    secondary_chart_y: float = 0.0
-
-
-@dataclass(frozen=True, slots=True)
 class VowelChartBand:
     """One height-tier band stripe. ``top_norm`` / ``bottom_norm``
     are clamped to the silhouette's y span; renderers apply them
@@ -401,12 +357,11 @@ class VowelChartGeometry:
     cells: tuple[VowelChartCell, ...]
     natural_data_width_px: int
     natural_data_height_px: int
-    # Diphthong rendering hints. One entry per vowel segment whose
-    # PHOIBLE encoding spans two cells: the renderer draws a curved
-    # arrow from ``primary_cell`` to ``secondary_cell``; the glyph
-    # itself stays in ``primary_cell``. Empty for monophthong-only
-    # inventories.
-    diphthongs: tuple[VowelChartDiphthong, ...] = ()
+    # Diphthong segments (PHOIBLE contour vowels whose encoding spans
+    # two cells). They are NOT placed in the trapezoid; renderers list
+    # them as labelled chips below the vowel space. Empty for
+    # monophthong-only inventories.
+    diphthongs: tuple[str, ...] = ()
     # Height-tier banding rectangles. One band per populated row,
     # with ``(top_norm, bottom_norm)`` clamped to the silhouette
     # span and ``tinted`` alternating every other row. Renderers

@@ -33,18 +33,11 @@ verified empirically before commit):
   ``vowel_secondary`` key lookup misses the engine key (the
   original NFD/NFC bug that A1 fixed).
 
-- **E5 Pair-collision tracker**: counts inventories with >= 3
-  distinct diphthongs at the same primary->secondary pair. Does
-  NOT fail (the C3 fan-out renders them legibly); prints a
-  count at end-of-test so a sudden jump shows up.
-
 Skipped when the PHOIBLE bake snapshot is absent (a checkout that
 has never run ``web/scripts/bake_phoible.py``).
 """
 
 from __future__ import annotations
-
-import pytest
 
 from phonology_shared.chart.vowel_space import ROW_LABELS
 from phonology_shared.chart.vowels import (
@@ -274,60 +267,3 @@ def test_e4_diphthong_secondary_is_present_or_intentionally_suppressed(
         f"diphthongs with unexpectedly null secondary placement in "
         f"{len(offenders)} inventories: {offenders[:5]}"
     )
-
-
-def test_e5_pair_collision_tracker(
-    phoible_provider,
-    phoible_inventory_ids_full: list[str],
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Soft check: counts inventories where >= 3 distinct
-    diphthongs share the SAME (primary, secondary) cell pair. The
-    web renderer's C3 fan-out distributes their arrows around the
-    chord, so this is no longer a visual bug; the count is tracked
-    so a sudden growth shows up in CI output."""
-    from collections import defaultdict
-
-    inventories_with_collisions = 0
-    worst_collision = 0
-    for inv_id in phoible_inventory_ids_full:
-        inv = materialize_phoible_inventory(phoible_provider, inv_id)
-        vs = inv.metadata.get("vowel_secondary") or {}
-        if not vs:
-            continue
-        vowels = _vowels_of(dict(inv.segments))
-        seg_feats = {seg: dict(inv.segments[seg]) for seg in vowels}
-        profile = detect_vowel_profile(vowels, seg_feats)
-        _, placements = compute_placements(
-            vowels, profile, seg_feats, vowel_secondary=vs
-        )
-        pair_to_segs: dict[
-            tuple[tuple[int, int], tuple[int, int]], list[str]
-        ] = defaultdict(list)
-        for seg, p in placements.items():
-            if p.secondary is None:
-                continue
-            key = (
-                (p.row, p.col),
-                (p.secondary.row, p.secondary.col),
-            )
-            pair_to_segs[key].append(seg)
-        big_groups = [segs for segs in pair_to_segs.values() if len(segs) >= 3]
-        if big_groups:
-            inventories_with_collisions += 1
-            worst_collision = max(
-                worst_collision, max(len(g) for g in big_groups)
-            )
-    with capsys.disabled():
-        print(
-            f"\nPair-collision tracker: "
-            f"{inventories_with_collisions} inventories have >= 3 "
-            f"diphthongs at the same (primary, secondary) pair "
-            f"(worst: {worst_collision}). Renderer C3 fans them "
-            f"around the chord."
-        )
-    # Soft ceiling: a step-function jump (e.g. 100+ inventories or
-    # a single 10+ collision group) probably means something broke
-    # upstream; sound the alarm.
-    assert inventories_with_collisions < 100
-    assert worst_collision < 10

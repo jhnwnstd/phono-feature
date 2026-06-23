@@ -78,24 +78,6 @@ FONT_SIZE_MICRO_PX: int = 10
 # the CSS ``font-size`` string in px steps.
 FONT_SIZE_MIN_PX: int = 10
 
-# Label for the vowel-chart display-mode toggle button (flips
-# between monophthong-only and diphthong-only chart rendering).
-# Single string consumed by both renderers so a rename or
-# localisation lands once. Stays lowercase for typographic
-# consistency with the chart's row / column labels.
-DIPHTHONG_TOGGLE_LABEL: str = "diphthongs"
-
-# Tooltip strings for the vowel-chart display-mode toggle.
-# Each variant describes what clicking the toggle will DO from
-# the current mode (so users see the destination, not the
-# current state).
-VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE: str = (
-    "Show the inventory's diphthong trajectories instead"
-)
-VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE: str = (
-    "Show the inventory's monophthongs instead"
-)
-
 # Accessible name announced by screen readers when focus lands
 # on the chart container (web aria-label / Qt accessibleName).
 VOWEL_CHART_ACCESSIBLE_NAME: str = "IPA vowel chart"

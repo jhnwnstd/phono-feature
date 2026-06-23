@@ -570,23 +570,18 @@ def _build_status_text_payload() -> dict[str, str]:
 
         payload["minus_display"] = MINUS_DISPLAY
         payload["minus_serialized"] = MINUS_SERIALIZED
-        # Vowel-chart diphthong-toggle label + empty-state hints.
-        # Same SSOT pattern: the desktop reads the constant by
-        # import, the web reads via this status-text bake.
+        # Empty-state hints. Same SSOT pattern: the desktop reads the
+        # constant by import, the web reads via this status-text bake.
         from phonology_shared.presentation.constants import (
             DEFAULT_INVENTORY_STEM,
-            DIPHTHONG_TOGGLE_LABEL,
             EMPTY_NATURAL_CLASS_HINT,
             EMPTY_PHOIBLE_SEARCH_HINT,
             EMPTY_SHARED_FEATURES_HINT,
             MATCH_MODE_TOOLTIP_STRICT_ACTIVE,
             MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE,
             VOWEL_CHART_ACCESSIBLE_NAME,
-            VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE,
-            VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE,
         )
 
-        payload["diphthong_toggle_label"] = DIPHTHONG_TOGGLE_LABEL
         payload["empty_natural_class_hint"] = EMPTY_NATURAL_CLASS_HINT
         payload["empty_shared_features_hint"] = EMPTY_SHARED_FEATURES_HINT
         payload["empty_phoible_search_hint"] = EMPTY_PHOIBLE_SEARCH_HINT
@@ -612,15 +607,6 @@ def _build_status_text_payload() -> dict[str, str]:
         # ``{seg}`` so a future change to the convention (e.g.
         # square brackets) is one Python edit.
         payload["seg_accessible_label_template"] = "/{seg}/"
-        # Vowel-chart display-mode toggle tooltips. Each variant
-        # describes what clicking the toggle does FROM that state
-        # (the destination, not the current state).
-        payload["vowel_chart_mode_tooltip_mono_active"] = (
-            VOWEL_CHART_MODE_TOOLTIP_MONO_ACTIVE
-        )
-        payload["vowel_chart_mode_tooltip_diphthong_active"] = (
-            VOWEL_CHART_MODE_TOOLTIP_DIPHTHONG_ACTIVE
-        )
         # Enum value tables. JS previously hardcoded these as
         # ``Object.freeze({...})`` literals that silently drifted
         # if a Python member was renamed. Baking them via the
@@ -631,7 +617,6 @@ def _build_status_text_payload() -> dict[str, str]:
         from phonology_shared.presentation.palette import (
             PaletteMode,
             Theme,
-            VowelChartMode,
         )
         from phonology_shared.theory.feature_engine import MatchMode
 
@@ -650,9 +635,6 @@ def _build_status_text_payload() -> dict[str, str]:
         }
         payload["match_mode_values"] = {  # type: ignore[assignment]
             mm.name: mm.value for mm in MatchMode
-        }
-        payload["vowel_chart_mode_values"] = {  # type: ignore[assignment]
-            vm.name: vm.value for vm in VowelChartMode
         }
         return payload
     finally:
@@ -990,14 +972,6 @@ def generate_layout_css() -> None:
                 # desktop/.../vowel_chart.py.
                 "  --min-vowel-chart-w: "
                 f"{mod.MIN_VOWEL_CHART_W_PX}px;"
-            ),
-            (
-                "  --diphthong-arrow-stroke: "
-                f"{chart_style.DIPHTHONG_ARROW_STROKE_PX}px;"
-            ),
-            (
-                "  --diphthong-arrow-focused-alpha: "
-                f"{chart_style.DIPHTHONG_ARROW_FOCUSED_ALPHA};"
             ),
         ]
     )
@@ -1446,18 +1420,6 @@ def hash_assets() -> None:
         '<script id="chart-style" type="application/json">'
         + json.dumps(
             {
-                "diphthong_lift_chord_frac": (
-                    chart_style_mod.DIPHTHONG_LIFT_CHORD_FRAC
-                ),
-                "diphthong_lift_width_frac_cap": (
-                    chart_style_mod.DIPHTHONG_LIFT_WIDTH_FRAC_CAP
-                ),
-                "diphthong_arrowhead_len_frac": (
-                    chart_style_mod.DIPHTHONG_ARROWHEAD_LEN_FRAC
-                ),
-                "diphthong_arrowhead_half_frac": (
-                    chart_style_mod.DIPHTHONG_ARROWHEAD_HALF_FRAC
-                ),
                 "silhouette_corner_radius_frac": (
                     chart_style_mod.VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC
                 ),

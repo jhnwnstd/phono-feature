@@ -17,12 +17,10 @@ from collections.abc import Mapping
 
 from phonology_shared.chart.vowel_geometry.display_slots import (
     _BACKNESS_SLOT_ORDER,
-    effective_anchor_x,
 )
 from phonology_shared.chart.vowel_geometry.model import (
     VowelChartBand,
     VowelChartColHeader,
-    VowelChartDiphthong,
     VowelChartRow,
     VowelChartSilhouette,
 )
@@ -34,7 +32,6 @@ from phonology_shared.chart.vowel_geometry.outline import (
 )
 from phonology_shared.chart.vowel_space import (
     _BACKNESS_X,
-    _HEIGHT_Y,
     COL_LABELS,
     ROW_LABELS,
 )
@@ -144,61 +141,24 @@ def build_rows(
     )
 
 
-def build_diphthong_overlay(
+def build_diphthong_segments(
     placements: Mapping[str, VowelPlacement],
-    row_plan: RowPlan,
-    silhouette: VowelChartSilhouette,
-    open_front_populated: bool,
-) -> tuple[VowelChartDiphthong, ...]:
-    """Diphthong rendering hints: one entry per placement whose
-    ``secondary`` is non-null, with both endpoints projected through
-    the same silhouette + row-distribution math the populated cells
-    use, so an arrow whose secondary lands on an unpopulated slot
-    still gets a valid endpoint. Order is stable across builds
-    (insertion order of ``placements``) so diff-driven tests stay
+) -> tuple[str, ...]:
+    """The inventory's diphthong segment names: one per placement
+    whose ``secondary`` is non-null (a PHOIBLE contour vowel with
+    distinct endpoints; the placer's degeneracy filter has already
+    dropped contours that collapse to a single cell). Order is the
+    insertion order of ``placements`` so diff-driven tests stay
     reproducible.
+
+    These segments are deliberately NOT placed in the trapezoid; the
+    renderers list them as labelled chips below the vowel space.
     """
-
-    def _project(ri: int, ci: int) -> tuple[float, float]:
-        # Rows outside the populated set fall back to the canonical
-        # row y from ``_HEIGHT_Y`` so a glide targeting an empty
-        # tier still points at a sensible vertical position; the
-        # silhouette may not visually extend there, but the arrow
-        # geometry stays defined. Bounds are guaranteed at the
-        # source: every placement row and col, secondaries
-        # included, comes through ``_vowel_grid_pos_normalized``,
-        # whose post-conditions pin ``0 <= row < len(ROW_LABELS)``
-        # and ``0 <= col < 9``, and the snap pass only retargets to
-        # occupied cells in that same range.
-        if ri in row_plan.display_y:
-            cy = row_plan.display_y[ri]
-        else:
-            cy = _HEIGHT_Y[ROW_LABELS[ri]]
-        anchor_x = effective_anchor_x(ri, ci, open_front_populated)
-        return project_anchor_x(silhouette, anchor_x, cy), cy
-
-    out: list[VowelChartDiphthong] = []
-    for seg, placement in placements.items():
-        if placement.secondary is None:
-            continue
-        primary_x, primary_y = _project(placement.row, placement.col)
-        secondary_x, secondary_y = _project(
-            placement.secondary.row, placement.secondary.col
-        )
-        out.append(
-            VowelChartDiphthong(
-                segment=seg,
-                primary_row=placement.row,
-                primary_col=placement.col,
-                secondary_row=placement.secondary.row,
-                secondary_col=placement.secondary.col,
-                primary_chart_x=primary_x,
-                primary_chart_y=primary_y,
-                secondary_chart_x=secondary_x,
-                secondary_chart_y=secondary_y,
-            )
-        )
-    return tuple(out)
+    return tuple(
+        seg
+        for seg, placement in placements.items()
+        if placement.secondary is not None
+    )
 
 
 def build_bands(

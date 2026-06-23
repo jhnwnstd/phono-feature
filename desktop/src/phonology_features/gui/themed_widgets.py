@@ -116,35 +116,43 @@ class _BrandedStatusBar(QStatusBar):
         self._message_label.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        # ``Ignored`` horizontal policy so a long message can never
-        # widen the label past its layout slot: QLabel's minimum
-        # size otherwise tracks the text width, and an oversized
-        # message pushed the brand out of the bar instead of
-        # eliding. The brand keeps its full width (stretch 0); the
-        # message takes whatever remains and clips with an ellipsis.
+        # The message sizes to its (elided) content; the elide pass
+        # below sets a fixed width capped to the room the source link
+        # and brand leave over, so a long message can never push the
+        # brand off the bar. Fixed width also decouples width from the
+        # text so setting the elided string can't feed back into the
+        # layout.
         self._message_label.setSizePolicy(
-            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+        )
+        # "Source" hyperlink for a loaded PHOIBLE inventory. Sits in
+        # the LEFT group, immediately after the inventory-summary
+        # message (mirrors the web's ``.statusbar-left`` row). Hidden
+        # until ``set_source_link`` is given a URL; a non-PHOIBLE
+        # inventory clears it.
+        self._source_link = QLabel("", self)
+        self._source_link.setFont(self._FONT)
+        self._source_link.setTextFormat(Qt.TextFormat.RichText)
+        self._source_link.setOpenExternalLinks(True)
+        self._source_link.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        self._source_link.hide()
+        # Spacer absorbs the slack between the left group and the brand
+        # so the message + source stay left-aligned and the brand stays
+        # pinned right.
+        self._spacer = QWidget(self)
+        self._spacer.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
         self._brand = QLabel("Language Doodad", self)
         self._brand.setFont(self._FONT)
         self._brand.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
-        # "Source" hyperlink for a loaded PHOIBLE inventory. Sits as
-        # a permanent widget to the LEFT of the brand (added first), so
-        # it reads as part of the loaded-inventory summary at the
-        # right of the bar. Hidden until ``set_source_link`` is given a
-        # URL; a non-PHOIBLE inventory clears it.
-        self._source_link = QLabel("", self)
-        self._source_link.setFont(self._FONT)
-        self._source_link.setTextFormat(Qt.TextFormat.RichText)
-        self._source_link.setOpenExternalLinks(True)
-        self._source_link.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        self._source_link.hide()
-        self.addWidget(self._message_label, 1)
-        self.addPermanentWidget(self._source_link, 0)
+        self.addWidget(self._message_label, 0)
+        self.addWidget(self._source_link, 0)
+        self.addWidget(self._spacer, 1)
         self.addPermanentWidget(self._brand, 0)
         self.apply_theme()
 
@@ -156,12 +164,14 @@ class _BrandedStatusBar(QStatusBar):
         if not url:
             self._source_link.clear()
             self._source_link.hide()
+            self._update_elided_message()
             return
         # ``url`` is a baked phoible.org link, not user input; still,
         # only http(s) URLs are ever emitted, so no escaping beyond
         # the quote attribute is needed.
         self._source_link.setText(f'<a href="{url}">Source</a>')
         self._source_link.show()
+        self._update_elided_message()
 
     def apply_theme(self) -> None:
         """Re-apply palette-dependent styles. Called on theme toggle."""
@@ -174,8 +184,8 @@ class _BrandedStatusBar(QStatusBar):
             f"color: {C['text_dim']}; font-style: italic; padding: 0 4px;"
         )
         # The ``<a>`` tag picks up the accent colour for the link text
-        # via the widget's palette link role; padding matches the
-        # brand so the two right-pinned items sit on the same rhythm.
+        # via the widget's palette link role; a small left pad sets the
+        # gap from the inventory-summary message it follows.
         self._source_link.setStyleSheet("padding: 0 4px;")
         link_palette = self._source_link.palette()
         link_palette.setColor(QPalette.ColorRole.Link, QColor(C["accent"]))
@@ -200,13 +210,28 @@ class _BrandedStatusBar(QStatusBar):
         return self._full_message
 
     def _update_elided_message(self) -> None:
+        # Size the message to its content, capped to the room the
+        # source link + brand leave over, so the source sits right
+        # beside the (short) summary yet a long transient message
+        # still elides instead of shoving the brand off the bar.
         fm = self._message_label.fontMetrics()
-        width = max(0, self._message_label.width() - 4)
+        content_w = fm.horizontalAdvance(self._full_message)
+        source_w = (
+            self._source_link.sizeHint().width()
+            if self._source_link.isVisible()
+            else 0
+        )
+        brand_w = self._brand.sizeHint().width()
+        # Reserve the source + brand widths plus a margin allowance for
+        # item spacing and the bar's content margins.
+        avail = self.width() - source_w - brand_w - 32
+        target = max(0, min(content_w, avail))
         self._message_label.setText(
             fm.elidedText(
-                self._full_message, Qt.TextElideMode.ElideRight, width
+                self._full_message, Qt.TextElideMode.ElideRight, target
             )
         )
+        self._message_label.setFixedWidth(target)
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:
         super().resizeEvent(event)
