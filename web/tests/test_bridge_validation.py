@@ -75,6 +75,9 @@ def test_analyze_segments_accepts_known_segments() -> None:
     result = bridge.analyze_segments(["p"])
     assert "analysis_tabs" in result
     assert "segment_states" in result
+    # Sparse segment-state contract: the baseline travels alongside the
+    # map so JS can resolve absent segments.
+    assert "default_segment_state" in result
 
 
 def test_analyze_features_rejects_unknown_feature() -> None:

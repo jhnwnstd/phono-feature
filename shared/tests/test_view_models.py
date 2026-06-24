@@ -49,7 +49,13 @@ def test_summarize_segment_selection_single_maps_zero_to_empty(
     assert summary["common"]["Voice"] == "+"
     assert summary["common"]["Back"] == ""
     assert summary["segment_states"]["b"] == "selected"
-    assert summary["segment_states"]["d"] == "default"
+    # Sparse: an unselected segment is absent and takes the default.
+    assert "d" not in summary["segment_states"]
+    assert summary["default_segment_state"] == "default"
+    assert (
+        summary["segment_states"].get("d", summary["default_segment_state"])
+        == "default"
+    )
     assert summary["feature_rows"]["Voice"]["value"] == "+"
     assert summary["feature_rows"]["Voice"]["shared"] is True
     assert summary["feature_rows"]["Back"]["value"] == ""
@@ -271,7 +277,14 @@ def test_summarize_feature_query_matches_engine(
     for seg in ("p", "t", "k", "f", "s"):
         assert seg not in matching, f"voiceless /{seg}/ should not match"
     assert summary["segment_states"]["b"] == "matched"
-    assert summary["segment_states"]["p"] == "unmatched"
+    # Sparse: a non-matching segment is absent; the FEAT baseline is
+    # UNMATCHED, so its effective state is "unmatched".
+    assert "p" not in summary["segment_states"]
+    assert summary["default_segment_state"] == "unmatched"
+    assert (
+        summary["segment_states"].get("p", summary["default_segment_state"])
+        == "unmatched"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +390,41 @@ def test_analysis_tabs_empty_selection_safe_shape(
     assert "Select" in tabs["contrasts"]
 
 
+def test_segment_states_are_sparse_over_default(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    """``segment_states`` lists only the non-default exceptions; every
+    other segment takes ``default_segment_state``. Reconstructing the
+    effective state for every inventory segment reproduces the dense
+    semantics (selected/suggested in SEG mode, matched/unmatched in
+    FEAT mode), so a consumer reading
+    ``.get(seg, default_segment_state)`` sees no behaviour change.
+    """
+    engine = bundled_engine("hayes")
+    all_segs = set(engine.segments)
+
+    seg = summarize_segment_selection(engine, ["b", "d"])
+    assert seg["default_segment_state"] == "default"
+    exceptions = set(seg["selected"]) | set(seg["suggested"])
+    # Only the exceptions are stored, never a per-inventory entry.
+    assert set(seg["segment_states"]) == exceptions
+    states = seg["segment_states"]
+    for s in seg["selected"]:
+        assert states[s] == "selected"
+    for s in all_segs - exceptions:
+        assert states.get(s, seg["default_segment_state"]) == "default"
+
+    feat = summarize_feature_query(engine, {"Voice": "+"})
+    assert feat["default_segment_state"] == "unmatched"
+    matched = set(feat["matching"])
+    assert set(feat["segment_states"]) == matched
+    fstates = feat["segment_states"]
+    for s in matched:
+        assert fstates[s] == "matched"
+    for s in all_segs - matched:
+        assert fstates.get(s, feat["default_segment_state"]) == "unmatched"
+
+
 def test_segment_state_payload_strings_match_enum(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
@@ -395,24 +443,17 @@ def test_segment_state_payload_strings_match_enum(
 
     engine = bundled_engine("hayes")
     seg_list = list(engine.segments)
+    summaries = [
+        summarize_segment_selection(engine, []),
+        summarize_segment_selection(engine, seg_list[:1]),
+        summarize_segment_selection(engine, seg_list[:3]),
+        summarize_feature_query(engine, {}),
+        summarize_feature_query(engine, {"Voice": "+"}),
+    ]
+    # Collect both the sparse map values AND the default baseline,
+    # since absent segments render with default_segment_state.
     seen: set[str] = set()
-    seen.update(
-        summarize_segment_selection(engine, [])["segment_states"].values()
-    )
-    seen.update(
-        summarize_segment_selection(engine, seg_list[:1])[
-            "segment_states"
-        ].values()
-    )
-    seen.update(
-        summarize_segment_selection(engine, seg_list[:3])[
-            "segment_states"
-        ].values()
-    )
-    seen.update(summarize_feature_query(engine, {})["segment_states"].values())
-    seen.update(
-        summarize_feature_query(engine, {"Voice": "+"})[
-            "segment_states"
-        ].values()
-    )
+    for summary in summaries:
+        seen.update(summary["segment_states"].values())
+        seen.add(summary["default_segment_state"])
     assert seen <= enum_values, f"Unknown segment states: {seen - enum_values}"

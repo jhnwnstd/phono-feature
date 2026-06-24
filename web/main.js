@@ -2597,8 +2597,12 @@ function _applySegmentStates(stateFor) {
     }
 }
 
-function _applySegmentStateMap(segmentStates) {
-    _applySegmentStates((seg) => segmentStates?.[seg] ?? "default");
+// ``segmentStates`` is sparse: it lists only the segments whose state
+// differs from ``defaultState`` (the payload's default_segment_state),
+// so a segment absent from the map takes that baseline.
+function _applySegmentStateMap(segmentStates, defaultState) {
+    const fallback = defaultState ?? "default";
+    _applySegmentStates((seg) => segmentStates?.[seg] ?? fallback);
 }
 
 function _applyFeatureRowStates(featureRows) {
@@ -2638,7 +2642,9 @@ function runSegToFeat(token) {
     }
     if (token !== state.analysis_token) return;
     setAnalysisTabs(result.analysis_tabs);
-    _applySegmentStateMap(result.segment_states);
+    _applySegmentStateMap(
+        result.segment_states, result.default_segment_state,
+    );
     _applyFeatureRowStates(result.feature_rows);
 }
 
@@ -2652,7 +2658,9 @@ function runFeatToSeg(token) {
     }
     if (token !== state.analysis_token) return;
     setAnalysisTabs(result.analysis_tabs);
-    _applySegmentStateMap(result.segment_states);
+    _applySegmentStateMap(
+        result.segment_states, result.default_segment_state,
+    );
 }
 
 /** Surface a bridge-call failure to the user instead of letting it

@@ -1703,11 +1703,12 @@ class MainWindow(QMainWindow):
 
     def _update_seg_to_feat(self) -> None:
         """Apply the SEG-mode summary to the panels. The shared
-        ``summarize_segment_selection`` returns a total payload --
-        every segment in ``segment_states``, every feature in
-        ``feature_rows``; so the empty-selection case needs no
-        special branch here; it's just the payload returned for an
-        empty ``segs`` list. The web bridge path is the same shape.
+        ``summarize_segment_selection`` returns one payload for any
+        input (including the empty selection), so there is no special
+        empty-selection branch here. ``segment_states`` is sparse, so
+        each button reads its state as
+        ``.get(seg, default_segment_state)``. The web bridge path
+        consumes the same payload shape.
         """
         if not self.engine:
             return
@@ -1724,14 +1725,17 @@ class MainWindow(QMainWindow):
                 contrastive=bool(state["contrastive"]),
                 badge=state["badge"],
             )
+        seg_states = summary["segment_states"]
+        seg_default = summary["default_segment_state"]
         for seg, btn in self._seg_buttons.items():
-            btn.set_state(summary["segment_states"][seg])
+            btn.set_state(seg_states.get(seg, seg_default))
         self._apply_analysis_tabs(summary["analysis_tabs"])
 
     def _update_feat_to_seg(self) -> None:
         """Apply the FEAT-mode summary to the panels. Like
-        :py:meth:`_update_seg_to_feat`, the shared helper returns a
-        total payload for any input (including the empty spec), so
+        :py:meth:`_update_seg_to_feat`, the shared helper returns one
+        payload for any input (including the empty spec), with a sparse
+        ``segment_states`` over a ``default_segment_state`` baseline, so
         there is no separate empty-selection branch."""
         if not self.engine:
             return
@@ -1740,8 +1744,10 @@ class MainWindow(QMainWindow):
             self._selected_features,
             mode=self._match_mode,
         )
+        seg_states = summary["segment_states"]
+        seg_default = summary["default_segment_state"]
         for seg, btn in self._seg_buttons.items():
-            btn.set_state(summary["segment_states"][seg])
+            btn.set_state(seg_states.get(seg, seg_default))
         self._apply_analysis_tabs(summary["analysis_tabs"])
 
     def _apply_analysis_tabs(self, tabs: AnalysisTabsPayload) -> None:

@@ -125,7 +125,14 @@ class SegmentSelectionSummary(TypedDict):
     suggested: list[str]
     common: dict[str, str]
     contrastive: list[str]
+    # SPARSE: only segments whose state differs from
+    # ``default_segment_state`` (i.e. the selected and suggested ones).
+    # A segment absent from the map takes ``default_segment_state``.
+    # Keeping it sparse avoids an O(inventory) allocation on every
+    # selection; consumers iterate their own buttons and read
+    # ``segment_states.get(seg, default_segment_state)``.
     segment_states: dict[str, SegmentState]
+    default_segment_state: SegmentState
     feature_rows: dict[str, FeatureRowState]
     matching_mode: str
 
@@ -136,7 +143,10 @@ class FeatureQuerySummary(TypedDict):
     Same single-source contract as :py:class:`SegmentSelectionSummary`.
     The ``segment_states`` map carries :py:class:`SegmentState`
     members so consumers compare against ``SegmentState.MATCHED``
-    instead of bare strings.
+    instead of bare strings. It is SPARSE the same way: it lists the
+    matched segments and ``default_segment_state`` is ``UNMATCHED``
+    (or ``DEFAULT`` for an empty query), so absent segments take that
+    baseline without allocating an entry per inventory segment.
 
     The ``matching_mode`` field tags the result with the
     :py:class:`MatchMode` used to compute ``matching``. Wildcard
@@ -147,6 +157,7 @@ class FeatureQuerySummary(TypedDict):
     analysis_tabs: AnalysisTabsPayload
     matching: list[str]
     segment_states: dict[str, SegmentState]
+    default_segment_state: SegmentState
     matching_mode: str
 
 
@@ -219,7 +230,9 @@ def summarize_segment_selection(
       Single-segment selections map ``"0"`` to ``""`` so callers can
       treat underspecified rows as visually neutral.
     * ``contrastive``: feature names that split the selection.
-    * ``segment_states``: ``{seg: state}`` for every segment button.
+    * ``segment_states``: SPARSE ``{seg: state}`` listing only the
+      non-default (selected / suggested) segments; a segment absent
+      from the map takes ``default_segment_state``.
     * ``feature_rows``: per-feature visual-state payloads.
     * ``matching_mode``: the :py:class:`MatchMode` value the engine
       ran under to compute ``suggested`` + the class verdict.
@@ -231,13 +244,11 @@ def summarize_segment_selection(
     """
     mode_str = str(mode)
     if not segs:
-        # Only the empty-selection branch consumes the default
-        # tables; allocating them on every non-empty call cost
-        # ~30 ms / 1000 calls in the W1 profile for the feature
-        # rows, and the segment-state dict is larger still (up to
-        # ~120 keys vs ~24).
-        default_seg_states = _default_segment_states(engine)
-        default_feat_rows = _default_feature_rows(engine)
+        # Empty selection: every segment is the default state, so the
+        # sparse map is empty. Feature rows still need the default
+        # table (keyed by the small feature set, not the inventory);
+        # that allocation was the ~30 ms / 1000 calls the W1 profile
+        # flagged, and the segment side is now O(0) here.
         empty_completion = engine.complete_to_minimal_natural_class(
             [], mode=mode
         )
@@ -249,8 +260,9 @@ def summarize_segment_selection(
             "suggested": [],
             "common": {},
             "contrastive": [],
-            "segment_states": default_seg_states,
-            "feature_rows": default_feat_rows,
+            "segment_states": {},
+            "default_segment_state": SegmentState.DEFAULT,
+            "feature_rows": _default_feature_rows(engine),
             "matching_mode": mode_str,
         }
     if len(segs) == 1:
@@ -267,16 +279,16 @@ def summarize_segment_selection(
                     shared=True,
                     category=cat,
                 )
-        seg_states = _default_segment_states(engine)
-        seg_states[segs[0]] = SegmentState.SELECTED
         # Strict solver returns a single completion, so flatten
         # additions[0] for the seg-pane suggested highlight.
         suggested_segs = (
             completion.additions[0] if completion.additions else ()
         )
+        # Sparse: the selected segment wins over any suggested one;
+        # every other segment takes the DEFAULT baseline.
+        seg_states = {segs[0]: SegmentState.SELECTED}
         for seg in suggested_segs:
-            if seg_states.get(seg) is SegmentState.DEFAULT:
-                seg_states[seg] = SegmentState.SUGGESTED
+            seg_states.setdefault(seg, SegmentState.SUGGESTED)
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
         return {
             "analysis_tabs": _seg_tabs(
@@ -287,6 +299,7 @@ def summarize_segment_selection(
             "common": common,
             "contrastive": [],
             "segment_states": seg_states,
+            "default_segment_state": SegmentState.DEFAULT,
             "feature_rows": row_states,
             "matching_mode": mode_str,
         }
@@ -316,18 +329,11 @@ def summarize_segment_selection(
             )
         else:
             row_states[feat] = _feature_row_state(category=cat)
-    selected = set(segs)
-    suggested_set = set(suggested)
-    # Built directly from the loop; a defaults table here would be
-    # pure churn since every key is overwritten.
-    seg_states = {}
-    for seg in engine.segments:
-        if seg in selected:
-            seg_states[seg] = SegmentState.SELECTED
-        elif seg in suggested_set:
-            seg_states[seg] = SegmentState.SUGGESTED
-        else:
-            seg_states[seg] = SegmentState.DEFAULT
+    # Sparse: only the selected and suggested segments; the selected
+    # ones win, every other segment takes the DEFAULT baseline.
+    seg_states = {seg: SegmentState.SELECTED for seg in segs}
+    for seg in suggested:
+        seg_states.setdefault(seg, SegmentState.SUGGESTED)
     return {
         "analysis_tabs": _seg_tabs(
             engine, segs, common, contrastive, completion, mode=mode
@@ -337,6 +343,7 @@ def summarize_segment_selection(
         "common": common,
         "contrastive": list(contrastive),
         "segment_states": seg_states,
+        "default_segment_state": SegmentState.DEFAULT,
         "feature_rows": row_states,
         "matching_mode": mode_str,
     }
@@ -358,26 +365,23 @@ def summarize_feature_query(
     unspecified for queried features).
     """
     mode_str = str(mode)
-    segment_states = _default_segment_states(engine)
     if not spec:
         return {
             "analysis_tabs": _feat_tabs({}, [], mode=mode),
             "matching": [],
-            "segment_states": segment_states,
+            "segment_states": {},
+            "default_segment_state": SegmentState.DEFAULT,
             "matching_mode": mode_str,
         }
     matching = engine.find_segments(spec, mode=mode)
-    matching_set = set(matching)
-    for seg in engine.segments:
-        segment_states[seg] = (
-            SegmentState.MATCHED
-            if seg in matching_set
-            else SegmentState.UNMATCHED
-        )
+    # Sparse: list the matched segments; every other segment is
+    # UNMATCHED (the baseline), so a non-empty query no longer
+    # allocates one entry per inventory segment.
     return {
         "analysis_tabs": _feat_tabs(spec, matching, mode=mode),
         "matching": matching,
-        "segment_states": segment_states,
+        "segment_states": {seg: SegmentState.MATCHED for seg in matching},
+        "default_segment_state": SegmentState.UNMATCHED,
         "matching_mode": mode_str,
     }
 
@@ -534,12 +538,6 @@ def _feature_row_state(
     ``EXPLICIT_CONFLICT``).
     """
     return _FEATURE_ROW_STATES[(value, shared, contrastive, category)]
-
-
-def _default_segment_states(
-    engine: FeatureEngine,
-) -> dict[str, SegmentState]:
-    return {seg: SegmentState.DEFAULT for seg in engine.segments}
 
 
 def _default_feature_rows(

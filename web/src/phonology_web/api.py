@@ -571,10 +571,8 @@ def create_new_inventory(
     one-for-one.
 
     Raises :py:class:`ValidationError` with the full tuple of
-    issue messages when validation fails. JS surfaces the first
-    via the standard ``e.message`` channel; the others can be
-    requested separately via
-    :py:func:`validation_issues_from_error`.
+    issue messages when validation fails; JS surfaces it via the
+    standard bridge-error message channel.
     """
     global _engine, _inventory_name
     provider: FeatureProvider | None = None
@@ -1142,15 +1140,6 @@ def inventory_summary_for_mode(mode_str: str) -> dict[str, Any]:
     engine = _require_engine()
     mode = MatchMode(mode_str)
     return build_inventory_summary(engine, _inventory_name, mode=mode)
-
-
-def validation_issues_from_error(exc: Any) -> list[str]:
-    """Extract the canonical human-readable issues list from a
-    ``ValidationError`` raised by ``load_inventory_json``.
-    """
-    if isinstance(exc, ValidationError):
-        return list(exc.issues)
-    return [str(exc)]
 
 
 def validation_report_html(issues: list[str]) -> str:
