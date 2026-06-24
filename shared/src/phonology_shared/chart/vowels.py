@@ -99,6 +99,7 @@ from phonology_shared.chart.vowel_space import (
     _ROW_LABEL_TO_INDEX,
     ROW_LABELS,
 )
+from phonology_shared.data.inventory import normalize_feature_key
 from phonology_shared.presentation.feature_metadata import (
     USE_VOWEL_PAIR,
     features_for_use,
@@ -474,18 +475,25 @@ def _feature_state(feats: Mapping[str, str], key: str) -> FeatureState:
 
 
 def _normalize_feat_keys(feats: Mapping[str, str]) -> dict[str, str]:
-    """Lowercase every key in ``feats`` so downstream lookups by
-    canonical name (``high``, ``low``, ``front``, etc.) work
-    regardless of whether the caller passed raw PascalCase
-    inventory keys or pre-normalized lowercase keys.
+    """Fold every key in ``feats`` to the engine-canonical feature
+    name so downstream lookups by canonical name (``high``, ``low``,
+    ``front``, etc.) work regardless of whether the caller passed raw
+    PascalCase inventory keys, pre-normalized keys, or a registered
+    ALIAS spelling.
 
-    The placement code is the only consumer that mandates canonical
-    case (segment_grouper uses a similar convention); doing the
-    lowercase pass HERE means call sites cannot accidentally pass
-    raw inventory feats and silently get every vowel placed in the
-    Open-mid Central default cell.
+    Uses :py:func:`normalize_feature_key` (the same alias-aware,
+    memoized fold the engine and grouper use) rather than a bare
+    ``str.lower``: an inventory that declares a chart feature under an
+    alias (e.g. ``advancedTongueRoot`` for ``atr``, ``hi`` for
+    ``high``) then resolves to the canonical name the placement code
+    keys on, instead of silently missing it and defaulting every
+    vowel to the Open-mid Central cell. For canonical and already-
+    lowercased names the result is identical to ``str.lower``, so this
+    is a no-op for every shipped provider (PHOIBLE / PanPhon emit
+    canonical names) and changes behaviour only for alias-declared
+    inputs, where it is the correct reading.
     """
-    return {k.lower(): v for k, v in feats.items()}
+    return {normalize_feature_key(k): v for k, v in feats.items()}
 
 
 def detect_vowel_profile(
@@ -494,9 +502,12 @@ def detect_vowel_profile(
     """Scan the vowel segments to determine which features are in play.
 
     ``seg_feats`` maps each segment to its feature bundle. Keys
-    inside each bundle are case-normalized internally, so callers
-    may pass raw PascalCase inventory feats (``{"High": "+", ...}``)
-    or pre-normalized lowercase feats (``{"high": "+", ...}``).
+    inside each bundle are folded to the engine-canonical name
+    internally (alias-aware, via :py:func:`normalize_feature_key`),
+    so callers may pass raw PascalCase inventory feats
+    (``{"High": "+", ...}``), pre-normalized lowercase feats
+    (``{"high": "+", ...}``), or a registered alias spelling
+    (``{"advancedTongueRoot": "+", ...}``) and get the same profile.
     """
     active: set[str] = set()
     long_polarities: set[str] = set()
@@ -505,7 +516,7 @@ def detect_vowel_profile(
     rtr_polarities: set[str] = set()
     for seg in segs:
         for feat, val in seg_feats.get(seg, {}).items():
-            key = feat.lower()
+            key = normalize_feature_key(feat)
             if val != "0":
                 active.add(key)
             if key == "long" and val in ("+", "-"):

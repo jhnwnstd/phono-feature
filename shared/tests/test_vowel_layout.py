@@ -71,6 +71,40 @@ def test_vowel_placement_case_insensitive(
         ), f"/{seg}/ placement differs: raw={raw_p}, lower={lower_p}"
 
 
+def test_vowel_placement_resolves_alias_feature_names() -> None:
+    """A chart feature declared under a registered ALIAS spelling
+    (e.g. ``advancedTongueRoot`` for ATR, ``hi`` for High) must read
+    the same as its canonical spelling.
+
+    The chart fold goes through ``normalize_feature_key`` (alias-aware,
+    the same primitive the engine uses), not a bare ``str.lower``, so
+    a hand-authored inventory that names a feature by alias is not
+    silently misread as lacking it (which would default its vowels to
+    the Open-mid Central cell). Before this, ``advancedTongueRoot``
+    lowercased to ``advancedtongueroot`` and never matched ``atr``.
+    """
+    segs = ["i", "a", "o"]
+    canonical = {
+        "i": {"High": "+", "Low": "-", "Front": "+", "Back": "-", "ATR": "+"},
+        "a": {"High": "-", "Low": "+", "Front": "-", "Back": "-", "ATR": "-"},
+        "o": {"High": "-", "Low": "-", "Front": "-", "Back": "+", "ATR": "+"},
+    }
+    alias_of = {"High": "hi", "ATR": "advancedTongueRoot"}
+    aliased = {
+        seg: {alias_of.get(k, k): v for k, v in bundle.items()}
+        for seg, bundle in canonical.items()
+    }
+    canon_profile = detect_vowel_profile(segs, canonical)
+    alias_profile = detect_vowel_profile(segs, aliased)
+    assert canon_profile == alias_profile
+    # The alias-only features resolved to their canonical axes.
+    assert alias_profile.has_atr and alias_profile.has_high
+    for seg in segs:
+        assert vowel_grid_pos(canonical[seg], canon_profile) == vowel_grid_pos(
+            aliased[seg], alias_profile
+        ), seg
+
+
 def test_english_vowels_not_all_in_default_cell(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
