@@ -186,6 +186,7 @@ def bake_tables(
     _ensure_shared_on_path()
     from phonology_shared.editor.phoible_features import (
         PHOIBLE_TO_APP_FEATURE,
+        initial_phase_value,
         normalize_phoible_value,
         split_contour_value,
     )
@@ -294,10 +295,16 @@ def bake_tables(
             # flattened to ``"0"`` so they keep their established
             # manner-class placement; widening that is a deliberate
             # later step, not a side effect of this one.
-            is_vowel = row.get("syllabic", "0") == "+"
+            # Read the INITIAL phase of the major-class features: a
+            # contour cell classifies by the state it starts in. Using
+            # the raw cell would misread a falling diphthong (whose
+            # ``syllabic`` is itself a contour ``"+,-"``) as non-vowel
+            # and a prenasalized consonant (``sonorant`` = ``"+,-"``)
+            # as an obstruent, splitting or flattening the wrong cells.
+            is_vowel = initial_phase_value(row.get("syllabic", "0")) == "+"
             is_obstruent = (
-                row.get("consonantal", "0") == "+"
-                and row.get("sonorant", "0") != "+"
+                initial_phase_value(row.get("consonantal", "0")) == "+"
+                and initial_phase_value(row.get("sonorant", "0")) != "+"
             )
             initial_chars: list[str] = []
             final_chars: list[str] = []

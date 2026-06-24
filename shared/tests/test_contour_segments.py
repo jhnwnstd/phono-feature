@@ -13,7 +13,25 @@ engine saw only the initial polarity, so a diphthong gliding into
 from __future__ import annotations
 
 from phonology_shared.data import Inventory
+from phonology_shared.editor.phoible_features import initial_phase_value
 from phonology_shared.theory.feature_engine import FeatureEngine, MatchMode
+
+
+def test_initial_phase_value_reads_the_starting_polarity() -> None:
+    """The bake's vowel/obstruent gate reads this to classify a
+    segment by the state it STARTS in. A contour returns its initial
+    polarity; a plain cell normalizes as usual. This is what keeps a
+    falling diphthong (``syllabic="+,-"``) read as a vowel and a
+    prenasalized consonant (``sonorant="+,-"``) read as a sonorant,
+    instead of the raw ``"+,-" == "+"`` comparison misreading both."""
+    assert initial_phase_value("+,-") == "+"
+    assert initial_phase_value("-,+") == "-"
+    assert initial_phase_value("+") == "+"
+    assert initial_phase_value("-") == "-"
+    assert initial_phase_value("0") == "0"
+    # Not a valid 2-part contour -> falls back to normalize ("0").
+    assert initial_phase_value("+,-,+") == "0"
+    assert initial_phase_value("NA") == "0"
 
 
 def _contour_inv() -> Inventory:

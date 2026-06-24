@@ -179,8 +179,11 @@ def test_phoible_diphthongs_round_trip_secondary_and_flag(
         segment_secondary=generated.segment_secondary,
     )
 
+    # ``segment_secondary`` now also holds obstruent affricate
+    # contours, so intersect with the vowel set: a vowel diphthong is
+    # a vowel that carries a secondary phase.
     diphthongs = [seg for seg in vowels if seg in generated.segment_secondary]
-    assert diphthongs, "fixture invariant: segment_secondary keys are vowels"
+    assert diphthongs, "fixture invariant: this inventory has vowel diphthongs"
 
     seen_pairs: dict[tuple[tuple[int, int], tuple[int, int]], str] = {}
     for seg in diphthongs:

@@ -138,3 +138,20 @@ def split_contour_value(value: str) -> tuple[str, str] | None:
     if initial not in ("+", "-", "0") or final not in ("+", "-", "0"):
         return None
     return initial, final
+
+
+def initial_phase_value(value: str) -> str:
+    """The ``+``/``-``/``0`` state a PHOIBLE cell STARTS in.
+
+    A contour cell (``"+,-"``) classifies by its initial state, so any
+    test that reads a major-class feature to decide a segment's CLASS
+    (is it a vowel? an obstruent?) must read the initial phase, never
+    the raw cell: ``"+,-" == "+"`` is ``False``, which would misread a
+    falling diphthong's contoured ``syllabic`` as non-vowel and a
+    prenasalized consonant's contoured ``sonorant`` as non-sonorant. A
+    plain cell falls back to :py:func:`normalize_phoible_value`.
+    """
+    contour = split_contour_value(value)
+    return (
+        contour[0] if contour is not None else normalize_phoible_value(value)
+    )

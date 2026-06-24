@@ -133,8 +133,6 @@ def test_deferred_mode_refresh_safe_after_window_deleted(qapp) -> None:
     torn down (toggle mode, then immediately close). The callback must
     bail when the underlying C++ object is already deleted instead of
     crashing with "wrapped C/C++ object has been deleted"."""
-    from pathlib import Path
-
     from PyQt6 import sip
 
     from phonology_features.gui.main_window import MainWindow
