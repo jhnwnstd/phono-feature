@@ -3978,6 +3978,60 @@ function _measureScrollbarWidth() {
     return w;
 }
 
+// Editor-grid sizing: cached arithmetic, not per-render reflow.
+//
+// The grid's four panes are separate tables that must resolve to one
+// shared pixel column grid. Instead of rendering at natural width,
+// forcing a synchronous reflow, and reading offsetWidth/offsetHeight
+// for every cell on every edit, we measure glyph advance widths on a
+// canvas (cached) and size columns/rows by pure arithmetic, applying
+// pretext's "measure once with the font engine, then layout is
+// arithmetic" idea. The per-cell box overhead (padding + collapsed
+// border) and the single-line row height are page-constant, calibrated
+// once from a real cell.
+let _editorCellCalibration = null;
+const _editorTextWidthCache = new Map();
+
+function _calibrateEditorCell(cell) {
+    const cs = getComputedStyle(cell);
+    return {
+        family: cs.fontFamily || "monospace",
+        sizePx: parseFloat(cs.fontSize) || 13,
+        // Upper bound on horizontal chrome: full padding + full declared
+        // border. ``border-collapse`` makes the painted border <= this,
+        // so a column is never narrower than its content needs (no clip)
+        // and at most ~1px wider than the old natural width.
+        chromeW:
+            (parseFloat(cs.paddingLeft) || 0)
+            + (parseFloat(cs.paddingRight) || 0)
+            + (parseFloat(cs.borderLeftWidth) || 0)
+            + (parseFloat(cs.borderRightWidth) || 0),
+        // Single-line cells, so every row is the same height; measured
+        // once and exact (no min-height to contaminate it).
+        rowH: cell.offsetHeight,
+        minW: parseFloat(cs.minWidth) || 0,
+    };
+}
+
+function _editorTextWidth(text, weight, cal) {
+    const font = `${weight} ${cal.sizePx}px ${cal.family}`;
+    const key = `${font} ${text}`;
+    const hit = _editorTextWidthCache.get(key);
+    if (hit !== undefined) return hit;
+    _segMeasureCtx.font = font;
+    const w = _segMeasureCtx.measureText(text).width;
+    _editorTextWidthCache.set(key, w);
+    return w;
+}
+
+function _editorColumnWidthPx(headerText, dataWidth, cal) {
+    const headerW = _editorTextWidth(headerText, "bold", cal);
+    return Math.max(
+        cal.minW,
+        Math.ceil(Math.max(headerW, dataWidth)) + cal.chromeW,
+    );
+}
+
 /** Make all four panes share one grid. Each column gets the max of
  *  (data column natural width, header column natural width); we
  *  install a ``<colgroup>`` of explicit widths on BOTH the cols-pane
@@ -3994,22 +4048,36 @@ function _alignHeaderPanesToData() {
     const dataTable = nodes.editorGridData.querySelector("table");
     if (!dataTable) return;
     const colsTable = nodes.editorGridCols.querySelector("table");
-    // Tear down any prior colgroup / fixed layout so we re-measure
-    // natural widths after a segment add / remove / rename.
+    // Remove any prior colgroup / fixed layout. These are WRITES (no
+    // forced reflow); the old ``void dataTable.offsetWidth`` read and
+    // the per-cell offsetWidth reads are gone. Widths are now cached
+    // canvas arithmetic, calibrated once for the constant box overhead.
     dataTable.style.tableLayout = "";
     if (colsTable) colsTable.style.tableLayout = "";
     dataTable.querySelectorAll("colgroup").forEach((c) => c.remove());
     colsTable?.querySelectorAll("colgroup").forEach((c) => c.remove());
-    void dataTable.offsetWidth;
 
     const firstRow = dataTable.querySelector("tr");
-    const colHeaders = nodes.editorGridCols.querySelectorAll("th");
-    const dataCells = firstRow ? firstRow.querySelectorAll("td") : [];
-    const widths = [];
-    const n = Math.min(colHeaders.length, dataCells.length);
-    for (let c = 0; c < n; c++) {
-        widths.push(Math.max(dataCells[c].offsetWidth, colHeaders[c].offsetWidth));
+    const colHeaders = [...nodes.editorGridCols.querySelectorAll("th")];
+    const dataCells = firstRow ? [...firstRow.querySelectorAll("td")] : [];
+    if (_editorCellCalibration === null && colHeaders.length) {
+        // First call runs while the table is still in natural layout
+        // (the colgroup was just removed), so the calibration cell's
+        // offsetHeight is the true single-line row height. Cached after.
+        _editorCellCalibration = _calibrateEditorCell(colHeaders[0]);
     }
+    const cal = _editorCellCalibration;
+    const dataWidth = cal
+        ? Math.max(
+            _editorTextWidth(MINUS_DISPLAY, "normal", cal),
+            _editorTextWidth("+", "normal", cal),
+            _editorTextWidth("0", "normal", cal),
+        )
+        : 0;
+    const widths = cal
+        ? colHeaders.map((th) =>
+            _editorColumnWidthPx(th.textContent || "", dataWidth, cal))
+        : [];
     const makeColgroup = () => {
         const cg = document.createElement("colgroup");
         for (const w of widths) {
@@ -4046,16 +4114,16 @@ function _alignHeaderPanesToData() {
         }
     }
 
-    const rowHeaders = nodes.editorGridRows.querySelectorAll("tr");
-    const dataRows = dataTable.querySelectorAll("tr");
-    for (const tr of rowHeaders) tr.style.height = "";
-    for (const tr of dataRows) tr.style.height = "";
-    void dataTable.offsetHeight;
-    for (let r = 0; r < rowHeaders.length && r < dataRows.length; r++) {
-        const h = Math.max(dataRows[r].offsetHeight, rowHeaders[r].offsetHeight);
-        const px = `${h}px`;
-        rowHeaders[r].style.height = px;
-        dataRows[r].style.height = px;
+    // Every row is one line of text in the same font, so row height is
+    // the page-constant calibrated above. Stamp it on both panes' rows
+    // directly, with no reset-then-reflow and no per-row offsetHeight
+    // reads.
+    const rowHeaders = [...nodes.editorGridRows.querySelectorAll("tr")];
+    const dataRows = [...dataTable.querySelectorAll("tr")];
+    if (cal) {
+        const px = `${cal.rowH}px`;
+        for (const tr of rowHeaders) tr.style.height = px;
+        for (const tr of dataRows) tr.style.height = px;
     }
 
     // Apply scrollbar-gutter compensation conditionally on the
