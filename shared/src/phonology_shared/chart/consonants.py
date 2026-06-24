@@ -28,6 +28,13 @@ from enum import IntEnum, StrEnum
 
 from phonology_shared.data.inventory import normalize_feature_bundle
 
+#: Display-group name for vowels, emitted verbatim by
+#: :py:func:`group_segments`. Exported so consumers that split vowels
+#: out of the grouping (presentation + desktop) compare against this
+#: one constant instead of an ad-hoc ``manner.lower() == "vowels"``,
+#: which silently assumed a case the grouper never produces.
+VOWEL_GROUP_NAME = "Vowels"
+
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.
 PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
@@ -875,7 +882,7 @@ def group_segments(
         # caller computes them once per segment and threads them in
         # rather than this matcher recomputing them for every group
         # it is tested against.
-        if group_name == "Vowels":
+        if group_name == VOWEL_GROUP_NAME:
             if not is_vowel_phoneme:
                 return False
         elif group_name == "Tones":

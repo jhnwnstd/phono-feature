@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from phonology_shared.chart.consonants import VOWEL_GROUP_NAME
 from phonology_shared.chart.vowel_geometry import (
     build_vowel_chart_geometry,
 )
@@ -178,7 +179,7 @@ def build_inventory_summary(
     consonant_groups: list[dict[str, Any]] = []
     vowel_segs: list[str] = []
     for manner, segs in grouped.items():
-        if manner.lower() == "vowels":
+        if manner == VOWEL_GROUP_NAME:
             vowel_segs = list(segs)
         else:
             consonant_groups.append({"name": manner, "segments": list(segs)})

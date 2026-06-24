@@ -835,13 +835,15 @@ class Inventory:
         STRUCTURALLY by two phases disagreeing on ``f``, never by a
         special feature value.
 
-        The final phase currently comes from the ``segment_secondary``
-        metadata the PHOIBLE bake records (keyed by folded feature
-        names); it is remapped to this inventory's canonical feature
-        names here so callers see one consistent vocabulary. When
-        phases become a first-class, persisted part of the schema this
-        method's body changes but its contract is stable: callers
-        iterate the returned phases and treat each as a normal bundle.
+        The final phase comes from the ``segment_secondary`` metadata
+        the PHOIBLE bake records. Its feature names are already folded
+        onto this inventory's declared keys at parse time (see
+        :py:func:`phonology_shared.data._parse._assemble_inventory`),
+        so both phases share one key namespace and this method just
+        returns them. When phases become a first-class, persisted part
+        of the schema this body changes but its contract is stable:
+        callers iterate the returned phases and treat each as a normal
+        bundle.
 
         Raises :py:class:`KeyError` if ``segment`` is not present.
         """
@@ -852,11 +854,7 @@ class Inventory:
         final = secondary.get(segment)
         if not isinstance(final, Mapping) or not final:
             return (primary,)
-        # Remap the final phase's folded feature names to this
-        # inventory's canonical names; drop any that do not map.
-        canon = {f.lower(): f for f in self.features}
-        final_canon = {canon[k]: v for k, v in final.items() if k in canon}
-        return (primary, final_canon)
+        return (primary, final)
 
 
 def atomic_write_json(path: str | os.PathLike[str], data: Any) -> None:

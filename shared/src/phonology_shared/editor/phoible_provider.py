@@ -556,30 +556,21 @@ def materialize_phoible_inventory(
         # summary on both UIs. Plain-text informational stamp.
         metadata["phoible_source_url"] = descriptor.source_url
     if generated.segment_secondary:
-        # Canonicalise BOTH the diphthong segment key AND the
-        # feature bundle keys through the engine's normalisation
-        # (NFC for the segment, ``normalize_feature_key`` for the
-        # feature names). PHOIBLE ships ~26% of inventories with
-        # NFD-form segments (nasal vowels like ``ã`` arrive as
-        # ``a + U+0303``); the engine NFC-folds them at parse so
-        # a raw-key copy here means ``segment_secondary['ãi']``
-        # (NFD) misses ``inventory.segments['ãi']`` (NFC) on the
-        # lookup inside ``compute_placements``. Result pre-fix:
-        # nasal diphthongs silently lost their secondary
-        # placement and rendered as monophthongs.
+        # Canonicalise the contour segment KEY (NFC). PHOIBLE ships
+        # ~26% of inventories with NFD-form segments (nasal vowels
+        # like ``ã`` arrive as ``a + U+0303``); the engine NFC-folds
+        # them at parse, so a raw NFD key here would miss the NFC
+        # ``inventory.segments`` key on lookup and the diphthong would
+        # silently render as a monophthong.
         #
-        # The feature-key normalisation defends against the same
-        # bug shape for FEATURE keys: if PHOIBLE ever shipped a
-        # feature name in NFD (or PascalCase, or with a delimiter
-        # variant), the lookup inside ``vowel_grid_pos`` would
-        # quietly miss and the segment would place at the
-        # default Open-mid-Central cell.
-        from phonology_shared.data.inventory import normalize_feature_key
-
+        # The feature-bundle keys are already this inventory's declared
+        # feature names (they came from zipping against
+        # ``generated.features``), and ``Inventory.parse`` folds
+        # segment_secondary onto the declared names anyway, so they are
+        # copied as-is here rather than folded to a second namespace
+        # and back.
         metadata["segment_secondary"] = {
-            canonicalize_segment_label(seg): {
-                normalize_feature_key(k): v for k, v in bundle.items()
-            }
+            canonicalize_segment_label(seg): dict(bundle)
             for seg, bundle in generated.segment_secondary.items()
         }
 

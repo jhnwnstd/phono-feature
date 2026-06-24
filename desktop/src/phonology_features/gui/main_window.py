@@ -78,6 +78,7 @@ from phonology_features.gui.widgets import (
     SegmentGridWidget,
     SegmentState,
 )
+from phonology_shared.chart.consonants import VOWEL_GROUP_NAME
 from phonology_shared.data.inventory import Inventory, ValidationError
 from phonology_shared.editor.grid import enforce_class_caps
 from phonology_shared.editor.phoible_provider import phoible_loaded_message
@@ -1158,14 +1159,9 @@ class MainWindow(QMainWindow):
         # automatically invalidates them.
         groups = dict(self.engine.grouped_segments)  # shallow; pop mutates
         norm_feats = self.engine.normalized_segment_feats
-        # Case-insensitive lookup so an inventory with "vowels" or
-        # "VOWELS" still gets routed to the IPA chart. Matches the
-        # web bridge's _summarize_engine behaviour.
-        vowel_key = next(
-            (k for k in groups if k.lower() == "vowels"),
-            None,
-        )
-        vowel_segs = groups.pop(vowel_key, []) if vowel_key else []
+        # The grouper emits the vowel group under one fixed name; pop it
+        # out so only consonant groups remain for the seg grid.
+        vowel_segs = groups.pop(VOWEL_GROUP_NAME, [])
         consonant_buttons: dict[str, SegmentButton] = {}
         for segs in groups.values():
             for seg in segs:

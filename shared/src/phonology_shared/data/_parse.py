@@ -681,6 +681,35 @@ def _assemble_inventory(
         metadata.setdefault("segment_secondary", metadata["vowel_secondary"])
         del metadata["vowel_secondary"]
 
+    # Fold segment_secondary (contour final-state bundles) onto the
+    # DECLARED feature names ONCE here, so contour phases share the
+    # exact key namespace as primary bundles and inventory.features.
+    # The PHOIBLE producer and pre-existing saves stored these keys
+    # folded to lowercase; remapping at this single ingest funnel lets
+    # segment_phases trust the keys instead of rebuilding a fold map on
+    # every call, and removes a normalise-then-denormalise round trip.
+    # Keys that match no declared feature are dropped (the same
+    # behaviour segment_phases had); values pass through untouched.
+    secondary = metadata.get("segment_secondary")
+    if isinstance(secondary, Mapping):
+        declared_by_canonical = {
+            normalize_feature_key(name): name for name in feature_table.names
+        }
+        folded_secondary: dict[str, dict[str, Any]] = {}
+        for seg, bundle in secondary.items():
+            if not isinstance(bundle, Mapping):
+                continue
+            declared_bundle: dict[str, Any] = {}
+            for raw_key, value in bundle.items():
+                declared = declared_by_canonical.get(
+                    normalize_feature_key(raw_key)
+                )
+                if declared is not None:
+                    declared_bundle[declared] = value
+            if declared_bundle:
+                folded_secondary[seg] = declared_bundle
+        metadata["segment_secondary"] = folded_secondary
+
     # Inventory name is a display label, not a key, so policy is
     # lighter than segment/feature names: canonicalize and cap, but
     # skip the alias/collision/invisible-char checks. Length cap
