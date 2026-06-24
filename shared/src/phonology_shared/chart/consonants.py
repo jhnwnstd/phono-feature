@@ -770,6 +770,7 @@ def group_segments(
     inventory: Mapping[str, Mapping[str, str]],
     *,
     normalized: Mapping[str, dict[str, str]] | None = None,
+    contour_feats: Mapping[str, frozenset[str]] | None = None,
 ) -> dict[str, list[str]]:
     """Assign every segment to a phonological display group.
 
@@ -781,6 +782,16 @@ def group_segments(
     ``normalized_segment_feats`` pass it so the inventory is not
     re-normalized on every grouping (this sits on the interactive
     inventory-switch path).
+
+    ``contour_feats`` optionally maps each segment to the
+    (normalized) feature names that take BOTH ``+`` and ``-`` across
+    its phases, i.e. the features that contour within the segment.
+    It identifies affricates that carry no ``DelRel`` feature: an
+    obstruent whose ``continuant`` contours (stop -> fricative) is an
+    affricate even when nothing marks delayed release. The engine
+    derives it from :py:meth:`Inventory.segment_phases`; callers that
+    pass nothing simply lose contour-based affricate inference (the
+    ``DelRel`` spec path is unaffected).
     """
     if not inventory:
         return {}
@@ -873,6 +884,17 @@ def group_segments(
         else:
             if is_vowel_phoneme or is_tone_phoneme:
                 return False
+        # Affrication needs a positive signal. With ``DelRel`` active,
+        # the spec's ``delrel: +`` is that signal (a plain stop carries
+        # ``delrel: -`` and is rejected below). With no ``DelRel`` in
+        # the inventory the spec degenerates to a bare stop spec
+        # (``consonantal +, continuant -, sonorant -``) and, sitting
+        # earlier than Plosives, would claim every stop. Refuse the
+        # spec entirely in that case: the only affricates an inventory
+        # without delayed release can name are the ones a ``continuant``
+        # contour marks, handled by ``affricate_by_contour`` below.
+        if group_name == "Affricates" and "delrel" not in active_features:
+            return False
         relevant = [f for f in spec if f in active_features]
         if not relevant:
             return False
@@ -959,9 +981,39 @@ def group_segments(
                 best_matches = matched
         return best_name
 
+    contours = contour_feats or {}
+
+    def affricate_by_contour(sym: str, seg_feats: dict[str, str]) -> str:
+        """``Affricates`` when ``continuant`` contours within an
+        obstruent, regardless of ``DelRel``.
+
+        Linguists routinely write an affricate as a single segment
+        whose ``continuant`` holds both values (``-`` for the stop
+        closure, ``+`` for the fricative release). That contour is
+        the affrication, so a ``+consonantal`` non-sonorant carrying
+        it is an affricate even with no ``DelRel`` column. The
+        obstruent gate keeps the rule off vowels, sonorants, and
+        clicks; ``DelRel``-bearing affricates still go through the
+        spec path in ``best_primary`` so this only adds the
+        delrel-free case rather than changing the existing one.
+        """
+        if "continuant" not in contours.get(sym, frozenset()):
+            return ""
+        if seg_feats.get("consonantal", "0") != "+":
+            return ""
+        if seg_feats.get("sonorant", "0") == "+":
+            return ""
+        if seg_feats.get("click", "0") == "+":
+            return ""
+        return "Affricates"
+
     assignment: dict[str, list[str]] = defaultdict(list)
     for sym, feats in norm.items():
-        group = best_primary(feats) or fallback_assignment(feats)
+        group = (
+            affricate_by_contour(sym, feats)
+            or best_primary(feats)
+            or fallback_assignment(feats)
+        )
         if group:
             assignment[group].append(sym)
     for new_name, parent_name, cond in DERIVED_BREAKOUTS:

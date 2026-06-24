@@ -75,6 +75,81 @@ def test_monophthongs_stay_in_exactly_one_class() -> None:
         assert "i" in minus_low and "i" not in plus_low, mode
 
 
+def _affricate_inv(*, with_delrel: bool) -> Inventory:
+    """A 3-obstruent inventory: a plain stop ``t``, a fricative ``s``,
+    and ``ts`` whose ``continuant`` contours ``- -> +`` (the affricate,
+    encoded as a second phase). ``with_delrel`` toggles whether the
+    inventory even has a ``DelRel`` column, modelling the two regimes
+    the grouper must handle."""
+    feats = ["Consonantal", "Sonorant", "Continuant"]
+    t = {"Consonantal": "+", "Sonorant": "-", "Continuant": "-"}
+    s = {"Consonantal": "+", "Sonorant": "-", "Continuant": "+"}
+    ts = {"Consonantal": "+", "Sonorant": "-", "Continuant": "-"}
+    if with_delrel:
+        feats.append("DelRel")
+        t["DelRel"] = "-"
+        s["DelRel"] = "-"
+        ts["DelRel"] = "+"
+    return Inventory.parse(
+        {
+            "features": feats,
+            "segments": {"t": t, "s": s, "ts": ts},
+            "metadata": {"vowel_secondary": {"ts": {"continuant": "+"}}},
+        }
+    )
+
+
+def test_continuant_contour_is_affricate_without_delrel() -> None:
+    """The note's case: with no ``DelRel`` feature, a ``continuant``
+    contour is what names an affricate. ``ts`` lands in Affricates;
+    the plain stop ``t`` stays a Plosive and ``s`` a Fricative."""
+    eng = FeatureEngine(_affricate_inv(with_delrel=False))
+    groups = eng.grouped_segments
+    assert "ts" in groups.get("Affricates", []), groups
+    assert "t" in groups.get("Plosives", []), groups
+    assert "s" in groups.get("Fricatives", []), groups
+    # The contour segment must not also linger in Plosives.
+    assert "ts" not in groups.get("Plosives", []), groups
+
+
+def test_plain_stop_not_affricate_without_delrel() -> None:
+    """Guard against the degenerate path: with ``DelRel`` absent the
+    Affricates spec must not claim plain stops by tie-break. Only the
+    contour segment is an affricate; ``t`` is a Plosive."""
+    eng = FeatureEngine(_affricate_inv(with_delrel=False))
+    assert "t" not in eng.grouped_segments.get("Affricates", [])
+
+
+def test_delrel_affricate_still_classified_when_present() -> None:
+    """Regression: when ``DelRel`` IS present the existing spec path is
+    untouched. ``ts`` (delrel +) is an affricate, ``t`` (delrel -) a
+    plosive, independent of any contour metadata."""
+    eng = FeatureEngine(_affricate_inv(with_delrel=True))
+    groups = eng.grouped_segments
+    assert "ts" in groups.get("Affricates", []), groups
+    assert "t" in groups.get("Plosives", []), groups
+
+
+def test_contour_feats_exposes_only_contouring_features() -> None:
+    """The engine's contour map names exactly the features that flip
+    polarity across phases: ``continuant`` for ``ts`` and nothing for
+    the single-phase obstruents."""
+    eng = FeatureEngine(_affricate_inv(with_delrel=False))
+    cmap = eng._contour_feats_by_seg
+    assert cmap.get("ts") == frozenset({"continuant"})
+    assert "t" not in cmap and "s" not in cmap
+
+
+def test_diphthong_contour_is_not_an_affricate() -> None:
+    """The obstruent gate keeps the affricate rule off vowels: the
+    ``ia`` diphthong contours (it is in the engine's contour map) but
+    is ``-consonantal``, so ``affricate_by_contour`` refuses it and it
+    never enters the Affricates class."""
+    eng = FeatureEngine(_contour_inv())
+    assert "ia" in eng._contour_feats_by_seg, "diphthong should contour"
+    assert "ia" not in eng.grouped_segments.get("Affricates", [])
+
+
 def test_single_phase_inventory_matching_unchanged() -> None:
     """An inventory with no contour segments indexes exactly as a
     plain +/-/0 inventory: plus and minus stay disjoint, so wildcard
