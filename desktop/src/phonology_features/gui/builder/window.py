@@ -1078,6 +1078,14 @@ class InventoryBuilder(QMainWindow):
             self._table.clearSelection()
         else:
             self._table.selectAll()
+        # The corner click overrode any per-header selection, so reset
+        # the toggle stickies owned by the header handlers. Without this
+        # a later click on the SAME column/row header that was active
+        # before the corner click is misread as a toggle-off and clears
+        # the selection instead of selecting it (the remove button then
+        # stays disabled).
+        self._user_clicked_col = None
+        self._user_clicked_row = None
 
     def _clear_remove_selection(self) -> None:
         """Reset which header is currently selected for removal."""

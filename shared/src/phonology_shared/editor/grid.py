@@ -411,6 +411,16 @@ def classify_selection(
         return SelectionShape(kind=SELECTION_SHAPE_EMPTY)
     if n == 1:
         ((r, c),) = cells_set
+        # In a degenerate grid one selected cell IS a whole column (when
+        # there is only one row) or a whole row (only one column), so it
+        # must classify as such or the "- Segment" / "- Feature" buttons
+        # never enable and a 1-feature or 1-segment inventory becomes
+        # impossible to edit structurally. A genuine 1x1 grid stays a
+        # single cell: removing its only segment/feature is not allowed.
+        if num_rows == 1 and num_cols > 1:
+            return SelectionShape(kind=SELECTION_SHAPE_SINGLE_COLUMN, column=c)
+        if num_cols == 1 and num_rows > 1:
+            return SelectionShape(kind=SELECTION_SHAPE_SINGLE_ROW, row=r)
         return SelectionShape(
             kind=SELECTION_SHAPE_SINGLE_CELL, row=r, column=c
         )

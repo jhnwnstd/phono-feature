@@ -247,6 +247,13 @@ dialog {
      reserves a comfortable inset on both sides. */
   min-width: min(320px, calc(100vw - var(--space-xl) * 2));
   max-width: min(480px, calc(100vw - var(--space-xl) * 2));
+  /* Cap height to the viewport and scroll internally so a tall dialog
+     (e.g. the New-inventory setup form with its two textareas) never
+     pushes its Cancel / submit actions below the fold and out of reach
+     on a short or landscape-phone viewport. */
+  max-height: calc(100vh - var(--space-xl) * 2);
+  overflow: auto;
+  box-sizing: border-box;
   font: inherit;
 }
 dialog::backdrop {
@@ -368,6 +375,14 @@ dialog input[type="text"]:focus-visible {
    step in this picker's flow. Sizing follows the same viewport-cap
    pattern as ``.setup-dialog``. */
 
+/* A <dialog> is hidden by the UA rule ``dialog:not([open]) { display:
+   none }``, but the author ``display: flex`` below beats that UA rule
+   (author origin wins regardless of specificity), which would leave the
+   picker permanently on screen. Re-assert the closed-state default so
+   the flex layout only applies once the dialog is actually open. */
+.phoible-picker:not([open]) {
+  display: none;
+}
 .phoible-picker {
   /* Fixed WIDTH, content-driven HEIGHT capped at a max. The dialog is
      exactly as tall as its content (no dead space when a language has
@@ -382,6 +397,10 @@ dialog input[type="text"]:focus-visible {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  /* This picker manages its own single inner scroll region
+     (#phoible-radios), so suppress the base dialog's overflow:auto to
+     avoid a redundant second scrollbar on the dialog itself. */
+  overflow: hidden;
 }
 .phoible-picker > #phoible-picker-form {
   display: flex;
@@ -2020,7 +2039,13 @@ progress {
 .editor-toolbar {
   display: flex;
   align-items: center;
+  /* Wrap like the main toolbar: the editor view is position:fixed with
+     no horizontal scroll, so without wrapping the trailing buttons
+     (- Segment / - Feature) clip off-screen and become unreachable on
+     a narrow/phone viewport. */
+  flex-wrap: wrap;
   gap: var(--space-md);
+  row-gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
   background: var(--panel);
   border-bottom: var(--border-thin) solid var(--border);

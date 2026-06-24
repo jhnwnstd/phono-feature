@@ -4235,6 +4235,18 @@ function classifyEditorSelection() {
     if (n === 0) return { kind: "empty" };
     if (n === 1) {
         const { r, c } = parseCellKey(sel.values().next().value);
+        // Mirror classify_selection in shared/editor/grid.py: in a
+        // degenerate grid one selected cell is a whole column (single
+        // row) or whole row (single column), so it must classify as
+        // such or the remove-segment / remove-feature buttons never
+        // enable for a 1-feature or 1-segment inventory. A true 1x1
+        // grid stays single_cell (its last seg/feature cannot be cut).
+        if (numRows === 1 && numCols > 1) {
+            return { kind: "single_column", column: c };
+        }
+        if (numCols === 1 && numRows > 1) {
+            return { kind: "single_row", row: r };
+        }
         return { kind: "single_cell", row: r, column: c };
     }
     let theCol = null;
@@ -5432,16 +5444,46 @@ function wireMatchModeToggle() {
         //   3. runAnalysis re-renders the current selection under
         //      the new mode.
         callBridge("set_match_mode", next);
+        // Capture BEFORE the feature-pane rebuild so a selection made
+        // under the old mode still drives the re-analysis below.
+        const hadSelection =
+            state.selected_segments.length > 0
+            || Object.keys(state.selected_features).length > 0;
         try {
             const info = callBridge("inventory_summary_for_mode", next);
-            if (info) applyInventoryInfo(info);
+            if (info) {
+                // Rebuild ONLY the feature pane (the active-feature set
+                // changes: all-0 features appear in wildcard / disappear
+                // in strict). Do NOT call applyInventoryInfo here: that
+                // is the full inventory-SWAP routine, which clears the
+                // segment + feature selection, blanks the analysis, and
+                // wipes the PHOIBLE provenance chip + Source link. The
+                // desktop's _toggle_match_mode likewise keeps the
+                // selection and only repopulates the feature rows.
+                state.features = info.features;
+                renderFeaturePanel(info.feature_groups);
+                // Re-apply the FEAT-mode query markers from the
+                // preserved selection onto the rebuilt rows (mirrors
+                // activateMode's restore loop).
+                if (state.mode === MODE.FEAT_TO_SEG) {
+                    for (const [feat, rec] of state.feat_rows) {
+                        const cur = state.selected_features[feat];
+                        rec.plus.dataset.active =
+                            cur === "+" ? "true" : "false";
+                        rec.minus.dataset.active =
+                            cur === "-" ? "true" : "false";
+                        if (cur === "+" || cur === "-") {
+                            rec.row.dataset.queryValue = cur;
+                        } else {
+                            delete rec.row.dataset.queryValue;
+                        }
+                    }
+                }
+            }
         } catch (e) {
             console.warn("match-mode inventory refresh failed:", e);
         }
-        const hasSelection =
-            state.selected_segments.length > 0
-            || Object.keys(state.selected_features).length > 0;
-        if (hasSelection) runAnalysis();
+        if (hadSelection) runAnalysis();
     });
 }
 
@@ -5585,7 +5627,7 @@ function addPhoibleDropdownEntry(inventoryId, name) {
 }
 
 function wireInventoryPicker() {
-    nodes.inventoryPicker.addEventListener("change", () => {
+    nodes.inventoryPicker.addEventListener("change", async () => {
         const value = nodes.inventoryPicker.value;
         if (value.startsWith(PHOIBLE_OPTION_PREFIX)) {
             // Session PHOIBLE entry: reload through the bridge.
@@ -5597,8 +5639,10 @@ function wireInventoryPicker() {
                 applyInventoryInfo(info);
                 setStatus(info.status || `Loaded ${info.name}.`);
             } catch (e) {
+                // bridgeErrorMessage extracts the clean last line; a raw
+                // PythonError.message would dump the whole traceback.
                 setStatus(
-                    e.message || "Could not load inventory.",
+                    bridgeErrorMessage(e, "Could not load inventory."),
                     STATUS_KIND.error,
                 );
             }
@@ -5606,7 +5650,20 @@ function wireInventoryPicker() {
         }
         const item = BUNDLED_INVENTORIES.find((i) => i.file === value);
         if (item) {
-            loadBundledInventory(item);
+            // loadBundledInventory fetches the asset; without this
+            // try/catch a transient fetch failure (offline, SW miss)
+            // would be an unhandled rejection with no user feedback,
+            // leaving the dropdown showing an inventory the engine
+            // never loaded.
+            try {
+                await loadBundledInventory(item);
+            } catch (e) {
+                setStatus(
+                    `Could not load ${item.label}: `
+                    + bridgeErrorMessage(e, "load failed"),
+                    STATUS_KIND.error,
+                );
+            }
         }
     });
 }

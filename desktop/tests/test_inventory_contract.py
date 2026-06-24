@@ -1611,6 +1611,48 @@ def test_bulk_edit_does_not_disable_rm_buttons(tmp_path: Path) -> None:
     close_builder_silent(b)
 
 
+def test_corner_click_resets_header_toggle_stickies(tmp_path: Path) -> None:
+    """Clicking the select-all corner must reset the header toggle
+    stickies. Otherwise a later click on the SAME column header that was
+    active before the corner click is misread as a toggle-off, so the
+    column is not re-selected and -Segment stays disabled."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    sd = str(tmp_path / "qt-settings")
+    _os.makedirs(sd, exist_ok=True)
+    for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
+        QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.builder import InventoryBuilder
+
+    b = InventoryBuilder(load_path=HAYES)
+    b.show()
+    for _ in range(4):
+        app.processEvents()
+    b._on_col_header_clicked(5)  # select column 5
+    b._on_corner_clicked()  # select all
+    b._on_corner_clicked()  # clear all
+    for _ in range(2):
+        app.processEvents()
+    # Re-click the SAME header: must register as a fresh selection.
+    b._on_col_header_clicked(5)
+    for _ in range(2):
+        app.processEvents()
+    assert b._user_clicked_col == 5, (
+        "after a corner click, re-clicking the same column header must "
+        "register as a fresh selection, not a stale toggle-off"
+    )
+    assert (
+        b._rm_seg_btn.isEnabled()
+    ), "the re-selected column should re-enable the -Segment button"
+    close_builder_silent(b)
+
+
 def test_header_doubleclick_still_toggles_selection(tmp_path: Path) -> None:
     """PyQt6's QHeaderView suppresses ``sectionClicked`` when a press
     lands within the OS double-click interval (~400 ms) of the previous

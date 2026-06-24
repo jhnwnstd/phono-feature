@@ -533,6 +533,46 @@ def test_classify_selection_single_cell():
     assert s.row == 2 and s.column == 3
 
 
+def test_classify_selection_single_cell_in_one_row_grid_is_column():
+    """In a one-feature (single-row) grid, one selected cell IS the
+    whole segment column, so it must classify as single_column or the
+    "- Segment" button never enables (degenerate-grid dead-end)."""
+    from phonology_shared.editor.grid import (
+        SELECTION_SHAPE_SINGLE_COLUMN,
+        classify_selection,
+    )
+
+    s = classify_selection([(0, 1)], num_rows=1, num_cols=4)
+    assert s.kind == SELECTION_SHAPE_SINGLE_COLUMN
+    assert s.column == 1
+
+
+def test_classify_selection_single_cell_in_one_col_grid_is_row():
+    """In a one-segment (single-column) grid, one selected cell IS the
+    whole feature row, so it must classify as single_row or the
+    "- Feature" button never enables."""
+    from phonology_shared.editor.grid import (
+        SELECTION_SHAPE_SINGLE_ROW,
+        classify_selection,
+    )
+
+    s = classify_selection([(2, 0)], num_rows=4, num_cols=1)
+    assert s.kind == SELECTION_SHAPE_SINGLE_ROW
+    assert s.row == 2
+
+
+def test_classify_selection_single_cell_in_1x1_grid_stays_cell():
+    """A genuine 1x1 grid keeps single_cell: removing its only segment
+    or feature is not allowed, so neither remove button should enable."""
+    from phonology_shared.editor.grid import (
+        SELECTION_SHAPE_SINGLE_CELL,
+        classify_selection,
+    )
+
+    s = classify_selection([(0, 0)], num_rows=1, num_cols=1)
+    assert s.kind == SELECTION_SHAPE_SINGLE_CELL
+
+
 def test_classify_selection_single_column():
     from phonology_shared.editor.grid import (
         SELECTION_SHAPE_SINGLE_COLUMN,
