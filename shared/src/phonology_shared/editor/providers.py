@@ -171,3 +171,20 @@ def blank_bundle(features: tuple[str, ...]) -> dict[str, str]:
     place instead of re-typing the symbol after a manual fix.
     """
     return {feature: "0" for feature in features}
+
+
+def decode_positional_bundle(
+    features: tuple[str, ...] | list[str], encoded: str
+) -> dict[str, str]:
+    """Pair ``features`` with a positionally-encoded value string.
+
+    A baked bundle ships as one character per feature (``"+-0..."``)
+    for compactness; decoding is a positional ``zip``. ``strict=False``
+    tolerates a value string shorter or longer than ``features`` (the
+    callers validate length separately and skip mismatches), so a
+    snapshot baked against a slightly different column set degrades to
+    a partial bundle instead of raising. Single definition of the
+    positional-encoding contract shared by every provider that loads
+    baked tables.
+    """
+    return dict(zip(features, encoded, strict=False))

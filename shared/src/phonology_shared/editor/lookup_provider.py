@@ -28,6 +28,7 @@ from typing import Any
 
 from phonology_shared.editor.providers import (
     GeneratedInventory,
+    decode_positional_bundle,
     prune_unused_features,
     restrict_bundles,
 )
@@ -139,7 +140,9 @@ class LookupFeatureProvider:
                 # runtime; the unresolved counter will surface the
                 # gap to the user.
                 continue
-            self._bundles[ipa] = dict(zip(self._feature_names, encoded))
+            self._bundles[ipa] = decode_positional_bundle(
+                self._feature_names, encoded
+            )
 
     @classmethod
     def from_path(cls, path: str | Path) -> LookupFeatureProvider:

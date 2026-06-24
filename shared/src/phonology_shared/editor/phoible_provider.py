@@ -39,6 +39,7 @@ from phonology_shared.editor.inventory_providers import (
 )
 from phonology_shared.editor.providers import (
     GeneratedInventory,
+    decode_positional_bundle,
     prune_unused_features,
     restrict_bundles,
 )
@@ -430,7 +431,7 @@ class PhoibleProvider:
             # value vector. The bundle is shipped as a string of
             # one char per feature for compactness; decoding is a
             # single ``zip`` per segment.
-            resolved[sym] = dict(zip(features, encoded, strict=False))
+            resolved[sym] = decode_positional_bundle(features, encoded)
 
         # Pre-prune feature space so secondaries align with primaries
         # when the column-pruning step below drops sparse features.
@@ -438,7 +439,7 @@ class PhoibleProvider:
             inventory_id, {}
         )
         secondary: dict[str, Mapping[str, str]] = {
-            sym: dict(zip(features, encoded, strict=False))
+            sym: decode_positional_bundle(features, encoded)
             for sym, encoded in encoded_secondary.items()
             if sym in resolved
         }
