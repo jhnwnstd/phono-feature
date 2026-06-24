@@ -38,18 +38,6 @@ Bridge contract (single source of truth for the JS side; see
   entire bridge behind a postMessage boundary; the contract above
   is the boundary that migration follows, so any new bridge
   function added here MUST already obey it.
-
-Methods (current surface; keep alphabetised when adding):
-    analyze_features, analyze_segments, best_segment_n_cols_for_groups,
-    confirm_remove_feature_prompt, confirm_remove_segment_prompt,
-    get_cycle_ladder, get_download_filename, get_grid_state,
-    get_max_undo_depth, get_mode_status_text, get_move_keys,
-    get_setup_defaults, get_value_keys, load_inventory_json,
-    partition_segment_spillover, phoible_is_available,
-    phoible_is_ready, phoible_list_inventories, phoible_load_data,
-    phoible_preview_inventory, rename_current_inventory,
-    serialize_current_inventory, set_active_palette_mode,
-    set_active_theme, validation_report_html.
 """
 
 from __future__ import annotations
@@ -890,17 +878,6 @@ def project_segments_to_features(segs: list[str]) -> dict[str, str]:
 
 
 @_translate_engine_errors
-def project_features_to_segments(spec: dict[str, str]) -> list[str]:
-    """Mode-switch projection (FEAT -> SEG): the segments matching
-    the current feature query. Empty dict maps to empty list.
-    """
-    engine = _require_engine()
-    if not spec:
-        return []
-    return engine.find_segments(dict(spec))
-
-
-@_translate_engine_errors
 def project_mode_switch(
     current_mode: str,
     target_mode: str,
@@ -977,14 +954,14 @@ def plan_segment_layout(
 
     Returned dict mirrors :py:class:`SegLayoutPlan`:
 
-    * ``main_groups`` -- group names that stay in the main flow.
-    * ``spillover_groups`` -- group names that spill below the main
+    * ``main_groups``: group names that stay in the main flow.
+    * ``spillover_groups``: group names that spill below the main
       flow + chart (empty list = no spillover).
-    * ``n_spillover_cols`` -- column count in the spillover region
+    * ``n_spillover_cols``: column count in the spillover region
       (1..max_spillover_cols=4).
-    * ``spillover_column_assignment`` -- parallel to ``spillover_groups``;
+    * ``spillover_column_assignment``: parallel to ``spillover_groups``;
       each entry is the destination column index (0-indexed).
-    * ``spillover_rect`` -- ``[x, y, w, h]`` in pane-local pixels
+    * ``spillover_rect``: ``[x, y, w, h]`` in pane-local pixels
       (informational; the web renderer just needs n_spillover_cols
       and column_assignment to apply ``grid-template-columns`` and
       slot each spilled group).
@@ -1122,15 +1099,6 @@ def _analyze_features_cached(
     engine = _require_engine()
     mode = MatchMode(mode_str)
     return summarize_feature_query(engine, dict(spec_items), mode=mode)
-
-
-@_translate_engine_errors
-def get_match_mode() -> str:
-    """Wire-stable string of the active :py:class:`MatchMode`.
-    JS reads this on boot (after replaying its persisted
-    preference) and uses it to drive the toolbar toggle's pressed
-    state."""
-    return str(_match_mode)
 
 
 @_translate_engine_errors

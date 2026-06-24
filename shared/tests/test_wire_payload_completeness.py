@@ -287,6 +287,15 @@ def test_web_js_cell_field_reads_match_expected_set() -> None:
             "querySelector",
             "querySelectorAll",
             "getBoundingClientRect",
+            # Layout-metric reads (measured from the rendered DOM, not
+            # carried in the wire payload), same category as
+            # getBoundingClientRect above.
+            "offsetWidth",
+            "offsetHeight",
+            "clientWidth",
+            "clientHeight",
+            "scrollWidth",
+            "scrollHeight",
             "appendChild",
             "addEventListener",
             "removeEventListener",

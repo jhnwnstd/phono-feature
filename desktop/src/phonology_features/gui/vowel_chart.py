@@ -147,7 +147,7 @@ class FlowLayout(QLayout):
         self._center = center
         self.setContentsMargins(0, 0, 0, 0)
 
-    # -- QLayout plumbing ------------------------------------------
+    # QLayout plumbing
     def addItem(self, item: QLayoutItem | None) -> None:  # noqa: D102
         if item is not None:
             self._items.append(item)
@@ -192,7 +192,7 @@ class FlowLayout(QLayout):
         )
         return size
 
-    # -- core flow -------------------------------------------------
+    # core flow
     def _do_layout(self, rect: QRect, *, apply: bool) -> int:
         """Place items (when ``apply``) or just measure; return the
         total wrapped height in pixels. Items are grouped into lines

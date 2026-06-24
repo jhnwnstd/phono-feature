@@ -674,8 +674,8 @@ def _assemble_inventory(
     # is. ``segment_secondary`` was ``vowel_secondary`` before obstruent
     # affricates joined vowel diphthongs in it, and a builder round-trip
     # persists the whole metadata mapping, so a pre-rename save (or an
-    # edit of one) still carries the former. Doing it here -- the single
-    # ingest funnel for both parse() and from_grid() -- means no
+    # edit of one) still carries the former. Doing it here, at the
+    # single ingest funnel for both parse() and from_grid(), means no
     # downstream reader needs an old-key fallback.
     if "vowel_secondary" in metadata:
         metadata.setdefault("segment_secondary", metadata["vowel_secondary"])
