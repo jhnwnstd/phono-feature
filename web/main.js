@@ -435,11 +435,13 @@ function loadPyodideScript() {
 // Built from ``STATUS_TEXT.default_inventory_stem`` (relayed from
 // the ``DEFAULT_INVENTORY_STEM`` Python constant). Keeps the runtime
 // default-pick aligned with the build-time bootstrap precompute so
-// the two cannot drift to different files. Falls back to the
-// historical literal if the relay key is missing (e.g. an older
-// snapshot built before the relay landed).
+// the two cannot drift to different files. Falls back to a shipped
+// stem if the relay key is missing (e.g. an older snapshot built
+// before the relay landed); the literal must name a TRACKED
+// inventory so the fallback path cannot itself land on a stem the
+// manifest omits.
 const PREFERRED_DEFAULT_INVENTORY = (
-    "inventories/" + (STATUS_TEXT.default_inventory_stem || "general_features")
+    "inventories/" + (STATUS_TEXT.default_inventory_stem || "hayes_features")
     + ".json"
 );
 

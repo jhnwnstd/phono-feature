@@ -97,8 +97,12 @@ def format_segment_accessible_label(seg: str) -> str:
 
 # Bundled-inventory stem the web boots into and that build.py
 # precomputes the bootstrap render for. Single source so the
-# build-time bootstrap and the runtime default cannot drift.
-DEFAULT_INVENTORY_STEM: str = "general_features"
+# build-time bootstrap and the runtime default cannot drift. Must
+# name a TRACKED inventory: copy_inventories omits gitignored files
+# from the runtime manifest, so a gitignored stem would still bake
+# into the bootstrap chart yet be missing at runtime, silently
+# dropping the default-pick to the first bundled inventory.
+DEFAULT_INVENTORY_STEM: str = "hayes_features"
 
 # Hover-tooltip strings for the wildcard ("Allow underspecified")
 # matching-mode toggle that sits in the Features pane header on
