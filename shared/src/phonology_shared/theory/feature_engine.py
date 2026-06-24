@@ -224,6 +224,14 @@ class FeatureEngine:
         self.spec_segs: dict[str, frozenset[str]] = {}
         self.plus_segs: dict[str, frozenset[str]] = {}
         self.minus_segs: dict[str, frozenset[str]] = {}
+        # Wildcard-only "exclusively that polarity" indices: a contour
+        # segment that is BOTH + and - for a feature (its two phases
+        # disagree) is excluded from neither, so wildcard subtraction
+        # uses these instead of the full plus/minus sets. For a
+        # single-phase inventory plus/minus are disjoint and these
+        # equal the full sets, so behaviour is unchanged.
+        self._plus_excl: dict[str, frozenset[str]] = {}
+        self._minus_excl: dict[str, frozenset[str]] = {}
         self._build_membership_caches()
         _log.debug(
             "engine constructed: %r (%d segments, %d features)",
@@ -295,12 +303,19 @@ class FeatureEngine:
         feat→seg query semantics and the round-trip rule
         :py:meth:`find_all_minimal_bundles` relies on.
 
-        WILDCARD: ``+`` excludes only ``minus_segs[f]``, ``-``
-        excludes only ``plus_segs[f]``, and a requested ``"0"`` is
-        a no-op (no constraint added). ``"0"``-on-segment is
-        compatible with either polarity; the only thing wildcard
-        rules out is an explicit opposite. See
-        :py:class:`MatchMode` for the rationale.
+        WILDCARD: ``+`` excludes only segments that are EXCLUSIVELY
+        ``-`` for the feature (``_minus_excl[f]``), ``-`` excludes
+        only the exclusively-``+`` ones, and a requested ``"0"`` is a
+        no-op (no constraint added). A contour segment that is both
+        ``+`` and ``-`` (its phases disagree) is in neither exclusive
+        set, so it survives a query for EITHER polarity, which is the
+        point: a diphthong gliding into ``[+low]`` must still answer a
+        ``[+low]`` query. For single-phase inventories the exclusive
+        sets equal the full ``minus_segs`` / ``plus_segs``, so this is
+        the unchanged behaviour. ``"0"``-on-segment is compatible with
+        either polarity; the only thing wildcard rules out is an
+        explicit, non-contour opposite. See :py:class:`MatchMode` for
+        the rationale.
 
         Either way, a fresh call is ``O(F)`` over the spec.
         """
@@ -308,9 +323,9 @@ class FeatureEngine:
         if mode is MatchMode.WILDCARD:
             for feature, value in feature_spec.items():
                 if value == "+":
-                    matched -= self.minus_segs[feature]
+                    matched -= self._minus_excl[feature]
                 elif value == "-":
-                    matched -= self.plus_segs[feature]
+                    matched -= self._plus_excl[feature]
                 # value == "0": wildcard interprets as "no
                 # constraint." A user who wants the explicit-
                 # underspec semantic stays in strict mode.
@@ -330,24 +345,40 @@ class FeatureEngine:
         return list(matched)
 
     def _build_membership_caches(self) -> None:
-        """Populate the three membership sets in one pass."""
+        """Populate the membership sets in one pass.
+
+        Membership UNIONS over a segment's phases (see
+        :py:meth:`Inventory.segment_phases`): a contour segment is a
+        member of ``[+f]`` if ANY phase is ``+f`` and of ``[-f]`` if
+        ANY phase is ``-f``, so a diphthong that glides ``-low`` ->
+        ``+low`` lands in both classes. A single-phase segment indexes
+        exactly as before. The per-feature ``_plus_excl`` /
+        ``_minus_excl`` hold the "exclusively that polarity" segments
+        for the wildcard path.
+        """
         features = self._inventory.features
-        segments = self._inventory.segments
         spec: dict[str, set[str]] = {f: set() for f in features}
         plus: dict[str, set[str]] = {f: set() for f in features}
         minus: dict[str, set[str]] = {f: set() for f in features}
-        for seg, feats in segments.items():
-            for f in features:
-                v = feats.get(f, "0")
-                if v == "+":
-                    spec[f].add(seg)
-                    plus[f].add(seg)
-                elif v == "-":
-                    spec[f].add(seg)
-                    minus[f].add(seg)
+        for seg in self._inventory.segments:
+            for phase in self._inventory.segment_phases(seg):
+                for f in features:
+                    v = phase.get(f, "0")
+                    if v == "+":
+                        spec[f].add(seg)
+                        plus[f].add(seg)
+                    elif v == "-":
+                        spec[f].add(seg)
+                        minus[f].add(seg)
         self.spec_segs = {f: frozenset(s) for f, s in spec.items()}
         self.plus_segs = {f: frozenset(s) for f, s in plus.items()}
         self.minus_segs = {f: frozenset(s) for f, s in minus.items()}
+        self._plus_excl = {
+            f: self.plus_segs[f] - self.minus_segs[f] for f in features
+        }
+        self._minus_excl = {
+            f: self.minus_segs[f] - self.plus_segs[f] for f in features
+        }
         # Universe of segment names. Held as a frozenset because the
         # natural-class fast path repeatedly computes
         # ``all_segments - selected_subset``; on each call that would

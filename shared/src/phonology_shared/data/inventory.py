@@ -824,6 +824,40 @@ class Inventory:
         # ``Mapping[str, str]`` field type to the typed enum.
         return FeatureValue(self.segments[segment].get(feature, "0"))
 
+    def segment_phases(self, segment: str) -> tuple[Mapping[str, str], ...]:
+        """Return the segment's feature-bundle PHASES.
+
+        A simple segment is one phase (its primary bundle). A CONTOUR
+        segment traverses two states over its duration, so it is two
+        phases: the primary (initial) bundle and a final-state bundle.
+        Each phase is an ordinary ``+`` / ``-`` / ``0`` bundle; the
+        "both ``+f`` and ``-f``" property of a diphthong is represented
+        STRUCTURALLY by two phases disagreeing on ``f``, never by a
+        special feature value.
+
+        The final phase currently comes from the ``vowel_secondary``
+        metadata the PHOIBLE bake records (keyed by folded feature
+        names); it is remapped to this inventory's canonical feature
+        names here so callers see one consistent vocabulary. When
+        phases become a first-class, persisted part of the schema this
+        method's body changes but its contract is stable: callers
+        iterate the returned phases and treat each as a normal bundle.
+
+        Raises :py:class:`KeyError` if ``segment`` is not present.
+        """
+        primary = self.segments[segment]
+        secondary = self.metadata.get("vowel_secondary")
+        if not isinstance(secondary, Mapping):
+            return (primary,)
+        final = secondary.get(segment)
+        if not isinstance(final, Mapping) or not final:
+            return (primary,)
+        # Remap the final phase's folded feature names to this
+        # inventory's canonical names; drop any that do not map.
+        canon = {f.lower(): f for f in self.features}
+        final_canon = {canon[k]: v for k, v in final.items() if k in canon}
+        return (primary, final_canon)
+
 
 def atomic_write_json(path: str | os.PathLike[str], data: Any) -> None:
     """Write JSON to ``path`` using a temporary file and atomic replace.
