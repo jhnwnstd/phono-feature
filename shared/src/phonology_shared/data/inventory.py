@@ -835,7 +835,7 @@ class Inventory:
         STRUCTURALLY by two phases disagreeing on ``f``, never by a
         special feature value.
 
-        The final phase currently comes from the ``vowel_secondary``
+        The final phase currently comes from the ``segment_secondary``
         metadata the PHOIBLE bake records (keyed by folded feature
         names); it is remapped to this inventory's canonical feature
         names here so callers see one consistent vocabulary. When
@@ -846,7 +846,7 @@ class Inventory:
         Raises :py:class:`KeyError` if ``segment`` is not present.
         """
         primary = self.segments[segment]
-        secondary = self.metadata.get("vowel_secondary")
+        secondary = self.metadata.get("segment_secondary")
         if not isinstance(secondary, Mapping):
             return (primary,)
         final = secondary.get(segment)

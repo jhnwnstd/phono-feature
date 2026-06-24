@@ -187,7 +187,7 @@ def bake_tables(
     from phonology_shared.editor.phoible_features import (
         PHOIBLE_TO_APP_FEATURE,
         normalize_phoible_value,
-        split_vowel_contour,
+        split_contour_value,
     )
 
     if not csv_path.exists():
@@ -212,7 +212,7 @@ def bake_tables(
     # bundle stamped into inv_segments holds the initial state so
     # any consumer that does not know about diphthongs still sees
     # the conservative single-vowel placement.
-    inv_vowel_secondary: dict[str, dict[str, str]] = defaultdict(dict)
+    inv_segment_secondary: dict[str, dict[str, str]] = defaultdict(dict)
     # Language-name dedup. The same language often appears under
     # several inventories; the autocomplete list wants one entry per
     # language.
@@ -276,20 +276,38 @@ def bake_tables(
                     }
 
             # Build the positional bundle string in feature_columns
-            # order; one character per column. For vowel rows
-            # (Syllabic=+) that carry contour values in any column,
-            # we also build a parallel SECONDARY bundle holding the
-            # final-state polarity; the primary bundle keeps the
-            # initial state. This preserves PHOIBLE's diphthong
-            # encoding for the placement code without breaking the
+            # order; one character per column. A PHOIBLE cell that
+            # holds a contour (``"+,-"``) is split into an initial and
+            # a final polarity: the primary bundle keeps the initial,
+            # a parallel SECONDARY bundle records the final. That turns
+            # a contour into a sequence of ordinary phases (see
+            # ``Inventory.segment_phases``) without breaking the
             # engine's single-value-per-feature contract.
+            #
+            # A contour is preserved where the segment's class makes it
+            # meaningful: ANY feature on a vowel (a diphthong glides
+            # through both poles) and ``continuant`` on an obstruent
+            # (an affricate's stop closure releases into a fricative,
+            # so its affrication is recoverable from the continuant
+            # contour even with no ``DelRel`` column). Other consonant
+            # contours (e.g. a prenasalized stop's ``nasal``) stay
+            # flattened to ``"0"`` so they keep their established
+            # manner-class placement; widening that is a deliberate
+            # later step, not a side effect of this one.
             is_vowel = row.get("syllabic", "0") == "+"
+            is_obstruent = (
+                row.get("consonantal", "0") == "+"
+                and row.get("sonorant", "0") != "+"
+            )
             initial_chars: list[str] = []
             final_chars: list[str] = []
             has_contour = False
             for col in feature_columns:
                 raw = row.get(col, "0")
-                contour = split_vowel_contour(raw) if is_vowel else None
+                allow_contour = is_vowel or (
+                    is_obstruent and col == "continuant"
+                )
+                contour = split_contour_value(raw) if allow_contour else None
                 if contour is not None:
                     has_contour = True
                     initial, final = contour
@@ -311,8 +329,8 @@ def bake_tables(
             if phoneme in inv_segments[inv_id]:
                 continue
             inv_segments[inv_id][phoneme] = bundle_str
-            if is_vowel and has_contour:
-                inv_vowel_secondary[inv_id][phoneme] = "".join(final_chars)
+            if has_contour:
+                inv_segment_secondary[inv_id][phoneme] = "".join(final_chars)
 
     # Backfill segment_count on each inventory descriptor.
     for inv_id, meta in inv_meta.items():
@@ -346,16 +364,17 @@ def bake_tables(
             inv_id: dict(inv_segments[inv_id])
             for inv_id in sorted(inv_segments.keys(), key=int)
         },
-        # Vowel diphthong secondary bundles per inventory; sparse
-        # (only inventories with at least one diphthong appear).
-        # Each value maps phoneme -> final-state bundle string in
-        # the same positional encoding as ``inventories``. Older
-        # clients that ignore the field still get sensible
-        # single-vowel placement from the primary bundle.
-        "vowel_secondary": {
-            inv_id: dict(inv_vowel_secondary[inv_id])
-            for inv_id in sorted(inv_vowel_secondary.keys(), key=int)
-            if inv_vowel_secondary[inv_id]
+        # Per-inventory final-state bundles for contour segments
+        # (vowel diphthongs and obstruent affricates); sparse, only
+        # inventories with at least one contour appear. Each value
+        # maps phoneme -> final-state bundle string in the same
+        # positional encoding as ``inventories``. Older clients that
+        # ignore the field still get sensible single-phase placement
+        # and classification from the primary bundle.
+        "segment_secondary": {
+            inv_id: dict(inv_segment_secondary[inv_id])
+            for inv_id in sorted(inv_segment_secondary.keys(), key=int)
+            if inv_segment_secondary[inv_id]
         },
     }
 

@@ -225,7 +225,7 @@ def test_diphthong_placement_carries_secondary_and_flag():
     secondary_in = {"ia": final}
     profile = vl.detect_vowel_profile(["ia"], feats)
     occupied, placements = vl.compute_placements(
-        ["ia"], profile, feats, vowel_secondary=secondary_in
+        ["ia"], profile, feats, segment_secondary=secondary_in
     )
     placement = placements["ia"]
     assert placement.secondary is not None

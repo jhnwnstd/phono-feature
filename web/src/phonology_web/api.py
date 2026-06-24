@@ -797,7 +797,7 @@ def commit_inventory_from_grid(
     The active inventory's metadata (minus ``name``) is carried
     through to the rebuilt inventory: the grid cannot edit stamps
     like the PHOIBLE provenance or the diphthong
-    ``vowel_secondary`` bundles, and dropping them meant a builder
+    ``segment_secondary`` bundles, and dropping them meant a builder
     round-trip of a PHOIBLE inventory silently erased its
     diphthong arrows. Mirrors the desktop builder's
     ``_extra_metadata`` carry.

@@ -1106,7 +1106,7 @@ def compute_placements(
     profile: VowelProfile,
     norm_feats: Mapping[str, Mapping[str, str]],
     policy: PlacementPolicy | None = None,
-    vowel_secondary: Mapping[str, Mapping[str, str]] | None = None,
+    segment_secondary: Mapping[str, Mapping[str, str]] | None = None,
     *,
     norm_cache: Mapping[str, Mapping[str, str]] | None = None,
 ) -> tuple[dict[tuple[int, int], list[str]], dict[str, VowelPlacement]]:
@@ -1117,7 +1117,7 @@ def compute_placements(
     paper-recommended stricter settings (``coronal_front``
     disabled, low-vowel split off, etc.).
 
-    ``vowel_secondary`` carries final-state feature bundles for
+    ``segment_secondary`` carries final-state feature bundles for
     diphthong segments (PHOIBLE's contour rows). Segments that
     appear in this map get a non-null ``placement.secondary`` and
     both placements carry :py:attr:`PlacementFlag.DIPHTHONG`. The
@@ -1149,7 +1149,7 @@ def compute_placements(
     ascending segment string for stable ordering.
     """
     policy = policy or PlacementPolicy()
-    secondary_feats = vowel_secondary or {}
+    secondary_feats = segment_secondary or {}
     # Normalize the per-segment feature bundles ONCE up front so
     # the per-segment loop can call ``_vowel_grid_pos_normalized``
     # (skipping the per-call lowercase dict allocation). Most

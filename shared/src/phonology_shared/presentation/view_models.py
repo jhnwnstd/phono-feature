@@ -570,12 +570,14 @@ def _vowel_chart_summary(
     # PHOIBLE-loaded inventories stamp diphthong secondary bundles
     # into ``Inventory.metadata`` so the chart renderer can draw
     # arrows between the two cells without a new bridge endpoint.
-    secondary = engine.inventory.metadata.get("vowel_secondary")
+    secondary = engine.inventory.metadata.get("segment_secondary")
     geometry = build_vowel_chart_geometry(
         list(vowel_segs),
         profile,
         seg_feats,
-        vowel_secondary=secondary if isinstance(secondary, Mapping) else None,
+        segment_secondary=(
+            secondary if isinstance(secondary, Mapping) else None
+        ),
     )
     sil = geometry.silhouette
     return {

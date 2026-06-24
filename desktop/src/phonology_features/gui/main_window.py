@@ -1179,16 +1179,16 @@ class MainWindow(QMainWindow):
                 # PHOIBLE-loaded inventories stash their diphthong
                 # secondary bundles in metadata so the chart can
                 # draw arrows between primary and secondary cells.
-                vowel_secondary = self.engine.inventory.metadata.get(
-                    "vowel_secondary"
+                segment_secondary = self.engine.inventory.metadata.get(
+                    "segment_secondary"
                 )
                 self.vowel_chart_widget.set_vowels(
                     vowel_segs,
                     vowel_buttons,
                     norm_feats,
-                    vowel_secondary=(
-                        vowel_secondary
-                        if isinstance(vowel_secondary, Mapping)
+                    segment_secondary=(
+                        segment_secondary
+                        if isinstance(segment_secondary, Mapping)
                         else None
                     ),
                 )

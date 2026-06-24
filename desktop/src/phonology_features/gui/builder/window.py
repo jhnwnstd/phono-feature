@@ -186,7 +186,7 @@ class InventoryBuilder(QMainWindow):
         # Full metadata carried from a loaded inventory (everything
         # except ``name``); merged back on save so stamps the grid
         # cannot edit (PHOIBLE provenance, diphthong
-        # ``vowel_secondary`` bundles) survive a builder round-trip.
+        # ``segment_secondary`` bundles) survive a builder round-trip.
         self._extra_metadata: dict[str, Any] = {}
         self._build_ui()
         # SaveController owns save_in_flight / dirty / draining_save
@@ -1438,7 +1438,7 @@ class InventoryBuilder(QMainWindow):
                 row.append(item.text() if item is not None else "0")
             cells.append(row)
         # Start from the carried metadata (PHOIBLE stamps,
-        # vowel_secondary, any user keys) and overlay the live
+        # segment_secondary, any user keys) and overlay the live
         # provenance fields; the setup-dialog path has no carried
         # metadata and keeps its prior behaviour.
         metadata: dict[str, Any] = dict(self._extra_metadata)
@@ -1689,7 +1689,7 @@ class InventoryBuilder(QMainWindow):
         # ``name``, which the grid's name field owns) so the next
         # save round-trips it. Keeping only ``feature_source`` here
         # used to silently drop the PHOIBLE stamps and the
-        # ``vowel_secondary`` diphthong bundles, so editing a
+        # ``segment_secondary`` diphthong bundles, so editing a
         # PHOIBLE inventory in the builder erased its diphthong
         # arrows on save.
         self._extra_metadata = {

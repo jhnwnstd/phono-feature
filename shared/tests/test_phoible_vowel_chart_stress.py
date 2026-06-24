@@ -10,7 +10,7 @@ language named.
 Thresholds (calibrated against the current PHOIBLE 2.0 snapshot,
 verified empirically before commit):
 
-- **E1 NFC integrity**: every key in ``metadata['vowel_secondary']``
+- **E1 NFC integrity**: every key in ``metadata['segment_secondary']``
   appears in ``inventory.segments``. PHOIBLE ships ~26% of
   inventories with NFD-form segments; the materializer NFC-folds
   them so the engine and the metadata stay in lock-step. A future
@@ -28,9 +28,9 @@ verified empirically before commit):
   is the inventory, not a placement bug).
 
 - **E4 Diphthong NFC parity**: every diphthong segment in
-  ``vowel_secondary`` produces a non-null ``secondary`` from
+  ``segment_secondary`` produces a non-null ``secondary`` from
   ``compute_placements``. Catches the regression where the
-  ``vowel_secondary`` key lookup misses the engine key (the
+  ``segment_secondary`` key lookup misses the engine key (the
   original NFD/NFC bug that A1 fixed).
 
 Skipped when the PHOIBLE bake snapshot is absent (a checkout that
@@ -69,10 +69,10 @@ def _vowels_of(generated_segments: dict[str, dict[str, str]]) -> list[str]:
     ]
 
 
-def test_e1_vowel_secondary_keys_subset_of_engine_segments(
+def test_e1_segment_secondary_keys_subset_of_engine_segments(
     phoible_provider, phoible_inventory_ids_sample: list[str]
 ) -> None:
-    """Every key in ``metadata['vowel_secondary']`` must appear in
+    """Every key in ``metadata['segment_secondary']`` must appear in
     ``inventory.segments``. This is the NFC-mismatch regression
     test: the original bug had NFD-form diphthong keys missing
     the engine's NFC-folded segment keys, silently dropping
@@ -80,7 +80,7 @@ def test_e1_vowel_secondary_keys_subset_of_engine_segments(
     offenders: list[tuple[str, set[str]]] = []
     for inv_id in phoible_inventory_ids_sample:
         inv = materialize_phoible_inventory(phoible_provider, inv_id)
-        vs = inv.metadata.get("vowel_secondary") or {}
+        vs = inv.metadata.get("segment_secondary") or {}
         if not vs:
             continue
         missing = set(vs) - set(inv.segments)
@@ -93,7 +93,7 @@ def test_e1_vowel_secondary_keys_subset_of_engine_segments(
             )
             offenders.append((label, missing))
     assert not offenders, (
-        f"vowel_secondary keys missing from engine segments in "
+        f"segment_secondary keys missing from engine segments in "
         f"{len(offenders)} inventories: "
         f"{offenders[:5]}"
     )
@@ -124,7 +124,7 @@ def test_e2_no_cell_holds_more_than_eight_segments(
             vowels,
             profile,
             seg_feats,
-            vowel_secondary=gen.vowel_secondary,
+            segment_secondary=gen.segment_secondary,
         )
         max_size = max((len(segs) for segs in occupied.values()), default=0)
         if max_size > HARD_CEILING:
@@ -176,7 +176,7 @@ def test_e3_default_anchor_ceiling_for_large_inventories(
             vowels,
             profile,
             seg_feats,
-            vowel_secondary=gen.vowel_secondary,
+            segment_secondary=gen.segment_secondary,
         )
         collapsed = sum(
             1
@@ -204,7 +204,7 @@ def test_e4_diphthong_secondary_is_present_or_intentionally_suppressed(
     phoible_provider, phoible_inventory_ids_full: list[str]
 ) -> None:
     """For every PHOIBLE inventory with diphthongs, every key in
-    ``vowel_secondary`` either produces a placement with a non-null
+    ``segment_secondary`` either produces a placement with a non-null
     ``secondary``, OR ``compute_placements`` intentionally
     suppressed it because the secondary projection collapsed to
     the same ``(row, col)`` cell as the primary (a degenerate
@@ -222,14 +222,14 @@ def test_e4_diphthong_secondary_is_present_or_intentionally_suppressed(
     offenders: list[tuple[str, list[str]]] = []
     for inv_id in phoible_inventory_ids_full:
         inv = materialize_phoible_inventory(phoible_provider, inv_id)
-        vs = inv.metadata.get("vowel_secondary") or {}
+        vs = inv.metadata.get("segment_secondary") or {}
         if not vs:
             continue
         vowels = _vowels_of(dict(inv.segments))
         seg_feats = {seg: dict(inv.segments[seg]) for seg in vowels}
         profile = detect_vowel_profile(vowels, seg_feats)
         _, placements = compute_placements(
-            vowels, profile, seg_feats, vowel_secondary=vs
+            vowels, profile, seg_feats, segment_secondary=vs
         )
         # A null secondary is acceptable IFF the primary and the
         # secondary feature bundles would project to the same cell;
@@ -238,6 +238,13 @@ def test_e4_diphthong_secondary_is_present_or_intentionally_suppressed(
 
         missing = []
         for seg in vs:
+            # ``segment_secondary`` now spans both vowel diphthongs and
+            # obstruent affricates (continuant contours). This is the
+            # VOWEL-chart contract, so a non-vowel secondary (an
+            # affricate) is out of scope: it is correctly absent from
+            # the vowel placements and must not count as a miss.
+            if seg not in vowels:
+                continue
             if seg not in placements:
                 missing.append(seg)
                 continue

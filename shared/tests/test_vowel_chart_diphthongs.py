@@ -1,6 +1,6 @@
 """Pins the vowel chart's diphthong handling.
 
-Diphthongs (PHOIBLE contour vowels: a ``vowel_secondary`` whose
+Diphthongs (PHOIBLE contour vowels: a ``segment_secondary`` whose
 secondary placement lands in a DIFFERENT (row, col) from the
 primary) are NOT placed in the trapezoid. They are surfaced as a
 labelled chip strip below the vowel space, and the geometry lists
@@ -26,14 +26,14 @@ from phonology_shared.chart.vowels import (
 )
 
 
-def _build_geometry(seg_feats, *, vowel_secondary=None):
+def _build_geometry(seg_feats, *, segment_secondary=None):
     vowels = list(seg_feats)
     profile = detect_vowel_profile(vowels, seg_feats)
     return build_vowel_chart_geometry(
         vowels,
         profile,
         seg_feats,
-        vowel_secondary=vowel_secondary,
+        segment_secondary=segment_secondary,
     )
 
 
@@ -43,7 +43,7 @@ def _build_geometry(seg_feats, *, vowel_secondary=None):
 
 
 def test_true_diphthong_does_not_occupy_a_cell() -> None:
-    """A segment whose ``vowel_secondary`` puts the secondary at a
+    """A segment whose ``segment_secondary`` puts the secondary at a
     DIFFERENT (row, col) than the primary is a TRUE diphthong: it
     appears in ``geometry.diphthongs`` (the chip list) and NOT in any
     chart cell. Monophthongs do occupy cells."""
@@ -74,7 +74,7 @@ def test_true_diphthong_does_not_occupy_a_cell() -> None:
             "tense": "+",
         },
     }
-    vowel_secondary = {
+    segment_secondary = {
         "ia": {
             "high": "-",
             "low": "+",
@@ -83,7 +83,7 @@ def test_true_diphthong_does_not_occupy_a_cell() -> None:
             "round": "-",
         },
     }
-    geom = _build_geometry(seg_feats, vowel_secondary=vowel_secondary)
+    geom = _build_geometry(seg_feats, segment_secondary=segment_secondary)
     by_seg = {seg: cell for cell in geom.cells for seg in cell.entries}
     assert "ia" not in by_seg, (
         f"diphthong /ia/ must NOT occupy a cell; landed in "
@@ -99,8 +99,8 @@ def test_true_diphthong_does_not_occupy_a_cell() -> None:
     )
 
 
-def test_no_vowel_secondary_means_no_diphthongs() -> None:
-    """When the inventory carries no ``vowel_secondary`` metadata
+def test_no_segment_secondary_means_no_diphthongs() -> None:
+    """When the inventory carries no ``segment_secondary`` metadata
     (user-created JSON inventory, no PHOIBLE encoding), the diphthong
     list is empty regardless of segment-string length or diacritic
     count."""
@@ -139,9 +139,9 @@ def test_no_vowel_secondary_means_no_diphthongs() -> None:
             "rhotic": "+",
         },
     }
-    geom = _build_geometry(seg_feats, vowel_secondary=None)
+    geom = _build_geometry(seg_feats, segment_secondary=None)
     assert geom.diphthongs == (), (
-        f"no vowel_secondary should mean no diphthongs; got "
+        f"no segment_secondary should mean no diphthongs; got "
         f"{geom.diphthongs!r}"
     )
 
@@ -181,13 +181,13 @@ def test_korean_phoible_diphthongs_are_chips_not_cells() -> None:
         pytest.skip("Korean PHOIBLE has no vowels (unexpected)")
     seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
-    vowel_secondary = inv.metadata.get("vowel_secondary")
-    vsec = vowel_secondary if isinstance(vowel_secondary, dict) else None
+    segment_secondary = inv.metadata.get("segment_secondary")
+    vsec = segment_secondary if isinstance(segment_secondary, dict) else None
     geom = build_vowel_chart_geometry(
-        vowels, profile, seg_feats, vowel_secondary=vsec
+        vowels, profile, seg_feats, segment_secondary=vsec
     )
     _occupied, placements = compute_placements(
-        vowels, profile, seg_feats, vowel_secondary=vsec
+        vowels, profile, seg_feats, segment_secondary=vsec
     )
     diphthong_segments = {
         seg
@@ -221,7 +221,7 @@ def test_korean_phoible_diphthongs_are_chips_not_cells() -> None:
 )
 def test_archi_pharyngeals_not_treated_as_diphthongs() -> None:
     """Archi (PHOIBLE id=228) contains pharyngealised vowels that
-    appear in ``vowel_secondary`` but whose secondary collapses to
+    appear in ``segment_secondary`` but whose secondary collapses to
     the primary cell, so the placer's degeneracy filter excludes
     them. The diphthong list must be empty."""
     p = PhoibleProvider()
@@ -234,10 +234,10 @@ def test_archi_pharyngeals_not_treated_as_diphthongs() -> None:
         pytest.skip("Archi PHOIBLE has no vowels (unexpected)")
     seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
-    vowel_secondary = inv.metadata.get("vowel_secondary")
-    vsec = vowel_secondary if isinstance(vowel_secondary, dict) else None
+    segment_secondary = inv.metadata.get("segment_secondary")
+    vsec = segment_secondary if isinstance(segment_secondary, dict) else None
     geom = build_vowel_chart_geometry(
-        vowels, profile, seg_feats, vowel_secondary=vsec
+        vowels, profile, seg_feats, segment_secondary=vsec
     )
     assert geom.diphthongs == (), (
         f"Archi PHOIBLE should have zero diphthongs (pharyngealised "

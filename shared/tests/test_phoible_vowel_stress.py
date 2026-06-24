@@ -114,7 +114,7 @@ def test_phoible_vowel_placement_does_not_collapse(
         vowels,
         profile,
         seg_feats,
-        vowel_secondary=generated.vowel_secondary,
+        segment_secondary=generated.segment_secondary,
     )
 
     open_mid_row = ROW_LABELS.index("Open-mid")
@@ -160,7 +160,7 @@ def test_phoible_diphthongs_round_trip_secondary_and_flag(
             f"PHOIBLE inventory not present: {language}/{source_short}"
         )
     generated = phoible_provider.generate(inv_id)
-    if not generated.vowel_secondary:
+    if not generated.segment_secondary:
         pytest.skip(
             f"{language}/{source_short} carries no diphthongs in the bake"
         )
@@ -176,11 +176,11 @@ def test_phoible_diphthongs_round_trip_secondary_and_flag(
         vowels,
         profile,
         seg_feats,
-        vowel_secondary=generated.vowel_secondary,
+        segment_secondary=generated.segment_secondary,
     )
 
-    diphthongs = [seg for seg in vowels if seg in generated.vowel_secondary]
-    assert diphthongs, "fixture invariant: vowel_secondary keys are vowels"
+    diphthongs = [seg for seg in vowels if seg in generated.segment_secondary]
+    assert diphthongs, "fixture invariant: segment_secondary keys are vowels"
 
     seen_pairs: dict[tuple[tuple[int, int], tuple[int, int]], str] = {}
     for seg in diphthongs:

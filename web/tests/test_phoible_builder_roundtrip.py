@@ -4,7 +4,7 @@ The single most important PHOIBLE integration property: a user can
 load a database inventory, edit it in the builder, and save it
 locally without silently losing anything. The historical failure
 mode was metadata: the grid cannot edit stamps like the PHOIBLE
-provenance or the diphthong ``vowel_secondary`` bundles, and the
+provenance or the diphthong ``segment_secondary`` bundles, and the
 commit path used to drop them, so a builder round-trip erased the
 diphthong arrows from the saved file.
 """
@@ -70,7 +70,7 @@ def test_builder_roundtrip_preserves_diphthongs_and_provenance(
     # Save locally, reload through the file path, and confirm the
     # arrows and provenance survived the round-trip.
     inv = api._engine.inventory
-    assert "vowel_secondary" in inv.metadata
+    assert "segment_secondary" in inv.metadata
     assert inv.metadata.get("phoible_language") == "Korean"
     path = os.path.join(str(tmp_path), "my_korean.json")
     inv.write_atomic(path)

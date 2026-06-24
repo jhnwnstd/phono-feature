@@ -124,9 +124,9 @@ def _geom_for_bundled(stem: str):
         return None
     seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
-    sec = inv.metadata.get("vowel_secondary") or {}
+    sec = inv.metadata.get("segment_secondary") or {}
     return build_vowel_chart_geometry(
-        vowels, profile, seg_feats, vowel_secondary=sec
+        vowels, profile, seg_feats, segment_secondary=sec
     )
 
 
@@ -196,9 +196,9 @@ def test_phoible_sample_has_no_cell_overlap() -> None:
             s: dict(engine.normalized_segment_feats[s]) for s in vowels
         }
         profile = detect_vowel_profile(vowels, seg_feats)
-        sec = inv.metadata.get("vowel_secondary") or {}
+        sec = inv.metadata.get("segment_secondary") or {}
         geom = build_vowel_chart_geometry(
-            vowels, profile, seg_feats, vowel_secondary=sec
+            vowels, profile, seg_feats, segment_secondary=sec
         )
         if _row_overlap_count(geom) > 0:
             offenders.append(inv_id)
@@ -241,9 +241,9 @@ def test_pair_shift_conflict_resolver_elevates_wide_paired_cells() -> None:
     vowels = list(engine.grouped_segments.get("Vowels", []))
     seg_feats = {s: dict(engine.normalized_segment_feats[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
-    sec = inv.metadata.get("vowel_secondary") or {}
+    sec = inv.metadata.get("segment_secondary") or {}
     geom = build_vowel_chart_geometry(
-        vowels, profile, seg_feats, vowel_secondary=sec
+        vowels, profile, seg_feats, segment_secondary=sec
     )
 
     by_anchor: dict[tuple[int, int], list] = {}
@@ -327,9 +327,9 @@ def test_phoible_sample_silhouette_aspect_within_ceiling() -> None:
             s: dict(engine.normalized_segment_feats[s]) for s in vowels
         }
         profile = detect_vowel_profile(vowels, seg_feats)
-        sec = inv.metadata.get("vowel_secondary") or {}
+        sec = inv.metadata.get("segment_secondary") or {}
         geom = build_vowel_chart_geometry(
-            vowels, profile, seg_feats, vowel_secondary=sec
+            vowels, profile, seg_feats, segment_secondary=sec
         )
         sil = geom.silhouette
         sil_h = (sil.bottom_y - sil.top_y) * geom.natural_data_height_px

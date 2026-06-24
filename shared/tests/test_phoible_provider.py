@@ -353,8 +353,10 @@ def test_materialize_phoible_inventory_raises_keyerror_on_unknown_id() -> None:
         materialize_phoible_inventory(p, "does-not-exist")
 
 
-def test_materialize_normalises_vowel_secondary_keys_to_engine_form() -> None:
-    """The vowel_secondary metadata keys must use the SAME canonical
+def test_materialize_normalises_segment_secondary_keys_to_engine_form() -> (
+    None
+):
+    """The segment_secondary metadata keys must use the SAME canonical
     form (NFC + IPA folding) the engine applies to inventory
     segments via ``Inventory.parse``. Without this, PHOIBLE's NFD-
     encoded nasal diphthongs (e.g. ``a + U+0303 + i``) silently
@@ -363,7 +365,7 @@ def test_materialize_normalises_vowel_secondary_keys_to_engine_form() -> None:
 
     The stub mirrors the real-data shape: snapshot keys arrive as
     NFD; materialize must NFC-normalise them so every key in
-    ``metadata['vowel_secondary']`` matches a key in
+    ``metadata['segment_secondary']`` matches a key in
     ``inventory.segments``.
     """
     from phonology_shared.editor.phoible_provider import (
@@ -398,7 +400,7 @@ def test_materialize_normalises_vowel_secondary_keys_to_engine_form() -> None:
                 "ãi": "+-",  # /ãi/ in NFD
             },
         },
-        "vowel_secondary": {
+        "segment_secondary": {
             "v1": {
                 # Final state of the diphthong: nasal monophthong
                 # values would arrive here in NFD too.
@@ -408,11 +410,11 @@ def test_materialize_normalises_vowel_secondary_keys_to_engine_form() -> None:
     }
     p = PhoibleProvider(index_table=nfd_index, data_table=nfd_data)
     inv = materialize_phoible_inventory(p, "v1")
-    vs = inv.metadata.get("vowel_secondary") or {}
+    vs = inv.metadata.get("segment_secondary") or {}
     engine_segs = set(inv.segments)
     assert vs, "fixture invariant: stub injects one diphthong"
     assert set(vs).issubset(engine_segs), (
-        f"vowel_secondary keys must be a subset of engine segments; "
+        f"segment_secondary keys must be a subset of engine segments; "
         f"missing={set(vs) - engine_segs}"
     )
     # And explicitly: NFD input lands as NFC in both maps.

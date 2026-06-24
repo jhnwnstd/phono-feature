@@ -669,6 +669,18 @@ def _assemble_inventory(
     if raw_inv.explicit_metadata is not None:
         metadata.update(raw_inv.explicit_metadata)
 
+    # Migrate legacy metadata keys in place so the in-memory Inventory
+    # always uses the canonical name no matter how old the on-disk file
+    # is. ``segment_secondary`` was ``vowel_secondary`` before obstruent
+    # affricates joined vowel diphthongs in it, and a builder round-trip
+    # persists the whole metadata mapping, so a pre-rename save (or an
+    # edit of one) still carries the former. Doing it here -- the single
+    # ingest funnel for both parse() and from_grid() -- means no
+    # downstream reader needs an old-key fallback.
+    if "vowel_secondary" in metadata:
+        metadata.setdefault("segment_secondary", metadata["vowel_secondary"])
+        del metadata["vowel_secondary"]
+
     # Inventory name is a display label, not a key, so policy is
     # lighter than segment/feature names: canonicalize and cap, but
     # skip the alias/collision/invisible-char checks. Length cap

@@ -217,10 +217,10 @@ def phoible_build_geometry(phoible_provider) -> Callable[[str], object]:
             s: dict(engine.normalized_segment_feats[s]) for s in vowels
         }
         profile = detect_vowel_profile(vowels, seg_feats)
-        secondary = inv.metadata.get("vowel_secondary")
+        secondary = inv.metadata.get("segment_secondary")
         secondary_map = secondary if isinstance(secondary, dict) else None
         return build_vowel_chart_geometry(
-            vowels, profile, seg_feats, vowel_secondary=secondary_map
+            vowels, profile, seg_feats, segment_secondary=secondary_map
         )
 
     return _build

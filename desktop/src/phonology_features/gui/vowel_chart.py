@@ -602,7 +602,7 @@ class VowelChartWidget(QWidget):
         segs: list[str],
         buttons: Mapping[str, QWidget],
         norm_feats: Mapping[str, Mapping[str, str]],
-        vowel_secondary: Mapping[str, Mapping[str, str]] | None = None,
+        segment_secondary: Mapping[str, Mapping[str, str]] | None = None,
     ) -> None:
         """Build the shared geometry, then render it as Qt widgets.
 
@@ -611,7 +611,7 @@ class VowelChartWidget(QWidget):
         :py:mod:`vowel_layout`. This method only translates the
         result into widget calls.
 
-        ``vowel_secondary`` carries final-state feature bundles for
+        ``segment_secondary`` carries final-state feature bundles for
         PHOIBLE diphthong segments. When present, those segments are
         listed as chips below the chart (they are not placed in the
         trapezoid).
@@ -620,7 +620,7 @@ class VowelChartWidget(QWidget):
         self._buttons = dict(buttons)
         profile = detect_vowel_profile(segs, norm_feats)
         geometry = build_vowel_chart_geometry(
-            segs, profile, norm_feats, vowel_secondary=vowel_secondary
+            segs, profile, norm_feats, segment_secondary=segment_secondary
         )
         self._render_geometry(geometry)
 

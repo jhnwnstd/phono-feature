@@ -245,7 +245,7 @@ class PhoibleProvider:
         # invariant must not depend on a completed ingest.
         self._feature_names: tuple[str, ...] = ()
         self._segments_by_inventory: dict[str, Mapping[str, str]] = {}
-        self._vowel_secondary_by_inventory: dict[str, Mapping[str, str]] = {}
+        self._segment_secondary_by_inventory: dict[str, Mapping[str, str]] = {}
         if data_table is None:
             raw_data = _try_load_data_bytes()
             if raw_data is not None:
@@ -329,7 +329,7 @@ class PhoibleProvider:
         # inventories have none and stay absent from the map. The
         # field is optional in the bake schema for backward
         # compatibility with older snapshots that predate it.
-        raw_secondary = data.get("vowel_secondary") or {}
+        raw_secondary = data.get("segment_secondary") or {}
         secondary_decoded: dict[str, Mapping[str, str]] = {}
         if isinstance(raw_secondary, Mapping):
             for inv_id, segments in raw_secondary.items():
@@ -355,7 +355,7 @@ class PhoibleProvider:
         # and ``has_data`` would gate open on a broken payload.
         self._feature_names = names
         self._segments_by_inventory = decoded
-        self._vowel_secondary_by_inventory = secondary_decoded
+        self._segment_secondary_by_inventory = secondary_decoded
 
     # ------------------------------------------------------------------
     # InventoryProvider Protocol
@@ -434,7 +434,7 @@ class PhoibleProvider:
 
         # Pre-prune feature space so secondaries align with primaries
         # when the column-pruning step below drops sparse features.
-        encoded_secondary = self._vowel_secondary_by_inventory.get(
+        encoded_secondary = self._segment_secondary_by_inventory.get(
             inventory_id, {}
         )
         secondary: dict[str, Mapping[str, str]] = {
@@ -455,7 +455,7 @@ class PhoibleProvider:
             segments=resolved,
             unresolved=(),
             warnings=(),
-            vowel_secondary=secondary,
+            segment_secondary=secondary,
         )
 
     # ------------------------------------------------------------------
@@ -517,9 +517,10 @@ def materialize_phoible_inventory(
     * ``feature_source`` metadata records the PHOIBLE provenance
       ("PHOIBLE 2.0 / Korean / SPA") so a saved file is debuggable;
       the field is plain text and the user can edit or delete it.
-    * Diphthong secondary bundles get stamped under
-      ``vowel_secondary`` so the vowel chart can draw arrows
-      without a new bridge endpoint or constructor parameter.
+    * Contour secondary bundles (vowel diphthongs and obstruent
+      affricates) get stamped under ``segment_secondary`` so the
+      vowel chart can draw diphthong arrows and the engine can read
+      affricate phases, without a new bridge endpoint or parameter.
 
     Raises :py:class:`KeyError` for an unknown ``inventory_id``;
     callers translate the failure into whatever the platform's
@@ -554,14 +555,14 @@ def materialize_phoible_inventory(
         # surfaced as a "Source" link beside the loaded-inventory
         # summary on both UIs. Plain-text informational stamp.
         metadata["phoible_source_url"] = descriptor.source_url
-    if generated.vowel_secondary:
+    if generated.segment_secondary:
         # Canonicalise BOTH the diphthong segment key AND the
         # feature bundle keys through the engine's normalisation
         # (NFC for the segment, ``normalize_feature_key`` for the
         # feature names). PHOIBLE ships ~26% of inventories with
         # NFD-form segments (nasal vowels like ``ã`` arrive as
         # ``a + U+0303``); the engine NFC-folds them at parse so
-        # a raw-key copy here means ``vowel_secondary['ãi']``
+        # a raw-key copy here means ``segment_secondary['ãi']``
         # (NFD) misses ``inventory.segments['ãi']`` (NFC) on the
         # lookup inside ``compute_placements``. Result pre-fix:
         # nasal diphthongs silently lost their secondary
@@ -575,11 +576,11 @@ def materialize_phoible_inventory(
         # default Open-mid-Central cell.
         from phonology_shared.data.inventory import normalize_feature_key
 
-        metadata["vowel_secondary"] = {
+        metadata["segment_secondary"] = {
             canonicalize_segment_label(seg): {
                 normalize_feature_key(k): v for k, v in bundle.items()
             }
-            for seg, bundle in generated.vowel_secondary.items()
+            for seg, bundle in generated.segment_secondary.items()
         }
 
     inventory = Inventory.from_grid(

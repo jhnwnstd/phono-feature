@@ -96,16 +96,17 @@ def normalize_phoible_value(value: str) -> str:
     PHOIBLE's main vocabulary is the same three values. A small
     fraction of rows use comma-separated contour values like
     ``"+,-"`` for segments that change polarity within a feature
-    (tone contours, certain affricates, vowel diphthongs). The
-    app's engine assumes a single value per (segment, feature), so
-    we normalize contours to ``"0"`` here; the user can hand-edit
-    afterwards if they need precise contour modelling. The bake
-    script logs the count.
+    (tone contours, certain affricates, vowel diphthongs). This
+    function is the fallback for a cell whose contour the bake does
+    NOT preserve: it collapses the contour to ``"0"`` so the engine
+    never sees a value outside its three-state enum.
 
-    Vowel diphthongs are recovered separately at bake time via
-    :py:func:`split_vowel_contour`, which gives the placement code
-    a faithful (initial, final) pair without disturbing the
-    engine's three-valued contract.
+    Contours the bake DOES preserve (any feature on a vowel, and
+    ``continuant`` on an obstruent) are split instead via
+    :py:func:`split_contour_value` into an ``(initial, final)`` pair
+    that becomes two ordinary phases, so this collapse only applies
+    to the remaining contours (tone letters, other consonant
+    contours). The user can hand-edit those afterwards.
     """
     if value in ("+", "-", "0"):
         return value
@@ -115,13 +116,15 @@ def normalize_phoible_value(value: str) -> str:
     return "0"
 
 
-def split_vowel_contour(value: str) -> tuple[str, str] | None:
+def split_contour_value(value: str) -> tuple[str, str] | None:
     """Return the ``(initial, final)`` pair of a PHOIBLE contour
     value, or ``None`` if ``value`` is not a contour.
 
-    PHOIBLE encodes diphthongs by writing the two polarities the
-    vowel traverses, separated by a comma: ``"+,-"`` for a vowel
-    that starts at ``+feature`` and glides to ``-feature``. Both
+    PHOIBLE encodes a contour by writing the two polarities the
+    segment traverses, separated by a comma: ``"+,-"`` for a feature
+    that starts ``+`` and ends ``-``. A diphthong glides between two
+    vowel qualities this way; an affricate's ``continuant`` runs
+    ``"-,+"`` as the stop closure releases into a fricative. Both
     polarities must be members of the app's three-valued vocabulary
     after stripping whitespace; anything else returns ``None`` so
     the caller can fall back to :py:func:`normalize_phoible_value`.

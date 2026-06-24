@@ -239,7 +239,7 @@ def test_diphthong_wire_shape_is_list_of_segment_strings() -> None:
     if "i" in seg_feats and "a" in seg_feats:
         synthetic_secondary["i"] = dict(seg_feats["a"])
     geom = build_vowel_chart_geometry(
-        vowels, profile, seg_feats, vowel_secondary=synthetic_secondary
+        vowels, profile, seg_feats, segment_secondary=synthetic_secondary
     )
     if not geom.diphthongs:
         pytest.skip(

@@ -313,7 +313,7 @@ def _plan_placements(
     profile: VowelProfile,
     norm_feats: Mapping[str, Mapping[str, str]],
     policy: PlacementPolicy | None,
-    vowel_secondary: Mapping[str, Mapping[str, str]] | None,
+    segment_secondary: Mapping[str, Mapping[str, str]] | None,
 ) -> PlacementPlan:
     """Run the inference layer once and derive the shared facts.
 
@@ -340,7 +340,7 @@ def _plan_placements(
         profile,
         norm_feats,
         policy,
-        vowel_secondary=vowel_secondary,
+        segment_secondary=segment_secondary,
         norm_cache=norm_cache,
     )
     return PlacementPlan(
@@ -530,13 +530,13 @@ def build_vowel_chart_geometry(
     profile: VowelProfile,
     norm_feats: Mapping[str, Mapping[str, str]],
     policy: PlacementPolicy | None = None,
-    vowel_secondary: Mapping[str, Mapping[str, str]] | None = None,
+    segment_secondary: Mapping[str, Mapping[str, str]] | None = None,
 ) -> VowelChartGeometry:
     """End-to-end: compute placements and produce a render-ready
     chart geometry for both UIs. Stage list and ordering rationale
     in the module docstring.
 
-    ``vowel_secondary`` carries final-state feature bundles for
+    ``segment_secondary`` carries final-state feature bundles for
     PHOIBLE diphthong segments. When present, the returned
     geometry's :py:attr:`VowelChartGeometry.diphthongs` lists one
     entry per diphthong with both endpoint cells so renderers can
@@ -545,7 +545,9 @@ def build_vowel_chart_geometry(
     Renderers attach the result directly: no placement decisions
     and no coordinate arithmetic happen at the UI layer.
     """
-    plan = _plan_placements(segs, profile, norm_feats, policy, vowel_secondary)
+    plan = _plan_placements(
+        segs, profile, norm_feats, policy, segment_secondary
+    )
 
     # Empty case: the inventory has no vowels (consonant-only setup,
     # or a fresh "New" with the default-segments placeholder which

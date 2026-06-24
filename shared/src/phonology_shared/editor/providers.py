@@ -47,7 +47,7 @@ class GeneratedInventory:
         warnings: Human-readable per-symbol diagnostics. Each entry
             is meant for a log line, not a modal; the dialog reports
             the unresolved count and routes the detail to the log.
-        vowel_secondary: Optional secondary feature bundles for
+        segment_secondary: Optional secondary feature bundles for
             vowel diphthongs. Sparse: only PHOIBLE diphthong
             segments populate this; PanPhon and curated bundles
             leave it empty. Keys are the same segment strings as in
@@ -62,7 +62,7 @@ class GeneratedInventory:
     segments: Mapping[str, Mapping[str, str]]
     unresolved: tuple[str, ...]
     warnings: tuple[str, ...]
-    vowel_secondary: Mapping[str, Mapping[str, str]] = field(
+    segment_secondary: Mapping[str, Mapping[str, str]] = field(
         default_factory=dict
     )
 

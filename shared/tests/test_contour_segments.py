@@ -4,7 +4,7 @@ membership over those phases so a contour segment belongs to BOTH the
 [+f] and [-f] natural class for any feature its phases disagree on.
 
 This pins the interim phase model (the final phase comes from the
-``vowel_secondary`` metadata) and the engine's union + wildcard
+``segment_secondary`` metadata) and the engine's union + wildcard
 behaviour. PHOIBLE encodes the contour as ``"+,-"``; before this, the
 engine saw only the initial polarity, so a diphthong gliding into
 ``[+low]`` never answered a ``[+low]`` query.
@@ -19,7 +19,7 @@ from phonology_shared.theory.feature_engine import FeatureEngine, MatchMode
 def _contour_inv() -> Inventory:
     """``i`` (+high -low), ``a`` (-high +low), and a diphthong ``ia``
     whose primary phase is the /i/ state and whose final phase (in
-    ``vowel_secondary``, folded keys) is the /a/ state."""
+    ``segment_secondary``, folded keys) is the /a/ state."""
     return Inventory.parse(
         {
             "features": ["High", "Low"],
@@ -28,7 +28,9 @@ def _contour_inv() -> Inventory:
                 "a": {"High": "-", "Low": "+"},
                 "ia": {"High": "+", "Low": "-"},
             },
-            "metadata": {"vowel_secondary": {"ia": {"high": "-", "low": "+"}}},
+            "metadata": {
+                "segment_secondary": {"ia": {"high": "-", "low": "+"}}
+            },
         }
     )
 
@@ -45,7 +47,7 @@ def test_segment_phases_two_for_contour_with_canonical_keys() -> None:
     phases = inv.segment_phases("ia")
     assert len(phases) == 2
     # Primary (initial) phase = /i/; final phase = /a/, remapped from
-    # the folded ``vowel_secondary`` keys to canonical feature names.
+    # the folded ``segment_secondary`` keys to canonical feature names.
     assert dict(phases[0]) == {"High": "+", "Low": "-"}
     assert dict(phases[1]) == {"High": "-", "Low": "+"}
 
@@ -94,7 +96,7 @@ def _affricate_inv(*, with_delrel: bool) -> Inventory:
         {
             "features": feats,
             "segments": {"t": t, "s": s, "ts": ts},
-            "metadata": {"vowel_secondary": {"ts": {"continuant": "+"}}},
+            "metadata": {"segment_secondary": {"ts": {"continuant": "+"}}},
         }
     )
 
