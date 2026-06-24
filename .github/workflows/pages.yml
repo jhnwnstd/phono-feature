@@ -1,27 +1,29 @@
 name: Deploy web app to GitHub Pages
 
-# Builds web/dist/ on every push to main and publishes it
-# as the GitHub Pages site. The same shared package the desktop
-# app uses (data / theory / chart / presentation / editor) gets
-# bundled into the deploy, so edits land in both places on next
-# push. PRs run the build + smoke without deploying, so regressions
-# fail pre-merge.
+# MANUAL deploy only. Pushing to main does NOT publish the site: this
+# workflow runs only when you trigger it, so spending Actions minutes
+# on the expensive Playwright browser smoke + the Pages deploy is an
+# intentional act, not a side effect of every small commit.
+#
+# Trigger it from the Actions tab ("Deploy web app to GitHub Pages" ->
+# Run workflow) or the CLI:
+#
+#     gh workflow run pages.yml
+#
+# Push/PR validation still happens automatically in ci.yml, which
+# builds the web artifact (web/scripts/build.py) and runs the full
+# test + lint suite on every push to main and every PR. So regressions
+# still fail fast; they just no longer trigger a publish. The browser
+# smoke in the build job below runs at deploy time and gates the
+# publish, so a broken build is never shipped.
+#
+# Tradeoff: main may hold built-but-unpublished work between manual
+# deploys. Click Run workflow when you want the live site updated.
+#
+# The same shared package the desktop app uses (data / theory / chart /
+# presentation / editor) is bundled into the deploy.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - web/**
-      - shared/**
-      - desktop/inventories/**
-      - .github/workflows/pages.yml
-  pull_request:
-    branches: [main]
-    paths:
-      - web/**
-      - shared/**
-      - desktop/inventories/**
-      - .github/workflows/pages.yml
   workflow_dispatch:
 
 permissions:
@@ -29,11 +31,13 @@ permissions:
   pages: write
   id-token: write
 
-# Allow one in-flight deploy; queue subsequent pushes rather than
-# cancelling, so a fast follow-up push still publishes.
+# Deploys are manual and infrequent. If a second run is started while
+# one is in flight (an accidental double Run workflow), cancel the
+# older one instead of queueing it, so the extra trigger does not burn
+# minutes; the latest run wins.
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -93,8 +97,6 @@ jobs:
 
   deploy:
     needs: build
-    # PRs run build + smoke but never publish to Pages.
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

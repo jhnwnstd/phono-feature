@@ -52,4 +52,13 @@ First browser load fetches Pyodide (~10 MB) from JSDelivr CDN and is cached loca
 
 ## Deploy
 
-`.github/workflows/pages.yml` builds and uploads `dist/` on every push to `main` that touches the web app, shared sources, or bundled inventories. Enable Pages in repo Settings → Pages → Source: "GitHub Actions" to publish.
+Deploy is **manual**. Pushing to `main` does not publish the site, so a publish (and its Actions minutes) only happens when you ask for one. Day to day you just commit and push as usual; `ci.yml` still builds the artifact and runs the full test + lint suite on every push, so regressions fail fast without triggering a deploy.
+
+When you want the live site updated, run `.github/workflows/pages.yml`:
+
+- **GitHub UI:** Actions → "Deploy web app to GitHub Pages" → Run workflow.
+- **CLI:** `gh workflow run pages.yml`.
+
+It rebuilds `dist/`, smoke-tests the built site in headless Chromium/Firefox/WebKit (which gates the publish, so a broken build never ships), and uploads to Pages. One-time setup: repo Settings → Pages → Source: "GitHub Actions".
+
+Tradeoff: `main` may contain built-but-unpublished work between manual deploys. That is intentional — it keeps the normal commit-to-`main` habit while making each publish a deliberate click.
