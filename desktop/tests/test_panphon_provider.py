@@ -122,6 +122,24 @@ def test_tie_bar_affricate_resolves_as_single_segment(
     assert "t͡ʃ" in result.segments
 
 
+def test_non_tiebar_affricates_resolve_via_lookup_normalization(
+    provider: PanPhonFeatureProvider,
+) -> None:
+    """Affricates written WITHOUT the over-tiebar (the under-tiebar,
+    the ASCII-hyphen convention, or a bare digraph) now resolve: the
+    provider looks PanPhon up on the normalized form
+    (``to_panphon_form``). Crucially the result is keyed by the
+    ORIGINAL symbol so the grid preserves exactly what the user typed,
+    and DelRel is ``+`` confirming PanPhon read an affricate, not a
+    cluster."""
+    for original in ["t͜ʃ", "t-ʃ", "tʃ", "d-ʒ", "t-s"]:
+        result = provider.generate([original])
+        assert result.unresolved == (), original
+        # Original spelling preserved as the key (not the tiebar form).
+        assert original in result.segments, original
+        assert result.segments[original].get("DelRel") == "+", original
+
+
 def test_unrecognised_symbol_lands_in_unresolved(
     provider: PanPhonFeatureProvider,
 ) -> None:

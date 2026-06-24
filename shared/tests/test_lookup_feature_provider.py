@@ -173,17 +173,20 @@ def test_constructor_skips_segments_with_wrong_length() -> None:
         "provider_name": "PanPhon",
         "provider_version": "1.0",
         "feature_names": ["A", "B"],
+        # IPA-valid keys: the lookup normalises input to PanPhon form
+        # (to_panphon_form), so non-IPA placeholders like "good" would
+        # fold (g -> ɡ) and miss. "p"/"t" map to themselves.
         "segments": {
-            "good": "+-",
+            "p": "+-",
             # 3 chars vs 2 declared: skipped at __init__, becomes
             # unresolved at generate-time.
-            "future": "+-?",
+            "t": "+-?",
         },
     }
     provider = LookupFeatureProvider(table=table)
-    result = provider.generate(["good", "future"])
-    assert "good" in result.segments
-    assert "future" in result.unresolved
+    result = provider.generate(["p", "t"])
+    assert "p" in result.segments
+    assert "t" in result.unresolved
 
 
 def test_load_failure_path() -> None:

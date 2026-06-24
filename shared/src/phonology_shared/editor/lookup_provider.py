@@ -26,6 +26,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from phonology_shared.editor.panphon_features import to_panphon_form
 from phonology_shared.editor.providers import (
     GeneratedInventory,
     decode_positional_bundle,
@@ -188,7 +189,12 @@ class LookupFeatureProvider:
         warnings: list[str] = []
 
         for symbol in segments:
-            bundle = self._bundles.get(symbol)
+            # Look up the PanPhon-compatible form (tiebar affricates,
+            # NFD, diacritic folds) but key the result on the user's
+            # ORIGINAL symbol so the grid preserves exactly what was
+            # entered. The baked snapshot carries PanPhon's NFD keys,
+            # which to_panphon_form targets.
+            bundle = self._bundles.get(to_panphon_form(symbol))
             if bundle is None:
                 unresolved.append(symbol)
                 warnings.append(

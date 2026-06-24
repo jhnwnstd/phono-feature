@@ -25,6 +25,7 @@ from collections.abc import Mapping
 from phonology_shared.editor.panphon_features import (
     PANPHON_TO_APP_FEATURE,
     panphon_value_to_app,
+    to_panphon_form,
 )
 from phonology_shared.editor.providers import (
     GeneratedInventory,
@@ -130,7 +131,11 @@ class PanPhonFeatureProvider:
 
         for symbol in segments:
             try:
-                parsed = self._ft.word_fts(symbol)
+                # Resolve the PanPhon-compatible form (tiebar
+                # affricates, diacritic folds) but key the result on
+                # the user's ORIGINAL symbol below, so the grid keeps
+                # exactly what was entered.
+                parsed = self._ft.word_fts(to_panphon_form(symbol))
             except (KeyError, ValueError, RuntimeError, TypeError) as exc:
                 # Narrow exception set so KeyboardInterrupt and
                 # SystemExit propagate; PanPhon raises these four
