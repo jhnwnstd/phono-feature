@@ -384,28 +384,31 @@ dialog input[type="text"]:focus-visible {
   display: none;
 }
 .phoible-picker {
-  /* Fixed WIDTH, content-sized HEIGHT capped at a max. The dialog is
-     only as tall as its content, so the empty state is a compact box
-     (search + footer, no dead void) and the picked state grows just
-     enough for the source list + preview, capping at the max after
-     which the source list scrolls. The attribution + actions ride the
-     bottom of that snug content, never a stranded preview pane. */
+  /* SET SIZE, not content-sized. A fixed height means the dialog never
+     resizes itself (and so never drifts) as the user types, picks a
+     language, or picks a source: the body fills it and the source list
+     scrolls once a language has more than ~4 sources. ``resize: both``
+     lets the user drag it larger by hand. */
   width: min(600px, calc(100vw - var(--space-xl) * 2));
-  max-height: min(560px, calc(100vh - var(--space-xl) * 2));
+  height: min(564px, calc(100vh - var(--space-xl) * 2));
+  min-width: 360px;
+  min-height: 280px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  /* This picker manages its own single inner scroll region
-     (#phoible-radios), so suppress the base dialog's overflow:auto to
-     avoid a redundant second scrollbar on the dialog itself. */
+  resize: both;
+  /* This picker manages its own inner scroll region (the source list),
+     so suppress the base dialog overflow to avoid a redundant second
+     scrollbar; ``hidden`` also lets ``resize`` take effect. */
   overflow: hidden;
 }
 .phoible-picker > #phoible-picker-form {
   display: flex;
   flex-direction: column;
-  /* ``min-height: 0`` lets the form shrink below its content when the
-     dialog hits its max-height, so the overflow flows into the source
-     list's scroll region rather than past the dialog edge. */
+  /* Fill the set-size dialog so the panel fills too and the footer pins
+     to the bottom; ``min-height: 0`` lets the inner list, not the
+     dialog, scroll. */
+  flex: 1;
   min-height: 0;
   box-sizing: border-box;
 }
@@ -417,11 +420,10 @@ dialog input[type="text"]:focus-visible {
   border: var(--border-std) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg);
-  /* Sizes to its content but shrinks (``flex: 0 1 auto`` + ``min-height:
-     0``) when the dialog hits its max so the overflow reaches the one
-     inner scroll region (the source list). No panel-level overflow: a
-     second scrollbar on top of the list's would be redundant. */
-  flex: 0 1 auto;
+  /* Fills the set-size dialog and hands its overflow to the one inner
+     scroll region (the source list). No panel-level overflow: a second
+     scrollbar on top of the list's would be redundant. */
+  flex: 1;
   min-height: 0;
 }
 /* The active region lays its sections out with ONE consistent gap,
@@ -432,6 +434,9 @@ dialog input[type="text"]:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  /* Fills the panel so the body (hint / results / source list) takes
+     the room between the search input and the preview. */
+  flex: 1;
   min-height: 0;
 }
 /* The author ``display: flex`` above beats the UA's
@@ -478,10 +483,10 @@ dialog input[type="text"]:focus-visible {
      instead of the dialog overflowing. */
   display: flex;
   flex-direction: column;
-  /* Sizes to its cards but shrinks (``flex: 0 1 auto`` + ``min-height:
-     0``) when the dialog hits its max so the source list, not the
-     dialog, scrolls. */
-  flex: 0 1 auto;
+  /* Fills the body so the source list takes the room and scrolls past
+     ~4 cards; ``min-height: 0`` lets the inner list, not the dialog,
+     scroll. */
+  flex: 1;
   min-height: 0;
 }
 /* The author ``display: flex`` above beats the UA's
@@ -516,11 +521,16 @@ dialog input[type="text"]:focus-visible {
    text so the dialog reads as "waiting for input" rather than leaving
    dead space; hides the moment the user types or picks a language. */
 .phoible-hint {
-  /* Compact helper line under the search input in the empty state. The
-     dialog is content-sized, so this is a small one-line hint, not a
-     filler stretched to plug a void. */
+  /* Empty-state hint. Fills the body and centers so the set-size dialog
+     reads as "waiting for a search" before the user types; hides the
+     moment a language is picked. */
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   margin: 0;
-  padding: 2px 2px 0;
+  padding: var(--space-md);
   color: var(--text-dim);
   font-size: 0.9em;
 }
@@ -531,13 +541,12 @@ dialog input[type="text"]:focus-visible {
   list-style: none;
   margin: 0;
   padding: 4px 0;
-  /* Content-sized dropdown: as tall as its matches, capped so a long
-     list scrolls instead of pushing the dialog past its max. Borderless
-     and transparent (rows sit on the dialog body, like a command
-     palette) so a one- or two-match query reads as "the results"
-     rather than framing a mostly-empty box. */
-  flex: 0 0 auto;
-  max-height: 240px;
+  /* Fills the body and scrolls, so the result list is the dialog's main
+     area while searching. Borderless and transparent (rows sit on the
+     dialog body, like a command palette) so a one- or two-match query
+     reads as "the results" rather than framing a mostly-empty box. */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
 .phoible-results li {
@@ -570,13 +579,11 @@ dialog input[type="text"]:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  /* The ONE scroll region for source cards. ``flex: 0 1 auto`` sizes it
-     to its cards (a few-source language makes a short, snug dialog) and
-     lets it shrink + scroll when a language has many sources and the
-     dialog is capped, so the dialog never needs a second outer
-     scrollbar. ``min-height: 0`` is what lets it shrink below its
-     content height. */
-  flex: 0 1 auto;
+  /* The ONE scroll region for source cards. ``flex: 1`` fills the
+     fieldset, so at the set dialog size it shows ~4 cards and scrolls
+     past that, while the preview + footer stay anchored. ``min-height:
+     0`` is what lets it shrink below its content height to scroll. */
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   /* Match the input + result list radius so the chooser feels like

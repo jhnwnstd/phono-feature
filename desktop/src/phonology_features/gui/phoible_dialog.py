@@ -121,12 +121,14 @@ class PhoibleDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Load inventory from PHOIBLE")
-        # Fixed minimum WIDTH only; the height tracks content (via
-        # ``adjustSize`` after each list change) so the empty state is a
-        # compact box (search + one-line hint), a one-source language is
-        # short, and many sources cap + scroll. No height floor: a floor
-        # would strand a dead void below the search before any search.
-        self.setMinimumWidth(540)
+        # SET SIZE, manually resizable. A fixed default size means the
+        # dialog never resizes itself (and so never drifts) as the user
+        # types or picks: the source list fills the body and scrolls once
+        # a language has more than ~4 sources. ``QDialog`` is resizable by
+        # default, so the user can drag it larger; the minimum keeps it
+        # usable when dragged small. Mirrors the web picker's fixed size.
+        self.resize(560, 512)
+        self.setMinimumSize(440, 360)
         self.setWindowModality(Qt.WindowModality.WindowModal)
 
         self._provider = provider
@@ -159,35 +161,37 @@ class PhoibleDialog(QDialog):
         layout.setContentsMargins(14, 14, 14, 14)
 
         layout.addWidget(self._build_search_row())
-        layout.addWidget(self._build_results_list())
-        # Compact one-line empty-state hint under the search box. The
-        # dialog is content-sized, so this is a small helper, not a
-        # filler stretched to plug a void; it hides once a language is
-        # picked. Wording matches the web picker's hint.
+        # The results, hint, and source section share the body: only one
+        # shows at a time, each with stretch so the visible one fills the
+        # set-size dialog. The preview + buttons stay pinned below.
+        layout.addWidget(self._build_results_list(), stretch=1)
+        # Empty-state hint, centered to fill the body before a search.
         self._hint = QLabel(
             "Search for a language to browse its PHOIBLE inventories.",
             self,
         )
+        self._hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._hint.setWordWrap(True)
-        self._hint.setFont(QFont("Noto Sans", 9))
-        set_css(self._hint, f"color: {C['text_dim']}; padding: 2px 2px 6px;")
-        layout.addWidget(self._hint)
-        layout.addWidget(self._build_source_section())
+        self._hint.setFont(QFont("Noto Sans", 10))
+        set_css(self._hint, f"color: {C['text_dim']}; padding: 16px;")
+        layout.addWidget(self._hint, stretch=1)
+        layout.addWidget(self._build_source_section(), stretch=1)
         layout.addWidget(self._build_preview_section())
         layout.addWidget(self._build_buttons())
 
-        # Open compact: only the search row and the hint show until the
-        # user picks a language; the source and preview sections appear
-        # on demand (see ``_on_language_activated``). Sizing the empty
-        # lists to zero here is what stops the two-empty-boxes look.
+        # Open showing only the search + hint; the source and preview
+        # sections appear once a language is picked. No ``adjustSize`` so
+        # the dialog keeps its set size; the body just swaps content.
         self._set_sections_visible(sources=False, hint=True)
-        self._fit_to_content()
 
     def _set_sections_visible(self, *, sources: bool, hint: bool) -> None:
-        """Toggle the on-demand sections. The source + preview panes
-        show only once a language is picked; the empty-state hint shows
-        only before the user has started (so it is mutually exclusive
-        with both the autocomplete results and the source panes)."""
+        """Show exactly one of the three body sections so the visible one
+        fills the set-size dialog: the empty-state hint before a search,
+        the autocomplete results mid-search, or the source + preview
+        panes once a language is picked. Hiding (not just emptying) the
+        others is what stops an empty bordered box from showing."""
+        results = not sources and not hint
+        self._results_wrap.setVisible(results)
         self._source_wrap.setVisible(sources)
         self._preview_wrap.setVisible(sources)
         self._hint.setVisible(hint)
@@ -230,6 +234,23 @@ class PhoibleDialog(QDialog):
             f" QListWidget::item:hover {{ background: {C['bg']}; }}"
         )
 
+    @staticmethod
+    def _results_list_style() -> str:
+        """Borderless chrome for the autocomplete list. It fills the body
+        while searching, so a frame around a few matches would just box
+        empty space; rows sit on the dialog with a soft hover/selection
+        block, like a command palette."""
+        return (
+            f"QListWidget {{"
+            f" background: transparent; color: {C['text']};"
+            f" border: none; outline: none;"
+            f" }}"
+            f" QListWidget::item {{ padding: 5px 8px; border-radius: 4px; }}"
+            f" QListWidget::item:selected {{"
+            f" background: {C['accent_light']}; color: {C['text']}; }}"
+            f" QListWidget::item:hover {{ background: {C['bg']}; }}"
+        )
+
     def _build_search_row(self) -> QWidget:
         row = QWidget(self)
         row_layout = QHBoxLayout(row)
@@ -254,21 +275,23 @@ class PhoibleDialog(QDialog):
 
     def _build_results_list(self) -> QWidget:
         wrap = QWidget(self)
+        self._results_wrap = wrap
         wrap_layout = QVBoxLayout(wrap)
         wrap_layout.setContentsMargins(0, 0, 0, 0)
         self._results = QListWidget(wrap)
         self._results.setFont(QFont("Noto Sans", 10))
-        self._results.setStyleSheet(self._list_style())
-        # Height is set from the match count after each search (see
-        # ``_size_list_to_content``) so one match is a one-row box, not
-        # a tall empty pane, and many matches cap + scroll. Fixed
-        # vertical policy so that explicit height is honoured.
+        # Borderless: while searching the result list fills the body, so
+        # a one-match query reads as "the result" sitting in the dialog
+        # rather than a lone row framed in a mostly-empty box.
+        self._results.setStyleSheet(self._results_list_style())
+        # Fills the body while searching and scrolls past what fits, so
+        # the result list is the dialog's main area without resizing it.
         self._results.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
         )
         self._results.itemActivated.connect(self._on_language_activated)
         self._results.itemClicked.connect(self._on_language_activated)
-        wrap_layout.addWidget(self._results)
+        wrap_layout.addWidget(self._results, stretch=1)
         return wrap
 
     def _build_source_section(self) -> QWidget:
@@ -283,12 +306,10 @@ class PhoibleDialog(QDialog):
         self._sources = QListWidget(wrap)
         self._sources.setFont(QFont("Noto Sans", 10))
         self._sources.setStyleSheet(self._source_list_style())
-        # Height is set from the source count after each language pick
-        # (see ``_size_list_to_content``) so one source is a short box,
-        # not a tall empty pane, and many sources cap + scroll. Fixed
-        # vertical policy so that explicit height is honoured.
+        # Fills the body and scrolls once a language has more than the
+        # ~4 sources that fit, while the dialog keeps its set size.
         self._sources.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
         )
         self._sources.setSelectionMode(
             QListWidget.SelectionMode.SingleSelection
@@ -298,7 +319,7 @@ class PhoibleDialog(QDialog):
         # the no-mouse flow: type, Enter to pick the language, arrow
         # keys over the sources, Enter to load.
         self._sources.itemActivated.connect(self._on_source_activated)
-        wrap_layout.addWidget(self._sources)
+        wrap_layout.addWidget(self._sources, stretch=1)
         return wrap
 
     def _build_preview_section(self) -> QWidget:
@@ -372,18 +393,24 @@ class PhoibleDialog(QDialog):
             # stranding the previous source rows.
             self._clear_sources()
             self._set_sections_visible(sources=False, hint=True)
-            self._fit_to_content()
             return
-        for name in self._provider.search_languages(query, limit=20):
+        matches = self._provider.search_languages(query, limit=20)
+        for name in matches:
             QListWidgetItem(name, self._results)
-        if self._results.count() > 0:
+        if matches:
             self._results.setCurrentRow(0)
+        else:
+            # A non-selectable "no matches" row so the results page is
+            # never an empty box; the user reads why nothing showed.
+            placeholder = QListWidgetItem(
+                "No PHOIBLE inventories match this query.", self._results
+            )
+            placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
         # Mid-search the autocomplete is the focus: drop any stale
-        # source rows from a previous pick and hide both the hint and
-        # the source section until the user commits to a language.
+        # source rows from a previous pick and show the results page
+        # (hint + source panes hidden) until the user commits.
         self._clear_sources()
         self._set_sections_visible(sources=False, hint=False)
-        self._fit_to_content()
 
     def eventFilter(self, obj: QObject | None, event: QEvent | None) -> bool:
         """Forward Up / Down / Enter from the search field to the
@@ -418,34 +445,6 @@ class PhoibleDialog(QDialog):
     # Source-card flow
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _size_list_to_content(lst: QListWidget, cap: int) -> None:
-        """Pin a list's height to its rows (capped at ``cap`` rows, after
-        which it scrolls). Sums each visible row's own height rather than
-        assuming a uniform row, because the source rows vary (one source
-        has a description, another a dialect, another both). An empty
-        list collapses to zero height."""
-        n = lst.count()
-        if n == 0:
-            lst.setFixedHeight(0)
-            return
-        rows = min(n, cap)
-        total = sum(lst.sizeHintForRow(i) for i in range(rows))
-        frame = 2 * lst.frameWidth()
-        # ``+ 6`` covers the list's own 2 px content padding (top +
-        # bottom) and 1 px border (top + bottom) that the row heights do
-        # not include, so the last row never clips into a scrollbar.
-        lst.setFixedHeight(total + frame + 6)
-
-    def _fit_to_content(self) -> None:
-        """Resize the dialog so its height tracks the visible content:
-        compact for a one-source language, capped + scrolling for many.
-        Each list is sized to its rows first, so the dialog never
-        strands empty space below them."""
-        self._size_list_to_content(self._results, 6)
-        self._size_list_to_content(self._sources, 6)
-        self.adjustSize()
-
     def _clear_sources(self) -> None:
         """Reset the source pane to its empty state: no rows, nothing
         selected, blank summary, Load disabled."""
@@ -469,7 +468,6 @@ class PhoibleDialog(QDialog):
             self._summary.setText(
                 f"PHOIBLE has no inventories for {language!r}."
             )
-            self._fit_to_content()
             return
         # Default selection: the first listed source, matching the
         # order the rows render in (the provider already orders the
@@ -488,7 +486,6 @@ class PhoibleDialog(QDialog):
         # clicking or tabbing back to the input, which matches how
         # pickers behave once a choice list is on screen.
         self._sources.setFocus()
-        self._fit_to_content()
 
     @staticmethod
     def _trim_redundant_language(dialect: str | None, language: str) -> str:
