@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Phonology Segment &amp; Feature Engine</title>
 <!--
+  Inline SVG favicon (the app's vowel-chart trapezoid on the accent
+  color) so the browser's automatic /favicon.ico request does not 404.
+  Base64 so the data URI needs no character escaping; img-src allows
+  data: in the CSP below. Source SVG:
+    <svg viewBox="0 0 32 32"><rect width=32 height=32 rx=7 fill=#2563EB/>
+    <path d="M7 9h18l-4 14H11z" fill=none stroke=#fff stroke-width=2.4
+    stroke-linejoin=round/></svg>
+-->
+<link rel="icon" type="image/svg+xml"
+      href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzI1NjNFQiIvPjxwYXRoIGQ9Ik03IDloMThsLTQgMTRIMTF6IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMi40IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+">
+<!--
   CSP: defense-in-depth on top of the analysis renderer's
   html.escape. style-src needs 'unsafe-inline' because analysis.py
   emits chips with per-element styles; moving chip colors to CSS
