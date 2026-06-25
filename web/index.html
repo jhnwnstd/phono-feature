@@ -309,6 +309,12 @@
         <input id="phoible-search" type="text" autocomplete="off"
                spellcheck="false"
                placeholder="e.g. Korean">
+        <!-- Empty-state hint. Fills the body before a search so the
+             dialog reads as "waiting for input" instead of leaving dead
+             space, and the footer (with the attribution) stays put. -->
+        <p id="phoible-hint" class="phoible-hint">
+          Search for a language to browse its PHOIBLE inventories.
+        </p>
         <ul id="phoible-results" class="phoible-results" hidden
             role="listbox"></ul>
 

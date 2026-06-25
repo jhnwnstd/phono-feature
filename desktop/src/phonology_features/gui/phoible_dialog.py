@@ -121,14 +121,12 @@ class PhoibleDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Load inventory from PHOIBLE")
-        # Fixed minimum width; the height tracks content (via
-        # ``adjustSize`` after each list change) so a language with one
-        # source makes a short dialog instead of stranding ~200 px of
-        # empty space below a lone card. The source list caps + scrolls
-        # for many sources, so the dialog never grows without bound. The
-        # modest height floor keeps the initial (pre-search) dialog from
-        # collapsing to just the search box.
-        self.setMinimumSize(540, 360)
+        # Fixed minimum WIDTH only; the height tracks content (via
+        # ``adjustSize`` after each list change) so the empty state is a
+        # compact box (search + one-line hint), a one-source language is
+        # short, and many sources cap + scroll. No height floor: a floor
+        # would strand a dead void below the search before any search.
+        self.setMinimumWidth(540)
         self.setWindowModality(Qt.WindowModality.WindowModal)
 
         self._provider = provider
@@ -161,16 +159,76 @@ class PhoibleDialog(QDialog):
         layout.setContentsMargins(14, 14, 14, 14)
 
         layout.addWidget(self._build_search_row())
-        # The results list sizes to its matches (no stretch); the
-        # source list takes all the spare height. Previously both got
-        # ``stretch=1``, so the autocomplete grabbed half the dialog and
-        # sat near-empty (one match in a tall box) once a language was
-        # picked. Now the spare space goes to the source list, the part
-        # the user actually works in.
         layout.addWidget(self._build_results_list())
+        # Compact one-line empty-state hint under the search box. The
+        # dialog is content-sized, so this is a small helper, not a
+        # filler stretched to plug a void; it hides once a language is
+        # picked. Wording matches the web picker's hint.
+        self._hint = QLabel(
+            "Search for a language to browse its PHOIBLE inventories.",
+            self,
+        )
+        self._hint.setWordWrap(True)
+        self._hint.setFont(QFont("Noto Sans", 9))
+        set_css(self._hint, f"color: {C['text_dim']}; padding: 2px 2px 6px;")
+        layout.addWidget(self._hint)
         layout.addWidget(self._build_source_section())
         layout.addWidget(self._build_preview_section())
         layout.addWidget(self._build_buttons())
+
+        # Open compact: only the search row and the hint show until the
+        # user picks a language; the source and preview sections appear
+        # on demand (see ``_on_language_activated``). Sizing the empty
+        # lists to zero here is what stops the two-empty-boxes look.
+        self._set_sections_visible(sources=False, hint=True)
+        self._fit_to_content()
+
+    def _set_sections_visible(self, *, sources: bool, hint: bool) -> None:
+        """Toggle the on-demand sections. The source + preview panes
+        show only once a language is picked; the empty-state hint shows
+        only before the user has started (so it is mutually exclusive
+        with both the autocomplete results and the source panes)."""
+        self._source_wrap.setVisible(sources)
+        self._preview_wrap.setVisible(sources)
+        self._hint.setVisible(hint)
+
+    @staticmethod
+    def _list_style() -> str:
+        """Themed chrome for the autocomplete + source lists so they
+        match the rest of the app (panel fill, themed border + radius,
+        soft accent selection) instead of the raw Qt default frame."""
+        return (
+            f"QListWidget {{"
+            f" background: {C['panel']}; color: {C['text']};"
+            f" border: 1px solid {C['border']}; border-radius: 5px;"
+            f" padding: 2px; outline: none;"
+            f" }}"
+            f" QListWidget::item {{"
+            f" padding: 4px 8px; border-radius: 4px;"
+            f" }}"
+            f" QListWidget::item:selected {{"
+            f" background: {C['accent_light']}; color: {C['text']};"
+            f" }}"
+            f" QListWidget::item:hover {{ background: {C['bg']}; }}"
+        )
+
+    @staticmethod
+    def _source_list_style() -> str:
+        """Chrome for the source list. Unlike the autocomplete, its rows
+        are full widgets (``_build_source_row``) that carry their own
+        padding, so items add none here; selection paints a soft rounded
+        accent block behind the transparent row."""
+        return (
+            f"QListWidget {{"
+            f" background: {C['panel']}; color: {C['text']};"
+            f" border: 1px solid {C['border']}; border-radius: 5px;"
+            f" padding: 2px; outline: none;"
+            f" }}"
+            f" QListWidget::item {{ border-radius: 4px; }}"
+            f" QListWidget::item:selected {{"
+            f" background: {C['accent_light']}; }}"
+            f" QListWidget::item:hover {{ background: {C['bg']}; }}"
+        )
 
     def _build_search_row(self) -> QWidget:
         row = QWidget(self)
@@ -183,6 +241,12 @@ class PhoibleDialog(QDialog):
         self._search_edit = QLineEdit(row)
         self._search_edit.setPlaceholderText("e.g. Korean")
         self._search_edit.setMinimumHeight(28)
+        self._search_edit.setStyleSheet(
+            f"QLineEdit {{ background: {C['panel']}; color: {C['text']};"
+            f" border: 1px solid {C['border']}; border-radius: 5px;"
+            f" padding: 4px 8px; }}"
+            f" QLineEdit:focus {{ border: 1.5px solid {C['accent']}; }}"
+        )
         self._search_edit.textChanged.connect(self._on_search_text_changed)
         self._search_edit.installEventFilter(self)
         row_layout.addWidget(self._search_edit, stretch=1)
@@ -194,6 +258,7 @@ class PhoibleDialog(QDialog):
         wrap_layout.setContentsMargins(0, 0, 0, 0)
         self._results = QListWidget(wrap)
         self._results.setFont(QFont("Noto Sans", 10))
+        self._results.setStyleSheet(self._list_style())
         # Height is set from the match count after each search (see
         # ``_size_list_to_content``) so one match is a one-row box, not
         # a tall empty pane, and many matches cap + scroll. Fixed
@@ -208,6 +273,7 @@ class PhoibleDialog(QDialog):
 
     def _build_source_section(self) -> QWidget:
         wrap = QWidget(self)
+        self._source_wrap = wrap
         wrap_layout = QVBoxLayout(wrap)
         wrap_layout.setContentsMargins(0, 0, 0, 0)
         wrap_layout.setSpacing(4)
@@ -216,6 +282,7 @@ class PhoibleDialog(QDialog):
         wrap_layout.addWidget(title)
         self._sources = QListWidget(wrap)
         self._sources.setFont(QFont("Noto Sans", 10))
+        self._sources.setStyleSheet(self._source_list_style())
         # Height is set from the source count after each language pick
         # (see ``_size_list_to_content``) so one source is a short box,
         # not a tall empty pane, and many sources cap + scroll. Fixed
@@ -236,6 +303,7 @@ class PhoibleDialog(QDialog):
 
     def _build_preview_section(self) -> QWidget:
         wrap = QWidget(self)
+        self._preview_wrap = wrap
         wrap_layout = QVBoxLayout(wrap)
         wrap_layout.setContentsMargins(0, 4, 0, 0)
         wrap_layout.setSpacing(4)
@@ -299,16 +367,22 @@ class PhoibleDialog(QDialog):
         query = self._search_edit.text().strip()
         self._results.clear()
         if not query:
-            # Deleting the typed language resets the source selection
-            # too, so the dialog gives responsive feedback that nothing
-            # is chosen rather than stranding the previous source rows.
+            # Deleting the typed language returns the dialog to its
+            # empty state (hint shown, sections hidden) rather than
+            # stranding the previous source rows.
             self._clear_sources()
+            self._set_sections_visible(sources=False, hint=True)
             self._fit_to_content()
             return
         for name in self._provider.search_languages(query, limit=20):
             QListWidgetItem(name, self._results)
         if self._results.count() > 0:
             self._results.setCurrentRow(0)
+        # Mid-search the autocomplete is the focus: drop any stale
+        # source rows from a previous pick and hide both the hint and
+        # the source section until the user commits to a language.
+        self._clear_sources()
+        self._set_sections_visible(sources=False, hint=False)
         self._fit_to_content()
 
     def eventFilter(self, obj: QObject | None, event: QEvent | None) -> bool:
@@ -346,17 +420,22 @@ class PhoibleDialog(QDialog):
 
     @staticmethod
     def _size_list_to_content(lst: QListWidget, cap: int) -> None:
-        """Pin a list's height to its row count (capped at ``cap`` rows,
-        after which it scrolls). Explicit, deterministic sizing rather
-        than ``AdjustToContents``, whose sizeHint did not reliably track
-        multi-line rows. An empty list collapses to zero height."""
+        """Pin a list's height to its rows (capped at ``cap`` rows, after
+        which it scrolls). Sums each visible row's own height rather than
+        assuming a uniform row, because the source rows vary (one source
+        has a description, another a dialect, another both). An empty
+        list collapses to zero height."""
         n = lst.count()
         if n == 0:
             lst.setFixedHeight(0)
             return
-        row_h = lst.sizeHintForRow(0)
+        rows = min(n, cap)
+        total = sum(lst.sizeHintForRow(i) for i in range(rows))
         frame = 2 * lst.frameWidth()
-        lst.setFixedHeight(row_h * min(n, cap) + frame + 2)
+        # ``+ 6`` covers the list's own 2 px content padding (top +
+        # bottom) and 1 px border (top + bottom) that the row heights do
+        # not include, so the last row never clips into a scrollbar.
+        lst.setFixedHeight(total + frame + 6)
 
     def _fit_to_content(self) -> None:
         """Resize the dialog so its height tracks the visible content:
@@ -380,6 +459,12 @@ class PhoibleDialog(QDialog):
         language = item.text()
         inventories = self._provider.list_inventories(language)
         self._clear_sources()
+        # Collapse the autocomplete now that a language is committed:
+        # the chosen name stays in the search box, so a lone highlighted
+        # result row below it would just be redundant. Reveal the source
+        # and preview panes that were hidden in the empty state.
+        self._results.clear()
+        self._set_sections_visible(sources=True, hint=False)
         if not inventories:
             self._summary.setText(
                 f"PHOIBLE has no inventories for {language!r}."
@@ -391,10 +476,11 @@ class PhoibleDialog(QDialog):
         # list by source then id, so "first" is stable and is what
         # the user sees highlighted at the top).
         for descriptor in inventories:
-            item = QListWidgetItem(
-                self._format_source_item(descriptor), self._sources
-            )
+            item = QListWidgetItem(self._sources)
             item.setData(_INVENTORY_ID_ROLE, descriptor.id)
+            widget = self._build_source_row(descriptor, language)
+            item.setSizeHint(widget.sizeHint())
+            self._sources.setItemWidget(item, widget)
         self._sources.setCurrentRow(0)
         # Hand focus to the source list so the keyboard flow
         # continues without the mouse: arrows move between sources,
@@ -404,14 +490,63 @@ class PhoibleDialog(QDialog):
         self._sources.setFocus()
         self._fit_to_content()
 
-    def _format_source_item(self, descriptor: InventoryDescriptor) -> str:
-        head = f"{descriptor.source_short}"
+    @staticmethod
+    def _trim_redundant_language(dialect: str | None, language: str) -> str:
+        """Drop a leading copy of the chosen language from a dialect so a
+        row under "Korean" reads "Seoul" not "Korean (Seoul)" (the
+        language is already in the search box). Mirrors the web's
+        ``_trimRedundantLanguage``; only a clean leading match is
+        stripped, anything else is left as is."""
+        d = (dialect or "").strip()
+        lang = (language or "").strip()
+        if not d or not lang or not d.lower().startswith(lang.lower()):
+            return d
+        rest = d[len(lang) :].strip()
+        if rest.startswith("(") and rest.endswith(")"):
+            rest = rest[1:-1].strip()
+        return rest or d
+
+    def _build_source_row(
+        self, descriptor: InventoryDescriptor, language: str
+    ) -> QWidget:
+        """Lay a source out the way the web card does: the source name
+        and its segment count on one line (name in semibold, count
+        right-aligned and muted), then a single muted line carrying the
+        description and dialect. Real labels in a layout, so the count
+        column lines up and nothing is faked with padding spaces."""
+        row = QWidget()
+        col = QVBoxLayout(row)
+        col.setContentsMargins(12, 8, 12, 8)
+        col.setSpacing(3)
+
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(12)
+        name = QLabel(descriptor.source_short, row)
+        name.setFont(QFont("Noto Sans", 10, QFont.Weight.DemiBold))
+        set_css(name, f"color: {C['text']}; background: transparent;")
+        count = QLabel(f"{descriptor.segment_count} segments", row)
+        count.setFont(QFont("Noto Sans", 9))
+        set_css(count, f"color: {C['text_dim']}; background: transparent;")
+        header.addWidget(name)
+        header.addStretch(1)
+        header.addWidget(count)
+        col.addLayout(header)
+
+        parts: list[str] = []
         if descriptor.source_description:
-            head = f"{head}  -  {descriptor.source_description}"
-        line2 = f"{descriptor.segment_count} segments"
-        if descriptor.dialect:
-            line2 = f"{line2}    {descriptor.dialect}"
-        return f"{head}\n{line2}"
+            parts.append(descriptor.source_description)
+        dialect = self._trim_redundant_language(descriptor.dialect, language)
+        if dialect:
+            parts.append(dialect)
+        if parts:
+            sub = QLabel("   ·   ".join(parts), row)
+            sub.setFont(QFont("Noto Sans", 9))
+            set_css(sub, f"color: {C['text_dim']}; background: transparent;")
+            col.addWidget(sub)
+
+        set_css(row, "background: transparent;")
+        return row
 
     def _on_source_changed(
         self,

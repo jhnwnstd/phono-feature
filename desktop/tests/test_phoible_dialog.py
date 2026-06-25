@@ -130,3 +130,56 @@ def test_load_click_materializes_inventory_via_shared_path(
         )
     finally:
         dialog.deleteLater()
+
+
+def test_initial_state_hides_sections_and_shows_hint(
+    qapp: QApplication,
+) -> None:
+    """A freshly opened dialog shows only the search row and the
+    empty-state hint; the source and preview panes stay hidden so the
+    user never sees two empty bordered boxes. ``isVisibleTo`` reflects
+    the intended visibility without needing to actually show the
+    dialog."""
+    dialog = _make_dialog(qapp)
+    try:
+        assert dialog._hint.isVisibleTo(dialog)
+        assert not dialog._source_wrap.isVisibleTo(dialog)
+        assert not dialog._preview_wrap.isVisibleTo(dialog)
+        assert dialog._results.count() == 0
+    finally:
+        dialog.deleteLater()
+
+
+def test_pick_collapses_autocomplete_then_clear_resets_state(
+    qapp: QApplication,
+) -> None:
+    """Picking a language collapses the autocomplete (the chosen name
+    is already in the search box) and reveals the source + preview
+    panes; clearing the search returns the dialog to its empty state
+    with the hint back and nothing selected."""
+    dialog = _make_dialog(qapp)
+    try:
+        dialog._search_edit.setText("Korean")
+        dialog._run_search()
+        # Searching: the hint yields to the autocomplete results.
+        assert dialog._results.count() > 0
+        assert not dialog._hint.isVisibleTo(dialog)
+
+        dialog._on_language_activated(dialog._results.item(0))
+        # Picked: autocomplete cleared, sections shown, hint hidden.
+        assert dialog._results.count() == 0
+        assert dialog._source_wrap.isVisibleTo(dialog)
+        assert dialog._preview_wrap.isVisibleTo(dialog)
+        assert not dialog._hint.isVisibleTo(dialog)
+
+        # Clearing the query must reset everything, not strand the
+        # previous source rows or the enabled Load button.
+        dialog._search_edit.clear()
+        dialog._run_search()
+        assert dialog._hint.isVisibleTo(dialog)
+        assert not dialog._source_wrap.isVisibleTo(dialog)
+        assert dialog._sources.count() == 0
+        assert dialog._selected_inventory_id is None
+        assert not dialog._load_btn.isEnabled()
+    finally:
+        dialog.deleteLater()

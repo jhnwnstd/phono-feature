@@ -60,6 +60,7 @@ const NODE_IDS = Object.freeze({
     phoibleLoading: "phoible-loading",
     phoibleActive: "phoible-active",
     phoibleSearch: "phoible-search",
+    phoibleHint: "phoible-hint",
     phoibleResults: "phoible-results",
     phoibleInventories: "phoible-inventories",
     phoibleRadios: "phoible-radios",
@@ -3150,7 +3151,25 @@ function wireSetupDialog() {
  * the click target; ``:has(input:checked)`` in CSS paints the
  * accent border so the dot is a redundant cue, not the only one.
  */
-function _buildSourceCard(inv, defaultId, onPick) {
+/** Drop a leading copy of the already-chosen language from a dialect
+ *  label so a card under the "Korean" search reads "(Seoul)" rather
+ *  than "Korean (Seoul)": the language is already shown in the field
+ *  above, so repeating it on every row is noise. Only strips a clean
+ *  leading match and unwraps a fully parenthesized remainder; anything
+ *  else (e.g. "Standard Korean ...") is returned unchanged. */
+function _trimRedundantLanguage(dialect, language) {
+    if (!dialect || !language) return dialect || "";
+    const d = dialect.trim();
+    const lang = language.trim();
+    if (!d.toLowerCase().startsWith(lang.toLowerCase())) return d;
+    let rest = d.slice(lang.length).trim();
+    if (rest.startsWith("(") && rest.endsWith(")")) {
+        rest = rest.slice(1, -1).trim();
+    }
+    return rest || d;
+}
+
+function _buildSourceCard(inv, defaultId, onPick, language) {
     const radioId = "phoible-radio-" + inv.id;
     const label = document.createElement("label");
     label.className = "phoible-source-card";
@@ -3179,18 +3198,17 @@ function _buildSourceCard(inv, defaultId, onPick) {
     header.appendChild(segs);
     body.appendChild(header);
 
-    if (inv.source_description) {
-        const desc = document.createElement("div");
-        desc.className = "phoible-source-desc";
-        desc.textContent = inv.source_description;
-        body.appendChild(desc);
-    }
-
-    if (inv.dialect) {
-        const dialect = document.createElement("div");
-        dialect.className = "phoible-source-dialect";
-        dialect.textContent = inv.dialect;
-        body.appendChild(dialect);
+    // One muted secondary line carrying the description and dialect,
+    // matching the desktop row so the two clients read identically.
+    const subParts = [];
+    if (inv.source_description) subParts.push(inv.source_description);
+    const dialectText = _trimRedundantLanguage(inv.dialect, language);
+    if (dialectText) subParts.push(dialectText);
+    if (subParts.length) {
+        const sub = document.createElement("div");
+        sub.className = "phoible-source-sub";
+        sub.textContent = subParts.join("   ·   ");
+        body.appendChild(sub);
     }
 
     label.appendChild(input);
@@ -3252,6 +3270,8 @@ function wirePhoiblePicker() {
         searchInput.value = "";
         nodes.phoibleResults.hidden = true;
         nodes.phoibleResults.innerHTML = "";
+        // Empty state: the hint fills the body until the user searches.
+        nodes.phoibleHint.hidden = false;
         errorBox.textContent = "";
         clearInventorySelection();
         if (searchTimer) {
@@ -3334,6 +3354,7 @@ function wirePhoiblePicker() {
 
     const pickLanguage = (languageName) => {
         searchInput.value = languageName;
+        nodes.phoibleHint.hidden = true;
         nodes.phoibleResults.hidden = true;
         const invs = callBridge("phoible_list_inventories", languageName);
         const radios = nodes.phoibleRadios;
@@ -3348,7 +3369,9 @@ function wirePhoiblePicker() {
         // the user sees highlighted at the top).
         const defaultId = invs[0].id;
         for (const inv of invs) {
-            radios.appendChild(_buildSourceCard(inv, defaultId, pickInventory));
+            radios.appendChild(
+                _buildSourceCard(inv, defaultId, pickInventory, languageName),
+            );
         }
         nodes.phoibleInventories.hidden = false;
         pickInventory(defaultId);
@@ -3447,18 +3470,34 @@ function wirePhoiblePicker() {
         }
         const query = searchInput.value;
         if (query.trim() === "") {
-            // Deleting the typed language resets the source selection
-            // too, so the picker gives responsive feedback that nothing
-            // is chosen rather than stranding the previous source cards.
+            // Deleting the typed language returns the picker to its
+            // empty state: the hint reappears and any half-made source
+            // selection is cleared, rather than stranding stale cards.
             nodes.phoibleResults.hidden = true;
             nodes.phoibleResults.innerHTML = "";
             clearInventorySelection();
+            nodes.phoibleHint.hidden = false;
             return;
         }
+        // Typing means we have left the empty state; the result list (or
+        // the source cards) owns the body from here.
+        nodes.phoibleHint.hidden = true;
         searchTimer = window.setTimeout(() => {
+            const trimmed = query.trim();
             const matches = callBridge(
-                "phoible_search_languages", query, 20,
+                "phoible_search_languages", trimmed, 20,
             );
+            // Auto-advance on an unambiguous exact match: typing a full
+            // language name that is the SOLE result skips the redundant
+            // one-row dropdown (which would just repeat the text already
+            // in the input) and shows that language's sources directly.
+            if (
+                matches && matches.length === 1
+                && matches[0].toLowerCase() === trimmed.toLowerCase()
+            ) {
+                pickLanguage(matches[0]);
+                return;
+            }
             renderResults(matches);
         }, SEARCH_DEBOUNCE_MS);
     });
@@ -3485,6 +3524,18 @@ function wirePhoiblePicker() {
             setHighlight(highlightedIndex - 1);
             return;
         }
+        if (ev.key === "Home") {
+            if (!items.length || ul.hidden) return;
+            ev.preventDefault();
+            setHighlight(0);
+            return;
+        }
+        if (ev.key === "End") {
+            if (!items.length || ul.hidden) return;
+            ev.preventDefault();
+            setHighlight(items.length - 1);
+            return;
+        }
         if (ev.key === "Enter") {
             if (ul.hidden || !items.length) return;
             ev.preventDefault();
@@ -3507,12 +3558,10 @@ function wirePhoiblePicker() {
     // previewing the target source. ``preventDefault`` suppresses the
     // browser's built-in wrapping radio navigation.
     nodes.phoibleRadios.addEventListener("keydown", (ev) => {
-        if (
-            ev.key !== "ArrowDown" && ev.key !== "ArrowUp"
-            && ev.key !== "ArrowLeft" && ev.key !== "ArrowRight"
-        ) {
-            return;
-        }
+        const NAV = [
+            "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End",
+        ];
+        if (!NAV.includes(ev.key)) return;
         const radios = Array.from(
             nodes.phoibleRadios.querySelectorAll('input[type="radio"]')
         );
@@ -3522,10 +3571,17 @@ function wirePhoiblePicker() {
             (r) => r.checked || r === document.activeElement
         );
         if (idx < 0) idx = 0;
-        const forward = ev.key === "ArrowDown" || ev.key === "ArrowRight";
-        const next = forward
-            ? Math.min(idx + 1, radios.length - 1)
-            : Math.max(idx - 1, 0);
+        let next;
+        if (ev.key === "Home") {
+            next = 0;
+        } else if (ev.key === "End") {
+            next = radios.length - 1;
+        } else {
+            const forward = ev.key === "ArrowDown" || ev.key === "ArrowRight";
+            next = forward
+                ? Math.min(idx + 1, radios.length - 1)
+                : Math.max(idx - 1, 0);
+        }
         if (next === idx) return;
         const radio = radios[next];
         // Programmatic ``checked`` does not fire ``change``, so drive
