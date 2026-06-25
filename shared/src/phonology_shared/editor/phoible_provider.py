@@ -120,6 +120,35 @@ def _try_load_data_bytes() -> bytes | None:
         return None
 
 
+def _loads_pooled(raw: str | bytes) -> Any:
+    """``json.loads`` that collapses duplicate string VALUES onto one
+    shared object as each object is decoded.
+
+    The packaged PHOIBLE data table repeats only ~2.2k distinct feature
+    strings across ~105k segment entries (each ~47x). A plain
+    ``json.loads`` allocates a fresh ``str`` per occurrence, so the
+    parsed table peaks near ~21 MB and the Emscripten/WASM heap grows to
+    match. That heap never shrinks, so the transient peak becomes the
+    committed page footprint for the rest of the session. Pooling values
+    during decode frees each duplicate the instant its object is built
+    (refcount drops to zero once it is replaced by the shared instance),
+    keeping the high-water mark far lower for the same final structure.
+
+    Object KEYS (segment symbols, inventory ids) are already de-duplicated
+    by the decoder's own key memo, so only values are folded here. The
+    pool is local and dropped on return, leaving only shared references.
+    """
+    pool: dict[str, str] = {}
+
+    def hook(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        return {
+            key: (pool.setdefault(val, val) if type(val) is str else val)
+            for key, val in pairs
+        }
+
+    return json.loads(raw, object_pairs_hook=hook)
+
+
 class PhoibleProvider:
     """Search PHOIBLE 2.0 by language name and materialise a
     chosen inventory as a :py:class:`GeneratedInventory`.
@@ -264,7 +293,7 @@ class PhoibleProvider:
         if data_table is None:
             raw_data = _try_load_data_bytes()
             if raw_data is not None:
-                data_table = json.loads(raw_data)
+                data_table = _loads_pooled(raw_data)
         if data_table is not None:
             self._ingest_data(data_table)
 
@@ -285,7 +314,7 @@ class PhoibleProvider:
         data: dict[str, Any] | None = None
         if data_path is not None:
             with Path(data_path).open("r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = _loads_pooled(f.read())
         return cls(index_table=index, data_table=data)
 
     def load_data_payload(
@@ -300,7 +329,7 @@ class PhoibleProvider:
         but cheap to support) does not leave a stale cache.
         """
         if isinstance(payload, (str, bytes)):
-            data = json.loads(payload)
+            data = _loads_pooled(payload)
         else:
             data = payload
         self._ingest_data(data)
