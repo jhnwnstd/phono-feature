@@ -524,6 +524,12 @@ async function bootPyodide({ prerendered = false } = {}) {
     _syncBridgeMatchModeToStoredState();
 
     enableBridgeGatedControls();
+    // First layout pass with the bridge in. Pre-bridge the column and
+    // spillover passes no-op (they need the shared planner) and the
+    // prerendered path never re-renders the grid, so without this the
+    // bootstrap layout would not pick up the planner until the next
+    // resize. Also absorbs any resize that landed during boot.
+    relayoutSegments();
     setLoadingStatus("Loading default inventory…");
     mark("inventory:start");
     const defaultItem = pickDefaultInventory(BUNDLED_INVENTORIES);
@@ -1056,7 +1062,13 @@ function detachResizeObserver(dataEl, key) {
 }
 
 const SEG_FONT_NATURAL_PX = parseCSSLength("--font-size-control", 13);
-const SEG_FONT_FLOOR_PX = parseCSSLength("--font-size-min-px", 10);
+// Seg-button shrink floor. Deliberately below the global
+// ``--font-size-min-px`` (10): Charis IPA renders the widest hayes
+// tie-bar affricates (``k+͡x+``, ``ɡ+͡ɣ+``) too wide to fit the 33px
+// button at 10px, and a two-glyph affricate icon stays legible at 9
+// (the desktop already paints every seg button at a fixed 9pt). This
+// is a content-driven floor for an icon-like glyph, not body text.
+const SEG_FONT_FLOOR_PX = 9;
 // Inner width budget for seg-button text. ``--seg-btn-min-w`` is
 // 33 px; subtract the 1.5 px border on each side and leave 1 px of
 // breathing room so glyphs sit just inside the outline. Picked to
@@ -1103,6 +1115,21 @@ function _pickSegFontSize(text) {
     }
     _segFontSizeCache.set(text, SEG_FONT_FLOOR_PX);
     return SEG_FONT_FLOOR_PX;
+}
+
+/** Re-run the per-glyph shrink for every live seg button once the IPA
+ *  webfont has loaded. The first-paint shrink runs at button-build,
+ *  before Charis IPA is available, so it measures the fallback
+ *  monospace metrics, which are narrower than Charis. Without this
+ *  pass the widest tie-bar affricates keep a size that fit the
+ *  fallback but overflow once Charis swaps in. The cache is cleared
+ *  first so the re-measure uses the now-loaded font. */
+function _refitSegButtons() {
+    _segFontSizeCache.clear();
+    for (const [seg, btn] of state.seg_buttons) {
+        const fit = _pickSegFontSize(seg);
+        btn.style.fontSize = fit !== null ? `${fit}px` : "";
+    }
 }
 
 /**
@@ -1342,7 +1369,11 @@ function relayoutSegments() {
             ).join(","),
         ].join("|");
         if (key === _lastRelayoutKey) return;
-        _lastRelayoutKey = key;
+        // Only record the key once the bridge can actually apply the
+        // layout. Pre-bridge both passes no-op (they need the shared
+        // planner), so caching the key then would suppress the first
+        // real pass once the bridge is in.
+        if (state.bridge) _lastRelayoutKey = key;
         // Thread the already-queried row list through so the
         // column-picker doesn't re-run the same querySelectorAll.
         applyPerGroupSegmentColumns(rows);
@@ -1411,6 +1442,10 @@ function applyPerGroupSegmentColumns(rows) {
     if (!grid) return;
     if (!rows) rows = [...grid.querySelectorAll(".seg-row")];
     if (rows.length === 0) return;
+    // Pre-bridge the rows keep the default flex-wrap layout (see the
+    // note above); the orphan-avoiding column count needs the shared
+    // Python helper, so defer the whole pass until the bridge is in.
+    if (!state.bridge) return;
     const sample = rows[0].querySelector(".seg-btn");
     if (!sample) return;
     const btnW = sample.offsetWidth || _BTN_W_CSS || 33;
@@ -1428,9 +1463,9 @@ function applyPerGroupSegmentColumns(rows) {
     const sizes = rows.map(
         (r) => r.querySelectorAll(".seg-btn").length,
     );
-    const groupCols = state.bridge
-        ? callBridge("best_segment_n_cols_for_groups", sizes, maxCols)
-        : sizes.map((n) => _fallbackBestNCols(n, maxCols));
+    const groupCols = callBridge(
+        "best_segment_n_cols_for_groups", sizes, maxCols,
+    );
     for (let i = 0; i < rows.length; i++) {
         rows[i].style.display = "grid";
         // Fixed tracks (not minmax-to-max-content): all seg-buttons
@@ -1440,20 +1475,6 @@ function applyPerGroupSegmentColumns(rows) {
         rows[i].style.gridTemplateColumns =
             `repeat(${groupCols[i]}, ${btnW}px)`;
     }
-}
-
-/** Local mirror of ``best_segment_n_cols`` for the pre-bridge window.
- *  Once Pyodide is live the Python implementation is the only source
- *  of truth; this keeps the algorithm identical for the brief gap. */
-function _fallbackBestNCols(groupSize, maxCols) {
-    if (groupSize <= 0) return 1;
-    if (maxCols <= 1) return 1;
-    if (groupSize <= maxCols) return groupSize;
-    for (let n = maxCols; n > 1; n--) {
-        const r = groupSize % n;
-        if (r === 0 || r >= 2) return n;
-    }
-    return maxCols;
 }
 
 /**
@@ -1487,13 +1508,12 @@ function rebalanceSegmentSpillover() {
     )];
     if (consonants.length === 0) return;
 
-    // Bridge-aware path: call ``plan_segment_layout`` which returns
-    // the FULL plan (main_count + n_spillover_cols + per-group
-    // column assignment). Pre-migration the web called the legacy
-    // ``partition_segment_spillover`` which hardcoded 2 cols +
-    // sequential row pairing, so the desktop and web placed the
-    // same inventory differently. Falls back to the legacy
-    // partitioner when the bridge isn't ready yet (~200 ms boot).
+    // Bridge path: ``plan_segment_layout`` returns the FULL plan
+    // (main_count + n_spillover_cols + per-group column assignment).
+    // Pre-migration the web ran a legacy 2-col partitioner that placed
+    // the same inventory differently from the desktop; the shared
+    // planner is the only source now. Pre-bridge there is no plan, so
+    // the consonant rows keep the CSS default layout until it is in.
     if (state.bridge) {
         const groupNames = consonants.map((el) => el.dataset.group || "");
         const heights = consonants.map((el) => el.offsetHeight);
@@ -1558,38 +1578,6 @@ function rebalanceSegmentSpillover() {
         }
         return;
     }
-
-    // Pre-bridge fallback: legacy 2-column partitioner. Hash-pinned
-    // by ``test_jsfallback_parity.py`` so this branch stays mirrored
-    // to the shared Python helper.
-    if (grid.scrollHeight <= available) return;
-    const heights = consonants.map((el) => el.offsetHeight);
-    const mainCount = _fallbackPartitionSpillover(heights, available);
-    if (mainCount >= consonants.length) return;
-    grid.appendChild(spillover);
-    for (let i = mainCount; i < consonants.length; i++) {
-        spillover.appendChild(consonants[i]);
-    }
-}
-
-/** Local mirror of ``partition_groups_for_spillover`` for the brief
- *  window between first paint and bridge bootstrap. Once the bridge
- *  is live, ``callBridge`` is the canonical source. */
-function _fallbackPartitionSpillover(heights, available, nCols = 2) {
-    const n = heights.length;
-    if (n === 0 || available <= 0) return n;
-    const fits = (mainCount) => {
-        let h = 0;
-        for (let i = 0; i < mainCount; i++) h += heights[i];
-        const spill = heights.slice(mainCount);
-        for (let i = 0; i < spill.length; i += nCols) {
-            h += Math.max(...spill.slice(i, i + nCols));
-        }
-        return h <= available;
-    };
-    let mainCount = n;
-    while (mainCount > 0 && !fits(mainCount)) mainCount -= 1;
-    return mainCount;
 }
 
 function _buildConsonantGroup(group) {
@@ -2433,23 +2421,6 @@ function onFeatureClicked(feat, polarity) {
     scheduleAnalysis();
 }
 
-function fallbackModeSwitch() {
-    if (state.mode === MODE.SEG_TO_FEAT) {
-        return {
-            saved_seg_state: state.selected_segments.slice(),
-            saved_feat_state: emptyFeatureSpec(),
-            selected_segments: [],
-            selected_features: emptyFeatureSpec(),
-        };
-    }
-    return {
-        saved_seg_state: [],
-        saved_feat_state: cloneFeatureSpec(state.selected_features),
-        selected_segments: [],
-        selected_features: emptyFeatureSpec(),
-    };
-}
-
 /**
  * Switch top-level mode, projecting the outgoing mode's state
  * into the incoming one (mirrors desktop's ModeController.
@@ -2468,7 +2439,22 @@ function activateMode(mode) {
             state.selected_segments,
             state.selected_features,
         )
-        : fallbackModeSwitch();
+        // Pre-bridge there is no engine to project the outgoing
+        // selection across modes, so the target mode starts empty and
+        // we only remember the raw outgoing selection. This equals
+        // shared mode_logic.project_mode_transition with engine=None.
+        : {
+            saved_seg_state:
+                state.mode === MODE.SEG_TO_FEAT
+                    ? state.selected_segments.slice()
+                    : [],
+            saved_feat_state:
+                state.mode === MODE.SEG_TO_FEAT
+                    ? emptyFeatureSpec()
+                    : cloneFeatureSpec(state.selected_features),
+            selected_segments: [],
+            selected_features: emptyFeatureSpec(),
+        };
 
     state.saved_seg_state = transition.saved_seg_state.slice();
     state.saved_feat_state = cloneFeatureSpec(transition.saved_feat_state);
@@ -3602,10 +3588,10 @@ function wirePhoiblePicker() {
 //
 // This section (~main.js:1675-3000) is the second large state machine
 // in the file and mirrors the desktop's ``InventoryBuilder``
-// (``app/src/phonology_features/gui/builder/window.py``). Strategy:
+// (``desktop/src/phonology_features/gui/builder/window.py``). Strategy:
 //
-//  * **Pure logic lives in Python** (``grid_logic.py``,
-//    ``inventory_setup.py``) and is consumed via the bridge or via
+//  * **Pure logic lives in Python** (``editor/grid.py``,
+//    ``editor/setup.py``) and is consumed via the bridge or via
 //    constants fetched once at editor open (cycle ladder, value
 //    keys, move keys, undo depth cap, add-label validators, remove
 //    prompts, max-segments / max-features caps).
@@ -3615,12 +3601,12 @@ function wirePhoiblePicker() {
 //    bridge hops would lag on rapid shift-drag and keyboard repeat.
 //
 //  * **Two surfaces that mirror Python logic locally** are
-//    parity-tested in ``app/tests/test_jsfallback_parity.py``:
+//    parity-tested in ``shared/tests/test_editor_mirror_parity.py``:
 //      - ``classifyEditorSelection`` mirrors
-//        ``grid_logic.classify_selection``
+//        ``editor/grid.classify_selection``
 //      - ``SELECTION_SHAPE_REMOVE_TARGET`` mirrors
-//        ``grid_logic.SELECTION_SHAPE_REMOVE_TARGET``
-//    Edit either side and the parity tests catch the drift.
+//        ``editor/grid.SELECTION_SHAPE_REMOVE_TARGET``
+//    Edit either side and the parity test catches the drift.
 //
 // In-memory edit state for the builder editor. Mirrors the desktop
 // ``InventoryBuilder``'s ``_segments`` / ``_features`` / table-item
@@ -6036,6 +6022,13 @@ async function main() {
     const prerendered = applyBootstrap();
     if (prerendered) {
         mark("first-paint:bootstrap");
+    }
+    // The first-paint seg-button shrink measured the fallback font
+    // (Charis IPA loads async), so the widest affricates are sized for
+    // the narrower fallback. Re-fit once Charis is in. Idempotent and
+    // safe whether or not buttons exist yet.
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(_refitSegButtons);
     }
 
     try {

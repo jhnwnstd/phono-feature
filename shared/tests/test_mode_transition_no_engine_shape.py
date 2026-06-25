@@ -1,7 +1,7 @@
 """Pin the no-engine ``project_mode_transition`` contract.
 
-The web's pre-bridge ``fallbackModeSwitch()`` in ``web/main.js``
-returns the same four-field shape that
+The web's pre-bridge mode-switch branch in ``activateMode``
+(``web/main.js``) returns the same four-field shape that
 :py:func:`phonology_shared.presentation.mode_logic.project_mode_transition`
 emits when called with ``engine=None``. Without an engine the
 projection cannot derive features-from-segments or
@@ -58,8 +58,9 @@ def test_no_engine_returns_four_field_shape(
     field_names = {f for f in result.__dataclass_fields__}
     assert field_names == REQUIRED_FIELDS, (
         "ModeTransition fields drifted from the JS fallback's "
-        "expected shape; update web/main.js:fallbackModeSwitch to "
-        "match before adding a new field here."
+        "expected shape; update the pre-bridge branch in "
+        "web/main.js:activateMode to match before adding a new "
+        "field here."
     )
 
 

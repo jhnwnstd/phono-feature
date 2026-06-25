@@ -1113,7 +1113,10 @@ class FeatureEngine:
         inventory and is recomputed on every call. Callers that hit
         this on a hot path should cache the result themselves.
         """
-        name = self.metadata.get("name", "Unknown")
+        # ``or "Unknown"`` (not a ``.get`` default) so a present-but-
+        # empty or ``None`` name still reads "Unknown" rather than
+        # stringifying to "" or "None" in the stats line.
+        name = self.metadata.get("name") or "Unknown"
         stats: dict[str, int | float | str] = {
             "name": str(name),
             "segment_count": len(self.segments),

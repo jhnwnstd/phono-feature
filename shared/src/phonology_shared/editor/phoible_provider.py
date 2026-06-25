@@ -22,6 +22,7 @@ preset / PanPhon flows without crashing.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Mapping
 from functools import lru_cache
 from importlib import resources
@@ -43,6 +44,8 @@ from phonology_shared.editor.providers import (
     prune_unused_features,
     restrict_bundles,
 )
+
+_log = logging.getLogger(__name__)
 
 _INDEX_FILENAME = "_phoible_index.generated.json"
 _DATA_FILENAME = "_phoible_data.generated.json"
@@ -204,6 +207,17 @@ class PhoibleProvider:
             raise ValueError(
                 f"PHOIBLE index has {skipped_no_id} entries but none "
                 "have a usable 'id' field; rerun bake_phoible"
+            )
+        if skipped_no_id:
+            # Some entries loaded, so this is a degraded-but-usable
+            # index, not a hard failure. Surface the dropped count so a
+            # bad bake that quietly loses languages from the picker is
+            # diagnosable instead of invisible.
+            _log.warning(
+                "PHOIBLE index: dropped %d entr%s with no usable 'id'; "
+                "rerun bake_phoible if languages are missing",
+                skipped_no_id,
+                "y" if skipped_no_id == 1 else "ies",
             )
 
         # Sorted language-name list for fast prefix/substring scan.

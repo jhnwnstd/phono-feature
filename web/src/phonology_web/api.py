@@ -184,7 +184,6 @@ def load_inventory_json(
     Raises ``ValidationError`` with the same shape as
     ``Inventory.load`` so JS can surface the issues list.
     """
-    global _engine, _inventory_name
     # Single decode entry-point shared with ``Inventory.load`` so the
     # desktop file path and the web upload path enforce the same
     # JSON-level contract: duplicate keys, non-finite literals, and
@@ -197,9 +196,9 @@ def load_inventory_json(
     # import chart), so enforce them here, after the structural
     # parse, before the engine swaps in.
     enforce_class_caps(inventory.segments)
-    _engine = FeatureEngine(inventory)
-    _inventory_name = inventory.name or source_label
-    _invalidate_analysis_caches()
+    engine = _set_engine(
+        FeatureEngine(inventory), inventory.name or source_label
+    )
     # ``source_label`` is the user-facing label the picker passed
     # (bundled inventory title / uploaded filename / PHOIBLE
     # composite). The chip shows the inventory NAME, not a
@@ -207,7 +206,7 @@ def load_inventory_json(
     # ("bundled / ") is noise the user does not need.
     provenance = source_label or "uploaded"
     return build_inventory_summary(
-        _engine, _inventory_name, provenance, mode=_match_mode
+        engine, _inventory_name, provenance, mode=_match_mode
     )
 
 
@@ -221,6 +220,23 @@ def _invalidate_analysis_caches() -> None:
     """
     _analyze_segments_cached.cache_clear()
     _analyze_features_cached.cache_clear()
+
+
+def _set_engine(engine: FeatureEngine, name: str) -> FeatureEngine:
+    """Swap the active engine. The only path that mutates ``_engine``,
+    so the inventory name and the analysis caches can never lag behind
+    it: every load route goes through here, and forgetting to refresh
+    the name or clear the caches stops being possible by construction.
+
+    Returns the engine so callers build their summary from the local
+    instead of re-reading the module global, which static analysis
+    cannot narrow to non-None past this indirect assignment.
+    """
+    global _engine, _inventory_name
+    _engine = engine
+    _inventory_name = name
+    _invalidate_analysis_caches()
+    return engine
 
 
 def serialize_current_inventory() -> str:
@@ -504,7 +520,6 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     unavailable, the data payload has not been loaded, or the
     inventory id is unknown.
     """
-    global _engine, _inventory_name
     provider = _phoible_provider()
     if provider is None:
         raise ValidationError(
@@ -527,9 +542,7 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
         inventory = materialize_phoible_inventory(provider, inventory_id)
     except KeyError as exc:
         raise ValidationError((str(exc),)) from exc
-    _engine = FeatureEngine(inventory)
-    _inventory_name = inventory.name
-    _invalidate_analysis_caches()
+    engine = _set_engine(FeatureEngine(inventory), inventory.name)
     # ``Inventory.metadata['feature_source']`` carries the bake-
     # time provenance ("PHOIBLE / Korean (Eurasian Phonologies)").
     # Mirrors the desktop ``_open_phoible_picker`` path so both
@@ -537,7 +550,7 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     feature_source = inventory.metadata.get("feature_source") or "PHOIBLE"
     provenance = f"{feature_source} / {inventory.name}"
     summary = build_inventory_summary(
-        _engine, _inventory_name, provenance, mode=_match_mode
+        engine, _inventory_name, provenance, mode=_match_mode
     )
     # Status-bar line composed shared-side (language + source +
     # counts) so both UIs show the identical terse message instead
@@ -574,7 +587,6 @@ def create_new_inventory(
     issue messages when validation fails; JS surfaces it via the
     standard bridge-error message channel.
     """
-    global _engine, _inventory_name
     provider: FeatureProvider | None = None
     if provider_name:
         provider = _provider_registry().get(provider_name)
@@ -621,11 +633,9 @@ def create_new_inventory(
     # above, but vowel/consonant class is feature-driven, so it
     # cannot be known until the bundles are resolved here.
     enforce_class_caps(inventory.segments)
-    _engine = FeatureEngine(inventory)
-    _inventory_name = inventory.name
-    _invalidate_analysis_caches()
+    engine = _set_engine(FeatureEngine(inventory), inventory.name)
     return build_inventory_summary(
-        _engine, _inventory_name, "builder / new", mode=_match_mode
+        engine, _inventory_name, "builder / new", mode=_match_mode
     )
 
 
@@ -791,7 +801,6 @@ def commit_inventory_from_grid(
     Raises :py:class:`ValidationError` if the grid is not a valid
     inventory.
     """
-    global _engine, _inventory_name
     base_metadata: dict[str, Any] | None = None
     if _engine is not None:
         base_metadata = {
@@ -804,11 +813,9 @@ def commit_inventory_from_grid(
         cells=cells,
         metadata=base_metadata,
     )
-    _engine = FeatureEngine(inventory)
-    _inventory_name = inventory.name
-    _invalidate_analysis_caches()
+    engine = _set_engine(FeatureEngine(inventory), inventory.name)
     return build_inventory_summary(
-        _engine, _inventory_name, "builder / grid", mode=_match_mode
+        engine, _inventory_name, "builder / grid", mode=_match_mode
     )
 
 
@@ -827,15 +834,12 @@ def rename_current_inventory(new_name: str) -> dict[str, Any]:
     Raises :py:class:`ValidationError` if the new name fails
     validation, matching the existing load path's contract.
     """
-    global _engine, _inventory_name
     engine = _require_engine()
     data = engine.inventory.to_json_dict()
     metadata = data.setdefault("metadata", {})
     metadata["name"] = new_name
     inventory = Inventory.parse(data)
-    _engine = FeatureEngine(inventory)
-    _inventory_name = inventory.name
-    _invalidate_analysis_caches()
+    _set_engine(FeatureEngine(inventory), inventory.name)
     return {"name": inventory.name}
 
 
