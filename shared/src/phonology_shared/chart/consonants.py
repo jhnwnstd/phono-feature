@@ -49,6 +49,15 @@ from phonology_shared.data.inventory import normalize_feature_bundle
 #: which silently assumed a case the grouper never produces.
 VOWEL_GROUP_NAME = "Vowels"
 
+#: Display-group name for suprasegmental tone letters, emitted verbatim
+#: by :py:func:`group_segments`. Exported alongside
+#: :py:data:`VOWEL_GROUP_NAME` so the cap counter
+#: (:py:func:`~phonology_shared.chart.segment_classes.count_segment_classes`)
+#: and the ``is_member`` tone-phoneme guard compare against this one
+#: symbol rather than a bare ``"Tones"`` literal that a group-label
+#: rename would silently desync (zeroing the tone class's hard cap).
+TONES_GROUP_NAME = "Tones"
+
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.
 PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
@@ -105,7 +114,7 @@ PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
         "Semivowels",
         {"consonantal": "-", "syllabic": "-", "sonorant": "+"},
     ),
-    ("Vowels", {"syllabic": "+"}),
+    (VOWEL_GROUP_NAME, {"syllabic": "+"}),
     # Suprasegmental tone letters (Chao ``˥˦˧˨˩`` plus combining
     # tone diacritics). PHOIBLE ships these as standalone segments
     # with only ``HighTone=+`` and no consonant / vowel features;
@@ -116,7 +125,7 @@ PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
     # ``tone`` -> ``HighTone`` and PanPhon maps ``hitone`` ->
     # ``HighTone``; Hayes does not record standalone tone letters
     # so the group simply stays empty on Hayes inventories.
-    ("Tones", {"hightone": "+"}),
+    (TONES_GROUP_NAME, {"hightone": "+"}),
 ]
 # Minimum positive matches required for membership; prevents barely
 # specified segments from qualifying for classes by default.
@@ -185,10 +194,10 @@ DISPLAY_ORDER: list[str] = [
     "Central Approximants",
     "Semivowels",
     "Laryngeals",
-    "Vowels",
+    VOWEL_GROUP_NAME,
     # Tones render after the segmental classes so the chart reads
     # consonants first, then vowels, then the suprasegmental tier.
-    "Tones",
+    TONES_GROUP_NAME,
 ]
 # Origin-set -> display label for relational relabeling.
 #
@@ -920,7 +929,7 @@ def group_segments(
         if group_name == VOWEL_GROUP_NAME:
             if not is_vowel_phoneme:
                 return False
-        elif group_name == "Tones":
+        elif group_name == TONES_GROUP_NAME:
             if not is_tone_phoneme:
                 return False
         else:

@@ -26,7 +26,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from phonology_shared.chart.consonants import group_segments
+from phonology_shared.chart.consonants import (
+    TONES_GROUP_NAME,
+    VOWEL_GROUP_NAME,
+    group_segments,
+)
 from phonology_shared.data.limits import MAX_CONSONANTS, MAX_VOWELS
 
 
@@ -57,8 +61,8 @@ def count_segment_classes(
     """
     groups = group_segments(inventory, normalized=normalized)
     n_total = sum(len(segs) for segs in groups.values())
-    n_vowels = len(groups.get("Vowels", []))
-    n_tones = len(groups.get("Tones", []))
+    n_vowels = len(groups.get(VOWEL_GROUP_NAME, []))
+    n_tones = len(groups.get(TONES_GROUP_NAME, []))
     n_consonants = n_total - n_vowels - n_tones
     return n_vowels, n_consonants, n_total
 

@@ -665,13 +665,24 @@ def phoible_loaded_message(inventory: Inventory) -> str:
     [PHOIBLE] (48 segments, 37 features)." This composes the
     essentials only: language, source, and the counts. Shared so
     both status bars render the identical line.
+
+    The count/separator suffix is NOT spelled out here: it routes
+    through :py:func:`inventory_loaded_message` (the single home for
+    ``INVENTORY_LOADED_TEMPLATE``), so the PHOIBLE line cannot drift
+    from the ordinary load line. Only the language/source name is
+    PHOIBLE-specific. Lazy import keeps the editor->presentation edge
+    off the cold-boot module-load path (this runs only on a load).
     """
+    from phonology_shared.presentation.mode_logic import (
+        inventory_loaded_message,
+    )
+
     language = str(
         inventory.metadata.get("phoible_language") or inventory.name
     )
     source = str(inventory.metadata.get("phoible_source") or "PHOIBLE")
-    return (
-        f"{language} [{source}]: "
-        f"{len(inventory.segments)} segments × "
-        f"{len(inventory.features)} features"
+    return inventory_loaded_message(
+        name=f"{language} [{source}]",
+        n_segments=len(inventory.segments),
+        n_features=len(inventory.features),
     )

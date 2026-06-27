@@ -89,6 +89,20 @@ def _signed_feature_chip(value: str, feature: str) -> str:
     return _tag(f"{MINUS_SIGN}{feature}", TagColor.MINUS)
 
 
+def _signed_feature_chip_strip(spec: Mapping[str, str]) -> str:
+    """Render ``spec`` as one space-joined strip of signed feature
+    chips, ordered by :py:func:`sort_spec`. The feature-side twin of
+    :py:func:`_segment_chip_strip`; collapses the two identical
+    ``' '.join(_signed_feature_chip(...) for ... in
+    sort_spec(...).items())`` sites. (The minimal-spec builder uses a
+    pre-filtered dict in its own order, so it does NOT route here.)
+    """
+    return " ".join(
+        _signed_feature_chip(value, feature)
+        for feature, value in sort_spec(spec).items()
+    )
+
+
 def _muted_italic_span(text: str) -> str:
     """Inline ``<i>`` styled with the palette's muted-text colour.
 
@@ -337,10 +351,7 @@ def _render_shared_features(common: dict[str, str]) -> str:
             f"<p><b>Shared features:</b></p>"
             f"<p>{_muted_italic_span(EMPTY_SHARED_FEATURES_HINT)}</p>"
         )
-    chips = " ".join(
-        _signed_feature_chip(value, feature)
-        for feature, value in sort_spec(common).items()
-    )
+    chips = _signed_feature_chip_strip(common)
     return f"<p><b>Shared features:</b></p><p>{chips}</p>"
 
 
@@ -568,10 +579,7 @@ def render_features_tab_feat(feature_dict: dict[str, str]) -> str:
     """
     if not feature_dict:
         return _muted_italic_p("No features set yet.")
-    chips = " ".join(
-        _signed_feature_chip(value, feature)
-        for feature, value in sort_spec(feature_dict).items()
-    )
+    chips = _signed_feature_chip_strip(feature_dict)
     n = len(feature_dict)
     return (
         f"<p><b>Active query ({n} {_plural(n, 'feature')}):</b></p>"

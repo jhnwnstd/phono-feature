@@ -2481,6 +2481,27 @@ function _buildFeatureRow(feat) {
     return row;
 }
 
+/** Paint one feature row's +/- toggle state and the row's
+ *  data-query-value attribute (which drives the FEAT-mode row
+ *  background via CSS). ``value`` is "+", "-", or "" / undefined to
+ *  clear. The single home for this trio of dataset writes; mirrors
+ *  the desktop's FeatureRow._apply_query_style. */
+function setFeatureRowQuery(rec, value) {
+    rec.plus.dataset.active = value === "+" ? "true" : "false";
+    rec.minus.dataset.active = value === "-" ? "true" : "false";
+    if (value === "+" || value === "-") rec.row.dataset.queryValue = value;
+    else delete rec.row.dataset.queryValue;
+}
+
+/** Re-apply the FEAT-mode query markers from the current selection
+ *  onto every feature row (after a mode / match-mode switch rebuilds
+ *  the pane). Mirrors the desktop's restore_feature_selection loop. */
+function _restoreFeatureQueryMarkers() {
+    for (const [feat, rec] of state.feat_rows) {
+        setFeatureRowQuery(rec, state.selected_features[feat]);
+    }
+}
+
 function onFeatureClicked(feat, polarity) {
     activateMode(MODE.FEAT_TO_SEG);
     if (state.selected_features[feat] === polarity) {
@@ -2489,15 +2510,7 @@ function onFeatureClicked(feat, polarity) {
         state.selected_features[feat] = polarity;
     }
     const rec = state.feat_rows.get(feat);
-    if (rec) {
-        const cur = state.selected_features[feat];
-        rec.plus.dataset.active = cur === "+" ? "true" : "false";
-        rec.minus.dataset.active = cur === "-" ? "true" : "false";
-        // data-query-value drives the FEAT-mode row background via
-        // CSS (mirrors the desktop's _apply_query_style).
-        if (cur === "+" || cur === "-") rec.row.dataset.queryValue = cur;
-        else delete rec.row.dataset.queryValue;
-    }
+    if (rec) setFeatureRowQuery(rec, state.selected_features[feat]);
     scheduleAnalysis();
 }
 
@@ -2548,9 +2561,7 @@ function activateMode(mode) {
         state.selected_segments = transition.selected_segments.slice();
         state.selected_features = cloneFeatureSpec(transition.selected_features);
         for (const rec of state.feat_rows.values()) {
-            rec.plus.dataset.active = "false";
-            rec.minus.dataset.active = "false";
-            delete rec.row.dataset.queryValue;
+            setFeatureRowQuery(rec, "");
         }
         // FEAT→SEG: segment-button states are also painted by the
         // subsequent runAnalysis pass below (with ``suggested``
@@ -2588,13 +2599,7 @@ function activateMode(mode) {
                 }
             }
         }
-        for (const [feat, rec] of state.feat_rows) {
-            const cur = state.selected_features[feat];
-            rec.plus.dataset.active = cur === "+" ? "true" : "false";
-            rec.minus.dataset.active = cur === "-" ? "true" : "false";
-            if (cur === "+" || cur === "-") rec.row.dataset.queryValue = cur;
-            else delete rec.row.dataset.queryValue;
-        }
+        _restoreFeatureQueryMarkers();
     }
 
     // The bottom border keeps showing the loaded-inventory summary
@@ -5196,13 +5201,7 @@ function commitSegmentRename(c, oldName, proposed) {
     pushUndoEdit({
         kind: "segRename", index: c, oldName, newName: proposed,
     });
-    renderEditorGrid();
-    clearSelection();
-    markEditorDirty();
-    scheduleEditorCapRefresh();
-    setEditorStatus(`Renamed segment '${oldName}' to '${proposed}'.`);
-    // Restore grid focus so Ctrl-Z undoes the rename immediately.
-    focusEditorGrid();
+    _afterStructuralEdit(`Renamed segment '${oldName}' to '${proposed}'.`);
 }
 
 /** Return keyboard focus to the grid after a toolbar- or
@@ -5213,6 +5212,21 @@ function commitSegmentRename(c, oldName, proposed) {
  *  Restoring focus lets undo / redo work immediately after the edit. */
 function focusEditorGrid() {
     nodes.editorGridScroll.focus();
+}
+
+/** Shared tail for the editor's structural mutators (add / remove a
+ *  segment or feature, commit a rename). Re-renders the grid, drops
+ *  the selection, marks the inventory dirty, refreshes the cap
+ *  counters, shows ``statusMsg``, and returns focus to the grid so
+ *  Ctrl-Z / Ctrl-Y work immediately. The single home for this
+ *  six-step tail. */
+function _afterStructuralEdit(statusMsg) {
+    renderEditorGrid();
+    clearSelection();
+    markEditorDirty();
+    scheduleEditorCapRefresh();
+    setEditorStatus(statusMsg);
+    focusEditorGrid();
 }
 
 function addSegmentToState(seg) {
@@ -5227,14 +5241,9 @@ function addSegmentToState(seg) {
         seg,
         col: editorState.cells.map(() => ZERO_VALUE),
     });
-    renderEditorGrid();
-    clearSelection();
-    markEditorDirty();
-    scheduleEditorCapRefresh();
-    setEditorStatus(_formatTpl(
+    _afterStructuralEdit(_formatTpl(
         "added_segment_template", "Added segment '{seg}'.", { seg },
     ));
-    focusEditorGrid();
 }
 
 function addFeatureToState(feat) {
@@ -5245,14 +5254,9 @@ function addFeatureToState(feat) {
     editorState.features.push(feat);
     editorState.cells.push(row.slice());
     pushUndoEdit({ kind: "featAdd", index, feat, row });
-    renderEditorGrid();
-    clearSelection();
-    markEditorDirty();
-    scheduleEditorCapRefresh();
-    setEditorStatus(_formatTpl(
+    _afterStructuralEdit(_formatTpl(
         "added_feature_template", "Added feature '{feat}'.", { feat },
     ));
-    focusEditorGrid();
 }
 
 function removeSelectedSegment() {
@@ -5271,16 +5275,9 @@ function removeSelectedSegment() {
         row.splice(c, 1);
     }
     pushUndoEdit({ kind: "segRemove", index: c, seg, col });
-    renderEditorGrid();
-    clearSelection();
-    markEditorDirty();
-    scheduleEditorCapRefresh();
-    setEditorStatus(_formatTpl(
+    _afterStructuralEdit(_formatTpl(
         "removed_segment_template", "Removed segment '{seg}'.", { seg },
     ));
-    // Restore grid focus so Ctrl-Z undoes the deletion immediately,
-    // without the user first clicking a cell.
-    focusEditorGrid();
 }
 
 function removeSelectedFeature() {
@@ -5295,16 +5292,9 @@ function removeSelectedFeature() {
     editorState.features.splice(r, 1);
     editorState.cells.splice(r, 1);
     pushUndoEdit({ kind: "featRemove", index: r, feat, row });
-    renderEditorGrid();
-    clearSelection();
-    markEditorDirty();
-    scheduleEditorCapRefresh();
-    setEditorStatus(_formatTpl(
+    _afterStructuralEdit(_formatTpl(
         "removed_feature_template", "Removed feature '{feat}'.", { feat },
     ));
-    // Restore grid focus so Ctrl-Z undoes the deletion immediately,
-    // without the user first clicking a cell.
-    focusEditorGrid();
 }
 
 /** Write ``value`` to the selection (or the focused cell when
@@ -5717,6 +5707,15 @@ function _syncBridgeMatchModeToStoredState() {
     }
 }
 
+/** Set a toolbar toggle's accessible + hover label from one string so
+ *  the SR announcement (aria-label) and the hover tooltip (title)
+ *  cannot drift apart. Shared by the match-mode / colorblind / theme
+ *  toggles. */
+function setButtonLabel(btn, text) {
+    btn.title = text;
+    btn.setAttribute("aria-label", text);
+}
+
 function wireMatchModeToggle() {
     if (!nodes.matchModeBtn) return;
     // Tooltip strings come from the relayed STATUS_TEXT so a
@@ -5729,11 +5728,8 @@ function wireMatchModeToggle() {
             || "Switch to strict matching (only explicit +/- values match).")
         : (STATUS_TEXT.match_mode_tooltip_strict_active
             || "Allow underspecified matches (wildcard).");
-    const applyLabel = (mode) => {
-        const text = labelFor(mode);
-        nodes.matchModeBtn.title = text;
-        nodes.matchModeBtn.setAttribute("aria-label", text);
-    };
+    const applyLabel = (mode) =>
+        setButtonLabel(nodes.matchModeBtn, labelFor(mode));
     const stored = normalizeMatchMode(safeStorageGet("match_mode"));
     if (stored === MATCH_MODE.WILDCARD) {
         document.documentElement.dataset.matchMode = "wildcard";
@@ -5787,18 +5783,7 @@ function wireMatchModeToggle() {
                 // preserved selection onto the rebuilt rows (mirrors
                 // activateMode's restore loop).
                 if (state.mode === MODE.FEAT_TO_SEG) {
-                    for (const [feat, rec] of state.feat_rows) {
-                        const cur = state.selected_features[feat];
-                        rec.plus.dataset.active =
-                            cur === "+" ? "true" : "false";
-                        rec.minus.dataset.active =
-                            cur === "-" ? "true" : "false";
-                        if (cur === "+" || cur === "-") {
-                            rec.row.dataset.queryValue = cur;
-                        } else {
-                            delete rec.row.dataset.queryValue;
-                        }
-                    }
+                    _restoreFeatureQueryMarkers();
                 }
             }
         } catch (e) {
@@ -5817,11 +5802,8 @@ function wireColorblindToggle() {
         ? (STATUS_TEXT.palette_to_standard || "Switch to standard palette")
         : (STATUS_TEXT.palette_to_colorblind
             || "Switch to colorblind-friendly palette");
-    const applyLabel = (mode) => {
-        const text = labelFor(mode);
-        nodes.cbBtn.title = text;
-        nodes.cbBtn.setAttribute("aria-label", text);
-    };
+    const applyLabel = (mode) =>
+        setButtonLabel(nodes.cbBtn, labelFor(mode));
     const stored = normalizePaletteMode(safeStorageGet("palette_mode"));
     if (stored === PALETTE_MODE.COLORBLIND) {
         document.documentElement.dataset.cb = "on";
@@ -5871,11 +5853,8 @@ function wireThemeToggle() {
     const glyphFor = (theme) => theme === THEME.DARK
         ? (STATUS_TEXT.theme_glyph_dark || "☀")
         : (STATUS_TEXT.theme_glyph_light || "☾");
-    const applyLabel = (theme) => {
-        const text = labelFor(theme);
-        nodes.themeBtn.title = text;
-        nodes.themeBtn.setAttribute("aria-label", text);
-    };
+    const applyLabel = (theme) =>
+        setButtonLabel(nodes.themeBtn, labelFor(theme));
     const stored = normalizeTheme(safeStorageGet("theme"));
     if (stored === THEME.DARK) {
         document.documentElement.dataset.theme = THEME.DARK;
@@ -6088,9 +6067,7 @@ function clearAll() {
         rec.row.dataset.shared = "false";
         rec.row.dataset.contrastive = "false";
         _setRasterizedBadge(rec.badge, "·");
-        rec.plus.dataset.active = "false";
-        rec.minus.dataset.active = "false";
-        delete rec.row.dataset.queryValue;
+        setFeatureRowQuery(rec, "");
     }
     // Clearing the selection leaves the inventory loaded, so the
     // bottom border keeps its inventory summary untouched.
