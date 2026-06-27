@@ -36,8 +36,14 @@ def _index(group: list[str], seg: str) -> int:
 def test_l_family_orders_plus_then_base_then_minus(
     engine: FeatureEngine,
 ) -> None:
-    liquids = engine.grouped_segments["Liquids"]
-    assert _index(liquids, "ʟ+") < _index(liquids, "ʟ") < _index(liquids, "ʟ-")
+    # The ʟ family lives in Lateral Approximants: Hayes has no central
+    # approximant participating with these laterals, so they no longer
+    # relabel up into a "Liquids" cover class (see chart.consonants
+    # _RELABEL_PATTERNS). The +/base/- ordering is what this asserts.
+    laterals = engine.grouped_segments["Lateral Approximants"]
+    assert (
+        _index(laterals, "ʟ+") < _index(laterals, "ʟ") < _index(laterals, "ʟ-")
+    )
 
 
 def test_velar_plosive_family_orders_plus_then_base_then_minus(

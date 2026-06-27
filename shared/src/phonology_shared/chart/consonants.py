@@ -132,8 +132,14 @@ _MERGE_PARENT: dict[str, str] = {
     "Sibilants": "Fricatives",
     "Lateral Fricatives": "Fricatives",
     "Lateral Flaps": "Taps & Flaps",
-    "Trills": "Central Approximants",
-    "Taps & Flaps": "Central Approximants",
+    # A small Trills or Taps group merges up into Vibrants (the
+    # feature-justified trill+tap cover), NOT Central Approximants: a
+    # trill/tap is not an approximant, and routing it through Central
+    # Approximants was the path that let a place-blind trill (e.g. the
+    # bilabial /ʙ/) drift on into a Liquids relabel. Rhoticity is not
+    # recoverable from the features, so Trills/Taps never imply liquid.
+    "Trills": "Vibrants",
+    "Taps & Flaps": "Vibrants",
     "Implosives": "Plosives",
     "Ejective Plosives": "Plosives",
     "Ejective Fricatives": "Fricatives",
@@ -171,6 +177,17 @@ DISPLAY_ORDER: list[str] = [
     "Tones",
 ]
 # Origin-set -> display label for relational relabeling.
+#
+# "Liquids" only forms when Central Approximants participate. A central
+# approximant is the best feature-system proxy for an r-like rhotic
+# approximant, so its presence is what licenses calling a lateral +
+# vibrant cluster a liquid system. The features establish "trill",
+# "tap", and "lateral approximant"; they do NOT establish that a trill
+# or tap is rhotic. So "Lateral Approximants + Trills" (and the tap and
+# trill+tap variants) are deliberately absent here: relabeling those to
+# Liquids with no central-approximant anchor is what swept the place-
+# blind bilabial trill /ʙ/ into Liquids. Trills + Taps still merge to
+# the feature-justified "Vibrants" below.
 _RELABEL_PATTERNS: dict[frozenset[str], str] = {
     frozenset({"Trills", "Taps & Flaps"}): "Vibrants",
     frozenset({"Trills", "Central Approximants"}): "Rhotics",
@@ -191,13 +208,17 @@ _RELABEL_PATTERNS: dict[frozenset[str], str] = {
             "Taps & Flaps",
         }
     ): "Liquids",
-    frozenset({"Lateral Approximants", "Trills", "Taps & Flaps"}): "Liquids",
-    frozenset({"Lateral Approximants", "Taps & Flaps"}): "Liquids",
-    frozenset({"Lateral Approximants", "Trills"}): "Liquids",
 }
 _DERIVED_MERGES: list[tuple[frozenset[str], str]] = [
+    # Vibrants fold into an EXISTING Liquids (which only forms when a
+    # central approximant participated, see _RELABEL_PATTERNS), and
+    # Rhotics (already central-approximant-anchored) fold into Liquids
+    # with laterals. There is deliberately NO Vibrants + Lateral
+    # Approximants -> Liquids merge: that is "any lateral + any vibrant
+    # -> liquid" with nothing establishing rhoticity, the path that
+    # re-leaked /ʙ/ into Liquids after the relabel pass produced a
+    # Vibrants group.
     (frozenset({"Vibrants", "Liquids"}), "Liquids"),
-    (frozenset({"Vibrants", "Lateral Approximants"}), "Liquids"),
     (frozenset({"Rhotics", "Lateral Approximants"}), "Liquids"),
 ]
 
@@ -1091,12 +1112,12 @@ def group_segments(
     # Relabel-by-origin happens ONLY in the pass above, which fires
     # when every origin group is simultaneously small. Groups
     # combined later by _MERGE_PARENT keep the parent's label: a
-    # small Trills group absorbed into a large Central Approximants
-    # displays as Central Approximants, not Rhotics. A second
-    # origin-set relabel pass used to sit here, but it rebuilt its
-    # origin map from the already-merged assignment, so it could
-    # never fire; the bundled-inventory grouping snapshot pins the
-    # parent-label behaviour as the intended one.
+    # small Trills group absorbed up displays as Vibrants (its
+    # _MERGE_PARENT), never as Liquids, since no feature establishes
+    # the trill as rhotic. A second origin-set relabel pass used to
+    # sit here, but it rebuilt its origin map from the already-merged
+    # assignment, so it could never fire; the bundled-inventory
+    # grouping snapshot pins the parent-label behaviour as intended.
     for pair, label in _DERIVED_MERGES:
         present = [g for g in sorted(pair) if g in assignment]
         if len(present) < 2:
