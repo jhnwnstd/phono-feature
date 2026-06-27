@@ -994,6 +994,9 @@ def group_segments(
         is_consonant = not is_vowel_phoneme and not is_tone_phoneme
         if is_consonant:
             # Explicit declared-class primitives beat inferred manner.
+            # Precedence rhotic > flap > liquid: the most specific
+            # declaration wins, with the broad liquid cover checked
+            # last (and itself yielding to a lateral approximant).
             if seg_feats.get("rhotic", "0") == "+":
                 return "Rhotics"
             if seg_feats.get("flap", "0") == "+":
@@ -1209,22 +1212,37 @@ def group_segments(
                 assignment.setdefault(parent, []).extend(assignment.pop(gname))
                 changed = True
     if _LARYNGEAL_FEATURES & active_features:
-        laryngeal_segs: list[str] = []
+        # The "Laryngeals" row (h / ɦ / ʔ pulled out of their manner
+        # classes) is a convenience regroup, so it must not make the
+        # display WORSE by leaving a singleton behind. Two guards, in
+        # the spirit of the ``_should_break_out`` discipline the manner
+        # breakouts already use:
+        #   * stranding: never peel a group's laryngeals if that would
+        #     leave the group with exactly one member. A lone /ɦ/ reads
+        #     better beside the other fricatives than stranding /f/
+        #     alone in a singleton Fricatives row (the Hindi case).
+        #     Emptying the group (it was all laryngeal) is fine.
+        #   * worthwhileness: only raise the row once >= 2 members
+        #     qualify; a single laryngeal stays in its manner home.
+        # When a guard blocks the peel the laryngeals stay where they
+        # are (h/ɦ among the fricatives, ʔ among the plosives), which
+        # is the standard manner-by-place chart layout anyway.
+        peelable: dict[str, list[str]] = {}
         for gname in list(assignment.keys()):
             if gname == "Laryngeals":
                 continue
-            peeled = [
-                sym
-                for sym in assignment[gname]
-                if _is_laryngeal_candidate(norm[sym])
-            ]
-            if peeled:
-                for sym in peeled:
+            members = assignment[gname]
+            cands = [s for s in members if _is_laryngeal_candidate(norm[s])]
+            if cands and len(members) - len(cands) != 1:
+                peelable[gname] = cands
+        if sum(len(c) for c in peelable.values()) >= 2:
+            laryngeal_segs: list[str] = []
+            for gname, cands in peelable.items():
+                for sym in cands:
                     assignment[gname].remove(sym)
-                laryngeal_segs.extend(peeled)
+                laryngeal_segs.extend(cands)
                 if not assignment[gname]:
                     del assignment[gname]
-        if laryngeal_segs:
             assignment.setdefault("Laryngeals", []).extend(laryngeal_segs)
     return {
         name: sorted(

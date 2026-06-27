@@ -168,9 +168,7 @@
       "v",
       "θ",
       "ð",
-      "ʍ"
-    ],
-    "Laryngeals": [
+      "ʍ",
       "h"
     ],
     "Liquids": [
@@ -389,9 +387,7 @@
       "v",
       "ç",
       "x",
-      "ʁ"
-    ],
-    "Laryngeals": [
+      "ʁ",
       "h"
     ],
     "Lateral Approximants": [
@@ -610,9 +606,7 @@
       "d͡ʒʱ"
     ],
     "Fricatives": [
-      "f"
-    ],
-    "Laryngeals": [
+      "f",
       "ɦ"
     ],
     "Liquids": [
@@ -675,10 +669,7 @@
       "d͡ʒ"
     ],
     "Fricatives": [
-      "s"
-    ],
-    "Laryngeals": [
-      "ʔ",
+      "s",
       "h"
     ],
     "Liquids": [
@@ -696,7 +687,8 @@
       "t",
       "d",
       "k",
-      "ɡ"
+      "ɡ",
+      "ʔ"
     ],
     "Semivowels": [
       "j",
@@ -712,10 +704,7 @@
   },
   "indonesian_features.json": {
     "Fricatives": [
-      "s"
-    ],
-    "Laryngeals": [
-      "ʔ",
+      "s",
       "h"
     ],
     "Liquids": [
@@ -736,7 +725,8 @@
       "c",
       "ɟ",
       "k",
-      "ɡ"
+      "ɡ",
+      "ʔ"
     ],
     "Semivowels": [
       "j",
@@ -758,9 +748,7 @@
     ],
     "Fricatives": [
       "ɸ",
-      "ç"
-    ],
-    "Laryngeals": [
+      "ç",
       "h"
     ],
     "Nasals": [
@@ -814,9 +802,7 @@
     ],
     "Fricatives": [
       "s",
-      "sʰ"
-    ],
-    "Laryngeals": [
+      "sʰ",
       "h"
     ],
     "Lateral Approximants": [
@@ -1110,10 +1096,7 @@
   },
   "tobabatak_features.json": {
     "Fricatives": [
-      "s"
-    ],
-    "Laryngeals": [
-      "ʔ",
+      "s",
       "h"
     ],
     "Liquids": [
@@ -1135,7 +1118,8 @@
       "ɟ",
       "k",
       "kʰ",
-      "ɡ"
+      "ɡ",
+      "ʔ"
     ],
     "Vowels": [
       "i",
@@ -1154,9 +1138,7 @@
     ],
     "Fricatives": [
       "f",
-      "v"
-    ],
-    "Laryngeals": [
+      "v",
       "h"
     ],
     "Lateral Approximants": [
