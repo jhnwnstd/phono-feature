@@ -725,6 +725,13 @@ function applyBootstrap() {
     state.features = info.features;
     renderSegmentGrid(info.groups, info.vowel_chart);
     renderFeaturePanel(info.feature_groups);
+    // Paint the no-selection analysis hints ("Click a segment...")
+    // baked into the bootstrap so they land with the first frame
+    // instead of after Pyodide boots. The bridge-ready pass repaints
+    // the identical payload, which setAnalysisTabs skips. Tolerant of
+    // an older cached bootstrap without the field: the bridge fills it
+    // in then.
+    if (info.analysis_tabs) setAnalysisTabs(info.analysis_tabs);
     return true;
 }
 

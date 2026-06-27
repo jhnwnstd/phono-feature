@@ -1141,6 +1141,13 @@ def write_bootstrap() -> None:
         "from phonology_web import api\n"
         f"text = open({str(default_inv)!r}, encoding='utf-8-sig').read()\n"
         f"summary = api.load_inventory_json(text, {label!r})\n"
+        # Empty-selection analysis tabs ("Click a segment...") so the
+        # bootstrap render paints the no-selection hints with the first
+        # frame instead of after Pyodide boots; the bridge-ready pass
+        # returns the identical payload, so setAnalysisTabs's identity
+        # skip makes that repaint a no-op.
+        "summary['analysis_tabs'] = "
+        "api.analyze_segments([])['analysis_tabs']\n"
         "sys.stdout.write(json.dumps(summary, ensure_ascii=False))\n"
     )
     result = subprocess.run(
