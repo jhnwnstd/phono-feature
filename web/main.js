@@ -116,13 +116,56 @@ function initNodes() {
 const STATUS_KIND = Object.freeze({
     info: "info", success: "success", warning: "warning", error: "error",
 });
-/** Update the status bar. ``kind`` drives a leading icon glyph so
- *  success / error are visually distinct from informational
- *  messages without relying on a colour change alone. */
-const setStatus = (msg, kind = STATUS_KIND.info) => {
+// Pending flash-revert timer + the persistent status it is covering.
+// A transient flash (clipboard copy) restores this when it expires so
+// the inventory summary is never permanently erased by a copy.
+let _statusFlashTimer = null;
+let _statusFlashPrev = null;
+
+/** Low-level status-bar write (no flash bookkeeping). */
+const _setStatusText = (msg, kind) => {
     nodes.statusbar.textContent = msg;
     nodes.statusbar.title = msg;
     nodes.statusbar.dataset.kind = kind;
+};
+
+/** Update the status bar. ``kind`` drives a leading icon glyph so
+ *  success / error are visually distinct from informational
+ *  messages without relying on a colour change alone. This is the
+ *  PERSISTENT writer: it cancels any pending flash-revert so a stale
+ *  revert can't later overwrite a freshly loaded inventory summary. */
+const setStatus = (msg, kind = STATUS_KIND.info) => {
+    if (_statusFlashTimer !== null) {
+        clearTimeout(_statusFlashTimer);
+        _statusFlashTimer = null;
+        _statusFlashPrev = null;
+    }
+    _setStatusText(msg, kind);
+};
+
+/** Flash transient feedback for ``ms`` then revert to whatever
+ *  persistent status was showing first. Used for clipboard-copy
+ *  feedback so copying a segment never erases the inventory summary
+ *  (mirrors the desktop QStatusBar: a permanent ``set_summary`` under
+ *  a timed ``showMessage``; 2500 ms matches its copy timeout). Rapid
+ *  repeat flashes extend the window and still revert to the original
+ *  persistent message, not to a prior flash. */
+const flashStatus = (msg, kind = STATUS_KIND.info, ms = 2500) => {
+    if (_statusFlashTimer !== null) {
+        clearTimeout(_statusFlashTimer);
+    } else {
+        _statusFlashPrev = {
+            msg: nodes.statusbar.textContent,
+            kind: nodes.statusbar.dataset.kind || STATUS_KIND.info,
+        };
+    }
+    _setStatusText(msg, kind);
+    _statusFlashTimer = setTimeout(() => {
+        _statusFlashTimer = null;
+        const prev = _statusFlashPrev;
+        _statusFlashPrev = null;
+        if (prev) _setStatusText(prev.msg, prev.kind);
+    }, ms);
 };
 const setLoadingStatus = (msg) => { nodes.loadingStatus.textContent = msg; };
 
@@ -5978,8 +6021,12 @@ function copySegmentToClipboard(seg) {
     // web-only so it stays inline.
     const tpl = STATUS_TEXT.clipboard_copy_template
         || "Copied /{seg}/ to clipboard";
-    const onOk = () => setStatus(tpl.replace("{seg}", seg), STATUS_KIND.success);
-    const onFail = () => setStatus(`Could not copy /${seg}/`, STATUS_KIND.error);
+    // Flash (not setStatus) so the copy confirmation auto-reverts to
+    // the inventory summary instead of permanently replacing it.
+    const onOk = () =>
+        flashStatus(tpl.replace("{seg}", seg), STATUS_KIND.success);
+    const onFail = () =>
+        flashStatus(`Could not copy /${seg}/`, STATUS_KIND.error);
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(seg).then(onOk, onFail);
         return;
