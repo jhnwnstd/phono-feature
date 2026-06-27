@@ -610,6 +610,17 @@ dialog input[type="text"]:focus-visible {
   margin-top: 3px;
   flex-shrink: 0;
 }
+/* The card's accent border (and the radio's filled dot) already
+   signal the selection, so suppress the native radio's focus ring,
+   which renders as a stray blue square hugging the round dot.
+   Keyboard focus stays visible via the card's :focus-within border
+   below, so nothing is lost for non-pointer users. */
+.phoible-source-card input[type="radio"]:focus {
+  outline: none;
+}
+.phoible-source-card:focus-within {
+  border-color: var(--accent);
+}
 .phoible-source-body {
   flex: 1;
   display: flex;
@@ -2264,10 +2275,18 @@ progress {
 /* Keyboard focus indicator. A dashed inset outline so it reads as
    "cursor here" without competing with the solid-outline selection
    highlight. Applied independently of is-selected so a selected
-   focused cell gets both. */
+   focused cell gets both. The -3px offset lands the dashed ring on
+   the same 2px band as the is-selected box-shadow ring (which sits
+   just inside the collapsed 1px gridline): when a cell is both
+   selected and focused the two coincide, so the dashed reads as part
+   of the solid selection ring instead of a misaligned second square;
+   a focused-only cell still shows the dashed cursor on its own. The
+   -1px offset lands the 2px outline (which draws inward from the
+   offset line) on the [1px,3px] band the box-shadow ring occupies
+   just inside the collapsed 1px gridline. */
 .editor-grid td.is-focused {
   outline: 2px dashed var(--accent);
-  outline-offset: -2px;
+  outline-offset: -1px;
 }
 /* Header click affordance: cursor change so the user knows
    headers are interactive (the desktop builder gets this for

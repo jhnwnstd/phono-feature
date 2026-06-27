@@ -134,8 +134,8 @@ def inventory_sort_key(fname: str, label: str) -> tuple[int, str]:
 # STATUS_TEXT JSON.
 MATCH_MODE_TOOLTIP_STRICT_ACTIVE: str = (
     "Allow underspecified feature matches: segments with 0 or "
-    "absent values can form a set when no other valued feature "
-    "explicitly contradicts it."
+    "absent values can form a natural class when no other valued "
+    "feature explicitly contradicts it."
 )
 MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE: str = (
     "Switch to strict matching (only explicit +/- values match)."

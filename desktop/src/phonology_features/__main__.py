@@ -20,9 +20,44 @@ import sys
 import threading
 
 from PyQt6.QtCore import QCommandLineParser
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import (
+    QApplication,
+    QProxyStyle,
+    QStyle,
+    QStyleHintReturn,
+    QStyleOption,
+    QWidget,
+)
 
 _FALLBACK_GUARD_ENV = "FEATURES_QT_PLATFORM_FALLBACK"
+
+# Push tooltip hints back so they feel less eager on hover. Qt's
+# tooltip wake-up delay is the only place this can live: the web build
+# uses native ``title=`` tooltips whose timing the browser owns and
+# exposes no knob for, so there is deliberately no shared constant to
+# mirror here.
+_TOOLTIP_EXTRA_DELAY_MS = 750
+
+
+class _HoverDelayStyle(QProxyStyle):
+    """Fusion, but with a longer tooltip wake-up delay.
+
+    Overrides only ``SH_ToolTip_WakeUpDelay`` and delegates every other
+    style hint, metric, and paint call to the wrapped base style, so
+    the app looks identical and only the hover timing changes.
+    """
+
+    def styleHint(
+        self,
+        hint: QStyle.StyleHint,
+        option: QStyleOption | None = None,
+        widget: QWidget | None = None,
+        returnData: QStyleHintReturn | None = None,
+    ) -> int:
+        if hint == QStyle.StyleHint.SH_ToolTip_WakeUpDelay:
+            base = super().styleHint(hint, option, widget, returnData)
+            return base + _TOOLTIP_EXTRA_DELAY_MS
+        return super().styleHint(hint, option, widget, returnData)
 
 
 def _argv_requests_qt_platform(argv: list[str]) -> bool:
@@ -122,7 +157,7 @@ def _run_gui(argv: list[str]) -> int:
     icon_pix = QPixmap(64, 64)
     icon_pix.fill(QColor("#2563EB"))
     app.setWindowIcon(QIcon(icon_pix))
-    app.setStyle("Fusion")
+    app.setStyle(_HoverDelayStyle("Fusion"))
     # Seed Qt's default palette + app-wide background BEFORE any window
     # is constructed. Without this, the compositor's initial surface
     # is filled by Qt against its default light palette; in dark mode
