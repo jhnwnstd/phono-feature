@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from phonology_features._logging import get_logger
+from phonology_features.gui.controllers.theme import ThemeController
 from phonology_shared.data.inventory import Inventory, ValidationError
 from phonology_shared.data.limits import (
     MAX_FEATURES,
@@ -233,50 +234,16 @@ class InventoryBuilder(QMainWindow):
             }}
             """)
         self.addToolBar(toolbar)
-        btn_style = f"""
-            QPushButton {{
-                background: {C["bg"]};
-                color: {C["text"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-                padding: 0 12px;
-            }}
-            QPushButton:hover {{
-                background: {C["accent_light"]};
-                border: 1.5px solid {C["accent"]};
-                color: {C["accent"]};
-            }}
-        """
-        save_style = f"""
-            QPushButton {{
-                background: {C["btn_primary"]};
-                color: {C["btn_primary_text"]};
-                border: none;
-                border-radius: 6px;
-                padding: 0 16px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background: {C["btn_primary_hover"]};
-                color: {C["btn_primary_hover_text"]};
-            }}
-            """
+        # Shared with the main toolbar's nav buttons (same neutral
+        # box) and the filled action buttons (Save / Delete), via
+        # ThemeController so the styling lives in one place.
+        btn_style = ThemeController.nav_btn_style()
+        save_style = ThemeController.filled_btn_style("btn_primary", "0 16px")
         # Destructive action: red fill so it reads as "danger" against
         # the rest of the toolbar's neutral buttons.
-        self._delete_style_enabled = f"""
-            QPushButton {{
-                background: {C["btn_danger"]};
-                color: {C["btn_danger_text"]};
-                border: none;
-                border-radius: 6px;
-                padding: 0 16px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background: {C["btn_danger_hover"]};
-                color: {C["btn_danger_hover_text"]};
-            }}
-        """
+        self._delete_style_enabled = ThemeController.filled_btn_style(
+            "btn_danger", "0 16px"
+        )
         self._btn_style_enabled = btn_style
         # Disabled state: noticeably darker / more muted than the
         # active buttons so it visually recedes into the toolbar

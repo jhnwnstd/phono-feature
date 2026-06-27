@@ -103,6 +103,30 @@ class ThemeController:
         """
 
     @staticmethod
+    def filled_btn_style(family: str, padding: str) -> str:
+        """Solid-fill action-button QSS (Save / Delete / Create Grid).
+
+        ``family`` selects the palette colour group (``btn_primary``
+        or ``btn_danger``); ``padding`` sets the box padding (the
+        height-pinned toolbar buttons use ``0 16px``, dialog buttons
+        pad vertically with ``6px 20px``).
+        """
+        return f"""
+            QPushButton {{
+                background: {C[family]};
+                color: {C[f"{family}_text"]};
+                border: none;
+                border-radius: 6px;
+                padding: {padding};
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background: {C[f"{family}_hover"]};
+                color: {C[f"{family}_hover_text"]};
+            }}
+        """
+
+    @staticmethod
     def combo_style() -> str:
         """Inventory-dropdown QSS.
 

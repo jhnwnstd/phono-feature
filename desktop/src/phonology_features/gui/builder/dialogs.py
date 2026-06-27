@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from phonology_features.gui.controllers.theme import ThemeController
 from phonology_features.providers import available_providers
 from phonology_shared.data.limits import MAX_NAME_LENGTH
 from phonology_shared.editor.providers import FeatureProvider
@@ -366,20 +367,9 @@ class InputDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         row.addWidget(cancel_btn)
         ok_btn = QPushButton("Create Grid")
-        ok_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C["btn_primary"]};
-                color: {C["btn_primary_text"]};
-                border: none;
-                border-radius: 6px;
-                padding: 6px 20px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background: {C["btn_primary_hover"]};
-                color: {C["btn_primary_hover_text"]};
-            }}
-            """)
+        ok_btn.setStyleSheet(
+            ThemeController.filled_btn_style("btn_primary", "6px 20px")
+        )
         ok_btn.clicked.connect(self.accept)
         row.addWidget(ok_btn)
         return row

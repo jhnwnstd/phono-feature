@@ -345,99 +345,69 @@ def _css_var_name(palette_key: str) -> str:
     return palette_key.replace("_", "-").lower()
 
 
-def _load_palette_module() -> ModuleType:
-    """Import ``palette.py`` directly without bringing in the rest
-    of the desktop GUI package (the build runs outside the package
-    layout, so a normal import would fail).
+def _load_module(
+    path: Path, mod_name: str, *, register: bool = False
+) -> ModuleType:
+    """Side-load a single shared module file directly, outside the
+    package layout (the build runs against a bare interpreter in CI,
+    so a normal import would fail).
+
+    ``register=True`` inserts the module into ``sys.modules`` BEFORE
+    ``exec`` so a ``@dataclass`` defined in it can resolve its own
+    ``__module__`` (e.g. ``RegionConstraint`` validating its annotated
+    fields at class creation).
     """
-    palette_path = PRESENTATION_DIR / "palette.py"
-    spec = importlib.util.spec_from_file_location("_palette", palette_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"could not load {palette_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def _load_layout_module() -> ModuleType:
-    """Same trick as ``_load_palette_module`` for ``layout.py``. Used
-    by ``generate_layout_css`` to bake the adaptive-layout constants
-    into a CSS custom-property file the stylesheet then references.
-    """
-    layout_path = PRESENTATION_DIR / "layout.py"
-    spec = importlib.util.spec_from_file_location("_layout", layout_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"could not load {layout_path}")
-    module = importlib.util.module_from_spec(spec)
-    # ``@dataclass`` introspects via ``sys.modules[cls.__module__]``;
-    # register the module before exec so ``RegionConstraint`` can
-    # validate its annotated fields at class creation.
-    sys.modules["_layout"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def _load_constants_module() -> ModuleType:
-    """Side-load ``constants.py`` so ``generate_layout_css`` can read
-    the FONT_SIZE_* ladder without requiring the engine package to be
-    installed (this script runs against a bare interpreter in CI).
-    """
-    constants_path = PRESENTATION_DIR / "constants.py"
-    spec = importlib.util.spec_from_file_location(
-        "_constants",
-        constants_path,
-    )
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"could not load {constants_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["_constants"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def _load_chart_style_module() -> ModuleType:
-    """Side-load ``chart_style.py``: the vowel-chart visual policy
-    module. Same spec_from_file_location pattern as the other
-    loaders so the build runs against a bare interpreter; the
-    module imports ``constants.py`` and ``layout.py`` which we
-    therefore preload into ``sys.modules`` so the import succeeds.
-    """
-    # Preload deps so chart_style.py's top-level imports resolve.
-    constants_mod = _load_constants_module()
-    layout_mod = _load_layout_module()
-    # chart_style.py imports as
-    # ``phonology_shared.presentation.{constants,layout}`` so it
-    # finds an already-installed package, but in the bare-CI
-    # build interpreter we side-load both. Inject the package
-    # path so the chart_style import line resolves.
-    sys.modules["phonology_shared.presentation.constants"] = constants_mod
-    sys.modules["phonology_shared.presentation.layout"] = layout_mod
-    chart_path = PRESENTATION_DIR / "chart_style.py"
-    spec = importlib.util.spec_from_file_location(
-        "_chart_style",
-        chart_path,
-    )
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"could not load {chart_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["_chart_style"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def _load_inventory_setup_module() -> ModuleType:
-    """Side-load ``inventory_setup.py`` so the HTML-bake step can
-    substitute shared dialog strings (``SETUP_DIALOG_TITLE``,
-    ``SETUP_NAME_PLACEHOLDER``) into ``index.html``.
-    """
-    path = EDITOR_DIR / "setup.py"
-    spec = importlib.util.spec_from_file_location("_inv_setup", path)
+    spec = importlib.util.spec_from_file_location(mod_name, path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {path}")
     module = importlib.util.module_from_spec(spec)
-    sys.modules["_inv_setup"] = module
+    if register:
+        sys.modules[mod_name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _load_palette_module() -> ModuleType:
+    """``palette.py`` (theme colors), without the desktop GUI package."""
+    return _load_module(PRESENTATION_DIR / "palette.py", "_palette")
+
+
+def _load_layout_module() -> ModuleType:
+    """``layout.py``, baked into the layout CSS by
+    ``generate_layout_css``. Registered so its ``@dataclass`` fields
+    validate at class creation."""
+    return _load_module(
+        PRESENTATION_DIR / "layout.py", "_layout", register=True
+    )
+
+
+def _load_constants_module() -> ModuleType:
+    """``constants.py`` (the FONT_SIZE_* ladder), for
+    ``generate_layout_css``."""
+    return _load_module(
+        PRESENTATION_DIR / "constants.py", "_constants", register=True
+    )
+
+
+def _load_chart_style_module() -> ModuleType:
+    """``chart_style.py`` (vowel-chart visual policy). Preloads its
+    ``constants`` + ``layout`` deps under their package import names so
+    its top-level imports resolve in the bare-CI interpreter.
+    """
+    constants_mod = _load_constants_module()
+    layout_mod = _load_layout_module()
+    sys.modules["phonology_shared.presentation.constants"] = constants_mod
+    sys.modules["phonology_shared.presentation.layout"] = layout_mod
+    return _load_module(
+        PRESENTATION_DIR / "chart_style.py", "_chart_style", register=True
+    )
+
+
+def _load_inventory_setup_module() -> ModuleType:
+    """``setup.py``: shared dialog strings (``SETUP_DIALOG_TITLE``,
+    ``SETUP_NAME_PLACEHOLDER``) the HTML bake substitutes into
+    ``index.html``."""
+    return _load_module(EDITOR_DIR / "setup.py", "_inv_setup", register=True)
 
 
 def _build_limits_payload() -> dict[str, int]:

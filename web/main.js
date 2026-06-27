@@ -2632,12 +2632,18 @@ function _setRasterizedBadge(badgeEl, text) {
     );
 }
 
-function runSegToFeat(token) {
+// The two analysis directions run the same flow: call the bridge,
+// surface a failure, drop the result if a newer request superseded
+// this ``token``, then repaint tabs + segment states. They differ
+// only in the bridge fn + argument and whether feature-row states
+// are repainted (seg->feat owns the feature rows; feat->seg does
+// not touch them).
+function _runAnalysis(token, bridgeFn, arg, applyFeatureRows) {
     let result;
     try {
-        result = callBridge("analyze_segments", state.selected_segments);
+        result = callBridge(bridgeFn, arg);
     } catch (e) {
-        _surfaceBridgeFailure("analyze_segments", e);
+        _surfaceBridgeFailure(bridgeFn, e);
         return;
     }
     if (token !== state.analysis_token) return;
@@ -2645,22 +2651,15 @@ function runSegToFeat(token) {
     _applySegmentStateMap(
         result.segment_states, result.default_segment_state,
     );
-    _applyFeatureRowStates(result.feature_rows);
+    if (applyFeatureRows) _applyFeatureRowStates(result.feature_rows);
+}
+
+function runSegToFeat(token) {
+    _runAnalysis(token, "analyze_segments", state.selected_segments, true);
 }
 
 function runFeatToSeg(token) {
-    let result;
-    try {
-        result = callBridge("analyze_features", state.selected_features);
-    } catch (e) {
-        _surfaceBridgeFailure("analyze_features", e);
-        return;
-    }
-    if (token !== state.analysis_token) return;
-    setAnalysisTabs(result.analysis_tabs);
-    _applySegmentStateMap(
-        result.segment_states, result.default_segment_state,
-    );
+    _runAnalysis(token, "analyze_features", state.selected_features, false);
 }
 
 /** Surface a bridge-call failure to the user instead of letting it

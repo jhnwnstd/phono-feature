@@ -137,8 +137,7 @@ body {
   background: var(--panel);
   border-bottom: var(--border-thin) solid var(--border);
 }
-.toolbar select,
-.toolbar button {
+.toolbar :is(select, button) {
   height: var(--control-h-md);
   padding: 0 var(--space-lg);
   border: var(--border-std) solid var(--border);
@@ -160,8 +159,7 @@ body {
   min-width: 0;
   max-width: calc(100vw - var(--space-lg) * 2);
 }
-.toolbar select:hover,
-.toolbar button:hover {
+.toolbar :is(select, button):hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-light);
