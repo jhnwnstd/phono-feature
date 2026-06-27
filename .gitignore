@@ -82,3 +82,5 @@ docs/
 # the subset has clear instructions.
 web/scripts/font_cache/*
 !web/scripts/font_cache/README.md
+
+BRAND.md
