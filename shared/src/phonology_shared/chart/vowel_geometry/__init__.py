@@ -23,7 +23,7 @@ cell_boxes        box sizes, density tiers, pair-shift   the outline
 outline           silhouette, shrink solver, edge        cells
 (layer 4)         evaluators, polygon, cascade,          (``VowelChartCell``
                   row distribution                       is a forbidden name)
-furniture         row labels, column headers, bands,     cell positions
+furniture         row labels, column headers,            cell positions
 (layer 5)         diphthong overlay                      (reads rows +
                                                          outline only)
 pipeline          orchestration; the ONLY place boxes    n/a (imports all)
@@ -100,7 +100,6 @@ from phonology_shared.chart.vowel_geometry.furniture import (
 )
 from phonology_shared.chart.vowel_geometry.model import (
     VOWEL_CHART_TITLE,
-    VowelChartBand,
     VowelChartCell,
     VowelChartColHeader,
     VowelChartGeometry,
@@ -127,7 +126,6 @@ __all__ = [
     "DENSITY_TIER_ULTRA_THRESHOLD",
     "PAIR_DISPLAY_KINDS",
     "VOWEL_CHART_TITLE",
-    "VowelChartBand",
     "VowelChartCell",
     "VowelChartColHeader",
     "VowelChartGeometry",

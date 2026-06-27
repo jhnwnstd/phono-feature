@@ -1714,7 +1714,7 @@ function _silhouetteForDataWidth(sil, dwPx) {
 }
 
 /** Cascade: port of ``rounded_silhouette_polygon_points`` in
- *  ``shared/.../chart/vowels_layout.py``. Returns a CSS
+ *  ``shared/.../chart/vowel_geometry/outline.py``. Returns a CSS
  *  ``clip-path: polygon()`` points string with the four corners
  *  smoothed via quadratic Bezier. Must stay byte-identical to the
  *  Python helper; the test suite at

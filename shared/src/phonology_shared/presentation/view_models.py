@@ -594,6 +594,20 @@ def _vowel_chart_summary(
             "bottom_right": sil.bottom_right,
             "top_width": sil.top_width,
             "bottom_width": sil.bottom_width,
+            # Cascade source fields: let the web recompute the four
+            # corners at its LIVE data width (the
+            # ``_silhouetteForDataWidth`` port in main.js) so the
+            # outline hugs the outermost button flush at any width,
+            # exactly as the desktop does. Without these the JS cascade
+            # gates off ``cell_outer_extent_px == 0`` and silently
+            # no-ops, leaving the web on the canonical-width corners
+            # while desktop width-corrects (a small outline drift at
+            # off-canonical widths).
+            "front_anchor_at_top": sil.front_anchor_at_top,
+            "front_anchor_at_bottom": sil.front_anchor_at_bottom,
+            "back_anchor": sil.back_anchor,
+            "cell_outer_extent_px": sil.cell_outer_extent_px,
+            "front_cell_outer_extent_px": sil.front_cell_outer_extent_px,
             "back_right_pixel_offset": sil.back_right_pixel_offset,
         },
         "cols": [
@@ -627,9 +641,6 @@ def _vowel_chart_summary(
             }
             for row in geometry.rows
         ],
-        # Height-tier bands. Renderers iterate and paint;
-        # the midpoint math has already happened in the
-        # geometry layer so both UIs share the same edge clamps.
         "cells": [
             {
                 "row": cell.row,

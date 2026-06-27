@@ -290,21 +290,6 @@ class VowelChartSilhouette:
     back_right_pixel_offset: int = 0
 
 
-@dataclass(frozen=True, slots=True)
-class VowelChartBand:
-    """One height-tier band stripe. ``top_norm`` / ``bottom_norm``
-    are clamped to the silhouette's y span; renderers apply them
-    as ``top: top_norm * 100%; height: (bottom_norm - top_norm) *
-    100%`` (web) or the equivalent fillRect (desktop). ``tinted``
-    is True on alternate rows so the every-other-row rhythm is
-    decided once rather than recomputed in each renderer's loop.
-    """
-
-    top_norm: float
-    bottom_norm: float
-    tinted: bool
-
-
 @dataclass(frozen=True)
 class VowelChartGeometry:
     """Complete render-ready description of a vowel chart.
@@ -362,9 +347,3 @@ class VowelChartGeometry:
     # them as labelled chips below the vowel space. Empty for
     # monophthong-only inventories.
     diphthongs: tuple[str, ...] = ()
-    # Height-tier banding rectangles. One band per populated row,
-    # with ``(top_norm, bottom_norm)`` clamped to the silhouette
-    # span and ``tinted`` alternating every other row. Renderers
-    # paint as a translucent fill behind cells; midpoint math
-    # lives here so both renderers iterate, not compute.
-    bands: tuple[VowelChartBand, ...] = ()

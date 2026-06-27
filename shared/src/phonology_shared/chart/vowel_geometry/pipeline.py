@@ -17,7 +17,7 @@ pipeline is propose-then-confine:
    edge cells; the natural size and aspect cap settle.
 7. ``_confine_cells``: residual overhangs nudge inward. Shift-only;
    the outline is the HARD boundary for the buttons.
-8. ``furniture``: rows, headers, bands, and the diphthong overlay
+8. ``furniture``: rows, headers, and the diphthong overlay
    bake against the final outline.
 
 ``build_vowel_chart_geometry`` is the public entry point both UIs
@@ -49,7 +49,6 @@ from phonology_shared.chart.vowel_geometry.display_slots import (
     classify_cells,
 )
 from phonology_shared.chart.vowel_geometry.furniture import (
-    build_bands,
     build_col_headers,
     build_diphthong_segments,
     build_rows,
@@ -603,5 +602,4 @@ def build_vowel_chart_geometry(
         natural_data_width_px=sized.natural_w,
         natural_data_height_px=sized.natural_h,
         diphthongs=build_diphthong_segments(plan.placements),
-        bands=build_bands(rows, sized.silhouette),
     )

@@ -1,7 +1,7 @@
 """External labels and chart chrome (layer 5: furniture).
 
-Row labels, column headers, height-tier bands, and the diphthong
-overlay. Everything here is INFORMED BY the chart's structure (which
+Row labels, column headers, and the diphthong overlay. Everything
+here is INFORMED BY the chart's structure (which
 rows exist, where their anchors sit, what the outline looks like)
 but never DEPENDS ON button positions: labels anchor to the outline
 at their own y, headers project pure backness anchors, and arrow
@@ -19,7 +19,6 @@ from phonology_shared.chart.vowel_geometry.display_slots import (
     _BACKNESS_SLOT_ORDER,
 )
 from phonology_shared.chart.vowel_geometry.model import (
-    VowelChartBand,
     VowelChartColHeader,
     VowelChartRow,
     VowelChartSilhouette,
@@ -159,28 +158,3 @@ def build_diphthong_segments(
         for seg, placement in placements.items()
         if placement.secondary is not None
     )
-
-
-def build_bands(
-    rows: tuple[VowelChartRow, ...],
-    silhouette: VowelChartSilhouette,
-) -> tuple[VowelChartBand, ...]:
-    """Height-tier bands: one stripe per populated row, clamped to
-    the silhouette's vertical span, with ``tinted`` alternating so
-    the every-other-row rhythm is decided once here rather than
-    recomputed by each renderer.
-    """
-    row_ys = tuple(r.chart_y for r in rows)
-    out: list[VowelChartBand] = []
-    n_rows = len(row_ys)
-    for i, y in enumerate(row_ys):
-        above = (row_ys[i - 1] + y) / 2 if i > 0 else silhouette.top_y
-        below = (
-            (y + row_ys[i + 1]) / 2 if i < n_rows - 1 else silhouette.bottom_y
-        )
-        out.append(
-            VowelChartBand(
-                top_norm=above, bottom_norm=below, tinted=i % 2 == 0
-            )
-        )
-    return tuple(out)
