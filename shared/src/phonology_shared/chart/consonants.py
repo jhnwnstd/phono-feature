@@ -7,16 +7,30 @@ is keyed to the active feature set so inventories that lack a feature
 skip the related step.
 
 Place of articulation is derived from distinctive features rather
-than read as a primitive: there is no ``"velar"`` or ``"uvular"``
+than read as a primitive. There is no ``"velar"`` or ``"uvular"``
 feature in standard feature theory; those are display categories
-inferred from ``dorsal``/``high``/``back``/``front`` etc. The same
-discipline applies elsewhere in the module: laryngeal / phonation
-behaviour is derived from ``voice``/``spreadgl``/``constrgl`` plus a
-small set of accepted convenience aliases (``ejective``,
-``implosive``, ``breathy``, ``creaky``, ``slackvoice``,
-``stiffvoice``); secondary articulation is derived from the
-underlying place + ``round`` evidence, NOT from invented
-``"velarized"`` / ``"palatalized"`` primitives.
+inferred from ``dorsal``/``high``/``back``/``front`` etc.
+
+The same discipline governs the optional descriptive primitives an
+inventory author may supply. Standard distinctive-feature evidence is
+consulted FIRST, and a small set of primitive aliases is accepted
+only when the standard bundle cannot establish the display category.
+
+  * Laryngeal / phonation reads ``voice``/``spreadgl``/``constrgl``
+    first, then the ``ejective`` / ``implosive`` / ``breathy`` /
+    ``creaky`` / ``slackvoice`` / ``stiffvoice`` aliases.
+  * Secondary articulation reads ``round`` / ``secondary*`` place
+    evidence first, then the optional ``labialized`` / ``palatalized``
+    / ``velarized`` / ``pharyngealized`` aliases.
+  * The relational classes accept explicit ``rhotic`` (a declared
+    ``Rhotics`` member, since rhoticity is not recoverable from
+    features), ``liquid`` (the ``Liquids`` cover when nothing more
+    specific claims the segment), and ``flap`` (folded into ``Taps &
+    Flaps``).
+
+All of these are display-grouping reads only. They do not change
+feature-query behaviour beyond the inventory simply containing the
+feature.
 """
 
 from __future__ import annotations
@@ -941,6 +955,27 @@ def group_segments(
 
         ``click:+`` always wins regardless of how many other features
         match broader obstruent classes.
+
+        Three optional declared-class primitives are honoured for
+        consonants, since the standard feature bundle cannot recover
+        them and an inventory author may state them outright:
+
+          * ``rhotic:+`` routes to ``Rhotics``. The declared specific
+            class beats feature-inferred manner (rhoticity is not
+            derivable from the symbol or place). Gated to consonants:
+            ``rhotic`` is also a vowel feature (``ɚ``/``ɝ``).
+          * ``flap:+`` folds into ``Taps & Flaps`` (some inventories
+            split tap and flap; the display groups them together).
+          * ``liquid:+`` anchors the ``Liquids`` cover, yielding only
+            to a more specific lateral approximant (``+lateral`` falls
+            through to the manner match -> Lateral Approximants).
+            Without the anchor a declared liquid, being itself a
+            sonorant continuant, would always be claimed by the generic
+            Central Approximants spec.
+
+        These are read only here, in display grouping; they do not
+        change feature-query behaviour (a query against ``liquid`` or
+        ``rhotic`` still behaves like any other inventory feature).
         """
         if seg_feats.get("click", "0") == "+":
             return "Clicks"
@@ -956,6 +991,21 @@ def group_segments(
             and consonantal != "+"
             and syllabic != "+"
         )
+        is_consonant = not is_vowel_phoneme and not is_tone_phoneme
+        if is_consonant:
+            # Explicit declared-class primitives beat inferred manner.
+            if seg_feats.get("rhotic", "0") == "+":
+                return "Rhotics"
+            if seg_feats.get("flap", "0") == "+":
+                return "Taps & Flaps"
+            # ``liquid:+`` anchors Liquids, but a lateral approximant is
+            # the more specific group (the one the policy names), so a
+            # ``+lateral`` segment falls through to the manner match.
+            if (
+                seg_feats.get("liquid", "0") == "+"
+                and seg_feats.get("lateral", "0") != "+"
+            ):
+                return "Liquids"
         matches = [
             (
                 name,
@@ -1120,6 +1170,19 @@ def group_segments(
     # grouping snapshot pins the parent-label behaviour as intended.
     for pair, label in _DERIVED_MERGES:
         present = [g for g in sorted(pair) if g in assignment]
+        if label == "Liquids":
+            # An explicit ``liquid:-`` on every member of a group is a
+            # declaration that they are NOT liquids; never force such a
+            # group (e.g. a declared +rhotic -liquid set) into the
+            # Liquids cover. This is a no-op for any inventory whose
+            # segments do not carry an explicit ``liquid`` feature.
+            present = [
+                g
+                for g in present
+                if not all(
+                    norm[s].get("liquid", "0") == "-" for s in assignment[g]
+                )
+            ]
         if len(present) < 2:
             continue
         if any(g in _FROZEN_GROUPS for g in present):
