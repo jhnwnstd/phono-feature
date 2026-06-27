@@ -195,6 +195,14 @@ def run_for_browser(browser_type, label: str) -> int:
             browser.close()
             return rc
 
+    # Editor "New" transaction rollback (resets its own viewport). Runs
+    # last so its inventory swap + rollback cannot disturb the layout
+    # assertions above.
+    rc = run_editor_rollback_check(page, label)
+    if rc != 0:
+        browser.close()
+        return rc
+
     if console_errors or page_errors:
         print(
             "  FAIL: console / page errors fired during run",
@@ -272,6 +280,65 @@ def run_baseline_checks(page, label: str) -> int:
         f"  analysis: selection={len(selection_html)}B,"
         f" features={len(features_html)}B"
     )
+    return 0
+
+
+def run_editor_rollback_check(page, label: str) -> int:
+    """Regression guard for the editor "New" transaction: creating a new
+    inventory via the builder's New and backing out WITHOUT saving must
+    roll the engine back to the previously loaded inventory, not leave
+    the unsaved one behind (with the old name).
+    """
+    page.set_viewport_size({"width": 1280, "height": 720})
+    sig_js = (
+        "() => [...document.querySelectorAll('#seg-grid .seg-btn')]"
+        ".map(b => b.dataset.seg).join(',')"
+    )
+    before = page.evaluate(sig_js)
+    if not before:
+        print("  editor-rollback: no seg-grid, skipping")
+        return 0
+    page.click("#builder-btn")
+    page.wait_for_timeout(150)
+    page.click("#editor-new-btn")
+    try:
+        page.wait_for_selector("#setup-dialog[open]", timeout=10_000)
+    except Exception:  # noqa: BLE001
+        print("  FAIL: setup dialog did not open", file=sys.stderr)
+        return 1
+    # Fill from the placeholder defaults (a smaller, different inventory
+    # than the default) and submit.
+    page.evaluate(
+        "() => {"
+        " const s = document.querySelector('#setup-segments-input');"
+        " const f = document.querySelector('#setup-features-input');"
+        " document.querySelector('#setup-name-input').value = 'SMOKE_NEW';"
+        " s.value = s.placeholder; f.value = f.placeholder;"
+        " document.querySelector('#setup-form').requestSubmit();"
+        "}"
+    )
+    page.wait_for_timeout(700)
+    if page.evaluate(sig_js) == before:
+        print("  FAIL: 'New' did not swap the inventory", file=sys.stderr)
+        return 1
+    # Back out; accept the discard confirm (default Playwright behaviour
+    # would dismiss it, cancelling the close).
+    page.once("dialog", lambda d: d.accept())
+    page.click("#editor-exit-btn")
+    page.wait_for_timeout(700)
+    after = page.evaluate(sig_js)
+    hidden = page.evaluate(
+        "() => document.querySelector('#editor-view').hidden"
+    )
+    if after != before or not hidden:
+        print(
+            "  FAIL: back-out did not restore the original inventory "
+            f"(before#={before.count(',') + 1}, "
+            f"after#={after.count(',') + 1}, editor_hidden={hidden})",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"  editor rollback ok (restored {after.count(',') + 1} segments)")
     return 0
 
 

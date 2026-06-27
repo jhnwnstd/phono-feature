@@ -3159,6 +3159,24 @@ function wireSetupDialog() {
             cancelProviderRefresh();
             refreshProviderFeatures();
         }
+        // "New" runs only from inside the editor; the bridge call below
+        // swaps the live engine to the new (UNSAVED) inventory. Capture
+        // the committed inventory first so backing out of the editor can
+        // roll the engine back rather than letting the new one persist.
+        // Snapshot once per session: a second "New" keeps the original
+        // rollback target.
+        const editorOpen = !nodes.editorView.hidden;
+        let committedSnapshot = null;
+        if (editorOpen && !editorState.engineReplaced) {
+            try {
+                committedSnapshot = {
+                    json: callBridge("serialize_current_inventory"),
+                    dropdownValue: nodes.inventoryPicker.value,
+                };
+            } catch (_) {
+                committedSnapshot = null;
+            }
+        }
         try {
             const info = callBridge(
                 "create_new_inventory",
@@ -3171,6 +3189,12 @@ function wireSetupDialog() {
                 ? ` via ${chosenProvider}`
                 : "";
             applyInventoryInfo(info);
+            if (editorOpen) {
+                if (committedSnapshot) {
+                    editorState.committedSnapshot = committedSnapshot;
+                }
+                editorState.engineReplaced = true;
+            }
             setStatus(
                 `Created ${info.name} `
                 + `(${info.segments.length} segments, `
@@ -3749,6 +3773,16 @@ const editorState = {
     focused: null,        // {r, c}, fallback target when no selection
     undoStack: [],
     redoStack: [],
+    // Transaction guard for the "New" path. The editor stages cell +
+    // name edits in editorState and only mutates the engine on
+    // Save-as, but "New" (the setup dialog) swaps the live engine to a
+    // brand-new inventory up front. ``engineReplaced`` records that an
+    // UNSAVED inventory is sitting in the engine; ``committedSnapshot``
+    // is the serialized inventory (+ its dropdown selection) that was
+    // active before the swap, so backing out can roll the engine back
+    // instead of letting the new inventory secretly persist.
+    engineReplaced: false,
+    committedSnapshot: null,
 };
 
 // Cycle ladder, value-key map, move-key map, and the undo depth
@@ -3855,12 +3889,24 @@ function wireBuilderEditor(setupDialog) {
         nodes.editorGridScroll.focus();
     };
     const closeEditor = () => {
-        if (editorState.dirty
+        // "Unsaved" covers both staged grid edits AND a new inventory
+        // created via "New" that was never saved: backing out of either
+        // must not silently keep the work.
+        const hasUnsaved = editorState.dirty || editorState.engineReplaced;
+        if (hasUnsaved
             && !confirm("Discard unsaved changes to the inventory?")) {
             return;
         }
+        // Roll the engine back to the inventory that was committed when
+        // "New" replaced it, so the unsaved inventory does not persist
+        // behind the editor.
+        if (editorState.engineReplaced) {
+            restoreCommittedInventory();
+        }
         editorState.open = false;
         editorState.dirty = false;
+        editorState.engineReplaced = false;
+        editorState.committedSnapshot = null;
         clearSelection();
         editorState.undoStack.length = 0;
         editorState.redoStack.length = 0;
@@ -5237,9 +5283,56 @@ function applyValueToSelection(value) {
  * engine-swap-with-identical-content that would flush analysis
  * caches and clear the undo history for no reason.
  */
+/**
+ * Roll the engine back to the inventory snapshotted before "New"
+ * replaced it (see ``editorState.committedSnapshot``). Re-loads the
+ * serialized inventory so the engine, the rendered panels, the
+ * statusbar, and the dropdown all return to the committed state; the
+ * unsaved new inventory is discarded.
+ */
+function restoreCommittedInventory() {
+    const snap = editorState.committedSnapshot;
+    if (!snap) return;
+    try {
+        const info = callBridge("load_inventory_json", snap.json, "");
+        applyInventoryInfo(info);
+        setInventoryStatus(info);
+        // Restore whatever the dropdown showed for the committed
+        // inventory (a bundled file value, a PHOIBLE entry, or "" if it
+        // was itself unlisted). Programmatic ``.value`` does not fire a
+        // ``change`` event, so this does not re-trigger a load.
+        nodes.inventoryPicker.value = snap.dropdownValue;
+    } catch (e) {
+        // Best-effort: a failed restore leaves the new inventory in
+        // place, no worse than before this guard existed.
+        setStatus(
+            bridgeErrorMessage(e, "Could not restore the previous inventory."),
+            STATUS_KIND.error,
+        );
+    }
+}
+
+/**
+ * The active inventory has just been saved to a file, so it is the
+ * committed state now: drop the rollback marker (a later back-out
+ * keeps it) and deselect the dropdown, since a saved inventory is not
+ * one of the listed bundled / PHOIBLE options. The statusbar carries
+ * its name instead.
+ */
+function finishInventoryTransaction() {
+    editorState.engineReplaced = false;
+    editorState.committedSnapshot = null;
+    nodes.inventoryPicker.selectedIndex = -1;
+}
+
 function commitAndDownload() {
     if (!editorState.dirty) {
         downloadCurrentInventory();
+        // A "New" inventory saved with no further edits is committed by
+        // the download itself; stop tracking it for rollback.
+        if (editorState.engineReplaced) {
+            finishInventoryTransaction();
+        }
         setEditorStatus("Downloaded current inventory (no edits to commit).");
         return;
     }
@@ -5260,6 +5353,7 @@ function commitAndDownload() {
     applyInventoryInfo(info);
     refreshEditorFromCurrent();
     downloadCurrentInventory();
+    finishInventoryTransaction();
     setEditorStatus(`Saved as ${info.name}.`);
 }
 
