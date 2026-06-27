@@ -386,10 +386,11 @@ class VowelChartWidget(QWidget):
         diph_font.setWeight(QFont.Weight(cs.SEG_GROUP_HEADER_FONT_WEIGHT))
         self._diphthong_label = QLabel("DIPHTHONGS", self)
         self._diphthong_label.setFont(diph_font)
-        # Centered over the chip row so the diphthong section reads as a
-        # balanced block under the trapezoid rather than left-jammed.
+        # Left-aligned so the header sits flush with the chart's left
+        # edge, directly above the chip row that fills left-to-right
+        # under it. Matches the segment-class headers, left-aligned too.
         self._diphthong_label.setAlignment(
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
         self._diphthong_label.setStyleSheet(self._DIPH_INACTIVE)
         self._diphthong_label.hide()
@@ -408,7 +409,7 @@ class VowelChartWidget(QWidget):
         # overlap). ``BTN_GAP`` matches the segment grid's spacing so
         # the chips share the seg-button rhythm.
         self._chip_strip_layout = FlowLayout(
-            self._diphthong_chip_strip, gap=BTN_GAP, center=True
+            self._diphthong_chip_strip, gap=BTN_GAP, center=False
         )
         self._diphthong_chip_strip.hide()
         # Floor for ``set_target_width``: the geometry's natural
@@ -924,6 +925,28 @@ class VowelChartWidget(QWidget):
         container.show()
         return container
 
+    def _diphthong_left_inset(self, dw: int) -> int:
+        """Horizontal px from the data area's left edge to the
+        trapezoid's BOTTOM-LEFT corner (where the slanted front edge
+        meets the bottom edge), so the diphthong footer starts flush
+        under the silhouette's front slant instead of the data area's
+        left edge.
+
+        Reads the SAME width-corrected ``bottom_left`` the outline
+        paints its bottom-left corner from (the ``paintEvent``
+        cascade), so the footer and that corner land on the same pixel
+        at every width. Width-only, so it is safe to call from
+        :py:meth:`_chip_strip_height` without the footer-height
+        circularity.
+        """
+        if dw <= 0:
+            return 0
+        sil = self._silhouette
+        if sil is None:
+            sil = vowel_silhouette(self._shape)
+        sil = silhouette_for_data_width(sil, dw)
+        return max(0, round(sil.bottom_left * dw))
+
     def _chip_strip_height(self) -> int:
         """Vertical pixels the diphthong chip strip needs. Zero when
         the inventory has no diphthongs; otherwise the exact height
@@ -940,6 +963,11 @@ class VowelChartWidget(QWidget):
         # wrapped lines in lock-step (the old grid estimate could
         # disagree with the built layout and overlap).
         strip_w = max(0, self.width() - VOWEL_LABEL_W - self._PAD_R)
+        # The strip now starts at the trapezoid's bottom-left corner,
+        # so it is narrower than the full data width. Measure the wrap
+        # at that narrower width or dense inventories (Korean PHOIBLE,
+        # 12 diphthongs) under-reserve height and overflow the footer.
+        strip_w = max(0, strip_w - self._diphthong_left_inset(strip_w))
         if strip_w <= 0:
             return SEG_BTN_H
         return max(SEG_BTN_H, self._chip_strip_layout.heightForWidth(strip_w))
@@ -986,9 +1014,22 @@ class VowelChartWidget(QWidget):
             strip_h = self._chip_strip_height()
             label_h = self._diphthong_label.sizeHint().height()
             footer_top = self.height() - self._PAD_B - self._footer_height()
-            self._diphthong_label.setGeometry(dx, footer_top, dw, label_h)
+            # Start the footer at the trapezoid's bottom-left corner (the
+            # foot of the front slant), not the data area's left edge, so
+            # the label + chips sit flush under the silhouette's
+            # bottom-left edge. The width shrinks to match, so chips still
+            # wrap at the data area's right (back) edge. Mirrors the web
+            # ``--vowel-diph-indent``.
+            footer_left = dx + self._diphthong_left_inset(dw)
+            footer_w = max(0, dx + dw - footer_left)
+            self._diphthong_label.setGeometry(
+                footer_left, footer_top, footer_w, label_h
+            )
             self._diphthong_chip_strip.setGeometry(
-                dx, footer_top + label_h + self._FOOTER_GAP_PX, dw, strip_h
+                footer_left,
+                footer_top + label_h + self._FOOTER_GAP_PX,
+                footer_w,
+                strip_h,
             )
         if self._title_label is not None:
             # Give the title the FULL data-area box and let its

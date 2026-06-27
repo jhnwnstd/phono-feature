@@ -1892,6 +1892,17 @@ function _buildVowelChart(chart) {
             dataEl.style.setProperty(
                 `--vowel-${shape}-rounded-points`, polyStr,
             );
+            // Anchor the diphthong footer (label + chip strip) to the
+            // trapezoid's BOTTOM-LEFT corner instead of the data area's
+            // left edge: indent it by the same ``bottom_left`` fraction
+            // ``silAdj`` paints the polygon's bottom-left corner from,
+            // in px at the live width. Set on ``chartEl`` (the grid
+            // container) so the footer grid items inherit it; recomputed
+            // here on every resize alongside the polygon.
+            chartEl.style.setProperty(
+                "--vowel-diph-indent",
+                Math.max(0, silAdj.bottom_left * dw) + "px",
+            );
             // Same trigger set as the polygon (first layout +
             // every resize): re-derive the stack button heights
             // from the rows' slot budgets at the height we just
