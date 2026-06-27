@@ -1520,9 +1520,12 @@ class InventoryBuilder(QMainWindow):
         # second action quietly do nothing.
         if self._save_in_flight:
             self._wait_for_save()
+        # ``_write_json`` kicks off the async write. ``_current_path`` +
+        # the title are adopted only once the write is CONFIRMED, in the
+        # save controller's success branch. Setting them here would
+        # leave a phantom backing file (and a falsely "saved" meta strip
+        # + live Delete button) on a validation-abort or a failed write.
         self._write_json(path)
-        self._current_path = path
-        self._update_title()
 
     def _delete_inventory(self) -> None:
         """Delete the on-disk file for the currently-loaded inventory.

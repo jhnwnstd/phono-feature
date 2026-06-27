@@ -1107,6 +1107,20 @@ class MainWindow(QMainWindow):
                 inventory_load_failure_message(fname=fname, issue=e.issues[0])
             )
             self.analysis.set_html(render_validation_report(e.issues))
+            # The combo was already moved to the failed inventory (the
+            # dropdown selection or Browse). The engine and
+            # ``_current_path`` still hold the previously-loaded
+            # inventory, so move the combo back: it must not name an
+            # inventory that is not actually loaded. ``activated`` is
+            # user-only, so a programmatic setCurrentIndex does not
+            # re-fire the load. Index 0 is the disabled placeholder,
+            # used when nothing was previously loaded.
+            idx = (
+                self.inventory_combo.findData(self._current_path)
+                if self._current_path
+                else -1
+            )
+            self.inventory_combo.setCurrentIndex(idx if idx >= 0 else 0)
             return
         # Swap engines: grouping/normalization caches live on the
         # engine (cached_property), so a new engine = fresh caches.
@@ -1711,8 +1725,14 @@ class MainWindow(QMainWindow):
             return
         # Feature pane filter is mode-aware; rebuild it before re-
         # running the analysis so the rows the new mode wants to
-        # surface are present.
+        # surface are present. The rebuild clears the live FEAT query,
+        # so capture it first and re-apply it onto the rebuilt rows
+        # (dropping features the new mode no longer surfaces) through
+        # the same restore loop a SEG↔FEAT switch uses - mirroring the
+        # web, which keeps the query across a strict↔wildcard toggle.
+        saved_query = dict(self._selected_features)
         self._populate_features()
+        self._mode_ctrl.restore_feature_selection(saved_query)
         self._run_pending_update()
 
     def _update_seg_to_feat(self) -> None:

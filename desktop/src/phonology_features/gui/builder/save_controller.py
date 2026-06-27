@@ -217,8 +217,12 @@ class _SaveController(QObject):
             # start; any edit made during the worker re-dirtied it
             # via _commit_edit (the single chokepoint every edit
             # path goes through), which is the authoritative source
-            # of truth here.
+            # of truth here. The write is confirmed, so adopt the path
+            # as the backing file NOW (not optimistically at save start)
+            # and refresh the title + meta strip.
             _log.info("save complete: %s", basename)
+            self._b._current_path = path
+            self._b._update_title()
             self._status.showMessage(f"Saved to {basename}")
         self.save_drained.emit()
 

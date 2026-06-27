@@ -799,6 +799,21 @@ function applyInventoryInfo(info) {
     setStatusSourceLink(info.source_url);
 }
 
+/**
+ * The active inventory is NOT one of the listed dropdown options - it
+ * was uploaded, created, renamed, or saved-as - so deselect the picker
+ * rather than let it keep naming a bundled / PHOIBLE entry that is not
+ * actually loaded. The active name lives in the statusbar instead.
+ * Single home for this invariant: every engine-identity change that
+ * does not originate from the dropdown routes through here, so a
+ * picker selection can never outlive the inventory it named. (The
+ * dropdown's own change handler is the one path that KEEPS its
+ * selection, by not calling this.)
+ */
+function markInventoryUnlisted() {
+    nodes.inventoryPicker.selectedIndex = -1;
+}
+
 /** Paint the analysis pane's no-selection hints ("Click a segment to
  *  inspect it." etc.) from the shared view-model so the tabs are never
  *  blank while an inventory is loaded. Pre-bridge (boot bootstrap) the
@@ -2868,10 +2883,7 @@ function wireUploadDownload() {
         }
         const text = await file.text();
         await loadInventoryText(text, file.name);
-        // An uploaded file replaces the engine state; deselect the
-        // dropdown so no bundled or PHOIBLE entry claims to be the
-        // loaded one. The PHOIBLE group itself stays available.
-        nodes.inventoryPicker.selectedIndex = -1;
+        markInventoryUnlisted();
         ev.target.value = "";
     });
     // Save-as lives on the editor toolbar only; the main toolbar
@@ -2899,8 +2911,10 @@ function downloadCurrentInventory() {
         // versions have not actually started the download by the time
         // a synchronous revoke runs.
         setTimeout(() => URL.revokeObjectURL(url), 0);
+        return true;
     } catch (e) {
         setStatus(`Download failed: ${e.message}`, STATUS_KIND.error);
+        return false;
     }
 }
 
@@ -2940,6 +2954,9 @@ function wireRename() {
         try {
             const result = callBridge("rename_current_inventory", newName);
             state.inventory_name = result.name;
+            // The renamed inventory no longer matches its dropdown
+            // option's label, so it is no longer a listed selection.
+            markInventoryUnlisted();
             setStatus(`Renamed to ${result.name}.`, STATUS_KIND.success);
             errorBox.textContent = "";
             close();
@@ -3189,6 +3206,11 @@ function wireSetupDialog() {
                 ? ` via ${chosenProvider}`
                 : "";
             applyInventoryInfo(info);
+            // The new inventory is not a listed dropdown option; deselect
+            // the picker so it never names it. This defends the restore +
+            // save exits directly instead of relying on the editor chrome
+            // covering a stale picker.
+            markInventoryUnlisted();
             if (editorOpen) {
                 if (committedSnapshot) {
                     editorState.committedSnapshot = committedSnapshot;
@@ -3785,6 +3807,14 @@ const editorState = {
     committedSnapshot: null,
 };
 
+/** True when the editor holds work a discard / back-out / page unload
+ *  would lose: staged grid or name edits (``dirty``) OR a created-but-
+ *  unsaved inventory sitting in the engine (``engineReplaced``). Single
+ *  source so the Back guard and the beforeunload guard cannot drift. */
+function editorHasUnsavedWork() {
+    return editorState.dirty || editorState.engineReplaced;
+}
+
 // Cycle ladder, value-key map, move-key map, and the undo depth
 // cap. All fetched from the bridge at the editor's first open;
 // the desktop's ``cycle_value`` / ``_VALUE_KEYS`` / ``_MOVE_KEYS``
@@ -3892,7 +3922,7 @@ function wireBuilderEditor(setupDialog) {
         // "Unsaved" covers both staged grid edits AND a new inventory
         // created via "New" that was never saved: backing out of either
         // must not silently keep the work.
-        const hasUnsaved = editorState.dirty || editorState.engineReplaced;
+        const hasUnsaved = editorHasUnsavedWork();
         if (hasUnsaved
             && !confirm("Discard unsaved changes to the inventory?")) {
             return;
@@ -3986,7 +4016,7 @@ function wireBuilderEditor(setupDialog) {
 
     // Browser-level unsaved-changes guard for refresh / tab close.
     window.addEventListener("beforeunload", (ev) => {
-        if (!editorState.dirty) return;
+        if (!editorHasUnsavedWork()) return;
         ev.preventDefault();
         ev.returnValue = "";
     });
@@ -5322,15 +5352,16 @@ function restoreCommittedInventory() {
 function finishInventoryTransaction() {
     editorState.engineReplaced = false;
     editorState.committedSnapshot = null;
-    nodes.inventoryPicker.selectedIndex = -1;
+    markInventoryUnlisted();
 }
 
 function commitAndDownload() {
     if (!editorState.dirty) {
-        downloadCurrentInventory();
         // A "New" inventory saved with no further edits is committed by
-        // the download itself; stop tracking it for rollback.
-        if (editorState.engineReplaced) {
+        // the download itself; stop tracking it for rollback, but only
+        // if the file actually downloaded (else keep the rollback so
+        // Back still restores the previous inventory).
+        if (downloadCurrentInventory() && editorState.engineReplaced) {
             finishInventoryTransaction();
         }
         setEditorStatus("Downloaded current inventory (no edits to commit).");
@@ -5351,9 +5382,16 @@ function commitAndDownload() {
     }
     editorState.dirty = false;
     applyInventoryInfo(info);
+    // The engine swapped to the saved inventory, so refresh the main
+    // statusbar's name + counts line through its single writer (the
+    // load path pairs these two; save-as must too).
+    setInventoryStatus(info);
     refreshEditorFromCurrent();
-    downloadCurrentInventory();
-    finishInventoryTransaction();
+    // Finalize the transaction only on a real download; a failed save
+    // keeps the rollback marker so Back restores the prior inventory.
+    if (downloadCurrentInventory()) {
+        finishInventoryTransaction();
+    }
     setEditorStatus(`Saved as ${info.name}.`);
 }
 

@@ -294,6 +294,10 @@ class AnalysisPanel(QWidget):
         self.selection_label.setHtml("")
         set_html(self._tab_features, "")
         set_html(self._tab_contrasts, "")
+        # A single-blob report (e.g. a validation error) carries no
+        # natural-class verdict, so clear any stale green/red Class-tab
+        # tint a prior selection left behind.
+        self._apply_class_state(ClassState.NEUTRAL)
 
     def set_sections(
         self,

@@ -226,14 +226,21 @@ class ModeController:
                 btn.set_state(SegmentState.DEFAULT)
                 btn.setChecked(False)
 
-    def restore_feature_selection(self) -> None:
-        """Set each feature row to its final state for the new mode.
-        Sole authority on per-row visual state during a mode switch;
-        rows in ``saved_feat_state`` get ``restore_value``, the rest
-        get ``reset``.
+    def restore_feature_selection(
+        self, restore_feats: dict[str, str] | None = None
+    ) -> None:
+        """Set each feature row to its final state. Sole authority on
+        per-row visual state during a mode switch; rows in the restore
+        map get ``restore_value``, the rest get ``reset``.
+
+        ``restore_feats`` defaults to the saved FEAT query for the
+        active SEG↔FEAT mode (empty in SEG_TO_FEAT). Callers may pass
+        an explicit map instead - e.g. the match-mode toggle keeping
+        the live query across the strict↔wildcard feature rebuild.
         """
-        is_s2f = self.mode == Mode.SEG_TO_FEAT
-        restore_feats = self.saved_feat_state if not is_s2f else {}
+        if restore_feats is None:
+            is_s2f = self.mode == Mode.SEG_TO_FEAT
+            restore_feats = self.saved_feat_state if not is_s2f else {}
         self._w._selected_features.clear()
         for feat, row in self._w._feat_rows.items():
             if feat in restore_feats:
