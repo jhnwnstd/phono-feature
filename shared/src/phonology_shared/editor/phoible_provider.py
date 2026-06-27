@@ -40,6 +40,7 @@ from phonology_shared.editor.inventory_providers import (
 )
 from phonology_shared.editor.providers import (
     GeneratedInventory,
+    _filter_encoded_bundles,
     decode_positional_bundle,
     prune_unused_features,
     restrict_bundles,
@@ -356,18 +357,7 @@ class PhoibleProvider:
         for inv_id, segments in raw_invs.items():
             if not isinstance(segments, Mapping):
                 continue
-            bundles: dict[str, str] = {}
-            for sym, encoded in segments.items():
-                if not isinstance(sym, str) or not isinstance(encoded, str):
-                    continue
-                if len(encoded) != n:
-                    # Forward-compat: skip rather than raise so a
-                    # snapshot with extra columns from a future
-                    # bake doesn't crash a runtime that knows
-                    # fewer columns.
-                    continue
-                bundles[sym] = encoded
-            decoded[str(inv_id)] = bundles
+            decoded[str(inv_id)] = _filter_encoded_bundles(segments, n)
 
         # Vowel diphthong secondary bundles. Sparse: most
         # inventories have none and stay absent from the map. The
@@ -379,15 +369,7 @@ class PhoibleProvider:
             for inv_id, segments in raw_secondary.items():
                 if not isinstance(segments, Mapping):
                     continue
-                bundles = {}
-                for sym, encoded in segments.items():
-                    if not isinstance(sym, str) or not isinstance(
-                        encoded, str
-                    ):
-                        continue
-                    if len(encoded) != n:
-                        continue
-                    bundles[sym] = encoded
+                bundles = _filter_encoded_bundles(segments, n)
                 if bundles:
                     secondary_decoded[str(inv_id)] = bundles
 

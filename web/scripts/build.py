@@ -89,11 +89,7 @@ def bake_panphon_table() -> None:
     """
     print("Baking PanPhon lookup table...")
     bake_script = WEB_DIR / "scripts" / "bake_panphon.py"
-    spec = importlib.util.spec_from_file_location("bake_panphon", bake_script)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Could not load bake script at {bake_script}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load_module(bake_script, "bake_panphon")
     try:
         table = module.bake_table()
     except ImportError as exc:
@@ -141,11 +137,7 @@ def bake_phoible_tables() -> None:
     """
     print("Baking PHOIBLE inventory tables...")
     bake_script = WEB_DIR / "scripts" / "bake_phoible.py"
-    spec = importlib.util.spec_from_file_location("bake_phoible", bake_script)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Could not load bake script at {bake_script}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load_module(bake_script, "bake_phoible")
     try:
         index, data, stats = module.bake_tables()
     except FileNotFoundError as exc:
@@ -312,11 +304,11 @@ def generate_theme_css() -> None:
             assert keys is not None  # non-neutral states always map
             fg_key, bg_key = keys
             out.append(
-                f"  --class-state-{state.replace('_', '-')}-fg:"
+                f"  --class-state-{_css_var_name(state)}-fg:"
                 f" {table[fg_key]};"
             )
             out.append(
-                f"  --class-state-{state.replace('_', '-')}-bg:"
+                f"  --class-state-{_css_var_name(state)}-bg:"
                 f" {table[bg_key]};"
             )
         out.append("}")
@@ -434,11 +426,7 @@ def _build_limits_payload() -> dict[str, int]:
     bare interpreter; only the standard library is available.
     """
     limits_path = DATA_DIR / "limits.py"
-    spec = importlib.util.spec_from_file_location("_limits", limits_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"could not load {limits_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load_module(limits_path, "_limits")
     # PHOIBLE preview cap: how many IPA glyphs the picker preview
     # shows before truncating with a "+N more" hint. Baked here so
     # the bridge (api.phoible_preview_inventory) and the JS picker
@@ -481,17 +469,14 @@ def _build_status_text_payload() -> dict[str, str]:
     look up the defining module by name and would otherwise hit
     ``AttributeError`` on the temporary spec-loaded module.
     """
-    import sys
-
     mode_logic_path = PRESENTATION_DIR / "mode_logic.py"
     module_name = "_build_mode_logic"
-    spec = importlib.util.spec_from_file_location(module_name, mode_logic_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"could not load {mode_logic_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
+    # Load inside the try (register=True; see the docstring above) so
+    # the finally below still pops the temporary module from
+    # sys.modules even if exec_module raises. Uses the module-level
+    # ``sys`` import; no local shadow needed.
     try:
-        spec.loader.exec_module(module)
+        module = _load_module(mode_logic_path, module_name, register=True)
         payload: dict[str, str] = {
             str(member): module.mode_status_text(member, has_engine=True)
             for member in module.Mode
@@ -960,7 +945,7 @@ def generate_layout_css() -> None:
     # ``setMinimumSize`` calls in Phase C.
     lines.append("  /* Region constraints (from layout.py). */")
     for key, region in mod.REGION_CONSTRAINTS.items():
-        css_key = key.replace("_", "-")
+        css_key = _css_var_name(key)
         lines.append(f"  --{css_key}-min-w: {region.min_w}px;")
         if region.max_w is not None:
             lines.append(f"  --{css_key}-max-w: {region.max_w}px;")

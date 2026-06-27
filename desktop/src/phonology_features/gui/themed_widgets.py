@@ -41,6 +41,35 @@ from phonology_shared.presentation.layout import REGION_CONSTRAINTS
 from phonology_shared.presentation.palette import C
 
 
+def toolbar_chrome_qss() -> str:
+    """QSS for a toolbar container: panel background, bottom border,
+    and padding. Shared by the main window's theme restyle
+    (:py:meth:`ThemeController._restyle_toolbar`) and the builder's
+    toolbar so the chrome lives in one place. Function-not-constant so
+    it re-evaluates against the active palette after a theme swap.
+    """
+    return f"""
+        QToolBar {{
+            background: {C["panel"]};
+            border-bottom: 1px solid {C["border"]};
+            padding: 4px 8px;
+            spacing: 6px;
+        }}
+    """
+
+
+def statusbar_chrome_qss() -> str:
+    """QSS for a status bar's chrome: panel background and top border.
+    Shared by the main window's branded status bar
+    (:py:meth:`_BrandedStatusBar.apply_theme`) and the builder's status
+    bar so the two windows cannot drift. Function-not-constant for the
+    same re-evaluate-after-swap reason as the button helpers.
+    """
+    return (
+        f"background: {C['panel']};" f" border-top: 1px solid {C['border']};"
+    )
+
+
 def _clear_btn_style() -> str:
     """Stylesheet for the per-panel Clear buttons. Function-not-constant
     so it re-evaluates against the active palette after a theme swap.
@@ -198,10 +227,7 @@ class _BrandedStatusBar(QStatusBar):
 
     def apply_theme(self) -> None:
         """Re-apply palette-dependent styles. Called on theme toggle."""
-        self.setStyleSheet(
-            f"background: {C['panel']};"
-            f" border-top: 1px solid {C['border']};"
-        )
+        self.setStyleSheet(statusbar_chrome_qss())
         set_css(self._message_label, f"color: {C['text']};")
         self._brand.setStyleSheet(
             f"color: {C['text_dim']}; font-style: italic; padding: 0 4px;"

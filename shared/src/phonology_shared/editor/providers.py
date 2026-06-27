@@ -188,3 +188,27 @@ def decode_positional_bundle(
     baked tables.
     """
     return dict(zip(features, encoded, strict=False))
+
+
+def _filter_encoded_bundles(
+    segments: Mapping[object, object], n: int
+) -> dict[str, str]:
+    """Select the usable survivors from one inventory's baked segment
+    map: ``{sym: encoded}`` for every entry that is a ``str`` symbol
+    mapped to a ``str`` value of exactly ``n`` characters.
+
+    Entries failing either check are skipped: a non-str key/value, or a
+    length mismatch from a snapshot baked against a different column
+    count (a forward-compat skip, not a raise, so a snapshot with extra
+    columns from a newer bake doesn't crash an older runtime). The
+    single definition of "which baked entries are usable", shared by
+    the PHOIBLE primary + secondary ingests and the PanPhon lookup
+    table loader.
+    """
+    return {
+        sym: encoded
+        for sym, encoded in segments.items()
+        if isinstance(sym, str)
+        and isinstance(encoded, str)
+        and len(encoded) == n
+    }

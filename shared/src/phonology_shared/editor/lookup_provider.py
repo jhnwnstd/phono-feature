@@ -29,6 +29,7 @@ from typing import Any
 from phonology_shared.editor.panphon_features import to_panphon_form
 from phonology_shared.editor.providers import (
     GeneratedInventory,
+    _filter_encoded_bundles,
     decode_positional_bundle,
     prune_unused_features,
     restrict_bundles,
@@ -131,19 +132,13 @@ class LookupFeatureProvider:
         # Building once at __init__ avoids re-zipping on every
         # preview-debounce tick the dialog fires.
         n = len(self._feature_names)
-        self._bundles: dict[str, Mapping[str, str]] = {}
-        for ipa, encoded in segments.items():
-            if not isinstance(ipa, str) or not isinstance(encoded, str):
-                continue
-            if len(encoded) != n:
-                # Skip rather than raise so a forward-compat snapshot
-                # with extra columns doesn't crash a behind-the-tip
-                # runtime; the unresolved counter will surface the
-                # gap to the user.
-                continue
-            self._bundles[ipa] = decode_positional_bundle(
-                self._feature_names, encoded
-            )
+        # _filter_encoded_bundles applies the shared survivor guard
+        # (str symbol -> str value of length n; forward-compat skip on
+        # mismatch); decode each survivor positionally.
+        self._bundles: dict[str, Mapping[str, str]] = {
+            ipa: decode_positional_bundle(self._feature_names, encoded)
+            for ipa, encoded in _filter_encoded_bundles(segments, n).items()
+        }
 
     @classmethod
     def from_path(cls, path: str | Path) -> LookupFeatureProvider:

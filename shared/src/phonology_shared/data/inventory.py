@@ -652,11 +652,19 @@ class Inventory:
         favour of the explicit ``name`` argument so there is one
         source of truth for the inventory's display name.
         """
+        # Local import to keep the dependency direction one-way (data
+        # imports from presentation only at boundaries like this; see
+        # the metadata-resolver import in resolve_feature_alias).
+        # MINUS_SIGN is the single definition of the builder's Unicode
+        # minus glyph, so this fold cannot drift from a look-alike
+        # literal pasted here.
+        from phonology_shared.presentation.constants import MINUS_SIGN
+
         normalized_segments: dict[str, dict[str, str]] = {}
         for seg, feats in segments.items():
             normalized: dict[str, str] = {}
             for f, v in feats.items():
-                if v == "−":
+                if v == MINUS_SIGN:
                     v = "-"
                 normalized[f] = v
             normalized_segments[seg] = normalized

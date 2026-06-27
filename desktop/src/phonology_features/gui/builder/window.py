@@ -6,6 +6,10 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from phonology_features._logging import get_logger
 from phonology_features.gui.controllers.theme import ThemeController
+from phonology_features.gui.themed_widgets import (
+    statusbar_chrome_qss,
+    toolbar_chrome_qss,
+)
 from phonology_shared.data.inventory import Inventory, ValidationError
 from phonology_shared.data.limits import (
     MAX_FEATURES,
@@ -225,14 +229,7 @@ class InventoryBuilder(QMainWindow):
     def _build_toolbar(self) -> None:
         toolbar = QToolBar()
         toolbar.setMovable(False)
-        toolbar.setStyleSheet(f"""
-            QToolBar {{
-                background: {C["panel"]};
-                border-bottom: 1px solid {C["border"]};
-                padding: 4px 8px;
-                spacing: 6px;
-            }}
-            """)
+        toolbar.setStyleSheet(toolbar_chrome_qss())
         self.addToolBar(toolbar)
         # Shared with the main toolbar's nav buttons (same neutral
         # box) and the filled action buttons (Save / Delete), via
@@ -442,9 +439,7 @@ class InventoryBuilder(QMainWindow):
 
     def _build_status_bar(self) -> None:
         self._status = QStatusBar()
-        self._status.setStyleSheet(
-            f"background: {C['panel']}; border-top: 1px solid {C['border']};"
-        )
+        self._status.setStyleSheet(statusbar_chrome_qss())
         self.setStatusBar(self._status)
         # Live cap counter, pinned to the right so transient
         # showMessage() text never overwrites it. Populated by

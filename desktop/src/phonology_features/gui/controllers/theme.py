@@ -24,6 +24,7 @@ from phonology_features.gui.style_utils import (
 from phonology_features.gui.themed_widgets import (
     _clear_btn_style,
     _match_mode_btn_style,
+    toolbar_chrome_qss,
 )
 from phonology_shared.presentation.constants import scrollbar_style
 from phonology_shared.presentation.mode_logic import (
@@ -283,17 +284,7 @@ class ThemeController:
 
     def _restyle_toolbar(self) -> None:
         m = self._main
-        set_css(
-            m._toolbar,
-            f"""
-            QToolBar {{
-                background: {C["panel"]};
-                border-bottom: 1px solid {C["border"]};
-                padding: 4px 8px;
-                spacing: 6px;
-            }}
-        """,
-        )
+        set_css(m._toolbar, toolbar_chrome_qss())
         # One home for the dropdown QSS: the same string construction
         # uses, so the box does not jump background or gain the
         # drop-down rule on the first toggle.

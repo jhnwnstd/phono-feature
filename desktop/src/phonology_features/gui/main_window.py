@@ -506,10 +506,11 @@ class MainWindow(QMainWindow):
         self._hsplit.splitterMoved.connect(self._on_hsplit_moved)
 
     def _build_status_bar(self) -> None:
+        # _BrandedStatusBar.__init__ already applies its chrome QSS via
+        # apply_theme(); no second set here (it would just re-set the
+        # byte-identical string the widget owns end to end, including
+        # the theme restyle path).
         self.status = _BrandedStatusBar(self)
-        self.status.setStyleSheet(
-            f"background: {C['panel']}; border-top: 1px solid {C['border']};"
-        )
         self.setStatusBar(self.status)
         # The bottom border shows ONLY the loaded-inventory summary
         # (name, segment x feature counts, Source link for PHOIBLE),
