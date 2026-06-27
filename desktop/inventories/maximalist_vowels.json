@@ -1,18 +1,12 @@
 {
   "metadata": {
-    "name": "Maximalist Vowel Test Inventory",
-    "citation": "Synthetic test inventory built from a coordinate table covering every cell of the 3-column x 7-row vowel grid, plus neutral-round and Long-pair probes. Cell coordinates use (x, y, R/U/Ø) where x in {0=front, 1=central, 2=back}, y in {0=close, 1=near-close, 2=close-mid, 3=mid, 4=open-mid, 5=near-open, 6=open}, and round in {U=-, R=+, Ø=0}. Provided by the project owner as a reference for the chart geometry's intended behavior.",
-    "compiled_by": "internal debugging fixture",
-    "schema_note": "Vowels only. Feature values use Hayes / Halle-style '+', '-', '0'. Not a real language inventory; values are chosen to populate specific chart cells and should not be interpreted phonologically.",
+    "name": "Maximal vowel inventory",
+    "citation": "A synthetic reference inventory that places at least one vowel in every cell of the 3-column x 7-row vowel grid, plus neutral-round probes. Cell coordinates use (x, y, R/U/Ø) where x in {0=front, 1=central, 2=back}, y in {0=close, 1=near-close, 2=close-mid, 3=mid, 4=open-mid, 5=near-open, 6=open}, and round in {U=-, R=+, Ø=0}.",
+    "schema_note": "Vowels only. Feature values use Hayes / Halle-style '+', '-', '0'. Not a natural language inventory; the segments are chosen to populate specific chart cells and should not be interpreted phonologically.",
     "notes": {
-      "purpose": "Visual debugging of the vowel chart layout; every cell that the chart could render is populated by at least one segment so layout regressions surface immediately.",
+      "purpose": "Covers every position the vowel chart can render, so a single inventory exercises the full chart layout.",
       "row_coverage": "Close, Near-close, Close-mid, Mid (Tier 2 via 0tense), Open-mid, Near-open, Open.",
-      "column_coverage": "front, central, back; unrounded and rounded; plus central-neutral (0round) probes at Mid and Near-open.",
-      "long_pairs": "None. The Long contrast is intentionally absent to keep this inventory's cells one-segment so position regressions surface unambiguously.",
-      "policy_probes": [
-        "Near-open at y=5 fires via the -tense low-vowel split.",
-        "Open at y=6 fires via 0tense low-vowel default; +front +low at y=6 (a, ɶ) tests whether the layout honors the open vs near-open policy."
-      ]
+      "column_coverage": "front, central, back; unrounded and rounded; plus central-neutral (0round) probes at Mid and Near-open."
     }
   },
   "features": [

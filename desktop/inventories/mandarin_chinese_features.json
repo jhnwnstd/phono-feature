@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "name": "Standard Mandarin Chinese phoneme inventory",
+    "name": "Mandarin Chinese phoneme inventory",
     "citation": "Compiled from Standard Chinese / Mandarin phonology descriptions, including Mandarin tone as nonsegmental.",
     "compiled_by": "OpenAI ChatGPT",
     "schema_note": "Draft distinctive-feature JSON modeled after the user's uploaded feature inventories. Values are '+', '-', or '0'. Segmental matrices are dense. Language inventories are standard or broad-reference varieties and should be treated as a reviewable starting point, not a final fieldwork-grade analysis.",

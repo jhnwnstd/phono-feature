@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "name": "English Phoneme Inventory (Hayes 2009)",
+    "name": "English phoneme inventory (Hayes 2009)",
     "citation": "Hayes, B. (2009). Introductory Phonology. Wiley-Blackwell.",
     "authors": [
       "Hayes, Bruce"
@@ -1011,6 +1011,6 @@
       "Voice": "-"
     }
   },
-  "name": "English Phoneme Inventory (Hayes 2009)",
+  "name": "English phoneme inventory (Hayes 2009)",
   "version": "1.1"
 }

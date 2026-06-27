@@ -592,6 +592,7 @@ async function bootPyodide({ prerendered = false } = {}) {
             state.selected_segments.length > 0
             || Object.keys(state.selected_features).length > 0;
         if (hasPending) scheduleAnalysis();
+        else renderEmptyAnalysisHints();
     } else {
         await loadBundledInventory(defaultItem);
     }
@@ -774,20 +775,37 @@ async function loadBundledInventory(item) {
  */
 function applyInventoryInfo(info) {
     state.inventory_name = info.name;
-    state.provenance = info.provenance || null;
     state.segments = info.segments;
     state.features = info.features;
     state.selected_segments = [];
     state.selected_features = emptyFeatureSpec();
     renderSegmentGrid(info.groups, info.vowel_chart);
     renderFeaturePanel(info.feature_groups);
-    clearAnalysisTabs();
-    _applyProvenanceChip(info.provenance);
+    // Show the empty-state hints ("Click a segment…") from the start
+    // rather than a blank pane (the inventory identity lives in the
+    // dropdown + the statusbar, so it is not repeated above the tabs).
+    renderEmptyAnalysisHints();
     // PHOIBLE inventories carry a source-page URL; any other load
     // (bundled, uploaded, built) leaves it undefined, which hides the
     // statusbar "Source" link, so the link always reflects the
     // currently loaded inventory.
     setStatusSourceLink(info.source_url);
+}
+
+/** Paint the analysis pane's no-selection hints ("Click a segment to
+ *  inspect it." etc.) from the shared view-model so the tabs are never
+ *  blank while an inventory is loaded. Pre-bridge (boot bootstrap) the
+ *  engine isn't up yet, so fall back to the empty baseline until the
+ *  bridge-ready render repaints. */
+function renderEmptyAnalysisHints() {
+    if (state.bridge) {
+        const result = callBridge(
+            "analyze_segments", state.selected_segments,
+        );
+        setAnalysisTabs(result.analysis_tabs);
+    } else {
+        clearAnalysisTabs();
+    }
 }
 
 /** Show or hide the statusbar "Source" hyperlink for the loaded
@@ -807,31 +825,6 @@ function setStatusSourceLink(url) {
     link.href = clean;
     link.title = `PHOIBLE source: ${clean}`;
     link.hidden = false;
-}
-
-/** Paint the persistent inventory-source badge next to the
- *  analysis-selection header. Reads the ``provenance`` field from
- *  the bridge payload so the user can tell where the loaded
- *  inventory came from (PHOIBLE / bundled / uploaded / builder)
- *  after the picker dialog closes. */
-function _applyProvenanceChip(provenance) {
-    let chip = document.getElementById("inventory-provenance");
-    if (!provenance) {
-        if (chip) chip.hidden = true;
-        return;
-    }
-    if (!chip) {
-        chip = document.createElement("span");
-        chip.id = "inventory-provenance";
-        chip.className = "inventory-provenance";
-        const host = document.getElementById("analysis-selection");
-        if (host && host.parentNode) {
-            host.parentNode.insertBefore(chip, host);
-        }
-    }
-    chip.textContent = provenance;
-    chip.title = `Loaded from ${provenance}`;
-    chip.hidden = false;
 }
 
 /** Set the bottom-border status to the loaded-inventory summary
@@ -5472,7 +5465,7 @@ function wireBugButton() {
     if (!nodes.bugBtn) return;
     nodes.bugBtn.addEventListener("click", () => {
         window.open(
-            "https://github.com/jhnwnstd/features/issues/new",
+            "https://github.com/jhnwnstd/phono-feature/issues/new",
             "_blank",
             "noopener,noreferrer"
         );

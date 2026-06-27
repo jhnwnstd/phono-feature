@@ -104,6 +104,26 @@ def format_segment_accessible_label(seg: str) -> str:
 # dropping the default-pick to the first bundled inventory.
 DEFAULT_INVENTORY_STEM: str = "hayes_features"
 
+
+def inventory_sort_key(fname: str, label: str) -> tuple[int, str]:
+    """Dropdown ordering key shared by the web manifest build and the
+    desktop inventory combo so both list inventories in the same order.
+
+    The canonical Hayes (2009) inventories lead the list: the universal
+    default (:data:`DEFAULT_INVENTORY_STEM`) first, then any other
+    Hayes inventory, then everything else alphabetically by display
+    label.
+    """
+    stem = fname[:-5] if fname.endswith(".json") else fname
+    if stem == DEFAULT_INVENTORY_STEM:
+        rank = 0
+    elif "hayes" in label.casefold():
+        rank = 1
+    else:
+        rank = 2
+    return (rank, label.casefold())
+
+
 # Hover-tooltip strings for the wildcard ("Allow underspecified")
 # matching-mode toggle that sits in the Features pane header on
 # both UIs. ``STRICT_ACTIVE`` runs when the button is NOT pressed
@@ -113,9 +133,9 @@ DEFAULT_INVENTORY_STEM: str = "hayes_features"
 # attribute read identically; the web relays via the inlined
 # STATUS_TEXT JSON.
 MATCH_MODE_TOOLTIP_STRICT_ACTIVE: str = (
-    "Allow underspecified matches (wildcard): segments with a 0 "
-    "or absent value match a +/- request unless they explicitly "
-    "contradict it."
+    "Allow underspecified feature matches: segments with 0 or "
+    "absent values can form a set when no other valued feature "
+    "explicitly contradicts it."
 )
 MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE: str = (
     "Switch to strict matching (only explicit +/- values match)."

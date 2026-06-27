@@ -216,7 +216,8 @@ def copy_inventories() -> None:
     manifest: list[dict[str, str]] = []
     skipped_private: list[str] = []
     skipped_gitignored: list[str] = []
-    for inv in sorted(INVENTORIES.glob("*.json")):
+    candidates: list[Path] = []
+    for inv in INVENTORIES.glob("*.json"):
         # Underscore-prefixed siblings (e.g. ``_schema.json``) are
         # metadata that lives alongside the inventories but isn't
         # itself an inventory; the desktop dropdown applies the same
@@ -227,13 +228,18 @@ def copy_inventories() -> None:
         if _is_gitignored(inv):
             skipped_gitignored.append(inv.name)
             continue
+        candidates.append(inv)
+    # Order the dropdown via the shared key (Hayes default first, then
+    # any other Hayes, then alphabetical by label) so the web manifest
+    # and the desktop combo list inventories identically.
+    constants = _load_constants_module()
+    labeled = [(inv, _inventory_label(inv)) for inv in candidates]
+    labeled.sort(
+        key=lambda il: constants.inventory_sort_key(il[0].name, il[1])
+    )
+    for inv, label in labeled:
         shutil.copy(inv, out / inv.name)
-        manifest.append(
-            {
-                "file": f"inventories/{inv.name}",
-                "label": _inventory_label(inv),
-            }
-        )
+        manifest.append({"file": f"inventories/{inv.name}", "label": label})
     (DIST / "inventories.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False),
     )

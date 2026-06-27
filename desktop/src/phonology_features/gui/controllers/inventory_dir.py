@@ -20,6 +20,7 @@ from PyQt6.QtGui import QStandardItemModel
 from phonology_features._logging import get_logger
 from phonology_features._settings import SettingsKey, write_setting
 from phonology_shared.editor.setup import inventory_display_label
+from phonology_shared.presentation.constants import inventory_sort_key
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QSettings
@@ -236,7 +237,8 @@ class InventoryDirController:
             inventories_dir = self.get_inventories_dir()
             if os.path.isdir(inventories_dir):
                 self.sweep_stale_tmp_files(inventories_dir)
-                for fname in sorted(os.listdir(inventories_dir)):
+                entries: list[tuple[str, str, str]] = []
+                for fname in os.listdir(inventories_dir):
                     # Skip dotfiles (.tmp_inv_*.json side files from
                     # atomic writes are visible to the watcher for
                     # ~ms between mkstemp and os.replace; editor swap
@@ -246,13 +248,17 @@ class InventoryDirController:
                     if not _is_visible_inventory_file(fname):
                         continue
                     path = os.path.join(inventories_dir, fname)
-                    self._combo.addItem(
-                        inventory_display_label(
-                            fname=fname,
-                            metadata_name=_read_metadata_name(path),
-                        ),
-                        userData=path,
+                    label = inventory_display_label(
+                        fname=fname,
+                        metadata_name=_read_metadata_name(path),
                     )
+                    entries.append((fname, path, label))
+                # Hayes default first, then any other Hayes, then
+                # alphabetical: shared with the web manifest build via
+                # inventory_sort_key so both dropdowns match.
+                entries.sort(key=lambda e: inventory_sort_key(e[0], e[2]))
+                for _fname, path, label in entries:
+                    self._combo.addItem(label, userData=path)
             self._append_phoible_section()
             idx = self._combo.findData(previous_path) if previous_path else 0
             self._combo.setCurrentIndex(max(idx, 0))

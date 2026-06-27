@@ -334,17 +334,31 @@ class MainWindow(QMainWindow):
         self.inventory_combo.activated.connect(self._on_inventory_selected)
         toolbar.addWidget(self.inventory_combo)
 
-        def add_nav(label: str, slot: Callable[[], object]) -> QPushButton:
+        def add_nav(
+            label: str,
+            slot: Callable[[], object],
+            tooltip: str = "",
+        ) -> QPushButton:
             btn = QPushButton(label, toolbar)
             btn.setFont(QFont("Noto Sans", 10))
             btn.setMinimumHeight(_TOOLBAR_BTN_H)
+            if tooltip:
+                btn.setToolTip(tooltip)
             btn.clicked.connect(slot)
             toolbar.addWidget(btn)
             self._nav_buttons.append(btn)
             return btn
 
-        add_nav("Browse\u2026", self._browse_inventory)
-        add_nav("Builder", self._open_builder)
+        add_nav(
+            "Browse\u2026",
+            self._browse_inventory,
+            "Load an inventory from a JSON file on your computer",
+        )
+        add_nav(
+            "Builder",
+            self._open_builder,
+            "Create or edit an inventory in the grid builder",
+        )
         add_nav("PHOIBLE", self._open_phoible_picker)
         # Spacer pushes the theme toggle to the far right.
         spacer = QWidget(toolbar)

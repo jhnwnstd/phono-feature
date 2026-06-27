@@ -936,6 +936,9 @@ dialog input[type="text"]:focus-visible {
   color: var(--text-dim);
   padding: var(--seg-group-header-padding);
   overflow-wrap: anywhere;
+  /* Uppercase the manner-class names (Plosives -> PLOSIVES) to match
+     the desktop QLabel(manner.upper()) and the "VOWELS" title. */
+  text-transform: uppercase;
 }
 .panel[data-active="true"] .seg-group-header {
   color: var(--text);
@@ -1234,6 +1237,9 @@ dialog input[type="text"]:focus-visible {
   letter-spacing: var(--seg-group-header-letter-spacing);
   color: var(--text-dim);
   padding: var(--seg-group-header-padding);
+  /* Uppercase to match the seg-class headers + the desktop's
+     QLabel("DIPHTHONGS"). */
+  text-transform: uppercase;
   /* Left-aligned so the header sits flush with the chart's left edge,
      directly above the chip row, which fills left-to-right under it.
      Matches the seg-class headers, which are left-aligned too. */
@@ -1757,20 +1763,6 @@ dialog input[type="text"]:focus-visible {
 .analysis-selection[hidden] { display: none; }
 .analysis-selection p { margin: 0; }
 .analysis-selection b { color: var(--text); }
-
-/* Persistent inventory-source badge. Lives ABOVE the analysis-
-   selection strip so the user can tell where the loaded inventory
-   came from after the picker closes. Muted typography keeps it
-   out of the way of the IPA chip strip below. */
-.inventory-provenance {
-  display: block;
-  margin: 0 0 var(--space-xs) var(--space-xs);
-  font-size: var(--font-size-label);
-  color: var(--text-dim);
-  letter-spacing: 0.2px;
-  user-select: text;
-}
-.inventory-provenance[hidden] { display: none; }
 
 /* Tab strip: Class / Features / Contrasts. Mirrors the desktop's
    QTabBar styling: bottom-flush tabs with the active tab merged
