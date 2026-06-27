@@ -164,7 +164,6 @@ class FeatureQuerySummary(TypedDict):
 def build_inventory_summary(
     engine: FeatureEngine,
     inventory_name: str,
-    provenance: str | None = None,
     *,
     mode: MatchMode = MatchMode.STRICT,
 ) -> dict[str, Any]:
@@ -173,12 +172,6 @@ def build_inventory_summary(
     Returns the plain dict payload the web bridge exposes to JS. The
     structure is also useful to the desktop when we want a canonical,
     serializable snapshot of the current engine-backed layout state.
-
-    ``provenance`` is an optional short label naming where the
-    inventory came from (e.g. ``"PHOIBLE / Korean (Eurasian
-    Phonologies)"``, ``"bundled / english_features"``,
-    ``"PanPhon / IPA Help"``). Surfaced by both renderers so the
-    user can tell the source after the picker dialog closes.
 
     ``mode`` selects between strict and wildcard semantics for the
     derived ``active_features`` list. Under wildcard, every
@@ -201,7 +194,6 @@ def build_inventory_summary(
     active = list(engine.active_features_for_mode(mode))
     return {
         "name": inventory_name,
-        "provenance": provenance,
         "segments": list(engine.segments),
         "features": list(engine.features),
         "active_features": active,

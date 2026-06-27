@@ -5623,7 +5623,7 @@ function wireMatchModeToggle() {
                 // in strict). Do NOT call applyInventoryInfo here: that
                 // is the full inventory-SWAP routine, which clears the
                 // segment + feature selection, blanks the analysis, and
-                // wipes the PHOIBLE provenance chip + Source link. The
+                // wipes the PHOIBLE Source link. The
                 // desktop's _toggle_match_mode likewise keeps the
                 // selection and only repopulates the feature rows.
                 state.features = info.features;

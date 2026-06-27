@@ -199,15 +199,7 @@ def load_inventory_json(
     engine = _set_engine(
         FeatureEngine(inventory), inventory.name or source_label
     )
-    # ``source_label`` is the user-facing label the picker passed
-    # (bundled inventory title / uploaded filename / PHOIBLE
-    # composite). The chip shows the inventory NAME, not a
-    # "source / name" composite: the source-type prefix
-    # ("bundled / ") is noise the user does not need.
-    provenance = source_label or "uploaded"
-    return build_inventory_summary(
-        engine, _inventory_name, provenance, mode=_match_mode
-    )
+    return build_inventory_summary(engine, _inventory_name, mode=_match_mode)
 
 
 def _invalidate_analysis_caches() -> None:
@@ -543,15 +535,7 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     except KeyError as exc:
         raise ValidationError((str(exc),)) from exc
     engine = _set_engine(FeatureEngine(inventory), inventory.name)
-    # ``Inventory.metadata['feature_source']`` carries the bake-
-    # time provenance ("PHOIBLE / Korean (Eurasian Phonologies)").
-    # Mirrors the desktop ``_open_phoible_picker`` path so both
-    # surfaces show the same chip text.
-    feature_source = inventory.metadata.get("feature_source") or "PHOIBLE"
-    provenance = f"{feature_source} / {inventory.name}"
-    summary = build_inventory_summary(
-        engine, _inventory_name, provenance, mode=_match_mode
-    )
+    summary = build_inventory_summary(engine, _inventory_name, mode=_match_mode)
     # Status-bar line composed shared-side (language + source +
     # counts) so both UIs show the identical terse message instead
     # of each wrapping the full dialect-bearing display name.
@@ -634,9 +618,7 @@ def create_new_inventory(
     # cannot be known until the bundles are resolved here.
     enforce_class_caps(inventory.segments)
     engine = _set_engine(FeatureEngine(inventory), inventory.name)
-    return build_inventory_summary(
-        engine, _inventory_name, "builder / new", mode=_match_mode
-    )
+    return build_inventory_summary(engine, _inventory_name, mode=_match_mode)
 
 
 def get_cycle_ladder() -> dict[str, str]:
@@ -814,9 +796,7 @@ def commit_inventory_from_grid(
         metadata=base_metadata,
     )
     engine = _set_engine(FeatureEngine(inventory), inventory.name)
-    return build_inventory_summary(
-        engine, _inventory_name, "builder / grid", mode=_match_mode
-    )
+    return build_inventory_summary(engine, _inventory_name, mode=_match_mode)
 
 
 def rename_current_inventory(new_name: str) -> dict[str, Any]:
