@@ -196,10 +196,7 @@ def load_inventory_json(
     # import chart), so enforce them here, after the structural
     # parse, before the engine swaps in.
     enforce_class_caps(inventory.segments)
-    engine = _set_engine(
-        FeatureEngine(inventory), inventory.name or source_label
-    )
-    return build_inventory_summary(engine, _inventory_name, mode=_match_mode)
+    return _swap_engine_summary(inventory, inventory.name or source_label)
 
 
 def _invalidate_analysis_caches() -> None:
@@ -229,6 +226,19 @@ def _set_engine(engine: FeatureEngine, name: str) -> FeatureEngine:
     _inventory_name = name
     _invalidate_analysis_caches()
     return engine
+
+
+def _swap_engine_summary(inventory: Inventory, name: str) -> dict[str, Any]:
+    """Swap the active engine to ``inventory`` and return its summary.
+
+    The shared tail of every load route (uploaded JSON, PHOIBLE,
+    builder): ``_set_engine`` then ``build_inventory_summary`` under
+    the current match mode. PHOIBLE layers its status line and Source
+    link onto the returned dict; the other routes use it verbatim, so
+    there is no per-route display logic to drift apart.
+    """
+    engine = _set_engine(FeatureEngine(inventory), name)
+    return build_inventory_summary(engine, name, mode=_match_mode)
 
 
 def serialize_current_inventory() -> str:
@@ -534,8 +544,7 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
         inventory = materialize_phoible_inventory(provider, inventory_id)
     except KeyError as exc:
         raise ValidationError((str(exc),)) from exc
-    engine = _set_engine(FeatureEngine(inventory), inventory.name)
-    summary = build_inventory_summary(engine, _inventory_name, mode=_match_mode)
+    summary = _swap_engine_summary(inventory, inventory.name)
     # Status-bar line composed shared-side (language + source +
     # counts) so both UIs show the identical terse message instead
     # of each wrapping the full dialect-bearing display name.
@@ -617,8 +626,7 @@ def create_new_inventory(
     # above, but vowel/consonant class is feature-driven, so it
     # cannot be known until the bundles are resolved here.
     enforce_class_caps(inventory.segments)
-    engine = _set_engine(FeatureEngine(inventory), inventory.name)
-    return build_inventory_summary(engine, _inventory_name, mode=_match_mode)
+    return _swap_engine_summary(inventory, inventory.name)
 
 
 def get_cycle_ladder() -> dict[str, str]:
@@ -795,8 +803,7 @@ def commit_inventory_from_grid(
         cells=cells,
         metadata=base_metadata,
     )
-    engine = _set_engine(FeatureEngine(inventory), inventory.name)
-    return build_inventory_summary(engine, _inventory_name, mode=_match_mode)
+    return _swap_engine_summary(inventory, inventory.name)
 
 
 def rename_current_inventory(new_name: str) -> dict[str, Any]:

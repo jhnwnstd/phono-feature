@@ -2420,13 +2420,20 @@ function _buildFeatureRow(feat) {
     // the system font's OpenType ``smcp`` feature.
     name.textContent = feat;
     row.appendChild(name);
+    // Badge + polarity buttons share one fixed-width controls slot
+    // (``.feat-controls``). Activating the pane swaps the badge for
+    // the +/- buttons; holding the slot width constant keeps the flex
+    // name column from changing, which would otherwise reflow long
+    // feature names even though the panel has spare width.
+    const controls = document.createElement("div");
+    controls.className = "feat-controls";
     const badge = document.createElement("div");
     badge.className = "feat-badge";
     badge.setAttribute("aria-label", "·");
     badge.appendChild(
         createRasterizedLabel("·", '12px "Noto Sans", sans-serif')
     );
-    row.appendChild(badge);
+    controls.appendChild(badge);
     const polarityButtons = {};
     for (const polarity of ["+", "−"]) {
         const btn = document.createElement("button");
@@ -2438,9 +2445,10 @@ function _buildFeatureRow(feat) {
         btn.appendChild(
             createRasterizedLabel(polarity, '13px "Noto Sans", sans-serif')
         );
-        row.appendChild(btn);
+        controls.appendChild(btn);
         polarityButtons[code] = btn;
     }
+    row.appendChild(controls);
     state.feat_rows.set(feat, {
         row, badge,
         plus: polarityButtons["+"],

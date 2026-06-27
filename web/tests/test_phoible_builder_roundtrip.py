@@ -77,7 +77,7 @@ def test_builder_roundtrip_preserves_diphthongs_and_provenance(
     reloaded = Inventory.load(path)
     engine = FeatureEngine(reloaded)
     summary2 = build_inventory_summary(
-        engine, reloaded.name, "file", mode=api._match_mode
+        engine, reloaded.name, mode=api._match_mode
     )
     assert len(summary2["vowel_chart"]["diphthongs"]) == n_arrows
     assert reloaded.metadata.get("feature_source")

@@ -1594,6 +1594,9 @@ dialog input[type="text"]:focus-visible {
   width: var(--feat-badge-w-compact);
   height: var(--feat-btn-h-compact);
 }
+#feat-panel[data-density="compact"] .feat-controls {
+  width: calc(2 * var(--feat-btn-w-compact) + var(--feat-row-gap));
+}
 
 /* Row backgrounds are mode-dependent. SEG mode (feat panel
    inactive) encodes the analysis result via data-shared /
@@ -1652,6 +1655,22 @@ dialog input[type="text"]:focus-visible {
 #feat-panel[data-active="true"] .feat-row[data-query-value="+"] .feat-name,
 #feat-panel[data-active="true"] .feat-row[data-query-value="-"] .feat-name {
   text-shadow: 0 0 0.55px currentColor, 0 0 0.55px currentColor;
+}
+
+/* Fixed-width slot holding the value badge (display mode) and the
+   +/- buttons (query mode). Reserving the WIDER query-mode extent in
+   both modes (two --feat-btn-w buttons + their inter-gap) keeps the
+   flex .feat-name column a constant width, so toggling the active
+   pane swaps badge<->buttons without reflowing long feature names.
+   The single badge right-aligns into the slot so it stays flush with
+   the +/- buttons' right edge. */
+.feat-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--feat-row-gap);
+  width: calc(2 * var(--feat-btn-w) + var(--feat-row-gap));
+  flex-shrink: 0;
 }
 
 .feat-badge {
