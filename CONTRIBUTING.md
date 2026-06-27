@@ -124,7 +124,7 @@ lockstep.
 | `shared/tests/`      | Pure-Python: Inventory, FeatureEngine, geometry, chart placement, layout, mode_logic, view_models, builder grid. No Qt. |
 | `desktop/tests/`     | Desktop GUI + integration. Boots PyQt6 under `QT_QPA_PLATFORM=offscreen`. |
 | `web/tests/`         | Bridge-boundary validation: every `api.py` entry rejects bad input as `ValidationError`. |
-| `shared/tests/test_jsfallback_parity.py`, `test_status_text_relay.py` | Pin the web's pre-bridge JS mirrors and the build-time JSON bake against the Python source they shadow. |
+| `shared/tests/test_editor_mirror_parity.py`, `test_relay_smoke.py` | Pin the web's pre-bridge JS mirrors and the build-time JSON bake against the Python source they shadow. |
 | `web/scripts/smoke.py` | Playwright end-to-end: boots the built site through Pyodide, drives the bridge, asserts the analysis pane populates. |
 
 ## Lint and verification chain

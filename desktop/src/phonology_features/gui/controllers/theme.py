@@ -128,14 +128,20 @@ class ThemeController:
 
     @staticmethod
     def combo_style() -> str:
-        """Inventory-dropdown QSS.
+        """Inventory-dropdown QSS: THE single home for this widget.
 
         Styles the box to look button-like (so it visibly invites a
         click) and themes the popup list. The Fusion native arrow is
         suppressed by any QComboBox rule without a paired down-arrow
         image asset; that trade-off is intentional because the
         box-as-button styling reads as a dropdown affordance on its
-        own.
+        own. The ``::drop-down`` rule removes the subcontrol border
+        and pads the (assetless) arrow zone.
+
+        Both the construction styling and the theme/palette restyle
+        (``_restyle_toolbar``) call this, so the dropdown cannot shift
+        its background or gain/lose the drop-down rule on the first
+        toggle.
         """
         return f"""
             QComboBox {{
@@ -147,6 +153,10 @@ class ThemeController:
             }}
             QComboBox:hover {{
                 border: 1.5px solid {C["accent"]};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                padding-right: 8px;
             }}
             QComboBox QAbstractItemView {{
                 background: {C["panel"]};
@@ -284,33 +294,10 @@ class ThemeController:
             }}
         """,
         )
-        set_css(
-            m.inventory_combo,
-            f"""
-            QComboBox {{
-                background: {C["panel"]};
-                color: {C["text"]};
-                border: 1.5px solid {C["border"]};
-                border-radius: 6px;
-                padding: 0 10px;
-            }}
-            QComboBox:hover {{
-                border: 1.5px solid {C["accent"]};
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                padding-right: 8px;
-            }}
-            QComboBox QAbstractItemView {{
-                background: {C["panel"]};
-                color: {C["text"]};
-                border: 1px solid {C["border"]};
-                selection-background-color: {C["accent_light"]};
-                selection-color: {C["accent"]};
-                outline: none;
-            }}
-        """,
-        )
+        # One home for the dropdown QSS: the same string construction
+        # uses, so the box does not jump background or gain the
+        # drop-down rule on the first toggle.
+        set_css(m.inventory_combo, self.combo_style())
         nav_style = self.nav_btn_style()
         for btn in m._nav_buttons:
             set_css(btn, nav_style)

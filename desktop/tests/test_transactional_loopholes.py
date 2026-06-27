@@ -8,6 +8,7 @@ the active inventory / engine after a mode toggle or a failed load.
 
 from __future__ import annotations
 
+from phonology_features.gui.controllers.theme import ThemeController
 from phonology_shared.presentation.palette import ClassState
 
 
@@ -59,3 +60,19 @@ def test_set_html_resets_class_tab_tint(window) -> None:
     panel.set_html("<p>The grid does not satisfy the contract.</p>")
 
     assert panel._class_state == ClassState.NEUTRAL
+
+
+def test_inventory_combo_restyle_matches_construction(window) -> None:
+    """H6: the inventory dropdown must carry the same QSS after a theme
+    restyle as it does at construction. Both paths route through
+    ThemeController.combo_style(), so the box cannot jump its
+    background or gain the drop-down subcontrol rule on the first
+    theme / palette toggle (the restyle used to inline a divergent
+    copy: panel bg + an extra drop-down rule)."""
+    built = window.inventory_combo.styleSheet()
+    assert built == ThemeController.combo_style()
+
+    # A restyle at the SAME palette must reproduce the construction QSS
+    # byte for byte; set_css then no-ops on the identical string.
+    window._theme._restyle_toolbar()
+    assert window.inventory_combo.styleSheet() == built

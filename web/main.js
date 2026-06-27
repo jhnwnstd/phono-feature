@@ -343,17 +343,23 @@ function bridgeErrorMessage(e, fallback) {
  *  back and edit a string in place. */
 const STATUS_TEXT = Object.freeze(readInlineJson("status-text", {}));
 
-/** Vowel-chart visual policy: the stack-density thresholds and the
- *  legibility floor the renderer needs at runtime. Baked from
+/** Vowel-chart visual policy: the stack-density thresholds, the
+ *  legibility floor, and the silhouette corner radius the renderer
+ *  needs at runtime. Baked from
  *  ``shared/.../presentation/chart_style.py`` via
  *  ``_build_chart_style_block`` in ``web/scripts/build.py``.
- *  Defensive defaults match the pre-relay literals in case the
- *  inline JSON block is missing (older snapshot, offline build). */
+ *  The single home for the offline-build fallbacks: these defaults
+ *  must mirror the Python source values (NOT the pre-relay literals)
+ *  so the missing-block path renders identically to a baked build.
+ *  Consumers read ``CHART_STYLE.<key>`` directly; they no longer
+ *  carry their own ``?? literal`` clauses, which had drifted
+ *  (silhouette radius was 0.018 here vs 0.024 in Python). */
 const CHART_STYLE = Object.freeze(
     readInlineJson("chart-style", {
         vowel_cell_dense_threshold: 5,
         vowel_cell_ultra_threshold: 10,
         vowel_btn_min_h_px: 14,
+        silhouette_corner_radius_frac: 0.024,
     }),
 );
 
@@ -362,9 +368,9 @@ const CHART_STYLE = Object.freeze(
  *  ``mode_logic.Mode`` (single source of truth). The hardcoded
  *  fallback below is defensive only; exercised when the
  *  inlined JSON is missing (e.g., older snapshot, offline rebuild).
- *  The parity test at ``shared/tests/test_status_text_relay.py``
+ *  The parity test at ``shared/tests/test_relay_smoke.py``
  *  asserts every Python ``Mode`` member appears in the baked
- *  payload, so a future rename to the Python enum trips at build
+ *  payload, so a future rename to the Python enum trips at test
  *  time rather than at user-click time. */
 const MODE = Object.freeze(
     STATUS_TEXT.mode_values || {
@@ -588,10 +594,7 @@ async function bootPyodide({ prerendered = false } = {}) {
         const info = callBridge("load_inventory_json", text, defaultItem.label);
         setInventoryStatus(info);
         setStatusSourceLink(info.source_url);
-        const hasPending =
-            state.selected_segments.length > 0
-            || Object.keys(state.selected_features).length > 0;
-        if (hasPending) scheduleAnalysis();
+        if (hasActiveSelection()) scheduleAnalysis();
         else renderEmptyAnalysisHints();
     } else {
         await loadBundledInventory(defaultItem);
@@ -1932,8 +1935,7 @@ function _buildVowelChart(chart) {
         // We can't measure ``dataEl.clientWidth`` synchronously
         // (DOM not laid out yet); defer via rAF + observe
         // resize so the polygon tracks splitter drags too.
-        const radiusFrac = CHART_STYLE.silhouette_corner_radius_frac
-            ?? 0.018;
+        const radiusFrac = CHART_STYLE.silhouette_corner_radius_frac;
         const refreshPolygon = () => {
             // ``dataEl`` may have been removed from the DOM
             // between scheduling rAF and the callback firing
@@ -2207,8 +2209,8 @@ function _buildVowelCellStack(segs, slotNorm) {
     // ``vowels_layout`` tier constants (the same ladder that
     // drives the geometry's natural-height request); the literals
     // are offline-build fallbacks only.
-    const denseThreshold = CHART_STYLE.vowel_cell_dense_threshold ?? 5;
-    const ultraThreshold = CHART_STYLE.vowel_cell_ultra_threshold ?? 10;
+    const denseThreshold = CHART_STYLE.vowel_cell_dense_threshold;
+    const ultraThreshold = CHART_STYLE.vowel_cell_ultra_threshold;
     if (segs.length >= ultraThreshold) {
         // Pathological-cell tier (PHOIBLE worst case is 12 in
         // !XU/UPSID). The standard dense tier still produces a
@@ -2244,9 +2246,9 @@ function _buildVowelCellStack(segs, slotNorm) {
 function _refreshVowelStackClamp(dataEl) {
     const dh = dataEl.clientHeight || 0;
     if (dh <= 0) return;
-    const minH = CHART_STYLE.vowel_btn_min_h_px ?? 14;
-    const denseThreshold = CHART_STYLE.vowel_cell_dense_threshold ?? 5;
-    const ultraThreshold = CHART_STYLE.vowel_cell_ultra_threshold ?? 10;
+    const minH = CHART_STYLE.vowel_btn_min_h_px;
+    const denseThreshold = CHART_STYLE.vowel_cell_dense_threshold;
+    const ultraThreshold = CHART_STYLE.vowel_cell_ultra_threshold;
     const styles = getComputedStyle(dataEl);
     const readPx = (name, fallback) => {
         const v = parseFloat(styles.getPropertyValue(name));
@@ -2621,6 +2623,16 @@ const ANALYSIS_DEBOUNCE_MS = 30;
  * Schedule a debounced runAnalysis. Coalesces rapid clicks so a
  * burst (toggle on/off/on) doesn't trigger N bridge calls.
  */
+/** True when the user has an active query: at least one selected
+ *  segment (seg->feat) or one queried feature (feat->seg). The single
+ *  home for this predicate; boot, the mode toggle, and the theme /
+ *  colorblind toggles all read it so the "is anything selected" rule
+ *  cannot drift between call sites. */
+function hasActiveSelection() {
+    return state.selected_segments.length > 0
+        || Object.keys(state.selected_features).length > 0;
+}
+
 function scheduleAnalysis() {
     if (state.debounce_timer !== null) clearTimeout(state.debounce_timer);
     state.debounce_timer = setTimeout(() => {
@@ -3156,13 +3168,15 @@ function wireSetupDialog() {
 
     form.addEventListener("submit", (ev) => {
         ev.preventDefault();
-        // Editor-dirty guard: creating a new inventory swaps the
-        // engine, which discards any unsaved edits the user made in
-        // the editor. Prompt once before the swap so the dialog
-        // submit cannot silently erase in-progress work. Matches
-        // the spirit of the desktop's ``_check_unsaved`` gate
-        // around :py:meth:`show_setup_dialog`.
-        if (!nodes.editorView.hidden && editorState.dirty) {
+        // Editor-unsaved guard: creating a new inventory swaps the
+        // engine, which discards any unsaved work in the editor.
+        // Prompt once before the swap so the dialog submit cannot
+        // silently erase in-progress work. Uses the same
+        // editorHasUnsavedWork() predicate as closeEditor/beforeunload
+        // so a created-but-unsaved inventory (engineReplaced, not yet
+        // dirty) is still caught. Matches the spirit of the desktop's
+        // ``_check_unsaved`` gate around :py:meth:`show_setup_dialog`.
+        if (!nodes.editorView.hidden && editorHasUnsavedWork()) {
             if (!confirm("Discard unsaved changes to the current inventory?")) {
                 return;
             }
@@ -3703,10 +3717,12 @@ function wirePhoiblePicker() {
     form.addEventListener("submit", (ev) => {
         ev.preventDefault();
         if (!selectedInventoryId) return;
-        // Editor-dirty guard: loading a new inventory swaps the
-        // engine, which discards any unsaved edits in the Builder.
-        // Mirrors the upload + setup-dialog gate.
-        if (!nodes.editorView.hidden && editorState.dirty) {
+        // Editor-unsaved guard: loading a new inventory swaps the
+        // engine, which discards any unsaved work in the Builder.
+        // Mirrors the upload + setup-dialog gate; editorHasUnsavedWork()
+        // also catches a created-but-unsaved inventory, not just dirty
+        // grid edits.
+        if (!nodes.editorView.hidden && editorHasUnsavedWork()) {
             const ok = confirm(
                 "Discard unsaved changes to the current inventory?",
             );
@@ -5498,22 +5514,16 @@ function labelPrompt({
     nodes.labelPromptInput.value = "";
     nodes.labelPromptError.textContent = "";
     _labelPromptPending = { bridgeEndpoint, existing, onAccept };
-    const dlg = nodes.labelPromptDialog;
-    if (typeof dlg.showModal === "function") {
-        dlg.showModal();
-    } else {
-        dlg.setAttribute("open", "");
-    }
+    // Route through the shared dialog helper so the prompt captures
+    // its trigger (+Segment / +Feature) and restores focus to it on
+    // close, like every other dialog. openDialog does not focus an
+    // input, so we still rAF-focus the text field afterwards.
+    openDialog(nodes.labelPromptDialog);
     requestAnimationFrame(() => nodes.labelPromptInput.focus());
 }
 
 function closeLabelPrompt() {
-    const dlg = nodes.labelPromptDialog;
-    if (typeof dlg.close === "function") {
-        dlg.close();
-    } else {
-        dlg.removeAttribute("open");
-    }
+    closeDialog(nodes.labelPromptDialog);
     _labelPromptPending = null;
 }
 
@@ -5759,9 +5769,7 @@ function wireMatchModeToggle() {
         callBridge("set_match_mode", next);
         // Capture BEFORE the feature-pane rebuild so a selection made
         // under the old mode still drives the re-analysis below.
-        const hadSelection =
-            state.selected_segments.length > 0
-            || Object.keys(state.selected_features).length > 0;
+        const hadSelection = hasActiveSelection();
         try {
             const info = callBridge("inventory_summary_for_mode", next);
             if (info) {
@@ -5841,10 +5849,13 @@ function wireColorblindToggle() {
         safeStorageSet("palette_mode", next);
         if (state.bridge) {
             callBridge("set_active_palette_mode", next);
-            const hasSelection =
-                state.selected_segments.length > 0
-                || Object.keys(state.selected_features).length > 0;
-            if (hasSelection) runAnalysis();
+            // Always repaint, even with no selection: the empty-state
+            // hint HTML carries the palette color baked in, so the pane
+            // must re-render to pick up the new palette. runAnalysis
+            // dispatches by mode and re-runs analyze_* on the (possibly
+            // empty) selection. Mirrors the desktop, which refreshes
+            // analysis unconditionally on a palette change.
+            runAnalysis();
         }
     });
 }
@@ -5882,12 +5893,13 @@ function wireThemeToggle() {
         safeStorageSet("theme", next);
         if (state.bridge) {
             callBridge("set_active_theme", next);
-            // Re-run only if a selection is active; an empty pane
-            // has no chip colors to refresh.
-            const hasSelection =
-                state.selected_segments.length > 0
-                || Object.keys(state.selected_features).length > 0;
-            if (hasSelection) runAnalysis();
+            // Always repaint, even with no selection: the empty-state
+            // hint HTML carries the theme color baked in, so the pane
+            // must re-render to pick up the new theme. runAnalysis
+            // dispatches by mode and re-runs analyze_* on the (possibly
+            // empty) selection. Mirrors the desktop, which refreshes
+            // analysis unconditionally on a theme change.
+            runAnalysis();
         }
     });
 }

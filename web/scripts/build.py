@@ -586,8 +586,8 @@ def _build_status_text_payload() -> dict[str, str]:
         # if a Python member was renamed. Baking them via the
         # payload makes the Python enum the single source of
         # truth; the parity test at
-        # ``shared/tests/test_status_text_relay.py`` confirms each
-        # member is present.
+        # ``shared/tests/test_relay_smoke.py`` confirms each
+        # member is relayed (name and value).
         from phonology_shared.presentation.palette import (
             PaletteMode,
             Theme,
@@ -1040,8 +1040,18 @@ def write_python_bundle() -> None:
         compression=zipfile.ZIP_DEFLATED,
         compresslevel=9,
     ) as zf:
+        # Write each member through an explicit ZipInfo with a fixed
+        # timestamp instead of zf.write(), which embeds the file's real
+        # st_mtime into the local-file header. Without this, the zip
+        # bytes (and therefore the content hash and the service-worker
+        # build_id) change on every build even when the source is
+        # byte-identical, forcing returning visitors to re-download the
+        # bundle and bumping the SW cache on every deploy.
         for zip_path, src in entries:
-            zf.write(src, arcname=zip_path)
+            zinfo = zipfile.ZipInfo(zip_path, date_time=(1980, 1, 1, 0, 0, 0))
+            zinfo.compress_type = zipfile.ZIP_DEFLATED
+            zinfo.external_attr = 0o644 << 16
+            zf.writestr(zinfo, src.read_bytes(), compresslevel=9)
 
     shutil.rmtree(shared_root, ignore_errors=True)
     raw = sum(p.stat().st_size for _, p in entries if p.exists())

@@ -61,7 +61,7 @@ def test_chart_style_inline_json(built_dist: Path) -> None:
         assert key in payload
 
 
-def test_status_text_inline_json(built_dist: Path) -> None:
+def _status_text_payload(built_dist: Path) -> dict:
     html = (built_dist / "index.html").read_text(encoding="utf-8")
     match = re.search(
         r'<script id="status-text"[^>]*>(.+?)</script>',
@@ -69,8 +69,42 @@ def test_status_text_inline_json(built_dist: Path) -> None:
         re.DOTALL,
     )
     assert match is not None
-    payload = json.loads(match.group(1))
+    return json.loads(match.group(1))
+
+
+def test_status_text_inline_json(built_dist: Path) -> None:
+    payload = _status_text_payload(built_dist)
     assert "clipboard_copy_template" in payload
+
+
+def test_enum_value_tables_relayed(built_dist: Path) -> None:
+    """Every Python enum member that main.js mirrors as a defensive
+    pre-bridge fallback must appear, name and value, in the baked
+    status-text payload. This is the parity guard the MODE / theme /
+    palette / match-mode fallbacks in main.js advertise: a rename to
+    a Python enum member trips HERE rather than silently drifting the
+    JS fallback until a user clicks. (Replaces the per-constant
+    test_status_text_relay guard the build comments used to cite.)
+    """
+    from phonology_shared.presentation.mode_logic import Mode
+    from phonology_shared.presentation.palette import PaletteMode, Theme
+    from phonology_shared.theory.feature_engine import MatchMode
+
+    payload = _status_text_payload(built_dist)
+    tables = {
+        "mode_values": Mode,
+        "theme_values": Theme,
+        "palette_mode_values": PaletteMode,
+        "match_mode_values": MatchMode,
+    }
+    for key, enum in tables.items():
+        baked = payload.get(key)
+        assert baked, f"{key} missing or empty in status-text payload"
+        for member in enum:
+            assert baked.get(member.name) == member.value, (
+                f"{key} drifted: Python {member.name}={member.value!r} "
+                f"not relayed (payload has {baked.get(member.name)!r})"
+            )
 
 
 def test_limits_inline_json(built_dist: Path) -> None:

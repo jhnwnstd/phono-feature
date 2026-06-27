@@ -203,6 +203,14 @@ def run_for_browser(browser_type, label: str) -> int:
         browser.close()
         return rc
 
+    # Editor "New" unsaved-work prompt (data-loss guard). Runs after the
+    # rollback check, which leaves the original inventory restored and
+    # the editor closed.
+    rc = run_editor_unsaved_guard_check(page, label)
+    if rc != 0:
+        browser.close()
+        return rc
+
     if console_errors or page_errors:
         print(
             "  FAIL: console / page errors fired during run",
@@ -283,6 +291,82 @@ def run_baseline_checks(page, label: str) -> int:
     return 0
 
 
+# Submit the editor's "New inventory" setup dialog with a given name,
+# filling the segment + feature fields from their placeholder defaults
+# (a smaller, valid inventory distinct from the loaded one). Shared by
+# the rollback + unsaved-guard checks so the setup-submit idiom has one
+# home.
+_SETUP_SUBMIT_JS = (
+    "(name) => {"
+    " const s = document.querySelector('#setup-segments-input');"
+    " const f = document.querySelector('#setup-features-input');"
+    " document.querySelector('#setup-name-input').value = name;"
+    " s.value = s.placeholder; f.value = f.placeholder;"
+    " document.querySelector('#setup-form').requestSubmit();"
+    "}"
+)
+
+
+def run_editor_unsaved_guard_check(page, label: str) -> int:
+    """Regression guard for the editor "New" unsaved-work prompt.
+
+    Once a new (unsaved) inventory has been created via "New", a SECOND
+    "New" must PROMPT before discarding it. The guard reads
+    editorHasUnsavedWork(), so it fires even though the just-created
+    inventory is not yet "dirty" (engineReplaced is true). A weaker
+    dirty-only guard silently discarded the created inventory.
+    """
+    page.set_viewport_size({"width": 1280, "height": 720})
+    has_grid = page.evaluate(
+        "() => document.querySelectorAll('#seg-grid .seg-btn').length"
+    )
+    if not has_grid:
+        print("  editor-unsaved-guard: no seg-grid, skipping")
+        return 0
+    prompts: list[str] = []
+
+    def _record(d) -> None:
+        prompts.append(d.message)
+        d.accept()
+
+    page.on("dialog", _record)
+    try:
+        page.click("#builder-btn")
+        page.wait_for_timeout(150)
+        # First New: state was clean before it, so no prompt should fire.
+        page.click("#editor-new-btn")
+        page.wait_for_selector("#setup-dialog[open]", timeout=10_000)
+        page.evaluate(_SETUP_SUBMIT_JS, "GUARD_FIRST")
+        page.wait_for_timeout(700)
+        if prompts:
+            print(
+                f"  FAIL: first New prompted unexpectedly ({prompts})",
+                file=sys.stderr,
+            )
+            return 1
+        # Second New: a created-but-unsaved inventory now exists; the
+        # guard must prompt even though it is not "dirty".
+        page.click("#editor-new-btn")
+        page.wait_for_selector("#setup-dialog[open]", timeout=10_000)
+        page.evaluate(_SETUP_SUBMIT_JS, "GUARD_SECOND")
+        page.wait_for_timeout(700)
+        if not any("Discard unsaved" in m for m in prompts):
+            print(
+                "  FAIL: second New did not prompt before discarding a "
+                f"created-but-unsaved inventory (dialogs={prompts})",
+                file=sys.stderr,
+            )
+            return 1
+    finally:
+        page.remove_listener("dialog", _record)
+    # Clean up: back out of the editor, accepting the discard confirm.
+    page.once("dialog", lambda d: d.accept())
+    page.click("#editor-exit-btn")
+    page.wait_for_timeout(400)
+    print("  editor unsaved-work guard ok (second New prompted)")
+    return 0
+
+
 def run_editor_rollback_check(page, label: str) -> int:
     """Regression guard for the editor "New" transaction: creating a new
     inventory via the builder's New and backing out WITHOUT saving must
@@ -308,15 +392,7 @@ def run_editor_rollback_check(page, label: str) -> int:
         return 1
     # Fill from the placeholder defaults (a smaller, different inventory
     # than the default) and submit.
-    page.evaluate(
-        "() => {"
-        " const s = document.querySelector('#setup-segments-input');"
-        " const f = document.querySelector('#setup-features-input');"
-        " document.querySelector('#setup-name-input').value = 'SMOKE_NEW';"
-        " s.value = s.placeholder; f.value = f.placeholder;"
-        " document.querySelector('#setup-form').requestSubmit();"
-        "}"
-    )
+    page.evaluate(_SETUP_SUBMIT_JS, "SMOKE_NEW")
     page.wait_for_timeout(700)
     if page.evaluate(sig_js) == before:
         print("  FAIL: 'New' did not swap the inventory", file=sys.stderr)
