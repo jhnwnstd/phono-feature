@@ -1967,6 +1967,19 @@ dialog input[type="text"]:focus-visible {
   color: var(--text-dim);
   white-space: nowrap;
   user-select: none;
+  /* Now an <a> to the author's site. The rasterized glyph mask has
+     no DOM text to underline, but drop the default link decoration
+     anyway and let the mask keep painting via the dim currentColor. */
+  text-decoration: none;
+}
+/* Signal the link: the mask paints with background-color:currentColor,
+   so brightening the colour on hover/focus brightens the brand. */
+.statusbar-brand:hover {
+  color: var(--accent);
+}
+.statusbar-brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 /* The bug-report button sits in the statusbar's centre slot
    (``justify-content: space-between`` with three items places
