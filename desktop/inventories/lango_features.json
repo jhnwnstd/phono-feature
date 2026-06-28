@@ -213,7 +213,7 @@
       "Back": "0",
       "Tense": "0"
     },
-    "c͡ç": {
+    "t͡ɕ": {
       "Syllabic": "-",
       "Stress": "-",
       "Long": "-",
@@ -234,7 +234,7 @@
       "CORONAL": "+",
       "Anterior": "-",
       "Distributed": "+",
-      "Strident": "-",
+      "Strident": "+",
       "Lateral": "-",
       "DORSAL": "+",
       "High": "+",
@@ -243,7 +243,7 @@
       "Back": "-",
       "Tense": "0"
     },
-    "ɟ͡ʝ": {
+    "d͡ʑ": {
       "Syllabic": "-",
       "Stress": "-",
       "Long": "-",
@@ -264,7 +264,7 @@
       "CORONAL": "+",
       "Anterior": "-",
       "Distributed": "+",
-      "Strident": "-",
+      "Strident": "+",
       "Lateral": "-",
       "DORSAL": "+",
       "High": "+",
