@@ -874,8 +874,6 @@ _PLACEMENT_SNAPSHOT: dict[str, dict[str, list[int]]] = {
         "i": [0, 0],
         "o": [2, 5],
         "u": [0, 5],
-        "ɔ": [4, 5],
-        "ɛ": [4, 0],
     },
     "turkish_features.json": {
         "e": [2, 0],

@@ -1157,8 +1157,8 @@
   },
   "tobabatak_features.json": {
     "Affricates": [
-      "t͡ɕ",
-      "d͡ʑ"
+      "t͡ʃ",
+      "d͡ʒ"
     ],
     "Fricatives": [
       "s",
@@ -1189,10 +1189,8 @@
     "Vowels": [
       "i",
       "u",
-      "ɛ",
       "e",
       "a",
-      "ɔ",
       "o"
     ]
   },
