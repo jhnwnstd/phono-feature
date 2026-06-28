@@ -52,7 +52,14 @@ def _geometry(inventory_name: str) -> VowelChartGeometry:
     ]
     feats = {s: dict(engine.segments[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, feats)
-    return build_vowel_chart_geometry(vowels, profile, feats)
+    # Mirror the live renderer (view_models): diphthong final-state
+    # bundles live in metadata.segment_secondary, so the geometry can
+    # exclude contour vowels from cells and draw them as the diphthong
+    # strip instead of placing them as monophthongs.
+    secondary = engine.inventory.metadata.get("segment_secondary")
+    return build_vowel_chart_geometry(
+        vowels, profile, feats, segment_secondary=secondary
+    )
 
 
 def _find_cell_with(geometry: VowelChartGeometry, seg: str):
