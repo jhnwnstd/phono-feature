@@ -168,6 +168,7 @@ class PhoibleProvider:
         *,
         index_table: Mapping[str, Any] | None = None,
         data_table: Mapping[str, Any] | None = None,
+        defer_index: bool = False,
     ) -> None:
         """Construct from pre-loaded tables (testing override) or
         from the packaged snapshots.
@@ -178,18 +179,58 @@ class PhoibleProvider:
         :py:meth:`load_data_payload` provides the data JSON. This
         is the web bridge's expected boot state.
         """
+        # Initialise every index + data attribute up front so a
+        # deferred provider (the web cold path, before the lazy index /
+        # data payloads land) is a fully-formed object whose invariants
+        # never depend on a completed ingest.
+        self.version: str = "PHOIBLE 2.0"
+        self._citation: str = ""
+        self._license: str = ""
+        self._source_url: str = ""
+        self._inventories: dict[str, InventoryDescriptor] = {}
+        self._by_language: dict[str, list[str]] = {}
+        self._language_search_index: list[tuple[str, str]] = []
+        self._index_loaded: bool = False
+        self._feature_names: tuple[str, ...] = ()
+        self._segments_by_inventory: dict[str, Mapping[str, str]] = {}
+        self._segment_secondary_by_inventory: dict[str, Mapping[str, str]] = {}
+
+        if defer_index:
+            # Web bundle: the index is externalized as a lazy ``dist``
+            # asset (kept out of ``python_bundle.zip``). main.js injects
+            # it via :py:meth:`load_index_payload` and the data via
+            # :py:meth:`load_data_payload` on first PHOIBLE picker open.
+            return
+
         if index_table is None:
             index_table = json.loads(_load_index_bytes())
+        self._ingest_index(index_table)
+
+        if data_table is None:
+            raw_data = _try_load_data_bytes()
+            if raw_data is not None:
+                data_table = _loads_pooled(raw_data)
+        if data_table is not None:
+            self._ingest_data(data_table)
+
+    def _ingest_index(self, index_table: Mapping[str, Any]) -> None:
+        """Build the descriptor + language search indices from a parsed
+        PHOIBLE index table.
+
+        Shared by ``__init__`` (packaged index, desktop + tests) and
+        :py:meth:`load_index_payload` (web lazy-loaded index asset).
+        Sets :py:attr:`has_index` on success.
+        """
         if not isinstance(index_table, Mapping):
             raise TypeError(
                 f"PHOIBLE index must be a mapping at top level; "
                 f"got {type(index_table).__name__}"
             )
 
-        self.version: str = str(index_table.get("version", "PHOIBLE 2.0"))
-        self._citation: str = str(index_table.get("citation", ""))
-        self._license: str = str(index_table.get("license", ""))
-        self._source_url: str = str(index_table.get("source_url", ""))
+        self.version = str(index_table.get("version", "PHOIBLE 2.0"))
+        self._citation = str(index_table.get("citation", ""))
+        self._license = str(index_table.get("license", ""))
+        self._source_url = str(index_table.get("source_url", ""))
 
         # Materialise the descriptor list and a language-name index
         # for O(1) lookups during the dialog flow. ``language_index``
@@ -207,8 +248,8 @@ class PhoibleProvider:
                 f"{type(raw_inventories).__name__!s}, expected list; "
                 "rerun bake_phoible to regenerate"
             )
-        self._inventories: dict[str, InventoryDescriptor] = {}
-        self._by_language: dict[str, list[str]] = {}
+        self._inventories = {}
+        self._by_language = {}
         skipped_no_id = 0
         for entry in raw_inventories:
             if not isinstance(entry, Mapping):
@@ -277,26 +318,8 @@ class PhoibleProvider:
         # the dedup map above; keeping them means every debounced
         # autocomplete keystroke scans precomputed folds instead of
         # re-casefolding all ~2,700 names per query.
-        self._language_search_index: list[tuple[str, str]] = sorted(
-            by_folded.items()
-        )
-
-        # Optional data payload. ``_segments_by_inventory`` is the
-        # decoded form keyed by inventory id; ``_feature_names``
-        # is the canonical column list used to decode positional
-        # bundle strings. All three attributes are initialized here
-        # so the index-only boot state (web bridge before the lazy
-        # data fetch lands) is a fully-constructed object; the
-        # invariant must not depend on a completed ingest.
-        self._feature_names: tuple[str, ...] = ()
-        self._segments_by_inventory: dict[str, Mapping[str, str]] = {}
-        self._segment_secondary_by_inventory: dict[str, Mapping[str, str]] = {}
-        if data_table is None:
-            raw_data = _try_load_data_bytes()
-            if raw_data is not None:
-                data_table = _loads_pooled(raw_data)
-        if data_table is not None:
-            self._ingest_data(data_table)
+        self._language_search_index = sorted(by_folded.items())
+        self._index_loaded = True
 
     @classmethod
     def from_path(
@@ -334,6 +357,22 @@ class PhoibleProvider:
         else:
             data = payload
         self._ingest_data(data)
+
+    def load_index_payload(
+        self, payload: str | bytes | Mapping[str, Any]
+    ) -> None:
+        """Ingest a previously-deferred index JSON payload.
+
+        Used by the web bridge after the lazy ``fetch`` of
+        ``phoible_index.<hash>.json`` lands (the index is externalized
+        from ``python_bundle.zip`` to shrink the cold boot). Mirrors
+        :py:meth:`load_data_payload`; idempotent.
+        """
+        if isinstance(payload, (str, bytes)):
+            index = json.loads(payload)
+        else:
+            index = payload
+        self._ingest_index(index)
 
     def _ingest_data(self, data: Mapping[str, Any]) -> None:
         feature_names = data.get("feature_names")
@@ -513,6 +552,16 @@ class PhoibleProvider:
         Grid" button until the lazy fetch lands.
         """
         return bool(self._feature_names)
+
+    @property
+    def has_index(self) -> bool:
+        """``True`` once the index payload is loaded.
+
+        Always ``True`` for a packaged construction (desktop + tests);
+        starts ``False`` in the web deferred mode until
+        :py:meth:`load_index_payload` runs.
+        """
+        return self._index_loaded
 
     def descriptor(self, inventory_id: str) -> InventoryDescriptor | None:
         """Look up an inventory descriptor by id, or ``None`` if

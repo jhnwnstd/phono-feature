@@ -115,19 +115,18 @@ def bake_phoible_tables() -> None:
     ``web/scripts/phoible_cache/`` and writes two JSON files:
 
     * ``_phoible_index.generated.json`` -> shared/.../editor/
-      (small; ships inside ``python_bundle.zip``)
+      (language list + inventory descriptors)
     * ``_phoible_data.generated.json`` -> shared/.../editor/
-      (larger; ships as a SEPARATE static asset under
-      ``web/dist/`` because we lazy-load it on first PHOIBLE
-      click to keep the cold path cheap)
+      (the larger per-segment feature payload)
 
-    The data file STILL gets written into the shared/ directory
-    here so the desktop install picks it up via
-    ``importlib.resources``; the
-    :py:func:`write_python_bundle` step below opts the data file
-    OUT of the zip (it walks ``_phoible_index.generated.json``
-    explicitly so the larger data file is left for
-    :py:func:`copy_phoible_data_asset` to handle separately).
+    Both files STILL get written into the shared/ directory here so
+    the desktop install picks them up via ``importlib.resources``; on
+    the web both are externalized as SEPARATE static assets under
+    ``web/dist/`` and lazy-loaded on first PHOIBLE click to keep the
+    cold path cheap and the precached bundle small. The
+    :py:func:`write_python_bundle` step below opts BOTH files OUT of
+    the zip; :py:func:`copy_phoible_data_asset` and
+    :py:func:`copy_phoible_index_asset` copy them to ``dist/``.
 
     When the vendored cache is missing (a stripped clone, an
     intentional dev override), the bake prints a warning and
@@ -1008,13 +1007,18 @@ def write_python_bundle() -> None:
     for path in sorted(shared_root.rglob("*.py")):
         entries.append((path.relative_to(shared_root).as_posix(), path))
     # Non-Python data files that ship inside the package and load via
-    # importlib.resources at runtime (PanPhon lookup snapshot, PHOIBLE
-    # index). The PHOIBLE *data* file is intentionally excluded: it is
-    # 5 MB raw and ships as a separate static asset under ``dist/`` so
-    # the cold Pyodide boot path stays cheap (the dialog fetches and
-    # injects the JSON on first PHOIBLE click via the bridge).
+    # importlib.resources at runtime (PanPhon lookup snapshot). The
+    # PHOIBLE *data* (~5 MB) and *index* (~1 MB) files are intentionally
+    # excluded: both ship as separate static assets under ``dist/`` so
+    # the cold Pyodide boot path stays cheap and the precached bundle
+    # stays small. The dialog fetches and injects them on first PHOIBLE
+    # click via the bridge (phoible_load_index / phoible_load_data).
+    lazy_generated = {
+        "_phoible_data.generated.json",
+        "_phoible_index.generated.json",
+    }
     for path in sorted(shared_root.rglob("*.generated.json")):
-        if path.name == "_phoible_data.generated.json":
+        if path.name in lazy_generated:
             continue
         entries.append((path.relative_to(shared_root).as_posix(), path))
     entries.append(("api.py", DIST / "api.py"))
@@ -1075,6 +1079,27 @@ def copy_phoible_data_asset() -> None:
     if license_src.exists():
         shutil.copy(license_src, DIST / "PHOIBLE_LICENSE.txt")
         print("  PHOIBLE_LICENSE.txt -> dist/")
+
+
+def copy_phoible_index_asset() -> None:
+    """Copy the PHOIBLE index JSON to dist/ as a lazy static asset.
+
+    The index (language list + inventory descriptors, ~1 MB raw) is
+    externalized from ``python_bundle.zip`` the same way the data file
+    is, so it is not precached on a cold boot for the majority who never
+    open the PHOIBLE picker. main.js fetches it on first picker open and
+    injects it via the ``phoible_load_index`` bridge. :py:func:`hash_assets`
+    content-hashes it like the data asset.
+    """
+    src = SHARED_PKG / "editor" / "_phoible_index.generated.json"
+    if not src.exists():
+        # No bake produced (cache missing); the asset manifest will lack
+        # ``phoible_index`` and main.js hides the PHOIBLE entry.
+        return
+    dst = DIST / "phoible_index.json"
+    shutil.copy(src, dst)
+    kb = dst.stat().st_size / 1024
+    print(f"Copying PHOIBLE index asset...\n  {kb:.0f} KB -> {dst.name}")
 
 
 def copy_ipa_font_asset() -> None:
@@ -1225,6 +1250,17 @@ def hash_assets() -> None:
         phoible_data.rename(DIST / new_phoible)
         runtime_map["phoible_data"] = new_phoible
         full_map["phoible_data.json"] = new_phoible
+
+    # 3a-bis. PHOIBLE index asset. Same lazy treatment as the data
+    #     asset above; the hashed name lands in ``runtime_map`` so
+    #     main.js can ``fetch(asset_map.phoible_index)`` and gate the
+    #     PHOIBLE picker entry on the asset's presence.
+    phoible_index = DIST / "phoible_index.json"
+    if phoible_index.exists():
+        new_phoible_index = _hashed_name(phoible_index)
+        phoible_index.rename(DIST / new_phoible_index)
+        runtime_map["phoible_index"] = new_phoible_index
+        full_map["phoible_index.json"] = new_phoible_index
 
     # 3b. IPA font. Hashed BEFORE the CSS step so we can rewrite
     #     style.css's ``url("charis-ipa.woff2")`` reference to the
@@ -1474,13 +1510,13 @@ def write_service_worker() -> None:
     template = (WEB_DIR / "sw.js").read_text(encoding="utf-8")
 
     SKIP_NAMES = {"sw.js", ".nojekyll"}
-    # PHOIBLE data file (~5 MB) is lazy-loaded on demand; precaching
-    # it would force every visitor to download it during the SW
-    # install even if they never click the PHOIBLE picker. The file
-    # gets cached on first fetch via the cache-first rule in sw.js
-    # so subsequent visits hit the local copy. ``startswith`` so a
-    # future content-hash on the same logical asset still matches.
-    LAZY_PREFIXES = ("phoible_data.",)
+    # PHOIBLE data (~5 MB) and index (~1 MB) files are lazy-loaded on
+    # demand; precaching them would force every visitor to download
+    # ~6 MB during the SW install even if they never click the PHOIBLE
+    # picker. They get cached on first fetch via the cache-first rule
+    # in sw.js so subsequent visits hit the local copy. ``startswith``
+    # so a future content-hash on the same logical asset still matches.
+    LAZY_PREFIXES = ("phoible_data.", "phoible_index.")
     precache = ["./", "./index.html"]
     for path in sorted(DIST.rglob("*")):
         if not path.is_file():
@@ -1532,6 +1568,7 @@ def main() -> int:
     copy_inventories()
     write_python_bundle()
     copy_phoible_data_asset()
+    copy_phoible_index_asset()
     copy_ipa_font_asset()
     write_bootstrap()
     hash_assets()

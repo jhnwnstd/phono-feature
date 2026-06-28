@@ -203,13 +203,17 @@ def tag_palettes() -> dict[TagColor, tuple[str, str]]:
     return built
 
 
-# Pre-baked inline-chip ``<span style='...'>`` prefix per (theme_version,
-# color). The hot path through ``_tag`` in analysis.py used to
+# Pre-baked inline-chip ``<span style='...'>`` prefix per colour for the
+# current theme. The hot path through ``_tag`` in analysis.py used to
 # interpolate 9 fields (bg, fg, 5 invariant CSS constants, etc.) per
-# call; the only thing that actually varies per (theme, color) is the
-# bg/fg pair, so the prefix is fully cacheable. Cache keyed on
-# ``palette.theme_version`` so a theme toggle invalidates it.
-_TAG_PREFIX_CACHE: dict[tuple[int, TagColor], str] = {}
+# call; the only thing that actually varies per (theme, colour) is the
+# bg/fg pair, so the prefix is fully cacheable. Single-slot on
+# ``palette.theme_version`` (same shape as :py:func:`tag_palettes`
+# above): a theme/colourblind/mode toggle clears the previous theme's
+# entries instead of leaving them behind, so the cache stays capped at
+# one entry per :class:`TagColor` for the life of the tab.
+_TAG_PREFIX_CACHE: dict[TagColor, str] = {}
+_tag_prefix_cache_version: int | None = None
 
 
 def tag_prefix(colour: TagColor) -> str:
@@ -218,9 +222,15 @@ def tag_prefix(colour: TagColor) -> str:
     Callers concatenate ``tag_prefix(colour) + escaped_text + "</span>"``
     instead of paying for a 9-field f-string interpolation per call.
     """
+    global _tag_prefix_cache_version
     version = _palette.theme_version
-    key = (version, colour)
-    cached = _TAG_PREFIX_CACHE.get(key)
+    if _tag_prefix_cache_version != version:
+        # A theme toggle bumps ``theme_version``: drop the previous
+        # theme's prefixes rather than accumulating a fresh set per
+        # version (which would grow without bound over a long session).
+        _TAG_PREFIX_CACHE.clear()
+        _tag_prefix_cache_version = version
+    cached = _TAG_PREFIX_CACHE.get(colour)
     if cached is not None:
         return cached
     palette = tag_palettes()
@@ -234,7 +244,7 @@ def tag_prefix(colour: TagColor) -> str:
         f" font-size:{CHIP_FONT_SIZE_PT}pt;"
         f" white-space:nowrap;'>"
     )
-    _TAG_PREFIX_CACHE[key] = prefix
+    _TAG_PREFIX_CACHE[colour] = prefix
     return prefix
 
 

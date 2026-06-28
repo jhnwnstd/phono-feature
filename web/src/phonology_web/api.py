@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import functools
 import json
+import sys
 from collections.abc import Callable
 from functools import lru_cache
 from typing import Any, TypeVar, cast
@@ -174,6 +175,25 @@ def _translate_engine_errors(fn: F) -> F:
     return cast(F, wrapper)
 
 
+def _parse_enforce(json_text: str, source_label: str) -> Inventory:
+    """Decode + structurally parse + cap-check a JSON inventory.
+
+    The shared head of every JSON load route. Uses the single decode
+    entry-point also used by ``Inventory.load`` so the desktop file path
+    and the web upload path enforce the same JSON-level contract:
+    duplicate keys, non-finite literals, and syntax errors all surface
+    as ``ValidationError`` with the source label prepended. The parse
+    layer caps the TOTAL segment count; the per-class caps are
+    feature-driven and live one layer up (data must not import chart),
+    so they are enforced here, after the structural parse, before any
+    engine swap.
+    """
+    raw = parse_inventory_json_text(json_text, source_label)
+    inventory = Inventory.parse(raw, source=source_label)
+    enforce_class_caps(inventory.segments)
+    return inventory
+
+
 def load_inventory_json(
     json_text: str,
     source_label: str = "uploaded",
@@ -184,19 +204,35 @@ def load_inventory_json(
     Raises ``ValidationError`` with the same shape as
     ``Inventory.load`` so JS can surface the issues list.
     """
-    # Single decode entry-point shared with ``Inventory.load`` so the
-    # desktop file path and the web upload path enforce the same
-    # JSON-level contract: duplicate keys, non-finite literals, and
-    # syntax errors all surface as ``ValidationError`` with the
-    # source label prepended.
-    raw = parse_inventory_json_text(json_text, source_label)
-    inventory = Inventory.parse(raw, source=source_label)
-    # The parse layer caps the TOTAL segment count; the per-class
-    # caps are feature-driven and live one layer up (data must not
-    # import chart), so enforce them here, after the structural
-    # parse, before the engine swaps in.
-    enforce_class_caps(inventory.segments)
+    inventory = _parse_enforce(json_text, source_label)
     return _swap_engine_summary(inventory, inventory.name or source_label)
+
+
+def load_inventory_json_status_only(
+    json_text: str,
+    source_label: str = "uploaded",
+) -> dict[str, Any]:
+    """Swap the engine in WITHOUT building the full grid/feature summary.
+
+    The prerendered default-boot path has the segment grid and feature
+    list already painted from ``bootstrap.json``, so it only needs the
+    engine swapped (for the first analysis click) and the four facts the
+    status bar shows. Building + deep-converting the full summary
+    (segments, features, groups, feature_groups, vowel_chart,
+    active_features) the way :py:func:`load_inventory_json` does would
+    just be discarded here, so this returns a flat dict the status bar
+    reads directly. Same parse + cap-check + swap contract as the full
+    route; only the payload differs.
+    """
+    inventory = _parse_enforce(json_text, source_label)
+    name = inventory.name or source_label
+    engine = _set_engine(FeatureEngine(inventory), name)
+    return {
+        "name": name,
+        "n_segments": len(engine.segments),
+        "n_features": len(engine.features),
+        "source_url": inventory.metadata.get("source_url"),
+    }
 
 
 def _invalidate_analysis_caches() -> None:
@@ -292,13 +328,22 @@ def _inventory_provider_registry() -> dict[str, InventoryProvider]:
     """Return the available inventory providers indexed by ``name``.
 
     Sibling to :py:func:`_provider_registry`; today the only
-    inventory provider is PHOIBLE. The provider boots in index-
-    only mode on the web (data file is lazy-loaded), so the
-    autocomplete + inventory listing are available before the
-    user has fetched the data payload. ``generate`` raises until
-    :py:func:`phoible_load_data` injects the data JSON.
+    inventory provider is PHOIBLE.
+
+    On the web (Pyodide / Emscripten) both the PHOIBLE index and data
+    files are externalized as lazy ``dist`` assets to keep the cold-boot
+    bundle small, so the provider is constructed in deferred mode and
+    touches no packaged snapshot here; main.js injects the index + data
+    payloads (:py:func:`phoible_load_index` / :py:func:`phoible_load_data`)
+    on first picker open, and availability is gated by the asset
+    manifest. Off the web (desktop / tests) the packaged snapshot is
+    read at construction, so a stale checkout with no baked index leaves
+    the registry empty.
     """
     registry: dict[str, InventoryProvider] = {}
+    if sys.platform == "emscripten":
+        registry["PHOIBLE"] = PhoibleProvider(defer_index=True)
+        return registry
     try:
         provider = PhoibleProvider()
     except PhoibleSnapshotNotAvailable:
@@ -399,15 +444,20 @@ def phoible_is_available() -> bool:
 
 
 def phoible_is_ready() -> bool:
-    """Return ``True`` once the PHOIBLE data payload is loaded.
+    """Return ``True`` once the PHOIBLE index AND data payloads load.
 
-    Index-only mode (the web cold path) returns ``False`` until
-    :py:func:`phoible_load_data` runs. The picker uses this to
-    gate the "Create Grid" submit so a user can't trigger
-    ``generate`` before the data is in memory.
+    On the web both are lazy-loaded (index + data are externalized from
+    the bundle), so this returns ``False`` until
+    :py:func:`phoible_load_index` and :py:func:`phoible_load_data` have
+    both run. The picker uses it to gate the "Create Grid" submit so a
+    user can't trigger ``generate`` before the snapshot is in memory.
     """
     provider = _phoible_provider()
-    return provider is not None and getattr(provider, "has_data", False)
+    return (
+        provider is not None
+        and getattr(provider, "has_index", False)
+        and getattr(provider, "has_data", False)
+    )
 
 
 def phoible_load_data(payload_json: str) -> bool:
@@ -423,6 +473,23 @@ def phoible_load_data(payload_json: str) -> bool:
     if provider is None:
         return False
     provider.load_data_payload(payload_json)  # type: ignore[attr-defined]
+    return True
+
+
+def phoible_load_index(payload_json: str) -> bool:
+    """Ingest the lazy-loaded PHOIBLE index JSON payload.
+
+    Called once by the web dialog after the ``fetch`` of
+    ``phoible_index.<hash>.json`` lands (the index is externalized from
+    ``python_bundle.zip`` to shrink the cold boot). Returns ``True`` on
+    success, ``False`` when there is no PHOIBLE provider to receive the
+    payload (no-op for desktop, which reads the index from the packaged
+    snapshot at construction). Re-loading is idempotent.
+    """
+    provider = _phoible_provider()
+    if provider is None:
+        return False
+    provider.load_index_payload(payload_json)  # type: ignore[attr-defined]
     return True
 
 

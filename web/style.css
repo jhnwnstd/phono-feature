@@ -959,6 +959,21 @@ dialog input[type="text"]:focus-visible {
   flex-wrap: wrap;
   gap: var(--space-xs);
 }
+/* Phone-width override. On the wide / computer layout a per-group JS pass
+   switches each consonant ``.seg-row`` to an inline ``grid`` sized to the
+   room left BESIDE the floated vowel chart, so the matrix stays column
+   aligned. Below ~600 px the vowel chart spans almost the whole pane, that
+   room collapses, and the pass falls back to roughly one button per row,
+   leaving the consonants stacked vertically. Restoring the default flex
+   wrap lets them flow horizontally across the full pane width below the
+   chart. Scoped to the viewport (not the ``@container`` the chart un-float
+   uses) so the computer layout above 600 px is left untouched; the
+   ``!important`` is needed only to beat the pass's inline grid. */
+@media (max-width: 600px) {
+  #seg-grid .seg-row {
+    display: flex !important;
+  }
+}
 .seg-btn {
   /* Uniform fixed dimensions so the consonant grid reads as a tidy
      monospaced matrix instead of a jagged bar of variable-width

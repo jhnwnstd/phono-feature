@@ -591,7 +591,13 @@ async function bootPyodide({ prerendered = false } = {}) {
         // linger even though an inventory is on screen (the
         // non-prerendered path sets it via loadInventoryText).
         const text = await fetchInventoryText(defaultItem.file);
-        const info = callBridge("load_inventory_json", text, defaultItem.label);
+        // The panels are already painted from bootstrap.json, so we only
+        // need the engine swapped + the status-bar facts; the status-only
+        // bridge skips building and deep-converting the full summary that
+        // this branch would otherwise discard.
+        const info = callBridge(
+            "load_inventory_json_status_only", text, defaultItem.label,
+        );
         setInventoryStatus(info);
         setStatusSourceLink(info.source_url);
         if (hasActiveSelection()) scheduleAnalysis();
@@ -859,11 +865,17 @@ function setStatusSourceLink(url) {
 function setInventoryStatus(info) {
     const loadedTpl = STATUS_TEXT.inventory_loaded_template
         || "{name}: {n_segments} segments × {n_features} features";
+    // Accept both the full summary (segments / features arrays, used by
+    // the upload + non-prerendered routes) and the flat status-only
+    // payload (n_segments / n_features counts, used by the prerendered
+    // boot route), so this stays the single inventory-line formatter.
+    const nSeg = info.n_segments ?? info.segments.length;
+    const nFeat = info.n_features ?? info.features.length;
     setStatus(
         loadedTpl
             .replace("{name}", info.name)
-            .replace("{n_segments}", String(info.segments.length))
-            .replace("{n_features}", String(info.features.length))
+            .replace("{n_segments}", String(nSeg))
+            .replace("{n_features}", String(nFeat))
     );
 }
 
@@ -954,6 +966,12 @@ function prewarmCommonAnalyses() {
 let _phoibleDataText = null;
 let _phoibleDataFetch = null;
 let _phoibleDataLoad = null;
+// Index lazy-load state, mirroring the data slots above. The index is
+// also externalized from the bundle (see build.py), so it must be
+// fetched + injected before any search/list call; the picker loads it
+// alongside the data.
+let _phoibleIndexText = null;
+let _phoibleIndexFetch = null;
 
 /** Single-flight fetch of the PHOIBLE data file. Cheap to retry;
  *  on failure clears the promise slot so the next caller can try
@@ -976,6 +994,26 @@ function _fetchPhoibleData() {
     return _phoibleDataFetch;
 }
 
+/** Single-flight fetch of the PHOIBLE index file. Same contract as
+ *  _fetchPhoibleData; network only, does not touch the bridge. */
+function _fetchPhoibleIndex() {
+    if (_phoibleIndexText) return Promise.resolve(_phoibleIndexText);
+    if (_phoibleIndexFetch) return _phoibleIndexFetch;
+    _phoibleIndexFetch = (async () => {
+        try {
+            const url = assetUrl("phoible_index");
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            _phoibleIndexText = await resp.text();
+            return _phoibleIndexText;
+        } catch (e) {
+            _phoibleIndexFetch = null;
+            throw e;
+        }
+    })();
+    return _phoibleIndexFetch;
+}
+
 /** Kick off the PHOIBLE data fetch when the browser is idle so
  *  the dialog open path doesn't pay the ~5 MB download on first
  *  click. The bridge LOAD step is left for the click path: the
@@ -984,18 +1022,21 @@ function _fetchPhoibleData() {
  *  open, where the spinner explains the brief wait. A future
  *  worker migration would let this also happen at idle. */
 function schedulePhoiblePrefetch() {
-    if (_phoibleDataText || _phoibleDataFetch) return;
-    if (!state.bridge) return;
-    try {
-        if (!callBridge("phoible_is_available")) return;
-        if (callBridge("phoible_is_ready")) return;
-    } catch {
-        return;
-    }
+    if (_phoibleDataText && _phoibleIndexText) return;
+    // Gate on the asset manifest, NOT a bridge call: this runs at boot
+    // and must not construct the (index-deferred) PHOIBLE provider just
+    // to decide whether to prefetch. A build with no baked PHOIBLE
+    // assets simply lacks these manifest entries.
+    if (!assetUrl("phoible_index") || !assetUrl("phoible_data")) return;
     const idle = ("requestIdleCallback" in window)
         ? (cb) => window.requestIdleCallback(cb, { timeout: 10_000 })
         : (cb) => setTimeout(cb, 1500);
     idle(() => {
+        // Both are externalized; prefetch in parallel so the dialog open
+        // path doesn't pay either download on first click.
+        _fetchPhoibleIndex().catch(() => {
+            /* silent; openDialog retries on click */
+        });
         _fetchPhoibleData().catch(() => {
             /* silent; openDialog retries on click */
         });
@@ -1006,12 +1047,20 @@ function schedulePhoiblePrefetch() {
  *  dialog open path awaits whatever load is in progress, so a
  *  click that lands while the bridge parse is mid-flight resolves
  *  on the same call. */
-function ensurePhoibleData() {
+function ensurePhoibleLoaded() {
     if (_phoibleDataLoad) return _phoibleDataLoad;
     _phoibleDataLoad = (async () => {
         try {
-            const text = await _fetchPhoibleData();
-            callBridge("phoible_load_data", text);
+            // Fetch index + data in parallel, then inject. The index
+            // must be loaded before any search/list/generate call; each
+            // bridge parse briefly blocks the main thread, which is why
+            // this is deferred to picker open (behind the spinner).
+            const [indexText, dataText] = await Promise.all([
+                _fetchPhoibleIndex(),
+                _fetchPhoibleData(),
+            ]);
+            callBridge("phoible_load_index", indexText);
+            callBridge("phoible_load_data", dataText);
         } catch (e) {
             _phoibleDataLoad = null;
             throw e;
@@ -3356,14 +3405,15 @@ function _buildSourceCard(inv, defaultId, onPick, language) {
  * ``feature_source`` metadata field records provenance but doesn't
  * constrain identity.
  *
- * Lazy-load: the index ships in the Pyodide bundle (~95 KB
- * gzipped), but the 5 MB data payload is fetched on first open
- * via the asset-manifest hashed URL, then injected via
- * ``phoible_load_data``. Re-opens are cheap.
+ * Lazy-load: both the index (~1 MB) and the 5 MB data payload are
+ * externalized from the Pyodide bundle and fetched on first open via
+ * their asset-manifest hashed URLs, then injected via
+ * ``phoible_load_index`` + ``phoible_load_data``. Re-opens are cheap.
  *
- * The button starts disabled and only enables when the bridge
- * confirms ``phoible_is_available`` (avoids the broken-row case
- * of a stale checkout where the bake never ran).
+ * The button starts disabled and enables via the standard
+ * BRIDGE_GATED_NODES path; the picker gates on the asset manifest at
+ * click time, so a stale checkout where the bake never ran shows a
+ * friendly error instead of a broken row.
  */
 function wirePhoiblePicker() {
     const button = nodes.phoibleBtn;
@@ -3556,7 +3606,7 @@ function wirePhoiblePicker() {
 
         if (!ready) {
             try {
-                await ensurePhoibleData();
+                await ensurePhoibleLoaded();
             } catch (e) {
                 nodes.phoibleLoading.textContent =
                     "Could not load PHOIBLE data: "
@@ -3570,14 +3620,13 @@ function wirePhoiblePicker() {
     };
 
     // Toolbar wiring. The button gets enabled by the standard
-    // BRIDGE_GATED_NODES path after Pyodide attaches; we only
-    // check ``phoible_is_available`` lazily here at click time so
-    // a stale checkout (no baked index) reports a friendly error
-    // instead of crashing the click handler.
+    // BRIDGE_GATED_NODES path after Pyodide attaches; availability is a
+    // static asset-manifest check at click time (the PHOIBLE index +
+    // data are lazy dist assets, so a build that baked them has both
+    // entries) rather than a bridge call that would construct the
+    // provider just to answer "is PHOIBLE available?".
     button.addEventListener("click", () => {
-        if (!callBridge("phoible_is_available")) {
-            // Replace the friendly title in case the bake step
-            // never ran.
+        if (!assetUrl("phoible_index") || !assetUrl("phoible_data")) {
             button.title = "PHOIBLE data is not available in this build.";
             setStatus(
                 "PHOIBLE data is not available in this build.",
