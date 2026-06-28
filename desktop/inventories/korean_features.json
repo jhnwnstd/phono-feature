@@ -123,7 +123,7 @@
       "Back": "0",
       "Tense": "0"
     },
-    "t͡ʃ": {
+    "t͡ɕ": {
       "Syllabic": "-",
       "Stress": "-",
       "Long": "-",
@@ -693,7 +693,7 @@
       "Back": "0",
       "Tense": "0"
     },
-    "t͡ʃʰ": {
+    "t͡ɕʰ": {
       "Syllabic": "-",
       "Stress": "-",
       "Long": "-",
@@ -723,7 +723,7 @@
       "Back": "0",
       "Tense": "0"
     },
-    "pʼ": {
+    "p͈": {
       "Syllabic": "-",
       "Stress": "-",
       "Long": "-",
@@ -753,7 +753,7 @@
       "Back": "0",
       "Tense": "0"
     },
-    "tʼ": {
+    "t͈": {
       "Syllabic": "-",
       "Stress": "-",
       "Long": "-",
@@ -783,7 +783,7 @@
       "Back": "0",
       "Tense": "0"
     },
-    "kʼ": {
+    "k͈": {
       "Syllabic": "-",
       "Stress": "-",
       "Long": "-",
@@ -813,7 +813,7 @@
       "Back": "0",
       "Tense": "0"
     },
-    "t͡ʃʼ": {
+    "t͡ɕ͈": {
       "Syllabic": "-",
       "Stress": "-",
       "Long": "-",

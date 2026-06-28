@@ -1175,11 +1175,13 @@ def group_segments(
     # when every origin group is simultaneously small. Groups
     # combined later by _MERGE_PARENT keep the parent's label: a
     # small Trills group absorbed up displays as Vibrants (its
-    # _MERGE_PARENT), never as Liquids, since no feature establishes
-    # the trill as rhotic. A second origin-set relabel pass used to
-    # sit here, but it rebuilt its origin map from the already-merged
-    # assignment, so it could never fire; the bundled-inventory
-    # grouping snapshot pins the parent-label behaviour as intended.
+    # _MERGE_PARENT), never as Liquids. The place-aware pass below then
+    # relabels a non-labial, non-lateral Vibrants cover to Rhotics (the
+    # cases recoverable from place features), leaving the neutral
+    # Vibrants label only for labial (/ʙ/, /ⱱ/) or lateral vibrants. A
+    # second origin-set relabel pass used to sit here, but it rebuilt
+    # its origin map from the already-merged assignment, so it could
+    # never fire; the bundled-inventory grouping snapshot pins this.
     for pair, label in _DERIVED_MERGES:
         present = [g for g in sorted(pair) if g in assignment]
         if label == "Liquids":
@@ -1220,6 +1222,27 @@ def group_segments(
             if parent is not None:
                 assignment.setdefault(parent, []).extend(assignment.pop(gname))
                 changed = True
+    # Place-aware rhotic relabel. Both the trill+tap cover relabel above
+    # and the lone-trill/tap _MERGE_PARENT fold land in the place-neutral
+    # "Vibrants" group, because a trill or tap is not rhotic by manner
+    # alone: a bilabial trill /ʙ/ or labiodental flap /ⱱ/ is a vibrant,
+    # not a rhotic. But a Vibrants cover whose members are ALL non-labial
+    # and non-lateral IS a rhotic system (coronal/uvular trills, taps,
+    # flaps), and that is recoverable from the standard place features
+    # without a declared ``rhotic`` primitive. Relabel such a cover to
+    # "Rhotics"; a cover that includes any labial vibrant (/ʙ/, /ⱱ/) or a
+    # lateral flap (/ɺ/) keeps the neutral "Vibrants" label. This runs
+    # AFTER the merge passes, so a feature-derived rhotic system stays its
+    # own row (e.g. Hindi: "Rhotics" beside "Lateral Approximants")
+    # instead of folding into the Liquids cover, which remains reserved
+    # for the declared / central-approximant-anchored path above.
+    vibrants = assignment.get("Vibrants")
+    if vibrants and all(
+        norm[s].get("labial", "0") != "+"
+        and norm[s].get("lateral", "0") != "+"
+        for s in vibrants
+    ):
+        assignment.setdefault("Rhotics", []).extend(assignment.pop("Vibrants"))
     if _LARYNGEAL_FEATURES & active_features:
         # The "Laryngeals" row (h / ɦ / ʔ pulled out of their manner
         # classes) is a convenience regroup, so it must not make the
