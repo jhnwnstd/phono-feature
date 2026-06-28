@@ -244,11 +244,14 @@ def grid_to_inventory(
     serialized form (ASCII hyphen-minus); :py:func:`normalize_minus`
     folds both to the canonical form before validation.
 
-    Cells with value ``"0"`` are OMITTED from the per-segment
-    bundle. :py:meth:`Inventory.parse` documents the "missing
-    feature => ``'0'``" semantics, so writing explicit zeros would
-    silently inflate sparsely-authored on-disk files on every
-    builder round-trip. Omission keeps load/save symmetric.
+    Every cell is kept, INCLUDING ``"0"``, so the per-segment bundle
+    is fully dense. The bundled inventories are authored densely
+    (every feature stated explicitly), so preserving ``"0"`` keeps a
+    builder round-trip of a dense inventory byte-stable; the previous
+    behavior stripped every ``"0"`` cell and turned a small edit into a
+    large spurious diff. Absent and ``"0"`` remain equivalent on load
+    (:py:meth:`Inventory.parse`), so a sparsely-authored file is merely
+    inflated to dense form, never corrupted.
 
     ``metadata`` is forwarded to :py:meth:`Inventory.from_grid` so
     the caller can stamp provenance (e.g. ``feature_source``,
@@ -282,10 +285,7 @@ def grid_to_inventory(
     for c, seg in enumerate(segments):
         feats: dict[str, str] = {}
         for r, feat in enumerate(features):
-            val = normalize_minus(cells[r][c])
-            if val == "0":
-                continue
-            feats[feat] = val
+            feats[feat] = normalize_minus(cells[r][c])
         segments_dict[seg] = feats
 
     inventory = Inventory.from_grid(
