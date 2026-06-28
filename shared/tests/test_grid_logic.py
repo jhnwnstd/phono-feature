@@ -416,21 +416,24 @@ def test_grid_to_inventory_round_trip(simple_grid):
     assert set(inv.segments.keys()) == {"b", "d", "m"}
     assert inv.segments["b"].get("Voice") == "+"
     assert inv.segments["m"].get("Nasal") == "+"
-    # Zero cells were omitted; the inventory parser treats missing
-    # as "0" so the round-trip is lossless.
-    assert "Nasal" not in inv.segments["b"]
+    # "0" cells are PRESERVED (dense), so a dense inventory survives a
+    # builder round-trip byte-stable instead of being silently
+    # stripped to a sparse form. Absent and "0" remain equivalent on
+    # load, so this is still lossless.
+    assert inv.segments["b"].get("Nasal") == "0"
 
 
-def test_grid_to_inventory_omits_zero_cells():
-    """An all-zero column ends up with an empty per-segment dict.
-    Avoids inflating sparse inventories on every save."""
+def test_grid_to_inventory_keeps_zero_cells():
+    """A "0" cell is kept (fully dense per-segment bundle) so a builder
+    round-trip of a densely-authored inventory does not strip every
+    zero and produce a large spurious diff."""
     inv = grid_to_inventory(
         name="X",
         features=["F1", "F2"],
         segments=["a"],
         cells=[["0"], ["0"]],
     )
-    assert inv.segments["a"] == {}
+    assert dict(inv.segments["a"]) == {"F1": "0", "F2": "0"}
 
 
 def test_grid_to_inventory_normalizes_display_minus():

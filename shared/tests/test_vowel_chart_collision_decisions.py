@@ -755,6 +755,7 @@ _PLACEMENT_SNAPSHOT: dict[str, dict[str, list[int]]] = {
         "i": [0, 0],
         "o": [2, 5],
         "u": [0, 5],
+        "ə": [4, 2],
     },
     "japanese_features.json": {
         "a": [6, 2],
@@ -778,11 +779,16 @@ _PLACEMENT_SNAPSHOT: dict[str, dict[str, list[int]]] = {
         "ɨ": [0, 2],
     },
     "lango_features.json": {
-        "a": [6, 2],
+        "a": [5, 2],
         "e": [2, 0],
         "i": [0, 0],
         "o": [2, 5],
         "u": [0, 5],
+        "ɔ": [4, 5],
+        "ə": [2, 2],
+        "ɛ": [4, 0],
+        "ɪ": [1, 0],
+        "ʊ": [1, 5],
     },
     "lomongo_features.json": {
         "a": [6, 2],
@@ -869,6 +875,7 @@ _PLACEMENT_SNAPSHOT: dict[str, dict[str, list[int]]] = {
         "o": [2, 5],
         "u": [0, 5],
         "y": [0, 1],
+        "ø": [2, 1],
         "ɑ": [6, 4],
         "ɯ": [0, 4],
     },
