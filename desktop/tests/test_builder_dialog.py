@@ -1,4 +1,4 @@
-"""Tests for the InventoryBuilder setup dialog and SegmentTextEdit.
+"""Tests for the InventoryEditor setup dialog and SegmentTextEdit.
 
 Covers the recently-fixed UX bugs:
 
@@ -8,8 +8,8 @@ Covers the recently-fixed UX bugs:
      or empty features no longer close the dialog and then surface
      a warning over an already-gone editor.
   3. The unsaved-changes / cancel paths return False from
-     _show_setup_dialog so callers can clean up (e.g. _open_builder
-     in MainWindow uses this to avoid flashing an empty builder).
+     _show_setup_dialog so callers can clean up (e.g. _open_editor
+     in MainWindow uses this to avoid flashing an empty editor).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import QDialog, QMessageBox
 
-from phonology_features.gui.builder.dialogs import (
+from phonology_features.gui.editor.dialogs import (
     FeatureTextEdit,
     InputDialog,
     SegmentTextEdit,
@@ -286,7 +286,7 @@ def test_segment_and_feature_editors_share_inference(qapp):
     Pre-refactor the segments box used whitespace-split and the
     features box used newline-split, so neither accepted the
     other's natural shape."""
-    from phonology_features.gui.builder.dialogs import (
+    from phonology_features.gui.editor.dialogs import (
         FeatureTextEdit,
         SegmentTextEdit,
     )

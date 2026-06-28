@@ -4,7 +4,7 @@ Cold-start profile of the full app session.
 
 Walks through the interactions a real user would perform: launch, load
 each bundled inventory, toggle segments and features, switch modes,
-toggle the theme, and open the Builder. Each phase is wrapped in its
+toggle the theme, and open the Editor. Each phase is wrapped in its
 own cProfile run, then the combined stats are printed sorted by
 cumulative and tottime.
 
@@ -192,14 +192,14 @@ def run_session(only: str | None = None) -> None:
             win._theme.toggle()
             app.processEvents()
 
-    def open_builder() -> None:
+    def open_editor() -> None:
         assert win is not None
-        win._open_builder()
+        win._open_editor()
         app.processEvents()
         # Close it so it doesn't keep affecting later phases.
-        if win._builder is not None:
-            win._builder.close()
-            win._builder = None
+        if win._editor is not None:
+            win._editor.close()
+            win._editor = None
         app.processEvents()
 
     phases: list[Phase] = [
@@ -210,7 +210,7 @@ def run_session(only: str | None = None) -> None:
         Phase("toggle_features_x45", toggle_features),
         Phase("mode_switch_x20", mode_switch_burst),
         Phase("theme_toggle_x6", theme_toggle_burst),
-        Phase("open_close_builder", open_builder),
+        Phase("open_close_editor", open_editor),
     ]
 
     if only:

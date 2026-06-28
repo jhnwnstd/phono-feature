@@ -116,16 +116,16 @@ def main() -> int:
     force_size()
     grab("03_nasal_query")
 
-    print("Phase 4: Inventory Builder editing Hayes")
-    win._open_builder()
+    print("Phase 4: Inventory Editor editing Hayes")
+    win._open_editor()
     settle()
-    if win._builder is not None:
-        win._builder.resize(1500, 950)
-        win._builder.show()
+    if win._editor is not None:
+        win._editor.resize(1500, 950)
+        win._editor.show()
         settle()
-        grab("04_builder", widget=win._builder)
-        win._builder.close()
-        win._builder = None
+        grab("04_editor", widget=win._editor)
+        win._editor.close()
+        win._editor = None
 
     win.close()
     return 0

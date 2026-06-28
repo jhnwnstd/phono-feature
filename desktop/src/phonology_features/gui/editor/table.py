@@ -1,7 +1,7 @@
-"""Custom QTableWidget machinery for the inventory builder.
+"""Custom QTableWidget machinery for the inventory editor.
 
 Three Qt subclasses and one cached-brush helper, all self-contained
-so the main builder window does not have to carry the Qt-specific
+so the main editor window does not have to carry the Qt-specific
 selection-paint and click-haptic code inline.
 
 * ``_ToggleHeaderView``: a QHeaderView that emits ``sectionClicked``
@@ -13,7 +13,7 @@ selection-paint and click-haptic code inline.
 * ``_SelectionFillDelegate``: per-cell paint delegate that swaps in a
   theme-aware highlight brush for selected cells.
 
-The InventoryBuilder owns instances of all three but does not need
+The InventoryEditor owns instances of all three but does not need
 their implementation surfaces. Splitting them here keeps the main
 window file focused on state and lifecycle.
 """
@@ -99,7 +99,7 @@ class _BulkCycleTable(QTableWidget):
     """Subclass with two custom behaviours:
 
     1. ``mousePressEvent``: when the user clicks a cell that's
-       already in the selection, run the builder's bulk-cycle
+       already in the selection, run the editor's bulk-cycle
        callback without forwarding the press to the base class.
        Keeps Qt's selection intact AND avoids the orphan-release
        problem where consuming via an event filter let the base
@@ -132,7 +132,7 @@ class _BulkCycleTable(QTableWidget):
     def set_bulk_cycle_callback(
         self, cb: Callable[[QTableWidgetItem], None]
     ) -> None:
-        """Builder hands us a function ``(QTableWidgetItem) -> None``."""
+        """Editor hands us a function ``(QTableWidgetItem) -> None``."""
         self._bulk_cycle_cb = cb
 
     def mousePressEvent(self, event: QMouseEvent | None) -> None:
@@ -333,7 +333,7 @@ class _SelectionFillDelegate(QStyledItemDelegate):
 
 # Module-level highlight brush cache. Theme-version keyed so a theme
 # toggle invalidates it transparently (no observer wiring), same trick
-# the cell-brush cache uses in builder/grid.py.
+# the cell-brush cache uses in editor/grid.py.
 _highlight_brush_version: int = -1
 _highlight_brush: QBrush | None = None
 

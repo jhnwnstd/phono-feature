@@ -1,6 +1,6 @@
 """Portable logic for the New Inventory setup flow. Owns the
 delimiter inference, validation rules, autofill seeds, and named
-feature presets the desktop builder dialog and the web setup
+feature presets the desktop editor dialog and the web setup
 modal share. Pure-Python; UI layers adapt to their native widgets.
 """
 

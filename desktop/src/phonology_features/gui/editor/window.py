@@ -1,4 +1,4 @@
-"""InventoryBuilder: grid editor for creating or editing inventories."""
+"""InventoryEditor: grid editor for creating or editing inventories."""
 
 import os
 from collections.abc import Callable, Mapping
@@ -60,13 +60,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from phonology_features.gui.builder.dialogs import (
+from phonology_features.gui.editor.dialogs import (
     InputDialog,
     ask_question,
     center_on_parent,
     show_warning,
 )
-from phonology_features.gui.builder.edits import (
+from phonology_features.gui.editor.edits import (
     _MAX_UNDO_DEPTH,
     _BulkEdit,
     _CellPrev,
@@ -74,12 +74,12 @@ from phonology_features.gui.builder.edits import (
     _RenameEdit,
     _SegmentEdit,
 )
-from phonology_features.gui.builder.grid import (
+from phonology_features.gui.editor.grid import (
     cycle_value,
     make_cell,
     style_cell,
 )
-from phonology_features.gui.builder.table import (
+from phonology_features.gui.editor.table import (
     _BulkCycleTable,
     _SelectionFillDelegate,
     _ToggleHeaderView,
@@ -108,7 +108,7 @@ _log = get_logger(__name__)
 # structural edits (add / remove segment or feature, rename segment).
 _Edit = _BulkEdit | _SegmentEdit | _FeatureEdit | _RenameEdit
 
-# Builder toolbar button height. Matches the main-window toolbar so
+# Editor toolbar button height. Matches the main-window toolbar so
 # the two surfaces feel like one chrome family at the 1x baseline.
 _TOOLBAR_BTN_H = 32
 
@@ -139,7 +139,7 @@ def _move_key_to_qt(name: str) -> Qt.Key:
     return cast(Qt.Key, getattr(Qt.Key, f"Key_{name.upper()}"))
 
 
-class InventoryBuilder(QMainWindow):
+class InventoryEditor(QMainWindow):
     """Grid editor for creating phonological feature inventories."""
 
     def __init__(
@@ -148,7 +148,7 @@ class InventoryBuilder(QMainWindow):
         load_path: str | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Inventory Builder")
+        self.setWindowTitle("Inventory Editor")
         self.setMinimumSize(800, 500)
         self._segments: list[str] = []
         self._features: list[str] = []
@@ -191,7 +191,7 @@ class InventoryBuilder(QMainWindow):
         # Full metadata carried from a loaded inventory (everything
         # except ``name``); merged back on save so stamps the grid
         # cannot edit (PHOIBLE provenance, diphthong
-        # ``segment_secondary`` bundles) survive a builder round-trip.
+        # ``segment_secondary`` bundles) survive a editor round-trip.
         self._extra_metadata: dict[str, Any] = {}
         self._build_ui()
         # SaveController owns save_in_flight / dirty / draining_save
@@ -200,7 +200,7 @@ class InventoryBuilder(QMainWindow):
         # bar that _build_status_bar creates. _to_inventory is passed
         # as a callback so the controller never has to know about the
         # grid widgets.
-        from phonology_features.gui.builder.save_controller import (
+        from phonology_features.gui.editor.save_controller import (
             _SaveController,
         )
 
@@ -1387,7 +1387,7 @@ class InventoryBuilder(QMainWindow):
         then delegates to :py:func:`grid_to_inventory` for the
         Unicode-minus normalization, the omit-on-zero rule, and the
         :py:meth:`Inventory.from_grid` round-trip. The shared helper
-        is the same one the web builder calls, so the on-disk format
+        is the same one the web editor calls, so the on-disk format
         is identical across both frontends.
         """
         assert self._table.columnCount() == len(self._segments)
@@ -1451,7 +1451,7 @@ class InventoryBuilder(QMainWindow):
     @property
     def _save_finished(self) -> Any:
         """Signal alias for back-compat. External callers do
-        ``builder._save_finished.connect(...)``."""
+        ``editor._save_finished.connect(...)``."""
         return self._save_ctrl.save_finished
 
     @property
@@ -1594,7 +1594,7 @@ class InventoryBuilder(QMainWindow):
     def _load_existing(self, path: str) -> None:
         """Load an existing JSON inventory into the grid for editing.
 
-        Routes through ``Inventory.load`` so the builder enforces the
+        Routes through ``Inventory.load`` so the editor enforces the
         same contract as the engine: invalid files refuse to load with
         a human-readable error rather than producing a partially-
         normalized grid that gets silently rewritten on save.
@@ -1627,8 +1627,8 @@ class InventoryBuilder(QMainWindow):
         disk; ``None`` for in-memory inventories (the PHOIBLE
         picker's materialised result, a renamed-but-unsaved one),
         in which case Save routes through Save As. Public so
-        MainWindow can hand the builder the ACTIVE in-memory
-        inventory: a PHOIBLE load has no file path, and the builder
+        MainWindow can hand the editor the ACTIVE in-memory
+        inventory: a PHOIBLE load has no file path, and the editor
         previously fell back to the new-inventory setup dialog,
         which made "load from PHOIBLE, then edit, then save
         locally" impossible.
@@ -1655,7 +1655,7 @@ class InventoryBuilder(QMainWindow):
         # save round-trips it. Keeping only ``feature_source`` here
         # used to silently drop the PHOIBLE stamps and the
         # ``segment_secondary`` diphthong bundles, so editing a
-        # PHOIBLE inventory in the builder erased its diphthong
+        # PHOIBLE inventory in the editor erased its diphthong
         # arrows on save.
         self._extra_metadata = {
             k: v for k, v in inventory.metadata.items() if k != "name"
@@ -1666,7 +1666,7 @@ class InventoryBuilder(QMainWindow):
         # the ``make_cell`` work (each cell is a QTableWidgetItem
         # construction + setTextAlignment + setFlags + style_cell).
         # On Hayes (140 segs x 28 features = 3920 cells) that was the
-        # dominant cost of every Builder open. ``_rebuild_table``
+        # dominant cost of every Editor open. ``_rebuild_table``
         # already supports an ``initial_cells`` seed via the PanPhon
         # provider path; reuse it here so loaded inventories take
         # the same single-pass build path.
@@ -1700,7 +1700,7 @@ class InventoryBuilder(QMainWindow):
         # repeating them in the title bar is noise.
         path = self._current_path
         has_file = bool(path)
-        self.setWindowTitle("Inventory Builder")
+        self.setWindowTitle("Inventory Editor")
         # Delete only makes sense when there's an on-disk file backing
         # the current grid; toggle the visual + interactive state.
         self._delete_btn.setEnabled(has_file)

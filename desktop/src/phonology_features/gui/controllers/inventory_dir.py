@@ -146,7 +146,7 @@ class InventoryDirController:
         self._reload_timer.setInterval(_RELOAD_DEBOUNCE_MS)
         self._reload_timer.timeout.connect(self._do_auto_reload)
         # Start watching the bundled inventories directory so saves
-        # from the Builder (or external edits) appear in the
+        # from the Editor (or external edits) appear in the
         # dropdown live.
         inventories_dir = self.get_inventories_dir()
         if (
@@ -217,7 +217,7 @@ class InventoryDirController:
     def populate_dropdown(self) -> None:
         """Scan ``inventories/`` and fill the dropdown. Preserves the
         current selection if the previously-loaded path still exists
-        after the rescan (matters when the Builder saves a new file
+        after the rescan (matters when the Editor saves a new file
         and the directory watcher triggers a refresh).
         """
         previous_path = self._combo.currentData()
@@ -392,7 +392,7 @@ class InventoryDirController:
             return
         if not os.path.isfile(self._w._current_path):
             # Current inventory was deleted under us (most often
-            # via Builder Delete). Pick a fallback so the viewer
+            # via Editor Delete). Pick a fallback so the viewer
             # doesn't continue showing stale data with a
             # missing-file path. pick_fallback_after_delete prefers
             # an MRU neighbour; if none survives, it picks the

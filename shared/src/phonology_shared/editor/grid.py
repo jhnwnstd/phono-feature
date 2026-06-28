@@ -1,8 +1,8 @@
-"""Portable inventory-builder grid logic. Owns the cell value
+"""Portable inventory-editor grid logic. Owns the cell value
 ladder (``0`` -> ``+`` -> minus -> ``0``), the display-vs-serialized
 minus form (U+2212 vs ASCII hyphen-minus), and the snapshot path
 that turns grid state into a validated :py:class:`Inventory`.
-Shared by the desktop builder and the web editor.
+Shared by the desktop editor and the web editor.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from phonology_shared.presentation.constants import MINUS_SIGN
 # renders this; the on-disk JSON uses ASCII hyphen-minus instead.
 # Aliased from the single escaped definition in
 # ``presentation.constants`` so a look-alike substitution (U+2010,
-# ASCII hyphen) cannot silently split the builder's minus from the
+# ASCII hyphen) cannot silently split the editor's minus from the
 # analysis pane's minus.
 MINUS_DISPLAY: str = MINUS_SIGN
 
@@ -36,7 +36,7 @@ MINUS_DISPLAY: str = MINUS_SIGN
 MINUS_SERIALIZED: str = "-"
 
 # The value-cycle ladder, ``0`` -> ``+`` -> minus -> ``0``. Exposed
-# as a read-only mapping so both the desktop builder and the web
+# as a read-only mapping so both the desktop editor and the web
 # editor can drive the click-to-cycle behavior off the same data.
 # Treat any value not in the ladder as a return to ``0``: the
 # defensive default in :py:func:`cycle_value` and the fallback the
@@ -76,7 +76,7 @@ VALUE_KEYS: Mapping[str, str] = MappingProxyType(
 # * Arrow keys: ``ArrowUp`` / ``ArrowDown`` / ``ArrowLeft`` /
 #   ``ArrowRight``. These match the JS ``event.key`` values
 #   directly; the desktop translates them to ``Qt.Key.Key_Up``
-#   etc. via the wrapper in ``builder/window.py``.
+#   etc. via the wrapper in ``editor/window.py``.
 # * Vim: h / j / k / l. Single chars; translate uppercase to the
 #   matching ``Qt.Key.Key_<X>`` constant on the desktop.
 # * Numpad: 4 / 5 / 6 / 8. Same translation rule.
@@ -247,7 +247,7 @@ def grid_to_inventory(
     Every cell is kept, INCLUDING ``"0"``, so the per-segment bundle
     is fully dense. The bundled inventories are authored densely
     (every feature stated explicitly), so preserving ``"0"`` keeps a
-    builder round-trip of a dense inventory byte-stable; the previous
+    editor round-trip of a dense inventory byte-stable; the previous
     behavior stripped every ``"0"`` cell and turned a small edit into a
     large spurious diff. Absent and ``"0"`` remain equivalent on load
     (:py:meth:`Inventory.parse`), so a sparsely-authored file is merely
@@ -308,7 +308,7 @@ def enforce_class_caps(
 
     The single enforcement seam every "grid becomes an Inventory"
     path and every load path funnels through, so the desktop
-    builder, the web editor, PHOIBLE materialization, and JSON
+    editor, the web editor, PHOIBLE materialization, and JSON
     opens all reject an over-class inventory with identical wording.
     Delegates the counting to
     :py:func:`phonology_shared.chart.consonants.validate_class_caps`

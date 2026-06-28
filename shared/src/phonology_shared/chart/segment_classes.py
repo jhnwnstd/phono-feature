@@ -42,7 +42,7 @@ def count_segment_classes(
     """Return ``(n_vowels, n_consonants, n_total)`` for ``inventory``.
 
     The single source of the class counts both the hard-cap
-    validator and the live builder counter consume, so the two can
+    validator and the live editor counter consume, so the two can
     never disagree about which side a segment falls on. Counting
     goes through :py:func:`group_segments` so each class means
     exactly what the charts render.
@@ -86,7 +86,7 @@ def validate_class_caps(
     Callers raise
     :py:class:`phonology_shared.data.inventory.ValidationError` with
     the returned messages wherever a grid becomes an
-    :py:class:`~phonology_shared.data.inventory.Inventory` (builder
+    :py:class:`~phonology_shared.data.inventory.Inventory` (editor
     save, new-inventory create, PHOIBLE materialization) and after
     every JSON load. The caps are sized so all PHOIBLE inventories
     pass (So has exactly ``MAX_VOWELS`` vowels; !Xoo has 130

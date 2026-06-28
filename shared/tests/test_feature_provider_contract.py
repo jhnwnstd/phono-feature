@@ -83,7 +83,7 @@ def test_stub_provider_satisfies_protocol() -> None:
 
 def test_blank_bundle_returns_all_zero_per_feature() -> None:
     """The unresolved-segment seed is exactly ``"0"`` per declared
-    feature; the builder relies on this to surface unresolved
+    feature; the editor relies on this to surface unresolved
     columns as visibly-empty without raising at parse time."""
     features = ("Syllabic", "Consonantal", "Voice")
     bundle = blank_bundle(features)
@@ -105,7 +105,7 @@ def test_generated_bundles_round_trip_through_inventory_from_grid() -> None:
     assert result.unresolved == ("customX",)
 
     # Seed the unresolved column with a blank bundle, matching what
-    # the builder will do at integration time.
+    # the editor will do at integration time.
     segments_payload: dict[str, dict[str, str]] = {
         seg: dict(bundle) for seg, bundle in result.segments.items()
     }
@@ -129,7 +129,7 @@ def test_generated_bundles_round_trip_through_inventory_from_grid() -> None:
 def test_grid_to_inventory_stamps_metadata_provenance() -> None:
     """The ``metadata`` kwarg added to :py:func:`grid_to_inventory`
     must surface verbatim on the resulting inventory's ``metadata``
-    mapping so the builder can record provider provenance on save.
+    mapping so the editor can record provider provenance on save.
     """
     cells: list[list[str]] = [
         ["+", "-"],  # Syllabic: vowel +, consonant -

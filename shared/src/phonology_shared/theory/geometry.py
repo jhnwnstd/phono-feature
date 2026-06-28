@@ -175,7 +175,7 @@ class GeometryNode:
     def to_dict(self) -> dict[str, Any]:
         """Serialize the tree defensively.
 
-        Cycle detection is included even though the tree builder tries
+        Cycle detection is included even though the tree editor tries
         to prevent cycles. This keeps diagnostics safe on unusual input.
         """
         return self._to_dict(set())

@@ -232,7 +232,7 @@ def _swap_engine_summary(inventory: Inventory, name: str) -> dict[str, Any]:
     """Swap the active engine to ``inventory`` and return its summary.
 
     The shared tail of every load route (uploaded JSON, PHOIBLE,
-    builder): ``_set_engine`` then ``build_inventory_summary`` under
+    editor): ``_set_engine`` then ``build_inventory_summary`` under
     the current match mode. PHOIBLE layers its status line and Source
     link onto the returned dict; the other routes use it verbatim, so
     there is no per-route display logic to drift apart.
@@ -312,7 +312,7 @@ def get_setup_defaults() -> dict[str, Any]:
     available bootstrap providers the web setup modal needs to
     populate its UI.
 
-    Shared with the desktop builder via
+    Shared with the desktop editor via
     :py:mod:`phonology_shared.editor.setup` so both frontends offer
     the same Tab-autofill strings and the same named presets in the
     dropdown. The ``providers`` list mirrors the desktop's
@@ -508,7 +508,7 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     the inventory is named after the PHOIBLE language (the user can
     rename in place via the toolbar's pencil button OR overwrite
     the name on the next save). Once loaded the inventory is fully
-    the user's: any edit in the Builder produces a personal copy,
+    the user's: any edit in the Editor produces a personal copy,
     and saving routes through the same Save flow as any other
     in-memory inventory.
 
@@ -572,8 +572,8 @@ def create_new_inventory(
     columns; the inventory's :py:attr:`Inventory.metadata` records
     ``feature_source`` + ``feature_source_version`` for provenance
     so a downstream save round-trips the attribution. This mirrors
-    the desktop builder's
-    :py:meth:`InventoryBuilder._open_setup_dialog` behaviour
+    the desktop editor's
+    :py:meth:`InventoryEditor._open_setup_dialog` behaviour
     one-for-one.
 
     Raises :py:class:`ValidationError` with the full tuple of
@@ -632,7 +632,7 @@ def create_new_inventory(
 def get_cycle_ladder() -> dict[str, str]:
     """Return the value-cycle ladder used by the editor click handler.
 
-    Same constant the desktop builder's ``cycle_value`` reads.
+    Same constant the desktop editor's ``cycle_value`` reads.
     The web editor fetches this once at boot and consults it on
     every click; centralizing the source here keeps the desktop and
     web cycle order in lockstep and avoids per-click bridge cost.
@@ -646,7 +646,7 @@ def validate_segment_label(label: str, existing: list[str]) -> str:
     Thin bridge wrapper over :py:func:`validate_new_segment_label`,
     passing :py:data:`MAX_SEGMENTS` so the web editor enforces the
     inventory cap at add-time rather than at save-time. Same
-    validator the desktop builder uses, so error wording matches.
+    validator the desktop editor uses, so error wording matches.
     """
     return validate_new_segment_label(
         label, existing, max_segments=MAX_SEGMENTS
@@ -669,7 +669,7 @@ def get_value_keys() -> dict[str, str]:
 
     Maps the typed character (the logical key, not a scancode) to
     the cell value the editor should apply. The web editor reads
-    this once at boot; the desktop ``InventoryBuilder`` derives its
+    this once at boot; the desktop ``InventoryEditor`` derives its
     Qt-flavoured dict from the same constant.
     """
     return dict(VALUE_KEYS)
@@ -681,7 +681,7 @@ def get_move_keys() -> dict[str, list[int]]:
     Maps the typed character to a ``[dr, dc]`` step in the grid.
     Tuples become arrays through the Pyodide bridge so JS can
     destructure them directly. Same constant the desktop's
-    ``InventoryBuilder._MOVE_KEYS`` derives from.
+    ``InventoryEditor._MOVE_KEYS`` derives from.
     """
     return {key: list(step) for key, step in MOVE_KEYS.items()}
 
@@ -699,9 +699,9 @@ def get_max_undo_depth() -> int:
 def get_grid_state() -> dict[str, Any]:
     """Return the active inventory in editor-grid shape.
 
-    The web builder editor reads this on open to populate its grid:
+    The web editor editor reads this on open to populate its grid:
     ``cells[feature_index][segment_index]`` mirrors the desktop
-    ``InventoryBuilder``'s ``rows = features, cols = segments``
+    ``InventoryEditor``'s ``rows = features, cols = segments``
     table layout. Missing values default to ``"0"`` (same semantics
     as :py:meth:`Inventory.feature_value`).
 
@@ -728,7 +728,7 @@ def inventory_cap_status_for_grid(
     features: list[str],
     cells: list[list[str]],
 ) -> dict[str, Any]:
-    """Live vowel / consonant / total counts for the web builder's
+    """Live vowel / consonant / total counts for the web editor's
     cap counter.
 
     Counts through the same shared classifier the desktop counter
@@ -769,10 +769,10 @@ def commit_inventory_from_grid(
     segments: list[str],
     cells: list[list[str]],
 ) -> dict[str, Any]:
-    """Build and adopt a new inventory from web-builder grid state.
+    """Build and adopt a new inventory from web-editor grid state.
 
     Calls the shared :py:func:`grid_to_inventory` (the same path the
-    desktop builder's Save uses), which folds U+2212 minus to ASCII,
+    desktop editor's Save uses), which folds U+2212 minus to ASCII,
     omits ``"0"`` cells, and routes through
     :py:meth:`Inventory.from_grid` for validation. On success
     replaces the active engine and returns the standard summary
@@ -783,9 +783,9 @@ def commit_inventory_from_grid(
     The active inventory's metadata (minus ``name``) is carried
     through to the rebuilt inventory: the grid cannot edit stamps
     like the PHOIBLE provenance or the diphthong
-    ``segment_secondary`` bundles, and dropping them meant a builder
+    ``segment_secondary`` bundles, and dropping them meant a editor
     round-trip of a PHOIBLE inventory silently erased its
-    diphthong arrows. Mirrors the desktop builder's
+    diphthong arrows. Mirrors the desktop editor's
     ``_extra_metadata`` carry.
 
     Raises :py:class:`ValidationError` if the grid is not a valid

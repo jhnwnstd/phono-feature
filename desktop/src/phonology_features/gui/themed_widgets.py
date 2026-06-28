@@ -44,7 +44,7 @@ from phonology_shared.presentation.palette import C
 def toolbar_chrome_qss() -> str:
     """QSS for a toolbar container: panel background, bottom border,
     and padding. Shared by the main window's theme restyle
-    (:py:meth:`ThemeController._restyle_toolbar`) and the builder's
+    (:py:meth:`ThemeController._restyle_toolbar`) and the editor's
     toolbar so the chrome lives in one place. Function-not-constant so
     it re-evaluates against the active palette after a theme swap.
     """
@@ -61,7 +61,7 @@ def toolbar_chrome_qss() -> str:
 def statusbar_chrome_qss() -> str:
     """QSS for a status bar's chrome: panel background and top border.
     Shared by the main window's branded status bar
-    (:py:meth:`_BrandedStatusBar.apply_theme`) and the builder's status
+    (:py:meth:`_BrandedStatusBar.apply_theme`) and the editor's status
     bar so the two windows cannot drift. Function-not-constant for the
     same re-evaluate-after-swap reason as the button helpers.
     """

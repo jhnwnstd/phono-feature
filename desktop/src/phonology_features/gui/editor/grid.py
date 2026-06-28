@@ -13,7 +13,7 @@ from phonology_shared.presentation import palette
 from phonology_shared.presentation.palette import C
 
 # Re-export so existing ``from .grid import cycle_value`` call sites
-# in the builder continue to resolve. The canonical home is
+# in the editor continue to resolve. The canonical home is
 # :py:mod:`phonology_shared.editor.grid`.
 __all__ = [
     "MINUS_DISPLAY",
@@ -30,12 +30,12 @@ _CELL_FONT_NORMAL = QFont("Noto Sans", 10)
 # Item flags don't depend on value either. Hoisting the bitwise OR
 # matters because make_cell is called for every grid cell on load --
 # the previous per-call OR showed up as the second-hottest line in
-# the builder-load profile (25k+ enum.__or__ calls).
+# the editor-load profile (25k+ enum.__or__ calls).
 _CELL_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
 
 # QBrush/QColor construction is ~14us per call and ran 4x per cell on
 # the old code path. On the Hayes inventory that produced ~16k QColor
-# objects per builder load. The brush set has exactly three states
+# objects per editor load. The brush set has exactly three states
 # (+, -, 0), so cache one (fg, bg) tuple per state and rebuild ALL of
 # them only when the theme changes. Keyed on ``palette.theme_version``
 # (a monotonic counter bumped by ``set_theme``) so the cache is

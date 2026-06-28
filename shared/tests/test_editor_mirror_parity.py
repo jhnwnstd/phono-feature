@@ -1,4 +1,4 @@
-"""Parity guard for the two builder-editor surfaces ``web/main.js``
+"""Parity guard for the two editor-editor surfaces ``web/main.js``
 mirrors from shared Python.
 
 The web editor keeps two pieces of selection logic in JS for speed

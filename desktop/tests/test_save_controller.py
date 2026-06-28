@@ -1,4 +1,4 @@
-"""Regression test for :py:mod:`phonology_features.gui.builder.save_controller`.
+"""Regression test for :py:mod:`phonology_features.gui.editor.save_controller`.
 
 Pins the invariant that ``save_finished`` fires no matter what the
 worker raises, including ``BaseException`` subclasses. Without that
@@ -16,10 +16,10 @@ from typing import Any
 import pytest
 from PyQt6.QtWidgets import QStatusBar, QWidget
 
-from phonology_features.gui.builder import (
+from phonology_features.gui.editor import (
     save_controller as save_controller_module,
 )
-from phonology_features.gui.builder.save_controller import _SaveController
+from phonology_features.gui.editor.save_controller import _SaveController
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.theory.feature_engine import FeatureEngine
 

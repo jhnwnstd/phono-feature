@@ -790,7 +790,7 @@ def test_long_pair_stays_side_by_side_and_grows_chart() -> None:
     """A side-by-side Long-pair cell keeps its ``LONG_PAIR``
     display_kind even when the inventory populates a sibling in
     the same backness-pair slot. Instead of demoting the pair to a
-    vertical stack, the builder reports the inventory's expanded
+    vertical stack, the editor reports the inventory's expanded
     natural width via
     :py:attr:`VowelChartGeometry.natural_data_width_px`; the
     renderer grows the chart slot so all cells stay legible.
@@ -967,7 +967,7 @@ def test_silhouette_aspect_within_ceiling(
 ) -> None:
     """Every bundled inventory's silhouette aspect (width / height)
     must stay at or below ``VOWEL_SILHOUETTE_MAX_ASPECT``. The
-    geometry builder grows ``natural_data_height_px`` when natural
+    geometry editor grows ``natural_data_height_px`` when natural
     sizing would overshoot the ceiling. Catches a future change
     that disables the ceiling or breaks the dh-growth path.
     """
@@ -994,6 +994,6 @@ def test_silhouette_aspect_within_ceiling(
         f"{inv_name} silhouette aspect {aspect:.3f} exceeds the "
         f"ceiling {VOWEL_SILHOUETTE_MAX_ASPECT}; pre-fix this was "
         "common for sparse inventories like Spanish (2.35) and "
-        "Modern Standard Arabic (3.29). The geometry builder must "
+        "Modern Standard Arabic (3.29). The geometry editor must "
         "grow natural_data_height_px to bring the aspect down."
     )

@@ -743,7 +743,7 @@ def features_for_use(use: str) -> frozenset[str]:
 
 def all_aliases(canonical: str) -> tuple[str, ...]:
     """Surface forms registered for ``canonical`` (the canonical
-    name plus every alias). Used by derived-table builders in
+    name plus every alias). Used by derived-table editors in
     :py:mod:`phonology_shared.presentation.constants`."""
     meta = FEATURE_REGISTRY.get(canonical)
     if meta is None:

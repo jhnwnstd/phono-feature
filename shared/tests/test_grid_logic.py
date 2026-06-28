@@ -1,8 +1,8 @@
 """Tests for :py:mod:`phonology_shared.editor.grid`.
 
-The module is pure-Python and consumed by both the desktop builder
-(``_BulkCycleTable``, ``InventoryBuilder._to_inventory``) and the
-web app builder grid (via the build relay). These tests exercise
+The module is pure-Python and consumed by both the desktop editor
+(``_BulkCycleTable``, ``InventoryEditor._to_inventory``) and the
+web app editor grid (via the build relay). These tests exercise
 its contract directly, no Qt required.
 """
 
@@ -152,7 +152,7 @@ def test_move_keys_arrow_names_use_js_event_key_format():
     """The arrow entries use the same string format JS reports as
     ``event.key`` so the web handler can match without translation.
     The desktop translates these to ``Qt.Key.Key_<X>`` via the
-    ``_ARROW_NAME_TO_QT`` table in builder/window.py."""
+    ``_ARROW_NAME_TO_QT`` table in editor/window.py."""
     for name in ("ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"):
         assert name in MOVE_KEYS, f"missing arrow binding: {name}"
 
@@ -173,11 +173,11 @@ def test_max_undo_depth_is_a_positive_int():
     assert MAX_UNDO_DEPTH > 0
 
 
-def test_max_undo_depth_re_exported_by_builder_edits():
+def test_max_undo_depth_re_exported_by_editor_edits():
     """The desktop's ``_MAX_UNDO_DEPTH`` alias points at the same
     integer. Web editor caps its own JS stack to this value
     through the bridge."""
-    from phonology_features.gui.builder.edits import _MAX_UNDO_DEPTH
+    from phonology_features.gui.editor.edits import _MAX_UNDO_DEPTH
 
     assert (
         _MAX_UNDO_DEPTH is MAX_UNDO_DEPTH or _MAX_UNDO_DEPTH == MAX_UNDO_DEPTH
@@ -417,14 +417,14 @@ def test_grid_to_inventory_round_trip(simple_grid):
     assert inv.segments["b"].get("Voice") == "+"
     assert inv.segments["m"].get("Nasal") == "+"
     # "0" cells are PRESERVED (dense), so a dense inventory survives a
-    # builder round-trip byte-stable instead of being silently
+    # editor round-trip byte-stable instead of being silently
     # stripped to a sparse form. Absent and "0" remain equivalent on
     # load, so this is still lossless.
     assert inv.segments["b"].get("Nasal") == "0"
 
 
 def test_grid_to_inventory_keeps_zero_cells():
-    """A "0" cell is kept (fully dense per-segment bundle) so a builder
+    """A "0" cell is kept (fully dense per-segment bundle) so a editor
     round-trip of a densely-authored inventory does not strip every
     zero and produce a large spurious diff."""
     inv = grid_to_inventory(

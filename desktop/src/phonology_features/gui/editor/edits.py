@@ -1,8 +1,8 @@
-"""Undo/redo data types for the inventory builder.
+"""Undo/redo data types for the inventory editor.
 
 Module-private symbols (leading underscore) but visible inside the
-``builder`` package. Pure data types with no Qt dependency, so the
-table machinery and the InventoryBuilder class can both reference
+``editor`` package. Pure data types with no Qt dependency, so the
+table machinery and the InventoryEditor class can both reference
 them without dragging GUI imports through the engine-only test
 paths that ``Inventory`` and ``FeatureEngine`` live on.
 

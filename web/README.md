@@ -20,7 +20,7 @@ on the next build.
 | Mode-switch projection rules and per-mode helper text | `shared/src/phonology_shared/presentation/mode_logic.py` | Desktop + web (bundled) |
 | Theme colors (light / dark palette tokens) | `shared/src/phonology_shared/presentation/palette.py` | Desktop (Qt) + web (`theme.css` generated from it) |
 | Feature display order, chip box model, mono font chain | `shared/src/phonology_shared/presentation/constants.py` | Desktop + web (bundled) |
-| Inventory builder grid + setup | `shared/src/phonology_shared/editor/*.py` | Desktop + web (bundled) |
+| Inventory editor grid + setup | `shared/src/phonology_shared/editor/*.py` | Desktop + web (bundled) |
 | Bundled inventories shown in the dropdown | Add / edit JSON in `desktop/inventories/` | Desktop + web (auto-discovered, label from `metadata.name`) |
 | Web-only layout (panel structure, toolbar, loading screen) | `web/index.html`, `web/style.css` | Web only |
 | Web-only event wiring (clicks, mode toggle, upload) | `web/main.js` | Web only |

@@ -12,8 +12,8 @@ stability audit:
   when the drain times out. A stuck save previously left
   ``save_in_flight`` True forever, silently rejecting every later
   save for the rest of the session.
-* Reopening the builder must not let the OLD instance's ``destroyed``
-  signal null the reference to the freshly-opened builder.
+* Reopening the editor must not let the OLD instance's ``destroyed``
+  signal null the reference to the freshly-opened editor.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def test_save_guard_released_on_drain_timeout(qapp) -> None:
     session, while still reporting the save as not completed."""
     from PyQt6.QtWidgets import QStatusBar, QWidget
 
-    from phonology_features.gui.builder.save_controller import (
+    from phonology_features.gui.editor.save_controller import (
         _SaveController,
     )
 
@@ -81,26 +81,26 @@ def test_save_guard_released_on_drain_timeout(qapp) -> None:
     )
 
 
-def test_reopen_keeps_new_builder_reference_when_old_destroyed(
+def test_reopen_keeps_new_editor_reference_when_old_destroyed(
     window, qapp
 ) -> None:
-    """The old builder's ``destroyed`` signal (fired when its deferred
+    """The old editor's ``destroyed`` signal (fired when its deferred
     deletion runs) must not null the reference to the freshly-opened
-    builder. The fix disconnects the outgoing builder's signals before
+    editor. The fix disconnects the outgoing editor's signals before
     scheduling its deletion."""
-    window._open_builder()
-    first = window._builder
+    window._open_editor()
+    first = window._editor
     assert first is not None
     first._dirty = False
     first._save_in_flight = False
     first.close()
     qapp.processEvents()
 
-    window._open_builder()
-    second = window._builder
+    window._open_editor()
+    second = window._editor
     assert second is not None and second is not first
 
-    # Force the OLD builder's deferred deletion so its ``destroyed``
+    # Force the OLD editor's deferred deletion so its ``destroyed``
     # signal actually fires. Plain ``processEvents`` excludes
     # ``DeferredDelete`` events, so deleteLater'd objects would linger
     # and the test would pass trivially without exercising the bug.
@@ -109,15 +109,15 @@ def test_reopen_keeps_new_builder_reference_when_old_destroyed(
 
     qapp.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     qapp.processEvents()
-    # Precondition: the old builder really was destroyed (its
+    # Precondition: the old editor really was destroyed (its
     # ``destroyed`` signal fired during the dispatch above).
     assert sip.isdeleted(first), (
-        "old builder was not destroyed; test would not exercise the "
+        "old editor was not destroyed; test would not exercise the "
         "destroyed-signal path"
     )
-    assert window._builder is second, (
-        "the old builder's destroyed signal nulled the new builder "
-        "reference; outgoing-builder signals must be disconnected before "
+    assert window._editor is second, (
+        "the old editor's destroyed signal nulled the new editor "
+        "reference; outgoing-editor signals must be disconnected before "
         "deleteLater"
     )
 

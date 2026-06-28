@@ -228,11 +228,11 @@ UNDID_TEMPLATE: str = "Undid {n} cell change{plural}."
 #: ``{n}`` and ``{plural}`` substituted per UI.
 REDID_TEMPLATE: str = "Redid {n} cell change{plural}."
 
-#: ``{seg}`` substituted per UI. Builder add/remove status messages.
+#: ``{seg}`` substituted per UI. Editor add/remove status messages.
 ADDED_SEGMENT_TEMPLATE: str = "Added segment '{seg}'."
 REMOVED_SEGMENT_TEMPLATE: str = "Removed segment '{seg}'."
 
-#: ``{feat}`` substituted per UI. Builder add/remove status messages.
+#: ``{feat}`` substituted per UI. Editor add/remove status messages.
 ADDED_FEATURE_TEMPLATE: str = "Added feature '{feat}'."
 REMOVED_FEATURE_TEMPLATE: str = "Removed feature '{feat}'."
 
@@ -245,38 +245,38 @@ def plural_s(n: int) -> str:
 
 
 def undid_message(n: int) -> str:
-    """Builder status after undo. ``{plural}`` resolves via
+    """Editor status after undo. ``{plural}`` resolves via
     :py:func:`plural_s`.
     """
     return UNDID_TEMPLATE.format(n=n, plural=plural_s(n))
 
 
 def redid_message(n: int) -> str:
-    """Builder status after redo."""
+    """Editor status after redo."""
     return REDID_TEMPLATE.format(n=n, plural=plural_s(n))
 
 
 def added_segment_message(seg: str) -> str:
-    """Builder status after adding a new segment column."""
+    """Editor status after adding a new segment column."""
     return ADDED_SEGMENT_TEMPLATE.format(seg=seg)
 
 
 def removed_segment_message(seg: str) -> str:
-    """Builder status after removing a segment column."""
+    """Editor status after removing a segment column."""
     return REMOVED_SEGMENT_TEMPLATE.format(seg=seg)
 
 
 def added_feature_message(feat: str) -> str:
-    """Builder status after adding a new feature row."""
+    """Editor status after adding a new feature row."""
     return ADDED_FEATURE_TEMPLATE.format(feat=feat)
 
 
 def removed_feature_message(feat: str) -> str:
-    """Builder status after removing a feature row."""
+    """Editor status after removing a feature row."""
     return REMOVED_FEATURE_TEMPLATE.format(feat=feat)
 
 
-#: Fraction of a cap at which the live builder counter turns from
+#: Fraction of a cap at which the live editor counter turns from
 #: neutral to warning, so the user sees the ceiling approaching
 #: before an add is refused. Below it the counter reads "ok".
 _CAP_WARN_FRACTION: float = 0.9
@@ -284,7 +284,7 @@ _CAP_WARN_FRACTION: float = 0.9
 
 @dataclass(frozen=True)
 class InventoryCapStatus:
-    """Live vowel / consonant / total counts for the builder counter,
+    """Live vowel / consonant / total counts for the editor counter,
     classified against the hard caps.
 
     ``severity`` is ``"error"`` when any count is AT or OVER its cap
@@ -306,7 +306,7 @@ def inventory_cap_status(
     *,
     normalized: Mapping[str, dict[str, str]] | None = None,
 ) -> InventoryCapStatus:
-    """Build the live cap-counter view model for a builder grid.
+    """Build the live cap-counter view model for a editor grid.
 
     Class counts come from
     :py:func:`phonology_shared.chart.consonants.count_segment_classes`

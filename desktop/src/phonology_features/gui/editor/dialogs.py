@@ -232,9 +232,9 @@ class InputDialog(QDialog):
         self.setWindowModality(Qt.WindowModality.WindowModal)
         # Provider chosen via the preset dropdown. ``None`` means the
         # user picked a static features-only preset (Default / Custom)
-        # so the builder takes the user-typed feature list verbatim
+        # so the editor takes the user-typed feature list verbatim
         # and produces an empty grid. A non-None value means the
-        # builder calls ``provider.generate(segments)`` after the
+        # editor calls ``provider.generate(segments)`` after the
         # dialog accepts and pre-populates grid cells.
         self._chosen_provider: FeatureProvider | None = None
         # Provider-labelled entries in the preset combo are routed
@@ -445,8 +445,8 @@ class InputDialog(QDialog):
         """Return the bootstrap provider the user picked, if any.
 
         ``None`` when the user picked a static preset (Default /
-        Custom) and the builder should produce an empty grid.
-        Otherwise the builder calls ``provider.generate(segments)``
+        Custom) and the editor should produce an empty grid.
+        Otherwise the editor calls ``provider.generate(segments)``
         after validation to pre-populate cells.
         """
         return self._chosen_provider
@@ -477,7 +477,7 @@ class InputDialog(QDialog):
         the features-side validation against the provider's
         canonical feature names so a user who cleared the
         auto-filled textarea does not get a misleading "no
-        features" error: the builder uses the provider's features
+        features" error: the editor uses the provider's features
         regardless.
         """
         provider = self._chosen_provider

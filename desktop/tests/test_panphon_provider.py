@@ -167,10 +167,10 @@ def test_generated_payload_round_trips_through_inventory_from_grid(
     provider: PanPhonFeatureProvider,
 ) -> None:
     """A generated result must satisfy
-    :py:meth:`Inventory.from_grid` so the builder can feed it
+    :py:meth:`Inventory.from_grid` so the editor can feed it
     through the same validation chokepoint as user-authored grids.
     Unresolved columns get seeded with :py:func:`blank_bundle`
-    matching what the builder's setup-dialog branch does at
+    matching what the editor's setup-dialog branch does at
     integration time.
     """
     result = provider.generate(["p", "i", "customX"])
@@ -237,7 +237,7 @@ def test_pruning_preserves_canonical_feature_order(
     provider: PanPhonFeatureProvider,
 ) -> None:
     """The kept-features tuple stays in the canonical PanPhon order
-    after filtering. Pins that the dialog and the builder see a
+    after filtering. Pins that the dialog and the editor see a
     stable column order regardless of which segments were
     submitted."""
     full = provider.feature_names()
@@ -265,7 +265,7 @@ def test_pruning_keeps_full_feature_set_when_nothing_resolves(
 def test_registry_exposes_panphon_when_installed() -> None:
     """When panphon is installed, the desktop registry should report
     exactly one provider with name ``"PanPhon"``. Pins that the
-    Builder can find the provider through the abstract registry,
+    Editor can find the provider through the abstract registry,
     without importing ``PanPhonFeatureProvider`` directly."""
     from phonology_features.providers import (
         available_providers,

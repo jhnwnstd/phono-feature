@@ -6,7 +6,7 @@ durability, and the alias-collision check in segment_grouper.
 
 Every test here exercises the SINGLE entry point ``Inventory.parse``
 (or a thin wrapper). The engine cannot accept anything the parser
-rejects, and the builder cannot save anything the parser rejects;
+rejects, and the editor cannot save anything the parser rejects;
 the parser is the contract.
 """
 
@@ -28,7 +28,7 @@ from phonology_shared.data.inventory import (
 from phonology_shared.theory.feature_engine import FeatureEngine
 from phonology_shared.theory.geometry import GeometryAnalyzer
 
-from .conftest import close_builder_silent
+from .conftest import close_editor_silent
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HAYES = str(REPO_ROOT / "inventories" / "hayes_features.json")
@@ -1230,7 +1230,7 @@ def test_cell_brushes_cached_until_theme_changes() -> None:
     """The brush triple cache must return the SAME QBrush object
     across calls within one theme epoch, then a fresh one after
     ``set_theme`` bumps ``theme_version``."""
-    from phonology_features.gui.builder.grid import _cell_brushes
+    from phonology_features.gui.editor.grid import _cell_brushes
     from phonology_shared.presentation import palette
 
     palette.set_theme("light")
@@ -1366,7 +1366,7 @@ def test_from_grid_accepts_unicode_minus() -> None:
 
 
 def test_from_grid_rejects_unknown_cell_value() -> None:
-    """The old builder silently rewrote unknown values to '0'. New
+    """The old editor silently rewrote unknown values to '0'. New
     contract: unknown values are an error; they shouldn't reach the
     save path in the first place, so surfacing them is the bug-hunting
     behaviour."""
@@ -1543,9 +1543,9 @@ def test_bulk_cycle_whole_table_under_100ms(tmp_path: Path) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     b.show()
     for _ in range(4):
         app.processEvents()
@@ -1562,9 +1562,9 @@ def test_bulk_cycle_whole_table_under_100ms(tmp_path: Path) -> None:
         f"regression vs <100 ms target. Did vertical header drift "
         f"back to ResizeToContents?"
     )
-    # close_builder_silent skips the unsaved-changes modal that would
+    # close_editor_silent skips the unsaved-changes modal that would
     # block forever in offscreen mode after the dirty bulk cycle.
-    close_builder_silent(b)
+    close_editor_silent(b)
 
 
 def test_bulk_edit_does_not_disable_rm_buttons(tmp_path: Path) -> None:
@@ -1586,9 +1586,9 @@ def test_bulk_edit_does_not_disable_rm_buttons(tmp_path: Path) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     b.show()
     for _ in range(4):
         app.processEvents()
@@ -1608,7 +1608,7 @@ def test_bulk_edit_does_not_disable_rm_buttons(tmp_path: Path) -> None:
         "-Segment must stay enabled (Qt selection didn't change)"
     )
     assert b._user_clicked_col == 5
-    close_builder_silent(b)
+    close_editor_silent(b)
 
 
 def test_corner_click_resets_header_toggle_stickies(tmp_path: Path) -> None:
@@ -1628,9 +1628,9 @@ def test_corner_click_resets_header_toggle_stickies(tmp_path: Path) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     b.show()
     for _ in range(4):
         app.processEvents()
@@ -1650,7 +1650,7 @@ def test_corner_click_resets_header_toggle_stickies(tmp_path: Path) -> None:
     assert (
         b._rm_seg_btn.isEnabled()
     ), "the re-selected column should re-enable the -Segment button"
-    close_builder_silent(b)
+    close_editor_silent(b)
 
 
 def test_header_doubleclick_still_toggles_selection(tmp_path: Path) -> None:
@@ -1676,9 +1676,9 @@ def test_header_doubleclick_still_toggles_selection(tmp_path: Path) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     b.resize(1600, 900)
     b.show()
     for _ in range(4):
@@ -1753,8 +1753,8 @@ def test_dropdown_filters_out_atomic_write_tmp_files(tmp_path: Path) -> None:
     assert ".tmp_inv_abc123.json" not in listed
 
 
-def test_builder_close_waits_for_save_in_flight(tmp_path: Path) -> None:
-    """Closing the builder while a background save is still running
+def test_editor_close_waits_for_save_in_flight(tmp_path: Path) -> None:
+    """Closing the editor while a background save is still running
     must wait for the worker to finish, so the worker can't emit
     ``_save_finished`` on a QObject that Qt is destroying."""
     import os as _os
@@ -1769,9 +1769,9 @@ def test_builder_close_waits_for_save_in_flight(tmp_path: Path) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     target = tmp_path / "saved.json"
     b._write_json(str(target))
     assert b._save_in_flight, "save should be scheduled but not done"
@@ -1782,7 +1782,7 @@ def test_builder_close_waits_for_save_in_flight(tmp_path: Path) -> None:
     assert target.exists(), "file must be on disk after close completes"
 
 
-def test_builder_save_then_close_dialog_path(tmp_path: Path) -> None:
+def test_editor_save_then_close_dialog_path(tmp_path: Path) -> None:
     """User edits, then clicks Close. The unsaved dialog's Save button
     calls ``_save()`` (async) and then ``_wait_for_save()``; the
     dirty flag must clear before ``_check_unsaved`` returns so the
@@ -1800,9 +1800,9 @@ def test_builder_save_then_close_dialog_path(tmp_path: Path) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     target = tmp_path / "edited.json"
     b._current_path = str(target)
     b._dirty = True
@@ -1834,8 +1834,8 @@ def test_worker_non_oserror_clears_save_in_flight(
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
-    from phonology_features.gui.builder import save_controller as _sc
+    from phonology_features.gui.editor import InventoryEditor
+    from phonology_features.gui.editor import save_controller as _sc
     from phonology_shared.data.inventory import Inventory
 
     # Stub modal warning so the error path doesn't deadlock the test.
@@ -1846,7 +1846,7 @@ def test_worker_non_oserror_clears_save_in_flight(
 
     monkeypatch.setattr(Inventory, "write_atomic", boom)
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     b._write_json(str(tmp_path / "out.json"))
     import time as _time
 
@@ -1858,7 +1858,7 @@ def test_worker_non_oserror_clears_save_in_flight(
         "non-OSError in worker left _save_in_flight=True forever; "
         "user would be permanently locked out of save"
     )
-    close_builder_silent(b)
+    close_editor_silent(b)
 
 
 def test_save_as_drains_in_flight_save(tmp_path: Path, monkeypatch) -> None:
@@ -1877,9 +1877,9 @@ def test_save_as_drains_in_flight_save(tmp_path: Path, monkeypatch) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     first = tmp_path / "first.json"
     second = tmp_path / "second.json"
     b._current_path = str(first)
@@ -1902,10 +1902,10 @@ def test_save_as_drains_in_flight_save(tmp_path: Path, monkeypatch) -> None:
         "Save-As silently dropped because _save_as did not drain the "
         "in-flight save before issuing the second write"
     )
-    close_builder_silent(b)
+    close_editor_silent(b)
 
 
-def test_builder_save_runs_off_main_thread(tmp_path: Path) -> None:
+def test_editor_save_runs_off_main_thread(tmp_path: Path) -> None:
     """``_write_json`` validates synchronously then hands the disk
     write to a background worker. We assert:
       1. The call returns BEFORE the file is fully written
@@ -1928,9 +1928,9 @@ def test_builder_save_runs_off_main_thread(tmp_path: Path) -> None:
     ):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, settings_dir)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     target = tmp_path / "saved.json"
     b._write_json(str(target))
     # Spin the event loop briefly so the timer callback fires
@@ -1969,7 +1969,7 @@ def test_edit_during_in_flight_save_preserves_dirty(
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
     from phonology_shared.data.inventory import Inventory
 
     # Stall the worker so the main thread has time to mutate the grid
@@ -1982,7 +1982,7 @@ def test_edit_during_in_flight_save_preserves_dirty(
 
     monkeypatch.setattr(Inventory, "write_atomic", slow_write)
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     target = tmp_path / "out.json"
     b._write_json(str(target))
     assert b._save_in_flight, "worker should still be running"
@@ -2005,7 +2005,7 @@ def test_edit_during_in_flight_save_preserves_dirty(
         "post-snapshot edit was clobbered: completion handler cleared "
         "_dirty even though the edit is not in the file on disk"
     )
-    close_builder_silent(b)
+    close_editor_silent(b)
 
 
 def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
@@ -2027,8 +2027,8 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
-    from phonology_features.gui.builder import save_controller as _sc
+    from phonology_features.gui.editor import InventoryEditor
+    from phonology_features.gui.editor import save_controller as _sc
     from phonology_shared.data.inventory import Inventory
 
     monkeypatch.setattr(_sc, "show_warning", lambda *a, **k: None)
@@ -2038,7 +2038,7 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
         lambda self, path: (_ for _ in ()).throw(OSError("disk full")),
     )
 
-    b = InventoryBuilder(load_path=HAYES)
+    b = InventoryEditor(load_path=HAYES)
     b._dirty = True
     b._write_json(str(tmp_path / "out.json"))
 
@@ -2051,7 +2051,7 @@ def test_save_failure_redirties_grid(tmp_path: Path, monkeypatch) -> None:
         "save failure left _dirty=False; close guard would discard "
         "the user's unsaved work silently"
     )
-    close_builder_silent(b)
+    close_editor_silent(b)
 
 
 # ---------------------------------------------------------------------------
@@ -2274,7 +2274,7 @@ def test_main_viewer_falls_back_when_current_inventory_deleted(
     tmp_path: Path,
 ) -> None:
     """When the currently-loaded inventory is deleted from disk
-    (typically via Builder -> Delete), the viewer should switch
+    (typically via Editor -> Delete), the viewer should switch
     automatically to the most-recently-opened non-deleted inventory.
     Pre-fix the viewer kept the dangling path and the watcher
     auto-reload code path simply no-op'd on the missing file."""
@@ -2312,7 +2312,7 @@ def test_main_viewer_falls_back_when_current_inventory_deleted(
     assert w._inv_dir.recent_paths[0] == _os.path.abspath(str(b))
     assert _os.path.abspath(str(a)) in w._inv_dir.recent_paths
 
-    # Simulate the Builder's delete path: file vanishes from disk,
+    # Simulate the Editor's delete path: file vanishes from disk,
     # then the directory watcher fires.
     _os.remove(str(b))
     w._inv_dir._on_directory_changed(str(work_dir))
@@ -2325,12 +2325,12 @@ def test_main_viewer_falls_back_when_current_inventory_deleted(
     w.close()
 
 
-def test_main_viewer_loads_freshly_saved_builder_inventory(
+def test_main_viewer_loads_freshly_saved_editor_inventory(
     tmp_path: Path,
 ) -> None:
-    """When the user creates a NEW inventory in the builder and
+    """When the user creates a NEW inventory in the editor and
     saves, the main feature visualizer should switch to that
-    inventory automatically. Pre-fix the builder closed silently and
+    inventory automatically. Pre-fix the editor closed silently and
     the user had to open the dropdown to find their new file.
     """
     import os as _os
@@ -2346,7 +2346,7 @@ def test_main_viewer_loads_freshly_saved_builder_inventory(
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
     from phonology_features.gui.main_window import MainWindow
     from phonology_shared.presentation.constants import (
         SETTINGS_APP,
@@ -2368,31 +2368,31 @@ def test_main_viewer_loads_freshly_saved_builder_inventory(
     # was written to exercise.
     w._current_path = None
     w.engine = None
-    # Spawn a builder the same way _open_builder does for the
+    # Spawn a editor the same way _open_editor does for the
     # no-current-inventory case, including the save-finished wiring.
-    builder = InventoryBuilder(parent=w)
-    builder._save_finished.connect(w._on_builder_save_finished)
-    w._builder = builder
+    editor = InventoryEditor(parent=w)
+    editor._save_finished.connect(w._on_editor_save_finished)
+    w._editor = editor
     # Author a minimal inventory by hand.
-    builder._segments = ["p", "b"]
-    builder._features = ["Voice"]
-    builder._inv_name = "Built-In-Test"
-    builder._dirty = True
-    builder._rebuild_table()
+    editor._segments = ["p", "b"]
+    editor._features = ["Voice"]
+    editor._inv_name = "Built-In-Test"
+    editor._dirty = True
+    editor._rebuild_table()
     # Need to set the cells properly so _to_inventory produces valid output.
-    from phonology_features.gui.builder.grid import make_cell
+    from phonology_features.gui.editor.grid import make_cell
 
-    builder._table.setItem(0, 0, make_cell("-"))  # p is voiceless
-    builder._table.setItem(0, 1, make_cell("+"))  # b is voiced
+    editor._table.setItem(0, 0, make_cell("-"))  # p is voiceless
+    editor._table.setItem(0, 1, make_cell("+"))  # b is voiced
 
     target = tmp_path / "built_in_test.json"
     assert w._current_path is None
-    builder._write_json(str(target))
+    editor._write_json(str(target))
 
-    # Drain the background save; _on_builder_save_finished fires
+    # Drain the background save; _on_editor_save_finished fires
     # via the queued _save_finished signal back on the main thread.
     deadline = _time.monotonic() + 3.0
-    while builder._save_in_flight and _time.monotonic() < deadline:
+    while editor._save_in_flight and _time.monotonic() < deadline:
         app.processEvents()
         _time.sleep(0.01)
     # Process events one more time so the queued save_finished slot
@@ -2407,12 +2407,12 @@ def test_main_viewer_loads_freshly_saved_builder_inventory(
     )
     assert w.engine is not None
     assert "p" in w.engine.segments
-    close_builder_silent(builder)
+    close_editor_silent(editor)
     w.close()
 
 
-def test_builder_rebuild_table_keeps_headers_visible(tmp_path: Path) -> None:
-    """When the user creates a new inventory in the builder, the grid
+def test_editor_rebuild_table_keeps_headers_visible(tmp_path: Path) -> None:
+    """When the user creates a new inventory in the editor, the grid
     showed correct dimensions but no header labels (segments/features
     invisible). Cause: ``_rebuild_table`` replaces the table's headers
     via ``setHorizontalHeader(new)``; a freshly-constructed
@@ -2436,9 +2436,9 @@ def test_builder_rebuild_table_keeps_headers_visible(tmp_path: Path) -> None:
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     app = QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
-    b = InventoryBuilder()
+    b = InventoryEditor()
     b._segments = ["p", "b", "t"]
     b._features = ["Voice", "Nasal"]
     b._rebuild_table()
@@ -2476,7 +2476,7 @@ def test_builder_rebuild_table_keeps_headers_visible(tmp_path: Path) -> None:
         f"vertical header invisible after rebuild on visible table: "
         f"isVisible={v2.isVisible()}, width={v2.width()}"
     )
-    close_builder_silent(b)
+    close_editor_silent(b)
 
 
 def test_inventory_swap_does_not_resize_window(tmp_path: Path) -> None:
@@ -2649,12 +2649,12 @@ def test_bundle_search_largest_inventory_under_50ms() -> None:
     )
 
 
-def test_builder_save_keeps_zero_cells_dense(
+def test_editor_save_keeps_zero_cells_dense(
     tmp_path: Path,
 ) -> None:
-    """Builder save writes a fully DENSE bundle (every feature stated,
+    """Editor save writes a fully DENSE bundle (every feature stated,
     including "0"). The bundled inventories are authored densely, so a
-    builder round-trip of one must be byte-stable rather than stripping
+    editor round-trip of one must be byte-stable rather than stripping
     every "0" cell into a large spurious diff. A sparsely-authored
     inventory is therefore inflated to dense form on save; this stays
     lossless because ``Inventory.parse`` reads a missing feature as
@@ -2672,7 +2672,7 @@ def test_builder_save_keeps_zero_cells_dense(
     for fmt in (QSettings.Format.NativeFormat, QSettings.Format.IniFormat):
         QSettings.setPath(fmt, QSettings.Scope.UserScope, sd)
     QApplication.instance() or QApplication([])
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
     # Author a sparse inventory: 'p' has Voice set, no Nasal.
     sparse_src = tmp_path / "sparse.json"
@@ -2684,19 +2684,19 @@ def test_builder_save_keeps_zero_cells_dense(
             }
         )
     )
-    b = InventoryBuilder(load_path=str(sparse_src))
+    b = InventoryEditor(load_path=str(sparse_src))
     # Snapshot through the same code path save uses; no edits.
     inv = b._to_inventory()
     serialized = inv.to_json_dict()
     # The previously-omitted "Nasal" on "p" and "Voice" on "m" are now
     # written explicitly as "0" (dense), so a dense inventory survives a
-    # builder round-trip unchanged.
+    # editor round-trip unchanged.
     assert serialized["segments"]["p"].get("Nasal") == "0", (
-        f"builder did not densify omitted feature: "
+        f"editor did not densify omitted feature: "
         f"{serialized['segments']['p']}"
     )
     assert serialized["segments"]["m"].get("Voice") == "0", (
-        f"builder did not densify omitted feature: "
+        f"editor did not densify omitted feature: "
         f"{serialized['segments']['m']}"
     )
-    close_builder_silent(b)
+    close_editor_silent(b)

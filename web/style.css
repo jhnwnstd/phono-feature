@@ -369,7 +369,7 @@ dialog input[type="text"]:focus-visible {
 /* ---------- PHOIBLE picker dialog ---------- */
 /* Standalone dialog opened by the toolbar's PHOIBLE button. Loads
    a chosen inventory directly into the engine (semantically parallel
-   to ``Browse…``); the Builder is the post-load edit surface, not a
+   to ``Browse…``); the Editor is the post-load edit surface, not a
    step in this picker's flow. Sizing follows the same viewport-cap
    pattern as ``.setup-dialog``. */
 
@@ -1499,7 +1499,7 @@ dialog input[type="text"]:focus-visible {
    two display features, e.g. long x nasal). Three-entry layout
    spans the first child across both columns on row 0; four-entry
    layout uses a pure 2x2. ``data-cell-size`` is set by the JS
-   builder so the 3-entry case can apply the column span without
+   editor so the 3-entry case can apply the column span without
    needing a separate class. */
 .vowel-chart-cell-contrast-set {
   display: grid;
@@ -2086,7 +2086,7 @@ progress {
   width: 100%;
 }
 
-/* ---------- builder editor (full-screen overlay) ---------- */
+/* ---------- editor editor (full-screen overlay) ---------- */
 
 /* Full-viewport overlay so the viewer chrome stays in the DOM
    (no rebuild on toggle) but is visually hidden while the editor
@@ -2302,7 +2302,7 @@ progress {
   outline-offset: -1px;
 }
 /* Header click affordance: cursor change so the user knows
-   headers are interactive (the desktop builder gets this for
+   headers are interactive (the desktop editor gets this for
    free via Qt's QPushButton-haptic header subclass). */
 .editor-grid thead th,
 .editor-grid tbody th {

@@ -119,7 +119,7 @@ from phonology_shared.presentation.view_models import (
 from phonology_shared.theory.feature_engine import FeatureEngine, MatchMode
 
 if TYPE_CHECKING:
-    from phonology_features.gui.builder import InventoryBuilder
+    from phonology_features.gui.editor import InventoryEditor
 
 _log = get_logger(__name__)
 
@@ -166,7 +166,7 @@ class MainWindow(QMainWindow):
         # because it needs the combobox widget.
         self._inv_dir: InventoryDirController  # populated below
         self._did_first_show = False
-        self._builder: InventoryBuilder | None = None
+        self._editor: InventoryEditor | None = None
         # Last-seen segment-pane width; ``_on_seg_pane_width_changed``
         # short-circuits when the width hasn't actually changed across
         # a Qt-internal layout pass. Initialized to -1 so the first
@@ -250,7 +250,7 @@ class MainWindow(QMainWindow):
         # synthetic round-trip now lets Qt finish that work invisibly.
         self._warm_palette_cache()
         # Construct the PanPhon FeatureTable in a daemon thread so the
-        # first Builder "New" click does not pay the ~2 s panphon-data-
+        # first Editor "New" click does not pay the ~2 s panphon-data-
         # load cost on the UI thread. The dialog's
         # ``available_providers()`` call hits a warm cache after this
         # thread finishes (~2 s after launch); if the user clicks New
@@ -355,9 +355,9 @@ class MainWindow(QMainWindow):
             "Load an inventory from a JSON file on your computer",
         )
         add_nav(
-            "Builder",
-            self._open_builder,
-            "Create or edit an inventory in the grid builder",
+            "Editor",
+            self._open_editor,
+            "Create or edit an inventory in the grid editor",
         )
         add_nav("PHOIBLE", self._open_phoible_picker)
         # Spacer pushes the theme toggle to the far right.
@@ -831,11 +831,11 @@ class MainWindow(QMainWindow):
         # slot then fires on a half-destroyed window. Calling stop()
         # is safe even if the timer is not active.
         self._debounce.stop()
-        # Let the builder prompt for unsaved changes. Without this,
+        # Let the editor prompt for unsaved changes. Without this,
         # Qt parent-child cleanup destroys it without firing its
         # closeEvent and unsaved edits are silently dropped.
-        if self._builder is not None and self._builder.isVisible():
-            if not self._builder.close():
+        if self._editor is not None and self._editor.isVisible():
+            if not self._editor.close():
                 if event is not None:
                     event.ignore()
                 return
@@ -990,83 +990,83 @@ class MainWindow(QMainWindow):
         self._inv_dir.add_phoible_entry(inventory)
         self._populate_after_load()
 
-    def _open_builder(self) -> None:
-        """Open (or raise) the Builder window. Edits the current
+    def _open_editor(self) -> None:
+        """Open (or raise) the Editor window. Edits the current
         inventory in place if one is loaded; otherwise shows the
         new-inventory setup dialog.
 
-        The Builder is window-modal against MainWindow: while it's
+        The Editor is window-modal against MainWindow: while it's
         open the user can't interact with the visualizer (in
-        particular, can't toggle the theme). The Builder's own
+        particular, can't toggle the theme). The Editor's own
         palette-dependent chrome doesn't get rebuilt on theme
         changes, so blocking those changes while it's up avoids
         the half-restyled state.
         """
-        if self._builder is not None and self._builder.isVisible():
-            self._builder.raise_()
-            self._builder.activateWindow()
+        if self._editor is not None and self._editor.isVisible():
+            self._editor.raise_()
+            self._editor.activateWindow()
             return
         # Drop any stale (closed-but-not-yet-deleted) reference before
-        # constructing the new builder, and DISCONNECT its signals
+        # constructing the new editor, and DISCONNECT its signals
         # first. Without the disconnect: (a) a still-running save on the
-        # old builder could fire ``_on_builder_save_finished`` after the
-        # new builder is wired to the same slot; and (b) when Qt finally
-        # collects the deleteLater'd old builder, its ``destroyed`` would
-        # call ``_on_builder_destroyed`` and null out the reference to
-        # the NEW builder. Disconnecting both severs the old instance
+        # old editor could fire ``_on_editor_save_finished`` after the
+        # new editor is wired to the same slot; and (b) when Qt finally
+        # collects the deleteLater'd old editor, its ``destroyed`` would
+        # call ``_on_editor_destroyed`` and null out the reference to
+        # the NEW editor. Disconnecting both severs the old instance
         # cleanly. Guarded because a signal may already be disconnected.
-        if self._builder is not None:
+        if self._editor is not None:
             for signal, slot in (
-                (self._builder._save_finished, self._on_builder_save_finished),
-                (self._builder.destroyed, self._on_builder_destroyed),
+                (self._editor._save_finished, self._on_editor_save_finished),
+                (self._editor.destroyed, self._on_editor_destroyed),
             ):
                 try:
                     signal.disconnect(slot)
                 except (TypeError, RuntimeError):
                     pass
-            self._builder.deleteLater()
-            self._builder = None
+            self._editor.deleteLater()
+            self._editor = None
 
-        from phonology_features.gui.builder import InventoryBuilder
+        from phonology_features.gui.editor import InventoryEditor
 
         if self._current_path:
-            builder = InventoryBuilder(
+            editor = InventoryEditor(
                 parent=self, load_path=self._current_path
             )
         elif self.engine is not None:
             # In-memory inventory with no backing file (PHOIBLE
-            # picker load). Seed the builder from the live engine so
+            # picker load). Seed the editor from the live engine so
             # "load from PHOIBLE, then edit, then save locally"
             # works; Save routes through Save As because there is no
             # path to overwrite.
-            builder = InventoryBuilder(parent=self)
-            builder.load_inventory(self.engine.inventory)
+            editor = InventoryEditor(parent=self)
+            editor.load_inventory(self.engine.inventory)
         else:
-            builder = InventoryBuilder(parent=self)
-            if not builder.show_setup_dialog():
-                builder.deleteLater()
+            editor = InventoryEditor(parent=self)
+            if not editor.show_setup_dialog():
+                editor.deleteLater()
                 return
 
-        builder.setWindowFlag(Qt.WindowType.Window)
-        builder.setWindowModality(Qt.WindowModality.WindowModal)
-        builder._save_finished.connect(self._on_builder_save_finished)
-        # When Qt destroys the builder, clear the field so the next
+        editor.setWindowFlag(Qt.WindowType.Window)
+        editor.setWindowModality(Qt.WindowModality.WindowModal)
+        editor._save_finished.connect(self._on_editor_save_finished)
+        # When Qt destroys the editor, clear the field so the next
         # open creates a fresh instance instead of resurrecting a
         # dangling pointer.
-        builder.destroyed.connect(self._on_builder_destroyed)
-        self._builder = builder
-        self._builder.show()
+        editor.destroyed.connect(self._on_editor_destroyed)
+        self._editor = editor
+        self._editor.show()
 
-    def _on_builder_destroyed(self, _obj: object) -> None:
-        """Reset the cached builder reference when Qt finishes
-        destroying it. Connected by :py:meth:`_open_builder`."""
-        self._builder = None
+    def _on_editor_destroyed(self, _obj: object) -> None:
+        """Reset the cached editor reference when Qt finishes
+        destroying it. Connected by :py:meth:`_open_editor`."""
+        self._editor = None
 
-    def _on_builder_save_finished(self, path: str, err: str) -> None:
-        """When the builder finishes a save, switch the main viewer to
+    def _on_editor_save_finished(self, path: str, err: str) -> None:
+        """When the editor finishes a save, switch the main viewer to
         the freshly-saved file if it's not already the current one.
 
-        Covers the "user just authored a new inventory in the builder"
+        Covers the "user just authored a new inventory in the editor"
         case (current_path was None) and the "Save As to a different
         path" case. For saves to the SAME path the user is already
         viewing, the directory watcher's auto-reload handles it --
@@ -1074,12 +1074,12 @@ class MainWindow(QMainWindow):
         twice for no benefit.
         """
         if err:
-            return  # builder already showed its own error dialog
+            return  # editor already showed its own error dialog
         if path == self._current_path:
             return  # same-path save -> watcher will refresh
         if os.path.isfile(path):
             _log.info(
-                "switching to inventory saved from builder: %s",
+                "switching to inventory saved from editor: %s",
                 os.path.basename(path),
             )
             self._load_path(path)

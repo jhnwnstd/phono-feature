@@ -1,11 +1,11 @@
-"""End-to-end contract for the PHOIBLE -> builder -> save flow.
+"""End-to-end contract for the PHOIBLE -> editor -> save flow.
 
 The single most important PHOIBLE integration property: a user can
-load a database inventory, edit it in the builder, and save it
+load a database inventory, edit it in the editor, and save it
 locally without silently losing anything. The historical failure
 mode was metadata: the grid cannot edit stamps like the PHOIBLE
 provenance or the diphthong ``segment_secondary`` bundles, and the
-commit path used to drop them, so a builder round-trip erased the
+commit path used to drop them, so a editor round-trip erased the
 diphthong arrows from the saved file.
 """
 
@@ -43,14 +43,14 @@ def test_phoible_load_status_is_terse(korean_with_diphthongs: dict) -> None:
     assert "(Korean" not in status
 
 
-def test_builder_roundtrip_preserves_diphthongs_and_provenance(
+def test_editor_roundtrip_preserves_diphthongs_and_provenance(
     korean_with_diphthongs: dict, tmp_path: object
 ) -> None:
     info = korean_with_diphthongs
     n_arrows = len(info["vowel_chart"]["diphthongs"])
     assert n_arrows > 0
 
-    # Builder open: grid state from the live engine; user edits one
+    # Editor open: grid state from the live engine; user edits one
     # cell and renames the inventory.
     grid = api.get_grid_state()
     cells = grid["cells"]

@@ -219,10 +219,10 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
     )
 
 
-def test_vowel_silhouette_builder_matches_per_inventory_back_edge() -> None:
-    """``vowel_silhouette()`` (the canonical builder used by
+def test_vowel_silhouette_editor_matches_per_inventory_back_edge() -> None:
+    """``vowel_silhouette()`` (the canonical editor used by
     ``build.py`` for the pre-load CSS bake) lands the back edge at
-    the same normalised extent the per-inventory builder produces,
+    the same normalised extent the per-inventory editor produces,
     so the bake and the runtime path stay byte-aligned.
     """
     from phonology_shared.chart.vowel_geometry import vowel_silhouette

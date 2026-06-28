@@ -30,7 +30,7 @@ def _phantom_engine() -> FeatureEngine:
 
     Shared between the strict-drop and wildcard-include tests so
     both assertions point at the exact same construction; if the
-    builder ever stops accepting the shape, both tests fail
+    editor ever stops accepting the shape, both tests fail
     together rather than drifting.
     """
     features = ["Voice", "Sonorant", "PhantomFeat"]

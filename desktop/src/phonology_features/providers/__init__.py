@@ -11,7 +11,7 @@ Provider instances are cached at module scope. The PanPhon
 ``FeatureTable`` reads ``ipa_all.csv`` into a pandas DataFrame and
 walks ~32k rows during construction (~2 s on a typical desktop);
 re-constructing for every InputDialog open turned every "New"
-click in the Builder into a multi-second stall. The cache pays the
+click in the Editor into a multi-second stall. The cache pays the
 cost once on first use and serves every subsequent dialog open in
 microseconds.
 
@@ -82,7 +82,7 @@ def prewarm_in_background() -> None:
     """Kick off a daemon thread that constructs the cached provider.
 
     Without this call the first ``available_providers()`` invocation
-    (typically from the first Builder ``New`` click) blocks the UI
+    (typically from the first Editor ``New`` click) blocks the UI
     thread for ~2 s while ``panphon.FeatureTable()`` walks
     ``ipa_all.csv`` into a pandas DataFrame. Running that
     construction off the UI thread at app startup means the cache
@@ -93,7 +93,7 @@ def prewarm_in_background() -> None:
     internal lock: if the user clicks New before the background
     thread completes, the UI thread blocks on the same lock and
     receives the eventual result (no duplicate construction). If
-    the user never opens the Builder, the daemon thread quietly
+    the user never opens the Editor, the daemon thread quietly
     finishes its work and exits with the process.
 
     Idempotent: subsequent calls return immediately because the

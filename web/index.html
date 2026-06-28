@@ -86,8 +86,8 @@
   <button id="upload-btn" type="button" disabled
           title="Load an inventory from a JSON file on your computer">Browse…</button>
   <input id="upload-input" type="file" accept=".json" hidden>
-  <button id="builder-btn" type="button" disabled
-          title="Create or edit an inventory in the grid builder">Builder</button>
+  <button id="editor-btn" type="button" disabled
+          title="Create or edit an inventory in the grid editor">Editor</button>
   <button id="phoible-btn" type="button" disabled
           title="Load an inventory from the PHOIBLE 2.0 database">
     PHOIBLE
@@ -177,9 +177,9 @@
 </footer>
 
 <!--
-  Builder editor. Mirrors the desktop ``InventoryBuilder`` window:
+  Editor editor. Mirrors the desktop ``InventoryEditor`` window:
   toolbar with New / Save as..., editable name strip, then the grid.
-  Initially hidden; the main toolbar's Builder button toggles
+  Initially hidden; the main toolbar's Editor button toggles
   ``hidden`` on this block so the editor swaps in as a full-screen
   view (the viewer chrome stays in the DOM but hides behind it).
 -->

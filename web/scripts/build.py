@@ -444,7 +444,7 @@ def _build_limits_payload() -> dict[str, int]:
     return {
         "max_features": module.MAX_FEATURES,
         "max_segments": module.MAX_SEGMENTS,
-        # Per-class caps for the web builder's live counter; the
+        # Per-class caps for the web editor's live counter; the
         # bridge enforces them too, so the JS read is display-only.
         "max_vowels": module.MAX_VOWELS,
         "max_consonants": module.MAX_CONSONANTS,
@@ -508,7 +508,7 @@ def _build_status_text_payload() -> dict[str, str]:
         payload["palette_to_standard"] = module.palette_toggle_tooltip(
             is_colorblind=True
         )
-        # Builder status templates. JS substitutes {seg}/{feat}/{n}/
+        # Editor status templates. JS substitutes {seg}/{feat}/{n}/
         # {plural} locally because those values originate in JS state.
         payload["undo_nothing_message"] = module.UNDO_NOTHING_MESSAGE
         payload["redo_nothing_message"] = module.REDO_NOTHING_MESSAGE
@@ -518,7 +518,7 @@ def _build_status_text_payload() -> dict[str, str]:
         payload["removed_segment_template"] = module.REMOVED_SEGMENT_TEMPLATE
         payload["added_feature_template"] = module.ADDED_FEATURE_TEMPLATE
         payload["removed_feature_template"] = module.REMOVED_FEATURE_TEMPLATE
-        # Builder cell-value glyphs. U+2212 (display) vs U+002D
+        # Editor cell-value glyphs. U+2212 (display) vs U+002D
         # (serialized). The JS used to declare these as literals;
         # baking from phonology_shared.editor.grid makes the Python
         # constants the single source.

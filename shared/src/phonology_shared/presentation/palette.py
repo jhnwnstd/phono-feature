@@ -51,7 +51,7 @@ LIGHT = {
     "border": "#DADCE0",
     "text": "#202124",
     "text_dim": "#5F6368",
-    # Status cues for the builder's live cap counter: amber as a
+    # Status cues for the editor's live cap counter: amber as a
     # count nears its cap, red once it is at/over. Shared so the
     # desktop QLabel and the web counter (relayed to CSS) agree.
     "status_warn": "#B45309",

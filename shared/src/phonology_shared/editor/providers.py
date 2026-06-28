@@ -1,7 +1,7 @@
 """Feature-provider abstraction for the New-inventory setup flow.
 
 A :py:class:`FeatureProvider` derives feature-value bundles for a
-list of user-supplied segment symbols. The desktop builder calls
+list of user-supplied segment symbols. The desktop editor calls
 ``provider.generate(segments)`` after the setup dialog accepts; the
 returned :py:class:`GeneratedInventory` carries the canonical
 feature list, the per-segment bundles, and any unresolved symbols
@@ -37,11 +37,11 @@ class GeneratedInventory:
             the grid editor afterward.
         segments: Per-segment ``{feature: "+"/"-"/"0"}`` bundles for
             every successfully resolved symbol. Unresolved symbols
-            are NOT present here; the builder seeds them with
+            are NOT present here; the editor seeds them with
             :py:func:`blank_bundle` so the grid still shows a
             column for the user to edit.
         unresolved: Symbols the provider could not resolve, in
-            input order. The builder surfaces the count in the
+            input order. The editor surfaces the count in the
             status bar so unresolved cases never disappear
             silently.
         warnings: Human-readable per-symbol diagnostics. Each entry
@@ -73,7 +73,7 @@ class FeatureProvider(Protocol):
 
     Implementations live in client-specific packages so optional
     dependencies do not leak into the shared layer. The dialog and
-    the builder only see this Protocol.
+    the editor only see this Protocol.
     """
 
     #: Short identifier used in metadata provenance and in the
@@ -166,7 +166,7 @@ def restrict_bundles(
 def blank_bundle(features: tuple[str, ...]) -> dict[str, str]:
     """Return ``{feature: "0"}`` for every feature.
 
-    Used by the builder to seed grid columns for symbols the
+    Used by the editor to seed grid columns for symbols the
     provider could not resolve, so the user can edit the cells in
     place instead of re-typing the symbol after a manual fix.
     """

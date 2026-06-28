@@ -331,7 +331,7 @@ def run_editor_unsaved_guard_check(page, label: str) -> int:
 
     page.on("dialog", _record)
     try:
-        page.click("#builder-btn")
+        page.click("#editor-btn")
         page.wait_for_timeout(150)
         # First New: state was clean before it, so no prompt should fire.
         page.click("#editor-new-btn")
@@ -369,7 +369,7 @@ def run_editor_unsaved_guard_check(page, label: str) -> int:
 
 def run_editor_rollback_check(page, label: str) -> int:
     """Regression guard for the editor "New" transaction: creating a new
-    inventory via the builder's New and backing out WITHOUT saving must
+    inventory via the editor's New and backing out WITHOUT saving must
     roll the engine back to the previously loaded inventory, not leave
     the unsaved one behind (with the old name).
     """
@@ -382,7 +382,7 @@ def run_editor_rollback_check(page, label: str) -> int:
     if not before:
         print("  editor-rollback: no seg-grid, skipping")
         return 0
-    page.click("#builder-btn")
+    page.click("#editor-btn")
     page.wait_for_timeout(150)
     page.click("#editor-new-btn")
     try:

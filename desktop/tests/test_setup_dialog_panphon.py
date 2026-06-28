@@ -14,7 +14,7 @@ Pins the dialog-side half of the bootstrap contract:
   list.
 
 Skipped when ``panphon`` is absent. The non-PanPhon dialog path is
-covered indirectly by every other builder test that exercises the
+covered indirectly by every other editor test that exercises the
 Hayes / PHOIBLE / Custom static presets.
 """
 
@@ -26,7 +26,7 @@ pytest.importorskip("panphon")
 
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
-from phonology_features.gui.builder.dialogs import InputDialog  # noqa: E402
+from phonology_features.gui.editor.dialogs import InputDialog  # noqa: E402
 from phonology_features.providers.panphon_provider import (  # noqa: E402
     PanPhonFeatureProvider,
 )
@@ -53,7 +53,7 @@ def test_accept_blocks_when_panphon_chosen_with_empty_segments(
     qapp: QApplication, mocker
 ) -> None:
     """Robustness pin: picking PanPhon with the segments box empty
-    must not accept the dialog. Otherwise the builder would run
+    must not accept the dialog. Otherwise the editor would run
     ``provider.generate([])`` and present the user with a
     0-segment grid that fails save-time validation downstream.
     The dialog instead surfaces a provider-specific warning, names
@@ -99,7 +99,7 @@ def test_accept_passes_when_panphon_features_box_cleared(
 ) -> None:
     """When PanPhon is the chosen preset the features textarea is
     auto-filled; if the user wipes it, validation must still pass
-    because the builder will use the provider's canonical feature
+    because the editor will use the provider's canonical feature
     names regardless. Otherwise the user sees a misleading "No
     features found" error for a path where features are
     provider-supplied."""
@@ -124,7 +124,7 @@ def test_choosing_panphon_exposes_provider_and_fills_features(
     ``get_chosen_provider`` return a provider with ``name == "PanPhon"``
     and (b) fill the features textarea with the same names the
     provider promises in ``feature_names()``. This is the round-trip
-    the builder relies on when it calls ``provider.generate`` after
+    the editor relies on when it calls ``provider.generate`` after
     the dialog accepts."""
     dlg = InputDialog()
     dlg.preset_combo.setCurrentText(PANPHON_LABEL)
@@ -208,7 +208,7 @@ def test_switching_back_to_static_preset_clears_chosen_provider(
     qapp: QApplication,
 ) -> None:
     """Selecting PanPhon then switching back to ``Hayes``
-    must clear ``get_chosen_provider``. Otherwise the builder would
+    must clear ``get_chosen_provider``. Otherwise the editor would
     call ``provider.generate`` on a path where the user explicitly
     asked for a static features-only preset."""
     dlg = InputDialog()

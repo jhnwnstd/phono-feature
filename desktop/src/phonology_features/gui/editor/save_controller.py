@@ -1,4 +1,4 @@
-"""Background save coordinator for the inventory builder.
+"""Background save coordinator for the inventory editor.
 
 Owns the save state machine: ``save_in_flight``, ``dirty``,
 ``draining_save`` flags, plus the QObject signals (``save_finished``,
@@ -6,10 +6,10 @@ Owns the save state machine: ``save_in_flight``, ``dirty``,
 the main thread.
 
 A QObject subclass because pyqtSignal must be a class attribute on
-a QObject. Holds a back reference to the InventoryBuilder so it can
+a QObject. Holds a back reference to the InventoryEditor so it can
 call back into the grid serialization (``_to_inventory``) and the
 existing modal helpers (``show_warning``, ``ask_question``). The
-builder still owns the table widget, the undo stack, and the
+editor still owns the table widget, the undo stack, and the
 inventory name; this controller owns only the save lifecycle.
 
 Snapshot semantics: at the moment ``request_save`` runs,
@@ -32,7 +32,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 from phonology_features._logging import get_logger
-from phonology_features.gui.builder.dialogs import ask_question, show_warning
+from phonology_features.gui.editor.dialogs import ask_question, show_warning
 from phonology_shared.data.inventory import (
     Inventory,
     ValidationError,
@@ -41,7 +41,7 @@ from phonology_shared.data.inventory import (
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QStatusBar
 
-    from phonology_features.gui.builder.window import InventoryBuilder
+    from phonology_features.gui.editor.window import InventoryEditor
 
 _log = get_logger(__name__)
 
@@ -49,7 +49,7 @@ _log = get_logger(__name__)
 class _SaveController(QObject):
     """Save state machine + background worker coordinator.
 
-    Public state (tests and the builder read/write these directly):
+    Public state (tests and the editor read/write these directly):
         save_in_flight: True between save start and worker completion.
         dirty: True when the in-memory grid has unsaved edits.
         draining_save: True while wait_for_save is running a nested
@@ -78,15 +78,15 @@ class _SaveController(QObject):
 
     def __init__(
         self,
-        builder: InventoryBuilder,
+        editor: InventoryEditor,
         status_bar: QStatusBar,
         snapshot: Callable[[], Inventory],
     ) -> None:
-        super().__init__(builder)
-        self._b = builder
+        super().__init__(editor)
+        self._b = editor
         self._status = status_bar
-        # Callback into the builder's grid serializer. Held as a
-        # callable rather than a hard reference to a builder method
+        # Callback into the editor's grid serializer. Held as a
+        # callable rather than a hard reference to a editor method
         # so the controller never has to know about the grid
         # internals.
         self._snapshot = snapshot
@@ -235,7 +235,7 @@ class _SaveController(QObject):
         save finished, False on timeout.
 
         Used by check_unsaved (Save+Close flow), the Save-As path
-        (drain before second write), and the builder's closeEvent
+        (drain before second write), and the editor's closeEvent
         (post-close cleanup). Without this, a window close while
         the save thread is still running would let the worker emit
         save_finished on a QObject that's being destroyed by Qt.
@@ -282,7 +282,7 @@ class _SaveController(QObject):
 
     def check_unsaved(self) -> bool:
         """Return True if it's OK to discard changes (or there are
-        none). Used by the builder's closeEvent and the Open File
+        none). Used by the editor's closeEvent and the Open File
         flow."""
         if not self.dirty:
             return True
@@ -298,7 +298,7 @@ class _SaveController(QObject):
             default=QMessageBox.StandardButton.Cancel,
         )
         if reply == QMessageBox.StandardButton.Save:
-            # The builder's _save() handles "no current path -> Save
+            # The editor's _save() handles "no current path -> Save
             # As" routing; route back through it rather than
             # duplicating the dialog logic here.
             self._b._save()

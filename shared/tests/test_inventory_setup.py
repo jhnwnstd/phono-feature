@@ -1,6 +1,6 @@
 """Tests for :py:mod:`phonology_shared.editor.setup`.
 
-The module is pure-Python and consumed by both the desktop builder
+The module is pure-Python and consumed by both the desktop editor
 dialog and the web setup modal. These tests exercise its contract
 directly so a regression here fails fast in CI, before the desktop
 or web smoke would notice.

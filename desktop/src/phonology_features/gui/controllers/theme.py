@@ -206,18 +206,18 @@ class ThemeController:
     def apply(self) -> None:
         """Re-style every palette-dependent widget in place.
 
-        Drops the cached :class:`InventoryBuilder` first (it caches
+        Drops the cached :class:`InventoryEditor` first (it caches
         palette-dependent button stylesheets at construction and
-        never re-styles); modality prevents the builder from being
+        never re-styles); modality prevents the editor from being
         open at this point, so this never destroys an in-use window.
         Then re-styles segment buttons, feature rows, and the
         chrome chain.
         """
         m = self._main
         QToolTip.hideText()
-        if m._builder is not None:
-            m._builder.deleteLater()
-            m._builder = None
+        if m._editor is not None:
+            m._editor.deleteLater()
+            m._editor = None
         with m._batched_updates():
             # Skip pool entries detached from the layout (orphans from
             # prior inventories). ``_get_or_create_seg_button`` calls

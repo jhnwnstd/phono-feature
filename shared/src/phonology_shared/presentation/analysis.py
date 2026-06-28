@@ -94,7 +94,7 @@ def _signed_feature_chip_strip(spec: Mapping[str, str]) -> str:
     chips, ordered by :py:func:`sort_spec`. The feature-side twin of
     :py:func:`_segment_chip_strip`; collapses the two identical
     ``' '.join(_signed_feature_chip(...) for ... in
-    sort_spec(...).items())`` sites. (The minimal-spec builder uses a
+    sort_spec(...).items())`` sites. (The minimal-spec editor uses a
     pre-filtered dict in its own order, so it does NOT route here.)
     """
     return " ".join(

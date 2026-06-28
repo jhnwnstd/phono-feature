@@ -30,13 +30,13 @@ K = TypeVar("K")
 
 def styles_for_active_theme(
     cache: dict[tuple[str, str], dict[K, str]],
-    builder: Callable[[], dict[K, str]],
+    editor: Callable[[], dict[K, str]],
 ) -> dict[K, str]:
-    """Return ``builder()`` keyed on the active (theme, mode) pair.
+    """Return ``editor()`` keyed on the active (theme, mode) pair.
 
     Cache hit: the dict from the last call at the same palette
     identity (object identity preserved so consumers can skip work
-    via ``is`` comparison). Cache miss: invoke ``builder()`` once
+    via ``is`` comparison). Cache miss: invoke ``editor()`` once
     and store the result for the current identity.
 
     The function takes the cache dict by reference so the caller
@@ -46,6 +46,6 @@ def styles_for_active_theme(
     key = (_palette.get_theme_name(), _palette.get_palette_mode())
     cached = cache.get(key)
     if cached is None:
-        cached = builder()
+        cached = editor()
         cache[key] = cached
     return cached

@@ -1,6 +1,6 @@
 """Per-class hard caps: the vowel / consonant counters, the
 classifier-backed validator, the enforcement seam, and the live
-builder counter helper.
+editor counter helper.
 
 Classification is feature-driven (``group_segments``), so a "vowel"
 here means exactly what the chart renders as one; these tests pin

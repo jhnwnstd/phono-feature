@@ -17,7 +17,7 @@ front-ends over the same shared package. The pattern:
    * `chart/` -- IPA chart placement (consonants, vowels).
    * `presentation/` -- palette, layout, view models, mode logic,
      HTML analysis renderer.
-   * `editor/` -- inventory-builder grid + setup helpers.
+   * `editor/` -- inventory-editor grid + setup helpers.
 
    No subpackage has Qt or DOM imports at module scope.
 2. `web/scripts/build.py:copy_shared_sources` mirrors the whole
@@ -53,7 +53,7 @@ phono-feature/
 │   │   ├── _logging.py      Pure Python; desktop owns this.
 │   │   ├── _settings.py     QSettings; Qt-only.
 │   │   └── gui/
-│   │       ├── builder/     Inventory Builder window and helpers.
+│   │       ├── editor/     Inventory Editor window and helpers.
 │   │       ├── controllers/ Desktop orchestrators (mode, theme, etc).
 │   │       └── *.py         Qt widgets (MainWindow, widgets, etc).
 │   ├── inventories/         Canonical JSON inventories.
@@ -64,7 +64,7 @@ phono-feature/
 │       ├── theory/          Analysis engine + geometry.
 │       ├── chart/           IPA chart placement (consonants + vowels).
 │       ├── presentation/    Palette, layout, view models, mode logic.
-│       └── editor/          Builder grid + setup.
+│       └── editor/          Editor grid + setup.
 ├── web/                     Pyodide bridge + browser surface.
 │   ├── src/phonology_web/api.py  JS-to-Python bridge.
 │   ├── index.html, main.js, style.css, sw.js
@@ -121,7 +121,7 @@ lockstep.
 
 | Suite                | What it covers |
 |----------------------|---|
-| `shared/tests/`      | Pure-Python: Inventory, FeatureEngine, geometry, chart placement, layout, mode_logic, view_models, builder grid. No Qt. |
+| `shared/tests/`      | Pure-Python: Inventory, FeatureEngine, geometry, chart placement, layout, mode_logic, view_models, editor grid. No Qt. |
 | `desktop/tests/`     | Desktop GUI + integration. Boots PyQt6 under `QT_QPA_PLATFORM=offscreen`. |
 | `web/tests/`         | Bridge-boundary validation: every `api.py` entry rejects bad input as `ValidationError`. |
 | `shared/tests/test_editor_mirror_parity.py`, `test_relay_smoke.py` | Pin the web's pre-bridge JS mirrors and the build-time JSON bake against the Python source they shadow. |

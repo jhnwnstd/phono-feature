@@ -637,7 +637,7 @@ class Inventory:
         segments: dict[str, dict[str, str]],
         metadata: Mapping[str, Any] | None = None,
     ) -> Inventory:
-        """Construct from builder grid state.
+        """Construct from editor grid state.
 
         Validates by funneling through :py:meth:`parse` so there is
         exactly one validation code path. ASCII-minus normalization
@@ -655,7 +655,7 @@ class Inventory:
         # Local import to keep the dependency direction one-way (data
         # imports from presentation only at boundaries like this; see
         # the metadata-resolver import in resolve_feature_alias).
-        # MINUS_SIGN is the single definition of the builder's Unicode
+        # MINUS_SIGN is the single definition of the editor's Unicode
         # minus glyph, so this fold cannot drift from a look-alike
         # literal pasted here.
         from phonology_shared.presentation.constants import MINUS_SIGN

@@ -672,7 +672,7 @@ def _assemble_inventory(
     # Migrate legacy metadata keys in place so the in-memory Inventory
     # always uses the canonical name no matter how old the on-disk file
     # is. ``segment_secondary`` was ``vowel_secondary`` before obstruent
-    # affricates joined vowel diphthongs in it, and a builder round-trip
+    # affricates joined vowel diphthongs in it, and a editor round-trip
     # persists the whole metadata mapping, so a pre-rename save (or an
     # edit of one) still carries the former. Doing it here, at the
     # single ingest funnel for both parse() and from_grid(), means no
