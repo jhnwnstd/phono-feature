@@ -1,4 +1,4 @@
-"""Inventory-editor editor: grid value-cycles, undo/redo,
+"""Inventory editor: grid value-cycles, undo/redo,
 delimiter-aware paste parsing, setup validation.
 
 Reads from :py:mod:`phonology_shared.data` for canonicalisation

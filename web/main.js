@@ -40,7 +40,7 @@ const NODE_IDS = Object.freeze({
     renameError: "rename-error",
     renameCancel: "rename-cancel",
     renameSave: "rename-save",
-    builderBtn: "builder-btn",
+    editorBtn: "editor-btn",
     setupDialog: "setup-dialog",
     setupForm: "setup-form",
     setupNameInput: "setup-name-input",
@@ -49,10 +49,10 @@ const NODE_IDS = Object.freeze({
     setupPresetPicker: "setup-preset-picker",
     setupError: "setup-error",
     // PHOIBLE picker dialog (separate from the setup dialog). PHOIBLE
-    // is a LOAD path (parallel to ``Browse…``), not a builder
+    // is a LOAD path (parallel to ``Browse…``), not an editor
     // integration: clicking the toolbar button opens this picker,
     // user picks a language + inventory, the engine swaps. After
-    // load the inventory is fully the user's; the Builder is the
+    // load the inventory is fully the user's; the editor is the
     // post-load edit surface, not a step in this picker's flow.
     phoibleBtn: "phoible-btn",
     phoiblePicker: "phoible-picker",
@@ -679,7 +679,7 @@ const BRIDGE_GATED_NODES = [
     "inventoryPicker",
     "uploadBtn",
     "renameBtn",
-    "builderBtn",
+    "editorBtn",
     "phoibleBtn",
     "matchModeBtn",
 ];
@@ -2909,8 +2909,8 @@ function wireUploadDownload() {
 
 /**
  * Serialize the active inventory and trigger a browser download.
- * Shared by the main toolbar's "Save as..." button and the builder
- * editor's "Save as..." button so both surfaces produce identical
+ * Shared by the main toolbar's "Save as..." button and the editor's
+ * "Save as..." button so both surfaces produce identical
  * output. Filename comes from the same suggest_filename slugifier
  * the desktop Save As dialog uses.
  */
@@ -2987,11 +2987,11 @@ function wireRename() {
 /**
  * Wire the New-inventory setup dialog and return its ``open()``
  * trigger. The dialog itself owns its inputs and submit handling;
- * callers (the builder editor's New button) invoke ``open()`` to
+ * callers (the editor's New button) invoke ``open()`` to
  * show it.
  *
  * The preset dropdown and Tab-autofill seeds come from the same
- * inventory_setup module the desktop builder uses, so the two
+ * inventory_setup module the desktop editor uses, so the two
  * frontends offer identical defaults. Validation is server-side
  * (Pyodide-side) through validate_setup; the dialog stays open
  * on error so the user can correct without losing input.
@@ -3243,7 +3243,7 @@ function wireSetupDialog() {
             );
             errorBox.textContent = "";
             close();
-            // If the builder editor is open it must re-fetch the new
+            // If the editor is open it must re-fetch the new
             // grid; the engine swap invalidated the previous state.
             if (!nodes.editorView.hidden) {
                 refreshEditorFromCurrent();
@@ -3346,11 +3346,11 @@ function _buildSourceCard(inv, defaultId, onPick, language) {
 /**
  * Wire the toolbar's PHOIBLE button and its picker dialog.
  *
- * PHOIBLE is a LOAD path, not a Builder integration: clicking the
+ * PHOIBLE is a LOAD path, not an editor integration: clicking the
  * button opens an inventory picker (search a language, pick a
  * source, see a preview), and submitting swaps the engine to the
  * chosen inventory. After load the inventory belongs to the user:
- * they can rename via the toolbar's pencil, edit in the Builder,
+ * they can rename via the toolbar's pencil, edit in the editor,
  * and Save As to keep a local copy. The Save flow does not
  * distinguish a PHOIBLE-loaded inventory from any other; a single
  * ``feature_source`` metadata field records provenance but doesn't
@@ -3723,7 +3723,7 @@ function wirePhoiblePicker() {
         ev.preventDefault();
         if (!selectedInventoryId) return;
         // Editor-unsaved guard: loading a new inventory swaps the
-        // engine, which discards any unsaved work in the Builder.
+        // engine, which discards any unsaved work in the editor.
         // Mirrors the upload + setup-dialog gate; editorHasUnsavedWork()
         // also catches a created-but-unsaved inventory, not just dirty
         // grid edits.
@@ -3768,11 +3768,11 @@ function wirePhoiblePicker() {
 
 
 // ----------------------------------------------------------------------
-// Builder / editor: web-side state machine.
+// Editor: web-side state machine.
 //
 // This section (~main.js:1675-3000) is the second large state machine
-// in the file and mirrors the desktop's ``InventoryBuilder``
-// (``desktop/src/phonology_features/gui/builder/window.py``). Strategy:
+// in the file and mirrors the desktop's ``InventoryEditor``
+// (``desktop/src/phonology_features/gui/editor/window.py``). Strategy:
 //
 //  * **Pure logic lives in Python** (``editor/grid.py``,
 //    ``editor/setup.py``) and is consumed via the bridge or via
@@ -3792,8 +3792,8 @@ function wirePhoiblePicker() {
 //        ``editor/grid.SELECTION_SHAPE_REMOVE_TARGET``
 //    Edit either side and the parity test catches the drift.
 //
-// In-memory edit state for the builder editor. Mirrors the desktop
-// ``InventoryBuilder``'s ``_segments`` / ``_features`` / table-item
+// In-memory edit state for the editor. Mirrors the desktop
+// ``InventoryEditor``'s ``_segments`` / ``_features`` / table-item
 // values, plus selection state, anchor for shift-click range
 // extension, focused cell for keyboard fallback, undo/redo stacks
 // matching the desktop's ``_BulkEdit`` shape, and a ``dirty`` flag
@@ -3802,7 +3802,7 @@ function wirePhoiblePicker() {
 // get_grid_state shape and the shared :py:func:`grid_to_inventory`
 // contract.
 //
-// Undo stack entries mirror ``builder.edits._BulkEdit``:
+// Undo stack entries mirror ``editor.edits._BulkEdit``:
 //   {cells: [{r, c, old}, ...], new: "value"}
 const editorState = {
     open: false,
@@ -3890,12 +3890,12 @@ function cellSerialized(value) {
 }
 
 /**
- * Wire the builder editor. Mirrors the desktop ``InventoryBuilder``
+ * Wire the editor. Mirrors the desktop ``InventoryEditor``
  * window:
  *
- * * Main toolbar's "Builder" button opens the editor.
+ * * Main toolbar's "Editor" button opens the editor.
  * * Inside the editor, "New" opens the setup dialog (same dialog
- *   the desktop builder's New button shows).
+ *   the desktop editor's New button shows).
  * * "Save as..." commits the current grid through
  *   commit_inventory_from_grid then triggers a download.
  * * "Back" closes the editor; if there are unsaved edits, the user
@@ -3917,7 +3917,7 @@ function cellSerialized(value) {
  *   cell), 1/2/3/0 set the value directly (via the shared
  *   :py:data:`VALUE_KEYS` mapping), Esc clears the selection.
  */
-function wireBuilderEditor(setupDialog) {
+function wireEditor(setupDialog) {
     const openEditor = () => {
         if (cycleLadder === null) {
             // First open: fetch the shared constants once.
@@ -3965,7 +3965,7 @@ function wireBuilderEditor(setupDialog) {
         setMainChromeInert(false);
     };
 
-    nodes.builderBtn.addEventListener("click", openEditor);
+    nodes.editorBtn.addEventListener("click", openEditor);
     nodes.editorExitBtn.addEventListener("click", closeEditor);
     nodes.editorNewBtn.addEventListener("click", setupDialog.open);
     nodes.editorSaveAsBtn.addEventListener("click", commitAndDownload);
@@ -4339,7 +4339,7 @@ function _alignHeaderPanesToData() {
     // Apply scrollbar-gutter compensation conditionally on the
     // data pane's ACTUAL scrollbar visibility. The previous
     // implementation stamped both borders unconditionally at
-    // ``wireBuilderEditor`` time, leaving a phantom panel-coloured
+    // ``wireEditor`` time, leaving a phantom panel-coloured
     // stripe at the bottom of the rows pane that clipped the last
     // row label whenever no horizontal scrollbar was visible.
     // Recomputed after every render because adding / removing a
@@ -4654,7 +4654,7 @@ function applyEdit(edit, useOld) {
 
 // Both UIs read these status templates from STATUS_TEXT (baked
 // from shared/render/mode_logic.py) so the desktop and web
-// builders surface byte-identical wording on undo / redo / add /
+// editors surface byte-identical wording on undo / redo / add /
 // remove. Fallbacks mirror the Python literals.
 function _pluralS(n) {
     return n === 1 ? "" : "s";
@@ -4674,7 +4674,7 @@ function _formatTpl(key, fallback, vars) {
 // all undoable, sharing the one undo stack with cell edits. Each
 // records enough to reconstruct the prior state (the removed column /
 // row values, the old name) so undo and redo are exact inverses.
-// Mirrors the desktop builder's structural-edit records.
+// Mirrors the desktop editor's structural-edit records.
 
 function _insertSegmentAt(index, seg, col) {
     editorState.segments.splice(index, 0, seg);
@@ -5131,7 +5131,7 @@ function cellFromFirstSelected() {
  * also clears any stale selection that referenced the old shape).
  */
 /** Right-click a column header to edit (rename) that segment inline.
- *  Mirrors the desktop builder's header double-click rename. The
+ *  Mirrors the desktop editor's header double-click rename. The
  *  edit commits on blur ("clicking away sets whatever the segment
  *  currently is") or Enter, and cancels on Escape. A real change is
  *  pushed onto the undo stack so Ctrl-Z reverts it. */
@@ -5485,7 +5485,7 @@ let _labelPromptPending = null;
 /**
  * Show the shared text-input modal. Used by + Segment and
  * + Feature to gather the new label, validate it via the bridge
- * (which routes through the same validator the desktop builder
+ * (which routes through the same validator the desktop editor
  * uses), and apply it to ``editorState`` on success.
  *
  * ``onAccept`` receives the canonical (trimmed) label string.
@@ -6248,7 +6248,7 @@ async function main() {
     // trigger from the dialog's wire-up return value.
     const setupDialog = wireSetupDialog();
     wireLabelPrompt();
-    wireBuilderEditor(setupDialog);
+    wireEditor(setupDialog);
     wireAnalysisTabs();
     wireClearButtons();
     wirePanelClickMode();

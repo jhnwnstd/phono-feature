@@ -699,7 +699,7 @@ def get_max_undo_depth() -> int:
 def get_grid_state() -> dict[str, Any]:
     """Return the active inventory in editor-grid shape.
 
-    The web editor editor reads this on open to populate its grid:
+    The web editor reads this on open to populate its grid:
     ``cells[feature_index][segment_index]`` mirrors the desktop
     ``InventoryEditor``'s ``rows = features, cols = segments``
     table layout. Missing values default to ``"0"`` (same semantics

@@ -1030,9 +1030,7 @@ class MainWindow(QMainWindow):
         from phonology_features.gui.editor import InventoryEditor
 
         if self._current_path:
-            editor = InventoryEditor(
-                parent=self, load_path=self._current_path
-            )
+            editor = InventoryEditor(parent=self, load_path=self._current_path)
         elif self.engine is not None:
             # In-memory inventory with no backing file (PHOIBLE
             # picker load). Seed the editor from the live engine so

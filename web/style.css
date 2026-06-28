@@ -2086,7 +2086,7 @@ progress {
   width: 100%;
 }
 
-/* ---------- editor editor (full-screen overlay) ---------- */
+/* ---------- editor (full-screen overlay) ---------- */
 
 /* Full-viewport overlay so the viewer chrome stays in the DOM
    (no rebuild on toggle) but is visually hidden while the editor
