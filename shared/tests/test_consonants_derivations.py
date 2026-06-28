@@ -142,8 +142,9 @@ def test_place_pharyngeal_from_constrpharynx_feature() -> None:
 
 
 def test_place_glottal_from_constrgl_feature() -> None:
-    """``+constrgl`` alone marks glottal place regardless of other
-    evidence; this matches the conventional treatment of ʔ."""
+    """``+constrgl`` with no oral-place evidence marks glottal place;
+    this matches the conventional treatment of ʔ (a placeless
+    constricted-glottis stop)."""
     assert derive_place({"constrgl": "+"}) == PlaceRank.GLOTTAL
 
 
@@ -160,11 +161,12 @@ def test_place_vowel_or_unknown_for_syllabic_vowel() -> None:
     assert derive_place({"syllabic": "+"}) == PlaceRank.VOWEL_OR_UNKNOWN
 
 
-def test_place_constrgl_overrides_oral_evidence() -> None:
-    """Per the current derivation, ``+constrgl`` short-circuits to
-    glottal before any oral-place check; verified so a future
-    re-ordering surfaces here."""
-    assert derive_place({"constrgl": "+", "labial": "+"}) == PlaceRank.GLOTTAL
+def test_place_constrgl_does_not_override_oral_evidence() -> None:
+    """``+constrgl`` is laryngeal, not place: a constricted-glottis
+    consonant that also carries oral-place evidence keeps that oral
+    place (a glottalized / ejective / tense bilabial is BILABIAL, not
+    GLOTTAL). Only a placeless ``+constrgl`` segment is glottal."""
+    assert derive_place({"constrgl": "+", "labial": "+"}) == PlaceRank.BILABIAL
 
 
 # derive_laryngeal_kind: conventional-first, aliases fill in the gaps.
@@ -205,11 +207,28 @@ def test_laryngeal_creaky_from_constrgl_plus_voice_plus_non_stop() -> None:
     )
 
 
-def test_laryngeal_ejective_requires_obstruent_base() -> None:
-    """Conventional path: ``-voice, +constrgl, -sonorant`` to
-    EJECTIVE."""
+def test_laryngeal_constrgl_voiceless_obstruent_is_fortis_without_evidence() -> (
+    None
+):
+    """``-voice, +constrgl, -sonorant`` alone is FORTIS, not EJECTIVE:
+    [+constricted glottis] equally encodes tense/fortis (Korean
+    /p͈ t͈ k͈/), so an ejective is named only with positive evidence."""
     assert (
         derive_laryngeal_kind({"voice": "-", "constrgl": "+", "sonorant": "-"})
+        == LaryngealKind.FORTIS
+    )
+
+
+def test_laryngeal_ejective_requires_positive_evidence() -> None:
+    """``-voice, +constrgl, -sonorant`` is EJECTIVE only with the
+    raised-larynx airstream feature or a declared ``ejective``."""
+    base = {"voice": "-", "constrgl": "+", "sonorant": "-"}
+    assert (
+        derive_laryngeal_kind({**base, "raisedlarynxejective": "+"})
+        == LaryngealKind.EJECTIVE
+    )
+    assert (
+        derive_laryngeal_kind({**base, "ejective": "+"})
         == LaryngealKind.EJECTIVE
     )
 

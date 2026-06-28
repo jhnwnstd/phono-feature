@@ -420,8 +420,6 @@ def derive_place(
     through ``distributed``, never through literal ``apical`` /
     ``laminal`` primitives.
     """
-    if feats.get("constrgl", "0") == "+":
-        return PlaceRank.GLOTTAL
     if _is_epiglottal_like(feats):
         return PlaceRank.EPIGLOTTAL
     if _is_pharyngeal_like(feats):
@@ -469,6 +467,15 @@ def derive_place(
             if feats.get("labiodental", "0") == "+"
             else PlaceRank.BILABIAL
         )
+    # ``constrgl`` is a LARYNGEAL feature, not a place: an ejective,
+    # implosive, tense/fortis, or glottalized consonant keeps the oral
+    # place resolved above. Only a [+constrgl] segment with NO oral
+    # place evidence is a glottal stop (/ʔ/). Checked here, after the
+    # oral-place branches, so the oral place wins (Korean /p͈ t͈ k͈/ stay
+    # bilabial / alveolar / velar, ejectives /pʼ tʼ kʼ/ likewise),
+    # rather than the whole [+constrgl] series collapsing to GLOTTAL.
+    if feats.get("constrgl", "0") == "+":
+        return PlaceRank.GLOTTAL
     if (
         feats.get("consonantal", "0") == "-"
         and feats.get("syllabic", "0") == "-"
@@ -490,6 +497,11 @@ class LaryngealKind(IntEnum):
     implosive -> creaky, with :py:attr:`UNKNOWN` last so segments
     whose laryngeal evidence is genuinely missing sort to the tail
     of the group rather than fighting for a particular slot.
+    :py:attr:`FORTIS` is appended after ``UNKNOWN`` (rather than
+    inserted) so the pinned ranks above are unchanged; in practice a
+    fortis segment coexists with the plain/aspirated members of its
+    place, so within a plosive place it still reads plain, aspirated,
+    fortis.
     """
 
     PLAIN_VOICELESS = 0
@@ -500,6 +512,12 @@ class LaryngealKind(IntEnum):
     IMPLOSIVE = 5
     CREAKY = 6
     UNKNOWN = 7
+    #: Tense / fortis voiceless obstruent: ``[-voice, +constricted
+    #: glottis]`` WITHOUT positive ejective evidence (no raised-larynx
+    #: airstream feature, no declared ``ejective``). The Korean tense
+    #: stops /p͈ t͈ k͈/. Has no fact-breakout, so it stays with its manner
+    #: class (Plosives) rather than peeling into an Ejective row.
+    FORTIS = 8
 
 
 def derive_laryngeal_kind(feats: dict[str, str]) -> LaryngealKind:
@@ -515,7 +533,10 @@ def derive_laryngeal_kind(feats: dict[str, str]) -> LaryngealKind:
          creaky-, breathy-, aspirated-, plain-voiced and
          plain-voiceless segments. Implosives require a stop
          obstruent base (``-continuant, -sonorant``); ejectives
-         require an obstruent (``-sonorant``).
+         require an obstruent (``-sonorant``) AND positive ejective
+         evidence (``raisedlarynxejective`` or a declared ``ejective``),
+         since ``+constrgl`` alone also marks tense/fortis obstruents
+         (returned as :py:attr:`LaryngealKind.FORTIS`).
       2. When the conventional path lands on
          :py:attr:`LaryngealKind.UNKNOWN` (no laryngeal evidence at
          all, or contradictory ``+constrgl`` + ambiguous ``voice``
@@ -539,7 +560,20 @@ def derive_laryngeal_kind(feats: dict[str, str]) -> LaryngealKind:
         if voice == "+" and is_stop and is_obstruent:
             return LaryngealKind.IMPLOSIVE
         if voice == "-" and is_obstruent:
-            return LaryngealKind.EJECTIVE
+            # [+constricted glottis] alone does NOT establish an
+            # ejective: it equally encodes tense/fortis (Korean
+            # /p͈ t͈ k͈/) and other glottalized voiceless obstruents.
+            # Name it ejective only with positive ejective evidence
+            # (PHOIBLE's raised-larynx-ejective airstream feature, or a
+            # declared ``ejective``); otherwise it is a fortis obstruent
+            # that stays with its manner class instead of peeling into an
+            # Ejective breakout.
+            if (
+                feats.get("raisedlarynxejective", "0") == "+"
+                or feats.get("ejective", "0") == "+"
+            ):
+                return LaryngealKind.EJECTIVE
+            return LaryngealKind.FORTIS
         if voice == "+":
             return LaryngealKind.CREAKY
         # +constrgl with ambiguous voice/sonorant: fall through to
