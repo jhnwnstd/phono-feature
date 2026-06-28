@@ -1,21 +1,12 @@
 {
   "metadata": {
     "name": "Modern Standard Arabic phoneme inventory",
-    "citation": "Compiled from Modern Standard Arabic phonology descriptions.",
-    "compiled_by": "OpenAI ChatGPT",
-    "schema_note": "Draft distinctive-feature JSON modeled after the user's uploaded feature inventories. Values are '+', '-', or '0'. Segmental matrices are dense. Language inventories are standard or broad-reference varieties and should be treated as a reviewable starting point, not a final fieldwork-grade analysis.",
     "notes": {
       "variety": "Modern Standard Arabic",
-      "speaker_rank_basis": "Ethnologue 2026 total speakers places Modern Standard Arabic fifth when listed separately from dialects.",
       "caveats": [
         "Modern Standard Arabic is not normally an L1 variety.",
         "Arabic dialects differ substantially in consonant realization and phoneme inventory.",
         "The segment /d͡ʒ/ has major regional variation in realization."
-      ],
-      "corrections_reviewed": [
-        "No core segment corrections made against the Wikipedia MSA tables.",
-        "Kept six vowel phonemes /a aː i iː u uː/ and 28 consonant phonemes.",
-        "Kept /d͡ʒ/ with a caveat because its realization varies regionally."
       ]
     }
   },

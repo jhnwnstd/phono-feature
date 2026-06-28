@@ -1,20 +1,11 @@
 {
   "metadata": {
     "name": "Mandarin Chinese phoneme inventory",
-    "citation": "Compiled from Standard Chinese / Mandarin phonology descriptions, including Mandarin tone as nonsegmental.",
-    "compiled_by": "OpenAI ChatGPT",
-    "schema_note": "Draft distinctive-feature JSON modeled after the user's uploaded feature inventories. Values are '+', '-', or '0'. Segmental matrices are dense. Language inventories are standard or broad-reference varieties and should be treated as a reviewable starting point, not a final fieldwork-grade analysis.",
     "notes": {
       "variety": "Standard Mandarin / Putonghua",
-      "speaker_rank_basis": "Ethnologue 2026 total speakers places Mandarin Chinese second.",
       "caveats": [
         "Mandarin vowel phoneme analysis varies strongly by theory.",
         "This file uses a practical surface-phoneme style inventory rather than a minimal underlying-vowel analysis."
-      ],
-      "corrections_reviewed": [
-        "Standardized affricate labels with tie bars: /t͡s t͡sʰ t͡ʂ t͡ʂʰ t͡ɕ t͡ɕʰ/.",
-        "Removed separate /ʐ/ because Standard Mandarin pinyin r is better represented as one rhotic phoneme /ɻ/ with [ʐ] as a possible realization.",
-        "Kept the surface-style vowel inventory /i y u ə a ɚ/ and glides /j w ɥ/ because the original file explicitly chose a practical surface inventory."
       ]
     }
   },

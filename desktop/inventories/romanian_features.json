@@ -1,8 +1,6 @@
 {
   "metadata": {
     "name": "Romanian phoneme inventory",
-    "citation": "Hand-authored from Steriade 2008 and Bermudez-Otero 2018; mostly Hayes-style distinctive features.",
-    "schema_note": "Hand-authored distinctive-feature JSON using a Hayes-style feature set. Values are '+', '-', or '0'. A reviewable reference encoding of Standard Romanian, not a final fieldwork-grade analysis.",
     "notes": "Core contrasts: seven oral vowels and the standard consonant set p b t d k ɡ t͡s t͡ʃ d͡ʒ f v s z ʃ ʒ h m n l r. The semivowels j and w are included as optional segmental objects for tautosyllabic vocoid sequences. Romanian palatalization, assibilation, S-palatalization, and /o/ ~ /o̯a/ alternations are treated as alternation facts rather than automatic additions to the core contrastive inventory."
   },
   "features": [
@@ -87,7 +85,7 @@
       "High": "+",
       "Low": "-",
       "Front": "-",
-      "Back": "+",
+      "Back": "-",
       "Round": "-",
       "Tense": "+",
       "Long": "-",
@@ -174,7 +172,7 @@
       "High": "-",
       "Low": "-",
       "Front": "-",
-      "Back": "+",
+      "Back": "-",
       "Round": "-",
       "Tense": "-",
       "Long": "-",
@@ -232,7 +230,7 @@
       "High": "-",
       "Low": "+",
       "Front": "-",
-      "Back": "+",
+      "Back": "-",
       "Round": "-",
       "Tense": "-",
       "Long": "-",

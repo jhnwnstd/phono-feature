@@ -1,20 +1,11 @@
 {
   "metadata": {
     "name": "Spanish phoneme inventory",
-    "citation": "Compiled from Spanish phonology descriptions and Spanish phonemic inventory references.",
-    "compiled_by": "OpenAI ChatGPT",
-    "schema_note": "Draft distinctive-feature JSON modeled after the user's uploaded feature inventories. Values are '+', '-', or '0'. Segmental matrices are dense. Language inventories are standard or broad-reference varieties and should be treated as a reviewable starting point, not a final fieldwork-grade analysis.",
     "notes": {
       "variety": "broad Spanish reference, with core pan-Hispanic segments plus Castilian/traditional dialectal contrasts",
-      "speaker_rank_basis": "Ethnologue 2026 total speakers places Spanish fourth.",
       "caveats": [
         "Spanish phonology varies by dialect.",
         "/θ/ and /ʎ/ are included as dialectal or traditional contrasts rather than universal Spanish phonemes."
-      ],
-      "corrections_reviewed": [
-        "Marked palatal /ɲ ʎ ʝ/ with dorsal high front place features instead of ordinary coronal anterior features.",
-        "Kept /θ/ and /ʎ/ as dialectal or traditional contrasts because the source file already marks them as not pan-Hispanic.",
-        "Kept /b d ɡ/ as stop phonemes, with approximant/fricative realizations treated as allophones rather than separate segments."
       ]
     }
   },

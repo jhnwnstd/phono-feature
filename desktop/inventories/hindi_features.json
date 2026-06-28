@@ -1,21 +1,11 @@
 {
   "metadata": {
     "name": "Hindi phoneme inventory",
-    "citation": "Compiled from Hindustani/Hindi phonology descriptions, using a Hindi-oriented inventory with aspiration and breathy-voiced stops.",
-    "compiled_by": "OpenAI ChatGPT",
-    "schema_note": "Draft distinctive-feature JSON modeled after the user's uploaded feature inventories. Values are '+', '-', or '0'. Segmental matrices are dense. Language inventories are standard or broad-reference varieties and should be treated as a reviewable starting point, not a final fieldwork-grade analysis.",
     "notes": {
       "variety": "Standard Hindi / Hindustani reference with Hindi-oriented labels",
-      "speaker_rank_basis": "Ethnologue 2026 total speakers places Hindi third.",
       "caveats": [
         "Hindi and Urdu are highly overlapping in phonology.",
         "Loan phonemes such as /f z ʃ/ are included because they are established in many descriptions."
-      ],
-      "corrections_reviewed": [
-        "Renamed /h/ to /ɦ/ for Hindi/Hindustani voiced glottal fricative.",
-        "Renamed long open vowel /aː/ to /ɑː/ to match the Wikipedia-style Hindustani table; keep /aː/ instead if the inventory intentionally uses broad Indic transcription.",
-        "Added marginal English-loan /æː/ noted in the Hindustani vowel discussion.",
-        "Marked /ɲ/ with dorsal high front place features rather than purely coronal features."
       ]
     }
   },
