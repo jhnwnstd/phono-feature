@@ -755,6 +755,7 @@ _PLACEMENT_SNAPSHOT: dict[str, dict[str, list[int]]] = {
         "i": [0, 0],
         "o": [2, 5],
         "u": [0, 5],
+        "ɯ": [0, 4],
     },
     "indonesian_features.json": {
         "a": [6, 2],
