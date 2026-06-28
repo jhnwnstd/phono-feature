@@ -192,6 +192,10 @@ class PhoibleProvider:
         self._language_search_index: list[tuple[str, str]] = []
         self._index_loaded: bool = False
         self._feature_names: tuple[str, ...] = ()
+        self._raw_segments_by_inventory: Mapping[str, Any] = {}
+        self._raw_secondary_by_inventory: Mapping[str, Any] = {}
+        # Per-inventory filter caches, populated lazily by generate() so
+        # only materialized inventories pay the per-segment filter cost.
         self._segments_by_inventory: dict[str, Mapping[str, str]] = {}
         self._segment_secondary_by_inventory: dict[str, Mapping[str, str]] = {}
 
@@ -384,7 +388,6 @@ class PhoibleProvider:
                 "list-of-strings; rerun bake_phoible to regenerate"
             )
         names = tuple(feature_names)
-        n = len(names)
 
         raw_invs = data.get("inventories")
         if not isinstance(raw_invs, Mapping):
@@ -392,35 +395,59 @@ class PhoibleProvider:
                 "PHOIBLE data table missing 'inventories' object; "
                 "rerun bake_phoible to regenerate"
             )
-        decoded: dict[str, Mapping[str, str]] = {}
-        for inv_id, segments in raw_invs.items():
-            if not isinstance(segments, Mapping):
-                continue
-            decoded[str(inv_id)] = _filter_encoded_bundles(segments, n)
 
-        # Vowel diphthong secondary bundles. Sparse: most
-        # inventories have none and stay absent from the map. The
-        # field is optional in the bake schema for backward
-        # compatibility with older snapshots that predate it.
-        raw_secondary = data.get("segment_secondary") or {}
-        secondary_decoded: dict[str, Mapping[str, str]] = {}
-        if isinstance(raw_secondary, Mapping):
-            for inv_id, segments in raw_secondary.items():
-                if not isinstance(segments, Mapping):
-                    continue
-                bundles = _filter_encoded_bundles(segments, n)
-                if bundles:
-                    secondary_decoded[str(inv_id)] = bundles
+        # Vowel diphthong secondary bundles. Sparse: most inventories
+        # have none. Optional in the bake schema for backward
+        # compatibility with snapshots that predate it.
+        raw_secondary = data.get("segment_secondary")
+        if not isinstance(raw_secondary, Mapping):
+            raw_secondary = {}
 
-        # Assign all three together only after validation and
-        # decoding fully succeeded. Assigning piecemeal above would
-        # let a failed ingest leave the provider half-loaded: new
-        # feature names zipped against the old segment table
-        # silently mis-assigns every value on the next generate(),
-        # and ``has_data`` would gate open on a broken payload.
+        # Keep the raw per-inventory maps and defer the per-segment
+        # filter + decode to generate() (memoized per id by
+        # :py:meth:`_filtered_segments`). Filtering all ~3020 inventories
+        # here cost ~15.8 ms native / ~50-80 ms WASM on the main thread
+        # at load for inventories the user never opens; the filter is
+        # idempotent per inventory, so deferring it is behavior-
+        # preserving. Assign feature_names + the raw maps + the (reset)
+        # caches together so a failed validation above cannot leave the
+        # provider half-loaded (new feature names against a stale table
+        # would mis-decode every value, and ``has_data`` would gate open
+        # on a broken payload).
         self._feature_names = names
-        self._segments_by_inventory = decoded
-        self._segment_secondary_by_inventory = secondary_decoded
+        self._raw_segments_by_inventory = raw_invs
+        self._raw_secondary_by_inventory = raw_secondary
+        self._segments_by_inventory = {}
+        self._segment_secondary_by_inventory = {}
+
+    def _filtered_segments(
+        self, inventory_id: str
+    ) -> tuple[Mapping[str, str], Mapping[str, str]]:
+        """Filter + cache one inventory's encoded primary + secondary
+        segment maps.
+
+        Deferred from :py:meth:`_ingest_data` so only the inventories a
+        user actually materializes pay the per-segment filter cost.
+        Memoized: a repeat ``generate`` of the same id reuses the cache.
+        Returns ``({}, {})`` for an id absent from the data payload.
+        """
+        cached = self._segments_by_inventory.get(inventory_id)
+        if cached is None:
+            n = len(self._feature_names)
+            raw = self._raw_segments_by_inventory.get(inventory_id)
+            cached = (
+                _filter_encoded_bundles(raw, n)
+                if isinstance(raw, Mapping)
+                else {}
+            )
+            self._segments_by_inventory[inventory_id] = cached
+            raw_sec = self._raw_secondary_by_inventory.get(inventory_id)
+            self._segment_secondary_by_inventory[inventory_id] = (
+                _filter_encoded_bundles(raw_sec, n)
+                if isinstance(raw_sec, Mapping)
+                else {}
+            )
+        return cached, self._segment_secondary_by_inventory[inventory_id]
 
     # ------------------------------------------------------------------
     # InventoryProvider Protocol
@@ -486,7 +513,9 @@ class PhoibleProvider:
             )
         if inventory_id not in self._inventories:
             raise KeyError(f"unknown PHOIBLE inventory id {inventory_id!r}")
-        encoded_bundles = self._segments_by_inventory.get(inventory_id, {})
+        encoded_bundles, encoded_secondary = self._filtered_segments(
+            inventory_id
+        )
 
         features: tuple[str, ...] = self._feature_names
         resolved: dict[str, Mapping[str, str]] = {}
@@ -499,9 +528,6 @@ class PhoibleProvider:
 
         # Pre-prune feature space so secondaries align with primaries
         # when the column-pruning step below drops sparse features.
-        encoded_secondary = self._segment_secondary_by_inventory.get(
-            inventory_id, {}
-        )
         secondary: dict[str, Mapping[str, str]] = {
             sym: decode_positional_bundle(features, encoded)
             for sym, encoded in encoded_secondary.items()
