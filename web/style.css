@@ -159,10 +159,18 @@ body {
   min-width: 0;
   max-width: calc(100vw - var(--space-lg) * 2);
 }
-.toolbar :is(select, button):hover {
+.toolbar button:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-light);
+}
+/* The inventory <select> is a wide control showing the loaded
+   inventory name. A full accent fill on hover washed the whole
+   dropdown blue (and lingered while the pointer stayed over it),
+   which read as heavy and obscured the text. Give the select only a
+   border cue on hover so it stays calm and legible. */
+.toolbar select:hover {
+  border-color: var(--accent);
 }
 .toolbar-spacer { flex: 1; }
 #theme-btn {
@@ -224,6 +232,53 @@ body {
   color: var(--btn-primary-text);
   border-color: var(--accent);
 }
+
+/* Segment-class visibility popover. Anchored under the panel header
+   (``.panel-header`` is ``position: relative``) and dropped just below
+   it. ``.panel`` is ``overflow: hidden`` but the popover stays within
+   the panel bounds, so it overlays the seg grid without being clipped.
+   Themed via the standard tokens so dark + colorblind palettes inherit
+   automatically. */
+.panel-header { position: relative; }
+.class-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: var(--space-lg);
+  z-index: 20;
+  min-width: 184px;
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-sm);
+  background: var(--panel);
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+.class-popover-heading {
+  font-size: var(--font-size-meta);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  padding: 2px 6px 5px;
+}
+.class-popover-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text);
+  font-size: var(--font-size-base);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.class-popover-row:hover { background: var(--accent-light); }
+.class-popover-row input { cursor: pointer; margin: 0; }
 /* Pencil-icon rename button. Sized like #theme-btn so square-icon
    buttons share one footprint. Sits next to the picker so the
    "edit the displayed inventory" affordance is local to its target. */
@@ -1650,9 +1705,16 @@ dialog input[type="text"]:focus-visible {
 .feat-name {
   flex: 1;
   color: var(--text);
-  /* User-uploaded inventories may carry long feature names; wrap
-     on any character rather than blowing out the row. */
-  overflow-wrap: anywhere;
+  /* Feature names render on a single line so the standard PHOIBLE /
+     Hayes labels (up to "LoweredLarynxImplosive", 22 chars) are
+     always written out in full. The feature pane is content sized
+     (``max-content`` on web, ``sizeHint`` on desktop) so it widens
+     to fit the longest name instead of reflowing the label; the seg
+     pane keeps its ``--seg-min-w`` floor, so a pathological
+     user-uploaded name widens the feat pane rather than blowing out
+     the row. */
+  white-space: nowrap;
+  overflow-wrap: normal;
   /* Small-caps follows the academic convention for citing
      features in print: the initial letter is rendered at full
      cap height and the remaining lowercase letters render as

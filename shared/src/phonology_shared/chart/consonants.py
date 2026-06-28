@@ -36,7 +36,7 @@ feature.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 
@@ -1324,3 +1324,25 @@ def group_segments(
 # ``chart.segment_classes``: that is application cap POLICY, not the
 # grouping algorithm this module owns. ``segment_classes`` imports
 # ``group_segments`` from here.
+
+
+def visible_groups(
+    groups: Mapping[str, list[str]],
+    hidden: Collection[str],
+) -> dict[str, list[str]]:
+    """Drop hidden class labels from a grouping, order preserved.
+
+    The display-side filter behind the segment-class visibility
+    toggle. It does NOT touch :py:func:`group_segments` (the canonical
+    grouping is unchanged); it only removes whole classes the user has
+    chosen to hide so each UI reflows over the remaining classes and
+    reclaims the freed space. Kept here, beside the grouping it
+    filters, so the desktop and the web apply identical semantics
+    (the web mirrors this filter in JS over the same payload).
+    """
+    hidden_set = frozenset(hidden)
+    return {
+        label: list(segs)
+        for label, segs in groups.items()
+        if label not in hidden_set
+    }

@@ -19,6 +19,8 @@ const NODE_IDS = Object.freeze({
     featPanel: "feat-panel",
     segGrid: "seg-grid",
     featList: "feat-list",
+    segFilterBtn: "seg-filter-btn",
+    segClassPopover: "seg-class-popover",
     segClearBtn: "seg-clear-btn",
     featClearBtn: "feat-clear-btn",
     analysisPane: "analysis-pane",
@@ -420,7 +422,25 @@ const state = {
     // querySelectorAll in the analysis hot path.
     seg_buttons: new Map(),  // seg -> HTMLButtonElement
     feat_rows: new Map(),    // feat -> { row, badge, plus, minus }
+    // Segment-class visibility. ``seg_groups`` / ``seg_vowel_chart``
+    // cache the last load's UNFILTERED payload so toggling a class
+    // re-renders from memory without a bridge round-trip;
+    // ``hidden_segment_classes`` holds the class labels the user has
+    // hidden via the filter popover. Resets to all-shown on every
+    // inventory change (display-state-reset convention): class sets
+    // differ between inventories, so a hidden label must not leak
+    // across a swap.
+    hidden_segment_classes: new Set(),
+    seg_groups: [],
+    seg_vowel_chart: null,
 };
+
+// Display label for the vowel group; mirrors the shared
+// ``VOWEL_GROUP_NAME`` in chart/consonants.py. The bridge renders
+// vowels as a chart (not a ``.seg-group``), so this label is not in
+// ``info.groups``; the filter popover appends it and hiding it drops
+// the whole vowel chart.
+const VOWEL_CLASS_LABEL = "Vowels";
 
 let BUNDLED_INVENTORIES = [];
 
@@ -732,7 +752,10 @@ function applyBootstrap() {
     state.inventory_name = info.name;
     state.segments = info.segments;
     state.features = info.features;
-    renderSegmentGrid(info.groups, info.vowel_chart);
+    state.hidden_segment_classes = new Set();
+    state.seg_groups = info.groups;
+    state.seg_vowel_chart = info.vowel_chart;
+    renderSegmentsWithVisibility();
     renderFeaturePanel(info.feature_groups);
     // Paint the no-selection analysis hints ("Click a segment...")
     // baked into the bootstrap so they land with the first frame
@@ -795,7 +818,10 @@ function applyInventoryInfo(info) {
     state.features = info.features;
     state.selected_segments = [];
     state.selected_features = emptyFeatureSpec();
-    renderSegmentGrid(info.groups, info.vowel_chart);
+    state.hidden_segment_classes = new Set();
+    state.seg_groups = info.groups;
+    state.seg_vowel_chart = info.vowel_chart;
+    renderSegmentsWithVisibility();
     renderFeaturePanel(info.feature_groups);
     // Show the empty-state hints ("Click a segment…") from the start
     // rather than a blank pane (the inventory identity lives in the
@@ -1449,6 +1475,103 @@ function renderSegmentGrid(groups, vowelChart) {
         grid.appendChild(_buildConsonantGroup(group));
     }
     relayoutSegments();
+}
+
+/** Re-render the segment grid honoring ``hidden_segment_classes``.
+ *  Filters the cached consonant groups and drops the vowel chart when
+ *  the "Vowels" class is hidden, then defers to ``renderSegmentGrid``
+ *  so the spillover planner reflows over the visible set and reclaims
+ *  the freed space. Single entry point for both a fresh load and a
+ *  popover toggle. */
+function renderSegmentsWithVisibility() {
+    const hidden = state.hidden_segment_classes;
+    const groups = (state.seg_groups || []).filter(
+        (g) => !hidden.has(g.name),
+    );
+    const vowelChart = hidden.has(VOWEL_CLASS_LABEL)
+        ? null
+        : state.seg_vowel_chart;
+    renderSegmentGrid(groups, vowelChart);
+    updateClassFilterButton();
+}
+
+/** Ordered class labels for the filter popover: the consonant groups
+ *  in engine order, then "Vowels" if the inventory has a vowel chart.
+ *  Mirrors the seg grid's own class set so every visible class gets a
+ *  checkbox. */
+function _segmentClassLabels() {
+    const labels = (state.seg_groups || []).map((g) => g.name);
+    const chart = state.seg_vowel_chart;
+    if (chart && Array.isArray(chart.cells) && chart.cells.length) {
+        labels.push(VOWEL_CLASS_LABEL);
+    }
+    return labels;
+}
+
+/** Enable the filter button only when there is something to filter and
+ *  flag it (``aria-pressed``) when any class is hidden, so the
+ *  affordance reads as "active" without adding chrome to the pane. */
+function updateClassFilterButton() {
+    const btn = nodes.segFilterBtn;
+    if (!btn) return;
+    const labels = _segmentClassLabels();
+    btn.disabled = labels.length === 0;
+    btn.setAttribute(
+        "aria-pressed",
+        state.hidden_segment_classes.size > 0 ? "true" : "false",
+    );
+}
+
+/** Build (or rebuild) the popover body from the current class list and
+ *  visibility state. Rebuilt on every open so it always reflects the
+ *  loaded inventory and any toggles made while it is open. */
+function buildClassPopover() {
+    const pop = nodes.segClassPopover;
+    pop.replaceChildren();
+    const heading = document.createElement("div");
+    heading.className = "class-popover-heading";
+    heading.textContent =
+        STATUS_TEXT.class_popover_heading || "Show classes";
+    pop.appendChild(heading);
+    for (const label of _segmentClassLabels()) {
+        const row = document.createElement("label");
+        row.className = "class-popover-row";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !state.hidden_segment_classes.has(label);
+        cb.dataset.class = label;
+        const text = document.createElement("span");
+        text.textContent = label;
+        row.append(cb, text);
+        pop.appendChild(row);
+    }
+}
+
+/** Open or close the class-visibility popover. ``force`` true opens,
+ *  false closes; omitted toggles. */
+function toggleClassPopover(force) {
+    const pop = nodes.segClassPopover;
+    const btn = nodes.segFilterBtn;
+    const open = force === undefined ? pop.hidden : force;
+    if (open) {
+        buildClassPopover();
+        pop.hidden = false;
+        btn.setAttribute("aria-expanded", "true");
+    } else {
+        pop.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+    }
+}
+
+/** Toggle one class's visibility from a popover checkbox change and
+ *  re-render. Keeps the popover open so the user can flip several. */
+function onClassPopoverChange(ev) {
+    const cb = ev.target.closest('input[type="checkbox"]');
+    if (!cb) return;
+    const label = cb.dataset.class;
+    if (cb.checked) state.hidden_segment_classes.delete(label);
+    else state.hidden_segment_classes.add(label);
+    renderSegmentsWithVisibility();
 }
 
 // Cached signature of the last successful relayout pass. When the
@@ -6096,6 +6219,36 @@ function wireClearButtons() {
     });
 }
 
+/** Wire the segment-class visibility popover: the header filter button
+ *  toggles it, a checkbox change flips one class' visibility, and a
+ *  click outside or Escape dismisses it. The popover acts purely on the
+ *  cached render payload, so it needs no bridge round-trip. */
+function wireClassFilter() {
+    if (!nodes.segFilterBtn || !nodes.segClassPopover) return;
+    nodes.segFilterBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        toggleClassPopover();
+    });
+    nodes.segClassPopover.addEventListener("change", onClassPopoverChange);
+    // Clicks inside the popover must not reach the outside-click
+    // dismiss handler below.
+    nodes.segClassPopover.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+    });
+    document.addEventListener("click", (ev) => {
+        if (nodes.segClassPopover.hidden) return;
+        if (nodes.segFilterBtn.contains(ev.target)) return;
+        if (nodes.segClassPopover.contains(ev.target)) return;
+        toggleClassPopover(false);
+    });
+    document.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape" && !nodes.segClassPopover.hidden) {
+            toggleClassPopover(false);
+            nodes.segFilterBtn.focus();
+        }
+    });
+}
+
 function clearAll() {
     // Clear is "make the selection empty", not a distinct UI state.
     // The analysis pane is intentionally not wiped here: the caller
@@ -6300,6 +6453,7 @@ async function main() {
     wireEditor(setupDialog);
     wireAnalysisTabs();
     wireClearButtons();
+    wireClassFilter();
     wirePanelClickMode();
     wireSegmentDelegation();
     wireFeatureDelegation();
