@@ -3,20 +3,78 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Phonology Segment &amp; Feature Engine</title>
+<title>Phono Feature — phonological feature analysis and inventory tool</title>
+<meta name="description" content="Distinctive-feature phonology in your browser: find the natural class of any set of speech sounds, the features that distinguish them, and minimal distinctive bundles. Edit and build IPA inventories.">
+<link rel="canonical" href="https://jhnwnstd.github.io/phono-feature/">
+<meta name="theme-color" content="#2563EB" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#60A5FA" media="(prefers-color-scheme: dark)">
+<!--
+  Open Graph + Twitter card. Absolute URLs throughout: link-preview
+  scrapers (Slack, Bluesky, iMessage, etc.) do NOT run the Pyodide SPA,
+  so they need the image and canonical link to resolve without a base
+  path. og-image.png ships UNHASHED at a stable URL (build.py copies it
+  verbatim) so this reference does not rot per deploy.
+-->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Phono Feature">
+<meta property="og:url" content="https://jhnwnstd.github.io/phono-feature/">
+<meta property="og:title" content="Phono Feature">
+<meta property="og:description" content="Distinctive-feature phonology in your browser: natural classes, distinguishing features, minimal distinctive bundles, and IPA inventory editing.">
+<meta property="og:image" content="https://jhnwnstd.github.io/phono-feature/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Phono Feature, a phonological segment and feature inventory tool">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Phono Feature">
+<meta name="twitter:description" content="Distinctive-feature phonology in your browser: natural classes, distinguishing features, minimal distinctive bundles, and IPA inventory editing.">
+<meta name="twitter:image" content="https://jhnwnstd.github.io/phono-feature/og-image.png">
+<meta name="twitter:image:alt" content="Phono Feature, a phonological segment and feature inventory tool">
+<!--
+  JSON-LD describing THIS app page (not the hub). type=application/ld+json
+  is data, not executable script, so the CSP script-src does not block it.
+  ``author`` links back to the hub site to connect the app to the parent.
+-->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Phono Feature",
+  "alternateName": "Phonology Segment and Feature Engine",
+  "description": "Browser tool for distinctive-feature phonology: find the natural class of any set of speech sounds, the features that distinguish them, and the minimal distinctive feature bundle, or query by +/- feature. Edit and build IPA segment inventories, including from the PHOIBLE 2.0 database.",
+  "url": "https://jhnwnstd.github.io/phono-feature/",
+  "image": "https://jhnwnstd.github.io/phono-feature/og-image.png",
+  "applicationCategory": "EducationalApplication",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires JavaScript and WebAssembly",
+  "inLanguage": "en",
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "license": "https://opensource.org/licenses/MIT",
+  "author": {
+    "@type": "Person",
+    "name": "jhnwnstd",
+    "url": "https://jhnwnstd.github.io/"
+  }
+}
+</script>
 <!--
   Inline SVG favicon: the app's vowel-space trapezoid (IPA quadrilateral)
-  on the accent color, so the browser's automatic /favicon.ico request
-  does not 404. The shape matches the chart silhouette: vertical RIGHT
-  edge (back column), slanted LEFT edge (front), wider at the top. Base64
-  so the data URI needs no character escaping; img-src allows data: in
-  the CSP below. Source SVG:
+  filled solid white on the accent color, so the browser's automatic
+  /favicon.ico request does not 404. The shape matches the chart
+  silhouette: vertical RIGHT edge (back column), slanted LEFT edge
+  (front), wider at the top. A solid fill (not a thin outline) keeps the
+  mark crisp at the 16px tab size where a 1.2px stroke would smear.
+  Base64 so the data URI needs no character escaping; img-src allows
+  data: in the CSP below. Source SVG:
     <svg viewBox="0 0 32 32"><rect width=32 height=32 rx=7 fill=#2563EB/>
-    <path d="M7 8H25V24H11Z" fill=none stroke=#fff stroke-width=2.4
-    stroke-linejoin=round/></svg>
+    <path d="M8 8H24V24H12Z" fill=#fff/></svg>
 -->
 <link rel="icon" type="image/svg+xml"
-      href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzI1NjNFQiIvPjxwYXRoIGQ9Ik03IDhIMjVWMjRIMTFaIiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMi40IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+">
+      href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzI1NjNFQiIvPjxwYXRoIGQ9Ik04IDhIMjRWMjRIMTJaIiBmaWxsPSIjZmZmIi8+PC9zdmc+">
 <!--
   CSP: defense-in-depth on top of the analysis renderer's
   html.escape. style-src needs 'unsafe-inline' because analysis.py
@@ -69,10 +127,53 @@
   </div>
 </noscript>
 <div id="loading-overlay" class="loading">
-  <div class="loading-card">
-    <div class="loading-title">Phonology Segment &amp; Feature Engine</div>
-    <div class="loading-status" id="loading-status">Loading the Python runtime…</div>
-    <progress></progress>
+  <div class="loading-inner">
+    <div class="loading-card">
+      <h1 class="loading-title">Phono Feature</h1>
+      <p class="loading-tagline">Phonological segment and feature inventory tool</p>
+      <div class="loading-status" id="loading-status">Loading the Python runtime…</div>
+      <progress></progress>
+    </div>
+    <!--
+      Crawlable intro. This is the page's stable, human-readable
+      description for search engines and link-preview scrapers, which
+      read the initial HTML before (or without) running the Pyodide SPA.
+      It sits outside the JavaScript-rendered panels, is visible during
+      the boot wait, and hides with the overlay once the app is ready.
+    -->
+    <section class="app-intro" aria-label="About Phono Feature">
+      <p>Phono Feature is a browser-based tool for distinctive-feature
+        phonology. Select any set of speech sounds and it shows the natural
+        class they form, the features that distinguish them, and the minimal
+        feature bundle that uniquely characterizes the set — or work in
+        reverse and list every segment matching a <code>+</code>/<code>−</code>
+        feature specification. It runs entirely in your browser via Pyodide
+        (Python compiled to WebAssembly); nothing is uploaded to a server.</p>
+      <h2>Features</h2>
+      <ul>
+        <li>Natural-class analysis: the shared features, the distinguishing
+          features, and the minimal distinctive bundle for any segment set.</li>
+        <li>Feature-to-segment queries: find every phoneme matching a
+          <code>+</code>/<code>−</code> feature specification.</li>
+        <li>Inventory editor: build and edit IPA segment inventories, or load
+          them from the PHOIBLE 2.0 database.</li>
+        <li>Runs fully in the browser — no install and no server; ships Hayes
+          (2009) features and a general IPA inventory.</li>
+      </ul>
+      <h2>FAQ</h2>
+      <dl>
+        <dt>What is a natural class?</dt>
+        <dd>A set of speech sounds that share one or more distinctive features
+          to the exclusion of every other sound in the inventory. Phono
+          Feature computes it for any selection.</dd>
+        <dt>Does my data leave the browser?</dt>
+        <dd>No. The engine is Python compiled to WebAssembly and runs locally;
+          inventories you load or build stay on your device.</dd>
+        <dt>Which feature systems does it support?</dt>
+        <dd>It ships Hayes (2009) features and a general IPA inventory, can
+          load any inventory from PHOIBLE 2.0, and lets you build your own.</dd>
+      </dl>
+    </section>
   </div>
 </div>
 

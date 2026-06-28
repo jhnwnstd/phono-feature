@@ -2074,11 +2074,25 @@ dialog input[type="text"]:focus-visible {
   inset: 0;
   background: var(--bg);
   z-index: 1000;
+  /* Flex + margin:auto centring (not align/justify) so the taller intro
+     content scrolls instead of clipping at the top on short viewports. */
   display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: auto;
 }
 .loading.hidden { display: none; }
+/* The booted-app loading overlay wraps its card + crawlable intro; the
+   <noscript> fallback has a bare card, so centre that directly too. */
+.loading-inner,
+.loading > .loading-card {
+  margin: auto;
+}
+.loading-inner {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+}
 .loading-card {
   background: var(--panel);
   border: var(--border-thin) solid var(--border);
@@ -2090,12 +2104,40 @@ dialog input[type="text"]:focus-visible {
 .loading-title {
   font-weight: bold;
   font-size: var(--font-size-icon);
-  margin-bottom: var(--space-md);
+  margin: 0 0 var(--space-xs);
+}
+.loading-tagline {
+  margin: 0 0 var(--space-lg);
+  color: var(--text-dim);
 }
 .loading-status {
   color: var(--text-dim);
   margin-bottom: var(--space-lg);
   min-height: 20px;
+}
+/* Crawlable intro shown beneath the loading card. Visible during boot
+   and indexed from the initial HTML; hides with the overlay once ready. */
+.app-intro {
+  max-width: 560px;
+  color: var(--text-dim);
+  line-height: 1.55;
+  text-align: left;
+}
+.app-intro h2 {
+  font-size: var(--font-size-label);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  margin: var(--space-lg) 0 var(--space-sm);
+}
+.app-intro p { margin: 0 0 var(--space-md); }
+.app-intro ul { margin: 0; padding-left: 1.2em; }
+.app-intro li { margin-bottom: var(--space-xs); }
+.app-intro dt { font-weight: 600; color: var(--text); margin-top: var(--space-sm); }
+.app-intro dd { margin: 0 0 var(--space-sm); }
+.app-intro code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.95em;
 }
 progress {
   width: 100%;
