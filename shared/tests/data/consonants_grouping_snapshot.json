@@ -1054,6 +1054,53 @@
       "aː"
     ]
   },
+  "romanian_features.json": {
+    "Affricates": [
+      "t͡s",
+      "t͡ʃ",
+      "d͡ʒ"
+    ],
+    "Fricatives": [
+      "f",
+      "v",
+      "h"
+    ],
+    "Liquids": [
+      "r",
+      "l"
+    ],
+    "Nasals": [
+      "m",
+      "n"
+    ],
+    "Plosives": [
+      "p",
+      "b",
+      "t",
+      "d",
+      "k",
+      "ɡ"
+    ],
+    "Semivowels": [
+      "j",
+      "w"
+    ],
+    "Sibilants": [
+      "s",
+      "z",
+      "ʃ",
+      "ʒ"
+    ],
+    "Vowels": [
+      "i",
+      "ɨ",
+      "u",
+      "e",
+      "ə",
+      "a",
+      "o"
+    ]
+  },
   "spanish_features.json": {
     "Affricates": [
       "t͡ʃ"
