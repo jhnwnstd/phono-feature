@@ -2649,15 +2649,16 @@ def test_bundle_search_largest_inventory_under_50ms() -> None:
     )
 
 
-def test_builder_save_omits_zero_cells_to_preserve_omission(
+def test_builder_save_keeps_zero_cells_dense(
     tmp_path: Path,
 ) -> None:
-    """``Inventory.parse`` documents missing-feature == 0 semantics
-    and preserves omitted features on round-trip
-    (see test_parse_missing_feature_in_bundle_defaults_to_zero).
-    Builder save MUST honour the same contract: writing explicit "0"
-    for every unset cell would silently inflate sparsely-authored
-    inventories on every save through the builder.
+    """Builder save writes a fully DENSE bundle (every feature stated,
+    including "0"). The bundled inventories are authored densely, so a
+    builder round-trip of one must be byte-stable rather than stripping
+    every "0" cell into a large spurious diff. A sparsely-authored
+    inventory is therefore inflated to dense form on save; this stays
+    lossless because ``Inventory.parse`` reads a missing feature as
+    "0" (see test_parse_missing_feature_in_bundle_defaults_to_zero).
     """
     import os as _os
 
@@ -2687,13 +2688,15 @@ def test_builder_save_omits_zero_cells_to_preserve_omission(
     # Snapshot through the same code path save uses; no edits.
     inv = b._to_inventory()
     serialized = inv.to_json_dict()
-    # The omitted "Nasal" on "p" and "Voice" on "m" must STAY omitted.
-    assert "Nasal" not in serialized["segments"]["p"], (
-        f"builder reintroduced explicit '0' for omitted feature: "
+    # The previously-omitted "Nasal" on "p" and "Voice" on "m" are now
+    # written explicitly as "0" (dense), so a dense inventory survives a
+    # builder round-trip unchanged.
+    assert serialized["segments"]["p"].get("Nasal") == "0", (
+        f"builder did not densify omitted feature: "
         f"{serialized['segments']['p']}"
     )
-    assert "Voice" not in serialized["segments"]["m"], (
-        f"builder reintroduced explicit '0' for omitted feature: "
+    assert serialized["segments"]["m"].get("Voice") == "0", (
+        f"builder did not densify omitted feature: "
         f"{serialized['segments']['m']}"
     )
     close_builder_silent(b)
