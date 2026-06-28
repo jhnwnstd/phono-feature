@@ -423,7 +423,7 @@
       "Back": "-",
       "Tense": "+"
     },
-    "ɨ": {
+    "ɯ": {
       "Syllabic": "+",
       "Stress": "-",
       "Long": "-",
@@ -450,7 +450,7 @@
       "High": "+",
       "Low": "-",
       "Front": "-",
-      "Back": "-",
+      "Back": "+",
       "Tense": "+"
     },
     "u": {
@@ -543,7 +543,7 @@
       "Back": "+",
       "Tense": "+"
     },
-    "ə": {
+    "ʌ": {
       "Syllabic": "+",
       "Stress": "-",
       "Long": "-",
@@ -570,7 +570,7 @@
       "High": "-",
       "Low": "-",
       "Front": "-",
-      "Back": "-",
+      "Back": "+",
       "Tense": "-"
     },
     "a": {
@@ -843,7 +843,7 @@
       "Back": "0",
       "Tense": "0"
     },
-    "sʰ": {
+    "s͈": {
       "Syllabic": "-",
       "Stress": "-",
       "Long": "-",
@@ -856,8 +856,8 @@
       "Trill": "-",
       "Nasal": "-",
       "Voice": "-",
-      "SpreadGl": "+",
-      "ConstrGl": "-",
+      "SpreadGl": "-",
+      "ConstrGl": "+",
       "LABIAL": "-",
       "Round": "-",
       "Labiodental": "-",

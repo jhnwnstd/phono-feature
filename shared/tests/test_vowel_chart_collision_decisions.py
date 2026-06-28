@@ -775,8 +775,8 @@ _PLACEMENT_SNAPSHOT: dict[str, dict[str, list[int]]] = {
         "i": [0, 0],
         "o": [2, 5],
         "u": [0, 5],
-        "ə": [4, 2],
-        "ɨ": [0, 2],
+        "ɯ": [0, 4],
+        "ʌ": [4, 4],
     },
     "lango_features.json": {
         "a": [5, 2],

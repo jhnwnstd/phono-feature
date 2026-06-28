@@ -453,7 +453,7 @@
       "Back": "0",
       "Tense": "0"
     },
-    "ɾ": {
+    "r": {
       "Syllabic": "-",
       "Stress": "-",
       "Long": "-",
@@ -462,8 +462,8 @@
       "Continuant": "+",
       "DelRel": "0",
       "Approximant": "+",
-      "Tap": "+",
-      "Trill": "-",
+      "Tap": "-",
+      "Trill": "+",
       "Nasal": "-",
       "Voice": "+",
       "SpreadGl": "-",

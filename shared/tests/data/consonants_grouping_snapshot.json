@@ -649,7 +649,8 @@
     ],
     "Vibrants": [
       "r",
-      "ɽ"
+      "ɽ",
+      "ɽʱ"
     ],
     "Vowels": [
       "ɪ",
@@ -748,8 +749,8 @@
   "japanese_features.json": {
     "Affricates": [
       "t͡s",
-      "t͡ʃ",
-      "d͡ʒ"
+      "t͡ɕ",
+      "d͡ʑ"
     ],
     "Fricatives": [
       "ɸ",
@@ -759,7 +760,8 @@
     "Nasals": [
       "m",
       "n",
-      "ŋ"
+      "ŋ",
+      "ɴ"
     ],
     "Plosives": [
       "p",
@@ -776,7 +778,7 @@
     "Sibilants": [
       "s",
       "z",
-      "ʃ"
+      "ɕ"
     ],
     "Vibrants": [
       "ɾ"
@@ -807,7 +809,7 @@
     ],
     "Fricatives": [
       "s",
-      "sʰ",
+      "s͈",
       "h"
     ],
     "Lateral Approximants": [
@@ -832,11 +834,11 @@
     ],
     "Vowels": [
       "i",
-      "ɨ",
+      "ɯ",
       "u",
       "e",
-      "ə",
       "a",
+      "ʌ",
       "o"
     ]
   },
@@ -883,10 +885,12 @@
   "lomongo_features.json": {
     "Affricates": [
       "t͡s",
-      "d͡ʒ"
+      "d͡z"
     ],
     "Fricatives": [
-      "s"
+      "f",
+      "s",
+      "h"
     ],
     "Lateral Approximants": [
       "l"
@@ -896,16 +900,20 @@
       "m̩",
       "n",
       "n̩",
+      "ɲ",
       "ŋ",
       "ŋ̩"
     ],
     "Plosives": [
+      "p",
       "b",
       "t",
+      "d",
       "k",
       "ɡ"
     ],
     "Semivowels": [
+      "j",
       "w"
     ],
     "Vowels": [
@@ -1155,7 +1163,7 @@
       "h"
     ],
     "Liquids": [
-      "ɾ",
+      "r",
       "l"
     ],
     "Nasals": [
