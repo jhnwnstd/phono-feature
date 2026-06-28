@@ -609,10 +609,8 @@
       "f",
       "ɦ"
     ],
-    "Liquids": [
-      "r",
-      "l",
-      "ɽ"
+    "Lateral Approximants": [
+      "l"
     ],
     "Nasals": [
       "m",
@@ -648,6 +646,10 @@
       "z",
       "ʃ",
       "ʂ"
+    ],
+    "Vibrants": [
+      "r",
+      "ɽ"
     ],
     "Vowels": [
       "ɪ",
@@ -703,6 +705,10 @@
     ]
   },
   "indonesian_features.json": {
+    "Affricates": [
+      "c",
+      "ɟ"
+    ],
     "Fricatives": [
       "s",
       "h"
@@ -722,8 +728,6 @@
       "b",
       "t",
       "d",
-      "c",
-      "ɟ",
       "k",
       "ɡ",
       "ʔ"
@@ -918,10 +922,10 @@
     "Affricates": [
       "t͡s",
       "t͡sʰ",
-      "t͡ɕ",
-      "t͡ɕʰ",
       "t͡ʂ",
-      "t͡ʂʰ"
+      "t͡ʂʰ",
+      "t͡ɕ",
+      "t͡ɕʰ"
     ],
     "Fricatives": [
       "f",
@@ -951,8 +955,8 @@
     ],
     "Sibilants": [
       "s",
-      "ɕ",
-      "ʂ"
+      "ʂ",
+      "ɕ"
     ],
     "Vowels": [
       "i",

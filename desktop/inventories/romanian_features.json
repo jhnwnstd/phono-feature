@@ -791,11 +791,11 @@
       "Syllabic": "-",
       "Consonantal": "+",
       "Sonorant": "+",
-      "Approximant": "-",
+      "Approximant": "+",
       "Voice": "+",
       "SpreadGl": "0",
       "ConstrGl": "0",
-      "Continuant": "-",
+      "Continuant": "+",
       "DelRel": "0",
       "Nasal": "-",
       "Lateral": "-",
@@ -841,7 +841,7 @@
       "Front": "+",
       "Back": "-",
       "Round": "-",
-      "Tense": "0",
+      "Tense": "+",
       "Long": "-",
       "Stress": "-"
     },
@@ -870,7 +870,7 @@
       "Front": "-",
       "Back": "+",
       "Round": "+",
-      "Tense": "0",
+      "Tense": "+",
       "Long": "-",
       "Stress": "-"
     }

@@ -220,7 +220,7 @@
       "Consonantal": "+",
       "Sonorant": "-",
       "Continuant": "+",
-      "DelRel": "+",
+      "DelRel": "-",
       "Approximant": "-",
       "Tap": "-",
       "Trill": "-",
