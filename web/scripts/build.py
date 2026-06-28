@@ -190,6 +190,15 @@ def copy_static_assets() -> None:
     for name in ("index.html", "style.css", "main.js"):
         shutil.copy(WEB_DIR / name, DIST / name)
     shutil.copy(WEB_DIR / "src" / "phonology_web" / "api.py", DIST / "api.py")
+    # SEO/social static files ship UNHASHED at stable URLs: the canonical
+    # page, the Open Graph card, and the sitemap are all referenced by
+    # absolute URL (in index.html's head and by external crawlers), so a
+    # per-build content hash would rot those references. Copied verbatim;
+    # hash_assets does not touch files it doesn't explicitly rename.
+    for name in ("og-image.png", "sitemap.xml"):
+        src = WEB_DIR / name
+        if src.exists():
+            shutil.copy(src, DIST / name)
 
 
 def copy_inventories() -> None:

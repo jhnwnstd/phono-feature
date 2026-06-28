@@ -2074,25 +2074,11 @@ dialog input[type="text"]:focus-visible {
   inset: 0;
   background: var(--bg);
   z-index: 1000;
-  /* Flex + margin:auto centring (not align/justify) so the taller intro
-     content scrolls instead of clipping at the top on short viewports. */
   display: flex;
-  overflow: auto;
+  align-items: center;
+  justify-content: center;
 }
 .loading.hidden { display: none; }
-/* The booted-app loading overlay wraps its card + crawlable intro; the
-   <noscript> fallback has a bare card, so centre that directly too. */
-.loading-inner,
-.loading > .loading-card {
-  margin: auto;
-}
-.loading-inner {
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-lg);
-}
 .loading-card {
   background: var(--panel);
   border: var(--border-thin) solid var(--border);
@@ -2104,40 +2090,27 @@ dialog input[type="text"]:focus-visible {
 .loading-title {
   font-weight: bold;
   font-size: var(--font-size-icon);
-  margin: 0 0 var(--space-xs);
-}
-.loading-tagline {
-  margin: 0 0 var(--space-lg);
-  color: var(--text-dim);
+  margin: 0 0 var(--space-md);
 }
 .loading-status {
   color: var(--text-dim);
   margin-bottom: var(--space-lg);
   min-height: 20px;
 }
-/* Crawlable intro shown beneath the loading card. Visible during boot
-   and indexed from the initial HTML; hides with the overlay once ready. */
-.app-intro {
-  max-width: 560px;
-  color: var(--text-dim);
-  line-height: 1.55;
-  text-align: left;
-}
-.app-intro h2 {
-  font-size: var(--font-size-label);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text);
-  margin: var(--space-lg) 0 var(--space-sm);
-}
-.app-intro p { margin: 0 0 var(--space-md); }
-.app-intro ul { margin: 0; padding-left: 1.2em; }
-.app-intro li { margin-bottom: var(--space-xs); }
-.app-intro dt { font-weight: 600; color: var(--text); margin-top: var(--space-sm); }
-.app-intro dd { margin: 0 0 var(--space-sm); }
-.app-intro code {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.95em;
+/* Visually hidden but crawlable: the description block (.app-intro) stays
+   in the DOM and in the raw HTML that link-preview scrapers read, without
+   showing on the loading screen or taking any layout space. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 progress {
   width: 100%;

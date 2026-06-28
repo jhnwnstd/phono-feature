@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#ffffff"/>
+  <rect x="0" y="623" width="1200" height="7" fill="#2563EB"/>
+  <g transform="translate(96,170) scale(7.2)">
+    <rect width="32" height="32" rx="7" fill="#2563EB"/>
+    <path d="M8 8H24V24H13.7Z" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linejoin="round"/>
+  </g>
+  <g font-family="Arial, 'DejaVu Sans', Helvetica, sans-serif">
+    <text x="400" y="300" font-size="104" font-weight="700" fill="#1f2328">Phono Feature</text>
+    <text x="404" y="362" font-size="34" fill="#5f6368">Distinctive feature phonology in your browser</text>
+    <text x="404" y="420" font-size="28" fill="#8a8f96">jhnwnstd.github.io/phono-feature</text>
+  </g>
+</svg>
