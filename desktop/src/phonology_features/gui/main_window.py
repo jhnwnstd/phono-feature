@@ -625,14 +625,6 @@ class MainWindow(QMainWindow):
         # widget starts in MONOPHTHONG and ``set_vowels`` resets it
         # on every inventory load, so no persisted value is
         # restored here.
-        # Diphthong chip strip: clicking a chip selects the
-        # diphthong via the same flow the pooled SegmentButton's
-        # ``clicked`` signal uses. Routing through ``btn.click()``
-        # preserves the mode-switch + selection-set side effects
-        # the chart cells would trigger directly.
-        self.vowel_chart_widget.segment_clicked.connect(
-            self._on_diphthong_chip_clicked
-        )
         # Seed with the per-pane width default; the splitter-drag
         # callback pushes the adapted value in later. We can't read
         # ``self._hsplit`` here because it's still being built.
@@ -1381,24 +1373,21 @@ class MainWindow(QMainWindow):
 
     def _deselect_hidden_class(self, label: str) -> None:
         """Drop a newly-hidden class' segments from the selection and
-        reset their buttons, then refresh the analysis. Without this a
-        selected segment in a hidden class stays in ``_selected_segments``
-        (still driving the analysis) with no visible button to deselect.
+        reset their buttons. Without this a selected segment in a hidden
+        class stays in ``_selected_segments`` (still driving the
+        analysis) with no visible button to deselect. The caller
+        (``_set_class_visible`` -> ``_apply_class_visibility``) re-runs
+        the analysis against the pruned selection, so no refresh here.
         """
         if self.engine is None:
             return
-        removed = False
         for seg in self.engine.grouped_segments.get(label, []):
             if seg in self._selected_segments:
                 self._selected_segments.remove(seg)
-                removed = True
             btn = self._seg_button_pool.get(seg)
             if btn is not None:
                 btn.setChecked(False)
                 btn.set_state(SegmentState.DEFAULT)
-        if removed:
-            # Recompute the analysis against the pruned selection.
-            self._debounce.start()
 
     def _apply_class_visibility(self) -> None:
         """Re-lay the seg grid + vowel chart for the current visibility
@@ -1449,6 +1438,12 @@ class MainWindow(QMainWindow):
         # make the resulting resize relayout at once (the spillover
         # budget is otherwise only refreshed on the next interaction).
         self.seg_grid_widget.request_sync_relayout()
+        # Repaint every button against the live selection/query. Showing
+        # a class re-attaches its buttons in their DEFAULT state (hiding
+        # forced them there); without re-running the analysis they would
+        # render neutral instead of their MATCHED/UNMATCHED/SUGGESTED
+        # state until the next unrelated interaction.
+        self._mode_ctrl.refresh_analysis()
 
     def _get_or_create_seg_button(self, seg: str) -> SegmentButton:
         """Return a SegmentButton for ``seg``, creating it on first use.
@@ -1909,19 +1904,6 @@ class MainWindow(QMainWindow):
             if is_wild
             else MATCH_MODE_TOOLTIP_STRICT_ACTIVE
         )
-
-    def _on_diphthong_chip_clicked(self, seg: str) -> None:
-        """Forward a diphthong-chip-strip click through the same
-        flow a real chart-cell click uses. The pool's
-        ``SegmentButton`` for ``seg`` is checkable; calling
-        ``click()`` programmatically fires ``pressed`` then
-        ``clicked``, which the existing handlers
-        ``_on_segment_pressed`` and ``_on_segment_clicked`` are
-        already wired to."""
-        btn = self._seg_button_pool.get(seg)
-        if btn is None:
-            return
-        btn.click()
 
     def _toggle_match_mode(self) -> None:
         """Flip strict↔wildcard, persist the choice, refresh the

@@ -18,7 +18,7 @@ import math
 from collections.abc import Mapping
 from typing import ClassVar
 
-from PyQt6.QtCore import QPoint, QRect, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, QRect, QSize, Qt
 from PyQt6.QtGui import (
     QColor,
     QFont,
@@ -73,8 +73,6 @@ from phonology_shared.presentation.layout import (
     VOWEL_PAIR_GAP_PX,
 )
 from phonology_shared.presentation.palette import C
-
-from .widgets.segment_button import SegmentButton
 
 # Public surface. The placement-layer types (Confidence,
 # VowelPlacement, VowelProfile) are NOT re-exported; importers
@@ -509,33 +507,32 @@ class VowelChartWidget(QWidget):
         )
         self._last_headers_active = active
 
-    # PyQt signal fired when a chip in the diphthong chip strip
-    # is clicked. The MainWindow connects to this and routes the
-    # click through the standard segment-selection flow so the
-    # chip behaves identically to a click on the segment's
-    # SegmentButton in any other surface.
-    segment_clicked = pyqtSignal(str)
-
     def _populate_diphthong_chip_strip(self) -> None:
-        """Refill the chip strip with one chip per unique
-        diphthong segment in the current inventory. Chip click
-        emits ``segment_clicked(seg)``; the owning MainWindow
-        routes that through the same handler the pooled
-        SegmentButton's ``clicked`` signal uses, so the chip is
-        a thin shortcut, not a parallel selection path.
+        """Refill the chip strip with the pooled ``SegmentButton`` for
+        each unique diphthong segment in the current inventory.
+
+        Each chip IS the segment's pooled button (the same instance the
+        rest of the app tracks for selection), so selection, analysis
+        repaint, theme, and Clear all flow through one source of truth.
+        Diphthongs are never placed in the trapezoid, so the strip is
+        their only on-screen home; a separate button here would latch
+        its own checked state and drift out of sync with the real
+        selection on Clear.
 
         The FlowLayout wraps the chips to new lines on its own when
         the strip isn't wide enough, so this method only has to add
         them in order; placement and wrapping happen at layout time.
         """
         layout = self._chip_strip_layout
+        # Detach (never destroy) any previously placed chips: they are
+        # the caller's pooled buttons, owned by the MainWindow.
         while layout.count():
             item = layout.takeAt(0)
             if item is None:
                 continue
             w = item.widget()
             if w is not None:
-                w.deleteLater()
+                w.setParent(None)
         seen: set[str] = set()
         unique_diphs: list[str] = []
         for seg in self._diphthongs:
@@ -543,16 +540,13 @@ class VowelChartWidget(QWidget):
                 continue
             seen.add(seg)
             unique_diphs.append(seg)
-        # Chips reuse SegmentButton for visual + state parity with
-        # chart cells (size, IPA font chain, selection state).
         for segment in unique_diphs:
-            chip = SegmentButton(segment, self._diphthong_chip_strip)
+            chip = self._buttons.get(segment)
+            if chip is None:
+                continue
+            chip.setParent(self._diphthong_chip_strip)
             chip.setToolTip(f"Select /{segment}/")
-            chip.clicked.connect(
-                lambda _checked=False, s=segment: (
-                    self.segment_clicked.emit(s)
-                )
-            )
+            chip.show()
             layout.addWidget(chip)
 
     def clear(self) -> None:

@@ -50,7 +50,7 @@ from PyQt6.QtWidgets import (
 )
 
 from phonology_features.gui.style_utils import set_css
-from phonology_shared.data.inventory import Inventory
+from phonology_shared.data.inventory import Inventory, ValidationError
 from phonology_shared.editor.inventory_providers import InventoryDescriptor
 from phonology_shared.editor.phoible_provider import (
     PhoibleProvider,

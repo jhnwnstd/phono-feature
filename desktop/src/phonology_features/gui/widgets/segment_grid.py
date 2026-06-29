@@ -201,6 +201,21 @@ class SegmentGridWidget(QWidget):
             return
         self._resize_timer.start()
 
+    def _clear_grid(self) -> None:
+        """Empty the grid AND reset every row's minimum height.
+
+        ``takeAt`` removes layout *items*, but ``setRowMinimumHeight``
+        is a layout property that survives a rebuild and ``rowCount``
+        never shrinks. Without zeroing the minimums, the inter-group
+        spacer heights from a taller layout linger on rows a later,
+        shorter layout leaves empty, padding the grid with phantom
+        vertical gaps (e.g. swapping a large inventory for a small one).
+        """
+        while self._grid.count():
+            self._grid.takeAt(0)
+        for row in range(self._grid.rowCount()):
+            self._grid.setRowMinimumHeight(row, 0)
+
     def _compute_n_cols(self) -> int:
         # Width-to-cols delegated to the shared layout helper so the
         # web's grid uses the same formula. The local cap-at-group-
@@ -223,8 +238,7 @@ class SegmentGridWidget(QWidget):
             self._n_cols = n_cols
             self._last_available_height = available
             self._last_main_count = 0
-            while self._grid.count():
-                self._grid.takeAt(0)
+            self._clear_grid()
             return
         # ``best_segment_n_cols`` picks the largest column count
         # that leaves no row holding a single orphan button.
@@ -278,10 +292,10 @@ class SegmentGridWidget(QWidget):
         self._n_cols = n_cols
         self._last_available_height = available
         self._last_main_count = main_count
-        while self._grid.count():
-            self._grid.takeAt(0)
+        self._clear_grid()
 
         grid_row = 0
+        has_spillover = main_count < len(groups_items)
         hdr_iter = iter(self._headers)
         # Main flow: header spans the full ``n_cols`` row so headers
         # align across groups; each group's BUTTONS wrap at the
@@ -289,10 +303,12 @@ class SegmentGridWidget(QWidget):
         # orphan rows. Header span is intentionally ``n_cols`` (not
         # the per-group count) so the manner-class titles line up
         # along the same left edge.
-        for (_manner, segs), g_cols in zip(
-            groups_items[:main_count],
-            group_cols_main[:main_count],
-            strict=True,
+        for main_idx, ((_manner, segs), g_cols) in enumerate(
+            zip(
+                groups_items[:main_count],
+                group_cols_main[:main_count],
+                strict=True,
+            )
         ):
             hdr = next(hdr_iter)
             self._grid.addWidget(hdr, grid_row, 0, 1, n_cols)
@@ -311,10 +327,12 @@ class SegmentGridWidget(QWidget):
             # ``.seg-group { margin-bottom: var(--seg-group-gap); }``.
             # The grid's default row stride is ``BTN_GAP``; bumping
             # this row to ``SEG_GROUP_GAP_PX`` (8 px) adds the
-            # remaining 4 px. Skipped on the very last group so the
-            # bottom of the grid doesn't carry a trailing empty row.
+            # remaining 4 px. Skipped after the very last main group when
+            # no spillover follows, so the bottom of the grid doesn't
+            # carry a trailing empty spacer row.
+            is_last_main = main_idx == main_count - 1
             extra = max(0, cs.SEG_GROUP_GAP_PX - BTN_GAP)
-            if extra:
+            if extra and not (is_last_main and not has_spillover):
                 self._grid.setRowMinimumHeight(grid_row, extra)
                 grid_row += 1
 
