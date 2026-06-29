@@ -78,6 +78,7 @@ from phonology_shared.editor.grid import (  # noqa: F401
 from phonology_shared.editor.inventory_providers import (
     InventoryDescriptor,
     InventoryProvider,
+    display_dialect,
 )
 from phonology_shared.editor.lookup_provider import (
     LookupFeatureProvider,
@@ -535,10 +536,14 @@ def phoible_list_inventories(language_name: str) -> list[dict[str, Any]]:
     provider = _phoible_provider()
     if provider is None:
         return []
-    return [
-        _descriptor_to_dict(d)
-        for d in provider.list_inventories(language_name)
-    ]
+    rows: list[dict[str, Any]] = []
+    for d in provider.list_inventories(language_name):
+        row = _descriptor_to_dict(d)
+        # Precompute the search-language-trimmed dialect so the JS card
+        # renders the shared result instead of re-implementing the trim.
+        row["display_dialect"] = display_dialect(d.dialect, language_name)
+        rows.append(row)
+    return rows
 
 
 def phoible_preview_inventory(inventory_id: str) -> dict[str, Any]:

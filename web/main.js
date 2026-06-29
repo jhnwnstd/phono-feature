@@ -3620,19 +3620,7 @@ function wireSetupDialog() {
  *  above, so repeating it on every row is noise. Only strips a clean
  *  leading match and unwraps a fully parenthesized remainder; anything
  *  else (e.g. "Standard Korean ...") is returned unchanged. */
-function _trimRedundantLanguage(dialect, language) {
-    if (!dialect || !language) return dialect || "";
-    const d = dialect.trim();
-    const lang = language.trim();
-    if (!d.toLowerCase().startsWith(lang.toLowerCase())) return d;
-    let rest = d.slice(lang.length).trim();
-    if (rest.startsWith("(") && rest.endsWith(")")) {
-        rest = rest.slice(1, -1).trim();
-    }
-    return rest || d;
-}
-
-function _buildSourceCard(inv, defaultId, onPick, language) {
+function _buildSourceCard(inv, defaultId, onPick) {
     const radioId = "phoible-radio-" + inv.id;
     const label = document.createElement("label");
     label.className = "phoible-source-card";
@@ -3665,8 +3653,7 @@ function _buildSourceCard(inv, defaultId, onPick, language) {
     // matching the desktop row so the two clients read identically.
     const subParts = [];
     if (inv.source_description) subParts.push(inv.source_description);
-    const dialectText = _trimRedundantLanguage(inv.dialect, language);
-    if (dialectText) subParts.push(dialectText);
+    if (inv.display_dialect) subParts.push(inv.display_dialect);
     if (subParts.length) {
         const sub = document.createElement("div");
         sub.className = "phoible-source-sub";
@@ -3834,7 +3821,7 @@ function wirePhoiblePicker() {
         const defaultId = invs[0].id;
         for (const inv of invs) {
             radios.appendChild(
-                _buildSourceCard(inv, defaultId, pickInventory, languageName),
+                _buildSourceCard(inv, defaultId, pickInventory),
             );
         }
         nodes.phoibleInventories.hidden = false;

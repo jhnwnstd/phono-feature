@@ -51,7 +51,10 @@ from PyQt6.QtWidgets import (
 
 from phonology_features.gui.style_utils import set_css
 from phonology_shared.data.inventory import Inventory, ValidationError
-from phonology_shared.editor.inventory_providers import InventoryDescriptor
+from phonology_shared.editor.inventory_providers import (
+    InventoryDescriptor,
+    display_dialect,
+)
 from phonology_shared.editor.phoible_provider import (
     DEFAULT_SEARCH_LIMIT,
     PhoibleProvider,
@@ -490,22 +493,6 @@ class PhoibleDialog(QDialog):
         # pickers behave once a choice list is on screen.
         self._sources.setFocus()
 
-    @staticmethod
-    def _trim_redundant_language(dialect: str | None, language: str) -> str:
-        """Drop a leading copy of the chosen language from a dialect so a
-        row under "Korean" reads "Seoul" not "Korean (Seoul)" (the
-        language is already in the search box). Mirrors the web's
-        ``_trimRedundantLanguage``; only a clean leading match is
-        stripped, anything else is left as is."""
-        d = (dialect or "").strip()
-        lang = (language or "").strip()
-        if not d or not lang or not d.lower().startswith(lang.lower()):
-            return d
-        rest = d[len(lang) :].strip()
-        if rest.startswith("(") and rest.endswith(")"):
-            rest = rest[1:-1].strip()
-        return rest or d
-
     def _build_source_row(
         self, descriptor: InventoryDescriptor, language: str
     ) -> QWidget:
@@ -536,7 +523,7 @@ class PhoibleDialog(QDialog):
         parts: list[str] = []
         if descriptor.source_description:
             parts.append(descriptor.source_description)
-        dialect = self._trim_redundant_language(descriptor.dialect, language)
+        dialect = display_dialect(descriptor.dialect, language)
         if dialect:
             parts.append(dialect)
         if parts:

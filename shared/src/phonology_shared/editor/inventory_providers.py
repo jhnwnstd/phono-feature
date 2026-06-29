@@ -42,6 +42,7 @@ __all__ = [
     "GeneratedInventory",
     "InventoryDescriptor",
     "InventoryProvider",
+    "display_dialect",
 ]
 
 
@@ -95,6 +96,25 @@ class InventoryDescriptor:
     source_description: str
     segment_count: int
     source_url: str = ""
+
+
+def display_dialect(dialect: str | None, language: str) -> str:
+    """Dialect label with a leading copy of the chosen language
+    stripped, so a row under "Korean" reads "Seoul" not
+    "Korean (Seoul)" (the language is already in the search box).
+
+    Only a clean leading match is stripped; anything else is returned
+    unchanged. The single trim algorithm both the desktop picker row
+    and the web source card consume, so the two clients cannot drift.
+    """
+    d = (dialect or "").strip()
+    lang = (language or "").strip()
+    if not d or not lang or not d.lower().startswith(lang.lower()):
+        return d
+    rest = d[len(lang) :].strip()
+    if rest.startswith("(") and rest.endswith(")"):
+        rest = rest[1:-1].strip()
+    return rest or d
 
 
 @runtime_checkable

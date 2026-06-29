@@ -117,7 +117,7 @@ class FeatureProvider(Protocol):
         ...
 
 
-def prune_unused_features(
+def _prune_unused_features(
     features: tuple[str, ...],
     resolved: Mapping[str, Mapping[str, str]],
     *,
@@ -150,7 +150,7 @@ def prune_unused_features(
     return tuple(feat for feat in features if feat in used)
 
 
-def restrict_bundles(
+def _restrict_bundles(
     bundles: Mapping[str, Mapping[str, str]],
     features: tuple[str, ...],
 ) -> dict[str, Mapping[str, str]]:
@@ -185,13 +185,13 @@ def prune_and_restrict(
     sec: Mapping[str, Mapping[str, str]] = secondary or {}
     if not resolved:
         return features, dict(resolved), dict(sec)
-    features = prune_unused_features(
+    features = _prune_unused_features(
         features, resolved, extra_bundles=sec.values()
     )
     return (
         features,
-        restrict_bundles(resolved, features),
-        restrict_bundles(sec, features),
+        _restrict_bundles(resolved, features),
+        _restrict_bundles(sec, features),
     )
 
 

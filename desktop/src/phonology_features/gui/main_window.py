@@ -994,6 +994,32 @@ class MainWindow(QMainWindow):
             return
         self._adopt_phoible_inventory(inventory)
 
+    def _activate_inventory(
+        self,
+        inventory: Inventory,
+        *,
+        summary_msg: str,
+        register: Callable[[], None],
+    ) -> None:
+        """Swap the engine to ``inventory``, set the status summary, run
+        the caller's registration, then repopulate the widgets.
+
+        The shared tail of every successful load. ``register`` runs
+        AFTER ``set_summary`` and BEFORE ``_populate_after_load``
+        because the file-path registration reads the still-current
+        ``_current_path`` before reassigning it. Grouping/normalization
+        caches live on the engine (cached_property), so a new engine
+        starts fresh; no manual invalidation needed.
+        """
+        self.engine = FeatureEngine(inventory)
+        # Advisories (e.g. "unusually large feature set") go to the log
+        # only, not the status bar: diagnostics, not window chrome.
+        for note in inventory.advisories:
+            _log.info("inventory advisory: %s: %s", inventory.name, note)
+        self.status.set_summary(summary_msg)
+        register()
+        self._populate_after_load()
+
     def _adopt_phoible_inventory(self, inventory: Inventory) -> None:
         """Swap the engine to a PHOIBLE-materialised inventory and
         register it in the dropdown's session PHOIBLE group.
@@ -1006,29 +1032,23 @@ class MainWindow(QMainWindow):
         grouping/normalization caches live on the engine, so the
         new engine starts with fresh caches.
         """
-        self.engine = FeatureEngine(inventory)
-        # Terse shared composition: language + source + counts. The
-        # full display name (with the dialect parenthetical) stays
-        # on the inventory itself for the dropdown and save flows;
-        # repeating it here alongside the provenance string made the
-        # status line unreadably long.
-        msg = phoible_loaded_message(inventory)
-        # Advisories go to the log only (see _load_path); the status
-        # bar stays terse.
-        for note in inventory.advisories:
-            _log.info(
-                "inventory advisory (phoible %s): %s",
-                inventory.name,
-                note,
-            )
-        self.status.set_summary(msg)
-        # Clear any path-based registration so the inventory combo
-        # does not point at a stale file when the user later picks
-        # a bundled entry, then cache + select the PHOIBLE entry so
-        # it can be reloaded without reopening the picker.
-        self._current_path = None
-        self._inv_dir.add_phoible_entry(inventory)
-        self._populate_after_load()
+
+        def register() -> None:
+            # Clear any path-based registration so the combo does not
+            # point at a stale file when the user later picks a bundled
+            # entry, then cache + select the PHOIBLE entry so it can be
+            # reloaded without reopening the picker.
+            self._current_path = None
+            self._inv_dir.add_phoible_entry(inventory)
+
+        # Terse shared composition: language + source + counts. The full
+        # display name (with the dialect parenthetical) stays on the
+        # inventory for the dropdown and save flows.
+        self._activate_inventory(
+            inventory,
+            summary_msg=phoible_loaded_message(inventory),
+            register=register,
+        )
 
     def _open_editor(self) -> None:
         """Open (or raise) the Editor window. Edits the current
@@ -1155,27 +1175,18 @@ class MainWindow(QMainWindow):
             )
             self.inventory_combo.setCurrentIndex(idx if idx >= 0 else 0)
             return
-        # Swap engines: grouping/normalization caches live on the
-        # engine (cached_property), so a new engine = fresh caches.
-        # No manual invalidation needed.
-        self.engine = FeatureEngine(inventory)
-        name = inventory.name
-        base_msg = inventory_loaded_message(
-            name=name,
-            n_segments=len(self.engine.segments),
-            n_features=len(self.engine.features),
+        # Counts come from the inventory (engine.segments/features are
+        # the inventory's own), so the message is independent of the
+        # swap order inside _activate_inventory.
+        self._activate_inventory(
+            inventory,
+            summary_msg=inventory_loaded_message(
+                name=inventory.name,
+                n_segments=len(inventory.segments),
+                n_features=len(inventory.features),
+            ),
+            register=lambda: self._inv_dir.register_loaded_path(path),
         )
-        # Advisories (e.g. "unusually large feature set") go to the
-        # LOG only, not the status bar: they are diagnostics, not
-        # something the user needs pinned to the window chrome.
-        # Provenance ("bundled / ...") is likewise dropped from the
-        # bar; the inventory name lives in the Select Inventory
-        # dropdown instead.
-        for note in inventory.advisories:
-            _log.info("inventory advisory: %s: %s", fname, note)
-        self.status.set_summary(base_msg)
-        self._inv_dir.register_loaded_path(path)
-        self._populate_after_load()
 
     def _populate_after_load(self) -> None:
         """Rebuild segment + feature widgets for the freshly-loaded engine.
