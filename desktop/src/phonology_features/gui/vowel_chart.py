@@ -1253,6 +1253,7 @@ class VowelChartWidget(QWidget):
         # text colour transition); the silhouette outline stays
         # the same in both states.
         self._paint_gradient_interior(painter, path)
+        self._paint_guides(painter, path, dx, dy, dw, dh)
         # Outline only, no painted fill. The trapezoid is a
         # structural guide, not a coloured region. A 1 px alpha-
         # blended stroke softens the silhouette so the cells inside
@@ -1270,6 +1271,35 @@ class VowelChartWidget(QWidget):
         painter.setPen(pen)
         painter.drawPath(path)
         painter.end()
+
+    def _paint_guides(
+        self,
+        painter: QPainter,
+        path: "QPainterPath",
+        dx: int,
+        dy: int,
+        dw: int,
+        dh: int,
+    ) -> None:
+        """Faint dotted row + column guides inside the silhouette so the
+        eye can trace each height tier and backness column. Clipped to
+        the trapezoid and drawn at very low alpha (under the cells) so
+        the structure reads without competing with the glyphs."""
+        guide = QColor(C["border"])
+        guide.setAlphaF(cs.VOWEL_GUIDE_ALPHA)
+        pen = QPen(guide)
+        pen.setWidthF(cs.VOWEL_GUIDE_STROKE_PX)
+        pen.setStyle(Qt.PenStyle.DotLine)
+        painter.save()
+        painter.setClipPath(path)
+        painter.setPen(pen)
+        for _lbl, chart_y, _tier in self._row_labels:
+            y = dy + round(chart_y * dh)
+            painter.drawLine(dx, y, dx + dw, y)
+        for _lbl, chart_x in self._col_labels:
+            x = dx + round(chart_x * dw)
+            painter.drawLine(x, dy, x, dy + dh)
+        painter.restore()
 
     @staticmethod
     def _build_rounded_silhouette_path(

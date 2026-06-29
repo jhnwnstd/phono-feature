@@ -268,6 +268,13 @@ VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC: float = 0.024
 #: Alpha (0..1) for the silhouette outline color.
 VOWEL_SILHOUETTE_ALPHA: float = 0.70
 
+#: Faint dotted row/column guide lines inside the silhouette so the
+#: eye can trace each height tier and backness column. Kept well below
+#: the outline alpha (0.70) so the guides recede behind both the
+#: outline and the cells; shared so web + desktop match exactly.
+VOWEL_GUIDE_ALPHA: float = 0.22
+VOWEL_GUIDE_STROKE_PX: float = 0.8
+
 #: Minimum data-area height so tiny inventories (5-vowel Spanish)
 #: still draw a recognisable trapezoid.
 VOWEL_CHART_DATA_MIN_H_PX: int = 8 * SEG_BTN_H

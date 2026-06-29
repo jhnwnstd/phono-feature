@@ -1472,6 +1472,38 @@ dialog input[type="text"]:focus-visible {
 .vowel-chart-data[data-shape="triangle"] .vowel-chart-row-bands {
   clip-path: polygon(var(--vowel-triangle-rounded-points));
 }
+/* Faint dotted row/column guides inside the silhouette so the eye can
+   trace each height tier + backness column. Positioned from the shared
+   geometry (chart.rows / chart.cols) by main.js, clipped to the
+   trapezoid/triangle so lines don't spill past the slanted edge, and
+   behind the cells. Mirrors the desktop paintEvent guides; the alpha +
+   stroke come from chart_style via the relay so both UIs match. */
+.vowel-chart-guides {
+  position: absolute;
+  inset: 1px;
+  pointer-events: none;
+  z-index: 0;
+}
+.vowel-chart-data[data-shape="trapezoid"] .vowel-chart-guides {
+  clip-path: polygon(var(--vowel-trapezoid-rounded-points));
+}
+.vowel-chart-data[data-shape="triangle"] .vowel-chart-guides {
+  clip-path: polygon(var(--vowel-triangle-rounded-points));
+}
+.vowel-guide-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: var(--vowel-guide-stroke-px, 0.8px) dotted var(--border);
+  opacity: var(--vowel-guide-alpha, 0.22);
+}
+.vowel-guide-col {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: var(--vowel-guide-stroke-px, 0.8px) dotted var(--border);
+  opacity: var(--vowel-guide-alpha, 0.22);
+}
 /* Silhouette outline stays as the canonical thin border-coloured
    stroke regardless of pane-active state. An earlier "soft modern"
    pass added an accent drop-shadow on the active state; the

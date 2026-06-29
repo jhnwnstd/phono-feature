@@ -2337,6 +2337,27 @@ function _buildVowelChart(chart) {
         rowLabel.style.setProperty("--row-left", leftNorm.toFixed(5));
         dataEl.appendChild(rowLabel);
     }
+    // Faint dotted row/column guides behind the cells so the eye can
+    // trace each height tier + backness column. Positioned from the
+    // SAME shared geometry the desktop paintEvent uses (chart.rows /
+    // chart.cols), clipped to the trapezoid so lines don't spill past
+    // the slanted edge, and appended before the cells (which carry a
+    // higher z-index) so the guides recede behind the glyphs.
+    const guidesEl = document.createElement("div");
+    guidesEl.className = "vowel-chart-guides";
+    for (const row of chart.rows || []) {
+        const g = document.createElement("div");
+        g.className = "vowel-guide vowel-guide-row";
+        g.style.top = `${(row.chart_y * 100).toFixed(4)}%`;
+        guidesEl.appendChild(g);
+    }
+    for (const col of chart.cols || []) {
+        const g = document.createElement("div");
+        g.className = "vowel-guide vowel-guide-col";
+        g.style.left = `${(col.chart_x * 100).toFixed(4)}%`;
+        guidesEl.appendChild(g);
+    }
+    dataEl.appendChild(guidesEl);
     const rowTierByLogical = new Map(
         (chart.rows || []).map((r) => [r.logical_row, r.tier || "middle"]),
     );

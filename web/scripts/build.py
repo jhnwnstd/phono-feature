@@ -931,6 +931,11 @@ def generate_layout_css() -> None:
                 "  --vowel-silhouette-alpha: "
                 f"{chart_style.VOWEL_SILHOUETTE_ALPHA};"
             ),
+            ("  --vowel-guide-alpha: " f"{chart_style.VOWEL_GUIDE_ALPHA};"),
+            (
+                "  --vowel-guide-stroke-px: "
+                f"{chart_style.VOWEL_GUIDE_STROKE_PX}px;"
+            ),
             (
                 "  --vowel-chart-data-min-h: "
                 f"{chart_style.VOWEL_CHART_DATA_MIN_H_PX}px;"
