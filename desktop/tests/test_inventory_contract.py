@@ -2372,8 +2372,8 @@ def test_main_viewer_loads_freshly_saved_editor_inventory(
     # Spawn a editor the same way _open_editor does for the
     # no-current-inventory case, including the save-finished wiring.
     editor = InventoryEditor(parent=w)
-    editor._save_finished.connect(w._on_editor_save_finished)
-    w._editor = editor
+    editor._save_finished.connect(w._dialogs._on_editor_save_finished)
+    w._dialogs._editor = editor
     # Author a minimal inventory by hand.
     editor._segments = ["p", "b"]
     editor._features = ["Voice"]
