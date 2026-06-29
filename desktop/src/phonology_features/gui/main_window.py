@@ -80,6 +80,7 @@ from phonology_features.gui.widgets import (
     SegmentGridWidget,
     SegmentState,
 )
+from phonology_shared.application import SessionState
 from phonology_shared.chart.consonants import (
     VOCOID_GROUP_NAME,
     VOWEL_GROUP_NAME,
@@ -117,10 +118,6 @@ from phonology_shared.presentation.palette import (
     set_palette_mode,
     set_theme,
 )
-from phonology_shared.presentation.source_link import (
-    NONE_SOURCE,
-    classify_source,
-)
 from phonology_shared.presentation.view_models import (
     AnalysisTabsPayload,
     summarize_feature_query,
@@ -156,7 +153,14 @@ _CLEAR_BTN_H = 26
 class MainWindow(QMainWindow):
     def __init__(self, startup_path: str | None = None) -> None:
         super().__init__()
-        self.engine: FeatureEngine | None = None
+        # Shared application state. The inventory + engine, match mode,
+        # selection, and hidden classes live on the session, not as loose
+        # MainWindow fields; ``engine`` / ``_match_mode`` /
+        # ``_selected_segments`` / ``_selected_features`` /
+        # ``_hidden_segment_classes`` are delegating properties over it
+        # (see the property block after __init__), so the call sites are
+        # unchanged but the desktop and the session cannot drift.
+        self._session = SessionState()
         # Mode controller owns ``mode``, ``saved_seg_state``, and
         # ``saved_feat_state``. Reach through ``self._mode_ctrl`` at
         # call sites; do not add forwarding properties here.
@@ -168,13 +172,6 @@ class MainWindow(QMainWindow):
         # the QPushButton + setStyleSheet cost on every swap.
         self._seg_button_pool: dict[str, SegmentButton] = {}
         self._feat_rows: dict[str, FeatureRow] = {}  # active subset
-        self._selected_segments: list[str] = []
-        self._selected_features: dict[str, str] = {}  # feature -> '+'/'-'
-        # Segment-class labels the user has hidden via the filter menu.
-        # Display-only (the grouping itself is untouched); reset to
-        # empty on every inventory load so a hidden label cannot leak
-        # across a swap (class sets differ between inventories).
-        self._hidden_segment_classes: set[str] = set()
         # Watcher, MRU, dropdown population, and delete-fallback all
         # live in the InventoryDirController, built after _build_ui
         # because it needs the combobox widget.
@@ -234,7 +231,7 @@ class MainWindow(QMainWindow):
         saved_match_mode = self._read_setting_str(
             SettingsKey.MATCH_MODE, str(MatchMode.STRICT)
         )
-        self._match_mode: MatchMode = (
+        self._match_mode = (
             MatchMode.WILDCARD
             if saved_match_mode == str(MatchMode.WILDCARD)
             else MatchMode.STRICT
@@ -275,6 +272,41 @@ class MainWindow(QMainWindow):
         from phonology_features.providers import prewarm_in_background
 
         prewarm_in_background()
+
+    # ------------------------------------------------------------------
+    # Session-state delegation. These names are the historical MainWindow
+    # fields; they now read/write the shared ``SessionState`` so the
+    # desktop frontend and the session cannot drift. Call sites are
+    # unchanged. The three collections are only mutated in place, so they
+    # expose no setter (the session owns the container).
+    # ------------------------------------------------------------------
+    @property
+    def engine(self) -> FeatureEngine | None:
+        return self._session.engine
+
+    @engine.setter
+    def engine(self, value: FeatureEngine | None) -> None:
+        self._session.engine = value
+
+    @property
+    def _match_mode(self) -> MatchMode:
+        return self._session.match_mode
+
+    @_match_mode.setter
+    def _match_mode(self, value: MatchMode) -> None:
+        self._session.match_mode = value
+
+    @property
+    def _selected_segments(self) -> list[str]:
+        return self._session.selected_segments
+
+    @property
+    def _selected_features(self) -> dict[str, str]:
+        return self._session.selected_features
+
+    @property
+    def _hidden_segment_classes(self) -> set[str]:
+        return self._session.hidden_segment_classes
 
     def _warm_palette_cache(self) -> None:
         """Cycle the active palette mode once to pre-build cached
@@ -1011,7 +1043,10 @@ class MainWindow(QMainWindow):
         caches live on the engine (cached_property), so a new engine
         starts fresh; no manual invalidation needed.
         """
-        self.engine = FeatureEngine(inventory)
+        # The shared session owns the swap: it rebuilds the engine,
+        # classifies the source, and resets the per-inventory selection +
+        # hidden classes. The frontend below only repaints from it.
+        self._session.load_inventory(inventory)
         # Advisories (e.g. "unusually large feature set") go to the log
         # only, not the status bar: diagnostics, not window chrome.
         for note in inventory.advisories:
@@ -1193,20 +1228,12 @@ class MainWindow(QMainWindow):
         one event-loop tick so pending paints drain before we resize.
         """
         self._mode_ctrl.reset_saved_state()
-        # Refresh the status-bar "Source" affordance for the freshly
-        # loaded inventory from the unified ``metadata.source`` field
-        # (a URL/DOI link or a plain citation). PHOIBLE stamps it with
-        # the phoible.org page; bundled inventories carry a citation;
-        # an inventory without one clears the affordance.
-        source = NONE_SOURCE
-        if self.engine is not None:
-            source = classify_source(
-                self.engine.inventory.metadata.get("source")
-            )
-        self.status.set_source(source)
-        # New inventory: every class starts visible. Reset before the
-        # repopulate so the filter menu and the grid agree.
-        self._hidden_segment_classes.clear()
+        # Status-bar "Source" affordance: the session classified it from
+        # ``metadata.source`` during load_inventory (URL/DOI link, plain
+        # citation, or none). Read it rather than reclassify.
+        self.status.set_source(self._session.source)
+        # ``load_inventory`` already reset selection + cleared the hidden
+        # classes, so the populate below starts from a clean slate.
         with self._batched_updates():
             self._populate_segments()
             self._populate_features()
@@ -1817,14 +1844,10 @@ class MainWindow(QMainWindow):
             self._seg_buttons[segment].setChecked(False)
             return
         btn = self._seg_buttons[segment]
-        if checked:
-            btn.set_state(SegmentState.SELECTED)
-            if segment not in self._selected_segments:
-                self._selected_segments.append(segment)
-        else:
-            btn.set_state(SegmentState.DEFAULT)
-            if segment in self._selected_segments:
-                self._selected_segments.remove(segment)
+        btn.set_state(
+            SegmentState.SELECTED if checked else SegmentState.DEFAULT
+        )
+        self._session.toggle_segment(segment, checked)
         self._debounce.start()
 
     def _on_segment_right_clicked(self, segment: str) -> None:
@@ -1865,10 +1888,7 @@ class MainWindow(QMainWindow):
     def _on_feature_changed(self, feature: str, value: str) -> None:
         if self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
             return
-        if value:
-            self._selected_features[feature] = value
-        else:
-            self._selected_features.pop(feature, None)
+        self._session.set_feature(feature, value)
         self._debounce.start()
 
     def _on_feature_pressed(self) -> None:
@@ -2047,8 +2067,7 @@ class MainWindow(QMainWindow):
         state through the normal view-model pipeline, which is what
         produces the default placeholder text.
         """
-        self._selected_segments.clear()
-        self._selected_features.clear()
+        self._session.reset_selection()
         for btn in self._seg_buttons.values():
             if btn._state != SegmentState.DEFAULT:
                 btn.set_state(SegmentState.DEFAULT)
