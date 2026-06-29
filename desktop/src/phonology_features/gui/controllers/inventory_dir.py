@@ -308,7 +308,15 @@ class InventoryDirController:
             self._watcher.removePath(self._w._current_path)
             old_dir = os.path.dirname(os.path.abspath(self._w._current_path))
             new_dir = os.path.dirname(os.path.abspath(path))
-            if old_dir != new_dir:
+            # The bundled inventories dir is a permanent watch target
+            # (added once in __init__) so Editor saves into it always
+            # refresh the dropdown. Never drop it when navigating to an
+            # out-of-tree file, or the dropdown stops live-updating for
+            # bundled inventories until the next in-tree load.
+            bundled_dir = os.path.normpath(
+                os.path.abspath(self.get_inventories_dir())
+            )
+            if old_dir != new_dir and old_dir != bundled_dir:
                 self._watcher.removePath(old_dir)
         self._w._current_path = path
         if path not in self._watcher.files():

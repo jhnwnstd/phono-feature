@@ -1496,6 +1496,13 @@ class InventoryEditor(QMainWindow):
             self, "Save Inventory", inventories_dir, "JSON Files (*.json)"
         )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        # Default suffix so the dialog appends ``.json`` BEFORE its own
+        # overwrite confirmation. Without it, a user typing a bare name
+        # (e.g. ``foo``) is confirmed against ``foo`` while the file
+        # actually written is ``foo.json``, so an existing ``foo.json``
+        # could be silently overwritten. The manual append below stays as
+        # a fallback for non-native dialogs that ignore the default.
+        dlg.setDefaultSuffix("json")
         # Pre-fill the filename from the inventory name, slugified to
         # match the existing inventories/ naming convention. The user can
         # still override it in the dialog.

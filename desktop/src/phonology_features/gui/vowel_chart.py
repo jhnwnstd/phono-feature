@@ -1239,32 +1239,37 @@ class VowelChartWidget(QWidget):
             dh,
         )
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        # "Soft modern" interior: single top->bottom gradient
-        # instead of the alternating per-band tints. Paints first
-        # so the silhouette outline and diphthong arrows render on
-        # top. Active-state cue lives on the labels (text-dim to
-        # text colour transition); the silhouette outline stays
-        # the same in both states.
-        self._paint_gradient_interior(painter, path)
-        self._paint_guides(painter, path, dx, dy, dw, dh)
-        # Outline only, no painted fill. The trapezoid is a
-        # structural guide, not a coloured region. A 1 px alpha-
-        # blended stroke softens the silhouette so the cells inside
-        # carry the visual weight; mirrors the web's muted
-        # ``color-mix(in srgb, var(--border) 70%, transparent)``
-        # treatment on ``.vowel-chart-data::before``.
-        outline_color = QColor(C["border"])
-        # Alpha from chart_style.VOWEL_SILHOUETTE_ALPHA so web's
-        # color-mix(70%) and desktop's setAlpha pick the same value.
-        outline_color.setAlphaF(cs.VOWEL_SILHOUETTE_ALPHA)
-        pen = QPen(outline_color)
-        pen.setWidthF(cs.VOWEL_SILHOUETTE_STROKE_PX)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        painter.setPen(pen)
-        painter.drawPath(path)
-        painter.end()
+        # ``end()`` in a finally so a raise mid-paint can't leave the
+        # QPainter active on the widget (Qt then warns and can corrupt
+        # the next paint pass).
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            # "Soft modern" interior: single top->bottom gradient
+            # instead of the alternating per-band tints. Paints first
+            # so the silhouette outline and diphthong arrows render on
+            # top. Active-state cue lives on the labels (text-dim to
+            # text colour transition); the silhouette outline stays
+            # the same in both states.
+            self._paint_gradient_interior(painter, path)
+            self._paint_guides(painter, path, dx, dy, dw, dh)
+            # Outline only, no painted fill. The trapezoid is a
+            # structural guide, not a coloured region. A 1 px alpha-
+            # blended stroke softens the silhouette so the cells inside
+            # carry the visual weight; mirrors the web's muted
+            # ``color-mix(in srgb, var(--border) 70%, transparent)``
+            # treatment on ``.vowel-chart-data::before``.
+            outline_color = QColor(C["border"])
+            # Alpha from chart_style.VOWEL_SILHOUETTE_ALPHA so web's
+            # color-mix(70%) and desktop's setAlpha pick the same value.
+            outline_color.setAlphaF(cs.VOWEL_SILHOUETTE_ALPHA)
+            pen = QPen(outline_color)
+            pen.setWidthF(cs.VOWEL_SILHOUETTE_STROKE_PX)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(pen)
+            painter.drawPath(path)
+        finally:
+            painter.end()
 
     def _paint_guides(
         self,
@@ -1287,8 +1292,13 @@ class VowelChartWidget(QWidget):
         painter.save()
         painter.setClipPath(path)
         painter.setPen(pen)
-        for _lbl, chart_y, _tier in self._row_labels:
-            y = dy + round(chart_y * dh)
+        for _lbl, chart_y, tier in self._row_labels:
+            # Trace the button-row midpoint, not the raw ``chart_y``
+            # anchor: top / bottom tiers anchor their cells' EDGE on
+            # ``chart_y`` and grow inward, so an unshifted guide would
+            # miss the button centres. Uses the SAME ``label_midpoint_norm``
+            # the row label placement uses, so guide and label align.
+            y = dy + round(label_midpoint_norm(chart_y, tier, dh) * dh)
             painter.drawLine(dx, y, dx + dw, y)
         for _lbl, chart_x in self._col_labels:
             x = dx + round(chart_x * dw)

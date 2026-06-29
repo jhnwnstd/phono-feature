@@ -598,11 +598,13 @@ class PhoibleDialog(QDialog):
             self.chosen_inventory = materialize_phoible_inventory(
                 self._provider, self._selected_inventory_id
             )
-        except KeyError:
-            # Should not happen since the source list came straight
-            # from the provider, but the materializer's contract
-            # documents this fail mode and a status-bar message is
-            # nicer than an exception trace.
+        except (KeyError, ValidationError):
+            # ``KeyError`` should not happen since the source list came
+            # straight from the provider; ``ValidationError`` can surface
+            # if a refreshed snapshot ever yields an inventory that fails
+            # ``Inventory.parse`` or the class-cap guard. Either way,
+            # leaving the dialog open with no selection beats an
+            # unhandled exception trace out of the click slot.
             self.chosen_inventory = None
             return
         self.accept()

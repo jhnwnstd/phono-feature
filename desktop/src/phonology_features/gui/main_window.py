@@ -1357,6 +1357,13 @@ class MainWindow(QMainWindow):
         """
         if self.engine is None:
             return
+        # Ignore labels that no longer name a class in the live
+        # inventory: a file-watcher auto-reload can swap the engine
+        # (clearing the hidden set) while the filter menu is still open
+        # on the previous inventory's labels, so a late menu click must
+        # not pollute the set with an inert phantom label.
+        if label not in self.engine.grouped_segments:
+            return
         if shown:
             self._hidden_segment_classes.discard(label)
             # Buttons detached while hidden were skipped by any theme

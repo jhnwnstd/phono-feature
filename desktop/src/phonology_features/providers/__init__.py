@@ -102,7 +102,27 @@ def prewarm_in_background() -> None:
     if _panphon_instance.cache_info().currsize > 0:
         return
     threading.Thread(
-        target=_panphon_instance,
+        target=_prewarm_worker,
         name="panphon-prewarm",
         daemon=True,
     ).start()
+
+
+def _prewarm_worker() -> None:
+    """Body of the prewarm daemon thread.
+
+    Swallows any construction failure so a dying background thread
+    never prints an unhandled-exception trace. The most likely failure
+    is an ``atexit``/import race when the user quits within the ~2 s
+    panphon load window (the interpreter begins shutting down while
+    pandas/numpy are still importing). ``lru_cache`` does not memoize
+    exceptions, so a failed prewarm simply leaves the first real
+    ``available_providers()`` call to retry on the UI thread.
+    """
+    try:
+        _panphon_instance()
+    except Exception:
+        # Background prewarm only: there is no user-facing surface to
+        # report to here, and a real failure resurfaces (handled) on
+        # the next on-demand provider construction.
+        pass

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
+from PyQt6 import sip
 from PyQt6.QtCore import QByteArray, QPoint, QTimer
 from PyQt6.QtGui import QScreen
 from PyQt6.QtWidgets import QApplication
@@ -158,6 +159,8 @@ class GeometryController:
         the recovery path (on the happy path they cause a visible
         focus blink on some Linux WMs).
         """
+        if sip.isdeleted(self._w):
+            return
         app = QApplication.instance()
         assert isinstance(app, QApplication)
         screen = self.target_screen()
@@ -209,7 +212,14 @@ class GeometryController:
         to chase every inventory's content ``sizeHint`` with
         ``self.resize()``, which produced visible layout shift on
         every load and clobbered the user's manual window sizing.
+
+        Guarded against post-teardown firing: this runs deferred via
+        ``QTimer.singleShot(0, ...)`` after an inventory swap, so a
+        close in the same tick can leave the window's C++ object
+        already deleted (mirrors the ``ModeController`` guard).
         """
+        if sip.isdeleted(self._w):
+            return
         QApplication.processEvents()
         # Seg panel sticks to its natural content width; extra
         # horizontal room belongs to the feature pane (stretch=1 on
@@ -556,7 +566,10 @@ class GeometryController:
         ``apply_splitter_sizes`` where the window hadn't been laid
         out yet. Runs after one event-loop tick (post-show); if
         height is still 0 we accept the constructor default rather
-        than recurse."""
+        than recurse. Guarded against post-teardown firing since it is
+        the ``QTimer.singleShot(0, ...)`` target in two places."""
+        if sip.isdeleted(self._w):
+            return
         total = self._vsplit.height()
         if total <= 0:
             return
