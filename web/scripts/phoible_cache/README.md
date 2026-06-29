@@ -39,15 +39,35 @@ is the lower-risk choice.
 
 ## Refreshing
 
-If upstream publishes an update, refresh both files:
+One command re-fetches both files from upstream, gzips them
+deterministically (fixed mtime, so an unchanged upstream file produces
+a byte-identical `.gz`), and writes `PROVENANCE.json`:
 
 ```sh
-curl -sL https://raw.githubusercontent.com/phoible/dev/refs/heads/master/data/phoible.csv \
-  | gzip -9 > web/scripts/phoible_cache/phoible.csv.gz
+# latest upstream (records the exact commit it resolved to)
+python web/scripts/update_phoible.py
 
-curl -sL https://raw.githubusercontent.com/phoible/dev/refs/heads/master/mappings/InventoryID-Bibtex.csv \
-  | gzip -9 > web/scripts/phoible_cache/InventoryID-Bibtex.csv.gz
+# reproduce an exact past state, or pin a release tag
+python web/scripts/update_phoible.py --ref <commit-sha-or-tag>
 ```
 
-Then re-run ``python web/scripts/bake_phoible.py`` to regenerate
-the JSON snapshots and verify tests still pass.
+Then re-bake and verify:
+
+```sh
+python web/scripts/bake_phoible.py
+cd shared && pytest
+```
+
+`PROVENANCE.json` records the ref, the resolved commit sha, the fetch
+time, and a sha256 per vendored file, so a rebuild is reproducible and
+the source of the data is auditable. `bake_phoible.py` reads the
+release metadata (version, date, license, citation, upstream URL) back
+out of it, so a refresh updates the baked version stamp without a
+second manual edit.
+
+The CLDF StructureDataset was evaluated as an alternative input
+(DOI 10.5281/zenodo.2677911). It was NOT adopted: it splits the data
+across four tables (more files than the two here), drops the
+`SpecificDialect` field that disambiguates ~18% of inventories, and
+yields a byte-identical bake, so it offered no benefit for a real
+cost.

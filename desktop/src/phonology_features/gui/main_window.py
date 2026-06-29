@@ -83,10 +83,6 @@ from phonology_shared.chart.consonants import (
     VOWEL_GROUP_NAME,
     visible_groups,
 )
-from phonology_shared.presentation.source_link import (
-    NONE_SOURCE,
-    classify_source,
-)
 from phonology_shared.data.inventory import Inventory, ValidationError
 from phonology_shared.editor.grid import enforce_class_caps
 from phonology_shared.editor.phoible_provider import phoible_loaded_message
@@ -118,6 +114,10 @@ from phonology_shared.presentation.palette import (
     C,
     set_palette_mode,
     set_theme,
+)
+from phonology_shared.presentation.source_link import (
+    NONE_SOURCE,
+    classify_source,
 )
 from phonology_shared.presentation.view_models import (
     AnalysisTabsPayload,
@@ -1281,6 +1281,8 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         for label in self.engine.grouped_segments:
             act = menu.addAction(label)
+            if act is None:  # pragma: no cover - Qt always returns one
+                continue
             act.setCheckable(True)
             act.setChecked(label not in self._hidden_segment_classes)
             act.toggled.connect(

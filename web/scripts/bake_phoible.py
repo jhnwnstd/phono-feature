@@ -57,6 +57,14 @@ DEFAULT_BIBTEX = (
     / "phoible_cache"
     / "InventoryID-Bibtex.csv.gz"
 )
+#: Provenance stamp written by ``web/scripts/update_phoible.py`` (the
+#: ref/commit/release the vendored CSVs came from). The bake reads the
+#: release metadata back out of it so a refresh updates the baked
+#: version stamp automatically; absent, the hard-coded constants below
+#: apply and the output is unchanged.
+DEFAULT_PROVENANCE = (
+    REPO_ROOT / "web" / "scripts" / "phoible_cache" / "PROVENANCE.json"
+)
 
 #: phoible.org page bases. A single-source inventory links straight to
 #: that source's reference page (the slug is the lower-cased BibtexKey,
@@ -121,6 +129,23 @@ def _open_csv(path: Path) -> io.TextIOWrapper:
     # ``newline=""`` is the csv module's documented requirement so
     # embedded newlines inside quoted fields round-trip correctly.
     return io.TextIOWrapper(binary, encoding="utf-8", newline="")
+
+
+def _load_provenance(path: Path = DEFAULT_PROVENANCE) -> dict[str, Any]:
+    """Read the refresh provenance stamp, or ``{}`` if absent/unreadable.
+
+    Lets a ``update_phoible.py`` refresh feed the baked release
+    metadata (version, date, license, citation, upstream URL) without a
+    second manual edit. Missing or malformed file falls back silently
+    to the hard-coded constants so a bare checkout still bakes.
+    """
+    if not path.exists():
+        return {}
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
 
 
 def _source_info(source: str) -> tuple[str, str]:
@@ -354,12 +379,17 @@ def bake_tables(
         key=lambda d: (d["language_name"].casefold(), d["source"], d["id"]),
     )
 
+    # Release metadata: prefer the refresh provenance stamp (so a
+    # re-vendor updates the version/date automatically), else the
+    # hard-coded constants. When the stamp matches the constants the
+    # baked index is byte-identical to the pre-provenance output.
+    prov = _load_provenance()
     index: dict[str, Any] = {
-        "version": f"PHOIBLE {PHOIBLE_VERSION}",
-        "release_date": PHOIBLE_RELEASE_DATE,
-        "source_url": PHOIBLE_SOURCE_URL,
-        "license": PHOIBLE_LICENSE,
-        "citation": PHOIBLE_CITATION,
+        "version": prov.get("release") or f"PHOIBLE {PHOIBLE_VERSION}",
+        "release_date": prov.get("release_date") or PHOIBLE_RELEASE_DATE,
+        "source_url": prov.get("upstream") or PHOIBLE_SOURCE_URL,
+        "license": prov.get("license") or PHOIBLE_LICENSE,
+        "citation": prov.get("citation") or PHOIBLE_CITATION,
         "languages": sorted_languages,
         "inventories": sorted_inventories,
     }

@@ -1,0 +1,24 @@
+{
+  "upstream": "https://github.com/phoible/dev",
+  "ref": "master",
+  "commit": "68b8984575d430d3c718b00d5c256a336d4b4dc2",
+  "release": "PHOIBLE 2.0",
+  "release_date": "2019-04-03",
+  "license": "GPL-3.0 (codebase) + CC BY-SA 3.0 (data)",
+  "citation": "Moran, Steven & McCloy, Daniel (eds.) 2019. PHOIBLE 2.0. Jena: Max Planck Institute for the Science of Human History. http://phoible.org. DOI: 10.5281/zenodo.2626687",
+  "fetched_utc": "2026-06-29T02:59:10Z",
+  "files": {
+    "phoible.csv.gz": {
+      "upstream_path": "data/phoible.csv",
+      "raw_bytes": 24578868,
+      "gz_bytes": 897111,
+      "sha256": "30b6620e3d3ca67bd67341dda029cc7685b9e5a2e3ddb281032e1fc06fd36a16"
+    },
+    "InventoryID-Bibtex.csv.gz": {
+      "upstream_path": "mappings/InventoryID-Bibtex.csv",
+      "raw_bytes": 254794,
+      "gz_bytes": 47732,
+      "sha256": "fac4715a8cd78d4f3f59163ab6b30701e0127b8613671be96d6a8f100c61814a"
+    }
+  }
+}

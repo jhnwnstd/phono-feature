@@ -43,11 +43,11 @@ from PyQt6.QtWidgets import (
 
 from phonology_features.gui.style_utils import set_css
 from phonology_shared.presentation.layout import REGION_CONSTRAINTS
+from phonology_shared.presentation.palette import C
 from phonology_shared.presentation.source_link import (
     NONE_SOURCE,
     SourceLink,
 )
-from phonology_shared.presentation.palette import C
 
 
 def toolbar_chrome_qss() -> str:
