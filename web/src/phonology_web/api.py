@@ -699,15 +699,22 @@ def create_new_inventory(
     return _swap_engine_summary(inventory, inventory.name)
 
 
-def get_cycle_ladder() -> dict[str, str]:
-    """Return the value-cycle ladder used by the editor click handler.
+def get_editor_config() -> dict[str, Any]:
+    """Editor config the web editor reads once at boot, as ONE payload
+    instead of four bridge round-trips.
 
-    Same constant the desktop editor's ``cycle_value`` reads.
-    The web editor fetches this once at boot and consults it on
-    every click; centralizing the source here keeps the desktop and
-    web cycle order in lockstep and avoids per-click bridge cost.
+    Carries the value-cycle ladder (consulted on every cell click), the
+    direct-entry and cursor-move key maps, and the undo-depth cap. The
+    desktop ``InventoryEditor`` derives the same dicts from the same
+    shared constants, so the two stay in lockstep. ``move_keys`` steps
+    become lists so JS can destructure them directly.
     """
-    return dict(CYCLE_LADDER)
+    return {
+        "cycle_ladder": dict(CYCLE_LADDER),
+        "value_keys": dict(VALUE_KEYS),
+        "move_keys": {key: list(step) for key, step in MOVE_KEYS.items()},
+        "max_undo_depth": MAX_UNDO_DEPTH,
+    }
 
 
 def validate_segment_label(label: str, existing: list[str]) -> str:
@@ -732,38 +739,6 @@ def validate_feature_label(label: str, existing: list[str]) -> str:
     return validate_new_feature_label(
         label, existing, max_features=MAX_FEATURES
     )
-
-
-def get_value_keys() -> dict[str, str]:
-    """Return the direct-entry keyboard shortcuts.
-
-    Maps the typed character (the logical key, not a scancode) to
-    the cell value the editor should apply. The web editor reads
-    this once at boot; the desktop ``InventoryEditor`` derives its
-    Qt-flavoured dict from the same constant.
-    """
-    return dict(VALUE_KEYS)
-
-
-def get_move_keys() -> dict[str, list[int]]:
-    """Return the cell-cursor navigation shortcuts.
-
-    Maps the typed character to a ``[dr, dc]`` step in the grid.
-    Tuples become arrays through the Pyodide bridge so JS can
-    destructure them directly. Same constant the desktop's
-    ``InventoryEditor._MOVE_KEYS`` derives from.
-    """
-    return {key: list(step) for key, step in MOVE_KEYS.items()}
-
-
-def get_max_undo_depth() -> int:
-    """Return the undo-stack depth cap shared by both editors.
-
-    The desktop's ``_undo_stack`` enforces this cap via
-    :py:data:`_MAX_UNDO_DEPTH`; the web editor caps its own JS-side
-    stack identically so behavior matches across frontends.
-    """
-    return MAX_UNDO_DEPTH
 
 
 def get_grid_state() -> dict[str, Any]:

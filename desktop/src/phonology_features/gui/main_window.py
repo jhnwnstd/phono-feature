@@ -597,7 +597,9 @@ class MainWindow(QMainWindow):
             "Deselects every segment in the segment pane and "
             "resets the analysis view."
         )
-        self.clear_seg_btn.clicked.connect(self._clear_then_activate_segs)
+        self.clear_seg_btn.clicked.connect(
+            lambda: self._clear_then_activate(Mode.SEG_TO_FEAT)
+        )
         # Class-visibility filter. A single header button (not a +/-
         # per class label) opens a checkable menu of the loaded
         # inventory's classes so the user can hide ones they are not
@@ -769,7 +771,9 @@ class MainWindow(QMainWindow):
             "Resets every feature row to neutral and clears the "
             "feature panel's natural-class query."
         )
-        self.clear_feat_btn.clicked.connect(self._clear_then_activate_feats)
+        self.clear_feat_btn.clicked.connect(
+            lambda: self._clear_then_activate(Mode.FEAT_TO_SEG)
+        )
         header.addWidget(self._feat_title)
         # Wildcard toggle sits adjacent to the FEATURES label so the
         # natural-class-policy control reads as part of the panel's
@@ -1531,15 +1535,13 @@ class MainWindow(QMainWindow):
             cards_by_title[title] = card
             sizes[title] = n_active
             card.setVisible(n_active > 0)
+        group_order = [t for t, _ in FEATURE_GROUPS]
         if self._other_card is not None:
             other_title = self._card_title(self._other_card) or "Other"
             n_active = sum(1 for f in active if f not in self._feat_row_pool)
             cards_by_title[other_title] = self._other_card
             sizes[other_title] = n_active
             self._other_card.setVisible(n_active > 0)
-        group_order = [t for t, _ in FEATURE_GROUPS]
-        if self._other_card is not None:
-            other_title = self._card_title(self._other_card) or "Other"
             if other_title not in group_order:
                 group_order.append(other_title)
         left_names, right_names = distribute_feature_groups(
@@ -1897,29 +1899,21 @@ class MainWindow(QMainWindow):
         """Either Clear button wipes both panes. See ``_reset_both_sides``."""
         self._reset_both_sides(silent)
 
-    def _clear_then_activate_segs(self) -> None:
-        """Clear button handler: empty the selection, snap to seg mode,
-        render the empty-selection state.
+    def _clear_then_activate(self, mode: Mode) -> None:
+        """Clear button handler: empty the selection, snap to ``mode``,
+        and render the empty-selection state.
 
         Clear is "make the selection empty", not a distinct UI state.
         The view-model's empty-selection payload produces the default
-        placeholder text (same shape as app launch), so the post-
-        clear analysis re-renders through the normal pipeline:
+        placeholder text (same shape as app launch), so the post-clear
+        analysis re-renders through the normal pipeline:
         :py:meth:`ModeController.apply_phases` schedules the deferred
         refresh on a mode change; the same-mode branch refreshes
         directly.
         """
         self._reset_both_sides(silent=False)
-        if self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
-            self._set_mode(Mode.SEG_TO_FEAT)
-        else:
-            self._mode_ctrl.refresh_analysis()
-
-    def _clear_then_activate_feats(self) -> None:
-        """See :py:meth:`_clear_then_activate_segs`."""
-        self._reset_both_sides(silent=False)
-        if self._mode_ctrl.mode != Mode.FEAT_TO_SEG:
-            self._set_mode(Mode.FEAT_TO_SEG)
+        if self._mode_ctrl.mode != mode:
+            self._set_mode(mode)
         else:
             self._mode_ctrl.refresh_analysis()
 

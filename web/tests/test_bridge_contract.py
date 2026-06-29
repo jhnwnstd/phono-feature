@@ -64,12 +64,8 @@ def _assert_json_clean(name: str, value: Any) -> None:
 # ----- Sync bridge methods (no arguments or with trivial args) -----
 
 
-def test_get_cycle_ladder_json_round_trips() -> None:
-    _assert_json_clean("get_cycle_ladder", bridge.get_cycle_ladder())
-
-
-def test_get_max_undo_depth_json_round_trips() -> None:
-    _assert_json_clean("get_max_undo_depth", bridge.get_max_undo_depth())
+def test_get_editor_config_json_round_trips() -> None:
+    _assert_json_clean("get_editor_config", bridge.get_editor_config())
 
 
 def test_get_mode_status_text_json_round_trips() -> None:
@@ -78,14 +74,6 @@ def test_get_mode_status_text_json_round_trips() -> None:
             f"get_mode_status_text({mode!r})",
             bridge.get_mode_status_text(mode),
         )
-
-
-def test_get_move_keys_json_round_trips() -> None:
-    _assert_json_clean("get_move_keys", bridge.get_move_keys())
-
-
-def test_get_value_keys_json_round_trips() -> None:
-    _assert_json_clean("get_value_keys", bridge.get_value_keys())
 
 
 def test_get_setup_defaults_json_round_trips() -> None:

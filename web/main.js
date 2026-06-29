@@ -4244,11 +4244,12 @@ function cellSerialized(value) {
 function wireEditor(setupDialog) {
     const openEditor = () => {
         if (cycleLadder === null) {
-            // First open: fetch the shared constants once.
-            cycleLadder = callBridge("get_cycle_ladder");
-            valueKeys = callBridge("get_value_keys");
-            moveKeys = callBridge("get_move_keys");
-            maxUndoDepth = callBridge("get_max_undo_depth");
+            // First open: fetch the shared editor constants in one call.
+            const cfg = callBridge("get_editor_config");
+            cycleLadder = cfg.cycle_ladder;
+            valueKeys = cfg.value_keys;
+            moveKeys = cfg.move_keys;
+            maxUndoDepth = cfg.max_undo_depth;
         }
         // Reveal the view BEFORE we render & measure. The alignment
         // pass at the end of renderEditorGrid reads offsetWidth on the

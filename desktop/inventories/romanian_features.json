@@ -1,7 +1,7 @@
 {
   "metadata": {
     "name": "Romanian phoneme inventory",
-    "notes": "Core contrasts: seven oral vowels and the standard consonant set p b t d k ɡ t͡s t͡ʃ d͡ʒ f v s z ʃ ʒ h m n l r. The semivowels j and w are included as optional segmental objects for tautosyllabic vocoid sequences. Romanian palatalization, assibilation, S-palatalization, and /o/ ~ /o̯a/ alternations are treated as alternation facts rather than automatic additions to the core contrastive inventory."
+    "notes": "Core contrasts: seven oral vowels and the standard consonant set p b t d k ɡ t͡s t͡ʃ d͡ʒ f v s z ʃ ʒ h m n l r. The semivowels j and w are included as optional segmental objects for tautosyllabic vocoid sequences. Romanian palatalization, assibilation, S-palatalization, and /o/ ~ /o̯a/ alternations are treated as alternation facts rather than automatic additions to the core contrastive inventory. Velars /k ɡ/ bear DORSAL but are unspecified (0) for the tongue-body features High/Low/Front/Back/Round, which are reserved for the dorsal vocoids; this keeps [DORSAL] on [-syllabic] segments = velar and on [+syllabic] segments = back/high vowel. Tense is left unspecified (0) on the vowels, as Romanian is not described with a tense/lax contrast in this inventory."
   },
   "features": [
     "Syllabic",
@@ -58,7 +58,7 @@
       "Front": "+",
       "Back": "-",
       "Round": "-",
-      "Tense": "+",
+      "Tense": "0",
       "Long": "-",
       "Stress": "-"
     },
@@ -87,7 +87,7 @@
       "Front": "-",
       "Back": "-",
       "Round": "-",
-      "Tense": "+",
+      "Tense": "0",
       "Long": "-",
       "Stress": "-"
     },
@@ -116,7 +116,7 @@
       "Front": "-",
       "Back": "+",
       "Round": "+",
-      "Tense": "+",
+      "Tense": "0",
       "Long": "-",
       "Stress": "-"
     },
@@ -145,7 +145,7 @@
       "Front": "+",
       "Back": "-",
       "Round": "-",
-      "Tense": "+",
+      "Tense": "0",
       "Long": "-",
       "Stress": "-"
     },
@@ -174,7 +174,7 @@
       "Front": "-",
       "Back": "-",
       "Round": "-",
-      "Tense": "-",
+      "Tense": "0",
       "Long": "-",
       "Stress": "-"
     },
@@ -203,7 +203,7 @@
       "Front": "-",
       "Back": "+",
       "Round": "+",
-      "Tense": "+",
+      "Tense": "0",
       "Long": "-",
       "Stress": "-"
     },
@@ -232,7 +232,7 @@
       "Front": "-",
       "Back": "-",
       "Round": "-",
-      "Tense": "-",
+      "Tense": "0",
       "Long": "-",
       "Stress": "-"
     },
@@ -372,10 +372,10 @@
       "Anterior": "0",
       "Distributed": "0",
       "DORSAL": "+",
-      "High": "+",
-      "Low": "-",
-      "Front": "-",
-      "Back": "+",
+      "High": "0",
+      "Low": "0",
+      "Front": "0",
+      "Back": "0",
       "Round": "0",
       "Tense": "0",
       "Long": "-",
@@ -401,10 +401,10 @@
       "Anterior": "0",
       "Distributed": "0",
       "DORSAL": "+",
-      "High": "+",
-      "Low": "-",
-      "Front": "-",
-      "Back": "+",
+      "High": "0",
+      "Low": "0",
+      "Front": "0",
+      "Back": "0",
       "Round": "0",
       "Tense": "0",
       "Long": "-",
@@ -841,7 +841,7 @@
       "Front": "+",
       "Back": "-",
       "Round": "-",
-      "Tense": "+",
+      "Tense": "0",
       "Long": "-",
       "Stress": "-"
     },
@@ -870,7 +870,7 @@
       "Front": "-",
       "Back": "+",
       "Round": "+",
-      "Tense": "+",
+      "Tense": "0",
       "Long": "-",
       "Stress": "-"
     }
