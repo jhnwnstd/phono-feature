@@ -175,7 +175,6 @@ class MainWindow(QMainWindow):
         # empty on every inventory load so a hidden label cannot leak
         # across a swap (class sets differ between inventories).
         self._hidden_segment_classes: set[str] = set()
-        self._current_path: str | None = None
         # Watcher, MRU, dropdown population, and delete-fallback all
         # live in the InventoryDirController, built after _build_ui
         # because it needs the combobox widget.
@@ -909,9 +908,10 @@ class MainWindow(QMainWindow):
         write_setting(
             self._settings, SettingsKey.MODE, self._mode_ctrl.mode.value
         )
-        if self._current_path:
+        current_path = self._inv_dir.current_path
+        if current_path:
             write_setting(
-                self._settings, SettingsKey.LAST_INVENTORY, self._current_path
+                self._settings, SettingsKey.LAST_INVENTORY, current_path
             )
         # Flush settings to disk synchronously. Without sync(), a hard
         # process exit between the setValue calls and QSettings'
@@ -1007,7 +1007,7 @@ class MainWindow(QMainWindow):
         The shared tail of every successful load. ``register`` runs
         AFTER ``set_summary`` and BEFORE ``_populate_after_load``
         because the file-path registration reads the still-current
-        ``_current_path`` before reassigning it. Grouping/normalization
+        path before reassigning it. Grouping/normalization
         caches live on the engine (cached_property), so a new engine
         starts fresh; no manual invalidation needed.
         """
@@ -1038,7 +1038,7 @@ class MainWindow(QMainWindow):
             # point at a stale file when the user later picks a bundled
             # entry, then cache + select the PHOIBLE entry so it can be
             # reloaded without reopening the picker.
-            self._current_path = None
+            self._inv_dir.clear_current_path()
             self._inv_dir.add_phoible_entry(inventory)
 
         # Terse shared composition: language + source + counts. The full
@@ -1089,8 +1089,9 @@ class MainWindow(QMainWindow):
 
         from phonology_features.gui.editor import InventoryEditor
 
-        if self._current_path:
-            editor = InventoryEditor(parent=self, load_path=self._current_path)
+        current_path = self._inv_dir.current_path
+        if current_path:
+            editor = InventoryEditor(parent=self, load_path=current_path)
         elif self.engine is not None:
             # In-memory inventory with no backing file (PHOIBLE
             # picker load). Seed the editor from the live engine so
@@ -1133,7 +1134,7 @@ class MainWindow(QMainWindow):
         """
         if err:
             return  # editor already showed its own error dialog
-        if path == self._current_path:
+        if path == self._inv_dir.current_path:
             return  # same-path save -> watcher will refresh
         if os.path.isfile(path):
             _log.info(
@@ -1161,18 +1162,15 @@ class MainWindow(QMainWindow):
             )
             self.analysis.set_html(render_validation_report(e.issues))
             # The combo was already moved to the failed inventory (the
-            # dropdown selection or Browse). The engine and
-            # ``_current_path`` still hold the previously-loaded
+            # dropdown selection or Browse). The engine and the
+            # controller's current_path still hold the previously-loaded
             # inventory, so move the combo back: it must not name an
             # inventory that is not actually loaded. ``activated`` is
             # user-only, so a programmatic setCurrentIndex does not
             # re-fire the load. Index 0 is the disabled placeholder,
             # used when nothing was previously loaded.
-            idx = (
-                self.inventory_combo.findData(self._current_path)
-                if self._current_path
-                else -1
-            )
+            prev_path = self._inv_dir.current_path
+            idx = self.inventory_combo.findData(prev_path) if prev_path else -1
             self.inventory_combo.setCurrentIndex(idx if idx >= 0 else 0)
             return
         # Counts come from the inventory (engine.segments/features are

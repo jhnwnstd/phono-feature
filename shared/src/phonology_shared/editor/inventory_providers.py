@@ -33,8 +33,9 @@ only pins the contract.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from phonology_shared.editor.providers import GeneratedInventory
 
@@ -193,4 +194,35 @@ class InventoryProvider(Protocol):
         provenance metadata; a provider without it would type-check
         against the picker flow and then crash at materialise time.
         """
+        ...
+
+    # Deferred-load lifecycle. The web bundle ships the index + data as
+    # separate lazy fetches to shrink the cold boot, so the bridge needs
+    # to query readiness and inject each payload. A provider that loads
+    # eagerly (desktop reads the snapshot at construction) reports both
+    # ready and treats the load_* calls as idempotent no-ops. Declared
+    # on the Protocol so the bridge calls them typed, without ``getattr``
+    # probes or ``type: ignore`` casts.
+    @property
+    def has_index(self) -> bool:
+        """``True`` once the language/source index is in memory (gates
+        search + list)."""
+        ...
+
+    @property
+    def has_data(self) -> bool:
+        """``True`` once the per-inventory feature data is in memory
+        (gates ``generate``)."""
+        ...
+
+    def load_index_payload(
+        self, payload: str | bytes | Mapping[str, Any]
+    ) -> None:
+        """Ingest a deferred index payload (web lazy-load path)."""
+        ...
+
+    def load_data_payload(
+        self, payload: str | bytes | Mapping[str, Any]
+    ) -> None:
+        """Ingest a deferred data payload (web lazy-load path)."""
         ...

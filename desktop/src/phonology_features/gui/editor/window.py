@@ -371,25 +371,43 @@ class InventoryEditor(QMainWindow):
         lay.addWidget(self._file_label)
         return strip
 
-    def _build_table(self) -> QTableWidget:
-        self._table = _BulkCycleTable()
-        # Install QPushButton-haptic headers BEFORE any signal wiring;
-        # see _ToggleHeaderView for why.
+    def _install_headers(self) -> None:
+        """Install the custom :class:`_ToggleHeaderView` on both axes
+        and wire each axis' per-section click + rename signals.
+
+        Shared by :meth:`_build_table` and :meth:`_rebuild_table`:
+        ``clear()`` drops our headers back to a plain QHeaderView (losing
+        the doubleclick-as-press haptic), so the rebuild path must
+        re-install and re-wire them exactly as the initial build. A
+        freshly-constructed QHeaderView starts ``isHidden=True`` and Qt
+        does NOT auto-show it on ``setHorizontalHeader``; without the
+        explicit ``show()`` the label area paints at 0 height and the
+        grid renders with no segment / feature labels (the New-Inventory
+        blank-labels bug).
+        """
         self._table.setHorizontalHeader(
             _ToggleHeaderView(Qt.Orientation.Horizontal, self._table)
         )
         self._table.setVerticalHeader(
             _ToggleHeaderView(Qt.Orientation.Vertical, self._table)
         )
-        # See _rebuild_table for the full explanation: a fresh
-        # QHeaderView is isHidden=True by default and Qt doesn't
-        # auto-show it when handed to a view via setHorizontalHeader.
-        _h_hdr = self._table.horizontalHeader()
-        if _h_hdr is not None:
-            _h_hdr.show()
-        _v_hdr = self._table.verticalHeader()
-        if _v_hdr is not None:
-            _v_hdr.show()
+        h_header = self._table.horizontalHeader()
+        v_header = self._table.verticalHeader()
+        if h_header is not None:
+            h_header.show()
+            # _ToggleHeaderView forwards doubleclick -> press, so every
+            # user click fires sectionClicked exactly once.
+            h_header.sectionClicked.connect(self._on_col_header_clicked)
+            self._wire_col_header_rename(h_header)
+        if v_header is not None:
+            v_header.show()
+            v_header.sectionClicked.connect(self._on_row_header_clicked)
+
+    def _build_table(self) -> QTableWidget:
+        self._table = _BulkCycleTable()
+        # Install + wire the custom headers before any other setup
+        # (shared with _rebuild_table).
+        self._install_headers()
         self._table.set_bulk_cycle_callback(self._cycle_selection_from)
         self._table.setFont(QFont("Noto Sans", 10))
         self._table.setStyleSheet(f"""
@@ -414,16 +432,6 @@ class InventoryEditor(QMainWindow):
         # Key-handling event filter only. The click-to-select and
         # click-to-cycle UX lives in _BulkCycleTable.mousePressEvent.
         self._table.installEventFilter(self)
-        h_header = self._table.horizontalHeader()
-        v_header = self._table.verticalHeader()
-        if h_header:
-            # _ToggleHeaderView forwards doubleclick -> press, so every
-            # user click fires sectionClicked exactly once. Same haptic
-            # as a QPushButton; no need to wire sectionDoubleClicked.
-            h_header.sectionClicked.connect(self._on_col_header_clicked)
-            self._wire_col_header_rename(h_header)
-        if v_header:
-            v_header.sectionClicked.connect(self._on_row_header_clicked)
         # Single source of truth for rm-button enabled/disabled state:
         # fires for every selection change regardless of source (header
         # click, ctrl+A, corner click, drag-select). Setters inside
@@ -585,56 +593,30 @@ class InventoryEditor(QMainWindow):
         self._table.clear()
         self._table.setRowCount(len(self._features))
         self._table.setColumnCount(len(self._segments))
-        # clear() can replace header objects with default QHeaderView,
-        # destroying our _ToggleHeaderView's doubleclick-as-press
-        # override. Re-install our custom headers BEFORE setting labels
-        # or wiring signals so the per-click haptic survives a reload.
-        self._table.setHorizontalHeader(
-            _ToggleHeaderView(Qt.Orientation.Horizontal, self._table)
-        )
-        self._table.setVerticalHeader(
-            _ToggleHeaderView(Qt.Orientation.Vertical, self._table)
-        )
-        # A freshly-constructed QHeaderView starts isHidden=True. When
-        # we replace the table's header via setHorizontalHeader on an
-        # already-visible (or about-to-be-visible) table, Qt does NOT
-        # auto-show the new header; it inherits the constructor's
-        # default. The result: width/height stay at 0, no label area
-        # paints, the cells fill the viewport, and the user sees a
-        # grid with the right dimensions but no segment / feature
-        # labels (the visible bug after New Inventory creates a grid).
-        # Explicitly show both headers to make replacement work the
-        # same regardless of view-show ordering.
-        _h_hdr_new = self._table.horizontalHeader()
-        if _h_hdr_new is not None:
-            _h_hdr_new.show()
-        _v_hdr_new = self._table.verticalHeader()
-        if _v_hdr_new is not None:
-            _v_hdr_new.show()
+        # clear() drops our custom headers back to a plain QHeaderView;
+        # re-install + re-wire them before labels so the per-click haptic
+        # and rename affordance survive a reload.
+        self._install_headers()
         self._table.setVerticalHeaderLabels(self._features)
         self._table.setHorizontalHeaderLabels(self._segments)
+        # Per-axis font + Fixed section sizing (rebuild only, on the
+        # populated table). Fixed (NOT ResizeToContents): the adaptive
+        # mode re-measured every cell on each data change, so a 28-cell
+        # column cycle took ~1 s; pinning to Fixed dropped it to 0.3 ms
+        # (60 s+ -> 17 ms for select-all). Values are single-char so
+        # adaptive sizing buys nothing.
         v_header = self._table.verticalHeader()
         if v_header:
             v_header.setFont(QFont("Noto Sans", 9))
-            # Fixed (NOT ResizeToContents). The previous mode triggered
-            # a per-row re-measure on EVERY cell data change. A
-            # bulk-cycle on a 28-cell column took ~1 SECOND because
-            # each item.setForeground stalled Qt re-walking the row.
-            # Values are always single-char (+/-/0) so adaptive sizing
-            # is pointless; profile dropped from 1096 ms to 0.3 ms for
-            # a single-column cycle, 60 s+ -> 17 ms for select-all.
             v_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             v_header.setDefaultSectionSize(26)
             v_header.setMinimumSectionSize(24)
-            v_header.sectionClicked.connect(self._on_row_header_clicked)
         h_header = self._table.horizontalHeader()
         if h_header:
             h_header.setFont(QFont("Noto Sans", 11))
             h_header.setDefaultSectionSize(36)
             h_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
             h_header.setMinimumSectionSize(32)
-            h_header.sectionClicked.connect(self._on_col_header_clicked)
-            self._wire_col_header_rename(h_header)
         # clear() can replace the selectionModel too; re-wire it here.
         sel_model = self._table.selectionModel()
         if sel_model is not None:

@@ -173,13 +173,3 @@ def test_best_segment_n_cols_for_groups_json_round_trips() -> None:
         "best_segment_n_cols_for_groups",
         payload,
     )
-
-
-def test_partition_segment_spillover_json_round_trips() -> None:
-    # Argument is a list of group heights in pixels, matching the
-    # JS call site at ``main.js:_applySegmentSpillover``.
-    payload = bridge.partition_segment_spillover([60, 80, 40], 400)
-    _assert_json_clean(
-        "partition_segment_spillover",
-        payload,
-    )

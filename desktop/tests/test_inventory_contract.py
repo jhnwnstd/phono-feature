@@ -2309,7 +2309,7 @@ def test_main_viewer_falls_back_when_current_inventory_deleted(
     # Load A, then B. MRU is now [B, A].
     w._load_path(str(a))
     w._load_path(str(b))
-    assert w._current_path == _os.path.abspath(str(b))
+    assert w._inv_dir.current_path == _os.path.abspath(str(b))
     assert w._inv_dir.recent_paths[0] == _os.path.abspath(str(b))
     assert _os.path.abspath(str(a)) in w._inv_dir.recent_paths
 
@@ -2319,9 +2319,9 @@ def test_main_viewer_falls_back_when_current_inventory_deleted(
     w._inv_dir._on_directory_changed(str(work_dir))
 
     # Viewer must have fallen back to A (the MRU survivor).
-    assert w._current_path == _os.path.abspath(str(a)), (
+    assert w._inv_dir.current_path == _os.path.abspath(str(a)), (
         f"viewer did not fall back after delete: "
-        f"current_path={w._current_path!r}"
+        f"current_path={w._inv_dir.current_path!r}"
     )
     w.close()
 
@@ -2367,7 +2367,7 @@ def test_main_viewer_loads_freshly_saved_editor_inventory(
     # the "no current inventory" save flow specifically, so undo the
     # auto-load and put the viewer back into the blank state the test
     # was written to exercise.
-    w._current_path = None
+    w._inv_dir.clear_current_path()
     w.engine = None
     # Spawn a editor the same way _open_editor does for the
     # no-current-inventory case, including the save-finished wiring.
@@ -2387,7 +2387,7 @@ def test_main_viewer_loads_freshly_saved_editor_inventory(
     editor._table.setItem(0, 1, make_cell("+"))  # b is voiced
 
     target = tmp_path / "built_in_test.json"
-    assert w._current_path is None
+    assert w._inv_dir.current_path is None
     editor._write_json(str(target))
 
     # Drain the background save; _on_editor_save_finished fires
@@ -2402,9 +2402,9 @@ def test_main_viewer_loads_freshly_saved_editor_inventory(
         app.processEvents()
 
     assert target.exists(), "save did not produce the file"
-    assert w._current_path == str(_os.path.abspath(target)), (
+    assert w._inv_dir.current_path == str(_os.path.abspath(target)), (
         f"main viewer did not switch to the freshly-saved inventory: "
-        f"current_path={w._current_path!r}, expected={str(target)!r}"
+        f"current_path={w._inv_dir.current_path!r}, expected={str(target)!r}"
     )
     assert w.engine is not None
     assert "p" in w.engine.segments

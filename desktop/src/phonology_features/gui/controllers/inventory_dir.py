@@ -124,6 +124,12 @@ class InventoryDirController:
         self._w = window
         self._settings = settings
         self._combo = inventory_combo
+        # Path of the currently-loaded on-disk inventory, owned here:
+        # ``register_loaded_path`` is the sole setter, the watcher logic
+        # reads/clears it internally, and MainWindow reads it through
+        # ``current_path``. ``None`` when nothing on-disk is loaded
+        # (startup, or after a PHOIBLE-only swap).
+        self._path: str | None = None
         # Public: tests read this directly. MRU of paths the user
         # has loaded, deduplicated, capped. Not persisted across
         # sessions (starts empty each launch).
@@ -300,13 +306,24 @@ class InventoryDirController:
     # ------------------------------------------------------------------
     # Load registration / MRU
     # ------------------------------------------------------------------
+    @property
+    def current_path(self) -> str | None:
+        """Path of the currently-loaded on-disk inventory (read-only;
+        :py:meth:`register_loaded_path` is the canonical setter)."""
+        return self._path
+
+    def clear_current_path(self) -> None:
+        """Forget the on-disk path, e.g. after a PHOIBLE swap that has
+        no backing file."""
+        self._path = None
+
     def register_loaded_path(self, path: str) -> None:
         """Wire watcher, dropdown, and settings for a newly-loaded
         path. Called by MainWindow._load_path after a successful
         inventory load."""
-        if self._w._current_path and self._w._current_path != path:
-            self._watcher.removePath(self._w._current_path)
-            old_dir = os.path.dirname(os.path.abspath(self._w._current_path))
+        if self._path and self._path != path:
+            self._watcher.removePath(self._path)
+            old_dir = os.path.dirname(os.path.abspath(self._path))
             new_dir = os.path.dirname(os.path.abspath(path))
             # The bundled inventories dir is a permanent watch target
             # (added once in __init__) so Editor saves into it always
@@ -318,7 +335,7 @@ class InventoryDirController:
             )
             if old_dir != new_dir and old_dir != bundled_dir:
                 self._watcher.removePath(old_dir)
-        self._w._current_path = path
+        self._path = path
         if path not in self._watcher.files():
             self._watcher.addPath(path)
         parent_dir = os.path.dirname(os.path.abspath(path))
@@ -396,9 +413,9 @@ class InventoryDirController:
         self._reload_timer.stop()
         if os.path.normpath(directory) == self.get_inventories_dir():
             self.populate_dropdown()
-        if not self._w._current_path:
+        if not self._path:
             return
-        if not os.path.isfile(self._w._current_path):
+        if not os.path.isfile(self._path):
             # Current inventory was deleted under us (most often
             # via Editor Delete). Pick a fallback so the viewer
             # doesn't continue showing stale data with a
@@ -406,11 +423,11 @@ class InventoryDirController:
             # an MRU neighbour; if none survives, it picks the
             # first file in the inventories dir; if none of those
             # either, returns None and we clear current_path.
-            deleted = self._w._current_path
+            deleted = self._path
             fname = os.path.basename(deleted)
             _log.info("current inventory deleted on disk: %s", fname)
             fallback = self.pick_fallback_after_delete(deleted)
-            self._w._current_path = None
+            self._path = None
             self._settings.remove(str(SettingsKey.LAST_INVENTORY))
             if fallback is not None:
                 _log.info("falling back to: %s", os.path.basename(fallback))
@@ -423,14 +440,14 @@ class InventoryDirController:
                     f"Deleted “{fname}”; no other " f"inventories available."
                 )
             return
-        if self._w._current_path not in self._watcher.files():
-            self._watcher.addPath(self._w._current_path)
+        if self._path not in self._watcher.files():
+            self._watcher.addPath(self._path)
             self._reload_timer.start()
 
     def _do_auto_reload(self) -> None:
         """Reload the current inventory after the watcher debounce
         fires."""
-        path = self._w._current_path
+        path = self._path
         if path and os.path.isfile(path):
             fname = os.path.basename(path)
             _log.info("auto-reload (watcher fired): %s", fname)

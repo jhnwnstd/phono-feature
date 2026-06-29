@@ -35,7 +35,7 @@ def test_match_mode_toggle_preserves_feat_query(window) -> None:
 def test_failed_load_reverts_inventory_combo(window) -> None:
     """M1: a load that fails validation must leave the dropdown naming
     the inventory that is actually loaded, not the failed one."""
-    loaded_path = window._current_path
+    loaded_path = window._inv_dir.current_path
     loaded_idx = window.inventory_combo.currentIndex()
     assert loaded_idx >= 0
 
@@ -45,7 +45,7 @@ def test_failed_load_reverts_inventory_combo(window) -> None:
     window.inventory_combo.setCurrentIndex(0)
     window._load_path("/no/such/inventory_file_does_not_exist.json")
 
-    assert window._current_path == loaded_path
+    assert window._inv_dir.current_path == loaded_path
     assert window.inventory_combo.currentIndex() == loaded_idx
 
 

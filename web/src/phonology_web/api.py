@@ -107,7 +107,6 @@ from phonology_shared.editor.setup import (
 from phonology_shared.presentation.analysis import render_validation_report
 from phonology_shared.presentation.layout import (
     best_segment_n_cols,
-    partition_groups_for_spillover,
     plan_seg_layout,
 )
 from phonology_shared.presentation.mode_logic import (
@@ -453,11 +452,7 @@ def phoible_is_ready() -> bool:
     user can't trigger ``generate`` before the snapshot is in memory.
     """
     provider = _phoible_provider()
-    return (
-        provider is not None
-        and getattr(provider, "has_index", False)
-        and getattr(provider, "has_data", False)
-    )
+    return provider is not None and provider.has_index and provider.has_data
 
 
 @_translate_engine_errors
@@ -473,7 +468,7 @@ def phoible_load_data(payload_json: str) -> bool:
     provider = _phoible_provider()
     if provider is None:
         return False
-    provider.load_data_payload(payload_json)  # type: ignore[attr-defined]
+    provider.load_data_payload(payload_json)
     return True
 
 
@@ -491,7 +486,7 @@ def phoible_load_index(payload_json: str) -> bool:
     provider = _phoible_provider()
     if provider is None:
         return False
-    provider.load_index_payload(payload_json)  # type: ignore[attr-defined]
+    provider.load_index_payload(payload_json)
     return True
 
 
@@ -558,7 +553,7 @@ def phoible_preview_inventory(inventory_id: str) -> dict[str, Any]:
     inventory carries after the empty-column pruning step.
     """
     provider = _phoible_provider()
-    if provider is None or not getattr(provider, "has_data", False):
+    if provider is None or not provider.has_data:
         return {}
     descriptor = provider.descriptor(inventory_id)
     if descriptor is None:
@@ -602,7 +597,7 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
         raise ValidationError(
             ("PHOIBLE provider is not available; rebuild the web bundle.",)
         )
-    if not getattr(provider, "has_data", False):
+    if not provider.has_data:
         raise ValidationError(
             (
                 "PHOIBLE data payload not loaded; call phoible_load_data "
@@ -979,25 +974,6 @@ def project_mode_switch(
 def get_mode_status_text(mode: str) -> str:
     """Per-mode helper text shared with the desktop status bar."""
     return mode_status_text(mode, has_engine=_engine is not None)
-
-
-def partition_segment_spillover(
-    heights: list[int],
-    available: int,
-    n_spillover_cols: int = 2,
-) -> int:
-    """JS bridge to the shared spillover partition. JS measures each
-    consonant group's natural height + the pane's clientHeight, hands
-    them here, and applies the returned main-flow count to the DOM.
-    Same function the desktop calls during ``set_groups`` so a
-    threshold change lands on both UIs at once.
-
-    Kept only for the hash-pin test (the pre-bridge JS fallback that
-    used to call it is gone). Live JS calls prefer
-    :py:func:`plan_segment_layout` so the spillover region uses the
-    same 1-4 column policy the desktop's ``plan_seg_layout`` returns.
-    """
-    return partition_groups_for_spillover(heights, available, n_spillover_cols)
 
 
 def plan_segment_layout(
