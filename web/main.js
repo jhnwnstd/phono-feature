@@ -42,6 +42,8 @@ const NODE_IDS = Object.freeze({
     renameError: "rename-error",
     renameCancel: "rename-cancel",
     renameSave: "rename-save",
+    sourceDialog: "source-dialog",
+    sourceCitation: "source-citation",
     editorBtn: "editor-btn",
     setupDialog: "setup-dialog",
     setupForm: "setup-form",
@@ -619,7 +621,7 @@ async function bootPyodide({ prerendered = false } = {}) {
             "load_inventory_json_status_only", text, defaultItem.label,
         );
         setInventoryStatus(info);
-        setStatusSourceLink(info.source_url);
+        setStatusSource(info.source);
         if (hasActiveSelection()) scheduleAnalysis();
         else renderEmptyAnalysisHints();
     } else {
@@ -831,7 +833,7 @@ function applyInventoryInfo(info) {
     // (bundled, uploaded, built) leaves it undefined, which hides the
     // statusbar "Source" link, so the link always reflects the
     // currently loaded inventory.
-    setStatusSourceLink(info.source_url);
+    setStatusSource(info.source);
 }
 
 /**
@@ -865,23 +867,61 @@ function renderEmptyAnalysisHints() {
     }
 }
 
-/** Show or hide the statusbar "Source" hyperlink for the loaded
- *  inventory. ``url`` is a baked phoible.org page; empty / absent
- *  hides the link (non-PHOIBLE inventories). The summary text itself
- *  is set separately via ``setStatus``; this link sits beside it at
+/** Configure the statusbar "Source" affordance from a classified
+ *  source descriptor ``{kind, href, text, label}`` (shared
+ *  ``classify_source``). ``url``/``doi`` make it a hyperlink;
+ *  ``citation`` makes it open a window with the citation text;
+ *  ``none`` / absent hides it. One affordance for PHOIBLE pages,
+ *  bundled-inventory citations, and user DOIs alike. The summary text
+ *  itself is set separately via ``setStatus``; this sits beside it at
  *  the bottom border, mirroring the desktop status bar. */
-function setStatusSourceLink(url) {
+function setStatusSource(source) {
     const link = nodes.statusbarSource;
     if (!link) return;
-    const clean = typeof url === "string" ? url.trim() : "";
-    if (!clean) {
-        link.removeAttribute("href");
+    const desc = source && typeof source === "object" ? source : null;
+    const kind = desc ? desc.kind : "none";
+    // Reset the per-kind attributes so a re-load never inherits the
+    // previous inventory's link/handler.
+    link.onclick = null;
+    link.onkeydown = null;
+    link.removeAttribute("href");
+    link.removeAttribute("role");
+    link.removeAttribute("tabindex");
+    if (!desc || kind === "none") {
         link.hidden = true;
         return;
     }
-    link.href = clean;
-    link.title = `PHOIBLE source: ${clean}`;
+    link.textContent = desc.label || "Source";
+    if (kind === "url" || kind === "doi") {
+        link.href = desc.href;
+        link.title = `Source: ${desc.href}`;
+    } else {
+        // Plain citation: no resolvable target. Present the element as
+        // a button that opens the citation window (mouse + keyboard).
+        link.title = "Show the inventory citation";
+        link.setAttribute("role", "button");
+        link.setAttribute("tabindex", "0");
+        link.onclick = (ev) => {
+            ev.preventDefault();
+            openSourceCitation(desc.text);
+        };
+        link.onkeydown = (ev) => {
+            if (ev.key === "Enter" || ev.key === " ") {
+                ev.preventDefault();
+                openSourceCitation(desc.text);
+            }
+        };
+    }
     link.hidden = false;
+}
+
+/** Open the citation window for a plain-text inventory source. */
+function openSourceCitation(text) {
+    if (!nodes.sourceDialog || !nodes.sourceCitation) return;
+    nodes.sourceCitation.textContent = text || "";
+    if (typeof nodes.sourceDialog.showModal === "function") {
+        nodes.sourceDialog.showModal();
+    }
 }
 
 /** Set the bottom-border status to the loaded-inventory summary
@@ -1572,6 +1612,11 @@ function onClassPopoverChange(ev) {
     if (cb.checked) state.hidden_segment_classes.delete(label);
     else state.hidden_segment_classes.add(label);
     renderSegmentsWithVisibility();
+    // The grid was rebuilt with default-state buttons; re-run the
+    // active analysis so the current selection (seg->feat) or
+    // feature-query highlighting (feat->seg) is re-applied to the
+    // surviving buttons. Pre-bridge there is no selection to restore.
+    if (state.bridge) runAnalysis();
 }
 
 // Cached signature of the last successful relayout pass. When the

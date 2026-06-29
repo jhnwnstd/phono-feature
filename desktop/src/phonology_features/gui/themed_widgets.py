@@ -14,6 +14,10 @@ swap).
 
 from __future__ import annotations
 
+import html
+from collections.abc import Mapping
+from typing import Any
+
 from PyQt6.QtCore import QEvent, QRectF, Qt, QTimer
 from PyQt6.QtGui import (
     QColor,
@@ -29,6 +33,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QSizePolicy,
     QSplitter,
     QSplitterHandle,
@@ -38,6 +43,10 @@ from PyQt6.QtWidgets import (
 
 from phonology_features.gui.style_utils import set_css
 from phonology_shared.presentation.layout import REGION_CONSTRAINTS
+from phonology_shared.presentation.source_link import (
+    NONE_SOURCE,
+    SourceLink,
+)
 from phonology_shared.presentation.palette import C
 
 
@@ -166,11 +175,12 @@ class _BrandedStatusBar(QStatusBar):
         self._message_label.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
         )
-        # "Source" hyperlink for a loaded PHOIBLE inventory. Sits in
-        # the LEFT group, immediately after the inventory-summary
-        # message (mirrors the web's ``.statusbar-left`` row). Hidden
-        # until ``set_source_link`` is given a URL; a non-PHOIBLE
-        # inventory clears it.
+        # "Source" affordance for a loaded inventory. Sits in the LEFT
+        # group, immediately after the inventory-summary message
+        # (mirrors the web's ``.statusbar-left`` row). Hidden until
+        # ``set_source`` is given a URL/DOI (opens the link) or a
+        # citation (opens a window with the text); an inventory without
+        # a source clears it.
         self._source_link = QLabel("", self)
         self._source_link.setFont(self._FONT)
         self._source_link.setTextFormat(Qt.TextFormat.RichText)
@@ -178,6 +188,12 @@ class _BrandedStatusBar(QStatusBar):
         self._source_link.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
+        # Plain-citation sources have no resolvable target; clicking the
+        # link opens a window with the citation text instead. URL/DOI
+        # sources are opened by ``setOpenExternalLinks`` and ignored
+        # here. The active source is cached so the handler knows which.
+        self._source: SourceLink = NONE_SOURCE
+        self._source_link.linkActivated.connect(self._on_source_activated)
         self._source_link.hide()
         # Spacer absorbs the slack between the left group and the brand
         # so the message + source stay left-aligned and the brand stays
@@ -208,22 +224,53 @@ class _BrandedStatusBar(QStatusBar):
         self.addPermanentWidget(self._brand, 0)
         self.apply_theme()
 
-    def set_source_link(self, url: str) -> None:
-        """Show a ``Source`` hyperlink to ``url`` (a PHOIBLE source or
-        inventory page), or hide the link when ``url`` is empty (a
-        non-PHOIBLE inventory). Idempotent."""
-        url = (url or "").strip()
-        if not url:
+    def set_source(
+        self, source: SourceLink | Mapping[str, Any] | None
+    ) -> None:
+        """Configure the ``Source`` affordance from a classified source.
+
+        A URL or DOI becomes an external hyperlink (opens the browser);
+        a plain citation becomes a link that opens a window with the
+        citation text; ``none`` / empty hides the affordance. Accepts a
+        :py:class:`SourceLink` or its dict form. Idempotent.
+        """
+        link = (
+            source
+            if isinstance(source, SourceLink)
+            else SourceLink.from_dict(source)
+        )
+        self._source = link
+        if link.kind in ("url", "doi"):
+            # ``href`` is a resolvable URL; escape it for the attribute.
+            self._source_link.setOpenExternalLinks(True)
+            href = html.escape(link.href, quote=True)
+            self._source_link.setText(f'<a href="{href}">{link.label}</a>')
+            self._source_link.show()
+        elif link.kind == "citation":
+            # No resolvable target: intercept the click (handled in
+            # ``_on_source_activated``) rather than open the dummy href.
+            self._source_link.setOpenExternalLinks(False)
+            self._source_link.setText(f'<a href="#cite">{link.label}</a>')
+            self._source_link.show()
+        else:
             self._source_link.clear()
             self._source_link.hide()
-            self._update_elided_message()
-            return
-        # ``url`` is a baked phoible.org link, not user input; still,
-        # only http(s) URLs are ever emitted, so no escaping beyond
-        # the quote attribute is needed.
-        self._source_link.setText(f'<a href="{url}">Source</a>')
-        self._source_link.show()
         self._update_elided_message()
+
+    def _on_source_activated(self, _href: str) -> None:
+        """Open the citation window for a plain-text source. URL/DOI
+        sources are opened by ``setOpenExternalLinks`` and never reach
+        here as a citation."""
+        if self._source.kind != "citation":
+            return
+        box = QMessageBox(self.window())
+        box.setWindowTitle("Source")
+        box.setIcon(QMessageBox.Icon.NoIcon)
+        box.setText(self._source.text)
+        box.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        box.exec()
 
     def apply_theme(self) -> None:
         """Re-apply palette-dependent styles. Called on theme toggle."""

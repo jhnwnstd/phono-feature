@@ -369,6 +369,22 @@
   </form>
 </dialog>
 
+<!--
+  Source citation window. Opened from the statusbar [Source] affordance
+  when the loaded inventory's source is a plain citation (no resolvable
+  URL/DOI). URL/DOI sources open the link directly and never reach this
+  dialog.
+-->
+<dialog id="source-dialog" aria-labelledby="source-dialog-title">
+  <form method="dialog">
+    <div class="dialog-title" id="source-dialog-title">Source</div>
+    <p class="dialog-citation" id="source-citation"></p>
+    <div class="dialog-actions">
+      <button type="submit" id="source-dialog-close" value="close">Close</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="setup-dialog" class="setup-dialog"
         aria-labelledby="setup-dialog-title">
   <form method="dialog" id="setup-form">

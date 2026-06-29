@@ -31,6 +31,7 @@ from phonology_shared.presentation.constants import (
 )
 from phonology_shared.presentation.layout import distribute_feature_groups
 from phonology_shared.presentation.palette import ClassState
+from phonology_shared.presentation.source_link import classify_source
 from phonology_shared.theory.feature_engine import (
     FeatureCategory,
     MatchMode,
@@ -201,6 +202,13 @@ def build_inventory_summary(
         "feature_groups": _grouped_features(active),
         "vowel_chart": _vowel_chart_summary(engine, vowel_segs),
         "matching_mode": str(mode),
+        # Classified inventory source (URL / DOI / citation / none) so
+        # both frontends render the [Source] affordance from one rule.
+        # PHOIBLE and bundled inventories both populate ``metadata
+        # .source``; an inventory without one yields kind "none".
+        "source": classify_source(
+            engine.inventory.metadata.get("source")
+        ).as_dict(),
     }
 
 

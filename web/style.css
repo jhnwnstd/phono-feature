@@ -325,6 +325,19 @@ dialog form {
   font-size: var(--font-size-meta);
   color: var(--text-dim);
 }
+/* Citation text in the [Source] window. Wraps freely (a citation is a
+   sentence, not a token) and stays selectable so the user can copy it. */
+.dialog-citation {
+  max-width: 46ch;
+  margin: 4px 0 8px;
+  color: var(--text);
+  font-size: var(--font-size-base);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
 dialog input[type="text"] {
   height: var(--control-h-md);
   padding: 0 10px;

@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMenu,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -78,7 +79,14 @@ from phonology_features.gui.widgets import (
     SegmentGridWidget,
     SegmentState,
 )
-from phonology_shared.chart.consonants import VOWEL_GROUP_NAME
+from phonology_shared.chart.consonants import (
+    VOWEL_GROUP_NAME,
+    visible_groups,
+)
+from phonology_shared.presentation.source_link import (
+    NONE_SOURCE,
+    classify_source,
+)
 from phonology_shared.data.inventory import Inventory, ValidationError
 from phonology_shared.editor.grid import enforce_class_caps
 from phonology_shared.editor.phoible_provider import phoible_loaded_message
@@ -160,6 +168,11 @@ class MainWindow(QMainWindow):
         self._feat_rows: dict[str, FeatureRow] = {}  # active subset
         self._selected_segments: list[str] = []
         self._selected_features: dict[str, str] = {}  # feature -> '+'/'-'
+        # Segment-class labels the user has hidden via the filter menu.
+        # Display-only (the grouping itself is untouched); reset to
+        # empty on every inventory load so a hidden label cannot leak
+        # across a swap (class sets differ between inventories).
+        self._hidden_segment_classes: set[str] = set()
         self._current_path: str | None = None
         # Watcher, MRU, dropdown population, and delete-fallback all
         # live in the InventoryDirController, built after _build_ui
@@ -549,8 +562,23 @@ class MainWindow(QMainWindow):
             "resets the analysis view."
         )
         self.clear_seg_btn.clicked.connect(self._clear_then_activate_segs)
+        # Class-visibility filter. A single header button (not a +/-
+        # per class label) opens a checkable menu of the loaded
+        # inventory's classes so the user can hide ones they are not
+        # interested in and reclaim the pane space.
+        self.seg_filter_btn = QPushButton("⊟", container)  # squared minus
+        self.seg_filter_btn.setFixedHeight(_CLEAR_BTN_H)
+        self.seg_filter_btn.setFont(QFont("Noto Sans", 11))
+        set_css(self.seg_filter_btn, _clear_btn_style())
+        self.seg_filter_btn.setAccessibleName("Show or hide segment classes")
+        self.seg_filter_btn.setAccessibleDescription(
+            "Opens a menu to hide or show whole segment classes so the "
+            "segment pane reclaims the freed space."
+        )
+        self.seg_filter_btn.clicked.connect(self._open_class_filter_menu)
         header.addWidget(self._seg_title)
         header.addStretch()
+        header.addWidget(self.seg_filter_btn)
         header.addWidget(self.clear_seg_btn)
         vlay.addLayout(header)
         self._seg_scroll = QScrollArea(container)
@@ -1151,16 +1179,20 @@ class MainWindow(QMainWindow):
         """
         self._mode_ctrl.saved_seg_state = []
         self._mode_ctrl.saved_feat_state = {}
-        # Refresh the status-bar "Source" link for the freshly-loaded
-        # inventory. PHOIBLE inventories carry ``phoible_source_url``;
-        # any other inventory (bundled, built, uploaded) has none, so
-        # this also clears the link on a non-PHOIBLE load.
-        source_url = ""
+        # Refresh the status-bar "Source" affordance for the freshly
+        # loaded inventory from the unified ``metadata.source`` field
+        # (a URL/DOI link or a plain citation). PHOIBLE stamps it with
+        # the phoible.org page; bundled inventories carry a citation;
+        # an inventory without one clears the affordance.
+        source = NONE_SOURCE
         if self.engine is not None:
-            source_url = str(
-                self.engine.inventory.metadata.get("phoible_source_url", "")
+            source = classify_source(
+                self.engine.inventory.metadata.get("source")
             )
-        self.status.set_source_link(source_url)
+        self.status.set_source(source)
+        # New inventory: every class starts visible. Reset before the
+        # repopulate so the filter menu and the grid agree.
+        self._hidden_segment_classes.clear()
         with self._batched_updates():
             self._populate_segments()
             self._populate_features()
@@ -1237,6 +1269,66 @@ class MainWindow(QMainWindow):
             btn.hide()
             btn.setParent(None)
             btn.deleteLater()
+
+    def _open_class_filter_menu(self) -> None:
+        """Show a checkable menu of the loaded inventory's segment
+        classes; unchecking one hides that whole class so the pane
+        reclaims its space. Built fresh on each open so it tracks the
+        inventory and any prior toggles.
+        """
+        if self.engine is None:
+            return
+        menu = QMenu(self)
+        for label in self.engine.grouped_segments:
+            act = menu.addAction(label)
+            act.setCheckable(True)
+            act.setChecked(label not in self._hidden_segment_classes)
+            act.toggled.connect(
+                lambda shown, lbl=label: self._set_class_visible(lbl, shown)
+            )
+        menu.exec(
+            self.seg_filter_btn.mapToGlobal(
+                self.seg_filter_btn.rect().bottomLeft()
+            )
+        )
+
+    def _set_class_visible(self, label: str, shown: bool) -> None:
+        """Hide or show one segment class, then re-lay the pane."""
+        if shown:
+            self._hidden_segment_classes.discard(label)
+        else:
+            self._hidden_segment_classes.add(label)
+        self._apply_class_visibility()
+
+    def _apply_class_visibility(self) -> None:
+        """Re-lay the seg grid + vowel chart for the current visibility
+        set, REUSING pooled buttons so the selection and per-button
+        states survive a class toggle (``_populate_segments`` rebuilds
+        and would reset them). Hiding a consonant class drops it from
+        the grid; hiding the vowel class hides the chart, whose space
+        the stretch=1 consonant column then reclaims automatically.
+        ``self._seg_buttons`` is left as the FULL set so click and
+        analysis handlers still resolve a hidden class' buttons.
+        """
+        if self.engine is None:
+            return
+        groups = visible_groups(
+            dict(self.engine.grouped_segments),
+            self._hidden_segment_classes,
+        )
+        groups.pop(VOWEL_GROUP_NAME, None)
+        consonant_buttons = {
+            seg: self._seg_button_pool[seg]
+            for segs in groups.values()
+            for seg in segs
+            if seg in self._seg_button_pool
+        }
+        self.seg_grid_widget.set_groups(groups, consonant_buttons)
+        has_vowels = bool(self.engine.grouped_segments.get(VOWEL_GROUP_NAME))
+        if has_vowels and VOWEL_GROUP_NAME not in self._hidden_segment_classes:
+            self.vowel_chart_widget.show()
+        else:
+            self.vowel_chart_widget.hide()
 
     def _get_or_create_seg_button(self, seg: str) -> SegmentButton:
         """Return a SegmentButton for ``seg``, creating it on first use.

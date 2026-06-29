@@ -654,7 +654,12 @@ def materialize_phoible_inventory(
     if descriptor.source_url:
         # phoible.org page documenting this inventory's source(s),
         # surfaced as a "Source" link beside the loaded-inventory
-        # summary on both UIs. Plain-text informational stamp.
+        # summary on both UIs. ``source`` is the unified field the
+        # display path classifies (shared with bundled inventories);
+        # ``phoible_source_url`` is kept as a PHOIBLE-specific stamp
+        # for any consumer that still reads it. Plain-text stamps the
+        # user can edit or delete.
+        metadata["source"] = descriptor.source_url
         metadata["phoible_source_url"] = descriptor.source_url
     if generated.segment_secondary:
         # Canonicalise the contour segment KEY (NFC). PHOIBLE ships

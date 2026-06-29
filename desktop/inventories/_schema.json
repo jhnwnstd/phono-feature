@@ -19,7 +19,7 @@
       "additionalProperties": true,
       "properties": {
         "name": { "type": "string", "minLength": 1, "maxLength": 256 },
-        "source": { "type": "string" },
+        "source": { "type": "string", "description": "Provenance shown as a [Source] affordance: an http(s) URL or a DOI (10.xxxx/...) opens the link; any other text is treated as a citation and shown in a window when clicked." },
         "notes": { "type": "string" },
         "version": { "type": "string" }
       }

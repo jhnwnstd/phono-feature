@@ -114,6 +114,7 @@ from phonology_shared.presentation.mode_logic import (
     project_mode_transition,
 )
 from phonology_shared.presentation.palette import set_palette_mode, set_theme
+from phonology_shared.presentation.source_link import classify_source
 from phonology_shared.presentation.view_models import (
     FeatureQuerySummary,
     SegmentSelectionSummary,
@@ -231,7 +232,10 @@ def load_inventory_json_status_only(
         "name": name,
         "n_segments": len(engine.segments),
         "n_features": len(engine.features),
-        "source_url": inventory.metadata.get("source_url"),
+        # Classified source descriptor (URL / DOI / citation / none),
+        # same shape build_inventory_summary emits, so the status bar's
+        # [Source] affordance reads one field on every load route.
+        "source": classify_source(inventory.metadata.get("source")).as_dict(),
     }
 
 
@@ -616,10 +620,10 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
     # counts) so both UIs show the identical terse message instead
     # of each wrapping the full dialect-bearing display name.
     summary["status"] = phoible_loaded_message(inventory)
-    # phoible.org page documenting this inventory's source(s); the UI
-    # renders it as a "Source" link beside the summary. Empty for the
-    # rare inventory whose source mapping is missing.
-    summary["source_url"] = inventory.metadata.get("phoible_source_url", "")
+    # The Source affordance is now carried by ``summary["source"]``
+    # (classified from ``metadata.source``, which
+    # ``materialize_phoible_inventory`` stamps with the phoible.org
+    # page), so no per-route override is needed here.
     return summary
 
 

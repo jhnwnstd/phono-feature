@@ -1,6 +1,7 @@
 {
   "metadata": {
-    "name": "Universal phoneme inventory (Hayes 2009)"
+    "name": "Universal phoneme inventory (Hayes 2009)",
+    "source": "Hayes, Bruce (2009). Introductory Phonology. Oxford: Wiley-Blackwell."
   },
   "features": [
     "CORONAL",
