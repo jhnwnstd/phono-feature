@@ -235,7 +235,7 @@ class ModeController:
 
         ``restore_feats`` defaults to the saved FEAT query for the
         active SEG↔FEAT mode (empty in SEG_TO_FEAT). Callers may pass
-        an explicit map instead - e.g. the match-mode toggle keeping
+        an explicit map instead, e.g. the match-mode toggle keeping
         the live query across the strict↔wildcard feature rebuild.
         """
         if restore_feats is None:

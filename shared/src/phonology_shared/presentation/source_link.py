@@ -76,7 +76,7 @@ def classify_source(raw: str | None) -> SourceLink:
     # Metadata values pass through the parser untouched, so a
     # hand-edited or future-baked inventory could carry a non-string
     # ``source`` (dict / list / number). Coerce at the boundary rather
-    # than let ``.strip()`` raise and fail the entire load on all three
+    # than let ``.strip()`` raise and fail the entire load on both
     # frontends.
     if not isinstance(raw, str):
         return NONE_SOURCE

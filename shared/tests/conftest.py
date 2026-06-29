@@ -60,11 +60,9 @@ def bundled_inventory(
     ``"english"``) to a parsed :py:class:`Inventory`.
 
     Skips the calling test with a clear message if the named
-    inventory isn't on disk (gitignored under
-    :py:data:`phonology_shared.editor.providers.LookupTableProvider`'s
-    bake artifacts policy). Centralises the per-file
-    ``_load_bundled`` helper five test modules previously each
-    defined.
+    inventory isn't on disk (some bundled inventories are gitignored
+    in CI). Centralises the per-file ``_load_bundled`` helper five
+    test modules previously each defined.
     """
 
     def _load(name: str) -> Inventory:

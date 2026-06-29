@@ -114,7 +114,8 @@ _TOOLBAR_BTN_H = 32
 
 
 # Translate JS-native key-name vocabulary (the format
-# :py:data:`gui.grid_logic.MOVE_KEYS` uses) into ``Qt.Key`` constants.
+# :py:data:`phonology_shared.editor.grid.MOVE_KEYS` uses) into
+# ``Qt.Key`` constants.
 # Arrow keys are named (``ArrowUp`` etc.); single-character keys
 # (``h``, ``4``) fall through to the ``Key_<X>`` getattr rule.
 # Defined at module level rather than inside the class body so the
@@ -643,7 +644,7 @@ class InventoryEditor(QMainWindow):
         self._refresh_cap_counter()
 
     # Direct-entry keyboard shortcuts. Derived from the shared
-    # :py:data:`VALUE_KEYS` constant in grid_logic so the desktop
+    # :py:data:`VALUE_KEYS` constant in editor.grid so the desktop
     # and web editor stay in lockstep on which key sets which value.
     # Translation step here: shared dict is char -> value; Qt's
     # KeyPress events carry the Qt.Key.Key_<char> constant.

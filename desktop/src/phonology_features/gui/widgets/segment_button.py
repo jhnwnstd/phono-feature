@@ -45,8 +45,8 @@ class SegmentButton(QPushButton):
     #: (the IPA string).
     right_clicked = pyqtSignal(str)
 
-    # ``palette.theme_version`` -> styles dict, shared across
-    # instances. Cache rebuild semantics live in
+    # ``(theme, mode)`` -> styles dict, shared across instances.
+    # Cache rebuild semantics live in
     # :py:func:`_themed_style_cache.styles_for_active_theme`; see
     # that module for the invalidation contract.
     _styles_cache: ClassVar[dict[tuple[str, str], dict[SegmentState, str]]] = (

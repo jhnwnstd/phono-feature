@@ -26,7 +26,7 @@ macOS may block unsigned command files: right click `RUN-Mac.command`, choose **
 
 ## Inventories
 
-Bundled inventories live in `desktop/inventories/` and appear in the app menu. The bundled set covers Hayes 2009, a general IPA inventory, and English. Add and build your own through **New Inventory** in the app.
+Bundled inventories live in `desktop/inventories/` and appear in the app menu. The bundled set covers Hayes 2009, a general IPA inventory, and a range of language inventories (English, German, Hindi, Japanese, Korean, Mandarin, Spanish, Arabic, Turkish, and more). Add and build your own through **New Inventory** in the app.
 
 ## Development
 

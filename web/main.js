@@ -350,8 +350,8 @@ const STATUS_TEXT = Object.freeze(readInlineJson("status-text", {}));
 /** Vowel-chart visual policy: the stack-density thresholds, the
  *  legibility floor, and the silhouette corner radius the renderer
  *  needs at runtime. Baked from
- *  ``shared/.../presentation/chart_style.py`` via
- *  ``_build_chart_style_block`` in ``web/scripts/build.py``.
+ *  ``shared/.../presentation/chart_style.py`` (loaded via
+ *  ``_load_chart_style_module``) in ``web/scripts/build.py``.
  *  The single home for the offline-build fallbacks: these defaults
  *  must mirror the Python source values (NOT the pre-relay literals)
  *  so the missing-block path renders identically to a baked build.
@@ -846,8 +846,8 @@ function applyInventoryInfo(info) {
 }
 
 /**
- * The active inventory is NOT one of the listed dropdown options - it
- * was uploaded, created, renamed, or saved-as - so deselect the picker
+ * The active inventory is NOT one of the listed dropdown options (it
+ * was uploaded, created, renamed, or saved-as) so deselect the picker
  * rather than let it keep naming a bundled / PHOIBLE entry that is not
  * actually loaded. The active name lives in the statusbar instead.
  * Single home for this invariant: every engine-identity change that
@@ -1764,7 +1764,7 @@ function relayoutSegments() {
 // in the CSS variables baked from ``constants.BTN_W`` /
 // ``constants.BTN_GAP`` by ``web/scripts/build.py``; reading them
 // per relayout walks the cascade on every splitter drag. NaN
-// values mean the read happened before the relay attached --
+// values mean the read happened before the relay attached;
 // callers fall back to the literal defaults in that case.
 let _BTN_W_CSS = NaN;
 let _BTN_GAP_CSS = NaN;
@@ -2047,13 +2047,13 @@ function _buildVowelSegBtn(seg) {
 /**
  * Build the IPA vowel trapezoid: 6 height rows × 6 backness-
  * rounding columns. Row/column placement comes from Python
- * (gui.vowel_layout.vowel_grid_pos) so it matches the desktop's
+ * (chart.vowels.vowel_grid_pos) so it matches the desktop's
  * VowelChartWidget cell-for-cell.
  */
 /** Cascade: return a silhouette dict with its corner fields
  *  recomputed for the given rendered data width in pixels. Mirrors
  *  ``silhouette_for_data_width`` in
- *  ``shared/.../chart/vowels_layout.py``.
+ *  ``shared/.../chart/vowel_geometry/outline.py``.
  *
  *  The cell-extent fields (``front_anchor_at_top``,
  *  ``front_anchor_at_bottom``, ``back_anchor``,
@@ -2161,8 +2161,9 @@ function _buildVowelChart(chart) {
     // both UIs must honour.
     const titleEl = document.createElement("div");
     titleEl.className = "vowel-chart-title";
-    // ``chart.title`` comes from shared vowel_layout.VOWEL_CHART_TITLE
-    // so the desktop and web charts always agree on the heading.
+    // ``chart.title`` comes from the shared
+    // chart.vowel_geometry.model.VOWEL_CHART_TITLE so the desktop
+    // and web charts always agree on the heading.
     titleEl.textContent = chart.title;
     chartEl.appendChild(titleEl);
 
@@ -2539,7 +2540,7 @@ function _buildVowelCellStack(segs, slotNorm) {
         cell.dataset.stackDepth = String(segs.length);
     }
     // Density thresholds relayed from the shared
-    // ``vowels_layout`` tier constants (the same ladder that
+    // ``cell_boxes`` tier constants (the same ladder that
     // drives the geometry's natural-height request); the literals
     // are offline-build fallbacks only.
     const denseThreshold = CHART_STYLE.vowel_cell_dense_threshold;
@@ -2694,7 +2695,7 @@ function onSegmentClicked(seg) {
 /**
  * Render the feature panel as cards distributed across two
  * columns. The Python side decides which card lands in which
- * column (via gui.layout.distribute_feature_groups); we just
+ * column (via layout.distribute_feature_groups); we just
  * mount each card into the column it advertises.
  */
 function renderFeaturePanel(featureGroups) {
@@ -4103,8 +4104,8 @@ function wirePhoiblePicker() {
 // ----------------------------------------------------------------------
 // Editor: web-side state machine.
 //
-// This section (~main.js:1675-3000) is the second large state machine
-// in the file and mirrors the desktop's ``InventoryEditor``
+// The second large state machine in the file; mirrors the desktop's
+// ``InventoryEditor``
 // (``desktop/src/phonology_features/gui/editor/window.py``). Strategy:
 //
 //  * **Pure logic lives in Python** (``editor/grid.py``,
@@ -6426,7 +6427,7 @@ function clearAll() {
     // The analysis pane is intentionally not wiped here: the caller
     // follows up with ``activateMode`` (on a mode change) or
     // ``runAnalysis`` (same mode), and the empty-selection payload
-    // from the view-model produces the default placeholder text --
+    // from the view-model produces the default placeholder text,
     // same shape as app launch.
     state.selected_segments = [];
     state.selected_features = emptyFeatureSpec();

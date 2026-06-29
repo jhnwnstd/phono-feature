@@ -61,4 +61,4 @@ When you want the live site updated, run `.github/workflows/pages.yml`:
 
 It rebuilds `dist/`, smoke-tests the built site in headless Chromium/Firefox/WebKit (which gates the publish, so a broken build never ships), and uploads to Pages. One-time setup: repo Settings → Pages → Source: "GitHub Actions".
 
-Tradeoff: `main` may contain built-but-unpublished work between manual deploys. That is intentional — it keeps the normal commit-to-`main` habit while making each publish a deliberate click.
+Tradeoff: `main` may contain built-but-unpublished work between manual deploys. That is intentional. It keeps the normal commit-to-`main` habit while making each publish a deliberate click.

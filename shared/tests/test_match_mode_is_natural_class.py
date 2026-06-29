@@ -1,11 +1,11 @@
 """Wildcard-mode contract tests for ``FeatureEngine.is_natural_class``.
 
-The engine recently gained a ``mode=MatchMode.WILDCARD`` keyword on
-its match-bearing methods. The strict-mode behaviour is already
-pinned by the existing 949-test suite; this file pins the wildcard
-verdict on the natural-class decision question and the bundle-level
-round-trip rule that wildcard NCs must satisfy. The strict default
-is exercised here only as a comparison baseline so the
+The engine gained a ``mode=MatchMode.WILDCARD`` keyword on its
+match-bearing methods. The strict-mode behaviour is already pinned
+by the rest of the suite; this file pins the wildcard verdict on
+the natural-class decision question and the bundle-level round-trip
+rule that wildcard NCs must satisfy. The strict default is
+exercised here only as a comparison baseline so the
 "wildcard is a superset of strict" invariant is testable in one place.
 """
 

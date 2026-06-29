@@ -88,9 +88,9 @@ def bake_table() -> dict[str, object]:
 
     ft = panphon.FeatureTable()
     panphon_names = list(ft.names)
-    # The canonical feature list is the subset of panphon's names that
-    # has an app-side mapping, preserved in panphon's column order so
-    # this matches what the desktop's live provider exposes.
+    # Canonical feature list is panphon's names that have an app-side
+    # mapping, kept in panphon's column order so this matches what the
+    # desktop's live provider exposes.
     feature_names = tuple(
         PANPHON_TO_APP_FEATURE[name]
         for name in panphon_names

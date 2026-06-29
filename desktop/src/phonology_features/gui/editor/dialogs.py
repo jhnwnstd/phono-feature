@@ -159,7 +159,7 @@ class FeatureTextEdit(_AutofillTextEdit):
     starting points (Hayes, PHOIBLE) are in the preset dropdown.
 
     Trailing newline so the caret lands on a fresh line ready for
-    the user to type the next feature; ``_infer_split`` filters empty
+    the user to type the next feature; ``infer_split`` filters empty
     lines so the trailer doesn't introduce a phantom feature. The
     inferred-delimiter parser inherited from the base accepts any
     consistent delimiter (newline, comma, tab, etc.) so a pasted

@@ -835,8 +835,9 @@ dialog input[type="text"]:focus-visible {
 
 /* Spillover for consonant groups that don't fit in the segments
    pane (only triggers for large inventories like General IPA).
-   ``main.js:rebalanceSegmentSpillover`` calls the shared
-   ``plan_seg_layout`` bridge and writes the chosen column count
+   ``main.js:rebalanceSegmentSpillover`` calls the
+   ``plan_segment_layout`` bridge (which wraps the shared
+   ``plan_seg_layout``) and writes the chosen column count
    to ``--seg-spillover-cols`` on this element (1-4). Each spilled
    ``.seg-group`` carries a ``grid-column`` inline style assigning
    it to its destination column. The fallback (pre-bridge) keeps
@@ -969,7 +970,7 @@ dialog input[type="text"]:focus-visible {
 .seg-vowels {
   float: right;
   margin: 0 0 var(--space-md) var(--space-xl);
-  /* Width is set INLINE by the JS renderer at build time --
+  /* Width is set INLINE by the JS renderer at build time:
      ``main.js:_buildVowelChart`` computes
      ``max(VOWEL_CHART_W_FLOOR, natural_data_width_px + chrome)``
      from the shared geometry. The web's floor is local to
@@ -1125,7 +1126,7 @@ dialog input[type="text"]:focus-visible {
 
 /* ---------- IPA vowel trapezoid ----------
    6 height rows × 6 backness-rounding columns. Placement comes
-   from Python (gui.vowel_layout.vowel_grid_pos) so the chart
+   from Python (chart.vowels.vowel_grid_pos) so the chart
    matches the desktop's VowelChartWidget. */
 
 .vowel-chart-group {
@@ -1395,7 +1396,7 @@ dialog input[type="text"]:focus-visible {
    would stay white against the inactive pane's grey surface.
 
    The clip-path corners come from
-   ``vowel_layout.vowel_trapezoid_corners`` (baked into
+   ``rounded_silhouette_polygon_points`` (baked into
    ``layout.css`` by ``build.py``) so the outline exactly hugs
    the back-anchored cell positions: the right edge sits on the
    back-pair's outer extent (back vowels are flush against it)
@@ -1461,10 +1462,10 @@ dialog input[type="text"]:focus-visible {
   /* Rounded trapezoid silhouette: ``--vowel-trapezoid-rounded-points``
      bakes ~24 points (5 per corner + 4 original corners) along a
      quadratic Bezier so every corner reads as gently rounded
-     instead of sharp. Drops the previous 4-point polygon. The
-     points come from ``rounded_silhouette_polygon_points`` in
-     shared/vowels_layout.py so desktop's ``QPainterPath`` and
-     the web's clip-path stay in lockstep. */
+     instead of sharp. The points come from
+     ``rounded_silhouette_polygon_points`` in
+     chart/vowel_geometry/outline.py so desktop's ``QPainterPath``
+     and the web's clip-path stay in lockstep. */
   clip-path: polygon(var(--vowel-trapezoid-rounded-points));
 }
 .vowel-chart-data[data-shape="triangle"]::before,
@@ -1558,7 +1559,7 @@ dialog input[type="text"]:focus-visible {
    zeroing it here would fork the vertical layout constant and make
    web stacks render shorter than desktop. */
 .vowel-chart-cell-stack[data-cell-density="dense"] > .seg-btn {
-  /* Relayed from vowels_layout.DENSITY_TIER_DENSE_BTN_H via
+  /* Relayed from cell_boxes.DENSITY_TIER_DENSE_BTN_H via
      layout.css; the calc fallback covers a stale build missing
      the var. */
   height: var(--vowel-cell-dense-h, calc(var(--seg-btn-h) - 4px));
@@ -1567,7 +1568,7 @@ dialog input[type="text"]:focus-visible {
    is 12 in one cell on !XU/UPSID). Per-button height tightens
    further; width and the shared gap are unchanged. */
 .vowel-chart-cell-stack[data-cell-density="ultra"] > .seg-btn {
-  /* Relayed from vowels_layout.DENSITY_TIER_ULTRA_BTN_H. */
+  /* Relayed from cell_boxes.DENSITY_TIER_ULTRA_BTN_H. */
   height: var(--vowel-cell-ultra-h, calc(var(--seg-btn-h) - 8px));
   border-radius: var(--radius-md);
 }
@@ -1632,9 +1633,9 @@ dialog input[type="text"]:focus-visible {
 }
 
 /* ---------- feature panel ----------
-   Two columns of named cards. JS decides which card goes in which
-   column (gui.layout.distribute_feature_groups); we just space
-   them. Narrow viewports stack vertically. */
+   Two columns of named cards. The shared
+   layout.distribute_feature_groups decides which card goes in which
+   column; we just space them. Narrow viewports stack vertically. */
 
 #feat-list {
   display: flex;
@@ -1870,11 +1871,10 @@ dialog input[type="text"]:focus-visible {
 .panel[data-active="true"] .feat-badge { display: none; }
 
 /* ---------- analysis pane ----------
-   Fixed at 220 px (min == max) so a long multi-segment analysis
-   can't eat enough vertical space to crowd the segments pane.
-   Inside, .analysis-content's overflow:auto handles content
-   that exceeds the visible area. The expand button overrides
-   min-height to 55vh; min-height wins over max-height per CSS. */
+   Fixed height (min == max, both --min-analysis-h) so a long
+   multi-segment analysis can't eat enough vertical space to crowd
+   the segments pane. Inside, .analysis-content's overflow:auto
+   handles content that exceeds the visible area. */
 
 .analysis {
   background: var(--analysis-bg);
@@ -2105,9 +2105,8 @@ dialog input[type="text"]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* The bug-report button sits in the statusbar's centre slot
-   (``justify-content: space-between`` with three items places
-   the middle one in the centre). Styled as a chrome-less icon
+/* The bug-report button sits in the statusbar's centre grid track
+   (``justify-self: center`` above). Styled as a chrome-less icon
    to blend into the statusbar; hover dims the surrounding text. */
 .statusbar-bug-btn {
   background: transparent;
@@ -2406,8 +2405,7 @@ progress {
   outline-offset: -1px;
 }
 /* Cell value styling. Same semantics as the desktop's
-   _cell_brushes: + on green, minus on red, 0 on a dim neutral.
-   Read-only this iteration; the click-to-cycle wiring lands next. */
+   _cell_brushes: + on green, minus on red, 0 on a dim neutral. */
 .editor-grid td[data-value="+"] {
   background: var(--plus-bg); color: var(--plus); font-weight: bold;
 }

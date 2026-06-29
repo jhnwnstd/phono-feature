@@ -4,25 +4,25 @@
 Runnable locally (``python web/scripts/build.py``) and from the
 Pages workflow. Output is what GitHub Pages publishes verbatim.
 
-Pipeline:
+Pipeline (see ``main`` for the exact call order):
 
-1. ``copy_shared_sources``       phonology_shared/* -> dist/shared/
-2. ``copy_static_assets``        web/{index.html,style.css,main.js}
-                                  + web/src/phonology_web/api.py
-                                  -> dist/
-3. ``generate_theme_css``        palette.py -> dist/theme.css
-4. ``generate_layout_css``       layout.py -> dist/layout.css
-5. ``copy_inventories``          desktop/inventories/*.json -> dist/
-                                  inventories/ + dist/inventories.json
-6. ``write_python_bundle``       dist/shared/* + dist/api.py
-                                  -> dist/python_bundle.zip
-                                  (removes the loose copies)
-7. ``write_bootstrap``           default inventory's render summary
-                                  -> dist/bootstrap.json
-8. ``hash_assets``               content-hash filenames + asset
-                                  manifest + index.html rewrite
-9. ``write_service_worker``      sw.js template -> dist/sw.js
-10. ``write_pages_no_jekyll``    dist/.nojekyll
+1. ``bake_panphon_table`` / ``bake_phoible_tables`` refresh the
+   generated JSON snapshots in shared/ before the mirror step.
+2. ``copy_shared_sources``    phonology_shared/* -> dist/shared/
+3. ``copy_static_assets``     index.html / style.css / main.js +
+                              api.py -> dist/
+4. ``generate_theme_css``     palette.py -> dist/theme.css
+5. ``generate_layout_css``    layout.py -> dist/layout.css
+6. ``copy_inventories``       desktop/inventories/*.json -> dist/
+7. ``write_python_bundle``    dist/shared/* + api.py ->
+                              python_bundle.zip (loose copies removed)
+8. ``copy_phoible_data_asset`` / ``copy_phoible_index_asset`` /
+   ``copy_ipa_font_asset`` ship the lazy-loaded static assets.
+9. ``write_bootstrap``        default render summary -> bootstrap.json
+10. ``hash_assets``           content-hash filenames + manifest +
+                              index.html rewrite
+11. ``write_service_worker``  sw.js template -> dist/sw.js
+12. ``write_pages_no_jekyll`` dist/.nojekyll
 
 The full ``phonology_shared`` package (data / theory / chart /
 presentation / editor) is mirrored under ``dist/shared/`` and
@@ -618,7 +618,7 @@ def _vowel_corner_lines(shape: str) -> list[str]:
     same formula the desktop and web renderers apply at runtime, so
     the canonical bake stays aligned with the interactive renders.
 
-    Also emits ``--vowel-<shape>-rounded-points`` for the new
+    Also emits ``--vowel-<shape>-rounded-points`` for the
     "soft modern" silhouette outline: a polygon points string
     with each corner replaced by ``segments_per_corner+1`` points
     interpolated along a quadratic Bezier (see
@@ -655,7 +655,7 @@ def _vowel_corner_lines(shape: str) -> list[str]:
 
 def _vowel_silhouette(shape: str) -> dict[str, float | int]:
     """Canonical silhouette field values for the given shape. Reads
-    :py:func:`vowel_layout.vowel_silhouette` so the bake's numbers
+    :py:func:`vowel_geometry.vowel_silhouette` so the bake's numbers
     match what ``build_vowel_chart_geometry`` produces for an
     inventory-free chart."""
     from phonology_shared.chart.vowel_geometry import vowel_silhouette
@@ -1117,7 +1117,7 @@ def copy_phoible_index_asset() -> None:
 
 
 def copy_ipa_font_asset() -> None:
-    """Copy the subset Charis SIL Compact woff2 + its OFL license.
+    """Copy the subset Charis SIL Regular woff2 + its OFL license.
 
     The font lives at ``web/assets/charis-ipa.woff2`` (committed,
     refreshed by running ``web/scripts/subset_ipa_font.py`` against
@@ -1376,8 +1376,8 @@ def hash_assets() -> None:
     )
 
     # Bake the setup-dialog title + name placeholder from
-    # ``shared/inventory_setup.py`` so the desktop dialog and the
-    # web modal cannot drift on these strings.
+    # ``phonology_shared/editor/setup.py`` so the desktop dialog and
+    # the web modal cannot drift on these strings.
     inv_setup = _load_inventory_setup_module()
 
     def _bake(label: str, pattern: str, replacement: str) -> None:

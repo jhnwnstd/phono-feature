@@ -3,8 +3,8 @@
 The placement code looks up canonical lowercase feature names
 (``high``, ``low``, ``front``, etc.) inside each feature bundle.
 Inventory JSON typically uses PascalCase keys (``High``, ``Low``).
-``gui.vowel_layout`` is case-insensitive at its entry, so callers
-can pass either form. These tests lock that contract in:
+``phonology_shared.chart.vowels`` is case-insensitive at its entry,
+so callers can pass either form. These tests lock that contract in:
 
 * PascalCase and lowercase inputs MUST produce identical placements
   for every vowel of every bundled inventory.

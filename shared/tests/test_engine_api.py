@@ -277,8 +277,8 @@ def test_feature_query_match_is_always_natural_class(
     every ``Q`` that returns at least one segment.
 
     Stress: every single-feature query (``+`` and ``-`` per
-    feature), plus 200 random 2--5-feature queries, must satisfy
-    the invariant. Catches any future drift between
+    feature), plus 200 random queries of 2 to 5 features, must
+    satisfy the invariant. Catches any future drift between
     :py:meth:`find_segments` and
     :py:meth:`is_natural_class` (e.g. if one started using
     different matching semantics than the other).
@@ -358,10 +358,9 @@ def test_complete_to_minimal_natural_class_validity_invariant(
 ) -> None:
     """**Validity invariant**: for any non-NC selection, every
     ``additions[i]`` set must, when added to ``S``, form a strict
-    natural class. This pins the bug the old
-    ``suggest_natural_class_extension`` had: a budget-exhausted
-    fallback returned a list of candidates that did NOT actually
-    close the class.
+    natural class. This guards against a budget-exhausted fallback
+    returning a list of candidates that does NOT actually close the
+    class.
     """
     import random
 

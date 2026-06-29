@@ -103,8 +103,8 @@ def close_editor_silent(editor) -> None:
     Forcing ``_dirty=False`` is the cheapest fix: it asserts "no
     unsaved changes worth prompting about" and lets ``closeEvent``
     fall through cleanly. ``_save_in_flight`` is also forced low
-    because any pending save would block via ``_wait_for_save`` --
-    tests that care about that path should call ``_wait_for_save``
+    because any pending save would block via ``_wait_for_save``.
+    Tests that care about that path should call ``_wait_for_save``
     explicitly rather than relying on close-time bookkeeping.
     """
     editor._dirty = False

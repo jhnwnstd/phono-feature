@@ -1193,7 +1193,8 @@ def test_engine_seg_value_tuples_lazy() -> None:
 
 
 # ---------------------------------------------------------------------------
-# GeometryAnalyzer: state must not leak across analyze() calls
+# Bundle search correctness, brush caching, and GeometryAnalyzer
+# per-run state isolation
 # ---------------------------------------------------------------------------
 def test_find_all_minimal_bundles_bitmask_matches_naive() -> None:
     """The bitmask hitting-set search must produce bundles that

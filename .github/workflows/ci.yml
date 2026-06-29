@@ -117,7 +117,7 @@ jobs:
         run: python -m pip install --quiet -e ".[dev,panphon]"
 
       - name: Run isort + black + flake8 + mypy + node --check in the launcher's venv
-        # Lint runs ONCE on Linux -- the rules are platform-agnostic and
+        # Lint runs ONCE on Linux since the rules are platform-agnostic;
         # running on every matrix entry would triple the CI minutes for
         # zero coverage gain. The four-tool chain matches the user's
         # local invocation (``isort . --profile black; black -l 79 .;

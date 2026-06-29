@@ -139,7 +139,7 @@ def test_clear_buttons_are_symmetric(window):
 
 
 def test_silent_clear_in_inventory_reload_resets_both_sides(window):
-    """The internal silent=True path used by _apply_mode_to_new_widgets must
+    """The internal silent=True path used by apply_to_new_widgets must
     fully reset both data structures and visual state regardless of mode.
     This is what runs when you switch inventories."""
     # Populate state first

@@ -414,7 +414,7 @@ def test_b7_chao_tone_letter_lands_in_tones_for_every_feature_shape(
     """Parametrised tone-phoneme parity: a synthetic Chao tone
     letter (``HighTone=+``, no consonant/vowel anchors) lands in
     the ``Tones`` group regardless of whether the surrounding
-    feature inventory is Hayes-shaped (no HighTone column - the
+    feature inventory is Hayes-shaped (no HighTone column, so the
     classifier sees zero positive features and the segment is
     correctly excluded from every group), PHOIBLE-shaped, or
     PanPhon-shaped. Pins feature-set generality on the

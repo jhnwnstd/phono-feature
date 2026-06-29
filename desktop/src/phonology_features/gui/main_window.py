@@ -1334,7 +1334,7 @@ class MainWindow(QMainWindow):
         menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         for label in self.engine.grouped_segments:
             act = menu.addAction(label)
-            if act is None:  # pragma: no cover - Qt always returns one
+            if act is None:  # pragma: no cover (Qt always returns one)
                 continue
             act.setCheckable(True)
             act.setChecked(label not in self._hidden_segment_classes)
@@ -1932,7 +1932,7 @@ class MainWindow(QMainWindow):
         # surface are present. The rebuild clears the live FEAT query,
         # so capture it first and re-apply it onto the rebuilt rows
         # (dropping features the new mode no longer surfaces) through
-        # the same restore loop a SEG↔FEAT switch uses - mirroring the
+        # the same restore loop a SEG↔FEAT switch uses, mirroring the
         # web, which keeps the query across a strict↔wildcard toggle.
         saved_query = dict(self._selected_features)
         self._populate_features()

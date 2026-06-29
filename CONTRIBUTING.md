@@ -12,12 +12,12 @@ front-ends over the same shared package. The pattern:
 
 1. Pure-Python modules live in `shared/src/phonology_shared/`,
    split by functional role into five subpackages:
-   * `data/` -- inventory schema, parsing, hard caps.
-   * `theory/` -- phonological analysis engine + geometry.
-   * `chart/` -- IPA chart placement (consonants, vowels).
-   * `presentation/` -- palette, layout, view models, mode logic,
+   * `data/`: inventory schema, parsing, hard caps.
+   * `theory/`: phonological analysis engine + geometry.
+   * `chart/`: IPA chart placement (consonants, vowels).
+   * `presentation/`: palette, layout, view models, mode logic,
      HTML analysis renderer.
-   * `editor/` -- inventory-editor grid + setup helpers.
+   * `editor/`: inventory-editor grid + setup helpers.
 
    No subpackage has Qt or DOM imports at module scope.
 2. `web/scripts/build.py:copy_shared_sources` mirrors the whole
@@ -153,12 +153,12 @@ dependency-touching change lands.
 
 `tools/` holds developer tooling that isn't part of the runtime:
 
-* `install.sh` -- shared launcher bootstrap (sourced by RUN-Linux
+* `install.sh`: shared launcher bootstrap (sourced by RUN-Linux
   / RUN-Mac).
-* `install.bat` -- Windows equivalent (called by RUN-Windows.bat).
-* `capture_screens.py` -- drives the offscreen Qt build through
+* `install.bat`: Windows equivalent (called by RUN-Windows.bat).
+* `capture_screens.py`: drives the offscreen Qt build through
   the scripted demo states and saves PNGs to `.github/screenshots/`.
-* `profile_app.py` -- cold-start cProfile of the full session,
+* `profile_app.py`: cold-start cProfile of the full session,
   walking through every bundled inventory and every mode.
 
 `desktop/inventories/_schema.json` is the JSON Schema for

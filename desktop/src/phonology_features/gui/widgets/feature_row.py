@@ -145,8 +145,8 @@ class FeatureRow(QWidget):
     """
 
     value_changed = pyqtSignal(str, str)
-    # ``palette.theme_version`` -> styles dict (BADGE_*, ROW_*,
-    # NAME_*). Shared invalidation contract with SegmentButton via
+    # ``(theme, mode)`` -> styles dict (BADGE_*, ROW_*, NAME_*).
+    # Shared invalidation contract with SegmentButton via
     # :py:func:`_themed_style_cache.styles_for_active_theme`.
     _styles_cache: ClassVar[dict[tuple[str, str], dict[str, str]]] = {}
     # Instance attrs populated by ``_build_styles`` via setattr from
@@ -298,9 +298,9 @@ class FeatureRow(QWidget):
             "NAME_ACTIVE": f"color: {C['text']};",
             "NAME_INACTIVE": f"color: {C['text_dim']};",
             # Per-polarity +/- button QSS. Identical across every
-            # FeatureRow in the pool, so caching once per palette
-            # version saves the f-string rebuild + attribute lookups
-            # on every row's apply_theme. The setStyleSheet polish
+            # FeatureRow in the pool, so caching once per
+            # (theme, mode) saves the f-string rebuild + attribute
+            # lookups on every row's apply_theme. The setStyleSheet polish
             # cost itself is unavoidable on a theme change, but the
             # cache cuts the per-call CPU above the Qt boundary.
             "BTN_PLUS": _feature_row_btn_qss(is_plus=True),

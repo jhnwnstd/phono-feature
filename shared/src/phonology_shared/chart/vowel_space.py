@@ -151,6 +151,8 @@ _PAIR_OFFSET_HALF: float = (
 )
 
 
+# Reverse of ROW_LABELS so a row label ("Close", "Open-mid", ...) maps
+# back to its row index without an O(n) scan on every placement.
 _ROW_LABEL_TO_INDEX: dict[str, int] = {
     label: i for i, label in enumerate(ROW_LABELS)
 }

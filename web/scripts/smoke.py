@@ -1,28 +1,26 @@
 #!/usr/bin/env python3
 """End-to-end smoke test for the built web app.
 
-Serves ``web/dist/`` from a local HTTP server, opens it across
-Chromium / Firefox / WebKit via Playwright (each one skipped
-cleanly if its driver binary is not installed), and asserts:
+Serves ``web/dist/`` and opens it across Chromium, Firefox, and
+WebKit via Playwright (each skipped if its driver binary is
+absent), then asserts:
 
 * Pyodide boots and the bridge attaches.
 * The default inventory renders segment buttons and feature rows.
 * Clicking a segment populates the analysis pane.
-* No console / page errors during boot.
+* No console or page errors during boot.
 
-After the baseline check at 1280x720 the same page is resized to
-two extra viewports (360x640 and 3440x1440) where additional
-assertions run:
+After the 1280x720 baseline the same page is resized to two extra
+viewports (360x640 and 3440x1440) for follow-up assertions:
 
-* The narrow viewport must keep the statusbar brand visible
-  even when the message text is artificially long, and the
-  single-column collapse must engage.
-* The ultrawide viewport must keep ``main.grid`` capped under
+* The narrow viewport keeps the statusbar brand visible even with
+  an artificially long message, and the single-column collapse
+  engages.
+* The ultrawide viewport keeps ``main.grid`` capped under
   ``--content-max-w`` so the page doesn't fan out edge-to-edge.
 
-Designed for CI: the build workflow produces ``web/dist/``, this
-smokes it, regressions fail the deploy. Exit 0 on success, 1 on
-any failure.
+Built for CI: build.py produces ``web/dist/``, this smokes it,
+regressions fail the deploy. Exit 0 on success, 1 on any failure.
 """
 
 from __future__ import annotations
@@ -37,9 +35,8 @@ DIST = Path(__file__).resolve().parents[1] / "dist"
 PORT = 8920
 BOOT_TIMEOUT_MS = 120_000
 
-# Browsers to sweep. Each entry's first value is the human label
-# used in log lines; the second is the attribute name on the
-# Playwright ``p`` object that returns the BrowserType.
+# Browsers to sweep. First value is the log label; second is the
+# attribute on the Playwright ``p`` object returning the BrowserType.
 BROWSERS = (
     ("chromium", "chromium"),
     ("firefox", "firefox"),
@@ -47,8 +44,8 @@ BROWSERS = (
 )
 
 # Extra viewports beyond the 1280x720 baseline. Each tuple is
-# (label, width, height, check_callable_name) where the callable
-# is one of the run_* functions below.
+# (label, width, height, check_callable_name); the callable is one
+# of the run_* functions below, looked up via globals().
 EXTRA_VIEWPORTS = (
     ("narrow-mobile", 360, 640, "run_narrow_checks"),
     ("ultrawide", 3440, 1440, "run_ultrawide_checks"),
@@ -101,10 +98,9 @@ def main() -> int:
             try:
                 exe = browser_type.executable_path
             except AttributeError:
-                # Older Playwright versions don't expose this property
-                # on the BrowserType class; treat as "driver missing"
-                # rather than swallowing every exception class (which
-                # masked real Playwright import errors).
+                # Older Playwright lacks this property; treat as
+                # "driver missing". Catching AttributeError only, not
+                # every class, so real Playwright errors still surface.
                 exe = ""
             if not exe or not Path(exe).exists():
                 print(f"SKIP: {label}: driver not installed at {exe!r}")
@@ -131,12 +127,11 @@ def main() -> int:
 def run_for_browser(browser_type, label: str) -> int:
     """Boot the app in this browser at 1280x720, run the baseline
     smoke, then resize through the extra viewports and run the
-    follow-up assertions. One page session per browser keeps the
-    Pyodide boot cost amortised.
+    follow-up assertions. One page session per browser amortises the
+    Pyodide boot cost.
     """
-    # Local import so the module loads cleanly even without
-    # Playwright installed; main() reports the missing dep before
-    # any run_for_browser call.
+    # Local import so the module loads without Playwright installed;
+    # main() reports the missing dep before any run_for_browser call.
     from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
     browser = browser_type.launch(headless=True)
@@ -163,9 +158,9 @@ def run_for_browser(browser_type, label: str) -> int:
             timeout=BOOT_TIMEOUT_MS,
         )
     except PlaywrightTimeoutError as e:
-        # Only catch the boot-timeout case; KeyboardInterrupt and
-        # any genuine Playwright bug should propagate so the smoke
-        # run can be killed cleanly or the bug surfaces in CI.
+        # Catch only the boot timeout; KeyboardInterrupt and genuine
+        # Playwright bugs propagate so the run can be killed cleanly
+        # or the bug surfaces in CI.
         print(f"  FAIL: bridge never booted: {e}", file=sys.stderr)
         _dump_errors(console_errors, page_errors)
         browser.close()
@@ -195,17 +190,17 @@ def run_for_browser(browser_type, label: str) -> int:
             browser.close()
             return rc
 
-    # Editor "New" transaction rollback (resets its own viewport). Runs
-    # last so its inventory swap + rollback cannot disturb the layout
-    # assertions above.
+    # Editor "New" transaction rollback (resets its own viewport).
+    # Runs after the layout checks so its inventory swap + rollback
+    # cannot disturb them.
     rc = run_editor_rollback_check(page, label)
     if rc != 0:
         browser.close()
         return rc
 
-    # Editor "New" unsaved-work prompt (data-loss guard). Runs after the
-    # rollback check, which leaves the original inventory restored and
-    # the editor closed.
+    # Editor "New" unsaved-work prompt (data-loss guard). Runs after
+    # the rollback check, which leaves the original inventory restored
+    # and the editor closed.
     rc = run_editor_unsaved_guard_check(page, label)
     if rc != 0:
         browser.close()
@@ -226,8 +221,8 @@ def run_for_browser(browser_type, label: str) -> int:
 
 
 def run_baseline_checks(page, label: str) -> int:
-    """Original 1280x720 happy-path assertions: segments render,
-    features render, clicking a segment populates the analysis pane.
+    """1280x720 happy-path assertions: segments render, features
+    render, clicking a segment populates the analysis pane.
     """
     seg_count = page.evaluate(
         "() => document.querySelectorAll('.seg-btn').length",
@@ -246,13 +241,11 @@ def run_baseline_checks(page, label: str) -> int:
         " return null; }",
     )
     print(f"  click seg /{clicked}/")
-    # Firefox is markedly slower than chromium/webkit at the first
-    # ``analyze_segments`` call (cold Pyodide path through the
-    # Python view-models stack). 10 s was tight under the prior
-    # smoke; the cold path comfortably finishes by 30 s on every
-    # browser, so the wider window only matters when something is
-    # actually broken (in which case 30 s still surfaces the
-    # failure quickly enough).
+    # Firefox is much slower than chromium/webkit on the first
+    # ``analyze_segments`` call (cold Pyodide path through the Python
+    # view-models stack). 10 s was tight; the cold path finishes well
+    # under 30 s on every browser, so the wider window only matters
+    # when something is broken.
     page.wait_for_function(
         "() => {"
         " const sel = document.getElementById('analysis-selection');"
@@ -294,8 +287,7 @@ def run_baseline_checks(page, label: str) -> int:
 # Submit the editor's "New inventory" setup dialog with a given name,
 # filling the segment + feature fields from their placeholder defaults
 # (a smaller, valid inventory distinct from the loaded one). Shared by
-# the rollback + unsaved-guard checks so the setup-submit idiom has one
-# home.
+# the rollback + unsaved-guard checks.
 _SETUP_SUBMIT_JS = (
     "(name) => {"
     " const s = document.querySelector('#setup-segments-input');"
@@ -426,11 +418,11 @@ def _assert_no_overlap_js(
 ) -> int:
     """Pairwise non-overlap assertion runnable from any smoke check.
 
-    Returns 0 if no element matching ``selector_a`` intersects any
-    element matching ``selector_b`` (1-px tolerance to absorb sub-
-    pixel boundary touches), 1 otherwise with details to stderr.
-    Skips pairs where one side is empty; the panel may simply not
-    contain that selector at the current viewport.
+    Returns 0 if no ``selector_a`` element intersects any
+    ``selector_b`` element (1-px tolerance for sub-pixel boundary
+    touches), else 1 with details to stderr. Skips pairs where one
+    side is empty: the panel may not contain that selector at the
+    current viewport.
     """
     overlaps = page.evaluate(
         "(args) => {"
@@ -478,16 +470,15 @@ def run_pane_toggle_no_overlap_checks(page, label: str) -> int:
     """Activate the Features pane and back; assert the toggle does
     not INTRODUCE new vowel-chart overlap that wasn't there before.
 
-    Phase A wires ``relayoutSegments`` into the pane-activation
-    path so any future CSS rule that changes pane width on toggle
-    will retrigger the per-group column computation. The current
-    CSS only changes ``data-active`` color, so the pane width is
-    invariant under toggle; this check captures that invariant by
-    diffing the pre- and post-toggle overlap sets.
+    ``relayoutSegments`` is wired into the pane-activation path so any
+    future CSS rule that changes pane width on toggle retriggers the
+    per-group column computation. Today the CSS only changes
+    ``data-active`` color, so pane width is invariant under toggle;
+    this check pins that by diffing the pre- and post-toggle overlap
+    sets.
 
-    The check is a delta, not an absolute, so pre-existing
-    spillover-vs-float overlap (a separate bug) doesn't shadow
-    Phase A's invariant.
+    A delta, not an absolute, so pre-existing spillover-vs-float
+    overlap (a separate bug) doesn't shadow the invariant.
     """
 
     overlap_set_js = (
@@ -547,16 +538,14 @@ def run_pane_toggle_no_overlap_checks(page, label: str) -> int:
 
 def run_critical_pair_no_overlap_checks(page, label: str) -> int:
     """Structural pairwise non-overlap invariants for the document
-    skeleton. Pins the principle that the toolbar, main grid, and
-    statusbar are stacked siblings: each must occupy a distinct
-    vertical band. A future ``position: absolute`` or
-    ``z-index``-shuffle that visually overlays them gets caught
-    here instead of as a hand-eye-test regression.
+    skeleton. The toolbar, main grid, and statusbar are stacked
+    siblings: each must occupy a distinct vertical band. A future
+    ``position: absolute`` or ``z-index`` shuffle that overlays them
+    is caught here instead of by hand-eye test.
 
-    The seg/feat/analysis trio is handled by the CSS grid template
-    columns + rows; this check pins that they don't drift into each
-    other's space (e.g. via a future ``transform`` or negative
-    margin).
+    The seg/feat/analysis trio is placed by the CSS grid template;
+    this pins that they don't drift into each other's space (e.g. via
+    a future ``transform`` or negative margin).
     """
     page.wait_for_timeout(60)
     for sel_a, sel_b, pair_label in [
@@ -574,14 +563,13 @@ def run_critical_pair_no_overlap_checks(page, label: str) -> int:
 
 
 def run_narrow_checks(page, label: str) -> int:
-    """At a 360x640 viewport: the single-column collapse should
-    engage, the statusbar should clip a long message via ellipsis
-    instead of pushing the brand out of view, and dialogs should
-    fit inside the viewport.
+    """At a 360x640 viewport: the single-column collapse engages,
+    the statusbar clips a long message instead of pushing the brand
+    out of view, and elements fit inside the viewport.
     """
     # Single-column collapse: grid-template-columns is "1fr" below
-    # the COLLAPSE_W threshold. We check for the resolved single-
-    # track form rather than parsing the raw value.
+    # the COLLAPSE_W threshold. Check the resolved single-track form
+    # rather than parsing the raw value.
     grid_cols = page.evaluate(
         "() => getComputedStyle(document.querySelector('main.grid'))"
         ".gridTemplateColumns"
@@ -640,9 +628,9 @@ def run_narrow_checks(page, label: str) -> int:
         )
         return 1
 
-    # No element should overflow the viewport on the right side.
-    # ``overflow: hidden`` on body would mask, but the audit found
-    # dialogs in particular as the risk; check toolbar too.
+    # No skeleton element should overflow the viewport on the right.
+    # ``overflow: hidden`` on body would mask a real overflow, so
+    # measure the toolbar, grid, and statusbar directly.
     overflow = page.evaluate(
         "() => {"
         " const w = window.innerWidth;"
@@ -669,8 +657,8 @@ def run_narrow_checks(page, label: str) -> int:
 
 
 def run_ultrawide_checks(page, label: str) -> int:
-    """At 3440x1440: ``main.grid`` should be capped by
-    ``--content-max-w`` (composed with ``calc(100vw * RATIO)``) and
+    """At 3440x1440: ``main.grid`` is capped by ``--content-max-w``
+    (a flat ``CONTENT_MAX_W_ABS`` px relayed from layout.py) and
     centred via ``margin-inline: auto``. No element should overflow.
     """
     grid_w = page.evaluate(
@@ -685,9 +673,9 @@ def run_ultrawide_checks(page, label: str) -> int:
             file=sys.stderr,
         )
         return 1
-    # The cap is the smaller of CONTENT_MAX_W_ABS (2400) and
-    # 0.75 * viewport (= 2580). On 3440 wide the absolute cap
-    # should win; allow a 2-px tolerance for sub-pixel rendering.
+    # The cap is a flat CONTENT_MAX_W_ABS (2400 px), so at 3440 wide
+    # the grid must sit at 2400. Allow a 2-px tolerance for sub-pixel
+    # rendering.
     if grid_w > 2400 + 2:
         print(
             f"  FAIL: grid exceeds 2400 cap at ultrawide: {grid_w}px",

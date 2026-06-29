@@ -9,7 +9,7 @@ the user needs to edit by hand.
 
 This module is pure Python with stdlib-only imports so it stays
 Pyodide-safe. Concrete providers (``PanPhonFeatureProvider`` on
-desktop, ``LookupTableProvider`` and ``PhoibleProvider`` shared
+desktop, ``LookupFeatureProvider`` and ``PhoibleProvider`` shared
 between both UIs) live in client-specific packages because they
 may depend on optional dependencies the shared layer cannot assume.
 """

@@ -128,7 +128,7 @@ from phonology_shared.theory.feature_engine import MatchMode
 _engine: FeatureEngine | None = None
 _inventory_name: str = ""
 # Active matching mode for natural-class queries. Defaults to
-# STRICT — the wildcard ("Allow underspecified") UI toggle is opt-
+# STRICT; the wildcard ("Allow underspecified") UI toggle is opt-
 # in. JS persists the choice through ``localStorage`` and replays
 # it via :py:func:`set_match_mode` after a reload.
 _match_mode: MatchMode = MatchMode.STRICT
@@ -240,12 +240,10 @@ def load_inventory_json_status_only(
 
 
 def _invalidate_analysis_caches() -> None:
-    """Clear the LRU caches for ``analyze_segments`` /
-    ``analyze_features``.
+    """Clear the analyze_* LRU caches.
 
-    Required after any change that would invalidate a cached
-    result: a new inventory (engine state changed) or a theme swap
-    (the cached HTML embeds chip colors from the previous palette).
+    Required after a new inventory (engine state changed) or a theme
+    swap (cached HTML embeds chip colors from the old palette).
     """
     _analyze_segments_cached.cache_clear()
     _analyze_features_cached.cache_clear()
@@ -254,8 +252,7 @@ def _invalidate_analysis_caches() -> None:
 def _set_engine(engine: FeatureEngine, name: str) -> FeatureEngine:
     """Swap the active engine. The only path that mutates ``_engine``,
     so the inventory name and the analysis caches can never lag behind
-    it: every load route goes through here, and forgetting to refresh
-    the name or clear the caches stops being possible by construction.
+    it: every load route goes through here.
 
     Returns the engine so callers build their summary from the local
     instead of re-reading the module global, which static analysis
@@ -644,7 +641,7 @@ def create_new_inventory(
     ``feature_source`` + ``feature_source_version`` for provenance
     so a downstream save round-trips the attribution. This mirrors
     the desktop editor's
-    :py:meth:`InventoryEditor._open_setup_dialog` behaviour
+    :py:meth:`InventoryEditor.show_setup_dialog` behaviour
     one-for-one.
 
     Raises :py:class:`ValidationError` with the full tuple of
@@ -988,11 +985,10 @@ def partition_segment_spillover(
     Same function the desktop calls during ``set_groups`` so a
     threshold change lands on both UIs at once.
 
-    Kept for backward compatibility with the pre-bridge fallback
-    (``_fallbackPartitionSpillover`` in main.js) and the hash-pin
-    test. Live JS calls should prefer :py:func:`plan_segment_layout`
-    so the spillover region uses the same 1-4 column policy the
-    desktop's ``plan_seg_layout`` returns.
+    Kept only for the hash-pin test (the pre-bridge JS fallback that
+    used to call it is gone). Live JS calls prefer
+    :py:func:`plan_segment_layout` so the spillover region uses the
+    same 1-4 column policy the desktop's ``plan_seg_layout`` returns.
     """
     return partition_groups_for_spillover(heights, available, n_spillover_cols)
 
@@ -1070,7 +1066,7 @@ def best_segment_n_cols_for_groups(
     count; gets back the best per-group column count to use for its
     ``grid-template-columns`` rule. Same algorithm desktop runs in
     :py:meth:`SegmentGridWidget._do_relayout`, so a group with 13
-    segments lays out as 2+11 or 3+5+5 — never 12+1 — on either UI.
+    segments lays out as 2+11 or 3+5+5 (never 12+1) on either UI.
     """
     return [best_segment_n_cols(n, max_cols) for n in group_sizes]
 
@@ -1106,9 +1102,8 @@ def _analyze_segments_cached(
     mode_str: str,
 ) -> SegmentSelectionSummary:
     """SEG analysis result. ``mode_str`` is the ``MatchMode`` value
-    as a wire string so it composes with ``lru_cache``'s hashability
-    requirement (the enum already is hashable; using the string keeps
-    the cache key human-readable in profiles)."""
+    as a wire string so the cache key stays human-readable in
+    profiles."""
     engine = _require_engine()
     mode = MatchMode(mode_str)
     return summarize_segment_selection(engine, list(segs_tuple), mode=mode)
@@ -1164,15 +1159,10 @@ def _analyze_features_cached(
 @_translate_engine_errors
 def set_match_mode(mode_str: str) -> str:
     """Toggle the active matching mode. Accepts the wire strings
-    ``"strict"`` and ``"wildcard"``; rejects anything else.
-    Clears the analysis caches because cached results are mode-
-    keyed (the key string is part of the lru_cache key, so the
-    new mode will compute fresh — clearing is belt-and-suspenders
-    for the rare case where the cache is full of stale strict
-    entries we don't want to keep alive).
-
-    Returns the canonical wire string of the new active mode so
-    JS can confirm the round-trip.
+    ``"strict"`` and ``"wildcard"``; rejects anything else. Clears
+    the analysis caches (results are mode-keyed) and returns the
+    canonical wire string of the new active mode so JS can confirm
+    the round-trip.
     """
     global _match_mode
     try:

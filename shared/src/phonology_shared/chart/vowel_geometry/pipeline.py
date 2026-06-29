@@ -483,7 +483,7 @@ def _fit_outline_and_size(
     """
     silhouette = _grow_outline_extent(cells, silhouette)
     natural_w, natural_h = _natural_data_area_size(tuple(cells))
-    sil_y_span = _HEIGHT_Y["Open"] - _HEIGHT_Y["Close"]  # 0.84
+    sil_y_span = _HEIGHT_Y["Open"] - _HEIGHT_Y["Close"]  # 0.90
     if sil_y_span > 0:
         current_sil_h = sil_y_span * natural_h
         if current_sil_h > 0:

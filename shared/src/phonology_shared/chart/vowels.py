@@ -469,11 +469,6 @@ def _feature_state(feats: Mapping[str, str], key: str) -> FeatureState:
     return FeatureState.ZERO
 
 
-#: Reverse of ``ROW_LABELS`` so axis evidence carrying a row label
-#: ("Close", "Open-mid", ...) can be turned back into a row index
-#: without an O(n) scan on every placement.
-
-
 def _normalize_feat_keys(feats: Mapping[str, str]) -> dict[str, str]:
     """Fold every key in ``feats`` to the engine-canonical feature
     name so downstream lookups by canonical name (``high``, ``low``,
@@ -625,7 +620,7 @@ def _height_split_value(
     rtr = _nonzero(feats.get("rtr"))
     # Asymmetric RTR -> ATR-equivalent inversion. ``+rtr``
     # (retracted tongue root) implies ``-atr`` because a vowel
-    # can't be both advanced and retracted at the same time --
+    # can't be both advanced and retracted at the same time, so
     # this drives a real claim about the ATR axis. ``-rtr`` (not
     # retracted) does NOT imply ``+atr``: a vowel can be neither
     # advanced nor retracted, so a negative RTR carries no positive
@@ -650,7 +645,7 @@ def _height_split_value(
     # alongside ``atr=-`` looks like agreement, not a real source).
     # The intent-coded Hayes inventories (Ilokano /e/ at Close-mid
     # via ``tense=+``) still resolve through value-resolution
-    # because the value is read regardless of the contrast flag --
+    # because the value is read regardless of the contrast flag;
     # only the divergence flag is gated.
     tense_for_div = (
         tense if profile is None or profile.has_tense_contrast else None
@@ -1390,7 +1385,7 @@ def _vowel_grid_pos_normalized(
     profile: VowelProfile,
     policy: PlacementPolicy | None = None,
 ) -> VowelPlacement:
-    """Placement core. Caller MUST pass already-lowercase keys --
+    """Placement core. Caller MUST pass already-lowercase keys;
     use :py:func:`vowel_grid_pos` for the safe wrapper that
     normalizes first.
     """

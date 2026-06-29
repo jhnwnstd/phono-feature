@@ -142,14 +142,14 @@ def to_panphon_form(segment: str) -> str:
     Pipeline, deliberately built ON TOP of the wide-scope inventory
     canonicalisation rather than duplicating it:
 
-    1. :py:func:`canonicalize_segment_label` -- NFC, strip, and the
+    1. :py:func:`canonicalize_segment_label`: NFC, strip, and the
        shared IPA folds (ASCII ``g`` -> ``ɡ``, ``'`` -> ``ʼ``). This is
        the single source of IPA glyph folding; PanPhon reuses it.
     2. Affricate tiebars: the under-tiebar folds to the over-tiebar
        unconditionally; the ASCII-hyphen and bare-digraph forms of the
        explicit :py:data:`_AFFRICATE_PAIRS` fold to the over-tiebar.
     3. The conservative :py:data:`_DIACRITIC_VARIANTS` lookalike fold.
-    4. NFD -- the form PanPhon normalises its own table and inputs to,
+    4. NFD: the form PanPhon normalises its own table and inputs to,
        so the returned string matches both the live ``FeatureTable``
        and the baked lookup snapshot (which carries NFD keys).
 

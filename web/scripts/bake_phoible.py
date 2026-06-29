@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
 """Bake the vendored PHOIBLE 2.0 CSV into two JSON snapshots.
 
-The web app cannot ship 25 MB of CSV plus a CSV parser to every
-visitor, and parsing 105k rows on every Pyodide cold start would
-dominate the boot time. Pre-computing at build time produces two
-artifacts the runtime consumes via plain JSON parse:
+Shipping 25 MB of CSV plus a parser to every visitor, then parsing
+105k rows on every Pyodide cold start, would dominate boot time.
+Pre-computing at build time produces two artifacts the runtime
+consumes via plain JSON parse:
 
-* ``_phoible_index.generated.json``: language + inventory
-  metadata only (~150-250 KB raw). Bundled into
+* ``_phoible_index.generated.json``: language and inventory
+  metadata only (~150 to 250 KB raw). Bundled into
   ``python_bundle.zip`` so the picker autocomplete lights up at
   app boot without a second fetch.
 
-* ``_phoible_data.generated.json``: per-inventory segment
-  bundles in compact positional encoding (~1.5-2.5 MB raw,
-  ~500-700 KB gzipped). Shipped as a separate static asset under
-  ``web/dist/`` and lazy-loaded on first PHOIBLE click so the
-  cold path stays cheap.
+* ``_phoible_data.generated.json``: per-inventory segment bundles
+  in compact positional encoding (~1.5 to 2.5 MB raw, ~500 to 700
+  KB gzipped). Shipped as a separate static asset under
+  ``web/dist/`` and lazy-loaded on first PHOIBLE click so the cold
+  path stays cheap.
 
 Run standalone for debugging:
 
     python web/scripts/bake_phoible.py [--out-index PATH] [--out-data PATH]
 
 The default paths land under
-``shared/src/phonology_shared/editor/`` alongside the
+``shared/src/phonology_shared/editor/`` alongside the other
 ``*.generated.json`` files; both are gitignored.
 """
 
@@ -59,8 +59,8 @@ DEFAULT_BIBTEX = (
 )
 #: Provenance stamp written by ``web/scripts/update_phoible.py`` (the
 #: ref/commit/release the vendored CSVs came from). The bake reads the
-#: release metadata back out of it so a refresh updates the baked
-#: version stamp automatically; absent, the hard-coded constants below
+#: release metadata back out so a refresh updates the baked version
+#: stamp automatically. If absent, the hard-coded constants below
 #: apply and the output is unchanged.
 DEFAULT_PROVENANCE = (
     REPO_ROOT / "web" / "scripts" / "phoible_cache" / "PROVENANCE.json"
@@ -92,8 +92,8 @@ PHOIBLE_CITATION = (
 # pair. ``short`` is the bold heading the picker shows; ``description``
 # is the secondary line that expands opaque acronyms like SPA and
 # UPSID. Empty description means ``short`` already says everything.
-# Keep both fields here so a future bake refresh does not have to
-# coordinate with the JS picker over a separate description map.
+# Both fields live here so a bake refresh need not coordinate with
+# the JS picker over a separate description map.
 SOURCE_INFO: dict[str, tuple[str, str]] = {
     "spa": ("SPA", "Stanford Phonology Archive"),
     "upsid": ("UPSID", "UCLA Phonological Segment Inventory Database"),
@@ -109,8 +109,8 @@ SOURCE_INFO: dict[str, tuple[str, str]] = {
 
 def _ensure_shared_on_path() -> None:
     """Make ``phonology_shared`` importable without an editable
-    install. Mirrors the same trick :py:mod:`web.scripts.build`
-    uses so this script works from a bare repo checkout.
+    install. Mirrors the trick ``web/scripts/build.py`` uses so this
+    script works from a bare repo checkout.
     """
     p = str(SHARED_SRC)
     if p not in sys.path:
@@ -134,9 +134,9 @@ def _open_csv(path: Path) -> io.TextIOWrapper:
 def _load_provenance(path: Path = DEFAULT_PROVENANCE) -> dict[str, Any]:
     """Read the refresh provenance stamp, or ``{}`` if absent/unreadable.
 
-    Lets a ``update_phoible.py`` refresh feed the baked release
+    Lets an ``update_phoible.py`` refresh feed the baked release
     metadata (version, date, license, citation, upstream URL) without a
-    second manual edit. Missing or malformed file falls back silently
+    second manual edit. A missing or malformed file falls back silently
     to the hard-coded constants so a bare checkout still bakes.
     """
     if not path.exists():
@@ -149,12 +149,11 @@ def _load_provenance(path: Path = DEFAULT_PROVENANCE) -> dict[str, Any]:
 
 
 def _source_info(source: str) -> tuple[str, str]:
-    """Return the ``(short, description)`` pair for a PHOIBLE source
-    code.
+    """Return the ``(short, description)`` pair for a source code.
 
     Unknown codes pass through as uppercased short with empty
-    description so the picker still has something readable when a
-    future PHOIBLE release introduces a new source family.
+    description so the picker stays readable when a future PHOIBLE
+    release introduces a new source family.
     """
     return SOURCE_INFO.get(source, (source.upper(), ""))
 
@@ -200,13 +199,11 @@ def bake_tables(
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, int]]:
     """Stream the PHOIBLE CSV and return (index, data, stats).
 
-    The index payload is bundle-bound and stays small (no per-
-    segment bundles). The data payload carries the segment data
-    indexed by ``InventoryID`` and is shipped separately so the
-    web cold path is not penalised. The stats dict reports
-    counts the build pipeline prints.
-
-    Schema of the returned dicts is documented in module top.
+    The index payload is bundle-bound and stays small (no per-segment
+    bundles). The data payload carries the segment data indexed by
+    ``InventoryID`` and ships separately to spare the web cold path.
+    The stats dict reports counts the build pipeline prints. The two
+    payloads map to the JSON artifacts described at module top.
     """
     _ensure_shared_on_path()
     from phonology_shared.editor.phoible_features import (
@@ -232,16 +229,14 @@ def bake_tables(
     # Per-inventory accumulators.
     inv_meta: dict[str, dict[str, Any]] = {}
     inv_segments: dict[str, dict[str, str]] = defaultdict(dict)
-    # Per-inventory diphthong secondary bundles. Keys are inventory
-    # ids; values map phoneme -> the final-state bundle string in
-    # the same positional encoding as inv_segments. The primary
-    # bundle stamped into inv_segments holds the initial state so
-    # any consumer that does not know about diphthongs still sees
-    # the conservative single-vowel placement.
+    # Per-inventory diphthong secondary bundles: phoneme -> final-state
+    # bundle string in the same positional encoding as inv_segments. The
+    # primary bundle in inv_segments holds the initial state so a
+    # consumer ignorant of diphthongs still sees a conservative
+    # single-vowel placement.
     inv_segment_secondary: dict[str, dict[str, str]] = defaultdict(dict)
-    # Language-name dedup. The same language often appears under
-    # several inventories; the autocomplete list wants one entry per
-    # language.
+    # Language-name dedup: the same language often appears under several
+    # inventories, but the autocomplete list wants one entry each.
     languages: dict[str, dict[str, Any]] = {}
 
     rows_total = 0
@@ -319,7 +314,7 @@ def bake_tables(
             # contours (e.g. a prenasalized stop's ``nasal``) stay
             # flattened to ``"0"`` so they keep their established
             # manner-class placement; widening that is a deliberate
-            # later step, not a side effect of this one.
+            # later step.
             # Read the INITIAL phase of the major-class features: a
             # contour cell classifies by the state it starts in. Using
             # the raw cell would misread a falling diphthong (whose
@@ -354,10 +349,9 @@ def bake_tables(
                     final_chars.append(normalized)
             bundle_str = "".join(initial_chars)
 
-            # Multiple rows for the same phoneme within one
-            # inventory are extremely rare in PHOIBLE; keep the
-            # FIRST one per the convention so the secondary bundle
-            # we computed above lines up with the primary.
+            # Duplicate rows for one phoneme within an inventory are
+            # very rare; keep the FIRST so the secondary bundle
+            # computed above lines up with the primary.
             if phoneme in inv_segments[inv_id]:
                 continue
             inv_segments[inv_id][phoneme] = bundle_str
@@ -368,9 +362,8 @@ def bake_tables(
     for inv_id, meta in inv_meta.items():
         meta["segment_count"] = len(inv_segments.get(inv_id, {}))
 
-    # Sort languages alphabetically for stable index output; the
-    # picker can render the list in whatever order it likes but a
-    # deterministic file simplifies diffs across rebuilds.
+    # Sort for stable index output: the picker can reorder freely, but
+    # a deterministic file simplifies diffs across rebuilds.
     sorted_languages = sorted(
         languages.values(), key=lambda d: d["name"].casefold()
     )
@@ -401,13 +394,12 @@ def bake_tables(
             inv_id: dict(inv_segments[inv_id])
             for inv_id in sorted(inv_segments.keys(), key=int)
         },
-        # Per-inventory final-state bundles for contour segments
-        # (vowel diphthongs and obstruent affricates); sparse, only
-        # inventories with at least one contour appear. Each value
-        # maps phoneme -> final-state bundle string in the same
-        # positional encoding as ``inventories``. Older clients that
-        # ignore the field still get sensible single-phase placement
-        # and classification from the primary bundle.
+        # Sparse final-state bundles for contour segments (vowel
+        # diphthongs and obstruent affricates); only inventories with
+        # at least one contour appear. Each value maps phoneme ->
+        # final-state bundle in the same encoding as ``inventories``.
+        # Clients that ignore the field still get sensible single-phase
+        # placement and classification from the primary bundle.
         "segment_secondary": {
             inv_id: dict(inv_segment_secondary[inv_id])
             for inv_id in sorted(inv_segment_secondary.keys(), key=int)

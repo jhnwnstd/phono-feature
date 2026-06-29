@@ -28,7 +28,7 @@ _CELL_FONT_BOLD = QFont("Noto Sans", 10, QFont.Weight.Bold)
 _CELL_FONT_NORMAL = QFont("Noto Sans", 10)
 
 # Item flags don't depend on value either. Hoisting the bitwise OR
-# matters because make_cell is called for every grid cell on load --
+# matters because make_cell is called for every grid cell on load:
 # the previous per-call OR showed up as the second-hottest line in
 # the editor-load profile (25k+ enum.__or__ calls).
 _CELL_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable

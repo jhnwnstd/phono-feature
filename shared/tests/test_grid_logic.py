@@ -416,17 +416,17 @@ def test_grid_to_inventory_round_trip(simple_grid):
     assert set(inv.segments.keys()) == {"b", "d", "m"}
     assert inv.segments["b"].get("Voice") == "+"
     assert inv.segments["m"].get("Nasal") == "+"
-    # "0" cells are PRESERVED (dense), so a dense inventory survives a
-    # editor round-trip byte-stable instead of being silently
+    # "0" cells are PRESERVED (dense), so a dense inventory survives
+    # an editor round-trip byte-stable instead of being silently
     # stripped to a sparse form. Absent and "0" remain equivalent on
     # load, so this is still lossless.
     assert inv.segments["b"].get("Nasal") == "0"
 
 
 def test_grid_to_inventory_keeps_zero_cells():
-    """A "0" cell is kept (fully dense per-segment bundle) so a editor
-    round-trip of a densely-authored inventory does not strip every
-    zero and produce a large spurious diff."""
+    """A "0" cell is kept (fully dense per-segment bundle) so an
+    editor round-trip of a densely-authored inventory does not strip
+    every zero and produce a large spurious diff."""
     inv = grid_to_inventory(
         name="X",
         features=["F1", "F2"],

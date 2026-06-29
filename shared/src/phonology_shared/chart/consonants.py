@@ -333,7 +333,7 @@ class PlaceRank(IntEnum):
     display labels :py:func:`derive_place` emits.
 
     :py:attr:`VOWEL_OR_UNKNOWN` is the catch-all bucket for
-    segments that carry no place evidence the grouper can read --
+    segments that carry no place evidence the grouper can read,
     typically syllabic vowels (handled separately by the manner
     pass) or sparsely specified segments waiting on more features.
     """
@@ -397,7 +397,7 @@ def derive_place(
     ``feats`` is a normalised feature bundle (the keys have already
     been folded through
     :py:func:`phonology_shared.data.inventory.normalize_feature_key`).
-    Reads only conventional distinctive features --
+    Reads only conventional distinctive features:
     ``labial``/``labiodental``, ``coronal``/``anterior``/
     ``distributed``, ``dorsal``/``high``/``back``/``low``/``front``,
     ``pharyngeal``/``constrpharynx``/``radical``/``rtr``,

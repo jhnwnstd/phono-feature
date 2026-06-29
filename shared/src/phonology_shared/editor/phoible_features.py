@@ -1,13 +1,12 @@
 """PHOIBLE column-name → app feature-name mapping.
 
-PHOIBLE 2.0 ships 36 SPE-style feature columns; our app exposes
-24 canonical names. The overlap is ~13 features that map one-for-
-one (`syllabic` → `Syllabic`); two require semantic aliasing
-(`periodicGlottalSource` → `Voice`, `click` → `Velaric`); the
-remaining PHOIBLE-only columns pass through under PHOIBLE's own
-lowercase names so users see exactly what PHOIBLE specifies and
-can drop columns they do not want via the editor's column-remove
-gesture.
+PHOIBLE 2.0 ships SPE-style feature columns. Most map one-for-one
+onto an app canonical name (`syllabic` → `Syllabic`); a couple
+require semantic aliasing (`periodicGlottalSource` → `Voice`,
+`click` → `Velaric`). PHOIBLE-only columns pass through under
+PHOIBLE's own names so users see exactly what PHOIBLE specifies
+and can drop columns they do not want via the editor's
+column-remove gesture.
 
 Lives in shared/ alongside :py:mod:`panphon_features` so the bake
 script, the desktop provider, and the web bridge all read from one

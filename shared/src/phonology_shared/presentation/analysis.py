@@ -523,8 +523,8 @@ def render_class_tab_feat(
     matching segments (the result of the query) + count.
 
     Wildcard FEAT-mode queries get the ``wildcard matching``
-    badge for the same reason SEG-mode wildcard verdicts do ,
-    the matching set differs in meaning even when it happens to
+    badge for the same reason SEG-mode wildcard verdicts do: the
+    matching set differs in meaning even when it happens to
     coincide with the strict result.
     """
     if not feature_dict:

@@ -1,4 +1,5 @@
-"""Tests for ``partition_groups_for_spillover`` in ``gui.layout``.
+"""Tests for ``partition_groups_for_spillover`` in
+``phonology_shared.presentation.layout``.
 
 This is the single source of truth that both the desktop's
 ``SegmentGridWidget`` and the web's ``rebalanceSegmentSpillover`` call

@@ -1,16 +1,16 @@
 """Pairwise non-overlap invariants for the desktop GUI layout.
 
-Existing layout tests under ``desktop/tests/test_layout_*.py`` pin pixel
-sizes and content-driven thresholds. None of them assert "widget A's
-geometry does not intersect widget B's geometry". This file fills
-that gap: at a representative set of window resolutions, every
-declared pair of visible regions must not occupy overlapping screen
-coordinates.
+The other desktop layout tests (``test_layout_stress.py``,
+``test_feature_panel_layout.py``) pin pixel sizes and content-driven
+thresholds. None of them assert "widget A's geometry does not
+intersect widget B's geometry". This file fills that gap: at a
+representative set of window resolutions, every declared pair of
+visible regions must not occupy overlapping screen coordinates.
 
 The test resolution matrix mirrors the named breakpoints used in
-``test_layout_resolutions.py`` so a future "all my resolution tests
-pass but the screen has a button on top of a label" regression
-fails here on the same matrix.
+``shared/tests/test_layout_resolutions.py`` so a future "all my
+resolution tests pass but the screen has a button on top of a label"
+regression fails here on the same matrix.
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ def _drain(qapp, times: int = 4) -> None:
 
 # Representative resolutions covering the main breakpoint regimes:
 # laptop-low, mainstream FHD, ultrawide. Wider than the no-overlap
-# claim needs to cover, but mirrors test_layout_resolutions.py so a
-# regression that appears at one resolution lights up everywhere.
+# claim needs to cover, but mirrors shared/tests/test_layout_resolutions.py
+# so a regression at one resolution lights up everywhere.
 _RESOLUTIONS = [
     (1366, 768),
     (1920, 1080),

@@ -505,8 +505,8 @@ def _build_feature_row_state(
 # payloads. Profiling (W1: 58,300 calls / top tracemalloc site at
 # 3.7 KB retained) showed the constructor was rebuilding the same
 # 5-key dict tens of thousands of times per selection-summary pass;
-# this table collapses every call to a dict lookup. Read-only
-# semantics pinned by ``test_feature_row_state_is_cached_singleton``.
+# this table collapses every call to a dict lookup. The returned
+# payloads are shared singletons, so callers must never mutate them.
 _FEATURE_ROW_STATES: dict[
     tuple[str, bool, bool, FeatureCategory], FeatureRowState
 ] = {

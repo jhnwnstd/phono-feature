@@ -96,7 +96,7 @@ def test_should_collapse_single_column_at_threshold() -> None:
 def test_initial_size_floored_on_small_screen() -> None:
     # Below the floor (e.g. 1366x768 laptop), the function returns
     # the floor; ``clamp_size_to_screen`` will then trim down to fit.
-    # Width floor is now 1120 (vowel-safe minimum) instead of 1400.
+    # Width floor is MIN_FIRST_LAUNCH_W (a vowel-safe minimum).
     w, h = layout.recommended_initial_window_size(1366, 768)
     assert w == layout.MIN_FIRST_LAUNCH_W
     assert h == 900
@@ -142,8 +142,9 @@ def test_best_n_cols_floors_at_1() -> None:
 
 
 def test_initial_size_picks_floor_when_fraction_smaller() -> None:
-    # 1920x1080 monitor: 80% = 1536x864. Width floor 1400 doesn't
-    # bind (1536 > 1400); height floor 900 binds because 864 < 900.
+    # 1920x1080 monitor: 80% = 1536x864. The width floor
+    # MIN_FIRST_LAUNCH_W does not bind (1536 is above it); height
+    # floor 900 binds because 864 < 900.
     w, h = layout.recommended_initial_window_size(1920, 1080)
     assert w == 1536
     assert h == 900

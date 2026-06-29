@@ -4,7 +4,7 @@ State-machine tests for the seg/feat mode toggle in MainWindow.
 These tests exercise the public-ish click handlers (_on_segment_clicked,
 _on_feature_changed) and _set_mode, then assert on the resulting widget +
 selection state. The goal is to catch regressions in the mode-switch
-projection logic; the area the user has flagged as delicate; without
+projection logic (the area the user has flagged as delicate) without
 needing to launch the GUI.
 
 Naming convention: each test name describes the property it guards. If a

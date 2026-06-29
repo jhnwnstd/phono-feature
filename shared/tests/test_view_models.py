@@ -196,8 +196,8 @@ def test_complete_to_minimal_natural_class_blevins_affricate_strict_closure(
     Skipped in CI when ``blevins_features.json`` is gitignored.
     """
     # ``bundled_engine`` skips with a clear message when the
-    # named inventory isn't on disk (gitignored under
-    # ``LookupTableProvider``'s bake-artifact policy).
+    # named inventory isn't on disk (some bundled inventories are
+    # gitignored in CI).
     engine = bundled_engine("blevins")
     selected = ["b͡v", "d͡z", "t͡s"]
     assert all(s in engine.segments for s in selected)

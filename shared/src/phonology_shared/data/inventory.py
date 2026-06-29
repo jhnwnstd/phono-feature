@@ -214,8 +214,11 @@ def normalize_feature_key(key: str) -> str:
 
     Lives in :py:mod:`inventory` so :py:meth:`Inventory.parse` can
     detect alias collisions at the boundary without depending on
-    the display layer; :py:mod:`segment_grouper` re-imports it for
-    its own bundle normalisation.
+    the display layer. :py:mod:`phonology_shared.chart.vowels`
+    re-imports it directly and
+    :py:mod:`phonology_shared.chart.consonants` reaches it through
+    :py:func:`normalize_feature_bundle` for their own bundle
+    normalisation.
     """
     # Local import to keep the dependency direction one-way: data
     # imports from presentation only here, at the metadata-resolver
@@ -654,7 +657,7 @@ class Inventory:
         """
         # Local import to keep the dependency direction one-way (data
         # imports from presentation only at boundaries like this; see
-        # the metadata-resolver import in resolve_feature_alias).
+        # the metadata-resolver import in normalize_feature_key).
         # MINUS_SIGN is the single definition of the editor's Unicode
         # minus glyph, so this fold cannot drift from a look-alike
         # literal pasted here.

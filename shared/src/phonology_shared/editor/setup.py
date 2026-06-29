@@ -46,8 +46,9 @@ SETUP_DIALOG_TITLE: str = "New inventory"
 SETUP_NAME_PLACEHOLDER: str = "e.g. My Language Inventory"
 
 # Feature-preset dropdown options. Insertion order = render order.
-# Hayes mirrors hayes_features.json (pinned by test_setup_presets).
-# PHOIBLE derives from PHOIBLE_TO_APP_FEATURE so bake refreshes flow.
+# Hayes mirrors hayes_features.json (pinned by
+# test_hayes_preset_matches_bundled_inventory). PHOIBLE derives from
+# PHOIBLE_TO_APP_FEATURE so bake refreshes flow.
 FEATURE_PRESETS: Mapping[str, list[str]] = {
     "Hayes": [
         "CORONAL",

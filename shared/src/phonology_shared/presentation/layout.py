@@ -235,7 +235,7 @@ def plan_seg_layout(
     4. **Pack the ``k`` spilled groups via LPT.** Sort by descending
        natural height; assign each to the currently-shortest column.
        The column with the largest total height sets the spillover's
-       bounding height. Source order is preserved at render time --
+       bounding height. Source order is preserved at render time:
        the assignment tuple records column membership, not display
        order.
 
