@@ -58,6 +58,18 @@ VOWEL_GROUP_NAME = "Vowels"
 #: rename would silently desync (zeroing the tone class's hard cap).
 TONES_GROUP_NAME = "Tones"
 
+#: Catch-all display groups for segments that match no manner/place
+#: class (reachable with sparse / custom inventories whose features
+#: don't carry the usual manner+place columns). The fallthrough is
+#: split by Pike's vocoid/contoid distinction so each lands near its
+#: kin: a vowel-like segment that fits no class is a VOCOID (rendered
+#: as a flat list under the vowel chart); anything else is a CONTOID
+#: (a flat list under the consonants). Routing them here keeps them
+#: visible and the on-screen count honest rather than silently dropping
+#: them while they still appear in the flat segment list.
+CONTOID_GROUP_NAME = "Contoids"
+VOCOID_GROUP_NAME = "Vocoids"
+
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.
 PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
@@ -194,7 +206,13 @@ DISPLAY_ORDER: list[str] = [
     "Central Approximants",
     "Semivowels",
     "Laryngeals",
+    # Consonant-area catch-all: renders at the end of the consonant
+    # section (before vowels) so an unclassifiable contoid stays visible.
+    CONTOID_GROUP_NAME,
     VOWEL_GROUP_NAME,
+    # Vowel-area catch-all: renders right after the vowel chart so an
+    # unclassifiable vocoid stays visible beneath it.
+    VOCOID_GROUP_NAME,
     # Tones render after the segmental classes so the chart reads
     # consonants first, then vowels, then the suprasegmental tier.
     TONES_GROUP_NAME,
@@ -851,6 +869,26 @@ def _is_laryngeal_candidate(feats: dict[str, str]) -> bool:
     )
 
 
+def _is_vocoid(feats: dict[str, str]) -> bool:
+    """Pike's vocoid test for the no-class catch-all routing only.
+
+    A vocoid is a syllabic segment, or a central oral resonant
+    (``-consonantal +sonorant +continuant``, non-lateral) i.e. a vowel
+    or glide; everything else is a contoid. This only decides which
+    catch-all an UNclassifiable segment falls into (vocoids under the
+    vowel chart, contoids under the consonants); it does not affect any
+    segment a manner/place spec already claimed.
+    """
+    if feats.get("syllabic", "0") == "+":
+        return True
+    return (
+        feats.get("consonantal", "0") != "+"
+        and feats.get("sonorant", "0") == "+"
+        and feats.get("continuant", "0") == "+"
+        and feats.get("lateral", "0") != "+"
+    )
+
+
 def group_segments(
     inventory: Mapping[str, Mapping[str, str]],
     *,
@@ -1138,8 +1176,16 @@ def group_segments(
             or best_primary(feats)
             or fallback_assignment(feats)
         )
-        if group:
-            assignment[group].append(sym)
+        # A segment matching no manner/place spec would otherwise vanish
+        # from the grouped payload (still in the flat segment list, but
+        # rendered nowhere). Route it to a catch-all so it stays visible:
+        # a vocoid (vowel-like) lands under the vowel chart, anything
+        # else under the consonants.
+        if not group:
+            group = (
+                VOCOID_GROUP_NAME if _is_vocoid(feats) else CONTOID_GROUP_NAME
+            )
+        assignment[group].append(sym)
     for new_name, parent_name, cond in DERIVED_BREAKOUTS:
         if parent_name not in assignment:
             continue

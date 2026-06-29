@@ -236,11 +236,17 @@ class ThemeController:
             # after starting from light, the name label's text color
             # stays light against the dark bg, making the name appear
             # "unpopulated".
-            for row in m._feat_row_pool.values():
+            # Only the ACTIVE (displayed) rows need restyling now.
+            # Inactive pool rows are frequently the majority (e.g. 117
+            # of 145 for a 28-feature inventory) and are re-themed
+            # lazily by ``_populate_features`` when they next become
+            # active (``apply_theme`` there is a cheap no-op if already
+            # current). ``_feat_rows`` is the active set, INCLUDING the
+            # non-pooled "Other" card rows, so this one loop covers
+            # everything the user can see while skipping ~80% of the
+            # per-toggle setStyleSheet cost.
+            for row in m._feat_rows.values():
                 row.apply_theme()
-            for feat, row in m._feat_rows.items():
-                if feat not in m._feat_row_pool:
-                    row.apply_theme()
             self._restyle_chrome()
             # Refresh panel-chrome QSS rules then re-polish so the
             # active-mode border picks up the new accent color.

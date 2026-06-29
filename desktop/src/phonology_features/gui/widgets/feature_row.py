@@ -329,6 +329,15 @@ class FeatureRow(QWidget):
         Always re-styles the +/- buttons since they're visible in
         feat mode regardless of state.
         """
+        # Short-circuit when our styles are already the active theme's:
+        # ``_styles_for_active_theme`` returns the SAME dict instance for
+        # repeated requests in one theme (identity check is correct and
+        # cheap), so calling this on an already-current row (e.g. from
+        # ``_populate_features`` on every activation) costs nothing.
+        new_styles = self._styles_for_active_theme()
+        if new_styles is getattr(self, "_themed_dict", None):
+            return
+        self._themed_dict = new_styles
         saved_display = self._last_display_state
         saved_current_value = self._current_value
         self._build_styles()

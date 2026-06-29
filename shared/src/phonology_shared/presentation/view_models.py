@@ -10,7 +10,10 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from phonology_shared.chart.consonants import VOWEL_GROUP_NAME
+from phonology_shared.chart.consonants import (
+    VOCOID_GROUP_NAME,
+    VOWEL_GROUP_NAME,
+)
 from phonology_shared.chart.vowel_geometry import (
     build_vowel_chart_geometry,
 )
@@ -183,10 +186,17 @@ def build_inventory_summary(
     grouped = engine.grouped_segments
     consonant_groups: list[dict[str, Any]] = []
     vowel_segs: list[str] = []
+    vocoid_segs: list[str] = []
     for manner, segs in grouped.items():
         if manner == VOWEL_GROUP_NAME:
             vowel_segs = list(segs)
+        elif manner == VOCOID_GROUP_NAME:
+            # Vowel-like catch-all: rendered as a flat list under the
+            # vowel chart, not in the consonant area.
+            vocoid_segs = list(segs)
         else:
+            # Includes the consonant-area catch-all (Contoids), which
+            # renders as an ordinary manner-class flat list.
             consonant_groups.append({"name": manner, "segments": list(segs)})
     # In STRICT mode this drops columns where every segment is ``0``
     # (a ``+f`` request would return ∅). In WILDCARD mode every
@@ -201,6 +211,9 @@ def build_inventory_summary(
         "groups": consonant_groups,
         "feature_groups": _grouped_features(active),
         "vowel_chart": _vowel_chart_summary(engine, vowel_segs),
+        # Vowel-like segments that fit no class; rendered as a flat list
+        # under the vowel chart. Usually empty.
+        "vocoids": vocoid_segs,
         "matching_mode": str(mode),
         # Classified inventory source (URL / DOI / citation / none) so
         # both frontends render the [Source] affordance from one rule.

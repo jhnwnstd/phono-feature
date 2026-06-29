@@ -183,6 +183,16 @@ class SegmentGridWidget(QWidget):
         natural_w = cols * BTN_W + (cols - 1) * BTN_GAP if cols > 0 else 0
         return QSize(natural_w, super().sizeHint().height())
 
+    def request_sync_relayout(self) -> None:
+        """Make the next resize relayout synchronously (no debounce).
+
+        Used when a sibling's visibility change frees pane space the
+        grid should reclaim immediately (e.g. the vowel chart hiding),
+        so the spillover partition is not left stale until the next
+        interaction-driven resize.
+        """
+        self._needs_sync_relayout = True
+
     def resizeEvent(self, a0: QResizeEvent | None) -> None:
         super().resizeEvent(a0)
         if self._needs_sync_relayout:

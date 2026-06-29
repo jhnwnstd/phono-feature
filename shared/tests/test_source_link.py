@@ -46,6 +46,14 @@ def test_too_short_registrant_is_not_a_doi() -> None:
     assert classify_source("10.1/x").kind == "citation"
 
 
+def test_non_string_source_is_coerced_not_crashed() -> None:
+    # A hand-edited / future-baked inventory could carry a non-string
+    # metadata.source; it must yield "none", never raise (a raise would
+    # fail the whole inventory load on every frontend).
+    for bad in ({"x": 1}, [1, 2], 123, 1.5, True):
+        assert classify_source(bad).kind == "none"  # type: ignore[arg-type]
+
+
 def test_dict_round_trip() -> None:
     link = classify_source("https://example.org")
     assert SourceLink.from_dict(link.as_dict()) == link

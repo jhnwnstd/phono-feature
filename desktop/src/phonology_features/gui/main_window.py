@@ -80,6 +80,7 @@ from phonology_features.gui.widgets import (
     SegmentState,
 )
 from phonology_shared.chart.consonants import (
+    VOCOID_GROUP_NAME,
     VOWEL_GROUP_NAME,
     visible_groups,
 )
@@ -645,6 +646,29 @@ class MainWindow(QMainWindow):
             alignment=Qt.AlignmentFlag.AlignTop,
         )
         seg_content_layout.addLayout(self._seg_h_pair, stretch=1)
+        # Vocoid strip: vowel-like segments that fit no class, shown as a
+        # flat labelled list beneath the consonants + chart (kin to the
+        # vowels, like the contoid catch-all renders among consonants).
+        # Hidden unless the rare inventory produces one. Placed in the
+        # outer VBox (not the chart's column) so it never perturbs the
+        # delicate stack-vs-side chart layout.
+        self._vocoid_strip = QWidget(seg_content)
+        set_css(self._vocoid_strip, "background: transparent;")
+        _vstrip_lay = QHBoxLayout(self._vocoid_strip)
+        _vstrip_lay.setContentsMargins(0, 6, 0, 0)
+        _vstrip_lay.setSpacing(8)
+        _vocoid_label = QLabel("VOCOIDS")
+        _vocoid_label.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
+        set_css(_vocoid_label, f"color: {C['text_dim']}; letter-spacing: 1px;")
+        _vstrip_lay.addWidget(
+            _vocoid_label, alignment=Qt.AlignmentFlag.AlignVCenter
+        )
+        self._vocoid_row = QHBoxLayout()
+        self._vocoid_row.setSpacing(4)
+        _vstrip_lay.addLayout(self._vocoid_row)
+        _vstrip_lay.addStretch()
+        self._vocoid_strip.hide()
+        seg_content_layout.addWidget(self._vocoid_strip)
         # Tracks whether the chart is currently in the bottom-stacked
         # slot (True) or the right-side slot (False). Flipped by
         # ``_on_seg_pane_width_changed``.
@@ -1221,11 +1245,18 @@ class MainWindow(QMainWindow):
         # The grouper emits the vowel group under one fixed name; pop it
         # out so only consonant groups remain for the seg grid.
         vowel_segs = groups.pop(VOWEL_GROUP_NAME, [])
+        # Vowel-like catch-all renders in its own strip under the chart,
+        # not in the consonant grid.
+        vocoid_segs = groups.pop(VOCOID_GROUP_NAME, [])
         consonant_buttons: dict[str, SegmentButton] = {}
         for segs in groups.values():
             for seg in segs:
                 consonant_buttons[seg] = self._get_or_create_seg_button(seg)
         self.seg_grid_widget.set_groups(groups, consonant_buttons)
+        vocoid_buttons: dict[str, SegmentButton] = {
+            seg: self._get_or_create_seg_button(seg) for seg in vocoid_segs
+        }
+        self._populate_vocoid_strip(vocoid_buttons)
         vowel_buttons: dict[str, SegmentButton] = {}
         if vowel_segs:
             for seg in vowel_segs:
@@ -1251,7 +1282,11 @@ class MainWindow(QMainWindow):
         else:
             self.vowel_chart_widget.clear()
             self.vowel_chart_widget.hide()
-        self._seg_buttons = {**consonant_buttons, **vowel_buttons}
+        self._seg_buttons = {
+            **consonant_buttons,
+            **vowel_buttons,
+            **vocoid_buttons,
+        }
         # Evict pool entries the new inventory does not use: detach them
         # AND drop them from the pool so it cannot grow without bound.
         # Without the drop, every unique segment ever loaded stays alive
@@ -1270,6 +1305,28 @@ class MainWindow(QMainWindow):
             btn.setParent(None)
             btn.deleteLater()
 
+    def _populate_vocoid_strip(
+        self, buttons: dict[str, SegmentButton]
+    ) -> None:
+        """Fill the vocoid strip with the given (pooled) buttons, or hide
+        it when there are none. Reusing pooled buttons keeps these
+        segments wired into the same selection / analysis machinery as
+        the grid and the chart.
+        """
+        while self._vocoid_row.count():
+            item = self._vocoid_row.takeAt(0)
+            if item is None:
+                continue
+            w = item.widget()
+            if w is not None:
+                w.setParent(None)
+        if not buttons:
+            self._vocoid_strip.hide()
+            return
+        for btn in buttons.values():
+            self._vocoid_row.addWidget(btn)
+        self._vocoid_strip.show()
+
     def _open_class_filter_menu(self) -> None:
         """Show a checkable menu of the loaded inventory's segment
         classes; unchecking one hides that whole class so the pane
@@ -1279,6 +1336,10 @@ class MainWindow(QMainWindow):
         if self.engine is None:
             return
         menu = QMenu(self)
+        # Free the menu (and its actions + lambda connections) when it
+        # closes; otherwise each open leaves one more menu parented to
+        # the long-lived window, an unbounded slow accumulation.
+        menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         for label in self.engine.grouped_segments:
             act = menu.addAction(label)
             if act is None:  # pragma: no cover - Qt always returns one
@@ -1295,12 +1356,49 @@ class MainWindow(QMainWindow):
         )
 
     def _set_class_visible(self, label: str, shown: bool) -> None:
-        """Hide or show one segment class, then re-lay the pane."""
+        """Hide or show one segment class, then re-lay the pane.
+
+        Hiding a class drops its segments from the active selection (so
+        the analysis can't keep reflecting a segment whose button is
+        gone); showing one refreshes its buttons' palette, since a theme
+        toggle while they were detached would have skipped them.
+        """
+        if self.engine is None:
+            return
         if shown:
             self._hidden_segment_classes.discard(label)
+            # Buttons detached while hidden were skipped by any theme
+            # toggle in between (it skips orphaned pool entries), so
+            # refresh their palette before they reappear.
+            for seg in self.engine.grouped_segments.get(label, []):
+                btn = self._seg_button_pool.get(seg)
+                if btn is not None:
+                    btn.apply_theme()
         else:
             self._hidden_segment_classes.add(label)
+            self._deselect_hidden_class(label)
         self._apply_class_visibility()
+
+    def _deselect_hidden_class(self, label: str) -> None:
+        """Drop a newly-hidden class' segments from the selection and
+        reset their buttons, then refresh the analysis. Without this a
+        selected segment in a hidden class stays in ``_selected_segments``
+        (still driving the analysis) with no visible button to deselect.
+        """
+        if self.engine is None:
+            return
+        removed = False
+        for seg in self.engine.grouped_segments.get(label, []):
+            if seg in self._selected_segments:
+                self._selected_segments.remove(seg)
+                removed = True
+            btn = self._seg_button_pool.get(seg)
+            if btn is not None:
+                btn.setChecked(False)
+                btn.set_state(SegmentState.DEFAULT)
+        if removed:
+            # Recompute the analysis against the pruned selection.
+            self._debounce.start()
 
     def _apply_class_visibility(self) -> None:
         """Re-lay the seg grid + vowel chart for the current visibility
@@ -1319,6 +1417,8 @@ class MainWindow(QMainWindow):
             self._hidden_segment_classes,
         )
         groups.pop(VOWEL_GROUP_NAME, None)
+        # Vocoids render in their own strip, never in the consonant grid.
+        groups.pop(VOCOID_GROUP_NAME, None)
         consonant_buttons = {
             seg: self._seg_button_pool[seg]
             for segs in groups.values()
@@ -1331,6 +1431,24 @@ class MainWindow(QMainWindow):
             self.vowel_chart_widget.show()
         else:
             self.vowel_chart_widget.hide()
+        # Vocoid strip mirrors the chart: hidden if its class is hidden,
+        # else its pooled buttons (selection state preserved).
+        if VOCOID_GROUP_NAME in self._hidden_segment_classes:
+            self._vocoid_strip.hide()
+        else:
+            self._populate_vocoid_strip(
+                {
+                    seg: self._seg_button_pool[seg]
+                    for seg in self.engine.grouped_segments.get(
+                        VOCOID_GROUP_NAME, []
+                    )
+                    if seg in self._seg_button_pool
+                }
+            )
+        # A vowel-chart show/hide changes the consonant grid's width;
+        # make the resulting resize relayout at once (the spillover
+        # budget is otherwise only refreshed on the next interaction).
+        self.seg_grid_widget.request_sync_relayout()
 
     def _get_or_create_seg_button(self, seg: str) -> SegmentButton:
         """Return a SegmentButton for ``seg``, creating it on first use.
@@ -1454,6 +1572,10 @@ class MainWindow(QMainWindow):
         for feat, row in self._feat_row_pool.items():
             if feat in active_feature_set:
                 row.setVisible(True)
+                # Pick up any palette change that happened while this
+                # row was hidden (``theme.apply`` skips inactive rows);
+                # a cheap no-op when the row's theme is already current.
+                row.apply_theme()
                 row.reset()
                 self._feat_rows[feat] = row
             else:

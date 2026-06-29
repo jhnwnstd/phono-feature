@@ -435,6 +435,10 @@ const state = {
     hidden_segment_classes: new Set(),
     seg_groups: [],
     seg_vowel_chart: null,
+    // Vowel-like segments that fit no class; rendered as a flat strip
+    // under the vowel chart. Usually empty (vocoids almost always match
+    // a class), but carried so they are never silently dropped.
+    seg_vocoids: [],
 };
 
 // Display label for the vowel group; mirrors the shared
@@ -443,6 +447,9 @@ const state = {
 // ``info.groups``; the filter popover appends it and hiding it drops
 // the whole vowel chart.
 const VOWEL_CLASS_LABEL = "Vowels";
+// Mirrors the shared ``VOCOID_GROUP_NAME``: vowel-like segments that fit
+// no class, shown as a flat strip under the vowel chart.
+const VOCOID_CLASS_LABEL = "Vocoids";
 
 let BUNDLED_INVENTORIES = [];
 
@@ -757,6 +764,7 @@ function applyBootstrap() {
     state.hidden_segment_classes = new Set();
     state.seg_groups = info.groups;
     state.seg_vowel_chart = info.vowel_chart;
+    state.seg_vocoids = info.vocoids || [];
     renderSegmentsWithVisibility();
     renderFeaturePanel(info.feature_groups);
     // Paint the no-selection analysis hints ("Click a segment...")
@@ -823,6 +831,7 @@ function applyInventoryInfo(info) {
     state.hidden_segment_classes = new Set();
     state.seg_groups = info.groups;
     state.seg_vowel_chart = info.vowel_chart;
+    state.seg_vocoids = info.vocoids || [];
     renderSegmentsWithVisibility();
     renderFeaturePanel(info.feature_groups);
     // Show the empty-state hints ("Click a segment…") from the start
@@ -1511,10 +1520,37 @@ function renderSegmentGrid(groups, vowelChart) {
         vowels.appendChild(_buildVowelChart(vowelChart));
         grid.appendChild(vowels);
     }
+    // Vocoid strip under the chart: vowel-like segments that fit no
+    // class. Gated by the Vocoids filter class; usually empty.
+    const vocoids = state.hidden_segment_classes.has(VOCOID_CLASS_LABEL)
+        ? []
+        : (state.seg_vocoids || []);
+    if (vocoids.length) {
+        grid.appendChild(_buildVocoidStrip(vocoids));
+    }
     for (const group of groups) {
         grid.appendChild(_buildConsonantGroup(group));
     }
     relayoutSegments();
+}
+
+/** Build the flat vocoid strip (header + segment buttons) rendered
+ *  under the vowel chart for vowel-like segments that fit no class.
+ *  Reuses the ``.seg-group`` skeleton so it themes + sizes like the
+ *  other groups; ``seg-vocoids`` lets CSS place it under the chart. */
+function _buildVocoidStrip(segs) {
+    const el = document.createElement("div");
+    el.className = "seg-group seg-vocoids";
+    el.dataset.group = VOCOID_CLASS_LABEL;
+    const header = document.createElement("div");
+    header.className = "seg-group-header";
+    header.textContent = VOCOID_CLASS_LABEL;
+    el.appendChild(header);
+    const row = document.createElement("div");
+    row.className = "seg-row";
+    for (const seg of segs) row.appendChild(_buildSegmentButton(seg));
+    el.appendChild(row);
+    return el;
 }
 
 /** Re-render the segment grid honoring ``hidden_segment_classes``.
@@ -1545,7 +1581,33 @@ function _segmentClassLabels() {
     if (chart && Array.isArray(chart.cells) && chart.cells.length) {
         labels.push(VOWEL_CLASS_LABEL);
     }
+    if ((state.seg_vocoids || []).length) {
+        labels.push(VOCOID_CLASS_LABEL);
+    }
     return labels;
+}
+
+/** The segment strings in a class label: a consonant group's segments,
+ *  or every vowel-chart cell's segments for "Vowels". Used to prune a
+ *  hidden class out of the selection. */
+function _segmentsInClass(label) {
+    if (label === VOCOID_CLASS_LABEL) {
+        return (state.seg_vocoids || []).slice();
+    }
+    if (label === VOWEL_CLASS_LABEL) {
+        const out = [];
+        const chart = state.seg_vowel_chart;
+        if (chart && Array.isArray(chart.cells)) {
+            for (const cell of chart.cells) {
+                for (const s of cell.segs || []) {
+                    if (s && s.seg) out.push(s.seg);
+                }
+            }
+        }
+        return out;
+    }
+    const g = (state.seg_groups || []).find((x) => x.name === label);
+    return g ? g.segments.slice() : [];
 }
 
 /** Enable the filter button only when there is something to filter and
@@ -1627,14 +1689,29 @@ function onClassPopoverChange(ev) {
     const cb = ev.target.closest('input[type="checkbox"]');
     if (!cb) return;
     const label = cb.dataset.class;
-    if (cb.checked) state.hidden_segment_classes.delete(label);
-    else state.hidden_segment_classes.add(label);
+    let pruned = false;
+    if (cb.checked) {
+        state.hidden_segment_classes.delete(label);
+    } else {
+        state.hidden_segment_classes.add(label);
+        // Drop the hidden class' segments from the selection so the
+        // analysis can't keep reflecting a segment with no visible,
+        // deselectable button (the ghost-selection contract gap).
+        const inClass = new Set(_segmentsInClass(label));
+        if (inClass.size) {
+            const before = state.selected_segments.length;
+            state.selected_segments = state.selected_segments.filter(
+                (s) => !inClass.has(s),
+            );
+            pruned = state.selected_segments.length !== before;
+        }
+    }
     renderSegmentsWithVisibility();
-    // The grid was rebuilt with default-state buttons; re-run the
-    // active analysis so the current selection (seg->feat) or
-    // feature-query highlighting (feat->seg) is re-applied to the
-    // surviving buttons. Pre-bridge there is no selection to restore.
-    if (state.bridge) runAnalysis();
+    // Re-run analysis only when there is selection / query state to
+    // re-apply to the rebuilt buttons, or a prune just changed the
+    // selection. With nothing selected the empty-state hints are already
+    // correct, so the bridge round-trip is pure overhead and is skipped.
+    if (state.bridge && (pruned || hasActiveSelection())) runAnalysis();
 }
 
 // Cached signature of the last successful relayout pass. When the

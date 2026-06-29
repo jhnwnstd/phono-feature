@@ -73,7 +73,14 @@ def classify_source(raw: str | None) -> SourceLink:
     anything else non-empty is a ``citation``; empty/absent is
     ``none`` (no affordance shown).
     """
-    text = (raw or "").strip()
+    # Metadata values pass through the parser untouched, so a
+    # hand-edited or future-baked inventory could carry a non-string
+    # ``source`` (dict / list / number). Coerce at the boundary rather
+    # than let ``.strip()`` raise and fail the entire load on all three
+    # frontends.
+    if not isinstance(raw, str):
+        return NONE_SOURCE
+    text = raw.strip()
     if not text:
         return NONE_SOURCE
     low = text.lower()
