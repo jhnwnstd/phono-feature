@@ -215,9 +215,7 @@ class ThemeController:
         """
         m = self._main
         QToolTip.hideText()
-        if m._editor is not None:
-            m._editor.deleteLater()
-            m._editor = None
+        m._dialogs.drop_editor()
         with m._batched_updates():
             # Skip pool entries detached from the layout (orphans from
             # prior inventories). ``_get_or_create_seg_button`` calls

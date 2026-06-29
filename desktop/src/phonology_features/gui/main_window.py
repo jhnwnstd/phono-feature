@@ -31,7 +31,6 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -51,6 +50,9 @@ from phonology_features._settings import (
     safe_read_setting,
     write_setting,
 )
+from phonology_features.gui.controllers.dialog_coordinator import (
+    DialogCoordinator,
+)
 from phonology_features.gui.controllers.geometry import GeometryController
 from phonology_features.gui.controllers.inventory_dir import (
     InventoryDirController,
@@ -61,7 +63,6 @@ from phonology_features.gui.controllers.theme import (
     ThemeController,
     detect_system_theme,
 )
-from phonology_features.gui.editor.dialogs import center_on_parent
 from phonology_features.gui.style_utils import (
     set_css,
 )
@@ -177,7 +178,9 @@ class MainWindow(QMainWindow):
         # because it needs the combobox widget.
         self._inv_dir: InventoryDirController  # populated below
         self._did_first_show = False
-        self._editor: InventoryEditor | None = None
+        # Browse / PHOIBLE launchers + the Editor window lifecycle live
+        # here; the ``_editor`` property + ``_open_editor`` etc. forward.
+        self._dialogs = DialogCoordinator(self)
         # Last-seen segment-pane width; ``_on_seg_pane_width_changed``
         # short-circuits when the width hasn't actually changed across
         # a Qt-internal layout pass. Initialized to -1 so the first
@@ -907,14 +910,13 @@ class MainWindow(QMainWindow):
         # slot then fires on a half-destroyed window. Calling stop()
         # is safe even if the timer is not active.
         self._debounce.stop()
-        # Let the editor prompt for unsaved changes. Without this,
+        # Let a visible editor prompt for unsaved changes. Without this,
         # Qt parent-child cleanup destroys it without firing its
         # closeEvent and unsaved edits are silently dropped.
-        if self._editor is not None and self._editor.isVisible():
-            if not self._editor.close():
-                if event is not None:
-                    event.ignore()
-                return
+        if not self._dialogs.try_close_editor():
+            if event is not None:
+                event.ignore()
+            return
         self._settings.remove("geometry")
         if self.isMaximized() or self.isFullScreen():
             normal = self.normalGeometry()
@@ -970,61 +972,16 @@ class MainWindow(QMainWindow):
         if data:
             self._load_path(data)
 
+    @property
+    def _editor(self) -> InventoryEditor | None:
+        """The live Editor window, owned by the DialogCoordinator."""
+        return self._dialogs.editor
+
     def _browse_inventory(self) -> None:
-        """Open a file dialog and load the chosen JSON."""
-        dlg = QFileDialog(
-            self, "Open Phonological Inventory", "", "JSON Files (*.json)"
-        )
-        dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
-        dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
-        center_on_parent(dlg, self)
-        if not dlg.exec():
-            return
-        path = dlg.selectedFiles()[0] if dlg.selectedFiles() else ""
-        if not path:
-            return
-        idx = self.inventory_combo.findData(path)
-        if idx < 0:
-            pretty = os.path.splitext(os.path.basename(path))[0]
-            pretty = pretty.replace("_", " ").title()
-            self.inventory_combo.addItem(pretty, userData=path)
-            idx = self.inventory_combo.count() - 1
-        self.inventory_combo.setCurrentIndex(idx)
-        self._load_path(path)
+        self._dialogs.browse_inventory()
 
     def _open_phoible_picker(self) -> None:
-        """Open the PHOIBLE inventory picker dialog and load the
-        chosen language inventory into the active engine.
-
-        Mirrors the web's toolbar PHOIBLE button. All non-Qt
-        composition (search, list, generate, name + metadata stamp,
-        ``Inventory.from_grid``) lives in shared so the two UIs
-        produce the same ``Inventory`` from the same picker
-        selection: see
-        :py:func:`phonology_shared.editor.phoible_provider.materialize_phoible_inventory`.
-
-        Falls back to a friendly status-bar message when the
-        PHOIBLE snapshot is absent on this checkout (developer
-        ran the tests without running ``bake_phoible.py``); the
-        dialog is never shown in that case.
-        """
-        from phonology_features.gui.phoible_dialog import (
-            create_phoible_dialog,
-        )
-
-        dialog = create_phoible_dialog(self)
-        if dialog is None:
-            self.status.showMessage(
-                "PHOIBLE data not available; run "
-                "``python web/scripts/bake_phoible.py`` to enable."
-            )
-            return
-        if not dialog.exec():
-            return
-        inventory = dialog.chosen_inventory
-        if inventory is None:
-            return
-        self._adopt_phoible_inventory(inventory)
+        self._dialogs.open_phoible_picker()
 
     def _activate_inventory(
         self,
@@ -1086,97 +1043,7 @@ class MainWindow(QMainWindow):
         )
 
     def _open_editor(self) -> None:
-        """Open (or raise) the Editor window. Edits the current
-        inventory in place if one is loaded; otherwise shows the
-        new-inventory setup dialog.
-
-        The Editor is window-modal against MainWindow: while it's
-        open the user can't interact with the visualizer (in
-        particular, can't toggle the theme). The Editor's own
-        palette-dependent chrome doesn't get rebuilt on theme
-        changes, so blocking those changes while it's up avoids
-        the half-restyled state.
-        """
-        if self._editor is not None and self._editor.isVisible():
-            self._editor.raise_()
-            self._editor.activateWindow()
-            return
-        # Drop any stale (closed-but-not-yet-deleted) reference before
-        # constructing the new editor, and DISCONNECT its signals
-        # first. Without the disconnect: (a) a still-running save on the
-        # old editor could fire ``_on_editor_save_finished`` after the
-        # new editor is wired to the same slot; and (b) when Qt finally
-        # collects the deleteLater'd old editor, its ``destroyed`` would
-        # call ``_on_editor_destroyed`` and null out the reference to
-        # the NEW editor. Disconnecting both severs the old instance
-        # cleanly. Guarded because a signal may already be disconnected.
-        if self._editor is not None:
-            for signal, slot in (
-                (self._editor._save_finished, self._on_editor_save_finished),
-                (self._editor.destroyed, self._on_editor_destroyed),
-            ):
-                try:
-                    signal.disconnect(slot)
-                except (TypeError, RuntimeError):
-                    pass
-            self._editor.deleteLater()
-            self._editor = None
-
-        from phonology_features.gui.editor import InventoryEditor
-
-        current_path = self._inv_dir.current_path
-        if current_path:
-            editor = InventoryEditor(parent=self, load_path=current_path)
-        elif self.engine is not None:
-            # In-memory inventory with no backing file (PHOIBLE
-            # picker load). Seed the editor from the live engine so
-            # "load from PHOIBLE, then edit, then save locally"
-            # works; Save routes through Save As because there is no
-            # path to overwrite.
-            editor = InventoryEditor(parent=self)
-            editor.load_inventory(self.engine.inventory)
-        else:
-            editor = InventoryEditor(parent=self)
-            if not editor.show_setup_dialog():
-                editor.deleteLater()
-                return
-
-        editor.setWindowFlag(Qt.WindowType.Window)
-        editor.setWindowModality(Qt.WindowModality.WindowModal)
-        editor._save_finished.connect(self._on_editor_save_finished)
-        # When Qt destroys the editor, clear the field so the next
-        # open creates a fresh instance instead of resurrecting a
-        # dangling pointer.
-        editor.destroyed.connect(self._on_editor_destroyed)
-        self._editor = editor
-        self._editor.show()
-
-    def _on_editor_destroyed(self, _obj: object) -> None:
-        """Reset the cached editor reference when Qt finishes
-        destroying it. Connected by :py:meth:`_open_editor`."""
-        self._editor = None
-
-    def _on_editor_save_finished(self, path: str, err: str) -> None:
-        """When the editor finishes a save, switch the main viewer to
-        the freshly-saved file if it's not already the current one.
-
-        Covers the "user just authored a new inventory in the editor"
-        case (current_path was None) and the "Save As to a different
-        path" case. For saves to the SAME path the user is already
-        viewing, the directory watcher's auto-reload handles it --
-        explicit reload here would clear the user's analysis state
-        twice for no benefit.
-        """
-        if err:
-            return  # editor already showed its own error dialog
-        if path == self._inv_dir.current_path:
-            return  # same-path save -> watcher will refresh
-        if os.path.isfile(path):
-            _log.info(
-                "switching to inventory saved from editor: %s",
-                os.path.basename(path),
-            )
-            self._load_path(path)
+        self._dialogs.open_editor()
 
     def _load_path(self, path: str) -> None:
         """Load an inventory JSON. Shared by the dropdown, Browse, and
