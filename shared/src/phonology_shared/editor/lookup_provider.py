@@ -31,8 +31,7 @@ from phonology_shared.editor.providers import (
     GeneratedInventory,
     _filter_encoded_bundles,
     decode_positional_bundle,
-    prune_unused_features,
-    restrict_bundles,
+    prune_and_restrict,
 )
 
 # Filename of the build-baked snapshot. Co-located with this module
@@ -202,9 +201,7 @@ class LookupFeatureProvider:
             # the copy is a non-issue.
             resolved[symbol] = dict(bundle)
 
-        if resolved:
-            features = prune_unused_features(features, resolved)
-            resolved = restrict_bundles(resolved, features)
+        features, resolved, _ = prune_and_restrict(features, resolved)
 
         return GeneratedInventory(
             features=features,

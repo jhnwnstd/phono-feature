@@ -36,7 +36,7 @@ feature.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Collection, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 
@@ -834,6 +834,34 @@ def _should_break_out(subgroup_size: int, inventory_size: int) -> bool:
     return subgroup_size >= max(3, int(inventory_size * 0.05))
 
 
+def _apply_breakout(
+    assignment: dict[str, list[str]],
+    new_name: str,
+    parent_name: str,
+    member_pred: Callable[[str], bool],
+    inventory_size: int,
+) -> None:
+    """Peel the parent's members matching ``member_pred`` into
+    ``new_name`` and leave the rest under the parent.
+
+    No-op unless the parent exists, the split is non-trivial (both
+    sides non-empty), and the subgroup clears the breakout threshold.
+    Shared scaffold for the spec-based and fact-based breakout passes;
+    only the membership predicate differs between them.
+    """
+    if parent_name not in assignment:
+        return
+    parent_members = list(assignment[parent_name])
+    subgroup = [s for s in parent_members if member_pred(s)]
+    remainder = [s for s in parent_members if s not in subgroup]
+    if not subgroup or not remainder:
+        return
+    if not _should_break_out(len(subgroup), inventory_size):
+        return
+    assignment[parent_name] = remainder
+    assignment[new_name] = subgroup
+
+
 _LARYNGEAL_FEATURES: set[str] = {"spreadgl", "constrgl"}
 _PLACE_FEATURES: set[str] = {
     "labial",
@@ -1187,23 +1215,17 @@ def group_segments(
             )
         assignment[group].append(sym)
     for new_name, parent_name, cond in DERIVED_BREAKOUTS:
-        if parent_name not in assignment:
-            continue
+        # Skip-guard kept here (not in the helper) so an inactive
+        # feature set never triggers the split.
         if not all(f in active_features for f in cond):
             continue
-        parent_members = list(assignment[parent_name])
-        subgroup = [
-            s
-            for s in parent_members
-            if all(norm[s].get(f, "0") == v for f, v in cond.items())
-        ]
-        remainder = [s for s in parent_members if s not in subgroup]
-        if not subgroup or not remainder:
-            continue
-        if not _should_break_out(len(subgroup), len(inventory)):
-            continue
-        assignment[parent_name] = remainder
-        assignment[new_name] = subgroup
+
+        def _spec_match(s: str, cond: dict[str, str] = cond) -> bool:
+            return all(norm[s].get(f, "0") == v for f, v in cond.items())
+
+        _apply_breakout(
+            assignment, new_name, parent_name, _spec_match, len(inventory)
+        )
 
     # Fact-based breakouts: peel Implosives / Ejective {Plosives,
     # Fricatives, Affricates} off their manner parents using the
@@ -1220,21 +1242,13 @@ def group_segments(
     # only see consonants. The relabel patterns and laryngeal
     # rescue below inherit the same guarantee.
     for new_name, parent_name, target_kind in _FACT_BREAKOUTS:
-        if parent_name not in assignment:
-            continue
-        parent_members = list(assignment[parent_name])
-        subgroup = [
-            s
-            for s in parent_members
-            if derive_laryngeal_kind(norm[s]) == target_kind
-        ]
-        remainder = [s for s in parent_members if s not in subgroup]
-        if not subgroup or not remainder:
-            continue
-        if not _should_break_out(len(subgroup), len(inventory)):
-            continue
-        assignment[parent_name] = remainder
-        assignment[new_name] = subgroup
+
+        def _kind_match(s: str, kind: LaryngealKind = target_kind) -> bool:
+            return derive_laryngeal_kind(norm[s]) == kind
+
+        _apply_breakout(
+            assignment, new_name, parent_name, _kind_match, len(inventory)
+        )
 
     for origin_set, new_label in _RELABEL_PATTERNS.items():
         present = [g for g in sorted(origin_set) if g in assignment]

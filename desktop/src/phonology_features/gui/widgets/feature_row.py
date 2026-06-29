@@ -193,46 +193,25 @@ class FeatureRow(QWidget):
         self._panel_cache_valid: bool = False
         self._panel_cached_for: bool = False
         layout = QHBoxLayout(self)
-        # Padding + inter-element gap sourced from
-        # ``chart_style.FEAT_ROW_*`` so the desktop's
-        # setContentsMargins / setSpacing and the web's CSS
-        # ``padding`` / ``gap`` read the same numbers. Pre-relay
-        # desktop hardcoded ``(8, 3, 8, 3)`` and ``4``; web used
-        # ``2px var(--space-md)`` and ``var(--space-xs)``.
-        layout.setContentsMargins(
-            cs.FEAT_ROW_PADDING_H_PX,
-            cs.FEAT_ROW_PADDING_V_PX,
-            cs.FEAT_ROW_PADDING_H_PX,
-            cs.FEAT_ROW_PADDING_V_PX,
-        )
+        # Inter-element gap from chart_style so the desktop setSpacing
+        # and the web CSS ``gap`` read one number. Per-density padding,
+        # sizes, fonts, and the height pin are applied below via
+        # ``_apply_density``.
         layout.setSpacing(cs.FEAT_ROW_GAP_PX)
         self.name_label = QLabel(feature_name, self)
-        # Academic small-caps for feature labels: the initial cap
-        # stays at full height and the rest of the lowercase
-        # letters render as small caps. Matches the print
-        # convention for citing features.
-        _name_font = QFont("Noto Sans", 10)
-        _name_font.setCapitalization(QFont.Capitalization.SmallCaps)
-        self.name_label.setFont(_name_font)
         self.name_label.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Preferred,
         )
         set_css(self.name_label, f"color: {C['text']};")
         self.plus_btn = QPushButton("+", self)
-        self.plus_btn.setFixedSize(28, 24)
         self.plus_btn.setCheckable(True)
-        self.plus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self._style_btn(self.plus_btn, "+")
         self.minus_btn = QPushButton("−", self)
-        self.minus_btn.setFixedSize(28, 24)
         self.minus_btn.setCheckable(True)
-        self.minus_btn.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self._style_btn(self.minus_btn, "-")
         self.badge = QLabel("·", self)
-        self.badge.setFixedSize(30, 24)
         self.badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.badge.setFont(QFont("Noto Sans", 11, QFont.Weight.Bold))
         self.badge.hide()
         layout.addWidget(self.name_label)
         layout.addWidget(self.badge)
@@ -242,12 +221,12 @@ class FeatureRow(QWidget):
         self.minus_btn.clicked.connect(lambda: self._on_click("-"))
         self.setAutoFillBackground(True)
         set_css(self, self._ROW_NEUTRAL)
-        # Pin the row to its density's stride so Qt cannot squeeze it
-        # below the buttons' fixed height. Owners flip density via
-        # ``set_compact`` after they know the inventory's feature
-        # count; the constructor starts in NORMAL.
+        # Sizes, fonts, padding, and the height pin all come from the
+        # density pack so the constructor and ``set_compact`` cannot
+        # drift. Owners flip to COMPACT after they know the inventory's
+        # feature count; start in NORMAL.
         self._compact = False
-        self.setFixedHeight(_DENSITY_NORMAL.row_h)
+        self._apply_density(_DENSITY_NORMAL)
 
     def _build_styles(self) -> None:
         """Bind the active theme's style strings as instance attrs."""
@@ -430,6 +409,37 @@ class FeatureRow(QWidget):
         self.minus_btn.setVisible(yes)
         self.badge.setVisible(not yes)
 
+    def _apply_density(self, cfg: _RowDensity) -> None:
+        """Apply a density pack's sizes, fonts, padding, and height pin.
+
+        Shared by ``__init__`` (NORMAL) and ``set_compact`` so the
+        initial render and the compact swap read one source.
+        """
+        btn_w, btn_h = cfg.btn_size
+        badge_w, badge_h = cfg.badge_size
+        self.plus_btn.setFixedSize(btn_w, btn_h)
+        self.minus_btn.setFixedSize(btn_w, btn_h)
+        self.badge.setFixedSize(badge_w, badge_h)
+        btn_font = QFont("Noto Sans", cfg.btn_font, QFont.Weight.Bold)
+        self.plus_btn.setFont(btn_font)
+        self.minus_btn.setFont(btn_font)
+        self.badge.setFont(btn_font)
+        # Academic small-caps: the initial cap stays full height and the
+        # rest render as small caps, matching the print convention for
+        # citing features.
+        name_font = QFont("Noto Sans", cfg.name_font)
+        name_font.setCapitalization(QFont.Capitalization.SmallCaps)
+        self.name_label.setFont(name_font)
+        lay = self.layout()
+        if lay is not None:
+            lay.setContentsMargins(
+                cs.FEAT_ROW_PADDING_H_PX,
+                cfg.margin_v,
+                cs.FEAT_ROW_PADDING_H_PX,
+                cfg.margin_v,
+            )
+        self.setFixedHeight(cfg.row_h)
+
     def set_compact(self, yes: bool) -> None:
         """Switch the row between comfortable and compact density.
 
@@ -446,26 +456,7 @@ class FeatureRow(QWidget):
         if yes == self._compact:
             return
         self._compact = yes
-        cfg = _DENSITY_COMPACT if yes else _DENSITY_NORMAL
-        btn_w, btn_h = cfg.btn_size
-        badge_w, badge_h = cfg.badge_size
-        self.plus_btn.setFixedSize(btn_w, btn_h)
-        self.minus_btn.setFixedSize(btn_w, btn_h)
-        self.badge.setFixedSize(badge_w, badge_h)
-        self.plus_btn.setFont(
-            QFont("Noto Sans", cfg.btn_font, QFont.Weight.Bold)
-        )
-        self.minus_btn.setFont(
-            QFont("Noto Sans", cfg.btn_font, QFont.Weight.Bold)
-        )
-        self.badge.setFont(QFont("Noto Sans", cfg.btn_font, QFont.Weight.Bold))
-        _compact_name_font = QFont("Noto Sans", cfg.name_font)
-        _compact_name_font.setCapitalization(QFont.Capitalization.SmallCaps)
-        self.name_label.setFont(_compact_name_font)
-        lay = self.layout()
-        if lay is not None:
-            lay.setContentsMargins(8, cfg.margin_v, 8, cfg.margin_v)
-        self.setFixedHeight(cfg.row_h)
+        self._apply_density(_DENSITY_COMPACT if yes else _DENSITY_NORMAL)
 
     def set_display(
         self,

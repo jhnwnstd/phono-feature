@@ -758,15 +758,7 @@ function applyBootstrap() {
             console.error("bootstrap shape invalid; falling back to bridge", info);
         return false;
     }
-    state.inventory_name = info.name;
-    state.segments = info.segments;
-    state.features = info.features;
-    state.hidden_segment_classes = new Set();
-    state.seg_groups = info.groups;
-    state.seg_vowel_chart = info.vowel_chart;
-    state.seg_vocoids = info.vocoids || [];
-    renderSegmentsWithVisibility();
-    renderFeaturePanel(info.feature_groups);
+    _adoptInventoryState(info);
     // Paint the no-selection analysis hints ("Click a segment...")
     // baked into the bootstrap so they land with the first frame
     // instead of after Pyodide boots. The bridge-ready pass repaints
@@ -818,11 +810,13 @@ async function loadBundledInventory(item) {
 }
 
 /**
- * Adopt a bridge-returned inventory summary as the active state and
- * paint the panels. Shared by the load-from-text and create-new
- * paths so both produce identical post-load UI state.
+ * Adopt an inventory summary as the active state and paint the
+ * segment + feature panels. Shared by the cold-boot bootstrap, the
+ * load-from-text, and the create-new paths so all three land on
+ * identical post-load UI state. Selection resets to empty, a no-op at
+ * boot since state starts empty.
  */
-function applyInventoryInfo(info) {
+function _adoptInventoryState(info) {
     state.inventory_name = info.name;
     state.segments = info.segments;
     state.features = info.features;
@@ -834,6 +828,15 @@ function applyInventoryInfo(info) {
     state.seg_vocoids = info.vocoids || [];
     renderSegmentsWithVisibility();
     renderFeaturePanel(info.feature_groups);
+}
+
+/**
+ * Adopt a bridge-returned inventory summary, then paint the
+ * no-selection analysis hints and the Source link. The load-from-text
+ * and create-new paths both land here.
+ */
+function applyInventoryInfo(info) {
+    _adoptInventoryState(info);
     // Show the empty-state hints ("Click a segment…") from the start
     // rather than a blank pane (the inventory identity lives in the
     // dropdown + the statusbar, so it is not repeated above the tabs).

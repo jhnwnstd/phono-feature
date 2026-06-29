@@ -29,8 +29,7 @@ from phonology_shared.editor.panphon_features import (
 )
 from phonology_shared.editor.providers import (
     GeneratedInventory,
-    prune_unused_features,
-    restrict_bundles,
+    prune_and_restrict,
 )
 
 
@@ -176,9 +175,7 @@ class PanPhonFeatureProvider:
                     f"{symbol!r}: PanPhon feature conversion failed: " f"{exc}"
                 )
 
-        if resolved:
-            features = prune_unused_features(features, resolved)
-            resolved = restrict_bundles(resolved, features)
+        features, resolved, _ = prune_and_restrict(features, resolved)
 
         return GeneratedInventory(
             features=features,

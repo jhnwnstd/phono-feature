@@ -127,16 +127,10 @@ class SegmentGridWidget(QWidget):
         hdr_font = QFont("Noto Sans")
         hdr_font.setPixelSize(cs.SEG_GROUP_HEADER_FONT_PX)
         hdr_font.setWeight(QFont.Weight(cs.SEG_GROUP_HEADER_FONT_WEIGHT))
-        pad = cs.SEG_GROUP_HEADER_PADDING_PX
         for manner in groups:
             hdr = QLabel(manner.upper())
             hdr.setFont(hdr_font)
-            set_css(
-                hdr,
-                f"color: {C['text_dim']};"
-                f" letter-spacing: {cs.SEG_GROUP_HEADER_LETTER_SPACING_PX}px;"
-                f" padding: {pad[0]}px {pad[1]}px {pad[2]}px {pad[3]}px;",
-            )
+            set_css(hdr, self._header_style(C["text_dim"]))
             hdr.setParent(self)
             self._headers.append(hdr)
         self._n_cols = 0
@@ -152,6 +146,18 @@ class SegmentGridWidget(QWidget):
         """
         self._last_headers_active = None
 
+    def _header_style(self, color: str) -> str:
+        """Manner-class header QSS built from the relayed shared
+        constants so ``set_groups`` and ``set_headers_active`` never
+        drift on padding or letter-spacing.
+        """
+        pad = cs.SEG_GROUP_HEADER_PADDING_PX
+        return (
+            f"color: {color};"
+            f" letter-spacing: {cs.SEG_GROUP_HEADER_LETTER_SPACING_PX}px;"
+            f" padding: {pad[0]}px {pad[1]}px {pad[2]}px {pad[3]}px;"
+        )
+
     def set_headers_active(self, active: bool) -> None:
         """Style headers for the given active state. Skips re-applying
         if the cached state matches; ``set_groups`` and ``apply_theme``
@@ -160,10 +166,7 @@ class SegmentGridWidget(QWidget):
         if self._last_headers_active == active:
             return
         color = C["text"] if active else C["text_dim"]
-        style = (
-            f"color: {color}; letter-spacing: 1px;"
-            " padding: 4px 2px 1px 2px;"
-        )
+        style = self._header_style(color)
         for hdr in self._headers:
             set_css(hdr, style)
         self._last_headers_active = active

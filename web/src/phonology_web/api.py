@@ -55,7 +55,6 @@ from phonology_shared.data import (
     VALID_VALUES,
     Inventory,
     ValidationError,
-    parse_inventory_json_text,
 )
 
 # ``confirm_remove_*_prompt`` are re-exported on the api module so
@@ -72,6 +71,7 @@ from phonology_shared.editor.grid import (  # noqa: F401
     enforce_class_caps,
     grid_to_inventory,
     normalize_minus,
+    parse_inventory_checked,
     validate_new_feature_label,
     validate_new_segment_label,
 )
@@ -84,6 +84,7 @@ from phonology_shared.editor.lookup_provider import (
     LookupTableNotAvailable,
 )
 from phonology_shared.editor.phoible_provider import (
+    DEFAULT_SEARCH_LIMIT,
     PHOIBLE_PREVIEW_SEGMENT_LIMIT,
     PhoibleProvider,
     PhoibleSnapshotNotAvailable,
@@ -189,10 +190,7 @@ def _parse_enforce(json_text: str, source_label: str) -> Inventory:
     so they are enforced here, after the structural parse, before any
     engine swap.
     """
-    raw = parse_inventory_json_text(json_text, source_label)
-    inventory = Inventory.parse(raw, source=source_label)
-    enforce_class_caps(inventory.segments)
-    return inventory
+    return parse_inventory_checked(json_text, source_label)
 
 
 def load_inventory_json(
@@ -461,6 +459,7 @@ def phoible_is_ready() -> bool:
     )
 
 
+@_translate_engine_errors
 def phoible_load_data(payload_json: str) -> bool:
     """Ingest the lazy-loaded PHOIBLE data JSON payload.
 
@@ -477,6 +476,7 @@ def phoible_load_data(payload_json: str) -> bool:
     return True
 
 
+@_translate_engine_errors
 def phoible_load_index(payload_json: str) -> bool:
     """Ingest the lazy-loaded PHOIBLE index JSON payload.
 
@@ -494,7 +494,9 @@ def phoible_load_index(payload_json: str) -> bool:
     return True
 
 
-def phoible_search_languages(query: str, limit: int = 20) -> list[str]:
+def phoible_search_languages(
+    query: str, limit: int = DEFAULT_SEARCH_LIMIT
+) -> list[str]:
     """Autocomplete: return up to ``limit`` language names matching
     the substring query. Empty query returns an empty list.
 

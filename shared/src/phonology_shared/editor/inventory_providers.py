@@ -116,6 +116,9 @@ class InventoryProvider(Protocol):
     #: :py:attr:`name`. ``"unknown"`` is acceptable.
     version: str
 
+    # The live default is DEFAULT_SEARCH_LIMIT in phoible_provider.py;
+    # kept as a literal here so the Protocol stays decoupled from any
+    # concrete provider module.
     def search_languages(self, query: str, limit: int = 20) -> list[str]:
         """Return language names matching ``query``.
 

@@ -524,25 +524,6 @@ class GeometryController:
             return
         QTimer.singleShot(0, lambda: self.fit_vsplit_after_layout(top_need_h))
 
-    def apply_vsplit_to_content(self, top_need_h: int) -> None:
-        """Re-fit JUST the vsplit (top vs analysis) to the current
-        inventory's content height. Called from
-        ``apply_splitter_sizes`` on the first launch only. Subsequent
-        inventory swaps go through :py:meth:`reflow_top_pane_only`
-        instead so the analysis-pane height stays stable across loads
-        (the user-visible bug: loading a smaller inventory used to
-        make analysis grow, which then shrank back on the next big
-        load, churning the layout).
-        """
-        total = self._vsplit.height()
-        if total <= 0:
-            QTimer.singleShot(
-                0, lambda: self.fit_vsplit_after_layout(top_need_h)
-            )
-            return
-        top_h = layout.top_pane_height(top_need_h, total)
-        self._vsplit.setSizes([top_h, total - top_h])
-
     def reflow_top_pane_only(self, top_need_h: int) -> None:
         """Re-run the seg-pane spillover and feature-pane layout for
         the new inventory WITHOUT changing the vsplit sizes. Called
@@ -550,11 +531,11 @@ class GeometryController:
         established analysis-pane height stays stable.
 
         ``top_need_h`` is kept as a parameter for symmetry with
-        :py:meth:`apply_vsplit_to_content` and for the future case
+        :py:meth:`apply_splitter_sizes` and for the future case
         where a very tall new inventory would push the cap (the
         analysis floor is sacrosanct via ``setMinimumHeight``, so the
         top pane's content overflows into its internal scroll area
-        rather than mutating the vsplit). No splitter writes here --
+        rather than mutating the vsplit). No splitter writes here, so
         layout-reflow alone via Qt's normal resize-event path picks
         up the new top-pane content from the panel's
         ``setMinimumHeight`` that ``fit_to_content`` just applied.

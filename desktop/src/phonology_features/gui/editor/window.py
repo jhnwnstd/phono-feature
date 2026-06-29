@@ -60,10 +60,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from phonology_features.gui.controllers.inventory_dir import (
+    InventoryDirController,
+)
 from phonology_features.gui.editor.dialogs import (
     InputDialog,
     ask_question,
     center_on_parent,
+    prompt_text,
     show_warning,
 )
 from phonology_features.gui.editor.edits import (
@@ -94,8 +98,8 @@ from phonology_shared.editor.grid import (
     classify_selection,
     confirm_remove_feature_prompt,
     confirm_remove_segment_prompt,
-    enforce_class_caps,
     grid_to_inventory,
+    load_inventory_checked,
     remove_target_for_shape,
     validate_new_feature_label,
     validate_new_segment_label,
@@ -453,6 +457,15 @@ class InventoryEditor(QMainWindow):
             "Create a new inventory or open an existing one."
         )
 
+    def _cell_text(self, row: int, col: int) -> str:
+        """The grid cell's text, or ``"0"`` for an empty/missing cell.
+
+        Centralizes the QTableWidgetItem-or-default read that every
+        grid snapshot performs.
+        """
+        item = self._table.item(row, col)
+        return item.text() if item is not None else "0"
+
     def _refresh_cap_counter(self) -> None:
         """Recompute and restyle the vowel / consonant / total
         counter from the live grid. Cheap at the capped sizes, so
@@ -466,8 +479,7 @@ class InventoryEditor(QMainWindow):
         for c, seg in enumerate(self._segments):
             bundle: dict[str, str] = {}
             for r, feat in enumerate(self._features):
-                item = self._table.item(r, c)
-                val = item.text() if item is not None else "0"
+                val = self._cell_text(r, c)
                 if val != "0":
                     bundle[feat] = val
             segments[seg] = bundle
@@ -1179,8 +1191,7 @@ class InventoryEditor(QMainWindow):
         """The column's per-feature cell text, for an undoable removal."""
         out: list[str] = []
         for r in range(len(self._features)):
-            item = self._table.item(r, col)
-            out.append(item.text() if item is not None else "0")
+            out.append(self._cell_text(r, col))
         return tuple(out)
 
     def _insert_feature_at(
@@ -1200,8 +1211,7 @@ class InventoryEditor(QMainWindow):
         """The row's per-segment cell text, for an undoable removal."""
         out: list[str] = []
         for c in range(len(self._segments)):
-            item = self._table.item(row, c)
-            out.append(item.text() if item is not None else "0")
+            out.append(self._cell_text(row, c))
         return tuple(out)
 
     def _rename_segment_at(self, index: int, name: str) -> None:
@@ -1215,17 +1225,12 @@ class InventoryEditor(QMainWindow):
         :py:func:`validate_new_segment_label`, so the web editor's
         add-segment flow produces identical error wording.
         """
-        from PyQt6.QtWidgets import QInputDialog
-
-        dlg = QInputDialog(self)
-        dlg.setWindowTitle("Add Segment")
-        dlg.setLabelText("Segment symbol (IPA):")
-        center_on_parent(dlg, self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        value = prompt_text(self, "Add Segment", "Segment symbol (IPA):")
+        if value is None:
             return
         try:
             seg = validate_new_segment_label(
-                dlg.textValue(),
+                value,
                 self._segments,
                 max_segments=MAX_SEGMENTS,
             )
@@ -1250,17 +1255,12 @@ class InventoryEditor(QMainWindow):
         Trim + dupe-check via the shared
         :py:func:`validate_new_feature_label`.
         """
-        from PyQt6.QtWidgets import QInputDialog
-
-        dlg = QInputDialog(self)
-        dlg.setWindowTitle("Add Feature")
-        dlg.setLabelText("Feature name:")
-        center_on_parent(dlg, self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        value = prompt_text(self, "Add Feature", "Feature name:")
+        if value is None:
             return
         try:
             feat = validate_new_feature_label(
-                dlg.textValue(),
+                value,
                 self._features,
                 max_features=MAX_FEATURES,
             )
@@ -1353,17 +1353,13 @@ class InventoryEditor(QMainWindow):
         """Prompt for a new label for the segment at ``col`` and apply
         it as an undoable rename. Empty, unchanged, or duplicate names
         are rejected (the latter with a status note)."""
-        from PyQt6.QtWidgets import QInputDialog
-
         old = self._segments[col]
-        dlg = QInputDialog(self)
-        dlg.setWindowTitle("Rename Segment")
-        dlg.setLabelText("Segment symbol (IPA):")
-        dlg.setTextValue(old)
-        center_on_parent(dlg, self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        value = prompt_text(
+            self, "Rename Segment", "Segment symbol (IPA):", initial=old
+        )
+        if value is None:
             return
-        proposed = dlg.textValue().strip()
+        proposed = value.strip()
         if proposed == "" or proposed == old:
             return
         if any(
@@ -1397,8 +1393,7 @@ class InventoryEditor(QMainWindow):
         for r in range(len(self._features)):
             row: list[str] = []
             for c in range(len(self._segments)):
-                item = self._table.item(r, c)
-                row.append(item.text() if item is not None else "0")
+                row.append(self._cell_text(r, c))
             cells.append(row)
         # Start from the carried metadata (PHOIBLE stamps,
         # segment_secondary, any user keys) and overlay the live
@@ -1483,16 +1478,7 @@ class InventoryEditor(QMainWindow):
     def _save_as(self) -> None:
         if self._draining_save:
             return
-        inventories_dir = os.path.normpath(
-            os.path.join(
-                os.path.dirname(__file__),
-                "..",
-                "..",
-                "..",
-                "..",
-                "inventories",
-            )
-        )
+        inventories_dir = InventoryDirController.get_inventories_dir()
         dlg = QFileDialog(
             self, "Save Inventory", inventories_dir, "JSON Files (*.json)"
         )
@@ -1577,16 +1563,7 @@ class InventoryEditor(QMainWindow):
             return
         if not self._check_unsaved():
             return
-        inventories_dir = os.path.normpath(
-            os.path.join(
-                os.path.dirname(__file__),
-                "..",
-                "..",
-                "..",
-                "..",
-                "inventories",
-            )
-        )
+        inventories_dir = InventoryDirController.get_inventories_dir()
         dlg = QFileDialog(
             self, "Open Inventory", inventories_dir, "JSON Files (*.json)"
         )
@@ -1608,14 +1585,7 @@ class InventoryEditor(QMainWindow):
         normalized grid that gets silently rewritten on save.
         """
         try:
-            inventory = Inventory.load(path)
-            # Per-class caps are enforced one layer above the parse
-            # contract (data must not import chart), so apply them
-            # here inside the same try, matching the viewer's
-            # ``main_window._load_path`` and the web load seam: all
-            # three load paths must agree on which files are
-            # admissible, not just the eventual Save.
-            enforce_class_caps(inventory.segments)
+            inventory = load_inventory_checked(path)
         except ValidationError as e:
             show_warning(
                 self,

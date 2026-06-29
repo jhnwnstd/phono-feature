@@ -53,6 +53,7 @@ from phonology_features.gui.style_utils import set_css
 from phonology_shared.data.inventory import Inventory, ValidationError
 from phonology_shared.editor.inventory_providers import InventoryDescriptor
 from phonology_shared.editor.phoible_provider import (
+    DEFAULT_SEARCH_LIMIT,
     PhoibleProvider,
     PhoibleSnapshotNotAvailable,
     default_phoible_provider,
@@ -394,7 +395,9 @@ class PhoibleDialog(QDialog):
             self._clear_sources()
             self._set_sections_visible(sources=False, hint=True)
             return
-        matches = self._provider.search_languages(query, limit=20)
+        matches = self._provider.search_languages(
+            query, limit=DEFAULT_SEARCH_LIMIT
+        )
         for name in matches:
             QListWidgetItem(name, self._results)
         if matches:

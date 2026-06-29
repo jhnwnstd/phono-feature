@@ -61,6 +61,7 @@ from phonology_features.gui.controllers.theme import (
     ThemeController,
     detect_system_theme,
 )
+from phonology_features.gui.editor.dialogs import center_on_parent
 from phonology_features.gui.style_utils import (
     set_css,
 )
@@ -85,7 +86,7 @@ from phonology_shared.chart.consonants import (
     visible_groups,
 )
 from phonology_shared.data.inventory import Inventory, ValidationError
-from phonology_shared.editor.grid import enforce_class_caps
+from phonology_shared.editor.grid import load_inventory_checked
 from phonology_shared.editor.phoible_provider import phoible_loaded_message
 from phonology_shared.presentation import layout
 from phonology_shared.presentation.analysis import render_validation_report
@@ -944,12 +945,7 @@ class MainWindow(QMainWindow):
         )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
         dlg.setFileMode(QFileDialog.FileMode.ExistingFile)
-        screen = self.screen()
-        if screen:
-            geo = screen.availableGeometry()
-            frame = dlg.frameGeometry()
-            frame.moveCenter(geo.center())
-            dlg.move(frame.topLeft())
+        center_on_parent(dlg, self)
         if not dlg.exec():
             return
         path = dlg.selectedFiles()[0] if dlg.selectedFiles() else ""
@@ -1135,13 +1131,7 @@ class MainWindow(QMainWindow):
         fname = os.path.basename(path)
         _log.info("load path: %s", fname)
         try:
-            inventory = Inventory.load(path)
-            # Per-class caps: the total cap is enforced inside
-            # ``Inventory.load``; the vowel/consonant split is
-            # feature-driven and lives one layer up, so check it
-            # here, inside the same try so it surfaces through the
-            # identical validation-report channel.
-            enforce_class_caps(inventory.segments)
+            inventory = load_inventory_checked(path)
         except ValidationError as e:
             # Inventory.load already logged the failure category; here
             # we just record what the GUI did about it.
@@ -1193,8 +1183,7 @@ class MainWindow(QMainWindow):
         first paint is already at the right size; runtime swaps defer
         one event-loop tick so pending paints drain before we resize.
         """
-        self._mode_ctrl.saved_seg_state = []
-        self._mode_ctrl.saved_feat_state = {}
+        self._mode_ctrl.reset_saved_state()
         # Refresh the status-bar "Source" affordance for the freshly
         # loaded inventory from the unified ``metadata.source`` field
         # (a URL/DOI link or a plain citation). PHOIBLE stamps it with
@@ -2058,5 +2047,4 @@ class MainWindow(QMainWindow):
         for row in self._feat_rows.values():
             row.reset()
         if not silent:
-            self._mode_ctrl.saved_seg_state = []
-            self._mode_ctrl.saved_feat_state = {}
+            self._mode_ctrl.reset_saved_state()

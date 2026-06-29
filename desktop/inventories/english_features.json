@@ -1,6 +1,7 @@
 {
   "metadata": {
-    "name": "English phoneme inventory (Hayes 2009)"
+    "name": "English phoneme inventory (Hayes 2009)",
+    "source": "Hayes, Bruce. 2009. Introductory Phonology. Blackwell Textbooks in Linguistics. Malden, MA and Oxford: Wiley-Blackwell."
   },
   "features": [
     "CORONAL",

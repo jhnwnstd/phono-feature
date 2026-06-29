@@ -417,12 +417,6 @@ class VowelChartWidget(QWidget):
         # legible when an inventory needs more horizontal room than
         # the canonical ``layout.VOWEL_NATURAL_W``.
         self._natural_total_w: int = 0
-        # Cell width hint used to inset the data rectangle so cells
-        # placed at chart_x == 0 / 1 stay fully inside the trapezoid
-        # instead of clipping at the left / right edge. Populated
-        # from the first cell that lands inside, defaults to the
-        # consonant button width as a sensible floor.
-        self._cell_w_hint: int = 36
 
     def _rebuild_style_cache(self) -> None:
         # Letter-spacing on the column headers pinned to
@@ -494,9 +488,13 @@ class VowelChartWidget(QWidget):
         header_style = self._HDR_ACTIVE if active else self._HDR_INACTIVE
         row_style = self._ROW_ACTIVE if active else self._ROW_INACTIVE
         if self._title_label is not None:
+            # Color is the only active-state difference; padding comes
+            # from the relayed constant and letter-spacing already lives
+            # on the QFont (a stylesheet copy would double-apply it).
+            _pad = cs.VOWEL_CHART_TITLE_PADDING_PX
             self._title_label.setStyleSheet(
-                f"color: {C['text' if active else 'text_dim']};"
-                " letter-spacing: 1px; padding: 2px 2px 0 2px;"
+                f"color: {C['text' if active else 'text_dim']}; "
+                f"padding: {_pad[0]}px {_pad[1]}px {_pad[2]}px {_pad[3]}px;"
             )
         for lbl, _ in self._col_labels:
             lbl.setStyleSheet(header_style)
@@ -1142,8 +1140,6 @@ class VowelChartWidget(QWidget):
             widget.adjustSize()
             ww = widget.width()
             wh = widget.height()
-            if ww > self._cell_w_hint:
-                self._cell_w_hint = ww
             # ``cell_nudge`` is the shared hard-boundary confinement
             # offset; applied with the pair shift so the box stays
             # inside the outline exactly as the geometry computed.

@@ -42,8 +42,7 @@ from phonology_shared.editor.providers import (
     GeneratedInventory,
     _filter_encoded_bundles,
     decode_positional_bundle,
-    prune_unused_features,
-    restrict_bundles,
+    prune_and_restrict,
 )
 
 _log = logging.getLogger(__name__)
@@ -55,7 +54,7 @@ _DATA_FILENAME = "_phoible_data.generated.json"
 # even when the user types a one-letter substring matching
 # hundreds of languages. The dialog can request more by upping the
 # ``limit`` parameter on :py:meth:`PhoibleProvider.search_languages`.
-_DEFAULT_SEARCH_LIMIT = 20
+DEFAULT_SEARCH_LIMIT = 20
 
 
 class PhoibleSnapshotNotAvailable(RuntimeError):
@@ -454,7 +453,7 @@ class PhoibleProvider:
     # ------------------------------------------------------------------
 
     def search_languages(
-        self, query: str, limit: int = _DEFAULT_SEARCH_LIMIT
+        self, query: str, limit: int = DEFAULT_SEARCH_LIMIT
     ) -> list[str]:
         """Return language names matching ``query`` case-
         insensitively against the language name.
@@ -534,12 +533,9 @@ class PhoibleProvider:
             if sym in resolved
         }
 
-        if resolved:
-            features = prune_unused_features(
-                features, resolved, extra_bundles=secondary.values()
-            )
-            resolved = restrict_bundles(resolved, features)
-            secondary = restrict_bundles(secondary, features)
+        features, resolved, secondary = prune_and_restrict(
+            features, resolved, secondary=secondary
+        )
 
         return GeneratedInventory(
             features=features,

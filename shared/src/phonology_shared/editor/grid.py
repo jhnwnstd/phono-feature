@@ -19,6 +19,7 @@ from phonology_shared.data.inventory import (
     ValidationError,
     canonicalize_feature_label,
     canonicalize_segment_label,
+    parse_inventory_json_text,
 )
 from phonology_shared.presentation.constants import MINUS_SIGN
 
@@ -319,6 +320,37 @@ def enforce_class_caps(
     messages = validate_class_caps(segments, normalized=normalized)
     if messages:
         raise ValidationError(tuple(messages))
+
+
+def load_inventory_checked(path: str) -> Inventory:
+    """Load a JSON inventory file and enforce the per-class caps.
+
+    The single file-load seam for the desktop viewer and editor.
+    ``Inventory.load`` caps the total segment count; the
+    vowel/consonant split is feature-driven and lives one layer up
+    (data must not import chart), so it is checked here. A future load
+    route inherits the split check by calling this instead of
+    :py:meth:`Inventory.load` directly. Both steps raise
+    :py:class:`ValidationError`, so callers need one except clause.
+    """
+    inventory = Inventory.load(path)
+    enforce_class_caps(inventory.segments)
+    return inventory
+
+
+def parse_inventory_checked(json_text: str, source: str) -> Inventory:
+    """Decode, structurally parse, and cap-check JSON inventory text.
+
+    The in-memory-text counterpart to :py:func:`load_inventory_checked`
+    (the web bridge's upload path reads text, not a file). The same
+    decode entry point :py:meth:`Inventory.load` uses, so every route
+    enforces the same JSON-level contract (duplicate keys, non-finite
+    literals, syntax errors) and the same per-class caps.
+    """
+    raw = parse_inventory_json_text(json_text, source)
+    inventory = Inventory.parse(raw, source=source)
+    enforce_class_caps(inventory.segments)
+    return inventory
 
 
 # Selection shape -----------------------------------------------------

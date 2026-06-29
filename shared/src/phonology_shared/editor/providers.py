@@ -163,6 +163,38 @@ def restrict_bundles(
     return out
 
 
+def prune_and_restrict(
+    features: tuple[str, ...],
+    resolved: Mapping[str, Mapping[str, str]],
+    *,
+    secondary: Mapping[str, Mapping[str, str]] | None = None,
+) -> tuple[
+    tuple[str, ...],
+    dict[str, Mapping[str, str]],
+    dict[str, Mapping[str, str]],
+]:
+    """Prune unused feature columns, then project the bundles onto the
+    survivors. The emptiness guard and the secondary-alignment rule
+    every provider's ``generate`` shares live here once.
+
+    Returns the inputs unchanged when ``resolved`` is empty.
+    ``secondary`` (PHOIBLE diphthong final-half bundles) counts toward
+    "used" features and is restricted to the same survivors; providers
+    without one pass ``None`` and ignore the empty dict returned for it.
+    """
+    sec: Mapping[str, Mapping[str, str]] = secondary or {}
+    if not resolved:
+        return features, dict(resolved), dict(sec)
+    features = prune_unused_features(
+        features, resolved, extra_bundles=sec.values()
+    )
+    return (
+        features,
+        restrict_bundles(resolved, features),
+        restrict_bundles(sec, features),
+    )
+
+
 def blank_bundle(features: tuple[str, ...]) -> dict[str, str]:
     """Return ``{feature: "0"}`` for every feature.
 

@@ -135,15 +135,13 @@ def _classify_vowel_cell_display(
     return VowelCellDisplayKind.STACK, (), entries
 
 
-#: The single feature whose ``+`` value marks the right-hand member
-#: of each simple pair kind. PHONATION_PAIR is deliberately absent:
-#: it covers the joint breathy/creaky contrast and orders on
-#: modality instead (see :py:func:`_order_pair_entries`).
+#: Inverse of :py:data:`_PAIR_KIND_FOR_FEATURE`: the single feature
+#: whose ``+`` value marks the right-hand member of each simple pair
+#: kind. PHONATION_PAIR is absent from the source map (it covers the
+#: joint breathy/creaky contrast and orders on modality instead, see
+#: :py:func:`_order_pair_entries`), so it stays absent here.
 _PAIR_KIND_TO_FEATURE: dict[VowelCellDisplayKind, str] = {
-    VowelCellDisplayKind.LONG_PAIR: "long",
-    VowelCellDisplayKind.NASAL_PAIR: "nasal",
-    VowelCellDisplayKind.RHOTIC_PAIR: "rhotic",
-    VowelCellDisplayKind.TONE_PAIR: "tone",
+    kind: feat for feat, kind in _PAIR_KIND_FOR_FEATURE.items()
 }
 
 

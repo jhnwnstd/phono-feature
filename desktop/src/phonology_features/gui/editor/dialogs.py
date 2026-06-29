@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -220,6 +221,28 @@ def show_warning(parent: QWidget | None, title: str, text: str) -> None:
     )
     center_on_parent(box, parent)
     box.exec()
+
+
+def prompt_text(
+    parent: QWidget | None,
+    title: str,
+    label: str,
+    initial: str = "",
+) -> str | None:
+    """Show a single-line text prompt centered on parent's screen.
+
+    Returns the entered text, or None if the user cancelled. Callers
+    own any trimming or validation of the returned value.
+    """
+    dlg = QInputDialog(parent)
+    dlg.setWindowTitle(title)
+    dlg.setLabelText(label)
+    if initial:
+        dlg.setTextValue(initial)
+    center_on_parent(dlg, parent)
+    if dlg.exec() != QDialog.DialogCode.Accepted:
+        return None
+    return dlg.textValue()
 
 
 class InputDialog(QDialog):

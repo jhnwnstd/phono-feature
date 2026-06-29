@@ -39,6 +39,14 @@ class ModeController:
         self.saved_seg_state: list[str] = []
         self.saved_feat_state: dict[str, str] = {}
 
+    def reset_saved_state(self) -> None:
+        """Clear both cross-mode projections so a prior inventory's
+        selection can't pre-fill the other mode. Called on inventory
+        swap and on a non-silent Clear.
+        """
+        self.saved_seg_state = []
+        self.saved_feat_state = {}
+
     # ------------------------------------------------------------------
     # Transition entry point
     # ------------------------------------------------------------------
