@@ -41,8 +41,8 @@ from phonology_shared.editor.inventory_providers import (
 from phonology_shared.editor.providers import (
     GeneratedInventory,
     _filter_encoded_bundles,
+    build_generated_inventory,
     decode_positional_bundle,
-    prune_and_restrict,
 )
 
 _log = logging.getLogger(__name__)
@@ -183,9 +183,6 @@ class PhoibleProvider:
         # data payloads land) is a fully-formed object whose invariants
         # never depend on a completed ingest.
         self.version: str = "PHOIBLE 2.0"
-        self._citation: str = ""
-        self._license: str = ""
-        self._source_url: str = ""
         self._inventories: dict[str, InventoryDescriptor] = {}
         self._by_language: dict[str, list[str]] = {}
         self._language_search_index: list[tuple[str, str]] = []
@@ -231,9 +228,6 @@ class PhoibleProvider:
             )
 
         self.version = str(index_table.get("version", "PHOIBLE 2.0"))
-        self._citation = str(index_table.get("citation", ""))
-        self._license = str(index_table.get("license", ""))
-        self._source_url = str(index_table.get("source_url", ""))
 
         # Materialise the descriptor list and a language-name index
         # for O(1) lookups during the dialog flow. ``language_index``
@@ -533,38 +527,13 @@ class PhoibleProvider:
             if sym in resolved
         }
 
-        features, resolved, secondary = prune_and_restrict(
+        return build_generated_inventory(
             features, resolved, secondary=secondary
-        )
-
-        return GeneratedInventory(
-            features=features,
-            segments=resolved,
-            unresolved=(),
-            warnings=(),
-            segment_secondary=secondary,
         )
 
     # ------------------------------------------------------------------
     # Convenience accessors used by the dialog + bridge layers
     # ------------------------------------------------------------------
-
-    @property
-    def citation(self) -> str:
-        """The PHOIBLE 2.0 citation string from the index payload.
-
-        Shown in the dialog's compact disclaimer chip so the user
-        knows what they are looking at and how to cite it.
-        """
-        return self._citation
-
-    @property
-    def license(self) -> str:
-        return self._license
-
-    @property
-    def source_url(self) -> str:
-        return self._source_url
 
     @property
     def has_data(self) -> bool:

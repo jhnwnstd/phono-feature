@@ -29,7 +29,7 @@ from phonology_shared.editor.panphon_features import (
 )
 from phonology_shared.editor.providers import (
     GeneratedInventory,
-    prune_and_restrict,
+    build_generated_inventory,
 )
 
 
@@ -175,11 +175,9 @@ class PanPhonFeatureProvider:
                     f"{symbol!r}: PanPhon feature conversion failed: " f"{exc}"
                 )
 
-        features, resolved, _ = prune_and_restrict(features, resolved)
-
-        return GeneratedInventory(
-            features=features,
-            segments=resolved,
-            unresolved=tuple(unresolved),
-            warnings=tuple(warnings),
+        return build_generated_inventory(
+            features,
+            resolved,
+            unresolved=unresolved,
+            warnings=warnings,
         )

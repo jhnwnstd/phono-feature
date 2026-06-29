@@ -1432,10 +1432,6 @@ class InventoryEditor(QMainWindow):
         ``editor._save_finished.connect(...)``."""
         return self._save_ctrl.save_finished
 
-    @property
-    def _save_drained(self) -> Any:
-        return self._save_ctrl.save_drained
-
     # ------------------------------------------------------------------
     # Save method forwarders
     # ------------------------------------------------------------------

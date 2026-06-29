@@ -195,6 +195,32 @@ def prune_and_restrict(
     )
 
 
+def build_generated_inventory(
+    features: tuple[str, ...],
+    resolved: Mapping[str, Mapping[str, str]],
+    *,
+    unresolved: Iterable[str] = (),
+    warnings: Iterable[str] = (),
+    secondary: Mapping[str, Mapping[str, str]] | None = None,
+) -> GeneratedInventory:
+    """Prune the feature space, then pack the survivors into a
+    :py:class:`GeneratedInventory`. Every provider's ``generate``
+    ends with this same prune-then-construct step, so it lives here
+    once. ``secondary`` carries the PHOIBLE diphthong final-half
+    bundles; providers without one omit it.
+    """
+    features, resolved, secondary = prune_and_restrict(
+        features, resolved, secondary=secondary
+    )
+    return GeneratedInventory(
+        features=features,
+        segments=resolved,
+        unresolved=tuple(unresolved),
+        warnings=tuple(warnings),
+        segment_secondary=secondary,
+    )
+
+
 def blank_bundle(features: tuple[str, ...]) -> dict[str, str]:
     """Return ``{feature: "0"}`` for every feature.
 

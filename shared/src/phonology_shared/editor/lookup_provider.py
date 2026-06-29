@@ -30,8 +30,8 @@ from phonology_shared.editor.panphon_features import to_panphon_form
 from phonology_shared.editor.providers import (
     GeneratedInventory,
     _filter_encoded_bundles,
+    build_generated_inventory,
     decode_positional_bundle,
-    prune_and_restrict,
 )
 
 # Filename of the build-baked snapshot. Co-located with this module
@@ -201,11 +201,9 @@ class LookupFeatureProvider:
             # the copy is a non-issue.
             resolved[symbol] = dict(bundle)
 
-        features, resolved, _ = prune_and_restrict(features, resolved)
-
-        return GeneratedInventory(
-            features=features,
-            segments=resolved,
-            unresolved=tuple(unresolved),
-            warnings=tuple(warnings),
+        return build_generated_inventory(
+            features,
+            resolved,
+            unresolved=unresolved,
+            warnings=warnings,
         )
