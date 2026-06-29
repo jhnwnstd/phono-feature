@@ -87,3 +87,51 @@ def test_spillover_engages_when_viewport_too_short(qapp) -> None:
         "but every header is at column 0"
     )
     scroll.deleteLater()
+
+
+def test_row_minimums_reset_when_relayout_shrinks(qapp) -> None:
+    """A taller layout's inter-group spacer minimums must not linger on
+    rows a later, shorter layout leaves empty.
+
+    ``QGridLayout.takeAt`` removes layout *items* but not the
+    ``setRowMinimumHeight`` properties, and ``rowCount`` never shrinks.
+    Without an explicit reset, swapping a tall group set for a short one
+    leaves phantom vertical gaps below the real content. The widget
+    zeroes the row minimums on every rebuild; this pins that.
+    """
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    grid = SegmentGridWidget()
+    grid.resize(BTN_W * 8 + BTN_GAP * 7, 1000)
+    scroll.setWidget(grid)
+    scroll.resize(grid.width(), 4000)
+    # Tall layout: many single-column groups -> many spacer rows.
+    big_groups, big_buttons = _make_groups(10)
+    grid.set_groups(big_groups, big_buttons)
+    grid._do_relayout()
+    assert any(
+        grid._grid.rowMinimumHeight(r) > 0
+        for r in range(grid._grid.rowCount())
+    ), "expected the tall layout to set inter-group spacer minimums"
+    # Shorter layout: far fewer content rows.
+    small_groups, small_buttons = _make_groups(2)
+    grid.set_groups(small_groups, small_buttons)
+    grid._do_relayout()
+    small_max_content = max(
+        (
+            r
+            for r in range(grid._grid.rowCount())
+            if any(
+                grid._grid.itemAtPosition(r, c) is not None
+                for c in range(grid._grid.columnCount())
+            )
+        ),
+        default=-1,
+    )
+    stale = [
+        r
+        for r in range(small_max_content + 1, grid._grid.rowCount())
+        if grid._grid.rowMinimumHeight(r) > 0
+    ]
+    assert stale == [], f"stale row minimums on empty rows: {stale}"
+    scroll.deleteLater()
