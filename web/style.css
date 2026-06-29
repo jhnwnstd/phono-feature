@@ -233,30 +233,32 @@ body {
   border-color: var(--accent);
 }
 
-/* Segment-class visibility popover. Anchored under the panel header
-   (``.panel-header`` is ``position: relative``) and dropped just below
-   it. ``.panel`` is ``overflow: hidden`` but the popover stays within
-   the panel bounds, so it overlays the seg grid without being clipped.
-   Themed via the standard tokens so dark + colorblind palettes inherit
-   automatically. */
-.panel-header { position: relative; }
+/* Segment-class visibility popover. Lives at body level and is
+   ``position: fixed``, positioned by main.js from the filter button's
+   rect on open, so it sits tightly under the button and escapes the
+   seg panel's ``container-type`` containing block + ``overflow:
+   hidden``. The explicit ``[hidden]`` rule is required: the base
+   ``display: flex`` (an author rule) otherwise beats the UA
+   ``[hidden] { display: none }`` and the popover could never hide.
+   Themed via the standard tokens so dark + colorblind palettes
+   inherit automatically. */
 .class-popover {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: var(--space-lg);
-  z-index: 20;
+  position: fixed;
+  z-index: 50;
   min-width: 184px;
   max-height: 60vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  margin: 0;
   padding: var(--space-sm);
   background: var(--panel);
   border: var(--border-std) solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
 }
+.class-popover[hidden] { display: none; }
 .class-popover-heading {
   font-size: var(--font-size-meta);
   font-weight: 600;

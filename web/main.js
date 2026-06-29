@@ -1587,8 +1587,25 @@ function buildClassPopover() {
     }
 }
 
+/** Position the popover directly under the filter button using fixed
+ *  (viewport) coordinates from the button's rect, right-aligned to the
+ *  button and clamped on screen. Fixed + body-level placement is why it
+ *  escapes the seg panel's containing block and overflow clipping. */
+function positionClassPopover() {
+    const pop = nodes.segClassPopover;
+    const r = nodes.segFilterBtn.getBoundingClientRect();
+    pop.style.top = `${Math.round(r.bottom + 4)}px`;
+    // offsetWidth is valid here: the popover is already shown.
+    const pw = pop.offsetWidth || 184;
+    const left = Math.max(
+        8,
+        Math.min(Math.round(r.right - pw), window.innerWidth - pw - 8),
+    );
+    pop.style.left = `${left}px`;
+}
+
 /** Open or close the class-visibility popover. ``force`` true opens,
- *  false closes; omitted toggles. */
+ *  false closes; omitted toggles on the current state. */
 function toggleClassPopover(force) {
     const pop = nodes.segClassPopover;
     const btn = nodes.segFilterBtn;
@@ -1596,6 +1613,7 @@ function toggleClassPopover(force) {
     if (open) {
         buildClassPopover();
         pop.hidden = false;
+        positionClassPopover();
         btn.setAttribute("aria-expanded", "true");
     } else {
         pop.hidden = true;
@@ -6275,23 +6293,34 @@ function wireClassFilter() {
         toggleClassPopover();
     });
     nodes.segClassPopover.addEventListener("change", onClassPopoverChange);
-    // Clicks inside the popover must not reach the outside-click
-    // dismiss handler below.
-    nodes.segClassPopover.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-    });
-    document.addEventListener("click", (ev) => {
-        if (nodes.segClassPopover.hidden) return;
-        if (nodes.segFilterBtn.contains(ev.target)) return;
-        if (nodes.segClassPopover.contains(ev.target)) return;
-        toggleClassPopover(false);
-    });
+    // Outside-press dismiss in the CAPTURE phase so it always fires,
+    // even though segment buttons / the grid delegation call
+    // stopPropagation in the bubble phase (which would otherwise strand
+    // the popover open). A press on the button or inside the popover is
+    // excluded so it does not fight the toggle / checkbox handlers.
+    document.addEventListener(
+        "pointerdown",
+        (ev) => {
+            if (nodes.segClassPopover.hidden) return;
+            if (nodes.segFilterBtn.contains(ev.target)) return;
+            if (nodes.segClassPopover.contains(ev.target)) return;
+            toggleClassPopover(false);
+        },
+        true,
+    );
     document.addEventListener("keydown", (ev) => {
         if (ev.key === "Escape" && !nodes.segClassPopover.hidden) {
             toggleClassPopover(false);
             nodes.segFilterBtn.focus();
         }
     });
+    // Keep the popover anchored to the button if the layout shifts
+    // (window resize, or a pane scroll) while it is open.
+    const reanchor = () => {
+        if (!nodes.segClassPopover.hidden) positionClassPopover();
+    };
+    window.addEventListener("resize", reanchor);
+    window.addEventListener("scroll", reanchor, true);
 }
 
 function clearAll() {

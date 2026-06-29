@@ -211,16 +211,6 @@
               title="Show or hide segment classes">&#x229F;</button>
       <button class="panel-clear-btn" id="seg-clear-btn" type="button"
               aria-label="Clear segment selection">Clear</button>
-      <!--
-        Class-visibility popover. Anchored to the panel header (which
-        is ``position: relative``) and dropped below it with
-        ``top: 100%``; populated by main.js from the loaded
-        inventory's class list on open, with a checkbox per class.
-        Unchecking hides that class so the layout reclaims its space.
-        Starts ``hidden``; visibility resets to all-shown on every
-        inventory change.
-      -->
-      <div class="class-popover" id="seg-class-popover" role="menu" hidden></div>
     </header>
     <div class="panel-body" id="seg-grid"></div>
   </section>
@@ -368,6 +358,17 @@
     </div>
   </form>
 </dialog>
+
+<!--
+  Segment-class visibility popover. Lives at body level (not inside the
+  seg panel) so its ``position: fixed`` is viewport-relative and escapes
+  the panel's ``container-type`` containing block + ``overflow: hidden``.
+  main.js positions it under the filter button on open and fills it with
+  a checkbox per class; unchecking one hides that class so the layout
+  reclaims its space. Starts ``hidden``; resets to all-shown on every
+  inventory change.
+-->
+<div class="class-popover" id="seg-class-popover" role="menu" hidden></div>
 
 <!--
   Source citation window. Opened from the statusbar [Source] affordance
