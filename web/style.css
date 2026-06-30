@@ -78,6 +78,20 @@ html[data-swapping] *::after {
   transition: none !important;
 }
 
+/* Honour the OS "reduce motion" setting: collapse every transition and
+   animation (the feat-btn polarity fade, the PHOIBLE card fade, the vowel-
+   cell opacity fade, the phoible-spin loader) to effectively instant.
+   0.01ms rather than ``none`` so any transitionend/animationend listeners
+   still fire exactly once. Vestibular-motion accessibility (WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 * { box-sizing: border-box; }
 
 /* Keyboard-only focus ring (mouse clicks don't trigger it). */
