@@ -124,21 +124,22 @@ def inventory_sort_key(fname: str, label: str) -> tuple[int, str]:
     return (rank, label.casefold())
 
 
-# Hover-tooltip strings for the wildcard ("Allow underspecified")
-# matching-mode toggle that sits in the Features pane header on
-# both UIs. ``STRICT_ACTIVE`` runs when the button is NOT pressed
-# (the click would enable wildcard); ``WILDCARD_ACTIVE`` when the
-# button IS pressed (the click would revert to strict). Single
-# source so the desktop's ``setToolTip`` and the web's ``title``
-# attribute read identically; the web relays via the inlined
-# STATUS_TEXT JSON.
+# Hover-tooltip strings for the match-mode toggle that sits in the
+# Features pane header on both UIs. User-facing copy says
+# "underspecified matching"; the internal mode name remains
+# ``wildcard``. ``STRICT_ACTIVE`` runs when the button is NOT
+# pressed (the click would enable underspecified matching);
+# ``WILDCARD_ACTIVE`` when the button IS pressed (the click would
+# revert to strict). Single source so the desktop's ``setToolTip``
+# and the web's ``title`` attribute read identically; the web
+# relays via the inlined STATUS_TEXT JSON.
 MATCH_MODE_TOOLTIP_STRICT_ACTIVE: str = (
-    "Allow underspecified feature matches: segments with 0 or "
-    "absent values can form a natural class when no other valued "
-    "feature explicitly contradicts it."
+    "Allow underspecified matches: segments with 0 or absent values "
+    "can still match +/− queries."
 )
 MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE: str = (
-    "Switch to strict matching (only explicit +/- values match)."
+    "Underspecified matching is on: 0 or absent values can still "
+    "match +/− queries. Click for strict matching."
 )
 
 # Placeholder copy for non-ideal states. Each string is shown in

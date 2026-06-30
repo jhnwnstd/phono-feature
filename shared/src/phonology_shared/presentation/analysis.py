@@ -229,15 +229,19 @@ def _render_matching_segments(
 ) -> str:
     """HTML for the matching-segments answer of a feature query.
 
-    Strict: "Matching N segment(s):". Wildcard tacks "(wildcard)"
-    onto the heading so the relaxed result reads as visually
-    distinct from a strict match.
+    Strict: "Matching N segment(s):". Underspecified matching tacks
+    a qualifier onto the heading so the relaxed result reads as
+    visually distinct from a strict match.
     """
     if not matching:
         return f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
     n = len(matching)
     chips = _segment_chip_strip(matching)
-    qualifier = " (wildcard)" if mode is _MatchMode.WILDCARD else ""
+    qualifier = (
+        " (underspecified matching)"
+        if mode is _MatchMode.WILDCARD
+        else ""
+    )
     return (
         f"<p><b>Matching {_plural(n, 'segment')} ({n}){qualifier}:</b></p>"
         f"<p>{chips}</p>"
@@ -323,8 +327,8 @@ def _render_completion_body(
       ``selected_minimal_bundles``: minimal strict OR compatible
       bundles depending on ``mode``.
     * ``one_minimal_completion`` / ``multiple_minimal_completions``:
-      render the "N segments needed for X natural class" line
-      where X is "wildcard" or absent (strict default).
+      render the "N segments needed for ..." line, explicitly
+      naming underspecified matching when ``mode`` is wildcard.
     """
     if completion.status == "already_natural_class":
         return _render_completion_specs(
@@ -333,10 +337,15 @@ def _render_completion_body(
     additions = completion.additions[0]
     n = len(additions)
     chips = _segment_chip_strip(additions, TagColor.NEUTRAL)
-    qualifier = " wildcard" if mode is _MatchMode.WILDCARD else ""
+    if mode is _MatchMode.WILDCARD:
+        return (
+            f"<p><b>{n} {_plural(n, 'segment')} needed for a natural "
+            f"class under underspecified matching:</b></p>"
+            f"<p>{chips}</p>"
+        )
     return (
-        f"<p><b>{n} {_plural(n, 'segment')} needed for"
-        f"{qualifier} natural class:</b></p>"
+        f"<p><b>{n} {_plural(n, 'segment')} needed for natural "
+        f"class:</b></p>"
         f"<p>{chips}</p>"
     )
 
@@ -486,10 +495,11 @@ def render_selection_summary_seg(segs: list[str]) -> str:
 
 def _wildcard_badge() -> str:
     """Small inline badge prepended to wildcard Class-tab output so
-    users see at a glance that the verdict applies under wildcard
-    matching, not strict. Rendered as a coloured tag so it lines
-    up visually with the other inline chips in the tab body."""
-    return f"<p>{_tag('wildcard matching', TagColor.NEUTRAL)}</p>"
+    users see at a glance that the verdict applies under
+    underspecified matching, not strict. Rendered as a coloured tag
+    so it lines up visually with the other inline chips in the tab
+    body."""
+    return f"<p>{_tag('underspecified matching', TagColor.NEUTRAL)}</p>"
 
 
 def render_class_tab_seg(
@@ -500,8 +510,8 @@ def render_class_tab_seg(
 ) -> str:
     """Class tab content for SEG mode under ``mode``.
 
-    Wildcard verdicts open with a ``wildcard matching`` badge so
-    they are visually distinct from strict verdicts (which would
+    Wildcard verdicts open with an ``underspecified matching`` badge
+    so they are visually distinct from strict verdicts (which would
     otherwise render identical chip strips with subtly different
     semantics).
     """
@@ -522,7 +532,7 @@ def render_class_tab_feat(
     """Class tab content for FEAT mode under ``mode``: list of
     matching segments (the result of the query) + count.
 
-    Wildcard FEAT-mode queries get the ``wildcard matching``
+    Wildcard FEAT-mode queries get the ``underspecified matching``
     badge for the same reason SEG-mode wildcard verdicts do: the
     matching set differs in meaning even when it happens to
     coincide with the strict result.

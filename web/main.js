@@ -6075,9 +6075,9 @@ function wireMatchModeToggle() {
     // keep the toggle usable in offline / pre-relay builds.
     const labelFor = (mode) => mode === MATCH_MODE.WILDCARD
         ? (STATUS_TEXT.match_mode_tooltip_wildcard_active
-            || "Switch to strict matching (only explicit +/- values match).")
+            || "Underspecified matching is on: 0 or absent values can still match +/− queries. Click for strict matching.")
         : (STATUS_TEXT.match_mode_tooltip_strict_active
-            || "Allow underspecified matches (wildcard).");
+            || "Allow underspecified matches: segments with 0 or absent values can still match +/− queries.");
     const applyLabel = (mode) =>
         setButtonLabel(nodes.matchModeBtn, labelFor(mode));
     const stored = normalizeMatchMode(safeStorageGet("match_mode"));

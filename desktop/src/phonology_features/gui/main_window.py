@@ -756,10 +756,13 @@ class MainWindow(QMainWindow):
         self._match_mode_btn.setFont(QFont("Noto Sans", 11))
         self._match_mode_btn.setCheckable(True)
         set_css(self._match_mode_btn, _match_mode_btn_style())
-        self._match_mode_btn.setAccessibleName("Wildcard matching mode")
+        self._match_mode_btn.setAccessibleName(
+            "Underspecified matching mode"
+        )
         self._match_mode_btn.setAccessibleDescription(
-            "Toggle between strict and wildcard feature matching. "
-            "Wildcard mode allows underspecified segments."
+            "Toggle between strict and underspecified feature "
+            "matching. Underspecified matching allows segments with "
+            "0 or absent values to still match +/− queries."
         )
         self._match_mode_btn.clicked.connect(self._toggle_match_mode)
         self.clear_feat_btn = QPushButton("Clear", container)
