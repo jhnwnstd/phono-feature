@@ -63,13 +63,21 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-          # Cache the pip download dir so the panphon install (numpy +
-          # pandas, ~22 s on a cold runner) restores from cache on repeat
-          # deploys. No requirements file lives here, so key off the desktop
-          # package metadata (stable) purely for the cache hash; setup-python
-          # caches ~/.cache/pip regardless of which packages that file names.
-          cache: pip
-          cache-dependency-path: desktop/pyproject.toml
+
+      # Cache the pip download dir explicitly, NOT via setup-python's
+      # ``cache: pip``. Inside the Playwright container that option shells
+      # out to a ``pip`` wrapper the prebuilt CPython doesn't ship, failing
+      # with ENOENT (the Python install itself succeeds; only the cache
+      # probe breaks). A plain path cache has no such dependency. The panphon
+      # install pulls numpy + pandas (~22 s cold); this restores the wheels
+      # on repeat deploys. Keyed off the desktop package metadata (stable)
+      # just for the hash; the cache holds whatever pip actually downloaded.
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('desktop/pyproject.toml') }}
+          restore-keys: pip-${{ runner.os }}-
 
       - name: Install panphon for the build-time lookup-table bake
         # build.py itself is stdlib-only; the only third-party need
