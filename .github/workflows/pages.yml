@@ -42,12 +42,34 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Run the build + smoke INSIDE the official Playwright image: it ships
+    # the three browsers AND their system libraries preinstalled, so this
+    # job skips the ~50 s ``playwright install --with-deps`` apt step (apt
+    # is uncacheable on Linux, so the old browser-cache step never helped
+    # the dominant cost) and the cache step with it. The image carries the
+    # browsers under ``/ms-playwright`` and sets PLAYWRIGHT_BROWSERS_PATH,
+    # so the Python package finds them without any install.
+    #
+    # LOCKSTEP: the image TAG below and the ``playwright==`` pin further
+    # down MUST move together on a Playwright upgrade. The image ships the
+    # exact browser builds that the matching Playwright release drives;
+    # a mismatch makes smoke.py fail to launch a browser (which fails the
+    # build job and therefore blocks the deploy, by design).
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.0-noble
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          # Cache the pip download dir so the panphon install (numpy +
+          # pandas, ~22 s on a cold runner) restores from cache on repeat
+          # deploys. No requirements file lives here, so key off the desktop
+          # package metadata (stable) purely for the cache hash; setup-python
+          # caches ~/.cache/pip regardless of which packages that file names.
+          cache: pip
+          cache-dependency-path: desktop/pyproject.toml
 
       - name: Install panphon for the build-time lookup-table bake
         # build.py itself is stdlib-only; the only third-party need
@@ -63,28 +85,11 @@ jobs:
         # required.
         run: python web/scripts/build.py
 
-      # Headless browser smoke over the built site; catches Pyodide
-      # micropip wheel-resolution drift, shared-package API changes
-      # the bridge missed, and JS regressions pytest can't see. See
-      # web/scripts/smoke.py for the asserted coverage. Cache key
-      # includes the browser-set tag (cfw = chromium + firefox +
-      # webkit) so adding or removing a browser invalidates the
-      # cache; otherwise a stale chromium-only cache would silently
-      # hide the missing-driver branches in smoke.py.
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-cfw-${{ runner.os }}-v1
-
-      # ``--with-deps`` installs the GTK / libffi / libavif system
-      # packages WebKit needs on Ubuntu; without it WebKit silently
-      # skips at run time and the cross-browser coverage degrades to
-      # Chromium only.
-      - name: Install Playwright browsers and system deps
-        run: |
-          python -m pip install playwright
-          python -m playwright install --with-deps chromium firefox webkit
+      # The browsers + their system libs are already in the image; only the
+      # Playwright PYTHON package is missing (the image carries the Node
+      # one). Its version MUST equal the image tag above (see LOCKSTEP).
+      - name: Install the Playwright Python package
+        run: python -m pip install "playwright==1.61.0"
 
       - name: Smoke-test the built site
         run: python web/scripts/smoke.py
