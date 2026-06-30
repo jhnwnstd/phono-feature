@@ -1964,6 +1964,7 @@ dialog input[type="text"]:focus-visible {
   padding: var(--space-xs) var(--space-lg);
   font: inherit;
   font-size: var(--font-size-control);
+  font-weight: 600;
   cursor: pointer;
 }
 .analysis-tab:hover:not([aria-selected="true"]):not(:disabled) {
@@ -1972,7 +1973,6 @@ dialog input[type="text"]:focus-visible {
 .analysis-tab[aria-selected="true"] {
   background: var(--panel);
   color: var(--text);
-  font-weight: 600;
   /* Pull the active tab over the container's top border so the
      two visually merge, matching the QTabWidget appearance. */
   margin-bottom: -1px;
@@ -2014,11 +2014,9 @@ dialog input[type="text"]:focus-visible {
   /* Keep the coloured background even when the tab is active. The
      cue is more useful than the active-tab's panel colour. */
   background: var(--class-state-natural-bg);
-  font-weight: 600;
 }
 .analysis-tab[data-class-state="not_natural"][aria-selected="true"] {
   background: var(--class-state-not-natural-bg);
-  font-weight: 600;
 }
 
 .analysis-content {

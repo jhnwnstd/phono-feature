@@ -54,11 +54,11 @@ def _class_state_stylesheet(class_state: str | ClassState) -> str:
             border-top-right-radius: 4px;
             padding: 4px 14px;
             margin-right: 2px;
+            font-weight: bold;
         }}
         QTabBar::tab:selected {{
             background: {C["panel"]};
             color: {C["text"]};
-            font-weight: bold;
         }}
         QTabBar::tab:hover:!selected {{
             color: {C["text"]};
@@ -81,7 +81,6 @@ def _class_state_stylesheet(class_state: str | ClassState) -> str:
         QTabBar::tab:first:selected {{
             background: {bg};
             color: {fg};
-            font-weight: bold;
         }}
     """
 

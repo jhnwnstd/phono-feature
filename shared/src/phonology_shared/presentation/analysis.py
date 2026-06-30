@@ -238,9 +238,7 @@ def _render_matching_segments(
     n = len(matching)
     chips = _segment_chip_strip(matching)
     qualifier = (
-        " (underspecified matching)"
-        if mode is _MatchMode.WILDCARD
-        else ""
+        " (underspecified matching)" if mode is _MatchMode.WILDCARD else ""
     )
     return (
         f"<p><b>Matching {_plural(n, 'segment')} ({n}){qualifier}:</b></p>"
