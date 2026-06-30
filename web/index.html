@@ -105,11 +105,18 @@
 -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<!-- integrity MUST match PYODIDE_BOOTSTRAP_SRI in main.js (same pinned
+     v0.26.4 build). Without it the preload's no-integrity response does
+     not satisfy the injected script's SRI and pyodide.js is fetched
+     twice. asm.js uses as="script" (not as="fetch") because Pyodide
+     loads the Emscripten glue via a script element; a mismatched preload
+     destination is likewise refetched. -->
 <link rel="preload" as="script" crossorigin
+      integrity="sha384-i3R37b3tF+HWudsUf1VSEOY2YxwSNMqY8DQa9Z0O3xh+NkJ9o+yjcGyIi5huj+nB"
       href="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js">
 <link rel="preload" as="fetch" type="application/wasm" crossorigin
       href="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.asm.wasm">
-<link rel="preload" as="fetch" type="application/javascript" crossorigin
+<link rel="preload" as="script" crossorigin
       href="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.asm.js">
 <link rel="stylesheet" href="theme.css">
 <link rel="stylesheet" href="layout.css">

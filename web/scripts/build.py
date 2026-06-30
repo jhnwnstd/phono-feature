@@ -178,6 +178,21 @@ def copy_shared_sources() -> None:
     print(f"  {len(py_files)} .py files in shared/phonology_shared/")
 
 
+def _strip_css_comments(css: str) -> str:
+    """Drop ``/* */`` comments and blank lines from CSS for the dist copy.
+
+    ``style.css`` is the hand-written source of truth and carries ~52 KB of
+    explanatory comments (over half the file). They are pure overhead on the
+    wire, so the dist copy ships without them while the committed source keeps
+    them. CSS comments cannot nest and CSS has no line comments, so a single
+    non-greedy strip is safe; the source has no ``/*`` inside ``url()`` or
+    ``content`` strings (asserted by the build's own re-parse staying valid).
+    """
+    no_comments = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    lines = (ln.rstrip() for ln in no_comments.splitlines())
+    return "\n".join(ln for ln in lines if ln.strip())
+
+
 def copy_static_assets() -> None:
     """Copy index.html, CSS, JS, and api.py to the dist root.
 
@@ -187,8 +202,16 @@ def copy_static_assets() -> None:
     (``main.js`` does ``pyodide.pyimport("api")``).
     """
     print("Copying static assets...")
-    for name in ("index.html", "style.css", "main.js"):
+    for name in ("index.html", "main.js"):
         shutil.copy(WEB_DIR / name, DIST / name)
+    # style.css ships comment-stripped: ~91 KB -> ~39 KB raw (-21 KB gzip).
+    src_css = (WEB_DIR / "style.css").read_text(encoding="utf-8")
+    min_css = _strip_css_comments(src_css)
+    (DIST / "style.css").write_text(min_css, encoding="utf-8")
+    print(
+        f"  style.css minified: {len(src_css) // 1024} KB -> "
+        f"{len(min_css) // 1024} KB (comments stripped)"
+    )
     shutil.copy(WEB_DIR / "src" / "phonology_web" / "api.py", DIST / "api.py")
     # SEO/social static files ship UNHASHED at stable URLs: the canonical
     # page, the Open Graph card, and the sitemap are all referenced by

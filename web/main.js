@@ -477,6 +477,9 @@ const LOCAL_FETCH_TIMEOUT_MS = 10_000;
 
 const PYODIDE_BOOTSTRAP_URL =
     "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js";
+// Kept in sync with the integrity= on the pyodide.js preload in
+// index.html: the preload and this injected script must carry the SAME
+// SRI or the browser cannot reuse the preloaded response and refetches.
 const PYODIDE_BOOTSTRAP_SRI =
     "sha384-i3R37b3tF+HWudsUf1VSEOY2YxwSNMqY8DQa9Z0O3xh+NkJ9o+yjcGyIi5huj+nB";
 
@@ -1106,6 +1109,17 @@ function schedulePhoiblePrefetch() {
     // to decide whether to prefetch. A build with no baked PHOIBLE
     // assets simply lacks these manifest entries.
     if (!assetUrl("phoible_index") || !assetUrl("phoible_data")) return;
+    // Skip the eager prefetch on Data Saver or slow connections. It pulls
+    // ~320 KB gzip (held as ~6 MB of decoded JS text) that a visitor who
+    // never opens the PHOIBLE picker never uses. The picker-open path
+    // (ensurePhoibleLoaded) still fetches on demand, so gating only defers
+    // the cost to actual PHOIBLE use instead of imposing it on everyone.
+    const conn = navigator.connection;
+    if (conn && (conn.saveData
+            || conn.effectiveType === "slow-2g"
+            || conn.effectiveType === "2g")) {
+        return;
+    }
     const idle = ("requestIdleCallback" in window)
         ? (cb) => window.requestIdleCallback(cb, { timeout: 10_000 })
         : (cb) => setTimeout(cb, 1500);
@@ -1139,6 +1153,17 @@ function ensurePhoibleLoaded() {
             ]);
             callBridge("phoible_load_index", indexText);
             callBridge("phoible_load_data", dataText);
+            // The bridge now owns the parsed tables in the WASM heap, so
+            // the ~6 MB of JS text (held in these module slots AND in the
+            // resolved fetch promises that returned it) is dead weight.
+            // Drop every retainer so the JS heap reclaims it. Safe because
+            // success is terminal: _phoibleDataLoad stays resolved and is
+            // this function's only caller, so nothing re-reads the text;
+            // a failure path keeps the cache (it throws before here).
+            _phoibleIndexText = null;
+            _phoibleDataText = null;
+            _phoibleIndexFetch = null;
+            _phoibleDataFetch = null;
         } catch (e) {
             _phoibleDataLoad = null;
             throw e;
