@@ -66,6 +66,18 @@
 html { color-scheme: light; }
 html[data-theme="dark"] { color-scheme: dark; }
 
+/* During a palette swap (dark-mode / colour-blind toggle) the root carries
+   [data-swapping] for one forced style flush, suppressing every colour
+   transition so the new palette snaps in atomically. Without it the
+   .feat-btn polarity fade (and the PHOIBLE source-card fade) animate the
+   CSS-variable change over their own duration, lagging the instant rest of
+   the UI a step behind. See swapPaletteInstantly() in main.js. */
+html[data-swapping] *,
+html[data-swapping] *::before,
+html[data-swapping] *::after {
+  transition: none !important;
+}
+
 * { box-sizing: border-box; }
 
 /* Keyboard-only focus ring (mouse clicks don't trigger it). */

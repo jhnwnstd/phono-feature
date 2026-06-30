@@ -6169,11 +6169,13 @@ function wireColorblindToggle() {
         const next = cur === PALETTE_MODE.COLORBLIND
             ? PALETTE_MODE.STANDARD
             : PALETTE_MODE.COLORBLIND;
-        if (next === PALETTE_MODE.COLORBLIND) {
-            document.documentElement.dataset.cb = "on";
-        } else {
-            delete document.documentElement.dataset.cb;
-        }
+        swapPaletteInstantly(() => {
+            if (next === PALETTE_MODE.COLORBLIND) {
+                document.documentElement.dataset.cb = "on";
+            } else {
+                delete document.documentElement.dataset.cb;
+            }
+        });
         nodes.cbBtn.setAttribute(
             "aria-pressed", next === PALETTE_MODE.COLORBLIND ? "true" : "false"
         );
@@ -6190,6 +6192,24 @@ function wireColorblindToggle() {
             runAnalysis();
         }
     });
+}
+
+/** Apply a root-level palette change (dark-mode or colour-blind toggle)
+ *  with colour transitions momentarily suppressed, so the new palette
+ *  snaps in atomically. Without this, per-element colour transitions (the
+ *  ``.feat-btn`` polarity fade, the PHOIBLE source-card fade) animate the
+ *  CSS-variable change over their own 80-100 ms, visibly lagging the
+ *  instant rest of the UI. The root carries ``[data-swapping]`` (mapped to
+ *  ``transition: none`` in style.css) only across a forced style flush,
+ *  then drops it so later hover/active fades keep working. */
+function swapPaletteInstantly(mutate) {
+    const root = document.documentElement;
+    root.dataset.swapping = "";
+    mutate();
+    // Commit the recolour while transitions are still off; re-enabling
+    // them afterwards cannot animate values already at their target.
+    void root.offsetWidth;
+    delete root.dataset.swapping;
 }
 
 function wireThemeToggle() {
@@ -6216,7 +6236,9 @@ function wireThemeToggle() {
     nodes.themeBtn.addEventListener("click", () => {
         const cur = normalizeTheme(document.documentElement.dataset.theme);
         const next = cur === THEME.DARK ? THEME.LIGHT : THEME.DARK;
-        document.documentElement.dataset.theme = next;
+        swapPaletteInstantly(() => {
+            document.documentElement.dataset.theme = next;
+        });
         nodes.themeBtn.textContent = glyphFor(next);
         applyLabel(next);
         safeStorageSet("theme", next);
