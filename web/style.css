@@ -2019,16 +2019,22 @@ dialog input[type="text"]:focus-visible {
   background: var(--class-state-not-natural-bg);
 }
 
-.analysis-content {
+.analysis-content-frame {
   margin-top: 0;
   background: var(--panel);
   border: var(--border-thin) solid var(--border);
   border-top: none;
   border-radius: 0 0 var(--radius-md) var(--radius-md);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.analysis-content {
+  height: 100%;
   padding: var(--space-md) var(--space-lg);
   overflow: auto;
   scrollbar-gutter: stable;
-  flex: 1;
   font-size: var(--font-size-control);
   color: var(--text);
   /* Innerhtml swaps are the most frequent DOM update; contain so
