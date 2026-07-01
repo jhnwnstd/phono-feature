@@ -363,31 +363,59 @@ class PlaceRank(IntEnum):
 
 
 def _is_pharyngeal_like(feats: dict[str, str]) -> bool:
-    """Conventional pharyngeal-evidence patterns: explicit
-    ``+pharyngeal``, explicit ``+constrpharynx``, or the
-    ``+radical +rtr`` combination characteristic of pharyngeal
-    constrictions made with tongue-root retraction.
+    """Conventional pharyngeal-evidence patterns.
+
+    Three encodings are recognised because different feature systems
+    write the pharyngeals ``ħ`` / ``ʕ`` differently:
+      * an explicit ``+pharyngeal`` primitive (Modern Standard Arabic),
+      * an explicit ``+constrpharynx`` or ``+radical +rtr`` (Blevins /
+        McCarthy guttural encodings),
+      * the retracted low-back dorsal pattern ``+dorsal +low +back
+        +rtr`` that Hayes and PHOIBLE use, WITH ``+rtr`` as the
+        discriminator: a plain uvular is ``+dorsal +low? -rtr`` and a
+        low back vowel is ``+syllabic``, so both are excluded. Without
+        this branch the low-back dorsal fell through to the ``-high ->
+        UVULAR`` rule and every PHOIBLE ``ħ`` / ``ʕ`` sorted as a uvular.
     """
     return (
         feats.get("pharyngeal", "0") == "+"
         or feats.get("constrpharynx", "0") == "+"
         or (feats.get("radical", "0") == "+" and feats.get("rtr", "0") == "+")
+        or (
+            feats.get("dorsal", "0") == "+"
+            and feats.get("low", "0") == "+"
+            and feats.get("back", "0") == "+"
+            and feats.get("rtr", "0") == "+"
+            and feats.get("syllabic", "0") != "+"
+        )
     )
 
 
 def _is_epiglottal_like(feats: dict[str, str]) -> bool:
-    """Conventional epiglottal-evidence patterns: explicit
-    whole-larynx features (``+epilaryngeal`` /
-    ``+aryepiglottic``), or the ``+radical +constrpharynx +rtr``
-    triple Moisik / Esling-style inventories use to mark the
-    aryepiglottic stricture mechanism. The triple is a strict
-    superset of the pharyngeal ``+radical +rtr`` pattern, so
-    :py:func:`derive_place` must call this BEFORE
+    """Conventional epiglottal-evidence patterns: PHOIBLE's
+    ``+epilaryngealsource`` (the feature it actually stamps on the
+    epiglottals ``ʡ`` / ``ʜ`` / ``ʢ``), the explicit whole-larynx
+    features (``+epilaryngeal`` / ``+aryepiglottic``) that
+    hand-authored inventories use, or the ``+radical +constrpharynx
+    +rtr`` triple Moisik / Esling-style inventories use to mark the
+    aryepiglottic stricture mechanism. Without the
+    ``epilaryngealsource`` branch every PHOIBLE ``ʡ`` fell through to
+    UNKNOWN and ``ʜ`` / ``ʢ`` (both ``-consonantal``) collapsed onto
+    GLOTTAL. The ``epilaryngealsource`` branch is gated to
+    non-vowels so an epiglottalized VOWEL (``aᴱ`` / ``oᴱ`` / ``uᴱ``,
+    ``+syllabic +epilaryngealsource``) is not handed a consonant
+    place rank; it stays a vowel and sorts among the vowels. The
+    triple is a strict superset of the pharyngeal ``+radical +rtr``
+    pattern, so :py:func:`derive_place` must call this BEFORE
     :py:func:`_is_pharyngeal_like` to avoid the broader pharyngeal
     rule absorbing every epiglottal candidate.
     """
     return (
-        feats.get("epilaryngeal", "0") == "+"
+        (
+            feats.get("epilaryngealsource", "0") == "+"
+            and feats.get("syllabic", "0") != "+"
+        )
+        or feats.get("epilaryngeal", "0") == "+"
         or feats.get("aryepiglottic", "0") == "+"
         or (
             feats.get("radical", "0") == "+"
@@ -468,7 +496,20 @@ def derive_place(
         hayes_style = profile is None or profile.dorsals_use_anterior
         if hayes_style:
             if bk == "-":
-                if feats.get("anterior", "0") == "-":
+                # A ``+dorsal +high -back`` GLIDE (the palatal semivowel
+                # /j/, /ɥ/: explicit -consonantal, -syllabic) is palatal.
+                # It carries no ``anterior`` value, so the anterior-only
+                # rule would mislabel it VELAR. The clause requires an
+                # EXPLICIT ``-consonantal`` (not merely absent) so a true
+                # advanced velar (Hayes ``k+`` = +consonantal +dorsal +high
+                # -back +front 0anterior) and any under-specified dorsal
+                # both stay VELAR; and it is gated to non-syllabic so it
+                # does NOT reach front VOWELS (also -consonantal), whose
+                # within-chart ordering must stay put.
+                if feats.get("anterior", "0") == "-" or (
+                    feats.get("consonantal", "0") == "-"
+                    and feats.get("syllabic", "0") != "+"
+                ):
                     return PlaceRank.PALATAL
                 return PlaceRank.VELAR
             return PlaceRank.VELAR
@@ -926,6 +967,266 @@ def _is_vocoid(feats: dict[str, str]) -> bool:
     )
 
 
+# --------------------------------------------------------------------
+# Grouping pipeline stages.
+#
+# ``group_segments`` runs these in order: assign every segment to a
+# primary group, then reshape the group set with the stages below.
+# Each stage takes the running ``assignment`` (``{group: [symbol]}``)
+# plus the read-only context it needs (the normalised bundles, the set
+# of features the inventory actually uses, the inventory size, the
+# convention profile) and mutates ``assignment`` in place, except the
+# final sort which returns the display payload. Keeping each stage a
+# named function lets the pipeline in ``group_segments`` read as a
+# sequence of steps rather than one long block of inline loops.
+# --------------------------------------------------------------------
+
+
+def _break_out_by_spec(
+    assignment: dict[str, list[str]],
+    norm: Mapping[str, dict[str, str]],
+    active_features: set[str],
+    n: int,
+) -> None:
+    """Peel spec-defined subclasses off their manner parents.
+
+    Each :data:`DERIVED_BREAKOUTS` entry names a child group, its
+    parent, and the feature spec a member must match (Sibilants off
+    Fricatives, Lateral Fricatives / Sibilant Affricates / Lateral
+    Affricates / Lateral Flaps off their manner homes). The skip-guard
+    keeps a split from firing when the inventory does not carry every
+    feature the condition needs, so an inventory silent on ``strident``
+    never grows an empty Sibilants row.
+    """
+    for new_name, parent_name, cond in DERIVED_BREAKOUTS:
+        if not all(f in active_features for f in cond):
+            continue
+
+        def _spec_match(s: str, cond: dict[str, str] = cond) -> bool:
+            return all(norm[s].get(f, "0") == v for f, v in cond.items())
+
+        _apply_breakout(assignment, new_name, parent_name, _spec_match, n)
+
+
+def _break_out_by_laryngeal_kind(
+    assignment: dict[str, list[str]],
+    norm: Mapping[str, dict[str, str]],
+    n: int,
+) -> None:
+    """Peel Implosives / Ejective {Plosives, Fricatives, Affricates}
+    off their manner parents using the typed :class:`LaryngealKind`
+    derived per segment.
+
+    Runs AFTER :func:`_break_out_by_spec` so the more specific spec
+    classes (Sibilants, Lateral Fricatives, Sibilant Affricates,
+    Lateral Affricates) absorb their members first; a sibilant ejective
+    therefore lands in Sibilants, not Ejective Fricatives.
+
+    No syllabic-vowel guard is needed: the consonant-group invariant in
+    ``is_member`` already rejected vowels from every parent in
+    ``PRIMARY_GROUPS``, so the breakouts only see consonants. The
+    relabel passes and laryngeal rescue below inherit the same
+    guarantee.
+    """
+    for new_name, parent_name, target_kind in _FACT_BREAKOUTS:
+
+        def _kind_match(s: str, kind: LaryngealKind = target_kind) -> bool:
+            return derive_laryngeal_kind(norm[s]) == kind
+
+        _apply_breakout(assignment, new_name, parent_name, _kind_match, n)
+
+
+def _relabel_small_origin_sets(
+    assignment: dict[str, list[str]],
+    n: int,
+) -> None:
+    """Relabel a set of co-occurring small manner groups to one cover.
+
+    Each :data:`_RELABEL_PATTERNS` entry maps an origin set (e.g.
+    Trills + Taps & Flaps) to a cover label (Vibrants). The relabel
+    fires only when EVERY origin group is present AND each is small
+    enough to merge up, so a large, well-populated Trills row keeps its
+    own identity. Frozen groups never participate.
+    """
+    for origin_set, new_label in _RELABEL_PATTERNS.items():
+        present = [g for g in sorted(origin_set) if g in assignment]
+        if len(present) < 2:
+            continue
+        if any(not _should_merge_up(len(assignment[g]), n) for g in present):
+            continue
+        if any(g in _FROZEN_GROUPS for g in present):
+            continue
+        merged: list[str] = []
+        for g in present:
+            merged.extend(assignment.pop(g))
+        assignment.setdefault(new_label, []).extend(merged)
+
+
+def _merge_small_derived_pairs(
+    assignment: dict[str, list[str]],
+    norm: Mapping[str, dict[str, str]],
+    n: int,
+) -> None:
+    """Merge co-occurring small group pairs into a cover label (the
+    :data:`_DERIVED_MERGES` table, e.g. folding into Liquids).
+
+    Fires when both groups are present, at least one is small enough to
+    merge up, and none is frozen. The Liquids cover carries an extra
+    guard: a group whose every member is explicitly ``liquid:-`` is a
+    declaration that they are NOT liquids, so it is never forced into
+    the cover (a no-op unless the inventory marks ``liquid``).
+
+    Relabel-by-origin happens ONLY in :func:`_relabel_small_origin_sets`
+    and here. Groups combined later by ``_MERGE_PARENT`` keep the
+    parent's label (a small Trills group folds up as Vibrants, never as
+    Liquids), and the place-aware pass then recovers Rhotics from a
+    Vibrants cover. A second origin-set relabel pass once sat after this
+    one, but it rebuilt its origin map from the already-merged
+    assignment and so could never fire; the grouping snapshot pins that.
+    """
+    for pair, label in _DERIVED_MERGES:
+        present = [g for g in sorted(pair) if g in assignment]
+        if label == "Liquids":
+            present = [
+                g
+                for g in present
+                if not all(
+                    norm[s].get("liquid", "0") == "-" for s in assignment[g]
+                )
+            ]
+        if len(present) < 2:
+            continue
+        if any(g in _FROZEN_GROUPS for g in present):
+            continue
+        if not any(_should_merge_up(len(assignment[g]), n) for g in present):
+            continue
+        merged: list[str] = []
+        for g in present:
+            merged.extend(assignment.pop(g))
+        assignment.setdefault(label, []).extend(merged)
+
+
+def _fold_small_groups_into_parents(
+    assignment: dict[str, list[str]],
+    n: int,
+) -> None:
+    """Iteratively fold each too-small group into its
+    :data:`_MERGE_PARENT` until nothing else qualifies.
+
+    A group under the merge threshold is absorbed into its parent (a
+    lone Trills group folds up as Vibrants, its parent); the loop
+    repeats so a fold that leaves the parent itself small can cascade.
+    Frozen groups (Plosives) never fold.
+    """
+    changed = True
+    while changed:
+        changed = False
+        for gname in list(assignment.keys()):
+            if gname in _FROZEN_GROUPS:
+                continue
+            if not _should_merge_up(len(assignment[gname]), n):
+                continue
+            parent = _MERGE_PARENT.get(gname)
+            if parent is not None:
+                assignment.setdefault(parent, []).extend(assignment.pop(gname))
+                changed = True
+
+
+def _relabel_vibrants_to_rhotics(
+    assignment: dict[str, list[str]],
+    norm: Mapping[str, dict[str, str]],
+) -> None:
+    """Relabel a place-recoverable Vibrants cover to Rhotics.
+
+    Both the trill+tap cover relabel and the lone-trill/tap
+    ``_MERGE_PARENT`` fold land in the place-neutral Vibrants group,
+    because a trill or tap is not rhotic by manner alone: a bilabial
+    trill /ʙ/ or labiodental flap /ⱱ/ is a vibrant, not a rhotic. But a
+    Vibrants cover whose members are ALL non-labial and non-lateral IS a
+    rhotic system (coronal/uvular trills, taps, flaps), recoverable from
+    the standard place features without a declared ``rhotic`` primitive.
+    Relabel such a cover to Rhotics; a cover that includes any labial
+    vibrant (/ʙ/, /ⱱ/) or a lateral flap (/ɺ/) keeps the neutral
+    Vibrants label.
+
+    Runs AFTER the merge passes, so a feature-derived rhotic system
+    stays its own row (e.g. Hindi: Rhotics beside Lateral Approximants)
+    instead of folding into the Liquids cover, which stays reserved for
+    the declared / central-approximant-anchored path.
+    """
+    vibrants = assignment.get("Vibrants")
+    if vibrants and all(
+        norm[s].get("labial", "0") != "+"
+        and norm[s].get("lateral", "0") != "+"
+        for s in vibrants
+    ):
+        assignment.setdefault("Rhotics", []).extend(assignment.pop("Vibrants"))
+
+
+def _rescue_laryngeals(
+    assignment: dict[str, list[str]],
+    norm: Mapping[str, dict[str, str]],
+    active_features: set[str],
+) -> None:
+    """Regroup h / ɦ / ʔ into a single Laryngeals row when worthwhile.
+
+    The Laryngeals row (laryngeals pulled out of their manner classes)
+    is a convenience regroup, so it must not make the display WORSE by
+    leaving a singleton behind. Two guards, in the spirit of the
+    ``_should_break_out`` discipline the manner breakouts use:
+
+      * stranding: never peel a group's laryngeals if that would leave
+        the group with exactly one member. A lone /ɦ/ reads better
+        beside the other fricatives than stranding /f/ alone in a
+        singleton Fricatives row (the Hindi case). Emptying the group
+        (it was all laryngeal) is fine.
+      * worthwhileness: only raise the row once >= 2 members qualify; a
+        single laryngeal stays in its manner home.
+
+    When a guard blocks the peel the laryngeals stay where they are
+    (h/ɦ among the fricatives, ʔ among the plosives), the standard
+    manner-by-place chart layout anyway.
+    """
+    if not (_LARYNGEAL_FEATURES & active_features):
+        return
+    peelable: dict[str, list[str]] = {}
+    for gname in list(assignment.keys()):
+        if gname == "Laryngeals":
+            continue
+        members = assignment[gname]
+        cands = [s for s in members if _is_laryngeal_candidate(norm[s])]
+        if cands and len(members) - len(cands) != 1:
+            peelable[gname] = cands
+    if sum(len(c) for c in peelable.values()) >= 2:
+        laryngeal_segs: list[str] = []
+        for gname, cands in peelable.items():
+            for sym in cands:
+                assignment[gname].remove(sym)
+            laryngeal_segs.extend(cands)
+            if not assignment[gname]:
+                del assignment[gname]
+        assignment.setdefault("Laryngeals", []).extend(laryngeal_segs)
+
+
+def _sort_into_display_order(
+    assignment: Mapping[str, list[str]],
+    norm: Mapping[str, dict[str, str]],
+    profile: ConsonantProfile,
+) -> dict[str, list[str]]:
+    """Emit ``{group: [symbol, ...]}`` in ``DISPLAY_ORDER``, each
+    group's symbols sorted by :func:`_segment_sort_key` (place first,
+    then the manner / laryngeal / secondary tiebreakers). Empty groups
+    are dropped."""
+    return {
+        name: sorted(
+            assignment[name],
+            key=lambda s: _segment_sort_key(norm[s], profile),
+        )
+        for name in DISPLAY_ORDER
+        if assignment.get(name)
+    }
+
+
 def group_segments(
     inventory: Mapping[str, Mapping[str, str]],
     *,
@@ -1218,6 +1519,13 @@ def group_segments(
             return ""
         return "Affricates"
 
+    # Stage 1: assign every segment to a primary group. A contour
+    # affricate wins first, then the positive-evidence best_primary,
+    # then the mismatch-minimising fallback. A segment that matches no
+    # manner/place spec would otherwise vanish from the grouped payload
+    # (still in the flat segment list, rendered nowhere), so route it to
+    # a catch-all: a vocoid (vowel-like) lands under the vowel chart,
+    # anything else under the consonants.
     assignment: dict[str, list[str]] = defaultdict(list)
     for sym, feats in norm.items():
         group = (
@@ -1225,180 +1533,26 @@ def group_segments(
             or best_primary(feats)
             or fallback_assignment(feats)
         )
-        # A segment matching no manner/place spec would otherwise vanish
-        # from the grouped payload (still in the flat segment list, but
-        # rendered nowhere). Route it to a catch-all so it stays visible:
-        # a vocoid (vowel-like) lands under the vowel chart, anything
-        # else under the consonants.
         if not group:
             group = (
                 VOCOID_GROUP_NAME if _is_vocoid(feats) else CONTOID_GROUP_NAME
             )
         assignment[group].append(sym)
-    for new_name, parent_name, cond in DERIVED_BREAKOUTS:
-        # Skip-guard kept here (not in the helper) so an inactive
-        # feature set never triggers the split.
-        if not all(f in active_features for f in cond):
-            continue
 
-        def _spec_match(s: str, cond: dict[str, str] = cond) -> bool:
-            return all(norm[s].get(f, "0") == v for f, v in cond.items())
+    # Stages 2-8: reshape the group set. Each stage is a named function
+    # above; read them top-to-bottom to trace how the raw per-segment
+    # assignment becomes the final class list.
+    n = len(inventory)
+    _break_out_by_spec(assignment, norm, active_features, n)
+    _break_out_by_laryngeal_kind(assignment, norm, n)
+    _relabel_small_origin_sets(assignment, n)
+    _merge_small_derived_pairs(assignment, norm, n)
+    _fold_small_groups_into_parents(assignment, n)
+    _relabel_vibrants_to_rhotics(assignment, norm)
+    _rescue_laryngeals(assignment, norm, active_features)
 
-        _apply_breakout(
-            assignment, new_name, parent_name, _spec_match, len(inventory)
-        )
-
-    # Fact-based breakouts: peel Implosives / Ejective {Plosives,
-    # Fricatives, Affricates} off their manner parents using the
-    # typed :py:class:`LaryngealKind` derived per segment. Runs
-    # AFTER the spec-based breakouts so the more specific spec
-    # classes (Sibilants, Lateral Fricatives, Sibilant Affricates,
-    # Lateral Affricates) absorb their members first; a sibilant
-    # ejective therefore lands in Sibilants, not Ejective
-    # Fricatives.
-    #
-    # No syllabic-vowel guard needed here: the consonant-group
-    # invariant in :py:func:`is_member` already rejected vowels
-    # from every parent in ``PRIMARY_GROUPS``, so the breakouts
-    # only see consonants. The relabel patterns and laryngeal
-    # rescue below inherit the same guarantee.
-    for new_name, parent_name, target_kind in _FACT_BREAKOUTS:
-
-        def _kind_match(s: str, kind: LaryngealKind = target_kind) -> bool:
-            return derive_laryngeal_kind(norm[s]) == kind
-
-        _apply_breakout(
-            assignment, new_name, parent_name, _kind_match, len(inventory)
-        )
-
-    for origin_set, new_label in _RELABEL_PATTERNS.items():
-        present = [g for g in sorted(origin_set) if g in assignment]
-        if len(present) < 2:
-            continue
-        if any(
-            not _should_merge_up(len(assignment[g]), len(inventory))
-            for g in present
-        ):
-            continue
-        if any(g in _FROZEN_GROUPS for g in present):
-            continue
-        merged: list[str] = []
-        for g in present:
-            merged.extend(assignment.pop(g))
-        assignment.setdefault(new_label, []).extend(merged)
-    # Relabel-by-origin happens ONLY in the pass above, which fires
-    # when every origin group is simultaneously small. Groups
-    # combined later by _MERGE_PARENT keep the parent's label: a
-    # small Trills group absorbed up displays as Vibrants (its
-    # _MERGE_PARENT), never as Liquids. The place-aware pass below then
-    # relabels a non-labial, non-lateral Vibrants cover to Rhotics (the
-    # cases recoverable from place features), leaving the neutral
-    # Vibrants label only for labial (/ʙ/, /ⱱ/) or lateral vibrants. A
-    # second origin-set relabel pass used to sit here, but it rebuilt
-    # its origin map from the already-merged assignment, so it could
-    # never fire; the bundled-inventory grouping snapshot pins this.
-    for pair, label in _DERIVED_MERGES:
-        present = [g for g in sorted(pair) if g in assignment]
-        if label == "Liquids":
-            # An explicit ``liquid:-`` on every member of a group is a
-            # declaration that they are NOT liquids; never force such a
-            # group (e.g. a declared +rhotic -liquid set) into the
-            # Liquids cover. This is a no-op for any inventory whose
-            # segments do not carry an explicit ``liquid`` feature.
-            present = [
-                g
-                for g in present
-                if not all(
-                    norm[s].get("liquid", "0") == "-" for s in assignment[g]
-                )
-            ]
-        if len(present) < 2:
-            continue
-        if any(g in _FROZEN_GROUPS for g in present):
-            continue
-        if not any(
-            _should_merge_up(len(assignment[g]), len(inventory))
-            for g in present
-        ):
-            continue
-        merged = []
-        for g in present:
-            merged.extend(assignment.pop(g))
-        assignment.setdefault(label, []).extend(merged)
-    changed = True
-    while changed:
-        changed = False
-        for gname in list(assignment.keys()):
-            if gname in _FROZEN_GROUPS:
-                continue
-            if not _should_merge_up(len(assignment[gname]), len(inventory)):
-                continue
-            parent = _MERGE_PARENT.get(gname)
-            if parent is not None:
-                assignment.setdefault(parent, []).extend(assignment.pop(gname))
-                changed = True
-    # Place-aware rhotic relabel. Both the trill+tap cover relabel above
-    # and the lone-trill/tap _MERGE_PARENT fold land in the place-neutral
-    # "Vibrants" group, because a trill or tap is not rhotic by manner
-    # alone: a bilabial trill /ʙ/ or labiodental flap /ⱱ/ is a vibrant,
-    # not a rhotic. But a Vibrants cover whose members are ALL non-labial
-    # and non-lateral IS a rhotic system (coronal/uvular trills, taps,
-    # flaps), and that is recoverable from the standard place features
-    # without a declared ``rhotic`` primitive. Relabel such a cover to
-    # "Rhotics"; a cover that includes any labial vibrant (/ʙ/, /ⱱ/) or a
-    # lateral flap (/ɺ/) keeps the neutral "Vibrants" label. This runs
-    # AFTER the merge passes, so a feature-derived rhotic system stays its
-    # own row (e.g. Hindi: "Rhotics" beside "Lateral Approximants")
-    # instead of folding into the Liquids cover, which remains reserved
-    # for the declared / central-approximant-anchored path above.
-    vibrants = assignment.get("Vibrants")
-    if vibrants and all(
-        norm[s].get("labial", "0") != "+"
-        and norm[s].get("lateral", "0") != "+"
-        for s in vibrants
-    ):
-        assignment.setdefault("Rhotics", []).extend(assignment.pop("Vibrants"))
-    if _LARYNGEAL_FEATURES & active_features:
-        # The "Laryngeals" row (h / ɦ / ʔ pulled out of their manner
-        # classes) is a convenience regroup, so it must not make the
-        # display WORSE by leaving a singleton behind. Two guards, in
-        # the spirit of the ``_should_break_out`` discipline the manner
-        # breakouts already use:
-        #   * stranding: never peel a group's laryngeals if that would
-        #     leave the group with exactly one member. A lone /ɦ/ reads
-        #     better beside the other fricatives than stranding /f/
-        #     alone in a singleton Fricatives row (the Hindi case).
-        #     Emptying the group (it was all laryngeal) is fine.
-        #   * worthwhileness: only raise the row once >= 2 members
-        #     qualify; a single laryngeal stays in its manner home.
-        # When a guard blocks the peel the laryngeals stay where they
-        # are (h/ɦ among the fricatives, ʔ among the plosives), which
-        # is the standard manner-by-place chart layout anyway.
-        peelable: dict[str, list[str]] = {}
-        for gname in list(assignment.keys()):
-            if gname == "Laryngeals":
-                continue
-            members = assignment[gname]
-            cands = [s for s in members if _is_laryngeal_candidate(norm[s])]
-            if cands and len(members) - len(cands) != 1:
-                peelable[gname] = cands
-        if sum(len(c) for c in peelable.values()) >= 2:
-            laryngeal_segs: list[str] = []
-            for gname, cands in peelable.items():
-                for sym in cands:
-                    assignment[gname].remove(sym)
-                laryngeal_segs.extend(cands)
-                if not assignment[gname]:
-                    del assignment[gname]
-            assignment.setdefault("Laryngeals", []).extend(laryngeal_segs)
-    return {
-        name: sorted(
-            assignment[name],
-            key=lambda s: _segment_sort_key(norm[s], profile),
-        )
-        for name in DISPLAY_ORDER
-        if assignment.get(name)
-    }
+    # Stage 9: emit in display order, each group place-sorted.
+    return _sort_into_display_order(assignment, norm, profile)
 
 
 # Per-class cap counting and validation moved to

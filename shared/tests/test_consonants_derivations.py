@@ -592,6 +592,118 @@ def test_derive_place_general_profile_plus_back_is_velar() -> None:
     assert derive_place(feats, general) == PlaceRank.VELAR
 
 
+# derive_place: the palatal GLIDE /j/ /ɥ/ (Hayes-style inventories).
+# /j/ = +dorsal +high -back +front, -consonantal -syllabic, no anterior.
+# The anterior-only Hayes rule mislabelled it VELAR; the glide clause
+# lifts it to PALATAL without disturbing advanced velars or vowels.
+_PALATAL_GLIDE = {
+    "dorsal": "+",
+    "high": "+",
+    "back": "-",
+    "front": "+",
+    "consonantal": "-",
+    "syllabic": "-",
+}
+
+
+def test_derive_place_palatal_glide_j_is_palatal_under_hayes() -> None:
+    """/j/ (explicit ``-consonantal -syllabic``, no ``anterior``) is
+    PALATAL, not VELAR, even under the Hayes anterior discriminator."""
+    hayes = ConsonantProfile(dorsals_use_anterior=True)
+    assert derive_place(_PALATAL_GLIDE, hayes) == PlaceRank.PALATAL
+    # and with no profile (default Hayes-style)
+    assert derive_place(_PALATAL_GLIDE) == PlaceRank.PALATAL
+
+
+def test_derive_place_advanced_velar_with_consonantal_stays_velar() -> None:
+    """An explicit ``+consonantal`` advanced velar (Hayes ``k+`` =
+    +dorsal +high -back +front 0anterior) stays VELAR: the glide
+    clause fires only on an explicit ``-consonantal``."""
+    hayes = ConsonantProfile(dorsals_use_anterior=True)
+    advanced_velar = dict(_PALATAL_GLIDE)
+    advanced_velar["consonantal"] = "+"
+    del advanced_velar["syllabic"]
+    assert derive_place(advanced_velar, hayes) == PlaceRank.VELAR
+
+
+def test_derive_place_front_vowel_ordering_unaffected_by_glide_rule() -> None:
+    """A front VOWEL (``+dorsal +high -back -consonantal +syllabic``)
+    is NOT pulled into PALATAL by the glide clause; the clause is
+    gated to non-syllabic so vowel within-chart ordering is
+    preserved. It stays VELAR under Hayes, as before."""
+    hayes = ConsonantProfile(dorsals_use_anterior=True)
+    front_vowel = dict(_PALATAL_GLIDE)
+    front_vowel["syllabic"] = "+"
+    assert derive_place(front_vowel, hayes) == PlaceRank.VELAR
+
+
+# derive_place: PHOIBLE / Hayes encode pharyngeals ħ ʕ WITHOUT a
+# pharyngeal primitive, as a retracted low-back dorsal marked +rtr.
+# The detector must read that pattern or they fall through to UVULAR.
+_PHOIBLE_PHARYNGEAL = {
+    "dorsal": "+",
+    "high": "-",
+    "low": "+",
+    "back": "+",
+    "rtr": "+",
+    "consonantal": "+",
+    "syllabic": "-",
+}
+
+
+def test_derive_place_pharyngeal_from_phoible_rtr_low_back_dorsal() -> None:
+    """PHOIBLE ħ / ʕ (``+dorsal -high +low +back +rtr``) derive
+    PHARYNGEAL, not UVULAR."""
+    assert derive_place(_PHOIBLE_PHARYNGEAL) == PlaceRank.PHARYNGEAL
+
+
+def test_derive_place_uvular_stays_uvular_without_rtr() -> None:
+    """A plain uvular χ / ʁ (``+dorsal -high -low +back -rtr``) is
+    unchanged: ``+rtr`` is the discriminator that separates a
+    pharyngeal from a uvular, so a uvular never becomes pharyngeal."""
+    uvular = dict(_PHOIBLE_PHARYNGEAL)
+    uvular["low"] = "-"
+    uvular["rtr"] = "-"
+    assert derive_place(uvular) == PlaceRank.UVULAR
+
+
+def test_derive_place_rtr_low_back_vowel_is_not_pharyngeal() -> None:
+    """A low back RTR VOWEL (``+syllabic``) is excluded from the
+    pharyngeal pattern, so tongue-root harmony vowels do not steal a
+    consonant pharyngeal rank."""
+    rtr_vowel = dict(_PHOIBLE_PHARYNGEAL)
+    rtr_vowel["consonantal"] = "-"
+    rtr_vowel["syllabic"] = "+"
+    assert derive_place(rtr_vowel) != PlaceRank.PHARYNGEAL
+
+
+def test_derive_place_epiglottal_from_epilaryngealsource() -> None:
+    """PHOIBLE epiglottals ʜ / ʢ / ʡ are stamped ``+epilaryngealsource``
+    (not the hand-authored ``epilaryngeal`` / ``aryepiglottic``); the
+    detector must read the feature PHOIBLE actually ships or they
+    collapse onto GLOTTAL (``ʜ`` / ``ʢ`` are ``-consonantal``)."""
+    epiglottal = {
+        "epilaryngealsource": "+",
+        "consonantal": "-",
+        "syllabic": "-",
+    }
+    assert derive_place(epiglottal) == PlaceRank.EPIGLOTTAL
+
+
+def test_derive_place_epilaryngeal_vowel_is_not_epiglottal() -> None:
+    """An epiglottalized VOWEL (``aᴱ``: ``+syllabic
+    +epilaryngealsource``) keeps a vowel place, not a consonant
+    epiglottal rank."""
+    epi_vowel = {
+        "epilaryngealsource": "+",
+        "syllabic": "+",
+        "dorsal": "+",
+        "low": "+",
+        "back": "+",
+    }
+    assert derive_place(epi_vowel) != PlaceRank.EPIGLOTTAL
+
+
 # group_segments: gated-group fallback discipline (Clicks / Vowels /
 # Tones membership is a hard per-segment gate, never a mismatch default).
 
