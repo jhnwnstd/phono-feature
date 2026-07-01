@@ -16,8 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QUrl, pyqtSignal
+from PyQt6.QtGui import QDesktopServices, QFont, QMouseEvent
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 from phonology_features.gui._themed_style_cache import styles_for_active_theme
 from phonology_features.gui.style_utils import set_css
 from phonology_shared.presentation import chart_style as cs
+from phonology_shared.presentation.feature_metadata import glossary_url_for
 from phonology_shared.presentation.layout import (
     FEAT_BADGE_W,
     FEAT_BADGE_W_COMPACT,
@@ -176,6 +177,10 @@ class FeatureRow(QWidget):
     ) -> None:
         super().__init__(parent)
         self.feature = feature_name
+        # INLP glossary URL for this feature, or None when it has no
+        # entry. Set -> the name is underlined + clickable (opens the
+        # glossary page in the system browser); None -> plain name.
+        self._glossary_url = glossary_url_for(feature_name)
         self._current_value = ""
         self._panel_active = False
         self._build_styles()
@@ -204,6 +209,11 @@ class FeatureRow(QWidget):
             QSizePolicy.Policy.Preferred,
         )
         set_css(self.name_label, f"color: {C['text']};")
+        if self._glossary_url is not None:
+            self.name_label.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.name_label.setToolTip(
+                "Open the glossary entry in your browser"
+            )
         self.plus_btn = QPushButton("+", self)
         self.plus_btn.setCheckable(True)
         self._style_btn(self.plus_btn, "+")
@@ -431,6 +441,12 @@ class FeatureRow(QWidget):
         # for citing features.
         name_font = QFont("Noto Sans", cfg.name_font)
         name_font.setCapitalization(QFont.Capitalization.SmallCaps)
+        # A feature with a glossary entry gets an underlined name to
+        # mark it as a clickable link. Set on the font (re-applied on
+        # every density swap) so it survives compact <-> normal without
+        # touching the shared query-state stylesheets.
+        if self._glossary_url is not None:
+            name_font.setUnderline(True)
         self.name_label.setFont(name_font)
         lay = self.layout()
         if lay is not None:
@@ -441,6 +457,26 @@ class FeatureRow(QWidget):
                 cfg.margin_v,
             )
         self.setFixedHeight(cfg.row_h)
+
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:
+        """Open the feature's glossary page when its name is clicked.
+
+        The +/- buttons and badge consume their own presses, so a press
+        that reaches the row is on the name or empty area; the
+        ``name_label`` geometry guard keeps the underlined name (not the
+        blank right-hand strip) as the link target. Rows without a
+        glossary entry fall through to the default handler.
+        """
+        if (
+            event is not None
+            and self._glossary_url is not None
+            and event.button() == Qt.MouseButton.LeftButton
+            and self.name_label.geometry().contains(event.position().toPoint())
+        ):
+            QDesktopServices.openUrl(QUrl(self._glossary_url))
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
     def set_compact(self, yes: bool) -> None:
         """Switch the row between comfortable and compact density.

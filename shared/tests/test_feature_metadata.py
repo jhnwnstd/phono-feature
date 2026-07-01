@@ -32,12 +32,14 @@ from phonology_shared.presentation.constants import (
     sort_features,
 )
 from phonology_shared.presentation.feature_metadata import (
+    _GLOSSARY_SLUGS,
     FEATURE_REGISTRY,
     GROUP_ORDER,
     USE_VOWEL_PAIR,
     all_aliases,
     feature_sort_key,
     features_for_use,
+    glossary_url_for,
     is_suprasegmental,
     metadata_for,
     resolve_canonical,
@@ -565,3 +567,61 @@ def test_tone_marker_and_level_are_distinct() -> None:
     assert FEATURE_REGISTRY["tone"].canonical != (
         FEATURE_REGISTRY["hightone"].canonical
     )
+
+
+# ---------------------------------------------------------------
+# Glossary links
+# ---------------------------------------------------------------
+
+
+def test_glossary_url_for_resolves_any_surface_form() -> None:
+    """A feature with a glossary entry maps to its INLP page from any
+    surface spelling (canonical, Hayes all-caps, PHOIBLE camelCase,
+    PanPhon short, spaced)."""
+    assert (
+        glossary_url_for("DelRel")
+        == "https://inlpglossary.ca/delayed-release/"
+    )
+    assert (
+        glossary_url_for("Spread Glottis")
+        == "https://inlpglossary.ca/spread-glottis/"
+    )
+    for spelling in ("CORONAL", "Coronal", "coronal", "cor"):
+        assert glossary_url_for(spelling) == (
+            "https://inlpglossary.ca/coronal/"
+        )
+    # PHOIBLE's raw column name for Voice resolves to the voice page.
+    assert (
+        glossary_url_for("periodicGlottalSource")
+        == "https://inlpglossary.ca/voice/"
+    )
+
+
+def test_glossary_url_for_shared_pages() -> None:
+    """ATR and RTR both point at the single tongue-root page; HighTone
+    folds into the general tone page."""
+    tongue_root = "https://inlpglossary.ca/advanced-tongue-root/"
+    assert glossary_url_for("ATR") == tongue_root
+    assert glossary_url_for("RTR") == tongue_root
+    assert glossary_url_for("Tone") == glossary_url_for("HighTone")
+
+
+def test_glossary_url_for_unmapped_and_unknown_return_none() -> None:
+    """Registered features WITHOUT a glossary entry, and names the
+    registry does not know at all, both return None: no invented
+    links."""
+    for feat in ("Fortis", "Trill", "LoweredLarynxImplosive", "Click"):
+        assert resolve_canonical(feat) is not None
+        assert glossary_url_for(feat) is None
+    assert glossary_url_for("not_a_feature") is None
+
+
+def test_glossary_slug_keys_are_registry_canonicals() -> None:
+    """Every key in the glossary table is a real canonical, so a typo
+    can never silently drop a link; every slug is a bare path segment."""
+    for canonical in _GLOSSARY_SLUGS:
+        assert (
+            canonical in FEATURE_REGISTRY
+        ), f"glossary key {canonical!r} is not a registry canonical"
+    for slug in _GLOSSARY_SLUGS.values():
+        assert slug and "/" not in slug and slug == slug.strip()

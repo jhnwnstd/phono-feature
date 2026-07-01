@@ -823,6 +823,9 @@ function _adoptInventoryState(info) {
     state.inventory_name = info.name;
     state.segments = info.segments;
     state.features = info.features;
+    // Feature-name -> INLP glossary URL, for features with an entry.
+    // Read by ``_buildFeatureRow`` to render the name as a link.
+    state.featureGlossary = info.feature_glossary || {};
     state.selected_segments = [];
     state.selected_features = emptyFeatureSpec();
     state.hidden_segment_classes = new Set();
@@ -2804,7 +2807,26 @@ function _buildFeatureRow(feat) {
     // DOM text is the right tier: theme reactivity comes from the
     // cascaded ``color`` token; the small-caps shaping comes from
     // the system font's OpenType ``smcp`` feature.
-    name.textContent = feat;
+    // Feature names that have an INLP glossary entry render as a link
+    // to that entry (new tab); the rest stay plain text. The <a> lives
+    // INSIDE .feat-name so the flex layout and the inherited small-caps
+    // shaping are unchanged; the persistent dotted underline + hover
+    // cue live in style.css (``.feat-glossary-link``).
+    const glossaryUrl = state.featureGlossary
+        ? state.featureGlossary[feat]
+        : undefined;
+    if (glossaryUrl) {
+        const link = document.createElement("a");
+        link.className = "feat-glossary-link";
+        link.href = glossaryUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = feat;
+        link.title = "Open the glossary entry (opens in a new tab)";
+        name.appendChild(link);
+    } else {
+        name.textContent = feat;
+    }
     row.appendChild(name);
     // Badge + polarity buttons share one fixed-width controls slot
     // (``.feat-controls``). Activating the pane swaps the badge for

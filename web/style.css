@@ -1803,6 +1803,35 @@ dialog input[type="text"]:focus-visible {
   font-variant-caps: small-caps;
   letter-spacing: 0.01em;
 }
+
+/* Feature names that have an INLP glossary entry are wrapped in an
+   ``<a class="feat-glossary-link">`` (see ``_buildFeatureRow``). The
+   link inherits the name's colour and small-caps shaping so it reads
+   as the same label, plus a persistent faint dotted underline marking
+   it as a defined term the reader can look up (the chosen teaching
+   affordance). Colour is inherited so the underline follows the +/-
+   query-state colouring in FEAT mode. Hover / keyboard-focus brighten
+   it to the accent and turn the underline solid. Theme vars keep it
+   correct in dark mode / colour-blind palettes. */
+.feat-glossary-link {
+  color: inherit;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--text-dim);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.feat-glossary-link:hover,
+.feat-glossary-link:focus-visible {
+  color: var(--accent);
+  text-decoration-style: solid;
+  text-decoration-color: var(--accent);
+}
+.feat-glossary-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
 /* Emphasis cues on feature-name labels use ``text-shadow`` rather
    than ``font-weight: bold`` because the bold glyphs measure
    slightly wider; toggling the active pane (which flips which

@@ -9,12 +9,34 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from phonology_shared.presentation.feature_metadata import glossary_url_for
 from phonology_shared.presentation.view_models import (
     build_inventory_summary,
     summarize_feature_query,
     summarize_segment_selection,
 )
 from phonology_shared.theory.feature_engine import FeatureEngine
+
+
+def test_build_inventory_summary_feature_glossary_matches_helper(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    """``feature_glossary`` lists exactly the ACTIVE features that have
+    an INLP glossary entry, each mapped to :py:func:`glossary_url_for`'s
+    URL, and nothing else. This is what both UIs read to render the
+    clickable feature-name links."""
+    engine = bundled_engine("hayes")
+    summary = build_inventory_summary(engine, "Hayes")
+    glossary = summary["feature_glossary"]
+    active = summary["active_features"]
+    # The payload is exactly the helper applied over the active roster.
+    for feat in active:
+        assert glossary.get(feat) == glossary_url_for(feat)
+    assert set(glossary) <= set(active)
+    assert all(url is not None for url in glossary.values())
+    # The Hayes roster carries several linked features (Coronal, Voice,
+    # ...), so the map is non-empty.
+    assert glossary
 
 
 def test_build_inventory_summary_places_general_schwa_on_mid_row(

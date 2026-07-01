@@ -747,3 +747,74 @@ def iter_aliases_in_group(group: str) -> Iterable[str]:
     ):
         yield meta.canonical
         yield from meta.aliases
+
+
+# ---------------------------------------------------------------------
+# Glossary links
+#
+# The INLP Linguistic Glossary (https://inlpglossary.ca/) hosts a
+# dedicated distinctive-feature page per term at ``/<slug>/``. This
+# table maps a registry canonical to that slug for the ~27 features
+# that have an entry, turning their names into clickable teaching
+# links. Features with no glossary entry are simply absent here and
+# render as plain, non-clickable text ("put bad in, get bad out": no
+# invented links). Notes: ATR and RTR both point at the single
+# tongue-root page; HighTone folds into the general tone page. Slugs
+# were verified against the site's sitemap, and every key is asserted
+# to be a real canonical by ``test_feature_metadata``.
+# ---------------------------------------------------------------------
+GLOSSARY_BASE_URL = "https://inlpglossary.ca/"
+
+_GLOSSARY_SLUGS: dict[str, str] = {
+    # Major class
+    "syllabic": "syllabic",
+    "consonantal": "consonantal",
+    "sonorant": "sonorant",
+    "approximant": "approximant",
+    # Laryngeal
+    "voice": "voice",
+    "spreadgl": "spread-glottis",
+    "constrgl": "constricted-glottis",
+    # Manner
+    "continuant": "continuant",
+    "strident": "strident",
+    "delrel": "delayed-release",
+    "nasal": "nasal",
+    "lateral": "lateral",
+    # Place
+    "labial": "labial",
+    "round": "round",
+    "coronal": "coronal",
+    "anterior": "anterior",
+    "distributed": "distributed",
+    "dorsal": "dorsal",
+    "high": "high",
+    "low": "low",
+    "back": "back",
+    "pharyngeal": "pharyngeal",
+    # Tongue-root
+    "atr": "advanced-tongue-root",
+    "rtr": "advanced-tongue-root",
+    "tense": "tense",
+    # Prosodic
+    "tone": "tone",
+    "hightone": "tone",
+}
+
+
+def glossary_url_for(raw_name: str) -> str | None:
+    """Return the INLP glossary URL for ``raw_name`` if the feature has
+    a glossary entry, else ``None``.
+
+    Accepts any surface form (resolves through
+    :py:func:`resolve_canonical`), so display spellings like ``DelRel``,
+    ``SpreadGl``, or ``Spread Glottis`` all map to the right page, and
+    unknown names return ``None`` without raising.
+    """
+    canonical = resolve_canonical(raw_name)
+    if canonical is None:
+        return None
+    slug = _GLOSSARY_SLUGS.get(canonical)
+    if slug is None:
+        return None
+    return f"{GLOSSARY_BASE_URL}{slug}/"

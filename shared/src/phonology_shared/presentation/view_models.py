@@ -32,6 +32,7 @@ from phonology_shared.presentation.constants import (
     FEATURE_GROUPS,
     MINUS_SIGN,
 )
+from phonology_shared.presentation.feature_metadata import glossary_url_for
 from phonology_shared.presentation.layout import distribute_feature_groups
 from phonology_shared.presentation.palette import ClassState
 from phonology_shared.presentation.source_link import classify_source
@@ -210,6 +211,14 @@ def build_inventory_summary(
         "active_features": active,
         "groups": consonant_groups,
         "feature_groups": _grouped_features(active),
+        # Map of feature-name -> INLP glossary URL, for the features
+        # that have a distinctive-feature entry. The UIs render those
+        # names as glossary links; names absent here stay plain text.
+        "feature_glossary": {
+            feat: url
+            for feat in active
+            if (url := glossary_url_for(feat)) is not None
+        },
         "vowel_chart": _vowel_chart_summary(engine, vowel_segs),
         # Vowel-like segments that fit no class; rendered as a flat list
         # under the vowel chart. Usually empty.
