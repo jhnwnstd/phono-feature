@@ -71,7 +71,11 @@ _REPS = [RESOLUTIONS[3], RESOLUTIONS[0], RESOLUTIONS[8]]
 # vowel-chart natural width). Pane widths are checked against
 # inequalities so realistic content variation doesn't break tests.
 SEG_CONTENT_W = 500
-FEAT_CONTENT_W = 500
+# Kept above the feature-pane floor (FEAT_MIN_W = 552, after the card
+# floor was sized to fit the longest feature name plus its controls)
+# so the resolution-matrix tests still exercise the CONTENT-driven
+# branch (640 = 600 + FEAT_CUSHION_PX 40 > 552) rather than the floor.
+FEAT_CONTENT_W = 600
 
 
 # ---------------------------------------------------------------------------
@@ -161,8 +165,8 @@ def test_feat_pane_is_content_driven_at_every_resolution(
     res: Resolution,
 ) -> None:
     """Feat pane is content-driven (``max(FEAT_MIN_W, content +
-    cushion)``). Same literal 540 px at every resolution
-    (FEAT_CONTENT_W 500 + FEAT_CUSHION_PX 40); only the seg pane
+    cushion)``). Same literal 640 px at every resolution
+    (FEAT_CONTENT_W 600 + FEAT_CUSHION_PX 40); only the seg pane
     absorbs extra width on wide screens. Literal pin so a bump
     to FEAT_CUSHION_PX (40 to something else) trips the assertion
     rather than silently shifting both sides."""
@@ -172,7 +176,7 @@ def test_feat_pane_is_content_driven_at_every_resolution(
         seg_content_w=SEG_CONTENT_W,
         feat_content_w=FEAT_CONTENT_W,
     )
-    assert feat_w == 540
+    assert feat_w == 640
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +287,7 @@ def test_full_hd_window_uses_screen_fraction_not_floor() -> None:
 
 def test_low_end_laptop_window_falls_back_to_floor() -> None:
     """At 1366×768, both axes are below the floor: 0.80 × 1366
-    = 1092 < 1120, and 0.80 × 768 = 614 < 900. The floor wins on
+    = 1092 < 1252, and 0.80 × 768 = 614 < 900. The floor wins on
     both axes; geometry_controller clamps the result back to the
     actual screen after the fact. Literal numbers so a bump to
     either floor constant is caught here."""
@@ -294,7 +298,7 @@ def test_low_end_laptop_window_falls_back_to_floor() -> None:
 
 def test_smallest_targeted_resolution_width_fits_screen() -> None:
     """1280×720 is below the floor on the height axis (0.80 × 720
-    = 576 < 900) but the WIDTH floor 1120 now fits inside the
+    = 576 < 900) but the WIDTH floor 1252 now fits inside the
     1280 screen. Width does not overshoot the screen; height does
     (the clamp at the call site brings it back to fit). Captures
     the new vowel-safe-minimum-width contract."""
@@ -305,8 +309,8 @@ def test_smallest_targeted_resolution_width_fits_screen() -> None:
 
 def test_seg_pane_fans_out_at_4k() -> None:
     """At 4K, the recommended window is capped at 2400 px wide
-    (``CONTENT_MAX_W_ABS``). Feat lands at 540 px (FEAT_CONTENT_W
-    500 + FEAT_CUSHION_PX 40); seg gets the remaining 1860 px;
+    (``CONTENT_MAX_W_ABS``). Feat lands at 640 px (FEAT_CONTENT_W
+    600 + FEAT_CUSHION_PX 40); seg gets the remaining 1760 px;
     the cap stops the fan-out from going past the useful-content
     width even though the screen has room to spare."""
     win_w, _ = layout.recommended_initial_window_size(3840, 2160)
@@ -315,14 +319,14 @@ def test_seg_pane_fans_out_at_4k() -> None:
         seg_content_w=SEG_CONTENT_W,
         feat_content_w=FEAT_CONTENT_W,
     )
-    assert feat_w == 540
-    assert seg_w == 1860
+    assert feat_w == 640
+    assert seg_w == 1760
 
 
 def test_seg_pane_stays_at_min_at_low_end_laptop() -> None:
-    """At 1366×768, the window is preferred at 1120 wide (the new
-    vowel-safe floor). With feat 540 px and seg-min 480 px, seg
-    pane gets 580 px, just under VOWEL_STACK_W (620), so for
+    """At 1366×768, the window is preferred at 1252 wide (the new
+    vowel-safe floor). With feat 640 px and seg-min 480 px, seg
+    pane gets 612 px, just under VOWEL_STACK_W (680), so for
     typical-content inventories the chart would stack here. The
     content-driven floor in ``fit_to_content`` pushes the actual
     initial window up to the vowel-safe-per-inventory minimum."""
@@ -332,8 +336,8 @@ def test_seg_pane_stays_at_min_at_low_end_laptop() -> None:
         seg_content_w=SEG_CONTENT_W,
         feat_content_w=FEAT_CONTENT_W,
     )
-    assert feat_w == 540
-    assert seg_w == win_w - feat_w  # 1120 - 540 = 580
+    assert feat_w == 640
+    assert seg_w == win_w - feat_w  # 1252 - 640 = 612
 
 
 # ---------------------------------------------------------------------------
@@ -347,14 +351,14 @@ def test_seg_pane_stays_at_min_at_low_end_laptop() -> None:
 
 def test_feat_floor_binds_when_content_is_small() -> None:
     """``FEAT_MIN_W`` wins when ``feat_content_w + cushion`` is
-    below the minimum. With FEAT_MIN_W = 480 (bumped from 380 so
-    long card titles fit), feat_content_w=200 + cushion 40 = 240
-    is well below 480 → floor wins."""
+    below the minimum. With FEAT_MIN_W = 552 (sized so the longest
+    feature name plus its controls fits), feat_content_w=200 +
+    cushion 40 = 240 is well below 552 → floor wins."""
     seg_w, feat_w = layout.distribute_pane_widths(
         1400, seg_content_w=500, feat_content_w=200
     )
-    assert feat_w == 480  # FEAT_MIN_W literal
-    assert seg_w == 1400 - 480
+    assert feat_w == 552  # FEAT_MIN_W literal
+    assert seg_w == 1400 - 552
 
 
 def test_seg_floor_binds_when_window_is_narrow() -> None:
@@ -365,8 +369,8 @@ def test_seg_floor_binds_when_window_is_narrow() -> None:
     seg_w, feat_w = layout.distribute_pane_widths(
         800, seg_content_w=500, feat_content_w=500
     )
-    assert feat_w == 540
-    assert seg_w == 500  # seg_content_w wins over (win_w - feat_w) = 260
+    assert feat_w == 552
+    assert seg_w == 500  # seg_content_w wins over (win_w - feat_w) = 248
 
 
 def test_pane_widths_clamp_to_floor_when_window_below_minimal_sum() -> None:
@@ -376,10 +380,10 @@ def test_pane_widths_clamp_to_floor_when_window_below_minimal_sum() -> None:
     seg_w, feat_w = layout.distribute_pane_widths(
         600, seg_content_w=500, feat_content_w=500
     )
-    # seg_floor = max(480, 500) = 500; feat_floor = max(380, 540) = 540
+    # seg_floor = max(480, 500) = 500; feat_floor = max(552, 540) = 552
     assert seg_w == 500
-    assert feat_w == 540
-    assert seg_w + feat_w == 1040 > 600  # sum overshoots tight window
+    assert feat_w == 552
+    assert seg_w + feat_w == 1052 > 600  # sum overshoots tight window
 
 
 def test_seg_min_floor_binds_when_no_content_pressure() -> None:
@@ -389,8 +393,8 @@ def test_seg_min_floor_binds_when_no_content_pressure() -> None:
     seg_w, feat_w = layout.distribute_pane_widths(
         1400, seg_content_w=100, feat_content_w=100
     )
-    assert feat_w == 480  # FEAT_MIN_W literal
-    assert seg_w == 1400 - 480 == 920
+    assert feat_w == 552  # FEAT_MIN_W literal
+    assert seg_w == 1400 - 552 == 848
     # Even with extreme content compression, seg floor holds.
     seg_w, _ = layout.distribute_pane_widths(
         400, seg_content_w=0, feat_content_w=0
@@ -417,7 +421,7 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
     # Pinning these as literals catches a bump to
     # ``DEFAULT_SCREEN_FRACTION`` even when the partition itself
     # is preserved.
-    # Vowel-safe floor (1120) is lower than the previous 1400, so
+    # Vowel-safe floor (1252) is lower than the previous 1400, so
     # more screens are now fraction-driven. Pinned literals catch a
     # bump to either constant.
     # 3840×0.80=3072 exceeds the new ultrawide cap
@@ -445,19 +449,21 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
             assert w == fraction_widths[res.label]
             fraction_driven_w.add(res.label)
     # Floor-driven width: ``0.80 × screen < MIN_FIRST_LAUNCH_W``.
-    # After bumping ``VOWEL_STACK_W`` (and therefore
-    # ``MIN_FIRST_LAUNCH_W``), 1440x900 also falls below the floor
-    # alongside the smaller monitors.
+    # After the feature-card floor grew (``MIN_FEAT_CARD_W`` sized to
+    # the longest feature name), ``FEAT_MIN_W`` and therefore
+    # ``MIN_FIRST_LAUNCH_W`` (1252) rose, so 1536x864 (0.80 × 1536 =
+    # 1228 < 1252) also falls below the floor alongside 1440x900 and
+    # the smaller monitors.
     assert floor_driven_w == {
         "1280x1200",
         "1366x768",
         "1280x720",
         "1440x900",
+        "1536x864",
     }
     # Fraction-driven width: monitors wide enough that 0.80 × screen
     # clears MIN_FIRST_LAUNCH_W.
     assert fraction_driven_w == {
-        "1536x864",
         "1600x900",
         "1920x1080",
         "2560x1440",
@@ -493,7 +499,7 @@ def test_floor_vs_fraction_partition_is_stable() -> None:
 
 def test_tall_narrow_1280x1200_fits_screen_width() -> None:
     """1280×1200 is a non-16:9 aspect (taller than wide for
-    desktop). With the lower vowel-safe floor (1120), the width
+    desktop). With the lower vowel-safe floor (1252), the width
     now FITS the 1280 screen; no horizontal overshoot. Height is
     fraction-driven at 80% (0.80 × 1200 = 960 above the 900 floor).
     """
@@ -739,7 +745,7 @@ def test_inventory_has_features_within_reasonable_bound(
 ) -> None:
     """Feature count caps the feature-pane content width. A
     typical inventory has 25 to 35 features. A bump past 50 would
-    blow past the 540-px ``feat_w`` the resolution matrix
+    blow past the 640-px ``feat_w`` the resolution matrix
     assumes."""
     data = _load_inventory(f"{name}_features")
     features = data.get("features", [])
@@ -898,17 +904,17 @@ def test_min_vowel_safe_window_w_keeps_vowels_alongside() -> None:
     )
     assert seg_w >= layout.VOWEL_STACK_W
 
-    # Typical feat content (500): feat_w = max(FEAT_MIN_W, 540) = 540.
-    typical = layout.VOWEL_STACK_W + 540 + 20
-    assert layout.min_vowel_safe_window_w(500) == typical
+    # Typical feat content (600): feat_w = max(FEAT_MIN_W, 640) = 640.
+    typical = layout.VOWEL_STACK_W + 640 + 20
+    assert layout.min_vowel_safe_window_w(600) == typical
     seg_w, _ = layout.distribute_pane_widths(
-        typical, seg_content_w=500, feat_content_w=500
+        typical, seg_content_w=500, feat_content_w=600
     )
     assert seg_w >= layout.VOWEL_STACK_W
 
-    # Big feat content (600): feat_w = max(FEAT_MIN_W, 640) = 640.
-    big = layout.VOWEL_STACK_W + 640 + 20
-    assert layout.min_vowel_safe_window_w(600) == big
+    # Big feat content (700): feat_w = max(FEAT_MIN_W, 740) = 740.
+    big = layout.VOWEL_STACK_W + 740 + 20
+    assert layout.min_vowel_safe_window_w(700) == big
 
 
 def test_min_vowel_safe_window_w_floors_at_feat_min() -> None:

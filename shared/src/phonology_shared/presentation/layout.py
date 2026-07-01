@@ -353,14 +353,30 @@ def plan_seg_layout(
 # below consonants). The seg pane never shrinks past this floor on
 # either UI.
 SEG_MIN_W: int = 480
-# Floor for the feature pane. Sized so each of the two card columns
-# gets at least ``MIN_FEAT_CARD_W`` (220 px) after subtracting outer
-# margins (28 px) and the inter-card gutter (12 px): 2 x 220 + 28 +
-# 12 = 480. ``distribute_pane_widths`` lifts this when the
-# inventory's natural feature-pane content asks for more. An earlier
-# value of 380 wrapped titles like "TONGUE-ROOT / PHARYNGEAL" onto
-# two lines.
-FEAT_MIN_W: int = 480
+# Minimum width per feature CARD column inside the feature panel. Must
+# fit the WIDER of two contents:
+#   * the longest group TITLE ("TONGUE-ROOT / PHARYNGEAL", ~205 px at
+#     the card's 8pt Bold font), and
+#   * the longest feature-name ROW: the 22-char maximum feature name
+#     ("LoweredLarynxImplosive", ~163 px at the 14 px small-caps
+#     feat-name font) + the inter-gap (4) + the fixed +/- control
+#     column (2 * 28 + 4 = 60) + the row's L/R padding (2 * 8 = 16),
+#     i.e. ~243 px.
+# The name-row need (~243) exceeds the title need (~213), so it drives
+# the floor; 256 adds a small rendering-variance cushion. An earlier
+# title-only 220 left the long-name rows ~23 px short, so the name
+# overran its column and shoved the +/- buttons out of their aligned
+# column on PHOIBLE inventories (every PHOIBLE inventory carries the
+# full feature set, "LoweredLarynxImplosive" included). This is a
+# legitimate content-driven pixel floor: the one case the
+# ratios-over-pixels convention permits a raw pixel constant.
+MIN_FEAT_CARD_W: int = 256
+# Floor for the feature pane: two ``MIN_FEAT_CARD_W`` card columns plus
+# outer margins (28 px) and the inter-card gutter (12 px). Derived from
+# ``MIN_FEAT_CARD_W`` so the card floor and the pane floor can never
+# drift. ``distribute_pane_widths`` lifts it when the inventory's
+# natural feature-pane content asks for more.
+FEAT_MIN_W: int = 2 * MIN_FEAT_CARD_W + 28 + 12
 # Extra pixels beyond ``feat_content_w`` so feature cards don't sit
 # flush against the splitter handle / panel edge.
 FEAT_CUSHION_PX: int = 40
@@ -559,11 +575,9 @@ PANEL_CLEAR_BTN_H: int = 22
 # when sizing a panel's minimum height from its content.
 PANEL_CHROME_V: int = 54
 
-# Minimum width per feature card column inside the feature panel.
-# Sized so the longest group title ("TONGUE-ROOT / PHARYNGEAL", at
-# the card's 8pt Bold font) renders on a single line. Drives the
-# new ``FEAT_MIN_W`` derivation below.
-MIN_FEAT_CARD_W: int = 220
+# ``MIN_FEAT_CARD_W`` is defined near the top of this section (beside
+# ``FEAT_MIN_W``, which now derives from it) because the pane floor
+# depends on the card floor.
 
 # ---------------------------------------------------------------------------
 # RATIO HELPERS

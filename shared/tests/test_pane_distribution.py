@@ -29,10 +29,10 @@ def test_distribute_feat_clamped_to_min_when_content_tiny() -> None:
     seg_w, feat_w = layout.distribute_pane_widths(
         1440, seg_content_w=500, feat_content_w=100
     )
-    # FEAT_MIN_W = 480 (bumped from 380 so long card titles fit
-    # on one line in the two-column feature panel).
-    assert feat_w == 480
-    assert seg_w == 1440 - 480
+    # FEAT_MIN_W = 552 (the two card columns sized so the longest
+    # feature name plus its +/- controls fits on one line).
+    assert feat_w == 552
+    assert seg_w == 1440 - 552
 
 
 def test_distribute_seg_respects_floor_on_narrow_window() -> None:

@@ -1778,15 +1778,18 @@ dialog input[type="text"]:focus-visible {
 
 .feat-name {
   flex: 1;
+  min-width: 0;
   color: var(--text);
   /* Feature names render on a single line so the standard PHOIBLE /
      Hayes labels (up to "LoweredLarynxImplosive", 22 chars) are
-     always written out in full. The feature pane is content sized
-     (``max-content`` on web, ``sizeHint`` on desktop) so it widens
-     to fit the longest name instead of reflowing the label; the seg
-     pane keeps its ``--seg-min-w`` floor, so a pathological
-     user-uploaded name widens the feat pane rather than blowing out
-     the row. */
+     always written out in full. The card floor ``--min-feat-card-w``
+     (``layout.MIN_FEAT_CARD_W``) is sized to that longest name plus
+     its +/- controls, so every standard name fits at the pane floor
+     without wrapping or clipping and the control column stays aligned
+     across rows. ``min-width: 0`` lets a pathological user-uploaded
+     name (longer than any shipped label) clip gracefully within its
+     row instead of overrunning and shoving the buttons out of
+     alignment; standard names never reach it. */
   white-space: nowrap;
   overflow-wrap: normal;
   /* Small-caps follows the academic convention for citing
