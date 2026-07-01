@@ -505,3 +505,38 @@ def test_normalize_feature_key_matches_registry_for_every_alias() -> None:
                 f"{normalize_feature_key(name)!r}, registry gives "
                 f"{resolve_canonical(name)!r}"
             )
+
+
+def test_click_and_velaric_are_one_feature() -> None:
+    """Clicks are the velaric-airstream consonants. Hayes writes the
+    feature ``Click``; PHOIBLE and PanPhon write ``Velaric`` (PHOIBLE
+    bakes its ``click`` column to that label). Every spelling folds to
+    the single ``click`` canonical, so ``velaric`` is not a separate
+    registry entry."""
+    for name in ("click", "Click", "velaric", "Velaric"):
+        assert resolve_canonical(name) == "click"
+        assert normalize_feature_key(name) == "click"
+    assert "velaric" not in FEATURE_REGISTRY
+
+
+def test_velaric_authored_click_reaches_the_clicks_row() -> None:
+    """A segment authored with PHOIBLE's ``Velaric`` feature reaches
+    the consonant grouper as ``click`` and lands in the Clicks row.
+    Regression guard: before click/velaric were unified the grouper
+    read only ``click`` and silently missed every PHOIBLE click."""
+    from phonology_shared.chart.consonants import group_segments
+
+    groups = group_segments(
+        {"ǃ": {"Velaric": "+", "consonantal": "+", "sonorant": "-"}}
+    )
+    assert "ǃ" in groups.get("Clicks", [])
+
+
+def test_alternative_name_aliases_resolve() -> None:
+    """Common alternative spellings of known features resolve to the
+    canonical rather than falling through to the ``Other`` group."""
+    assert resolve_canonical("voiced") == "voice"
+    assert resolve_canonical("rounded") == "round"
+    assert resolve_canonical("flap") == "tap"
+    assert resolve_canonical("nasalized") == "nasal"
+    assert resolve_canonical("nasality") == "nasal"

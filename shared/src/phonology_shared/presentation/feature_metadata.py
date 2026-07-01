@@ -195,7 +195,7 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         canonical="voice",
         sort_key=200,
         group=GROUP_LARYNGEAL,
-        aliases=("Voice", "voi", "periodicGlottalSource"),
+        aliases=("Voice", "voi", "voiced", "periodicGlottalSource"),
         systems=_ALL_THREE,
         uses=frozenset({USE_CONSONANT, USE_LARYNGEAL, USE_NATURAL_CLASS}),
     ),
@@ -338,7 +338,7 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         canonical="nasal",
         sort_key=303,
         group=GROUP_MANNER,
-        aliases=("Nasal", "nas"),
+        aliases=("Nasal", "nas", "nasalized", "nasality"),
         systems=_ALL_THREE,
         uses=frozenset({USE_CONSONANT, USE_VOWEL_PAIR, USE_NATURAL_CLASS}),
     ),
@@ -362,24 +362,21 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         canonical="tap",
         sort_key=306,
         group=GROUP_MANNER,
-        aliases=("Tap",),
+        aliases=("Tap", "flap"),
         systems=_HAYES_PHOIBLE,
         uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
     ),
+    # Clicks are the velaric-airstream consonants. Hayes names the
+    # feature "Click"; PHOIBLE and PanPhon name it "Velaric" (PHOIBLE
+    # bakes its "click" column to that label). One canonical so the
+    # consonant classifier's ``click`` check catches segments from
+    # every source, not only Hayes-authored ones.
     "click": FeatureMetadata(
         canonical="click",
         sort_key=307,
         group=GROUP_MANNER,
-        aliases=("Click",),
-        systems=_HAYES_ONLY,
-        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
-    ),
-    "velaric": FeatureMetadata(
-        canonical="velaric",
-        sort_key=308,
-        group=GROUP_MANNER,
-        aliases=("Velaric",),
-        systems=frozenset({SYSTEM_PHOIBLE, SYSTEM_PANPHON}),
+        aliases=("Click", "Velaric"),
+        systems=_ALL_THREE,
         uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
     ),
     "rhotic": FeatureMetadata(
@@ -411,7 +408,7 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         canonical="round",
         sort_key=401,
         group=GROUP_PLACE,
-        aliases=("Round",),
+        aliases=("Round", "rounded"),
         subgroup="labial",
         systems=_ALL_THREE,
         uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
