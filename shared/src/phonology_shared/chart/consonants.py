@@ -127,17 +127,17 @@ PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
         {"consonantal": "-", "syllabic": "-", "sonorant": "+"},
     ),
     (VOWEL_GROUP_NAME, {"syllabic": "+"}),
-    # Suprasegmental tone letters (Chao ``˥˦˧˨˩`` plus combining
-    # tone diacritics). PHOIBLE ships these as standalone segments
-    # with only ``HighTone=+`` and no consonant / vowel features;
-    # before this group existed, the fallback assigner routed them
-    # to Affricates by document order. The ``is_member`` invariant
-    # below (the tone-phoneme guard) gates this group symmetrically
-    # to the vowel-phoneme guard. Feature-set general: PHOIBLE maps
-    # ``tone`` -> ``HighTone`` and PanPhon maps ``hitone`` ->
-    # ``HighTone``; Hayes does not record standalone tone letters
-    # so the group simply stays empty on Hayes inventories.
-    (TONES_GROUP_NAME, {"hightone": "+"}),
+    # Suprasegmental tone letters (Chao ``˥˦˧˨˩`` plus combining tone
+    # diacritics). PHOIBLE ships these as standalone segments carrying
+    # only the generic ``tone`` marker and no consonant / vowel
+    # features; before this group existed, the fallback assigner routed
+    # them to Affricates by document order. Membership is the
+    # tone-phoneme guard in ``is_member``, not this spec, since a tone
+    # letter is marked by the generic ``tone`` (PHOIBLE) OR the
+    # ``hightone`` level (PanPhon) and one spec cannot express either.
+    # Hayes records no standalone tone letters so the group stays empty
+    # on Hayes inventories.
+    (TONES_GROUP_NAME, {"tone": "+"}),
 ]
 # Minimum positive matches required for membership; prevents barely
 # specified segments from qualifying for classes by default.
@@ -884,7 +884,7 @@ def _is_laryngeal_candidate(feats: dict[str, str]) -> bool:
     # of Tones into Laryngeals. Mirrors the tone-phoneme guard in
     # ``is_member``.
     is_tone = (
-        feats.get("hightone", "0") == "+"
+        (feats.get("tone", "0") == "+" or feats.get("hightone", "0") == "+")
         and feats.get("consonantal", "0") != "+"
         and not is_vowel
     )
@@ -1030,8 +1030,10 @@ def group_segments(
             if not is_vowel_phoneme:
                 return False
         elif group_name == TONES_GROUP_NAME:
-            if not is_tone_phoneme:
-                return False
+            # Membership IS the tone-phoneme fact; the spec cannot be
+            # matched because different sources mark tonality with
+            # different features (generic ``tone`` vs ``hightone``).
+            return is_tone_phoneme
         else:
             if is_vowel_phoneme or is_tone_phoneme:
                 return False
@@ -1096,7 +1098,10 @@ def group_segments(
         syllabic = seg_feats.get("syllabic", "0")
         is_vowel_phoneme = syllabic == "+" and consonantal != "+"
         is_tone_phoneme = (
-            seg_feats.get("hightone", "0") == "+"
+            (
+                seg_feats.get("tone", "0") == "+"
+                or seg_feats.get("hightone", "0") == "+"
+            )
             and consonantal != "+"
             and syllabic != "+"
         )

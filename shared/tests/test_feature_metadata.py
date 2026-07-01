@@ -540,3 +540,28 @@ def test_alternative_name_aliases_resolve() -> None:
     assert resolve_canonical("flap") == "tap"
     assert resolve_canonical("nasalized") == "nasal"
     assert resolve_canonical("nasality") == "nasal"
+
+
+def test_register_is_one_feature() -> None:
+    """Pitch register is one concept. Hayes writes ``UpperRegister``,
+    PanPhon ``HighRegister`` / ``hireg``; all fold to a single
+    ``highregister`` canonical, so ``upperregister`` is not a separate
+    entry."""
+    for name in ("HighRegister", "hireg", "UpperRegister", "upperregister"):
+        assert resolve_canonical(name) == "highregister"
+    assert "upperregister" not in FEATURE_REGISTRY
+
+
+def test_tone_marker_and_level_are_distinct() -> None:
+    """``tone`` is the generic tonality marker (PHOIBLE's ``tone``
+    column, carried by every tone letter high or low); ``hightone`` is
+    the pitch LEVEL (PanPhon's ``hitone``). They are separate features
+    so a source that supplies pitch level can distinguish tones while
+    one that supplies only the generic marker leaves them all the
+    same."""
+    assert resolve_canonical("Tone") == "tone"
+    assert resolve_canonical("HighTone") == "hightone"
+    assert resolve_canonical("hitone") == "hightone"
+    assert FEATURE_REGISTRY["tone"].canonical != (
+        FEATURE_REGISTRY["hightone"].canonical
+    )

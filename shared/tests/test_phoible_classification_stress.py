@@ -331,7 +331,7 @@ def test_b5_no_tone_phoneme_lands_in_a_consonant_group(
     phoible_provider, phoible_label_for, phoible_inventory_ids_full: list[str]
 ) -> None:
     """The classifier must never route a tone-phoneme
-    (``HighTone=+`` AND no positive ``Consonantal`` / ``Syllabic``)
+    (``Tone=+`` AND no positive ``Consonantal`` / ``Syllabic``)
     into a consonant group. PHOIBLE ships Chao tone letters
     (``˥``, ``˦``, ``˧``, ``˨``, ``˩``) as standalone segments
     with only the tone feature set; before the Tones group +
@@ -352,7 +352,7 @@ def test_b5_no_tone_phoneme_lands_in_a_consonant_group(
                 s
                 for s in segs
                 if (
-                    inv.segments.get(s, {}).get("HighTone") == "+"
+                    inv.segments.get(s, {}).get("Tone") == "+"
                     and inv.segments.get(s, {}).get("Consonantal") != "+"
                     and inv.segments.get(s, {}).get("Syllabic") != "+"
                 )
@@ -372,7 +372,7 @@ def test_b6_phoible_tone_letters_land_in_tones_group(
     """Positive symmetry: every PHOIBLE Chao tone letter segment
     in the snapshot must land in the ``Tones`` group. Walks the
     real data so a future bake schema change or normalizer
-    regression that strips ``HighTone`` from tone segments
+    regression that strips the ``Tone`` marker from tone segments
     surfaces here with the failing inventory named."""
     tone_codepoints = set(range(0x02E5, 0x02EA))  # ˥˦˧˨˩
     missed: list[tuple[str, list[str]]] = []
@@ -385,7 +385,7 @@ def test_b6_phoible_tone_letters_land_in_tones_group(
             s
             for s in inv.segments
             if any(ord(c) in tone_codepoints for c in s)
-            and inv.segments[s].get("HighTone") == "+"
+            and inv.segments[s].get("Tone") == "+"
             and inv.segments[s].get("Consonantal") != "+"
             and inv.segments[s].get("Syllabic") != "+"
         ]
@@ -411,23 +411,23 @@ def test_b6_phoible_tone_letters_land_in_tones_group(
 def test_b7_chao_tone_letter_lands_in_tones_for_every_feature_shape(
     shape_name: str, features_factory
 ) -> None:
-    """Parametrised tone-phoneme parity: a synthetic Chao tone
-    letter (``HighTone=+``, no consonant/vowel anchors) lands in
-    the ``Tones`` group regardless of whether the surrounding
-    feature inventory is Hayes-shaped (no HighTone column, so the
-    classifier sees zero positive features and the segment is
-    correctly excluded from every group), PHOIBLE-shaped, or
-    PanPhon-shaped. Pins feature-set generality on the
-    tone-phoneme half of the invariant."""
+    """Parametrised tone-phoneme parity: a synthetic Chao tone letter
+    (no consonant/vowel anchors) lands in the ``Tones`` group under
+    every feature shape. Each source marks tonality with its own
+    feature: PHOIBLE the generic ``Tone``, PanPhon the ``HighTone``
+    level. Hayes ships no tone column, so the tone letter has no
+    positive feature and is correctly excluded from every group. Pins
+    feature-set generality on the tone-phoneme half of the invariant."""
     features = features_factory()
-    if "HighTone" not in features:
+    marker = next((m for m in ("Tone", "HighTone") if m in features), None)
+    if marker is None:
         pytest.skip(
-            f"{shape_name} shape does not record HighTone; tone"
+            f"{shape_name} shape records no tone marker; tone"
             " classification is a no-op there"
         )
     base: dict[str, str] = {f: "0" for f in features}
     tone_seg: dict[str, str] = dict(base)
-    tone_seg["HighTone"] = "+"
+    tone_seg[marker] = "+"
     inv = Inventory.from_grid(
         name="tone-synthetic",
         features=features,

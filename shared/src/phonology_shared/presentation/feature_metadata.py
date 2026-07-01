@@ -571,39 +571,40 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         uses=frozenset(),
         is_suprasegmental=True,
     ),
+    # ``tone`` is the generic "this is a tone-bearing element" marker.
+    # PHOIBLE bakes its ``tone`` column to this; every tone letter, high
+    # OR low, carries it, so it marks tonality, not pitch height.
     "tone": FeatureMetadata(
         canonical="tone",
         sort_key=603,
         group=GROUP_PROSODIC,
         aliases=("Tone",),
-        systems=_HAYES_ONLY,
+        systems=_HAYES_PHOIBLE,
         uses=frozenset({USE_VOWEL_PAIR}),
         is_suprasegmental=True,
     ),
+    # Pitch level, the feature that separates a high tone from a low one
+    # (PanPhon's ``hitone``). With ``highregister`` it distinguishes the
+    # tone levels; a source that ships only the generic ``tone`` marker
+    # leaves every tone the same.
     "hightone": FeatureMetadata(
         canonical="hightone",
         sort_key=604,
         group=GROUP_PROSODIC,
         aliases=("HighTone", "hitone"),
-        systems=frozenset({SYSTEM_PHOIBLE, SYSTEM_PANPHON}),
+        systems=frozenset({SYSTEM_PANPHON}),
         uses=frozenset(),
         is_suprasegmental=True,
     ),
-    "upperregister": FeatureMetadata(
-        canonical="upperregister",
-        sort_key=605,
-        group=GROUP_PROSODIC,
-        aliases=("UpperRegister",),
-        systems=_HAYES_ONLY,
-        uses=frozenset(),
-        is_suprasegmental=True,
-    ),
+    # Pitch register, the other tone-distinguishing dimension. Hayes
+    # writes it ``UpperRegister``, PanPhon ``HighRegister`` / ``hireg``;
+    # one canonical for the single upper-vs-lower-band concept.
     "highregister": FeatureMetadata(
         canonical="highregister",
-        sort_key=606,
+        sort_key=605,
         group=GROUP_PROSODIC,
-        aliases=("HighRegister", "hireg"),
-        systems=frozenset({SYSTEM_PANPHON}),
+        aliases=("HighRegister", "hireg", "UpperRegister"),
+        systems=frozenset({SYSTEM_PANPHON, SYSTEM_HAYES}),
         uses=frozenset(),
         is_suprasegmental=True,
     ),

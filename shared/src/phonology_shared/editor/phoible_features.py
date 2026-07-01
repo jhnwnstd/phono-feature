@@ -29,7 +29,10 @@ from collections.abc import Mapping
 #: pairs values to the right column.
 PHOIBLE_TO_APP_FEATURE: Mapping[str, str] = {
     # === Header-tier features (suprasegmental). PHOIBLE-only ===
-    "tone": "HighTone",
+    # PHOIBLE's ``tone`` marks tonality, not pitch height: every tone
+    # letter, high or low, carries ``tone=+``. Map it to the generic
+    # ``Tone`` marker, not ``HighTone`` (which is the pitch LEVEL).
+    "tone": "Tone",
     "stress": "Stress",
     # === Major-class features (overlap with app canonical names) ===
     "syllabic": "Syllabic",
