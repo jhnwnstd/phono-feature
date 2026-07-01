@@ -182,6 +182,15 @@ _MERGE_PARENT: dict[str, str] = {
 }
 # Exempt from upward merging; laryngeal rescue can still peel members.
 _FROZEN_GROUPS: set[str] = {"Plosives"}
+# Groups whose membership is a HARD per-segment gate (a click, a vowel
+# phoneme, a tone letter), decided by ``best_primary`` / ``is_member``,
+# never by spec similarity. ``fallback_assignment`` must never route a
+# leftover INTO one of these: a segment that failed the gate is by
+# definition not a member, yet its gate feature being UNSPECIFIED (a
+# consonant with ``tone`` / ``syllabic`` / ``click`` = 0) reads as zero
+# mismatches and would otherwise let the gated group win by default.
+# This is what stranded a bare ``/h/`` (tone unspecified) in Tones.
+_GATED_GROUPS: set[str] = {"Clicks", VOWEL_GROUP_NAME, TONES_GROUP_NAME}
 DISPLAY_ORDER: list[str] = [
     "Clicks",
     "Plosives",
@@ -1153,7 +1162,7 @@ def group_segments(
         best_mismatches = float("inf")
         best_matches = -1
         for name, spec in PRIMARY_GROUPS:
-            if name in _FROZEN_GROUPS:
+            if name in _FROZEN_GROUPS or name in _GATED_GROUPS:
                 continue
             relevant = [f for f in spec if f in active_features]
             if not relevant:
@@ -1174,6 +1183,13 @@ def group_segments(
                 best_name = name
                 best_mismatches = mismatches
                 best_matches = matched
+        # Require POSITIVE evidence. A segment whose only "win" is zero
+        # mismatches with zero matches (every relevant feature left
+        # unspecified) resembles no class; hand it to the caller's
+        # Contoid / Vocoid catch-all instead of the first group that
+        # happened to reference a feature the segment never specifies.
+        if best_matches < 1:
+            return ""
         return best_name
 
     contours = contour_feats or {}

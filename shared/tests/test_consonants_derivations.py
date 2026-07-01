@@ -25,6 +25,7 @@ from phonology_shared.chart.consonants import (
     derive_place,
     derive_secondary_articulations,
     detect_consonant_profile,
+    group_segments,
 )
 
 # derive_place: each example describes one articulatory target.
@@ -589,3 +590,47 @@ def test_derive_place_general_profile_plus_back_is_velar() -> None:
     general = ConsonantProfile(dorsals_use_anterior=False)
     feats = {"dorsal": "+", "high": "+", "back": "+"}
     assert derive_place(feats, general) == PlaceRank.VELAR
+
+
+# group_segments: gated-group fallback discipline (Clicks / Vowels /
+# Tones membership is a hard per-segment gate, never a mismatch default).
+
+
+def test_bare_glottal_is_not_grouped_as_a_tone() -> None:
+    """Regression: a bare /h/ (glottal fricative, ``tone`` unspecified)
+    used to fall into the Tones group. The mismatch fallback scored
+    Tones ``{tone: +}`` at zero mismatches because /h/ leaves ``tone``
+    unspecified, letting the gated group win by default. A tone letter
+    (``tone: +``) still lands in Tones; /h/ lands with the fricatives."""
+    inv = {
+        "h": {
+            "consonantal": "-",
+            "continuant": "+",
+            "sonorant": "-",
+            "spreadgl": "+",
+        },
+        "˧": {"tone": "+"},
+        "s": {"consonantal": "+", "continuant": "+", "sonorant": "-"},
+    }
+    groups = group_segments(inv)
+    assert "h" not in groups.get("Tones", [])
+    assert "˧" in groups.get("Tones", [])
+    assert "h" in groups.get("Fricatives", [])
+
+
+def test_featureless_segment_falls_to_catch_all_not_an_arbitrary_group() -> (
+    None
+):
+    """A segment that positively matches no manner class (every relevant
+    feature unspecified) goes to the Contoid / Vocoid catch-all, not the
+    first group whose spec it happens not to contradict."""
+    inv = {
+        "s": {"consonantal": "+", "continuant": "+", "sonorant": "-"},
+        "X": {"stress": "-"},  # a real feature, but no manner evidence
+    }
+    groups = group_segments(inv)
+    placed = {g for g, segs in groups.items() if "X" in segs}
+    assert placed <= {
+        "Contoids",
+        "Vocoids",
+    }, f"featureless segment landed in {placed}, expected a catch-all"
