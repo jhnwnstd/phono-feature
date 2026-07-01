@@ -12,13 +12,11 @@ existing modal helpers (``show_warning``, ``ask_question``). The
 editor still owns the table widget, the undo stack, and the
 inventory name; this controller owns only the save lifecycle.
 
-Snapshot semantics: at the moment ``request_save`` runs,
-``_to_inventory`` is captured synchronously (validation runs on the
-main thread). The disk write happens on a worker thread. ``dirty``
-is cleared at snapshot time. Any cell edit between snapshot and
-worker completion re-dirties the grid via the normal edit chokepoint
-(``_commit_edit``), so the post-completion handler does NOT touch
-``dirty`` on the success path.
+Snapshot semantics: ``request_save`` captures ``_to_inventory``
+synchronously (validation on the main thread) and clears ``dirty``,
+then the disk write runs on a worker thread. Any edit between snapshot
+and completion re-dirties via the normal chokepoint (``_commit_edit``),
+so the completion handler does NOT touch ``dirty`` on the success path.
 """
 
 from __future__ import annotations
@@ -60,17 +58,16 @@ class _SaveController(QObject):
         save_finished(path, error): emitted from the save worker
             thread; Qt picks QueuedConnection automatically for
             cross-thread emit, so the slot runs on the main thread.
-        save_drained(): emitted from _on_save_finished AFTER the
-            state flags have settled, on the main thread.
-            wait_for_save connects loop.quit to this so a worker
-            that fired BEFORE the wait was set up still triggers the
-            quit. The queued save_finished call dispatches inside
-            the nested loop, runs _on_save_finished, and that emits
-            save_drained direct-connect into the freshly-connected
-            loop.quit slot. Connecting loop.quit to save_finished
-            itself would miss this case because queued signals
-            capture the slot list at emit time, so a slot connected
-            after the emit never runs.
+        save_drained(): emitted from _on_save_finished after the
+            state flags settle, on the main thread. wait_for_save
+            connects loop.quit to this so a worker that fired BEFORE
+            the wait was set up still triggers the quit: the queued
+            save_finished dispatches inside the nested loop, runs
+            _on_save_finished, which direct-connect emits save_drained
+            into the freshly-connected loop.quit. Connecting loop.quit
+            to save_finished itself would miss this case because queued
+            signals capture their slot list at emit time, so a slot
+            connected after the emit never runs.
     """
 
     save_finished = pyqtSignal(str, str)
@@ -85,10 +82,8 @@ class _SaveController(QObject):
         super().__init__(editor)
         self._b = editor
         self._status = status_bar
-        # Callback into the editor's grid serializer. Held as a
-        # callable rather than a hard reference to a editor method
-        # so the controller never has to know about the grid
-        # internals.
+        # Callback into the editor's grid serializer, held as a
+        # callable so the controller never touches grid internals.
         self._snapshot = snapshot
         self.save_in_flight: bool = False
         self.dirty: bool = False
@@ -101,23 +96,16 @@ class _SaveController(QObject):
     def request_save(self, path: str) -> None:
         """Save the grid via the shared Inventory contract.
 
-        Validation + Inventory construction run on the main thread
-        (they touch grid widgets); the actual disk write runs on a
-        worker thread. Atomic write means an external reader sees
-        either the old file or the new file, never a half-written
-        one, regardless of how long the background write takes.
-
-        On a slow / network disk this keeps the UI responsive: a
-        ``json.dump`` + ``fsync`` on a remote share can freeze the
-        window for hundreds of milliseconds. Re-entrancy guard
-        (``save_in_flight``) drops a second click rather than
-        racing two writers on the same path.
-
-        Completion hops back to the main thread via the
-        ``save_finished`` signal (QueuedConnection by default for
-        cross-thread emit), so the worker never touches GUI state
-        directly and the dirty flag / status text mutate only on
-        the main thread.
+        Validation and Inventory construction run on the main thread
+        (they touch grid widgets); the disk write runs on a worker so
+        a slow or network disk does not freeze the window for hundreds
+        of ms. The atomic write means a reader sees either the old or
+        the new file, never a half-written one. The re-entrancy guard
+        (``save_in_flight``) drops a second click rather than racing
+        two writers on the same path. Completion hops back via the
+        ``save_finished`` signal (cross-thread queued), so the worker
+        never touches GUI state and dirty/status mutate only on the
+        main thread.
         """
         basename = os.path.basename(path)
         if self.save_in_flight:
@@ -141,11 +129,10 @@ class _SaveController(QObject):
             return
 
         self.save_in_flight = True
-        # Commit the snapshot to "being written" RIGHT HERE. Any edit
-        # made between this point and worker completion goes through
-        # _commit_edit, which re-sets dirty=True. Without this clear,
-        # _on_save_finished unconditionally cleared dirty, silently
-        # marking post-snapshot edits as saved and losing them on
+        # Clear dirty at snapshot time. Any edit before completion
+        # re-dirties via _commit_edit. Without this clear here,
+        # _on_save_finished would unconditionally clear dirty and
+        # silently mark post-snapshot edits as saved, losing them on
         # close-without-save.
         self.dirty = False
         _log.info(
@@ -157,14 +144,12 @@ class _SaveController(QObject):
         self._status.showMessage(f"Saving {basename}...")
 
         def worker() -> None:
-            # ``err`` defaults to a non-empty failure string so that if
-            # a BaseException subclass propagates past the inner
-            # ``except Exception`` (KeyboardInterrupt, SystemExit, or
-            # any future BaseException-derived class), the ``finally``
-            # below still emits a *failure* completion, so the main
-            # thread clears ``save_in_flight`` and the user is not
-            # told "saved" when the file was not written. The string
-            # is cleared to "" only on the success path inside try.
+            # ``err`` defaults non-empty so a BaseException past the
+            # inner ``except Exception`` (KeyboardInterrupt, SystemExit)
+            # still makes the ``finally`` emit a failure completion; the
+            # main thread then clears ``save_in_flight`` and the user is
+            # not told "saved" on an unwritten file. Cleared to "" only
+            # on the success path.
             err: str = "save interrupted unexpectedly"
             try:
                 inventory.write_atomic(path)
@@ -176,13 +161,12 @@ class _SaveController(QObject):
                 try:
                     self.save_finished.emit(path, err)
                 except RuntimeError:
-                    # The window was destroyed while we were still
-                    # running (close drain timed out, Qt deleted the
-                    # C++ widget). PyQt raises "wrapped C/C++ object
-                    # has been deleted" on the daemon thread.
-                    # Functionally fine (the app is already shutting
-                    # down) but logging it avoids the silent thread
-                    # death the finally block was added to prevent.
+                    # The window was destroyed mid-write (close drain
+                    # timed out, Qt deleted the C++ widget), so PyQt
+                    # raises "wrapped C/C++ object has been deleted" on
+                    # this thread. Harmless (already shutting down), but
+                    # log it to avoid the silent thread death the finally
+                    # block exists to prevent.
                     _log.debug(
                         "save worker: receiver destroyed before "
                         "completion emit: %s",
@@ -213,13 +197,11 @@ class _SaveController(QObject):
                 f"Could not write '{path}':\n{error}",
             )
         else:
-            # Success: do NOT touch dirty. It was cleared at save
-            # start; any edit made during the worker re-dirtied it
-            # via _commit_edit (the single chokepoint every edit
-            # path goes through), which is the authoritative source
-            # of truth here. The write is confirmed, so adopt the path
-            # as the backing file NOW (not optimistically at save start)
-            # and refresh the title + meta strip.
+            # Success: do NOT touch dirty. It was cleared at save start
+            # and re-set by any concurrent edit via _commit_edit, which
+            # is the authoritative source here. The write is confirmed,
+            # so adopt the path as the backing file now (not
+            # optimistically at start) and refresh the title + meta.
             _log.info("save complete: %s", basename)
             self._b._current_path = path
             self._b._update_title()
@@ -264,14 +246,13 @@ class _SaveController(QObject):
                 pass
         completed = not self.save_in_flight
         if not completed:
-            # Timed out: the worker is still running (a stuck disk /
-            # network share) or died without emitting. Release the
-            # re-entrancy guard so the user is not locked out of saving
-            # for the rest of the session; without this, ``save_in_flight``
-            # stays True forever and every later save is silently
-            # rejected. A late ``save_finished`` is handled idempotently
-            # (it just re-clears the flag and emits ``save_drained`` into
-            # no listener).
+            # Timed out (stuck disk, or the worker died without
+            # emitting). Release the re-entrancy guard so the user is
+            # not locked out of saving for the rest of the session;
+            # otherwise ``save_in_flight`` stays True forever and every
+            # later save is silently rejected. A late ``save_finished``
+            # is idempotent: it re-clears the flag and emits
+            # ``save_drained`` into no listener.
             _log.warning(
                 "save drain timed out after %d ms; releasing the "
                 "in-flight guard so saving is not locked out",

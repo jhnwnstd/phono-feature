@@ -13,11 +13,10 @@ to depend on the other's package.
 Names on the right follow the app's canonical capitalisation
 conventions (terminal features title-cased; the matching Hayes
 bundle keys are recognised by the engine identically). Ordering
-here also fixes the column order of
-generated bundles so positional iteration over PanPhon's name
-vector pairs values to the right column even when PanPhon adds new
-columns in a future release (unknown PanPhon names are skipped
-silently rather than raising).
+here also fixes the column order of generated bundles, so positional
+iteration over PanPhon's name vector pairs values to the right
+column even when PanPhon adds new columns in a future release
+(unknown PanPhon names are skipped silently rather than raising).
 """
 
 from __future__ import annotations

@@ -95,7 +95,7 @@ class DialogCoordinator:
         in place if one is loaded; otherwise shows the new-inventory
         setup dialog.
 
-        The Editor is window-modal against MainWindow: while it is open
+        The Editor is window-modal against MainWindow. While it is open
         the user can't toggle the theme (the Editor's palette-dependent
         chrome isn't rebuilt on theme changes), which avoids a
         half-restyled state.
@@ -105,10 +105,10 @@ class DialogCoordinator:
             self._editor.activateWindow()
             return
         # Drop any stale (closed-but-not-yet-deleted) editor and
-        # DISCONNECT its signals first: otherwise a still-running save
+        # disconnect its signals first, otherwise a still-running save
         # could fire _on_editor_save_finished after the new editor is
         # wired to the same slot, and the old editor's eventual
-        # ``destroyed`` would null out the reference to the NEW one.
+        # ``destroyed`` would null out the reference to the new one.
         if self._editor is not None:
             for signal, slot in (
                 (self._editor._save_finished, self._on_editor_save_finished),
@@ -159,7 +159,7 @@ class DialogCoordinator:
         if err:
             return  # editor already showed its own error dialog
         if path == self._w._inv_dir.current_path:
-            return  # same-path save -> watcher will refresh
+            return  # same-path save, watcher will refresh
         if os.path.isfile(path):
             _log.info(
                 "switching to inventory saved from editor: %s",

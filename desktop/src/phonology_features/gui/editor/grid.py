@@ -33,13 +33,12 @@ _CELL_FONT_NORMAL = QFont("Noto Sans", 10)
 # the editor-load profile (25k+ enum.__or__ calls).
 _CELL_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
 
-# QBrush/QColor construction is ~14us per call and ran 4x per cell on
-# the old code path. On the Hayes inventory that produced ~16k QColor
-# objects per editor load. The brush set has exactly three states
-# (+, -, 0), so cache one (fg, bg) tuple per state and rebuild ALL of
-# them only when the theme changes. Keyed on ``palette.theme_version``
-# (a monotonic counter bumped by ``set_theme``) so the cache is
-# self-invalidating; no observer wiring needed.
+# QBrush/QColor construction is ~14us per call and ran 4x per cell,
+# producing ~16k QColor objects per Hayes editor load. There are only
+# three states (+, -, 0), so cache one (fg, bg) tuple per state and
+# rebuild all of them only on theme change. Keyed on
+# ``palette.theme_version`` (a monotonic counter bumped by
+# ``set_theme``) so the cache self-invalidates with no observer wiring.
 _brush_cache_version: int = -1
 _brush_cache: dict[str, tuple[QBrush, QBrush]] = {}
 
@@ -65,8 +64,8 @@ def _ensure_brush_cache() -> None:
 
 
 def _cell_brushes(value: str) -> tuple[QBrush, QBrush]:
-    """Return ``(foreground, background)`` brushes for the cell value.
-    Theme-version-keyed cache: hits avoid all QBrush/QColor construction."""
+    """Return ``(foreground, background)`` brushes for the cell value
+    from the theme-version-keyed cache; hits skip all construction."""
     _ensure_brush_cache()
     if value in _brush_cache:
         return _brush_cache[value]
@@ -78,7 +77,6 @@ def _cell_brushes(value: str) -> tuple[QBrush, QBrush]:
 
 
 def make_cell(value: str = "0") -> QTableWidgetItem:
-    """Create a styled table cell with the given feature value."""
     if value == MINUS_SERIALIZED:
         value = MINUS_DISPLAY
     item = QTableWidgetItem(value)
@@ -89,7 +87,6 @@ def make_cell(value: str = "0") -> QTableWidgetItem:
 
 
 def style_cell(item: QTableWidgetItem, value: str) -> None:
-    """Apply color and font to a cell based on its value."""
     fg, bg = _cell_brushes(value)
     item.setForeground(fg)
     item.setBackground(bg)

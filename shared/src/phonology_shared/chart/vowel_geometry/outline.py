@@ -596,10 +596,9 @@ def silhouette_right_at_y(
     # constant.
     canonical = straight_right_at_y(sil, chart_y)
 
-    # --- top-right corner ---
-    # prev neighbour in CCW order = bottom-right (down the right
-    # edge); next neighbour = top-left (along the top edge,
-    # leftward).
+    # Top-right corner. Prev neighbour in CCW order is bottom-right
+    # (down the right edge); next neighbour is top-left (along the
+    # top edge, leftward).
     tr_dx_in = sil.bottom_right - sil.top_right
     tr_dy_in = sil.bottom_y - sil.top_y
     tr_len_in = math.hypot(tr_dx_in, tr_dy_in) or 1.0
@@ -634,7 +633,7 @@ def silhouette_right_at_y(
         # corner; use the smaller of canonical vs corner.
         return min(canonical, x_corner)
 
-    # --- bottom-right corner ---
+    # Bottom-right corner.
     br_dx_in = sil.bottom_left - sil.bottom_right
     br_len_in = abs(br_dx_in) or 1.0
     br_r_in = min(corner_radius_frac, br_len_in * 0.45)
@@ -706,7 +705,7 @@ def silhouette_left_at_y(
     # straight segment between p_out_top and p_in_bot).
     canonical = straight_left_at_y(sil, chart_y)
 
-    # --- top-left corner ---
+    # Top-left corner.
     tl_dx_out = sil.bottom_left - sil.top_left
     tl_dy_out = sil.bottom_y - sil.top_y
     tl_len_out = math.hypot(tl_dx_out, tl_dy_out) or 1.0
@@ -737,7 +736,7 @@ def silhouette_left_at_y(
         # the corner value.
         return max(canonical, x_corner)
 
-    # --- bottom-left corner ---
+    # Bottom-left corner.
     bl_dx_in = sil.top_left - sil.bottom_left
     bl_dy_in = sil.top_y - sil.bottom_y
     bl_len_in = math.hypot(bl_dx_in, bl_dy_in) or 1.0

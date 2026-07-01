@@ -128,17 +128,11 @@ from phonology_shared.theory.feature_engine import MatchMode
 
 _engine: FeatureEngine | None = None
 _inventory_name: str = ""
-# Active matching mode for natural-class queries. Defaults to
-# STRICT; the wildcard ("Allow underspecified") UI toggle is opt-
-# in. JS persists the choice through ``localStorage`` and replays
-# it via :py:func:`set_match_mode` after a reload.
+# Active matching mode for natural-class queries. Defaults to STRICT; the
+# wildcard UI toggle (labelled "Allow underspecified") is opt-in. JS persists
+# the choice through ``localStorage`` and replays it via
+# :py:func:`set_match_mode` after a reload.
 _match_mode: MatchMode = MatchMode.STRICT
-
-# Allowed values for the two-axis palette state. Kept here (not in
-# palette.py) so the bridge validators can reject bad strings at
-# the boundary without importing internal palette state. Both axes
-# round-trip as plain strings through QSettings + localStorage so
-# the membership check is a literal set.
 
 
 def _require_engine() -> FeatureEngine:
@@ -153,16 +147,14 @@ F = TypeVar("F", bound=Callable[..., Any])
 def _translate_engine_errors(fn: F) -> F:
     """Decorator: convert raw engine exceptions to ``ValidationError``.
 
-    The pyodide bridge passes JS-supplied arguments straight through
-    to engine methods that historically raised bare ``KeyError`` /
-    ``ValueError`` / ``TypeError`` on bad input. Those exceptions
-    don't carry the ``.issues`` shape the JS error path expects, and
-    they leak into the JS event loop as unhandled runtime errors
-    (no statusbar message, no recovery). The decorator wraps every
-    public bridge function so the JS caller sees the same
-    ``ValidationError`` shape regardless of which layer rejected
-    the input. Functions that explicitly raise ``ValidationError``
-    pass through unchanged.
+    The bridge passes JS-supplied arguments straight through to engine methods
+    that raise bare ``KeyError`` / ``ValueError`` / ``TypeError`` on bad input.
+    Those exceptions lack the ``.issues`` shape the JS error path expects and
+    leak into the JS event loop as unhandled runtime errors (no statusbar
+    message, no recovery). Wrapping every public bridge function gives the JS
+    caller one ``ValidationError`` shape regardless of which layer rejected the
+    input. Functions that already raise ``ValidationError`` pass through
+    unchanged.
     """
 
     @functools.wraps(fn)
@@ -178,17 +170,16 @@ def _translate_engine_errors(fn: F) -> F:
 
 
 def _parse_enforce(json_text: str, source_label: str) -> Inventory:
-    """Decode + structurally parse + cap-check a JSON inventory.
+    """Decode, structurally parse, and cap-check a JSON inventory.
 
-    The shared head of every JSON load route. Uses the single decode
-    entry-point also used by ``Inventory.load`` so the desktop file path
-    and the web upload path enforce the same JSON-level contract:
-    duplicate keys, non-finite literals, and syntax errors all surface
-    as ``ValidationError`` with the source label prepended. The parse
-    layer caps the TOTAL segment count; the per-class caps are
-    feature-driven and live one layer up (data must not import chart),
-    so they are enforced here, after the structural parse, before any
-    engine swap.
+    The shared head of every JSON load route. Uses the decode entry-point that
+    ``Inventory.load`` also uses, so the desktop file path and the web upload
+    path enforce the same JSON-level contract: duplicate keys, non-finite
+    literals, and syntax errors all surface as ``ValidationError`` with the
+    source label prepended. The parse layer caps the total segment count;
+    per-class caps are feature-driven and live one layer up (data must not
+    import chart), so they are enforced after the structural parse and before
+    any engine swap.
     """
     return parse_inventory_checked(json_text, source_label)
 
@@ -213,15 +204,13 @@ def load_inventory_json_status_only(
 ) -> dict[str, Any]:
     """Swap the engine in WITHOUT building the full grid/feature summary.
 
-    The prerendered default-boot path has the segment grid and feature
-    list already painted from ``bootstrap.json``, so it only needs the
-    engine swapped (for the first analysis click) and the four facts the
-    status bar shows. Building + deep-converting the full summary
-    (segments, features, groups, feature_groups, vowel_chart,
-    active_features) the way :py:func:`load_inventory_json` does would
-    just be discarded here, so this returns a flat dict the status bar
-    reads directly. Same parse + cap-check + swap contract as the full
-    route; only the payload differs.
+    The prerendered default-boot path already paints the segment grid and
+    feature list from ``bootstrap.json``, so it only needs the engine swapped
+    (for the first analysis click) and the four facts the status bar shows.
+    Building and deep-converting the full summary the way
+    :py:func:`load_inventory_json` does would just be discarded here, so this
+    returns a flat dict the status bar reads directly. Same parse, cap-check,
+    and swap contract as the full route; only the payload differs.
     """
     inventory = _parse_enforce(json_text, source_label)
     name = inventory.name or source_label
@@ -230,9 +219,9 @@ def load_inventory_json_status_only(
         "name": name,
         "n_segments": len(engine.segments),
         "n_features": len(engine.features),
-        # Classified source descriptor (URL / DOI / citation / none),
-        # same shape build_inventory_summary emits, so the status bar's
-        # [Source] affordance reads one field on every load route.
+        # Classified source descriptor (URL, DOI, citation, or none), the same
+        # shape build_inventory_summary emits, so the status bar's [Source]
+        # affordance reads one field on every load route.
         "source": classify_source(inventory.metadata.get("source")).as_dict(),
     }
 
@@ -248,13 +237,13 @@ def _invalidate_analysis_caches() -> None:
 
 
 def _set_engine(engine: FeatureEngine, name: str) -> FeatureEngine:
-    """Swap the active engine. The only path that mutates ``_engine``,
-    so the inventory name and the analysis caches can never lag behind
-    it: every load route goes through here.
+    """Swap the active engine. The only path that mutates ``_engine``, so the
+    inventory name and the analysis caches can never lag behind it: every load
+    route goes through here.
 
-    Returns the engine so callers build their summary from the local
-    instead of re-reading the module global, which static analysis
-    cannot narrow to non-None past this indirect assignment.
+    Returns the engine so callers build their summary from the local instead of
+    re-reading the module global, which static analysis cannot narrow to
+    non-None past this indirect assignment.
     """
     global _engine, _inventory_name
     _engine = engine
@@ -266,11 +255,11 @@ def _set_engine(engine: FeatureEngine, name: str) -> FeatureEngine:
 def _swap_engine_summary(inventory: Inventory, name: str) -> dict[str, Any]:
     """Swap the active engine to ``inventory`` and return its summary.
 
-    The shared tail of every load route (uploaded JSON, PHOIBLE,
-    editor): ``_set_engine`` then ``build_inventory_summary`` under
-    the current match mode. PHOIBLE layers its status line and Source
-    link onto the returned dict; the other routes use it verbatim, so
-    there is no per-route display logic to drift apart.
+    The shared tail of every load route (uploaded JSON, PHOIBLE, editor):
+    ``_set_engine`` then ``build_inventory_summary`` under the current match
+    mode. PHOIBLE layers its status line and Source link onto the returned
+    dict; the other routes use it verbatim, so there is no per-route display
+    logic to drift apart.
     """
     engine = _set_engine(FeatureEngine(inventory), name)
     return build_inventory_summary(engine, name, mode=_match_mode)
@@ -302,16 +291,14 @@ def _provider_registry() -> dict[str, FeatureProvider]:
     """Return the available providers indexed by ``name``.
 
     The lookup provider depends on the build-baked snapshot under
-    ``shared/.../editor/_panphon_table.generated.json``; a stale
-    developer checkout where ``web/scripts/bake_panphon.py`` has
-    never run will hit :py:class:`LookupTableNotAvailable` and the
-    provider quietly drops out of the registry so the dialog
-    falls back to static presets without crashing.
+    ``shared/.../editor/_panphon_table.generated.json``. A stale developer
+    checkout where ``web/scripts/bake_panphon.py`` never ran hits
+    :py:class:`LookupTableNotAvailable`, and the provider quietly drops out of
+    the registry so the dialog falls back to static presets without crashing.
 
-    Cached because the lookup provider eagerly decodes ~6.4k
-    segments at construction; re-running that on every
-    :py:func:`get_setup_defaults` call would dominate the
-    dialog-open latency.
+    Cached because the lookup provider eagerly decodes ~6.4k segments at
+    construction; re-running that on every :py:func:`get_setup_defaults` call
+    would dominate the dialog-open latency.
     """
     registry: dict[str, FeatureProvider] = {}
     try:
@@ -326,18 +313,17 @@ def _provider_registry() -> dict[str, FeatureProvider]:
 def _inventory_provider_registry() -> dict[str, InventoryProvider]:
     """Return the available inventory providers indexed by ``name``.
 
-    Sibling to :py:func:`_provider_registry`; today the only
-    inventory provider is PHOIBLE.
+    Sibling to :py:func:`_provider_registry`; today the only inventory provider
+    is PHOIBLE.
 
-    On the web (Pyodide / Emscripten) both the PHOIBLE index and data
-    files are externalized as lazy ``dist`` assets to keep the cold-boot
-    bundle small, so the provider is constructed in deferred mode and
-    touches no packaged snapshot here; main.js injects the index + data
-    payloads (:py:func:`phoible_load_index` / :py:func:`phoible_load_data`)
-    on first picker open, and availability is gated by the asset
-    manifest. Off the web (desktop / tests) the packaged snapshot is
-    read at construction, so a stale checkout with no baked index leaves
-    the registry empty.
+    On the web (Pyodide / Emscripten) both the PHOIBLE index and data files are
+    externalized as lazy ``dist`` assets to keep the cold-boot bundle small, so
+    the provider is constructed in deferred mode and touches no packaged
+    snapshot here. main.js injects the index and data payloads
+    (:py:func:`phoible_load_index`, :py:func:`phoible_load_data`) on first
+    picker open, and availability is gated by the asset manifest. Off the web
+    (desktop / tests) the packaged snapshot is read at construction, so a stale
+    checkout with no baked index leaves the registry empty.
     """
     registry: dict[str, InventoryProvider] = {}
     if sys.platform == "emscripten":
@@ -352,22 +338,20 @@ def _inventory_provider_registry() -> dict[str, InventoryProvider]:
 
 
 def get_setup_defaults() -> dict[str, Any]:
-    """Return the autofill seeds, named feature presets, and any
-    available bootstrap providers the web setup modal needs to
-    populate its UI.
+    """Return the autofill seeds, named feature presets, and available
+    bootstrap providers the web setup modal needs to populate its UI.
 
     Shared with the desktop editor via
-    :py:mod:`phonology_shared.editor.setup` so both frontends offer
-    the same Tab-autofill strings and the same named presets in the
-    dropdown. The ``providers`` list mirrors the desktop's
-    :py:func:`phonology_features.providers.available_providers`
-    surface: each entry carries the provider name + display label.
+    :py:mod:`phonology_shared.editor.setup` so both frontends offer the same
+    Tab-autofill strings and the same named presets in the dropdown. The
+    ``providers`` list mirrors the desktop's
+    :py:func:`phonology_features.providers.available_providers` surface: each
+    entry carries the provider name and display label.
 
-    Display order in the dropdown is ``providers`` first (today:
-    PanPhon, the auto-generating recommended default), then the
-    static presets in their ``FEATURE_PRESETS`` insertion order
-    (today: Hayes, PHOIBLE, Custom). The JS picker stitches the two
-    sequences together; the order here is the contract.
+    Display order in the dropdown is ``providers`` first (today PanPhon, the
+    auto-generating recommended default), then the static presets in their
+    ``FEATURE_PRESETS`` insertion order (today Hayes, PHOIBLE, Custom). The JS
+    picker stitches the two sequences together; the order here is the contract.
     """
     providers = [
         {
@@ -390,20 +374,18 @@ def get_setup_defaults() -> dict[str, Any]:
 def preview_provider_features(
     provider_name: str, segments_text: str
 ) -> list[str]:
-    """Return the feature list the named provider would emit for
-    the current segments input.
+    """Return the feature list the named provider would emit for the current
+    segments input.
 
-    Used by the web setup dialog to populate the features textarea
-    live as the user edits segments (matching the desktop dialog's
-    debounced refresh). Falls back to the provider's full feature
-    list when:
+    Used by the web setup dialog to populate the features textarea live as the
+    user edits segments (matching the desktop dialog's debounced refresh).
+    Falls back to the provider's full feature list when:
       - ``segments_text`` is empty (UI preview state).
-      - All segments are unresolved (``generate`` returns empty
-        features; the user still needs columns to edit by hand).
+      - All segments are unresolved (``generate`` returns empty features; the
+        user still needs columns to edit by hand).
 
-    Returns an empty list when the provider name is unknown so JS
-    can route to the static-preset fallback without an exception
-    spamming the console.
+    Returns an empty list when the provider name is unknown so JS can route to
+    the static-preset fallback without an exception spamming the console.
     """
     provider = _provider_registry().get(provider_name)
     if provider is None:
@@ -417,14 +399,14 @@ def preview_provider_features(
     return list(generated.features)
 
 
-# --- PHOIBLE bridge endpoints --------------------------------------------
-# Sibling surface to the feature-provider endpoints above. The picker
-# calls these in three stages: search the autocomplete, list the
-# inventories for the chosen language, and (after the user picks one)
-# either preview or generate it. ``phoible_load_data`` is the one-shot
-# lazy-load handshake the web bridge uses to inject the ~5 MB data
-# blob the desktop reads from disk; ``phoible_is_ready`` lets the
-# dialog gate the "Create Grid" button until the fetch + load lands.
+# PHOIBLE bridge endpoints.
+# Sibling surface to the feature-provider endpoints above. The picker calls
+# these in three stages: search the autocomplete, list the inventories for the
+# chosen language, and (after the user picks one) either preview or generate
+# it. ``phoible_load_data`` is the one-shot lazy-load handshake the web bridge
+# uses to inject the ~5 MB data blob the desktop reads from disk;
+# ``phoible_is_ready`` lets the dialog gate the "Create Grid" button until the
+# fetch and load land.
 
 
 def _phoible_provider() -> InventoryProvider | None:
@@ -434,10 +416,10 @@ def _phoible_provider() -> InventoryProvider | None:
 def phoible_is_available() -> bool:
     """Return ``True`` when a PHOIBLE provider is registered.
 
-    The web dialog uses this at open time to decide whether to
-    surface the "Load from PHOIBLE…" entry at all; a stale checkout
-    with no baked index will return ``False`` and the picker hides
-    the option entirely rather than showing a broken row.
+    The web dialog uses this at open time to decide whether to surface the
+    "Load from PHOIBLE…" entry at all. A stale checkout with no baked index
+    returns ``False`` and the picker hides the option entirely rather than
+    showing a broken row.
     """
     return _phoible_provider() is not None
 
@@ -445,11 +427,11 @@ def phoible_is_available() -> bool:
 def phoible_is_ready() -> bool:
     """Return ``True`` once the PHOIBLE index AND data payloads load.
 
-    On the web both are lazy-loaded (index + data are externalized from
-    the bundle), so this returns ``False`` until
-    :py:func:`phoible_load_index` and :py:func:`phoible_load_data` have
-    both run. The picker uses it to gate the "Create Grid" submit so a
-    user can't trigger ``generate`` before the snapshot is in memory.
+    On the web both are lazy-loaded (index and data are externalized from the
+    bundle), so this returns ``False`` until :py:func:`phoible_load_index` and
+    :py:func:`phoible_load_data` have both run. The picker uses it to gate the
+    "Create Grid" submit so a user can't trigger ``generate`` before the
+    snapshot is in memory.
     """
     provider = _phoible_provider()
     return provider is not None and provider.has_index and provider.has_data
@@ -460,10 +442,10 @@ def phoible_load_data(payload_json: str) -> bool:
     """Ingest the lazy-loaded PHOIBLE data JSON payload.
 
     Called once by the web dialog after the ``fetch`` of
-    ``phoible_data.<hash>.json`` lands. Returns ``True`` on
-    success, ``False`` when there is no PHOIBLE provider to
-    receive the payload (no-op for desktop, which loads from
-    disk at construction). Re-loading is idempotent and cheap.
+    ``phoible_data.<hash>.json`` lands. Returns ``True`` on success, ``False``
+    when there is no PHOIBLE provider to receive the payload (no-op for
+    desktop, which loads from disk at construction). Re-loading is idempotent
+    and cheap.
     """
     provider = _phoible_provider()
     if provider is None:
@@ -479,9 +461,9 @@ def phoible_load_index(payload_json: str) -> bool:
     Called once by the web dialog after the ``fetch`` of
     ``phoible_index.<hash>.json`` lands (the index is externalized from
     ``python_bundle.zip`` to shrink the cold boot). Returns ``True`` on
-    success, ``False`` when there is no PHOIBLE provider to receive the
-    payload (no-op for desktop, which reads the index from the packaged
-    snapshot at construction). Re-loading is idempotent.
+    success, ``False`` when there is no PHOIBLE provider to receive the payload
+    (no-op for desktop, which reads the index from the packaged snapshot at
+    construction). Re-loading is idempotent.
     """
     provider = _phoible_provider()
     if provider is None:
@@ -534,8 +516,8 @@ def phoible_list_inventories(language_name: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for d in provider.list_inventories(language_name):
         row = _descriptor_to_dict(d)
-        # Precompute the search-language-trimmed dialect so the JS card
-        # renders the shared result instead of re-implementing the trim.
+        # Precompute the search-language-trimmed dialect so the JS card renders
+        # the shared result instead of re-implementing the trim.
         row["display_dialect"] = display_dialect(d.dialect, language_name)
         rows.append(row)
     return rows
@@ -569,28 +551,26 @@ def phoible_preview_inventory(inventory_id: str) -> dict[str, Any]:
 
 
 def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
-    """Load a PHOIBLE inventory into the engine and return its
-    summary.
+    """Load a PHOIBLE inventory into the engine and return its summary.
 
     Semantically parallel to :py:func:`load_inventory_json` and the
-    bundled-inventory pick path: the user is loading an existing
-    inventory, not building one. The dialog never asks for a name;
-    the inventory is named after the PHOIBLE language (the user can
-    rename in place via the toolbar's pencil button OR overwrite
-    the name on the next save). Once loaded the inventory is fully
-    the user's: any edit in the Editor produces a personal copy,
-    and saving routes through the same Save flow as any other
-    in-memory inventory.
+    bundled-inventory pick path: the user is loading an existing inventory, not
+    building one. The dialog never asks for a name; the inventory is named
+    after the PHOIBLE language (the user can rename in place via the toolbar's
+    pencil button or overwrite the name on the next save). Once loaded the
+    inventory is fully the user's: any edit in the Editor produces a personal
+    copy, and saving routes through the same Save flow as any other in-memory
+    inventory.
 
-    Metadata stamping is light and informational, not authoritative:
-    one ``feature_source`` field records the PHOIBLE provenance so a
-    saved file is debuggable, but the field is plain text and the
-    user can edit or delete it. There is no "phoible_inventory_id"
-    lock; once loaded the inventory is detached from the database.
+    Metadata stamping is light and informational, not authoritative: one
+    ``feature_source`` field records the PHOIBLE provenance so a saved file is
+    debuggable, but the field is plain text and the user can edit or delete it.
+    There is no "phoible_inventory_id" lock; once loaded the inventory is
+    detached from the database.
 
     Raises :py:class:`ValidationError` when the PHOIBLE provider is
-    unavailable, the data payload has not been loaded, or the
-    inventory id is unknown.
+    unavailable, the data payload has not been loaded, or the inventory id is
+    unknown.
     """
     provider = _phoible_provider()
     if provider is None:
@@ -605,24 +585,22 @@ def load_phoible_inventory(inventory_id: str) -> dict[str, Any]:
             )
         )
     # Pure-logic composition (name template, metadata stamping,
-    # ``Inventory.from_grid``) lives in shared so the desktop's
-    # PHOIBLE picker dialog produces an identical inventory from
-    # the same ``inventory_id``. Only the bridge-side platform
-    # glue (global engine swap + analysis cache invalidation +
-    # summary build) stays here.
+    # ``Inventory.from_grid``) lives in shared so the desktop's PHOIBLE picker
+    # dialog produces an identical inventory from the same ``inventory_id``.
+    # Only the bridge-side platform glue (global engine swap, analysis cache
+    # invalidation, summary build) stays here.
     try:
         inventory = materialize_phoible_inventory(provider, inventory_id)
     except KeyError as exc:
         raise ValidationError((str(exc),)) from exc
     summary = _swap_engine_summary(inventory, inventory.name)
-    # Status-bar line composed shared-side (language + source +
-    # counts) so both UIs show the identical terse message instead
-    # of each wrapping the full dialect-bearing display name.
+    # Status-bar line composed shared-side (language, source, counts) so both
+    # UIs show the identical terse message instead of each wrapping the full
+    # dialect-bearing display name.
     summary["status"] = phoible_loaded_message(inventory)
-    # The Source affordance is now carried by ``summary["source"]``
-    # (classified from ``metadata.source``, which
-    # ``materialize_phoible_inventory`` stamps with the phoible.org
-    # page), so no per-route override is needed here.
+    # The Source affordance is carried by ``summary["source"]`` (classified
+    # from ``metadata.source``, which ``materialize_phoible_inventory`` stamps
+    # with the phoible.org page), so no per-route override is needed here.
     return summary
 
 
@@ -634,21 +612,18 @@ def create_new_inventory(
 ) -> dict[str, Any]:
     """Build a new inventory from delimited text inputs.
 
-    Runs the shared :py:func:`validate_setup` so the rules and
-    error wording match the desktop's New Inventory dialog. With
-    no provider, every cell starts at ``"0"`` (static-preset
-    path). With a provider, the provider resolves each segment to
-    a feature bundle and unresolved segments seed with all-zero
-    columns; the inventory's :py:attr:`Inventory.metadata` records
-    ``feature_source`` + ``feature_source_version`` for provenance
-    so a downstream save round-trips the attribution. This mirrors
-    the desktop editor's
-    :py:meth:`InventoryEditor.show_setup_dialog` behaviour
-    one-for-one.
+    Runs the shared :py:func:`validate_setup` so the rules and error wording
+    match the desktop's New Inventory dialog. With no provider, every cell
+    starts at ``"0"`` (static-preset path). With a provider, the provider
+    resolves each segment to a feature bundle and unresolved segments seed with
+    all-zero columns; the inventory's :py:attr:`Inventory.metadata` records
+    ``feature_source`` and ``feature_source_version`` for provenance so a
+    downstream save round-trips the attribution. This mirrors the desktop
+    editor's :py:meth:`InventoryEditor.show_setup_dialog` behaviour one-for-one.
 
-    Raises :py:class:`ValidationError` with the full tuple of
-    issue messages when validation fails; JS surfaces it via the
-    standard bridge-error message channel.
+    Raises :py:class:`ValidationError` with the full tuple of issue messages
+    when validation fails; JS surfaces it via the standard bridge-error message
+    channel.
     """
     provider: FeatureProvider | None = None
     if provider_name:
@@ -700,14 +675,14 @@ def create_new_inventory(
 
 
 def get_editor_config() -> dict[str, Any]:
-    """Editor config the web editor reads once at boot, as ONE payload
-    instead of four bridge round-trips.
+    """Editor config the web editor reads once at boot, as ONE payload instead
+    of four bridge round-trips.
 
     Carries the value-cycle ladder (consulted on every cell click), the
-    direct-entry and cursor-move key maps, and the undo-depth cap. The
-    desktop ``InventoryEditor`` derives the same dicts from the same
-    shared constants, so the two stay in lockstep. ``move_keys`` steps
-    become lists so JS can destructure them directly.
+    direct-entry and cursor-move key maps, and the undo-depth cap. The desktop
+    ``InventoryEditor`` derives the same dicts from the same shared constants,
+    so the two stay in lockstep. ``move_keys`` steps become lists so JS can
+    destructure them directly.
     """
     return {
         "cycle_ladder": dict(CYCLE_LADDER),
@@ -746,12 +721,12 @@ def get_grid_state() -> dict[str, Any]:
 
     The web editor reads this on open to populate its grid:
     ``cells[feature_index][segment_index]`` mirrors the desktop
-    ``InventoryEditor``'s ``rows = features, cols = segments``
-    table layout. Missing values default to ``"0"`` (same semantics
-    as :py:meth:`Inventory.feature_value`).
+    ``InventoryEditor``'s ``rows = features, cols = segments`` table layout.
+    Missing values default to ``"0"`` (same semantics as
+    :py:meth:`Inventory.feature_value`).
 
-    Round-trips with :py:func:`commit_inventory_from_grid`: take
-    the cells out, edit them, hand the result back.
+    Round-trips with :py:func:`commit_inventory_from_grid`: take the cells out,
+    edit them, hand the result back.
     """
     engine = _require_engine()
     segments = list(engine.segments)
@@ -773,22 +748,19 @@ def inventory_cap_status_for_grid(
     features: list[str],
     cells: list[list[str]],
 ) -> dict[str, Any]:
-    """Live vowel / consonant / total counts for the web editor's
-    cap counter.
+    """Live vowel / consonant / total counts for the web editor's cap counter.
 
-    Counts through the same shared classifier the desktop counter
-    and the save-time enforcement use, so the three never disagree
-    about which side a segment falls on. Unlike
-    :py:func:`commit_inventory_from_grid` this does NOT validate or
-    adopt anything: it classifies the in-progress grid as-is (an
-    over-cap or otherwise invalid grid still gets a count so the
-    counter can warn before the user tries to save), so it never
-    raises on a half-built inventory.
+    Counts through the same shared classifier the desktop counter and the
+    save-time enforcement use, so the three never disagree about which side a
+    segment falls on. Unlike :py:func:`commit_inventory_from_grid` this does
+    NOT validate or adopt anything: it classifies the in-progress grid as-is
+    (an over-cap or otherwise invalid grid still gets a count so the counter
+    can warn before the user tries to save), so it never raises on a half-built
+    inventory.
 
-    ``cells`` is indexed ``cells[feature_index][segment_index]``,
-    matching the commit path; ``"0"`` cells are dropped so a
-    segment with no positive features classifies the same way it
-    would once saved.
+    ``cells`` is indexed ``cells[feature_index][segment_index]``, matching the
+    commit path; ``"0"`` cells are dropped so a segment with no positive
+    features classifies the same way it would once saved.
     """
     bundles: dict[str, dict[str, str]] = {}
     for c, seg in enumerate(segments):
@@ -816,25 +788,21 @@ def commit_inventory_from_grid(
 ) -> dict[str, Any]:
     """Build and adopt a new inventory from web-editor grid state.
 
-    Calls the shared :py:func:`grid_to_inventory` (the same path the
-    desktop editor's Save uses), which folds U+2212 minus to ASCII,
-    omits ``"0"`` cells, and routes through
-    :py:meth:`Inventory.from_grid` for validation. On success
-    replaces the active engine and returns the standard summary
-    that JS uses to repaint the viewer.
+    Calls the shared :py:func:`grid_to_inventory` (the same path the desktop
+    editor's Save uses), which folds U+2212 minus to ASCII, omits ``"0"``
+    cells, and routes through :py:meth:`Inventory.from_grid` for validation. On
+    success replaces the active engine and returns the standard summary that JS
+    uses to repaint the viewer.
 
     ``cells`` is indexed as ``cells[feature_index][segment_index]``.
 
-    The active inventory's metadata (minus ``name``) is carried
-    through to the rebuilt inventory: the grid cannot edit stamps
-    like the PHOIBLE provenance or the diphthong
-    ``segment_secondary`` bundles, and dropping them meant a editor
-    round-trip of a PHOIBLE inventory silently erased its
-    diphthong arrows. Mirrors the desktop editor's
-    ``_extra_metadata`` carry.
+    The active inventory's metadata (minus ``name``) is carried through to the
+    rebuilt inventory: the grid cannot edit stamps like the PHOIBLE provenance
+    or the diphthong ``segment_secondary`` bundles, and dropping them meant an
+    editor round-trip of a PHOIBLE inventory silently erased its diphthong
+    arrows. Mirrors the desktop editor's ``_extra_metadata`` carry.
 
-    Raises :py:class:`ValidationError` if the grid is not a valid
-    inventory.
+    Raises :py:class:`ValidationError` if the grid is not a valid inventory.
     """
     base_metadata: dict[str, Any] | None = None
     if _engine is not None:
@@ -854,17 +822,16 @@ def commit_inventory_from_grid(
 def rename_current_inventory(new_name: str) -> dict[str, Any]:
     """Replace the active inventory's display name.
 
-    Round-trips through :py:meth:`Inventory.parse` so the new name is
-    validated and canonicalized (NFC, strip, length cap) the same way
-    the file loader would. The engine is reconstructed with the
-    renamed inventory; analysis caches are invalidated because their
-    cached HTML may embed the old name.
+    Round-trips through :py:meth:`Inventory.parse` so the new name is validated
+    and canonicalized (NFC, strip, length cap) the same way the file loader
+    would. The engine is reconstructed with the renamed inventory; analysis
+    caches are invalidated because their cached HTML may embed the old name.
 
-    Returns ``{"name": canonical_name}`` so the caller can update its
-    own display without a follow-up query.
+    Returns ``{"name": canonical_name}`` so the caller can update its own
+    display without a follow-up query.
 
-    Raises :py:class:`ValidationError` if the new name fails
-    validation, matching the existing load path's contract.
+    Raises :py:class:`ValidationError` if the new name fails validation,
+    matching the existing load path's contract.
     """
     engine = _require_engine()
     data = engine.inventory.to_json_dict()
@@ -920,13 +887,13 @@ def project_mode_switch(
 ) -> dict[str, Any]:
     """Full top-level mode-transition projection shared with desktop.
 
-    Returns the remembered cross-mode state PLUS the state that should
-    be active immediately after the switch in the target mode.
+    Returns the remembered cross-mode state PLUS the state that should be
+    active immediately after the switch in the target mode.
 
-    Mode strings are validated through :py:class:`Mode` (a StrEnum
-    that raises ``ValueError`` on a typo); the decorator translates
-    that to ``ValidationError`` so JS gets a clean error path on a
-    bad mode string instead of a raw stack trace in the console.
+    Mode strings are validated through :py:class:`Mode` (a StrEnum that raises
+    ``ValueError`` on a typo); the decorator translates that to
+    ``ValidationError`` so JS gets a clean error path on a bad mode string
+    instead of a raw stack trace in the console.
     """
     # ``project_mode_transition`` calls ``Mode(...)`` internally;
     # the decorator translates the ``ValueError`` for a bad string.
@@ -960,32 +927,31 @@ def plan_segment_layout(
     chart_rect: list[int] | None,
     min_col_w: int,
 ) -> dict[str, Any]:
-    """JS bridge to ``layout.plan_seg_layout``. JS measures each
-    consonant group's name / natural height / natural width, the
-    pane's clientWidth + clientHeight, the vowel chart's pane-local
-    rect (``[x, y, w, h]`` or ``None`` if absent), and the per-spill-
-    column minimum width; receives the complete layout plan.
+    """JS bridge to ``layout.plan_seg_layout``. JS measures each consonant
+    group's name, natural height, and natural width, the pane's clientWidth and
+    clientHeight, the vowel chart's pane-local rect (``[x, y, w, h]`` or
+    ``None`` if absent), and the per-spill-column minimum width; receives the
+    complete layout plan.
 
     Returned dict mirrors :py:class:`SegLayoutPlan`:
 
     * ``main_groups``: group names that stay in the main flow.
-    * ``spillover_groups``: group names that spill below the main
-      flow + chart (empty list = no spillover).
+    * ``spillover_groups``: group names that spill below the main flow and
+      chart (empty list means no spillover).
     * ``n_spillover_cols``: column count in the spillover region
       (1..max_spillover_cols=4).
-    * ``spillover_column_assignment``: parallel to ``spillover_groups``;
-      each entry is the destination column index (0-indexed).
-    * ``spillover_rect``: ``[x, y, w, h]`` in pane-local pixels
-      (informational; the web renderer just needs n_spillover_cols
-      and column_assignment to apply ``grid-template-columns`` and
-      slot each spilled group).
+    * ``spillover_column_assignment``: parallel to ``spillover_groups``; each
+      entry is the destination column index (0-indexed).
+    * ``spillover_rect``: ``[x, y, w, h]`` in pane-local pixels (informational;
+      the web renderer just needs n_spillover_cols and column_assignment to
+      apply ``grid-template-columns`` and slot each spilled group).
 
     Pre-relay the web bridge called the legacy
-    ``partition_groups_for_spillover`` with hardcoded 2 cols + the
-    fixed-pair-row scheme; desktop has migrated to ``plan_seg_layout``
-    which packs 1-4 columns via LPT bin-packing. The two surfaces
-    placed the same inventory differently. This function closes that
-    divergence by exposing the same plan to both.
+    ``partition_groups_for_spillover`` with hardcoded 2 cols and the
+    fixed-pair-row scheme, while desktop migrated to ``plan_seg_layout``, which
+    packs 1-4 columns via LPT bin-packing. The two surfaces placed the same
+    inventory differently. This function closes that divergence by exposing the
+    same plan to both.
     """
     chart_rect_t: tuple[int, int, int, int] | None
     if chart_rect is None:
@@ -1019,12 +985,12 @@ def best_segment_n_cols_for_groups(
     group_sizes: list[int],
     max_cols: int,
 ) -> list[int]:
-    """Vectorised JS bridge to ``best_segment_n_cols``. JS hands in
-    each consonant group's segment count + the pane's max column
-    count; gets back the best per-group column count to use for its
-    ``grid-template-columns`` rule. Same algorithm desktop runs in
-    :py:meth:`SegmentGridWidget._do_relayout`, so a group with 13
-    segments lays out as 2+11 or 3+5+5 (never 12+1) on either UI.
+    """Vectorised JS bridge to ``best_segment_n_cols``. JS hands in each
+    consonant group's segment count and the pane's max column count; gets back
+    the best per-group column count to use for its ``grid-template-columns``
+    rule. Same algorithm desktop runs in
+    :py:meth:`SegmentGridWidget._do_relayout`, so a group with 13 segments lays
+    out as 2+11 or 3+5+5 (never 12+1) on either UI.
     """
     return [best_segment_n_cols(n, max_cols) for n in group_sizes]
 
@@ -1032,16 +998,16 @@ def best_segment_n_cols_for_groups(
 @_translate_engine_errors
 def analyze_segments(segs: list[str]) -> SegmentSelectionSummary:
     """SEG-mode analysis under the active :py:class:`MatchMode`.
-    Returns the per-tab ``analysis_tabs`` payload plus the inputs
-    JS needs to derive each row/button's state inline (mirroring
-    the desktop's _update_seg_to_feat). Cache is keyed on
-    ``(selection, mode)`` so a mode toggle does not return stale
-    strict results from a wildcard query (or vice versa).
 
-    Validates that every entry of ``segs`` is a string present in
-    the active inventory. A stale segment (selected before an
-    inventory swap), a typo, or a non-string element gets rejected
-    here so the engine never sees garbage.
+    Returns the per-tab ``analysis_tabs`` payload plus the inputs JS needs to
+    derive each row/button's state inline (mirroring the desktop's
+    _update_seg_to_feat). Cache is keyed on ``(selection, mode)`` so a mode
+    toggle does not return stale strict results from a wildcard query (or vice
+    versa).
+
+    Validates that every entry of ``segs`` is a string present in the active
+    inventory. A stale segment (selected before an inventory swap), a typo, or
+    a non-string element gets rejected here so the engine never sees garbage.
     """
     engine = _require_engine()
     bad = [
@@ -1059,9 +1025,8 @@ def _analyze_segments_cached(
     segs_tuple: tuple[str, ...],
     mode_str: str,
 ) -> SegmentSelectionSummary:
-    """SEG analysis result. ``mode_str`` is the ``MatchMode`` value
-    as a wire string so the cache key stays human-readable in
-    profiles."""
+    """SEG analysis result. ``mode_str`` is the ``MatchMode`` value as a wire
+    string so the cache key stays human-readable in profiles."""
     engine = _require_engine()
     mode = MatchMode(mode_str)
     return summarize_segment_selection(engine, list(segs_tuple), mode=mode)
@@ -1070,20 +1035,19 @@ def _analyze_segments_cached(
 @_translate_engine_errors
 def analyze_features(spec: dict[str, str]) -> FeatureQuerySummary:
     """FEAT-mode analysis under the active :py:class:`MatchMode`.
-    Returns the per-tab ``analysis_tabs`` payload plus the matching
-    segment list.
 
-    Validates that every key in ``spec`` is a feature present in
-    the active inventory and every value is one of ``"+" / "-"
-    / "0"``. Same boundary-hardening as
-    :py:func:`analyze_segments`.
+    Returns the per-tab ``analysis_tabs`` payload plus the matching segment
+    list.
 
-    **Display invariant:** ``matching`` always equals
-    ``engine.find_segments(spec, mode=active_mode)``. Under
-    strict, the highlighted segments form a strict natural class
-    characterised by the query; under wildcard, they form the
-    wildcard natural class (segments whose value is unspecified
-    for queried features are included).
+    Validates that every key in ``spec`` is a feature present in the active
+    inventory and every value is one of ``"+" / "-" / "0"``. Same
+    boundary-hardening as :py:func:`analyze_segments`.
+
+    Display invariant: ``matching`` always equals
+    ``engine.find_segments(spec, mode=active_mode)``. Under strict, the
+    highlighted segments form a strict natural class characterised by the
+    query; under wildcard, they form the wildcard natural class (segments whose
+    value is unspecified for queried features are included).
     """
     engine = _require_engine()
     bad_keys = [
@@ -1116,11 +1080,10 @@ def _analyze_features_cached(
 
 @_translate_engine_errors
 def set_match_mode(mode_str: str) -> str:
-    """Toggle the active matching mode. Accepts the wire strings
-    ``"strict"`` and ``"wildcard"``; rejects anything else. Clears
-    the analysis caches (results are mode-keyed) and returns the
-    canonical wire string of the new active mode so JS can confirm
-    the round-trip.
+    """Toggle the active matching mode. Accepts the wire strings ``"strict"``
+    and ``"wildcard"``; rejects anything else. Clears the analysis caches
+    (results are mode-keyed) and returns the canonical wire string of the new
+    active mode so JS can confirm the round-trip.
     """
     global _match_mode
     try:
@@ -1139,23 +1102,22 @@ def set_match_mode(mode_str: str) -> str:
 
 @_translate_engine_errors
 def inventory_summary_for_mode(mode_str: str) -> dict[str, Any]:
-    """Rebuild the inventory summary under ``mode_str``. The
-    feature pane consumes ``active_features`` from the result,
-    which differs by mode (strict drops all-``0`` columns;
-    wildcard surfaces them). Called by JS after a
-    :py:func:`set_match_mode` toggle so the feature pane re-renders
-    with the new active-feature list. Returns the full
-    :py:func:`build_inventory_summary` payload so JS can also
-    refresh anything else mode-dependent."""
+    """Rebuild the inventory summary under ``mode_str``. The feature pane
+    consumes ``active_features`` from the result, which differs by mode (strict
+    drops all-``0`` columns; wildcard surfaces them). Called by JS after a
+    :py:func:`set_match_mode` toggle so the feature pane re-renders with the new
+    active-feature list. Returns the full :py:func:`build_inventory_summary`
+    payload so JS can also refresh anything else mode-dependent."""
     engine = _require_engine()
     mode = MatchMode(mode_str)
     return build_inventory_summary(engine, _inventory_name, mode=mode)
 
 
 def validation_report_html(issues: list[str]) -> str:
-    """Render the validation-error banner shown after a failed
-    inventory load. Delegates to the shared renderer so the web
-    Class tab and the desktop analysis pane carry byte-identical
-    markup (red heading + one paragraph per escaped issue).
+    """Render the validation-error banner shown after a failed inventory load.
+
+    Delegates to the shared renderer so the web Class tab and the desktop
+    analysis pane carry byte-identical markup (red heading, one paragraph per
+    escaped issue).
     """
     return render_validation_report(issues)

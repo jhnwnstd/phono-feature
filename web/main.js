@@ -1398,31 +1398,31 @@ function rasterizeText(text, font, maxWidth) {
     }
     measure.font = activeFont;
     const m = measure.measureText(text);
-    // ---- Optical (ink-bounding-box) centering ---------------------
+    // Optical (ink-bounding-box) centering.
     //
     // The canvas wraps the glyph's PAINTED bounding box (the "ink
     // bbox") plus a small antialias margin on all four sides. The
-    // glyph is drawn so the ink bbox sits dead-centre in the
-    // canvas. Because the span inherits the canvas dimensions and
-    // the seg button flex-centres the span, the ink centre lines up
-    // with the button centre for every glyph, regardless of
-    // whether the glyph has a descender (``p``), an ascender (``t``),
-    // a tie-bar combining mark (``t͡ʃ``), or neither (``o``).
+    // glyph is drawn so the ink bbox sits dead-centre in the canvas.
+    // Because the span inherits the canvas dimensions and the seg
+    // button flex-centres the span, the ink centre lines up with the
+    // button centre for every glyph, whether it has a descender
+    // (``p``), an ascender (``t``), a tie-bar combining mark
+    // (``t͡ʃ``), or neither (``o``).
     //
-    // This is the IPA-chart-cell / icon-font convention: each cell
-    // is a self-contained symbol, not a character in running text,
-    // so optical centering reads more even than baseline alignment
-    // across cells. The trade-off (no shared baseline across
-    // adjacent buttons) is the right trade for this surface.
+    // This follows the IPA-chart-cell / icon-font convention: each
+    // cell is a self-contained symbol, not a character in running
+    // text, so optical centering reads more even than baseline
+    // alignment across cells. The trade-off (no shared baseline
+    // across adjacent buttons) is the right one for this surface.
     //
-    // Measurement notes:
-    // ``actualBoundingBoxLeft/Right`` are distances from the text
-    // origin to the painted-pixel edges (positive = away from
-    // origin; ``Left`` going left, ``Right`` going right). For
-    // ``textAlign = "left"`` the origin is at the start of advance,
-    // and the painted area runs from (origin - left) to
-    // (origin + right) horizontally. ``actualBoundingBoxAscent/
-    // Descent`` are analogous vertical distances from the baseline.
+    // Measurement notes. ``actualBoundingBoxLeft/Right`` are
+    // distances from the text origin to the painted-pixel edges
+    // (positive means away from origin; ``Left`` going left,
+    // ``Right`` going right). For ``textAlign = "left"`` the origin
+    // is at the start of advance, and the painted area runs from
+    // (origin - left) to (origin + right) horizontally.
+    // ``actualBoundingBoxAscent/Descent`` are the analogous vertical
+    // distances from the baseline.
     const left = m.actualBoundingBoxLeft ?? 0;
     const right = m.actualBoundingBoxRight ?? m.width;
     const ascent = m.actualBoundingBoxAscent ?? 10;
@@ -3639,12 +3639,6 @@ function wireSetupDialog() {
  * the click target; ``:has(input:checked)`` in CSS paints the
  * accent border so the dot is a redundant cue, not the only one.
  */
-/** Drop a leading copy of the already-chosen language from a dialect
- *  label so a card under the "Korean" search reads "(Seoul)" rather
- *  than "Korean (Seoul)": the language is already shown in the field
- *  above, so repeating it on every row is noise. Only strips a clean
- *  leading match and unwraps a fully parenthesized remainder; anything
- *  else (e.g. "Standard Korean ...") is returned unchanged. */
 function _buildSourceCard(inv, defaultId, onPick) {
     const radioId = "phoible-radio-" + inv.id;
     const label = document.createElement("label");
@@ -4116,7 +4110,6 @@ function wirePhoiblePicker() {
 }
 
 
-// ----------------------------------------------------------------------
 // Editor: web-side state machine.
 //
 // The second large state machine in the file; mirrors the desktop's
@@ -4544,11 +4537,10 @@ function _measureScrollbarWidth() {
 // shared pixel column grid. Instead of rendering at natural width,
 // forcing a synchronous reflow, and reading offsetWidth/offsetHeight
 // for every cell on every edit, we measure glyph advance widths on a
-// canvas (cached) and size columns/rows by pure arithmetic, applying
-// pretext's "measure once with the font engine, then layout is
-// arithmetic" idea. The per-cell box overhead (padding + collapsed
-// border) and the single-line row height are page-constant, calibrated
-// once from a real cell.
+// canvas (cached) and size columns/rows by pure arithmetic: measure
+// once with the font engine, then layout is arithmetic. The per-cell
+// box overhead (padding + collapsed border) and the single-line row
+// height are page-constant, calibrated once from a real cell.
 let _editorCellCalibration = null;
 const _editorTextWidthCache = new Map();
 
@@ -4575,6 +4567,9 @@ function _calibrateEditorCell(cell) {
 
 function _editorTextWidth(text, weight, cal) {
     const font = `${weight} ${cal.sizePx}px ${cal.family}`;
+    // The literal NUL below joins the two key parts. No real font or text
+    // contains it, so distinct (font, text) pairs cannot collide into a
+    // wrong cache hit. Keep it; do not "tidy" it away.
     const key = `${font} ${text}`;
     const hit = _editorTextWidthCache.get(key);
     if (hit !== undefined) return hit;
@@ -4722,7 +4717,7 @@ function markEditorDirty() {
     nodes.editorFileLabel.textContent = "(modified)";
 }
 
-// Selection model ------------------------------------------------------
+// Selection model.
 
 function clearSelection() {
     editorState.selected.clear();
@@ -4840,14 +4835,14 @@ function repaintSelection() {
 
 /**
  * Classify the current selection by shape. Mirrors the shared
- * Python :py:func:`grid_logic.classify_selection`; both editors
+ * Python :py:func:`editor.grid.classify_selection`; both editors
  * must produce the same shape for the same selection so the
  * ``− Segment`` / ``− Feature`` enable rules stay in lockstep.
  *
  * Inlined in JS rather than called via the bridge because every
  * selection change (shift+drag, header click) fires this; a
  * per-call Pyodide bridge hop would add visible lag on rapid drags.
- * The Python tests in app/tests/test_grid_logic.py pin the shape
+ * The Python tests in shared/tests/test_grid_logic.py pin the shape
  * contract; if a desktop / web divergence ever surfaces it would
  * land here.
  *
@@ -4933,7 +4928,7 @@ function updateRemoveButtonStates() {
     nodes.editorRemoveFeatBtn.disabled = target !== "feature";
 }
 
-// Keyboard focus indicator -------------------------------------------
+// Keyboard focus indicator.
 
 // Last-painted focused cell, kept as a separate handle so the
 // repaint can clear the previous mark without scanning every cell.
@@ -4951,7 +4946,7 @@ function repaintFocused() {
     _lastFocusedCell = f === null ? null : { r: f.r, c: f.c };
 }
 
-// Edit primitive -----------------------------------------------------
+// Edit primitive.
 
 /**
  * Apply ``value`` to every ``(r, c)`` in ``targets``, capture the
@@ -5018,7 +5013,7 @@ function _formatTpl(key, fallback, vars) {
     return tpl;
 }
 
-// Structural-edit primitives -----------------------------------------
+// Structural-edit primitives.
 //
 // Add / remove segment, add / remove feature, and rename segment are
 // all undoable, sharing the one undo stack with cell edits. Each
@@ -5149,7 +5144,7 @@ function redo() {
     setEditorStatus(_undoRedoMessage(edit, false));
 }
 
-// Mouse handling -------------------------------------------------------
+// Mouse handling.
 
 /**
  * Dispatch a mousedown inside the grid table to the right handler.
@@ -5325,7 +5320,7 @@ function onCornerClicked() {
     }
 }
 
-// Keyboard handling ----------------------------------------------------
+// Keyboard handling.
 
 /**
  * Editor keydown router. Mirrors the desktop ``_handle_table_key``:
@@ -5471,15 +5466,8 @@ function cellFromFirstSelected() {
     return first === undefined ? null : parseCellKey(first);
 }
 
-// Add / remove segments and features --------------------------------
+// Add / remove segments and features.
 
-/**
- * Add a new segment column to the edit state. Called by the
- * label-prompt's onAccept after the shared validator has run, so
- * ``seg`` is already trimmed and known to be non-duplicate.
- * Mutates editorState in place and re-renders the grid (which
- * also clears any stale selection that referenced the old shape).
- */
 /** Right-click a column header to edit (rename) that segment inline.
  *  Mirrors the desktop editor's header double-click rename. The
  *  edit commits on blur ("clicking away sets whatever the segment
@@ -5658,18 +5646,6 @@ function applyValueToSelection(value) {
 }
 
 /**
- * Commit the editor's edit state through
- * commit_inventory_from_grid, swap the engine on success, then
- * trigger the standard JSON download. Refreshes both the viewer
- * (so the underlying inventory updates) and the editor (so the
- * grid reflects any canonicalization the parser applied).
- *
- * When the editor is clean (no in-progress edits) we skip the
- * commit and download the engine state directly. Avoids an
- * engine-swap-with-identical-content that would flush analysis
- * caches and clear the undo history for no reason.
- */
-/**
  * Roll the engine back to the inventory snapshotted before "New"
  * replaced it (see ``editorState.committedSnapshot``). Re-loads the
  * serialized inventory so the engine, the rendered panels, the
@@ -5711,6 +5687,18 @@ function finishInventoryTransaction() {
     markInventoryUnlisted();
 }
 
+/**
+ * Commit the editor's edit state through
+ * commit_inventory_from_grid, swap the engine on success, then
+ * trigger the standard JSON download. Refreshes both the viewer
+ * (so the underlying inventory updates) and the editor (so the
+ * grid reflects any canonicalization the parser applied).
+ *
+ * When the editor is clean (no in-progress edits) we skip the
+ * commit and download the engine state directly. Avoids an
+ * engine-swap-with-identical-content that would flush analysis
+ * caches and clear the undo history for no reason.
+ */
 function commitAndDownload() {
     if (!editorState.dirty) {
         // A "New" inventory saved with no further edits is committed by
@@ -5824,7 +5812,7 @@ function setMainChromeInert(on) {
     }
 }
 
-// Label-prompt modal -------------------------------------------------
+// Label-prompt modal.
 
 // Pending invocation state: the title / labels / handlers vary per
 // call site (+ Segment vs + Feature), but the dialog itself is
@@ -5989,14 +5977,6 @@ function normalizePaletteMode(value) {
     return known.has(value) ? value : PALETTE_MODE.STANDARD;
 }
 
-/**
- * Bind the colorblind-palette toggle. The active mode lives on
- * ``html[data-cb]`` so theme.css can override the standard
- * variables under that selector; ``aria-pressed`` doubles as the
- * styling hook for the button's accented "on" state. The Python
- * renderer is told via ``set_palette_mode`` so analysis-chip HTML
- * regenerates with matching colors.
- */
 /** Push the user's restored theme + palette-mode (set by
  *  wireThemeToggle / wireColorblindToggle before the bridge
  *  attached) into Python. Without this, the analysis HTML renders
@@ -6016,11 +5996,11 @@ function _syncBridgePaletteToStoredState() {
     }
 }
 
-/** Matching-mode toggle ("Strict" vs. "Wildcard"). Mirrors the
- *  colorblind toggle's structure: persistent localStorage choice,
- *  aria-pressed on the button, and a bridge sync so the Python
- *  side recomputes natural-class results under the chosen
- *  semantics.
+/** Matching-mode toggle (strict vs. underspecified matching, the
+ *  internal WILDCARD mode). Mirrors the colorblind toggle's
+ *  structure: persistent localStorage choice, aria-pressed on the
+ *  button, and a bridge sync so the Python side recomputes
+ *  natural-class results under the chosen semantics.
  *
  *  Wildcard mode treats a segment's ``0`` or absent value as
  *  compatible with either polarity of a requested feature, so a
@@ -6144,6 +6124,14 @@ function wireMatchModeToggle() {
 }
 
 
+/**
+ * Bind the colorblind-palette toggle. The active mode lives on
+ * ``html[data-cb]`` so theme.css can override the standard
+ * variables under that selector; ``aria-pressed`` doubles as the
+ * styling hook for the button's accented "on" state. The Python
+ * renderer is told via ``set_palette_mode`` so analysis-chip HTML
+ * regenerates with matching colors.
+ */
 function wireColorblindToggle() {
     if (!nodes.cbBtn) return;
     // aria-label and title share one source so SRs (which prefer

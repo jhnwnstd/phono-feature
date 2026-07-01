@@ -35,10 +35,10 @@ from phonology_shared.presentation.palette import (
 def _class_state_stylesheet(class_state: str | ClassState) -> str:
     """Compose the analysis pane's QTabBar stylesheet with an
     optional ``QTabBar::tab:first`` override that paints the Class
-    tab green / red per the natural-class verdict. Shared by
+    tab green or red per the natural-class verdict. Shared by
     :py:class:`AnalysisPanel` and :py:class:`AnalysisPeekPopup` so
-    both surfaces show the cue identically; previously they each
-    had their own private copy and drifted on theme swaps.
+    both surfaces show the cue identically; each previously had its
+    own copy and they drifted on theme swaps.
     """
     base = f"""
         QTabWidget::pane {{
@@ -96,19 +96,17 @@ class _CopyableTextEdit(QTextEdit):
     a JSON value silently does NOT match `"-"`.
 
     Translating at the copy boundary lets the display layer keep the
-    nice typographic glyph and gives every paste target the byte
-    they expect. Both the plain-text and HTML mime payloads get
+    typographic glyph and gives every paste target the byte it
+    expects. Both the plain-text and HTML mime payloads are
     translated so rich-text targets (a doc editor) agree with
     plain-text targets (a code editor).
     """
 
-    # ``str.maketrans`` precomputes the translation table at class
-    # load. The dict literal is intentionally minimal: if we ever
-    # add another display-only glyph (for example ``∅`` for
-    # "universal"), add it here, not as scattered ``replace`` calls.
+    # Add any new display-only glyph here (for example ``∅`` for
+    # "universal"), not as scattered ``replace`` calls.
     _COPY_TRANSLATIONS = str.maketrans(
         {
-            "−": "-",  # U+2212 MINUS SIGN -> ASCII hyphen-minus
+            "−": "-",  # U+2212 MINUS SIGN to ASCII hyphen-minus
         }
     )
 
@@ -118,7 +116,7 @@ class _CopyableTextEdit(QTextEdit):
             return original
         text = original.text()
         translated = text.translate(self._COPY_TRANSLATIONS)
-        # Fast path: no display-only chars in the selection.
+        # Fast path when the selection has no display-only chars.
         if text == translated and not original.hasHtml():
             return original
         out = QMimeData()
@@ -133,59 +131,55 @@ class _CopyableTextEdit(QTextEdit):
 
 
 class AnalysisPanel(QWidget):
-    """Analysis output pane. The tab labels (Class / Features /
+    """Analysis output pane. The tab labels (Class, Features,
     Contrasts) carry their own naming, so there's no top heading.
 
-    Layout (single ``QGridLayout``):
+    Layout is a single ``QGridLayout``. Row 0 hosts the persistent
+    selection label; a reserved row minimum height keeps the strip's
+    vertical footprint stable when the label hides in FEAT mode so
+    the tab bar's ``y`` does not shift between modes. Row 1 hosts the
+    tab widget and absorbs all vertical stretch.
 
-    - Row 0 hosts the persistent selection label. A reserved row
-      minimum height keeps the selection strip's vertical footprint
-      stable when the label is hidden (FEAT mode), so the tab bar's
-      ``y`` does not shift between modes.
-    - Row 1 hosts the tab widget; it absorbs all vertical stretch.
-
-    The pane is non-resizable: ``REGION_CONSTRAINTS['analysis_panel']``
-    pins its floor at the comfortable four-row minimum, and each tab's
-    ``_CopyableTextEdit`` (a ``QTextEdit`` subclass) provides built-in
-    scrollbars when the content overflows.
+    The pane is non-resizable. ``REGION_CONSTRAINTS['analysis_panel']``
+    pins its floor at the four-row minimum, and each tab's
+    ``_CopyableTextEdit`` provides built-in scrollbars when the
+    content overflows.
     """
 
-    # Index in ``self.tabs`` for the Contrasts tab, kept as a class
-    # constant so ``set_sections`` can enable/disable it cleanly. Order
-    # also matches the user's chosen reading order: Class first (the
-    # analytical conclusion), then Features (raw spec), then Contrasts
-    # (only meaningful for multi-segment SEG mode).
+    # Contrasts-tab index, a class constant so ``set_sections`` can
+    # enable/disable it cleanly. Order also matches the chosen reading
+    # order: Class first (the analytical conclusion), then Features
+    # (raw spec), then Contrasts (only meaningful for multi-segment
+    # SEG mode).
     _TAB_CLASS_IDX = 0
     _TAB_FEATURES_IDX = 1
     _TAB_CONTRASTS_IDX = 2
 
-    # Reserved minimum height for row 0 (the selection-label strip).
-    # 26 px keeps the strip's vertical footprint stable when the
-    # selection label hides in FEAT mode so the tab bar below does
-    # not jump between modes.
+    # Reserved minimum height for the selection-label strip (row 0).
+    # Keeps the strip's footprint stable when the label hides in FEAT
+    # mode so the tab bar below does not jump between modes.
     _SELECTION_ROW_MIN_H = 26
-    # Fixed height for the selection label. Taller than
-    # ``_SELECTION_ROW_MIN_H`` because the label needs room for one
-    # line of mono text at 10pt plus a 2-line wrap on long queries.
+    # Selection-label height. Taller than ``_SELECTION_ROW_MIN_H``
+    # because the label needs room for one line of mono text at 10pt
+    # plus a 2-line wrap on long queries.
     _SELECTION_LABEL_H = 38
-    # Floor for the active tab's content area so a single-line
-    # output (a one-feature query) still presents as a real pane,
-    # not a thin strip.
+    # Floor for the active tab's content area so a single-line output
+    # (a one-feature query) still presents as a real pane, not a thin
+    # strip.
     _CONTENT_TAB_MIN_H = 60
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         # Pane absorbs leftover vertical space inside the vsplit and
         # stretches with the window horizontally. ``minimumSizeHint``
-        # below pins the floor; ``REGION_CONSTRAINTS['analysis_panel']``
-        # is the single source for both ends.
+        # pins the floor; ``REGION_CONSTRAINTS['analysis_panel']`` is
+        # the single source for both ends.
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
         )
-        # Persistent header content: "Selected: /a/ /b/" or
-        # "Query: +Voice −Nasal". Stays visible regardless of which
-        # tab is active so the user always sees what they selected.
+        # Persistent header. Stays visible regardless of which tab is
+        # active so the user always sees what they selected.
         self.selection_label = _CopyableTextEdit(self)
         self.selection_label.setReadOnly(True)
         self.selection_label.setFixedHeight(self._SELECTION_LABEL_H)
@@ -193,12 +187,11 @@ class AnalysisPanel(QWidget):
         mono_font.setFamilies(MONO_FAMILIES)
         mono_font.setPointSize(10)
         self.selection_label.setFont(mono_font)
-        # The three analysis tabs. Each contains its own
-        # ``_CopyableTextEdit`` so tab swaps are cheap (no re-render)
-        # and the cached-HTML short-circuit in ``set_html`` still
-        # applies per tab. The Contrasts tab gets disabled (greyed
-        # out, not removed) when the current selection has nothing
-        # to compare.
+        # Each tab owns its ``_CopyableTextEdit`` so tab swaps are
+        # cheap (no re-render) and the cached-HTML short-circuit in
+        # ``set_html`` still applies per tab. The Contrasts tab is
+        # disabled (greyed out, not removed) when the current
+        # selection has nothing to compare.
         self.tabs = QTabWidget(self)
         self._tab_class = _CopyableTextEdit(self.tabs)
         self._tab_features = _CopyableTextEdit(self.tabs)
@@ -213,8 +206,8 @@ class AnalysisPanel(QWidget):
         self.tabs.addTab(self._tab_class, "Class")
         self.tabs.addTab(self._tab_features, "Features")
         self.tabs.addTab(self._tab_contrasts, "Contrasts")
-        # Back-compat alias so the existing ``self.analysis.content``
-        # references in tests + other code keep working; the Class
+        # Back-compat alias so existing ``self.analysis.content``
+        # references in tests and other code keep working. The Class
         # tab carries the most prominent analytical output so
         # ``.content`` lands there.
         self.content = self._tab_class
@@ -223,19 +216,18 @@ class AnalysisPanel(QWidget):
         layout.setContentsMargins(16, 2, 16, 8)
         layout.setHorizontalSpacing(0)
         layout.setVerticalSpacing(2)
-        # Row 0: selection label. The reserved minimum height keeps
-        # the strip's footprint stable when the label hides in FEAT
-        # mode so the tab bar's y does not shift.
+        # Reserved minimum height keeps the strip's footprint stable
+        # when the label hides in FEAT mode so the tab bar's y does
+        # not shift.
         layout.setRowMinimumHeight(0, self._SELECTION_ROW_MIN_H)
         layout.addWidget(self.selection_label, 0, 0)
         layout.addWidget(self.tabs, 1, 0)
         layout.setRowStretch(1, 1)
-        # Selection label starts hidden. Empty selection / FEAT
-        # mode shouldn't render chips. ``set_sections`` toggles
-        # visibility based on whether the html payload actually
-        # carries chips.
+        # Starts hidden. Empty selection and FEAT mode should not
+        # render chips. ``set_sections`` toggles visibility based on
+        # whether the html payload carries chips.
         self.selection_label.setVisible(False)
-        # Class-tab background-colour state (natural / not_natural /
+        # Class-tab background-colour state (natural, not_natural,
         # neutral). ``apply_theme`` reads this when composing the
         # stylesheet so a theme swap mid-session keeps the cue.
         self._class_state: ClassState = ClassState.NEUTRAL
@@ -245,8 +237,8 @@ class AnalysisPanel(QWidget):
         """Sourced from ``REGION_CONSTRAINTS['analysis_panel']``. The
         Qt splitter and the vsplit fitting code consult this when
         deciding how much room the analysis pane can yield under
-        resize pressure; the entry pins the bottom edge so future
-        ``setMinimumHeight(0)`` paths can't silently collapse it."""
+        resize pressure. The entry pins the bottom edge so a future
+        ``setMinimumHeight(0)`` path can't silently collapse it."""
         constraint = REGION_CONSTRAINTS["analysis_panel"]
         return QSize(constraint.min_w, constraint.min_h)
 
@@ -268,8 +260,8 @@ class AnalysisPanel(QWidget):
             """ + scrollbar_style()
         for tab in (self._tab_class, self._tab_features, self._tab_contrasts):
             set_css(tab, text_edit_css)
-        # Persistent selection header: same colour palette as the
-        # tab bodies but no border (it sits flush above the tabs).
+        # Same colour palette as the tab bodies but no border, since
+        # the header sits flush above the tabs.
         set_css(
             self.selection_label,
             f"""
@@ -284,9 +276,9 @@ class AnalysisPanel(QWidget):
         set_css(self.tabs, _class_state_stylesheet(self._class_state))
 
     def set_html(self, html: str) -> None:
-        """Single-blob entry point: routes the whole HTML to the
-        Class tab and clears the other tabs + selection label. Used
-        on the validation-error path where there's no view-model
+        """Single-blob entry point. Routes the whole HTML to the
+        Class tab and clears the other tabs and selection label.
+        Used on the validation-error path where there's no view-model
         envelope to feed :py:meth:`set_sections`.
         """
         set_html(self._tab_class, html)
@@ -309,25 +301,23 @@ class AnalysisPanel(QWidget):
         class_state: str | ClassState = ClassState.NEUTRAL,
     ) -> None:
         """Push the four analysis sections produced by the shared
-        view-model into the persistent selection header + three tabs.
+        view-model into the persistent selection header and three
+        tabs.
 
         ``contrasts_enabled=False`` greys out the Contrasts tab and
         prevents activation. Used for single-segment SEG selections
         and for FEAT mode, where contrasts aren't meaningful. If the
-        currently-active tab is the disabled one, focus jumps back
-        to the Class tab so the user lands on real content instead
-        of a placeholder explaining why the tab is empty.
+        currently-active tab is the disabled one, focus jumps back to
+        the Class tab so the user lands on real content instead of a
+        placeholder explaining why the tab is empty.
 
-        ``class_state`` colours the Class tab text: ``"natural"``
-        maps to palette ``plus`` (green), ``"not_natural"`` maps to
-        palette ``minus`` (red), anything else uses the default text
-        colour. The coloured tab replaces the previous "Natural
-        class: Yes/No" text in the tab body.
+        ``class_state`` colours the Class tab. ``"natural"`` maps to
+        palette ``plus`` (green), ``"not_natural"`` maps to palette
+        ``minus`` (red), anything else uses the default text colour.
 
-        Empty ``selection_html`` hides the persistent selection
-        label entirely (no reserved strip of space). Used in FEAT
-        mode where the query is already explicit in the Features
-        tab.
+        Empty ``selection_html`` hides the selection label entirely
+        (no reserved strip of space). Used in FEAT mode where the
+        query is already explicit in the Features tab.
         """
         if selection_html:
             self.selection_label.setHtml(selection_html)
@@ -350,12 +340,11 @@ class AnalysisPanel(QWidget):
         """Colour the first tab (Class) per the natural-class verdict.
 
         Re-applies the full tab-bar stylesheet with a state-specific
-        ``QTabBar::tab:first`` rule appended. Background colour is
-        the cue (palette ``plus_bg`` for natural, ``minus_bg`` for
-        not-natural, default for neutral); using background instead
-        of text colour stays readable for users with reduced colour
-        vision and is consistent with the web's ``data-class-state``
-        styling.
+        ``QTabBar::tab:first`` rule appended. Background colour is the
+        cue (palette ``plus_bg`` for natural, ``minus_bg`` for
+        not-natural, default for neutral). Background rather than text
+        colour stays readable for users with reduced colour vision and
+        matches the web's ``data-class-state`` styling.
         """
         coerced = ClassState(state)
         if coerced is self._class_state:
@@ -377,10 +366,11 @@ class AnalysisPanel(QWidget):
         self.selection_label.setVisible(False)
         for tab in (self._tab_class, self._tab_features, self._tab_contrasts):
             tab.clear()
-            # set_html caches the last HTML string on the widget and
-            # short-circuits duplicate calls. clear() resets the widget
-            # but not the cache, so a later set_html(X) where X matches
-            # the pre-clear value would no-op and leave the pane blank.
+            # set_html caches the last HTML on the widget and
+            # short-circuits duplicate calls. clear() resets the
+            # widget but not the cache, so a later set_html(X) where X
+            # matches the pre-clear value would no-op and leave the
+            # pane blank.
             if hasattr(tab, _LAST_HTML_ATTR):
                 delattr(tab, _LAST_HTML_ATTR)
         if hasattr(self.selection_label, _LAST_HTML_ATTR):

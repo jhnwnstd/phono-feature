@@ -154,13 +154,13 @@ _CLEAR_BTN_H = 26
 class MainWindow(QMainWindow):
     def __init__(self, startup_path: str | None = None) -> None:
         super().__init__()
-        # Shared application state. The inventory + engine, match mode,
-        # selection, and hidden classes live on the session, not as loose
-        # MainWindow fields; ``engine`` / ``_match_mode`` /
-        # ``_selected_segments`` / ``_selected_features`` /
-        # ``_hidden_segment_classes`` are delegating properties over it
-        # (see the property block after __init__), so the call sites are
-        # unchanged but the desktop and the session cannot drift.
+        # Shared application state. Engine, match mode, selection, and
+        # hidden classes live on the session, not as loose MainWindow
+        # fields; ``engine`` / ``_match_mode`` / ``_selected_segments`` /
+        # ``_selected_features`` / ``_hidden_segment_classes`` are
+        # delegating properties over it (see the property block after
+        # __init__), so call sites are unchanged but the desktop and the
+        # session cannot drift.
         self._session = SessionState()
         # Mode controller owns ``mode``, ``saved_seg_state``, and
         # ``saved_feat_state``. Reach through ``self._mode_ctrl`` at
@@ -182,11 +182,9 @@ class MainWindow(QMainWindow):
         # here; the ``_editor`` property + ``_open_editor`` etc. forward.
         self._dialogs = DialogCoordinator(self)
         # Last-seen segment-pane width; ``_on_seg_pane_width_changed``
-        # short-circuits when the width hasn't actually changed across
-        # a Qt-internal layout pass. Initialized to -1 so the first
-        # real width always falls through; explicit field beats a
-        # ``getattr(..., -1)`` because it surfaces the contract in
-        # __init__ instead of hiding behind a defaulted read.
+        # short-circuits when the width hasn't changed across a
+        # Qt-internal layout pass. Initialized to -1 so the first real
+        # width always falls through.
         self._last_seg_pane_w: int = -1
         # Pool of every FeatureRow ever created (FEATURE_ORDER plus any
         # inventory-specific Other-card extras). ``_feat_rows`` above is
@@ -263,15 +261,13 @@ class MainWindow(QMainWindow):
         # as a "shake" on the user's first colorblind toggle). One
         # synthetic round-trip now lets Qt finish that work invisibly.
         self._warm_palette_cache()
-        # Construct the PanPhon FeatureTable in a daemon thread so the
-        # first Editor "New" click does not pay the ~2 s panphon-data-
-        # load cost on the UI thread. The dialog's
-        # ``available_providers()`` call hits a warm cache after this
-        # thread finishes (~2 s after launch); if the user clicks New
-        # sooner, they block on the same lock the daemon is already
-        # waiting on and get the result as soon as it lands. Safe to
-        # call when ``panphon`` is not installed: the registry helper
-        # short-circuits on ``find_spec``.
+        # Build the PanPhon FeatureTable in a daemon thread so the first
+        # Editor "New" click does not pay the ~2 s panphon-data-load cost
+        # on the UI thread. The dialog's ``available_providers()`` hits a
+        # warm cache once the thread finishes; a sooner New click blocks
+        # on the same lock the daemon holds and gets the result as soon
+        # as it lands. Safe when ``panphon`` is not installed: the
+        # registry helper short-circuits on ``find_spec``.
         from phonology_features.providers import prewarm_in_background
 
         prewarm_in_background()
@@ -503,23 +499,19 @@ class MainWindow(QMainWindow):
             layout.MIN_FIRST_LAUNCH_H - _initial_analysis_h - 100,
         )
         self._vsplit.setSizes([_initial_top_h, _initial_analysis_h])
-        # Vertical handle is not user-draggable; the split is driven
-        # by the analysis pane's four-row floor plus the top pane's
+        # Vertical handle is not user-draggable; the split is driven by
+        # the analysis pane's four-row floor plus the top pane's
         # content-derived minimum. Qt's initial style polish resets
         # ``handleWidth`` back to the platform default (~4 px) AFTER
         # construction returns, so a synchronous ``setHandleWidth(0)``
-        # here doesn't stick. Re-applying via ``singleShot(0, ...)``
-        # lands the call after the polish, and the geometry
-        # controller's budget cap subtracts ``handleWidth()`` from
-        # the analysis-floor reservation as a belt-and-suspenders
-        # guarantee against any future polish that re-introduces a
-        # non-zero value. The handle widget itself is also disabled
-        # and clamped to zero height so it can never render a drag
-        # cursor or visible stripe even if handleWidth is non-zero.
+        # here doesn't stick; the ``singleShot(0, ...)`` below re-applies
+        # after the polish. The geometry controller's budget cap also
+        # subtracts ``handleWidth()`` from the analysis-floor reservation
+        # as a guard against any future polish reintroducing a non-zero
+        # value, and the handle widget is disabled and clamped to zero
+        # height so it can never render a drag cursor or stripe.
         self._vsplit.setHandleWidth(0)
-        # Deferred re-apply after Qt's post-construction polish; see
-        # the block comment above for why a single setHandleWidth(0)
-        # doesn't stick.
+        # Deferred re-apply after Qt's post-construction polish (see above).
         QTimer.singleShot(0, lambda: self._vsplit.setHandleWidth(0))
         handle = self._vsplit.handle(1)
         if handle is not None:
@@ -1176,14 +1168,12 @@ class MainWindow(QMainWindow):
             **vowel_buttons,
             **vocoid_buttons,
         }
-        # Evict pool entries the new inventory does not use: detach them
-        # AND drop them from the pool so it cannot grow without bound.
-        # Without the drop, every unique segment ever loaded stays alive
-        # as a hidden orphaned button forever, so a long session of
-        # inventory loads (PHOIBLE browsing churns through thousands of
-        # distinct segments) leaks memory until the app degrades. Shared
-        # segments were already reused above while building the active
-        # set, so only the genuinely unused leftovers are pruned here.
+        # Evict pool entries the new inventory does not use: detach AND
+        # drop them so the pool cannot grow without bound. Without the
+        # drop, every segment ever loaded stays alive as a hidden orphan,
+        # so a long PHOIBLE-browsing session (thousands of distinct
+        # segments) leaks memory. Shared segments were already reused
+        # above, so only genuinely unused leftovers are pruned.
         # ``hide()`` before ``setParent(None)`` so a button never briefly
         # becomes a top-level window; ``deleteLater`` frees it once the
         # current event cycle unwinds.

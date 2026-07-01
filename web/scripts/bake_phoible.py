@@ -108,9 +108,10 @@ SOURCE_INFO: dict[str, tuple[str, str]] = {
 
 
 def _ensure_shared_on_path() -> None:
-    """Make ``phonology_shared`` importable without an editable
-    install. Mirrors the trick ``web/scripts/build.py`` uses so this
-    script works from a bare repo checkout.
+    """Make ``phonology_shared`` importable without an editable install.
+
+    Mirrors the trick ``web/scripts/build.py`` uses so this script works
+    from a bare repo checkout.
     """
     p = str(SHARED_SRC)
     if p not in sys.path:
@@ -118,9 +119,10 @@ def _ensure_shared_on_path() -> None:
 
 
 def _open_csv(path: Path) -> io.TextIOWrapper:
-    """Return a text-mode reader over the (possibly gzipped) CSV
-    file. UTF-8 is the canonical PHOIBLE encoding; explicit so
-    the script behaves the same on every platform.
+    """Return a text-mode reader over the (possibly gzipped) CSV file.
+
+    UTF-8 is the canonical PHOIBLE encoding; explicit so the script
+    behaves the same on every platform.
     """
     if path.suffix == ".gz":
         binary = gzip.open(path, "rb")
@@ -231,9 +233,8 @@ def bake_tables(
     inv_segments: dict[str, dict[str, str]] = defaultdict(dict)
     # Per-inventory diphthong secondary bundles: phoneme -> final-state
     # bundle string in the same positional encoding as inv_segments. The
-    # primary bundle in inv_segments holds the initial state so a
-    # consumer ignorant of diphthongs still sees a conservative
-    # single-vowel placement.
+    # primary bundle holds the initial state so a consumer ignorant of
+    # diphthongs still sees a conservative single-vowel placement.
     inv_segment_secondary: dict[str, dict[str, str]] = defaultdict(dict)
     # Language-name dedup: the same language often appears under several
     # inventories, but the autocomplete list wants one entry each.
@@ -297,30 +298,30 @@ def bake_tables(
                     }
 
             # Build the positional bundle string in feature_columns
-            # order; one character per column. A PHOIBLE cell that
-            # holds a contour (``"+,-"``) is split into an initial and
-            # a final polarity: the primary bundle keeps the initial,
-            # a parallel SECONDARY bundle records the final. That turns
-            # a contour into a sequence of ordinary phases (see
-            # ``Inventory.segment_phases``) without breaking the
-            # engine's single-value-per-feature contract.
+            # order, one character per column. A PHOIBLE cell holding a
+            # contour (``"+,-"``) is split into an initial and a final
+            # polarity: the primary bundle keeps the initial, a parallel
+            # SECONDARY bundle records the final. That turns a contour
+            # into a sequence of ordinary phases (see
+            # ``Inventory.segment_phases``) without breaking the engine's
+            # single-value-per-feature contract.
             #
-            # A contour is preserved where the segment's class makes it
-            # meaningful: ANY feature on a vowel (a diphthong glides
-            # through both poles) and ``continuant`` on an obstruent
-            # (an affricate's stop closure releases into a fricative,
-            # so its affrication is recoverable from the continuant
-            # contour even with no ``DelRel`` column). Other consonant
-            # contours (e.g. a prenasalized stop's ``nasal``) stay
-            # flattened to ``"0"`` so they keep their established
-            # manner-class placement; widening that is a deliberate
-            # later step.
-            # Read the INITIAL phase of the major-class features: a
-            # contour cell classifies by the state it starts in. Using
-            # the raw cell would misread a falling diphthong (whose
+            # A contour is preserved only where the segment's class makes
+            # it meaningful: ANY feature on a vowel (a diphthong glides
+            # through both poles) and ``continuant`` on an obstruent (an
+            # affricate's stop closure releases into a fricative, so its
+            # affrication is recoverable from the continuant contour even
+            # with no ``DelRel`` column). Other consonant contours (e.g.
+            # a prenasalized stop's ``nasal``) stay flattened to ``"0"``
+            # so they keep their established manner-class placement;
+            # widening that is a deliberate later step.
+            #
+            # Classify off the INITIAL phase of the major-class features,
+            # since a contour cell classifies by the state it starts in.
+            # The raw cell would misread a falling diphthong (whose
             # ``syllabic`` is itself a contour ``"+,-"``) as non-vowel
-            # and a prenasalized consonant (``sonorant`` = ``"+,-"``)
-            # as an obstruent, splitting or flattening the wrong cells.
+            # and a prenasalized consonant (``sonorant`` = ``"+,-"``) as
+            # an obstruent, splitting or flattening the wrong cells.
             is_vowel = initial_phase_value(row.get("syllabic", "0")) == "+"
             is_obstruent = (
                 initial_phase_value(row.get("consonantal", "0")) == "+"

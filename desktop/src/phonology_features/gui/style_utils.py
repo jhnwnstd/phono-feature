@@ -24,8 +24,8 @@ from phonology_shared.presentation.palette import C
 
 def set_css(widget: QWidget, css: str) -> bool:
     """Apply ``css`` to ``widget`` only when it differs from the
-    currently-applied stylesheet. Returns True if a re-parse actually
-    happened, False on cache hit. The bool is useful in tests.
+    currently-applied stylesheet. Returns True if a re-parse happened,
+    False on cache hit. The bool is useful in tests.
     """
     if widget.styleSheet() == css:
         return False

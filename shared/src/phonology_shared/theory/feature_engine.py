@@ -6,10 +6,10 @@ segment distances. GUI-free.
 
 The engine takes the inventory in its constructor. There is no empty
 state to defend against, and there is no in-place ``load``. Replacing
-the inventory means constructing a new engine. The contract gain:
-``self._inventory`` and its derived caches are written exactly once,
-so the "cache stale relative to inventory" class of bug is
-structurally impossible.
+the inventory means constructing a new engine. The contract gain,
+``self._inventory`` and its derived caches are written exactly once, so
+the "cache stale relative to inventory" class of bug is structurally
+impossible.
 
 Cache strategy: cheap caches (the +/-/0 segment-sets used by the
 analysis pane on every selection) build eagerly in ``__init__``.
@@ -47,33 +47,32 @@ _EMPTY_BUNDLE: Mapping[str, str] = MappingProxyType({})
 class MatchMode(StrEnum):
     """How feature-bundle requests are evaluated against segments.
 
-    ``STRICT`` (the historical default and the one the desktop +
+    ``STRICT`` (the historical default and the one the desktop and
     web FEAT pane currently uses): a segment matches a requested
     ``+``/``-`` only when its own feature value is that explicit
-    value. ``"0"`` is its OWN value; a request of ``+`` does not
+    value. ``"0"`` is its OWN value. A request of ``+`` does not
     match a segment whose feature is ``"0"``, and a request of
     ``"0"`` returns only segments whose feature is unspecified.
-    This is the "round-trip" semantics
-    :py:meth:`FeatureEngine.find_all_minimal_bundles` relies on:
-    any bundle the engine returns, typed into the feat pane,
-    yields exactly the input set.
+    This is the round-trip semantics
+    :py:meth:`FeatureEngine.find_all_minimal_bundles` relies on: any
+    bundle the engine returns, typed into the feat pane, yields
+    exactly the input set.
 
-    ``WILDCARD`` ("Allow underspecified"): a segment matches a
-    requested ``+``/``-`` unless its own feature value is the
-    OPPOSITE explicit value. ``"0"`` on a segment is compatible
-    with either polarity. A request of ``"0"`` carries no
-    constraint at all: wildcard mode reads it as "I don't care
-    about this feature," not "show me unspecified segments."
-    Users who want the latter stay in strict mode.
+    ``WILDCARD`` (surfaced to users as underspecified matching): a
+    segment matches a requested ``+``/``-`` unless its own feature
+    value is the OPPOSITE explicit value. ``"0"`` on a segment is
+    compatible with either polarity. A request of ``"0"`` carries no
+    constraint at all: wildcard mode reads it as "don't care about
+    this feature," not "show me unspecified segments." Users who want
+    the latter stay in strict mode.
 
     The two modes share the same membership data
     (:py:attr:`FeatureEngine.plus_segs` / ``minus_segs`` /
-    ``spec_segs``); only the lookup arithmetic differs. Wildcard
-    mode is opt-in everywhere: every engine method's ``mode``
-    keyword defaults to ``MatchMode.STRICT``, and the payload
-    returned to renderers carries a ``matching_mode`` field so
-    strict and wildcard results can never be confused at the UI
-    layer.
+    ``spec_segs``); only the lookup arithmetic differs. Wildcard mode
+    is opt-in everywhere: every engine method's ``mode`` keyword
+    defaults to ``MatchMode.STRICT``, and the payload returned to
+    renderers carries a ``matching_mode`` field so strict and wildcard
+    results can never be confused at the UI layer.
     """
 
     STRICT = "strict"
@@ -99,10 +98,10 @@ class FeatureCategory(StrEnum):
       splits the selection; cannot contribute to a shared spec.
     * ``UNDERSPEC_PLUS`` / ``UNDERSPEC_MINUS``: some selected
       segments have the explicit value, the rest are ``'0'``. The
-      feature could contribute to a strictly-underspec-tolerant
-      spec but NOT to a strict spec (which requires every member
-      to have the explicit value). The user-facing analysis pane
-      reports this as "shared under underspecification".
+      feature could contribute to an underspec-tolerant spec but
+      NOT to a strict spec (which requires every member to have the
+      explicit value). The analysis pane surfaces this as shared
+      under underspecification.
     * ``UNDERSPEC_CONFLICT``: ``+``, ``-``, and ``'0'`` all appear.
       The conflict cannot be erased by underspecification: any
       strict-and-underspec spec including this feature would
@@ -112,8 +111,8 @@ class FeatureCategory(StrEnum):
 
     Strict natural-class detection (the contract the round-trip
     invariant rests on) only considers ``ALL_PLUS`` and ``ALL_MINUS``
-    features as bundle candidates. That restriction is what ensures
-    any spec the engine LISTS round-trips exactly through
+    features as bundle candidates. That restriction ensures any spec
+    the engine LISTS round-trips exactly through
     :py:meth:`find_segments`.
     """
 
@@ -165,14 +164,13 @@ class NaturalClassCompletion:
     * ``"one_minimal_completion"``: :py:attr:`additions` has one
       element (the unique minimum addition set);
       :py:attr:`selected_minimal_bundles` is empty.
-    * ``"multiple_minimal_completions"``: reserved. Under strict-
-      bundle semantics the minimum addition set is provably
-      unique (see the algorithm docstring), so the present solver
-      never emits this status. The value is kept on the Literal
-      and the outer-tuple shape on :py:attr:`additions` is kept
-      general so a future, more permissive solver could populate
-      multiple distinct minimum addition sets without a breaking
-      change.
+    * ``"multiple_minimal_completions"``: reserved. Under strict
+      bundle semantics the minimum addition set is provably unique
+      (see the algorithm docstring), so the present solver never
+      emits this status. The value stays on the Literal and the
+      outer-tuple shape on :py:attr:`additions` stays general so a
+      future, more permissive solver could populate multiple
+      distinct minimum addition sets without a breaking change.
 
     The universal class (whole inventory, empty bundle) is always
     a valid containing natural class, so :py:attr:`additions` is
@@ -195,13 +193,12 @@ class FeatureEngine:
     its backing :py:class:`Inventory` are immutable after
     construction. Every expensive derivation
     (``contrastive_features``, ``grouped_segments``,
-    ``normalized_segment_feats``, the per-segment value tuples) is
-    a :py:func:`functools.cached_property` whose invalidation
-    boundary is the constructor itself: there is no "edit the
-    inventory in place" path, so caches can never go stale. To
-    replace the inventory, construct a new engine; do not add an
-    in-place edit method without also writing the matching cache-
-    clear logic.
+    ``normalized_segment_feats``, the per-segment value tuples) is a
+    :py:func:`functools.cached_property` whose invalidation boundary
+    is the constructor itself: there is no edit-inventory-in-place
+    path, so caches can never go stale. To replace the inventory,
+    construct a new engine. Do not add an in-place edit method
+    without also writing the matching cache-clear logic.
 
     The bridge in ``web/api.py`` rebinds the module-level
     ``_engine`` to a fresh ``FeatureEngine`` on every
@@ -218,13 +215,13 @@ class FeatureEngine:
                 f"Use Inventory.parse(raw_dict) or Inventory.load(path) first."
             )
         self._inventory = inventory
-        # Per-feature segment-set caches built once at construction.
-        # Used by analysis.compute_contrastive (every selection change),
-        # GeometryAnalyzer, and is_contrastive.
+        # Per-feature segment-set caches, consumed by
+        # analysis.compute_contrastive on every selection change, by
+        # GeometryAnalyzer, and by is_contrastive.
         self.spec_segs: dict[str, frozenset[str]] = {}
         self.plus_segs: dict[str, frozenset[str]] = {}
         self.minus_segs: dict[str, frozenset[str]] = {}
-        # Wildcard-only "exclusively that polarity" indices: a contour
+        # Wildcard-only "exclusively that polarity" indices. A contour
         # segment that is BOTH + and - for a feature (its two phases
         # disagree) is excluded from neither, so wildcard subtraction
         # uses these instead of the full plus/minus sets. For a
@@ -244,12 +241,11 @@ class FeatureEngine:
         # find_all_minimal_bundles, so calling both on the same input
         # would re-run an exponential-worst-case search. Keyed by
         # ``(frozenset(segments), match_mode)`` because the same
-        # selection yields DIFFERENT minimal bundles under strict vs.
-        # wildcard semantics (wildcard's candidate space is wider, so
-        # its minimal bundles are typically shorter). Stored as
-        # tuples of MappingProxyType so a caller cannot mutate the
-        # cached result and corrupt subsequent queries on the same
-        # input.
+        # selection yields DIFFERENT minimal bundles under strict
+        # versus wildcard semantics (wildcard's candidate space is
+        # wider, so its minimal bundles are typically shorter). Stored
+        # as tuples of MappingProxyType so a caller cannot mutate the
+        # cached result and corrupt later queries on the same input.
         self._bundle_cache: dict[
             tuple[frozenset[str], MatchMode],
             tuple[Mapping[str, str], ...],
@@ -306,16 +302,15 @@ class FeatureEngine:
         WILDCARD: ``+`` excludes only segments that are EXCLUSIVELY
         ``-`` for the feature (``_minus_excl[f]``), ``-`` excludes
         only the exclusively-``+`` ones, and a requested ``"0"`` is a
-        no-op (no constraint added). A contour segment that is both
-        ``+`` and ``-`` (its phases disagree) is in neither exclusive
-        set, so it survives a query for EITHER polarity, which is the
-        point: a diphthong gliding into ``[+low]`` must still answer a
-        ``[+low]`` query. For single-phase inventories the exclusive
-        sets equal the full ``minus_segs`` / ``plus_segs``, so this is
-        the unchanged behaviour. ``"0"``-on-segment is compatible with
-        either polarity; the only thing wildcard rules out is an
-        explicit, non-contour opposite. See :py:class:`MatchMode` for
-        the rationale.
+        no-op. A contour segment that is both ``+`` and ``-`` (its
+        phases disagree) is in neither exclusive set, so it survives a
+        query for EITHER polarity. That is the point: a diphthong
+        gliding into ``[+low]`` must still answer a ``[+low]`` query.
+        For single-phase inventories the exclusive sets equal the full
+        ``minus_segs`` / ``plus_segs``, so behaviour is unchanged. A
+        ``"0"`` on a segment is compatible with either polarity. The
+        only thing wildcard rules out is an explicit, non-contour
+        opposite. See :py:class:`MatchMode` for the rationale.
 
         Either way, a fresh call is ``O(F)`` over the spec.
         """
@@ -326,9 +321,9 @@ class FeatureEngine:
                     matched -= self._minus_excl[feature]
                 elif value == "-":
                     matched -= self._plus_excl[feature]
-                # value == "0": wildcard interprets as "no
-                # constraint." A user who wants the explicit-
-                # underspec semantic stays in strict mode.
+                # value == "0" adds no constraint under wildcard. A
+                # user who wants the explicit-underspec semantic stays
+                # in strict mode.
                 if not matched:
                     break
             return list(matched)
@@ -338,7 +333,7 @@ class FeatureEngine:
             elif value == "-":
                 matched &= self.minus_segs[feature]
             else:
-                # ``'0'`` is its own value: segments NOT in spec_segs.
+                # ``'0'`` is its own value, the segments NOT in spec_segs.
                 matched -= self.spec_segs[feature]
             if not matched:
                 break
@@ -379,12 +374,12 @@ class FeatureEngine:
         self._minus_excl = {
             f: self.minus_segs[f] - self.plus_segs[f] for f in features
         }
-        # Universe of segment names. Held as a frozenset because the
+        # Universe of segment names, held as a frozenset because the
         # natural-class fast path repeatedly computes
-        # ``all_segments - selected_subset``; on each call that would
-        # otherwise rebuild a fresh set from the segments mapping.
-        # Frozen because the inventory (and therefore this universe)
-        # never changes after construction.
+        # ``all_segments - selected_subset`` and would otherwise
+        # rebuild a fresh set from the segments mapping each call.
+        # Frozen because the inventory (and this universe) never
+        # changes after construction.
         self._all_segments: frozenset[str] = frozenset(
             self._inventory.segments
         )
@@ -415,30 +410,29 @@ class FeatureEngine:
 
     @cached_property
     def active_features(self) -> tuple[str, ...]:
-        """Features that are explicitly specified for at least one
-        segment in the inventory. STRICT-mode filter.
+        """Features explicitly specified on at least one segment.
+        STRICT-mode filter.
 
-        A feature qualifies when at least one segment has a value of
-        ``+`` or ``-``. Features that are uniformly ``0`` (or
-        unspecified) across every segment are dropped because under
-        STRICT matching they can never participate in a query: a
-        ``+f`` request returns the empty set if no segment is
-        explicitly ``+f``. Features with all-``-`` values stay (the
-        inventory does specify a value, and ``-`` queries still
-        select segments).
+        A feature qualifies when at least one segment is ``+`` or
+        ``-``. Features uniformly ``0`` (or unspecified) across every
+        segment are dropped because under STRICT matching they can
+        never participate in a query: a ``+f`` request returns the
+        empty set if no segment is explicitly ``+f``. All-``-``
+        features stay, since the inventory does specify a value and
+        ``-`` queries still select segments.
 
-        Under WILDCARD matching, the inverse holds: a feature with
-        no explicit values is still queryable (a ``+f`` request
-        matches every segment because nothing contradicts it).
-        Callers that need the wildcard-aware list use
-        :py:meth:`active_features_for_mode`; this property stays
-        on the existing strict-only semantics so existing
-        consumers (the feature pane, the analysis renderer)
-        remain backward-compatible without a mode argument.
+        Under WILDCARD matching the inverse holds: a feature with no
+        explicit values is still queryable (a ``+f`` request matches
+        every segment because nothing contradicts it). Callers that
+        need the wildcard-aware list use
+        :py:meth:`active_features_for_mode`. This property keeps the
+        strict-only semantics so existing consumers (the feature pane,
+        the analysis renderer) stay backward-compatible without a mode
+        argument.
 
         Derived from :py:attr:`spec_segs` so the membership caches
-        stay the single definition of "explicitly specified",
-        matching :py:attr:`contrastive_features`.
+        stay the single definition of "explicitly specified", matching
+        :py:attr:`contrastive_features`.
         """
         return tuple(f for f in self._inventory.features if self.spec_segs[f])
 
@@ -609,18 +603,17 @@ class FeatureEngine:
             return self._bundle_cache[cache_key]
 
         # Candidate generation diverges by mode but the rest of the
-        # hitting-set algorithm is identical.
-        # ``candidate_pairs`` is the list of (feature, value)
-        # constraints the search may choose from. ``excludes_by``
-        # maps a candidate ID to the set of outside segments that
-        # constraint rules out.
+        # hitting-set algorithm is identical. ``candidate_pairs`` is
+        # the list of (feature, value) constraints the search may
+        # choose from; ``excludes_lookup`` maps a candidate to the set
+        # of outside segments that constraint rules out.
         if mode is MatchMode.WILDCARD:
             candidate_pairs = self._wildcard_candidate_constraints(selected)
-            # Wildcard constraint excludes the OPPOSITE-explicit
-            # segments: (f, "+") rules out only minus_segs[f];
-            # (f, "-") rules out only plus_segs[f]. ``"0"``
-            # outside segments are NOT excluded by any constraint
-            #: wildcard tolerates them everywhere.
+            # A wildcard constraint excludes the OPPOSITE-explicit
+            # segments: (f, "+") rules out only minus_segs[f], (f, "-")
+            # rules out only plus_segs[f]. ``"0"`` outside segments are
+            # NOT excluded by any constraint; wildcard tolerates them
+            # everywhere.
             excludes_lookup: list[frozenset[str]] = [
                 (
                     (minus_segs[f] & outside_set)
@@ -632,7 +625,7 @@ class FeatureEngine:
         else:
             strict_candidates = self._strict_candidate_constraints(selected)
             candidate_pairs = list(strict_candidates.items())
-            # Strict excluder collection: outside t is excluded by
+            # Strict excluders: outside segment t is excluded by
             # (f, +) iff t is not explicitly + on f.
             excludes_lookup = [
                 (outside_set - (plus_segs[f] if v == "+" else minus_segs[f]))
@@ -709,11 +702,11 @@ class FeatureEngine:
 
         # ``uncovered`` threads the still-unsatisfied excluder masks
         # down the recursion: choosing a candidate filters out every
-        # mask it covers, so the satisfaction check is "is the list
-        # empty" and the feasibility prunes scan only constraints
-        # that can still fail. The previous shape rescanned the full
-        # excluder list three times per node, which made wildcard
-        # single-segment clicks cost seconds on dense inventories.
+        # mask it covers, so satisfaction is "is the list empty" and
+        # the feasibility prunes scan only constraints that can still
+        # fail. The previous shape rescanned the full excluder list
+        # three times per node, which made wildcard single-segment
+        # clicks cost seconds on dense inventories.
         def backtrack(
             idx: int, depth: int, chosen_bits: int, uncovered: list[int]
         ) -> bool:

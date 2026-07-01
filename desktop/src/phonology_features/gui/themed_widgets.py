@@ -8,8 +8,8 @@ was the largest single cost in the theme-toggle profile.
 All four classes are module-private (leading underscore) and only
 referenced from main_window.py. ``_clear_btn_style`` is a sibling
 helper for the Clear buttons that needs the same live-palette
-behaviour (function not constant so it re-evaluates after a theme
-swap).
+behaviour (a function, not a constant, so it re-evaluates after a
+theme swap).
 """
 
 from __future__ import annotations
@@ -54,8 +54,9 @@ def toolbar_chrome_qss() -> str:
     """QSS for a toolbar container: panel background, bottom border,
     and padding. Shared by the main window's theme restyle
     (:py:meth:`ThemeController._restyle_toolbar`) and the editor's
-    toolbar so the chrome lives in one place. Function-not-constant so
-    it re-evaluates against the active palette after a theme swap.
+    toolbar so the chrome lives in one place. A function, not a
+    constant, so it re-evaluates against the active palette after a
+    theme swap.
     """
     return f"""
         QToolBar {{
@@ -71,8 +72,8 @@ def statusbar_chrome_qss() -> str:
     """QSS for a status bar's chrome: panel background and top border.
     Shared by the main window's branded status bar
     (:py:meth:`_BrandedStatusBar.apply_theme`) and the editor's status
-    bar so the two windows cannot drift. Function-not-constant for the
-    same re-evaluate-after-swap reason as the button helpers.
+    bar so the two windows can't drift. A function, not a constant, for
+    the same re-evaluate-after-swap reason as the button helpers.
     """
     return (
         f"background: {C['panel']};" f" border-top: 1px solid {C['border']};"
@@ -80,8 +81,9 @@ def statusbar_chrome_qss() -> str:
 
 
 def _clear_btn_style() -> str:
-    """Stylesheet for the per-panel Clear buttons. Function-not-constant
-    so it re-evaluates against the active palette after a theme swap.
+    """Stylesheet for the per-panel Clear buttons. A function, not a
+    constant, so it re-evaluates against the active palette after a
+    theme swap.
     """
     return (
         f"QPushButton {{"
@@ -95,16 +97,15 @@ def _clear_btn_style() -> str:
 
 
 def _match_mode_btn_style() -> str:
-    """Stylesheet for the wildcard / match-mode toggle that sits in
-    the Features pane header. Same chrome shape as the Clear button
-    so the two siblings read as a matched pair; the ``:checked``
-    state pulls the accent fill so the user can see at a glance
-    that wildcard matching is active.
+    """Stylesheet for the wildcard (match-mode) toggle in the Features
+    pane header. Same chrome shape as the Clear button so the two
+    siblings read as a matched pair; the ``:checked`` state pulls the
+    accent fill so the active mode is visible at a glance.
 
-    Function-not-constant so it re-evaluates against the active
-    palette after a theme or palette-mode swap; the colorblind
-    palette redefines ``accent`` / ``accent_light`` and the toggle
-    inherits the new hues without an additional restyle hook.
+    A function, not a constant, so it re-evaluates against the active
+    palette after a theme or palette-mode swap. The colorblind palette
+    redefines ``accent`` / ``accent_light`` and the toggle inherits the
+    new hues without an additional restyle hook.
     """
     return (
         f"QPushButton {{"
@@ -134,8 +135,9 @@ class _BrandedStatusBar(QStatusBar):
     """
 
     _FONT = QFont("Noto Sans", 9)
-    # 22 px matches the toolbar baseline; sized so italic ascenders /
-    # descenders don't push the bar taller than non-italic text would.
+    # 22 px matches the toolbar baseline, sized so italic ascenders
+    # and descenders don't push the bar taller than non-italic text
+    # would.
     _BAR_HEIGHT = 22
 
     def __init__(self, parent: QWidget | None = None) -> None:

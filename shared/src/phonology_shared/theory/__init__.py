@@ -1,8 +1,8 @@
 """Phonological analysis engine.
 
-Reads :py:mod:`phonology_shared.data` inventories and answers
-analytical queries (natural classes, contrastive features, feature
-categories, feature-geometry inference). No display knowledge.
+Reads :py:mod:`phonology_shared.data` inventories and answers analytical
+queries: natural classes, contrastive features, feature categories,
+feature-geometry inference. No display knowledge.
 """
 
 from __future__ import annotations

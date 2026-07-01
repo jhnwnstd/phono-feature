@@ -44,7 +44,7 @@ def _tag_cached(text: str, colour: TagColor, _version: int) -> str:
     is the palette ``theme_version``, threaded through so a theme
     toggle invalidates the cache. Working set is bounded (~300
     entries per inventory: segments x 2 colours + features x 2
-    signs); maxsize=2048 covers the worst PHOIBLE inventory plus
+    signs), so maxsize=2048 covers the worst PHOIBLE inventory plus
     headroom."""
     return f"{tag_prefix(colour)}{html.escape(text)}</span>"
 
@@ -68,11 +68,9 @@ def _segment_chip(seg: str, colour: TagColor = TagColor.SEGMENT) -> str:
 def _segment_chip_strip(
     segs: Sequence[str], colour: TagColor = TagColor.SEGMENT
 ) -> str:
-    """Render ``segs`` as a single space-joined chip strip. Replaces
-    the inlined ``' '.join(_segment_chip(seg) for seg in ...)`` idiom
-    that appeared at 7 sites and benefits from passing a list to
-    ``str.join`` instead of a generator (avoids generator overhead;
-    ``str.join`` can pre-size the result buffer).
+    """Render ``segs`` as a single space-joined chip strip. Passing a
+    list (not a generator) to ``str.join`` lets it pre-size the result
+    buffer and avoids generator overhead; this ran at 7 inlined sites.
     """
     return " ".join([_segment_chip(seg, colour) for seg in segs])
 
@@ -92,10 +90,8 @@ def _signed_feature_chip(value: str, feature: str) -> str:
 def _signed_feature_chip_strip(spec: Mapping[str, str]) -> str:
     """Render ``spec`` as one space-joined strip of signed feature
     chips, ordered by :py:func:`sort_spec`. The feature-side twin of
-    :py:func:`_segment_chip_strip`; collapses the two identical
-    ``' '.join(_signed_feature_chip(...) for ... in
-    sort_spec(...).items())`` sites. (The minimal-spec editor uses a
-    pre-filtered dict in its own order, so it does NOT route here.)
+    :py:func:`_segment_chip_strip`. The minimal-spec editor uses a
+    pre-filtered dict in its own order, so it does NOT route here.
     """
     return " ".join(
         _signed_feature_chip(value, feature)
@@ -268,16 +264,15 @@ def compute_contrastive(
     """For each feature with both '+' and '-' among ``segs``, bucket
     the segments by their value.
 
-    Returns ``{feat: {'+': [...], '-': [...], '0': [...]}}``. The
-    '0' bucket is included only when some segments are
-    underspecified. Bucket order follows the caller's ``segs`` list
-    so rendered chips align with selection order.
+    Returns ``{feat: {'+': [...], '-': [...], '0': [...]}}``. The '0'
+    bucket appears only when some segments are underspecified. Bucket
+    order follows the caller's ``segs`` list so rendered chips align
+    with selection order.
 
     Iterates ``engine.active_features`` (uniformly-zero features
-    cannot be contrastive) and walks ``segs`` once per feature,
-    bucketing by direct lookup into the engine's per-feature segment
-    sets. Replaces the prior triple-scan that did three list
-    comprehensions over ``segs`` per feature.
+    cannot be contrastive) and walks ``segs`` once per feature via
+    direct lookup into the engine's per-feature segment sets, instead
+    of the prior three comprehensions over ``segs`` per feature.
     """
     result: dict[str, dict[str, list[str]]] = {}
     seg_set = set(segs)
@@ -319,14 +314,13 @@ def _render_completion_body(
     """Class-pane content for a single selection's completion under
     ``mode``.
 
-    Hard concept boundary:
+    Two cases:
 
-    * ``already_natural_class``: render
-      ``selected_minimal_bundles``: minimal strict OR compatible
-      bundles depending on ``mode``.
-    * ``one_minimal_completion`` / ``multiple_minimal_completions``:
-      render the "N segments needed for ..." line, explicitly
-      naming underspecified matching when ``mode`` is wildcard.
+    * ``already_natural_class`` renders ``selected_minimal_bundles``,
+      the minimal strict or compatible bundles per ``mode``.
+    * ``one_minimal_completion`` / ``multiple_minimal_completions``
+      render the "N segments needed for ..." line, explicitly naming
+      underspecified matching when ``mode`` is wildcard.
     """
     if completion.status == "already_natural_class":
         return _render_completion_specs(
@@ -454,30 +448,28 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
 
 
 #: Maximum chip count rendered inline in the persistent selection
-#: header. Past this, the header truncates and appends a "+N more"
-#: muted indicator. The full selection is still available via the
-#: per-tab content below; this just keeps the persistent header
-#: from bloating the analysis pane on selections like General-IPA's
-#: "all 97 consonants", which would otherwise wrap to many rows
-#: and push the tabs / content down.
+#: header. Past this, the header truncates and appends a muted
+#: "+N more" indicator; the full selection stays available in the
+#: per-tab content below. Keeps the header from bloating the analysis
+#: pane on selections like General-IPA's "all 97 consonants", which
+#: would otherwise wrap to many rows and push the tabs down.
 SELECTION_HEADER_MAX_CHIPS: int = 24
 
 
 def render_selection_summary_seg(segs: list[str]) -> str:
     """Persistent header content for SEG-mode selections.
 
-    Returns ``"Selected (N): chip chip"``-style HTML that sits
-    above the tabs and doesn't move when the user switches tabs.
-    Empty selection returns the empty string. The surrounding
-    chrome hides the strip entirely (desktop ``setVisible(False)``
-    / web ``hidden`` attribute), so we don't repeat what the
-    status bar already says.
+    Returns ``"Selected (N): chip chip"``-style HTML that sits above
+    the tabs and doesn't move when the user switches tabs. Empty
+    selection returns the empty string, and the surrounding chrome
+    then hides the strip entirely (desktop ``setVisible(False)`` /
+    web ``hidden`` attribute) so it doesn't repeat the status bar.
 
-    When the selection exceeds :py:data:`SELECTION_HEADER_MAX_CHIPS`,
-    only the first N chips render inline and a muted ``"+M more"``
-    indicator stands in for the rest. The full count stays in the
-    header label so the user can always see how many segments are
-    in play; the truncation only governs the chip rendering.
+    Beyond :py:data:`SELECTION_HEADER_MAX_CHIPS`, only the first N
+    chips render inline with a muted ``"+M more"`` standing in for the
+    rest. The full count stays in the header label so the user always
+    sees how many segments are in play; truncation governs only the
+    chip rendering.
     """
     if not segs:
         return ""
@@ -494,9 +486,8 @@ def render_selection_summary_seg(segs: list[str]) -> str:
 def _wildcard_badge() -> str:
     """Small inline badge prepended to wildcard Class-tab output so
     users see at a glance that the verdict applies under
-    underspecified matching, not strict. Rendered as a coloured tag
-    so it lines up visually with the other inline chips in the tab
-    body."""
+    underspecified matching, not strict. Rendered as a coloured tag so
+    it lines up with the other inline chips in the tab body."""
     return f"<p>{_tag('underspecified matching', TagColor.NEUTRAL)}</p>"
 
 

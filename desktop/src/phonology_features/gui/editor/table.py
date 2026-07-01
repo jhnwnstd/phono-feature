@@ -49,27 +49,18 @@ from phonology_shared.presentation.palette import C
 class _ToggleHeaderView(QHeaderView):
     """QHeaderView with the click semantics of a QPushButton.
 
-    Background: when two presses land within the OS double-click
-    interval (~400 ms), Qt routes the second press through
-    ``mouseDoubleClickEvent`` instead of ``mousePressEvent``. Qt's
-    QHeaderView::mouseDoubleClickEvent emits ``sectionDoubleClicked``
-    but NOT ``sectionClicked``. The release after the doubleclick
-    finds state already cleared and doesn't emit either. Result on
-    a real OS: a fast two-click pair fires sectionClicked exactly
-    once (from the first release), so every second click silently
-    drops out of the toggle handler (the "clicks not always
-    detecting" symptom the user reported).
+    When two presses land within the OS double-click interval, Qt
+    routes the second through ``mouseDoubleClickEvent``, which emits
+    ``sectionDoubleClicked`` but not ``sectionClicked``, and the
+    following release emits neither. So a fast two-click pair fires
+    ``sectionClicked`` only once, and every second click drops out of
+    the toggle handler (the "clicks not always detecting" symptom).
 
-    Fix: emit ``sectionClicked`` from our ``mouseDoubleClickEvent``
-    override so the second press of the pair is represented as a
-    normal click event. Skip the super call so ``sectionDoubleClicked``
-    doesn't also fire (no consumer wants it, and emitting both would
-    double-count if anyone wired both signals).
-
-    Result: every user press = one ``sectionClicked``, same haptic as
-    a QPushButton's clicked signal. No dedicated doubleclick gesture
-    is used on these headers (resize is fixed, no edit-on-doubleclick),
-    so there's nothing to lose by repurposing the doubleclick path.
+    Fix: emit ``sectionClicked`` from the ``mouseDoubleClickEvent``
+    override so every press maps to one click. Skip the super call so
+    ``sectionDoubleClicked`` does not also fire. These headers have no
+    double-click gesture (resize is fixed, no edit-on-doubleclick), so
+    repurposing that path costs nothing.
     """
 
     def __init__(
@@ -98,19 +89,16 @@ class _ToggleHeaderView(QHeaderView):
 class _BulkCycleTable(QTableWidget):
     """Subclass with two custom behaviours:
 
-    1. ``mousePressEvent``: when the user clicks a cell that's
-       already in the selection, run the editor's bulk-cycle
-       callback without forwarding the press to the base class.
-       Keeps Qt's selection intact AND avoids the orphan-release
-       problem where consuming via an event filter let the base
-       release handler see a press it didn't process.
+    1. ``mousePressEvent``: clicking a cell already in the selection
+       runs the editor's bulk-cycle callback and does not forward the
+       press. Keeps Qt's selection intact and avoids the orphan-release
+       problem an event filter would cause (the base release handler
+       would see a press it never processed).
 
-    2. ``paintEvent``: after the base class paints cells +
-       gridlines, draw the selection outline ON TOP. Doing this in
-       the cell delegate doesn't work because Qt paints gridlines
-       AFTER delegates, so any outline drawn at cell boundaries gets
-       overwritten by the gridline. Drawing here puts the outline
-       above everything.
+    2. ``paintEvent``: draw the selection outline after the base paints
+       cells and gridlines. A cell delegate cannot do this because Qt
+       paints gridlines after delegates and would overwrite the
+       boundary outline; painting here puts it above everything.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -132,7 +120,6 @@ class _BulkCycleTable(QTableWidget):
     def set_bulk_cycle_callback(
         self, cb: Callable[[QTableWidgetItem], None]
     ) -> None:
-        """Editor hands us a function ``(QTableWidgetItem) -> None``."""
         self._bulk_cycle_cb = cb
 
     def mousePressEvent(self, event: QMouseEvent | None) -> None:
@@ -196,12 +183,10 @@ class _BulkCycleTable(QTableWidget):
             return
         # General case: arbitrary selection shape (cross, multi-col,
         # rectangle, ctrl+click set). Build a {(row, col)} membership
-        # set, then for each selected cell draw its edges on sides
-        # whose neighbour isn't also selected. Drawing happens AFTER
-        # super().paintEvent so the border lands above Qt's gridlines.
-        # The set is cached across paints and invalidated by
-        # ``selectionChanged``, so a drag-selection's per-mouse-move
-        # repaints reuse one membership build.
+        # set, then for each cell draw the edges whose neighbour is not
+        # also selected. The set is cached across paints and cleared by
+        # ``selectionChanged``, so a drag-selection's per-move repaints
+        # reuse one build.
         cells = self._sel_cells_cache
         if cells is None:
             cells = set()
@@ -223,12 +208,10 @@ class _BulkCycleTable(QTableWidget):
         pen.setWidth(2)
         painter.setPen(pen)
         for row, col in cells:
-            # Skip isolated cells (no neighbour also selected). Otherwise
-            # a single-cell selection would get a 4-sided border per
-            # cell (user wants only the light-blue fill in that case,
-            # reserving outlines for actual GROUPS: row, col, rectangle,
-            # cross). Cells inside a group always have at least one
-            # selected neighbour, so this only suppresses lone cells.
+            # Skip isolated cells (no selected neighbour). Outlines are
+            # reserved for actual groups (row, col, rectangle, cross);
+            # a lone cell shows only the light-blue fill. Grouped cells
+            # always have a selected neighbour, so only lone ones drop.
             if not (
                 (row - 1, col) in cells
                 or (row + 1, col) in cells
@@ -285,19 +268,15 @@ class _BulkCycleTable(QTableWidget):
 
 
 class _SelectionFillDelegate(QStyledItemDelegate):
-    """Selected cells render as light-blue fill + the cell's own text
-    colour. The outline around the whole selection region is drawn by
-    ``_BulkCycleTable.paintEvent`` so it sits ON TOP of Qt's
-    gridlines instead of being overwritten by them.
+    """Selected cells render as light-blue fill plus the cell's own
+    text colour. The outline around the whole region is drawn by
+    ``_BulkCycleTable.paintEvent`` so it sits above Qt's gridlines.
 
-    Hot path: this ``paint`` runs once per visible cell on every
-    selection change. Two micro-optimisations vs the obvious version:
-      State_Selected check is done against a cached ``int`` to skip
-      Python's slow ``enum.__and__`` (was 60 ms / 15k calls on the
-      row-toggle profile).
-      The highlight QBrush is module-level cached and theme-version
-      keyed (see ``_get_highlight_brush``) so we don't allocate a
-      QColor on every selected-cell paint.
+    ``paint`` runs once per visible cell on every selection change, so
+    two hot-path shortcuts: the State_Selected check runs against a
+    cached ``int`` to skip Python's slow ``enum.__and__`` (was 60 ms /
+    15k calls on the row-toggle profile), and the highlight QBrush is
+    module-cached and theme-version keyed (see ``_get_highlight_brush``).
     """
 
     # Pre-extracted int value so the per-cell hot path is an int AND
@@ -312,9 +291,9 @@ class _SelectionFillDelegate(QStyledItemDelegate):
         index: QModelIndex,
     ) -> None:
         if option.state & self._SELECTED_FLAG:
-            # parent() is typed QObject | None; in practice it's the
-            # QTableWidget that owns this delegate. ``hasattr`` keeps
-            # mypy happy without a cast and is cheap on the hot path.
+            # parent() is typed QObject | None but is the owning
+            # QTableWidget in practice. ``hasattr`` satisfies mypy
+            # without a cast and is cheap on the hot path.
             view = self.parent()
             item = (
                 view.item(index.row(), index.column())

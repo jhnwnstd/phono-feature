@@ -117,14 +117,12 @@ _Edit = _BulkEdit | _SegmentEdit | _FeatureEdit | _RenameEdit
 _TOOLBAR_BTN_H = 32
 
 
-# Translate JS-native key-name vocabulary (the format
-# :py:data:`phonology_shared.editor.grid.MOVE_KEYS` uses) into
-# ``Qt.Key`` constants.
-# Arrow keys are named (``ArrowUp`` etc.); single-character keys
-# (``h``, ``4``) fall through to the ``Key_<X>`` getattr rule.
-# Defined at module level rather than inside the class body so the
-# class-body comprehension that builds ``_MOVE_KEYS`` can reference
-# them.
+# Translate the JS-native key names in
+# :py:data:`phonology_shared.editor.grid.MOVE_KEYS` into ``Qt.Key``
+# constants. Arrow keys are named (``ArrowUp``); single-character keys
+# (``h``, ``4``) fall through to the ``Key_<X>`` getattr rule. Kept at
+# module level so the class-body comprehension that builds
+# ``_MOVE_KEYS`` can reference it.
 _ARROW_NAME_TO_QT: dict[str, Qt.Key] = {
     "ArrowUp": Qt.Key.Key_Up,
     "ArrowDown": Qt.Key.Key_Down,
@@ -166,12 +164,11 @@ class InventoryEditor(QMainWindow):
         # than the entire viewport. Held as a QRegion so the union
         # works for arbitrary shapes (single column, cross, rectangle).
         self._last_selection_region: QRegion | None = None
-        # User-click stickies, distinct from the Qt-selection-derived
-        # ``_selected_remove_*`` above. Qt auto-selects the column /
-        # row on header PRESS (before sectionClicked fires on
-        # RELEASE), so the toggle decision can't be based on Qt's
-        # selection state, which would always look "already selected".
-        # These mutate ONLY in the header click handlers.
+        # User-click stickies, distinct from the Qt-derived
+        # ``_selected_remove_*`` above. Qt auto-selects on header press
+        # (before sectionClicked fires on release), so the toggle
+        # decision can't read Qt's selection, which would always look
+        # "already selected". Mutated only in the header click handlers.
         self._user_clicked_col: int | None = None
         self._user_clicked_row: int | None = None
         # Last applied enabled-state for each rm button. Lets the
@@ -193,18 +190,16 @@ class InventoryEditor(QMainWindow):
         # this run's provider name.
         self._feature_source: str | None = None
         self._feature_source_version: str | None = None
-        # Full metadata carried from a loaded inventory (everything
-        # except ``name``); merged back on save so stamps the grid
-        # cannot edit (PHOIBLE provenance, diphthong
-        # ``segment_secondary`` bundles) survive a editor round-trip.
+        # Full metadata carried from a loaded inventory (all but
+        # ``name``), merged back on save so stamps the grid cannot edit
+        # (PHOIBLE provenance, diphthong ``segment_secondary`` bundles)
+        # survive an editor round-trip.
         self._extra_metadata: dict[str, Any] = {}
         self._build_ui()
-        # SaveController owns save_in_flight / dirty / draining_save
-        # state plus the cross-thread save_finished / save_drained
-        # signals. Built after _build_ui because it needs the status
-        # bar that _build_status_bar creates. _to_inventory is passed
-        # as a callback so the controller never has to know about the
-        # grid widgets.
+        # SaveController owns the save state and cross-thread signals.
+        # Built after _build_ui because it needs the status bar.
+        # _to_inventory is passed as a callback so the controller never
+        # has to know about the grid widgets.
         from phonology_features.gui.editor.save_controller import (
             _SaveController,
         )
@@ -236,9 +231,8 @@ class InventoryEditor(QMainWindow):
         toolbar.setMovable(False)
         toolbar.setStyleSheet(toolbar_chrome_qss())
         self.addToolBar(toolbar)
-        # Shared with the main toolbar's nav buttons (same neutral
-        # box) and the filled action buttons (Save / Delete), via
-        # ThemeController so the styling lives in one place.
+        # Shared with the main toolbar's nav and filled action buttons
+        # via ThemeController so the styling lives in one place.
         btn_style = ThemeController.nav_btn_style()
         save_style = ThemeController.filled_btn_style("btn_primary", "0 16px")
         # Destructive action: red fill so it reads as "danger" against
@@ -247,11 +241,9 @@ class InventoryEditor(QMainWindow):
             "btn_danger", "0 16px"
         )
         self._btn_style_enabled = btn_style
-        # Disabled state: noticeably darker / more muted than the
-        # active buttons so it visually recedes into the toolbar
-        # instead of competing with active controls. See the
-        # btn_disabled_* entries in palette.py for the per-theme
-        # colour choices and rationale.
+        # Disabled state: darker and more muted than active buttons so
+        # it recedes into the toolbar. See the btn_disabled_* entries
+        # in palette.py for the per-theme colour rationale.
         self._btn_style_disabled = f"""
             QPushButton {{
                 background: {C["btn_disabled_bg"]};
@@ -345,8 +337,7 @@ class InventoryEditor(QMainWindow):
         lay.addWidget(name_label)
         self._name_edit = QLineEdit(self._inv_name)
         # UI cap mirrors Inventory.MAX_NAME_LENGTH so the field stops
-        # accepting input at the limit; without it, the user could
-        # type/paste past the cap and only learn at save.
+        # at the limit instead of deferring the error to save.
         self._name_edit.setMaxLength(MAX_NAME_LENGTH)
         self._name_edit.setFont(QFont("Noto Sans", 10))
         self._name_edit.setStyleSheet(f"""
@@ -373,17 +364,15 @@ class InventoryEditor(QMainWindow):
 
     def _install_headers(self) -> None:
         """Install the custom :class:`_ToggleHeaderView` on both axes
-        and wire each axis' per-section click + rename signals.
+        and wire each axis' click and rename signals.
 
         Shared by :meth:`_build_table` and :meth:`_rebuild_table`:
-        ``clear()`` drops our headers back to a plain QHeaderView (losing
-        the doubleclick-as-press haptic), so the rebuild path must
-        re-install and re-wire them exactly as the initial build. A
-        freshly-constructed QHeaderView starts ``isHidden=True`` and Qt
-        does NOT auto-show it on ``setHorizontalHeader``; without the
-        explicit ``show()`` the label area paints at 0 height and the
-        grid renders with no segment / feature labels (the New-Inventory
-        blank-labels bug).
+        ``clear()`` drops our headers back to a plain QHeaderView, so
+        the rebuild path must re-install and re-wire them. A fresh
+        QHeaderView starts hidden and Qt does not auto-show it on
+        ``setHorizontalHeader``; without the explicit ``show()`` the
+        label area paints at 0 height and the grid shows no labels (the
+        New-Inventory blank-labels bug).
         """
         self._table.setHorizontalHeader(
             _ToggleHeaderView(Qt.Orientation.Horizontal, self._table)
@@ -429,12 +418,11 @@ class InventoryEditor(QMainWindow):
             """)
         # Selected cells get a light-blue fill + outer outline (delegate).
         self._table.setItemDelegate(_SelectionFillDelegate(self._table))
-        # Key-handling event filter only. The click-to-select and
-        # click-to-cycle UX lives in _BulkCycleTable.mousePressEvent.
+        # Key-handling event filter only; click-to-select and
+        # click-to-cycle live in _BulkCycleTable.mousePressEvent.
         self._table.installEventFilter(self)
-        # Single source of truth for rm-button enabled/disabled state:
-        # fires for every selection change regardless of source (header
-        # click, ctrl+A, corner click, drag-select). Setters inside
+        # Single source of truth for rm-button enabled state: fires for
+        # every selection change regardless of source. Setters inside
         # short-circuit when nothing changed.
         sel_model = self._table.selectionModel()
         if sel_model is not None:
@@ -475,11 +463,10 @@ class InventoryEditor(QMainWindow):
         return item.text() if item is not None else "0"
 
     def _refresh_cap_counter(self) -> None:
-        """Recompute and restyle the vowel / consonant / total
-        counter from the live grid. Cheap at the capped sizes, so
-        it runs on every mutation (build, add / remove, cell edit)
+        """Recompute the vowel/consonant/total counter from the live
+        grid. Cheap at capped sizes, so it runs on every mutation
         rather than tracking deltas. Colours come from the shared
-        palette so the desktop and web counters read identically."""
+        palette so desktop and web counters read identically."""
         if not self._segments:
             self._cap_label.setVisible(False)
             return
@@ -523,16 +510,14 @@ class InventoryEditor(QMainWindow):
         initial_cells: Mapping[str, Mapping[str, str]] | None = None
         status_suffix = ""
         if provider is not None:
-            # Provider-driven bootstrap. The feature list returned by
-            # the provider is canonical (matches the value-vector
-            # shape its ``generate`` emits), so we use it verbatim
-            # even if the user edited the textarea: a mismatch would
-            # produce a grid whose columns and values do not line up.
+            # Provider-driven bootstrap. The provider's feature list is
+            # canonical (matches the value-vector shape ``generate``
+            # emits), so use it verbatim even if the user edited the
+            # textarea; a mismatch would misalign columns and values.
             generated = provider.generate(segments)
             features = list(generated.features)
-            # Seed unresolved segments with a blank bundle so the
-            # grid still has a column for them. The user edits the
-            # cells in place. Resolved segments come straight from
+            # Seed unresolved segments with a blank bundle so the grid
+            # still has a column to edit; resolved segments come from
             # the provider's bundle map.
             cells: dict[str, dict[str, str]] = {
                 seg: dict(bundle) for seg, bundle in generated.segments.items()
@@ -594,17 +579,16 @@ class InventoryEditor(QMainWindow):
         self._table.setRowCount(len(self._features))
         self._table.setColumnCount(len(self._segments))
         # clear() drops our custom headers back to a plain QHeaderView;
-        # re-install + re-wire them before labels so the per-click haptic
-        # and rename affordance survive a reload.
+        # re-install before labels so the per-click haptic and rename
+        # affordance survive a reload.
         self._install_headers()
         self._table.setVerticalHeaderLabels(self._features)
         self._table.setHorizontalHeaderLabels(self._segments)
-        # Per-axis font + Fixed section sizing (rebuild only, on the
-        # populated table). Fixed (NOT ResizeToContents): the adaptive
-        # mode re-measured every cell on each data change, so a 28-cell
-        # column cycle took ~1 s; pinning to Fixed dropped it to 0.3 ms
-        # (60 s+ -> 17 ms for select-all). Values are single-char so
-        # adaptive sizing buys nothing.
+        # Per-axis font and Fixed section sizing. Fixed, not
+        # ResizeToContents: the adaptive mode re-measured every cell on
+        # each data change (a 28-cell column cycle took ~1 s), and
+        # values are single-char so it buys nothing. Fixed cut a
+        # select-all from 60 s+ to 17 ms.
         v_header = self._table.verticalHeader()
         if v_header:
             v_header.setFont(QFont("Noto Sans", 9))
@@ -637,30 +621,25 @@ class InventoryEditor(QMainWindow):
                 self._table.setItem(r, c, make_cell(value))
         self._refresh_cap_counter()
 
-    # Direct-entry keyboard shortcuts. Derived from the shared
-    # :py:data:`VALUE_KEYS` constant in editor.grid so the desktop
-    # and web editor stay in lockstep on which key sets which value.
-    # Translation step here: shared dict is char -> value; Qt's
-    # KeyPress events carry the Qt.Key.Key_<char> constant.
+    # Direct-entry shortcuts, derived from the shared
+    # :py:data:`VALUE_KEYS` so desktop and web agree on which key sets
+    # which value. Translation: the shared dict is char to value, but
+    # Qt KeyPress events carry the Qt.Key.Key_<char> constant.
     _VALUE_KEYS: ClassVar[dict[int, str]] = {
         getattr(Qt.Key, f"Key_{char}"): value
         for char, value in _SHARED_VALUE_KEYS.items()
     }
-    # Arrow / Vim / numpad cell navigation. Derived from the
-    # shared :py:data:`MOVE_KEYS` constant so the desktop and the
-    # web editor stay in lockstep on which key moves which
-    # direction. The translation tables that turn the shared
-    # JS-native key names into ``Qt.Key`` constants live at module
-    # level (class-body comprehensions cannot see sibling class
-    # attributes during evaluation).
+    # Arrow/Vim/numpad navigation, derived from the shared
+    # :py:data:`MOVE_KEYS` so desktop and web agree on directions. The
+    # name-to-``Qt.Key`` tables live at module level because class-body
+    # comprehensions cannot see sibling class attributes.
     _MOVE_KEYS: ClassVar[dict[int, tuple[int, int]]] = {
         _move_key_to_qt(name): step for name, step in _SHARED_MOVE_KEYS.items()
     }
-    # ``Shift+Arrow`` extends the QTableWidget's native selection;
-    # the handler below returns False on that case so Qt's native
-    # extend runs. Plain-arrow handling is identical to Qt's
-    # setCurrentCell, so taking it over is safe and keeps both
-    # frontends going through the same Python movement primitive.
+    # ``Shift+Arrow`` extends Qt's native selection, so the handler
+    # returns False for it and lets Qt extend. Plain-arrow handling
+    # matches Qt's setCurrentCell, so owning it is safe and keeps both
+    # frontends on the same Python movement primitive.
     _ARROW_QT_KEYS: ClassVar[frozenset[int]] = frozenset(
         _ARROW_NAME_TO_QT.values()
     )
@@ -710,12 +689,10 @@ class InventoryEditor(QMainWindow):
                 return True
         move = self._MOVE_KEYS.get(key)
         if move is not None and self._table.rowCount() > 0:
-            # Shift+Arrow extends the QTableWidget's native
-            # selection; defer to Qt for that case. The shared
-            # MOVE_KEYS handler only owns plain (no-shift)
-            # navigation so the web's parity shift+arrow code path
-            # can mirror it without needing to reimplement Qt's
-            # selection model.
+            # Defer Shift+Arrow to Qt's native selection extend. The
+            # shared MOVE_KEYS handler owns only plain navigation, so
+            # the web's parity code can mirror it without reimplementing
+            # Qt's selection model.
             shift_held = bool(mods & Qt.KeyboardModifier.ShiftModifier)
             if shift_held and key in self._ARROW_QT_KEYS:
                 return False
@@ -796,12 +773,11 @@ class InventoryEditor(QMainWindow):
         any that already match. Records the whole batch as one
         undoable edit.
 
-        Wraps the per-cell writes in ``setUpdatesEnabled(False)`` +
+        Wraps the writes in ``setUpdatesEnabled(False)`` +
         ``blockSignals(True)`` so Qt suspends paint scheduling and
-        view-update signal handling for the duration. Without this,
-        each ``setText`` / ``setForeground`` would schedule its own
-        cascade and the cumulative cost was much higher than the
-        actual work.
+        view-update signals for the loop; otherwise each ``setText`` /
+        ``setForeground`` schedules its own cascade, and the cumulative
+        cost dwarfs the actual work.
         """
         prevs: list[_CellPrev] = []
         table = self._table
@@ -824,27 +800,23 @@ class InventoryEditor(QMainWindow):
             table.setUpdatesEnabled(True)
         if not prevs:
             return
-        # One viewport update covers every changed cell at once
-        # instead of N queued data-change paints. Painter clips to
-        # dirty regions, so this is not even a full repaint; Qt
-        # re-paints only the cells whose items mutated.
+        # One viewport update covers every changed cell instead of N
+        # queued data-change paints. The painter clips to dirty
+        # regions, so Qt re-paints only the mutated cells.
         viewport = table.viewport()
         if viewport is not None:
             viewport.update()
         self._commit_edit(_BulkEdit(tuple(prevs), value))
 
     def _commit_edit(self, edit: _BulkEdit) -> None:
-        """Push a non-empty edit onto the undo stack and update dirty
-        state. Empty batches are ignored so no-op operations don't
-        pollute the history.
+        """Push a non-empty edit onto the undo stack and mark dirty.
+        Empty batches are ignored so no-ops don't pollute history.
 
-        Does NOT touch the rm-button enabled state. The Qt selection
-        model is unchanged by an edit, so the existing enable state
-        (which reflects "is one column or row selected?") is still
-        correct. The previous behaviour (calling
-        ``_clear_remove_selection`` here) caused a visible vs
-        disabled mismatch: the column stayed highlighted but the
-        - Segment button went grey, forcing a header re-click.
+        Does NOT touch the rm-button enabled state: an edit leaves the
+        Qt selection unchanged, so the existing state is still correct.
+        The old behaviour (calling ``_clear_remove_selection`` here)
+        left the column highlighted but greyed the remove button,
+        forcing a header re-click.
         """
         if not edit.cells:
             return
@@ -856,10 +828,9 @@ class InventoryEditor(QMainWindow):
         self._refresh_cap_counter()
 
     def _push_undo(self, edit: _Edit) -> None:
-        """Record any edit (cell batch or structural) on the undo
-        stack, drop the redo history, cap the depth, and mark dirty.
-        Single entry point so cell and structural edits share one
-        lifecycle."""
+        """Record any edit on the undo stack, drop redo history, cap
+        the depth, and mark dirty. Single entry point so cell and
+        structural edits share one lifecycle."""
         self._undo_stack.append(edit)
         # A new edit invalidates any redo history; same convention as
         # most editors (you can't redo into a divergent timeline).
@@ -939,13 +910,11 @@ class InventoryEditor(QMainWindow):
         return f"{verb} rename of '{edit.old}' to '{edit.new}'."
 
     def _replay_edit(self, edit: _BulkEdit, *, use_old: bool) -> None:
-        """Apply ``edit`` to the grid (``use_old`` for undo, the
-        shared ``new`` for redo). Same batching trick as
-        ``_apply_value_to_indexes``: suspend paint + signals during
-        the loop, then a single viewport.update() at the end. ``new``
-        is hoisted out of the loop on the redo path so the per-cell
-        body doesn't re-read it (the per-cell ``old`` is still in the
-        triple, so the undo path destructures it inline)."""
+        """Apply ``edit`` to the grid (``use_old`` for undo, the shared
+        ``new`` for redo). Same batching as ``_apply_value_to_indexes``:
+        suspend paint and signals during the loop, one viewport.update()
+        at the end. ``new`` is hoisted on the redo path; the per-cell
+        ``old`` stays in the triple for the undo path."""
         table = self._table
         table.setUpdatesEnabled(False)
         was_blocking = table.blockSignals(True)
@@ -976,12 +945,11 @@ class InventoryEditor(QMainWindow):
     def _on_col_header_clicked(self, col: int) -> None:
         """Toggle segment-column highlight; second click clears it.
 
-        Compares against ``_user_clicked_col`` (a separate sticky
-        owned by THIS handler) rather than the Qt-derived
-        ``_selected_remove_col``. Qt auto-selects the column on
-        press, so by the time this handler fires on release the
-        Qt-derived sticky already shows ``col``, which would make
-        every first click look like a toggle-off.
+        Compares against ``_user_clicked_col`` (this handler's own
+        sticky) rather than the Qt-derived ``_selected_remove_col``.
+        Qt auto-selects on press, so on release the Qt-derived sticky
+        already shows ``col`` and every first click would look like a
+        toggle-off.
         """
         if self._user_clicked_col == col:
             self._user_clicked_col = None
@@ -1010,12 +978,10 @@ class InventoryEditor(QMainWindow):
     def _on_corner_clicked(self) -> None:
         """Toggle select-all when the table corner is clicked.
 
-        The everything-selected check sums the selection model's
-        range sizes instead of ``len(selectedItems())``:
-        materialising a Python wrapper per selected cell is
-        O(rows*cols) on a select-all state (~3,900 items on a
-        Hayes-sized grid), a cost this file's cycle helpers already
-        avoid on every other interactive path.
+        The everything-selected check sums the selection model's range
+        sizes instead of ``len(selectedItems())``, which would
+        materialise a Python wrapper per cell (O(rows*cols), ~3,900 on
+        a Hayes grid), the cost the other interactive paths avoid.
         """
         rows = self._table.rowCount()
         cols = self._table.columnCount()
@@ -1036,11 +1002,10 @@ class InventoryEditor(QMainWindow):
         else:
             self._table.selectAll()
         # The corner click overrode any per-header selection, so reset
-        # the toggle stickies owned by the header handlers. Without this
-        # a later click on the SAME column/row header that was active
-        # before the corner click is misread as a toggle-off and clears
-        # the selection instead of selecting it (the remove button then
-        # stays disabled).
+        # the header handlers' stickies. Otherwise a later click on the
+        # same header that was active before is misread as a toggle-off,
+        # clearing the selection instead of selecting it (and leaving
+        # the remove button disabled).
         self._user_clicked_col = None
         self._user_clicked_row = None
 
@@ -1084,14 +1049,13 @@ class InventoryEditor(QMainWindow):
         sel_model = self._table.selectionModel()
         if sel_model is None:
             return
-        # Invalidate ONLY the union of the previous and current
-        # selection regions. The old "viewport().update()" repainted
-        # every visible cell on every toggle (~768 cells on Hayes,
-        # ~38 ms per click); switching to a bounded region cuts that
-        # to just the cells that actually change selection state OR
-        # sit at the intersection. Profile saw the delegate paint
-        # dominator drop from 541 ms / 15360 paints to <20 ms / ~250
-        # paints for a row toggle.
+        # Invalidate only the union of the previous and current
+        # selection regions. A full ``viewport().update()`` repainted
+        # every visible cell per toggle (~768 on Hayes, ~38 ms/click);
+        # the bounded region repaints only the cells that change
+        # selection state. Profile: the delegate paint dominator
+        # dropped from 541 ms / 15360 paints to <20 ms / ~250 paints
+        # for a row toggle.
         old_region = self._last_selection_region
         new_region = self._table.visualRegionForSelection(
             sel_model.selection()
@@ -1102,34 +1066,28 @@ class InventoryEditor(QMainWindow):
             else new_region
         )
         # Inflate by the outline pen width before repainting.
-        # ``visualRegionForSelection`` returns rects covering the cell
-        # interiors; our 2-px outline pen extends one pixel PAST the
-        # cell boundary into the neighbour. If the neighbour isn't in
-        # (old | new), those leaked pen pixels survive the repaint
-        # and stick around as ghost outlines after the selection
-        # moves away (the residual artifact visible after shift+
-        # arrow extends or shrinks a selection).
-        # Use boundingRect (not per-sub-rect inflation) because
-        # QRegion has no built-in inflate and the bbox is still
-        # bounded by the actual selection size, not the viewport.
+        # ``visualRegionForSelection`` returns cell interiors, but the
+        # 2-px outline pen extends one pixel past the cell boundary. If
+        # that neighbour isn't in (old | new), the leaked pen pixels
+        # survive as ghost outlines after the selection moves (the
+        # artifact seen after shift+arrow grows or shrinks a selection).
+        # Use boundingRect (QRegion has no inflate), still bounded by
+        # the selection size, not the viewport.
         leaked = invalid.boundingRect().adjusted(-2, -2, 2, 2)
-        # ``repaint(region)`` is synchronous; bypasses Qt's paint-event
-        # coalescing. update() would let Qt merge a rapid sequence of
-        # clicks into ONE paint at the end, so the user sees nothing
-        # change between clicks (the "sticky" or "click didn't
-        # register" symptom). With bounded invalidation each repaint
-        # is ~3 ms on Hayes, so we can afford 300+ clicks/sec before
-        # paint becomes the bottleneck.
+        # ``repaint(region)`` is synchronous, bypassing Qt's paint
+        # coalescing. update() would merge rapid clicks into one paint
+        # at the end, so nothing appears to change between them (the
+        # "sticky" / "click didn't register" symptom). With bounded
+        # invalidation each repaint is ~3 ms on Hayes, so 300+
+        # clicks/sec stay ahead of paint.
         viewport = self._table.viewport()
         if viewport is not None:
             viewport.repaint(leaked)
         self._last_selection_region = new_region
-        # Classify the current selection via the shared
-        # :py:func:`classify_selection` so the desktop and the web
-        # editor agree on what counts as a "single column" /
-        # "single row" selection. Walks the selectedIndexes once
-        # to materialize the (row, col) iterable the classifier
-        # expects; for typical inventories this is microseconds.
+        # Classify via the shared :py:func:`classify_selection` so
+        # desktop and web agree on what counts as a single column or
+        # row. Walks selectedIndexes once into the (row, col) iterable
+        # the classifier expects; microseconds for typical inventories.
         cells = (
             (idx.row(), idx.column()) for idx in sel_model.selectedIndexes()
         )
@@ -1152,10 +1110,10 @@ class InventoryEditor(QMainWindow):
         self._set_rm_feat_enabled(target == "feature")
 
     # Add / remove segments and features
-    # Structural-edit primitives. Each mutates the model lists +
-    # QTableWidget in lockstep; the undo machinery and the
-    # user-facing add / remove / rename handlers all go through these
-    # so a structural change and its inverse touch identical state.
+    # Structural-edit primitives. Each mutates the model lists and the
+    # QTableWidget in lockstep; the undo machinery and the user-facing
+    # handlers all route through these so a change and its inverse
+    # touch identical state.
     def _insert_segment_at(
         self, index: int, seg: str, values: tuple[str, ...]
     ) -> None:
@@ -1282,9 +1240,8 @@ class InventoryEditor(QMainWindow):
         self._status.showMessage(removed_segment_message(seg))
         self._refresh_cap_counter()
         # Return focus to the table so Ctrl-Z undoes the deletion
-        # immediately, without the user first clicking a cell (the
-        # undo shortcut is scoped to the table's event filter, and the
-        # toolbar button held focus through the removal).
+        # immediately; the undo shortcut is scoped to the table's event
+        # filter and the toolbar button held focus through the removal.
         self._table.setFocus()
 
     def _remove_feature(self) -> None:
@@ -1378,9 +1335,8 @@ class InventoryEditor(QMainWindow):
                 row.append(self._cell_text(r, c))
             cells.append(row)
         # Start from the carried metadata (PHOIBLE stamps,
-        # segment_secondary, any user keys) and overlay the live
-        # provenance fields; the setup-dialog path has no carried
-        # metadata and keeps its prior behaviour.
+        # segment_secondary, user keys) and overlay the live provenance
+        # fields. The setup-dialog path carries no metadata.
         metadata: dict[str, Any] = dict(self._extra_metadata)
         if self._feature_source:
             metadata["feature_source"] = self._feature_source
@@ -1461,16 +1417,15 @@ class InventoryEditor(QMainWindow):
             self, "Save Inventory", inventories_dir, "JSON Files (*.json)"
         )
         dlg.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
-        # Default suffix so the dialog appends ``.json`` BEFORE its own
-        # overwrite confirmation. Without it, a user typing a bare name
-        # (e.g. ``foo``) is confirmed against ``foo`` while the file
-        # actually written is ``foo.json``, so an existing ``foo.json``
-        # could be silently overwritten. The manual append below stays as
-        # a fallback for non-native dialogs that ignore the default.
+        # Default suffix so the dialog appends ``.json`` before its own
+        # overwrite confirmation. Otherwise a bare ``foo`` is confirmed
+        # against ``foo`` while ``foo.json`` is written, silently
+        # overwriting an existing ``foo.json``. The manual append below
+        # is a fallback for non-native dialogs that ignore the default.
         dlg.setDefaultSuffix("json")
         # Pre-fill the filename from the inventory name, slugified to
-        # match the existing inventories/ naming convention. The user can
-        # still override it in the dialog.
+        # match the inventories/ naming convention; the user can still
+        # override it.
         dlg.selectFile(suggest_filename(self._inv_name))
         center_on_parent(dlg, self)
         if not dlg.exec():
@@ -1480,18 +1435,16 @@ class InventoryEditor(QMainWindow):
             return
         if not path.endswith(".json"):
             path += ".json"
-        # Drain any in-flight save FIRST so the re-entrancy guard in
-        # ``_write_json`` doesn't silently drop this Save-As. Without
-        # this, a user who hits Save then immediately Save-As (e.g.
-        # because they realised they want a new filename) saw the
-        # second action quietly do nothing.
+        # Drain any in-flight save first so the re-entrancy guard in
+        # ``_write_json`` doesn't silently drop this Save-As (Save then
+        # immediate Save-As otherwise did nothing).
         if self._save_in_flight:
             self._wait_for_save()
-        # ``_write_json`` kicks off the async write. ``_current_path`` +
-        # the title are adopted only once the write is CONFIRMED, in the
-        # save controller's success branch. Setting them here would
-        # leave a phantom backing file (and a falsely "saved" meta strip
-        # + live Delete button) on a validation-abort or a failed write.
+        # ``_write_json`` starts the async write. ``_current_path`` and
+        # the title are adopted only once the write is confirmed, in the
+        # controller's success branch. Setting them here would leave a
+        # phantom backing file (and a falsely "saved" meta strip plus
+        # live Delete button) on a validation-abort or failed write.
         self._write_json(path)
 
     def _delete_inventory(self) -> None:
@@ -1579,25 +1532,22 @@ class InventoryEditor(QMainWindow):
     ) -> None:
         """Seed the grid from an already-validated ``Inventory``.
 
-        ``path`` is the backing file when the inventory came from
-        disk; ``None`` for in-memory inventories (the PHOIBLE
-        picker's materialised result, a renamed-but-unsaved one),
-        in which case Save routes through Save As. Public so
-        MainWindow can hand the editor the ACTIVE in-memory
-        inventory: a PHOIBLE load has no file path, and the editor
-        previously fell back to the new-inventory setup dialog,
-        which made "load from PHOIBLE, then edit, then save
-        locally" impossible.
+        ``path`` is the backing file for a disk load, ``None`` for
+        in-memory inventories (a PHOIBLE picker result, a
+        renamed-but-unsaved one), in which case Save routes through
+        Save As. Public so MainWindow can hand the editor the active
+        in-memory inventory: a PHOIBLE load has no file path, and the
+        editor used to fall back to the setup dialog, which made "load
+        from PHOIBLE, edit, then save locally" impossible.
         """
         self._inv_name = inventory.name
         self._features = list(inventory.features)
         self._segments = list(inventory.segments.keys())
         self._current_path = path
-        # Preserve any feature-source provenance already on the
-        # loaded inventory; clearing here would erase the original
-        # PanPhon (or future-provider) stamp on the next save. The
-        # ``feature_source_version`` may have been written by an
-        # older release; we read both keys defensively.
+        # Preserve any feature-source provenance on the loaded
+        # inventory; clearing here would erase the original PanPhon
+        # (or future-provider) stamp on the next save. Read both keys
+        # defensively since an older release may have written them.
         loaded_source = inventory.metadata.get("feature_source")
         loaded_version = inventory.metadata.get("feature_source_version")
         self._feature_source = (
@@ -1606,26 +1556,19 @@ class InventoryEditor(QMainWindow):
         self._feature_source_version = (
             str(loaded_version) if isinstance(loaded_version, str) else None
         )
-        # Carry the FULL metadata mapping (everything except
-        # ``name``, which the grid's name field owns) so the next
-        # save round-trips it. Keeping only ``feature_source`` here
-        # used to silently drop the PHOIBLE stamps and the
-        # ``segment_secondary`` diphthong bundles, so editing a
-        # PHOIBLE inventory in the editor erased its diphthong
-        # arrows on save.
+        # Carry the full metadata (all but ``name``, which the grid's
+        # name field owns) so the next save round-trips it. Keeping
+        # only ``feature_source`` used to drop the PHOIBLE stamps and
+        # the ``segment_secondary`` diphthong bundles, so editing a
+        # PHOIBLE inventory erased its diphthong arrows on save.
         self._extra_metadata = {
             k: v for k, v in inventory.metadata.items() if k != "name"
         }
-        # Seed the grid from the parsed bundle directly. Previously
-        # ``_rebuild_table()`` created an all-zero grid and the loop
-        # below replaced every cell with the loaded value, doubling
-        # the ``make_cell`` work (each cell is a QTableWidgetItem
-        # construction + setTextAlignment + setFlags + style_cell).
-        # On Hayes (140 segs x 28 features = 3920 cells) that was the
-        # dominant cost of every Editor open. ``_rebuild_table``
-        # already supports an ``initial_cells`` seed via the PanPhon
-        # provider path; reuse it here so loaded inventories take
-        # the same single-pass build path.
+        # Seed the grid from the parsed bundle directly. The old path
+        # built an all-zero grid and then replaced every cell, doubling
+        # the ``make_cell`` work (3920 cells on Hayes) and dominating
+        # every editor open. Reuse ``_rebuild_table``'s ``initial_cells``
+        # seed (already used by the provider path) for a single pass.
         self._rebuild_table(initial_cells=inventory.segments)
         self._dirty = False
         self._update_title()
@@ -1641,12 +1584,11 @@ class InventoryEditor(QMainWindow):
         if not self._check_unsaved():
             event.ignore()
             return
-        # Wait for any background save before letting Qt destroy the
-        # window. If the worker thread emits ``_save_finished`` after
-        # the QObject is destroyed, PyQt raises ``RuntimeError:
-        # wrapped C/C++ object has been deleted`` on the worker
-        # thread. Harmless but noisy in logs, and a clean wait is
-        # cheap (atomic write on a healthy disk is sub-ms).
+        # Wait for any background save before Qt destroys the window.
+        # A worker emitting ``_save_finished`` after the QObject is
+        # gone makes PyQt raise "wrapped C/C++ object has been deleted"
+        # on the worker thread. Harmless but noisy, and a clean wait is
+        # cheap (a healthy-disk atomic write is sub-ms).
         self._wait_for_save()
         event.accept()
 

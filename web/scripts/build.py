@@ -74,17 +74,13 @@ def clean_dist() -> None:
 def bake_panphon_table() -> None:
     """Refresh the PanPhon-lookup JSON snapshot in shared/.
 
-    Runs ``bake_panphon.bake_table()`` against the installed
-    ``panphon`` package and writes the result to
-    ``shared/.../editor/_panphon_table.generated.json``. The shared/
-    mirror step below picks the file up alongside every other .py /
-    .json under the package root, so the lookup provider in the
+    Writes to ``shared/.../editor/_panphon_table.generated.json``. The
+    shared/ mirror step below picks it up so the lookup provider in the
     Pyodide bundle finds it via importlib.resources at runtime.
 
-    When ``panphon`` is not installed (typical on a fresh CI runner
-    that hasn't pulled the optional dep) we print a warning, leave
-    any stale snapshot in place, and continue: the LookupProvider's
-    registry quietly drops the entry so the dialog falls back to
+    When ``panphon`` is not installed (typical on a fresh CI runner), we
+    warn, leave any stale snapshot in place, and continue. The
+    LookupProvider registry drops the entry so the dialog falls back to
     static presets instead of crashing.
     """
     print("Baking PanPhon lookup table...")
@@ -119,20 +115,18 @@ def bake_phoible_tables() -> None:
     * ``_phoible_data.generated.json`` -> shared/.../editor/
       (the larger per-segment feature payload)
 
-    Both files STILL get written into the shared/ directory here so
-    the desktop install picks them up via ``importlib.resources``; on
-    the web both are externalized as SEPARATE static assets under
-    ``web/dist/`` and lazy-loaded on first PHOIBLE click to keep the
-    cold path cheap and the precached bundle small. The
-    :py:func:`write_python_bundle` step below opts BOTH files OUT of
-    the zip; :py:func:`copy_phoible_data_asset` and
+    Both files get written into shared/ here so the desktop install
+    picks them up via ``importlib.resources``. On the web both are
+    externalized as separate static assets under ``web/dist/`` and
+    lazy-loaded on first PHOIBLE click to keep the cold path cheap and
+    the precached bundle small. :py:func:`write_python_bundle` opts both
+    files out of the zip; :py:func:`copy_phoible_data_asset` and
     :py:func:`copy_phoible_index_asset` copy them to ``dist/``.
 
-    When the vendored cache is missing (a stripped clone, an
-    intentional dev override), the bake prints a warning and
-    continues: the registry quietly drops the PHOIBLE provider
-    so the dialog falls back to PanPhon / static presets without
-    crashing.
+    When the vendored cache is missing (a stripped clone, a dev
+    override), the bake warns and continues. The registry drops the
+    PHOIBLE provider so the dialog falls back to PanPhon / static
+    presets without crashing.
     """
     print("Baking PHOIBLE inventory tables...")
     bake_script = WEB_DIR / "scripts" / "bake_phoible.py"
@@ -163,9 +157,8 @@ def bake_phoible_tables() -> None:
 
 def copy_shared_sources() -> None:
     """Mirror the whole ``phonology_shared`` package into
-    ``dist/shared/phonology_shared/`` so the bundle can zipimport
-    every submodule (``data``, ``theory``, ``chart``,
-    ``presentation``, ``editor``) under the canonical dotted path.
+    ``dist/shared/phonology_shared/`` so the bundle can zipimport every
+    submodule under the canonical dotted path.
     """
     print("Copying shared package source...")
     target_pkg = DIST / "shared" / "phonology_shared"
@@ -314,7 +307,7 @@ def generate_theme_css() -> None:
 
     Two perpendicular axes drive variant selection:
       * ``html[data-theme="dark"]``: dark theme overrides.
-      * ``html[data-cb="on"]``:      colorblind-friendly palette.
+      * ``html[data-cb="on"]``: colorblind-friendly palette.
     The colorblind-dark variant is keyed on both attributes so the
     most-specific selector wins regardless of attribute order.
     """
@@ -504,8 +497,7 @@ def _build_status_text_payload() -> dict[str, str]:
     module_name = "_build_mode_logic"
     # Load inside the try (register=True; see the docstring above) so
     # the finally below still pops the temporary module from
-    # sys.modules even if exec_module raises. Uses the module-level
-    # ``sys`` import; no local shadow needed.
+    # sys.modules even if exec_module raises.
     try:
         module = _load_module(mode_logic_path, module_name, register=True)
         payload: dict[str, str] = {

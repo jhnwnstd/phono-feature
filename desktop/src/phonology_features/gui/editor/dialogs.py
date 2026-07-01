@@ -36,29 +36,23 @@ from phonology_shared.presentation.palette import C
 
 
 class _AutofillTextEdit(QPlainTextEdit):
-    """Plain-text editor (NOT QTextEdit) with two shared affordances
-    used by both the segment and feature inputs in the New Inventory
-    dialog. ``QPlainTextEdit`` is the correct base for untrusted text
-    input: it cannot render pasted rich text from word processors or
-    browsers (Qt's QTextEdit interprets HTML on paste; the styled
-    fragment would display briefly even though ``entries()`` later
-    strips formatting via ``toPlainText``).
+    """Segment/feature input for the New Inventory dialog, with two
+    shared affordances. ``QPlainTextEdit`` (not QTextEdit) is the
+    correct base for untrusted text: QTextEdit interprets HTML on
+    paste and would briefly render pasted rich text, even though
+    ``entries()`` later strips formatting via ``toPlainText``.
 
-    1. **Tab autofill**: Tab on an empty box pastes ``DEFAULT_FILL``
-       (a quick-start example). Once non-empty, Tab advances focus
-       normally via ``setTabChangesFocus``.
+    Tab autofill: Tab on an empty box pastes ``DEFAULT_FILL`` (a
+    quick-start example); once non-empty, Tab advances focus.
+    ``setTabChangesFocus(True)`` routes Tab through ``event()`` to
+    ``focusNextPrevChild`` before ``keyPressEvent``, so the autofill
+    branch there returns True to consume the event and keep focus.
 
-       ``setTabChangesFocus(True)`` makes Qt route Tab through
-       ``event()`` to ``focusNextPrevChild`` BEFORE ``keyPressEvent``
-       runs; the autofill branch returns True to consume the event
-       so focus stays.
+    ``entries()`` splits the contents on any whitespace, so ``a b c``
+    and one-per-line input parse to the same list.
 
-    2. **``entries()`` parser**: splits the contents on any whitespace
-       (spaces, tabs, newlines). Both ``a b c`` and one-per-line input
-       parse to the same list.
-
-    Also overrides ``paintEvent`` to render multi-line placeholder text
-    (Qt only paints the first line of placeholderText).
+    ``paintEvent`` renders multi-line placeholder text because Qt only
+    paints the first line of placeholderText.
     """
 
     DEFAULT_FILL: str = ""  # subclasses override
@@ -71,11 +65,9 @@ class _AutofillTextEdit(QPlainTextEdit):
         self._placeholder: str = ""
 
     def setPlaceholderText(self, text: str) -> None:  # type: ignore[override]
-        """Capture the placeholder text for our own multi-line paint
-        and tell Qt the placeholder is empty so its built-in single
-        line render stays out of our way. Both lines of a multi-line
-        placeholder then come from the same paintEvent code path,
-        guaranteeing identical shading."""
+        """Capture the placeholder for our multi-line paint and tell Qt
+        its placeholder is empty, so every line comes from the same
+        paintEvent path and shades identically."""
         self._placeholder = text
         super().setPlaceholderText("")
 
@@ -100,12 +92,9 @@ class _AutofillTextEdit(QPlainTextEdit):
         return super().event(e)
 
     def entries(self) -> list[str]:
-        """Parse the current text as a list of entries by inferring
-        the delimiter. See :py:func:`infer_split` for the rule. Same
-        shape for segments and features so pasted input from any
-        source (CSV exports, spreadsheet columns, one-per-line
-        lists, space-separated jottings) works without pre-processing.
-        """
+        """Parse the current text into entries with an inferred
+        delimiter (see :py:func:`infer_split`), so pasted input from
+        any source works without pre-processing."""
         return infer_split(self.toPlainText())
 
     def paintEvent(self, e: QPaintEvent | None) -> None:
@@ -115,17 +104,11 @@ class _AutofillTextEdit(QPlainTextEdit):
         lines = self.placeholderText().splitlines()
         if not lines:
             return
-        # Paint EVERY placeholder line ourselves rather than letting
-        # Qt's built-in placeholder paint the first line and us paint
-        # the rest. Two reasons: (1) Qt only paints the first line of
-        # a multi-line placeholderText, so we have to paint the others
-        # anyway; (2) when both Qt and we paint the same buffer, the
-        # alpha-blended lines end up at different effective opacities
-        # (Qt's first-line render and our subsequent-line renders
-        # composite slightly differently across paint frames), giving
-        # the user visibly different shades for adjacent lines.
-        # Owning the whole multi-line paint here keeps every line at
-        # the same colour.
+        # Paint every placeholder line here, not just the lines past
+        # the first. Qt paints only the first line, and when both Qt
+        # and we paint the same buffer the alpha-blended lines land at
+        # different effective opacities, so adjacent lines show
+        # different shades. Owning the whole paint keeps them uniform.
         painter = QPainter(self.viewport())
         painter.setPen(self.palette().placeholderText().color())
         painter.setFont(self.font())
@@ -141,32 +124,22 @@ class _AutofillTextEdit(QPlainTextEdit):
 
 
 class SegmentTextEdit(_AutofillTextEdit):
-    """Tab on empty fills a quick-start segment list (IPA voiceless and
-    voiced stops). Trailing space so the caret lands ready for the
-    user to type the next segment without first having to add a
-    separator. ``entries()`` splits on whitespace and filters empties,
-    so the trailer does not introduce a phantom entry.
-    """
+    """Tab on empty fills a quick-start segment list. The trailing
+    space in DEFAULT_FILL lands the caret ready for the next segment;
+    ``entries()`` filters empties, so it adds no phantom entry."""
 
     # Sourced from the shared setup module so the web setup dialog
-    # offers the same Tab-autofill string. The \u0261 inside
-    # DEFAULT_SEGMENTS is U+0261 (IPA voiced velar script g).
+    # offers the same Tab-autofill string.
     DEFAULT_FILL = DEFAULT_SEGMENTS
 
 
 class FeatureTextEdit(_AutofillTextEdit):
-    """Tab on empty seeds the two major-class features (Syllabic and
-    Consonantal) as a starting point for a custom set. Fuller
-    starting points (Hayes, PHOIBLE) are in the preset dropdown.
-
-    Trailing newline so the caret lands on a fresh line ready for
-    the user to type the next feature; ``infer_split`` filters empty
-    lines so the trailer doesn't introduce a phantom feature. The
-    inferred-delimiter parser inherited from the base accepts any
-    consistent delimiter (newline, comma, tab, etc.) so a pasted
-    list from any source works without pre-processing, AND lets
-    feature names contain spaces (e.g. "Long Vowel") as long as the
-    user separates with something other than whitespace."""
+    """Tab on empty seeds the two major-class features as a start for
+    a custom set (fuller Hayes/PHOIBLE starts are in the preset
+    dropdown). The inferred-delimiter parser accepts any consistent
+    delimiter, so feature names may contain spaces (e.g. "Long Vowel")
+    when the user separates entries with something other than
+    whitespace."""
 
     DEFAULT_FILL = DEFAULT_FEATURES
 
@@ -253,24 +226,18 @@ class InputDialog(QDialog):
         self.setWindowTitle(SETUP_DIALOG_TITLE)
         self.setMinimumSize(500, 500)
         self.setWindowModality(Qt.WindowModality.WindowModal)
-        # Provider chosen via the preset dropdown. ``None`` means the
-        # user picked a static features-only preset (Default / Custom)
-        # so the editor takes the user-typed feature list verbatim
-        # and produces an empty grid. A non-None value means the
-        # editor calls ``provider.generate(segments)`` after the
-        # dialog accepts and pre-populates grid cells.
+        # Provider chosen via the preset dropdown. ``None`` means a
+        # static features-only preset (Default/Custom): the editor
+        # takes the typed feature list verbatim and makes an empty
+        # grid. Non-None means it calls ``provider.generate(segments)``
+        # on accept and pre-populates cells.
         self._chosen_provider: FeatureProvider | None = None
-        # Provider-labelled entries in the preset combo are routed
-        # through this map. Keys are the combo's display label
-        # (``provider.display_label()``), values are the provider
-        # instance. Populated once at construction.
+        # Maps each provider's combo display label to its instance.
         self._provider_by_label: dict[str, FeatureProvider] = {}
-        # Debounced re-generation of the features preview while a
-        # provider is chosen and the user is editing the segments
-        # textarea. ``generate`` is fast (~ms per segment via PanPhon)
-        # but spamming it on every keystroke would be noisy; 250 ms
-        # of idle is enough to feel responsive without flashing the
-        # textarea as the user types out a segment list.
+        # Debounce the features-preview regeneration while a provider
+        # is chosen and the user edits the segments textarea.
+        # ``generate`` is fast, but running it per keystroke flashes
+        # the textarea; 250 ms of idle feels responsive without it.
         self._provider_refresh_timer = QTimer(self)
         self._provider_refresh_timer.setSingleShot(True)
         self._provider_refresh_timer.setInterval(250)
@@ -288,10 +255,9 @@ class InputDialog(QDialog):
         row = QHBoxLayout()
         row.addWidget(QLabel("Inventory name:"))
         self.name_edit = QLineEdit()
-        # UI cap mirrors the parser cap (Inventory.MAX_NAME_LENGTH).
-        # Without it, the user could type/paste 10k chars, see them
-        # accepted in the field, and only get the error at save. With
-        # it, the field itself stops accepting input at the limit.
+        # UI cap mirrors the parser cap (Inventory.MAX_NAME_LENGTH) so
+        # the field stops accepting input at the limit instead of
+        # deferring the error to save.
         self.name_edit.setMaxLength(MAX_NAME_LENGTH)
         self.name_edit.setPlaceholderText(SETUP_NAME_PLACEHOLDER)
         row.addWidget(self.name_edit)
@@ -302,27 +268,21 @@ class InputDialog(QDialog):
         label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
         parent.addWidget(label)
         self.seg_edit = SegmentTextEdit()
-        # Placeholder = what Tab fills; the grayed text doubles as a
-        # format hint for the inferred-delimiter parser.
+        # Placeholder equals what Tab fills; the grayed text doubles as
+        # a format hint for the inferred-delimiter parser.
         self.seg_edit.setPlaceholderText(SegmentTextEdit.DEFAULT_FILL)
         self.seg_edit.setFont(QFont("Noto Sans", 12))
-        # Live-trim the features preview while a provider is active.
-        # Each edit re-arms the debounce timer so the textarea catches
-        # up after the user pauses typing; the handler no-ops when no
-        # provider is selected.
         self.seg_edit.textChanged.connect(self._on_segments_changed)
-        # Stretch 1 here vs 4 on the features edit below: segments
-        # are typically a short list (~10-40 symbols) while features
-        # are routinely 30+ entries, often pasted from a spreadsheet.
-        # Giving features the lion's share of vertical room matches
-        # the common shape of pasted input.
+        # Stretch 1 here vs 4 on the features edit below: segments are
+        # a short list while features run to 30+ entries, so features
+        # get most of the vertical room.
         parent.addWidget(self.seg_edit, stretch=1)
 
     def _add_features_section(self, parent: QVBoxLayout) -> None:
         self.preset_combo = QComboBox()
         # Native combo highlight is white-on-white in some OS themes;
-        # mirror MainWindow's inventory dropdown styling so items stay
-        # legible when highlighted.
+        # mirror MainWindow's inventory dropdown styling so highlighted
+        # items stay legible.
         self.preset_combo.setStyleSheet(f"""
             QComboBox {{
                 background: {C["panel"]};
@@ -343,12 +303,10 @@ class InputDialog(QDialog):
                 outline: none;
             }}
         """)
-        # Display order: providers FIRST (today PanPhon, the
-        # auto-fill recommended default), then the static presets
-        # (Hayes, PHOIBLE, Custom). Providers are bolded so the
-        # auto-generating option reads as the recommended path
-        # even at a glance; the static presets just populate the
-        # textarea with a column scaffold the user fills in.
+        # Display order: providers first (PanPhon today, the
+        # recommended auto-fill default), then static presets. Providers
+        # are bolded so the auto-generating option reads as the
+        # recommended path; static presets only scaffold the textarea.
         bold = QFont("Noto Sans", 10, QFont.Weight.Bold)
         for provider in available_providers():
             base_label = provider.display_label()
@@ -363,10 +321,9 @@ class InputDialog(QDialog):
         for name in FEATURE_PRESETS:
             self.preset_combo.addItem(name)
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
-        # Features header row: bold label on the left, preset combo
-        # flush to the RIGHT edge (separated by stretch). The combo
-        # doubles as the section's "set" control, so it sits in the
-        # header rather than under its own "Feature set:" label.
+        # Features header row: bold label left, preset combo flush
+        # right. The combo doubles as the section's "set" control, so
+        # it lives in the header rather than under its own label.
         feat_header_row = QHBoxLayout()
         feat_label = QLabel("Features (delimited):")
         feat_label.setFont(QFont("Noto Sans", 10, QFont.Weight.Bold))
@@ -377,9 +334,7 @@ class InputDialog(QDialog):
         self.feat_edit = FeatureTextEdit()
         self.feat_edit.setFont(QFont("Noto Sans", 10))
         self.feat_edit.setPlaceholderText(FeatureTextEdit.DEFAULT_FILL)
-        # See the segments edit for why features get the larger
-        # stretch factor: feature sets are routinely 30+ entries,
-        # often pasted from a spreadsheet column.
+        # See the segments edit for why features get the larger stretch.
         parent.addWidget(self.feat_edit, stretch=4)
         self._on_preset_changed(self.preset_combo.currentText())
 
@@ -402,15 +357,14 @@ class InputDialog(QDialog):
         if provider is not None:
             self._chosen_provider = provider
             self.feat_edit.setReadOnly(False)
-            # Run the same refresh path the textChanged handler uses,
-            # so a provider pick with already-typed segments lands
-            # immediately on the trimmed feature set instead of
-            # flashing the full 24-name canonical list first.
+            # Run the same refresh path textChanged uses, so a provider
+            # pick with already-typed segments lands on the trimmed
+            # feature set instead of flashing the full canonical list.
             self._refresh_provider_features()
             return
         self._chosen_provider = None
-        # Drop any pending provider-driven refresh: switching to a
-        # static preset means the user opted out of auto-generation.
+        # Switching to a static preset opts out of auto-generation, so
+        # drop any pending provider-driven refresh.
         self._provider_refresh_timer.stop()
         features = FEATURE_PRESETS.get(name, [])
         if features:
@@ -431,14 +385,12 @@ class InputDialog(QDialog):
         self._provider_refresh_timer.start()
 
     def _refresh_provider_features(self) -> None:
-        """Replace the features textarea with the actual feature
-        list the active provider would emit for the current segment
-        text. Empty / all-unresolved segment input falls back to
-        the provider's full canonical feature set so the user has
-        a preview of what is available before they enter any IPA.
+        """Replace the features textarea with the list the active
+        provider would emit for the current segment text. Empty or
+        all-unresolved input falls back to the provider's full
+        canonical set so the user sees a preview before entering IPA.
 
-        Idempotent: callers (textChanged debounce, ``_on_preset_changed``,
-        and the test fixture) can invoke it freely.
+        Idempotent, so any caller can invoke it freely.
         """
         if self._chosen_provider is None:
             return
@@ -448,10 +400,9 @@ class InputDialog(QDialog):
         else:
             features = self._chosen_provider.generate(segments).features
             if not features:
-                # All inputs unresolved: ``generate`` already falls
-                # back to the full set so the user has columns to
-                # edit. Defensive guard in case a future provider
-                # returns an empty tuple instead.
+                # Defensive guard: ``generate`` already falls back to
+                # the full set, but a future provider might return an
+                # empty tuple, and the user needs columns to edit.
                 features = self._chosen_provider.feature_names()
         self.feat_edit.setPlainText("\n".join(features))
 
@@ -474,10 +425,8 @@ class InputDialog(QDialog):
         """
         return self._chosen_provider
 
-    # Field name (from :py:class:`SetupIssue`) to (title, focus widget).
-    # Drives the warning box title and where focus lands on rejection;
-    # keeps the Qt UI vocabulary local to this class while the shared
-    # :py:func:`validate_setup` owns the rules.
+    # (field, code) to warning-box title. Keeps the Qt UI vocabulary
+    # local while the shared :py:func:`validate_setup` owns the rules.
     _ISSUE_TITLES: ClassVar[dict[tuple[str, str], str]] = {
         ("segments", "empty"): "No segments found",
         ("features", "empty"): "No features found",
@@ -493,15 +442,12 @@ class InputDialog(QDialog):
         messages are owned by :py:func:`validate_setup` so the web
         setup modal produces identical wording.
 
-        Provider-driven presets (PanPhon today) need at least one
-        segment to derive bundles from; this branch surfaces a
-        provider-specific message so the user understands why the
-        generic "no segments" hint is showing up. It also routes
-        the features-side validation against the provider's
-        canonical feature names so a user who cleared the
-        auto-filled textarea does not get a misleading "no
-        features" error: the editor uses the provider's features
-        regardless.
+        Provider-driven presets need at least one segment to derive
+        bundles from, so this branch surfaces a provider-specific
+        message. It also validates features against the provider's
+        canonical names, so clearing the auto-filled textarea does not
+        raise a misleading "no features" error; the editor uses the
+        provider's features regardless.
         """
         provider = self._chosen_provider
         if provider is not None:

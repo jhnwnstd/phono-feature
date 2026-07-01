@@ -73,14 +73,14 @@ class ModeController:
           paints the new mode's framing. Held inside a single
           ``setUpdatesEnabled(False/True)`` so the user sees one clean
           swap, not a flicker as each piece changes. The status bar is
-          deliberately NOT touched here: it shows only the persistent
+          deliberately not touched here. It shows only the persistent
           inventory summary, and mode hints live in the segment pane's
           own hint label, not the bottom border.
         * **Deferred stage**: ``refresh_analysis``, which re-renders
           the analysis pane (heavy ``setHtml`` work, ~30 ms on the
           slower direction). Posted to the next event-loop tick via
           ``QTimer.singleShot(0, ...)``. The user sees the mode swap
-          repaint first; the analysis content fills in one frame
+          repaint first, and the analysis content fills in one frame
           later, so the perceived transition is two short steps
           instead of one long blocking one.
 
@@ -196,15 +196,14 @@ class ModeController:
         """Set each segment button to its final state for the new mode.
 
         Two short-circuits keep the per-button cost minimal during a
-        mode switch; this is the dominant flash budget in the visible
-        stage:
+        mode switch, the dominant flash budget in the visible stage:
 
         1. **Skip the no-op case.** When transitioning into FEAT
-           mode AND the projected query is non-empty, the deferred
+           mode and the projected query is non-empty, the deferred
            ``refresh_analysis`` will momentarily re-style every
            button as MATCHED / UNMATCHED. The intermediate trip
            through DEFAULT for previously-SELECTED buttons is wasted
-           ``setStyleSheet`` work; skip it. Only the data-state
+           ``setStyleSheet`` work, so skip it. Only the data-state
            reset (``setChecked``, ``_selected_segments.clear()``)
            runs here so the button's checked semantics stay correct.
         2. **Don't re-set identical visual states.** ``set_state``
@@ -281,6 +280,6 @@ class ModeController:
         for row in self._w._feat_rows.values():
             row.set_panel_active(not is_s2f)
             row.set_interactive(not is_s2f)
-        # One reset: both _clear_* wrappers call _reset_both_sides, so
+        # One reset. Both _clear_* wrappers call _reset_both_sides, so
         # calling them in sequence ran the full reset twice.
         self._w._reset_both_sides(silent=True)

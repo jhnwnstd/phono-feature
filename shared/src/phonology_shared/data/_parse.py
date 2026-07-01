@@ -115,10 +115,6 @@ def _validate_features(
 
     Names are stored in canonical form (NFC + stripped) so downstream
     lookups never see two spellings of the same intended identity.
-    The returned :py:attr:`_FeatureTable.normalized_to_canonical`
-    map lets bundle validation accept aliases (``r-colored`` for
-    declared ``Rhotic``) by folding the bundle key onto the
-    declared canonical name.
     """
     empty = _FeatureTable(
         names=(),
@@ -249,12 +245,11 @@ def _canonicalize_segment_key(
     seg_name: Any,
     ctx: _ValidationContext,
 ) -> str | None:
-    """Run the canonicalisation + invisible-character + length
+    """Run the canonicalisation, invisible-character, and length
     checks for one segment key. Returns the canonical key on
-    success or ``None`` on failure (after recording the appropriate
-    issue on ``ctx``). Splits the per-key checks out of
-    :py:func:`_validate_segments` so each one is independently
-    testable and the driver loop stays scannable.
+    success or ``None`` on failure (recording the issue on ``ctx``).
+    Split out of :py:func:`_validate_segments` so the checks are
+    independently testable and the driver loop stays scannable.
     """
     path: tuple[str | int, ...] = ("segments", seg_name)
     if not isinstance(seg_name, str) or not seg_name:
@@ -312,12 +307,11 @@ def _resolve_bundle_feature_key(
     Resolution order: (1) direct canonical match against the
     declared name (NFC+strip); (2) alias-aware match via
     :py:func:`normalize_feature_key` against
-    :py:attr:`_FeatureTable.normalized_to_canonical`. Lifting case
-    (2) is the bundle-side counterpart to the declared-feature
-    alias rule: if both ``r-colored`` and ``Rhotic`` normalize to
-    ``rhotic`` and only ``Rhotic`` is declared, the bundle key
-    folds onto ``Rhotic`` so engine code and on-disk storage stay
-    consistent.
+    :py:attr:`_FeatureTable.normalized_to_canonical`. Case (2) is the
+    bundle-side counterpart to the declared-feature alias rule: if
+    both ``r-colored`` and ``Rhotic`` normalize to ``rhotic`` and
+    only ``Rhotic`` is declared, the bundle key folds onto ``Rhotic``
+    so engine code and on-disk storage stay consistent.
     """
     canonical_feature = _canonicalize_name(raw_feature_name)
     if canonical_feature in feature_table.declared:
@@ -464,10 +458,9 @@ def _validate_segments(
 ) -> Mapping[str, Mapping[str, FeatureValue]]:
     """Return a read-only mapping of validated segment labels to bundles.
 
-    Segment labels are treated as arbitrary identifiers. This function
-    canonicalizes labels only for stable identity, checks for collisions,
-    and validates each segment's feature bundle against the declared
-    feature table via alias-aware key resolution.
+    Labels are arbitrary identifiers, canonicalized only for stable
+    identity and collision detection. Each bundle is validated against
+    the declared feature table via alias-aware key resolution.
     """
     if not isinstance(segments_raw, dict):
         ctx.error(

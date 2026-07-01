@@ -1,5 +1,5 @@
 """Pure-Python layout helpers shared by desktop and web. One
-definition of which feature group goes in which column; one
+definition of which feature group goes in which column, one
 LPT-balancing algorithm. Edits propagate to both UIs through the
 build relay.
 """
@@ -14,18 +14,17 @@ from typing import Literal
 # ``web/scripts/build.py`` prepends the shared-src path to
 # ``sys.path`` before importing this module, so the top-level form
 # is safe for both desktop (workspace install) and web (Pyodide
-# bundling); no cycle exists.
+# bundling). No cycle exists.
 from phonology_shared.presentation.constants import BTN_GAP, BTN_W
 
-# Pins are conventional in IPA chart layouts: place-of-articulation
-# features (Major Class, Place) sit on the left, manner-of-
-# articulation (Manner) on the right. Everything else goes wherever
-# the LPT step puts it.
+# Pins follow the conventional IPA chart layout: place features
+# (Major Class, Place) sit on the left, manner on the right.
+# Everything else goes wherever the LPT step puts it.
 LEFT_PINS: tuple[str, ...] = ("Major Class", "Place")
 RIGHT_PINS: tuple[str, ...] = ("Manner",)
 
-# Per-card overhead (header + padding) expressed in row-equivalents.
-# Added to each card's row count when balancing column heights so
+# Per-card overhead (header + padding) in row-equivalents. Added to
+# each card's row count when balancing column heights so
 # many-small-cards columns aren't under-counted vs few-big-cards.
 CARD_OVERHEAD: int = 1
 
@@ -40,13 +39,12 @@ def distribute_feature_groups(
 ) -> tuple[list[str], list[str]]:
     """Assign feature-group names to two columns.
 
-    ``group_sizes`` maps each group name to its row count (that is,
-    the number of active features in the group). Groups with size 0
-    are dropped from the output; empty cards should not render.
+    ``group_sizes`` maps each group name to its row count (the number
+    of active features in the group). Size-0 groups are dropped;
+    empty cards should not render.
 
-    Returns ``(left_names, right_names)``: each is a list of group
-    names in the order they should be stacked vertically in that
-    column.
+    Returns ``(left_names, right_names)``, each a list of group names
+    in top-to-bottom stacking order for that column.
 
     Algorithm:
       1. Pin LEFT_PINS / RIGHT_PINS to their columns first.
@@ -54,10 +52,10 @@ def distribute_feature_groups(
       3. LPT-greedy: add each remaining group to whichever column is
          currently shorter.
 
-    ``group_order`` only matters for tie-breaking among unpinned
-    groups of equal cost; pass the canonical FEATURE_GROUPS order
-    when you care about determinism. Defaults to the iteration order
-    of ``group_sizes`` (insertion order in modern Python dicts).
+    ``group_order`` only breaks ties among unpinned groups of equal
+    cost. Pass the canonical FEATURE_GROUPS order for determinism.
+    Defaults to the iteration order of ``group_sizes`` (dict
+    insertion order).
     """
 
     def cost(name: str) -> int:
@@ -111,33 +109,25 @@ def partition_groups_for_spillover(
     flow vs. fall into a horizontal spillover at the bottom of the
     pane.
 
-    The segments pane in both frontends stacks manner-class groups as
-    a single vertical flow. With wide inventories (General IPA being
-    the canonical case), that flow overshoots the visible area.
-    Instead of forcing the user to scroll, the bottom groups get
-    rearranged into ``n_spillover_cols`` columns at the bottom: the
-    pair sits side-by-side, so the saved vertical space lets the
-    remaining single-column groups fit comfortably above.
+    Both frontends stack manner-class groups as a single vertical
+    flow. Wide inventories (General IPA is the canonical case)
+    overshoot the visible area. Rather than force a scroll, the
+    bottom groups rearrange into ``n_spillover_cols`` columns so the
+    saved vertical space lets the remaining single-column groups fit
+    above.
 
     ``group_heights`` is the natural per-group height (header + button
     rows) at the current pane width, in display units (px on web,
-    QGridLayout-row heights on desktop). They're both monotonic, so
-    the algorithm doesn't care which. ``available_height`` is the
-    pane's clientHeight on web / scroll-viewport height on desktop.
+    QGridLayout-row heights on desktop, both monotonic so the unit
+    doesn't matter). ``available_height`` is the pane's clientHeight
+    on web / scroll-viewport height on desktop.
 
-    Returns ``main_count``: the number of groups (from the front of
-    ``group_heights``) that stay in the main flow. Indexes
-    ``[main_count:]`` get the spillover. Iteratively shrinks
-    ``main_count`` until the combined height of the main flow plus
-    the row-packed spillover fits in ``available_height``.
-
-    The spillover's height per row is the tallest group in that row
-    (groups in a row are different manner-classes with different
-    segment counts; their button grids align to the row's top so the
-    row's height is dominated by the tallest member).
-
-    Same algorithm runs in both UIs so the rearrangement happens at
-    the same threshold regardless of which frontend the user is on.
+    Returns ``main_count``, the number of front groups that stay in
+    the main flow; indexes ``[main_count:]`` spill over. Shrinks
+    ``main_count`` until main flow plus the row-packed spillover fits
+    ``available_height``. A spillover row's height is its tallest
+    group (grids align to the row top, so the tallest member
+    dominates).
     """
     n = len(group_heights)
     if n == 0 or available_height <= 0:
@@ -161,13 +151,13 @@ def partition_groups_for_spillover(
 # ---------------------------------------------------------------------------
 # Geometry-aware segment-pane layout.
 #
-# The dead space we reclaim is the rectangle below
-# ``max(main_flow_bottom, chart_bottom)``, a function of both the
-# chart's height and how many groups stayed in the main flow.
-# Column assignment uses LPT bin-packing for minimal spillover
-# height, but renders groups in source order so the user reads
-# top-to-bottom without surprise. The smallest ``k`` (groups in
-# spillover) that fits wins, preserving "spill only the tail."
+# The reclaimed dead space is the rectangle below
+# ``max(main_flow_bottom, chart_bottom)``, a function of the chart's
+# height and how many groups stayed in the main flow. Column
+# assignment uses LPT bin-packing for minimal spillover height, but
+# renders groups in source order so the user reads top-to-bottom
+# without surprise. The smallest ``k`` (groups in spillover) that
+# fits wins, preserving "spill only the tail."
 # ---------------------------------------------------------------------------
 
 
@@ -176,18 +166,18 @@ class SegLayoutPlan:
     """Complete segment-pane layout decision returned by
     :py:func:`plan_seg_layout`.
 
-    ``main_groups`` lists the names that stay in the single-column
-    main flow at the top of the pane; ``spillover_groups`` lists the
-    names that fall into the spillover region below the main flow and
-    the vowel chart. ``n_spillover_cols`` is the number of columns in
-    that region (0 means no spillover). ``spillover_column_assignment``
-    is parallel to ``spillover_groups`` and gives each group's
-    destination column (0-indexed); when rendering, walk
-    ``spillover_groups`` in order and place each at the bottom of its
-    assigned column so the user reads top-to-bottom in column-major
-    order. ``spillover_rect`` is ``(x, y, w, h)`` of the spillover
-    region in pane-local pixel coordinates so the desktop can place
-    the spillover container precisely (web reads it for parity).
+    ``main_groups`` are the names in the single-column main flow at
+    the top of the pane. ``spillover_groups`` are the names in the
+    spillover region below the main flow and the vowel chart.
+    ``n_spillover_cols`` is that region's column count (0 means no
+    spillover). ``spillover_column_assignment`` parallels
+    ``spillover_groups`` and gives each group's 0-indexed destination
+    column; render by walking ``spillover_groups`` in order and
+    placing each at the bottom of its assigned column, so the user
+    reads top-to-bottom column-major. ``spillover_rect`` is
+    ``(x, y, w, h)`` of the region in pane-local pixels so the
+    desktop can place the container precisely (web reads it for
+    parity).
     """
 
     main_groups: tuple[str, ...]
@@ -217,39 +207,38 @@ def plan_seg_layout(
 
     1. **Compute the spillover rectangle.** Always full-width, sits
        below ``max(main_flow_bottom, chart_bottom)``. ``chart_rect``
-       is ``(x, y, w, h)`` in pane coords or ``None`` for "no chart
-       blocks the bottom" (stacked-below or empty inventories).
+       is ``(x, y, w, h)`` in pane coords or ``None`` when no chart
+       blocks the bottom (stacked-below or empty inventories).
 
     2. **Pick ``n_spillover_cols``.** ``min(max_spillover_cols, max(1,
        spillover_w // (min_col_w + spillover_gutter)))``. Floor at 1
-       so a narrow pane still has somewhere for spillover to land; cap
+       so a narrow pane still has somewhere for spillover to land, cap
        at ``max_spillover_cols`` (default 4) so a 1600 px pane doesn't
        fan groups out incoherently.
 
-    3. **Sweep candidate spill sizes from smallest to largest.** Start
-       with ``k = 0`` (no spillover); if the whole main flow fits in
-       ``pane_h``, accept. Otherwise try ``k = 1, 2, ...`` and pick
-       the smallest ``k`` that fits. This matches the historical
-       "spill only the tail" semantics.
+    3. **Sweep candidate spill sizes smallest to largest.** Try
+       ``k = 0`` (no spillover) first; accept if the whole main flow
+       fits in ``pane_h``. Otherwise try ``k = 1, 2, ...`` and pick
+       the smallest that fits, matching the historical "spill only the
+       tail" semantics.
 
     4. **Pack the ``k`` spilled groups via LPT.** Sort by descending
-       natural height; assign each to the currently-shortest column.
-       The column with the largest total height sets the spillover's
-       bounding height. Source order is preserved at render time:
-       the assignment tuple records column membership, not display
-       order.
+       natural height, assign each to the currently-shortest column.
+       The tallest column sets the spillover's bounding height. Source
+       order is preserved at render time: the assignment tuple records
+       column membership, not display order.
 
     5. **Reject plans that overflow a column's width.** Each spillover
        column gets width
        ``(spillover_w - (n_cols - 1) * gutter) // n_cols``. A group
-       whose natural width exceeds that is unspillable for this
-       ``n_cols``; the sweep skips ``k`` values that would put it in
-       spillover (effectively pinning it to main flow).
+       wider than that is unspillable for this ``n_cols``, so the
+       sweep skips ``k`` values that would spill it (effectively
+       pinning it to main flow).
 
-    6. **Fall back to "all main, scroll" on no fit.** If no ``k`` makes
-       the layout fit in ``pane_h``, the returned plan has every
-       group in ``main_groups`` and empty spillover. The caller's
-       internal ``QScrollArea`` then handles the overflow.
+    6. **Fall back to "all main, scroll" on no fit.** If no ``k`` fits
+       ``pane_h``, the returned plan puts every group in
+       ``main_groups`` with empty spillover. The caller's internal
+       ``QScrollArea`` then handles the overflow.
     """
     n = len(group_names)
     if not (n == len(group_heights) == len(group_widths)):
@@ -276,7 +265,7 @@ def plan_seg_layout(
     # Step 2: pick spillover column count from the full pane width.
     # Spillover always claims the full pane width (sits below both
     # main flow and chart), so it doesn't depend on which groups are
-    # spilled; it's a property of the pane.
+    # spilled. It's a property of the pane.
     n_cols_max = max(
         1, (pane_w + spillover_gutter) // (min_col_w + spillover_gutter)
     )
@@ -291,13 +280,13 @@ def plan_seg_layout(
         is too wide for ``col_w``; the caller skips this ``k``.
         """
         spill_indices = list(range(n - k, n))
-        # Width check first; if any group is too wide, this k is
+        # Width check first: if any group is too wide, this k is
         # infeasible regardless of how heights pack.
         for idx in spill_indices:
             if group_widths[idx] > col_w:
                 return 0, [], 1
         # LPT bin-packing by descending height. ``order`` is indices
-        # into ``spill_indices`` sorted by height descending; stable
+        # into ``spill_indices`` sorted by height descending, stable
         # tie-break by source order so identical-height groups keep
         # natural ordering.
         order = sorted(
@@ -365,44 +354,43 @@ def plan_seg_layout(
 # either UI.
 SEG_MIN_W: int = 480
 # Floor for the feature pane. Sized so each of the two card columns
-# inside the pane gets at least ``MIN_FEAT_CARD_W`` (220 px) after
-# subtracting outer margins (28 px) and the inter-card gutter (12 px).
-# Formula: 2 × 220 + 28 + 12 = 480. ``distribute_pane_widths`` lifts
-# this when the inventory's natural feature-pane content asks for
-# more. Earlier value of 380 caused titles like "TONGUE-ROOT /
-# PHARYNGEAL" to wrap to two lines.
+# gets at least ``MIN_FEAT_CARD_W`` (220 px) after subtracting outer
+# margins (28 px) and the inter-card gutter (12 px): 2 x 220 + 28 +
+# 12 = 480. ``distribute_pane_widths`` lifts this when the
+# inventory's natural feature-pane content asks for more. An earlier
+# value of 380 wrapped titles like "TONGUE-ROOT / PHARYNGEAL" onto
+# two lines.
 FEAT_MIN_W: int = 480
 # Extra pixels beyond ``feat_content_w`` so feature cards don't sit
 # flush against the splitter handle / panel edge.
 FEAT_CUSHION_PX: int = 40
 # Threshold at which the feature panel switches to compact row
 # density so a high-feature inventory fits without scrolling. At
-# 22 active features the worst-balanced column is ~12 rows; one
-# row beyond that and the natural-height panel starts to overflow
-# the typical 440-px top-pane budget at 720p. Tuned conservatively
-# so Hayes (28) goes compact, Default-33 goes compact, and shorter
-# inventories (Spanish ~16) stay comfortable. Lives here (not in
-# ``main_window.py``) so a future web parity implementation reads
-# the same number rather than re-inventing it.
+# 22 active features the worst-balanced column is ~12 rows; one more
+# row and the natural-height panel starts to overflow the typical
+# 440-px top-pane budget at 720p. Tuned conservatively so Hayes (28)
+# and Default-33 go compact while shorter inventories (Spanish ~16)
+# stay comfortable. Lives here, not in ``main_window.py``, so a
+# future web parity implementation reads the same number.
 FEAT_COMPACT_THRESHOLD: int = 22
 # Worst-case vowel chart width used by responsive-layout math
 # (``should_stack_vowels``, ``min_vowel_safe_window_w``,
 # ``would_overflow`` against the seg pane). Sized to cover the
 # widest PHOIBLE inventory (max ~302 px natural data width +
-# chrome ≈ 384 px) with comfortable slack.
+# chrome ~= 384 px) with comfortable slack.
 #
-# NOTE: this is a LAYOUT-MATH reference, NOT a per-render floor.
-# The actual rendered chart width is content-driven per renderer
-# via ``VOWEL_CHART_W_FLOOR`` in ``web/main.js`` and
+# This is a LAYOUT-MATH reference, not a per-render floor. The
+# actual rendered chart width is content-driven per renderer via
+# ``VOWEL_CHART_W_FLOOR`` in ``web/main.js`` and
 # ``desktop/.../gui/vowel_chart.py``; a small inventory renders
-# narrower than this constant. Keeping the layout math
-# conservative (assume worst case) preserves the stack-breakpoint
-# invariant: at ``VOWEL_STACK_W``, even the widest possible chart
-# fits side-by-side with the minimum consonant strip.
+# narrower than this constant. Keeping the layout math conservative
+# (assume worst case) preserves the stack-breakpoint invariant: at
+# ``VOWEL_STACK_W``, even the widest possible chart fits side-by-side
+# with the minimum consonant strip.
 VOWEL_NATURAL_W: int = 440
 
 # Canonical minimum width (px) for the rendered vowel chart on
-# EITHER platform. The shared geometry + chrome math agrees
+# either platform. The shared geometry + chrome math agrees
 # cross-renderer, but each platform's final rendering can need a
 # small adjustment for box-model / border / sub-pixel quirks.
 # The pattern:
@@ -411,27 +399,26 @@ VOWEL_NATURAL_W: int = 440
 #   web:     VOWEL_CHART_W_FLOOR = MIN + WEB_VOWEL_CHART_W_ADJ
 #   desktop: VOWEL_CHART_W_FLOOR = MIN + DESKTOP_VOWEL_CHART_W_ADJ
 #
-# Both renderers default their ``ADJ`` to 0 today (the shared
-# value is the canonical choice). Tune the renderer-side ``ADJ``
-# (NOT this constant) when one platform needs a small visual
-# nudge: a scrollbar gutter on the web, a Qt frame on the
-# desktop, etc.
+# Both renderers default ``ADJ`` to 0 today (the shared value is the
+# canonical choice). Tune the renderer-side ``ADJ``, not this
+# constant, when one platform needs a small visual nudge (a
+# scrollbar gutter on the web, a Qt frame on the desktop).
 #
-# Sized so the trapezoid + row-label gutter + chrome still read
-# as the canonical IPA chart for the smallest bundled inventory.
-# Above this floor the chart is content-driven (``max(floor,
-# natural_data_width_px + chrome)``).
-# Bumped from 320 to 380 to envelope the no-overlap-driven natural
-# widths after the inter-cell constraint kicked in: Hayes Universal
-# now requests 290 px data + 84 px chrome = 374 px chart-width
-# minimum (was 232 + 84 = 316 px pre-constraint).
+# Sized so the trapezoid + row-label gutter + chrome still read as
+# the canonical IPA chart for the smallest bundled inventory. Above
+# this floor the chart is content-driven (``max(floor,
+# natural_data_width_px + chrome)``). Bumped from 320 to 380 to
+# envelope the no-overlap-driven natural widths after the inter-cell
+# constraint kicked in: Hayes Universal now requests 290 px data +
+# 84 px chrome = 374 px chart-width minimum (was 232 + 84 = 316 px
+# pre-constraint).
 MIN_VOWEL_CHART_W_PX: int = 380
 # Within each backness (front, central, back), the unrounded/rounded
 # vowel pair sits in two grid columns. ``VOWEL_PAIR_GAP_PX`` is the
-# gap between the two mates: small enough to read as a pair, not as
-# unrelated symbols. ``VOWEL_PAIR_SEPARATOR_PX`` is the extra width
-# inserted between adjacent pairs (front-rnd <-> central-unr,
-# central-rnd <-> back-unr) so the boundary between backness columns
+# gap between the two mates, small enough to read as a pair rather
+# than unrelated symbols. ``VOWEL_PAIR_SEPARATOR_PX`` is the extra
+# width inserted between adjacent pairs (front-rnd to central-unr,
+# central-rnd to back-unr) so the boundary between backness columns
 # stays visually distinct. Both UIs consume these via the relay; the
 # placement code in ``vowel_layout.py`` still emits a 6-column index
 # (0..5) and the renderers translate to physical grid columns.
@@ -450,12 +437,12 @@ COLLAPSE_W: int = 900
 # grid: ``VOWEL_STACK_W`` (the seg-pane floor for hosting the chart
 # side-by-side) plus ``FEAT_MIN_W`` plus the splitter handle and a
 # few pixels of safety margin. Expressed via the constants by name
-# so a threshold retune cannot leave this prose stale.
-# At this floor, ``distribute_pane_widths`` gives the seg pane just
-# enough room for vowels-alongside; anything narrower would force
-# the chart to stack. Bigger inventories get a content-driven size
-# above this floor via ``fit_to_content``; smaller inventories sit
-# at the floor so vowels still display correctly.
+# so a threshold retune cannot leave this prose stale. At this
+# floor, ``distribute_pane_widths`` gives the seg pane just enough
+# room for vowels-alongside; anything narrower forces the chart to
+# stack. Bigger inventories get a content-driven size above this
+# floor via ``fit_to_content``; smaller inventories sit at the floor
+# so vowels still display correctly.
 MIN_FIRST_LAUNCH_W: int = VOWEL_STACK_W + FEAT_MIN_W + 20
 MIN_FIRST_LAUNCH_H: int = 900
 # Fresh-install window size = this fraction of the primary screen's

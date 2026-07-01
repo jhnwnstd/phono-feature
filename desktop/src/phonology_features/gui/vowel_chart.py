@@ -1,15 +1,15 @@
 """Qt thin shell that renders the shared vowel chart geometry.
 
-All placement decisions, collision grouping, and physical-
+All placement decisions, collision grouping, and physical
 coordinate arithmetic live in
-:py:mod:`phonology_shared.chart.vowels`. This module
-walks the pre-built :py:class:`~vowel_layout.VowelChartGeometry`
-and emits Qt widgets: labels for headers + rows, buttons (single
-cells) or vbox stacks (collision cells) for the data cells.
+:py:mod:`phonology_shared.chart.vowels`. This module walks the
+pre-built :py:class:`~vowel_layout.VowelChartGeometry` and emits Qt
+widgets: labels for headers and rows, buttons (single cells) or vbox
+stacks (collision cells) for the data cells.
 
-The web counterpart (``web/main.js:_buildVowelChart``) is the
-analogous thin shell on the browser side; both consume the same
-geometry object from the bridge.
+The web counterpart (``web/main.js:_buildVowelChart``) is the analogous
+thin shell on the browser side; both consume the same geometry object
+from the bridge.
 """
 
 from __future__ import annotations
@@ -84,29 +84,27 @@ __all__ = [
 
 # Width floor for the row-label gutter. Lives in shared
 # ``chart_style.VOWEL_CHART_ROW_LABEL_GUTTER_PX`` so the web's CSS
-# grid-template-columns and desktop's gutter math read the same
-# value. Re-exported here for any existing importer.
+# grid-template-columns and desktop's gutter math read the same value.
+# Re-exported here for any existing importer.
 VOWEL_LABEL_W = cs.VOWEL_CHART_ROW_LABEL_GUTTER_PX
 
-# Desktop's PLATFORM ADJUSTMENT to the shared canonical
-# chart-width floor (``MIN_VOWEL_CHART_W_PX`` in layout.py).
-# The architectural pattern: shared layer owns the canonical
-# math; each renderer adds its own platform-specific offset to
-# land at the rendered floor for THIS platform.
+# Desktop's platform adjustment to the shared canonical chart-width floor
+# (``MIN_VOWEL_CHART_W_PX`` in layout.py). The shared layer owns the
+# canonical math; each renderer adds its own platform-specific offset to
+# land at the rendered floor for its platform.
 #
-# Why a desktop-specific adjustment exists at all: Qt's frame
-# rendering (the splitter handle reserves border pixels), QFont
-# metrics rounding, QPainter sub-pixel anti-aliasing, QSizePolicy
-# integer enforcement. Tune this (NOT the shared constant) when
-# the rendered desktop chart needs a few px more (positive) or
-# less (negative) than the canonical. Set to 0 when no
-# adjustment is needed.
+# A desktop-specific adjustment exists because Qt's frame rendering (the
+# splitter handle reserves border pixels), QFont metrics rounding,
+# QPainter sub-pixel anti-aliasing, and QSizePolicy integer enforcement
+# all shift the rendered width. Tune this (not the shared constant) when
+# the rendered desktop chart needs a few px more (positive) or less
+# (negative) than the canonical. Set to 0 when no adjustment is needed.
 #
-# The rendered chart width =
+# The rendered chart width is
 #   max(MIN_VOWEL_CHART_W_PX + DESKTOP_VOWEL_CHART_W_ADJ,
 #       natural_data_width_px + chrome)
-# so the floor still steps aside for inventories whose content
-# needs more horizontal room.
+# so the floor still steps aside for inventories whose content needs more
+# horizontal room.
 DESKTOP_VOWEL_CHART_W_ADJ: int = 0
 VOWEL_CHART_W_FLOOR: int = MIN_VOWEL_CHART_W_PX + DESKTOP_VOWEL_CHART_W_ADJ
 
@@ -114,20 +112,20 @@ VOWEL_CHART_W_FLOOR: int = MIN_VOWEL_CHART_W_PX + DESKTOP_VOWEL_CHART_W_ADJ
 class FlowLayout(QLayout):
     """Left-packed, line-wrapping layout.
 
-    Lays its items out left to right at their natural size and wraps
-    to a new line when the next item would overflow the available
-    width, every line packed flush left with a fixed ``gap`` between
-    items and between lines. This is the Qt counterpart of the web
-    diphthong strip's ``display: flex; flex-wrap: wrap``: both UIs
-    therefore pack chips identically (tight, left-aligned, wrapping)
-    rather than the old grid's stretch-to-fill columns.
+    Lays its items out left to right at their natural size and wraps to a
+    new line when the next item would overflow the available width, every
+    line packed flush left with a fixed ``gap`` between items and between
+    lines. This is the Qt counterpart of the web diphthong strip's
+    ``display: flex; flex-wrap: wrap``, so both UIs pack chips identically
+    (tight, left-aligned, wrapping) rather than the old grid's
+    stretch-to-fill columns.
 
-    Crucially the layout REFLOWS on every ``setGeometry`` (i.e. on
-    resize) and reports :py:meth:`heightForWidth`, so the owning
-    widget can reserve exactly the height the wrapped lines need. The
-    old fixed-grid placement froze each chip's row/column at build
-    time and then disagreed with a later width-based height estimate,
-    which is what made dense diphthong inventories overlap.
+    The layout reflows on every ``setGeometry`` (on resize) and reports
+    :py:meth:`heightForWidth`, so the owning widget can reserve exactly
+    the height the wrapped lines need. The old fixed-grid placement froze
+    each chip's row and column at build time and then disagreed with a
+    later width-based height estimate, which made dense diphthong
+    inventories overlap.
     """
 
     def __init__(
@@ -192,10 +190,10 @@ class FlowLayout(QLayout):
 
     # core flow
     def _do_layout(self, rect: QRect, *, apply: bool) -> int:
-        """Place items (when ``apply``) or just measure; return the
-        total wrapped height in pixels. Items are grouped into lines
-        first so each line can be placed (left-packed or centered) once
-        its full width is known."""
+        """Place items (when ``apply``) or just measure; return the total
+        wrapped height in pixels. Items are grouped into lines first so
+        each line can be placed (left-packed or centered) once its full
+        width is known."""
         lines: list[tuple[list[tuple[QLayoutItem, QSize]], int, int]] = []
         cur: list[tuple[QLayoutItem, QSize]] = []
         cur_w = 0
@@ -242,11 +240,11 @@ class VowelChartWidget(QWidget):
     _COL_HEADERS: ClassVar[tuple[str, ...]] = COL_LABELS
     _ROW_HEADERS: ClassVar[tuple[str, ...]] = ROW_LABELS
 
-    # Chrome dimensions for the outer rectangular UI space. The
-    # title / column headers stack at the top; row labels sit on
-    # the left; the trapezoidal data area takes the remaining
-    # Chrome dimensions wired through chart_style so the web's
-    # ``--vowel-chart-*`` CSS vars and these constants cannot drift.
+    # Chrome dimensions for the outer rectangular UI space. The title and
+    # column headers stack at the top; row labels sit on the left; the
+    # trapezoidal data area takes the rest. Wired through chart_style so
+    # the web's ``--vowel-chart-*`` CSS vars and these constants cannot
+    # drift.
     _TITLE_H: ClassVar[int] = cs.VOWEL_CHART_TITLE_H_PX
     _COL_HEADER_H: ClassVar[int] = cs.VOWEL_CHART_COL_HEADER_H_PX
     _PAD_R: ClassVar[int] = cs.VOWEL_CHART_PAD_R_PX
@@ -267,19 +265,18 @@ class VowelChartWidget(QWidget):
         )
         self.setMinimumHeight(_constraint.min_h)
         # Transparent so the enclosing seg-panel's surface color shows
-        # through. Without this the widget paints an opaque palette
-        # window (white) regardless of whether the seg pane is active
-        # or inactive, leaving the trapezoid sitting on a white patch
-        # against the inactive panel's grey bg.
+        # through. Without this the widget paints an opaque palette window
+        # (white) regardless of whether the seg pane is active or inactive,
+        # leaving the trapezoid sitting on a white patch against the
+        # inactive panel's grey bg.
         self.setStyleSheet("background: transparent;")
-        # Accessible name for screen readers. Shared constant so the
-        # web's ``aria-label="IPA vowel chart"`` and desktop's
-        # ``setAccessibleName`` stay in sync.
+        # Shared constant so the web's ``aria-label="IPA vowel chart"`` and
+        # desktop's ``setAccessibleName`` stay in sync.
         self.setAccessibleName(VOWEL_CHART_ACCESSIBLE_NAME)
-        # The widget owns these directly; no layout manager. Children
-        # are positioned absolutely from ``_layout_children``, which
-        # runs on ``set_vowels`` and on every ``resizeEvent`` so the
-        # cells, headers, and row labels track the widget's size.
+        # The widget owns these directly; no layout manager. Children are
+        # positioned absolutely from ``_layout_children``, which runs on
+        # ``set_vowels`` and on every ``resizeEvent`` so the cells, headers,
+        # and row labels track the widget's size.
         self._buttons: dict[str, QWidget] = {}
         self._title_label: QLabel | None = None
         # Column / row labels with their normalised positions
@@ -297,30 +294,28 @@ class VowelChartWidget(QWidget):
         # middle labels do (those rows' cells anchor an EDGE on
         # chart_y and grow inward).
         self._row_labels: list[tuple[QLabel, float, str]] = []
-        # Cell widgets (segment buttons or vbox stacks for collision
-        # cells) carry their chart_x / chart_y plus a pair_side
-        # signed multiplier (-1 / 0 / +1). The resize pass projects
-        # them to pixel positions: the anchor follows the trapezoid
-        # silhouette, then a FIXED pair shift in pixels keeps
-        # rounded/unrounded mates exactly tangent regardless of how
-        # narrow the row becomes. The back-line snap-to-button-centre
-        # decision lives on the shared
-        # ``VowelChartSilhouette.back_right_pixel_offset`` field so
-        # the renderer does not need each cell's ``col``.
+        # Cell widgets (segment buttons or vbox stacks for collision cells)
+        # carry their chart_x / chart_y plus a pair_side signed multiplier
+        # (-1 / 0 / +1). The resize pass projects them to pixel positions:
+        # the anchor follows the trapezoid silhouette, then a fixed pair
+        # shift in pixels keeps rounded/unrounded mates exactly tangent no
+        # matter how narrow the row becomes. The back-line
+        # snap-to-button-centre decision lives on the shared
+        # ``VowelChartSilhouette.back_right_pixel_offset`` field so the
+        # renderer does not need each cell's ``col``.
         # ``tier`` is the row's anchor semantic from
         # :py:class:`VowelChartRow`: ``"top"`` / ``"bottom"`` /
-        # ``"middle"`` / ``"only"``. The layout pass uses it to
-        # decide whether the cell's stack hangs down from chart_y
-        # (top), rises up to chart_y (bottom), or centres on
-        # chart_y (middle / only). Web CSS expresses the same
-        # decision via ``data-row-tier`` rules with
+        # ``"middle"`` / ``"only"``. The layout pass uses it to decide
+        # whether the cell's stack hangs down from chart_y (top), rises up
+        # to chart_y (bottom), or centres on chart_y (middle / only). Web
+        # CSS expresses the same decision via ``data-row-tier`` rules with
         # ``translate(..., 0%)`` / ``-100%`` / ``-50%``.
         # Per-cell tuple:
         #   (widget, chart_x, chart_y, pair_side, tier, row, col,
         #    canonical_segment, pair_shift_px, nudge_px)
         # ``canonical_segment`` is ``entries[0]`` of the source
-        # ``VowelChartCell`` (entries are sorted by descending
-        # placement confidence).
+        # ``VowelChartCell`` (entries are sorted by descending placement
+        # confidence).
         self._cells: list[
             tuple[
                 QWidget,
@@ -362,23 +357,23 @@ class VowelChartWidget(QWidget):
         # trapezoid or triangle silhouette behind the data area
         # only (not under the row labels or column headers).
         self._shape: VowelChartShape = VowelChartShape.TRAPEZOID
-        # Silhouette corners for the current inventory. Populated
-        # by :py:meth:`_render_geometry` from the shared
-        # :py:attr:`VowelChartGeometry.silhouette` so the outline
-        # adapts to the populated row range (e.g. a Spanish
-        # inventory whose lowest row is Open uses the canonical
-        # narrow bottom; one whose lowest row is Open-mid carries
-        # a wider bottom edge). ``None`` before the first render.
+        # Silhouette corners for the current inventory. Populated by
+        # :py:meth:`_render_geometry` from the shared
+        # :py:attr:`VowelChartGeometry.silhouette` so the outline adapts to
+        # the populated row range (e.g. a Spanish inventory whose lowest
+        # row is Open uses the canonical narrow bottom; one whose lowest
+        # row is Open-mid carries a wider bottom edge). ``None`` before the
+        # first render.
         self._silhouette: VowelChartSilhouette | None = None
         # Diphthong segment names for the current inventory. They are
         # NOT placed in the trapezoid; the chip strip below the chart
         # lists them. Empty for monophthong-only inventories.
         self._diphthongs: tuple[str, ...] = ()
-        # "Diphthongs" section header above the chip strip, styled like
-        # the segment-class headers (uppercase, semibold, tracked) via
-        # the shared SEG_GROUP_HEADER_* tokens so it reads as a peer of
-        # the other class labels instead of incidental grey text.
-        # Shown only when the inventory has diphthongs.
+        # "Diphthongs" section header above the chip strip, styled like the
+        # segment-class headers (uppercase, semibold, tracked) via the
+        # shared SEG_GROUP_HEADER_* tokens so it reads as a peer of the
+        # other class labels instead of incidental grey text. Shown only
+        # when the inventory has diphthongs.
         diph_font = QFont("Noto Sans")
         diph_font.setPixelSize(cs.SEG_GROUP_HEADER_FONT_PX)
         diph_font.setWeight(QFont.Weight(cs.SEG_GROUP_HEADER_FONT_WEIGHT))
@@ -399,44 +394,42 @@ class VowelChartWidget(QWidget):
         self._diphthong_chip_strip.setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
-        # FlowLayout packs the chips tight and left-aligned and wraps
-        # to new lines when the strip isn't wide enough, mirroring the
-        # web strip's ``flex-wrap``. It reflows on resize and reports
-        # ``heightForWidth``, so the reserved footer height always
-        # matches the laid-out lines (dense inventories no longer
-        # overlap). ``BTN_GAP`` matches the segment grid's spacing so
-        # the chips share the seg-button rhythm.
+        # FlowLayout packs the chips tight and left-aligned and wraps to
+        # new lines when the strip isn't wide enough, mirroring the web
+        # strip's ``flex-wrap``. It reflows on resize and reports
+        # ``heightForWidth``, so the reserved footer height always matches
+        # the laid-out lines (dense inventories no longer overlap).
+        # ``BTN_GAP`` matches the segment grid's spacing so the chips share
+        # the seg-button rhythm.
         self._chip_strip_layout = FlowLayout(
             self._diphthong_chip_strip, gap=BTN_GAP, center=False
         )
         self._diphthong_chip_strip.hide()
-        # Floor for ``set_target_width``: the geometry's natural
-        # data width plus this widget's chrome. Updated on every
-        # :py:meth:`_render_geometry` call so external resize
-        # requests below this floor are clamped, keeping cells
-        # legible when an inventory needs more horizontal room than
-        # the canonical ``layout.VOWEL_NATURAL_W``.
+        # Floor for ``set_target_width``: the geometry's natural data width
+        # plus this widget's chrome. Updated on every
+        # :py:meth:`_render_geometry` call so external resize requests below
+        # this floor are clamped, keeping cells legible when an inventory
+        # needs more horizontal room than the canonical
+        # ``layout.VOWEL_NATURAL_W``.
         self._natural_total_w: int = 0
 
     def _rebuild_style_cache(self) -> None:
         # Letter-spacing on the column headers pinned to
-        # ``chart_style.VOWEL_CHART_COL_LABEL_LETTER_SPACING_PX`` so
-        # desktop and web both render Front / Central / Back with
-        # the same tracking. Pre-relay desktop used 0 (no spacing).
+        # ``chart_style.VOWEL_CHART_COL_LABEL_LETTER_SPACING_PX`` so desktop
+        # and web both render Front / Central / Back with the same tracking.
         _col_ls = (
             f"letter-spacing: "
             f"{cs.VOWEL_CHART_COL_LABEL_LETTER_SPACING_PX}px;"
         )
         self._HDR_ACTIVE = f"color: {C['text']}; {_col_ls}"
         self._HDR_INACTIVE = f"color: {C['text_dim']}; {_col_ls}"
-        # Row labels: NO inline padding-right. The gap to the
-        # silhouette comes entirely from
-        # ``chart_style.VOWEL_CHART_ROW_LABEL_GAP_PX`` applied at
-        # position time (web uses the same ``--vowel-chart-row-label-gap``
-        # value via its CSS ``right: calc(...)`` rule). Pre-relay
-        # desktop's extra 4 px padding-right stacked on top of the
-        # 10 px gap, leaving labels 14 px from the silhouette while
-        # web stayed at 10 px.
+        # Row labels: no inline padding-right. The gap to the silhouette
+        # comes entirely from ``chart_style.VOWEL_CHART_ROW_LABEL_GAP_PX``
+        # applied at position time (web uses the same
+        # ``--vowel-chart-row-label-gap`` value via its CSS
+        # ``right: calc(...)`` rule). Pre-relay desktop's extra 4 px
+        # padding-right stacked on top of the 10 px gap, leaving labels
+        # 14 px from the silhouette while web stayed at 10 px.
         self._ROW_ACTIVE = f"color: {C['text']};"
         self._ROW_INACTIVE = f"color: {C['text_dim']};"
         # "DIPHTHONGS" header: same segment-class-header tracking +
@@ -488,9 +481,9 @@ class VowelChartWidget(QWidget):
         header_style = self._HDR_ACTIVE if active else self._HDR_INACTIVE
         row_style = self._ROW_ACTIVE if active else self._ROW_INACTIVE
         if self._title_label is not None:
-            # Color is the only active-state difference; padding comes
-            # from the relayed constant and letter-spacing already lives
-            # on the QFont (a stylesheet copy would double-apply it).
+            # Color is the only active-state difference; padding comes from
+            # the relayed constant and letter-spacing already lives on the
+            # QFont (a stylesheet copy would double-apply it).
             _pad = cs.VOWEL_CHART_TITLE_PADDING_PX
             self._title_label.setStyleSheet(
                 f"color: {C['text' if active else 'text_dim']}; "
@@ -522,8 +515,8 @@ class VowelChartWidget(QWidget):
         them in order; placement and wrapping happen at layout time.
         """
         layout = self._chip_strip_layout
-        # Detach (never destroy) any previously placed chips: they are
-        # the caller's pooled buttons, owned by the MainWindow.
+        # Detach (never destroy) any previously placed chips; they are the
+        # caller's pooled buttons, owned by the MainWindow.
         while layout.count():
             item = layout.takeAt(0)
             if item is None:
@@ -680,18 +673,15 @@ class VowelChartWidget(QWidget):
         title.adjustSize()
         title.show()
         self._title_label = title
-        # Column headers: positioned at the backness anchor for
-        # each column (front / central / back) so the labels line
-        # up with the cells in the widest row of the trapezoid.
-        # Column headers carry the title-tier weight (DemiBold) so
-        # they read as section headings; row labels stay regular
-        # so the two tiers distinguish header from axis-label rhythm.
-        # Mirrors the web's 600/500 font-weight split on
+        # Column headers: positioned at the backness anchor for each column
+        # (front / central / back) so the labels line up with the cells in
+        # the widest row of the trapezoid. They carry the title-tier weight
+        # (DemiBold) so they read as section headings; row labels stay
+        # regular, so the two tiers distinguish header from axis-label
+        # rhythm. Mirrors the web's 600/500 font-weight split on
         # ``.vowel-chart-col-label`` vs ``.vowel-chart-row-label``.
-        # Col / row label fonts use chart_style.py so the desktop's
-        # Qt setPixelSize and the web's CSS font-size read the same
-        # number. Pre-relay desktop used 7pt Qt (~9 px at 96 DPI)
-        # while web used 11 px.
+        # Col / row label fonts use chart_style.py so the desktop's Qt
+        # setPixelSize and the web's CSS font-size read the same number.
         col_font = QFont("Noto Sans")
         col_font.setPixelSize(cs.VOWEL_CHART_COL_LABEL_FONT_PX)
         col_font.setWeight(QFont.Weight.DemiBold)
@@ -703,11 +693,10 @@ class VowelChartWidget(QWidget):
             lbl.adjustSize()
             lbl.show()
             self._col_labels.append((lbl, col.chart_x))
-        # Row labels: positioned at chart_y on the left gutter.
-        # Weight 500 (Medium) per chart_style.py so axis labels
-        # read lighter than the col-header headings; the
-        # 600/500 axis-vs-heading split the web docstring
-        # describes now applies on desktop too.
+        # Row labels: positioned at chart_y on the left gutter. Weight 500
+        # (Medium) per chart_style.py so axis labels read lighter than the
+        # col-header headings; the 600/500 axis-vs-heading split the web
+        # docstring describes now applies on desktop too.
         row_font = QFont("Noto Sans")
         row_font.setPixelSize(cs.VOWEL_CHART_ROW_LABEL_FONT_PX)
         row_font.setWeight(QFont.Weight(cs.VOWEL_CHART_ROW_LABEL_FONT_WEIGHT))
@@ -893,11 +882,10 @@ class VowelChartWidget(QWidget):
                     self._slot_norm_by_row.get(cell.row, 0.0),
                 )
             )
-        # Affordance: dense / ultra cells visually shrink their
-        # buttons; without a tooltip, users read the packing as a
-        # rendering bug. Mirror the web's title attribute on the
-        # container so hovering anywhere over the stack explains
-        # the count.
+        # Dense / ultra cells visually shrink their buttons; without a
+        # tooltip, users read the packing as a rendering bug. Mirror the
+        # web's title attribute on the container so hovering anywhere over
+        # the stack explains the count.
         if len(cell.entries) >= 5:
             container.setToolTip(
                 f"{len(cell.entries)} segments share this cell: "
@@ -947,18 +935,18 @@ class VowelChartWidget(QWidget):
         room they occupy and never overlap."""
         if not self._diphthongs:
             return 0
-        # The data-area WIDTH does not depend on the footer height
-        # (only the data-area height does), so this is the same width
-        # the chip strip is laid out at, with no circular call back
-        # into ``_data_area_rect``. Asking the FlowLayout itself for
+        # The data-area width does not depend on the footer height (only
+        # the data-area height does), so this is the same width the chip
+        # strip is laid out at, with no circular call back into
+        # ``_data_area_rect``. Asking the FlowLayout itself for
         # ``heightForWidth`` keeps the reserved height and the actual
-        # wrapped lines in lock-step (the old grid estimate could
-        # disagree with the built layout and overlap).
+        # wrapped lines in lock-step (the old grid estimate could disagree
+        # with the built layout and overlap).
         strip_w = max(0, self.width() - VOWEL_LABEL_W - self._PAD_R)
-        # The strip now starts at the trapezoid's bottom-left corner,
-        # so it is narrower than the full data width. Measure the wrap
-        # at that narrower width or dense inventories (Korean PHOIBLE,
-        # 12 diphthongs) under-reserve height and overflow the footer.
+        # The strip starts at the trapezoid's bottom-left corner, so it is
+        # narrower than the full data width. Measure the wrap at that
+        # narrower width or dense inventories (Korean PHOIBLE, 12
+        # diphthongs) under-reserve height and overflow the footer.
         strip_w = max(0, strip_w - self._diphthong_left_inset(strip_w))
         if strip_w <= 0:
             return SEG_BTN_H
@@ -1008,7 +996,7 @@ class VowelChartWidget(QWidget):
             footer_top = self.height() - self._PAD_B - self._footer_height()
             # Start the footer at the trapezoid's bottom-left corner (the
             # foot of the front slant), not the data area's left edge, so
-            # the label + chips sit flush under the silhouette's
+            # the label and chips sit flush under the silhouette's
             # bottom-left edge. The width shrinks to match, so chips still
             # wrap at the data area's right (back) edge. Mirrors the web
             # ``--vowel-diph-indent``.
@@ -1024,25 +1012,24 @@ class VowelChartWidget(QWidget):
                 strip_h,
             )
         if self._title_label is not None:
-            # Give the title the FULL data-area box and let its
-            # AlignCenter centre the text. This mirrors the web (the
-            # title is grid column 2, centred over the data area) and
-            # is positionally stable: the box is always
-            # ``[dx, dx + dw]``, so the heading sits at the same place
-            # for every inventory of a given chart width instead of
-            # drifting with the label's measured advance width. The
-            # full-width box also leaves ample slack on both sides, so
-            # the first glyph's side bearing (the 'V' of "VOWELS") is
-            # never clipped, which is what the earlier
-            # adjustSize-based placement got wrong.
+            # Give the title the full data-area box and let its AlignCenter
+            # centre the text. This mirrors the web (the title is grid
+            # column 2, centred over the data area) and is positionally
+            # stable: the box is always ``[dx, dx + dw]``, so the heading
+            # sits at the same place for every inventory of a given chart
+            # width instead of drifting with the label's measured advance
+            # width. The full-width box also leaves ample slack on both
+            # sides, so the first glyph's side bearing (the 'V' of "VOWELS")
+            # is never clipped, which is what the earlier adjustSize-based
+            # placement got wrong.
             self._title_label.setGeometry(dx, 0, dw, self._TITLE_H)
-        # Column headers: x in [0, 1] mapped across the data area,
-        # then centred on each anchor. Uses round-to-nearest (not
-        # int truncate) so sub-pixel positions don't bias every
-        # cell leftward vs the web's fractional CSS percentages.
-        # Bottom-anchored in the header strip a modest gap above the
-        # data area, so most of the strip's height becomes breathing
-        # room between the labels and the "VOWELS" title above.
+        # Column headers: x in [0, 1] mapped across the data area, then
+        # centred on each anchor. Uses round-to-nearest (not int truncate)
+        # so sub-pixel positions don't bias every cell leftward vs the web's
+        # fractional CSS percentages. Bottom-anchored in the header strip a
+        # modest gap above the data area, so most of the strip's height
+        # becomes breathing room between the labels and the "VOWELS" title
+        # above.
         col_label_y = (
             self._TITLE_H
             + self._COL_HEADER_H
@@ -1053,20 +1040,18 @@ class VowelChartWidget(QWidget):
             lw = lbl.width()
             px = dx + round(x * dw) - lw // 2
             lbl.move(px, col_label_y - lbl.height())
-        # Row labels: positioned at chart_y, right-aligned against
-        # the silhouette's slanted left edge at this row so the label
-        # follows the trapezoid inward as it shrinks. Falls back to
-        # the data area's left gutter when no silhouette has been
-        # rendered yet. The gap keeps the label off the slant stroke
-        # so the two read as separate elements; web mirrors the value
-        # in style.css.
+        # Row labels: positioned at chart_y, right-aligned against the
+        # silhouette's slanted left edge at this row so the label follows
+        # the trapezoid inward as it shrinks. Falls back to the data area's
+        # left gutter when no silhouette has been rendered yet. The gap
+        # keeps the label off the slant stroke so the two read as separate
+        # elements; web mirrors the value in style.css.
         label_gap_px = self._ROW_LABEL_GAP_PX
         # Compute silhouette_left per render using the dw-corrected
-        # silhouette: the baked per-row field on the shared geometry
-        # is exact at the canonical 232 px content width, but the
-        # rendered chart is content-driven (~228 to 320 px). The
-        # cascade helper keeps the label flush against the
-        # silhouette at any rendered width.
+        # silhouette. The baked per-row field on the shared geometry is
+        # exact at the canonical 232 px content width, but the rendered
+        # chart is content-driven (~228 to 320 px). The cascade helper keeps
+        # the label flush against the silhouette at any rendered width.
         sil_for_dw = (
             silhouette_for_data_width(self._silhouette, dw)
             if self._silhouette is not None
@@ -1077,14 +1062,14 @@ class VowelChartWidget(QWidget):
             lh = lbl.height()
             # Centre the label on its anchor button row via the shared
             # ``label_midpoint_norm`` (top / bottom tiers anchor their
-            # cells' EDGE on chart_y and grow inward, so an unshifted
-            # label would sit on the stack edge, not the button row).
-            # Recomputed against the LIVE ``dh`` each layout pass since
-            # the desktop chart resizes; the same function bakes the
-            # web's ``row.label_y`` at the natural height. The
-            # silhouette edge is then evaluated AT THE LABEL'S OWN y
-            # so the label-to-outline gap stays constant: label
-            # placement is divorced from where the row's buttons land.
+            # cells' edge on chart_y and grow inward, so an unshifted label
+            # would sit on the stack edge, not the button row). Recomputed
+            # against the live ``dh`` each layout pass since the desktop
+            # chart resizes; the same function bakes the web's
+            # ``row.label_y`` at the natural height. The silhouette edge is
+            # then evaluated at the label's own y so the label-to-outline
+            # gap stays constant, divorcing label placement from where the
+            # row's buttons land.
             label_y = label_midpoint_norm(y, tier, dh)
             py = dy + round(label_y * dh) - lh // 2
             silhouette_left = silhouette_left_at_y(sil_for_dw, label_y)
@@ -1092,14 +1077,13 @@ class VowelChartWidget(QWidget):
             px = anchor_x - lbl.width() - label_gap_px
             lbl.move(max(0, px), py)
         # Render-time slot clamp. The geometry's row-fit invariant
-        # guarantees every slot covers its stack at NATURAL size;
-        # when the rendered data area is shorter, the density-tier
-        # height would overflow the slot and invade the rows below
-        # (top tiers hang down) or above (bottom tiers rise up).
-        # Re-derive each stack's per-button height from its row's
-        # slot budget at the current ``dh``, floored at the shared
-        # legibility minimum; past the floor, the pane's scrolling
-        # absorbs the overflow. Mirrors the web's ``--cell-btn-h``
+        # guarantees every slot covers its stack at natural size; when the
+        # rendered data area is shorter, the density-tier height would
+        # overflow the slot and invade the rows below (top tiers hang down)
+        # or above (bottom tiers rise up). Re-derive each stack's per-button
+        # height from its row's slot budget at the current ``dh``, floored
+        # at the shared legibility minimum; past the floor, the pane's
+        # scrolling absorbs the overflow. Mirrors the web's ``--cell-btn-h``
         # resize pass.
         for container, btns, depth, slot_norm in self._stack_cells:
             if slot_norm <= 0.0 or depth <= 0:
@@ -1113,17 +1097,16 @@ class VowelChartWidget(QWidget):
                 for btn in btns:
                     btn.setFixedHeight(h)
                 container.adjustSize()
-        # Cells: position concern (anchor) + display concern (pair
-        # shift). ``chart_x`` / ``chart_y`` are the backness anchor
-        # already projected through the chart silhouette; the pair
-        # shift is a FIXED pixel offset of half a button width plus
-        # half the within-pair gap, multiplied by ``pair_side``
-        # (-1 unrounded, 0 unknown, +1 rounded). Keeping the pair
-        # shift in pixels means rounded/unrounded mates stay
-        # exactly tangent at every row of the trapezoid.
-        # Per-cell ``pair_shift_px`` always carries the effective
-        # value (canonical for unconflicted cells, elevated when the
-        # geometry build resolved a same-anchor collision), so the
+        # Cells combine a position concern (anchor) with a display concern
+        # (pair shift). ``chart_x`` / ``chart_y`` are the backness anchor
+        # already projected through the chart silhouette; the pair shift is
+        # a fixed pixel offset of half a button width plus half the
+        # within-pair gap, multiplied by ``pair_side`` (-1 unrounded,
+        # 0 unknown, +1 rounded). Keeping the pair shift in pixels means
+        # rounded/unrounded mates stay exactly tangent at every row of the
+        # trapezoid. Per-cell ``pair_shift_px`` always carries the
+        # effective value (canonical for unconflicted cells, elevated when
+        # the geometry build resolved a same-anchor collision), so the
         # renderer reads it unconditionally.
         for (
             widget,
@@ -1141,10 +1124,10 @@ class VowelChartWidget(QWidget):
             ww = widget.width()
             wh = widget.height()
             # ``cell_nudge`` is the shared hard-boundary confinement
-            # offset; applied with the pair shift so the box stays
-            # inside the outline exactly as the geometry computed.
-            # round-to-nearest so sub-pixel positions don't bias
-            # cells leftward / upward vs the web's float % CSS.
+            # offset, applied with the pair shift so the box stays inside
+            # the outline exactly as the geometry computed. Round-to-nearest
+            # so sub-pixel positions don't bias cells leftward / upward vs
+            # the web's float % CSS.
             px = (
                 dx
                 + round(cx * dw)
@@ -1153,13 +1136,13 @@ class VowelChartWidget(QWidget):
             )
             # Tier-aware y-anchor. Mirrors the web CSS at
             # ``web/style.css`` ``[data-row-tier]`` rules:
-            #   top    -> stack hangs DOWN from chart_y (anchor top)
-            #   bottom -> stack rises UP to chart_y (anchor bottom)
+            #   top    -> stack hangs down from chart_y (anchor top)
+            #   bottom -> stack rises up to chart_y (anchor bottom)
             #   middle / only -> centre on chart_y
             # Without this, a 7-deep Close (top) row stack centred on
-            # chart_y=0.08 extends half-stack ABOVE the silhouette
-            # top edge; one of the divergences vs. the web for
-            # Korean PHOIBLE and other tall-stack inventories.
+            # chart_y=0.08 extends half-stack above the silhouette top edge;
+            # one of the divergences vs the web for Korean PHOIBLE and other
+            # tall-stack inventories.
             cy_px = dy + round(cy * dh)
             if tier == "top":
                 py = cy_px
@@ -1186,27 +1169,25 @@ class VowelChartWidget(QWidget):
         dx, dy, dw, dh = self._data_area_rect()
         if dw <= 0 or dh <= 0:
             return
-        # Silhouette corners come from the geometry the bridge
-        # built for this inventory (adapted to its populated row
-        # range). Falls back to the canonical 7-row silhouette
-        # before the first render so an empty widget paints
-        # something sensible. The right edge sits on the back-
-        # pair's outer extent (back vowels are flush against it)
-        # and the left edge slants from the topmost row's front
-        # position to the bottommost row's front position.
+        # Silhouette corners come from the geometry the bridge built for
+        # this inventory (adapted to its populated row range). Falls back to
+        # the canonical 7-row silhouette before the first render so an empty
+        # widget paints something sensible. The right edge sits on the
+        # back-pair's outer extent (back vowels are flush against it) and
+        # the left edge slants from the topmost row's front position to the
+        # bottommost row's front position.
         sil = self._silhouette
         if sil is None:
             # No inventory rendered yet; use the canonical silhouette
             # so a pre-load paint still shows the trapezoid outline.
             sil = vowel_silhouette(self._shape)
-        # CASCADE: recompute the silhouette corners from the cell
-        # extent fields (front_anchor_at_*, back_anchor,
-        # cell_outer_extent_px) for the ACTUAL data width. This
-        # guarantees the silhouette wraps the outermost cells
-        # flush regardless of how wide the chart renders. Pre-
-        # cascade the corners were computed once at the canonical
-        # 232 px content width and drifted ~1 px at the rendered
-        # 228 / 320 px widths.
+        # Recompute the silhouette corners from the cell extent fields
+        # (front_anchor_at_*, back_anchor, cell_outer_extent_px) for the
+        # actual data width. This guarantees the silhouette wraps the
+        # outermost cells flush no matter how wide the chart renders.
+        # Pre-cascade the corners were computed once at the canonical 232 px
+        # content width and drifted ~1 px at the rendered 228 / 320 px
+        # widths.
         sil = silhouette_for_data_width(sil, dw)
         top_y = dy + round(sil.top_y * dh)
         bottom_y = dy + round(sil.bottom_y * dh)
@@ -1236,22 +1217,21 @@ class VowelChartWidget(QWidget):
         )
         painter = QPainter(self)
         # ``end()`` in a finally so a raise mid-paint can't leave the
-        # QPainter active on the widget (Qt then warns and can corrupt
-        # the next paint pass).
+        # QPainter active on the widget (Qt then warns and can corrupt the
+        # next paint pass).
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            # "Soft modern" interior: single top->bottom gradient
-            # instead of the alternating per-band tints. Paints first
-            # so the silhouette outline and diphthong arrows render on
-            # top. Active-state cue lives on the labels (text-dim to
-            # text colour transition); the silhouette outline stays
-            # the same in both states.
+            # Single top->bottom gradient interior instead of the old
+            # alternating per-band tints. Paints first so the silhouette
+            # outline and diphthong arrows render on top. The active-state
+            # cue lives on the labels (text-dim to text colour transition);
+            # the silhouette outline stays the same in both states.
             self._paint_gradient_interior(painter, path)
             self._paint_guides(painter, path, dx, dy, dw, dh)
-            # Outline only, no painted fill. The trapezoid is a
-            # structural guide, not a coloured region. A 1 px alpha-
-            # blended stroke softens the silhouette so the cells inside
-            # carry the visual weight; mirrors the web's muted
+            # Outline only, no painted fill. The trapezoid is a structural
+            # guide, not a coloured region. A 1 px alpha-blended stroke
+            # softens the silhouette so the cells inside carry the visual
+            # weight; mirrors the web's muted
             # ``color-mix(in srgb, var(--border) 70%, transparent)``
             # treatment on ``.vowel-chart-data::before``.
             outline_color = QColor(C["border"])
@@ -1289,11 +1269,11 @@ class VowelChartWidget(QWidget):
         painter.setClipPath(path)
         painter.setPen(pen)
         for _lbl, chart_y, tier in self._row_labels:
-            # Trace the button-row midpoint, not the raw ``chart_y``
-            # anchor: top / bottom tiers anchor their cells' EDGE on
-            # ``chart_y`` and grow inward, so an unshifted guide would
-            # miss the button centres. Uses the SAME ``label_midpoint_norm``
-            # the row label placement uses, so guide and label align.
+            # Trace the button-row midpoint, not the raw ``chart_y`` anchor:
+            # top / bottom tiers anchor their cells' edge on ``chart_y`` and
+            # grow inward, so an unshifted guide would miss the button
+            # centres. Uses the same ``label_midpoint_norm`` the row label
+            # placement uses, so guide and label align.
             y = dy + round(label_midpoint_norm(chart_y, tier, dh) * dh)
             painter.drawLine(dx, y, dx + dw, y)
         for _lbl, chart_x in self._col_labels:
@@ -1331,14 +1311,14 @@ class VowelChartWidget(QWidget):
             (br_x, br_y),
             (tr_x, tr_y),
         )
-        # Radius in pixels: web's polygon points use the same
-        # ``radius_frac`` applied uniformly to normalised x and y
-        # coords. Mirror that: scale by dw / dh respectively so
-        # the rounding looks identical on both UIs even when the
-        # chart's aspect ratio is non-square.
+        # Radius in pixels. The web's polygon points apply the same
+        # ``radius_frac`` uniformly to normalised x and y coords; mirror
+        # that by scaling by dw / dh respectively so the rounding looks
+        # identical on both UIs even when the chart's aspect ratio is
+        # non-square.
         r_x = cs.VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC * dw
         r_y = cs.VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC * dh
-        # Compute the inset points per corner; the path is then
+        # Inset points per corner; the path is then
         # ``moveTo(p_in_0) [ lineTo(p_in_next) quadTo(curr_next,
         # p_out_next) ]* closeSubpath``.
         n = len(corners)
@@ -1354,9 +1334,9 @@ class VowelChartWidget(QWidget):
             dy_out = nxt[1] - curr[1]
             len_in = math.hypot(dx_in, dy_in) or 1.0
             len_out = math.hypot(dx_out, dy_out) or 1.0
-            # Inset by the per-axis radius: x by r_x, y by r_y.
-            # Clamp to 45 % of the edge length so a tiny edge
-            # doesn't overlap the adjacent corner's arc.
+            # Inset by the per-axis radius (x by r_x, y by r_y). Clamp to
+            # 45 % of the edge length so a tiny edge doesn't overlap the
+            # adjacent corner's arc.
             scale_in = min(1.0, len_in * 0.45 / max(r_x, r_y))
             scale_out = min(1.0, len_out * 0.45 / max(r_x, r_y))
             ix_in = curr[0] + scale_in * r_x * (dx_in / len_in)
@@ -1366,13 +1346,11 @@ class VowelChartWidget(QWidget):
             inset_in.append((ix_in, iy_in))
             inset_out.append((ix_out, iy_out))
         path = QPainterPath()
-        # Start at the first corner's "outgoing" inset (post-arc
-        # point), then line+arc around the polygon.
+        # Start at the first corner's outgoing (post-arc) inset, then line
+        # and arc around the polygon.
         path.moveTo(inset_out[0][0], inset_out[0][1])
         for i in range(n):
             nxt_idx = (i + 1) % n
-            # Line from this corner's outgoing inset to the next
-            # corner's incoming inset.
             path.lineTo(inset_in[nxt_idx][0], inset_in[nxt_idx][1])
             # Arc through the next corner via quadratic Bezier.
             path.quadTo(
@@ -1389,14 +1367,12 @@ class VowelChartWidget(QWidget):
         painter: QPainter,
         silhouette_path: QPainterPath,
     ) -> None:
-        """Fill the silhouette interior with a single very-faint
-        top->bottom linear gradient. Replaces the pre-redesign
-        alternating per-band tints (which read as uneven graph
-        paper on irregular inventories). Mirrors the web's CSS
-        rule on ``.vowel-chart-row-bands``; both renderers paint
-        ``border @ 4 % alpha`` at the top, ``border @ 14 % alpha``
-        at the bottom, suggesting tongue lowering without adding
-        visual noise.
+        """Fill the silhouette interior with a single very-faint top->bottom
+        linear gradient. Replaces the old alternating per-band tints, which
+        read as uneven graph paper on irregular inventories. Mirrors the
+        web's CSS rule on ``.vowel-chart-row-bands``; both renderers paint
+        ``border @ 4 % alpha`` at the top, ``border @ 14 % alpha`` at the
+        bottom, suggesting tongue lowering without adding visual noise.
         """
         bounds = silhouette_path.boundingRect()
         if bounds.height() <= 0:

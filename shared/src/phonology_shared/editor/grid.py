@@ -58,9 +58,8 @@ CYCLE_LADDER: Mapping[str, str] = MappingProxyType(
 # the character) and the web (which reads ``event.key`` directly)
 # look up this mapping so the shortcuts stay in lockstep.
 #
-# ``"0"`` is accepted alongside ``"3"`` because the zero key sits
-# in the natural "zero" slot on most keyboards, and ``0`` reads as
-# "underspecified" intuitively. Both produce the same cell value.
+# ``"0"`` is accepted alongside ``"3"`` because the zero key reads
+# as "underspecified" intuitively. Both produce the same cell value.
 VALUE_KEYS: Mapping[str, str] = MappingProxyType(
     {
         "1": "+",
@@ -74,19 +73,17 @@ VALUE_KEYS: Mapping[str, str] = MappingProxyType(
 # step in the grid. Three vocabularies are supported so users on
 # different input habits all get a binding:
 #
-# * Arrow keys: ``ArrowUp`` / ``ArrowDown`` / ``ArrowLeft`` /
-#   ``ArrowRight``. These match the JS ``event.key`` values
-#   directly; the desktop translates them to ``Qt.Key.Key_Up``
-#   etc. via the wrapper in ``editor/window.py``.
+# * Arrows: ``ArrowUp`` / ``ArrowDown`` / ``ArrowLeft`` /
+#   ``ArrowRight``. Match the JS ``event.key`` values directly; the
+#   desktop translates them to ``Qt.Key.Key_Up`` etc. via the
+#   wrapper in ``editor/window.py``.
 # * Vim: h / j / k / l. Single chars; translate uppercase to the
 #   matching ``Qt.Key.Key_<X>`` constant on the desktop.
 # * Numpad: 4 / 5 / 6 / 8. Same translation rule.
 #
-# The desktop used to delegate arrow-key handling to Qt's built-in
-# ``QTableWidget`` navigation; the web had no equivalent and arrow
-# keys did nothing in the editor. Putting all three vocabularies in
-# the shared mapping keeps both frontends in lockstep and means a
-# new binding (e.g. PageUp / PageDown) lands once and propagates.
+# Kept in the shared mapping (rather than delegated to Qt's built-in
+# ``QTableWidget`` navigation, which the web had no equivalent for)
+# so both frontends stay in lockstep and a new binding lands once.
 MOVE_KEYS: Mapping[str, tuple[int, int]] = MappingProxyType(
     {
         # Arrows.
@@ -115,9 +112,7 @@ MAX_UNDO_DEPTH: int = 200
 
 
 def cycle_value(current: str) -> str:
-    """Return the next value in the ladder. Unknown inputs reset to
-    ``0``. Pure lookup over :py:data:`CYCLE_LADDER`.
-    """
+    """Return the next value in the ladder. Unknown inputs reset to ``0``."""
     return CYCLE_LADDER.get(current, "0")
 
 

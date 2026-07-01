@@ -5,18 +5,18 @@ feature data. The core inference is empirical: it estimates parent-child
 dependencies from the loaded inventory rather than validating the
 inventory against a fixed feature-geometry theory.
 
-The analyzer currently infers specifiedness dependencies of the form
-"child feature specified implies parent feature specified". It keeps the
-legacy tree interface while also exposing structured edges with support,
+The analyzer infers specifiedness dependencies of the form "child
+feature specified implies parent feature specified". It keeps the legacy
+tree interface while also exposing structured edges with support,
 violations, hypergeometric p-values, and optional Benjamini-Hochberg
 q-values for multiple-testing control.
 
-DORMANT RESEARCH CODE. This module is complete and tested but not
-wired into any live path: neither UI nor the web bridge surfaces it,
-and only the test suite imports it. It is retained intentionally as a
-working basis for a future feature-geometry view; treat it as a leaf
-that nothing in production depends on, not as something to keep in
-sync with the rest of the chart stack.
+DORMANT RESEARCH CODE. This module is complete and tested but wired
+into no live path: neither UI nor the web bridge surfaces it, and only
+the test suite imports it. It is retained intentionally as a working
+basis for a future feature-geometry view. Treat it as a leaf nothing in
+production depends on, not as something to keep in sync with the rest of
+the chart stack.
 """
 
 from __future__ import annotations

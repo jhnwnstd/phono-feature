@@ -1,10 +1,11 @@
-"""Inventory-directory ownership for :class:`MainWindow`:
-filesystem watcher with a 600 ms debounce, MRU list for the
-delete-fallback path, and dropdown population (with a stale-
-tmp-file sweep). The boundary between "files changed on disk"
-and "load this path". The actual load stays on MainWindow
-because it touches engine state, the status bar, and the
-analysis pane.
+"""Inventory-directory ownership for :class:`MainWindow`.
+
+Holds the filesystem watcher with a 600 ms debounce, the MRU list
+for the delete-fallback path, and dropdown population (with a
+stale-tmp-file sweep). This is the boundary between "files changed
+on disk" and "load this path". The actual load stays on MainWindow
+because it touches engine state, the status bar, and the analysis
+pane.
 """
 
 from __future__ import annotations
@@ -58,7 +59,7 @@ _log = get_logger(__name__)
 # probably doesn't want to fall back to them anyway.
 _MRU_CAP: int = 10
 
-# Watcher debounce: many editors delete-then-write rather than
+# Watcher debounce. Many editors delete-then-write rather than
 # truncate-and-overwrite, which fires the watcher twice in quick
 # succession. The timer coalesces those into one reload.
 _RELOAD_DEBOUNCE_MS: int = 600
@@ -73,7 +74,7 @@ _RELOAD_DEBOUNCE_MS: int = 600
 _WATCHER_REARM_DELAY_MS: int = 200
 
 # Stale tmp-file age threshold. Atomic writes complete in
-# milliseconds; anything older than an hour is from a crashed save.
+# milliseconds, so anything older than an hour is from a crashed save.
 _TMP_FILE_STALE_SECONDS: int = 3600
 
 
@@ -124,25 +125,25 @@ class InventoryDirController:
         self._w = window
         self._settings = settings
         self._combo = inventory_combo
-        # Path of the currently-loaded on-disk inventory, owned here:
+        # Path of the currently-loaded on-disk inventory, owned here.
         # ``register_loaded_path`` is the sole setter, the watcher logic
         # reads/clears it internally, and MainWindow reads it through
         # ``current_path``. ``None`` when nothing on-disk is loaded
         # (startup, or after a PHOIBLE-only swap).
         self._path: str | None = None
-        # Public: tests read this directly. MRU of paths the user
-        # has loaded, deduplicated, capped. Not persisted across
+        # MRU of paths the user has loaded, deduplicated and capped.
+        # Public because tests read it directly. Not persisted across
         # sessions (starts empty each launch).
         self.recent_paths: list[str] = []
         # Session cache of PHOIBLE-loaded inventories, keyed by
-        # display name. Rendered as a "PHOIBLE" group at the END of
+        # display name. Rendered as a "PHOIBLE" group at the end of
         # the dropdown so a once-searched inventory can be reloaded
         # without reopening the picker, while staying visually apart
         # from the on-disk entries (it becomes a regular entry once
-        # the user saves it locally). Insertion-ordered; not
+        # the user saves it locally). Insertion-ordered, not
         # persisted across sessions.
         self.phoible_inventories: dict[str, Inventory] = {}
-        # Parent set to the window so the watcher / timer get torn
+        # Parent set to the window so the watcher and timer get torn
         # down when MainWindow closes.
         self._watcher = QFileSystemWatcher(window)
         self._watcher.fileChanged.connect(self._on_file_changed)
@@ -196,9 +197,9 @@ class InventoryDirController:
         complete in milliseconds), so the sweep never touches an
         active operation.
 
-        Failures are swallowed silently: the dropdown population
-        must succeed even when the inventories directory is
-        read-only or partially permissioned.
+        Failures are swallowed silently so dropdown population
+        still succeeds when the inventories directory is read-only
+        or partially permissioned.
         """
         cutoff = time.time() - _TMP_FILE_STALE_SECONDS
         try:
@@ -245,12 +246,6 @@ class InventoryDirController:
                 self.sweep_stale_tmp_files(inventories_dir)
                 entries: list[tuple[str, str, str]] = []
                 for fname in os.listdir(inventories_dir):
-                    # Skip dotfiles (.tmp_inv_*.json side files from
-                    # atomic writes are visible to the watcher for
-                    # ~ms between mkstemp and os.replace; editor swap
-                    # files); skip underscore-prefixed siblings like
-                    # ``_schema.json`` that live alongside inventories
-                    # but aren't loadable themselves.
                     if not _is_visible_inventory_file(fname):
                         continue
                     path = os.path.join(inventories_dir, fname)
@@ -260,7 +255,7 @@ class InventoryDirController:
                     )
                     entries.append((fname, path, label))
                 # Hayes default first, then any other Hayes, then
-                # alphabetical: shared with the web manifest build via
+                # alphabetical. Shared with the web manifest build via
                 # inventory_sort_key so both dropdowns match.
                 entries.sort(key=lambda e: inventory_sort_key(e[0], e[2]))
                 for _fname, path, label in entries:
@@ -382,7 +377,7 @@ class InventoryDirController:
     def _on_file_changed(self, path: str) -> None:
         """Called by QFileSystemWatcher when the watched file
         changes."""
-        # Some editors remove and recreate the file; re-add if
+        # Some editors remove and recreate the file, so re-add it if
         # needed (see _WATCHER_REARM_DELAY_MS).
         QTimer.singleShot(
             _WATCHER_REARM_DELAY_MS,
@@ -404,7 +399,7 @@ class InventoryDirController:
         in the directory) so the viewer doesn't sit on a dangling
         reference.
         """
-        # Cancel any pending file-watcher debounce: if we're about
+        # Cancel any pending file-watcher debounce. If we're about
         # to load synchronously (fallback after delete) or re-arm
         # the watcher ourselves below, letting an earlier 600 ms
         # timer also fire would reload the file twice. The two

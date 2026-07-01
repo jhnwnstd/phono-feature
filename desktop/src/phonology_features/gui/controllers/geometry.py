@@ -39,14 +39,14 @@ class GeometryController:
     # fits its content. On short windows where the features need more
     # height than they'd get with this floor, ``apply_splitter_sizes``
     # gives priority to fitting the feature pane and lets the analysis
-    # pane shrink past this (down to ``HARD_MIN_ANALYSIS_H``). The
-    # rationale: features are primary inspection surface, analysis
-    # text reflows comfortably to whatever room is left.
+    # pane shrink past this (down to ``HARD_MIN_ANALYSIS_H``), because
+    # features are the primary inspection surface and analysis text
+    # reflows comfortably to whatever room is left.
     MIN_ANALYSIS_H: ClassVar[int] = layout.MIN_ANALYSIS_H
     # Absolute floor so analysis is at least its title bar + a line
     # of text on the worst-case window size.
     HARD_MIN_ANALYSIS_H: ClassVar[int] = layout.HARD_MIN_ANALYSIS_H
-    # First-launch floor: the content-derived width can come out
+    # First-launch floor. The content-derived width can come out
     # around 900-1100 px depending on the inventory, which leaves the
     # analysis pane visibly cramped on a fresh install. The floor
     # lives in ``phonology_shared.presentation.layout`` so the web bundle
@@ -65,25 +65,22 @@ class GeometryController:
         self._hsplit = hsplit
         self._vsplit = vsplit
         self._settings = settings
-        # Public state: tests and other MainWindow methods read /
-        # write these directly. Promoted from private to public on
-        # the controller because they are the controller's contract.
+        # Public state read and written directly by tests and other
+        # MainWindow methods; these flags are the controller's contract.
         self.has_saved_size: bool = False
         self.has_saved_splitter: bool = False
         self.min_analysis_h: int = self.MIN_ANALYSIS_H
-        # Anchor for programmatic resizes; updated only by user
-        # moves (mouse drag). Reading live self.pos() each resize
-        # caused leftward drift on Wayland compositors that nudge
-        # the reported position by 1-2 px in response to geometry
-        # requests.
+        # Anchor for programmatic resizes, updated only by user moves
+        # (mouse drag). Reading live self.pos() each resize caused
+        # leftward drift on Wayland compositors that nudge the reported
+        # position by 1-2 px in response to geometry requests.
         self.anchor_pos: QPoint | None = None
         # Nonzero while we're mid-programmatic resize so the paired
-        # moveEvent doesn't treat the compositor's response as a
-        # user drag. A counter (not a bool) so a nested call from
-        # within a programmatic resize, e.g. an inventory load that
-        # triggers fit_window_to_size while another is still in its
-        # finally, doesn't drop the outer guard when the inner call
-        # exits.
+        # moveEvent doesn't treat the compositor's response as a user
+        # drag. A counter, not a bool, so a nested call from within a
+        # programmatic resize (an inventory load that triggers
+        # fit_window_to_size while another is still in its finally)
+        # doesn't drop the outer guard when the inner call exits.
         self._programmatic_geom_depth: int = 0
 
     # ------------------------------------------------------------------
@@ -118,8 +115,8 @@ class GeometryController:
         anchored at ``pos`` lands inside any connected screen's
         :py:meth:`QScreen.availableGeometry`. Guards against stale
         saved positions from a previous monitor configuration that
-        would otherwise place the window entirely off-screen (the
-        user sees the launcher succeed but no window appears).
+        would otherwise place the window entirely off-screen, where the
+        user sees the launcher succeed but no window appears.
         """
         app = QApplication.instance()
         if not isinstance(app, QApplication):
@@ -183,8 +180,8 @@ class GeometryController:
     # ------------------------------------------------------------------
     def on_user_move(self, pos: QPoint) -> None:
         """Called from ``MainWindow.moveEvent``. Updates the resize
-        anchor only when the move was user-initiated (not when we
-        triggered it ourselves via the programmatic_geom guard).
+        anchor only when the move was user-initiated, not when we
+        triggered it ourselves via the programmatic_geom guard.
         """
         if self._programmatic_geom_depth == 0:
             self.anchor_pos = pos
@@ -206,12 +203,12 @@ class GeometryController:
         Window-geometry policy: once ``has_saved_size`` is True (either
         because settings had a saved size at startup, or because the
         first-launch auto-fit ran and claimed one), inventory changes
-        MUST NOT resize or move the window. The user (or their last
-        session's saved state) owns the shell; inventory swaps only
-        repaint the scrollable interior. The previous behaviour was
-        to chase every inventory's content ``sizeHint`` with
-        ``self.resize()``, which produced visible layout shift on
-        every load and clobbered the user's manual window sizing.
+        must not resize or move the window. The user (or their last
+        session's saved state) owns the shell, and inventory swaps only
+        repaint the scrollable interior. The previous behaviour chased
+        every inventory's content ``sizeHint`` with ``self.resize()``,
+        which produced visible layout shift on every load and clobbered
+        the user's manual window sizing.
 
         Guarded against post-teardown firing: this runs deferred via
         ``QTimer.singleShot(0, ...)`` after an inventory swap, so a
@@ -221,7 +218,7 @@ class GeometryController:
         if sip.isdeleted(self._w):
             return
         QApplication.processEvents()
-        # Seg panel sticks to its natural content width; extra
+        # Seg panel sticks to its natural content width. Extra
         # horizontal room belongs to the feature pane (stretch=1 on
         # the splitter), not to dead space after the vowels.
         seg_content = self._w._seg_scroll.widget()
@@ -236,7 +233,7 @@ class GeometryController:
         feat_padding = 40
         feat_need_w = feat_content_w + feat_chrome + feat_padding
         # Heights come from the shared layout helpers, not Qt's
-        # ``sizeHint``: the helpers compute from inventory data
+        # ``sizeHint``. The helpers compute from inventory data
         # directly so we don't have to wait for Qt's reflow, and so
         # the same numbers appear on the web bundle via the CSS-
         # variable relay. Falls back to ``sizeHint`` if the engine
@@ -248,14 +245,14 @@ class GeometryController:
                 for manner, segs in engine.grouped_segments.items()
                 if manner.lower() != "vowels"
             ]
-            # Predict the EVENTUAL seg pane width (post-splitter) so
+            # Predict the eventual seg pane width (post-splitter) so
             # ``seg_pane_n_cols`` picks the column count the grid
             # will actually paint at. Neither ``seg_panel.width()``
             # nor ``hsplit.width()`` is reliable here. On the
             # first-launch synchronous path they're constructor
-            # defaults (480 and 100 px respectively). The WINDOW
+            # defaults (480 and 100 px respectively). The window
             # width is reliable because the caller resizes the
-            # window before showing it. Derive the hsplit-available
+            # window before showing it, so derive the hsplit-available
             # width from window.width(); ``distribute_pane_widths``
             # is then a pure function that yields the eventual seg
             # pane width.
@@ -304,9 +301,9 @@ class GeometryController:
         # this cap, a tall inventory (Hayes' 28 features at full
         # natural content height ~ 597 px + chrome) would push
         # ``seg_panel.minimumHeight`` past the vsplit's
-        # ``total - analysis_floor`` budget; Qt's splitter respects
+        # ``total - analysis_floor`` budget. Qt's splitter respects
         # per-child mins and the analysis pane silently collapses.
-        # The cap is the maximum height the panel may CLAIM as a
+        # The cap is the maximum height the panel may claim as a
         # hard splitter floor; anything beyond that flows into the
         # panel's internal QScrollArea (already wired).
         vsplit_total = self._vsplit.height()
@@ -318,7 +315,7 @@ class GeometryController:
         # the budget honest. Without this subtraction the top panel
         # min-height can exceed the hsplit's allocated slot by
         # ``handleWidth``, the panel overflows its parent's rect,
-        # and the active panel's 1.5-px accent border lands in the
+        # and the active panel's 1.5 px accent border lands in the
         # analysis pane.
         handle_h = self._vsplit.handleWidth()
         max_top_min = max(
@@ -331,20 +328,20 @@ class GeometryController:
         analysis_h = self.min_analysis_h
         toolbar_h = 50
         total_need_h = top_need_h + analysis_h + toolbar_h + 30
-        # Paint suspended so the window doesn't flash through
-        # "new size + old splitter ratio" before setSizes lands.
+        # Paint suspended so the window doesn't flash the new size
+        # with the old splitter ratio before setSizes lands.
         screen = self.target_screen()
         with self._w._batched_updates():
             # First-launch only: claim a sensible window size from
             # the first inventory's content. Subsequent loads skip
             # this and rely on the splitter to absorb width changes.
-            # Width policy is content-driven with TWO floors:
-            #   * absolute floor (``MIN_FIRST_LAUNCH_W`` = 1120):
+            # Width policy is content-driven with two floors:
+            #   * absolute floor (``MIN_FIRST_LAUNCH_W`` = 1120)
             #     keeps the layout safe before any inventory loads.
-            #   * vowel-safe floor: per-inventory, ensures the seg
+            #   * vowel-safe floor, per-inventory, ensures the seg
             #     pane gets ``>= VOWEL_STACK_W`` so the vowel chart
-            #     stays beside the consonants. The user's stated
-            #     "default startup width should be the minimum
+            #     stays beside the consonants. This is the user's
+            #     stated "default startup width should be the minimum
             #     needed so vowels don't display under the consonant
             #     segments" preference.
             if not self.has_saved_size:
@@ -363,7 +360,7 @@ class GeometryController:
             # user-draggable, so once they've established a width
             # preference we leave it alone on inventory swap. Only
             # the first launch gets a content-derived hsplit ratio.
-            # The vsplit (top vs analysis) is NOT user-draggable
+            # The vsplit (top vs analysis) is not user-draggable
             # (the handle is disabled), so we always re-fit it to
             # the new content. Otherwise loading a smaller inventory
             # would leave the analysis pane at its old size instead
@@ -420,8 +417,8 @@ class GeometryController:
                 target_x = avail.x() + left_pad
             if target_y - top_pad < avail.y():
                 target_y = avail.y() + top_pad
-            # Atomic setGeometry: one xdg_toplevel configure carries
-            # both size and position so the compositor places once,
+            # Atomic setGeometry so one xdg_toplevel configure carries
+            # both size and position and the compositor places once,
             # not twice (resize then move-back drifted on Wayland).
             self._w.setGeometry(target_x, target_y, new_w, new_h)
             if target_x != anchor.x() or target_y != anchor.y():
@@ -493,13 +490,13 @@ class GeometryController:
         fans out on wide screens. Vertical splitter then leaves the
         analysis pane its ``min_analysis_h`` floor.
 
-        Called from ``fit_to_content``, which may run BEFORE the
+        Called from ``fit_to_content``, which may run before the
         window is laid out (sync path when an inventory is auto-
         loaded from settings during ``__init__``). In that case
         ``vsplit.height()`` is 0 and we can't compute a sensible top
-        height; the horizontal axis still applies, but
+        height. The horizontal axis still applies, but
         ``mark_splitter_owned`` flips ``has_saved_splitter`` and
-        blocks any future re-attempt. Schedule a one-shot retry for
+        blocks any future re-attempt, so schedule a one-shot retry for
         after the post-show layout pass so the vertical splitter
         still gets sized once before the user sees the analysis
         pane at the constructor default.
@@ -511,11 +508,11 @@ class GeometryController:
             feat_content_w=feat_need_w,
         )
         self._hsplit.setSizes([seg_w, feat_w])
-        # Notify the seg-pane internals (vowel chart sizing /
+        # Notify the seg-pane internals (vowel chart sizing,
         # stack-vs-side-by-side) that the seg width changed. The
         # method is defined unconditionally on MainWindow; calling it
-        # directly is offensive coding (a future rename trips mypy
-        # immediately, not silently via a getattr fallback).
+        # directly is offensive coding, so a future rename trips mypy
+        # immediately rather than silently via a getattr fallback.
         self._w._on_seg_pane_width_changed(seg_w)
         total = self._vsplit.height()
         if total > 0:
@@ -526,7 +523,7 @@ class GeometryController:
 
     def reflow_top_pane_only(self, top_need_h: int) -> None:
         """Re-run the seg-pane spillover and feature-pane layout for
-        the new inventory WITHOUT changing the vsplit sizes. Called
+        the new inventory without changing the vsplit sizes. Called
         on inventory swaps after the first launch so the user's
         established analysis-pane height stays stable.
 
@@ -536,11 +533,11 @@ class GeometryController:
         analysis floor is sacrosanct via ``setMinimumHeight``, so the
         top pane's content overflows into its internal scroll area
         rather than mutating the vsplit). No splitter writes here, so
-        layout-reflow alone via Qt's normal resize-event path picks
+        layout reflow alone via Qt's normal resize-event path picks
         up the new top-pane content from the panel's
         ``setMinimumHeight`` that ``fit_to_content`` just applied.
         """
-        del top_need_h  # currently unused; reserved for future cap-aware logic
+        del top_need_h  # unused, reserved for future cap-aware logic
 
     def fit_vsplit_after_layout(self, top_need_h: int) -> None:
         """Vertical-only fallback for the case in

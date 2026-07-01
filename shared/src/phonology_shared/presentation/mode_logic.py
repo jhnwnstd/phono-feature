@@ -252,27 +252,22 @@ def undid_message(n: int) -> str:
 
 
 def redid_message(n: int) -> str:
-    """Editor status after redo."""
     return REDID_TEMPLATE.format(n=n, plural=plural_s(n))
 
 
 def added_segment_message(seg: str) -> str:
-    """Editor status after adding a new segment column."""
     return ADDED_SEGMENT_TEMPLATE.format(seg=seg)
 
 
 def removed_segment_message(seg: str) -> str:
-    """Editor status after removing a segment column."""
     return REMOVED_SEGMENT_TEMPLATE.format(seg=seg)
 
 
 def added_feature_message(feat: str) -> str:
-    """Editor status after adding a new feature row."""
     return ADDED_FEATURE_TEMPLATE.format(feat=feat)
 
 
 def removed_feature_message(feat: str) -> str:
-    """Editor status after removing a feature row."""
     return REMOVED_FEATURE_TEMPLATE.format(feat=feat)
 
 
@@ -306,12 +301,12 @@ def inventory_cap_status(
     *,
     normalized: Mapping[str, dict[str, str]] | None = None,
 ) -> InventoryCapStatus:
-    """Build the live cap-counter view model for a editor grid.
+    """Build the live cap-counter view model for an editor grid.
 
     Class counts come from
-    :py:func:`phonology_shared.chart.consonants.count_segment_classes`
+    :py:func:`phonology_shared.chart.segment_classes.count_segment_classes`
     (the single source the save-time
-    :py:func:`~phonology_shared.chart.consonants.validate_class_caps`
+    :py:func:`~phonology_shared.chart.segment_classes.validate_class_caps`
     gate also uses), so the counter and the enforcement can never
     disagree about which side a segment falls on, tone letters
     included (counted toward the total, never toward the consonant

@@ -1,39 +1,34 @@
 """Single source of truth for feature-name metadata.
 
-Three concerns previously kept their own parallel tables:
-
-- Display ordering (``FEATURE_ORDER`` in
-  :py:mod:`phonology_shared.presentation.constants`).
-- Display grouping (``FEATURE_GROUPS`` in the same module).
-- Suprasegmental classification (``SUPRASEGMENTAL_FEATURES``).
-
-Plus two import-time mapping tables (``PHOIBLE_TO_APP_FEATURE``,
+Three concerns previously kept their own parallel tables: display
+ordering (``FEATURE_ORDER``), display grouping (``FEATURE_GROUPS``),
+and suprasegmental classification (``SUPRASEGMENTAL_FEATURES``), all
+in :py:mod:`phonology_shared.presentation.constants`. Plus two
+import-time mapping tables (``PHOIBLE_TO_APP_FEATURE``,
 ``PANPHON_TO_APP_FEATURE``) and a small inline alias table inside
 :py:func:`phonology_shared.data.inventory.normalize_feature_key`.
 
-Each table is keyed on a feature SURFACE NAME (e.g. ``"LABIAL"`` vs
-``"Labial"``), which forces every concept that has case variants to
-be enumerated repeatedly. There is no single place that answers "is
-``LABIAL`` and ``Labial`` the same feature?" from the renderer.
+Each of those was keyed on a feature SURFACE NAME (``"LABIAL"`` vs
+``"Labial"``), forcing every case-variant concept to be enumerated
+repeatedly with no single place answering "are ``LABIAL`` and
+``Labial`` the same feature?" from the renderer.
 
-This module replaces those parallel tables with one
-:py:class:`FeatureMetadata` registry keyed by the CANONICAL
-lowercase name. Each entry carries every surface form (``aliases``)
-that maps to that concept, so the resolver answers
-"``LABIAL``, ``Labial``, ``lab``, ``LAB`` all collapse to
-``labial``" in one lookup.
+This module replaces them with one :py:class:`FeatureMetadata`
+registry keyed by the CANONICAL lowercase name. Each entry carries
+every surface form (``aliases``) that maps to that concept, so the
+resolver collapses ``LABIAL``, ``Labial``, ``lab``, ``LAB`` to
+``labial`` in one lookup.
 
-Display-side consumers (sort, group, suprasegmental check) call
-into the resolver helpers below; the surface form rendered on the
-panel row stays whatever the inventory carried on disk (per the
-user's contract: Hayes' shouty ``LABIAL`` stays shouty; PHOIBLE's
-``Labial`` stays title-case; backend treats them as one concept).
+Display-side consumers (sort, group, suprasegmental check) call the
+resolver helpers below. The surface form rendered on the panel row
+stays whatever the inventory carried on disk, per the user's
+contract: Hayes' shouty ``LABIAL`` stays shouty, PHOIBLE's
+``Labial`` stays title-case, the backend treats them as one concept.
 
-Place subfeatures sort adjacent to their anchor via the
-``subgroup`` + ``sort_key`` design: ``round.sort_key`` is one more
-than ``labial.sort_key``, so the renderer's natural sort lands
-modifiers right after the anchor without any visual hierarchy
-work.
+Place subfeatures sort adjacent to their anchor via the ``subgroup``
++ ``sort_key`` design: ``round.sort_key`` is one more than
+``labial.sort_key``, so the renderer's natural sort lands modifiers
+right after the anchor with no visual-hierarchy work.
 """
 
 from __future__ import annotations
@@ -91,43 +86,39 @@ class FeatureMetadata:
 
     ``canonical`` is the lowercase, delimiter-stripped key that
     :py:func:`phonology_shared.data.inventory.normalize_feature_key`
-    produces for every alias in ``aliases``. The registry is keyed
-    on ``canonical``; ``aliases`` enumerates every surface form the
+    produces for every alias in ``aliases``. The registry is keyed on
+    ``canonical``; ``aliases`` enumerates every surface form the
     codebase has ever seen for this concept (Hayes' all-caps anchor,
     PHOIBLE's title-case, PanPhon's short code, common typos).
 
-    ``sort_key`` is a small integer; smaller sorts earlier. Place
-    modifiers (``round``, ``anterior``, ``high``, etc.) carry
-    sort_keys directly after their anchor's so they cluster in the
-    rendered list.
+    ``sort_key`` is a small integer, smaller sorting earlier. Place
+    modifiers (``round``, ``anterior``, ``high``) carry sort_keys
+    directly after their anchor so they cluster in the rendered list.
 
     ``group`` matches one of :py:data:`GROUP_ORDER`'s titles; the
     derived ``FEATURE_GROUPS`` in
-    :py:mod:`phonology_shared.presentation.constants` collects
-    every alias of every entry tagged with each group.
+    :py:mod:`phonology_shared.presentation.constants` collects every
+    alias of every entry tagged with each group.
 
-    ``subgroup`` is an optional canonical-key pointer at another
-    registry entry that serves as this feature's "anchor": the
-    head of an articulatory subcluster the modifier refines (e.g.
-    ``"labial"`` for ``round`` / ``labiodental``; ``"voice"`` for
-    ``fortis`` / ``lenis`` / ``breathy`` / ``creaky``;
-    ``"constrgl"`` for ``raisedlarynxejective`` /
-    ``loweredlarynximplosive``). Currently used only by tests /
-    inspection; rendering is sort-adjacency only (no visual
-    hierarchy). The
-    ``test_modifiers_sort_directly_after_their_anchor`` invariant
-    enforces same-group anchoring and ``modifier.sort_key >
-    anchor.sort_key``, so any non-None subgroup must name a
-    registered canonical in the same group.
+    ``subgroup`` optionally points at another entry's canonical key
+    that serves as this feature's "anchor", the head of an
+    articulatory subcluster the modifier refines (``"labial"`` for
+    ``round`` / ``labiodental``, ``"voice"`` for ``fortis`` /
+    ``lenis`` / ``breathy`` / ``creaky``, ``"constrgl"`` for
+    ``raisedlarynxejective`` / ``loweredlarynximplosive``). Used only
+    by tests and inspection; rendering is sort-adjacency, no visual
+    hierarchy. The ``test_modifiers_sort_directly_after_their_anchor``
+    invariant enforces same-group anchoring and ``modifier.sort_key >
+    anchor.sort_key``, so any non-None subgroup must name a registered
+    canonical in the same group.
 
-    ``systems`` records which provider rosters include this
-    feature. Used by import-time mappings + the bake script's
-    completeness check.
+    ``systems`` records which provider rosters include this feature.
+    Used by import-time mappings and the bake script's completeness
+    check.
 
-    ``uses`` records which display / classifier subsystem reads
-    the feature. Lets vowels.py / consonants.py / laryngeal display
-    consult the registry instead of carrying their own small
-    feature-name sets.
+    ``uses`` records which display / classifier subsystem reads the
+    feature, so vowels.py / consonants.py / laryngeal display consult
+    the registry instead of carrying their own feature-name sets.
 
     ``is_suprasegmental`` mirrors the existing
     ``SUPRASEGMENTAL_FEATURES`` membership.
@@ -158,8 +149,8 @@ class FeatureMetadata:
 # Gaps between entries leave room to insert new features in the
 # right neighbourhood without renumbering. Within a block, the
 # legacy ``FEATURE_ORDER`` ordering is preserved so the derived
-# table's membership matches the prior structure modulo Place's
-# anchor-first re-ordering (Labial -> Round -> Labiodental, etc.).
+# table's membership matches the prior structure, modulo Place's
+# anchor-first re-ordering (Labial then Round then Labiodental).
 _ALL_THREE = frozenset({SYSTEM_HAYES, SYSTEM_PHOIBLE, SYSTEM_PANPHON})
 _HAYES_PHOIBLE = frozenset({SYSTEM_HAYES, SYSTEM_PHOIBLE})
 _PHOIBLE_ONLY = frozenset({SYSTEM_PHOIBLE})
@@ -237,7 +228,7 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         aliases=("EpilaryngealSource", "epilaryngealSource"),
         # Anchored to ``voice``: epilaryngeal source is the
         # tier-internal correlate of laryngeal voicing, distinguishing
-        # supra-glottal vs. glottal voice (Esling 2005). PHOIBLE
+        # supra-glottal from glottal voice (Esling 2005). PHOIBLE
         # treats it as a refinement of the voicing dimension, so it
         # reads as a child of ``voice`` in the Feature Pane.
         subgroup="voice",
@@ -249,10 +240,10 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         sort_key=204,
         group=GROUP_LARYNGEAL,
         aliases=("Fortis",),
-        # Fortis / lenis are the energetic-effort axis under
-        # voicing. Anchoring them to ``voice`` clusters them with
-        # their phonetic correlate rather than leaving them as
-        # un-rooted strangers at the bottom of the Laryngeal group.
+        # Fortis / lenis are the energetic-effort axis under voicing.
+        # Anchoring them to ``voice`` clusters them with their
+        # phonetic correlate rather than leaving them un-rooted at the
+        # bottom of the Laryngeal group.
         subgroup="voice",
         systems=_PHOIBLE_ONLY,
         uses=frozenset({USE_LARYNGEAL}),
@@ -273,8 +264,8 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         aliases=("RaisedLarynxEjective", "raisedLarynxEjective"),
         # Anchored to ``constrgl``: ejectives are constricted-glottis
         # with a raised larynx. The PHOIBLE feature is the airstream
-        # mechanism that produces an ejective from the constricted-
-        # glottis base, so it's structurally a child of ``constrgl``.
+        # mechanism producing an ejective from the constricted-glottis
+        # base, so it's structurally a child of ``constrgl``.
         subgroup="constrgl",
         systems=_PHOIBLE_ONLY,
         uses=frozenset({USE_LARYNGEAL}),
@@ -508,13 +499,13 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
     ),
     # --- Tongue-Root / Pharyngeal (500s) ---
     # No subgroup anchor: the Tongue-Root group entries are
-    # independent dimensions (pharyngeal cavity vs. tongue-root
-    # position vs. tense) without a phonologically privileged
-    # anchor among themselves. The 500-504 sort_keys give the
-    # group its natural reading order; the contract
-    # ``test_modifiers_sort_directly_after_their_anchor`` requires
-    # any non-None ``subgroup`` to point at a registered canonical,
-    # which is the right discipline elsewhere.
+    # independent dimensions (pharyngeal cavity, tongue-root position,
+    # tense) with no phonologically privileged anchor among
+    # themselves. The 500-504 sort_keys give the group its natural
+    # reading order. The contract
+    # ``test_modifiers_sort_directly_after_their_anchor`` requires any
+    # non-None ``subgroup`` to point at a registered canonical, which
+    # is the right discipline elsewhere.
     "constrpharynx": FeatureMetadata(
         canonical="constrpharynx",
         sort_key=500,
@@ -629,23 +620,19 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
 
 
 def _build_alias_index() -> dict[str, str]:
-    """Map every alias + canonical to the canonical key.
+    """Map every alias and canonical to the canonical key.
 
-    Two stages of folding:
-
-    - For each registry entry, every (alias OR canonical) maps to
-      that entry's canonical, looked up case-insensitively and
-      delimiter-insensitively (the same folding
-      :py:func:`phonology_shared.data.inventory.normalize_feature_key`
-      uses on the engine side).
-    - Stored keys are pre-folded so :py:func:`resolve_canonical` can
-      look up in one dict access without re-folding the input every
-      time.
+    Each entry's aliases and canonical map to that canonical, folded
+    case-insensitively and delimiter-insensitively (the same folding
+    :py:func:`phonology_shared.data.inventory.normalize_feature_key`
+    uses on the engine side). Stored keys are pre-folded so
+    :py:func:`resolve_canonical` looks up in one dict access without
+    re-folding the input each time.
     """
     index: dict[str, str] = {}
     for meta in FEATURE_REGISTRY.values():
-        # The canonical form is already pre-folded; index identity-
-        # mapped so resolve_canonical("labial") returns "labial".
+        # The canonical form is already pre-folded, identity-mapped so
+        # resolve_canonical("labial") returns "labial".
         index[meta.canonical] = meta.canonical
         for alias in meta.aliases:
             folded = fold_feature_name(alias)

@@ -2,6 +2,6 @@
 delimiter-aware paste parsing, setup validation.
 
 Reads from :py:mod:`phonology_shared.data` for canonicalisation
-helpers and limits; consumed by both the desktop editor dialog and
+helpers and limits. Consumed by both the desktop editor dialog and
 the web new-inventory modal.
 """

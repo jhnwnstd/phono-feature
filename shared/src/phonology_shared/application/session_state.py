@@ -100,7 +100,6 @@ class SessionState:
             self.selected_features[feature] = value
 
     def set_class_hidden(self, label: str, hidden: bool) -> None:
-        """Hide or show one segment class in the display filter."""
         if hidden:
             self.hidden_segment_classes.add(label)
         else:

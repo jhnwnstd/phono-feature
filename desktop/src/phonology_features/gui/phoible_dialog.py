@@ -9,24 +9,21 @@ stay aligned:
 
 All non-Qt logic (search, descriptor lookup, segment generation,
 inventory composition) lives in the shared
-:py:mod:`phonology_shared.editor.phoible_provider` module; this
-dialog is the Qt thin shell that wires those calls to widgets.
-Per the project's single-source-of-truth approach: a future
-PHOIBLE schema change, name-template tweak, or feature mapping
-update flows through the shared layer once and both UIs pick it
-up automatically.
+:py:mod:`phonology_shared.editor.phoible_provider` module; this dialog
+is the Qt thin shell that wires those calls to widgets. Per the
+project's single-source-of-truth approach, a future PHOIBLE schema
+change, name-template tweak, or feature mapping update flows through the
+shared layer once and both UIs pick it up automatically.
 
 The dialog never mutates the application's engine itself. On
 :py:meth:`accept`, it exposes the chosen :py:class:`Inventory` on
-:py:attr:`chosen_inventory`; the caller swaps it into the active
-engine and refreshes the UI exactly as it would for any other
-file-based load.
+:py:attr:`chosen_inventory`; the caller swaps it into the active engine
+and refreshes the UI exactly as it would for any other file-based load.
 
 Skipped at construction (returns ``None`` from
-:py:func:`create_phoible_dialog`) if the PHOIBLE snapshot is not
-present in the bundled shared package. The toolbar button stays
-disabled in that case so the user never sees a dialog that cannot
-do anything.
+:py:func:`create_phoible_dialog`) if the PHOIBLE snapshot is not present
+in the bundled shared package. The toolbar button stays disabled in that
+case so the user never sees a dialog that cannot do anything.
 """
 
 from __future__ import annotations
@@ -64,34 +61,33 @@ from phonology_shared.editor.phoible_provider import (
 )
 from phonology_shared.presentation.palette import C
 
-# Type-only role for stashing the inventory id on a source-card
-# QListWidgetItem; ``Qt.ItemDataRole.UserRole`` is the canonical
-# user-data slot Qt reserves for application use.
+# Role for stashing the inventory id on a source-card QListWidgetItem;
+# ``Qt.ItemDataRole.UserRole`` is the canonical user-data slot Qt
+# reserves for application use.
 _INVENTORY_ID_ROLE = Qt.ItemDataRole.UserRole
 
-# Debounce window between the user's last keystroke and the
-# autocomplete query. Matches the web picker's ``SEARCH_DEBOUNCE_MS``
-# (180 ms) so both UIs feel identical under typing.
+# Debounce window between the user's last keystroke and the autocomplete
+# query. Matches the web picker's ``SEARCH_DEBOUNCE_MS`` (180 ms) so both
+# UIs feel identical under typing.
 _SEARCH_DEBOUNCE_MS = 180
 
 
 def create_phoible_dialog(
     parent: QWidget | None = None,
 ) -> PhoibleDialog | None:
-    """Construct a :py:class:`PhoibleDialog` if the PHOIBLE snapshot
-    is available; return ``None`` if the bake has not run on this
-    checkout.
+    """Construct a :py:class:`PhoibleDialog` if the PHOIBLE snapshot is
+    available; return ``None`` if the bake has not run on this checkout.
 
-    The toolbar button calls this at click time and surfaces the
-    ``None`` result as a friendly status-bar message. The
-    construction failure is not an error: a developer checkout that
-    has never run ``web/scripts/bake_phoible.py`` simply does not
-    have PHOIBLE available, and the dialog must not crash.
+    The toolbar button calls this at click time and surfaces the ``None``
+    result as a friendly status-bar message. The construction failure is
+    not an error: a developer checkout that has never run
+    ``web/scripts/bake_phoible.py`` simply does not have PHOIBLE
+    available, and the dialog must not crash.
 
-    The provider comes from the process-wide memoized accessor:
-    constructing it parses ~6 MB of packaged JSON (~100-200 ms),
-    and doing that synchronously inside the click handler froze
-    the UI on every dialog open, not just the first.
+    The provider comes from the process-wide memoized accessor.
+    Constructing it parses ~6 MB of packaged JSON (~100 to 200 ms), and
+    doing that synchronously inside the click handler froze the UI on
+    every dialog open, not just the first.
     """
     try:
         provider = default_phoible_provider()
@@ -125,10 +121,10 @@ class PhoibleDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Load inventory from PHOIBLE")
-        # SET SIZE, manually resizable. A fixed default size means the
+        # Fixed default size, manually resizable. A fixed size means the
         # dialog never resizes itself (and so never drifts) as the user
-        # types or picks: the source list fills the body and scrolls once
-        # a language has more than ~4 sources. ``QDialog`` is resizable by
+        # types or picks: the source list fills the body and scrolls once a
+        # language has more than ~4 sources. ``QDialog`` is resizable by
         # default, so the user can drag it larger; the minimum keeps it
         # usable when dragged small. Mirrors the web picker's fixed size.
         self.resize(560, 512)
@@ -167,7 +163,7 @@ class PhoibleDialog(QDialog):
         layout.addWidget(self._build_search_row())
         # The results, hint, and source section share the body: only one
         # shows at a time, each with stretch so the visible one fills the
-        # set-size dialog. The preview + buttons stay pinned below.
+        # set-size dialog. The preview and buttons stay pinned below.
         layout.addWidget(self._build_results_list(), stretch=1)
         # Empty-state hint, centered to fill the body before a search.
         self._hint = QLabel(
@@ -183,7 +179,7 @@ class PhoibleDialog(QDialog):
         layout.addWidget(self._build_preview_section())
         layout.addWidget(self._build_buttons())
 
-        # Open showing only the search + hint; the source and preview
+        # Open showing only the search and hint; the source and preview
         # sections appear once a language is picked. No ``adjustSize`` so
         # the dialog keeps its set size; the body just swaps content.
         self._set_sections_visible(sources=False, hint=True)
@@ -475,10 +471,10 @@ class PhoibleDialog(QDialog):
                 f"PHOIBLE has no inventories for {language!r}."
             )
             return
-        # Default selection: the first listed source, matching the
-        # order the rows render in (the provider already orders the
-        # list by source then id, so "first" is stable and is what
-        # the user sees highlighted at the top).
+        # Default selection is the first listed source, matching the order
+        # the rows render in (the provider already orders the list by source
+        # then id, so "first" is stable and is what the user sees
+        # highlighted at the top).
         for descriptor in inventories:
             item = QListWidgetItem(self._sources)
             item.setData(_INVENTORY_ID_ROLE, descriptor.id)
@@ -552,18 +548,18 @@ class PhoibleDialog(QDialog):
         if descriptor is None:
             self._load_btn.setEnabled(False)
             return
-        # Use the provider directly for the preview rather than
-        # going through the materializer (which builds a full
-        # Inventory); the preview only needs the segment list +
-        # counts and the materialization happens on Load.
+        # Use the provider directly for the preview rather than going
+        # through the materializer (which builds a full Inventory); the
+        # preview only needs the segment list and counts, and the
+        # materialization happens on Load.
         generated = self._provider.generate(inv_id)
         segments = list(generated.segments.keys())
-        # Caption only what the selected source ROW does not already
-        # show. That row carries the source name, segment count, and
-        # dialect; the feature count is the one datum it lacks, so show
-        # just that. The glyphs below are self-evidently the segments
-        # (with a "+N more" cue), so no "segments" label is needed and
-        # the word never appears twice on screen.
+        # Caption only what the selected source row does not already show.
+        # That row carries the source name, segment count, and dialect; the
+        # feature count is the one datum it lacks, so show just that. The
+        # glyphs below are self-evidently the segments (with a "+N more"
+        # cue), so no "segments" label is needed and the word never appears
+        # twice on screen.
         self._summary.setText(f"{len(generated.features)} features")
         sample = segments[:50]
         trail = ""

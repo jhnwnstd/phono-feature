@@ -38,10 +38,10 @@ DEFAULT_OUT = (
 
 
 def _ensure_shared_on_path() -> None:
-    """Add ``shared/src`` to ``sys.path`` so ``phonology_shared`` is
-    importable without an editable install. Mirrors the same trick
-    :py:mod:`web.scripts.build` uses to keep this script invokable
-    from a bare repo checkout.
+    """Make ``phonology_shared`` importable without an editable install.
+
+    Mirrors the trick :py:mod:`web.scripts.build` uses to keep this
+    script invokable from a bare repo checkout.
     """
     p = str(SHARED_SRC)
     if p not in sys.path:
@@ -88,9 +88,6 @@ def bake_table() -> dict[str, object]:
 
     ft = panphon.FeatureTable()
     panphon_names = list(ft.names)
-    # Canonical feature list is panphon's names that have an app-side
-    # mapping, kept in panphon's column order so this matches what the
-    # desktop's live provider exposes.
     feature_names = tuple(
         PANPHON_TO_APP_FEATURE[name]
         for name in panphon_names
@@ -127,8 +124,8 @@ def bake_table() -> dict[str, object]:
                 f"PanPhon returned {len(values)} values for "
                 f"{expected_n} names on segment {ipa!r}"
             )
-        # Coerce each kept value into the three-char vocabulary, then
-        # join into the positional string the runtime decodes against
+        # Coerce each kept value into the three-char vocabulary and join
+        # into the positional string the runtime decodes against
         # ``feature_names``.
         segments[ipa] = "".join(
             panphon_value_to_app(values[idx]) for idx in kept_indices

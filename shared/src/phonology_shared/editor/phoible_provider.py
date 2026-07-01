@@ -513,10 +513,6 @@ class PhoibleProvider:
         features: tuple[str, ...] = self._feature_names
         resolved: dict[str, Mapping[str, str]] = {}
         for sym, encoded in encoded_bundles.items():
-            # Pair feature_names positionally with the encoded
-            # value vector. The bundle is shipped as a string of
-            # one char per feature for compactness; decoding is a
-            # single ``zip`` per segment.
             resolved[sym] = decode_positional_bundle(features, encoded)
 
         # Pre-prune feature space so secondaries align with primaries
@@ -668,12 +664,10 @@ def default_phoible_provider() -> PhoibleProvider:
 
     Construction parses the ~830 KB index plus the ~5 MB data
     snapshot and ingests ~3,000 inventories (roughly 100-200 ms on
-    a fast machine, several times that under Pyodide), so callers
-    on interactive paths must not construct per use: the desktop's
-    PHOIBLE picker opens at toolbar-click time and used to re-pay
-    the full parse on every open. The web bridge keeps its own
-    memoized registry; this accessor gives the desktop the same
-    provider lifetime so the two surfaces share one pattern.
+    a fast machine, several times that under Pyodide), so callers on
+    interactive paths must not construct per use. The web bridge keeps
+    its own memoized registry; this accessor gives the desktop the
+    same provider lifetime so the two surfaces share one pattern.
 
     Raises :py:class:`PhoibleSnapshotNotAvailable` when the index
     is not packaged; the exception is not cached, so a retry after

@@ -3,13 +3,12 @@
 Two visual modes:
 
 * **Query mode** (FEAT_TO_SEG): user clicks ``+``/``-`` to assemble
-  a feature query. Row tints + bolds.
-* **Display mode** (SEG_TO_FEAT): badge shows the analytical state
+  a feature query. The row tints and bolds.
+* **Display mode** (SEG_TO_FEAT): a badge shows the analytical state
   derived from the shared view-model.
 
-Stylesheet strings cached per theme at class level so a 30+ row
-palette swap touches the f-strings once per theme, not once per
-row.
+Stylesheet strings are cached per theme at class level so a 30+ row
+palette swap touches the f-strings once per theme, not once per row.
 """
 
 from __future__ import annotations
@@ -65,7 +64,7 @@ class _RowDensity:
 
 # Comfortable default: 30-px row stride, 28x24 buttons, 10-pt label.
 # Pixel dimensions come from shared layout constants so the desktop
-# and the generated CSS (--feat-btn-*, --feat-badge-w) cannot drift.
+# and the generated CSS (--feat-btn-*, --feat-badge-w) can't drift.
 _DENSITY_NORMAL = _RowDensity(
     btn_size=(FEAT_BTN_W, FEAT_BTN_H),
     badge_size=(FEAT_BADGE_W, FEAT_BTN_H),
@@ -102,9 +101,9 @@ def _feature_row_btn_qss(*, is_plus: bool) -> str:
     active_bg = C["plus_bg"] if is_plus else C["minus_bg"]
     active_text = C["plus"] if is_plus else C["minus"]
     border = C["plus"] if is_plus else C["minus"]
-    # Border thickness + radius pinned via chart_style so the
-    # desktop QSS and web CSS read from one source. Pre-relay the
-    # 1.5 px border + 5 px radius were inline literals on both
+    # Border thickness and radius pinned via chart_style so the
+    # desktop QSS and web CSS read from one source. Before the relay
+    # the 1.5 px border and 5 px radius were inline literals on both
     # sides with no shared symbol.
     _bw = cs.BORDER_PX["std"]
     _br = cs.FEAT_BTN_RADIUS_PX
@@ -145,12 +144,12 @@ class FeatureRow(QWidget):
     """
 
     value_changed = pyqtSignal(str, str)
-    # ``(theme, mode)`` -> styles dict (BADGE_*, ROW_*, NAME_*).
+    # ``(theme, mode)`` to styles dict (BADGE_*, ROW_*, NAME_*).
     # Shared invalidation contract with SegmentButton via
     # :py:func:`_themed_style_cache.styles_for_active_theme`.
     _styles_cache: ClassVar[dict[tuple[str, str], dict[str, str]]] = {}
     # Instance attrs populated by ``_build_styles`` via setattr from
-    # the cached theme dict; declared here so mypy sees them.
+    # the cached theme dict, declared here so mypy sees them.
     _BADGE_CONTRASTIVE: str = ""
     _NAME_CONTRASTIVE: str = ""
     _ROW_CONTRASTIVE: str = ""
@@ -180,23 +179,24 @@ class FeatureRow(QWidget):
         self._current_value = ""
         self._panel_active = False
         self._build_styles()
-        # Dedup cache for set_display; cleared by reset / _apply_query_style
-        # (both rewrite the same stylesheets without going through set_display).
+        # Dedup cache for set_display, cleared by reset and
+        # _apply_query_style (both rewrite the same stylesheets
+        # without going through set_display).
         self._last_display_state: tuple[str, bool, bool] | None = None
-        # Reset-cache state: ``_panel_cache_valid`` says "the row has
-        # been reset to neutral and the cache is fresh"; on a True
-        # cache, ``_panel_cached_for`` records the ``panel_active``
-        # value it was reset for so reset() can short-circuit when
-        # nothing relevant has changed. Two named flags beat a
-        # ``bool | None`` sentinel where ``None`` overloads
-        # "no cache" with "force full reset".
+        # ``_panel_cache_valid`` means the row has been reset to
+        # neutral and the cache is fresh; when True,
+        # ``_panel_cached_for`` records the ``panel_active`` value it
+        # was reset for so reset() can short-circuit when nothing
+        # relevant has changed. Two named flags beat a ``bool | None``
+        # sentinel where ``None`` overloads "no cache" with "force
+        # full reset".
         self._panel_cache_valid: bool = False
         self._panel_cached_for: bool = False
         layout = QHBoxLayout(self)
         # Inter-element gap from chart_style so the desktop setSpacing
         # and the web CSS ``gap`` read one number. Per-density padding,
-        # sizes, fonts, and the height pin are applied below via
-        # ``_apply_density``.
+        # sizes, fonts, and the height pin come from ``_apply_density``
+        # below.
         layout.setSpacing(cs.FEAT_ROW_GAP_PX)
         self.name_label = QLabel(feature_name, self)
         self.name_label.setSizePolicy(
@@ -222,8 +222,8 @@ class FeatureRow(QWidget):
         self.setAutoFillBackground(True)
         set_css(self, self._ROW_NEUTRAL)
         # Sizes, fonts, padding, and the height pin all come from the
-        # density pack so the constructor and ``set_compact`` cannot
-        # drift. Owners flip to COMPACT after they know the inventory's
+        # density pack so the constructor and ``set_compact`` can't
+        # drift. Owners flip to COMPACT once they know the inventory's
         # feature count; start in NORMAL.
         self._compact = False
         self._apply_density(_DENSITY_NORMAL)
@@ -238,12 +238,12 @@ class FeatureRow(QWidget):
         """Build all stylesheet strings against the *current* palette.
 
         Called once per theme; results are cached at class level
-        (``_styles_cache``). The contrastive (``±``) badge reads
-        from the ``neutral`` slot so colorblind mode can swap blue
-        (which it reuses for "+") for purple without losing the
-        familiar blue tint in standard mode (standard maps ``neutral``
-        to the accent slot). The empty-state ``·`` badge stays gray
-        in both modes; only the contrastive state changes hue.
+        (``_styles_cache``). The contrastive (``±``) badge reads from
+        the ``neutral`` slot so colorblind mode can swap blue (which
+        it reuses for "+") for purple without losing the familiar blue
+        tint in standard mode, where ``neutral`` maps to the accent
+        slot. The empty-state ``·`` badge stays gray in both modes;
+        only the contrastive state changes hue.
         """
         return {
             "BADGE_CONTRASTIVE": (
@@ -277,11 +277,11 @@ class FeatureRow(QWidget):
             "NAME_ACTIVE": f"color: {C['text']};",
             "NAME_INACTIVE": f"color: {C['text_dim']};",
             # Per-polarity +/- button QSS. Identical across every
-            # FeatureRow in the pool, so caching once per
-            # (theme, mode) saves the f-string rebuild + attribute
-            # lookups on every row's apply_theme. The setStyleSheet polish
-            # cost itself is unavoidable on a theme change, but the
-            # cache cuts the per-call CPU above the Qt boundary.
+            # FeatureRow in the pool, so caching once per (theme, mode)
+            # saves the f-string rebuild and attribute lookups on every
+            # row's apply_theme. The setStyleSheet polish cost itself
+            # is unavoidable on a theme change, but the cache cuts the
+            # per-call CPU above the Qt boundary.
             "BTN_PLUS": _feature_row_btn_qss(is_plus=True),
             "BTN_MINUS": _feature_row_btn_qss(is_plus=False),
         }
@@ -300,19 +300,21 @@ class FeatureRow(QWidget):
            neutral palette colors. ``_last_display_state`` is None.
 
         Each state's visible styling was baked against the OLD palette
-        and has to be re-applied. We handle the three cases explicitly
-        rather than relying on a downstream caller (like the analysis
-        update path) to refresh; that caller doesn't run when there
-        are no selections, leaving neutral-state badges stale.
+        and has to be re-applied. The three cases are handled
+        explicitly rather than relying on a downstream caller (like the
+        analysis update path) to refresh; that caller doesn't run when
+        there are no selections, which leaves neutral-state badges
+        stale.
 
-        Always re-styles the +/- buttons since they're visible in
-        feat mode regardless of state.
+        Always re-styles the +/- buttons since they're visible in feat
+        mode regardless of state.
         """
-        # Short-circuit when our styles are already the active theme's:
-        # ``_styles_for_active_theme`` returns the SAME dict instance for
-        # repeated requests in one theme (identity check is correct and
-        # cheap), so calling this on an already-current row (e.g. from
-        # ``_populate_features`` on every activation) costs nothing.
+        # Short-circuit when our styles already match the active theme.
+        # ``_styles_for_active_theme`` returns the SAME dict instance
+        # for repeated requests in one theme, so this identity check is
+        # correct and cheap, and calling apply_theme on an
+        # already-current row (e.g. from ``_populate_features`` on every
+        # activation) costs nothing.
         new_styles = self._styles_for_active_theme()
         if new_styles is getattr(self, "_themed_dict", None):
             return
@@ -355,11 +357,10 @@ class FeatureRow(QWidget):
             self._panel_cached_for = self._panel_active
 
     def _style_btn(self, btn: QPushButton, polarity: str) -> None:
-        # Stylesheet is shape-identical for every FeatureRow in the
-        # pool; the per-polarity strings are cached at class level by
+        # The per-polarity strings are cached at class level by
         # :py:meth:`_compute_styles` and bound on this instance via
-        # :py:meth:`_build_styles`. Reading the precomputed attr
-        # avoids rebuilding two ~350-char f-strings per row on every
+        # :py:meth:`_build_styles`. Reading the precomputed attr avoids
+        # rebuilding two ~350-char f-strings per row on every
         # theme/palette toggle (34 rows x 2 polarities = 68 rebuilds
         # per toggle on Hayes).
         qss = self._BTN_PLUS if polarity == "+" else self._BTN_MINUS
@@ -380,8 +381,10 @@ class FeatureRow(QWidget):
 
     def _apply_query_style(self, value: str) -> None:
         """Apply row tinting that matches the current query value.
-        Invalidates both dedup caches since _on_click / restore_value
-        bypass set_display and reset but rewrite the same stylesheets.
+
+        Invalidates both dedup caches since _on_click and
+        restore_value bypass set_display and reset but rewrite the same
+        stylesheets.
         """
         self._last_display_state = None
         self._panel_cache_valid = False
@@ -401,10 +404,9 @@ class FeatureRow(QWidget):
         set_css(self.name_label, name_style)
 
     def set_interactive(self, yes: bool) -> None:
-        # No need to stash ``yes`` on the instance: the +/- buttons'
-        # visibility IS the source of truth for "interactive mode".
-        # Anything that needs to query the state can check
-        # plus_btn.isVisible().
+        # No need to stash ``yes`` on the instance. The +/- buttons'
+        # visibility IS the source of truth for "interactive mode";
+        # anything querying the state can check plus_btn.isVisible().
         self.plus_btn.setVisible(yes)
         self.minus_btn.setVisible(yes)
         self.badge.setVisible(not yes)
@@ -424,9 +426,9 @@ class FeatureRow(QWidget):
         self.plus_btn.setFont(btn_font)
         self.minus_btn.setFont(btn_font)
         self.badge.setFont(btn_font)
-        # Academic small-caps: the initial cap stays full height and the
-        # rest render as small caps, matching the print convention for
-        # citing features.
+        # Academic small-caps. The initial cap stays full height and
+        # the rest render as small caps, matching the print convention
+        # for citing features.
         name_font = QFont("Noto Sans", cfg.name_font)
         name_font.setCapitalization(QFont.Capitalization.SmallCaps)
         self.name_label.setFont(name_font)
@@ -474,12 +476,13 @@ class FeatureRow(QWidget):
             contrastive: selected segments split cleanly on this feature.
             badge: glyph from
                 :py:func:`phonology_shared.presentation.view_models._feature_row_state`
-                (`±` / `+` / U+2212 / `·`). Single source of truth so the
-                desktop and web FeatureRow can never drift; QSS selection
-                stays Qt-only below.
+                (`±`, `+`, U+2212, or `·`). Single source of truth so
+                the desktop and web FeatureRow can't drift; QSS
+                selection stays Qt-only below.
         """
-        # Dedup: seg-mode updates re-run through every row even when the
-        # state didn't change. Skip 3 setStyleSheet + 1 setText calls.
+        # Dedup. Seg-mode updates re-run through every row even when
+        # the state didn't change; skip 3 setStyleSheet + 1 setText
+        # calls.
         state = (value, shared, contrastive)
         if self._last_display_state == state:
             return
@@ -517,12 +520,13 @@ class FeatureRow(QWidget):
 
     def reset(self) -> None:
         """Return the row to its neutral state. Three fast paths:
-        1. Truly idempotent (value empty, no display dirt, panel
-           matches): no-op.
-        2. Clean-but-panel-changed: only name_label depends on the
+
+        1. Idempotent (value empty, no display dirt, panel matches):
+           no-op.
+        2. Clean but panel changed: only name_label depends on the
            panel_active value when neutral, so rewrite just that.
-        3. Visual-dirty, value non-empty, or cache invalidated (set
-           by ``apply_theme`` / ``_apply_query_style`` / ``set_display``
+        3. Visual-dirty, value non-empty, or cache invalidated (set by
+           ``apply_theme``, ``_apply_query_style``, or ``set_display``
            when palette or query state may have moved): full reset.
         """
         visual_dirty = self._last_display_state is not None

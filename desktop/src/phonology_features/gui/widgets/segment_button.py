@@ -1,13 +1,13 @@
 """Single-segment toggle button.
 
-``SegmentButton`` carries one IPA glyph; the closed set of visual
-states it mutates between (selected / matched / unmatched /
-suggested / default) lives on
+``SegmentButton`` carries one IPA glyph. The closed set of visual
+states it mutates between (selected, matched, unmatched, suggested,
+default) lives on
 :py:class:`phonology_shared.presentation.view_models.SegmentState`
 and is re-exported below so widget consumers can keep importing
-``SegmentState`` from this module. Stylesheet strings cached per
-theme at class level so a 140-segment palette swap pays the
-f-string cost once per theme rather than once per button.
+``SegmentState`` from this module. Stylesheet strings are cached per
+theme at class level so a 140-segment palette swap pays the f-string
+cost once per theme rather than once per button.
 """
 
 from __future__ import annotations
@@ -45,10 +45,9 @@ class SegmentButton(QPushButton):
     #: (the IPA string).
     right_clicked = pyqtSignal(str)
 
-    # ``(theme, mode)`` -> styles dict, shared across instances.
-    # Cache rebuild semantics live in
-    # :py:func:`_themed_style_cache.styles_for_active_theme`; see
-    # that module for the invalidation contract.
+    # ``(theme, mode)`` to styles dict, shared across instances. Cache
+    # rebuild semantics and the invalidation contract live in
+    # :py:func:`_themed_style_cache.styles_for_active_theme`.
     _styles_cache: ClassVar[dict[tuple[str, str], dict[SegmentState, str]]] = (
         {}
     )
@@ -62,15 +61,15 @@ class SegmentButton(QPushButton):
         self.segment = segment
         self._state: SegmentState = SegmentState.DEFAULT
         self.setCheckable(True)
-        # No tooltip: the button label already renders the segment,
-        # and a hover bubble repeating ``/seg/`` is pure redundancy
-        # that flickers every pointer pass. Removed in lockstep
-        # with the web's matching change.
-        # Fixed dimensions are sourced from the constraint table so the
-        # web (CSS ``--seg-btn-min-w`` / ``--seg-btn-min-h``) and the
-        # desktop (here) pull from one entry. ``setSizePolicy(Fixed)``
-        # is documentary: ``setFixedSize`` already pins both policies
-        # to Fixed internally, but the explicit call makes the size
+        # No tooltip. The button label already renders the segment,
+        # and a hover bubble repeating ``/seg/`` is redundancy that
+        # flickers every pointer pass. Removed in lockstep with the
+        # web's matching change.
+        # Fixed dimensions sourced from the constraint table so the web
+        # (CSS ``--seg-btn-min-w`` / ``--seg-btn-min-h``) and the
+        # desktop pull from one entry. ``setSizePolicy(Fixed)`` is
+        # documentary: ``setFixedSize`` already pins both policies to
+        # Fixed internally, but the explicit call makes the size
         # contract visible alongside the constraint citation.
         _seg_btn = REGION_CONSTRAINTS["seg_btn"]
         self.setFixedSize(
@@ -81,11 +80,11 @@ class SegmentButton(QPushButton):
             QSizePolicy.Policy.Fixed,
             QSizePolicy.Policy.Fixed,
         )
-        # Apply the IPA-coverage font chain (same as the analysis pane)
-        # so combining marks like the tie bar in d͡ʒ and ejectives
-        # like pʼ render with the same glyphs everywhere they appear.
-        # Using ``setFamilies`` keeps Qt's substitution rule intact;
-        # the 9pt size matches the historic button typography.
+        # IPA-coverage font chain (same as the analysis pane) so
+        # combining marks like the tie bar in d͡ʒ and ejectives like pʼ
+        # render with the same glyphs everywhere they appear.
+        # ``setFamilies`` keeps Qt's substitution rule intact; the 9pt
+        # size matches the historic button typography.
         btn_font = QFont("Noto Sans", 9)
         btn_font.setFamilies(MONO_FAMILIES)
         self.setFont(btn_font)
@@ -96,12 +95,12 @@ class SegmentButton(QPushButton):
         """Re-style against the active palette in place. Called by
         MainWindow on theme toggle so pooled buttons survive.
 
-        Short-circuits when the cached theme dict is already the one
-        we'd apply: ``_styles_cache`` returns the same dict instance
-        for repeated requests in the same theme, so identity check
-        is both correct and cheap. Lets the main theme loop safely
-        call apply_theme on orphan pool entries without paying for
-        widgets whose theme is already current.
+        Short-circuits when the cached theme dict already matches the
+        one we'd apply. ``_styles_cache`` returns the same dict
+        instance for repeated requests in the same theme, so the
+        identity check is both correct and cheap. This lets the main
+        theme loop safely call apply_theme on orphan pool entries
+        without paying for widgets whose theme is already current.
         """
         new_styles = self._styles_for_active_theme()
         if new_styles is self._styles:
@@ -111,11 +110,11 @@ class SegmentButton(QPushButton):
 
     @staticmethod
     def _build_styles() -> dict[SegmentState, str]:
-        # Border thickness ladder + border-radius sourced from
+        # Border thickness ladder and border-radius sourced from
         # ``chart_style`` so the desktop QSS and the web's
-        # ``--border-{thin,std,thick}`` / ``--radius-lg`` tokens
-        # cannot drift. Pre-relay desktop hardcoded 1px / 1.5px /
-        # 2px borders + 8 px radius across every state.
+        # ``--border-{thin,std,thick}`` / ``--radius-lg`` tokens can't
+        # drift. Before the relay, desktop hardcoded 1px, 1.5px, and
+        # 2px borders plus an 8 px radius across every state.
         _thin = cs.BORDER_PX["thin"]
         _std = cs.BORDER_PX["std"]
         _thick = cs.BORDER_PX["thick"]
@@ -190,9 +189,9 @@ class SegmentButton(QPushButton):
         }
 
     def set_state(self, state: SegmentState | str) -> None:
-        """Set the button's visual state. Accepts the enum or its string
-        value; the isinstance check avoids an enum lookup on the hot
-        mode-toggle path where most callers already pass the enum.
+        """Set the button's visual state. Accepts the enum or its
+        string value. The isinstance check avoids an enum lookup on the
+        hot mode-toggle path where most callers already pass the enum.
         """
         if isinstance(state, SegmentState):
             new_state = state

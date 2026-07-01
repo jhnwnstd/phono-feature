@@ -129,7 +129,7 @@ class ThemeController:
 
     @staticmethod
     def combo_style() -> str:
-        """Inventory-dropdown QSS: THE single home for this widget.
+        """Inventory-dropdown QSS, the single home for this widget.
 
         Styles the box to look button-like (so it visibly invites a
         click) and themes the popup list. The Fusion native arrow is
@@ -208,7 +208,7 @@ class ThemeController:
 
         Drops the cached :class:`InventoryEditor` first (it caches
         palette-dependent button stylesheets at construction and
-        never re-styles); modality prevents the editor from being
+        never re-styles). Modality prevents the editor from being
         open at this point, so this never destroys an in-use window.
         Then re-styles segment buttons, feature rows, and the
         chrome chain.
@@ -228,18 +228,19 @@ class ThemeController:
             # Iterate every FeatureRow we own, not just the pool. The
             # "Other" card in inventories with non-FEATURE_ORDER
             # features (for example general_features.json) creates
-            # rows that live in ``_feat_rows`` but NOT in
+            # rows that live in ``_feat_rows`` but not in
             # ``_feat_row_pool``. Missing them leaves their name and
-            # +/- buttons styled with the old palette; in dark mode
-            # after starting from light, the name label's text color
-            # stays light against the dark bg, making the name appear
+            # +/- buttons on the old palette; in dark mode after
+            # starting from light, the name label's text color stays
+            # light against the dark bg, making the name appear
             # "unpopulated".
-            # Only the ACTIVE (displayed) rows need restyling now.
+            #
+            # Only the active (displayed) rows need restyling now.
             # Inactive pool rows are frequently the majority (e.g. 117
             # of 145 for a 28-feature inventory) and are re-themed
             # lazily by ``_populate_features`` when they next become
             # active (``apply_theme`` there is a cheap no-op if already
-            # current). ``_feat_rows`` is the active set, INCLUDING the
+            # current). ``_feat_rows`` is the active set, including the
             # non-pooled "Other" card rows, so this one loop covers
             # everything the user can see while skipping ~80% of the
             # per-toggle setStyleSheet cost.
@@ -263,7 +264,7 @@ class ThemeController:
         Each helper touches one logical group of widgets in place.
         """
         # Tooltip colors refresh via the shared QToolTip palette,
-        # NOT via ``app.setStyleSheet``. The latter would re-polish
+        # not via ``app.setStyleSheet``. The latter would re-polish
         # every widget in the tree and turn theme toggle into a
         # hundred-millisecond stall on populated inventories. The
         # shape rules (border, radius, padding) were applied once at
@@ -289,9 +290,9 @@ class ThemeController:
     def _restyle_toolbar(self) -> None:
         m = self._main
         set_css(m._toolbar, toolbar_chrome_qss())
-        # One home for the dropdown QSS: the same string construction
-        # uses, so the box does not jump background or gain the
-        # drop-down rule on the first toggle.
+        # Same dropdown QSS that construction uses, so the box does
+        # not jump background or gain the drop-down rule on the first
+        # toggle.
         set_css(m.inventory_combo, self.combo_style())
         nav_style = self.nav_btn_style()
         for btn in m._nav_buttons:
