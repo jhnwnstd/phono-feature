@@ -127,11 +127,13 @@ class VowelChartCell:
     # charts to several times their natural width (~900 px).
     nudge_px: float = 0.0
     # For a CONTRAST_SET (two secondary contrasts, e.g. length x
-    # nasality), each entry's feature-aligned ``(col, row)`` in the 2x2
-    # grid, parallel to ``entries`` (columns = one contrast, rows = the
-    # other; ``+`` -> 1). Empty for pair / stack cells. Both renderers
-    # place a contrast-set's cells from this so a partial (3-entry) set
-    # shows its gap in the right corner instead of a positional guess.
+    # nasality), each entry's ``(col, row)`` in the capsule grid, parallel
+    # to ``entries``. Empty for pair / stack cells. A complete 4-entry set
+    # is a feature-aligned 2x2; a partial set with a base form (no ``+`` in
+    # any contrast feature) is a single HORIZONTAL row with the base
+    # centred and its variants flanking it (``var | base | var``). Both
+    # renderers place a contrast-set's cells from this and size the capsule
+    # from the slots' column x row extent.
     grid: tuple[tuple[int, int], ...] = ()
 
 
@@ -175,6 +177,14 @@ class VowelChartRow:
     # hand-built test fixtures; the geometry build always populates
     # it.
     label_y: float = 0.0
+    # The row's rendered CONTENT height in px (its tallest cell: one
+    # button for a plain / pair row, two button-rows for a 2x2 contrast
+    # set, N for a deep stack). The desktop recomputes ``label_y`` against
+    # its live data-area height each layout pass, so it needs the content
+    # height to reproduce the same centring shift the web reads pre-baked
+    # from ``label_y``. Defaults to 0 for hand-built test fixtures; the
+    # geometry build always populates it.
+    content_height_px: int = 0
     # Silhouette's actual LEFT and RIGHT edge x at this row's
     # ``label_y`` (normalised ``[0, 1]``), accounting for the
     # rounded-corner insets at the top + bottom of the polygon.

@@ -66,14 +66,16 @@ _PHOIBLE_SAMPLE = 100
 
 def _cell_half_width_px(cell) -> float:
     """Rendered half-width of a cell box in pixels at the chart's
-    natural width. PAIR / CONTRAST_SET cells are two buttons wide
-    plus the inner gap; STACK cells are one button wide."""
-    if (
-        cell.display_kind in PAIR_DISPLAY_KINDS
-        or cell.display_kind == VowelCellDisplayKind.CONTRAST_SET
-    ):
-        return (2 * BTN_W + VOWEL_PAIR_GAP_PX) / 2.0
-    return BTN_W / 2.0
+    natural width. PAIR cells are two buttons wide; a CONTRAST_SET is as
+    wide as its grid's column extent (a base-centred ``var | base | var``
+    row is three buttons, a 2x2 is two); STACK cells are one button."""
+    if cell.display_kind in PAIR_DISPLAY_KINDS:
+        n = 2
+    elif cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
+        n = (max(c for c, _r in cell.grid) + 1) if cell.grid else 2
+    else:
+        return BTN_W / 2.0
+    return (n * BTN_W + (n - 1) * VOWEL_PAIR_GAP_PX) / 2.0
 
 
 def _effective_pair_shift(cell) -> float:
@@ -427,6 +429,65 @@ def test_row_label_anchors_divorced_from_cell_positions() -> None:
         assert row.silhouette_right == pytest.approx(
             silhouette_right_at_y(geom.silhouette, row.label_y)
         ), row.label
+
+
+def test_row_label_centres_on_multi_row_content() -> None:
+    """A Close / Open row carrying a multi-row STACK centres its label on
+    the WHOLE block, not just the first button row.
+
+    The centring shift is half the row's CONTENT height, so a top-tier
+    row whose tallest cell is a 2-deep stack (two same-position vowels,
+    e.g. Archi's featurally-identical i / iˤ) shifts its label by more
+    than half a single button. Regression for the Close / Open labels
+    lining up above their (multi-vowel) rows instead of centred on them.
+    """
+    from phonology_shared.chart.vowel_geometry import (
+        build_vowel_chart_geometry,
+    )
+    from phonology_shared.chart.vowels import detect_vowel_profile
+    from phonology_shared.presentation.layout import SEG_BTN_H
+
+    # Close-front holds two same-position vowels (i / i2 share every
+    # feature, so they stack rather than pair) -> the Close (top) row is
+    # two button-rows tall; a lone open /a/ gives the chart another row.
+    close_feats = {
+        "high": "+",
+        "low": "-",
+        "front": "+",
+        "back": "-",
+        "round": "-",
+        "long": "-",
+        "nasal": "-",
+    }
+    feats = {
+        "i": dict(close_feats),
+        "i2": dict(close_feats),
+        "a": {
+            "high": "-",
+            "low": "+",
+            "front": "-",
+            "back": "-",
+            "round": "-",
+            "long": "-",
+            "nasal": "-",
+        },
+    }
+    segs = list(feats)
+    geom = build_vowel_chart_geometry(
+        segs, detect_vowel_profile(segs, feats), feats
+    )
+    top_rows = [r for r in geom.rows if r.tier == "top"]
+    assert top_rows, "expected a top-tier (Close) row"
+    close = top_rows[0]
+    # The stack makes the row taller than one button...
+    assert close.content_height_px > SEG_BTN_H
+    # ...and the label centres on that content height, not a single button.
+    expected = close.chart_y + (
+        (close.content_height_px / 2.0) / geom.natural_data_height_px
+    )
+    assert close.label_y == pytest.approx(expected)
+    naive = close.chart_y + (SEG_BTN_H / 2.0) / geom.natural_data_height_px
+    assert close.label_y > naive  # would-be single-button placement
 
 
 # Confinement clears the STRAIGHT trapezoid edges (the rounded

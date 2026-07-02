@@ -23,8 +23,8 @@ from phonology_features.gui.style_utils import set_css
 from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.constants import MONO_FAMILIES
 from phonology_shared.presentation.layout import (
-    RADIUS_PX,
     REGION_CONSTRAINTS,
+    SEG_BTN_RADIUS_PX,
 )
 from phonology_shared.presentation.palette import C
 from phonology_shared.presentation.view_models import SegmentState
@@ -60,14 +60,13 @@ class SegmentButton(QPushButton):
         super().__init__(segment, parent)
         self.segment = segment
         self._state: SegmentState = SegmentState.DEFAULT
-        # Per-instance vowel-chart style overrides, applied ON TOP of the
+        # Per-instance vowel-chart style override, applied ON TOP of the
         # shared per-theme cache WITHOUT mutating it (the cache is shared
         # with the consonant grid). ``_in_capsule`` swaps to the flat
-        # segmented-capsule cell style; ``_chip_radius_px`` overrides the
-        # corner radius for a single vowel chip. Both are reset when the
-        # pooled button returns to the consonant grid.
+        # segmented-capsule cell style; it is reset when the pooled button
+        # returns to the consonant grid. (Corner radius is no longer
+        # per-instance: every segment button shares ``SEG_BTN_RADIUS_PX``.)
         self._in_capsule: bool = False
-        self._chip_radius_px: int | None = None
         self.setCheckable(True)
         # No tooltip. The button label already renders the segment,
         # and a hover bubble repeating ``/seg/`` is redundancy that
@@ -118,15 +117,17 @@ class SegmentButton(QPushButton):
 
     @staticmethod
     def _build_styles() -> dict[SegmentState, str]:
-        # Border thickness ladder and border-radius sourced from
-        # ``chart_style`` so the desktop QSS and the web's
-        # ``--border-{thin,std,thick}`` / ``--radius-lg`` tokens can't
-        # drift. Before the relay, desktop hardcoded 1px, 1.5px, and
-        # 2px borders plus an 8 px radius across every state.
+        # Border thickness ladder and border-radius sourced from shared
+        # constants so the desktop QSS and the web's
+        # ``--border-{thin,std,thick}`` / ``--seg-btn-radius`` tokens
+        # can't drift. Before the relay, desktop hardcoded 1px, 1.5px,
+        # and 2px borders plus the radius across every state.
+        # ``SEG_BTN_RADIUS_PX`` is the one radius every segment button
+        # shares (consonant, vowel chip, diphthong / vocoid chip).
         _thin = cs.BORDER_PX["thin"]
         _std = cs.BORDER_PX["std"]
         _thick = cs.BORDER_PX["thick"]
-        _br = RADIUS_PX["lg"]
+        _br = SEG_BTN_RADIUS_PX
         return {
             SegmentState.SELECTED: f"""
                 QPushButton {{
@@ -264,20 +265,12 @@ class SegmentButton(QPushButton):
 
     def _refresh_css(self) -> None:
         """Re-apply the current state's stylesheet, honouring the
-        per-instance vowel-chart overrides (capsule mode / chip
-        radius) on top of the shared per-theme cache."""
+        per-instance capsule-mode override on top of the shared
+        per-theme cache."""
         if self._in_capsule:
             set_css(self, self._capsule_style(self._state))
             return
-        css = self._styles[self._state]
-        if self._chip_radius_px is not None:
-            # Append a second rule so the later border-radius wins over
-            # the cached base, without rebuilding the whole style.
-            css = (
-                f"{css}\nQPushButton {{"
-                f" border-radius: {self._chip_radius_px}px; }}"
-            )
-        set_css(self, css)
+        set_css(self, self._styles[self._state])
 
     def set_in_capsule(self, in_capsule: bool) -> None:
         """Toggle the flat 'cell inside a pair capsule' styling. Reset
@@ -286,15 +279,6 @@ class SegmentButton(QPushButton):
         if self._in_capsule == in_capsule:
             return
         self._in_capsule = in_capsule
-        self._refresh_css()
-
-    def set_chip_radius(self, radius_px: int | None) -> None:
-        """Override the corner radius (a single vowel chip uses the
-        larger vowel-scoped radius). ``None`` restores the shared
-        default; reset on return to the consonant grid."""
-        if self._chip_radius_px == radius_px:
-            return
-        self._chip_radius_px = radius_px
         self._refresh_css()
 
     def contextMenuEvent(self, event: QContextMenuEvent | None) -> None:

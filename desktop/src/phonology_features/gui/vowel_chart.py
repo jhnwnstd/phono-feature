@@ -296,7 +296,7 @@ class VowelChartWidget(QWidget):
         # rows so it centres on the anchor button row like the
         # middle labels do (those rows' cells anchor an EDGE on
         # chart_y and grow inward).
-        self._row_labels: list[tuple[QLabel, float, str]] = []
+        self._row_labels: list[tuple[QLabel, float, str, int]] = []
         # Cell widgets (segment buttons or vbox stacks for collision cells)
         # carry their chart_x / chart_y plus a pair_side signed multiplier
         # (-1 / 0 / +1). The resize pass projects them to pixel positions:
@@ -373,14 +373,14 @@ class VowelChartWidget(QWidget):
         # lists them. Empty for monophthong-only inventories.
         self._diphthongs: tuple[str, ...] = ()
         # "Diphthongs" section header above the chip strip, styled like the
-        # segment-class headers (uppercase, semibold, tracked) via the
+        # segment-class headers (title-case, semibold, tracked) via the
         # shared SEG_GROUP_HEADER_* tokens so it reads as a peer of the
         # other class labels instead of incidental grey text. Shown only
         # when the inventory has diphthongs.
         diph_font = QFont("Noto Sans")
         diph_font.setPixelSize(cs.SEG_GROUP_HEADER_FONT_PX)
         diph_font.setWeight(QFont.Weight(cs.SEG_GROUP_HEADER_FONT_WEIGHT))
-        self._diphthong_label = QLabel("DIPHTHONGS", self)
+        self._diphthong_label = QLabel("Diphthongs", self)
         self._diphthong_label.setFont(diph_font)
         # Left-aligned so the header sits flush with the chart's left
         # edge, directly above the chip row that fills left-to-right
@@ -554,11 +554,11 @@ class VowelChartWidget(QWidget):
         a wide-to-narrow inventory swap releases the prior pin.
         """
         for btn in self._buttons.values():
-            # Drop the per-instance vowel-chart style overrides before
-            # detaching, so a pooled button reused by the consonant grid
-            # never renders flat/borderless or with the vowel radius.
+            # Drop the per-instance capsule override before detaching, so a
+            # pooled button reused by the consonant grid never renders
+            # flat/borderless. (Corner radius is uniform across all seg
+            # buttons now, so there is nothing else to reset.)
             btn.set_in_capsule(False)
-            btn.set_chip_radius(None)
             btn.setParent(None)
         self._buttons.clear()
         if self._title_label is not None:
@@ -717,7 +717,9 @@ class VowelChartWidget(QWidget):
             )
             lbl.adjustSize()
             lbl.show()
-            self._row_labels.append((lbl, row.chart_y, row.tier))
+            self._row_labels.append(
+                (lbl, row.chart_y, row.tier, row.content_height_px)
+            )
         # Data cells: collected with their chart_x / chart_y; the
         # layout pass turns those into pixel positions. The cell's
         # row tier (read from the shared ``VowelChartRow``) decides
@@ -782,14 +784,12 @@ class VowelChartWidget(QWidget):
             if pooled is not None:
                 pooled.setFixedHeight(SEG_BTN_H)
                 pooled.set_in_capsule(False)
-                pooled.set_chip_radius(None)
         if len(cell.entries) == 1:
             btn = self._buttons.get(cell.entries[0])
             if btn is None:
                 return None
-            # Single vowel chip gets the larger vowel-scoped radius (the
-            # consonant grid keeps the global radius via the reset above).
-            btn.set_chip_radius(cs.VOWEL_CHIP_RADIUS_PX)
+            # Single vowel chip: no per-instance radius override needed;
+            # every seg button already uses the shared SEG_BTN_RADIUS_PX.
             btn.setParent(self)
             btn.show()
             return btn
@@ -834,12 +834,13 @@ class VowelChartWidget(QWidget):
     def _fill_contrast_set_layout(
         self, container: QWidget, cell: VowelChartCell
     ) -> QWidget | None:
-        """Lay a two-feature variant group as a feature-ALIGNED 2x2
-        gridded capsule: each entry sits at its ``cell.grid`` ``(col,
-        row)`` (columns = one contrast, rows = the other), so a partial
-        3-entry set leaves its missing corner empty instead of guessing.
-        The cells run flat + borderless inside the capsule; the frame +
-        dividers are painted by :class:`VowelPairCapsule`.
+        """Lay a two-feature variant group as a gridded capsule: each
+        entry sits at its ``cell.grid`` ``(col, row)``. A complete 4-entry
+        set is a feature-aligned 2x2; a partial set with a base form is a
+        single HORIZONTAL row with the base centred and its variants
+        flanking it (``var | base | var``). The cells run flat + borderless
+        inside the capsule; the frame + dividers are painted by
+        :class:`VowelPairCapsule`.
         """
         layout = QGridLayout(container)
         # No gaps: the capsule's painted dividers separate the cells.
@@ -855,7 +856,7 @@ class VowelChartWidget(QWidget):
                 continue
             if idx < len(grid):
                 col, row = grid[idx]
-            else:  # defensive fallback: row-major if grid is absent
+            else:  # defensive fallback: row-major
                 col, row = idx % 2, idx // 2
             btn.set_in_capsule(True)
             btn.show()
@@ -1084,7 +1085,7 @@ class VowelChartWidget(QWidget):
         # so they keep sitting in the gutter; the inset only pushes the
         # drawn outline out past them (the label-to-stroke gap tightens by
         # the inset, which is why the inset is kept below the label gap).
-        for lbl, y, tier in self._row_labels:
+        for lbl, y, tier, content_h in self._row_labels:
             lbl.adjustSize()
             lh = lbl.height()
             # Centre the label on its anchor button row via the shared
@@ -1097,7 +1098,7 @@ class VowelChartWidget(QWidget):
             # then evaluated at the label's own y so the label-to-outline
             # gap stays constant, divorcing label placement from where the
             # row's buttons land.
-            label_y = label_midpoint_norm(y, tier, dh)
+            label_y = label_midpoint_norm(y, tier, dh, content_h or SEG_BTN_H)
             py = dy + round(label_y * dh) - lh // 2
             silhouette_left = silhouette_left_at_y(sil_for_dw, label_y)
             anchor_x = dx + round(silhouette_left * dw)
@@ -1308,13 +1309,17 @@ class VowelChartWidget(QWidget):
         painter.save()
         painter.setClipPath(path)
         painter.setPen(pen)
-        for _lbl, chart_y, tier in self._row_labels:
-            # Trace the button-row midpoint, not the raw ``chart_y`` anchor:
+        for _lbl, chart_y, tier, content_h in self._row_labels:
+            # Trace the row-content midpoint, not the raw ``chart_y`` anchor:
             # top / bottom tiers anchor their cells' edge on ``chart_y`` and
-            # grow inward, so an unshifted guide would miss the button
-            # centres. Uses the same ``label_midpoint_norm`` the row label
-            # placement uses, so guide and label align.
-            y = dy + round(label_midpoint_norm(chart_y, tier, dh) * dh)
+            # grow inward, so an unshifted guide would miss the content
+            # centre. Uses the same ``label_midpoint_norm`` (with the row's
+            # content height) the row label placement uses, so guide and
+            # label stay aligned even for a 2-row contrast set or a stack.
+            y = dy + round(
+                label_midpoint_norm(chart_y, tier, dh, content_h or SEG_BTN_H)
+                * dh
+            )
             painter.drawLine(dx, y, dx + dw, y)
         # Column guides SLANT to follow their backness column, not a
         # naive vertical drop. The shared geometry bakes each column's

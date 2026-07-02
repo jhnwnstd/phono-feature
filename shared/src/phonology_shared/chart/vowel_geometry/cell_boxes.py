@@ -99,14 +99,16 @@ _INTER_CELL_GAP_PX: float = 2.0
 
 
 def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
-    """Horizontal button count contributed by ``cell``. PAIR /
-    CONTRAST_SET cells take 2, STACK takes 1. Module-level so both
+    """Horizontal button count contributed by ``cell``. PAIR cells take
+    2 (a horizontal mate pair); a CONTRAST_SET is driven by its ``grid``
+    column extent (a base-centred ``var | base | var`` row is 3 wide, a
+    2x2 is 2 wide), falling back to 2; STACK takes 1. Module-level so both
     the conflict resolver and the natural-size calc share one
     definition."""
     if cell.display_kind in PAIR_DISPLAY_KINDS:
         return 2
     if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
-        return 2
+        return _grid_cols_rows(cell.grid)[0]
     return 1
 
 
@@ -191,22 +193,46 @@ def _resolve_pair_shift_conflicts(
     ]
 
 
-def vertical_depth(kind: VowelCellDisplayKind, n_entries: int) -> int:
+def _grid_cols_rows(grid: tuple[tuple[int, int], ...]) -> tuple[int, int]:
+    """``(n_cols, n_rows)`` occupied by a CONTRAST_SET's ``(col, row)``
+    slots: one past the max index on each axis. A base-centred set is a
+    single row (``var | base | var``) -> ``(3, 1)``; a complete 2x2 ->
+    ``(2, 2)``. Empty grid falls back to the canonical 2x2 footprint."""
+    if not grid:
+        return (2, 2)
+    return (
+        max(col for col, _row in grid) + 1,
+        max(row for _col, row in grid) + 1,
+    )
+
+
+def vertical_depth(
+    kind: VowelCellDisplayKind,
+    n_entries: int,
+    grid: tuple[tuple[int, int], ...] = (),
+) -> int:
     """Vertical row count a cell of ``kind`` with ``n_entries``
-    contributes. PAIR kinds are 1 row; CONTRAST_SET is
-    ``ceil(entries / 2)``; STACK is ``len(entries)``. The single
-    definition shared by the height sizing, the confinement box
-    math, and the pipeline's row-depth pre-pass, so the three can
-    never disagree on how tall a cell renders.
+    contributes. PAIR kinds are 1 row; CONTRAST_SET is driven by its
+    ``grid`` extent (a single-row base-centred set is 1, a 2x2 is 2),
+    falling back to ``ceil(entries / 2)`` when no grid is supplied; STACK
+    is ``len(entries)``. The single definition shared by the height
+    sizing, the confinement box math, and the pipeline's row-depth
+    pre-pass, so the three can never disagree on how tall a cell renders.
     """
     if kind in PAIR_DISPLAY_KINDS:
         return 1
     if kind == VowelCellDisplayKind.CONTRAST_SET:
+        if grid:
+            return _grid_cols_rows(grid)[1]
         return (n_entries + 1) // 2
     return n_entries
 
 
-def content_height_px(kind: VowelCellDisplayKind, n_entries: int) -> int:
+def content_height_px(
+    kind: VowelCellDisplayKind,
+    n_entries: int,
+    grid: tuple[tuple[int, int], ...] = (),
+) -> int:
     """Rendered pixel height of a cell's button block: ``depth``
     button rows at the density-tier height with the stack gap
     between them.
@@ -217,7 +243,7 @@ def content_height_px(kind: VowelCellDisplayKind, n_entries: int) -> int:
     heights via this function, never raw depths; comparing depths
     lets the 9-deep cell overflow a slot sized for the 10-deep one.
     """
-    depth = vertical_depth(kind, n_entries)
+    depth = vertical_depth(kind, n_entries, grid)
     eff_h = effective_button_height_px(depth)
     return depth * eff_h + (depth - 1) * _VOWEL_CELL_STACK_GAP_PX
 
@@ -227,7 +253,7 @@ def _cell_height_px(cell: VowelChartCell) -> int:
     vertical mate of :py:func:`_cell_width_px`: the one height
     formula the box rect, the natural sizing, and the pipeline's
     row weighting share."""
-    return content_height_px(cell.display_kind, len(cell.entries))
+    return content_height_px(cell.display_kind, len(cell.entries), cell.grid)
 
 
 def _cell_box_px(

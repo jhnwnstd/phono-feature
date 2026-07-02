@@ -174,13 +174,50 @@ def _grid_layout(
     bundles: list[Mapping[str, str]],
     contrast: tuple[str, ...],
 ) -> tuple[tuple[str, ...], tuple[tuple[int, int], ...]]:
-    """Assign each entry a feature-aligned ``(col, row)`` in the 2x2
-    contrast grid. Columns encode one contrast (``long`` when present,
-    matching the horizontal length convention; else the sorted-first
-    feature), rows the other; ``+`` -> col/row 1. Returns the entries in
-    stable row-major reading order plus the parallel ``(col, row)``
-    tuple. Missing feature combinations simply leave that grid cell
-    empty (a 3-entry set shows one gap)."""
+    """Assign each entry a ``(col, row)`` slot in the contrast capsule.
+    Returns the entries in stable reading order plus the parallel slot
+    tuple; the renderers size the capsule from the slots' extent (columns
+    x rows).
+
+    A partial set with a single BASE form (the entry with no ``+`` in any
+    contrast feature, e.g. plain ``u`` among ``u / uː / ũː``) reads best as
+    a HORIZONTAL row with the base CENTRED and its variants FLANKING it:
+    a 3-entry set becomes ``var | base | var`` (least-marked variant left,
+    most-marked right); a 2-entry set becomes ``base | var``. A complete
+    4-entry set has no empty quadrant to centre around, so it keeps the
+    feature-ALIGNED 2x2 (columns = one contrast, rows the other;
+    ``+`` -> col/row 1); a base-less partial set likewise keeps its
+    aligned gap."""
+    base_idxs = [
+        i
+        for i, b in enumerate(bundles)
+        if not any(b.get(f) == "+" for f in contrast)
+    ]
+    if len(base_idxs) == 1 and 2 <= len(entries) <= 3:
+        base_i = base_idxs[0]
+
+        def _n_marks(i: int) -> int:
+            return sum(1 for f in contrast if bundles[i].get(f) == "+")
+
+        variants = sorted(
+            (i for i in range(len(entries)) if i != base_i),
+            key=lambda i: (_n_marks(i), entries[i]),
+        )
+        row_ordered: tuple[str, ...]
+        if len(variants) == 1:
+            # Two entries: base first, its variant to the right.
+            row_ordered = (entries[base_i], entries[variants[0]])
+        else:
+            # Three entries: base in the MIDDLE, variants flanking it
+            # (least-marked on the left, most-marked on the right).
+            row_ordered = (
+                entries[variants[0]],
+                entries[base_i],
+                entries[variants[1]],
+            )
+        # One horizontal row: column = reading order, single row.
+        row_grid = tuple((col, 0) for col in range(len(entries)))
+        return row_ordered, row_grid
     col_feat = "long" if "long" in contrast else contrast[0]
     row_feat = contrast[1] if contrast[0] == col_feat else contrast[0]
     tagged: list[tuple[int, int, str]] = []
@@ -279,9 +316,10 @@ class CellClassification:
     kind: VowelCellDisplayKind
     contrast_features: tuple[str, ...]
     entries: tuple[str, ...]
-    #: For a 2x2 CONTRAST_SET cell, each entry's feature-aligned
-    #: ``(col, row)`` in the grid (parallel to ``entries``); empty for
-    #: pair / stack cells, which need no grid coordinates.
+    #: For a CONTRAST_SET cell, each entry's ``(col, row)`` in the capsule
+    #: grid (parallel to ``entries``); empty for pair / stack cells, which
+    #: need no grid coordinates. A base-centred set is a single row
+    #: (``var | base | var``); a complete set is a 2x2.
     grid: tuple[tuple[int, int], ...] = ()
 
 
@@ -344,8 +382,8 @@ class CellSlot:
     contrast_features: tuple[str, ...]
     pair_side: int
     anchor_x: float
-    #: Feature-aligned ``(col, row)`` per entry for a 2x2 CONTRAST_SET;
-    #: empty otherwise. Carried through so the projection can hand it to
+    #: ``(col, row)`` per entry for a CONTRAST_SET; empty otherwise.
+    #: Carried through so the projection can hand it to
     #: :py:class:`..model.VowelChartCell`.
     grid: tuple[tuple[int, int], ...] = ()
 

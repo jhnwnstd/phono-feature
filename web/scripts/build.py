@@ -774,6 +774,10 @@ def generate_layout_css() -> None:
         f"  --radius-sm: {mod.RADIUS_PX['sm']}px;",
         f"  --radius-md: {mod.RADIUS_PX['md']}px;",
         f"  --radius-lg: {mod.RADIUS_PX['lg']}px;",
+        # One radius for every segment button (consonant, vowel chip,
+        # diphthong / vocoid chip), distinct from the crisper container
+        # radius above.
+        f"  --seg-btn-radius: {mod.SEG_BTN_RADIUS_PX}px;",
         f"  --control-h-md: {mod.TOOLBAR_BTN_H}px;",
         f"  --control-h-xs: {mod.PANEL_CLEAR_BTN_H}px;",
         f"  --panel-chrome-v: {mod.PANEL_CHROME_V}px;",
@@ -866,13 +870,9 @@ def generate_layout_css() -> None:
                 "  --vowel-cell-stack-gap: "
                 f"{chart_style.VOWEL_CELL_STACK_GAP_PX}px;"
             ),
-            # Vowel-scoped chip + pair-capsule radii (larger than the
-            # global consonant-button radius) and the faint capsule
+            # Pair-capsule frame radius (one step rounder than the shared
+            # ``--seg-btn-radius`` cells it holds) and the faint capsule
             # divider alpha, so both renderers read one source.
-            (
-                "  --vowel-chip-radius: "
-                f"{chart_style.VOWEL_CHIP_RADIUS_PX}px;"
-            ),
             (
                 "  --vowel-capsule-radius: "
                 f"{chart_style.VOWEL_CAPSULE_RADIUS_PX}px;"

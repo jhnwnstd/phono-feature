@@ -90,7 +90,7 @@ from phonology_shared.chart.consonants import (
 from phonology_shared.data.inventory import Inventory, ValidationError
 from phonology_shared.editor.grid import load_inventory_checked
 from phonology_shared.editor.phoible_provider import phoible_loaded_message
-from phonology_shared.presentation import layout
+from phonology_shared.presentation import chart_style, layout
 from phonology_shared.presentation.analysis import render_validation_report
 from phonology_shared.presentation.constants import (
     FEATURE_GROUPS,
@@ -678,9 +678,22 @@ class MainWindow(QMainWindow):
         _vstrip_lay = QHBoxLayout(self._vocoid_strip)
         _vstrip_lay.setContentsMargins(0, 6, 0, 0)
         _vstrip_lay.setSpacing(8)
-        _vocoid_label = QLabel("VOCOIDS")
-        _vocoid_label.setFont(QFont("Noto Sans", 8, QFont.Weight.Bold))
-        set_css(_vocoid_label, f"color: {C['text_dim']}; letter-spacing: 1px;")
+        # Title-case + the shared SEG_GROUP_HEADER_* tokens so this strip
+        # header reads identically to the consonant class headers, the
+        # vowel chart title, and the diphthong header (one quiet label
+        # voice, no all-caps shouting, no per-widget font drift).
+        _vocoid_label = QLabel("Vocoids")
+        _vocoid_font = QFont("Noto Sans")
+        _vocoid_font.setPixelSize(chart_style.SEG_GROUP_HEADER_FONT_PX)
+        _vocoid_font.setWeight(
+            QFont.Weight(chart_style.SEG_GROUP_HEADER_FONT_WEIGHT)
+        )
+        _vocoid_label.setFont(_vocoid_font)
+        set_css(
+            _vocoid_label,
+            f"color: {C['text_dim']}; letter-spacing: "
+            f"{chart_style.SEG_GROUP_HEADER_LETTER_SPACING_PX}px;",
+        )
         _vstrip_lay.addWidget(
             _vocoid_label, alignment=Qt.AlignmentFlag.AlignVCenter
         )

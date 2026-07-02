@@ -455,16 +455,18 @@ def test_classify_long_plus_nasal_is_contrast_set() -> None:
     assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("long", "nasal")
     assert ordered == ("a", "aa", "aN", "aaN")
-    # Feature-aligned 2x2: columns = long (short left, long right),
-    # rows = nasal (oral top, nasal bottom); parallel to ``ordered``.
+    # Complete set -> feature-aligned 2x2 (no empty quadrant to centre a
+    # base around): columns = long (short left, long right), rows = nasal
+    # (oral top, nasal bottom). Parallel to ``ordered``.
     assert grid == ((0, 0), (1, 0), (0, 1), (1, 1))
 
 
-def test_classify_partial_contrast_set_grid_leaves_the_gap() -> None:
-    """A 3-entry length x nasal set (Dzongkha's u / uː / ũː: the
-    short-nasal corner is missing) grids feature-aligned, so the gap
-    lands in the correct (short, nasal) corner rather than a positional
-    guess: u top-left, uː top-right, ũː bottom-right."""
+def test_classify_partial_contrast_set_centres_the_base_form() -> None:
+    """A 3-entry length x nasal set (Dzongkha's u / uː / ũː) has a single
+    BASE form (plain u, no + contrast). Rather than leave an empty
+    quadrant, it renders as one HORIZONTAL row with the base CENTRED and
+    its variants flanking it (least-marked left, most-marked right), so
+    ``ordered`` is ``(uː, u, ũː)`` and the grid is a single row."""
     from phonology_shared.chart.vowel_geometry.display_slots import (
         _classify_vowel_cell_display,
     )
@@ -482,8 +484,10 @@ def test_classify_partial_contrast_set_grid_leaves_the_gap() -> None:
     )
     assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("long", "nasal")
-    assert ordered == ("u", "uː", "ũː")
-    assert grid == ((0, 0), (1, 0), (1, 1))  # gap at (0, 1) = short-nasal
+    # var_left (fewest marks) | base | var_right (most marks).
+    assert ordered == ("uː", "u", "ũː")
+    # Single horizontal row: three columns, one row.
+    assert grid == ((0, 0), (1, 0), (2, 0))
 
 
 def test_classify_differs_on_position_feature_is_stack() -> None:

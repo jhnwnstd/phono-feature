@@ -1044,9 +1044,10 @@ dialog input[type="text"]:focus-visible {
   color: var(--text-dim);
   padding: var(--seg-group-header-padding);
   overflow-wrap: anywhere;
-  /* Uppercase the manner-class names (Plosives -> PLOSIVES) to match
-     the desktop QLabel(manner.upper()) and the "VOWELS" title. */
-  text-transform: uppercase;
+  /* Title-case (the group names ship title-cased, e.g. "Plosives") for a
+     consistent, quiet label voice: the vowel chart title + diphthong
+     header read the same way, so no section header shouts in all-caps.
+     Matches the desktop QLabel(manner). */
 }
 .panel[data-active="true"] .seg-group-header {
   color: var(--text);
@@ -1087,7 +1088,10 @@ dialog input[type="text"]:focus-visible {
   justify-content: center;
   line-height: 1;
   overflow: hidden;
-  border-radius: var(--radius-lg);
+  /* One radius for every segment button (consonant, vowel chip,
+     diphthong / vocoid chip); ``--radius-lg`` stays the crisper
+     container corner. */
+  border-radius: var(--seg-btn-radius, 10px);
   border: var(--border-std) solid var(--border);
   background: var(--seg-default);
   color: var(--text);
@@ -1360,9 +1364,8 @@ dialog input[type="text"]:focus-visible {
   letter-spacing: var(--seg-group-header-letter-spacing);
   color: var(--text-dim);
   padding: var(--seg-group-header-padding);
-  /* Uppercase to match the seg-class headers + the desktop's
-     QLabel("DIPHTHONGS"). */
-  text-transform: uppercase;
+  /* Title-case to match the seg-class headers + the vowel chart title +
+     the desktop's QLabel("Diphthongs"). */
   /* Left-aligned so the header sits flush with the chart's left edge,
      directly above the chip row, which fills left-to-right under it.
      Matches the seg-class headers, which are left-aligned too. */
@@ -1675,12 +1678,13 @@ dialog input[type="text"]:focus-visible {
   gap: var(--vowel-pair-gap, 2px);
   background: transparent;
 }
-/* 2-column grid for a CONTRAST_SET cell (3-4 segments differing on
-   two display features, e.g. long x nasal). Three-entry layout
-   spans the first child across both columns on row 0; four-entry
-   layout uses a pure 2x2. ``data-cell-size`` is set by the JS
-   editor so the 3-entry case can apply the column span without
-   needing a separate class. */
+/* Grid for a CONTRAST_SET cell (2-4 segments differing on two display
+   features, e.g. long x nasal). ``_buildVowelCellContrastSet`` sizes the
+   grid to the classifier's slot extent inline (``grid-template-columns/
+   rows: repeat(n, 1fr)``) and places each cell at its (col, row): a
+   complete 4-entry set is a feature-aligned 2x2; a partial set with a
+   base form is one horizontal row (``var | base | var``). The 1fr 1fr
+   below is only the offline fallback before the inline sizing lands. */
 .vowel-chart-cell-contrast-set {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1689,9 +1693,6 @@ dialog input[type="text"]:focus-visible {
      same number. Pre-relay desktop used 1 px while web used 2 px. */
   gap: var(--vowel-chart-contrast-set-row-gap, 2px) var(--vowel-pair-gap, 2px);
   background: transparent;
-}
-.vowel-chart-cell-contrast-set[data-cell-size="3"] > :first-child {
-  grid-column: span 2;
 }
 
 /* ---------- pair capsule ----------
@@ -1749,11 +1750,6 @@ dialog input[type="text"]:focus-visible {
   color: var(--text-dim);
   outline: var(--border-thin) dotted var(--border);
   outline-offset: calc(-1 * var(--border-thin));
-}
-/* Single vowel chips get the larger vowel-scoped radius (the pair
-   capsule uses its own). Consonant ``.seg-btn`` keeps ``--radius-lg``. */
-.vowel-chart-cell.seg-btn {
-  border-radius: var(--vowel-chip-radius, 10px);
 }
 
 /* Two-feature contrast set: a feature-aligned 2x2 gridded capsule.

@@ -75,18 +75,27 @@ def build_col_headers(
 
 
 def label_midpoint_norm(
-    chart_y: float, tier: str, data_height_px: float
+    chart_y: float,
+    tier: str,
+    data_height_px: float,
+    row_content_height_px: float = SEG_BTN_H,
 ) -> float:
     """The normalised y a row label centres on.
 
     Middle / only rows centre on the row's ``chart_y``. Top and
     bottom rows anchor their cells' EDGE on ``chart_y`` and grow
-    inward, so a label drawn at ``chart_y`` lines up with the
-    stack's edge, not its first button row; shifting it inward by
-    half a button height re-centres it on the anchor button row.
+    inward, so a label drawn at ``chart_y`` lines up with the row's
+    edge, not its vertical centre; shifting it inward by half the
+    row's CONTENT height re-centres it on the rendered content.
+    ``row_content_height_px`` is that content height (the row's
+    tallest cell: one button for a plain / pair row, but TWO
+    button-rows for a 2x2 contrast set, or N for a deep stack), so a
+    Close / Open row carrying a contrast set or stack centres on the
+    whole block instead of just its first button row. Defaults to a
+    single button height so a plain row is unchanged.
     ``data_height_px`` is the data area's pixel height the shift is
-    taken against, so the shift is exactly ``SEG_BTN_H / 2`` rendered
-    pixels.
+    taken against, so the shift is exactly
+    ``row_content_height_px / 2`` rendered pixels.
 
     THE SINGLE definition of the close/open label-centring shift,
     used by both renderers so it cannot drift between them: the
@@ -98,11 +107,11 @@ def label_midpoint_norm(
     """
     if data_height_px <= 0:
         return chart_y
-    half_btn_norm = (SEG_BTN_H / 2.0) / data_height_px
+    half_content_norm = (row_content_height_px / 2.0) / data_height_px
     if tier == "top":
-        return chart_y + half_btn_norm
+        return chart_y + half_content_norm
     if tier == "bottom":
-        return chart_y - half_btn_norm
+        return chart_y - half_content_norm
     return chart_y
 
 
@@ -112,9 +121,16 @@ def _label_y_for(row: int, row_plan: RowPlan, natural_h: int) -> float:
     fields are evaluated at this same y, so a label's gap to the
     outline stays constant regardless of where the row's buttons
     land inside it (label placement is divorced from cell position).
+
+    ``row_plan.weight`` is the row's content height in px (its tallest
+    cell), so a Close / Open row holding a 2-row contrast set or a deep
+    stack centres its label on the whole block, not just the first row.
     """
     return label_midpoint_norm(
-        row_plan.display_y[row], row_plan.tier[row], natural_h
+        row_plan.display_y[row],
+        row_plan.tier[row],
+        natural_h,
+        row_plan.weight[row],
     )
 
 
@@ -139,6 +155,7 @@ def build_rows(
             tier=row_plan.tier[ri],
             slot_height_norm=row_plan.slot_height[ri],
             label_y=label_y_by_row[ri],
+            content_height_px=row_plan.weight[ri],
             silhouette_left=silhouette_left_at_y(
                 silhouette, label_y_by_row[ri]
             ),

@@ -557,12 +557,21 @@ SPACING_PX: dict[str, int] = {
 }
 
 # Border-radius tokens. ``sm`` for chip-like inline controls,
-# ``md`` for buttons / cards, ``lg`` for the largest containers.
+# ``md`` for buttons / cards, ``lg`` for the largest containers
+# (dialogs, panels, the loading card).
 RADIUS_PX: dict[str, int] = {
     "sm": 4,
     "md": 6,
     "lg": 8,
 }
+
+# Corner radius (px) for EVERY segment button, consonant and vowel
+# alike (single vowel chips, diphthong / vocoid chips too), so the
+# whole segment inventory reads with one soft-control shape. Larger
+# than ``RADIUS_PX["lg"]`` (kept for the crisper container corners) and
+# smaller than ``VOWEL_CAPSULE_RADIUS_PX`` so a pair capsule's frame
+# still reads a touch rounder than the cells it holds.
+SEG_BTN_RADIUS_PX: int = 10
 
 # Top-bar control heights. ``TOOLBAR_BTN_H`` is the inventory
 # combo / picker buttons; ``PANEL_CLEAR_BTN_H`` is the small

@@ -369,7 +369,11 @@ def _plan_rows(
     """
     weights: dict[int, int] = {}
     for (ri, _ci), classification in classifications.items():
-        h = content_height_px(classification.kind, len(classification.entries))
+        h = content_height_px(
+            classification.kind,
+            len(classification.entries),
+            classification.grid,
+        )
         if h > weights.get(ri, 0):
             weights[ri] = h
     return distribute_rows(

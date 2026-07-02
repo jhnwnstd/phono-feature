@@ -47,9 +47,11 @@ def test_spillover_unused_when_viewport_fits(qapp) -> None:
     ]
     placed = [i.widget() for i in items if i is not None]
     placed_text = [w.text() for w in placed if hasattr(w, "text") and w.text()]
-    assert "GROUP0" in placed_text
-    assert "GROUP1" in placed_text
-    assert "GROUP2" in placed_text
+    # Headers render title-case (no ``.upper()``) for a consistent label
+    # voice across the app.
+    assert "Group0" in placed_text
+    assert "Group1" in placed_text
+    assert "Group2" in placed_text
     scroll.deleteLater()
 
 
@@ -79,11 +81,11 @@ def test_spillover_engages_when_viewport_too_short(qapp) -> None:
             w = item.widget()
             if w is None:
                 continue
-            if hasattr(w, "text") and w.text().startswith("GROUP"):
+            if hasattr(w, "text") and w.text().startswith("Group"):
                 slot1_cols_found = True
                 break
     assert slot1_cols_found, (
-        "expected at least one GROUPx header in the spillover slot 1, "
+        "expected at least one Groupx header in the spillover slot 1, "
         "but every header is at column 0"
     )
     scroll.deleteLater()

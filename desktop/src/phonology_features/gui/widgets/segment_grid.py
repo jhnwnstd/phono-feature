@@ -129,7 +129,11 @@ class SegmentGridWidget(QWidget):
         hdr_font.setPixelSize(cs.SEG_GROUP_HEADER_FONT_PX)
         hdr_font.setWeight(QFont.Weight(cs.SEG_GROUP_HEADER_FONT_WEIGHT))
         for manner in groups:
-            hdr = QLabel(manner.upper())
+            # Title-case (the group names already ship title-cased, e.g.
+            # "Plosives") for a consistent, quiet label voice across the
+            # app: the vowel chart title + diphthong header read the same
+            # way, so no section header shouts in all-caps.
+            hdr = QLabel(manner)
             hdr.setFont(hdr_font)
             set_css(hdr, self._header_style(C["text_dim"]))
             hdr.setParent(self)

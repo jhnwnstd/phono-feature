@@ -2773,25 +2773,38 @@ function _buildVowelCellPair(segs, kind) {
 function _buildVowelCellContrastSet(segs, grid) {
     const cell = document.createElement("div");
     // A two-feature variant group (e.g. length x nasality) renders as
-    // ONE feature-aligned 2x2 gridded capsule: columns encode one
-    // contrast, rows the other. ``grid`` (from the shared classifier,
-    // parallel to ``segs``) gives each entry's 0-based (col, row); a
-    // partial 3-entry set leaves its missing corner empty. The internal
-    // dividers are drawn on the right-column / bottom-row cells so they
-    // only appear where two cells actually meet.
+    // ONE gridded capsule. ``grid`` (from the shared classifier, parallel
+    // to ``segs``) gives each entry its 0-based ``(col, row)``. A complete
+    // 4-entry set is a feature-aligned 2x2; a partial set with a base form
+    // is a single HORIZONTAL row with the base CENTRED and its variants
+    // flanking it (``var | base | var``). The grid is sized to the slots'
+    // extent so the row / 2x2 both fit; dividers are drawn on any cell
+    // with a left / top neighbour so they only appear where two cells meet.
     cell.className =
         "vowel-chart-cell vowel-chart-cell-contrast-set "
         + "vowel-capsule vowel-capsule-grid";
     cell.dataset.cellSize = String(segs.length);
     const coords = Array.isArray(grid) ? grid : [];
+    let maxCol = 0;
+    let maxRow = 0;
+    for (const pos of coords) {
+        if (Array.isArray(pos) && pos.length >= 2) {
+            maxCol = Math.max(maxCol, pos[0]);
+            maxRow = Math.max(maxRow, pos[1]);
+        }
+    }
+    cell.style.gridTemplateColumns = `repeat(${maxCol + 1}, 1fr)`;
+    cell.style.gridTemplateRows = `repeat(${maxRow + 1}, 1fr)`;
     segs.forEach((seg, i) => {
         const btn = _buildVowelSegBtn(seg);
         const pos = coords[i];
-        if (Array.isArray(pos) && pos.length === 2) {
-            btn.style.gridColumn = String(pos[0] + 1);
-            btn.style.gridRow = String(pos[1] + 1);
-            if (pos[0] === 1) btn.classList.add("vowel-capsule-div-l");
-            if (pos[1] === 1) btn.classList.add("vowel-capsule-div-t");
+        if (Array.isArray(pos) && pos.length >= 2) {
+            const col = pos[0];
+            const row = pos[1];
+            btn.style.gridColumn = String(col + 1);
+            btn.style.gridRow = String(row + 1);
+            if (col > 0) btn.classList.add("vowel-capsule-div-l");
+            if (row > 0) btn.classList.add("vowel-capsule-div-t");
         }
         cell.appendChild(btn);
     });

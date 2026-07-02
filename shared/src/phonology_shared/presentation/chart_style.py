@@ -330,13 +330,13 @@ VOWEL_SILHOUETTE_MAX_ASPECT: float = 1.8
 #: growing the chart or shoving the row labels out of their gutter.
 VOWEL_SILHOUETTE_INSET_PX: int = 8
 
-#: Corner radius (px) for a single vowel CHIP and for the segmented
-#: pair CAPSULE. Larger than the global ``RADIUS_PX["lg"]`` = 8 used by
-#: consonant buttons, and larger than the small silhouette-field radius,
-#: so the hierarchy reads "soft selectable control on a crisp map". A
-#: dedicated VOWEL-scoped token so bumping it does not reshape the
-#: consonant grid (which keeps the global radius).
-VOWEL_CHIP_RADIUS_PX: int = 10
+#: Corner radius (px) for the segmented pair CAPSULE's outer frame.
+#: One step larger than every cell it holds (``SEG_BTN_RADIUS_PX`` = 10,
+#: the shared segment-button radius in ``layout.py``) and larger than the
+#: small silhouette-field radius, so the hierarchy reads "soft selectable
+#: control on a crisp map" and the frame stays a touch rounder than its
+#: cells. Individual chips (vowel + consonant + diphthong) share
+#: ``SEG_BTN_RADIUS_PX``; there is no separate vowel-chip radius anymore.
 VOWEL_CAPSULE_RADIUS_PX: int = 12
 
 #: Alpha (0..1) for the 1 px divider between the two cells of a pair
