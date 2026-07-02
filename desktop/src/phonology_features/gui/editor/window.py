@@ -18,6 +18,7 @@ from phonology_shared.data.limits import (
 )
 from phonology_shared.editor.providers import generated_to_grid
 from phonology_shared.editor.setup import suggest_filename
+from phonology_shared.presentation.layout import EDITOR_CELL_PX
 from phonology_shared.presentation.mode_logic import (
     REDO_NOTHING_MESSAGE,
     UNDO_NOTHING_MESSAGE,
@@ -39,6 +40,7 @@ from PyQt6.QtCore import QEvent, QModelIndex, QObject, QPoint, Qt
 from PyQt6.QtGui import (
     QCloseEvent,
     QFont,
+    QFontMetrics,
     QKeyEvent,
     QKeySequence,
     QShortcut,
@@ -599,6 +601,26 @@ class InventoryEditor(QMainWindow):
         return True
 
     # Table management
+    def _segment_header_item(self, seg: str) -> QTableWidgetItem:
+        """A column-header item for ``seg`` whose font is shrunk to fit
+        the fixed square cell (``EDITOR_CELL_PX``) when the glyph is too
+        wide, mirroring the web editor + the seg-buttons: one standard
+        square, oversized digraphs scaled down rather than widening the
+        column."""
+        item = QTableWidgetItem(seg)
+        base = QFont("Noto Sans", 11)
+        budget = EDITOR_CELL_PX - 6
+        if QFontMetrics(base).horizontalAdvance(seg) > budget:
+            shrunk = QFont(base)
+            pt = 11.0
+            while pt > 6.5:
+                pt -= 0.5
+                shrunk.setPointSizeF(pt)
+                if QFontMetrics(shrunk).horizontalAdvance(seg) <= budget:
+                    break
+            item.setFont(shrunk)
+        return item
+
     def _rebuild_table(
         self,
         initial_cells: Mapping[str, Mapping[str, str]] | None = None,
@@ -624,24 +646,30 @@ class InventoryEditor(QMainWindow):
         # affordance survive a reload.
         self._install_headers()
         self._table.setVerticalHeaderLabels(self._features)
-        self._table.setHorizontalHeaderLabels(self._segments)
+        # Segment columns get per-item headers so an oversized glyph can
+        # shrink to fit the fixed square section (see _segment_header_item).
+        for i, seg in enumerate(self._segments):
+            self._table.setHorizontalHeaderItem(
+                i, self._segment_header_item(seg)
+            )
         # Per-axis font and Fixed section sizing. Fixed, not
         # ResizeToContents: the adaptive mode re-measured every cell on
         # each data change (a 28-cell column cycle took ~1 s), and
         # values are single-char so it buys nothing. Fixed cut a
-        # select-all from 60 s+ to 17 ms.
+        # select-all from 60 s+ to 17 ms. Both axes use the one shared
+        # EDITOR_CELL_PX so the grid reads as uniform squares.
         v_header = self._table.verticalHeader()
         if v_header:
             v_header.setFont(QFont("Noto Sans", 9))
             v_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-            v_header.setDefaultSectionSize(26)
-            v_header.setMinimumSectionSize(24)
+            v_header.setDefaultSectionSize(EDITOR_CELL_PX)
+            v_header.setMinimumSectionSize(EDITOR_CELL_PX)
         h_header = self._table.horizontalHeader()
         if h_header:
             h_header.setFont(QFont("Noto Sans", 11))
-            h_header.setDefaultSectionSize(36)
+            h_header.setDefaultSectionSize(EDITOR_CELL_PX)
             h_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
-            h_header.setMinimumSectionSize(32)
+            h_header.setMinimumSectionSize(EDITOR_CELL_PX)
         # clear() can replace the selectionModel too; re-wire it here.
         sel_model = self._table.selectionModel()
         if sel_model is not None:
@@ -1160,7 +1188,9 @@ class InventoryEditor(QMainWindow):
     ) -> None:
         self._segments.insert(index, seg)
         self._table.insertColumn(index)
-        self._table.setHorizontalHeaderItem(index, QTableWidgetItem(seg))
+        self._table.setHorizontalHeaderItem(
+            index, self._segment_header_item(seg)
+        )
         for r, val in enumerate(values):
             self._table.setItem(r, index, make_cell(val))
 
@@ -1197,7 +1227,9 @@ class InventoryEditor(QMainWindow):
 
     def _rename_segment_at(self, index: int, name: str) -> None:
         self._segments[index] = name
-        self._table.setHorizontalHeaderItem(index, QTableWidgetItem(name))
+        self._table.setHorizontalHeaderItem(
+            index, self._segment_header_item(name)
+        )
 
     def _add_segment(self) -> None:
         """Prompt for a new segment and add a column.

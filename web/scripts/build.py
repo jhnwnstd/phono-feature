@@ -741,6 +741,9 @@ def generate_layout_css() -> None:
         # the web's container queries, and ``applyPerGroupSegmentColumns``.
         f"  --seg-btn-w: {mod.BTN_W}px;",
         f"  --seg-btn-gap: {mod.BTN_GAP}px;",
+        # Standard square editor-grid cell (shared with the desktop's
+        # header section sizes) so the two editors use one size.
+        f"  --editor-cell-size: {mod.EDITOR_CELL_PX}px;",
         # Per-row / per-card heights: single source of truth for
         # consonant-grid and feature-card height math in the web.
         f"  --seg-btn-h: {mod.SEG_BTN_H}px;",

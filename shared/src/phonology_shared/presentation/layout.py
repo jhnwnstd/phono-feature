@@ -510,6 +510,12 @@ SEG_BTN_H: int = 26
 SEG_BTN_ROW_H: int = 30  # SEG_BTN_H + BTN_GAP
 # Manner-class group header strip above each consonant group.
 SEG_GROUP_HEADER_H: int = 22
+
+# Standard SQUARE cell for the inventory-editor grid, shared by both
+# renderers (web via the ``--editor-cell-size`` relay, desktop via the
+# header section sizes). One uniform size means neither UI measures
+# per-column widths; an oversized segment glyph shrinks to fit instead.
+EDITOR_CELL_PX: int = 32
 # Hard cap on segment-grid columns regardless of pane width; rows
 # wider than this read poorly. Single source for the desktop
 # widget's ``SegmentGridWidget.MAX_COLS`` and the shared

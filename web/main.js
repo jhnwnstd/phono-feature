@@ -1315,23 +1315,60 @@ const SEG_FIT_BUDGET_PX = 30;
 // changes (which never happens at runtime today).
 const _segFontSizeCache = new Map();
 
-function _pickSegFontSize(text) {
-    const cached = _segFontSizeCache.get(text);
+/** Largest font-size (in 0.5px steps from ``naturalPx`` down to
+ *  ``floorPx``) at which ``text`` fits ``budgetPx``, measured on the
+ *  shared canvas in ``fontPrefix``+``family`` (``fontPrefix`` carries a
+ *  weight like ``"bold "``). Returns null when the natural size already
+ *  fits, or ``floorPx`` when even that overflows (``overflow: hidden``
+ *  clips the residual). ``cache`` is a per-config text->size memo. Shared
+ *  by the seg-buttons and the editor's square segment-header cells. */
+function _pickFittedFontSize(
+    text, fontPrefix, family, naturalPx, floorPx, budgetPx, cache,
+) {
+    const cached = cache.get(text);
     if (cached !== undefined) return cached;
-    _segMeasureCtx.font = `${SEG_FONT_NATURAL_PX}px ${_segFontFamily}`;
-    if (_segMeasureCtx.measureText(text).width <= SEG_FIT_BUDGET_PX) {
-        _segFontSizeCache.set(text, null);
+    _segMeasureCtx.font = `${fontPrefix}${naturalPx}px ${family}`;
+    if (_segMeasureCtx.measureText(text).width <= budgetPx) {
+        cache.set(text, null);
         return null;
     }
-    for (let px = SEG_FONT_NATURAL_PX - 0.5; px >= SEG_FONT_FLOOR_PX; px -= 0.5) {
-        _segMeasureCtx.font = `${px}px ${_segFontFamily}`;
-        if (_segMeasureCtx.measureText(text).width <= SEG_FIT_BUDGET_PX) {
-            _segFontSizeCache.set(text, px);
+    for (let px = naturalPx - 0.5; px >= floorPx; px -= 0.5) {
+        _segMeasureCtx.font = `${fontPrefix}${px}px ${family}`;
+        if (_segMeasureCtx.measureText(text).width <= budgetPx) {
+            cache.set(text, px);
             return px;
         }
     }
-    _segFontSizeCache.set(text, SEG_FONT_FLOOR_PX);
-    return SEG_FONT_FLOOR_PX;
+    cache.set(text, floorPx);
+    return floorPx;
+}
+
+function _pickSegFontSize(text) {
+    return _pickFittedFontSize(
+        text, "", _segFontFamily,
+        SEG_FONT_NATURAL_PX, SEG_FONT_FLOOR_PX, SEG_FIT_BUDGET_PX,
+        _segFontSizeCache,
+    );
+}
+
+// The editor's segment-header cells are fixed squares (--editor-cell-size);
+// an oversized glyph shrinks to fit the cell's inner budget instead of
+// widening its column, which is why the editor no longer measures
+// per-column widths. Bold, in the editor's own mono family.
+const _editorCellSizePx = parseCSSLength("--editor-cell-size", 32);
+const EDITOR_FIT_BUDGET_PX = _editorCellSizePx - 4;
+const _editorFontFamily = (
+    _rootCS.getPropertyValue("--mono-family").trim()
+    || "ui-monospace, monospace"
+);
+const _editorHeaderFontSizeCache = new Map();
+
+function _pickEditorHeaderFontSize(text) {
+    return _pickFittedFontSize(
+        text, "bold ", _editorFontFamily,
+        SEG_FONT_NATURAL_PX, SEG_FONT_FLOOR_PX, EDITOR_FIT_BUDGET_PX,
+        _editorHeaderFontSizeCache,
+    );
 }
 
 /** Re-run the per-glyph shrink for every live seg button once the IPA
@@ -4629,6 +4666,9 @@ function renderEditorGrid() {
         th.scope = "col";
         th.textContent = segments[c];
         th.dataset.col = String(c);
+        // Shrink an oversized segment glyph to fit the square cell.
+        const fit = _pickEditorHeaderFontSize(segments[c]);
+        if (fit !== null) th.style.fontSize = `${fit}px`;
         colsRow.appendChild(th);
     }
     colsBody.appendChild(colsRow);
@@ -4703,145 +4743,21 @@ function _measureScrollbarWidth() {
 // once with the font engine, then layout is arithmetic. The per-cell
 // box overhead (padding + collapsed border) and the single-line row
 // height are page-constant, calibrated once from a real cell.
-let _editorCellCalibration = null;
-const _editorTextWidthCache = new Map();
-
-function _calibrateEditorCell(cell) {
-    const cs = getComputedStyle(cell);
-    return {
-        family: cs.fontFamily || "monospace",
-        sizePx: parseFloat(cs.fontSize) || 13,
-        // Upper bound on horizontal chrome: full padding + full declared
-        // border. ``border-collapse`` makes the painted border <= this,
-        // so a column is never narrower than its content needs (no clip)
-        // and at most ~1px wider than the old natural width.
-        chromeW:
-            (parseFloat(cs.paddingLeft) || 0)
-            + (parseFloat(cs.paddingRight) || 0)
-            + (parseFloat(cs.borderLeftWidth) || 0)
-            + (parseFloat(cs.borderRightWidth) || 0),
-        // Single-line cells, so every row is the same height; measured
-        // once and exact (no min-height to contaminate it).
-        rowH: cell.offsetHeight,
-        minW: parseFloat(cs.minWidth) || 0,
-    };
-}
-
-function _editorTextWidth(text, weight, cal) {
-    const font = `${weight} ${cal.sizePx}px ${cal.family}`;
-    // The literal NUL below joins the two key parts. No real font or text
-    // contains it, so distinct (font, text) pairs cannot collide into a
-    // wrong cache hit. Keep it; do not "tidy" it away.
-    const key = `${font} ${text}`;
-    const hit = _editorTextWidthCache.get(key);
-    if (hit !== undefined) return hit;
-    _segMeasureCtx.font = font;
-    const w = _segMeasureCtx.measureText(text).width;
-    _editorTextWidthCache.set(key, w);
-    return w;
-}
-
-function _editorColumnWidthPx(headerText, dataWidth, cal) {
-    const headerW = _editorTextWidth(headerText, "bold", cal);
-    return Math.max(
-        cal.minW,
-        Math.ceil(Math.max(headerW, dataWidth)) + cal.chromeW,
-    );
-}
-
-/** Make all four panes share one grid. Each column gets the max of
- *  (data column natural width, header column natural width); we
- *  install a ``<colgroup>`` of explicit widths on BOTH the cols-pane
- *  and data-pane tables and switch them to ``table-layout: fixed``,
- *  which is the only reliable way to make two separate tables share
- *  column widths; setting ``style.width`` on individual cells is
- *  treated as a hint and ignored when other cells in the column are
- *  narrower. Without this, an IPA digraph like ``t͡ʃ`` expands its
- *  header cell past the 32px min-width while the data cell below
- *  stays at 32px, drifting every subsequent column out of alignment.
- *  Row heights are simpler: explicit ``<tr>.style.height`` works in
- *  both layout modes. Called after each render. */
+/** Size the two segment panes' tables and compensate for the data
+ *  pane's scrollbar. Every segment column is ONE fixed square
+ *  (``--editor-cell-size``, via CSS ``table-layout: fixed``), so there
+ *  is no per-column measurement any more: the tables just need an
+ *  explicit width (cols * cell) for fixed layout to honour the cell
+ *  widths, and row heights come from the CSS cell ``height``. Called
+ *  after each render. */
 function _alignHeaderPanesToData() {
     const dataTable = nodes.editorGridData.querySelector("table");
     if (!dataTable) return;
     const colsTable = nodes.editorGridCols.querySelector("table");
-    // Remove any prior colgroup / fixed layout. These are WRITES (no
-    // forced reflow); the old ``void dataTable.offsetWidth`` read and
-    // the per-cell offsetWidth reads are gone. Widths are now cached
-    // canvas arithmetic, calibrated once for the constant box overhead.
-    dataTable.style.tableLayout = "";
-    if (colsTable) colsTable.style.tableLayout = "";
-    dataTable.querySelectorAll("colgroup").forEach((c) => c.remove());
-    colsTable?.querySelectorAll("colgroup").forEach((c) => c.remove());
-
-    const firstRow = dataTable.querySelector("tr");
-    const colHeaders = [...nodes.editorGridCols.querySelectorAll("th")];
-    const dataCells = firstRow ? [...firstRow.querySelectorAll("td")] : [];
-    if (_editorCellCalibration === null && colHeaders.length) {
-        // First call runs while the table is still in natural layout
-        // (the colgroup was just removed), so the calibration cell's
-        // offsetHeight is the true single-line row height. Cached after.
-        _editorCellCalibration = _calibrateEditorCell(colHeaders[0]);
-    }
-    const cal = _editorCellCalibration;
-    const dataWidth = cal
-        ? Math.max(
-            _editorTextWidth(MINUS_DISPLAY, "normal", cal),
-            _editorTextWidth("+", "normal", cal),
-            _editorTextWidth("0", "normal", cal),
-        )
-        : 0;
-    const widths = cal
-        ? colHeaders.map((th) =>
-            _editorColumnWidthPx(th.textContent || "", dataWidth, cal))
-        : [];
-    const makeColgroup = () => {
-        const cg = document.createElement("colgroup");
-        for (const w of widths) {
-            const col = document.createElement("col");
-            col.style.width = `${w}px`;
-            cg.appendChild(col);
-        }
-        return cg;
-    };
-    if (widths.length) {
-        dataTable.insertBefore(makeColgroup(), dataTable.firstChild);
-        if (colsTable) {
-            colsTable.insertBefore(makeColgroup(), colsTable.firstChild);
-        }
-        // ``table-layout: fixed`` honors colgroup widths only when the
-        // table itself has an explicit width; without one Chrome falls
-        // back to the cells' min-width floor and the colgroup is
-        // ignored. Set the table width to the column-sum so both
-        // tables resolve to the same pixel grid.
-        const totalWidth = widths.reduce((a, b) => a + b, 0);
-        dataTable.style.tableLayout = "fixed";
-        dataTable.style.width = `${totalWidth}px`;
-        if (colsTable) {
-            colsTable.style.tableLayout = "fixed";
-            colsTable.style.width = `${totalWidth}px`;
-        }
-        // Belt-and-braces: also stamp the width on the first row's
-        // cells so any caller that re-measures cell widths gets the
-        // post-alignment value, not the min-width floor.
-        for (let c = 0; c < widths.length; c++) {
-            const px = `${widths[c]}px`;
-            if (dataCells[c]) dataCells[c].style.width = px;
-            if (colHeaders[c]) colHeaders[c].style.width = px;
-        }
-    }
-
-    // Every row is one line of text in the same font, so row height is
-    // the page-constant calibrated above. Stamp it on both panes' rows
-    // directly, with no reset-then-reflow and no per-row offsetHeight
-    // reads.
-    const rowHeaders = [...nodes.editorGridRows.querySelectorAll("tr")];
-    const dataRows = [...dataTable.querySelectorAll("tr")];
-    if (cal) {
-        const px = `${cal.rowH}px`;
-        for (const tr of rowHeaders) tr.style.height = px;
-        for (const tr of dataRows) tr.style.height = px;
-    }
+    const n = editorState.segments.length;
+    const gridW = n > 0 ? `${n * _editorCellSizePx}px` : "";
+    dataTable.style.width = gridW;
+    if (colsTable) colsTable.style.width = gridW;
 
     // Apply scrollbar-gutter compensation conditionally on the
     // data pane's ACTUAL scrollbar visibility. The previous
@@ -5664,7 +5580,12 @@ function startSegmentRename(th, c) {
     input.setAttribute("aria-label", `Rename segment ${oldName}`);
     th.textContent = "";
     th.appendChild(input);
-    input.focus();
+    // ``preventScroll``: the header pane is ``overflow:hidden`` with its
+    // scrollLeft/Top JS-mirrored from the data pane. A default focus
+    // scrolls the input into view, nudging the pane's scroll out of sync
+    // with the data pane -- which drifts the rename box sideways off its
+    // column. Not scrolling on focus keeps the panes aligned.
+    input.focus({ preventScroll: true });
     input.select();
     let settled = false;
     const finish = (cancel) => {

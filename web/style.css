@@ -36,6 +36,9 @@
   --border-thin: 1px;
   --border-std: 1.5px;
   --border-thick: 2px;
+  /* Standard square editor cell. Fallback only; the relayed value
+     (from EDITOR_CELL_PX, shared with the desktop) wins once loaded. */
+  --editor-cell-size: 32px;
   /* --space-*, --radius-*, --control-h-{md,xs}, --seg-btn-*,
      --feat-btn-*, --feat-badge-w, and the --font-size-* ladder
      are all sourced from layout.css (auto-generated from
@@ -2605,15 +2608,39 @@ progress {
 .editor-grid {
   border-collapse: collapse;
   font-family: var(--mono-family, ui-monospace, monospace);
+  /* Explicit so the JS shrink measures the SAME size it renders. */
+  font-size: var(--font-size-control);
 }
 .editor-grid th,
 .editor-grid td {
   border: 1px solid var(--border);
-  padding: 4px 8px;
-  min-width: 32px;
+  height: var(--editor-cell-size);
   text-align: center;
   box-sizing: border-box;
   white-space: nowrap;
+  /* Clip any residual half-pixel overrun of a shrunk-to-fit glyph,
+     exactly as ``.seg-btn`` does for tie-bar affricates. */
+  overflow: hidden;
+}
+/* Segment columns (headers + data): one fixed square size across the
+   whole grid. ``table-layout: fixed`` + the uniform width makes the two
+   panes share columns with no per-column measurement. Oversized segment
+   glyphs are shrunk to fit by ``renderEditorGrid`` (same approach as the
+   seg-buttons), so a wide digraph no longer widens its column. */
+.editor-grid-pane-cols .editor-grid,
+.editor-grid-pane-data .editor-grid {
+  table-layout: fixed;
+}
+.editor-grid-pane-cols .editor-grid th,
+.editor-grid-pane-data .editor-grid td {
+  width: var(--editor-cell-size);
+  padding: 0;
+}
+/* Feature-name row headers keep their content width (the frame's
+   max-content column) with a little horizontal breathing room. */
+.editor-grid-pane-rows .editor-grid th,
+.editor-grid-pane-corner .editor-grid th {
+  padding: 0 var(--space-sm);
 }
 .editor-grid td { background: var(--panel); }
 .editor-grid th {
