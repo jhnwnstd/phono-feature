@@ -2298,6 +2298,10 @@ function _buildVowelChart(chart) {
         // (DOM not laid out yet); defer via rAF + observe
         // resize so the polygon tracks splitter drags too.
         const radiusFrac = CHART_STYLE.silhouette_corner_radius_frac;
+        // Last data-area size this closure actually recomputed for, so a
+        // ResizeObserver fire that carries no real size delta is a no-op.
+        let lastPolyW = -1;
+        let lastPolyH = -1;
         const refreshPolygon = () => {
             // ``dataEl`` may have been removed from the DOM
             // between scheduling rAF and the callback firing
@@ -2308,6 +2312,17 @@ function _buildVowelChart(chart) {
             const dw = dataEl.clientWidth || 0;
             const dh = dataEl.clientHeight || 0;
             if (dw <= 0 || dh <= 0) return;
+            // The polygon + outline + stack clamp are a pure function of
+            // (dw, dh) plus constant tokens, so skip the whole recompute
+            // when the observed size is unchanged: the initial rAF +
+            // observer double-fire and sub-pixel / DPR jitter would
+            // otherwise rebuild byte-identical polygons every frame. A
+            // real window / splitter drag changes the size each frame, so
+            // tracking stays per-frame -- NOT debounced, so the silhouette
+            // never lags behind the cells it wraps.
+            if (dw === lastPolyW && dh === lastPolyH) return;
+            lastPolyW = dw;
+            lastPolyH = dh;
             const silAdj = _silhouetteForDataWidth(sil, dw);
             // FLUSH polygon (wraps the cell extent): the guides clip to
             // this so they trace the cell rows/columns.

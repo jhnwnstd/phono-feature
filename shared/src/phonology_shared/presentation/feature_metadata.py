@@ -807,19 +807,54 @@ _GLOSSARY_SLUGS: dict[str, str] = {
 }
 
 
-def glossary_url_for(raw_name: str) -> str | None:
-    """Return the INLP glossary URL for ``raw_name`` if the feature has
-    a glossary entry, else ``None``.
+# ---------------------------------------------------------------------
+# SIL secondary glossary
+#
+# The SIL "Glossary of Linguistic Terms" (https://glossary.sil.org/)
+# hosts a term page per concept at ``/term/<slug>``. It is a general
+# linguistics glossary (thin on distinctive-feature phonetics), so it
+# only FILLS GAPS the INLP table above leaves: :func:`glossary_url_for`
+# consults it ONLY for a feature with no INLP entry. Every slug was
+# verified to be a real "What is a <Term>" page whose definition matches
+# the feature; index-fallback slugs and adjacent-but-different pages
+# (e.g. a vowel-scoped "breathy vowel" page for the general [breathy]
+# phonation feature) were rejected -- same "put bad in, get bad out"
+# rule as the INLP table: no invented or approximate links. ``long`` and
+# ``short`` share the one Length (duration) page, mirroring the atr/rtr
+# and tone/hightone shared pages above. SIL term URLs carry no trailing
+# slash (unlike INLP).
+# ---------------------------------------------------------------------
+SIL_GLOSSARY_BASE_URL = "https://glossary.sil.org/term/"
 
-    Accepts any surface form (resolves through
-    :py:func:`resolve_canonical`), so display spellings like ``DelRel``,
-    ``SpreadGl``, or ``Spread Glottis`` all map to the right page, and
-    unknown names return ``None`` without raising.
+_SIL_GLOSSARY_SLUGS: dict[str, str] = {
+    # Laryngeal (articulatory strength)
+    "fortis": "fortis-consonant",
+    "lenis": "lenis-consonant",
+    # Prosodic
+    "long": "length",
+    "short": "length",
+    "stress": "stress",
+}
+
+
+def glossary_url_for(raw_name: str) -> str | None:
+    """Return the glossary URL for ``raw_name`` if the feature has an
+    entry, else ``None``.
+
+    Prefers the INLP distinctive-feature glossary; for features INLP does
+    not cover, falls back to the SIL Glossary of Linguistic Terms. Accepts
+    any surface form (resolves through :py:func:`resolve_canonical`), so
+    display spellings like ``DelRel``, ``SpreadGl``, or ``Spread Glottis``
+    all map to the right page, and unknown names return ``None`` without
+    raising.
     """
     canonical = resolve_canonical(raw_name)
     if canonical is None:
         return None
     slug = _GLOSSARY_SLUGS.get(canonical)
-    if slug is None:
-        return None
-    return f"{GLOSSARY_BASE_URL}{slug}/"
+    if slug is not None:
+        return f"{GLOSSARY_BASE_URL}{slug}/"
+    sil_slug = _SIL_GLOSSARY_SLUGS.get(canonical)
+    if sil_slug is not None:
+        return f"{SIL_GLOSSARY_BASE_URL}{sil_slug}"
+    return None

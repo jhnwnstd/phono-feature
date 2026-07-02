@@ -33,6 +33,7 @@ from phonology_shared.presentation.constants import (
 )
 from phonology_shared.presentation.feature_metadata import (
     _GLOSSARY_SLUGS,
+    _SIL_GLOSSARY_SLUGS,
     FEATURE_REGISTRY,
     GROUP_ORDER,
     USE_VOWEL_PAIR,
@@ -606,22 +607,59 @@ def test_glossary_url_for_shared_pages() -> None:
     assert glossary_url_for("Tone") == glossary_url_for("HighTone")
 
 
+def test_glossary_url_for_sil_secondary_pages() -> None:
+    """Features INLP does not cover fall back to their verified SIL
+    Glossary term page (no trailing slash). ``Long`` and ``Short`` share
+    the one Length page (the duration dimension), mirroring the atr/rtr
+    and tone/hightone shared pages."""
+    assert (
+        glossary_url_for("Fortis")
+        == "https://glossary.sil.org/term/fortis-consonant"
+    )
+    assert (
+        glossary_url_for("Lenis")
+        == "https://glossary.sil.org/term/lenis-consonant"
+    )
+    assert glossary_url_for("Stress") == "https://glossary.sil.org/term/stress"
+    length = "https://glossary.sil.org/term/length"
+    assert glossary_url_for("Long") == length
+    assert glossary_url_for("Short") == length
+
+
+def test_glossary_inlp_takes_priority_over_sil() -> None:
+    """A feature carried by BOTH tables resolves to INLP (the primary,
+    distinctive-feature glossary). Guards the fall-through order in
+    ``glossary_url_for`` even if a future edit adds an overlap."""
+    for canonical in _SIL_GLOSSARY_SLUGS:
+        if canonical in _GLOSSARY_SLUGS:
+            assert glossary_url_for(canonical).startswith(
+                "https://inlpglossary.ca/"
+            )
+
+
 def test_glossary_url_for_unmapped_and_unknown_return_none() -> None:
-    """Registered features WITHOUT a glossary entry, and names the
-    registry does not know at all, both return None: no invented
-    links."""
-    for feat in ("Fortis", "Trill", "LoweredLarynxImplosive", "Click"):
+    """Registered features WITHOUT a glossary entry in EITHER table, and
+    names the registry does not know at all, both return None: no
+    invented links. (Fortis/Long/Stress etc. now resolve to SIL and are
+    covered by ``test_glossary_url_for_sil_secondary_pages``.)"""
+    for feat in ("Trill", "LoweredLarynxImplosive", "Click", "Rhotic"):
         assert resolve_canonical(feat) is not None
         assert glossary_url_for(feat) is None
     assert glossary_url_for("not_a_feature") is None
 
 
 def test_glossary_slug_keys_are_registry_canonicals() -> None:
-    """Every key in the glossary table is a real canonical, so a typo
-    can never silently drop a link; every slug is a bare path segment."""
-    for canonical in _GLOSSARY_SLUGS:
-        assert (
-            canonical in FEATURE_REGISTRY
-        ), f"glossary key {canonical!r} is not a registry canonical"
-    for slug in _GLOSSARY_SLUGS.values():
-        assert slug and "/" not in slug and slug == slug.strip()
+    """Every key in either glossary table is a real canonical, so a typo
+    can never silently drop a link; every slug is a bare path segment.
+    The two tables are disjoint (SIL only fills gaps INLP leaves)."""
+    for table in (_GLOSSARY_SLUGS, _SIL_GLOSSARY_SLUGS):
+        for canonical in table:
+            assert (
+                canonical in FEATURE_REGISTRY
+            ), f"glossary key {canonical!r} is not a registry canonical"
+        for slug in table.values():
+            assert slug and "/" not in slug and slug == slug.strip()
+    assert not (_GLOSSARY_SLUGS.keys() & _SIL_GLOSSARY_SLUGS.keys()), (
+        "a feature is mapped in both glossary tables; SIL should only "
+        "fill gaps INLP leaves"
+    )

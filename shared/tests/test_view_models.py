@@ -22,9 +22,9 @@ def test_build_inventory_summary_feature_glossary_matches_helper(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """``feature_glossary`` lists exactly the ACTIVE features that have
-    an INLP glossary entry, each mapped to :py:func:`glossary_url_for`'s
-    URL, and nothing else. This is what both UIs read to render the
-    clickable feature-name links."""
+    a glossary entry (INLP or its SIL fallback), each mapped to
+    :py:func:`glossary_url_for`'s URL, and nothing else. This is what both
+    UIs read to render the clickable feature-name links."""
     engine = bundled_engine("hayes")
     summary = build_inventory_summary(engine, "Hayes")
     glossary = summary["feature_glossary"]
