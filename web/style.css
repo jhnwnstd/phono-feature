@@ -2676,16 +2676,15 @@ progress {
   outline: 2px dashed var(--accent);
   outline-offset: -1px;
 }
-/* Header click affordance: cursor change so the user knows
-   headers are interactive (the desktop editor gets this for
-   free via Qt's QPushButton-haptic header subclass). */
-.editor-grid thead th,
+/* Header click affordance: pointer cursor + a subtle hover tint so the
+   user knows the segment / feature headers (and the select-all corner)
+   are clickable. Only ``tbody th`` exists -- the grid renders no
+   ``thead`` -- so the old ``thead th`` rules here were dead. */
 .editor-grid tbody th {
   cursor: pointer;
 }
-.editor-grid thead th[data-corner],
-.editor-grid thead th[data-corner]:hover {
-  cursor: pointer;
+.editor-grid tbody th:hover {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
 }
 .editor-status {
   padding: var(--space-sm) var(--space-lg);

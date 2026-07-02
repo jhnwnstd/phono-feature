@@ -105,8 +105,19 @@ def test_cap_status_warns_near_cap():
     assert status.severity == "warn"
 
 
-def test_cap_status_errors_at_cap():
+def test_cap_status_full_at_cap_warns_not_errors():
+    """At exactly the cap the inventory is still VALID (the save gate
+    refuses only strictly OVER-cap), so the counter reads warn (full),
+    not the red error a valid inventory should never show."""
     status = inventory_cap_status(_vowels(MAX_VOWELS))
+    assert status.severity == "warn"
+
+
+def test_cap_status_errors_over_cap():
+    """Strictly over a cap is invalid -- reachable by a cell edit that
+    reclassifies a segment past its class cap -- so the counter goes red
+    to match the ``count > cap`` save gate."""
+    status = inventory_cap_status(_vowels(MAX_VOWELS + 1))
     assert status.severity == "error"
 
 

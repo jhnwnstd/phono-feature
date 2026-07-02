@@ -282,12 +282,18 @@ class InventoryCapStatus:
     """Live vowel / consonant / total counts for the editor counter,
     classified against the hard caps.
 
-    ``severity`` is ``"error"`` when any count is AT or OVER its cap
-    (the next add of that class is refused), ``"warn"`` when any
-    count has reached :py:data:`_CAP_WARN_FRACTION` of its cap, and
-    ``"ok"`` otherwise. ``text`` is the ready-to-render one-line
-    summary both UIs display; the counts are exposed too so a
-    frontend can style the individual figures if it wants."""
+    ``severity`` is ``"error"`` only when a count is strictly OVER its
+    cap -- an INVALID inventory the save gate refuses (reachable by
+    editing a cell so a segment reclassifies past its class cap, not
+    just by adding). At exactly the cap the inventory is still valid but
+    FULL (the next add is refused), so it reads ``"warn"`` alongside the
+    approaching-cap case (>= :py:data:`_CAP_WARN_FRACTION` of a cap), not
+    red error. ``"ok"`` otherwise. This keeps the counter's colour in
+    step with the ``count > cap`` enforcement gate, so a valid at-cap
+    inventory (e.g. exactly 50 vowels) no longer flashes error-red.
+    ``text`` is the ready-to-render one-line summary both UIs display;
+    the counts are exposed too so a frontend can style the individual
+    figures if it wants."""
 
     n_vowels: int
     n_consonants: int
@@ -322,9 +328,11 @@ def inventory_cap_status(
         (n_consonants, MAX_CONSONANTS),
         (n_total, MAX_SEGMENTS),
     )
-    if any(count >= cap for count, cap in pairs):
+    if any(count > cap for count, cap in pairs):
+        # Strictly over a cap == invalid (the save gate refuses it).
         severity = "error"
     elif any(count >= _CAP_WARN_FRACTION * cap for count, cap in pairs):
+        # At the cap (valid but full) or approaching it: amber, not red.
         severity = "warn"
     else:
         severity = "ok"

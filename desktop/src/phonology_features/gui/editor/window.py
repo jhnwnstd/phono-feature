@@ -259,29 +259,58 @@ class InventoryEditor(QMainWindow):
             slot: Callable[[], object],
             *,
             style: str = btn_style,
+            tooltip: str = "",
         ) -> QPushButton:
             """Add a Noto Sans 10 toolbar button.
 
             Height is pinned via ``_TOOLBAR_BTN_H`` so a hi-DPI
-            display does not collapse the row.
+            display does not collapse the row. ``tooltip`` sets a hover
+            hint (e.g. that a remove needs a whole column/row selected).
             """
             btn = QPushButton(label)
             btn.setFont(QFont("Noto Sans", 10))
             btn.setFixedHeight(_TOOLBAR_BTN_H)
             btn.setStyleSheet(style)
+            if tooltip:
+                btn.setToolTip(tooltip)
             btn.clicked.connect(slot)
             toolbar.addWidget(btn)
             return btn
 
-        make_btn("New", self.show_setup_dialog)
-        make_btn("Open", self._open_file)
-        make_btn("Save", self._save, style=save_style)
-        make_btn("Save As", self._save_as)
+        make_btn(
+            "New", self.show_setup_dialog, tooltip="Create a new inventory"
+        )
+        make_btn("Open", self._open_file, tooltip="Open an inventory file")
+        make_btn(
+            "Save",
+            self._save,
+            style=save_style,
+            tooltip="Save to the current file",
+        )
+        make_btn("Save As", self._save_as, tooltip="Save to a new file")
         toolbar.addSeparator()
-        make_btn("+ Segment", self._add_segment)
-        make_btn("+ Feature", self._add_feature)
-        self._rm_seg_btn = make_btn("\u2212 Segment", self._remove_segment)
-        self._rm_feat_btn = make_btn("\u2212 Feature", self._remove_feature)
+        make_btn(
+            "+ Segment",
+            self._add_segment,
+            tooltip="Add a segment (a new column)",
+        )
+        make_btn(
+            "+ Feature",
+            self._add_feature,
+            tooltip="Add a feature (a new row)",
+        )
+        self._rm_seg_btn = make_btn(
+            "\u2212 Segment",
+            self._remove_segment,
+            tooltip="Remove the selected segment "
+            "(click a column header to select it)",
+        )
+        self._rm_feat_btn = make_btn(
+            "\u2212 Feature",
+            self._remove_feature,
+            tooltip="Remove the selected feature "
+            "(click a row header to select it)",
+        )
         # Initial state: nothing selected => both greyed out. Use the
         # cache-aware setters so the initial assignment also fills the
         # ``_rm_*_enabled_state`` cache.
@@ -298,7 +327,11 @@ class InventoryEditor(QMainWindow):
         toolbar.addWidget(left_stretch)
         # Delete is only valid when an existing file is loaded; enabled
         # by _update_title whenever _current_path changes.
-        self._delete_btn = make_btn("Delete", self._delete_inventory)
+        self._delete_btn = make_btn(
+            "Delete",
+            self._delete_inventory,
+            tooltip="Delete the inventory file from disk",
+        )
         self._delete_btn.setEnabled(False)
         self._delete_btn.setStyleSheet(self._btn_style_disabled)
         right_stretch = QWidget()
@@ -390,6 +423,11 @@ class InventoryEditor(QMainWindow):
             self._wire_col_header_rename(h_header)
         if v_header is not None:
             v_header.show()
+            # Right-align the feature labels so each hugs the grid row it
+            # heads, matching the web editor's row-header pane.
+            v_header.setDefaultAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
             v_header.sectionClicked.connect(self._on_row_header_clicked)
 
     def _build_table(self) -> QTableWidget:
@@ -523,7 +561,7 @@ class InventoryEditor(QMainWindow):
                 seg: dict(bundle) for seg, bundle in generated.segments.items()
             }
             for sym in generated.unresolved:
-                cells[sym] = {feat: "0" for feat in features}
+                cells[sym] = dict.fromkeys(features, "0")
             initial_cells = cells
             self._feature_source = provider.name
             self._feature_source_version = provider.version

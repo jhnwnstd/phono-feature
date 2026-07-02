@@ -298,15 +298,22 @@
 <section id="editor-view" class="editor-view" hidden>
   <header class="editor-toolbar">
     <button id="editor-exit-btn" type="button"
+            title="Return to the viewer"
             aria-label="Close editor and return to viewer">← Back</button>
-    <button id="editor-new-btn" type="button">New</button>
-    <button id="editor-save-as-btn" type="button">Save as…</button>
+    <button id="editor-new-btn" type="button"
+            title="Create a new inventory">New</button>
+    <button id="editor-save-as-btn" type="button"
+            title="Save this inventory to a file">Save as…</button>
     <span class="editor-toolbar-sep" aria-hidden="true"></span>
-    <button id="editor-add-seg-btn" type="button">+ Segment</button>
-    <button id="editor-add-feat-btn" type="button">+ Feature</button>
+    <button id="editor-add-seg-btn" type="button"
+            title="Add a segment (a new column)">+ Segment</button>
+    <button id="editor-add-feat-btn" type="button"
+            title="Add a feature (a new row)">+ Feature</button>
     <button id="editor-remove-seg-btn" type="button" disabled
+            title="Remove the selected segment (click a column header to select it)"
             aria-label="Remove selected segment column">− Segment</button>
     <button id="editor-remove-feat-btn" type="button" disabled
+            title="Remove the selected feature (click a row header to select it)"
             aria-label="Remove selected feature row">− Feature</button>
     <div class="editor-toolbar-spacer"></div>
   </header>
