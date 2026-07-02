@@ -80,15 +80,48 @@ class _ToggleHeaderView(QHeaderView):
 
     def set_lit_sections(self, sections: Iterable[int]) -> None:
         """Set which sections to light for the selection crosshair and
-        repaint only when the set actually changes (selection changes
-        that leave the lit axis untouched cost nothing)."""
+        SYNCHRONOUSLY repaint the ones whose lit state changed.
+
+        Repaints with ``repaint`` (bounded to the changed sections),
+        not ``update``, for the same reason the cell outline in
+        :py:meth:`InventoryEditor._on_selection_changed` does:
+        ``update`` coalesces rapid key-repeat, so while arrowing fast
+        the lit header lags the synchronously-repainted cell cursor and
+        the current segment / feature reads as blank. A synchronous
+        repaint keeps the crosshair in lockstep with the cursor. It
+        stays cheap because it is bounded to the sections that changed
+        (typically the one the cursor left plus the one it entered) and
+        only fires when the lit set actually changes.
+        """
         lit = frozenset(sections)
         if lit == self._lit_sections:
             return
+        changed = lit ^ self._lit_sections
         self._lit_sections = lit
         viewport = self.viewport()
-        if viewport is not None:
-            viewport.update()
+        if viewport is None:
+            return
+        bound: QRect | None = None
+        for index in changed:
+            rect = self._section_rect(index)
+            if rect is None:
+                continue
+            bound = rect if bound is None else bound.united(rect)
+        if bound is not None:
+            viewport.repaint(bound)
+
+    def _section_rect(self, logical_index: int) -> QRect | None:
+        """Viewport rect spanning one section (full height for a
+        horizontal header, full width for a vertical one), or ``None``
+        when the section is collapsed."""
+        size = self.sectionSize(logical_index)
+        viewport = self.viewport()
+        if size <= 0 or viewport is None:
+            return None
+        pos = self.sectionViewportPosition(logical_index)
+        if self.orientation() == Qt.Orientation.Horizontal:
+            return QRect(pos, 0, size, viewport.height())
+        return QRect(0, pos, viewport.width(), size)
 
     def paintSection(
         self, painter: QPainter | None, rect: QRect, logicalIndex: int

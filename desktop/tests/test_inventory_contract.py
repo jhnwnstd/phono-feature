@@ -1731,6 +1731,77 @@ def test_header_doubleclick_still_toggles_selection(tmp_path: Path) -> None:
     b.close()
 
 
+def test_crosshair_header_repaints_synchronously_on_lit_change() -> None:
+    """Fast-arrowing regression: the selection crosshair must repaint
+    the header SYNCHRONOUSLY when its lit section changes, the same way
+    the cell cursor does. A coalescing ``update()`` would defer the
+    paint, so under rapid key-repeat the lit header lags the cursor and
+    the current segment / feature reads as blank. Assert a lit-set
+    change triggers a synchronous ``paintSection`` before any event-loop
+    spin (``update()`` yields zero), guarding ``set_lit_sections``
+    against regressing off ``repaint()``."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtWidgets import QApplication
+
+    from phonology_features.gui.editor import table as table_mod
+
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.editor import InventoryEditor
+
+    painted: set[int] = set()
+    orig_paint = table_mod._ToggleHeaderView.paintSection
+
+    def recording_paint(self, painter, rect, logical_index):  # type: ignore[no-untyped-def]
+        painted.add(logical_index)
+        return orig_paint(self, painter, rect, logical_index)
+
+    table_mod._ToggleHeaderView.paintSection = recording_paint  # type: ignore[method-assign]
+    try:
+        b = InventoryEditor(load_path=HAYES)
+        b.resize(1400, 800)
+        b.show()
+        for _ in range(4):
+            app.processEvents()
+        v = b._table.verticalHeader()
+        assert isinstance(v, table_mod._ToggleHeaderView)
+        # Seed a lit row and flush its paint.
+        v.set_lit_sections(frozenset({2}))
+        for _ in range(3):
+            app.processEvents()
+        # Arrowing to the next row changes the lit set. It must paint the
+        # header NOW, without spinning the event loop (what fast
+        # key-repeat starves); a coalescing update() would defer it to
+        # zero synchronous paints and blank the current feature. Both the
+        # section the cursor left (2, to clear its wash) and the one it
+        # entered (3, to draw it) must repaint in that same synchronous
+        # pass.
+        painted.clear()
+        v.set_lit_sections(frozenset({3}))
+        assert painted, (
+            "crosshair header did not repaint synchronously on a lit "
+            "change; a coalescing update() would blank the current "
+            "feature while arrowing fast"
+        )
+        assert {2, 3} <= painted, (
+            "synchronous repaint must cover both the departed (2) and "
+            f"entered (3) sections; painted={sorted(painted)}"
+        )
+        # Re-setting the SAME lit set must be a no-op (the diff
+        # early-return), so fast repeats that do not move the axis cost
+        # nothing.
+        painted.clear()
+        v.set_lit_sections(frozenset({3}))
+        assert not painted, (
+            "an unchanged lit set must not repaint; "
+            f"painted={sorted(painted)}"
+        )
+        b.close()
+    finally:
+        table_mod._ToggleHeaderView.paintSection = orig_paint
+
+
 def test_dropdown_filters_out_atomic_write_tmp_files(tmp_path: Path) -> None:
     """``atomic_write_json`` creates ``.tmp_inv_*.json`` files in the
     target directory between ``mkstemp`` and ``os.replace``. The

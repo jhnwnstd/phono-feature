@@ -1110,11 +1110,14 @@ class InventoryEditor(QMainWindow):
 
     def _on_selection_changed(self) -> None:
         """Single source of truth for everything that derives from the
-        current Qt selection: sticky vars, rm-button enabled state,
-        and the targeted viewport invalidation.
+        current Qt selection: sticky vars, rm-button enabled state, the
+        selection-crosshair headers, and the targeted viewport
+        invalidation.
 
-        Uses ``selectedColumns()`` and ``selectedRows()``, which are
-        microsecond cost even on select-all (vs walking ~4000 indexes).
+        Walks ``selectedIndexes()`` once into a reusable ``(row, col)``
+        list (microseconds for typical inventories) and shares it
+        between ``classify_selection`` and the crosshair so the
+        selection is enumerated a single time per change.
         """
         sel_model = self._table.selectionModel()
         if sel_model is None:
