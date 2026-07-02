@@ -58,6 +58,7 @@ PAIR_DISPLAY_KINDS: frozenset[VowelCellDisplayKind] = frozenset(
         VowelCellDisplayKind.RHOTIC_PAIR,
         VowelCellDisplayKind.PHONATION_PAIR,
         VowelCellDisplayKind.TONE_PAIR,
+        VowelCellDisplayKind.PHARYNGEAL_PAIR,
     }
 )
 

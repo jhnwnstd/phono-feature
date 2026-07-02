@@ -1596,7 +1596,9 @@ dialog input[type="text"]:focus-visible {
    spilling the upper half above the silhouette. Without this rule,
    PHOIBLE inventories with 5+ Close-row entries (Korean, Acehnese,
    !XU) render with the upper buttons sitting outside the chart's
-   top edge, often overlapping the title. */
+   top edge, often overlapping the title. Anchoring the EDGE (not the
+   centre) also keeps the cell inside the silhouette outline rather
+   than straddling it. */
 .vowel-chart-cell[data-row-tier="top"] {
   transform: translate(
     calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift) + var(--cell-nudge, 0px)),

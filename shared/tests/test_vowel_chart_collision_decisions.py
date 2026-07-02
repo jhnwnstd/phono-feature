@@ -432,6 +432,30 @@ def test_classify_tone_pair() -> None:
     assert contrast == ("tone",)
 
 
+def test_classify_pharyngeal_pair() -> None:
+    """A plain + pharyngealised (retracted-tongue-root) vowel pair links
+    as a PHARYNGEAL_PAIR when the source data encodes the RTR contrast
+    (e.g. Archi i / iˤ, if the record sets ``rtr``). Ordered plain-left,
+    marked-right like the other pairs."""
+    from phonology_shared.chart.vowel_geometry.display_slots import (
+        _classify_vowel_cell_display,
+    )
+    from phonology_shared.chart.vowels import VowelCellDisplayKind
+
+    feats = _make_classifier_feats(
+        {
+            "i": {"high": "+", "front": "+", "rtr": "-"},
+            "iˤ": {"high": "+", "front": "+", "rtr": "+"},
+        }
+    )
+    kind, contrast, ordered, _ = _classify_vowel_cell_display(
+        ("iˤ", "i"), feats
+    )
+    assert kind == VowelCellDisplayKind.PHARYNGEAL_PAIR
+    assert contrast == ("rtr",)
+    assert ordered == ("i", "iˤ")  # plain left, pharyngealised right
+
+
 def test_classify_long_plus_nasal_is_contrast_set() -> None:
     """Four entries differing on long and nasal -> CONTRAST_SET with
     both features in the sorted contrast tuple.

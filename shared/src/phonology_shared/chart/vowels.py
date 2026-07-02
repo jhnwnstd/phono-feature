@@ -134,11 +134,11 @@ class VowelCellDisplayKind(StrEnum):
       when the entries differ on a non-display feature (or on no
       feature at all) so vertical stacking is the safe arrangement.
     * ``LONG_PAIR`` / ``NASAL_PAIR`` / ``RHOTIC_PAIR`` /
-      ``PHONATION_PAIR`` / ``TONE_PAIR`` (side-by-side): two
-      buttons in a horizontal row, marked member on the right. The
-      five PAIR kinds share the same physical layout; the kind
-      records WHICH non-position feature drove the contrast so the
-      renderer (or downstream tooling) can read it without
+      ``PHONATION_PAIR`` / ``TONE_PAIR`` / ``PHARYNGEAL_PAIR``
+      (side-by-side): two buttons in a horizontal row, marked member
+      on the right. The PAIR kinds share the same physical layout;
+      the kind records WHICH non-position feature drove the contrast
+      so the renderer (or downstream tooling) can read it without
       re-deriving from the entries.
     * ``CONTRAST_SET``: 2x2 grid (for 3-4 entries) when the
       entries differ on more than one display feature (e.g. long x
@@ -155,6 +155,7 @@ class VowelCellDisplayKind(StrEnum):
     RHOTIC_PAIR = "rhotic_pair"
     PHONATION_PAIR = "phonation_pair"
     TONE_PAIR = "tone_pair"
+    PHARYNGEAL_PAIR = "pharyngeal_pair"
     CONTRAST_SET = "contrast_set"
 
 
@@ -170,7 +171,8 @@ class VowelCellDisplayKind(StrEnum):
 #: entries tagged with ``USE_VOWEL_PAIR`` so the contrast roster
 #: lives next to every other feature-name decision instead of being
 #: duplicated here. The current set: ``{long, nasal, rhotic,
-#: breathy, creaky, tone}``.
+#: breathy, creaky, tone, rtr}`` (``rtr`` links pharyngealised /
+#: retracted-tongue-root vowels to their plain counterpart).
 _DISPLAY_CONTRAST_FEATURES: frozenset[str] = features_for_use(USE_VOWEL_PAIR)
 
 
@@ -183,6 +185,7 @@ _PAIR_KIND_FOR_FEATURE: dict[str, VowelCellDisplayKind] = {
     "nasal": VowelCellDisplayKind.NASAL_PAIR,
     "rhotic": VowelCellDisplayKind.RHOTIC_PAIR,
     "tone": VowelCellDisplayKind.TONE_PAIR,
+    "rtr": VowelCellDisplayKind.PHARYNGEAL_PAIR,
 }
 
 

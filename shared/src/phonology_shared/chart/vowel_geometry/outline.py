@@ -905,12 +905,17 @@ def distribute_rows(
     neighbours into overlap. This module stays cell-blind: the
     weights arrive as abstract numbers.
 
-    Each row gets a slot whose height is ``weight / total_weight``
-    of the span. The row's y anchor sits at the top of its slot for
-    the topmost row, the bottom of its slot for the bottommost row,
-    and the centre for middle rows; the matching tier string tells
-    renderers which way the content grows, so the cell box fills its
-    slot without crossing the silhouette's top or bottom edge.
+    Each row gets a slot whose height is ``weight / total_weight`` of
+    the span (so a deep stack claims proportionally more room and no
+    two rows' content can overlap). ``display_y`` records each row's
+    tier anchor: the top row's anchor at the TOP of its slot
+    (``top_y``), the bottom row's at the BOTTOM of its slot
+    (``bottom_y``), middle rows at their slot CENTRE. The matching
+    ``tier`` string tells renderers which way the content grows -- top
+    rows anchor their cells' top edge on the anchor and hang DOWN,
+    bottom rows anchor their bottom edge and rise UP, middle rows
+    centre -- so the cell box fills its slot without crossing the
+    silhouette's top or bottom edge.
 
     Preconditions the pipeline guarantees: ``populated_rows`` is
     non-empty (the empty inventory short-circuits before any row
@@ -936,10 +941,10 @@ def distribute_rows(
         height = weights[ri] / total_weight * span
         slot_height[ri] = height
         if i == 0:
-            # Top row anchors at the top of its slot.
+            # Top row anchors on the silhouette's top edge.
             display_y[ri] = cursor
         elif i == last_index:
-            # Bottom row anchors at the bottom of its slot.
+            # Bottom row anchors on the silhouette's bottom edge.
             display_y[ri] = cursor + height
         else:
             # Middle rows anchor at the centre of their slot.

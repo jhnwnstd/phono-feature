@@ -267,9 +267,10 @@ def _cell_box_px(
     CSS): centre at ``chart_x * dw`` plus the signed pair shift,
     width from the horizontal button count, height from the stack
     depth at the density-tier button height, and the row-tier
-    vertical anchoring (top rows hang DOWN from chart_y, bottom
-    rows rise UP, middle / only centre). The confinement pass and
-    the containment tests use this one definition, so "inside the
+    vertical anchoring (top rows hang DOWN from chart_y, bottom rows
+    rise UP, middle / only centre) so the extreme rows' cells stay
+    inside the silhouette outline. The confinement pass and the
+    containment tests use this one definition, so "inside the
     outline" is judged against the same boxes the renderers draw.
     """
     ww = _cell_width_px(cell)

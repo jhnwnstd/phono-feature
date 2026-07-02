@@ -541,7 +541,12 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         group=GROUP_TONGUE_ROOT,
         aliases=("RTR", "retractedTongueRoot", "retracted_tongue_root"),
         systems=_PHOIBLE_ONLY,
-        uses=frozenset({USE_VOWEL, USE_NATURAL_CLASS}),
+        # USE_VOWEL_PAIR: pharyngealised / retracted-tongue-root vowels
+        # (e.g. Archi iˤ) link to their plain counterpart as one in-cell
+        # contrast, the same way length / nasality do -- WHEN the source
+        # data encodes the RTR difference (some records, e.g. UPSID Archi,
+        # leave both members RTR-negative, so there is nothing to link on).
+        uses=frozenset({USE_VOWEL, USE_VOWEL_PAIR, USE_NATURAL_CLASS}),
     ),
     # --- Prosodic / suprasegmental (600s) ---
     "long": FeatureMetadata(

@@ -76,34 +76,26 @@ def build_col_headers(
 
 def label_midpoint_norm(
     chart_y: float,
-    tier: str,
-    data_height_px: float,
+    tier: str = "middle",
+    data_height_px: float = 0.0,
     row_content_height_px: float = SEG_BTN_H,
 ) -> float:
-    """The normalised y a row label centres on.
+    """The normalised y a row label centres on: the row's rendered
+    CONTENT centre.
 
-    Middle / only rows centre on the row's ``chart_y``. Top and
-    bottom rows anchor their cells' EDGE on ``chart_y`` and grow
-    inward, so a label drawn at ``chart_y`` lines up with the row's
-    edge, not its vertical centre; shifting it inward by half the
-    row's CONTENT height re-centres it on the rendered content.
-    ``row_content_height_px`` is that content height (the row's
-    tallest cell: one button for a plain / pair row, but TWO
-    button-rows for a 2x2 contrast set, or N for a deep stack), so a
-    Close / Open row carrying a contrast set or stack centres on the
-    whole block instead of just its first button row. Defaults to a
-    single button height so a plain row is unchanged.
-    ``data_height_px`` is the data area's pixel height the shift is
-    taken against, so the shift is exactly
-    ``row_content_height_px / 2`` rendered pixels.
+    Middle / only rows centre their cell on ``chart_y``, so the label
+    sits there. Top and bottom rows anchor their cells' EDGE on
+    ``chart_y`` and grow inward (so the cells stay inside the
+    silhouette), which puts the content centre half the content height
+    IN from ``chart_y``; the label follows that centre so it lines up
+    with a Close / Open stack instead of the row's edge. For a plain /
+    pair one-row cell the shift is exactly half a button.
 
-    THE SINGLE definition of the close/open label-centring shift,
-    used by both renderers so it cannot drift between them: the
-    desktop calls it with its live data-area height every layout
-    pass; the web consumes the value baked here onto
+    THE single definition both renderers call so the label y cannot
+    drift: the desktop calls it with its live data-area height every
+    layout pass; the web consumes the value baked here onto
     :py:attr:`VowelChartRow.label_y` (its data area renders at the
-    natural height). Implementing it separately per renderer is what
-    left the web's Close / Open labels uncentred.
+    natural height).
     """
     if data_height_px <= 0:
         return chart_y

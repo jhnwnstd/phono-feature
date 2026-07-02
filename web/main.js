@@ -2523,6 +2523,7 @@ function _buildVowelChart(chart) {
                 case "rhotic_pair":
                 case "phonation_pair":
                 case "tone_pair":
+                case "pharyngeal_pair":
                     target = _buildVowelCellPair(segs, kind);
                     break;
                 case "contrast_set":

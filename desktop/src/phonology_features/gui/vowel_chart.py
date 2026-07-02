@@ -1164,13 +1164,13 @@ class VowelChartWidget(QWidget):
             )
             # Tier-aware y-anchor. Mirrors the web CSS at
             # ``web/style.css`` ``[data-row-tier]`` rules:
-            #   top    -> stack hangs down from chart_y (anchor top)
-            #   bottom -> stack rises up to chart_y (anchor bottom)
+            #   top    -> stack hangs down from chart_y (anchor top edge)
+            #   bottom -> stack rises up to chart_y (anchor bottom edge)
             #   middle / only -> centre on chart_y
-            # Without this, a 7-deep Close (top) row stack centred on
-            # chart_y=0.08 extends half-stack above the silhouette top edge;
-            # one of the divergences vs the web for Korean PHOIBLE and other
-            # tall-stack inventories.
+            # The extreme rows anchor an EDGE on chart_y (not the centre)
+            # so their cells stay INSIDE the silhouette outline instead of
+            # straddling it, and a deep stack grows inward without spilling
+            # past the top / bottom edge.
             cy_px = dy + round(cy * dh)
             if tier == "top":
                 py = cy_px

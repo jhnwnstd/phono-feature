@@ -415,6 +415,10 @@ def test_row_label_anchors_divorced_from_cell_positions() -> None:
     tiers = {r.tier for r in geom.rows}
     assert {"top", "bottom"} <= tiers
     for row in geom.rows:
+        # Top / bottom rows anchor their cells' edge on chart_y and grow
+        # inward, so the label insets half a button toward the content
+        # centre; middle rows sit at chart_y. (Lomongo's rows are all
+        # one-row cells, so the inset is exactly half a button.)
         if row.tier == "top":
             expected_label_y = row.chart_y + half_btn_norm
         elif row.tier == "bottom":
@@ -422,7 +426,8 @@ def test_row_label_anchors_divorced_from_cell_positions() -> None:
         else:
             expected_label_y = row.chart_y
         assert row.label_y == pytest.approx(expected_label_y), row.label
-        # The baked edge fields follow the LABEL, not the cells.
+        # The baked edge fields follow the LABEL's y (evaluated there,
+        # not at some other anchor), so the label-to-outline gap holds.
         assert row.silhouette_left == pytest.approx(
             silhouette_left_at_y(geom.silhouette, row.label_y)
         ), row.label
@@ -481,7 +486,8 @@ def test_row_label_centres_on_multi_row_content() -> None:
     close = top_rows[0]
     # The stack makes the row taller than one button...
     assert close.content_height_px > SEG_BTN_H
-    # ...and the label centres on that content height, not a single button.
+    # ...and the label centres on that content height (half the content
+    # in from the top-edge anchor), not just half a single button.
     expected = close.chart_y + (
         (close.content_height_px / 2.0) / geom.natural_data_height_px
     )
