@@ -41,10 +41,13 @@ class VowelPairCapsule(QWidget):
 
     def _frame_pen(self) -> QPen:
         """The outer-frame pen, whose LINE STYLE encodes the cells'
-        dominant state (the colour-blind cue for the whole pill) so the
-        segmented capsule reads as ONE unit: selected / matched -> solid
-        accent, suggested -> dashed accent, unmatched -> dotted border,
-        default -> solid border. Mirrors the web
+        dominant SELECTED / UNMATCHED state (the colour-blind cue for the
+        whole pill) so the segmented capsule reads as ONE unit: selected /
+        matched -> solid accent, unmatched -> dotted border, default ->
+        solid border. SUGGESTED (natural-class completion) is deliberately
+        NOT a frame state: the completing cell draws its OWN dashed accent
+        border (see :meth:`SegmentButton._capsule_style`) so only that
+        segment is marked, not the whole pill. Mirrors the web
         ``.vowel-capsule:has(> .seg-btn[data-state=...])`` frame rules;
         width stays constant so the box never resizes."""
         states = {
@@ -57,8 +60,6 @@ class VowelPairCapsule(QWidget):
         style = Qt.PenStyle.SolidLine
         if states & {SegmentState.SELECTED, SegmentState.MATCHED}:
             color, style = C["accent"], Qt.PenStyle.SolidLine
-        elif SegmentState.SUGGESTED in states:
-            color, style = C["accent"], Qt.PenStyle.DashLine
         elif SegmentState.UNMATCHED in states:
             color, style = C["border"], Qt.PenStyle.DotLine
         pen = QPen(QColor(color))
@@ -134,9 +135,11 @@ class VowelPairCapsule(QWidget):
                         QPointF(float(min(g.right(), og.right()) - 1), y),
                     )
         # Outer frame stroke: one rounded border whose line style carries
-        # the cells' dominant state (dashed = suggested, dotted =
-        # unmatched, solid-accent = selected), instead of per-cell borders
-        # that doubled at the dividers and clashed with the rounded ends.
+        # the cells' dominant SELECTED / UNMATCHED state (solid-accent =
+        # selected, dotted = unmatched, solid-border = default). SUGGESTED
+        # (natural-class completion) is NOT a frame state -- the completing
+        # cell draws its own dashed accent border (see
+        # SegmentButton._capsule_style) so only that segment is marked.
         painter.setPen(self._frame_pen())
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(rect, radius, radius)

@@ -1753,13 +1753,16 @@ dialog input[type="text"]:focus-visible {
     );
 }
 /* Per-cell hover + state cues INSIDE the capsule. Each cell carries its
-   state via its FILL (+ text colour / weight); the line STYLE that
-   distinguishes the states for colour-blind users (solid / dashed /
-   dotted) is carried by the CAPSULE FRAME below, NOT per cell. A
-   per-cell inset outline was tried and looked wrong: square outline
-   corners clashed with the rounded capsule ends and the outlines
-   DOUBLED along every internal divider. Moving the line style to the
-   one shared frame gives a single clean rounded state border. */
+   state via its FILL (+ text colour / weight). The colour-blind line
+   STYLE splits by state: SELECTED (solid-accent) + UNMATCHED (dotted) are
+   carried by the CAPSULE FRAME below so the pill reads as one unit;
+   SUGGESTED (natural-class completion) is a PER-CELL dashed outline (see
+   the suggested rule below) so only the completing segment is marked, not
+   the whole pill. An earlier per-cell outline for ALL states looked wrong
+   (square corners clashed with the rounded ends; outlines doubled at
+   every divider); it works for suggested now because the end cells round
+   their OUTER corners (first/last-child radius) so the outline follows
+   them, and only the one completing cell is outlined (no doubling). */
 .vowel-capsule > .seg-btn:hover {
   background: var(--accent-light);
 }
@@ -1772,23 +1775,32 @@ dialog input[type="text"]:focus-visible {
 .vowel-capsule > .seg-btn[data-state="suggested"] {
   background: var(--accent-light);
   color: var(--accent);
+  /* Natural-class COMPLETION cue on JUST this cell, not the whole pill:
+     a dashed accent ring drawn INSIDE the cell (negative outline-offset,
+     so zero layout change) that follows the cell's own corners -- rounded
+     on an end cell's OUTER side (from the first/last-child radius above),
+     square at the divider. So only the completing segment is outlined,
+     while its mates keep their own state. (The frame no longer goes fully
+     dashed for a suggested cell -- see the removed ``:has(suggested)``
+     rule below.) */
+  outline: var(--border-std) dashed var(--accent);
+  outline-offset: calc(-1 * var(--border-std));
 }
 .vowel-capsule > .seg-btn[data-state="unmatched"] {
   background: var(--seg-unmatched);
   color: var(--text-dim);
 }
-/* The CAPSULE FRAME carries the state's line style so the whole
-   segmented pill reads as ONE unit with ONE rounded border (dashed for
-   suggested, dotted for unmatched, solid-accent for selected), instead
-   of clashing per-cell rectangles. Width stays ``--border-std`` in
-   every state so the box never resizes; only the style + colour change.
-   Source order puts the strongest state last so it wins when a capsule
-   holds cells in mixed states. Needs ``:has()`` (baseline modern). */
+/* The CAPSULE FRAME carries the SELECTED / UNMATCHED line style so the
+   segmented pill reads as one unit (dotted for unmatched, solid-accent
+   for selected). SUGGESTED (natural-class completion) is deliberately
+   NOT here: it is a per-cell cue (the dashed outline above) so only the
+   completing segment is marked, not the whole pill. Width stays
+   ``--border-std`` in every state so the box never resizes; only the
+   style + colour change. Source order puts the strongest state last so
+   it wins when a capsule holds cells in mixed states. Needs ``:has()``
+   (baseline modern). */
 .vowel-capsule:has(> .seg-btn[data-state="unmatched"]) {
   border: var(--border-std) dotted var(--border);
-}
-.vowel-capsule:has(> .seg-btn[data-state="suggested"]) {
-  border: var(--border-std) dashed var(--accent);
 }
 .vowel-capsule:has(> .seg-btn[data-state="selected"]),
 .vowel-capsule:has(> .seg-btn[data-state="matched"]) {
