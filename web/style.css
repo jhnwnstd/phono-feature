@@ -1716,6 +1716,33 @@ dialog input[type="text"]:focus-visible {
   border-radius: 0;
   background: transparent; /* share the capsule fill */
 }
+/* Sharper selected fill: round the two END cells' OUTER corners to the
+   frame's INNER radius so a filled cell meets the rounded frame crisply.
+   A square fill clipped by ``overflow: hidden`` leaves a faint sub-pixel
+   crescent of the shared ``--seg-default`` at the rounded corners (the
+   "smudge"); a matching corner radius lets the cell paint its own clean
+   rounded edge right up to the frame. Only the OUTER corners round --
+   inner (divider) corners stay square so the group still reads as ONE
+   continuous pill. Radius-only, so layout is unchanged. Covers single-row
+   groups (pairs + ``var | base | var`` contrast rows); the rare 2x2
+   contrast grid (``data-cell-size="4"``) is excluded because its middle
+   cells' outer corners are not first/last-child. */
+.vowel-capsule:not([data-cell-size="4"]) > .seg-btn:first-child {
+  border-top-left-radius: calc(
+    var(--vowel-capsule-radius, 12px) - var(--border-std)
+  );
+  border-bottom-left-radius: calc(
+    var(--vowel-capsule-radius, 12px) - var(--border-std)
+  );
+}
+.vowel-capsule:not([data-cell-size="4"]) > .seg-btn:last-child {
+  border-top-right-radius: calc(
+    var(--vowel-capsule-radius, 12px) - var(--border-std)
+  );
+  border-bottom-right-radius: calc(
+    var(--vowel-capsule-radius, 12px) - var(--border-std)
+  );
+}
 .vowel-capsule > .seg-btn + .seg-btn {
   /* faint internal divider between the two variants */
   border-left: 1px solid

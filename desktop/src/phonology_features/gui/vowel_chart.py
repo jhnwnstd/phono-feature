@@ -822,10 +822,18 @@ class VowelChartWidget(QWidget):
         margin = round(cs.BORDER_PX["std"])
         layout.setContentsMargins(margin, margin, margin, margin)
         added = False
-        for seg in cell.entries:
+        # End cells round their OUTER corners so a selected cell's fill
+        # meets the rounded frame crisply (the left mate rounds its left
+        # corners, the right mate its right). Mirrors the web
+        # ``.vowel-capsule > .seg-btn:first-child / :last-child`` rule.
+        last = len(cell.entries) - 1
+        for idx, seg in enumerate(cell.entries):
             btn = self._buttons.get(seg)
             if btn is not None:
                 btn.set_in_capsule(True)
+                btn.set_capsule_corner(
+                    "left" if idx == 0 else "right" if idx == last else ""
+                )
                 btn.show()
                 layout.addWidget(btn)
                 added = True
@@ -850,6 +858,13 @@ class VowelChartWidget(QWidget):
         layout.setContentsMargins(margin, margin, margin, margin)
         added = False
         grid = cell.grid or ()
+        # A single-row group (2 or 3 entries: a pair or ``var|base|var``)
+        # rounds its two END cells' outer corners like a pair. A full 2x2
+        # keeps square inner corners (its middle-of-an-edge cells aren't
+        # simple left/right ends), so it is left un-rounded -- matching the
+        # web's ``:not([data-cell-size="4"])`` scope.
+        single_row = len(cell.entries) != 4
+        last = len(cell.entries) - 1
         for idx, seg in enumerate(cell.entries):
             btn = self._buttons.get(seg)
             if btn is None:
@@ -859,6 +874,12 @@ class VowelChartWidget(QWidget):
             else:  # defensive fallback: row-major
                 col, row = idx % 2, idx // 2
             btn.set_in_capsule(True)
+            if single_row:
+                btn.set_capsule_corner(
+                    "left" if idx == 0 else "right" if idx == last else ""
+                )
+            else:
+                btn.set_capsule_corner("")
             btn.show()
             layout.addWidget(btn, row, col)
             added = True

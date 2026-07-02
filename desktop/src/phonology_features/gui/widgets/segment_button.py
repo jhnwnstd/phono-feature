@@ -64,9 +64,16 @@ class SegmentButton(QPushButton):
         # shared per-theme cache WITHOUT mutating it (the cache is shared
         # with the consonant grid). ``_in_capsule`` swaps to the flat
         # segmented-capsule cell style; it is reset when the pooled button
-        # returns to the consonant grid. (Corner radius is no longer
-        # per-instance: every segment button shares ``SEG_BTN_RADIUS_PX``.)
+        # returns to the consonant grid.
         self._in_capsule: bool = False
+        # Which OUTER corners this cell rounds when it is an END cell of a
+        # capsule ("left" / "right" / "" for a middle cell). Rounding the
+        # end cells' outer corners to the frame's inner radius lets a
+        # selected cell's FILL meet the rounded frame crisply instead of a
+        # square fill the capsule mask clips at the corner, which left a
+        # faint seam of the shared fill (the "smudge"). Reset alongside
+        # ``_in_capsule`` when the pooled button returns to the grid.
+        self._capsule_corner: str = ""
         self.setCheckable(True)
         # No tooltip. The button label already renders the segment,
         # and a hover bubble repeating ``/seg/`` is redundancy that
@@ -215,15 +222,17 @@ class SegmentButton(QPushButton):
         """QSS for this button as a cell INSIDE a vowel pair capsule.
 
         The capsule container paints the outer frame + divider, so the
-        cell drops its own border/radius and shares the capsule fill.
-        Each cell carries its state by FILL (+ text colour / weight)
-        only; the colour-blind line STYLE (solid / dashed / dotted) is
-        carried by the ONE capsule frame (see
-        :class:`VowelPairCapsule`), NOT a per-cell border -- a per-cell
-        border doubled along every divider and its square corners
-        clashed with the rounded capsule. Built per-instance (capsule
-        cells are the rare case, not worth a second theme cache).
+        cell drops its own border and shares the capsule fill. Each cell
+        carries its state by FILL (+ text colour / weight) only; the
+        colour-blind line STYLE (solid / dashed / dotted) is carried by
+        the ONE capsule frame (see :class:`VowelPairCapsule`), NOT a
+        per-cell border -- a per-cell border doubled along every divider
+        and its square corners clashed with the rounded capsule. An END
+        cell rounds its OUTER corners (see :meth:`set_capsule_corner`) so
+        a filled cell meets the rounded frame crisply. Built per-instance
+        (capsule cells are the rare case, not worth a second theme cache).
         """
+        radius = self._capsule_radius_css()
         if state in (SegmentState.SELECTED, SegmentState.MATCHED):
             fill = (
                 C["seg_selected"]
@@ -232,30 +241,48 @@ class SegmentButton(QPushButton):
             )
             return (
                 f"QPushButton {{ background-color: {fill}; color: #FFFFFF;"
-                f" border: none; border-radius: 0px; font-weight: bold; }}"
+                f" border: none; {radius} font-weight: bold; }}"
             )
         if state == SegmentState.SUGGESTED:
             return (
                 f"QPushButton {{ background-color: {C['accent_light']};"
                 f" color: {C['accent']};"
-                f" border: none; border-radius: 0px; }}"
+                f" border: none; {radius} }}"
             )
         if state == SegmentState.UNMATCHED:
             return (
                 f"QPushButton {{ background-color: {C['seg_unmatched']};"
                 f" color: {C['text_dim']};"
-                f" border: none; border-radius: 0px; }}"
+                f" border: none; {radius} }}"
             )
         # DEFAULT: transparent so the capsule's shared fill shows
         # through; hover / click (:checked) read as the accent cue.
         return (
             f"QPushButton {{ background-color: transparent;"
-            f" color: {C['text']}; border: none; border-radius: 0px; }}"
+            f" color: {C['text']}; border: none; {radius} }}"
             f" QPushButton:hover {{"
             f" background-color: {C['accent_light']}; }}"
             f" QPushButton:checked {{"
             f" background-color: {C['seg_selected']}; color: #FFFFFF;"
             f" font-weight: bold; }}"
+        )
+
+    def _capsule_radius_css(self) -> str:
+        """Border-radius QSS for this capsule cell. Middle cells stay
+        square; an END cell rounds only its two OUTER corners to the
+        frame's INNER radius (capsule radius minus the frame stroke) so
+        its fill curves to meet the rounded frame cleanly. Inner (divider)
+        corners stay square so the group still reads as one pill."""
+        if self._capsule_corner not in ("left", "right"):
+            return "border-radius: 0px;"
+        r = cs.VOWEL_CAPSULE_RADIUS_PX - cs.BORDER_PX["std"]
+        side = "left" if self._capsule_corner == "left" else "right"
+        other = "right" if side == "left" else "left"
+        return (
+            f"border-top-{side}-radius: {r:g}px;"
+            f" border-bottom-{side}-radius: {r:g}px;"
+            f" border-top-{other}-radius: 0px;"
+            f" border-bottom-{other}-radius: 0px;"
         )
 
     def _refresh_css(self) -> None:
@@ -270,7 +297,7 @@ class SegmentButton(QPushButton):
             # ``.vowel-capsule:has(...)`` frame rule reacting to a child's
             # ``data-state``.
             parent = self.parent()
-            if parent is not None:
+            if isinstance(parent, QWidget):
                 parent.update()
             return
         set_css(self, self._styles[self._state])
@@ -278,11 +305,25 @@ class SegmentButton(QPushButton):
     def set_in_capsule(self, in_capsule: bool) -> None:
         """Toggle the flat 'cell inside a pair capsule' styling. Reset
         to ``False`` when the pooled button returns to the consonant
-        grid so it never renders borderless there."""
+        grid so it never renders borderless there. Leaving the capsule
+        also drops any per-instance corner rounding so a pooled button
+        reused by the consonant grid renders with the shared radius."""
+        if not in_capsule:
+            self._capsule_corner = ""
         if self._in_capsule == in_capsule:
             return
         self._in_capsule = in_capsule
         self._refresh_css()
+
+    def set_capsule_corner(self, corner: str) -> None:
+        """Set which OUTER corners this END cell rounds inside a capsule
+        ("left" / "right" / "" for a middle cell). No-op unless the cell
+        is in capsule mode; re-applies the style when it changes."""
+        if self._capsule_corner == corner:
+            return
+        self._capsule_corner = corner
+        if self._in_capsule:
+            self._refresh_css()
 
     def contextMenuEvent(self, event: QContextMenuEvent | None) -> None:
         """Emit ``right_clicked`` with the segment string. MainWindow
