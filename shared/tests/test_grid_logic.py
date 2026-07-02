@@ -685,3 +685,76 @@ def test_remove_target_for_shape():
         SELECTION_SHAPE_FULL_GRID,
     ):
         assert remove_target_for_shape(SelectionShape(kind=kind)) is None
+
+
+def test_header_highlight_single_cell_lights_its_segment_and_feature():
+    from phonology_shared.editor.grid import header_highlight_for_selection
+
+    cols, rows = header_highlight_for_selection([(1, 2)], 5, 5)
+    assert cols == frozenset({2})
+    assert rows == frozenset({1})
+
+
+def test_header_highlight_rectangle_lights_spanned_axes():
+    from phonology_shared.editor.grid import header_highlight_for_selection
+
+    cells = [(r, c) for r in range(2, 4) for c in range(1, 3)]
+    cols, rows = header_highlight_for_selection(cells, 5, 5)
+    assert cols == frozenset({1, 2})
+    assert rows == frozenset({2, 3})
+
+
+def test_header_highlight_whole_column_lights_segment_only():
+    """A whole-column selection pins a segment but no specific feature,
+    so the feature axis stays quiet."""
+    from phonology_shared.editor.grid import header_highlight_for_selection
+
+    cols, rows = header_highlight_for_selection(
+        [(r, 2) for r in range(5)], 5, 5
+    )
+    assert cols == frozenset({2})
+    assert rows == frozenset()
+
+
+def test_header_highlight_whole_row_lights_feature_only():
+    from phonology_shared.editor.grid import header_highlight_for_selection
+
+    cols, rows = header_highlight_for_selection(
+        [(1, c) for c in range(5)], 5, 5
+    )
+    assert cols == frozenset()
+    assert rows == frozenset({1})
+
+
+def test_header_highlight_full_grid_and_empty_light_nothing():
+    from phonology_shared.editor.grid import header_highlight_for_selection
+
+    full = [(r, c) for r in range(3) for c in range(4)]
+    assert header_highlight_for_selection(full, 3, 4) == (
+        frozenset(),
+        frozenset(),
+    )
+    assert header_highlight_for_selection([], 3, 4) == (
+        frozenset(),
+        frozenset(),
+    )
+
+
+def test_header_highlight_rectangle_spanning_all_rows_lights_segments_only():
+    """The subtle case: a rectangle that happens to cover every row is
+    a set of whole columns, so it pins segments only, never a bogus
+    'all features'."""
+    from phonology_shared.editor.grid import header_highlight_for_selection
+
+    cells = [(r, c) for r in range(4) for c in range(1, 3)]
+    cols, rows = header_highlight_for_selection(cells, 4, 5)
+    assert cols == frozenset({1, 2})
+    assert rows == frozenset()
+
+
+def test_header_highlight_scattered_lights_touched_axes():
+    from phonology_shared.editor.grid import header_highlight_for_selection
+
+    cols, rows = header_highlight_for_selection([(0, 0), (2, 3)], 5, 5)
+    assert cols == frozenset({0, 3})
+    assert rows == frozenset({0, 2})

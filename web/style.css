@@ -2713,6 +2713,16 @@ progress {
 .editor-grid tbody th:hover {
   background: color-mix(in srgb, var(--accent) 10%, var(--bg));
 }
+/* Selection crosshair: light the segment (column) and feature (row)
+   header a selected value cell lines up with, in the same
+   ``--accent-light`` as the cell fill so the header and the cell read
+   as one accent-tinted crosshair. Placed after the hover rule (equal
+   specificity) so a lit header stays lit while hovered. Which headers
+   light is decided by ``headerHighlightForSelection`` (mirroring shared
+   ``header_highlight_for_selection``). */
+.editor-grid tbody th.is-axis-lit {
+  background: var(--accent-light);
+}
 /* Bottom status bar: the transient message on the left, the live
    capacity counter pushed to the right (its ``margin-left: auto`` does
    the pushing). Keeping the counter here -- not up on the name row --

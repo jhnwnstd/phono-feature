@@ -4396,6 +4396,10 @@ const MINUS_SERIALIZED = STATUS_TEXT.minus_serialized || "-"; // U+002D
 // O(1) lookup beats querySelector at the cost of a single 2D array
 // rebuild per grid render.
 let _cellNodes = [];
+// Header <th> nodes by index, cached at render for the selection
+// crosshair (light the segment / feature a selected cell lines up with).
+let _colHeaderNodes = [];
+let _rowHeaderNodes = [];
 // Last-painted selection so repaintSelection only toggles the
 // symmetric difference rather than every cell on the page.
 let _lastPaintedSelection = new Set();
@@ -4636,6 +4640,8 @@ function refreshEditorFromCurrent() {
 function renderEditorGrid() {
     const { features, segments, cells } = editorState;
     _cellNodes = [];
+    _colHeaderNodes = [];
+    _rowHeaderNodes = [];
     _lastPaintedSelection = new Set();
     // Re-render discards previous DOM nodes; the cached focus
     // pointer is now stale. Null it so the next repaintFocused
@@ -4670,6 +4676,7 @@ function renderEditorGrid() {
         const fit = _pickEditorHeaderFontSize(segments[c]);
         if (fit !== null) th.style.fontSize = `${fit}px`;
         colsRow.appendChild(th);
+        _colHeaderNodes.push(th);
     }
     colsBody.appendChild(colsRow);
     colsTable.appendChild(colsBody);
@@ -4687,6 +4694,7 @@ function renderEditorGrid() {
         th.dataset.row = String(r);
         tr.appendChild(th);
         rowsBody.appendChild(tr);
+        _rowHeaderNodes.push(th);
     }
     rowsTable.appendChild(rowsBody);
     nodes.editorGridRows.replaceChildren(rowsTable);
@@ -4908,6 +4916,7 @@ function repaintSelection() {
         cellNode(r, c)?.classList.add("is-selected");
     }
     _lastPaintedSelection = new Set(editorState.selected);
+    repaintHeaderCrosshair();
     updateRemoveButtonStates();
 }
 
@@ -4978,6 +4987,46 @@ function classifyEditorSelection() {
     const rectSize = (rMax - rMin + 1) * (cMax - cMin + 1);
     if (n === rectSize) return { kind: "rectangle" };
     return { kind: "irregular" };
+}
+
+/**
+ * Mirror of shared ``header_highlight_for_selection`` (grid.py): the
+ * segment (column) and feature (row) headers to light for the current
+ * selection so the user sees which segment and feature a selected cell
+ * lines up with. A column lights when the selection touches it unless
+ * it touches every column (then no single segment is singled out, so
+ * the segment axis stays quiet); rows mirror. Inlined for the same
+ * no-bridge-hop reason as ``classifyEditorSelection``;
+ * shared/tests/test_editor_mirror_parity.py pins JS == Python.
+ *
+ * Returns ``{ cols: Set<number>, rows: Set<number> }`` of indices.
+ */
+function headerHighlightForSelection() {
+    const numRows = editorState.features.length;
+    const numCols = editorState.segments.length;
+    const cols = new Set();
+    const rows = new Set();
+    for (const key of editorState.selected) {
+        const { r, c } = parseCellKey(key);
+        cols.add(c);
+        rows.add(r);
+    }
+    if (numCols > 0 && cols.size >= numCols) cols.clear();
+    if (numRows > 0 && rows.size >= numRows) rows.clear();
+    return { cols, rows };
+}
+
+/** Light the segment / feature headers the current selection pins
+ *  down (see headerHighlightForSelection). A cheap full sweep over the
+ *  cached header nodes: at most one row plus one column of them. */
+function repaintHeaderCrosshair() {
+    const { cols, rows } = headerHighlightForSelection();
+    for (let c = 0; c < _colHeaderNodes.length; c++) {
+        _colHeaderNodes[c].classList.toggle("is-axis-lit", cols.has(c));
+    }
+    for (let r = 0; r < _rowHeaderNodes.length; r++) {
+        _rowHeaderNodes[r].classList.toggle("is-axis-lit", rows.has(r));
+    }
 }
 
 /** Resolve the column / row indices for the "single column" /

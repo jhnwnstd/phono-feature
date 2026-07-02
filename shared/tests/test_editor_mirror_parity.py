@@ -32,6 +32,7 @@ import pytest
 from phonology_shared.editor.grid import (
     SELECTION_SHAPE_REMOVE_TARGET,
     classify_selection,
+    header_highlight_for_selection,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -155,5 +156,69 @@ def test_classify_selection_js_matches_python(tmp_path: Path) -> None:
     ]
     assert not mismatches, (
         f"{len(mismatches)} classify_selection JS/Python mismatches; "
+        f"first: {mismatches[0]}"
+    )
+
+
+def _py_highlight(case: dict[str, object]) -> dict[str, object]:
+    cols, rows = header_highlight_for_selection(
+        [tuple(c) for c in case["cells"]],  # type: ignore[misc]
+        case["numRows"],  # type: ignore[arg-type]
+        case["numCols"],  # type: ignore[arg-type]
+    )
+    return {"cols": sorted(cols), "rows": sorted(rows)}
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not available")
+def test_header_highlight_js_matches_python(tmp_path: Path) -> None:
+    """Drive the real ``headerHighlightForSelection`` over every
+    selection on the grids in ``_GRID_DIMS`` and require it to match
+    ``header_highlight_for_selection`` exactly (the crosshair rule must
+    stay in lockstep across the two editors)."""
+    highlighter = _extract(
+        r"\nfunction headerHighlightForSelection\(\) \{.*?\n\}\n"
+    )
+    parse = _extract(r"const parseCellKey = \(key\) => \{.*?\n\};")
+    harness = (
+        "const editorState = "
+        "{features: [], segments: [], selected: new Set()};\n"
+        + parse
+        + "\n"
+        + highlighter
+        + "\n"
+        "const cases = JSON.parse("
+        "require('fs').readFileSync(process.argv[2], 'utf8'));\n"
+        "const srt = (s) => [...s].sort((a, b) => a - b);\n"
+        "const out = cases.map(({numRows, numCols, cells}) => {\n"
+        "  editorState.features = Array(numRows).fill(0);\n"
+        "  editorState.segments = Array(numCols).fill(0);\n"
+        "  editorState.selected = new Set(cells.map(([r, c]) => r + ',' + c));"
+        "\n"
+        "  const h = headerHighlightForSelection();\n"
+        "  return {cols: srt(h.cols), rows: srt(h.rows)};\n"
+        "});\n"
+        "process.stdout.write(JSON.stringify(out));\n"
+    )
+    cases = _all_cases()
+    cases_file = tmp_path / "cases.json"
+    cases_file.write_text(json.dumps(cases), encoding="utf-8")
+    harness_file = tmp_path / "harness.cjs"
+    harness_file.write_text(harness, encoding="utf-8")
+    proc = subprocess.run(
+        ["node", str(harness_file), str(cases_file)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0, f"node harness failed:\n{proc.stderr}"
+    js_out = json.loads(proc.stdout)
+    assert len(js_out) == len(cases)
+    mismatches = [
+        (case, js, _py_highlight(case))
+        for case, js in zip(cases, js_out)
+        if js != _py_highlight(case)
+    ]
+    assert not mismatches, (
+        f"{len(mismatches)} header_highlight JS/Python mismatches; "
         f"first: {mismatches[0]}"
     )

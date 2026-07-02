@@ -104,6 +104,7 @@ from phonology_shared.editor.grid import (
     confirm_remove_feature_prompt,
     confirm_remove_segment_prompt,
     grid_to_inventory,
+    header_highlight_for_selection,
     load_inventory_checked,
     remove_target_for_shape,
     validate_new_feature_label,
@@ -1155,16 +1156,28 @@ class InventoryEditor(QMainWindow):
         self._last_selection_region = new_region
         # Classify via the shared :py:func:`classify_selection` so
         # desktop and web agree on what counts as a single column or
-        # row. Walks selectedIndexes once into the (row, col) iterable
-        # the classifier expects; microseconds for typical inventories.
-        cells = (
+        # row. Walk selectedIndexes once into a (row, col) list reused
+        # by both the classifier and the crosshair; microseconds for
+        # typical inventories.
+        n_rows = self._table.rowCount()
+        n_cols = self._table.columnCount()
+        cells = [
             (idx.row(), idx.column()) for idx in sel_model.selectedIndexes()
+        ]
+        shape = classify_selection(cells, n_rows, n_cols)
+        # Selection crosshair: light the segment (column) and feature
+        # (row) headers this selection pins down, per the same shared
+        # rule the web mirrors. A whole column lights only its segment
+        # header (no single feature is pinned), and vice versa.
+        lit_cols, lit_rows = header_highlight_for_selection(
+            cells, n_rows, n_cols
         )
-        shape = classify_selection(
-            cells,
-            self._table.rowCount(),
-            self._table.columnCount(),
-        )
+        h_header = self._table.horizontalHeader()
+        v_header = self._table.verticalHeader()
+        if isinstance(h_header, _ToggleHeaderView):
+            h_header.set_lit_sections(lit_cols)
+        if isinstance(v_header, _ToggleHeaderView):
+            v_header.set_lit_sections(lit_rows)
         target = remove_target_for_shape(shape)
         if shape.kind == SELECTION_SHAPE_SINGLE_COLUMN:
             self._selected_remove_col = shape.column

@@ -491,3 +491,45 @@ def remove_target_for_shape(shape: SelectionShape) -> str | None:
     given selection shape, per :py:data:`SELECTION_SHAPE_REMOVE_TARGET`.
     """
     return SELECTION_SHAPE_REMOVE_TARGET.get(shape.kind)
+
+
+def header_highlight_for_selection(
+    cells: Iterable[tuple[int, int]],
+    num_rows: int,
+    num_cols: int,
+) -> tuple[frozenset[int], frozenset[int]]:
+    """Which segment (column) and feature (row) headers to emphasize
+    for the given cell selection: the editor "crosshair" that shows
+    which segment and feature a selected value cell lines up with.
+
+    Returns ``(columns, rows)`` of header indices to light. A column
+    is lit when the selection touches it UNLESS the selection touches
+    every column (then no single segment is singled out, so the
+    segment axis stays quiet); a row is lit under the mirror rule.
+    Consequences:
+
+    * single cell: its one segment and its one feature.
+    * rectangle: the segments and features it spans.
+    * whole column (a segment): that segment only; the feature axis
+      spans everything, so nothing on it is pinned.
+    * whole row (a feature): that feature only.
+    * whole grid or empty: neither axis is pinned, so nothing lights.
+
+    Kept beside :py:func:`classify_selection` and mirrored inline in
+    the web editor for the same reason (per-click bridge calls would
+    be too costly on rapid shift+drag); the JS must agree, and a
+    parity test pins it.
+    """
+    cols = {c for _, c in cells}
+    rows = {r for r, _ in cells}
+    lit_cols = (
+        frozenset()
+        if num_cols > 0 and len(cols) >= num_cols
+        else frozenset(cols)
+    )
+    lit_rows = (
+        frozenset()
+        if num_rows > 0 and len(rows) >= num_rows
+        else frozenset(rows)
+    )
+    return lit_cols, lit_rows

@@ -20,7 +20,7 @@ window file focused on state and lifecycle.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import ClassVar
 
 from PyQt6.QtCore import QItemSelection, QModelIndex, QRect, Qt
@@ -73,6 +73,36 @@ class _ToggleHeaderView(QHeaderView):
         # a fresh QHeaderView defaults to False. Without this, no
         # sectionClicked signals fire at all.
         self.setSectionsClickable(True)
+        # Sections lit as part of the selection crosshair: the segment
+        # (or feature) a selected value cell lines up with. Driven by
+        # the window from shared ``header_highlight_for_selection``.
+        self._lit_sections: frozenset[int] = frozenset()
+
+    def set_lit_sections(self, sections: Iterable[int]) -> None:
+        """Set which sections to light for the selection crosshair and
+        repaint only when the set actually changes (selection changes
+        that leave the lit axis untouched cost nothing)."""
+        lit = frozenset(sections)
+        if lit == self._lit_sections:
+            return
+        self._lit_sections = lit
+        viewport = self.viewport()
+        if viewport is not None:
+            viewport.update()
+
+    def paintSection(
+        self, painter: QPainter | None, rect: QRect, logicalIndex: int
+    ) -> None:
+        # Paint the section normally, then wash lit ones with the
+        # crosshair tint. Washing AFTER the base paint keeps the label
+        # (including the shrunk-glyph header fonts) pixel-identical to
+        # neighbouring sections; a solid pre-fill would have to redraw
+        # the label by hand and risk misaligning it.
+        super().paintSection(painter, rect, logicalIndex)
+        if painter is not None and logicalIndex in self._lit_sections:
+            painter.save()
+            painter.fillRect(rect, _get_header_lit_brush())
+            painter.restore()
 
     def mouseDoubleClickEvent(self, e: QMouseEvent | None) -> None:
         # Coordinate space: x for horizontal headers, y for vertical.
@@ -329,3 +359,30 @@ def _get_highlight_brush() -> QBrush:
         _highlight_brush_version = _palette.theme_version
         _highlight_brush = QBrush(QColor(C["accent_light"]))
     return _highlight_brush
+
+
+# Selection-crosshair header wash. Same theme-version cache as the cell
+# brush. A low-alpha accent washed OVER the fully-painted section lands
+# on roughly the cell fill (``accent_light``) while leaving the label
+# crisp, so a lit header reads as part of the selection crosshair. The
+# web draws the equivalent tint as a solid ``--accent-light`` header
+# background; both signal the same segment / feature.
+_HEADER_LIT_ALPHA = 45
+_header_lit_brush_version: int = -1
+_header_lit_brush: QBrush | None = None
+
+
+def _get_header_lit_brush() -> QBrush:
+    """Return the cached crosshair header brush, rebuilding on theme."""
+    global _header_lit_brush, _header_lit_brush_version
+    from phonology_shared.presentation import palette as _palette
+
+    if (
+        _header_lit_brush is None
+        or _header_lit_brush_version != _palette.theme_version
+    ):
+        _header_lit_brush_version = _palette.theme_version
+        col = QColor(C["accent"])
+        col.setAlpha(_HEADER_LIT_ALPHA)
+        _header_lit_brush = QBrush(col)
+    return _header_lit_brush
