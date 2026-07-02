@@ -282,8 +282,10 @@ VOWEL_SILHOUETTE_ALPHA: float = 0.70
 #: Faint dotted row/column guide lines inside the silhouette so the
 #: eye can trace each height tier and backness column. Kept well below
 #: the outline alpha (0.70) so the guides recede behind both the
-#: outline and the cells; shared so web + desktop match exactly.
-VOWEL_GUIDE_ALPHA: float = 0.22
+#: outline and the cells; shared so web + desktop match exactly. Nudged
+#: from 0.22 to 0.28 so the guides read a touch more clearly while
+#: staying subtle (still quiet against the cells).
+VOWEL_GUIDE_ALPHA: float = 0.28
 VOWEL_GUIDE_STROKE_PX: float = 0.8
 
 #: Minimum data-area height so tiny inventories (5-vowel Spanish)

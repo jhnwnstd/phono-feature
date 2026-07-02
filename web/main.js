@@ -2762,15 +2762,13 @@ function _buildVowelCellPair(segs, kind) {
     return cell;
 }
 
-/** Build a 2-column grid for a vowel-chart cell whose 3-4 entries
- *  differ on more than one in-cell-contrast feature (e.g. a 2x2
- *  long x nasal set). Three entries: first spans both columns on
- *  row 0; the remaining two land side-by-side on row 1. Four
- *  entries: pure 2x2 in input order, row-major.
- *
- *  Children are plain segment buttons; the grid layout is driven
- *  by the ``.vowel-chart-cell-contrast-set`` class so the same
- *  positioning rules apply as the other cell kinds. */
+/** Build a gridded capsule for a vowel-chart cell whose 2-4 entries
+ *  differ on more than one in-cell-contrast feature (e.g. a long x
+ *  nasal set). A complete 4-entry set is a feature-aligned 2x2; a
+ *  partial set with a base form is a single HORIZONTAL row with the
+ *  base CENTRED and its variants flanking it (``var | base | var``).
+ *  Each entry's ``(col, row)`` + the grid's column/row extent come
+ *  from the shared classifier; children are plain segment buttons. */
 function _buildVowelCellContrastSet(segs, grid) {
     const cell = document.createElement("div");
     // A two-feature variant group (e.g. length x nasality) renders as
