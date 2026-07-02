@@ -16,6 +16,7 @@ from phonology_shared.data.limits import (
     MAX_NAME_LENGTH,
     MAX_SEGMENTS,
 )
+from phonology_shared.editor.providers import generated_to_grid
 from phonology_shared.editor.setup import suggest_filename
 from phonology_shared.presentation.mode_logic import (
     REDO_NOTHING_MESSAGE,
@@ -39,6 +40,8 @@ from PyQt6.QtGui import (
     QCloseEvent,
     QFont,
     QKeyEvent,
+    QKeySequence,
+    QShortcut,
 )
 from PyQt6.QtWidgets import (
     QAbstractButton,
@@ -225,6 +228,11 @@ class InventoryEditor(QMainWindow):
         self._build_toolbar()
         self._build_central()
         self._build_status_bar()
+        # Standard save/open accelerators, active anywhere in the editor
+        # window (the table's own event filter owns Ctrl+Z/Y). They mirror
+        # the Save / Open toolbar buttons, so no new UI is added.
+        QShortcut(QKeySequence.StandardKey.Save, self, self._save)
+        QShortcut(QKeySequence.StandardKey.Open, self, self._open_file)
 
     def _build_toolbar(self) -> None:
         toolbar = QToolBar()
@@ -554,15 +562,10 @@ class InventoryEditor(QMainWindow):
             # textarea; a mismatch would misalign columns and values.
             generated = provider.generate(segments)
             features = list(generated.features)
-            # Seed unresolved segments with a blank bundle so the grid
-            # still has a column to edit; resolved segments come from
-            # the provider's bundle map.
-            cells: dict[str, dict[str, str]] = {
-                seg: dict(bundle) for seg, bundle in generated.segments.items()
-            }
-            for sym in generated.unresolved:
-                cells[sym] = dict.fromkeys(features, "0")
-            initial_cells = cells
+            # Assemble the grid in the user's segment order via the shared
+            # helper (same call the web makes), so the two frontends can't
+            # diverge on column order or dedup.
+            initial_cells = generated_to_grid(segments, generated)
             self._feature_source = provider.name
             self._feature_source_version = provider.version
             for warning in generated.warnings:
@@ -1410,7 +1413,14 @@ class InventoryEditor(QMainWindow):
 
     @_dirty.setter
     def _dirty(self, value: bool) -> None:
+        if self._save_ctrl.dirty == value:
+            return
         self._save_ctrl.dirty = value
+        # Surface the change on the file label's unsaved marker as soon
+        # as an edit dirties the grid, not only on the next save/load.
+        # (The save path clears dirty on the SaveController directly and
+        # refreshes via _update_title, so that side stays covered.)
+        self._refresh_meta_strip()
 
     @property
     def _draining_save(self) -> bool:
@@ -1649,12 +1659,17 @@ class InventoryEditor(QMainWindow):
 
     def _refresh_meta_strip(self) -> None:
         """Sync the name field and file-indicator label with the current
-        ``_inv_name`` / ``_current_path``. Used after every load, save,
-        or programmatic rename so the visible UI matches the data."""
+        ``_inv_name`` / ``_current_path``, marking unsaved edits. Used
+        after every load, save, or programmatic rename, and on every
+        dirty change (via the ``_dirty`` setter), so the visible UI
+        matches the data."""
         if self._name_edit.text() != self._inv_name:
             self._name_edit.setText(self._inv_name)
         if self._current_path:
-            self._file_label.setText(os.path.basename(self._current_path))
+            base = os.path.basename(self._current_path)
+            # Trailing bullet marks unsaved edits to the loaded file; the
+            # no-file "(unsaved)" state already says as much on its own.
+            self._file_label.setText(f"{base} •" if self._dirty else base)
         else:
             self._file_label.setText("(unsaved)")
 

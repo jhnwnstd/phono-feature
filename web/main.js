@@ -4575,7 +4575,11 @@ function refreshEditorFromCurrent() {
         ? { r: 0, c: 0 }
         : null;
     nodes.editorNameInput.value = editorState.name;
-    nodes.editorFileLabel.textContent = "(unsaved)";
+    // The web has no linked-on-disk file, so this label is purely a
+    // dirty cue: blank when clean (just loaded OR just saved -- no
+    // "(unsaved)" contradicting the "Saved as X" status), "(modified)"
+    // once edited (markEditorDirty). The Name input already names it.
+    nodes.editorFileLabel.textContent = "";
     renderEditorGrid();
     repaintFocused();
     refreshEditorCapCounter();
@@ -5508,6 +5512,12 @@ function onGridKeyDown(ev) {
         if (lower === "y") {
             ev.preventDefault();
             redo();
+            return;
+        }
+        if (lower === "a") {
+            // Keyboard equivalent of clicking the corner cell.
+            ev.preventDefault();
+            selectAll();
             return;
         }
         return;

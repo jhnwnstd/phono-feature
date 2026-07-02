@@ -2686,11 +2686,20 @@ progress {
 .editor-grid tbody th:hover {
   background: color-mix(in srgb, var(--accent) 10%, var(--bg));
 }
-.editor-status {
+/* Bottom status bar: the transient message on the left, the live
+   capacity counter pushed to the right (its ``margin-left: auto`` does
+   the pushing). Keeping the counter here -- not up on the name row --
+   leaves the name row to just the name, and mirrors the desktop, whose
+   counter sits in the window's status bar. */
+.editor-statusbar {
+  display: flex;
+  align-items: center;
   padding: var(--space-sm) var(--space-lg);
   background: var(--panel);
   border-top: var(--border-thin) solid var(--border);
+  min-height: 24px;
+}
+.editor-status {
   font-size: var(--font-size-meta);
   color: var(--text-dim);
-  min-height: 24px;
 }

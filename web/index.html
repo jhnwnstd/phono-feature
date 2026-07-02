@@ -303,7 +303,7 @@
     <button id="editor-new-btn" type="button"
             title="Create a new inventory">New</button>
     <button id="editor-save-as-btn" type="button"
-            title="Save this inventory to a file">Save as…</button>
+            title="Save this inventory to a file">Save as</button>
     <span class="editor-toolbar-sep" aria-hidden="true"></span>
     <button id="editor-add-seg-btn" type="button"
             title="Add a segment (a new column)">+ Segment</button>
@@ -321,9 +321,7 @@
     <label class="editor-meta-label" for="editor-name-input">Name:</label>
     <input id="editor-name-input" type="text" maxlength="256"
            autocomplete="off" spellcheck="false">
-    <span class="editor-meta-file" id="editor-file-label">(unsaved)</span>
-    <span class="editor-cap-counter" id="editor-cap-counter"
-          aria-live="polite" hidden></span>
+    <span class="editor-meta-file" id="editor-file-label"></span>
   </div>
   <!--
     tabindex on the scroll container so keyboard shortcuts (Space
@@ -336,7 +334,10 @@
     <div class="editor-grid-pane editor-grid-pane-rows" id="editor-grid-rows"></div>
     <div class="editor-grid-pane editor-grid-pane-data" id="editor-grid-data"></div>
   </div>
-  <footer class="editor-status" id="editor-status" aria-live="polite">
+  <footer class="editor-statusbar">
+    <span class="editor-status" id="editor-status" aria-live="polite"></span>
+    <span class="editor-cap-counter" id="editor-cap-counter"
+          aria-live="polite" hidden></span>
   </footer>
 </section>
 

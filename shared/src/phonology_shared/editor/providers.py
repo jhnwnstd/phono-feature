@@ -16,7 +16,7 @@ may depend on optional dependencies the shared layer cannot assume.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -228,7 +228,37 @@ def blank_bundle(features: tuple[str, ...]) -> dict[str, str]:
     provider could not resolve, so the user can edit the cells in
     place instead of re-typing the symbol after a manual fix.
     """
-    return {feature: "0" for feature in features}
+    return dict.fromkeys(features, "0")
+
+
+def generated_to_grid(
+    ordered_segments: Sequence[str],
+    generated: GeneratedInventory,
+    features: Sequence[str] | None = None,
+) -> dict[str, dict[str, str]]:
+    """Assemble editor grid cells ``{segment: {feature: value}}`` from a
+    provider's :class:`GeneratedInventory`, in the user's SEGMENT ORDER
+    (deduped, first occurrence wins). A resolved segment takes the
+    provider's bundle projected onto the feature axis (absent features
+    -> ``"0"``); an unresolved one gets an all-``"0"`` blank bundle.
+
+    Both editor frontends call this so the column ORDER and DEDUP can't
+    drift between them: previously the web kept the user's input order
+    while the desktop reordered resolved-first + unresolved-last, so the
+    same input produced different grids. ``features`` defaults to
+    ``generated.features``.
+    """
+    feats = tuple(features) if features is not None else generated.features
+    cells: dict[str, dict[str, str]] = {}
+    for seg in ordered_segments:
+        if seg in cells:
+            continue
+        bundle = generated.segments.get(seg)
+        if bundle is None:
+            cells[seg] = blank_bundle(feats)
+        else:
+            cells[seg] = {f: bundle.get(f, "0") for f in feats}
+    return cells
 
 
 def decode_positional_bundle(

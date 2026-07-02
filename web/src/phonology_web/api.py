@@ -94,7 +94,7 @@ from phonology_shared.editor.phoible_provider import (
 )
 from phonology_shared.editor.providers import (
     FeatureProvider,
-    blank_bundle,
+    generated_to_grid,
 )
 from phonology_shared.editor.setup import (
     DEFAULT_FEATURES,
@@ -643,15 +643,9 @@ def create_new_inventory(
         # grid still has a column-per-feature for the user to edit.
         generated = provider.generate(list(result.segments))
         feature_names = tuple(generated.features) or tuple(result.features)
-        grid: dict[str, dict[str, str]] = {}
-        for seg in result.segments:
-            bundle = generated.segments.get(seg)
-            if bundle is not None:
-                grid[seg] = {
-                    feat: bundle.get(feat, "0") for feat in feature_names
-                }
-            else:
-                grid[seg] = dict(blank_bundle(feature_names))
+        # Shared helper (same call the desktop makes) keeps column order +
+        # dedup identical across the two frontends.
+        grid = generated_to_grid(result.segments, generated, feature_names)
         metadata["feature_source"] = provider.name
         metadata["feature_source_version"] = provider.version
         features_list = list(feature_names)
