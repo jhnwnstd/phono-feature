@@ -32,11 +32,39 @@ from PyQt6.QtWidgets import QWidget
 
 from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.palette import C
+from phonology_shared.presentation.view_models import SegmentState
 
 
 class VowelPairCapsule(QWidget):
     """Paints the rounded frame + shared fill + faint divider for a
     vowel pair; hosts the two in-capsule mate buttons."""
+
+    def _frame_pen(self) -> QPen:
+        """The outer-frame pen, whose LINE STYLE encodes the cells'
+        dominant state (the colour-blind cue for the whole pill) so the
+        segmented capsule reads as ONE unit: selected / matched -> solid
+        accent, suggested -> dashed accent, unmatched -> dotted border,
+        default -> solid border. Mirrors the web
+        ``.vowel-capsule:has(> .seg-btn[data-state=...])`` frame rules;
+        width stays constant so the box never resizes."""
+        states = {
+            st
+            for kid in self.findChildren(QWidget)
+            if kid.parent() is self
+            and (st := getattr(kid, "_state", None)) is not None
+        }
+        color = C["border"]
+        style = Qt.PenStyle.SolidLine
+        if states & {SegmentState.SELECTED, SegmentState.MATCHED}:
+            color, style = C["accent"], Qt.PenStyle.SolidLine
+        elif SegmentState.SUGGESTED in states:
+            color, style = C["accent"], Qt.PenStyle.DashLine
+        elif SegmentState.UNMATCHED in states:
+            color, style = C["border"], Qt.PenStyle.DotLine
+        pen = QPen(QColor(color))
+        pen.setWidthF(cs.BORDER_PX["std"])
+        pen.setStyle(style)
+        return pen
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -105,10 +133,11 @@ class VowelPairCapsule(QWidget):
                         QPointF(float(max(g.left(), og.left()) + 1), y),
                         QPointF(float(min(g.right(), og.right()) - 1), y),
                     )
-        # Outer frame stroke.
-        pen = QPen(QColor(C["border"]))
-        pen.setWidthF(cs.BORDER_PX["std"])
-        painter.setPen(pen)
+        # Outer frame stroke: one rounded border whose line style carries
+        # the cells' dominant state (dashed = suggested, dotted =
+        # unmatched, solid-accent = selected), instead of per-cell borders
+        # that doubled at the dividers and clashed with the rounded ends.
+        painter.setPen(self._frame_pen())
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(rect, radius, radius)
         painter.end()

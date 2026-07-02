@@ -1725,11 +1725,14 @@ dialog input[type="text"]:focus-visible {
       transparent
     );
 }
-/* Per-cell hover + state cues INSIDE the capsule. The fill carries the
-   state colour; an INSET ``outline`` re-adds the colour-blind line
-   STYLE (solid / dashed / dotted) that the removed per-cell border used
-   to carry, drawn inside the cell via a negative ``outline-offset`` so
-   it never resizes the chip or overpaints the capsule frame. */
+/* Per-cell hover + state cues INSIDE the capsule. Each cell carries its
+   state via its FILL (+ text colour / weight); the line STYLE that
+   distinguishes the states for colour-blind users (solid / dashed /
+   dotted) is carried by the CAPSULE FRAME below, NOT per cell. A
+   per-cell inset outline was tried and looked wrong: square outline
+   corners clashed with the rounded capsule ends and the outlines
+   DOUBLED along every internal divider. Moving the line style to the
+   one shared frame gives a single clean rounded state border. */
 .vowel-capsule > .seg-btn:hover {
   background: var(--accent-light);
 }
@@ -1738,20 +1741,31 @@ dialog input[type="text"]:focus-visible {
   background: var(--seg-selected);
   color: #fff;
   font-weight: bold;
-  outline: var(--border-thick) solid var(--accent);
-  outline-offset: calc(-1 * var(--border-thick));
 }
 .vowel-capsule > .seg-btn[data-state="suggested"] {
   background: var(--accent-light);
   color: var(--accent);
-  outline: var(--border-std) dashed var(--accent);
-  outline-offset: calc(-1 * var(--border-std));
 }
 .vowel-capsule > .seg-btn[data-state="unmatched"] {
   background: var(--seg-unmatched);
   color: var(--text-dim);
-  outline: var(--border-thin) dotted var(--border);
-  outline-offset: calc(-1 * var(--border-thin));
+}
+/* The CAPSULE FRAME carries the state's line style so the whole
+   segmented pill reads as ONE unit with ONE rounded border (dashed for
+   suggested, dotted for unmatched, solid-accent for selected), instead
+   of clashing per-cell rectangles. Width stays ``--border-std`` in
+   every state so the box never resizes; only the style + colour change.
+   Source order puts the strongest state last so it wins when a capsule
+   holds cells in mixed states. Needs ``:has()`` (baseline modern). */
+.vowel-capsule:has(> .seg-btn[data-state="unmatched"]) {
+  border: var(--border-std) dotted var(--border);
+}
+.vowel-capsule:has(> .seg-btn[data-state="suggested"]) {
+  border: var(--border-std) dashed var(--accent);
+}
+.vowel-capsule:has(> .seg-btn[data-state="selected"]),
+.vowel-capsule:has(> .seg-btn[data-state="matched"]) {
+  border: var(--border-std) solid var(--accent);
 }
 
 /* Two-feature contrast set: a feature-aligned 2x2 gridded capsule.

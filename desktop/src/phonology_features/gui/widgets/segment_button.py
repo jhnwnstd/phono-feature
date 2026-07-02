@@ -216,15 +216,14 @@ class SegmentButton(QPushButton):
 
         The capsule container paints the outer frame + divider, so the
         cell drops its own border/radius and shares the capsule fill.
-        The coloured states fill the cell and re-add the colour-blind
-        cue (solid / dashed / dotted) as an INSET border drawn inside
-        the fixed-size box, so state never resizes the chip. Built
-        per-instance (capsule cells are the rare case, not worth a
-        second theme cache).
+        Each cell carries its state by FILL (+ text colour / weight)
+        only; the colour-blind line STYLE (solid / dashed / dotted) is
+        carried by the ONE capsule frame (see
+        :class:`VowelPairCapsule`), NOT a per-cell border -- a per-cell
+        border doubled along every divider and its square corners
+        clashed with the rounded capsule. Built per-instance (capsule
+        cells are the rare case, not worth a second theme cache).
         """
-        _thin = cs.BORDER_PX["thin"]
-        _std = cs.BORDER_PX["std"]
-        _thick = cs.BORDER_PX["thick"]
         if state in (SegmentState.SELECTED, SegmentState.MATCHED):
             fill = (
                 C["seg_selected"]
@@ -233,22 +232,19 @@ class SegmentButton(QPushButton):
             )
             return (
                 f"QPushButton {{ background-color: {fill}; color: #FFFFFF;"
-                f" border: {_thick}px solid {C['accent']};"
-                f" border-radius: 0px; font-weight: bold; }}"
+                f" border: none; border-radius: 0px; font-weight: bold; }}"
             )
         if state == SegmentState.SUGGESTED:
             return (
                 f"QPushButton {{ background-color: {C['accent_light']};"
                 f" color: {C['accent']};"
-                f" border: {_std}px dashed {C['accent']};"
-                f" border-radius: 0px; }}"
+                f" border: none; border-radius: 0px; }}"
             )
         if state == SegmentState.UNMATCHED:
             return (
                 f"QPushButton {{ background-color: {C['seg_unmatched']};"
                 f" color: {C['text_dim']};"
-                f" border: {_thin}px dotted {C['border']};"
-                f" border-radius: 0px; }}"
+                f" border: none; border-radius: 0px; }}"
             )
         # DEFAULT: transparent so the capsule's shared fill shows
         # through; hover / click (:checked) read as the accent cue.
@@ -259,7 +255,6 @@ class SegmentButton(QPushButton):
             f" background-color: {C['accent_light']}; }}"
             f" QPushButton:checked {{"
             f" background-color: {C['seg_selected']}; color: #FFFFFF;"
-            f" border: {_thick}px solid {C['accent']};"
             f" font-weight: bold; }}"
         )
 
@@ -269,6 +264,14 @@ class SegmentButton(QPushButton):
         per-theme cache."""
         if self._in_capsule:
             set_css(self, self._capsule_style(self._state))
+            # The capsule FRAME (drawn by the parent VowelPairCapsule)
+            # carries the state's line style, so nudge it to repaint when
+            # a cell's state changes -- the Qt analogue of the web's
+            # ``.vowel-capsule:has(...)`` frame rule reacting to a child's
+            # ``data-state``.
+            parent = self.parent()
+            if parent is not None:
+                parent.update()
             return
         set_css(self, self._styles[self._state])
 
