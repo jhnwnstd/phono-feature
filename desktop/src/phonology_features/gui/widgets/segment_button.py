@@ -60,6 +60,14 @@ class SegmentButton(QPushButton):
         super().__init__(segment, parent)
         self.segment = segment
         self._state: SegmentState = SegmentState.DEFAULT
+        # Per-instance vowel-chart style overrides, applied ON TOP of the
+        # shared per-theme cache WITHOUT mutating it (the cache is shared
+        # with the consonant grid). ``_in_capsule`` swaps to the flat
+        # segmented-capsule cell style; ``_chip_radius_px`` overrides the
+        # corner radius for a single vowel chip. Both are reset when the
+        # pooled button returns to the consonant grid.
+        self._in_capsule: bool = False
+        self._chip_radius_px: int | None = None
         self.setCheckable(True)
         # No tooltip. The button label already renders the segment,
         # and a hover bubble repeating ``/seg/`` is redundancy that
@@ -106,7 +114,7 @@ class SegmentButton(QPushButton):
         if new_styles is self._styles:
             return
         self._styles = new_styles
-        set_css(self, self._styles[self._state])
+        self._refresh_css()
 
     @staticmethod
     def _build_styles() -> dict[SegmentState, str]:
@@ -200,7 +208,94 @@ class SegmentButton(QPushButton):
         if self._state == new_state:
             return
         self._state = new_state
-        set_css(self, self._styles[new_state])
+        self._refresh_css()
+
+    def _capsule_style(self, state: SegmentState) -> str:
+        """QSS for this button as a cell INSIDE a vowel pair capsule.
+
+        The capsule container paints the outer frame + divider, so the
+        cell drops its own border/radius and shares the capsule fill.
+        The coloured states fill the cell and re-add the colour-blind
+        cue (solid / dashed / dotted) as an INSET border drawn inside
+        the fixed-size box, so state never resizes the chip. Built
+        per-instance (capsule cells are the rare case, not worth a
+        second theme cache).
+        """
+        _thin = cs.BORDER_PX["thin"]
+        _std = cs.BORDER_PX["std"]
+        _thick = cs.BORDER_PX["thick"]
+        if state in (SegmentState.SELECTED, SegmentState.MATCHED):
+            fill = (
+                C["seg_selected"]
+                if state == SegmentState.SELECTED
+                else C["seg_matched"]
+            )
+            return (
+                f"QPushButton {{ background-color: {fill}; color: #FFFFFF;"
+                f" border: {_thick}px solid {C['accent']};"
+                f" border-radius: 0px; font-weight: bold; }}"
+            )
+        if state == SegmentState.SUGGESTED:
+            return (
+                f"QPushButton {{ background-color: {C['accent_light']};"
+                f" color: {C['accent']};"
+                f" border: {_std}px dashed {C['accent']};"
+                f" border-radius: 0px; }}"
+            )
+        if state == SegmentState.UNMATCHED:
+            return (
+                f"QPushButton {{ background-color: {C['seg_unmatched']};"
+                f" color: {C['text_dim']};"
+                f" border: {_thin}px dotted {C['border']};"
+                f" border-radius: 0px; }}"
+            )
+        # DEFAULT: transparent so the capsule's shared fill shows
+        # through; hover / click (:checked) read as the accent cue.
+        return (
+            f"QPushButton {{ background-color: transparent;"
+            f" color: {C['text']}; border: none; border-radius: 0px; }}"
+            f" QPushButton:hover {{"
+            f" background-color: {C['accent_light']}; }}"
+            f" QPushButton:checked {{"
+            f" background-color: {C['seg_selected']}; color: #FFFFFF;"
+            f" border: {_thick}px solid {C['accent']};"
+            f" font-weight: bold; }}"
+        )
+
+    def _refresh_css(self) -> None:
+        """Re-apply the current state's stylesheet, honouring the
+        per-instance vowel-chart overrides (capsule mode / chip
+        radius) on top of the shared per-theme cache."""
+        if self._in_capsule:
+            set_css(self, self._capsule_style(self._state))
+            return
+        css = self._styles[self._state]
+        if self._chip_radius_px is not None:
+            # Append a second rule so the later border-radius wins over
+            # the cached base, without rebuilding the whole style.
+            css = (
+                f"{css}\nQPushButton {{"
+                f" border-radius: {self._chip_radius_px}px; }}"
+            )
+        set_css(self, css)
+
+    def set_in_capsule(self, in_capsule: bool) -> None:
+        """Toggle the flat 'cell inside a pair capsule' styling. Reset
+        to ``False`` when the pooled button returns to the consonant
+        grid so it never renders borderless there."""
+        if self._in_capsule == in_capsule:
+            return
+        self._in_capsule = in_capsule
+        self._refresh_css()
+
+    def set_chip_radius(self, radius_px: int | None) -> None:
+        """Override the corner radius (a single vowel chip uses the
+        larger vowel-scoped radius). ``None`` restores the shared
+        default; reset on return to the consonant grid."""
+        if self._chip_radius_px == radius_px:
+            return
+        self._chip_radius_px = radius_px
+        self._refresh_css()
 
     def contextMenuEvent(self, event: QContextMenuEvent | None) -> None:
         """Emit ``right_clicked`` with the segment string. MainWindow

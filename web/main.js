@@ -2117,6 +2117,24 @@ function _silhouetteForDataWidth(sil, dwPx) {
     };
 }
 
+/** Port of ``inset_silhouette_for_draw`` in outline.py: push the DRAWN
+ *  outline OUTWARD by ``insetPx`` on every side so the chips float
+ *  inside a quiet field. Draw-only; never feeds cell positions. */
+function _insetSilhouetteForDraw(sil, dwPx, dhPx, insetPx) {
+    if (!sil || dwPx <= 0 || dhPx <= 0 || insetPx <= 0) return sil;
+    const dx = insetPx / dwPx;
+    const dy = insetPx / dhPx;
+    return {
+        ...sil,
+        top_left: sil.top_left - dx,
+        bottom_left: sil.bottom_left - dx,
+        top_right: sil.top_right + dx,
+        bottom_right: sil.bottom_right + dx,
+        top_y: sil.top_y - dy,
+        bottom_y: sil.bottom_y + dy,
+    };
+}
+
 /** Cascade: port of ``rounded_silhouette_polygon_points`` in
  *  ``shared/.../chart/vowel_geometry/outline.py``. Returns a CSS
  *  ``clip-path: polygon()`` points string with the four corners
@@ -2288,13 +2306,46 @@ function _buildVowelChart(chart) {
             // onto detached DOM or leak the old chart's data.
             if (!dataEl.isConnected) return;
             const dw = dataEl.clientWidth || 0;
-            if (dw <= 0) return;
+            const dh = dataEl.clientHeight || 0;
+            if (dw <= 0 || dh <= 0) return;
             const silAdj = _silhouetteForDataWidth(sil, dw);
+            // FLUSH polygon (wraps the cell extent): the guides clip to
+            // this so they trace the cell rows/columns.
             const polyStr = _roundedSilhouettePolygonPoints(
                 silAdj, radiusFrac,
             );
             dataEl.style.setProperty(
                 `--vowel-${shape}-rounded-points`, polyStr,
+            );
+            // OUTSET outline polygon: push the drawn trapezoid a fixed
+            // inset beyond the flush edge so the chips float inside a
+            // quiet field. The outline pseudo-elements are extended by
+            // the same inset in CSS, so the outset points are remapped
+            // into that larger box (data area grown by ``insetPx`` on
+            // every side). Draw-only: cell positions are untouched.
+            const insetPx = parseFloat(
+                getComputedStyle(dataEl).getPropertyValue(
+                    "--vowel-silhouette-inset",
+                ),
+            ) || 0;
+            const silDraw = _insetSilhouetteForDraw(silAdj, dw, dh, insetPx);
+            let outlineStr = _roundedSilhouettePolygonPoints(
+                silDraw, radiusFrac,
+            );
+            if (insetPx > 0) {
+                const denomX = dw + 2 * insetPx;
+                const denomY = dh + 2 * insetPx;
+                outlineStr = outlineStr.split(",").map((pt) => {
+                    const xy = pt.trim().split(/\s+/);
+                    const px = (parseFloat(xy[0]) / 100 * dw + insetPx)
+                        / denomX * 100;
+                    const py = (parseFloat(xy[1]) / 100 * dh + insetPx)
+                        / denomY * 100;
+                    return `${px.toFixed(3)}% ${py.toFixed(3)}%`;
+                }).join(", ");
+            }
+            dataEl.style.setProperty(
+                `--vowel-${shape}-outline-points`, outlineStr,
             );
             // Anchor the diphthong footer (label + chip strip) to the
             // trapezoid's BOTTOM-LEFT corner instead of the data area's
@@ -2305,7 +2356,7 @@ function _buildVowelChart(chart) {
             // here on every resize alongside the polygon.
             chartEl.style.setProperty(
                 "--vowel-diph-indent",
-                Math.max(0, silAdj.bottom_left * dw) + "px",
+                Math.max(0, silDraw.bottom_left * dw) + "px",
             );
             // Same trigger set as the polygon (first layout +
             // every resize): re-derive the stack button heights
@@ -2331,7 +2382,6 @@ function _buildVowelChart(chart) {
     const silTopLeft = sil ? sil.top_left : 0;
     const silBotLeft = sil ? sil.bottom_left : 0;
     const silSpanY = silBotY - silTopY;
-    _appendVowelHeightTierBands(dataEl, chart);
     for (const row of chart.rows) {
         const rowLabel = document.createElement("div");
         rowLabel.className = "vowel-chart-row-label";
@@ -2383,11 +2433,56 @@ function _buildVowelChart(chart) {
         g.style.top = `${(row.chart_y * 100).toFixed(4)}%`;
         guidesEl.appendChild(g);
     }
-    for (const col of chart.cols || []) {
-        const g = document.createElement("div");
-        g.className = "vowel-guide vowel-guide-col";
-        g.style.left = `${(col.chart_x * 100).toFixed(4)}%`;
-        guidesEl.appendChild(g);
+    // Column guides SLANT to follow their backness column. The shared
+    // geometry bakes each column's anchor projected at BOTH the top and
+    // bottom silhouette edges (``col.chart_x`` / ``col.chart_x_bottom``);
+    // the cells in that column migrate toward the vertical back edge as the
+    // rows narrow, so a vertical guide would only touch the top cell and
+    // drift left of every lower one. We draw the line through the two baked
+    // endpoints. Rendered as one ``preserveAspectRatio="none"`` SVG so the
+    // slant tracks the live aspect ratio on resize (a skewed div would need
+    // re-measuring); the parent ``.vowel-chart-guides`` clip-path trims each
+    // line flush to the trapezoid exactly as it does the row divs.
+    // Back-column anchor == the projection's fixed point, so its two values
+    // match and the line stays vertical by construction.
+    const guideSil = chart.silhouette;
+    const cols = chart.cols || [];
+    if (guideSil && cols.length && typeof cols[0].chart_x_bottom === "number") {
+        const ty = guideSil.top_y;
+        const by = guideSil.bottom_y;
+        const span = by - ty || 1;
+        const svgNS = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(svgNS, "svg");
+        svg.setAttribute("class", "vowel-guide-cols-svg");
+        svg.setAttribute("viewBox", "0 0 100 100");
+        svg.setAttribute("preserveAspectRatio", "none");
+        svg.setAttribute("aria-hidden", "true");
+        for (const col of cols) {
+            const chartX = col.chart_x;
+            const slope = (col.chart_x_bottom - chartX) / span;
+            // Extrapolate the (top_y, bottom_y) segment to the full layer
+            // height so the clip-path trims it flush to the outline
+            // instead of stopping short at the top/bottom rows.
+            const x0 = chartX - slope * ty;
+            const x1 = col.chart_x_bottom + slope * (1 - by);
+            const line = document.createElementNS(svgNS, "line");
+            line.setAttribute("x1", (x0 * 100).toFixed(3));
+            line.setAttribute("y1", "0");
+            line.setAttribute("x2", (x1 * 100).toFixed(3));
+            line.setAttribute("y2", "100");
+            line.setAttribute("vector-effect", "non-scaling-stroke");
+            svg.appendChild(line);
+        }
+        guidesEl.appendChild(svg);
+    } else {
+        // Older bridge payload without the baked bottom endpoint: fall back
+        // to the historical vertical guides so the chart still renders.
+        for (const col of cols) {
+            const g = document.createElement("div");
+            g.className = "vowel-guide vowel-guide-col";
+            g.style.left = `${(col.chart_x * 100).toFixed(4)}%`;
+            guidesEl.appendChild(g);
+        }
     }
     dataEl.appendChild(guidesEl);
     const rowTierByLogical = new Map(
@@ -2431,7 +2526,7 @@ function _buildVowelChart(chart) {
                     target = _buildVowelCellPair(segs, kind);
                     break;
                 case "contrast_set":
-                    target = _buildVowelCellContrastSet(segs);
+                    target = _buildVowelCellContrastSet(segs, cell.grid);
                     break;
                 default:
                     // Unknown kind from the bridge: log + fall back so
@@ -2526,17 +2621,6 @@ function _appendVowelDiphthongChipStrip(chartEl, chart) {
  *  the pre-redesign per-row alternating tints were replaced by
  *  one continuous fill. Skipped when the inventory has no cells
  *  (nothing to back). */
-function _appendVowelHeightTierBands(dataEl, chart) {
-    const cells = chart.cells;
-    if (!Array.isArray(cells) || cells.length === 0) return;
-    const container = document.createElement("div");
-    container.className = "vowel-chart-row-bands";
-    container.setAttribute("aria-hidden", "true");
-    // Prepend so the gradient sits BEHIND row labels, cells, and
-    // the diphthong arrow overlay (which all share the data area).
-    dataEl.insertBefore(container, dataEl.firstChild);
-}
-
 /** Build a single vowel-cell button from an IPA segment string. */
 function _buildVowelCellButton(seg) {
     const btn = _buildVowelSegBtn(seg);
@@ -2662,7 +2746,14 @@ function _refreshVowelStackClamp(dataEl) {
  *  side-by-side instead of overlapping. */
 function _buildVowelCellPair(segs, kind) {
     const cell = document.createElement("div");
-    cell.className = "vowel-chart-cell vowel-chart-cell-pair";
+    // ``vowel-capsule`` styles the container as ONE segmented capsule
+    // (single outer frame + shared fill + a faint 1px divider) holding
+    // the two independently-selectable mates, so the pair reads as one
+    // articulatory position with two variants. The seg-btns keep their
+    // own click flow + data-state; the capsule CSS (style.css) flattens
+    // their per-cell border and re-adds the colour-blind state cue as an
+    // inset outline.
+    cell.className = "vowel-chart-cell vowel-chart-cell-pair vowel-capsule";
     if (kind) cell.dataset.pairKind = kind;
     for (const seg of segs) {
         cell.appendChild(_buildVowelSegBtn(seg));
@@ -2679,13 +2770,31 @@ function _buildVowelCellPair(segs, kind) {
  *  Children are plain segment buttons; the grid layout is driven
  *  by the ``.vowel-chart-cell-contrast-set`` class so the same
  *  positioning rules apply as the other cell kinds. */
-function _buildVowelCellContrastSet(segs) {
+function _buildVowelCellContrastSet(segs, grid) {
     const cell = document.createElement("div");
-    cell.className = "vowel-chart-cell vowel-chart-cell-contrast-set";
+    // A two-feature variant group (e.g. length x nasality) renders as
+    // ONE feature-aligned 2x2 gridded capsule: columns encode one
+    // contrast, rows the other. ``grid`` (from the shared classifier,
+    // parallel to ``segs``) gives each entry's 0-based (col, row); a
+    // partial 3-entry set leaves its missing corner empty. The internal
+    // dividers are drawn on the right-column / bottom-row cells so they
+    // only appear where two cells actually meet.
+    cell.className =
+        "vowel-chart-cell vowel-chart-cell-contrast-set "
+        + "vowel-capsule vowel-capsule-grid";
     cell.dataset.cellSize = String(segs.length);
-    for (const seg of segs) {
-        cell.appendChild(_buildVowelSegBtn(seg));
-    }
+    const coords = Array.isArray(grid) ? grid : [];
+    segs.forEach((seg, i) => {
+        const btn = _buildVowelSegBtn(seg);
+        const pos = coords[i];
+        if (Array.isArray(pos) && pos.length === 2) {
+            btn.style.gridColumn = String(pos[0] + 1);
+            btn.style.gridRow = String(pos[1] + 1);
+            if (pos[0] === 1) btn.classList.add("vowel-capsule-div-l");
+            if (pos[1] === 1) btn.classList.add("vowel-capsule-div-t");
+        }
+        cell.appendChild(btn);
+    });
     return cell;
 }
 

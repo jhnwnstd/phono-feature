@@ -107,6 +107,7 @@ from phonology_shared.chart.vowel_geometry.model import (
     VowelChartSilhouette,
 )
 from phonology_shared.chart.vowel_geometry.outline import (
+    inset_silhouette_for_draw,
     rounded_silhouette_polygon_points,
     silhouette_for_data_width,
     silhouette_left_at_y,
@@ -133,6 +134,7 @@ __all__ = [
     "VowelChartSilhouette",
     "build_vowel_chart_geometry",
     "effective_button_height_px",
+    "inset_silhouette_for_draw",
     "label_midpoint_norm",
     "rounded_silhouette_polygon_points",
     "silhouette_for_data_width",

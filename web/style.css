@@ -1432,7 +1432,13 @@ dialog input[type="text"]:focus-visible {
 .vowel-chart-data::after {
   content: "";
   position: absolute;
-  inset: 0;
+  /* Extend the outline pseudo-elements OUT past the data area by the
+     silhouette inset, so the OUTSET trapezoid (drawn via the remapped
+     ``--vowel-<shape>-outline-points`` polygon set by ``refreshPolygon``)
+     has room and the chips float inside it. Default 0 keeps the offline
+     fallback flush; the extension only ever reaches into the reserved
+     row-label gutter / pane padding, never the chips. */
+  inset: calc(-1 * var(--vowel-silhouette-inset, 0px));
   z-index: 0;
   pointer-events: none;
 }
@@ -1447,57 +1453,56 @@ dialog input[type="text"]:focus-visible {
   /* Thinner rim: a 1 px visible stroke matches the app-wide
      ``--border-thin`` token used by section dividers, distinguishing
      the structural silhouette from the 1.5 px standard interactive
-     borders on segment buttons + panel cards. */
-  inset: 1px;
-  background: var(--bg);
-}
-.panel[data-active="true"] .vowel-chart-data::after {
-  background: var(--panel);
-}
-
-/* Height-tier banding. One band per populated row, tiled so the
-   silhouette interior reads as a stack of subtle horizontal zones.
-   The container shares the silhouette clip-path (rule above) so
-   the tints never bleed outside the trapezoid into the row-label
-   gutter. ``z-index: 1`` lifts the bands above the
-   ``::after`` interior fill (the pseudo-element pair would
-   otherwise overpaint them); cells share z-index 1 and DOM-order
-   after the bands, so cells still paint on top. ``inset: 1px``
-   keeps the band container strictly inside the 1 px silhouette
-   rim so bands never paint over the structural outline. */
-.vowel-chart-row-bands {
-  /* Single very-faint top->bottom gradient inside the silhouette
-     interior (suggests tongue lowering without the visual noise
-     of per-tier banded fills). One empty container; the gradient
-     does the visual work and survives the silhouette clip-path
-     below. ``inset: 1px`` keeps the gradient strictly inside the
-     1 px silhouette rim so it never paints over the outline. */
-  position: absolute;
-  inset: 1px;
-  pointer-events: none;
-  z-index: 1;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--border) 4%, transparent),
-    color-mix(in srgb, var(--border) 14%, transparent)
+     borders on segment buttons + panel cards. 1 px inside ``::before``
+     (which carries the same silhouette inset) so the pair still renders
+     a hairline stroke when the outline is outset. */
+  inset: calc(1px - var(--vowel-silhouette-inset, 0px));
+  /* Flat, ultra-faint interior wash so the vowel space reads as a
+     distinct "map" surface the chips sit on (figure-ground), rather
+     than being invisible against the pane. A uniform tint, NOT the
+     removed per-tier gradient. */
+  background: color-mix(
+    in srgb,
+    var(--border) var(--vowel-field-tint, 3%),
+    var(--bg)
   );
 }
+.panel[data-active="true"] .vowel-chart-data::after {
+  background: color-mix(
+    in srgb,
+    var(--border) var(--vowel-field-tint, 3%),
+    var(--panel)
+  );
+}
+
+/* The trapezoid interior is a flat, quiet surface: the former faint
+   top->bottom gradient was removed so the field reads as a bare map
+   and the vowel chips carry the visual weight. Only the dotted
+   row/column guides (below) encode structure. */
 .vowel-chart-data[data-shape="trapezoid"]::before,
-.vowel-chart-data[data-shape="trapezoid"]::after,
-.vowel-chart-data[data-shape="trapezoid"] .vowel-chart-row-bands {
-  /* Rounded trapezoid silhouette: ``--vowel-trapezoid-rounded-points``
-     bakes ~24 points (5 per corner + 4 original corners) along a
-     quadratic Bezier so every corner reads as gently rounded
-     instead of sharp. The points come from
-     ``rounded_silhouette_polygon_points`` in
-     chart/vowel_geometry/outline.py so desktop's ``QPainterPath``
-     and the web's clip-path stay in lockstep. */
-  clip-path: polygon(var(--vowel-trapezoid-rounded-points));
+.vowel-chart-data[data-shape="trapezoid"]::after {
+  /* OUTSET outline polygon (falls back to the flush polygon until
+     ``refreshPolygon`` sets it, so there's no rectangle flash). */
+  clip-path: polygon(
+    var(
+      --vowel-trapezoid-outline-points,
+      var(--vowel-trapezoid-rounded-points)
+    )
+  );
 }
 .vowel-chart-data[data-shape="triangle"]::before,
-.vowel-chart-data[data-shape="triangle"]::after,
-.vowel-chart-data[data-shape="triangle"] .vowel-chart-row-bands {
-  clip-path: polygon(var(--vowel-triangle-rounded-points));
+.vowel-chart-data[data-shape="triangle"]::after {
+  /* OUTSET outline polygon; flush fallback until refreshPolygon sets it.
+     ``rounded_silhouette_polygon_points`` bakes ~24 points (5 per corner
+     + 4 corners) along a quadratic Bezier so corners read as gently
+     rounded; the points come from chart/vowel_geometry/outline.py so
+     desktop's ``QPainterPath`` and the web clip-path stay in lockstep. */
+  clip-path: polygon(
+    var(
+      --vowel-triangle-outline-points,
+      var(--vowel-triangle-rounded-points)
+    )
+  );
 }
 /* Faint dotted row/column guides inside the silhouette so the eye can
    trace each height tier + backness column. Positioned from the shared
@@ -1509,7 +1514,15 @@ dialog input[type="text"]:focus-visible {
   position: absolute;
   inset: 1px;
   pointer-events: none;
-  z-index: 0;
+  /* Paint ABOVE the field fill, BELOW the cells. The silhouette's
+     interior wash lives on ``.vowel-chart-data::after``, a pseudo-
+     element that (being generated content) paints AFTER real
+     children at the same z-index; at ``z-index: 0`` the guides were
+     rendered and then immediately masked by that fill, so the dotted
+     structure never showed. ``z-index: 1`` lifts the guides over the
+     fill; the cells (also ``z-index: 1`` but later in the DOM) keep
+     painting on top, so the guides still recede behind the glyphs. */
+  z-index: 1;
 }
 .vowel-chart-data[data-shape="trapezoid"] .vowel-chart-guides {
   clip-path: polygon(var(--vowel-trapezoid-rounded-points));
@@ -1530,6 +1543,29 @@ dialog input[type="text"]:focus-visible {
   bottom: 0;
   border-left: var(--vowel-guide-stroke-px, 0.8px) dotted var(--border);
   opacity: var(--vowel-guide-alpha, 0.22);
+}
+/* Column guides as a single stretched-to-fit SVG so each line can
+   SLANT with its backness column (the front/central columns migrate
+   toward the vertical back edge as the trapezoid narrows). ``overflow:
+   visible`` lets the extrapolated line ends reach past the SVG box; the
+   parent ``.vowel-chart-guides`` clip-path then trims them flush to the
+   trapezoid, exactly as it does the horizontal row divs. */
+.vowel-guide-cols-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  opacity: var(--vowel-guide-alpha, 0.22);
+}
+.vowel-guide-cols-svg line {
+  stroke: var(--border);
+  stroke-width: var(--vowel-guide-stroke-px, 0.8px);
+  /* Dotted to match the ``dotted`` border on the row guides; round
+     caps + a tight dash render as dots. ``non-scaling-stroke`` on the
+     lines keeps these px-exact despite the non-uniform viewBox scale. */
+  stroke-dasharray: 0.8 2.6;
+  stroke-linecap: round;
 }
 /* Silhouette outline stays as the canonical thin border-coloured
    stroke regardless of pane-active state. An earlier "soft modern"
@@ -1656,6 +1692,95 @@ dialog input[type="text"]:focus-visible {
 }
 .vowel-chart-cell-contrast-set[data-cell-size="3"] > :first-child {
   grid-column: span 2;
+}
+
+/* ---------- pair capsule ----------
+   A vowel PAIR renders as ONE segmented capsule: a single rounded
+   outer frame + shared fill holding two independently-selectable cells
+   split by a faint 1px divider, so the pair reads as one articulatory
+   position with two variants (unrounded left, rounded/modified right)
+   rather than two floating buttons. Scoped to ``.vowel-capsule >
+   .seg-btn`` so the shared consonant ``.seg-btn`` is untouched. */
+.vowel-capsule {
+  gap: 0; /* the 1px divider does the separation, not a flex gap */
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--vowel-capsule-radius, 12px);
+  background: var(--seg-default); /* one shared fill; default weight kept */
+  overflow: hidden; /* clip the inner cells to the rounded outer frame */
+}
+.vowel-capsule > .seg-btn {
+  border: none; /* the outer frame carries the border, not each cell */
+  border-radius: 0;
+  background: transparent; /* share the capsule fill */
+}
+.vowel-capsule > .seg-btn + .seg-btn {
+  /* faint internal divider between the two variants */
+  border-left: 1px solid
+    color-mix(
+      in srgb,
+      var(--border) calc(var(--vowel-capsule-divider-alpha, 0.5) * 100%),
+      transparent
+    );
+}
+/* Per-cell hover + state cues INSIDE the capsule. The fill carries the
+   state colour; an INSET ``outline`` re-adds the colour-blind line
+   STYLE (solid / dashed / dotted) that the removed per-cell border used
+   to carry, drawn inside the cell via a negative ``outline-offset`` so
+   it never resizes the chip or overpaints the capsule frame. */
+.vowel-capsule > .seg-btn:hover {
+  background: var(--accent-light);
+}
+.vowel-capsule > .seg-btn[data-state="selected"],
+.vowel-capsule > .seg-btn[data-state="matched"] {
+  background: var(--seg-selected);
+  color: #fff;
+  font-weight: bold;
+  outline: var(--border-thick) solid var(--accent);
+  outline-offset: calc(-1 * var(--border-thick));
+}
+.vowel-capsule > .seg-btn[data-state="suggested"] {
+  background: var(--accent-light);
+  color: var(--accent);
+  outline: var(--border-std) dashed var(--accent);
+  outline-offset: calc(-1 * var(--border-std));
+}
+.vowel-capsule > .seg-btn[data-state="unmatched"] {
+  background: var(--seg-unmatched);
+  color: var(--text-dim);
+  outline: var(--border-thin) dotted var(--border);
+  outline-offset: calc(-1 * var(--border-thin));
+}
+/* Single vowel chips get the larger vowel-scoped radius (the pair
+   capsule uses its own). Consonant ``.seg-btn`` keeps ``--radius-lg``. */
+.vowel-chart-cell.seg-btn {
+  border-radius: var(--vowel-chip-radius, 10px);
+}
+
+/* Two-feature contrast set: a feature-aligned 2x2 gridded capsule.
+   Overrides ``.vowel-capsule``'s flex row with a 2-column grid; each
+   cell is placed at its ``(col, row)`` inline by the renderer. Internal
+   dividers are drawn only on cells that have a left / top neighbour, so
+   a partial (3-entry) set shows no divider into its empty corner. */
+.vowel-capsule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 0;
+}
+.vowel-capsule-grid > .seg-btn.vowel-capsule-div-l {
+  border-left: 1px solid
+    color-mix(
+      in srgb,
+      var(--border) calc(var(--vowel-capsule-divider-alpha, 0.5) * 100%),
+      transparent
+    );
+}
+.vowel-capsule-grid > .seg-btn.vowel-capsule-div-t {
+  border-top: 1px solid
+    color-mix(
+      in srgb,
+      var(--border) calc(var(--vowel-capsule-divider-alpha, 0.5) * 100%),
+      transparent
+    );
 }
 
 /* ---------- feature panel ----------

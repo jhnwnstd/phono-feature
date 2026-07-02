@@ -67,6 +67,10 @@ _EXPECTED_CELL_FIELDS = frozenset(
         "segs",
         "display_kind",
         "contrast_features",
+        # Feature-aligned 2x2 grid coords for a CONTRAST_SET cell;
+        # ``_buildVowelCellContrastSet`` reads ``cell.grid`` to place
+        # each variant at its (col, row).
+        "grid",
         "pair_shift_px",
         "nudge_px",
     }

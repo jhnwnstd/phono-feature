@@ -337,7 +337,9 @@ def test_classify_long_pair_returns_long_pair_kind() -> None:
             "iː": {"high": "+", "long": "+"},
         }
     )
-    kind, contrast, ordered = _classify_vowel_cell_display(("i", "iː"), feats)
+    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+        ("i", "iː"), feats
+    )
     assert kind == VowelCellDisplayKind.LONG_PAIR
     assert contrast == ("long",)
     # Marked (+long) goes on the right.
@@ -356,7 +358,9 @@ def test_classify_nasal_pair() -> None:
             "õ": {"high": "-", "low": "-", "nasal": "+"},
         }
     )
-    kind, contrast, ordered = _classify_vowel_cell_display(("o", "õ"), feats)
+    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+        ("o", "õ"), feats
+    )
     assert kind == VowelCellDisplayKind.NASAL_PAIR
     assert contrast == ("nasal",)
     assert ordered == ("o", "õ")
@@ -382,7 +386,9 @@ def test_classify_rhotic_pair_with_aliases() -> None:
     assert "rhotic" in norm_a
     assert "rhotic" in norm_b
     feats = _make_classifier_feats({"ə": norm_a, "ɚ": norm_b})
-    kind, contrast, ordered = _classify_vowel_cell_display(("ə", "ɚ"), feats)
+    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+        ("ə", "ɚ"), feats
+    )
     assert kind == VowelCellDisplayKind.RHOTIC_PAIR
     assert contrast == ("rhotic",)
     assert ordered == ("ə", "ɚ")
@@ -400,7 +406,9 @@ def test_classify_phonation_pair() -> None:
             "a̤": {"high": "-", "low": "+", "breathy": "+", "creaky": "-"},
         }
     )
-    kind, contrast, ordered = _classify_vowel_cell_display(("a", "a̤"), feats)
+    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+        ("a", "a̤"), feats
+    )
     assert kind == VowelCellDisplayKind.PHONATION_PAIR
     assert contrast == ("breathy",)
     # modal on left, marked on right.
@@ -419,7 +427,7 @@ def test_classify_tone_pair() -> None:
             "à": {"high": "-", "low": "+", "tone": "L"},
         }
     )
-    kind, contrast, _ = _classify_vowel_cell_display(("ā", "à"), feats)
+    kind, contrast, _, _ = _classify_vowel_cell_display(("ā", "à"), feats)
     assert kind == VowelCellDisplayKind.TONE_PAIR
     assert contrast == ("tone",)
 
@@ -441,12 +449,41 @@ def test_classify_long_plus_nasal_is_contrast_set() -> None:
             "aaN": {"long": "+", "nasal": "+", "high": "-", "low": "+"},
         }
     )
-    kind, contrast, ordered = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid = _classify_vowel_cell_display(
         ("a", "aa", "aN", "aaN"), feats
     )
     assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("long", "nasal")
     assert ordered == ("a", "aa", "aN", "aaN")
+    # Feature-aligned 2x2: columns = long (short left, long right),
+    # rows = nasal (oral top, nasal bottom); parallel to ``ordered``.
+    assert grid == ((0, 0), (1, 0), (0, 1), (1, 1))
+
+
+def test_classify_partial_contrast_set_grid_leaves_the_gap() -> None:
+    """A 3-entry length x nasal set (Dzongkha's u / uː / ũː: the
+    short-nasal corner is missing) grids feature-aligned, so the gap
+    lands in the correct (short, nasal) corner rather than a positional
+    guess: u top-left, uː top-right, ũː bottom-right."""
+    from phonology_shared.chart.vowel_geometry.display_slots import (
+        _classify_vowel_cell_display,
+    )
+    from phonology_shared.chart.vowels import VowelCellDisplayKind
+
+    feats = _make_classifier_feats(
+        {
+            "u": {"high": "+", "back": "+", "long": "-", "nasal": "-"},
+            "uː": {"high": "+", "back": "+", "long": "+", "nasal": "-"},
+            "ũː": {"high": "+", "back": "+", "long": "+", "nasal": "+"},
+        }
+    )
+    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+        ("uː", "ũː", "u"), feats
+    )
+    assert kind == VowelCellDisplayKind.CONTRAST_SET
+    assert contrast == ("long", "nasal")
+    assert ordered == ("u", "uː", "ũː")
+    assert grid == ((0, 0), (1, 0), (1, 1))  # gap at (0, 1) = short-nasal
 
 
 def test_classify_differs_on_position_feature_is_stack() -> None:
@@ -465,7 +502,9 @@ def test_classify_differs_on_position_feature_is_stack() -> None:
             "ɨ": {"high": "+", "low": "-"},
         }
     )
-    kind, contrast, ordered = _classify_vowel_cell_display(("ə", "ɨ"), feats)
+    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+        ("ə", "ɨ"), feats
+    )
     assert kind == VowelCellDisplayKind.STACK
     assert contrast == ()
     assert ordered == ("ə", "ɨ")
@@ -501,7 +540,7 @@ def test_pair_ordering_puts_marked_on_right() -> None:
         ),
     ]
     for expected_kind, feat, feats in cases:
-        kind, contrast, ordered = _classify_vowel_cell_display(
+        kind, contrast, ordered, grid = _classify_vowel_cell_display(
             ("a", "b"), feats
         )
         assert kind == expected_kind, f"{expected_kind}: got {kind}"
@@ -530,7 +569,7 @@ def test_classify_stack_for_three_position_differences() -> None:
             "c": {"high": "+", "low": "-"},
         }
     )
-    kind, contrast, _ = _classify_vowel_cell_display(("a", "b", "c"), feats)
+    kind, contrast, _, _ = _classify_vowel_cell_display(("a", "b", "c"), feats)
     assert kind == VowelCellDisplayKind.STACK
     assert contrast == ()
 

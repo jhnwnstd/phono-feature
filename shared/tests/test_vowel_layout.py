@@ -565,6 +565,67 @@ def test_chart_geometry_cell_chart_x_within_bounds(
         )
 
 
+def test_column_guide_endpoints_track_the_backness_slant(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    """Each column header bakes its backness anchor projected at BOTH the
+    top and bottom silhouette edges so both renderers can draw a column
+    GUIDE that slants with the column instead of dropping vertically.
+
+    ``chart_x_bottom`` must equal ``project_anchor_x`` at ``bottom_y`` (the
+    same projection the cells use), the BACK column must stay vertical
+    (its two endpoints coincide, being the projection's fixed point), and
+    the front/central columns must migrate toward the back edge as the
+    trapezoid narrows (bottom endpoint strictly inside the top endpoint).
+    """
+    from phonology_shared.chart.vowel_geometry import (
+        build_vowel_chart_geometry,
+    )
+    from phonology_shared.chart.vowel_geometry.outline import (
+        project_anchor_x,
+    )
+
+    engine = bundled_engine("general")
+    vowel_segs = _vowel_segs(engine)
+    seg_feats = {s: dict(engine.segments[s]) for s in vowel_segs}
+    profile = detect_vowel_profile(vowel_segs, seg_feats)
+    geometry = build_vowel_chart_geometry(vowel_segs, profile, seg_feats)
+    sil = geometry.silhouette
+
+    labels = {col.label: col for col in geometry.cols}
+    assert {"Front", "Central", "Back"} <= set(labels)
+
+    for col in geometry.cols:
+        # The baked bottom endpoint is exactly the projection at bottom_y
+        # of the anchor whose top projection is ``chart_x`` (recover the
+        # nominal anchor from the top projection, then re-project).
+        nominal = _nominal_from_top(sil, col.chart_x)
+        expected_bottom = project_anchor_x(sil, nominal, sil.bottom_y)
+        assert col.chart_x_bottom == pytest.approx(expected_bottom, abs=1e-9)
+
+    # Back column is the fixed point: vertical guide.
+    back = labels["Back"]
+    assert back.chart_x_bottom == pytest.approx(back.chart_x, abs=1e-9)
+
+    # Front + central migrate toward the (larger-x) back edge going down.
+    for name in ("Front", "Central"):
+        col = labels[name]
+        assert col.chart_x_bottom > col.chart_x, (
+            f"{name} column should slant toward the back edge as the "
+            f"trapezoid narrows (chart_x_bottom > chart_x)"
+        )
+
+
+def _nominal_from_top(sil, chart_x_top: float) -> float:
+    """Recover a column's nominal backness anchor from its top-edge
+    projection: ``chart_x_top = back + width_at(top) * (anchor - back)``.
+    """
+    from phonology_shared.chart.vowel_geometry.outline import width_at_y
+
+    w_top = width_at_y(sil, sil.top_y)
+    return sil.back_anchor + (chart_x_top - sil.back_anchor) / w_top
+
+
 # ---------------------------------------------------------------------------
 # Paper-recommended semantic hardening:
 # four-state values, tightened fallbacks, per-axis evidence, flag-based

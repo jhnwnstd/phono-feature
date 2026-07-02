@@ -311,3 +311,55 @@ def test_edge_helpers_match_polygon_shrunken_widths() -> None:
         sil, sil.top_width * 0.85, sil.bottom_width * 0.85
     )
     _assert_edge_helpers_match_polygon(shrunk)
+
+
+def test_inset_silhouette_for_draw_outsets_symmetrically() -> None:
+    """The draw-only inset pushes every corner OUTWARD by exactly
+    ``inset_px / data_w`` horizontally and ``inset_px / data_h``
+    vertically, symmetric left/right, and is a no-op at zero inset."""
+    from phonology_shared.chart.vowel_geometry import (
+        inset_silhouette_for_draw,
+        silhouette_for_data_width,
+    )
+
+    sil = silhouette_for_data_width(
+        vowel_silhouette(VowelChartShape.TRAPEZOID), 300
+    )
+    inset_px = 14.0
+    out = inset_silhouette_for_draw(sil, 300, 200, inset_px)
+    dx = inset_px / 300
+    dy = inset_px / 200
+    assert abs((sil.top_left - out.top_left) - dx) < 1e-9
+    assert abs((sil.bottom_left - out.bottom_left) - dx) < 1e-9
+    assert abs((out.top_right - sil.top_right) - dx) < 1e-9
+    assert abs((out.bottom_right - sil.bottom_right) - dx) < 1e-9
+    assert abs((sil.top_y - out.top_y) - dy) < 1e-9
+    assert abs((out.bottom_y - sil.bottom_y) - dy) < 1e-9
+    # symmetric left vs right outset
+    assert (
+        abs((sil.top_left - out.top_left) - (out.top_right - sil.top_right))
+        < 1e-9
+    )
+    # zero inset (and non-positive dims) are no-ops
+    assert inset_silhouette_for_draw(sil, 300, 200, 0) == sil
+    assert inset_silhouette_for_draw(sil, 0, 200, 14) == sil
+
+
+def test_inset_is_draw_only_leaves_confinement_source_flush() -> None:
+    """``inset_silhouette_for_draw`` must NOT be the confinement source.
+    The confinement path reads ``silhouette_for_data_width`` (flush with
+    the cell extent); the inset is a separate OUTSET applied only when
+    drawing. This pins the separation: the flush corners and the inset
+    corners differ, and the cascade helper is untouched by the inset."""
+    from phonology_shared.chart.vowel_geometry import (
+        inset_silhouette_for_draw,
+        silhouette_for_data_width,
+    )
+
+    base = vowel_silhouette(VowelChartShape.TRAPEZOID)
+    flush = silhouette_for_data_width(base, 300)
+    outset = inset_silhouette_for_draw(flush, 300, 200, 14)
+    # The cascade (confinement source) is unchanged and NOT inset.
+    assert silhouette_for_data_width(base, 300) == flush
+    assert outset.top_left < flush.top_left
+    assert outset.top_right > flush.top_right

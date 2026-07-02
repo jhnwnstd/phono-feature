@@ -82,8 +82,9 @@ VOWEL_CHART_TITLE_FONT_PX: int = FONT_SIZE_LABEL_PX
 #: Semibold matches axis-label rhythm in IPA charts.
 VOWEL_CHART_TITLE_FONT_WEIGHT: int = 600
 
-#: Letter-spacing (px) on the title.
-VOWEL_CHART_TITLE_LETTER_SPACING_PX: float = 0.5
+#: Letter-spacing (px) on the title. Light tracking now that the title
+#: is title-case rather than all-caps (all-caps needed more to breathe).
+VOWEL_CHART_TITLE_LETTER_SPACING_PX: float = 0.2
 
 #: Padding tuple ``(top, right, bottom, left)`` in px around the
 #: title text. Desktop used ``(2, 2, 0, 2)`` (no bottom); web used
@@ -259,11 +260,21 @@ VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX: int = 2
 VOWEL_SILHOUETTE_STROKE_PX: float = 0.6
 
 #: Silhouette outline corner radius as a fraction of the data
-#: area width. Bumped to 0.024 alongside the thinner stroke so
-#: the silhouette reads as a soft container rather than a hard
-#: frame. Fraction (not pixels) so CSS clip-path resolves it
-#: natively without a per-resize JS recompute.
-VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC: float = 0.024
+#: area width. A small radius (~0.02 * dw is ~5 px at the usual
+#: 230-320 px widths) reads as a crisp MAP field, deliberately
+#: SMALLER than the soft vowel-chip radius so the hierarchy stays
+#: "soft selectable controls on a crisp field". Fraction (not
+#: pixels) so CSS clip-path resolves it natively without a
+#: per-resize JS recompute.
+VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC: float = 0.02
+
+#: Uniform ultra-faint interior wash (alpha over the pane colour) so
+#: the vowel space reads as a distinct "map" surface the chips sit on,
+#: reinforcing figure-ground. A FLAT wash, not the removed per-tier
+#: gradient; kept low so it whispers rather than competing with the
+#: chips or the dotted guides. Both renderers apply it as
+#: ``border`` colour at this alpha inside the silhouette.
+VOWEL_FIELD_TINT_ALPHA: float = 0.03
 
 #: Alpha (0..1) for the silhouette outline color.
 VOWEL_SILHOUETTE_ALPHA: float = 0.70
@@ -302,3 +313,33 @@ VOWEL_BTN_MIN_H_PX: int = 14
 #: catching the 2.35+ outliers (Spanish 2.35, MSA 3.29) that
 #: read as visually over-stretched.
 VOWEL_SILHOUETTE_MAX_ASPECT: float = 1.8
+
+#: Breathing room (px) between the outermost vowel chips and the drawn
+#: trapezoid stroke. The silhouette normally wraps the cells FLUSH (its
+#: corners are derived from the cell extent); this pushes the *drawn*
+#: outline this far OUTSIDE that flush edge so the chips float inside a
+#: quiet field instead of touching the frame. Applied as ``inset / dw``
+#: (and ``/ dh``) normalized at draw time, so it stays responsive. It is
+#: a DRAW-ONLY outset (see :py:func:`outline.inset_silhouette_for_draw`)
+#: that must never feed cell confinement, or the open rows re-crowd.
+#: Same class of content-driven pixel floor as
+#: :data:`VOWEL_CHART_PAD_R_PX`, so a raw pixel is permitted here. Kept
+#: at or below the existing chrome margins (``VOWEL_CHART_PAD_R_PX`` =
+#: 12, ``VOWEL_CHART_PAD_B_PX`` = 10, and the 10 px row-label gap) so the
+#: outset outline draws entirely within the reserved chrome without
+#: growing the chart or shoving the row labels out of their gutter.
+VOWEL_SILHOUETTE_INSET_PX: int = 8
+
+#: Corner radius (px) for a single vowel CHIP and for the segmented
+#: pair CAPSULE. Larger than the global ``RADIUS_PX["lg"]`` = 8 used by
+#: consonant buttons, and larger than the small silhouette-field radius,
+#: so the hierarchy reads "soft selectable control on a crisp map". A
+#: dedicated VOWEL-scoped token so bumping it does not reshape the
+#: consonant grid (which keeps the global radius).
+VOWEL_CHIP_RADIUS_PX: int = 10
+VOWEL_CAPSULE_RADIUS_PX: int = 12
+
+#: Alpha (0..1) for the 1 px divider between the two cells of a pair
+#: capsule: a faint line (kin to the guides) that separates the two
+#: variants without competing with the capsule's outer frame.
+VOWEL_CAPSULE_DIVIDER_ALPHA: float = 0.50

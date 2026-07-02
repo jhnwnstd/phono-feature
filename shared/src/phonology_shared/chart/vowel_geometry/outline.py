@@ -39,6 +39,7 @@ from phonology_shared.chart.vowel_space import (
 from phonology_shared.chart.vowels import VowelChartShape
 from phonology_shared.presentation.chart_style import (
     VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
+    VOWEL_SILHOUETTE_INSET_PX,
 )
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
@@ -519,6 +520,48 @@ def silhouette_for_data_width(
         bottom_left=silhouette.front_anchor_at_bottom - front_extent_norm,
         top_right=silhouette.back_anchor + extent_norm,
         bottom_right=silhouette.back_anchor + extent_norm,
+    )
+
+
+def inset_silhouette_for_draw(
+    silhouette: VowelChartSilhouette,
+    data_w_px: int,
+    data_h_px: int,
+    inset_px: float = VOWEL_SILHOUETTE_INSET_PX,
+) -> VowelChartSilhouette:
+    """Return a copy of ``silhouette`` grown OUTWARD by ``inset_px`` on
+    every side, for DRAWING ONLY.
+
+    :py:func:`silhouette_for_data_width` wraps the outermost cells
+    flush; this pushes the *drawn* trapezoid a fixed ``inset_px`` beyond
+    that flush edge, so the chips float inside a quiet field with
+    breathing room instead of touching the stroke. ``inset_px`` is
+    converted to normalised offsets (``/ data_w_px`` horizontally,
+    ``/ data_h_px`` vertically) so the gap stays a constant pixel width
+    at any rendered size.
+
+    CRITICAL: this is a draw-time transform ONLY. It must never feed
+    cell CONFINEMENT (``pipeline._confine_cells_to_outline`` ->
+    :py:func:`straight_left_at_y` / :py:func:`straight_right_at_y`):
+    confinement keeps using the un-inset
+    :py:func:`silhouette_for_data_width` result so cells stay positioned
+    against the true cell extent. If the inset leaked into confinement
+    it would shove every cell ``inset_px`` inward and re-crowd the open
+    rows. Callers pass this ONLY to the outline renderer, the row-label
+    edge, and the diphthong-strip anchor.
+    """
+    if data_w_px <= 0 or data_h_px <= 0 or inset_px <= 0:
+        return silhouette
+    dx = inset_px / data_w_px
+    dy = inset_px / data_h_px
+    return replace(
+        silhouette,
+        top_left=silhouette.top_left - dx,
+        bottom_left=silhouette.bottom_left - dx,
+        top_right=silhouette.top_right + dx,
+        bottom_right=silhouette.bottom_right + dx,
+        top_y=silhouette.top_y - dy,
+        bottom_y=silhouette.bottom_y + dy,
     )
 
 

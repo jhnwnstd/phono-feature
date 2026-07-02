@@ -59,6 +59,16 @@ def build_col_headers(
                 _BACKNESS_X[anchor_key],
                 silhouette.top_y,
             ),
+            # Same anchor at the BOTTOM edge so renderers can draw the
+            # column guide as a line that slants with the column (the
+            # front/central columns migrate inward as the trapezoid
+            # narrows; back is the fixed point, so its two values match
+            # and the guide stays vertical).
+            chart_x_bottom=project_anchor_x(
+                silhouette,
+                _BACKNESS_X[anchor_key],
+                silhouette.bottom_y,
+            ),
         )
         for label, anchor_key in zip(COL_LABELS, _BACKNESS_SLOT_ORDER)
     )

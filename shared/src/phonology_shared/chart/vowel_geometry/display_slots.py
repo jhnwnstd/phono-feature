@@ -65,7 +65,12 @@ PAIR_DISPLAY_KINDS: frozenset[VowelCellDisplayKind] = frozenset(
 def _classify_vowel_cell_display(
     entries: tuple[str, ...],
     norm_feats: Mapping[str, Mapping[str, str]],
-) -> tuple[VowelCellDisplayKind, tuple[str, ...], tuple[str, ...]]:
+) -> tuple[
+    VowelCellDisplayKind,
+    tuple[str, ...],
+    tuple[str, ...],
+    tuple[tuple[int, int], ...],
+]:
     """Pick a :py:class:`VowelCellDisplayKind` for ``entries``.
 
     Pure classifier over canonical feature bundles: no coordinate
@@ -98,7 +103,7 @@ def _classify_vowel_cell_display(
       7. Otherwise -> STACK.
     """
     if len(entries) < 2:
-        return VowelCellDisplayKind.STACK, (), entries
+        return VowelCellDisplayKind.STACK, (), entries, ()
     bundles: list[Mapping[str, str]] = [
         norm_feats.get(seg, {}) for seg in entries
     ]
@@ -114,25 +119,79 @@ def _classify_vowel_cell_display(
     differing_display = differing & _DISPLAY_CONTRAST_FEATURES
     differing_other = differing - _DISPLAY_CONTRAST_FEATURES
     if differing_other or not differing_display:
-        return VowelCellDisplayKind.STACK, (), entries
+        return VowelCellDisplayKind.STACK, (), entries, ()
     contrast = tuple(sorted(differing_display))
-    if len(entries) == 2:
-        if differing_display.issubset({"breathy", "creaky"}):
+    n_feats = len(differing_display)
+    # ONE secondary contrast (length OR nasal OR rhotic OR phonation OR
+    # tone): a HORIZONTAL variant capsule of any size (2, 3, 4). The
+    # feature keys the display kind; entries order plain -> marked.
+    if n_feats == 1:
+        (only,) = differing_display
+        if only in ("breathy", "creaky"):
             kind = VowelCellDisplayKind.PHONATION_PAIR
-        elif len(differing_display) == 1:
-            (only,) = differing_display
+        else:
             kind = _PAIR_KIND_FOR_FEATURE.get(
                 only, VowelCellDisplayKind.CONTRAST_SET
             )
-        else:
-            kind = VowelCellDisplayKind.CONTRAST_SET
-        ordered: tuple[str, ...] = entries
-        if kind in PAIR_DISPLAY_KINDS:
-            ordered = _order_pair_entries(entries, bundles, kind)
-        return kind, contrast, ordered
-    if 3 <= len(entries) <= 4:
-        return VowelCellDisplayKind.CONTRAST_SET, contrast, entries
-    return VowelCellDisplayKind.STACK, (), entries
+        ordered = _order_variant_row(entries, bundles, only, kind)
+        return kind, contrast, ordered, ()
+    if differing_display.issubset({"breathy", "creaky"}):
+        # Joint breathy/creaky (two features, but the phonation
+        # dimension) reads as one horizontal phonation capsule.
+        ordered = _order_pair_entries(
+            entries, bundles, VowelCellDisplayKind.PHONATION_PAIR
+        )
+        return VowelCellDisplayKind.PHONATION_PAIR, contrast, ordered, ()
+    # TWO secondary contrasts (e.g. length x nasal): a feature-ALIGNED
+    # 2x2 gridded capsule for 3-4 entries (columns = one contrast,
+    # rows = the other). Dzongkha's u/uː/ũː land here.
+    if n_feats == 2 and 2 <= len(entries) <= 4:
+        ordered, grid = _grid_layout(entries, bundles, contrast)
+        return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid
+    # >2 contrasts, or too many entries: stack (no clean linked layout).
+    return VowelCellDisplayKind.STACK, (), entries, ()
+
+
+def _order_variant_row(
+    entries: tuple[str, ...],
+    bundles: list[Mapping[str, str]],
+    feat: str,
+    kind: VowelCellDisplayKind,
+) -> tuple[str, ...]:
+    """Order a single-feature variant group left-to-right, plain member(s)
+    first and the ``+``-valued (marked) member(s) on the right. Phonation
+    keeps its modal-first ordering."""
+    if kind == VowelCellDisplayKind.PHONATION_PAIR:
+        return _order_pair_entries(entries, bundles, kind)
+    order = sorted(
+        range(len(entries)), key=lambda i: bundles[i].get(feat) == "+"
+    )
+    return tuple(entries[i] for i in order)
+
+
+def _grid_layout(
+    entries: tuple[str, ...],
+    bundles: list[Mapping[str, str]],
+    contrast: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[tuple[int, int], ...]]:
+    """Assign each entry a feature-aligned ``(col, row)`` in the 2x2
+    contrast grid. Columns encode one contrast (``long`` when present,
+    matching the horizontal length convention; else the sorted-first
+    feature), rows the other; ``+`` -> col/row 1. Returns the entries in
+    stable row-major reading order plus the parallel ``(col, row)``
+    tuple. Missing feature combinations simply leave that grid cell
+    empty (a 3-entry set shows one gap)."""
+    col_feat = "long" if "long" in contrast else contrast[0]
+    row_feat = contrast[1] if contrast[0] == col_feat else contrast[0]
+    tagged: list[tuple[int, int, str]] = []
+    for seg, bundle in zip(entries, bundles):
+        col = 1 if bundle.get(col_feat) == "+" else 0
+        row = 1 if bundle.get(row_feat) == "+" else 0
+        tagged.append((row, col, seg))
+    tagged.sort(key=lambda t: (t[0], t[1]))
+    ordered = tuple(t[2] for t in tagged)
+    grid = tuple((t[1], t[0]) for t in tagged)
+    return ordered, grid
 
 
 #: Inverse of :py:data:`_PAIR_KIND_FOR_FEATURE`: the single feature
@@ -220,6 +279,10 @@ class CellClassification:
     kind: VowelCellDisplayKind
     contrast_features: tuple[str, ...]
     entries: tuple[str, ...]
+    #: For a 2x2 CONTRAST_SET cell, each entry's feature-aligned
+    #: ``(col, row)`` in the grid (parallel to ``entries``); empty for
+    #: pair / stack cells, which need no grid coordinates.
+    grid: tuple[tuple[int, int], ...] = ()
 
 
 def classify_cells(
@@ -235,11 +298,14 @@ def classify_cells(
     """
     out: dict[tuple[int, int], CellClassification] = {}
     for rc, entries in occupied.items():
-        kind, contrast, ordered = _classify_vowel_cell_display(
+        kind, contrast, ordered, grid = _classify_vowel_cell_display(
             tuple(entries), norm_cache
         )
         out[rc] = CellClassification(
-            kind=kind, contrast_features=contrast, entries=ordered
+            kind=kind,
+            contrast_features=contrast,
+            entries=ordered,
+            grid=grid,
         )
     return out
 
@@ -278,6 +344,10 @@ class CellSlot:
     contrast_features: tuple[str, ...]
     pair_side: int
     anchor_x: float
+    #: Feature-aligned ``(col, row)`` per entry for a 2x2 CONTRAST_SET;
+    #: empty otherwise. Carried through so the projection can hand it to
+    #: :py:class:`..model.VowelChartCell`.
+    grid: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -361,6 +431,7 @@ def _assign_pair_sides(
                 contrast_features=classification.contrast_features,
                 pair_side=pair_side,
                 anchor_x=anchor_x,
+                grid=classification.grid,
             )
         )
         cells_meta_by_row.setdefault(ri, []).append(

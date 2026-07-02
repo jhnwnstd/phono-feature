@@ -27,7 +27,9 @@ from phonology_shared.presentation.chart_style import VOWEL_PAIR_SHIFT_PX
 #: placement contract for both renderers lives on
 #: :py:class:`VowelChartGeometry`: centred over the data area only,
 #: at the top of the chart's rectangular chrome.
-VOWEL_CHART_TITLE: str = "VOWELS"
+# Title-case + semibold (not shouting all-caps): a quiet label above
+# the diagram that names the chart without competing with the vowels.
+VOWEL_CHART_TITLE: str = "Vowels"
 
 
 @dataclass(frozen=True)
@@ -124,6 +126,13 @@ class VowelChartCell:
     # widening, and the width solver then inflates dense PHOIBLE
     # charts to several times their natural width (~900 px).
     nudge_px: float = 0.0
+    # For a CONTRAST_SET (two secondary contrasts, e.g. length x
+    # nasality), each entry's feature-aligned ``(col, row)`` in the 2x2
+    # grid, parallel to ``entries`` (columns = one contrast, rows = the
+    # other; ``+`` -> 1). Empty for pair / stack cells. Both renderers
+    # place a contrast-set's cells from this so a partial (3-entry) set
+    # shows its gap in the right corner instead of a positional guess.
+    grid: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -193,13 +202,25 @@ class VowelChartColHeader:
     """A backness column header (Front / Central / Back).
 
     ``chart_x`` is the column's backness ANCHOR as a normalised
-    ``[0, 1]`` fraction of the data-area width. Renderers sit each
-    header at ``chart_x * 100%`` so the header lines up over the
-    centre of its column's cells at the widest (top) row.
+    ``[0, 1]`` fraction of the data-area width, PROJECTED at the
+    silhouette's TOP edge. Renderers sit each header at
+    ``chart_x * 100%`` so the header lines up over the centre of its
+    column's cells at the widest (top) row.
+
+    ``chart_x_bottom`` is the SAME anchor projected at the silhouette's
+    BOTTOM edge. Because the front/central columns migrate toward the
+    vertical back edge as the trapezoid narrows (shared
+    ``project_anchor_x``), a column's cells do NOT sit on a vertical
+    line; they slant. Renderers draw the faint column GUIDE as the line
+    through ``(chart_x, top_y)`` and ``(chart_x_bottom, bottom_y)`` so it
+    tracks the column's true centres instead of only the top cell. The
+    back column's anchor is the projection's fixed point, so its two
+    values are equal and the guide stays vertical by construction.
     """
 
     label: str
     chart_x: float
+    chart_x_bottom: float = 0.0
 
 
 @dataclass(frozen=True)

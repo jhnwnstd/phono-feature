@@ -445,6 +445,7 @@ def _project_cells(
                 entries=slot.entries,
                 display_kind=slot.display_kind,
                 contrast_features=slot.contrast_features,
+                grid=slot.grid,
             )
         )
     # Same-anchor pair-shift conflicts: two paired cells (opposite

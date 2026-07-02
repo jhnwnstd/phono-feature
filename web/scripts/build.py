@@ -866,6 +866,34 @@ def generate_layout_css() -> None:
                 "  --vowel-cell-stack-gap: "
                 f"{chart_style.VOWEL_CELL_STACK_GAP_PX}px;"
             ),
+            # Vowel-scoped chip + pair-capsule radii (larger than the
+            # global consonant-button radius) and the faint capsule
+            # divider alpha, so both renderers read one source.
+            (
+                "  --vowel-chip-radius: "
+                f"{chart_style.VOWEL_CHIP_RADIUS_PX}px;"
+            ),
+            (
+                "  --vowel-capsule-radius: "
+                f"{chart_style.VOWEL_CAPSULE_RADIUS_PX}px;"
+            ),
+            (
+                "  --vowel-capsule-divider-alpha: "
+                f"{chart_style.VOWEL_CAPSULE_DIVIDER_ALPHA};"
+            ),
+            # Draw-only outset of the trapezoid outline (chips float
+            # inside it); the outline pseudo-elements extend by this and
+            # refreshPolygon remaps the outset polygon into that box.
+            (
+                "  --vowel-silhouette-inset: "
+                f"{chart_style.VOWEL_SILHOUETTE_INSET_PX}px;"
+            ),
+            # Flat interior wash (border colour at this % over the pane)
+            # so the vowel field reads as a distinct map surface.
+            (
+                "  --vowel-field-tint: "
+                f"{chart_style.VOWEL_FIELD_TINT_ALPHA * 100:g}%;"
+            ),
             (
                 "  --seg-group-header-font: "
                 f"{chart_style.SEG_GROUP_HEADER_FONT_PX}px;"

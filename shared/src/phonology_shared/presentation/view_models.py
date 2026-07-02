@@ -636,6 +636,7 @@ def _vowel_chart_summary(
             {
                 "label": col.label,
                 "chart_x": col.chart_x,
+                "chart_x_bottom": col.chart_x_bottom,
             }
             for col in geometry.cols
         ],
@@ -673,6 +674,9 @@ def _vowel_chart_summary(
                 "segs": list(cell.entries),
                 "display_kind": cell.display_kind.value,
                 "contrast_features": list(cell.contrast_features),
+                # Feature-aligned 2x2 grid coords per entry for a
+                # CONTRAST_SET (parallel to ``segs``); [] otherwise.
+                "grid": [list(pos) for pos in cell.grid],
                 # Always the effective pair-side displacement; the
                 # geometry elevates it to resolve same-anchor
                 # wide-cell collisions.
