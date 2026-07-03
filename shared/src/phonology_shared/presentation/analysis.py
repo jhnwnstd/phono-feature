@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 import html
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
@@ -19,6 +20,7 @@ from phonology_shared.presentation.constants import (
     sort_spec,
     tag_prefix,
 )
+from phonology_shared.presentation.feature_metadata import feature_sort_key
 from phonology_shared.presentation.layout import ANALYSIS_MIN_VISIBLE_ROWS
 from phonology_shared.presentation.mode_logic import VALIDATION_REPORT_HEADING
 from phonology_shared.presentation.palette import C
@@ -201,6 +203,36 @@ def _render_spec_table(
     )
 
 
+def _order_specs_for_scan(
+    specs: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Order the features within each spec, and the specs themselves, so
+    a MULTI-spec list scans easily top-to-bottom.
+
+    A single spec keeps canonical feature order (there is nothing to
+    align it against). With several specs, the values shared by the most
+    specs lead each line, so the common core forms a stable left-aligned
+    prefix and the distinguishing features trail on the right; the specs
+    then sort by that shared-first sequence, so rows that share a long
+    prefix sit next to each other. Ties fall back to canonical feature
+    order (then value) for a deterministic result.
+
+    Runs on the handful of already-computed spec dicts, so it adds no
+    measurable cost and leaves the engine's bundle search untouched.
+    """
+    if len(specs) == 1:
+        return [dict(sort_spec(specs[0]))]
+    freq = Counter(item for spec in specs for item in spec.items())
+
+    def chip_key(item: tuple[str, str]) -> tuple[int, int, str]:
+        feature, value = item
+        return (-freq[item], feature_sort_key(feature), value)
+
+    ordered = [dict(sorted(spec.items(), key=chip_key)) for spec in specs]
+    ordered.sort(key=lambda spec: [chip_key(item) for item in spec.items()])
+    return ordered
+
+
 def _render_spec_list(
     specs: Sequence[Mapping[str, str]],
     *,
@@ -214,13 +246,15 @@ def _render_spec_list(
     ``1.`` numbering when only one row remains. Returns ``""`` if
     nothing's left to show.
 
-    A single surviving spec renders as one line. Multiple specs fill a
-    COLUMN-MAJOR table (see :py:func:`_render_spec_table`) so the
-    fixed-height pane uses its horizontal space before scrolling.
-    ``rows_per_column`` is how many specs fit vertically before a column
-    wraps; it defaults to :py:data:`ANALYSIS_MIN_VISIBLE_ROWS` (the
-    pane's guaranteed-visible count) and each frontend passes the row
-    count its own live pane fits.
+    A single surviving spec renders as one line in canonical feature
+    order. Multiple specs are reordered by
+    :py:func:`_order_specs_for_scan` (shared features lead each line,
+    similar rows adjacent) and fill a COLUMN-MAJOR table (see
+    :py:func:`_render_spec_table`) so the fixed-height pane uses its
+    horizontal space before scrolling. ``rows_per_column`` is how many
+    specs fit vertically before a column wraps; it defaults to
+    :py:data:`ANALYSIS_MIN_VISIBLE_ROWS` (the pane's guaranteed-visible
+    count) and each frontend passes the row count its own live pane fits.
 
     ``mode`` selects the heading label: strict bundles read
     "Minimal specification:" while wildcard bundles read
@@ -229,12 +263,10 @@ def _render_spec_list(
     """
     singular, plural = _spec_labels(mode)
     seen: set[tuple[tuple[str, str], ...]] = set()
-    chip_rows: list[str] = []
+    filtered_specs: list[dict[str, str]] = []
     for spec in specs:
         filtered = {
-            feature: value
-            for feature, value in sort_spec(spec).items()
-            if value != "0"
+            feature: value for feature, value in spec.items() if value != "0"
         }
         if not filtered:
             continue
@@ -242,14 +274,16 @@ def _render_spec_list(
         if key in seen:
             continue
         seen.add(key)
-        chip_rows.append(
-            " ".join(
-                _signed_feature_chip(value, feature)
-                for feature, value in filtered.items()
-            )
-        )
-    if not chip_rows:
+        filtered_specs.append(filtered)
+    if not filtered_specs:
         return ""
+    chip_rows = [
+        " ".join(
+            _signed_feature_chip(value, feature)
+            for feature, value in spec.items()
+        )
+        for spec in _order_specs_for_scan(filtered_specs)
+    ]
     if len(chip_rows) == 1:
         return f"<p><b>{singular}:</b></p>" f"<p>{chip_rows[0]}</p>"
     return f"<p><b>{plural} ({len(chip_rows)}):</b></p>" + _render_spec_table(

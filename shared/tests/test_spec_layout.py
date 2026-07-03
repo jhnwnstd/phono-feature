@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import re
 
-from phonology_shared.presentation.analysis import _render_spec_list
+from phonology_shared.presentation.analysis import (
+    _order_specs_for_scan,
+    _render_spec_list,
+)
 from phonology_shared.presentation.layout import ANALYSIS_MIN_VISIBLE_ROWS
 
 
@@ -88,3 +91,68 @@ def test_non_positive_rows_per_column_falls_back_to_default():
 def test_default_rows_per_column_uses_the_shared_floor():
     html = _render_spec_list(_specs(ANALYSIS_MIN_VISIBLE_ROWS * 2))
     assert _column_count(html) == 2
+
+
+# --- scan-friendly ordering of MULTIPLE specs --------------------
+
+
+def test_single_spec_keeps_canonical_feature_order():
+    # A lone spec is not reordered by frequency: it stays in canonical
+    # order (Major Class before Place), so Consonantal leads Anterior.
+    ordered = _order_specs_for_scan([{"Anterior": "-", "Consonantal": "+"}])
+    assert list(ordered[0]) == ["Consonantal", "Anterior"]
+
+
+def test_shared_features_lead_every_line():
+    # +Voice and -Anterior appear in all three specs, so they must lead
+    # every line (the aligned left prefix), ahead of any feature that
+    # only some specs carry.
+    specs = [
+        {"Voice": "+", "Strident": "-", "Anterior": "-", "Distributed": "-"},
+        {"Sonorant": "-", "Voice": "+", "Anterior": "-", "Distributed": "-"},
+        {"Voice": "+", "Anterior": "-", "DORSAL": "-", "Continuant": "-"},
+    ]
+    for spec in _order_specs_for_scan(specs):
+        lead = list(spec.items())[:2]
+        assert ("Voice", "+") in lead
+        assert ("Anterior", "-") in lead
+
+
+def test_similar_specs_are_grouped_adjacently():
+    # a and c share a long prefix; b is the odd one out. After ordering,
+    # a and c must be neighbours even though b sat between them on input.
+    a = {
+        "Voice": "+",
+        "Anterior": "-",
+        "DelRel": "-",
+        "Strident": "-",
+        "Distributed": "-",
+    }
+    b = {
+        "Sonorant": "-",
+        "Voice": "+",
+        "Anterior": "-",
+        "Strident": "-",
+        "Distributed": "-",
+    }
+    c = {
+        "Voice": "+",
+        "Anterior": "-",
+        "DelRel": "-",
+        "Strident": "-",
+        "DORSAL": "-",
+    }
+    ordered = _order_specs_for_scan([a, b, c])
+    keys = [frozenset(s.items()) for s in ordered]
+    ia, ic = keys.index(frozenset(a.items())), keys.index(frozenset(c.items()))
+    assert abs(ia - ic) == 1
+
+
+def test_ordering_is_deterministic():
+    specs = [
+        {"Voice": "+", "Strident": "-", "Anterior": "-"},
+        {"Voice": "+", "Anterior": "-", "DORSAL": "-"},
+    ]
+    assert _order_specs_for_scan([dict(s) for s in specs]) == (
+        _order_specs_for_scan([dict(s) for s in specs])
+    )
