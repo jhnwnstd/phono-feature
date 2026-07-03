@@ -221,17 +221,15 @@ class SegmentButton(QPushButton):
     def _capsule_style(self, state: SegmentState) -> str:
         """QSS for this button as a cell INSIDE a vowel pair capsule.
 
-        The capsule container paints the outer frame + divider, so most
-        cells drop their own border and share the capsule fill, carrying
-        their state by FILL (+ text colour / weight); the SELECTED /
-        UNMATCHED line style is carried by the ONE capsule frame (see
-        :class:`VowelPairCapsule`). The exception is SUGGESTED (natural-
-        class completion): it draws its OWN dashed accent border so only
-        the completing cell is outlined, not the whole pill. An END cell
-        rounds its OUTER corners (see :meth:`set_capsule_corner`) so a
-        filled or outlined cell meets the rounded frame crisply. Built
-        per-instance (capsule cells are the rare case, not worth a second
-        theme cache).
+        The capsule container paints the outer frame + divider, so every
+        cell drops its own border and shares the capsule fill, carrying
+        its state by FILL (+ text colour / weight); the whole pill's
+        colour-blind line style (solid selected / dashed suggested /
+        dotted unmatched) is carried by the ONE capsule frame (see
+        :class:`VowelPairCapsule`). An END cell rounds its OUTER corners
+        (see :meth:`set_capsule_corner`) so a filled cell meets the
+        rounded frame crisply. Built per-instance (capsule cells are the
+        rare case, not worth a second theme cache).
         """
         radius = self._capsule_radius_css()
         if state in (SegmentState.SELECTED, SegmentState.MATCHED):
@@ -245,16 +243,15 @@ class SegmentButton(QPushButton):
                 f" border: none; {radius} font-weight: bold; }}"
             )
         if state == SegmentState.SUGGESTED:
-            # Natural-class COMPLETION cue on JUST this cell: a dashed
-            # accent border drawn inside the fixed-size button (no resize),
-            # rounded on its OUTER corners (via ``radius``) so only the
-            # completing segment is outlined. The capsule frame no longer
-            # dashes for suggested (see VowelPairCapsule._frame_pen).
-            std = cs.BORDER_PX["std"]
+            # Natural-class COMPLETION: identified by this cell's own
+            # accent_light fill. The dashed colour-blind cue is carried by
+            # the capsule FRAME (see VowelPairCapsule._frame_pen), like the
+            # other states, so the pill edge stays crisp -- an earlier
+            # per-cell dashed border here doubled the line at the divider
+            # and stacked concentric with the frame.
             return (
                 f"QPushButton {{ background-color: {C['accent_light']};"
-                f" color: {C['accent']};"
-                f" border: {std:g}px dashed {C['accent']}; {radius} }}"
+                f" color: {C['accent']}; border: none; {radius} }}"
             )
         if state == SegmentState.UNMATCHED:
             return (

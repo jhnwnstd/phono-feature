@@ -41,13 +41,15 @@ class VowelPairCapsule(QWidget):
 
     def _frame_pen(self) -> QPen:
         """The outer-frame pen, whose LINE STYLE encodes the cells'
-        dominant SELECTED / UNMATCHED state (the colour-blind cue for the
-        whole pill) so the segmented capsule reads as ONE unit: selected /
-        matched -> solid accent, unmatched -> dotted border, default ->
-        solid border. SUGGESTED (natural-class completion) is deliberately
-        NOT a frame state: the completing cell draws its OWN dashed accent
-        border (see :meth:`SegmentButton._capsule_style`) so only that
-        segment is marked, not the whole pill. Mirrors the web
+        dominant state (the colour-blind cue for the whole pill) so the
+        segmented capsule reads as ONE unit. Priority, strongest first:
+        selected / matched -> solid accent, suggested (natural-class
+        completion) -> dashed accent, unmatched -> dotted, default ->
+        solid border. The completing cell is still identified by its own
+        ``accent_light`` fill; carrying the dashed cue on the frame
+        (rather than a separate border each completing cell drew inside
+        it) keeps the edge crisp -- no line doubled at the divider, none
+        stacked concentric with the frame. Mirrors the web
         ``.vowel-capsule:has(> .seg-btn[data-state=...])`` frame rules;
         width stays constant so the box never resizes."""
         states = {
@@ -60,6 +62,8 @@ class VowelPairCapsule(QWidget):
         style = Qt.PenStyle.SolidLine
         if states & {SegmentState.SELECTED, SegmentState.MATCHED}:
             color, style = C["accent"], Qt.PenStyle.SolidLine
+        elif SegmentState.SUGGESTED in states:
+            color, style = C["accent"], Qt.PenStyle.DashLine
         elif SegmentState.UNMATCHED in states:
             color, style = C["border"], Qt.PenStyle.DotLine
         pen = QPen(QColor(color))

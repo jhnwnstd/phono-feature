@@ -36,6 +36,24 @@ from phonology_shared.presentation.layout import (
     VOWEL_PAIR_SEPARATOR_PX,
 )
 
+#: Two spacing regimes, deliberately distinct so the chart reads its
+#: phonology at a glance: a rounded / unrounded PAIR (two mates on the
+#: SAME backness anchor) is the tightest thing on the chart, and any
+#: two cells at DIFFERENT backness anchors sit strictly farther apart
+#: than that, so a lone central vowel (the Open row's central /a/ ~ /ä/
+#: beside the front pair /a ɶ/) never reads as a fourth pair member.
+#:
+#: * ``VOWEL_PAIR_GAP_PX`` (2 px) is the WITHIN-pair daylight: the two
+#:   mates render a fixed pixel shift apart regardless of chart width.
+#: * ``_INTER_ANCHOR_GAP_PX`` is the BETWEEN-anchor minimum daylight the
+#:   width solver guarantees, sized to the canonical inter-backness
+#:   ``VOWEL_PAIR_SEPARATOR_PX`` so cross-column spacing in a pinched
+#:   Open row matches cross-column spacing everywhere else -- and, being
+#:   the separator, is comfortably wider than the within-pair gap. This
+#:   is the same floor ``_min_row_width_for_meta`` already uses for the
+#:   shrink pass, so the grow and shrink passes now agree on how far
+#:   apart distinct backness columns sit.
+
 #: Gap (px) between vertically stacked segment buttons. Canonical
 #: home lives in ``phonology_shared.presentation.chart_style`` as
 #: ``VOWEL_CELL_STACK_GAP_PX`` (presentation layer, so build.py can
@@ -92,10 +110,19 @@ _VOWEL_ROW_GAP_PX: int = 6
 #: button centres without clipping their tops.
 _VOWEL_DATA_AREA_VERTICAL_PADDING_PX: int = SEG_BTN_H
 
-#: Minimum visible daylight (px) between two cells in the same row.
-#: Shared by the pair-shift conflict resolver and the width solver
-#: so "tangent" means the same thing in both.
-_INTER_CELL_GAP_PX: float = 2.0
+#: Minimum visible daylight (px) between two SAME-anchor cells (a
+#: rounded / unrounded pair): the tangency target the pair-shift
+#: conflict resolver keeps two mates at. Distinct from the wider
+#: between-anchor floor below; see the two-regime note at the top of
+#: this module.
+_INTER_CELL_GAP_PX: float = float(VOWEL_PAIR_GAP_PX)
+
+#: Minimum visible daylight (px) between two DIFFERENT-anchor cells
+#: (distinct backness columns). The canonical inter-backness
+#: separator, strictly wider than the within-pair gap above, so the
+#: width solver spreads distinct columns apart even in a pinched Open
+#: row. Matches the shrink pass's ``_VOWEL_MIN_CELL_GAP_NORM``.
+_INTER_ANCHOR_GAP_PX: float = float(VOWEL_PAIR_SEPARATOR_PX)
 
 
 def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
@@ -374,10 +401,10 @@ def _natural_data_area_size(
                 xb, ob, hb = cell_geom[j]
                 if xa < xb:
                     chart_x_diff = xb - xa
-                    needed_px = ha + hb + oa - ob + _INTER_CELL_GAP_PX
+                    needed_px = ha + hb + oa - ob + _INTER_ANCHOR_GAP_PX
                 elif xb < xa:
                     chart_x_diff = xa - xb
-                    needed_px = ha + hb + ob - oa + _INTER_CELL_GAP_PX
+                    needed_px = ha + hb + ob - oa + _INTER_ANCHOR_GAP_PX
                 else:
                     continue
                 if needed_px > 0:
