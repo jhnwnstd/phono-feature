@@ -44,6 +44,7 @@ const NODE_IDS = Object.freeze({
     renameSave: "rename-save",
     sourceDialog: "source-dialog",
     sourceCitation: "source-citation",
+    sourceDialogClose: "source-dialog-close",
     segTitle: "seg-title",
     featTitle: "feat-title",
     helpDialog: "help-dialog",
@@ -952,7 +953,7 @@ function setStatusSource(source) {
 function openSourceCitation(text) {
     if (!nodes.sourceDialog || !nodes.sourceCitation) return;
     nodes.sourceCitation.textContent = text || "";
-    openDialog(nodes.sourceDialog, { dismissOnBackdrop: true });
+    openDialog(nodes.sourceDialog);
 }
 
 /** Set the bottom-border status to the loaded-inventory summary
@@ -1233,14 +1234,12 @@ function parseCSSLength(varName, fallback) {
 /** ``<dialog>.showModal()`` with a graceful fallback for browsers
  *  without dialog support. Captures the previously-focused
  *  element so ``closeDialog`` can restore focus to its trigger. */
-function openDialog(dialog, { dismissOnBackdrop = false } = {}) {
+function openDialog(dialog) {
     dialog._returnFocusTo = document.activeElement;
-    // Read-only popups (help, citation viewer) opt into click-away
-    // dismissal: a click that lands on the dialog element itself (the
-    // ::backdrop, outside the content box) closes it. Data-entry
-    // dialogs leave it off so a stray click can't discard a form. The
-    // handler is added once and reused across opens.
-    if (dismissOnBackdrop && !dialog._backdropHandler) {
+    // Every dialog closes on a click that lands on the dialog element
+    // itself (its ::backdrop, outside the content box), matching Escape
+    // and the corner close button. Added once, reused across opens.
+    if (!dialog._backdropHandler) {
         dialog._backdropHandler = (ev) => {
             if (ev.target === dialog) closeDialog(dialog);
         };
@@ -6878,7 +6877,7 @@ function showHelp(topic) {
     if (!entry) return;
     nodes.helpDialogTitle.textContent = entry.title || "";
     nodes.helpDialogBody.innerHTML = entry.html || "";
-    openDialog(nodes.helpDialog, { dismissOnBackdrop: true });
+    openDialog(nodes.helpDialog);
 }
 
 /** Wire the SEGMENTS and FEATURES pane titles to open their help
@@ -6891,6 +6890,8 @@ function wireHelp() {
     nodes.featTitle.addEventListener("click", () => showHelp("features"));
     nodes.helpDialogClose.addEventListener("click", () =>
         closeDialog(nodes.helpDialog));
+    nodes.sourceDialogClose.addEventListener("click", () =>
+        closeDialog(nodes.sourceDialog));
 }
 
 async function main() {

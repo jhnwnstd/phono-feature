@@ -350,6 +350,8 @@
   dialogs (one modal per concern, sized small).
 -->
 <dialog id="label-prompt-dialog" aria-labelledby="label-prompt-title">
+  <button type="button" id="label-prompt-cancel" class="dialog-close-x"
+          aria-label="Close">&times;</button>
   <form method="dialog" id="label-prompt-form">
     <div class="dialog-title" id="label-prompt-title">Add</div>
     <label class="dialog-label" for="label-prompt-input"
@@ -358,13 +360,14 @@
            autocomplete="off" spellcheck="false" required>
     <div class="dialog-error" id="label-prompt-error" role="alert"></div>
     <div class="dialog-actions">
-      <button type="button" id="label-prompt-cancel">Cancel</button>
       <button type="submit" id="label-prompt-submit">Add</button>
     </div>
   </form>
 </dialog>
 
 <dialog id="rename-dialog" aria-labelledby="rename-dialog-title">
+  <button type="button" id="rename-cancel" class="dialog-close-x"
+          aria-label="Close">&times;</button>
   <form method="dialog" id="rename-form">
     <div class="dialog-title" id="rename-dialog-title">Rename inventory</div>
     <label class="dialog-label" for="rename-input">Name</label>
@@ -372,7 +375,6 @@
            spellcheck="false" required>
     <div class="dialog-error" id="rename-error" role="alert"></div>
     <div class="dialog-actions">
-      <button type="button" id="rename-cancel" value="cancel">Cancel</button>
       <button type="submit" id="rename-save" value="save">Save</button>
     </div>
   </form>
@@ -386,6 +388,8 @@
   same free-form string classify_source reads for the [Source] display.
 -->
 <dialog id="editor-source-dialog" aria-labelledby="editor-source-title">
+  <button type="button" id="editor-source-cancel" class="dialog-close-x"
+          aria-label="Close">&times;</button>
   <form method="dialog" id="editor-source-form">
     <div class="dialog-title" id="editor-source-title">Inventory source</div>
     <label class="dialog-label" for="editor-source-textarea">Citation, URL, DOI, or a pasted BibTeX entry</label>
@@ -395,7 +399,6 @@
 
 — or paste a BibTeX @entry, or a URL / DOI —"></textarea>
     <div class="dialog-actions">
-      <button type="button" id="editor-source-cancel" value="cancel">Cancel</button>
       <button type="submit" id="editor-source-save" value="save">Save</button>
     </div>
   </form>
@@ -432,17 +435,18 @@
   dialog.
 -->
 <dialog id="source-dialog" aria-labelledby="source-dialog-title">
+  <button type="button" id="source-dialog-close" class="dialog-close-x"
+          aria-label="Close">&times;</button>
   <form method="dialog">
     <div class="dialog-title" id="source-dialog-title">Source</div>
     <p class="dialog-citation" id="source-citation"></p>
-    <div class="dialog-actions">
-      <button type="submit" id="source-dialog-close" value="close">Close</button>
-    </div>
   </form>
 </dialog>
 
 <dialog id="setup-dialog" class="setup-dialog"
         aria-labelledby="setup-dialog-title">
+  <button type="button" id="setup-cancel" class="dialog-close-x"
+          aria-label="Close">&times;</button>
   <form method="dialog" id="setup-form">
     <div class="dialog-title" id="setup-dialog-title">New inventory</div>
 
@@ -471,7 +475,6 @@
 
     <div class="dialog-error" id="setup-error" role="alert"></div>
     <div class="dialog-actions">
-      <button type="button" id="setup-cancel" value="cancel">Cancel</button>
       <button type="submit" id="setup-create" value="create">Create grid</button>
     </div>
   </form>
@@ -483,6 +486,8 @@
      inventory and can edit / rename / save as their own. -->
 <dialog id="phoible-picker" class="phoible-picker"
         aria-labelledby="phoible-picker-title">
+  <button type="button" id="phoible-cancel" class="dialog-close-x"
+          aria-label="Close">&times;</button>
   <form method="dialog" id="phoible-picker-form">
     <div class="dialog-title" id="phoible-picker-title">
       Load inventory from PHOIBLE
@@ -538,7 +543,6 @@
            appears and shifts as the user picks a source. -->
       <a id="phoible-cite" class="phoible-cite" href="PHOIBLE_LICENSE.txt"
          target="_blank" rel="noopener">Powered by PHOIBLE 2.0</a>
-      <button type="button" id="phoible-cancel" value="cancel">Cancel</button>
       <button type="submit" id="phoible-load" value="load" disabled>
         Load inventory
       </button>

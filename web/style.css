@@ -351,6 +351,8 @@ dialog form {
 .dialog-title {
   font-weight: bold;
   font-size: var(--font-size-heading);
+  /* Reserve space so the title never runs under the corner close (×). */
+  padding-right: 1.8em;
 }
 .dialog-label {
   font-size: var(--font-size-meta);
@@ -412,10 +414,6 @@ dialog form {
 .dialog-close-x:hover {
   background: var(--bg);
   color: var(--text);
-}
-/* Keep the heading clear of the corner close button. */
-#help-dialog .dialog-title {
-  padding-right: 1.8em;
 }
 /* Citation text in the [Source] window. Wraps freely (a citation is a
    sentence, not a token) and stays selectable so the user can copy it. */
