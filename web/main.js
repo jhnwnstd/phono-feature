@@ -12,7 +12,6 @@ const NODE_IDS = Object.freeze({
     loadingStatus: "loading-status",
     loadingOverlay: "loading-overlay",
     inventoryPicker: "inventory-picker",
-    renameBtn: "rename-btn",
     uploadBtn: "upload-btn",
     uploadInput: "upload-input",
     segPanel: "seg-panel",
@@ -36,12 +35,6 @@ const NODE_IDS = Object.freeze({
     matchModeBtn: "match-mode-btn",
     bugBtn: "bug-btn",
     statusbarBrand: "statusbar-brand",
-    renameDialog: "rename-dialog",
-    renameForm: "rename-form",
-    renameInput: "rename-input",
-    renameError: "rename-error",
-    renameCancel: "rename-cancel",
-    renameSave: "rename-save",
     sourceDialog: "source-dialog",
     sourceCitation: "source-citation",
     sourceDialogClose: "source-dialog-close",
@@ -420,6 +413,14 @@ function cloneFeatureSpec(spec) {
     return Object.assign(Object.create(null), spec);
 }
 
+/** Build an <option> with a value and visible text. */
+function makeOption(value, text) {
+    const o = document.createElement("option");
+    o.value = value;
+    o.textContent = text;
+    return o;
+}
+
 const state = {
     mode: MODE.SEG_TO_FEAT,
     selected_segments: [],
@@ -482,8 +483,7 @@ let _ASSET_MANIFEST = null;
 
 function assetUrl(name) {
     if (_ASSET_MANIFEST === null) {
-        const el = document.getElementById("asset-manifest");
-        _ASSET_MANIFEST = el ? JSON.parse(el.textContent) : {};
+        _ASSET_MANIFEST = readInlineJson("asset-manifest", {});
     }
     return _ASSET_MANIFEST[name] || _DEFAULT_ASSET_URLS[name];
 }
@@ -732,7 +732,6 @@ function validatePythonBundleBytes(bytes) {
 const BRIDGE_GATED_NODES = [
     "inventoryPicker",
     "uploadBtn",
-    "renameBtn",
     "editorBtn",
     "phoibleBtn",
     "matchModeBtn",
@@ -951,7 +950,6 @@ function setStatusSource(source) {
 
 /** Open the citation window for a plain-text inventory source. */
 function openSourceCitation(text) {
-    if (!nodes.sourceDialog || !nodes.sourceCitation) return;
     nodes.sourceCitation.textContent = text || "";
     openDialog(nodes.sourceDialog);
 }
@@ -1709,7 +1707,6 @@ function _segmentsInClass(label) {
  *  affordance reads as "active" without adding chrome to the pane. */
 function updateClassFilterButton() {
     const btn = nodes.segFilterBtn;
-    if (!btn) return;
     const labels = _segmentClassLabels();
     btn.disabled = labels.length === 0;
     btn.setAttribute(
@@ -2128,15 +2125,6 @@ function _buildSegmentButton(seg, extraAttrs) {
     return btn;
 }
 
-/** Vowel-cell wrapper: same shape and size as a consonant-grid
- *  seg button so the chart's visual rhythm matches the consonant
- *  grid. The desktop's ``SegmentButton`` is single-size; the web
- *  follows suit. Multi-character PHOIBLE diphthongs that exceed
- *  the canonical button width are tracked by the CSS overflow
- *  rule on ``.seg-btn``. */
-function _buildVowelSegBtn(seg) {
-    return _buildSegmentButton(seg);
-}
 
 /**
  * Build the IPA vowel trapezoid: 6 height rows × 6 backness-
@@ -2704,7 +2692,7 @@ function _appendVowelDiphthongChipStrip(chartEl, chart) {
  *  (nothing to back). */
 /** Build a single vowel-cell button from an IPA segment string. */
 function _buildVowelCellButton(seg) {
-    const btn = _buildVowelSegBtn(seg);
+    const btn = _buildSegmentButton(seg);
     btn.classList.add("vowel-chart-cell");
     return btn;
 }
@@ -2759,7 +2747,7 @@ function _buildVowelCellStack(segs, slotNorm) {
         cell.title = `${segs.length} segments share this cell: ${segs.join(" ")}`;
     }
     for (const seg of segs) {
-        cell.appendChild(_buildVowelSegBtn(seg));
+        cell.appendChild(_buildSegmentButton(seg));
     }
     return cell;
 }
@@ -2837,7 +2825,7 @@ function _buildVowelCellPair(segs, kind) {
     cell.className = "vowel-chart-cell vowel-chart-cell-pair vowel-capsule";
     if (kind) cell.dataset.pairKind = kind;
     for (const seg of segs) {
-        cell.appendChild(_buildVowelSegBtn(seg));
+        cell.appendChild(_buildSegmentButton(seg));
     }
     return cell;
 }
@@ -2875,7 +2863,7 @@ function _buildVowelCellContrastSet(segs, grid) {
     cell.style.gridTemplateColumns = `repeat(${maxCol + 1}, 1fr)`;
     cell.style.gridTemplateRows = `repeat(${maxRow + 1}, 1fr)`;
     segs.forEach((seg, i) => {
-        const btn = _buildVowelSegBtn(seg);
+        const btn = _buildSegmentButton(seg);
         const pos = coords[i];
         if (Array.isArray(pos) && pos.length >= 2) {
             const col = pos[0];
@@ -2960,7 +2948,6 @@ function renderFeaturePanel(featureGroups) {
  *  web had no compact mode and relied on the panel-body
  *  scrollbar. */
 function applyFeatureDensity(featureCount) {
-    if (!nodes.featPanel) return;
     const threshold = LIMITS.feat_compact_threshold || 22;
     const compact = featureCount >= threshold;
     if (compact) {
@@ -3333,10 +3320,9 @@ function analysisSpecRowsPerCol() {
     const el = nodes.analysisContentClass;
     // Class tab may be display:none (another tab active); fall back to
     // the always-sized content frame so the height is still readable.
-    const h = el && el.clientHeight
-        ? el.clientHeight
-        : (el && el.parentElement ? el.parentElement.clientHeight : 0);
-    if (!h || !el) return ANALYSIS_MIN_SPEC_ROWS;
+    const h = el.clientHeight
+        || (el.parentElement ? el.parentElement.clientHeight : 0);
+    if (!h) return ANALYSIS_MIN_SPEC_ROWS;
     const cs = getComputedStyle(el);
     const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
     const line = parseFloat(cs.lineHeight) || 18;
@@ -3550,55 +3536,6 @@ function downloadCurrentInventory() {
 }
 
 /**
- * Wire the pencil button to a modal dialog that renames the active
- * inventory. The bridge endpoint round-trips the new name through
- * Inventory.parse so the same validation rules as the load path
- * apply (NFC + strip + length cap). Validation errors are surfaced
- * inline inside the dialog; the modal stays open so the user can
- * correct without losing context.
- */
-function wireRename() {
-    const dialog = nodes.renameDialog;
-    const form = nodes.renameForm;
-    const input = nodes.renameInput;
-    const errorBox = nodes.renameError;
-    const cancelBtn = nodes.renameCancel;
-
-    const open = () => {
-        input.value = state.inventory_name || "";
-        errorBox.textContent = "";
-        openDialog(dialog);
-        // Select-on-open so a confirming user can just retype.
-        requestAnimationFrame(() => input.select());
-    };
-    const close = () => closeDialog(dialog);
-
-    nodes.renameBtn.addEventListener("click", open);
-    cancelBtn.addEventListener("click", close);
-
-    form.addEventListener("submit", (ev) => {
-        // method="dialog" would auto-close on submit; preventDefault
-        // keeps the dialog open until the bridge confirms so a
-        // validation error can be shown inline.
-        ev.preventDefault();
-        const newName = input.value;
-        try {
-            const result = callBridge("rename_current_inventory", newName);
-            state.inventory_name = result.name;
-            // The renamed inventory no longer matches its dropdown
-            // option's label, so it is no longer a listed selection.
-            markInventoryUnlisted();
-            setStatus(`Renamed to ${result.name}.`, STATUS_KIND.success);
-            errorBox.textContent = "";
-            close();
-        } catch (e) {
-            errorBox.textContent = bridgeErrorMessage(e, "Rename failed.");
-            input.focus();
-        }
-    });
-}
-
-/**
  * Wire the New-inventory setup dialog and return its ``open()``
  * trigger. The dialog itself owns its inputs and submit handling;
  * callers (the editor's New button) invoke ``open()`` to
@@ -3658,21 +3595,19 @@ function wireSetupDialog() {
         presetPicker.innerHTML = "";
         const providers = defaults.providers || [];
         for (const provider of providers) {
-            const opt = document.createElement("option");
-            opt.value = PROVIDER_PREFIX + provider.name;
             // Suffix carries the meaning even on rendering surfaces
             // where ``<option>`` font-weight is ignored (some older
             // WebKit), so the recommended path is unambiguous
             // regardless of native ``<select>`` styling support.
-            opt.textContent = `${provider.label || provider.name} (auto-fill)`;
+            const opt = makeOption(
+                PROVIDER_PREFIX + provider.name,
+                `${provider.label || provider.name} (auto-fill)`
+            );
             opt.style.fontWeight = "600";
             presetPicker.appendChild(opt);
         }
         for (const name of Object.keys(presets)) {
-            const opt = document.createElement("option");
-            opt.value = name;
-            opt.textContent = name;
-            presetPicker.appendChild(opt);
+            presetPicker.appendChild(makeOption(name, name));
         }
         defaultsLoaded = true;
     };
@@ -4500,8 +4435,8 @@ function cellSerialized(value) {
  * * "Back" closes the editor; if there are unsaved edits, the user
  *   is prompted to discard or stay (matches the desktop's
  *   ``_check_unsaved`` guard).
- * * The name field commits on change/Enter, going through the same
- *   rename_current_inventory bridge as the main toolbar's pencil.
+ * * The name field commits on change/Enter as a local rename; the
+ *   engine adopts the new name on Save-as (with the cell edits).
  * * Plain click on an UNSELECTED cell selects just that cell. Plain
  *   click on a SELECTED cell bulk-cycles every selected cell to the
  *   clicked cell's next value. Matches desktop's
@@ -4911,13 +4846,25 @@ function clearSelection() {
     repaintSelection();
 }
 
-function selectSingleCell(r, c) {
+/** Select the inclusive cell rectangle [r0..r1] × [c0..c1], set the
+ *  anchor/focused cells, then repaint. The shared tail of every
+ *  selection helper below; loop order is irrelevant since `selected`
+ *  is a Set. */
+function _selectRange(r0, r1, c0, c1, anchor, focused) {
     editorState.selected.clear();
-    editorState.selected.add(cellKey(r, c));
-    editorState.anchor = { r, c };
-    editorState.focused = { r, c };
+    for (let r = r0; r <= r1; r++) {
+        for (let c = c0; c <= c1; c++) {
+            editorState.selected.add(cellKey(r, c));
+        }
+    }
+    editorState.anchor = anchor;
+    editorState.focused = focused;
     repaintSelection();
     repaintFocused();
+}
+
+function selectSingleCell(r, c) {
+    _selectRange(r, r, c, c, { r, c }, { r, c });
 }
 
 function extendSelectionTo(r, c) {
@@ -4926,19 +4873,11 @@ function extendSelectionTo(r, c) {
         return;
     }
     const { r: ar, c: ac } = editorState.anchor;
-    const r0 = Math.min(ar, r);
-    const r1 = Math.max(ar, r);
-    const c0 = Math.min(ac, c);
-    const c1 = Math.max(ac, c);
-    editorState.selected.clear();
-    for (let i = r0; i <= r1; i++) {
-        for (let j = c0; j <= c1; j++) {
-            editorState.selected.add(cellKey(i, j));
-        }
-    }
-    editorState.focused = { r, c };
-    repaintSelection();
-    repaintFocused();
+    _selectRange(
+        Math.min(ar, r), Math.max(ar, r),
+        Math.min(ac, c), Math.max(ac, c),
+        editorState.anchor, { r, c }
+    );
 }
 
 function toggleCellSelection(r, c) {
@@ -4958,45 +4897,21 @@ function toggleCellSelection(r, c) {
 
 function selectColumn(c) {
     const numRows = editorState.features.length;
-    editorState.selected.clear();
-    for (let r = 0; r < numRows; r++) {
-        editorState.selected.add(cellKey(r, c));
-    }
-    editorState.anchor = { r: 0, c };
-    editorState.focused = { r: 0, c };
-    repaintSelection();
-    // Update the focus indicator so the dashed outline lands on a
-    // cell in the new column (the anchor for subsequent shift+arrow
-    // extension). Without this the previously-focused cell would
-    // keep its outline even though logical focus moved here.
-    repaintFocused();
+    _selectRange(0, numRows - 1, c, c, { r: 0, c }, { r: 0, c });
 }
 
 function selectRow(r) {
     const numCols = editorState.segments.length;
-    editorState.selected.clear();
-    for (let c = 0; c < numCols; c++) {
-        editorState.selected.add(cellKey(r, c));
-    }
-    editorState.anchor = { r, c: 0 };
-    editorState.focused = { r, c: 0 };
-    repaintSelection();
-    repaintFocused();
+    _selectRange(r, r, 0, numCols - 1, { r, c: 0 }, { r, c: 0 });
 }
 
 function selectAll() {
     const numRows = editorState.features.length;
     const numCols = editorState.segments.length;
-    editorState.selected.clear();
-    for (let r = 0; r < numRows; r++) {
-        for (let c = 0; c < numCols; c++) {
-            editorState.selected.add(cellKey(r, c));
-        }
-    }
-    editorState.anchor = { r: 0, c: 0 };
-    editorState.focused = { r: 0, c: 0 };
-    repaintSelection();
-    repaintFocused();
+    _selectRange(
+        0, numRows - 1, 0, numCols - 1,
+        { r: 0, c: 0 }, { r: 0, c: 0 }
+    );
 }
 
 /** Diff-based selection repaint: toggle .is-selected only on cells
@@ -5504,36 +5419,22 @@ function extendSelectionToColumn(targetCol) {
     const numRows = editorState.features.length;
     if (numRows === 0) return;
     const anchorCol = editorState.anchor?.c ?? targetCol;
-    const c0 = Math.min(anchorCol, targetCol);
-    const c1 = Math.max(anchorCol, targetCol);
-    editorState.selected.clear();
-    for (let c = c0; c <= c1; c++) {
-        for (let r = 0; r < numRows; r++) {
-            editorState.selected.add(cellKey(r, c));
-        }
-    }
-    editorState.anchor = { r: 0, c: anchorCol };
-    editorState.focused = { r: 0, c: targetCol };
-    repaintSelection();
-    repaintFocused();
+    _selectRange(
+        0, numRows - 1,
+        Math.min(anchorCol, targetCol), Math.max(anchorCol, targetCol),
+        { r: 0, c: anchorCol }, { r: 0, c: targetCol }
+    );
 }
 
 function extendSelectionToRow(targetRow) {
     const numCols = editorState.segments.length;
     if (numCols === 0) return;
     const anchorRow = editorState.anchor?.r ?? targetRow;
-    const r0 = Math.min(anchorRow, targetRow);
-    const r1 = Math.max(anchorRow, targetRow);
-    editorState.selected.clear();
-    for (let r = r0; r <= r1; r++) {
-        for (let c = 0; c < numCols; c++) {
-            editorState.selected.add(cellKey(r, c));
-        }
-    }
-    editorState.anchor = { r: anchorRow, c: 0 };
-    editorState.focused = { r: targetRow, c: 0 };
-    repaintSelection();
-    repaintFocused();
+    _selectRange(
+        Math.min(anchorRow, targetRow), Math.max(anchorRow, targetRow),
+        0, numCols - 1,
+        { r: anchorRow, c: 0 }, { r: targetRow, c: 0 }
+    );
 }
 
 /** Desktop ``_on_corner_clicked``: select-all when nothing is fully
@@ -5780,16 +5681,6 @@ function commitSegmentRename(c, oldName, proposed) {
     _afterStructuralEdit(`Renamed segment '${oldName}' to '${proposed}'.`);
 }
 
-/** Return keyboard focus to the grid after a toolbar- or
- *  context-menu-driven structural edit (add / remove / rename). The
- *  undo keydown handler is scoped to ``#editor-grid-scroll``; without
- *  this, focus stays on the toolbar button (or the rename input) and
- *  the user has to click a cell before Ctrl-Z / Ctrl-Y do anything.
- *  Restoring focus lets undo / redo work immediately after the edit. */
-function focusEditorGrid() {
-    nodes.editorGridScroll.focus();
-}
-
 /** Shared tail for the editor's structural mutators (add / remove a
  *  segment or feature, commit a rename). Re-renders the grid, drops
  *  the selection, marks the inventory dirty, refreshes the cap
@@ -5802,21 +5693,14 @@ function _afterStructuralEdit(statusMsg) {
     markEditorDirty();
     scheduleEditorCapRefresh();
     setEditorStatus(statusMsg);
-    focusEditorGrid();
+    nodes.editorGridScroll.focus();
 }
 
 function addSegmentToState(seg) {
     const index = editorState.segments.length;
-    editorState.segments.push(seg);
-    for (const row of editorState.cells) {
-        row.push(ZERO_VALUE);
-    }
-    pushUndoEdit({
-        kind: "segAdd",
-        index,
-        seg,
-        col: editorState.cells.map(() => ZERO_VALUE),
-    });
+    const col = editorState.cells.map(() => ZERO_VALUE);
+    _insertSegmentAt(index, seg, col);
+    pushUndoEdit({ kind: "segAdd", index, seg, col });
     _afterStructuralEdit(_formatTpl(
         "added_segment_template", "Added segment '{seg}'.", { seg },
     ));
@@ -5827,8 +5711,7 @@ function addFeatureToState(feat) {
     const row = Array.from(
         { length: editorState.segments.length }, () => ZERO_VALUE,
     );
-    editorState.features.push(feat);
-    editorState.cells.push(row.slice());
+    _insertFeatureAt(index, feat, row);
     pushUndoEdit({ kind: "featAdd", index, feat, row });
     _afterStructuralEdit(_formatTpl(
         "added_feature_template", "Added feature '{feat}'.", { feat },
@@ -5843,13 +5726,9 @@ function removeSelectedSegment() {
     // wording matches the desktop's ``ask_question`` body exactly.
     const prompt = callBridge("confirm_remove_segment_prompt", seg);
     if (!confirm(prompt)) return;
-    // Capture the column values BEFORE the splice so undo can restore
-    // the segment with its feature values intact.
-    const col = editorState.cells.map((row) => row[c]);
-    editorState.segments.splice(c, 1);
-    for (const row of editorState.cells) {
-        row.splice(c, 1);
-    }
+    // _removeSegmentAt captures the column values before the splice so
+    // undo can restore the segment with its feature values intact.
+    const col = _removeSegmentAt(c);
     pushUndoEdit({ kind: "segRemove", index: c, seg, col });
     _afterStructuralEdit(_formatTpl(
         "removed_segment_template", "Removed segment '{seg}'.", { seg },
@@ -5862,11 +5741,9 @@ function removeSelectedFeature() {
     const feat = editorState.features[r];
     const prompt = callBridge("confirm_remove_feature_prompt", feat);
     if (!confirm(prompt)) return;
-    // Capture the row values BEFORE the splice so undo can restore the
-    // feature with its per-segment values intact.
-    const row = editorState.cells[r].slice();
-    editorState.features.splice(r, 1);
-    editorState.cells.splice(r, 1);
+    // _removeFeatureAt captures the row values before the splice so
+    // undo can restore the feature with its per-segment values intact.
+    const row = _removeFeatureAt(r);
     pushUndoEdit({ kind: "featRemove", index: r, feat, row });
     _afterStructuralEdit(_formatTpl(
         "removed_feature_template", "Removed feature '{feat}'.", { feat },
@@ -6175,7 +6052,6 @@ function safeStorageGet(key) {
  * drag-select-copy doesn't pick anything up.
  */
 function wireStatusbarBrand() {
-    if (!nodes.statusbarBrand) return;
     nodes.statusbarBrand.replaceChildren(
         createRasterizedLabel(
             "Language Doodad", 'italic 13px "Noto Sans", sans-serif'
@@ -6190,7 +6066,6 @@ function wireStatusbarBrand() {
  * the user knows their environment best.
  */
 function wireBugButton() {
-    if (!nodes.bugBtn) return;
     nodes.bugBtn.addEventListener("click", () => {
         window.open(
             "https://github.com/jhnwnstd/phono-feature/issues/new",
@@ -6281,7 +6156,6 @@ function setButtonLabel(btn, text) {
 }
 
 function wireMatchModeToggle() {
-    if (!nodes.matchModeBtn) return;
     // Tooltip strings come from the relayed STATUS_TEXT so a
     // wording change lands in one Python constant
     // (constants.MATCH_MODE_TOOLTIP_*) and propagates to both the
@@ -6367,7 +6241,6 @@ function wireMatchModeToggle() {
  * regenerates with matching colors.
  */
 function wireColorblindToggle() {
-    if (!nodes.cbBtn) return;
     // aria-label and title share one source so SRs (which prefer
     // aria-label) and hover tooltips can never drift apart.
     const labelFor = (mode) => mode === PALETTE_MODE.COLORBLIND
@@ -6508,10 +6381,7 @@ function renderPhoibleDropdownGroup() {
     }
     group.innerHTML = "";
     for (const [id, name] of phoibleDropdownEntries) {
-        const opt = document.createElement("option");
-        opt.value = PHOIBLE_OPTION_PREFIX + id;
-        opt.textContent = name;
-        group.appendChild(opt);
+        group.appendChild(makeOption(PHOIBLE_OPTION_PREFIX + id, name));
     }
     picker.appendChild(group);
 }
@@ -6570,9 +6440,7 @@ function populateInventoryPicker() {
     const picker = nodes.inventoryPicker;
     picker.innerHTML = "";
     for (const item of BUNDLED_INVENTORIES) {
-        const opt = document.createElement("option");
-        opt.value = item.file;
-        opt.textContent = item.label;
+        const opt = makeOption(item.file, item.label);
         // Aria-label augments the visible label with the segment
         // + feature counts so screen reader users hear the same
         // metadata sighted users can glean from the status bar
@@ -6621,24 +6489,18 @@ function wireClearButtons() {
     // Wipe state synchronously before triggering the mode switch so
     // the user never sees a flash of prior analysis content during
     // the debounced reanalysis window.
-    nodes.segClearBtn.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        clearAll();
-        if (state.mode !== MODE.SEG_TO_FEAT) {
-            activateMode(MODE.SEG_TO_FEAT);
-        } else if (state.bridge) {
-            runAnalysis();
-        }
-    });
-    nodes.featClearBtn.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        clearAll();
-        if (state.mode !== MODE.FEAT_TO_SEG) {
-            activateMode(MODE.FEAT_TO_SEG);
-        } else if (state.bridge) {
-            runAnalysis();
-        }
-    });
+    const wireClear = (btn, mode) =>
+        btn.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            clearAll();
+            if (state.mode !== mode) {
+                activateMode(mode);
+            } else if (state.bridge) {
+                runAnalysis();
+            }
+        });
+    wireClear(nodes.segClearBtn, MODE.SEG_TO_FEAT);
+    wireClear(nodes.featClearBtn, MODE.FEAT_TO_SEG);
 }
 
 /** Wire the segment-class visibility popover: the header filter button
@@ -6646,7 +6508,6 @@ function wireClearButtons() {
  *  click outside or Escape dismisses it. The popover acts purely on the
  *  cached render payload, so it needs no bridge round-trip. */
 function wireClassFilter() {
-    if (!nodes.segFilterBtn || !nodes.segClassPopover) return;
     nodes.segFilterBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         toggleClassPopover();
@@ -6693,17 +6554,12 @@ function clearAll() {
     state.selected_features = emptyFeatureSpec();
     state.saved_seg_state = [];
     state.saved_feat_state = emptyFeatureSpec();
-    for (const btn of state.seg_buttons.values()) {
-        btn.dataset.state = "default";
-        btn.setAttribute("aria-pressed", "false");
-    }
-    for (const rec of state.feat_rows.values()) {
-        rec.row.dataset.value = "";
-        rec.row.dataset.shared = "false";
-        rec.row.dataset.contrastive = "false";
-        _setRasterizedBadge(rec.badge, "·");
-        setFeatureRowQuery(rec, "");
-    }
+    // Reset every button/row to its baseline via the same appliers the
+    // analysis path uses; selected_features was already emptied above,
+    // so _restoreFeatureQueryMarkers clears every row's +/- markers.
+    _applySegmentStates(() => "default");
+    _applyFeatureRowStates();
+    _restoreFeatureQueryMarkers();
     // Clearing the selection leaves the inventory loaded, so the
     // bottom border keeps its inventory summary untouched.
 }
@@ -6719,16 +6575,14 @@ function clearAll() {
  *  ``preventDefault`` so the browser context menu doesn't appear
  *  over the inventory chrome. */
 function wirePanelClickMode() {
-    nodes.segPanel.addEventListener("mousedown", (ev) => {
-        if (ev.target.closest("button")) return;
-        if (ev.button === 2) ev.preventDefault();
-        activateMode(MODE.SEG_TO_FEAT);
-    });
-    nodes.featPanel.addEventListener("mousedown", (ev) => {
-        if (ev.target.closest("button")) return;
-        if (ev.button === 2) ev.preventDefault();
-        activateMode(MODE.FEAT_TO_SEG);
-    });
+    const wireMode = (panel, mode) =>
+        panel.addEventListener("mousedown", (ev) => {
+            if (ev.target.closest("button")) return;
+            if (ev.button === 2) ev.preventDefault();
+            activateMode(mode);
+        });
+    wireMode(nodes.segPanel, MODE.SEG_TO_FEAT);
+    wireMode(nodes.featPanel, MODE.FEAT_TO_SEG);
     // Right-click on empty panel space: keep the contextmenu
     // suppressed even when the mousedown handler missed (some
     // browsers fire contextmenu without a preceding mousedown).
@@ -6907,7 +6761,6 @@ async function main() {
     wireInventoryPicker();
     wireUploadDownload();
     wirePhoiblePicker();
-    wireRename();
     // Order matters: the setup dialog must be wired before the
     // editor, because the editor's New button receives its open()
     // trigger from the dialog's wire-up return value.

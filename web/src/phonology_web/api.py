@@ -832,29 +832,6 @@ def commit_inventory_from_grid(
     return _swap_engine_summary(inventory, inventory.name)
 
 
-def rename_current_inventory(new_name: str) -> dict[str, Any]:
-    """Replace the active inventory's display name.
-
-    Round-trips through :py:meth:`Inventory.parse` so the new name is validated
-    and canonicalized (NFC, strip, length cap) the same way the file loader
-    would. The engine is reconstructed with the renamed inventory; analysis
-    caches are invalidated because their cached HTML may embed the old name.
-
-    Returns ``{"name": canonical_name}`` so the caller can update its own
-    display without a follow-up query.
-
-    Raises :py:class:`ValidationError` if the new name fails validation,
-    matching the existing load path's contract.
-    """
-    engine = _require_engine()
-    data = engine.inventory.to_json_dict()
-    metadata = data.setdefault("metadata", {})
-    metadata["name"] = new_name
-    inventory = Inventory.parse(data)
-    _set_engine(FeatureEngine(inventory), inventory.name)
-    return {"name": inventory.name}
-
-
 @_translate_engine_errors
 def set_active_theme(name: str) -> None:
     """Switch the renderer palette so subsequent HTML output uses

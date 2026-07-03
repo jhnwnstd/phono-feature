@@ -19,7 +19,7 @@ widget and in the browser. Feature notation uses plain brackets
 actual heuristics:
 
 * consonants: manner grouping + place-ordering + size-driven
-  breakout/merge, all from encoded features
+  breakout/merge, all from specified features
   (:mod:`phonology_shared.chart.consonants`);
 * vowels: the height/backness/rounding inference and the low-vowel
   Near-open split (:mod:`phonology_shared.chart.vowels`), the Open-row
@@ -38,14 +38,14 @@ SEGMENTS_HELP_TITLE: str = "How to read the segment displays"
 
 #: Body of the ``SEGMENTS`` help window.
 SEGMENTS_HELP_HTML: str = (
-    "<p><i>Right-click any segment button to copy it.</i></p>"
-    "<p>The display uses only the encoded features for each segment. It does"
-    " not infer features from a symbol, a diacritic, or the segment's usual"
-    " pronunciation. If the features do not encode a distinction, the chart"
+    "<p><i>Right-click any segment to copy it.</i></p>"
+    "<p>The display uses only the specified features for each segment. It does"
+    " not infer features from a symbol, a diacritic, or the segment's conventional"
+    " pronunciation. If the specified features do not distinguish two segments, the chart"
     " cannot show that distinction.</p>"
     "<p>The layout is a practical display aid, not a full phonetic or"
     " theoretical analysis. It keeps every segment visible, even when the"
-    " encoded features are incomplete or hard to place. Such segments fall"
+    " specified features are incomplete or hard to place. Such segments fall"
     " into one of two catch-all groups: consonant-like segments join"
     " <b>Contoids</b>, shown below the consonant groups, and vowel-like"
     " segments join <b>Vocoids</b>, shown below the vowel chart.</p>"
@@ -58,10 +58,9 @@ SEGMENTS_HELP_HTML: str = (
     " group, such as Vibrants, Rhotics, or Liquids. The same class may"
     " therefore stand alone in one inventory and merge into a broader group"
     " in another.</p>"
-    "<p><b>Vowels</b> are placed from their encoded height, backness,"
-    " rounding, and related features. Their positions are useful display"
-    " positions, not exact measurements of pronunciation. Click the"
-    " <b>Vowels</b> label above the chart to see the placement rules.</p>"
+    "<p><b>Vowels</b> are placed based on their specified height, backness,"
+    " rounding, and related features. Their positions are useful display,"
+    " not exact representations of phonetic reality.</p>"
 )
 
 #: Title of the ``Vowels`` help window.
@@ -69,25 +68,24 @@ VOWELS_HELP_TITLE: str = "How vowels are placed"
 
 #: Body of the ``Vowels`` help window.
 VOWELS_HELP_HTML: str = (
-    "<p>The chart places vowels using their encoded features. It does not"
-    " claim to show each vowel's exact phonetic value. Even if a vowel has"
-    " missing or contradictory features, the chart places it at a fixed"
-    " fallback position.</p>"
+    "<p>The chart places vowels using their specified features. It does not"
+    " claim to show each vowel's exact phonetic position. Even vowels with"
+    " missing or contradictory features can be placed somewhere on the chart.</p>"
     "<p><b>Height (rows)</b><br>A vowel's height determines its row. Tense"
-    " and ATR features refine the row only when the inventory uses those"
-    " contrasts.</p>"
+    " and ATR refine the row placement only when the inventory uses those"
+    " features.</p>"
     "<ul>"
     "<li>[+high, -low] maps to Close. If it is [-tense], it maps to"
     " Near-close.</li>"
     "<li>[-high, -low] maps to the mid region. If it is [+tense], it maps to"
-    " Close-mid. If it is [-tense], it maps to Open-mid. If it has no tense"
-    " or ATR value, it maps to Mid.</li>"
+    " Close-mid. If it is [-tense], it maps to Open-mid. If it has no specified"
+    " tense or ATR feature, it maps to Mid.</li>"
     "<li>[-high, +low] maps to Open. If it is [-tense], [-ATR], or [+RTR],"
     " and the inventory uses tense or ATR contrasts, it maps to Near-open."
-    " If it is [+tense] or has no tense or ATR value, it remains Open.</li>"
+    " If it is [+tense] or has no specified tense or ATR feature, it remains Open.</li>"
     "</ul>"
-    "<p>If the bottom Open row has no front vowel, a central low vowel such"
-    " as lone /a/ can occupy the bottom-left corner instead of the"
+    "<p>If the bottom Open row has no front vowel, a low central vowel such"
+    " as /a/ will occupy the bottom-left corner instead of the"
     " bottom-center.</p>"
     "<p><b>Backness (columns)</b><br>A vowel's backness determines its"
     " column. [+front] maps to Front. [+back] maps to Back. [-front,"
@@ -96,8 +94,7 @@ VOWELS_HELP_HTML: str = (
     " and backness appear side by side. The unrounded vowel appears on the"
     " left. The rounded vowel appears on the right. A vowel with no rounding"
     " feature will occupy the center of its column.</p>"
-    "<p><b>Relative features</b><br>Relative features adjust the base"
-    " position.</p>"
+    "<p><b>Relative features</b> adjust the base position.</p>"
     "<ul>"
     "<li>[+raised] moves up one row.</li>"
     "<li>[+lowered] moves down one row.</li>"
@@ -105,7 +102,7 @@ VOWELS_HELP_HTML: str = (
     "<li>[+retracted] moves one column backward.</li>"
     "<li>[+centralized] moves toward Central.</li>"
     "</ul>"
-    "<p>Vowels encoded with opposing relative features stay in their base"
+    "<p>Vowels specified with opposing relative features stay in their base"
     " position.</p>"
     "<p><b>Secondary features</b><br>Length, nasality, rhoticity, phonation,"
     " and tone do not change a vowel's row or column. Two vowels that differ"
@@ -122,7 +119,7 @@ FEATURES_HELP_TITLE: str = "How to read and query features"
 #: Body of the ``FEATURES`` help window.
 FEATURES_HELP_HTML: str = (
     "<p>The Features pane has two modes. When you select a segment, the"
-    " pane reports the segment's encoded feature specification. When you"
+    " pane reports the segment's feature specification. When you"
     " set a feature specification, the pane queries the inventory for"
     " segments that match that specification.</p>"
     "<p><b>Feature groups and names</b><br>Features are grouped by"
