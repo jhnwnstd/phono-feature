@@ -134,10 +134,11 @@ def inventory_sort_key(fname: str, label: str) -> tuple[int, str]:
 # and the web's ``title`` attribute read identically; the web
 # relays via the inlined STATUS_TEXT JSON.
 MATCH_MODE_TOOLTIP_STRICT_ACTIVE: str = (
-    "Allow segments with 0 or absent feature values to match queries."
+    "Click to allow segments with 0 or absent feature values to match"
+    " queries."
 )
 MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE: str = (
-    "Match only segments with explicit feature values."
+    "Click to match only segments with explicit feature values."
 )
 
 # Placeholder copy for non-ideal states. Each string is shown in
