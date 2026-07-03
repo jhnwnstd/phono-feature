@@ -1524,13 +1524,15 @@ def test_analysis_selection_summary_escapes_segment_symbol() -> None:
     assert "&lt;x&gt;" in out
 
 
-def test_bulk_cycle_whole_table_under_100ms(tmp_path: Path) -> None:
+def test_bulk_cycle_whole_table_stays_fast(tmp_path: Path) -> None:
     """Regression guard against the ResizeToContents footgun. Before
     we switched the vertical header to Fixed, every per-cell
     setForeground stalled Qt re-walking the row to recompute height;
     a whole-table cycle on Hayes (3920 cells) took ~60+ seconds. The
-    Fixed-mode fix dropped it to ~17 ms. 100 ms is a comfortable
-    ceiling that still catches the failure mode if it ever regresses."""
+    Fixed-mode fix dropped it to ~17 ms. We take the best of a few runs
+    and assert a deliberately generous 1 s ceiling: the regression is
+    60+ SECONDS, so 1 s still catches it by ~60x while tolerating a slow
+    shared CI runner that measures the healthy op near 100 ms."""
     import os as _os
     import time as _time
 
@@ -1555,13 +1557,17 @@ def test_bulk_cycle_whole_table_under_100ms(tmp_path: Path) -> None:
         app.processEvents()
     anchor = b._table.item(0, 0)
     assert anchor is not None
-    t0 = _time.perf_counter()
-    b._cycle_selection_from(anchor)
-    elapsed_ms = (_time.perf_counter() - t0) * 1000
-    assert elapsed_ms < 100, (
-        f"whole-table bulk cycle took {elapsed_ms:.1f} ms; "
-        f"regression vs <100 ms target. Did vertical header drift "
-        f"back to ResizeToContents?"
+    # Best of a few runs so a single GC pause on a slow shared runner
+    # cannot trip the guard; the healthy op is ~17 ms.
+    best_ms = float("inf")
+    for _ in range(3):
+        t0 = _time.perf_counter()
+        b._cycle_selection_from(anchor)
+        best_ms = min(best_ms, (_time.perf_counter() - t0) * 1000)
+    assert best_ms < 1000, (
+        f"whole-table bulk cycle took {best_ms:.1f} ms (best of 3); "
+        f"regression vs <1 s ceiling (healthy ~17 ms). Did the vertical "
+        f"header drift back to ResizeToContents?"
     )
     # close_editor_silent skips the unsaved-changes modal that would
     # block forever in offscreen mode after the dirty bulk cycle.
@@ -2821,13 +2827,20 @@ def test_bundle_search_largest_inventory_under_50ms() -> None:
         all_segs[:50],
         all_segs[:100],
     ]
-    t0 = _time.perf_counter()
-    for segs in targets:
-        eng.find_all_minimal_bundles(segs)
-    elapsed_ms = (_time.perf_counter() - t0) * 1000
-    assert elapsed_ms < 50, (
+    # Best of a few runs, clearing the memoized bundle cache each time
+    # so the search cost is always measured (never a cache hit); the min
+    # filters runner jitter. The regression patterns are 7-100x+, so a
+    # genuine slowdown still blows past 50 ms even on the best run.
+    best_ms = float("inf")
+    for _ in range(3):
+        eng._bundle_cache.clear()
+        t0 = _time.perf_counter()
+        for segs in targets:
+            eng.find_all_minimal_bundles(segs)
+        best_ms = min(best_ms, (_time.perf_counter() - t0) * 1000)
+    assert best_ms < 50, (
         f"bundle search on general_features (135 seg x 30 feat) took "
-        f"{elapsed_ms:.1f} ms across {len(targets)} queries; "
+        f"{best_ms:.1f} ms (best of 3) across {len(targets)} queries; "
         f"regression vs <50 ms budget (typical: ~1-2 ms)"
     )
 
