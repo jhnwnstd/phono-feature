@@ -23,6 +23,7 @@ from PyQt6.QtGui import (
     QCloseEvent,
     QColor,
     QFont,
+    QFontMetrics,
     QMoveEvent,
     QPalette,
     QResizeEvent,
@@ -102,6 +103,7 @@ from phonology_shared.presentation.constants import (
     sort_features,
 )
 from phonology_shared.presentation.layout import (
+    ANALYSIS_MIN_VISIBLE_ROWS,
     TOOLBAR_BTN_H,
     distribute_feature_groups,
 )
@@ -1830,6 +1832,25 @@ class MainWindow(QMainWindow):
         self._mode_ctrl.restore_feature_selection(saved_query)
         self._run_pending_update()
 
+    def _analysis_spec_rows_per_col(self) -> int:
+        """How many minimal-spec rows the Class tab shows before it must
+        scroll. Passed to the shared renderer so a long minimal-spec
+        list fills the pane's height then wraps into columns instead of
+        scrolling in a single column. Unlike the web pane (height-locked
+        to the shared floor), the desktop pane grows with the window, so
+        this is measured from the live tab each refresh rather than
+        assumed constant."""
+        view = self.analysis.content
+        viewport = view.viewport()
+        if viewport is None:
+            return ANALYSIS_MIN_VISIBLE_ROWS
+        metrics = QFontMetrics(view.font())
+        # Spec row = one text line + the table's cellpadding/border-spacing.
+        row_h = metrics.lineSpacing() + 8
+        # Reserve the "Minimal specifications (N):" heading line.
+        available = viewport.height() - metrics.lineSpacing() - 4
+        return max(1, available // row_h)
+
     def _update_seg_to_feat(self) -> None:
         """Apply the SEG-mode summary to the panels. The shared
         ``summarize_segment_selection`` returns one payload for any
@@ -1845,6 +1866,7 @@ class MainWindow(QMainWindow):
             self.engine,
             self._selected_segments,
             mode=self._match_mode,
+            rows_per_column=self._analysis_spec_rows_per_col(),
         )
         for feat, row in self._feat_rows.items():
             state = summary["feature_rows"][feat]

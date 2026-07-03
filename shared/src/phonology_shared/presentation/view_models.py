@@ -239,6 +239,7 @@ def summarize_segment_selection(
     segs: list[str],
     *,
     mode: MatchMode = MatchMode.STRICT,
+    rows_per_column: int | None = None,
 ) -> SegmentSelectionSummary:
     """SEG-mode analysis payload shared by desktop and web.
 
@@ -276,7 +277,13 @@ def summarize_segment_selection(
         )
         return {
             "analysis_tabs": _seg_tabs(
-                engine, [], {}, {}, empty_completion, mode=mode
+                engine,
+                [],
+                {},
+                {},
+                empty_completion,
+                mode=mode,
+                rows_per_column=rows_per_column,
             ),
             "selected": [],
             "suggested": [],
@@ -314,7 +321,13 @@ def summarize_segment_selection(
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
         return {
             "analysis_tabs": _seg_tabs(
-                engine, segs, common, {}, completion, mode=mode
+                engine,
+                segs,
+                common,
+                {},
+                completion,
+                mode=mode,
+                rows_per_column=rows_per_column,
             ),
             "selected": list(segs),
             "suggested": list(suggested_segs),
@@ -358,7 +371,13 @@ def summarize_segment_selection(
         seg_states.setdefault(seg, SegmentState.SUGGESTED)
     return {
         "analysis_tabs": _seg_tabs(
-            engine, segs, common, contrastive, completion, mode=mode
+            engine,
+            segs,
+            common,
+            contrastive,
+            completion,
+            mode=mode,
+            rows_per_column=rows_per_column,
         ),
         "selected": list(segs),
         "suggested": suggested,
@@ -416,6 +435,7 @@ def _seg_tabs(
     completion: NaturalClassCompletion,
     *,
     mode: MatchMode = MatchMode.STRICT,
+    rows_per_column: int | None = None,
 ) -> AnalysisTabsPayload:
     """Build the per-tab HTML payload for the SEG-mode analysis pane.
 
@@ -433,7 +453,9 @@ def _seg_tabs(
         class_state = ClassState.NEUTRAL
     return {
         "selection": render_selection_summary_seg(segs),
-        "class": render_class_tab_seg(segs, completion, mode=mode),
+        "class": render_class_tab_seg(
+            segs, completion, mode=mode, rows_per_column=rows_per_column
+        ),
         "features": render_features_tab_seg(engine, segs, common),
         "contrasts": render_contrasts_tab_seg(engine, segs, contrastive),
         # Tab enable/disable is mode-driven, not selection-driven. SEG

@@ -2150,6 +2150,11 @@ dialog input[type="text"]:focus-visible {
      below) when output exceeds the floor. */
   min-height: var(--min-analysis-h);
   max-height: var(--min-analysis-h);
+  /* Bound the pane to its grid track: without this the grid item's
+     default ``min-width: auto`` lets a wide minimal-spec table push the
+     pane (and the page) out horizontally instead of scrolling inside
+     the tab content. */
+  min-width: 0;
 }
 /* Persistent selection header above the tabs (SEG mode only).
    FEAT mode sets ``hidden`` via JS so the strip doesn't reserve
@@ -2257,6 +2262,11 @@ dialog input[type="text"]:focus-visible {
   border-radius: 0 0 var(--radius-md) var(--radius-md);
   flex: 1;
   min-height: 0;
+  /* Also allow shrinking below content width: without this the flex
+     item's ``min-width: auto`` lets a wide, nowrap minimal-spec table
+     blow the frame (and the whole page) out horizontally instead of
+     letting the inner ``.analysis-content`` scroll on its own. */
+  min-width: 0;
   overflow: hidden;
 }
 

@@ -19,6 +19,7 @@ from phonology_shared.presentation.constants import (
     sort_spec,
     tag_prefix,
 )
+from phonology_shared.presentation.layout import ANALYSIS_MIN_VISIBLE_ROWS
 from phonology_shared.presentation.mode_logic import VALIDATION_REPORT_HEADING
 from phonology_shared.presentation.palette import C
 
@@ -145,17 +146,77 @@ def _spec_labels(mode: "MatchMode") -> tuple[str, str]:
     return _STRICT_SPEC_LABEL_SINGULAR, _STRICT_SPEC_LABEL_PLURAL
 
 
+# Spec-grid cell style. ``vertical-align:top`` + a right-hand gap gives
+# the columns air; ``white-space:nowrap`` keeps each minimal spec on one
+# line so the column-major rows stay a uniform height (a wrapping spec
+# would desync the grid and its row count). Mirrors the Contrasts table's
+# cell conventions so both tables read the same in the Qt rich-text pane.
+_SPEC_CELL_STYLE: str = (
+    "vertical-align:top; padding-right:18px; white-space:nowrap;"
+)
+
+
+def _render_spec_table(
+    chip_rows: Sequence[str], rows_per_column: int | None
+) -> str:
+    """Arrange numbered ``chip_rows`` into a COLUMN-MAJOR HTML table.
+
+    ``rows_per_column`` rows fill DOWN each column (toward the pane's
+    bottom edge) before the next column starts: cell ``(row, col)``
+    holds item ``col * rows + row``, so entries read top-to-bottom then
+    left-to-right. Trailing cells past the last item are omitted (no
+    phantom empty cell, matching the Contrasts renderer).
+
+    Rendered as a ``<table>`` (not CSS multi-column) so it lays out
+    identically in the web ``<div>`` and the desktop Qt rich-text pane,
+    which supports tables but not CSS ``columns``. When the columns are
+    wider than the pane each surface scrolls horizontally on its own.
+    """
+    n = len(chip_rows)
+    rows = max(1, rows_per_column or ANALYSIS_MIN_VISIBLE_ROWS)
+    n_cols = -(-n // rows)  # ceil(n / rows)
+    body: list[str] = []
+    for r in range(rows):
+        cells: list[str] = []
+        for c in range(n_cols):
+            idx = c * rows + r
+            if idx >= n:
+                # Column-major: any higher column in this row is empty too.
+                break
+            num = f"<span style='color:{C['text_dim']}'>{idx + 1}.</span>"
+            cells.append(
+                f"<td style='{_SPEC_CELL_STYLE}'>{num} {chip_rows[idx]}</td>"
+            )
+        if cells:
+            body.append("<tr>" + "".join(cells) + "</tr>")
+    return (
+        "<table cellpadding='3' cellspacing='0'"
+        " style='border-collapse:separate; border-spacing:0 2px;'>"
+        + "".join(body)
+        + "</table>"
+    )
+
+
 def _render_spec_list(
     specs: Sequence[Mapping[str, str]],
     *,
     mode: "MatchMode" = _MatchMode.STRICT,
+    rows_per_column: int | None = None,
 ) -> str:
-    """Render minimal feature specifications as numbered HTML rows.
+    """Render minimal feature specifications, numbered.
 
     Drops ``0`` values (under-specification is implicit), collapses
     rows that become identical after the drop, and omits the
     ``1.`` numbering when only one row remains. Returns ``""`` if
     nothing's left to show.
+
+    A single surviving spec renders as one line. Multiple specs fill a
+    COLUMN-MAJOR table (see :py:func:`_render_spec_table`) so the
+    fixed-height pane uses its horizontal space before scrolling.
+    ``rows_per_column`` is how many specs fit vertically before a column
+    wraps; it defaults to :py:data:`ANALYSIS_MIN_VISIBLE_ROWS` (the
+    pane's guaranteed-visible count) and each frontend passes the row
+    count its own live pane fits.
 
     ``mode`` selects the heading label: strict bundles read
     "Minimal specification:" while wildcard bundles read
@@ -187,11 +248,10 @@ def _render_spec_list(
         return ""
     if len(chip_rows) == 1:
         return f"<p><b>{singular}:</b></p>" f"<p>{chip_rows[0]}</p>"
-    numbered = "<br>".join(
-        f"<span style='color:{C['text_dim']}'>{i + 1}.</span> {row}"
-        for i, row in enumerate(chip_rows)
+    return (
+        f"<p><b>{plural} ({len(chip_rows)}):</b></p>"
+        + _render_spec_table(chip_rows, rows_per_column)
     )
-    return f"<p><b>{plural} ({len(chip_rows)}):</b></p>" f"<p>{numbered}</p>"
 
 
 # --- engine-side query helper ------------------------------------
@@ -201,13 +261,14 @@ def _render_completion_specs(
     bundles: Sequence[Mapping[str, str]],
     *,
     mode: "MatchMode" = _MatchMode.STRICT,
+    rows_per_column: int | None = None,
 ) -> str:
     """Render the minimal specs of a completion under ``mode``.
 
     Renders the universal-class line when the bundle is the empty
     bundle (the completed class is the entire inventory), otherwise
     dispatches to :py:func:`_render_spec_list` (which handles the
-    mode-specific headings).
+    mode-specific headings and the column-major layout).
     """
     singular, _ = _spec_labels(mode)
     if bundles and not bundles[0]:
@@ -215,7 +276,9 @@ def _render_completion_specs(
             f"<p><b>{singular}:</b>"
             f" {_tag('∅ (universal)', TagColor.NEUTRAL)}</p>"
         )
-    return _render_spec_list(bundles, mode=mode)
+    return _render_spec_list(
+        bundles, mode=mode, rows_per_column=rows_per_column
+    )
 
 
 def _render_matching_segments(
@@ -310,6 +373,7 @@ def _render_completion_body(
     completion: NaturalClassCompletion,
     *,
     mode: "MatchMode" = _MatchMode.STRICT,
+    rows_per_column: int | None = None,
 ) -> str:
     """Class-pane content for a single selection's completion under
     ``mode``.
@@ -324,7 +388,9 @@ def _render_completion_body(
     """
     if completion.status == "already_natural_class":
         return _render_completion_specs(
-            completion.selected_minimal_bundles, mode=mode
+            completion.selected_minimal_bundles,
+            mode=mode,
+            rows_per_column=rows_per_column,
         )
     additions = completion.additions[0]
     n = len(additions)
@@ -496,6 +562,7 @@ def render_class_tab_seg(
     completion: NaturalClassCompletion,
     *,
     mode: "MatchMode" = _MatchMode.STRICT,
+    rows_per_column: int | None = None,
 ) -> str:
     """Class tab content for SEG mode under ``mode``.
 
@@ -503,10 +570,16 @@ def render_class_tab_seg(
     so they are visually distinct from strict verdicts (which would
     otherwise render identical chip strips with subtly different
     semantics).
+
+    ``rows_per_column`` is forwarded to the minimal-spec renderer so a
+    long list of minimal specs fills the pane's height then wraps into
+    columns; each frontend passes the count its live pane fits.
     """
     if not segs:
         return _muted_italic_p("Click a segment to inspect it.")
-    body = _render_completion_body(completion, mode=mode)
+    body = _render_completion_body(
+        completion, mode=mode, rows_per_column=rows_per_column
+    )
     if mode is _MatchMode.WILDCARD:
         return _wildcard_badge() + body
     return body
