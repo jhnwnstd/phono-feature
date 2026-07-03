@@ -39,10 +39,10 @@ SEGMENTS_HELP_TITLE: str = "How to read the segment displays"
 #: Body of the ``SEGMENTS`` help window.
 SEGMENTS_HELP_HTML: str = (
     "<p><i>Right-click any segment to copy it.</i></p>"
-    "<p>The display uses only the specified features for each segment. It does"
+    "<p>The display uses only the specified features of each segment. It does"
     " not infer features from a symbol, a diacritic, or the segment's"
     " conventional pronunciation. If the specified features do not"
-    " distinguish two segments, the chart cannot show that distinction.</p>"
+    " distinguish two segments, the display cannot show that distinction.</p>"
     "<p>The layout is a practical display aid, not a phonetic or"
     " theoretical analysis. The layout keeps every segment visible, even when the"
     " specified features are incomplete or hard to place. Such segments fall"
