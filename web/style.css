@@ -356,6 +356,36 @@ dialog form {
   font-size: var(--font-size-meta);
   color: var(--text-dim);
 }
+/* Help-window body: the shared HTML copy (paragraphs + one bullet list).
+   Comfortable reading measure + rhythm; the parent ``dialog`` already
+   caps height and scrolls, so long copy stays inside the window. */
+.dialog-body {
+  color: var(--text);
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+  max-width: 52ch;
+}
+.dialog-body p {
+  margin: 0 0 0.7em;
+}
+.dialog-body p:last-child {
+  margin-bottom: 0;
+}
+.dialog-body ul {
+  margin: 0.2em 0 0;
+  padding-left: 1.3em;
+}
+.dialog-body li {
+  margin: 0 0 0.45em;
+}
+/* The help window holds bare divs (no <form>), so give it the same
+   title/body/actions rhythm the form-based dialogs get from
+   ``dialog form``. Scoped to [open] so a closed dialog stays hidden. */
+#help-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
 /* Citation text in the [Source] window. Wraps freely (a citation is a
    sentence, not a token) and stays selectable so the user can copy it. */
 .dialog-citation {
@@ -965,6 +995,11 @@ dialog input[type="text"]:focus-visible {
   letter-spacing: 0.5px;
   color: var(--text-dim);
 }
+/* Only the SEGMENTS title opens a help window (not FEATURES), so the
+   pointer affordance is scoped to it rather than every ``.panel-title``. */
+#seg-title {
+  cursor: pointer;
+}
 /* The Clear button pins to the far right of the panel header.
    ``margin-left: auto`` absorbs any leftover horizontal space so
    the title (and any siblings placed right after it, like the
@@ -1265,6 +1300,8 @@ dialog input[type="text"]:focus-visible {
      chart's top edge land at the same y on both UIs. */
   min-height: var(--vowel-chart-title-h);
   box-sizing: border-box;
+  /* Opens the vowel-placement help window; pointer hints it is live. */
+  cursor: pointer;
 }
 .panel[data-active="true"] .vowel-chart-title {
   color: var(--text);

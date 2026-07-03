@@ -39,6 +39,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from phonology_features.gui.help import ClickableLabel, show_help_dialog
 from phonology_features.gui.widgets.segment_button import SegmentButton
 from phonology_features.gui.widgets.vowel_pair_capsule import (
     VowelPairCapsule,
@@ -69,6 +70,10 @@ from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.constants import (
     BTN_GAP,
     VOWEL_CHART_ACCESSIBLE_NAME,
+)
+from phonology_shared.presentation.help_text import (
+    VOWELS_HELP_HTML,
+    VOWELS_HELP_TITLE,
 )
 from phonology_shared.presentation.layout import (
     MIN_VOWEL_CHART_W_PX,
@@ -663,7 +668,7 @@ class VowelChartWidget(QWidget):
         # QFontMetrics only includes spacing set on the font, so a
         # stylesheet rule would undersize adjustSize() and clip
         # the first glyph.
-        title = QLabel(geometry.title, self)
+        title = ClickableLabel(geometry.title, self)
         title_font = QFont("Noto Sans")
         title_font.setPixelSize(cs.VOWEL_CHART_TITLE_FONT_PX)
         title_font.setWeight(QFont.Weight(cs.VOWEL_CHART_TITLE_FONT_WEIGHT))
@@ -678,6 +683,12 @@ class VowelChartWidget(QWidget):
             f"padding: {_pad[0]}px {_pad[1]}px {_pad[2]}px {_pad[3]}px;"
         )
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setToolTip("How vowels are placed")
+        title.clicked.connect(
+            lambda: show_help_dialog(
+                self.window(), VOWELS_HELP_TITLE, VOWELS_HELP_HTML
+            )
+        )
         title.adjustSize()
         title.show()
         self._title_label = title

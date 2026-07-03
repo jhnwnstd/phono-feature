@@ -402,6 +402,20 @@
 </dialog>
 
 <!--
+  Segment-pane help window. Opened from the SEGMENTS pane title and the
+  Vowels chart title; its title + body are filled from the shared
+  help-text bake (``phonology_shared.presentation.help_text`` relayed as
+  the ``help-text`` inline JSON) so both frontends read one wording.
+-->
+<dialog id="help-dialog" aria-labelledby="help-dialog-title">
+  <div class="dialog-title" id="help-dialog-title"></div>
+  <div class="dialog-body" id="help-dialog-body"></div>
+  <div class="dialog-actions">
+    <button type="button" id="help-dialog-close" autofocus>Close</button>
+  </div>
+</dialog>
+
+<!--
   Segment-class visibility popover. Lives at body level (not inside the
   seg panel) so its ``position: fixed`` is viewport-relative and escapes
   the panel's ``container-type`` containing block + ``overflow: hidden``.

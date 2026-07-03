@@ -44,6 +44,11 @@ const NODE_IDS = Object.freeze({
     renameSave: "rename-save",
     sourceDialog: "source-dialog",
     sourceCitation: "source-citation",
+    segTitle: "seg-title",
+    helpDialog: "help-dialog",
+    helpDialogTitle: "help-dialog-title",
+    helpDialogBody: "help-dialog-body",
+    helpDialogClose: "help-dialog-close",
     editorBtn: "editor-btn",
     setupDialog: "setup-dialog",
     setupForm: "setup-form",
@@ -350,6 +355,11 @@ function bridgeErrorMessage(e, fallback) {
  *  freeze keeps the object immutable so a future bug can't reach
  *  back and edit a string in place. */
 const STATUS_TEXT = Object.freeze(readInlineJson("status-text", {}));
+
+/** Segments-pane help-window copy (title + HTML body per topic), baked
+ *  from ``phonology_shared.presentation.help_text`` so it matches the
+ *  desktop windows verbatim. Read by ``showHelp``. */
+const HELP_TEXT = Object.freeze(readInlineJson("help-text", {}));
 
 /** Vowel-chart visual policy: the stack-density thresholds, the
  *  legibility floor, and the silhouette corner radius the renderer
@@ -2259,6 +2269,8 @@ function _buildVowelChart(chart) {
     // chart.vowel_geometry.model.VOWEL_CHART_TITLE so the desktop
     // and web charts always agree on the heading.
     titleEl.textContent = chart.title;
+    titleEl.title = "How vowels are placed";
+    titleEl.addEventListener("click", () => showHelp("vowels"));
     chartEl.appendChild(titleEl);
 
     const corner = document.createElement("div");
@@ -6848,6 +6860,27 @@ function registerServiceWorker() {
     }
 }
 
+/** Populate + open the shared help window for a topic ("segments" or
+ *  "vowels"). Copy comes from the baked HELP_TEXT so the window matches
+ *  the desktop verbatim. */
+function showHelp(topic) {
+    const entry = HELP_TEXT[topic];
+    if (!entry) return;
+    nodes.helpDialogTitle.textContent = entry.title || "";
+    nodes.helpDialogBody.innerHTML = entry.html || "";
+    openDialog(nodes.helpDialog);
+}
+
+/** Wire the SEGMENTS pane title to open the help window (the Vowels
+ *  chart title is wired at chart-build time in _buildVowelChart) plus
+ *  the window's Close button. */
+function wireHelp() {
+    nodes.segTitle.title = "How to read the segment displays";
+    nodes.segTitle.addEventListener("click", () => showHelp("segments"));
+    nodes.helpDialogClose.addEventListener("click", () =>
+        closeDialog(nodes.helpDialog));
+}
+
 async function main() {
     initNodes();
     // Cache the baked --seg-btn-w / --seg-btn-gap CSS vars once
@@ -6872,6 +6905,7 @@ async function main() {
     wireAnalysisTabs();
     wireClearButtons();
     wireClassFilter();
+    wireHelp();
     wirePanelClickMode();
     wireSegmentDelegation();
     wireFeatureDelegation();

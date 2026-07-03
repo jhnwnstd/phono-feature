@@ -479,6 +479,26 @@ def _build_limits_payload() -> dict[str, int]:
     }
 
 
+def _build_help_text_payload() -> dict[str, dict[str, str]]:
+    """Bake the Segments-pane help windows (title + HTML body) from
+    ``help_text.py`` so the web reads the SAME copy the desktop imports
+    directly. Keyed by topic: ``segments`` (the pane title) and
+    ``vowels`` (the chart title)."""
+    module = _load_module(
+        PRESENTATION_DIR / "help_text.py", "_build_help_text"
+    )
+    return {
+        "segments": {
+            "title": module.SEGMENTS_HELP_TITLE,
+            "html": module.SEGMENTS_HELP_HTML,
+        },
+        "vowels": {
+            "title": module.VOWELS_HELP_TITLE,
+            "html": module.VOWELS_HELP_HTML,
+        },
+    }
+
+
 def _build_status_text_payload() -> dict[str, str]:
     """Bake the status-bar messages for every :py:class:`Mode` from
     ``mode_logic.mode_status_text`` into a flat dict.
@@ -1393,6 +1413,16 @@ def hash_assets() -> None:
         )
         + "</script>"
     )
+    # Segments-pane help-window copy (same source the desktop imports).
+    help_text_block = (
+        '<script id="help-text" type="application/json">'
+        + json.dumps(
+            _build_help_text_payload(),
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        + "</script>"
+    )
     # Bake the no-engine status string into the <span id="statusbar">
     # default so the pre-JS HTML carries the SAME literal the JS
     # ``statusTextForMode(...)`` returns. ``mode_status_text`` is the
@@ -1536,6 +1566,7 @@ def hash_assets() -> None:
         (
             f"{runtime_block}\n"
             + f"{status_block}\n"
+            + f"{help_text_block}\n"
             + f"{limits_block}\n"
             + f"{chart_style_block}\n"
             + (f"{bootstrap_block}\n" if bootstrap_block else "")
