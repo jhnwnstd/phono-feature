@@ -1,25 +1,34 @@
-"""User-facing help copy for the Segments pane, shared by both UIs.
+"""User-facing help copy for the Segments and Features panes, shared by
+both UIs.
 
-The Segments pane exposes two click-to-open help windows: the pane's
-``SEGMENTS`` title explains how to read the consonant AND vowel displays
-at a philosophy level, and the ``Vowels`` chart title drills into the
-specific feature-to-space placement rules. Keeping the copy here makes
-it the single source of truth: the desktop imports these constants
-directly, and ``web/scripts/build.py`` bakes them into an inline
-``application/json`` block the web reads (mirroring the status-text
-relay), so the two frontends can never show different wording.
+Three click-to-open help windows. The ``SEGMENTS`` pane title explains
+how to read the consonant AND vowel displays at a philosophy level. The
+``Vowels`` chart title drills into the specific feature-to-space
+placement rules. The ``FEATURES`` pane title explains readout mode, the
+feature-to-segment query, and strict versus underspecified matching.
+Keeping the copy here makes it the single source of truth: the desktop
+imports these constants directly, and ``web/scripts/build.py`` bakes
+them into an inline ``application/json`` block the web reads (mirroring
+the status-text relay), so the two frontends can never show different
+wording.
 
-The bodies are a conservative HTML subset (``<p>``, ``<b>``, ``<ul>``,
-``<li>``) that renders identically in a Qt rich-text widget and in the
-browser. Feature notation uses plain brackets (``[-tense]``) so it needs
-no markup. The wording is grounded in the actual heuristics:
+The bodies are a conservative HTML subset (``<p>``, ``<b>``, ``<i>``,
+``<br>``, ``<ul>``, ``<li>``) that renders identically in a Qt rich-text
+widget and in the browser. Feature notation uses plain brackets
+(``[-tense]``) so it needs no markup. The wording is grounded in the
+actual heuristics:
 
 * consonants: manner grouping + place-ordering + size-driven
   breakout/merge, all from encoded features
   (:mod:`phonology_shared.chart.consonants`);
 * vowels: the height/backness/rounding inference and the low-vowel
   Near-open split (:mod:`phonology_shared.chart.vowels`), the Open-row
-  migration (:mod:`phonology_shared.chart.vowel_geometry.display_slots`).
+  migration (:mod:`phonology_shared.chart.vowel_geometry.display_slots`);
+* features: the readout badges, the feature-to-segment query, and strict
+  versus underspecified matching
+  (:mod:`phonology_shared.theory.feature_engine`), plus feature grouping
+  and glossary links
+  (:mod:`phonology_shared.presentation.feature_metadata`).
 """
 
 from __future__ import annotations
@@ -105,4 +114,52 @@ VOWELS_HELP_HTML: str = (
     " capsule. Vowels that share a position but differ in more complex ways"
     " stack.</p>"
     "<p><b>Diphthongs</b> are listed below the vowel chart.</p>"
+)
+
+#: Title of the ``FEATURES`` help window.
+FEATURES_HELP_TITLE: str = "How to read and query features"
+
+#: Body of the ``FEATURES`` help window.
+FEATURES_HELP_HTML: str = (
+    "<p>The Features pane has two modes. When you select a segment, the"
+    " pane reports the segment's encoded feature specification. When you"
+    " set a feature specification, the pane queries the inventory for"
+    " segments that match that specification.</p>"
+    "<p><b>Feature groups and names</b><br>Features are grouped by"
+    " phonological role: Major Class, Laryngeal, Manner, Place,"
+    " Tongue-Root / Pharyngeal, and Prosodic. Any inventory feature"
+    " outside these groups appears as Other. An underlined"
+    " feature name links to an external glossary definition.</p>"
+    "<p><b>Querying by feature</b><br>Click + or − on a feature row to"
+    " add that specification to the query. Matching segments highlight in the"
+    " Segments pane.</p>"
+    "<p><b>Reading segments</b><br>Select one or more segments in the"
+    " Segments pane. Each feature row reports how that feature is"
+    " specified across the current selection.</p>"
+    "<ul>"
+    "<li>+ means every selected segment is specified [+] for that"
+    " feature.</li>"
+    "<li>− means every selected segment is specified [-] for that"
+    " feature.</li>"
+    "<li>± means the selected segments split between [+] and [-] for"
+    " that feature. The feature distinguishes segments within the"
+    " selection.</li>"
+    "<li>· means the selected segments neither share one specified value"
+    " nor split between both values. Either every selected segment leaves"
+    " the feature unspecified, or some selected segments specify one value"
+    " while the rest leave it unspecified.</li>"
+    "</ul>"
+    "<p><b>Natural class completion</b><br>When the selected segments do"
+    " not form a natural class under the current"
+    " matching mode, the Segments pane outlines in blue the additional"
+    " segments that complete the smallest natural class containing the"
+    " selection.</p>"
+    "<p><b>Strict and underspecified matching</b><br>The ≈ button controls"
+    " how the query treats unspecified features.</p>"
+    "<p>In strict matching, a [+F] query matches only segments explicitly"
+    " specified [+F], and a [-F] query matches only segments explicitly"
+    " specified [-F]. An unspecified or absent feature does not match"
+    " either query.</p>"
+    "<p>In underspecified matching, an unspecified or absent feature can"
+    " match either a [+F] or [-F] query.</p>"
 )

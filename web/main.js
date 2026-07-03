@@ -45,6 +45,7 @@ const NODE_IDS = Object.freeze({
     sourceDialog: "source-dialog",
     sourceCitation: "source-citation",
     segTitle: "seg-title",
+    featTitle: "feat-title",
     helpDialog: "help-dialog",
     helpDialogTitle: "help-dialog-title",
     helpDialogBody: "help-dialog-body",
@@ -6871,12 +6872,14 @@ function showHelp(topic) {
     openDialog(nodes.helpDialog);
 }
 
-/** Wire the SEGMENTS pane title to open the help window (the Vowels
- *  chart title is wired at chart-build time in _buildVowelChart) plus
- *  the window's Close button. */
+/** Wire the SEGMENTS and FEATURES pane titles to open their help
+ *  windows (the Vowels chart title is wired at chart-build time in
+ *  _buildVowelChart) plus the window's Close button. */
 function wireHelp() {
     nodes.segTitle.title = "How to read the segment displays";
     nodes.segTitle.addEventListener("click", () => showHelp("segments"));
+    nodes.featTitle.title = "How to read and query features";
+    nodes.featTitle.addEventListener("click", () => showHelp("features"));
     nodes.helpDialogClose.addEventListener("click", () =>
         closeDialog(nodes.helpDialog));
     // Click on the backdrop (the dialog element itself, outside its

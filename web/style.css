@@ -1026,9 +1026,10 @@ dialog input[type="text"]:focus-visible {
   letter-spacing: 0.5px;
   color: var(--text-dim);
 }
-/* Only the SEGMENTS title opens a help window (not FEATURES), so the
-   pointer affordance is scoped to it rather than every ``.panel-title``. */
-#seg-title {
+/* The SEGMENTS and FEATURES titles open help windows, so the pointer
+   affordance is scoped to them rather than every ``.panel-title``. */
+#seg-title,
+#feat-title {
   cursor: pointer;
 }
 /* A superscript "?" after each help-opening title makes the click
@@ -1037,6 +1038,7 @@ dialog input[type="text"]:focus-visible {
    needs no separate handler. Inherits the title's colour (so it tracks
    the theme + active/dim state) and brightens to accent on hover. */
 #seg-title::after,
+#feat-title::after,
 .vowel-chart-title::after {
   content: "?";
   margin-left: 0.3em;
@@ -1045,6 +1047,7 @@ dialog input[type="text"]:focus-visible {
   vertical-align: super;
 }
 #seg-title:hover::after,
+#feat-title:hover::after,
 .vowel-chart-title:hover::after {
   color: var(--accent);
 }

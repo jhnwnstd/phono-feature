@@ -482,8 +482,8 @@ def _build_limits_payload() -> dict[str, int]:
 def _build_help_text_payload() -> dict[str, dict[str, str]]:
     """Bake the Segments-pane help windows (title + HTML body) from
     ``help_text.py`` so the web reads the SAME copy the desktop imports
-    directly. Keyed by topic: ``segments`` (the pane title) and
-    ``vowels`` (the chart title)."""
+    directly. Keyed by topic: ``segments`` and ``features`` (the pane
+    titles) and ``vowels`` (the chart title)."""
     module = _load_module(
         PRESENTATION_DIR / "help_text.py", "_build_help_text"
     )
@@ -495,6 +495,10 @@ def _build_help_text_payload() -> dict[str, dict[str, str]]:
         "vowels": {
             "title": module.VOWELS_HELP_TITLE,
             "html": module.VOWELS_HELP_HTML,
+        },
+        "features": {
+            "title": module.FEATURES_HELP_TITLE,
+            "html": module.FEATURES_HELP_HTML,
         },
     }
 

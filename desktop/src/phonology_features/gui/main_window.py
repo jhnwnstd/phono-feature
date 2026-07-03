@@ -108,6 +108,8 @@ from phonology_shared.presentation.constants import (
     sort_features,
 )
 from phonology_shared.presentation.help_text import (
+    FEATURES_HELP_HTML,
+    FEATURES_HELP_TITLE,
     SEGMENTS_HELP_HTML,
     SEGMENTS_HELP_TITLE,
 )
@@ -762,10 +764,16 @@ class MainWindow(QMainWindow):
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
         header = QHBoxLayout()
-        self._feat_title = QLabel("FEATURES")
+        self._feat_title = ClickableLabel(help_hint_html("FEATURES"))
         self._feat_title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
         self._feat_title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1.5px;"
+        )
+        self._feat_title.setToolTip("How to read and query features")
+        self._feat_title.clicked.connect(
+            lambda: show_help_dialog(
+                self, FEATURES_HELP_TITLE, FEATURES_HELP_HTML
+            )
         )
         # Wildcard / match-mode toggle. Lives in the Features-pane
         # header (not the toolbar) so the natural-class-policy
