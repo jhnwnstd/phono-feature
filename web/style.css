@@ -363,7 +363,10 @@ dialog form {
   color: var(--text);
   font-size: var(--font-size-body);
   line-height: 1.5;
-  max-width: 52ch;
+  /* Reading measure; sets the help window's width (kept below the
+     ``#help-dialog`` max-width). A touch wider than a pure text column
+     so the longer help prose reads in fewer, less choppy lines. */
+  max-width: 62ch;
 }
 .dialog-body p {
   margin: 0 0 0.7em;
@@ -385,6 +388,34 @@ dialog form {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  /* A touch wider than the default dialog so the longer help prose reads
+     in fewer, less choppy lines. Still capped to the viewport. */
+  max-width: min(600px, calc(100vw - var(--space-xl) * 2));
+}
+/* Close control moved to the top-right corner (replaces the bottom
+   action row); clicking the backdrop or pressing Escape also closes. */
+.dialog-close-x {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 1.9em;
+  height: 1.9em;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--font-size-heading);
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.dialog-close-x:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+/* Keep the heading clear of the corner close button. */
+#help-dialog .dialog-title {
+  padding-right: 1.8em;
 }
 /* Citation text in the [Source] window. Wraps freely (a citation is a
    sentence, not a token) and stays selectable so the user can copy it. */

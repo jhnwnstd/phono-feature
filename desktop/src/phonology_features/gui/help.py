@@ -10,12 +10,11 @@ shared HTML copy from
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtCore import QEvent, Qt, pyqtSignal
+from PyQt6.QtGui import QMouseEvent, QShowEvent
 from PyQt6.QtWidgets import (
     QDialog,
     QLabel,
-    QPushButton,
     QTextBrowser,
     QVBoxLayout,
     QWidget,
@@ -57,22 +56,54 @@ class ClickableLabel(QLabel):
         super().mousePressEvent(event)
 
 
-def show_help_dialog(parent: QWidget | None, title: str, html: str) -> None:
-    """Open a small modal help window showing ``html`` under ``title``.
-
-    The dialog inherits the app's themed chrome; the body is a
-    borderless, read-only :class:`QTextBrowser` so long copy scrolls
-    inside the window instead of stretching it off-screen.
+class _HelpDialog(QDialog):
+    """Non-modal help window that closes when it loses focus (the user
+    clicks outside it), in addition to the title-bar close button and
+    Escape. Mirrors the web dialog's backdrop-click + Escape dismissal.
+    The ``_armed`` flag suppresses the close until after the first show
+    so the window doesn't dismiss itself during construction / initial
+    activation.
     """
-    dlg = QDialog(parent)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._armed = False
+
+    def showEvent(self, event: QShowEvent | None) -> None:
+        super().showEvent(event)
+        self._armed = True
+
+    def changeEvent(self, event: QEvent | None) -> None:
+        super().changeEvent(event)
+        if (
+            self._armed
+            and event is not None
+            and event.type() == QEvent.Type.ActivationChange
+            and not self.isActiveWindow()
+        ):
+            self.close()
+
+
+def show_help_dialog(parent: QWidget | None, title: str, html: str) -> None:
+    """Open a help window showing ``html`` under ``title``.
+
+    Non-modal so the user can read it alongside the chart; it closes on
+    the title-bar close button (top-right), on Escape, or when it loses
+    focus (a click anywhere outside it). The body is a borderless,
+    read-only :class:`QTextBrowser` so long copy scrolls inside the
+    window instead of stretching it off-screen.
+    """
+    dlg = _HelpDialog(parent)
     dlg.setWindowTitle(title)
-    dlg.setModal(True)
+    dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
     layout = QVBoxLayout(dlg)
-    layout.setContentsMargins(20, 20, 20, 16)
-    layout.setSpacing(12)
+    layout.setContentsMargins(20, 20, 20, 20)
 
     body = QTextBrowser(dlg)
     body.setOpenExternalLinks(True)
+    # No context menu: its popup would deactivate the window and trip
+    # the click-outside-to-close handler.
+    body.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
     body.setHtml(html)
     set_css(
         body,
@@ -81,10 +112,7 @@ def show_help_dialog(parent: QWidget | None, title: str, html: str) -> None:
     )
     layout.addWidget(body)
 
-    close = QPushButton("Close", dlg)
-    close.clicked.connect(dlg.accept)
-    close.setDefault(True)
-    layout.addWidget(close, alignment=Qt.AlignmentFlag.AlignRight)
-
-    dlg.resize(480, 460)
-    dlg.exec()
+    dlg.resize(560, 480)
+    dlg.show()
+    dlg.raise_()
+    dlg.activateWindow()

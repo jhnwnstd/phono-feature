@@ -6879,6 +6879,11 @@ function wireHelp() {
     nodes.segTitle.addEventListener("click", () => showHelp("segments"));
     nodes.helpDialogClose.addEventListener("click", () =>
         closeDialog(nodes.helpDialog));
+    // Click on the backdrop (the dialog element itself, outside its
+    // content) closes it -- native <dialog> already handles Escape.
+    nodes.helpDialog.addEventListener("click", (ev) => {
+        if (ev.target === nodes.helpDialog) closeDialog(nodes.helpDialog);
+    });
 }
 
 async function main() {
