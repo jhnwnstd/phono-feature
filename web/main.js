@@ -952,9 +952,7 @@ function setStatusSource(source) {
 function openSourceCitation(text) {
     if (!nodes.sourceDialog || !nodes.sourceCitation) return;
     nodes.sourceCitation.textContent = text || "";
-    if (typeof nodes.sourceDialog.showModal === "function") {
-        nodes.sourceDialog.showModal();
-    }
+    openDialog(nodes.sourceDialog, { dismissOnBackdrop: true });
 }
 
 /** Set the bottom-border status to the loaded-inventory summary
@@ -1235,8 +1233,19 @@ function parseCSSLength(varName, fallback) {
 /** ``<dialog>.showModal()`` with a graceful fallback for browsers
  *  without dialog support. Captures the previously-focused
  *  element so ``closeDialog`` can restore focus to its trigger. */
-function openDialog(dialog) {
+function openDialog(dialog, { dismissOnBackdrop = false } = {}) {
     dialog._returnFocusTo = document.activeElement;
+    // Read-only popups (help, citation viewer) opt into click-away
+    // dismissal: a click that lands on the dialog element itself (the
+    // ::backdrop, outside the content box) closes it. Data-entry
+    // dialogs leave it off so a stray click can't discard a form. The
+    // handler is added once and reused across opens.
+    if (dismissOnBackdrop && !dialog._backdropHandler) {
+        dialog._backdropHandler = (ev) => {
+            if (ev.target === dialog) closeDialog(dialog);
+        };
+        dialog.addEventListener("click", dialog._backdropHandler);
+    }
     if (typeof dialog.showModal === "function") {
         dialog.showModal();
     } else {
@@ -6869,7 +6878,7 @@ function showHelp(topic) {
     if (!entry) return;
     nodes.helpDialogTitle.textContent = entry.title || "";
     nodes.helpDialogBody.innerHTML = entry.html || "";
-    openDialog(nodes.helpDialog);
+    openDialog(nodes.helpDialog, { dismissOnBackdrop: true });
 }
 
 /** Wire the SEGMENTS and FEATURES pane titles to open their help
@@ -6882,11 +6891,6 @@ function wireHelp() {
     nodes.featTitle.addEventListener("click", () => showHelp("features"));
     nodes.helpDialogClose.addEventListener("click", () =>
         closeDialog(nodes.helpDialog));
-    // Click on the backdrop (the dialog element itself, outside its
-    // content) closes it -- native <dialog> already handles Escape.
-    nodes.helpDialog.addEventListener("click", (ev) => {
-        if (ev.target === nodes.helpDialog) closeDialog(nodes.helpDialog);
-    });
 }
 
 async function main() {

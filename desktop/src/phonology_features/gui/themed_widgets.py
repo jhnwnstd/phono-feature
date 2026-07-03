@@ -33,7 +33,6 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QSizePolicy,
     QSplitter,
     QSplitterHandle,
@@ -41,6 +40,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from phonology_features.gui.help import show_help_dialog
 from phonology_features.gui.style_utils import set_css
 from phonology_shared.presentation.layout import REGION_CONSTRAINTS
 from phonology_shared.presentation.palette import C
@@ -262,17 +262,17 @@ class _BrandedStatusBar(QStatusBar):
     def _on_source_activated(self, _href: str) -> None:
         """Open the citation window for a plain-text source. URL/DOI
         sources are opened by ``setOpenExternalLinks`` and never reach
-        here as a citation."""
+        here as a citation. Reuses the shared help window so its close
+        behavior (Escape, click-outside, title-bar close) matches the
+        other read-only popups."""
         if self._source.kind != "citation":
             return
-        box = QMessageBox(self.window())
-        box.setWindowTitle("Source")
-        box.setIcon(QMessageBox.Icon.NoIcon)
-        box.setText(self._source.text)
-        box.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
+        show_help_dialog(
+            self.window(),
+            "Source",
+            f"<p style='white-space:pre-wrap'>"
+            f"{html.escape(self._source.text)}</p>",
         )
-        box.exec()
 
     def apply_theme(self) -> None:
         """Re-apply palette-dependent styles. Called on theme toggle."""
