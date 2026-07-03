@@ -64,7 +64,11 @@ from phonology_features.gui.controllers.theme import (
     ThemeController,
     detect_system_theme,
 )
-from phonology_features.gui.help import ClickableLabel, show_help_dialog
+from phonology_features.gui.help import (
+    ClickableLabel,
+    help_hint_html,
+    show_help_dialog,
+)
 from phonology_features.gui.style_utils import (
     set_css,
 )
@@ -582,7 +586,7 @@ class MainWindow(QMainWindow):
         vlay.setContentsMargins(14, 14, 14, 10)
         vlay.setSpacing(10)
         header = QHBoxLayout()
-        self._seg_title = ClickableLabel("SEGMENTS")
+        self._seg_title = ClickableLabel(help_hint_html("SEGMENTS"))
         self._seg_title.setFont(QFont("Noto Sans", 9, QFont.Weight.Bold))
         self._seg_title.setStyleSheet(
             f"color: {C['text_dim']}; letter-spacing: 1.5px;"

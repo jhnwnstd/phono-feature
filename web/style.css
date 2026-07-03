@@ -1000,6 +1000,23 @@ dialog input[type="text"]:focus-visible {
 #seg-title {
   cursor: pointer;
 }
+/* A superscript "?" after each help-opening title makes the click
+   affordance visible. Decorative (each title's ``title=`` tooltip carries
+   the accessible hint) and part of the already-clickable label, so it
+   needs no separate handler. Inherits the title's colour (so it tracks
+   the theme + active/dim state) and brightens to accent on hover. */
+#seg-title::after,
+.vowel-chart-title::after {
+  content: "?";
+  margin-left: 0.3em;
+  font-size: 0.72em;
+  font-weight: 700;
+  vertical-align: super;
+}
+#seg-title:hover::after,
+.vowel-chart-title:hover::after {
+  color: var(--accent);
+}
 /* The Clear button pins to the far right of the panel header.
    ``margin-left: auto`` absorbs any leftover horizontal space so
    the title (and any siblings placed right after it, like the

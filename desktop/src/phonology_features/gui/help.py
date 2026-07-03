@@ -26,12 +26,21 @@ from phonology_shared.presentation.palette import C
 from .style_utils import set_css
 
 
+def help_hint_html(text: str) -> str:
+    """Wrap ``text`` with a trailing superscript "?" (Qt rich text) so a
+    help-opening :class:`ClickableLabel` shows a visible click-for-help
+    affordance. The "?" carries no colour of its own, so it inherits the
+    label's colour and tracks the theme + active/dim state. Mirrors the
+    web ``#seg-title::after`` / ``.vowel-chart-title::after`` badge."""
+    return f"{text} <sup>?</sup>"
+
+
 class ClickableLabel(QLabel):
     """A QLabel that emits :attr:`clicked` on a left-button press.
 
-    Used for the two help-opening pane labels; a pointing-hand cursor
-    plus a tooltip are the only affordance so the labels keep their
-    quiet look.
+    Used for the two help-opening pane labels; a pointing-hand cursor,
+    a tooltip, and a trailing "?" (see :func:`help_hint_html`) advertise
+    that clicking opens a help window.
     """
 
     clicked = pyqtSignal()
