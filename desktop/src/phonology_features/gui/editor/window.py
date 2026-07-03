@@ -476,6 +476,19 @@ class InventoryEditor(QMainWindow):
         sel_model = self._table.selectionModel()
         if sel_model is not None:
             sel_model.selectionChanged.connect(self._on_selection_changed)
+        # Keep the selection crosshair painted while a held arrow key
+        # scrolls the view: the header's scroll-exposed paint is async and
+        # starves under sustained key-repeat, blanking the lit segment /
+        # feature until the motion stops. A synchronous repaint on each
+        # scroll step keeps it on screen. Connected once (the table and
+        # its scrollbars outlive _rebuild_table, which only clear()s and
+        # re-installs headers); the slots look up the CURRENT header.
+        h_scroll = self._table.horizontalScrollBar()
+        if h_scroll is not None:
+            h_scroll.valueChanged.connect(self._repaint_col_header_on_scroll)
+        v_scroll = self._table.verticalScrollBar()
+        if v_scroll is not None:
+            v_scroll.valueChanged.connect(self._repaint_row_header_on_scroll)
         # Corner button (top-left of headers) drives select-all by
         # default; intercept so a second click clears the selection.
         corner = self._table.findChild(QAbstractButton)
@@ -1107,6 +1120,21 @@ class InventoryEditor(QMainWindow):
         self._rm_feat_btn.setStyleSheet(
             self._btn_style_enabled if enabled else self._btn_style_disabled
         )
+
+    def _repaint_col_header_on_scroll(self) -> None:
+        """Keep the lit segment header painted while a horizontal scroll
+        moves it under a held arrow key (see
+        :py:meth:`_ToggleHeaderView.repaint_lit_now`)."""
+        header = self._table.horizontalHeader()
+        if isinstance(header, _ToggleHeaderView):
+            header.repaint_lit_now()
+
+    def _repaint_row_header_on_scroll(self) -> None:
+        """Keep the lit feature header painted while a vertical scroll
+        moves it under a held arrow key."""
+        header = self._table.verticalHeader()
+        if isinstance(header, _ToggleHeaderView):
+            header.repaint_lit_now()
 
     def _on_selection_changed(self) -> None:
         """Single source of truth for everything that derives from the

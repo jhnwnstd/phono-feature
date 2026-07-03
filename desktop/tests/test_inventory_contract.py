@@ -1802,6 +1802,72 @@ def test_crosshair_header_repaints_synchronously_on_lit_change() -> None:
         table_mod._ToggleHeaderView.paintSection = orig_paint
 
 
+def test_crosshair_header_repaints_on_scroll_while_lit() -> None:
+    """Held-arrow-that-scrolls regression: a sustained arrow in one
+    direction scrolls the view, and the header section it exposes at the
+    edge is painted by Qt's async scroll-exposed update() that starves
+    under key-repeat, so the lit segment / feature blanks until the
+    motion stops. The table's scrollbars are wired to force a synchronous
+    header repaint on each scroll step while a crosshair is lit. Assert a
+    scroll synchronously repaints the segment header when lit, and stays a
+    no-op when nothing is lit."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import Qt as _Qt
+    from PyQt6.QtWidgets import QApplication
+
+    from phonology_features.gui.editor import table as table_mod
+
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.editor import InventoryEditor
+
+    h_painted: list[int] = []
+    orig_paint = table_mod._ToggleHeaderView.paintSection
+
+    def recording_paint(self, painter, rect, logical_index):  # type: ignore[no-untyped-def]
+        if self.orientation() == _Qt.Orientation.Horizontal:
+            h_painted.append(logical_index)
+        return orig_paint(self, painter, rect, logical_index)
+
+    table_mod._ToggleHeaderView.paintSection = recording_paint  # type: ignore[method-assign]
+    try:
+        b = InventoryEditor(load_path=HAYES)
+        b.resize(1200, 760)
+        b.show()
+        for _ in range(4):
+            app.processEvents()
+        hbar = b._table.horizontalScrollBar()
+        assert hbar is not None
+        # Active crosshair: a horizontal scroll must repaint the segment
+        # header NOW (before any event-loop spin), so it does not blank
+        # while a held arrow scrolls sideways.
+        b._table.setCurrentCell(5, 10)
+        for _ in range(3):
+            app.processEvents()
+        h_painted.clear()
+        hbar.setValue(hbar.value() + 3)
+        assert h_painted, (
+            "with a lit crosshair a horizontal scroll must synchronously "
+            "repaint the segment header so it does not blank while a held "
+            "arrow scrolls"
+        )
+        # No crosshair: scrolling must not force a synchronous repaint
+        # (plain scrolling pays nothing; Qt's async path handles labels).
+        b._table.clearSelection()
+        for _ in range(3):
+            app.processEvents()
+        h_painted.clear()
+        hbar.setValue(hbar.value() + 3)
+        assert not h_painted, (
+            "scrolling with no crosshair must stay a no-op; got "
+            f"synchronous segment-header paints {h_painted}"
+        )
+        b.close()
+    finally:
+        table_mod._ToggleHeaderView.paintSection = orig_paint
+
+
 def test_dropdown_filters_out_atomic_write_tmp_files(tmp_path: Path) -> None:
     """``atomic_write_json`` creates ``.tmp_inv_*.json`` files in the
     target directory between ``mkstemp`` and ``os.replace``. The

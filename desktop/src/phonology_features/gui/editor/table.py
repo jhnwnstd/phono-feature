@@ -98,11 +98,18 @@ class _ToggleHeaderView(QHeaderView):
             return
         changed = lit ^ self._lit_sections
         self._lit_sections = lit
+        self._repaint_sections(changed)
+
+    def _repaint_sections(self, sections: Iterable[int]) -> None:
+        """Synchronously repaint just ``sections``, bounded to the union
+        of their rects. Cheap because the crosshair touches only one or
+        two sections; a full-viewport repaint would re-render every
+        visible label (~20 ms on a wide header) on every call."""
         viewport = self.viewport()
         if viewport is None:
             return
         bound: QRect | None = None
-        for index in changed:
+        for index in sections:
             rect = self._section_rect(index)
             if rect is None:
                 continue
@@ -122,6 +129,25 @@ class _ToggleHeaderView(QHeaderView):
         if self.orientation() == Qt.Orientation.Horizontal:
             return QRect(pos, 0, size, viewport.height())
         return QRect(0, pos, viewport.width(), size)
+
+    def repaint_lit_now(self) -> None:
+        """Synchronously repaint the lit crosshair section(s) at their
+        current position.
+
+        Wired to the table's scrollbars. Holding an arrow key scrolls
+        the view continuously, and the section it exposes at the edge is
+        painted by Qt's scroll-exposed ``update()`` (async), which
+        starves under the sustained key-repeat, so the lit segment /
+        feature blanks until the motion stops. ``set_lit_sections``
+        cannot cover this: it runs on ``selectionChanged``, before the
+        scroll, so its bounded rect targets the pre-scroll (still
+        off-viewport) position. This fires after the scroll (on the
+        scrollbar's ``valueChanged``), so ``_section_rect`` reads the
+        post-scroll position and repaints the lit section there. No-op
+        when nothing is lit, so plain scrolling pays nothing.
+        """
+        if self._lit_sections:
+            self._repaint_sections(self._lit_sections)
 
     def paintSection(
         self, painter: QPainter | None, rect: QRect, logicalIndex: int
