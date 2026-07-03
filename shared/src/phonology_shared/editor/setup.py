@@ -183,7 +183,7 @@ def inventory_display_label(*, fname: str, metadata_name: str | None) -> str:
         cleaned = metadata_name.strip()
         if cleaned:
             return cleaned
-    stem = fname[:-5] if fname.endswith(".json") else fname
+    stem = fname.removesuffix(".json")
     stem = stem.removesuffix("_features").replace("_", " ")
     return stem.title()
 

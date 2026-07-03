@@ -252,7 +252,7 @@
     both UIs render the same partition without re-implementing the
     split logic on either side.
   -->
-  <div class="analysis-tabs" id="analysis-tabs" role="tablist">
+  <div class="analysis-tabs" role="tablist">
     <button class="analysis-tab" id="analysis-tab-class"
             type="button" role="tab" aria-controls="analysis-content-class"
             data-tab="class" data-class-state="neutral"
@@ -390,7 +390,7 @@
 <dialog id="editor-source-dialog" aria-labelledby="editor-source-title">
   <button type="button" id="editor-source-cancel" class="dialog-close-x"
           aria-label="Close">&times;</button>
-  <form method="dialog" id="editor-source-form">
+  <form method="dialog">
     <div class="dialog-title" id="editor-source-title">Inventory source</div>
     <label class="dialog-label" for="editor-source-textarea">Citation, URL, DOI, or a pasted BibTeX entry</label>
     <textarea id="editor-source-textarea" class="dialog-textarea" rows="6"
@@ -399,7 +399,7 @@
 
 — or paste a BibTeX @entry, or a URL / DOI —"></textarea>
     <div class="dialog-actions">
-      <button type="submit" id="editor-source-save" value="save">Save</button>
+      <button type="submit" value="save">Save</button>
     </div>
   </form>
 </dialog>
@@ -541,7 +541,7 @@
       <!-- Attribution anchored in the footer so it stays in one fixed
            place at the bottom rather than riding the preview, which
            appears and shifts as the user picks a source. -->
-      <a id="phoible-cite" class="phoible-cite" href="PHOIBLE_LICENSE.txt"
+      <a class="phoible-cite" href="PHOIBLE_LICENSE.txt"
          target="_blank" rel="noopener">Powered by PHOIBLE 2.0</a>
       <button type="submit" id="phoible-load" value="load" disabled>
         Load inventory

@@ -536,13 +536,7 @@ class VowelChartWidget(QWidget):
             w = item.widget()
             if w is not None:
                 w.setParent(None)
-        seen: set[str] = set()
-        unique_diphs: list[str] = []
-        for seg in self._diphthongs:
-            if not seg or seg in seen:
-                continue
-            seen.add(seg)
-            unique_diphs.append(seg)
+        unique_diphs = list(dict.fromkeys(s for s in self._diphthongs if s))
         for segment in unique_diphs:
             chip = self._buttons.get(segment)
             if chip is None:
@@ -1072,17 +1066,20 @@ class VowelChartWidget(QWidget):
                 strip_h,
             )
         if self._title_label is not None:
-            # Give the title the full data-area box and let its AlignCenter
-            # centre the text. This mirrors the web (the title is grid
-            # column 2, centred over the data area) and is positionally
-            # stable: the box is always ``[dx, dx + dw]``, so the heading
-            # sits at the same place for every inventory of a given chart
-            # width instead of drifting with the label's measured advance
-            # width. The full-width box also leaves ample slack on both
-            # sides, so the first glyph's side bearing (the 'V' of "VOWELS")
-            # is never clipped, which is what the earlier adjustSize-based
-            # placement got wrong.
-            self._title_label.setGeometry(dx, 0, dw, self._TITLE_H)
+            # Size the label to its content and centre it within the
+            # data-area box ``[dx, dx + dw]`` rather than stretching it
+            # full-width. A full-width label made the ENTIRE title row
+            # clickable (the label owns the help click), so a stray click
+            # far from the heading opened the help window; restricting the
+            # box to the text keeps the click target on the label + "?".
+            # The heading text is fixed ("Vowels"), so its measured width is
+            # stable across inventories (same positional guarantee as
+            # before), and the 2px side padding preserves the first glyph's
+            # side bearing so nothing clips.
+            tw = min(self._title_label.sizeHint().width(), dw)
+            self._title_label.setGeometry(
+                dx + (dw - tw) // 2, 0, tw, self._TITLE_H
+            )
         # Column headers: x in [0, 1] mapped across the data area, then
         # centred on each anchor. Uses round-to-nearest (not int truncate)
         # so sub-pixel positions don't bias every cell leftward vs the web's

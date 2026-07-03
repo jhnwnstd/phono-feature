@@ -1338,6 +1338,10 @@ dialog input[type="text"]:focus-visible {
      11px/600/0.5px/symmetric padding). */
   grid-row: 1;
   grid-column: 2;
+  /* Shrink the box to the label so only the "Vowels" text + "?" is
+     clickable, not the whole title row; still centered over the data
+     area because the grid cell centers a content-width item. */
+  justify-self: center;
   text-align: center;
   font-size: var(--vowel-chart-title-font);
   font-weight: var(--vowel-chart-title-weight);
@@ -1784,8 +1788,7 @@ dialog input[type="text"]:focus-visible {
    side-by-side rather than stacking vertically. ``data-pair-kind``
    carries which contrast drove the pair so stylesheet hooks (or
    downstream tooling) can react without re-deriving from entries. */
-.vowel-chart-cell-pair,
-.vowel-chart-cell-long-pair {
+.vowel-chart-cell-pair {
   display: flex;
   flex-direction: row;
   gap: var(--vowel-pair-gap, 2px);

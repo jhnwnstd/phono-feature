@@ -114,7 +114,7 @@ def inventory_sort_key(fname: str, label: str) -> tuple[int, str]:
     Hayes inventory, then everything else alphabetically by display
     label.
     """
-    stem = fname[:-5] if fname.endswith(".json") else fname
+    stem = fname.removesuffix(".json")
     if stem == DEFAULT_INVENTORY_STEM:
         rank = 0
     elif "hayes" in label.casefold():
@@ -137,8 +137,7 @@ MATCH_MODE_TOOLTIP_STRICT_ACTIVE: str = (
     "Allow segments with 0 or absent feature values to match queries."
 )
 MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE: str = (
-    "Underspecified matching is on: 0 or absent values can still "
-    "match +/− queries. Click for strict matching."
+    "Match only segments with explicit feature values."
 )
 
 # Placeholder copy for non-ideal states. Each string is shown in

@@ -197,26 +197,6 @@ class PhoibleDialog(QDialog):
         self._hint.setVisible(hint)
 
     @staticmethod
-    def _list_style() -> str:
-        """Themed chrome for the autocomplete + source lists so they
-        match the rest of the app (panel fill, themed border + radius,
-        soft accent selection) instead of the raw Qt default frame."""
-        return (
-            f"QListWidget {{"
-            f" background: {C['panel']}; color: {C['text']};"
-            f" border: 1px solid {C['border']}; border-radius: 5px;"
-            f" padding: 2px; outline: none;"
-            f" }}"
-            f" QListWidget::item {{"
-            f" padding: 4px 8px; border-radius: 4px;"
-            f" }}"
-            f" QListWidget::item:selected {{"
-            f" background: {C['accent_light']}; color: {C['text']};"
-            f" }}"
-            f" QListWidget::item:hover {{ background: {C['bg']}; }}"
-        )
-
-    @staticmethod
     def _source_list_style() -> str:
         """Chrome for the source list. Unlike the autocomplete, its rows
         are full widgets (``_build_source_row``) that carry their own
