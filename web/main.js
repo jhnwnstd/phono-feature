@@ -1031,7 +1031,11 @@ function prewarmCommonAnalyses() {
         if (myGen !== _prewarmGen) return;
         if (i >= targets.length) return;
         try {
-            callBridge("analyze_segments", [targets[i]]);
+            // Same rows-per-column the real click will use, so the
+            // prewarmed entry is a cache hit rather than a stale-R miss.
+            callBridge(
+                "analyze_segments", [targets[i]], analysisSpecRowsPerCol(),
+            );
         } catch {
             /* bridge may go away during teardown; silently skip */
         }
@@ -3282,10 +3286,10 @@ function _setRasterizedBadge(badgeEl, text) {
 // only in the bridge fn + argument and whether feature-row states
 // are repainted (seg->feat owns the feature rows; feat->seg does
 // not touch them).
-function _runAnalysis(token, bridgeFn, arg, applyFeatureRows) {
+function _runAnalysis(token, bridgeFn, arg, applyFeatureRows, ...extra) {
     let result;
     try {
-        result = callBridge(bridgeFn, arg);
+        result = callBridge(bridgeFn, arg, ...extra);
     } catch (e) {
         _surfaceBridgeFailure(bridgeFn, e);
         return;
@@ -3298,8 +3302,37 @@ function _runAnalysis(token, bridgeFn, arg, applyFeatureRows) {
     if (applyFeatureRows) _applyFeatureRowStates(result.feature_rows);
 }
 
+/** How many minimal specs fit the analysis pane's fixed height before a
+ *  column wraps. Measured from the live content area so the shared
+ *  column-major spec table fills the pane's height (then spills into
+ *  more columns, then scrolls). Falls back to the shared floor before
+ *  the pane is laid out. Mirrors the desktop's
+ *  ``_analysis_spec_rows_per_col``. */
+const ANALYSIS_MIN_SPEC_ROWS = 4;
+function analysisSpecRowsPerCol() {
+    const el = nodes.analysisContentClass;
+    // Class tab may be display:none (another tab active); fall back to
+    // the always-sized content frame so the height is still readable.
+    const h = el && el.clientHeight
+        ? el.clientHeight
+        : (el && el.parentElement ? el.parentElement.clientHeight : 0);
+    if (!h || !el) return ANALYSIS_MIN_SPEC_ROWS;
+    const cs = getComputedStyle(el);
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const line = parseFloat(cs.lineHeight) || 18;
+    // A spec row is one text line + the table's per-row border-spacing.
+    // Reserve the "Minimal specifications (N):" heading, which is a
+    // paragraph (~two lines with its bottom margin), and round DOWN so a
+    // full column never overflows into a vertical scrollbar.
+    const avail = h - pad - (line * 2 + 8);
+    return Math.max(ANALYSIS_MIN_SPEC_ROWS, Math.floor(avail / (line + 2)));
+}
+
 function runSegToFeat(token) {
-    _runAnalysis(token, "analyze_segments", state.selected_segments, true);
+    _runAnalysis(
+        token, "analyze_segments", state.selected_segments, true,
+        analysisSpecRowsPerCol(),
+    );
 }
 
 function runFeatToSeg(token) {

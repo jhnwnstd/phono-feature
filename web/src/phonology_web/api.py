@@ -1009,7 +1009,9 @@ def best_segment_n_cols_for_groups(
 
 
 @_translate_engine_errors
-def analyze_segments(segs: list[str]) -> SegmentSelectionSummary:
+def analyze_segments(
+    segs: list[str], rows_per_column: int | None = None
+) -> SegmentSelectionSummary:
     """SEG-mode analysis under the active :py:class:`MatchMode`.
 
     Returns the per-tab ``analysis_tabs`` payload plus the inputs JS needs to
@@ -1030,19 +1032,27 @@ def analyze_segments(segs: list[str]) -> SegmentSelectionSummary:
         raise ValidationError(
             (f"unknown segment(s) in current inventory: {bad!r}",)
         )
-    return _analyze_segments_cached(tuple(segs), str(_match_mode))
+    return _analyze_segments_cached(
+        tuple(segs), str(_match_mode), rows_per_column
+    )
 
 
 @lru_cache(maxsize=512)
 def _analyze_segments_cached(
     segs_tuple: tuple[str, ...],
     mode_str: str,
+    rows_per_column: int | None = None,
 ) -> SegmentSelectionSummary:
     """SEG analysis result. ``mode_str`` is the ``MatchMode`` value as a wire
-    string so the cache key stays human-readable in profiles."""
+    string so the cache key stays human-readable in profiles.
+    ``rows_per_column`` (how many minimal specs fit the live pane height,
+    measured by JS) is part of the key so a taller pane re-renders the
+    column-major spec table instead of returning a stale column count."""
     engine = _require_engine()
     mode = MatchMode(mode_str)
-    return summarize_segment_selection(engine, list(segs_tuple), mode=mode)
+    return summarize_segment_selection(
+        engine, list(segs_tuple), mode=mode, rows_per_column=rows_per_column
+    )
 
 
 @_translate_engine_errors

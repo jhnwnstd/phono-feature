@@ -161,11 +161,17 @@ def _render_spec_table(
 ) -> str:
     """Arrange numbered ``chip_rows`` into a COLUMN-MAJOR HTML table.
 
-    ``rows_per_column`` rows fill DOWN each column (toward the pane's
-    bottom edge) before the next column starts: cell ``(row, col)``
-    holds item ``col * rows + row``, so entries read top-to-bottom then
-    left-to-right. Trailing cells past the last item are omitted (no
-    phantom empty cell, matching the Contrasts renderer).
+    Each ``<td>`` is one COLUMN holding up to ``rows_per_column`` specs
+    stacked top-to-bottom; the columns sit side by side. Entries fill
+    DOWN the first column (toward the pane's bottom edge) before the
+    next column starts, so ``1, 2, 3 ...`` read top-to-bottom then
+    left-to-right.
+
+    Laying each column out as a single multi-line cell (rather than a
+    grid of one-spec cells) means the numbering survives a copy: a table
+    serializes cell-by-cell, so selecting and copying yields the specs
+    in column order (1, 2, 3 ... down each column then the next) instead
+    of the row-by-row jumble a rows x columns grid would produce.
 
     Rendered as a ``<table>`` (not CSS multi-column) so it lays out
     identically in the web ``<div>`` and the desktop Qt rich-text pane,
@@ -173,27 +179,25 @@ def _render_spec_table(
     wider than the pane each surface scrolls horizontally on its own.
     """
     n = len(chip_rows)
-    rows = max(1, rows_per_column or ANALYSIS_MIN_VISIBLE_ROWS)
-    n_cols = -(-n // rows)  # ceil(n / rows)
-    body: list[str] = []
-    for r in range(rows):
-        cells: list[str] = []
-        for c in range(n_cols):
-            idx = c * rows + r
-            if idx >= n:
-                # Column-major: any higher column in this row is empty too.
-                break
-            num = f"<span style='color:{C['text_dim']}'>{idx + 1}.</span>"
-            cells.append(
-                f"<td style='{_SPEC_CELL_STYLE}'>{num} {chip_rows[idx]}</td>"
-            )
-        if cells:
-            body.append("<tr>" + "".join(cells) + "</tr>")
+    rows = (
+        rows_per_column
+        if rows_per_column and rows_per_column > 0
+        else ANALYSIS_MIN_VISIBLE_ROWS
+    )
+    columns: list[str] = []
+    for start in range(0, n, rows):
+        items = [
+            f"<span style='color:{C['text_dim']}'>{i + 1}.</span> "
+            f"{chip_rows[i]}"
+            for i in range(start, min(start + rows, n))
+        ]
+        columns.append(
+            f"<td style='{_SPEC_CELL_STYLE}'>" + "<br>".join(items) + "</td>"
+        )
     return (
         "<table cellpadding='3' cellspacing='0'"
         " style='border-collapse:separate; border-spacing:0 2px;'>"
-        + "".join(body)
-        + "</table>"
+        "<tr>" + "".join(columns) + "</tr></table>"
     )
 
 

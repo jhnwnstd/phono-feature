@@ -1845,11 +1845,14 @@ class MainWindow(QMainWindow):
         if viewport is None:
             return ANALYSIS_MIN_VISIBLE_ROWS
         metrics = QFontMetrics(view.font())
-        # Spec row = one text line + the table's cellpadding/border-spacing.
-        row_h = metrics.lineSpacing() + 8
-        # Reserve the "Minimal specifications (N):" heading line.
-        available = viewport.height() - metrics.lineSpacing() - 4
-        return max(1, available // row_h)
+        line = metrics.lineSpacing()
+        # Each column is one multi-line cell, so a spec row is basically
+        # one text line plus the table's per-row border-spacing (2 px).
+        row_h = line + 2
+        # Reserve the "Minimal specifications (N):" heading (a line plus
+        # its paragraph gap) and the table's top/bottom cell padding.
+        available = viewport.height() - line * 2 - 6
+        return max(ANALYSIS_MIN_VISIBLE_ROWS, available // row_h)
 
     def _update_seg_to_feat(self) -> None:
         """Apply the SEG-mode summary to the panels. The shared
