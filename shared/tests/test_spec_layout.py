@@ -47,7 +47,9 @@ def test_html_and_copy_order_is_sequential_by_column():
 def test_rows_per_column_controls_column_count():
     assert _column_count(_render_spec_list(_specs(12), rows_per_column=4)) == 3
     assert _column_count(_render_spec_list(_specs(12), rows_per_column=6)) == 2
-    assert _column_count(_render_spec_list(_specs(12), rows_per_column=12)) == 1
+    assert (
+        _column_count(_render_spec_list(_specs(12), rows_per_column=12)) == 1
+    )
 
 
 def test_single_spec_stays_a_plain_line_not_a_table():

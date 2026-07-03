@@ -938,14 +938,14 @@ dialog input[type="text"]:focus-visible {
    relaxes this so the page stays scrollable on narrow viewports. */
 #feat-panel {
   min-width: var(--feat-min-w);
-  /* Mirror desktop's ``FEAT_CUSHION_PX`` (40 px) which
-     ``layout.distribute_pane_widths`` adds to the feature column's
-     allocated width so cards don't sit flush against the splitter
-     handle. Pre-relay the web's feat column claimed only
-     ``max-content``, leaving the cards crowded against the panel's
-     right edge. Adding it as right-padding here keeps the feat
-     grid-track sizing simple while reserving the same gutter. */
-  padding-right: var(--feat-cushion);
+  /* No right-edge cushion here. The desktop adds ``FEAT_CUSHION_PX``
+     (40 px) to the pane width so its cards don't sit flush against the
+     draggable Segments/Features SPLITTER; the web has no splitter on
+     this edge (it's the window edge), so that 40 px was just dead space
+     on the pane's far side. Dropping it lets the ``max-content`` track
+     shrink to the cards, handing the width back to the Segments pane,
+     and the panel body's own 12 px padding keeps a gutter that matches
+     the left edge. */
 }
 @media (max-width: 900px) {
   #feat-panel {

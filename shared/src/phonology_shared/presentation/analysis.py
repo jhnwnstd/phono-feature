@@ -252,9 +252,8 @@ def _render_spec_list(
         return ""
     if len(chip_rows) == 1:
         return f"<p><b>{singular}:</b></p>" f"<p>{chip_rows[0]}</p>"
-    return (
-        f"<p><b>{plural} ({len(chip_rows)}):</b></p>"
-        + _render_spec_table(chip_rows, rows_per_column)
+    return f"<p><b>{plural} ({len(chip_rows)}):</b></p>" + _render_spec_table(
+        chip_rows, rows_per_column
     )
 
 
