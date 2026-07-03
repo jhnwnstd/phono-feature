@@ -1728,15 +1728,30 @@ dialog input[type="text"]:focus-visible {
    .seg-btn`` so the shared consonant ``.seg-btn`` is untouched. */
 .vowel-capsule {
   gap: 0; /* the 1px divider does the separation, not a flex gap */
-  border: var(--border-std) solid var(--border);
   border-radius: var(--vowel-capsule-radius, 12px);
   background: var(--seg-default); /* one shared fill; default weight kept */
   overflow: hidden; /* clip the inner cells to the rounded outer frame */
 }
 .vowel-capsule > .seg-btn {
-  border: none; /* the outer frame carries the border, not each cell */
+  border: none; /* base: flat; the pill cells below re-add their own edge */
   border-radius: 0;
   background: transparent; /* share the capsule fill */
+}
+/* Each PILL cell owns ITS slice of the outline -- top + bottom always, plus
+   the rounded end cap on the first / last cell -- so only a stated cell's
+   OWN edge turns blue and the pill is never painted as one selected unit.
+   The faint divider (a separate, always-neutral line) is deliberately left
+   off this so a selected cell's blue stops at the shared boundary. Scoped
+   away from the 2x2 ``vowel-capsule-grid``, which keeps one neutral frame. */
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn {
+  border-top: var(--border-std) solid var(--border);
+  border-bottom: var(--border-std) solid var(--border);
+}
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn:first-child {
+  border-left: var(--border-std) solid var(--border);
+}
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn:last-child {
+  border-right: var(--border-std) solid var(--border);
 }
 /* Sharper selected fill: round the two END cells' OUTER corners to the
    frame's INNER radius so a filled cell meets the rounded frame crisply.
@@ -1774,15 +1789,11 @@ dialog input[type="text"]:focus-visible {
       transparent
     );
 }
-/* Per-cell hover + state cues INSIDE the capsule. Each cell carries its
-   state via its FILL (+ text colour / weight); the colour-blind line
-   STYLE is carried by the ONE capsule FRAME below (dotted unmatched,
-   dashed suggested, solid-accent selected), so the pill reads as one
-   unit and its edge stays crisp. An earlier version drew a separate
-   per-cell dashed outline INSIDE the frame for the completing cell; it
-   stacked concentric with the frame and doubled the line at the divider,
-   so suggested moved to the frame like the other states -- the
-   completing cell is still identified by its ``--accent-light`` fill. */
+/* Per-cell hover + FILL cues (the primary state cue), shared by pill and
+   grid. The colour-blind line cue rides each PILL cell's OWN outline
+   (below), so only the stated cell is marked and its edge stays crisp --
+   no whole-pill frame that reads as "everything selected", no per-cell
+   outline stacked concentric inside a frame. */
 .vowel-capsule > .seg-btn:hover {
   background: var(--accent-light);
 }
@@ -1800,22 +1811,52 @@ dialog input[type="text"]:focus-visible {
   background: var(--seg-unmatched);
   color: var(--text-dim);
 }
-/* The ONE capsule frame carries the whole pill's colour-blind line
-   style, keyed off its cells' states. Source order = priority, strongest
-   last: dotted (unmatched) -> dashed (suggested / natural-class
-   completion) -> solid-accent (selected), so the dominant state shows
-   when a pair holds cells in mixed states. Width stays ``--border-std``
-   in every state so the box never resizes; only the style + colour
-   change. Needs ``:has()`` (baseline modern). */
-.vowel-capsule:has(> .seg-btn[data-state="unmatched"]) {
-  border: var(--border-std) dotted var(--border);
+/* Colour only the STATED pill cell's own outline (top + bottom + its end
+   cap) -- never the shared divider, so a selected cell's blue stops at the
+   boundary and its neighbour keeps the neutral edge. selected / matched /
+   suggested all read as ONE SOLID blue edge: suggested drops its former
+   dashed style (which frayed on the rounded cap) and is told apart from
+   selection by its lighter FILL, not its line style. */
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn[data-state="selected"],
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn[data-state="matched"],
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn[data-state="suggested"] {
+  border-top-color: var(--accent);
+  border-bottom-color: var(--accent);
 }
-.vowel-capsule:has(> .seg-btn[data-state="suggested"]) {
-  border: var(--border-std) dashed var(--accent);
+.vowel-capsule:not(.vowel-capsule-grid)
+  > .seg-btn[data-state="selected"]:first-child,
+.vowel-capsule:not(.vowel-capsule-grid)
+  > .seg-btn[data-state="matched"]:first-child,
+.vowel-capsule:not(.vowel-capsule-grid)
+  > .seg-btn[data-state="suggested"]:first-child {
+  border-left-color: var(--accent);
 }
-.vowel-capsule:has(> .seg-btn[data-state="selected"]),
-.vowel-capsule:has(> .seg-btn[data-state="matched"]) {
-  border: var(--border-std) solid var(--accent);
+.vowel-capsule:not(.vowel-capsule-grid)
+  > .seg-btn[data-state="selected"]:last-child,
+.vowel-capsule:not(.vowel-capsule-grid)
+  > .seg-btn[data-state="matched"]:last-child,
+.vowel-capsule:not(.vowel-capsule-grid)
+  > .seg-btn[data-state="suggested"]:last-child {
+  border-right-color: var(--accent);
+}
+/* Unmatched keeps the dotted colour-blind cue, on its own outline only. */
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn[data-state="unmatched"] {
+  border-top-style: dotted;
+  border-bottom-style: dotted;
+}
+.vowel-capsule:not(.vowel-capsule-grid)
+  > .seg-btn[data-state="unmatched"]:first-child {
+  border-left-style: dotted;
+}
+.vowel-capsule:not(.vowel-capsule-grid)
+  > .seg-btn[data-state="unmatched"]:last-child {
+  border-right-style: dotted;
+}
+/* The rare 2x2 / 3-cell contrast grid keeps ONE neutral container frame
+   (per-edge partitioning its cells is fiddly and it is uncommon); state
+   still reads via each cell's fill, and the frame never turns selected. */
+.vowel-capsule-grid {
+  border: var(--border-std) solid var(--border);
 }
 
 /* Two-feature contrast set: a feature-aligned 2x2 gridded capsule.

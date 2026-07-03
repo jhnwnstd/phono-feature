@@ -1,19 +1,22 @@
 """Segmented capsule container for a vowel PAIR.
 
 A vowel pair (long / nasal / rhotic / phonation / tone mates that share
-one vowel-space position) renders as ONE segmented capsule: a single
-rounded outer frame + shared fill holding the two mates, split by a
-faint vertical divider, so the pair reads as one articulatory position
-with two variants rather than two floating buttons. This is the desktop
-twin of the web ``.vowel-capsule`` CSS.
+one vowel-space position) renders as ONE segmented capsule: a shared
+rounded fill holding the two mates, split by a faint vertical divider,
+so the pair reads as one articulatory position with two variants rather
+than two floating buttons. This is the desktop twin of the web
+``.vowel-capsule`` CSS.
 
 The two mates are the shared, pooled :class:`SegmentButton` widgets put
-into "in-capsule" mode (flat, borderless, transparent) via
-:meth:`SegmentButton.set_in_capsule`; this widget only paints the frame,
-fill, and divider behind them, and masks its children to the rounded
-outline (Qt's equivalent of the web's ``overflow: hidden``). It never
-mutates the shared button style cache, so the same pooled buttons keep
-their normal look when they return to the consonant grid.
+into "in-capsule" mode via :meth:`SegmentButton.set_in_capsule`; in that
+mode each cell paints its OWN slice of the pill outline (top + bottom +
+its end cap, coloured by that cell's state), so only a stated cell reads
+selected and the pill is never drawn as one selected unit. This widget
+paints just the shared fill and the faint divider the cells leave off
+their shared edge, and masks its children to the rounded outline (Qt's
+equivalent of the web's ``overflow: hidden``). It never mutates the
+shared button style cache, so the same pooled buttons keep their normal
+look when they return to the consonant grid.
 """
 
 from __future__ import annotations
@@ -32,44 +35,11 @@ from PyQt6.QtWidgets import QWidget
 
 from phonology_shared.presentation import chart_style as cs
 from phonology_shared.presentation.palette import C
-from phonology_shared.presentation.view_models import SegmentState
 
 
 class VowelPairCapsule(QWidget):
-    """Paints the rounded frame + shared fill + faint divider for a
-    vowel pair; hosts the two in-capsule mate buttons."""
-
-    def _frame_pen(self) -> QPen:
-        """The outer-frame pen, whose LINE STYLE encodes the cells'
-        dominant state (the colour-blind cue for the whole pill) so the
-        segmented capsule reads as ONE unit. Priority, strongest first:
-        selected / matched -> solid accent, suggested (natural-class
-        completion) -> dashed accent, unmatched -> dotted, default ->
-        solid border. The completing cell is still identified by its own
-        ``accent_light`` fill; carrying the dashed cue on the frame
-        (rather than a separate border each completing cell drew inside
-        it) keeps the edge crisp -- no line doubled at the divider, none
-        stacked concentric with the frame. Mirrors the web
-        ``.vowel-capsule:has(> .seg-btn[data-state=...])`` frame rules;
-        width stays constant so the box never resizes."""
-        states = {
-            st
-            for kid in self.findChildren(QWidget)
-            if kid.parent() is self
-            and (st := getattr(kid, "_state", None)) is not None
-        }
-        color = C["border"]
-        style = Qt.PenStyle.SolidLine
-        if states & {SegmentState.SELECTED, SegmentState.MATCHED}:
-            color, style = C["accent"], Qt.PenStyle.SolidLine
-        elif SegmentState.SUGGESTED in states:
-            color, style = C["accent"], Qt.PenStyle.DashLine
-        elif SegmentState.UNMATCHED in states:
-            color, style = C["border"], Qt.PenStyle.DotLine
-        pen = QPen(QColor(color))
-        pen.setWidthF(cs.BORDER_PX["std"])
-        pen.setStyle(style)
-        return pen
+    """Paints the shared rounded fill + faint divider for a vowel pair;
+    each hosted in-capsule mate button paints its own outline slice."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -138,13 +108,10 @@ class VowelPairCapsule(QWidget):
                         QPointF(float(max(g.left(), og.left()) + 1), y),
                         QPointF(float(min(g.right(), og.right()) - 1), y),
                     )
-        # Outer frame stroke: one rounded border whose line style carries
-        # the cells' dominant SELECTED / UNMATCHED state (solid-accent =
-        # selected, dotted = unmatched, solid-border = default). SUGGESTED
-        # (natural-class completion) is NOT a frame state -- the completing
-        # cell draws its own dashed accent border (see
-        # SegmentButton._capsule_style) so only that segment is marked.
-        painter.setPen(self._frame_pen())
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(rect, radius, radius)
+        # No outer frame stroke: each cell paints its OWN slice of the pill
+        # outline (top + bottom + its end cap), coloured by that cell's own
+        # state (see SegmentButton._capsule_border_css), so only a stated
+        # cell reads selected and the pill is never drawn as one selected
+        # unit. This widget paints just the shared fill + the faint divider
+        # the cells deliberately leave off their shared edge.
         painter.end()

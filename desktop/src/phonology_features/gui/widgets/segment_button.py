@@ -221,17 +221,21 @@ class SegmentButton(QPushButton):
     def _capsule_style(self, state: SegmentState) -> str:
         """QSS for this button as a cell INSIDE a vowel pair capsule.
 
-        The capsule container paints the outer frame + divider, so every
-        cell drops its own border and shares the capsule fill, carrying
-        its state by FILL (+ text colour / weight); the whole pill's
-        colour-blind line style (solid selected / dashed suggested /
-        dotted unmatched) is carried by the ONE capsule frame (see
-        :class:`VowelPairCapsule`). An END cell rounds its OUTER corners
-        (see :meth:`set_capsule_corner`) so a filled cell meets the
-        rounded frame crisply. Built per-instance (capsule cells are the
+        Each cell paints ITS OWN slice of the pill outline (top + bottom,
+        plus the rounded end cap on an END cell) via
+        :meth:`_capsule_border_css`, coloured by THIS cell's state, so
+        only a stated cell reads selected -- the pill is never painted as
+        one selected unit. The shared boundary between two cells is left
+        to the capsule's faint divider (see :class:`VowelPairCapsule`), so
+        a selected cell's blue stops at the divider instead of bleeding
+        onto its neighbour. Fill (+ text colour / weight) is the primary
+        state cue; selected / matched / suggested all read as one SOLID
+        blue edge (suggested is told apart by its lighter fill, not a
+        frayed dashed line). Built per-instance (capsule cells are the
         rare case, not worth a second theme cache).
         """
         radius = self._capsule_radius_css()
+        border = self._capsule_border_css(state)
         if state in (SegmentState.SELECTED, SegmentState.MATCHED):
             fill = (
                 C["seg_selected"]
@@ -240,36 +244,67 @@ class SegmentButton(QPushButton):
             )
             return (
                 f"QPushButton {{ background-color: {fill}; color: #FFFFFF;"
-                f" border: none; {radius} font-weight: bold; }}"
+                f" {border} {radius} font-weight: bold; }}"
             )
         if state == SegmentState.SUGGESTED:
-            # Natural-class COMPLETION: identified by this cell's own
-            # accent_light fill. The dashed colour-blind cue is carried by
-            # the capsule FRAME (see VowelPairCapsule._frame_pen), like the
-            # other states, so the pill edge stays crisp -- an earlier
-            # per-cell dashed border here doubled the line at the divider
-            # and stacked concentric with the frame.
+            # Natural-class COMPLETION: this cell's own accent_light fill
+            # plus a SOLID accent edge on its own outline (below). Solid,
+            # not dashed: a dashed stroke frayed on the pill's rounded cap;
+            # the lighter fill, not the line style, sets it apart from a
+            # hard selection.
             return (
                 f"QPushButton {{ background-color: {C['accent_light']};"
-                f" color: {C['accent']}; border: none; {radius} }}"
+                f" color: {C['accent']}; {border} {radius} }}"
             )
         if state == SegmentState.UNMATCHED:
             return (
                 f"QPushButton {{ background-color: {C['seg_unmatched']};"
                 f" color: {C['text_dim']};"
-                f" border: none; {radius} }}"
+                f" {border} {radius} }}"
             )
         # DEFAULT: transparent so the capsule's shared fill shows
         # through; hover / click (:checked) read as the accent cue.
         return (
             f"QPushButton {{ background-color: transparent;"
-            f" color: {C['text']}; border: none; {radius} }}"
+            f" color: {C['text']}; {border} {radius} }}"
             f" QPushButton:hover {{"
             f" background-color: {C['accent_light']}; }}"
             f" QPushButton:checked {{"
             f" background-color: {C['seg_selected']}; color: #FFFFFF;"
             f" font-weight: bold; }}"
         )
+
+    def _capsule_border_css(self, state: SegmentState) -> str:
+        """Per-side border QSS for this capsule cell's own outline.
+
+        Top and bottom are always drawn; the OUTER end cap is drawn only
+        on an END cell (``_capsule_corner`` "left" / "right"); the side
+        that faces a neighbour draws NO border, leaving that shared edge
+        to the capsule's faint divider so adjacent cells never double a
+        line there. The colour-blind cue rides the LINE: solid accent for
+        selected / matched / suggested, dotted for unmatched, solid
+        neutral for default -- constant ``--border-std`` width in every
+        state so a state change never resizes the cell.
+        """
+        std = f"{cs.BORDER_PX['std']:g}px"
+        if state in (
+            SegmentState.SELECTED,
+            SegmentState.MATCHED,
+            SegmentState.SUGGESTED,
+        ):
+            spec = f"{std} solid {C['accent']}"
+        elif state == SegmentState.UNMATCHED:
+            spec = f"{std} dotted {C['border']}"
+        else:
+            spec = f"{std} solid {C['border']}"
+        parts = [f"border-top: {spec};", f"border-bottom: {spec};"]
+        # The end cap goes on the OUTER side; the inner (divider) side is
+        # left to the capsule's faint divider.
+        left = spec if self._capsule_corner == "left" else "none"
+        right = spec if self._capsule_corner == "right" else "none"
+        parts.append(f"border-left: {left};")
+        parts.append(f"border-right: {right};")
+        return " ".join(parts)
 
     def _capsule_radius_css(self) -> str:
         """Border-radius QSS for this capsule cell. Middle cells stay
@@ -292,17 +327,12 @@ class SegmentButton(QPushButton):
     def _refresh_css(self) -> None:
         """Re-apply the current state's stylesheet, honouring the
         per-instance capsule-mode override on top of the shared
-        per-theme cache."""
+        per-theme cache. In capsule mode each cell paints its OWN
+        state-coloured outline, so setting its stylesheet repaints
+        everything a state change touches -- the capsule frame no longer
+        reflects state, so no parent repaint is needed."""
         if self._in_capsule:
             set_css(self, self._capsule_style(self._state))
-            # The capsule FRAME (drawn by the parent VowelPairCapsule)
-            # carries the state's line style, so nudge it to repaint when
-            # a cell's state changes -- the Qt analogue of the web's
-            # ``.vowel-capsule:has(...)`` frame rule reacting to a child's
-            # ``data-state``.
-            parent = self.parent()
-            if isinstance(parent, QWidget):
-                parent.update()
             return
         set_css(self, self._styles[self._state])
 

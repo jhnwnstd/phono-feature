@@ -89,15 +89,19 @@ def test_source_round_trips_through_get_grid_state():
 
 
 def test_edited_source_survives_and_carries_other_metadata():
-    # Blevins carries a notes blob alongside source; editing source must
-    # not drop sibling metadata.
-    blevins = str(
-        REPO_ROOT / "desktop" / "inventories" / "blevins_features.json"
-    )
-    inv = Inventory.load(blevins)
+    # An inventory that carries a sibling metadata blob (``notes``)
+    # alongside ``source``: editing source must not drop the sibling.
+    # Built in-memory from a committed inventory with a notes key injected,
+    # so the test depends on no gitignored fixture (CI has only the tracked
+    # ``*_features.json`` set).
+    raw = Inventory.load(HAYES).to_json_dict()
+    raw.setdefault("metadata", {})
+    raw["metadata"]["notes"] = "Field notes blob."
+    raw["metadata"]["source"] = "Original source."
+    inv = Inventory.parse(raw)
     bridge._engine = FeatureEngine(inv)
-    had_notes = "notes" in inv.metadata
+    assert "notes" in inv.metadata  # guard the fixture itself
     _commit("My own field notes, 2026.")
     meta = bridge._engine.inventory.metadata
     assert meta["source"] == "My own field notes, 2026."
-    assert ("notes" in meta) == had_notes
+    assert meta.get("notes") == "Field notes blob."

@@ -75,7 +75,6 @@ from phonology_shared.editor.grid import (  # noqa: F401
     validate_new_feature_label,
     validate_new_segment_label,
 )
-from phonology_shared.editor.source_input import normalize_source_input
 from phonology_shared.editor.inventory_providers import (
     InventoryDescriptor,
     InventoryProvider,
@@ -105,6 +104,7 @@ from phonology_shared.editor.setup import (
     suggest_filename,
     validate_setup,
 )
+from phonology_shared.editor.source_input import normalize_source_input
 from phonology_shared.presentation.analysis import render_validation_report
 from phonology_shared.presentation.layout import (
     best_segment_n_cols,
