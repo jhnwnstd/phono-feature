@@ -836,13 +836,11 @@ def generate_layout_css() -> None:
         ]
     )
     # Vowel-chart visual policy: title font / padding / letter-spacing,
-    # axis labels, contrast-set spacing, silhouette stroke + alpha,
-    # diphthong arrow stroke + opacity + arrowhead + lift formula.
+    # axis labels, contrast-set spacing, silhouette stroke + alpha.
     # Single source of truth at
     # ``shared/.../presentation/chart_style.py``; desktop reads via
     # import, web reads via these CSS vars. Pre-relay these values
-    # quietly drifted (desktop title 8pt-Bold vs web 11px/600, arrow
-    # stroke 1.75 px vs 0.6 user-units, focused opacity 1.0 vs 0.95).
+    # quietly drifted (desktop title 8pt-Bold vs web 11px/600).
     chart_style = _load_chart_style_module()
     title_pad = chart_style.VOWEL_CHART_TITLE_PADDING_PX
     lines.extend(
@@ -1511,11 +1509,11 @@ def hash_assets() -> None:
         + json.dumps(_build_limits_payload(), separators=(",", ":"))
         + "</script>"
     )
-    # Vowel-chart visual constants the JS renderer consumes
-    # (lift formula, arrowhead fractions, density-tier thresholds).
-    # The CSS-only values ride in the layout.css ``--vowel-*`` /
-    # ``--diphthong-*`` vars; this block carries the numbers
-    # main.js needs at runtime.
+    # Vowel-chart visual constants the JS renderer consumes at
+    # runtime (silhouette corner radius, stack-density thresholds,
+    # the legibility floor). The CSS-only values ride in layout.css
+    # as ``--vowel-*`` vars; this block carries the numbers main.js
+    # needs at runtime.
     chart_style_mod = _load_chart_style_module()
     from phonology_shared.chart.vowel_geometry import (
         DENSITY_TIER_DENSE_THRESHOLD,

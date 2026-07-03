@@ -227,7 +227,7 @@ def test_row_wire_dict_contains_every_field_web_reads() -> None:
 def test_diphthong_wire_shape_is_list_of_segment_strings() -> None:
     """``geometry.diphthongs`` (and its wire serialisation) is a plain
     list of segment-name strings. Both UIs render those as chips below
-    the vowel space; there is no per-arrow endpoint dict anymore."""
+    the vowel space; there is no per-diphthong endpoint dict anymore."""
     from phonology_shared.presentation.view_models import (
         _vowel_chart_summary,
     )

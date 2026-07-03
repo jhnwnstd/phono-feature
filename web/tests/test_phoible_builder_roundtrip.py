@@ -6,7 +6,7 @@ locally without silently losing anything. The historical failure
 mode was metadata: the grid cannot edit stamps like the PHOIBLE
 provenance or the diphthong ``segment_secondary`` bundles, and the
 commit path used to drop them, so a editor round-trip erased the
-diphthong arrows from the saved file.
+diphthongs from the saved file.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from phonology_shared.theory.feature_engine import FeatureEngine
 
 @pytest.fixture()
 def korean_with_diphthongs() -> dict:
-    """Load a Korean PHOIBLE source whose chart has diphthong arrows."""
+    """Load a Korean PHOIBLE source whose chart has diphthongs."""
     if not api.phoible_is_available():
         pytest.skip("PHOIBLE snapshot not baked on this checkout")
     for descriptor in api.phoible_list_inventories("Korean"):
@@ -47,8 +47,8 @@ def test_editor_roundtrip_preserves_diphthongs_and_provenance(
     korean_with_diphthongs: dict, tmp_path: object
 ) -> None:
     info = korean_with_diphthongs
-    n_arrows = len(info["vowel_chart"]["diphthongs"])
-    assert n_arrows > 0
+    n_diphthongs = len(info["vowel_chart"]["diphthongs"])
+    assert n_diphthongs > 0
 
     # Editor open: grid state from the live engine; user edits one
     # cell and renames the inventory.
@@ -65,10 +65,10 @@ def test_editor_roundtrip_preserves_diphthongs_and_provenance(
     summary = api.commit_inventory_from_grid(
         "My Korean (edited)", grid["features"], grid["segments"], cells
     )
-    assert len(summary["vowel_chart"]["diphthongs"]) == n_arrows
+    assert len(summary["vowel_chart"]["diphthongs"]) == n_diphthongs
 
     # Save locally, reload through the file path, and confirm the
-    # arrows and provenance survived the round-trip.
+    # diphthongs and provenance survived the round-trip.
     inv = api._engine.inventory
     assert "segment_secondary" in inv.metadata
     assert inv.metadata.get("phoible_language") == "Korean"
@@ -79,6 +79,6 @@ def test_editor_roundtrip_preserves_diphthongs_and_provenance(
     summary2 = build_inventory_summary(
         engine, reloaded.name, mode=api._match_mode
     )
-    assert len(summary2["vowel_chart"]["diphthongs"]) == n_arrows
+    assert len(summary2["vowel_chart"]["diphthongs"]) == n_diphthongs
     assert reloaded.metadata.get("feature_source")
     assert reloaded.name == "My Korean (edited)"

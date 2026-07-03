@@ -581,8 +581,9 @@ def materialize_phoible_inventory(
       the field is plain text and the user can edit or delete it.
     * Contour secondary bundles (vowel diphthongs and obstruent
       affricates) get stamped under ``segment_secondary`` so the
-      vowel chart can draw diphthong arrows and the engine can read
-      affricate phases, without a new bridge endpoint or parameter.
+      vowel chart can list diphthongs as chips and the engine can
+      read affricate phases, without a new bridge endpoint or
+      parameter.
 
     Raises :py:class:`KeyError` for an unknown ``inventory_id``;
     callers translate the failure into whatever the platform's

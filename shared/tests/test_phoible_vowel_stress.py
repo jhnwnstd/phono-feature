@@ -18,8 +18,8 @@ and asserts that:
 * Where the bake snapshot records a vowel diphthong, the placement
   carries the ``DIPHTHONG`` flag and a non-null ``secondary``.
 * No two distinct diphthong segments end up sharing the exact
-  ``(primary_cell, secondary_cell)`` pair (catches arrow overlay
-  collisions).
+  ``(primary_cell, secondary_cell)`` pair (catches distinct
+  contours collapsing to one grid path).
 
 The bank is parametrised so a future PHOIBLE re-bake that breaks a
 single inventory surfaces here with the failing language named.
@@ -151,9 +151,9 @@ def test_phoible_diphthongs_round_trip_secondary_and_flag(
     surface them through the placement layer: each diphthong's
     placement carries a non-null ``secondary`` and the
     ``DIPHTHONG`` flag, and no two distinct diphthongs share the
-    exact ``(primary_cell, secondary_cell)`` pair (otherwise the
-    SVG arrow overlay would render two arrows on top of one
-    another)."""
+    exact ``(primary_cell, secondary_cell)`` pair (otherwise two
+    distinct contours would be indistinguishable in the chart's
+    grid path)."""
     inv_id = _find_inventory_id(phoible_provider, language, source_short)
     if inv_id is None:
         pytest.skip(
@@ -199,15 +199,14 @@ def test_phoible_diphthongs_round_trip_secondary_and_flag(
         ), f"{language}: diphthong /{seg}/ secondary missing DIPHTHONG flag"
         pair = ((p.row, p.col), (p.secondary.row, p.secondary.col))
         if pair in seen_pairs:
-            # Same cells, different glyphs: two arrows would render
-            # on top of each other. Allow only if the glyphs are
-            # identical (a true duplicate that the bake already
+            # Same cells, different glyphs: two distinct contours
+            # collapsing to one grid path. Allow only if the glyphs
+            # are identical (a true duplicate that the bake already
             # de-duped above).
             assert seen_pairs[pair] == seg, (
                 f"{language}: diphthongs /{seen_pairs[pair]}/ and /{seg}/ "
                 f"both place at the same primary->secondary cell pair "
-                f"{pair}; the arrow overlay would render them on top of "
-                f"each other"
+                f"{pair}; distinct contours must map to distinct grid paths"
             )
         else:
             seen_pairs[pair] = seg

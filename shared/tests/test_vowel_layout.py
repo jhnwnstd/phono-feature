@@ -225,9 +225,9 @@ def test_diphthong_placement_carries_secondary_and_flag():
     :py:attr:`PlacementFlag.DIPHTHONG` so the renderer can detect
     the diphthong from either endpoint.
 
-    Diphthongs do NOT occupy chart cells; they render as arrows
-    + chip strip exclusively. ``placements[seg]`` still carries
-    the segment's geometry (so the arrow can be drawn) but
+    Diphthongs do NOT occupy chart cells; they render as a chip
+    strip below the chart exclusively. ``placements[seg]`` still
+    carries the segment's geometry (marking it a diphthong) but
     ``occupied`` does NOT contain an entry for ``seg``. This is
     the architectural fix that addressed the user complaint
     "singleton segments are grouped as diphthongs": pre-fix
@@ -272,7 +272,7 @@ def test_diphthong_placement_carries_secondary_and_flag():
         "Open"
     ), "final anchors at Open (low) tier"
     # ``occupied`` must NOT contain /ia/; diphthongs render via
-    # arrows + chip strip, not cell occupancy.
+    # the chip strip below the chart, not cell occupancy.
     assert occupied == {}, (
         f"diphthongs must not occupy chart cells; got {occupied!r}. "
         f"The placer's PlacementFlag.DIPHTHONG gate in "

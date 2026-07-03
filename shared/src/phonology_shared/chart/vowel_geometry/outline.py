@@ -844,9 +844,8 @@ def _silhouette_with_widths(
 def width_at_y(silhouette: VowelChartSilhouette, y: float) -> float:
     """Linear interp between the silhouette's top and bottom widths
     at display y. The single projection-width definition the cell
-    projection, the column headers, and the diphthong overlay all
-    share, so everything lies on the silhouette slant by
-    construction.
+    projection and the column headers share, so everything lies on
+    the silhouette slant by construction.
     """
     if silhouette.bottom_y == silhouette.top_y:
         return silhouette.top_width

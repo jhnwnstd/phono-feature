@@ -17,7 +17,7 @@ pipeline is propose-then-confine:
    edge cells; the natural size and aspect cap settle.
 7. ``_confine_cells``: residual overhangs nudge inward. Shift-only;
    the outline is the HARD boundary for the buttons.
-8. ``furniture``: rows, headers, and the diphthong overlay
+8. ``furniture``: rows, headers, and the diphthong chip list
    bake against the final outline.
 
 ``build_vowel_chart_geometry`` is the public entry point both UIs
@@ -542,9 +542,9 @@ def build_vowel_chart_geometry(
 
     ``segment_secondary`` carries final-state feature bundles for
     PHOIBLE diphthong segments. When present, the returned
-    geometry's :py:attr:`VowelChartGeometry.diphthongs` lists one
-    entry per diphthong with both endpoint cells so renderers can
-    draw a curved arrow between them.
+    geometry's :py:attr:`VowelChartGeometry.diphthongs` lists each
+    diphthong segment name; renderers show them as labelled chips
+    below the chart (they are never placed in the trapezoid).
 
     Renderers attach the result directly: no placement decisions
     and no coordinate arithmetic happen at the UI layer.

@@ -1709,7 +1709,7 @@ class InventoryEditor(QMainWindow):
         # name field owns) so the next save round-trips it. Keeping
         # only ``feature_source`` used to drop the PHOIBLE stamps and
         # the ``segment_secondary`` diphthong bundles, so editing a
-        # PHOIBLE inventory erased its diphthong arrows on save.
+        # PHOIBLE inventory erased its diphthongs on save.
         # ``source`` is owned by the Add/Edit source button (via
         # ``_source_text``), so keep it out of the carried-metadata dict
         # to avoid two writers; everything else (notes, PHOIBLE stamps,

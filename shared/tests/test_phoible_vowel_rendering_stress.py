@@ -23,7 +23,8 @@ Pinned invariants:
 - **B3 Diphthong cell existence**: every diphthong's primary AND
   secondary ``(row, col)`` corresponds to a populated cell in
   ``geom.cells``. After the degenerate-secondary suppression in
-  ``compute_placements``, this also asserts no self-loops.
+  ``compute_placements``, this also asserts no degenerate contours
+  (primary and secondary in the same cell).
 
 - **B4 Cell-count ceiling**: no inventory produces > 24 cells.
   PHOIBLE max today is 16; 24 leaves a 50% safety margin.

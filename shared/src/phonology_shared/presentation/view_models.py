@@ -611,8 +611,9 @@ def _vowel_chart_summary(
     seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)
     # PHOIBLE-loaded inventories stamp diphthong secondary bundles
-    # into ``Inventory.metadata`` so the chart renderer can draw
-    # arrows between the two cells without a new bridge endpoint.
+    # into ``Inventory.metadata`` so the geometry can tell contour
+    # vowels apart (listed as chips below the chart) without a new
+    # bridge endpoint.
     secondary = engine.inventory.metadata.get("segment_secondary")
     geometry = build_vowel_chart_geometry(
         list(vowel_segs),

@@ -449,9 +449,10 @@ class VowelPlacement:
     flags: frozenset[PlacementFlag] = field(default_factory=frozenset)
     # Final-state placement for a diphthong; ``None`` for a
     # monophthong. When set, both this placement and the secondary
-    # carry :py:attr:`PlacementFlag.DIPHTHONG`. Renderers draw a
-    # curved arrow from the primary cell to ``secondary``'s cell;
-    # the segment glyph stays in the primary only.
+    # carry :py:attr:`PlacementFlag.DIPHTHONG`. It marks the segment
+    # as a contour vowel (listed as a chip below the chart, kept out
+    # of the trapezoid) and its cell feeds the degeneracy filter that
+    # demotes a contour whose two halves land in the same cell.
     secondary: VowelPlacement | None = None
 
 
@@ -1144,14 +1145,14 @@ def compute_placements(
     pharyngealised vowels like ``iˤ`` whose contour halves differ
     only on features the placement code does not read for grid
     position), the secondary is dropped and the segment is treated
-    as a monophthong. Without this, the chart would render a
-    zero-length diphthong arrow that reads as a stray dot,
-    misleading the user about the segment's behaviour. Today this
-    affects 84 segments across 20 PHOIBLE languages (ARCHI/UPSID,
-    Northern Qiang/EA, !Xun/PHOIBLE, etc.). After this gate, every
-    ``geom.diphthongs`` entry honours the contract that its primary
-    and secondary cells are distinct, which the rendering stress
-    suite asserts.
+    as a monophthong. Without this, the segment would be pulled out
+    of the trapezoid into the diphthong chip strip despite having no
+    contour to distinguish, misleading the user about its behaviour.
+    Today this affects 84 segments across 20 PHOIBLE languages
+    (ARCHI/UPSID, Northern Qiang/EA, !Xun/PHOIBLE, etc.). After this
+    gate, every ``geom.diphthongs`` entry honours the contract that
+    its primary and secondary cells are distinct, which the rendering
+    stress suite asserts.
 
     Returns ``(occupied, placements)``. Cells are sorted by
     descending placement confidence (highest first); ties break on
@@ -1180,9 +1181,8 @@ def compute_placements(
         if seg in secondary_feats:
             secondary = vowel_grid_pos(secondary_feats[seg], profile, policy)
             # Suppress the secondary when it lands in the SAME
-            # (row, col) cell as the primary; the arrow would be
-            # zero-length. The segment then renders as a regular
-            # monophthong.
+            # (row, col) cell as the primary; there is no contour to
+            # show, so the segment renders as a regular monophthong.
             if (
                 secondary.row != placement.row
                 or secondary.col != placement.col
@@ -1201,15 +1201,15 @@ def compute_placements(
                     secondary=secondary,
                 )
         placements[seg] = placement
-        # Diphthongs render as arrows + chip strip only, so they
-        # are kept out of ``occupied`` to prevent visual grouping
+        # Diphthongs render as a chip strip below the chart only, so
+        # they are kept out of ``occupied`` to prevent visual grouping
         # with their primary-cell monophthong.
         if PlacementFlag.DIPHTHONG not in placement.flags:
             occupied.setdefault((placement.row, placement.col), []).append(seg)
     _snap_diphthong_secondaries(placements, occupied)
     # Degeneracy after snap: when the secondary collapses to the
-    # primary cell, demote to monophthong so the segment renders
-    # as a button instead of a zero-length arrow.
+    # primary cell, demote to monophthong so the segment renders as a
+    # normal button in its cell instead of a contour-less diphthong chip.
     for seg, placement in list(placements.items()):
         if PlacementFlag.DIPHTHONG not in placement.flags:
             continue
@@ -1289,9 +1289,9 @@ def _snap_diphthong_secondaries(
         cell. If ``forbid`` is set, the snap target must NOT
         equal that ``(row, col)``; prevents the diphthong's
         secondary from collapsing onto its primary's snapped
-        position, which would render as a zero-length arrow.
-        Falls through to the original endpoint when no
-        acceptable candidate exists.
+        position, which would make the contour degenerate (and so
+        demote it to a monophthong). Falls through to the original
+        endpoint when no acceptable candidate exists.
         """
         group = _BACKNESS_GROUP_BY_COL.get(endpoint.col)
         if group is None:
@@ -1328,9 +1328,8 @@ def _snap_diphthong_secondaries(
         # the secondary collapses onto the primary (only one
         # candidate cell exists in the secondary's backness
         # group and it is the primary's), prefer the ORIGINAL
-        # secondary position over a zero-length arrow. The arrow
-        # then terminates in empty space rather than collapsing
-        # to a dot.
+        # secondary position so the two halves stay in distinct
+        # cells rather than collapsing to one.
         if (
             new_secondary is not None
             and (new_secondary.row, new_secondary.col)

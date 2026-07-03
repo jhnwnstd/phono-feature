@@ -103,7 +103,7 @@ VOWELS_HELP_HTML: str = (
     " contrasts make a small 2x2 capsule. Otherwise co-located vowels"
     " stack.</li>"
     "<li>Diphthongs are never placed inside the trapezoid. They appear as"
-    " labelled chips below it, with an arrow between their endpoints.</li>"
+    " labelled chips below it.</li>"
     "<li>A lone low vowel with no front vowels present is drawn in the"
     " bottom-left corner instead of floating at the middle of the narrow"
     " bottom edge.</li>"

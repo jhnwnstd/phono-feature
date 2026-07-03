@@ -52,10 +52,11 @@ class GeneratedInventory:
             segments populate this; PanPhon and curated bundles
             leave it empty. Keys are the same segment strings as in
             ``segments``; values are the final-state bundle the
-            vowel glides toward. The placement code reads it to
-            draw a diphthong arrow between two cells; consumers
-            that ignore the field still get a sensible single-vowel
-            placement from the primary ``segments`` bundle.
+            vowel glides toward. The placement code reads it to mark
+            the segment as a diphthong (listed as a chip below the
+            chart); consumers that ignore the field still get a
+            sensible single-vowel placement from the primary
+            ``segments`` bundle.
     """
 
     features: tuple[str, ...]

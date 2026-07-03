@@ -208,16 +208,16 @@ def test_e4_diphthong_secondary_is_present_or_intentionally_suppressed(
     ``secondary``, OR ``compute_placements`` intentionally
     suppressed it because the secondary projection collapsed to
     the same ``(row, col)`` cell as the primary (a degenerate
-    self-loop the renderer would draw as a stray dot). The
-    suppression path is documented in :py:func:`compute_placements`
-    and exercised on ~84 segments across ~20 languages today
-    (mostly pharyngealised vowels like ``iˤ``, ``aˤː``).
+    contour with no grid movement). The suppression path is
+    documented in :py:func:`compute_placements` and exercised on
+    ~84 segments across ~20 languages today (mostly pharyngealised
+    vowels like ``iˤ``, ``aˤː``).
 
     A regression here would either:
     - Reintroduce null secondaries for non-degenerate diphthongs
       (the NFC mismatch the original bug had), OR
-    - Reintroduce self-loop arrows that the suppression path
-      should be catching.
+    - Reintroduce degenerate contours (secondary collapsed onto the
+      primary cell) that the suppression path should be catching.
     """
     offenders: list[tuple[str, list[str]]] = []
     for inv_id in phoible_inventory_ids_full:

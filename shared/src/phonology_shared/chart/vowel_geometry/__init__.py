@@ -24,7 +24,7 @@ outline           silhouette, shrink solver, edge        cells
 (layer 4)         evaluators, polygon, cascade,          (``VowelChartCell``
                   row distribution                       is a forbidden name)
 furniture         row labels, column headers,            cell positions
-(layer 5)         diphthong overlay                      (reads rows +
+(layer 5)         diphthong chip list                    (reads rows +
                                                          outline only)
 pipeline          orchestration; the ONLY place boxes    n/a (imports all)
 (cross-layer)     meet the outline (extent growth,

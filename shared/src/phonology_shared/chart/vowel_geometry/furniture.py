@@ -1,12 +1,12 @@
 """External labels and chart chrome (layer 5: furniture).
 
-Row labels, column headers, and the diphthong overlay. Everything
+Row labels, column headers, and the diphthong chip list. Everything
 here is INFORMED BY the chart's structure (which
 rows exist, where their anchors sit, what the outline looks like)
 but never DEPENDS ON button positions: labels anchor to the outline
-at their own y, headers project pure backness anchors, and arrow
-endpoints project logical slots. That one-way relationship is the
-fix for the labels-follow-the-buttons class of bug; it is enforced
+at their own y and headers project pure backness anchors. That
+one-way relationship is the fix for the labels-follow-the-buttons
+class of bug; it is enforced
 by ``shared/tests/test_vowel_geometry_boundaries.py``
 (``VowelChartCell`` is a forbidden name in this module).
 """
