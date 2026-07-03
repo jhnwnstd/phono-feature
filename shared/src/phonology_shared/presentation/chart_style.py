@@ -73,6 +73,21 @@ from phonology_shared.presentation.layout import (
 )
 
 # ---------------------------------------------------------------------------
+# Primary segment-label tracking (shared)
+# ---------------------------------------------------------------------------
+
+#: Letter-spacing (px) shared by EVERY primary label in the Segments
+#: pane so they read as one family: the manner-class headers
+#: ("Plosives", "Affricates", ... and the "Contoids" fallback), the
+#: "Vowels" chart title, the "Diphthongs" sub-header, and the "Vocoids"
+#: fallback strip. Both the title token and the group-header token below
+#: derive from this ONE value, so the pane's section labels can never
+#: drift apart in tracking. All are title-case, semibold
+#: (:data:`FONT_SIZE_LABEL_PX`, weight 600); this pins the last axis
+#: (tracking) that used to differ between the title and the headers.
+PRIMARY_LABEL_LETTER_SPACING_PX: int = 1
+
+# ---------------------------------------------------------------------------
 # Title chrome
 # ---------------------------------------------------------------------------
 
@@ -82,9 +97,11 @@ VOWEL_CHART_TITLE_FONT_PX: int = FONT_SIZE_LABEL_PX
 #: Semibold matches axis-label rhythm in IPA charts.
 VOWEL_CHART_TITLE_FONT_WEIGHT: int = 600
 
-#: Letter-spacing (px) on the title. Light tracking now that the title
-#: is title-case rather than all-caps (all-caps needed more to breathe).
-VOWEL_CHART_TITLE_LETTER_SPACING_PX: float = 0.2
+#: Letter-spacing (px) on the "Vowels" title. Shares the ONE primary
+#: segment-label tracking so the title reads as a peer of the
+#: manner-class headers / "Diphthongs" / "Vocoids", not a slightly
+#: tighter outlier. See :data:`PRIMARY_LABEL_LETTER_SPACING_PX`.
+VOWEL_CHART_TITLE_LETTER_SPACING_PX: float = PRIMARY_LABEL_LETTER_SPACING_PX
 
 #: Padding tuple ``(top, right, bottom, left)`` in px around the
 #: title text. Desktop used ``(2, 2, 0, 2)`` (no bottom); web used
@@ -177,8 +194,11 @@ SEG_GROUP_HEADER_FONT_PX: int = FONT_SIZE_LABEL_PX
 #: Semibold matches the vowel chart's title weight.
 SEG_GROUP_HEADER_FONT_WEIGHT: int = 600
 
-#: Letter-spacing (px) on group headers.
-SEG_GROUP_HEADER_LETTER_SPACING_PX: int = 1
+#: Letter-spacing (px) on group headers. The same shared primary-label
+#: tracking the "Vowels" title uses (see
+#: :data:`PRIMARY_LABEL_LETTER_SPACING_PX`), so "Plosives" / "Contoids" /
+#: "Vocoids" / "Diphthongs" and "Vowels" all track identically.
+SEG_GROUP_HEADER_LETTER_SPACING_PX: int = PRIMARY_LABEL_LETTER_SPACING_PX
 
 #: Padding ``(top, right, bottom, left)`` around the manner-class
 #: header. 2 px bottom leaves enough gap that the header doesn't
