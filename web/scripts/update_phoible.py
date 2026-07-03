@@ -9,11 +9,11 @@ sha, fetch time, and per-file checksums. That makes "stay current with
 upstream" a single reproducible step instead of a hand-run
 ``curl | gzip`` pipe.
 
-    # latest upstream (records the commit it resolved to)
+    # published PHOIBLE 2.0 release
     python web/scripts/update_phoible.py
 
-    # reproduce an exact past state, or pin a release tag
-    python web/scripts/update_phoible.py --ref <commit-sha-or-tag>
+    # latest upstream, an exact past state, or another release tag
+    python web/scripts/update_phoible.py --ref <branch-or-commit-sha-or-tag>
 
 After refreshing, re-bake and verify:
 
@@ -37,6 +37,7 @@ import sys
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypedDict
 
 CACHE_DIR = Path(__file__).resolve().parent / "phoible_cache"
 PROVENANCE_PATH = CACHE_DIR / "PROVENANCE.json"
@@ -46,9 +47,10 @@ UPSTREAM_URL = f"https://github.com/{UPSTREAM_REPO}"
 RAW_BASE = f"https://raw.githubusercontent.com/{UPSTREAM_REPO}"
 API_COMMIT = f"https://api.github.com/repos/{UPSTREAM_REPO}/commits"
 
-# Stable release identity shown in the picker. master tip is still the
-# 2.0 line (no later release exists); the resolved commit recorded in
-# PROVENANCE is what pins reproducibility.
+# Stable release identity shown in the picker. The default ref is the
+# published 2.0 tag so the vendored bytes match this release metadata.
+# Pass ``--ref master`` explicitly to test the latest upstream state.
+DEFAULT_REF = "v2.0"
 RELEASE = "PHOIBLE 2.0"
 RELEASE_DATE = "2019-04-03"
 LICENSE = "GPL-3.0 (codebase) + CC BY-SA 3.0 (data)"
@@ -69,6 +71,26 @@ FILES = {
 _USER_AGENT = "phono-feature-phoible-refresh"
 
 
+class FileMetadata(TypedDict):
+    upstream_path: str
+    raw_bytes: int
+    gz_bytes: int
+    raw_sha256: str
+    gz_sha256: str
+
+
+class Provenance(TypedDict):
+    upstream: str
+    ref: str
+    commit: str
+    release: str
+    release_date: str
+    license: str
+    citation: str
+    fetched_utc: str
+    files: dict[str, FileMetadata]
+
+
 def _fetch(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
@@ -76,22 +98,17 @@ def _fetch(url: str) -> bytes:
 
 
 def _resolve_commit(ref: str) -> str:
-    """Resolve a ref (branch/tag/sha) to a full commit sha, best effort.
+    """Resolve a ref (branch/tag/sha) to a full commit sha.
 
     The sha is what makes a refresh reproducible: record it, and a
-    later ``--ref <sha>`` re-fetches the identical bytes. If the API
-    is unreachable (offline, rate limited), fall back to the ref text
-    so the run still succeeds.
+    later ``--ref <sha>`` re-fetches the identical bytes.
     """
-    try:
-        raw = _fetch(f"{API_COMMIT}/{ref}")
-        return str(json.loads(raw).get("sha") or ref)
-    except Exception as exc:  # noqa: BLE001 - best-effort metadata only
-        sys.stderr.write(
-            f"update_phoible: could not resolve commit for {ref!r} "
-            f"({exc}); recording the ref verbatim\n"
-        )
-        return ref
+    raw = _fetch(f"{API_COMMIT}/{ref}")
+    loaded = json.loads(raw)
+    commit = loaded.get("sha")
+    if not isinstance(commit, str) or not commit:
+        raise RuntimeError(f"GitHub commit API did not return a sha for {ref!r}")
+    return commit
 
 
 def _gzip_deterministic(data: bytes) -> bytes:
@@ -108,9 +125,10 @@ def _gzip_deterministic(data: bytes) -> bytes:
 def update(ref: str) -> int:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     commit = _resolve_commit(ref)
-    files_meta: dict[str, dict[str, object]] = {}
+    files_meta: dict[str, FileMetadata] = {}
+
     for upstream_path, out_name in FILES.items():
-        url = f"{RAW_BASE}/{ref}/{upstream_path}"
+        url = f"{RAW_BASE}/{commit}/{upstream_path}"
         print(f"update_phoible: fetching {url}")
         raw = _fetch(url)
         gz_bytes = _gzip_deterministic(raw)
@@ -119,11 +137,12 @@ def update(ref: str) -> int:
             "upstream_path": upstream_path,
             "raw_bytes": len(raw),
             "gz_bytes": len(gz_bytes),
-            "sha256": hashlib.sha256(gz_bytes).hexdigest(),
+            "raw_sha256": hashlib.sha256(raw).hexdigest(),
+            "gz_sha256": hashlib.sha256(gz_bytes).hexdigest(),
         }
         print(f"  -> {out_name} ({len(raw):,} raw -> {len(gz_bytes):,} gz)")
 
-    provenance = {
+    provenance: Provenance = {
         "upstream": UPSTREAM_URL,
         "ref": ref,
         "commit": commit,
@@ -152,11 +171,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--ref",
-        default="master",
+        default=DEFAULT_REF,
         help=(
-            "Upstream git ref (branch, tag, or commit sha) to fetch. "
-            "Default 'master' takes the latest upstream; pass a commit "
-            "sha to reproduce an exact past state."
+            f"Upstream git ref (branch, tag, or commit sha) to fetch. "
+            f"Default {DEFAULT_REF!r} reproduces the published PHOIBLE "
+            f"2.0 release; pass 'master' to fetch latest upstream, or "
+            f"a commit sha to reproduce an exact past state."
         ),
     )
     args = parser.parse_args()

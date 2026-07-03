@@ -961,8 +961,6 @@ function openSourceCitation(text) {
  *  the inventory line: every load path routes through here so the bar
  *  cannot diverge in format or linger on a boot placeholder. */
 function setInventoryStatus(info) {
-    const loadedTpl = STATUS_TEXT.inventory_loaded_template
-        || "{name}: {n_segments} segments × {n_features} features";
     // Accept both the full summary (segments / features arrays, used by
     // the upload + non-prerendered routes) and the flat status-only
     // payload (n_segments / n_features counts, used by the prerendered
@@ -970,10 +968,11 @@ function setInventoryStatus(info) {
     const nSeg = info.n_segments ?? info.segments.length;
     const nFeat = info.n_features ?? info.features.length;
     setStatus(
-        loadedTpl
-            .replace("{name}", info.name)
-            .replace("{n_segments}", String(nSeg))
-            .replace("{n_features}", String(nFeat))
+        _formatTpl(
+            "inventory_loaded_template",
+            "{name}: {n_segments} segments × {n_features} features",
+            { name: info.name, n_segments: nSeg, n_features: nFeat }
+        )
     );
 }
 
@@ -1008,12 +1007,12 @@ async function loadInventoryText(text, sourceLabel) {
             contrasts: "",
             contrasts_enabled: false,
         });
-        const failTpl = STATUS_TEXT.load_failed_template
-            || "Cannot load {fname}: {issue}";
         setStatus(
-            failTpl
-                .replace("{fname}", sourceLabel || "inventory")
-                .replace("{issue}", issues[0])
+            _formatTpl(
+                "load_failed_template",
+                "Cannot load {fname}: {issue}",
+                { fname: sourceLabel || "inventory", issue: issues[0] }
+            )
         );
     }
 }
@@ -6130,13 +6129,17 @@ const THEME = Object.freeze(
     STATUS_TEXT.theme_values || { LIGHT: "light", DARK: "dark" },
 );
 
-/** localStorage is external input: anything that isn't an
- *  acknowledged theme value falls back to LIGHT. Validates
- *  against the relayed list so a future Python addition (e.g.
- *  a high-contrast theme) is accepted automatically once baked. */
+/** Clamp an external value (e.g. from localStorage) to a known enum
+ *  member, falling back when it is unrecognised. Validates against the
+ *  relayed enum so a future Python addition (e.g. a high-contrast theme)
+ *  is accepted automatically once baked. Shared by the theme /
+ *  palette-mode / match-mode normalizers. */
+function normalizeEnumValue(value, enumObj, fallback) {
+    return new Set(Object.values(enumObj)).has(value) ? value : fallback;
+}
+
 function normalizeTheme(value) {
-    const known = new Set(Object.values(THEME));
-    return known.has(value) ? value : THEME.LIGHT;
+    return normalizeEnumValue(value, THEME, THEME.LIGHT);
 }
 
 /** Best-effort localStorage write. Persistence is a "nice to have";
@@ -6208,13 +6211,8 @@ const PALETTE_MODE = Object.freeze(
     },
 );
 
-/** localStorage is external input: anything that isn't an
- *  acknowledged palette-mode value falls back to STANDARD.
- *  Validates against the relayed list so a future Python addition
- *  is accepted automatically once baked. */
 function normalizePaletteMode(value) {
-    const known = new Set(Object.values(PALETTE_MODE));
-    return known.has(value) ? value : PALETTE_MODE.STANDARD;
+    return normalizeEnumValue(value, PALETTE_MODE, PALETTE_MODE.STANDARD);
 }
 
 /** Push the user's restored theme + palette-mode (set by
@@ -6256,12 +6254,8 @@ const MATCH_MODE = Object.freeze(
     },
 );
 
-/** localStorage is external input: anything other than the
- *  wildcard sentinel reads as strict. */
 function normalizeMatchMode(value) {
-    return value === MATCH_MODE.WILDCARD
-        ? MATCH_MODE.WILDCARD
-        : MATCH_MODE.STRICT;
+    return normalizeEnumValue(value, MATCH_MODE, MATCH_MODE.STRICT);
 }
 
 /** Push the user's restored matching mode (set by
@@ -6789,12 +6783,17 @@ function copySegmentToClipboard(seg) {
     // (baked from mode_logic.CLIPBOARD_COPY_MESSAGE_TEMPLATE) so it
     // stays in lockstep with the desktop. The failure message is
     // web-only so it stays inline.
-    const tpl = STATUS_TEXT.clipboard_copy_template
-        || "Copied /{seg}/ to clipboard";
     // Flash (not setStatus) so the copy confirmation auto-reverts to
     // the inventory summary instead of permanently replacing it.
     const onOk = () =>
-        flashStatus(tpl.replace("{seg}", seg), STATUS_KIND.success);
+        flashStatus(
+            _formatTpl(
+                "clipboard_copy_template",
+                "Copied /{seg}/ to clipboard",
+                { seg }
+            ),
+            STATUS_KIND.success
+        );
     const onFail = () =>
         flashStatus(`Could not copy /${seg}/`, STATUS_KIND.error);
     if (navigator.clipboard && window.isSecureContext) {

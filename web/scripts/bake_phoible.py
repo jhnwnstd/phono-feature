@@ -36,7 +36,7 @@ import json
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import NotRequired, TypedDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHARED_SRC = REPO_ROOT / "shared" / "src"
@@ -88,6 +88,9 @@ PHOIBLE_CITATION = (
     "DOI: 10.5281/zenodo.2626687"
 )
 
+SCHEMA_VERSION = 1
+ENCODED_VALUES = frozenset({"+", "-", "0"})
+
 # Source identity per PHOIBLE source code: a ``(short, description)``
 # pair. ``short`` is the bold heading the picker shows; ``description``
 # is the secondary line that expands opaque acronyms like SPA and
@@ -105,6 +108,62 @@ SOURCE_INFO: dict[str, tuple[str, str]] = {
     "ea": ("Eurasian Phonologies", ""),
     "uz": ("Common Linguistic Features", ""),
 }
+
+
+class LanguageIndexEntry(TypedDict):
+    name: str
+    glottocode: str | None
+    iso: str | None
+
+
+class InventoryIndexEntry(TypedDict):
+    id: str
+    language_name: str
+    glottocode: str | None
+    iso: str | None
+    dialect: str | None
+    source: str
+    source_short: str
+    source_description: str
+    source_page_url: str
+    segment_count: int
+
+
+class PhoibleIndex(TypedDict):
+    schema_version: int
+    version: str
+    release_date: str
+    source_url: str
+    license: str
+    citation: str
+    languages: list[LanguageIndexEntry]
+    inventories: list[InventoryIndexEntry]
+
+
+class PhoibleData(TypedDict):
+    schema_version: int
+    version: str
+    feature_names: list[str]
+    inventories: dict[str, dict[str, str]]
+    segment_secondary: dict[str, dict[str, str]]
+
+
+class BakeStats(TypedDict):
+    rows_total: int
+    rows_skipped_empty_phoneme: int
+    inventory_count: int
+    language_count: int
+    contour_values_normalized: int
+    source_page_links: int
+    inventory_page_links: int
+
+
+class Provenance(TypedDict):
+    release: NotRequired[str]
+    release_date: NotRequired[str]
+    upstream: NotRequired[str]
+    license: NotRequired[str]
+    citation: NotRequired[str]
 
 
 def _ensure_shared_on_path() -> None:
@@ -133,7 +192,7 @@ def _open_csv(path: Path) -> io.TextIOWrapper:
     return io.TextIOWrapper(binary, encoding="utf-8", newline="")
 
 
-def _load_provenance(path: Path = DEFAULT_PROVENANCE) -> dict[str, Any]:
+def _load_provenance(path: Path = DEFAULT_PROVENANCE) -> Provenance:
     """Read the refresh provenance stamp, or ``{}`` if absent/unreadable.
 
     Lets an ``update_phoible.py`` refresh feed the baked release
@@ -195,10 +254,22 @@ def _inventory_source_url(inv_id: str, bibkeys: list[str]) -> str:
     return PHOIBLE_INVENTORY_PAGE_BASE + inv_id
 
 
+def _encode_bundle(chars: list[str], phoneme: str, inv_id: str) -> str:
+    """Join and validate a positional feature bundle."""
+    bundle = "".join(chars)
+    unexpected = set(bundle) - ENCODED_VALUES
+    if unexpected:
+        raise ValueError(
+            f"Unexpected PHOIBLE feature values {unexpected!r} "
+            f"for phoneme {phoneme!r} in inventory {inv_id}"
+        )
+    return bundle
+
+
 def bake_tables(
     csv_path: Path = DEFAULT_INPUT,
     bibtex_path: Path = DEFAULT_BIBTEX,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, int]]:
+) -> tuple[PhoibleIndex, PhoibleData, BakeStats]:
     """Stream the PHOIBLE CSV and return (index, data, stats).
 
     The index payload is bundle-bound and stays small (no per-segment
@@ -223,13 +294,15 @@ def bake_tables(
 
     feature_columns = list(PHOIBLE_TO_APP_FEATURE.keys())
     feature_names = [PHOIBLE_TO_APP_FEATURE[c] for c in feature_columns]
+    if not feature_columns:
+        raise RuntimeError("No PHOIBLE features mapped to app features")
 
     # Per-inventory bibliographic source(s), used to derive each
     # inventory's phoible.org source-page link.
     inv_bibkeys = _load_inventory_bibkeys(bibtex_path)
 
     # Per-inventory accumulators.
-    inv_meta: dict[str, dict[str, Any]] = {}
+    inv_meta: dict[str, InventoryIndexEntry] = {}
     inv_segments: dict[str, dict[str, str]] = defaultdict(dict)
     # Per-inventory diphthong secondary bundles: phoneme -> final-state
     # bundle string in the same positional encoding as inv_segments. The
@@ -238,7 +311,7 @@ def bake_tables(
     inv_segment_secondary: dict[str, dict[str, str]] = defaultdict(dict)
     # Language-name dedup: the same language often appears under several
     # inventories, but the autocomplete list wants one entry each.
-    languages: dict[str, dict[str, Any]] = {}
+    languages: dict[str, LanguageIndexEntry] = {}
 
     rows_total = 0
     contour_normalized = 0
@@ -348,7 +421,14 @@ def bake_tables(
                         contour_normalized += 1
                     initial_chars.append(normalized)
                     final_chars.append(normalized)
-            bundle_str = "".join(initial_chars)
+
+            bundle_str = _encode_bundle(initial_chars, phoneme, inv_id)
+            if len(bundle_str) != len(feature_names):
+                raise ValueError(
+                    f"Encoded {len(bundle_str)} values for "
+                    f"{len(feature_names)} features on phoneme {phoneme!r} "
+                    f"in inventory {inv_id}"
+                )
 
             # Duplicate rows for one phoneme within an inventory are
             # very rare; keep the FIRST so the secondary bundle
@@ -357,7 +437,9 @@ def bake_tables(
                 continue
             inv_segments[inv_id][phoneme] = bundle_str
             if has_contour:
-                inv_segment_secondary[inv_id][phoneme] = "".join(final_chars)
+                inv_segment_secondary[inv_id][phoneme] = _encode_bundle(
+                    final_chars, phoneme, inv_id
+                )
 
     # Backfill segment_count on each inventory descriptor.
     for inv_id, meta in inv_meta.items():
@@ -378,7 +460,8 @@ def bake_tables(
     # hard-coded constants. When the stamp matches the constants the
     # baked index is byte-identical to the pre-provenance output.
     prov = _load_provenance()
-    index: dict[str, Any] = {
+    index: PhoibleIndex = {
+        "schema_version": SCHEMA_VERSION,
         "version": prov.get("release") or f"PHOIBLE {PHOIBLE_VERSION}",
         "release_date": prov.get("release_date") or PHOIBLE_RELEASE_DATE,
         "source_url": prov.get("upstream") or PHOIBLE_SOURCE_URL,
@@ -388,7 +471,8 @@ def bake_tables(
         "inventories": sorted_inventories,
     }
 
-    data: dict[str, Any] = {
+    data: PhoibleData = {
+        "schema_version": SCHEMA_VERSION,
         "version": f"PHOIBLE {PHOIBLE_VERSION}",
         "feature_names": feature_names,
         "inventories": {
@@ -413,7 +497,7 @@ def bake_tables(
         for m in inv_meta.values()
         if m["source_page_url"].startswith(PHOIBLE_SOURCE_PAGE_BASE)
     )
-    stats = {
+    stats: BakeStats = {
         "rows_total": rows_total,
         "rows_skipped_empty_phoneme": skipped_no_phoneme,
         "inventory_count": len(inv_meta),

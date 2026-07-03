@@ -57,6 +57,17 @@ KEEP_RANGES: tuple[tuple[int, int], ...] = (
     (0xA700, 0xA71F),  # Modifier Tone Letters
 )
 
+REQUIRED_CODEPOINTS = frozenset(
+    {
+        ord("a"),
+        ord("ɡ"),
+        ord("ʃ"),
+        ord("ː"),
+        ord("\u0303"),  # Combining tilde
+        ord("\u0325"),  # Combining ring below
+    }
+)
+
 
 def _format_unicode_ranges(ranges: tuple[tuple[int, int], ...]) -> str:
     """Render the ranges as the CSS ``unicode-range`` token string."""
@@ -67,6 +78,38 @@ def _format_unicode_ranges(ranges: tuple[tuple[int, int], ...]) -> str:
         else:
             parts.append(f"U+{lo:04X}-{hi:04X}")
     return ", ".join(parts)
+
+
+def _validate_ranges(ranges: tuple[tuple[int, int], ...]) -> None:
+    """Fail fast if a hand-maintained Unicode range is invalid."""
+    previous_hi = -1
+    for lo, hi in ranges:
+        if lo > hi:
+            raise ValueError(f"invalid Unicode range: U+{lo:04X}-U+{hi:04X}")
+        if lo <= previous_hi:
+            raise ValueError(
+                f"overlapping or unsorted Unicode range at U+{lo:04X}"
+            )
+        previous_hi = hi
+
+
+def _codepoints_for_ranges(ranges: tuple[tuple[int, int], ...]) -> list[int]:
+    """Expand inclusive Unicode ranges into codepoints for fonttools."""
+    _validate_ranges(ranges)
+    return [
+        codepoint
+        for lo, hi in ranges
+        for codepoint in range(lo, hi + 1)
+    ]
+
+
+def _assert_required_codepoints(font: object) -> None:
+    """Verify that representative IPA-critical glyphs survived subsetting."""
+    cmap = set(font.getBestCmap())
+    missing = REQUIRED_CODEPOINTS - cmap
+    if missing:
+        formatted = ", ".join(f"U+{cp:04X}" for cp in sorted(missing))
+        raise RuntimeError(f"subset font is missing required glyphs: {formatted}")
 
 
 def subset_font(source: Path, out: Path) -> None:
@@ -81,19 +124,16 @@ def subset_font(source: Path, out: Path) -> None:
         from fontTools.subset import Options, Subsetter
         from fontTools.ttLib import TTFont
     except ImportError as exc:
-        sys.stderr.write(
-            f"subset_ipa_font: fonttools not installed ({exc}); "
-            "run `pip install 'fonttools[woff]' brotli` first.\n"
-        )
-        raise SystemExit(1) from exc
+        raise RuntimeError(
+            "fonttools not installed; run "
+            "`pip install 'fonttools[woff]' brotli` first"
+        ) from exc
 
     if not source.exists():
-        sys.stderr.write(
-            f"subset_ipa_font: source TTF not found at {source}; "
-            "extract Charis-7.000.zip into web/scripts/font_cache/ "
-            "first.\n"
+        raise FileNotFoundError(
+            f"source TTF not found at {source}; "
+            "extract Charis-7.000.zip into web/scripts/font_cache/ first"
         )
-        raise SystemExit(1)
 
     font = TTFont(str(source))
     options = Options()
@@ -120,17 +160,23 @@ def subset_font(source: Path, out: Path) -> None:
         "rlig",
     ]
 
-    unicodes: list[int] = []
-    for lo, hi in KEEP_RANGES:
-        unicodes.extend(range(lo, hi + 1))
-
     subsetter = Subsetter(options=options)
-    subsetter.populate(unicodes=unicodes)
+    subsetter.populate(unicodes=_codepoints_for_ranges(KEEP_RANGES))
     subsetter.subset(font)
+    _assert_required_codepoints(font)
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    font.flavor = "woff2"
-    font.save(str(out))
+    tmp_out = out.with_suffix(out.suffix + ".tmp")
+    try:
+        font.flavor = "woff2"
+        font.save(str(tmp_out))
+        tmp_out.replace(out)
+    finally:
+        if tmp_out.exists():
+            tmp_out.unlink()
+
+    if out.stat().st_size == 0:
+        raise RuntimeError(f"font subset wrote an empty file to {out}")
 
 
 def main() -> int:
@@ -149,7 +195,11 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    subset_font(args.source, args.out)
+    try:
+        subset_font(args.source, args.out)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        sys.stderr.write(f"subset_ipa_font: {exc}\n")
+        return 1
 
     kb = args.out.stat().st_size / 1024
     print(

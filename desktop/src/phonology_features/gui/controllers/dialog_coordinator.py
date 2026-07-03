@@ -16,7 +16,11 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFileDialog
 
 from phonology_features._logging import get_logger
+from phonology_features.gui.controllers.inventory_dir import (
+    _read_metadata_name,
+)
 from phonology_features.gui.editor.dialogs import center_on_parent
+from phonology_shared.editor.setup import inventory_display_label
 
 if TYPE_CHECKING:
     from phonology_features.gui.editor import InventoryEditor
@@ -54,8 +58,10 @@ class DialogCoordinator:
         combo = self._w.inventory_combo
         idx = combo.findData(path)
         if idx < 0:
-            pretty = os.path.splitext(os.path.basename(path))[0]
-            pretty = pretty.replace("_", " ").title()
+            pretty = inventory_display_label(
+                fname=os.path.basename(path),
+                metadata_name=_read_metadata_name(path),
+            )
             combo.addItem(pretty, userData=path)
             idx = combo.count() - 1
         combo.setCurrentIndex(idx)

@@ -23,9 +23,11 @@ Run standalone for debugging:
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import sys
 from pathlib import Path
+from typing import Sequence, TypedDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHARED_SRC = REPO_ROOT / "shared" / "src"
@@ -35,6 +37,17 @@ DEFAULT_OUT = (
     / "editor"
     / "_panphon_table.generated.json"
 )
+
+SCHEMA_VERSION = 1
+ENCODED_VALUES = frozenset({"+", "-", "0"})
+
+
+class PanphonSnapshot(TypedDict):
+    schema_version: int
+    provider_name: str
+    provider_version: str
+    feature_names: list[str]
+    segments: dict[str, str]
 
 
 def _ensure_shared_on_path() -> None:
@@ -48,13 +61,45 @@ def _ensure_shared_on_path() -> None:
         sys.path.insert(0, p)
 
 
-def bake_table() -> dict[str, object]:
+def _segment_values(seg_obj: object, ipa: str) -> list[object]:
+    """Return PanPhon segment values in ``FeatureTable.names`` order."""
+    if hasattr(seg_obj, "strings"):
+        return list(seg_obj.strings())
+    if hasattr(seg_obj, "numeric"):
+        return list(seg_obj.numeric())
+
+    raise TypeError(
+        f"PanPhon Segment for {ipa!r} has neither strings() "
+        f"nor numeric(); bake aborted"
+    )
+
+
+def _encode_segment(
+    values: Sequence[object],
+    kept_indices: Sequence[int],
+    ipa: str,
+) -> str:
+    """Encode kept PanPhon values as the runtime's positional string."""
+    from phonology_shared.editor.panphon_features import panphon_value_to_app
+
+    encoded = "".join(panphon_value_to_app(values[idx]) for idx in kept_indices)
+    unexpected = set(encoded) - ENCODED_VALUES
+    if unexpected:
+        raise ValueError(
+            f"Unexpected encoded feature values {unexpected!r} "
+            f"for segment {ipa!r}"
+        )
+    return encoded
+
+
+def bake_table() -> PanphonSnapshot:
     """Walk PanPhon's FeatureTable into a JSON-serializable dict.
 
     Schema (compact encoding):
         {
+          "schema_version": 1,
           "provider_name": "PanPhon",
-          "provider_version": "<panphon.__version__>",
+          "provider_version": "<installed panphon version>",
           "feature_names": ["Syllabic", "Sonorant", ...],
           "segments": {
             "<ipa>": "+-+--+...",
@@ -77,31 +122,27 @@ def bake_table() -> dict[str, object]:
     this matches what the desktop's live provider exposes.
     """
     _ensure_shared_on_path()
-    import importlib.metadata
 
     import panphon
 
-    from phonology_shared.editor.panphon_features import (
-        PANPHON_TO_APP_FEATURE,
-        panphon_value_to_app,
-    )
+    from phonology_shared.editor.panphon_features import PANPHON_TO_APP_FEATURE
 
     ft = panphon.FeatureTable()
     panphon_names = list(ft.names)
-    feature_names = tuple(
-        PANPHON_TO_APP_FEATURE[name]
-        for name in panphon_names
+
+    kept = [
+        (i, PANPHON_TO_APP_FEATURE[name])
+        for i, name in enumerate(panphon_names)
         if name in PANPHON_TO_APP_FEATURE
-    )
+    ]
+    if not kept:
+        raise RuntimeError("No PanPhon features mapped to app features")
 
     # Indices into the panphon name vector that correspond to a
     # mapped app feature, in feature_names order. Computed once so
     # the per-segment loop is a tight slice + join.
-    kept_indices = [
-        i
-        for i, pname in enumerate(panphon_names)
-        if pname in PANPHON_TO_APP_FEATURE
-    ]
+    kept_indices = [i for i, _ in kept]
+    feature_names = [name for _, name in kept]
     expected_n = len(panphon_names)
 
     segments: dict[str, str] = {}
@@ -110,26 +151,23 @@ def bake_table() -> dict[str, object]:
         # in the same column order as ``ft.names``. ``numeric()`` is
         # the forward-compat fallback for a future PanPhon where the
         # default representation changes.
-        if hasattr(seg_obj, "strings"):
-            values = list(seg_obj.strings())
-        elif hasattr(seg_obj, "numeric"):
-            values = list(seg_obj.numeric())
-        else:
-            raise TypeError(
-                f"PanPhon Segment for {ipa!r} has neither strings() "
-                f"nor numeric(); bake aborted"
-            )
+        values = _segment_values(seg_obj, ipa)
         if len(values) != expected_n:
             raise ValueError(
                 f"PanPhon returned {len(values)} values for "
                 f"{expected_n} names on segment {ipa!r}"
             )
+
         # Coerce each kept value into the three-char vocabulary and join
         # into the positional string the runtime decodes against
         # ``feature_names``.
-        segments[ipa] = "".join(
-            panphon_value_to_app(values[idx]) for idx in kept_indices
-        )
+        encoded = _encode_segment(values, kept_indices, ipa)
+        if len(encoded) != len(feature_names):
+            raise ValueError(
+                f"Encoded {len(encoded)} values for {len(feature_names)} "
+                f"features on segment {ipa!r}"
+            )
+        segments[ipa] = encoded
 
     try:
         version = importlib.metadata.version("panphon")
@@ -137,10 +175,11 @@ def bake_table() -> dict[str, object]:
         version = "unknown"
 
     return {
+        "schema_version": SCHEMA_VERSION,
         "provider_name": "PanPhon",
         "provider_version": version,
-        "feature_names": list(feature_names),
-        "segments": segments,
+        "feature_names": feature_names,
+        "segments": dict(sorted(segments.items())),
     }
 
 
@@ -178,6 +217,7 @@ def main() -> int:
     with args.out.open("w", encoding="utf-8") as f:
         json.dump(table, f, ensure_ascii=False, indent=args.indent)
         f.write("\n")
+
     n_seg = len(table["segments"])
     n_feat = len(table["feature_names"])
     size_kb = args.out.stat().st_size / 1024
