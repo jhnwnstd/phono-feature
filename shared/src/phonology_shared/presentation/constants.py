@@ -134,8 +134,7 @@ def inventory_sort_key(fname: str, label: str) -> tuple[int, str]:
 # and the web's ``title`` attribute read identically; the web
 # relays via the inlined STATUS_TEXT JSON.
 MATCH_MODE_TOOLTIP_STRICT_ACTIVE: str = (
-    "Allow underspecified matches: segments with 0 or absent values "
-    "can still match +/− queries."
+    "Allow segments with 0 or absent feature values to match queries."
 )
 MATCH_MODE_TOOLTIP_WILDCARD_ACTIVE: str = (
     "Underspecified matching is on: 0 or absent values can still "

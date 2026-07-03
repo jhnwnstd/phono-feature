@@ -1153,11 +1153,14 @@ dialog input[type="text"]:focus-visible {
   background: var(--accent-light);
   border-color: var(--accent);
 }
-/* Border-style encodes the state in addition to color so users
-   with anomalous color vision can still tell selected (solid
-   thick), suggested (dashed), and unmatched (dotted) apart at a
-   glance. Border-style is a preattentive attribute (NN/G) just
-   like color, but the pair carries strictly more information. */
+/* Border weight + style + fill together encode the state, so users
+   with anomalous color vision can still tell them apart at a glance:
+   selected is a THICK solid accent edge on a dark fill, natural-class
+   completion (suggested) a STANDARD solid accent edge on a light fill,
+   and unmatched a thin DOTTED edge. Suggested is deliberately solid
+   (not dashed): the shorthand for "add this to complete the class" is
+   one consistent solid blue edge everywhere, told apart from a hard
+   selection by its lighter fill and thinner stroke, not a line style. */
 .seg-btn[data-state="selected"],
 .seg-btn[data-state="matched"] {
   background: var(--seg-selected);
@@ -1173,7 +1176,7 @@ dialog input[type="text"]:focus-visible {
 .seg-btn[data-state="suggested"] {
   background: var(--accent-light);
   color: var(--accent);
-  border: var(--border-std) dashed var(--accent);
+  border: var(--border-std) solid var(--accent);
 }
 
 /* ---------- IPA vowel trapezoid ----------

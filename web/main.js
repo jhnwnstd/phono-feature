@@ -6276,7 +6276,7 @@ function wireMatchModeToggle() {
         ? (STATUS_TEXT.match_mode_tooltip_wildcard_active
             || "Underspecified matching is on: 0 or absent values can still match +/− queries. Click for strict matching.")
         : (STATUS_TEXT.match_mode_tooltip_strict_active
-            || "Allow underspecified matches: segments with 0 or absent values can still match +/− queries.");
+            || "Allow segments with 0 or absent feature values to match queries.");
     const applyLabel = (mode) =>
         setButtonLabel(nodes.matchModeBtn, labelFor(mode));
     const stored = normalizeMatchMode(safeStorageGet("match_mode"));

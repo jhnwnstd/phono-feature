@@ -177,11 +177,11 @@ class SegmentButton(QPushButton):
                 QPushButton {{
                     background-color: {C["accent_light"]};
                     color: {C["accent"]};
-                    border: {_std}px dashed {C["accent"]};
+                    border: {_std}px solid {C["accent"]};
                     border-radius: {_br}px;
                 }}
                 QPushButton:hover {{
-                    border: {_thick}px dashed {C["accent"]};
+                    border: {_thick}px solid {C["accent"]};
                 }}
             """,
             SegmentState.DEFAULT: f"""
