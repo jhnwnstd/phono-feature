@@ -86,6 +86,10 @@ const NODE_IDS = Object.freeze({
     editorRemoveFeatBtn: "editor-remove-feat-btn",
     editorNameInput: "editor-name-input",
     editorFileLabel: "editor-file-label",
+    editorSourceBtn: "editor-source-btn",
+    editorSourceDialog: "editor-source-dialog",
+    editorSourceTextarea: "editor-source-textarea",
+    editorSourceCancel: "editor-source-cancel",
     editorCapCounter: "editor-cap-counter",
     editorGridScroll: "editor-grid-scroll",
     editorGridCorner: "editor-grid-corner",
@@ -4344,6 +4348,7 @@ function wirePhoiblePicker() {
 const editorState = {
     open: false,
     name: "",
+    source: "",           // metadata.source (verbatim; normalized on save)
     features: [],
     segments: [],
     cells: [],
@@ -4526,6 +4531,29 @@ function wireEditor(setupDialog) {
         );
     });
 
+    // Source: a modal to add/edit the inventory's provenance (a
+    // citation, URL, DOI, or a pasted BibTeX entry). Staged on
+    // editorState like the name; normalized + written to
+    // metadata.source on Save as, where classify_source displays it.
+    nodes.editorSourceBtn.addEventListener("click", openSourceDialog);
+    nodes.editorSourceCancel.addEventListener("click", () => {
+        closeDialog(nodes.editorSourceDialog);
+    });
+    nodes.editorSourceDialog
+        .querySelector("form")
+        .addEventListener("submit", () => {
+            // method="dialog": the submit closes the dialog; capture the
+            // value first. Escape / Cancel never submit, so they discard.
+            const next = nodes.editorSourceTextarea.value;
+            if (next === editorState.source) return;
+            editorState.source = next;
+            markEditorDirty();
+            refreshSourceButton();
+            setEditorStatus(
+                "Source will apply on Save as... (Back to discard).",
+            );
+        });
+
     // Single bubbled handler at the frame root. Resolves the target
     // (<td>, column <th>, row <th>, corner) inside any of the four panes.
     nodes.editorGridScroll.addEventListener("mousedown", onGridMouseDown);
@@ -4601,6 +4629,7 @@ function refreshEditorFromCurrent() {
         return;
     }
     editorState.name = snapshot.name;
+    editorState.source = snapshot.source || "";
     editorState.features = snapshot.features.slice();
     editorState.segments = snapshot.segments.slice();
     editorState.cells = snapshot.cells.map((row) => row.slice());
@@ -4616,6 +4645,7 @@ function refreshEditorFromCurrent() {
         ? { r: 0, c: 0 }
         : null;
     nodes.editorNameInput.value = editorState.name;
+    refreshSourceButton();
     // The web has no linked-on-disk file, so this label is purely a
     // dirty cue: blank when clean (just loaded OR just saved -- no
     // "(unsaved)" contradicting the "Saved as X" status), "(modified)"
@@ -4628,6 +4658,23 @@ function refreshEditorFromCurrent() {
         `${editorState.segments.length} segments × `
         + `${editorState.features.length} features`,
     );
+}
+
+/** Reflect whether a source is set on the toolbar button's label. */
+function refreshSourceButton() {
+    const has = editorState.source.trim().length > 0;
+    nodes.editorSourceBtn.textContent = has ? "Edit source" : "Add source";
+    nodes.editorSourceBtn.title = has
+        ? "Edit the inventory's source"
+        : "Add a source for the inventory (a citation, URL, DOI, "
+        + "or a pasted BibTeX entry)";
+}
+
+/** Open the source modal, prefilled with the staged source. */
+function openSourceDialog() {
+    nodes.editorSourceTextarea.value = editorState.source;
+    openDialog(nodes.editorSourceDialog);
+    try { nodes.editorSourceTextarea.focus(); } catch { /* ignore */ }
 }
 
 /**
@@ -5857,6 +5904,7 @@ function commitAndDownload() {
             editorState.features,
             editorState.segments,
             editorState.cells,
+            editorState.source,
         );
     } catch (e) {
         setEditorStatus(`Save failed: ${bridgeErrorMessage(e, "error")}`);

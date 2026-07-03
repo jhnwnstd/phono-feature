@@ -75,6 +75,7 @@ from phonology_shared.editor.grid import (  # noqa: F401
     validate_new_feature_label,
     validate_new_segment_label,
 )
+from phonology_shared.editor.source_input import normalize_source_input
 from phonology_shared.editor.inventory_providers import (
     InventoryDescriptor,
     InventoryProvider,
@@ -729,11 +730,16 @@ def get_grid_state() -> dict[str, Any]:
         [engine.segments[seg].get(feat, "0") for seg in segments]
         for feat in features
     ]
+    # Seed the editor's source box. Metadata values pass through the
+    # parser untouched, so ``source`` could be a non-string; hand back a
+    # string (empty when absent) so the input never shows a repr.
+    source = engine.inventory.metadata.get("source")
     return {
         "name": _inventory_name or engine.inventory.name,
         "features": features,
         "segments": segments,
         "cells": cells,
+        "source": source if isinstance(source, str) else "",
     }
 
 
@@ -779,6 +785,7 @@ def commit_inventory_from_grid(
     features: list[str],
     segments: list[str],
     cells: list[list[str]],
+    source: str | None = None,
 ) -> dict[str, Any]:
     """Build and adopt a new inventory from web-editor grid state.
 
@@ -803,6 +810,18 @@ def commit_inventory_from_grid(
         base_metadata = {
             k: v for k, v in _engine.inventory.metadata.items() if k != "name"
         }
+    # A user-edited source overlays the carried metadata. ``None`` means
+    # "not touched" (keep whatever was carried); an empty result drops
+    # the key so the display shows no affordance. A pasted BibTeX entry
+    # is rendered to a plain citation here so it stores like a predefined
+    # inventory's source.
+    if source is not None:
+        normalized = normalize_source_input(source)
+        base_metadata = dict(base_metadata or {})
+        if normalized:
+            base_metadata["source"] = normalized
+        else:
+            base_metadata.pop("source", None)
     inventory = grid_to_inventory(
         name=name,
         features=features,

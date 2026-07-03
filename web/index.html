@@ -316,6 +316,8 @@
             title="Remove the selected feature (click a row header to select it)"
             aria-label="Remove selected feature row">− Feature</button>
     <div class="editor-toolbar-spacer"></div>
+    <button id="editor-source-btn" type="button"
+            title="Add or edit the inventory's source (a citation, URL, DOI, or a pasted BibTeX entry)">Add source</button>
   </header>
   <div class="editor-meta">
     <label class="editor-meta-label" for="editor-name-input">Name:</label>
@@ -372,6 +374,29 @@
     <div class="dialog-actions">
       <button type="button" id="rename-cancel" value="cancel">Cancel</button>
       <button type="submit" id="rename-save" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!--
+  Editor source-input modal. Opened from the editor toolbar's Add/Edit
+  source button. Accepts a plain citation, a URL, a DOI, or a pasted
+  BibTeX entry (multi-line, hence a textarea); a BibTeX entry is rendered
+  to a plain citation on save. Stored verbatim into metadata.source, the
+  same free-form string classify_source reads for the [Source] display.
+-->
+<dialog id="editor-source-dialog" aria-labelledby="editor-source-title">
+  <form method="dialog" id="editor-source-form">
+    <div class="dialog-title" id="editor-source-title">Inventory source</div>
+    <label class="dialog-label" for="editor-source-textarea">Citation, URL, DOI, or a pasted BibTeX entry</label>
+    <textarea id="editor-source-textarea" class="dialog-textarea" rows="6"
+              autocomplete="off" spellcheck="false"
+              placeholder="Hayes, Bruce. 2009. Introductory Phonology. Wiley-Blackwell.
+
+— or paste a BibTeX @entry, or a URL / DOI —"></textarea>
+    <div class="dialog-actions">
+      <button type="button" id="editor-source-cancel" value="cancel">Cancel</button>
+      <button type="submit" id="editor-source-save" value="save">Save</button>
     </div>
   </form>
 </dialog>

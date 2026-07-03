@@ -218,6 +218,29 @@ def prompt_text(
     return dlg.textValue()
 
 
+def prompt_source(
+    parent: QWidget | None,
+    initial: str = "",
+) -> str | None:
+    """Multi-line prompt for an inventory source, centered on parent.
+
+    The source may be a plain citation, a URL, a DOI, or a pasted
+    BibTeX entry (hence multi-line). Returns the entered text, or None
+    if cancelled; the caller normalizes it. Mirrors :py:func:`prompt_text`
+    but swaps the line edit for a plain-text edit.
+    """
+    dlg = QInputDialog(parent)
+    dlg.setOption(QInputDialog.InputDialogOption.UsePlainTextEditForTextInput)
+    dlg.setWindowTitle("Inventory source")
+    dlg.setLabelText("Citation, URL, DOI, or a pasted BibTeX entry:")
+    if initial:
+        dlg.setTextValue(initial)
+    center_on_parent(dlg, parent)
+    if dlg.exec() != QDialog.DialogCode.Accepted:
+        return None
+    return dlg.textValue()
+
+
 class InputDialog(QDialog):
     """Dialog for entering segments and features before opening the grid."""
 

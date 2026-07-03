@@ -1868,6 +1868,51 @@ def test_crosshair_header_repaints_on_scroll_while_lit() -> None:
         table_mod._ToggleHeaderView.paintSection = orig_paint
 
 
+def test_editor_source_button_seeds_edits_and_saves() -> None:
+    """The editor's Add/Edit source button seeds its text from
+    metadata.source, renders a pasted BibTeX entry to a plain citation
+    on save, and dropping the text removes the key entirely (so the
+    normal display shows no [Source] affordance). Sibling metadata is
+    untouched. Mirrors the web bridge behaviour in
+    web/tests/test_source_editing.py."""
+    import os as _os
+
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    from phonology_features.gui.editor import InventoryEditor
+
+    b = InventoryEditor(load_path=HAYES)
+    b.show()
+    for _ in range(3):
+        app.processEvents()
+    # Seeded from the loaded inventory's source; label reflects it.
+    assert b._source_btn.text() == "Edit source"
+    assert b._source_text.startswith("Hayes")
+    assert b._to_inventory().metadata["source"].startswith("Hayes")
+
+    # A pasted BibTeX entry renders to a plain citation on save.
+    b._source_text = (
+        "@book{h, author={Blevins, Juliette}, "
+        "title={Evolutionary Phonology}, year={2004}, "
+        "publisher={Cambridge University Press}}"
+    )
+    b._refresh_source_btn()
+    assert b._source_btn.text() == "Edit source"
+    assert b._to_inventory().metadata["source"] == (
+        "Blevins, Juliette (2004). Evolutionary Phonology. "
+        "Cambridge University Press."
+    )
+
+    # Clearing the source drops the key (no affordance) and relabels.
+    b._source_text = "   "
+    b._refresh_source_btn()
+    assert b._source_btn.text() == "Add source"
+    assert "source" not in b._to_inventory().metadata
+    b.close()
+
+
 def test_dropdown_filters_out_atomic_write_tmp_files(tmp_path: Path) -> None:
     """``atomic_write_json`` creates ``.tmp_inv_*.json`` files in the
     target directory between ``mkstemp`` and ``os.replace``. The

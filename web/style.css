@@ -383,6 +383,25 @@ dialog input[type="text"]:focus-visible {
   outline-offset: -1px;
   border-color: var(--accent);
 }
+/* Multi-line dialog input (the editor's source box: a citation, URL,
+   DOI, or a pasted BibTeX entry). Mirrors the text-input border/focus
+   so the source modal matches the rename / label prompts. */
+.dialog-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: var(--border-std) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.dialog-textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
 .dialog-error {
   min-height: 18px;
   font-size: var(--font-size-meta);

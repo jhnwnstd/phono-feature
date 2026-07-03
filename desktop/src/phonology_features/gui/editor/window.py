@@ -18,6 +18,7 @@ from phonology_shared.data.limits import (
 )
 from phonology_shared.editor.providers import generated_to_grid
 from phonology_shared.editor.setup import suggest_filename
+from phonology_shared.editor.source_input import normalize_source_input
 from phonology_shared.presentation.layout import EDITOR_CELL_PX
 from phonology_shared.presentation.mode_logic import (
     REDO_NOTHING_MESSAGE,
@@ -72,6 +73,7 @@ from phonology_features.gui.editor.dialogs import (
     InputDialog,
     ask_question,
     center_on_parent,
+    prompt_source,
     prompt_text,
     show_warning,
 )
@@ -201,6 +203,10 @@ class InventoryEditor(QMainWindow):
         # (PHOIBLE provenance, diphthong ``segment_secondary`` bundles)
         # survive an editor round-trip.
         self._extra_metadata: dict[str, Any] = {}
+        # Inventory source (``metadata.source``), owned separately from
+        # ``_extra_metadata`` so the Add/Edit source button can edit it.
+        # Normalized (a pasted BibTeX entry -> plain citation) on save.
+        self._source_text: str = ""
         self._build_ui()
         # SaveController owns the save state and cross-thread signals.
         # Built after _build_ui because it needs the status bar.
@@ -336,6 +342,16 @@ class InventoryEditor(QMainWindow):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
         toolbar.addWidget(left_stretch)
+        # Add/Edit the inventory's source (provenance) in the right-side
+        # space. Label reflects whether a source is set; the text is
+        # stored under metadata.source, the same free-form string the
+        # normal inventory display reads via classify_source.
+        self._source_btn = make_btn(
+            "Add source",
+            self._edit_source,
+            tooltip="Add or edit the inventory's source (a citation, "
+            "URL, DOI, or a pasted BibTeX entry)",
+        )
         # Delete is only valid when an existing file is loaded; enabled
         # by _update_title whenever _current_path changes.
         self._delete_btn = make_btn(
@@ -604,6 +620,9 @@ class InventoryEditor(QMainWindow):
         self._features = features
         self._inv_name = dlg.get_name()
         self._current_path = None
+        # A brand-new inventory starts with no source.
+        self._source_text = ""
+        self._refresh_source_btn()
         self._dirty = True
         self._rebuild_table(initial_cells=initial_cells)
         self._update_title()
@@ -1455,6 +1474,12 @@ class InventoryEditor(QMainWindow):
         # segment_secondary, user keys) and overlay the live provenance
         # fields. The setup-dialog path carries no metadata.
         metadata: dict[str, Any] = dict(self._extra_metadata)
+        # Overlay the user-entered source, rendering a pasted BibTeX
+        # entry to a plain citation. An empty result simply omits the
+        # key so the display shows no [Source] affordance.
+        source = normalize_source_input(self._source_text)
+        if source:
+            metadata["source"] = source
         if self._feature_source:
             metadata["feature_source"] = self._feature_source
             if self._feature_source_version:
@@ -1685,9 +1710,20 @@ class InventoryEditor(QMainWindow):
         # only ``feature_source`` used to drop the PHOIBLE stamps and
         # the ``segment_secondary`` diphthong bundles, so editing a
         # PHOIBLE inventory erased its diphthong arrows on save.
+        # ``source`` is owned by the Add/Edit source button (via
+        # ``_source_text``), so keep it out of the carried-metadata dict
+        # to avoid two writers; everything else (notes, PHOIBLE stamps,
+        # segment_secondary bundles) rides along untouched.
         self._extra_metadata = {
-            k: v for k, v in inventory.metadata.items() if k != "name"
+            k: v
+            for k, v in inventory.metadata.items()
+            if k not in ("name", "source")
         }
+        loaded_source = inventory.metadata.get("source")
+        self._source_text = (
+            loaded_source if isinstance(loaded_source, str) else ""
+        )
+        self._refresh_source_btn()
         # Seed the grid from the parsed bundle directly. The old path
         # built an all-zero grid and then replaced every cell, doubling
         # the ``make_cell`` work (3920 cells on Hayes) and dominating
@@ -1759,3 +1795,21 @@ class InventoryEditor(QMainWindow):
         self._inv_name = new_name
         self._dirty = True
         self._update_title()
+
+    def _refresh_source_btn(self) -> None:
+        """Reflect whether a source is set on the toolbar button label."""
+        has_source = bool(self._source_text.strip())
+        self._source_btn.setText("Edit source" if has_source else "Add source")
+
+    def _edit_source(self) -> None:
+        """Open the source prompt (prefilled) and stage the result.
+
+        The value is stored verbatim in ``_source_text`` and normalized
+        on save (a pasted BibTeX entry becomes a plain citation); editing
+        marks the inventory dirty so Save picks it up."""
+        entered = prompt_source(self, self._source_text)
+        if entered is None or entered == self._source_text:
+            return
+        self._source_text = entered
+        self._refresh_source_btn()
+        self._dirty = True
