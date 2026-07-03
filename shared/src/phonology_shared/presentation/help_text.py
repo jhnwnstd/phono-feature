@@ -109,5 +109,5 @@ VOWELS_HELP_HTML: str = (
     " one segmented capsule. If two such contrasts are present, the vowels"
     " form a small two-by-two capsule. Vowels that share a position but"
     " differ in more complex ways stack.</p>"
-    "<p><b>Diphthongs</b> display in a list under the vowel space.</p>"
+    "<p><b>Diphthongs</b> display in a list under the vowel chart.</p>"
 )
