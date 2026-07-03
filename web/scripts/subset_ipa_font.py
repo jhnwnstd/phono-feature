@@ -96,11 +96,7 @@ def _validate_ranges(ranges: tuple[tuple[int, int], ...]) -> None:
 def _codepoints_for_ranges(ranges: tuple[tuple[int, int], ...]) -> list[int]:
     """Expand inclusive Unicode ranges into codepoints for fonttools."""
     _validate_ranges(ranges)
-    return [
-        codepoint
-        for lo, hi in ranges
-        for codepoint in range(lo, hi + 1)
-    ]
+    return [codepoint for lo, hi in ranges for codepoint in range(lo, hi + 1)]
 
 
 def _assert_required_codepoints(font: object) -> None:
@@ -109,7 +105,9 @@ def _assert_required_codepoints(font: object) -> None:
     missing = REQUIRED_CODEPOINTS - cmap
     if missing:
         formatted = ", ".join(f"U+{cp:04X}" for cp in sorted(missing))
-        raise RuntimeError(f"subset font is missing required glyphs: {formatted}")
+        raise RuntimeError(
+            f"subset font is missing required glyphs: {formatted}"
+        )
 
 
 def subset_font(source: Path, out: Path) -> None:

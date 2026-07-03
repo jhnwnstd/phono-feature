@@ -82,7 +82,9 @@ def _encode_segment(
     """Encode kept PanPhon values as the runtime's positional string."""
     from phonology_shared.editor.panphon_features import panphon_value_to_app
 
-    encoded = "".join(panphon_value_to_app(values[idx]) for idx in kept_indices)
+    encoded = "".join(
+        panphon_value_to_app(values[idx]) for idx in kept_indices
+    )
     unexpected = set(encoded) - ENCODED_VALUES
     if unexpected:
         raise ValueError(

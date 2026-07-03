@@ -68,9 +68,10 @@ VOWELS_HELP_TITLE: str = "How vowels are placed"
 
 #: Body of the ``Vowels`` help window.
 VOWELS_HELP_HTML: str = (
-    "<p>The chart places vowels using their specified features. It does not"
-    " claim to show each vowel's exact phonetic position. Even vowels with"
-    " missing or contradictory features can be placed somewhere on the chart.</p>"
+    "<p>Vowel placement on the chart is determined by their specified features."
+    " It does not claim to show each vowel's exact phonetic position. Even"
+    " vowels with missing or contradictory features can be placed somewhere"
+    " on the chart.</p>"
     "<p><b>Height (rows)</b><br>A vowel's height determines its row. Tense"
     " and ATR features refine row placement only when the inventory uses"
     " those features.</p>"

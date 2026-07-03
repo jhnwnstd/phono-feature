@@ -107,7 +107,9 @@ def _resolve_commit(ref: str) -> str:
     loaded = json.loads(raw)
     commit = loaded.get("sha")
     if not isinstance(commit, str) or not commit:
-        raise RuntimeError(f"GitHub commit API did not return a sha for {ref!r}")
+        raise RuntimeError(
+            f"GitHub commit API did not return a sha for {ref!r}"
+        )
     return commit
 
 
