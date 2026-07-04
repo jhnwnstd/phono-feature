@@ -432,8 +432,12 @@ def test_classify_phonation_pair_phoible_spread_glottis() -> None:
             "a̤": {"high": "-", "low": "+", "spreadgl": "+"},
         }
     )
+    # Marked member FIRST in input order, so the modal-first reordering is
+    # actually exercised: a classifier that merely preserves input order
+    # fails here (the original hand-rolled swap only knew breathy/creaky
+    # and silently kept a spreadgl pair in input order).
     kind, contrast, ordered, _ = _classify_vowel_cell_display(
-        ("a", "a̤"), feats
+        ("a̤", "a"), feats
     )
     assert kind == VowelCellDisplayKind.PHONATION_PAIR
     assert contrast == ("spreadgl",)

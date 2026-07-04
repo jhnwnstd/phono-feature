@@ -168,28 +168,34 @@ def _classify_vowel_cell_display(
     # so the pile reads as a series a renderer can label rather than an
     # arbitrary column; only a POSITION-feature difference (the branch
     # above) yields a truly featureless stack.
-    ordered = _order_stack_entries(entries, bundles, contrast)
+    ordered = _order_base_first(entries, bundles, contrast)
     return VowelCellDisplayKind.STACK, contrast, ordered, ()
 
 
-def _order_stack_entries(
+def _order_base_first(
     entries: tuple[str, ...],
     bundles: list[Mapping[str, str]],
-    contrast: tuple[str, ...],
+    feats: Collection[str],
 ) -> tuple[str, ...]:
-    """Order a stacked cell so it reads as a series, not an arbitrary pile.
-
-    The base form (no ``+`` on any contrast feature) comes first, then the
+    """Order a variant group so it reads as a series, not an arbitrary
+    pile: the base form (no ``+`` on any contrast feature) first, then the
     single-feature variants, then any multi-marked entries, and within each
-    tier by the contrast features in ``contrast`` order (already sorted).
+    tier by the contrast features in sorted order. Shared by the
+    contrast-aware STACK and the single-dimension capsules, so a stacked
+    !Xoo series and a phonation capsule order by the one rule.
     Deterministic and stable, and it privileges nothing phonological: the
     key is (count of ``+`` contrast features, the contrast-value tuple), a
-    pure display ordering over the features the entries already carry."""
+    pure display ordering over the features the entries already carry. For
+    a two-entry phonation pair it reduces to the modal-first convention
+    (the modal member has zero marks) for ANY encoding of the phonation
+    contrast, where the retired hand-rolled swap only knew ``breathy`` /
+    ``creaky`` and silently kept input order for a ``spreadgl`` pair."""
+    ordered_feats = sorted(feats)
 
     def key(i: int) -> tuple[int, tuple[str, ...]]:
         bundle = bundles[i]
-        marked = sum(1 for feat in contrast if bundle.get(feat) == "+")
-        return marked, tuple(bundle.get(feat, "0") for feat in contrast)
+        marked = sum(1 for feat in ordered_feats if bundle.get(feat) == "+")
+        return marked, tuple(bundle.get(feat, "0") for feat in ordered_feats)
 
     order = sorted(range(len(entries)), key=key)
     return tuple(entries[i] for i in order)
@@ -206,25 +212,14 @@ def _order_variant_row(
     right. ``feats`` is the dimension's differing features (one for a
     simple pair, several for phonation).
 
-    A 2-entry group keeps the established pair convention
-    (:py:func:`_order_pair_entries`, incl. phonation modal-first). A wider
-    series orders base-first by mark count then feature value, so a
-    plain / breathy / creaky row reads base -> variants deterministically
-    for any number of entries or encoding features."""
-    if len(entries) == 2 and (
-        kind in _PAIR_KIND_TO_FEATURE
-        or kind == VowelCellDisplayKind.PHONATION_PAIR
-    ):
+    A 2-entry SINGLE-FEATURE pair keeps the established pair convention
+    (:py:func:`_order_pair_entries`: marked member right, tone by value).
+    Everything else, including every phonation group, uses the shared
+    base-first ordering, which reduces to modal-first for a 2-entry
+    phonation pair under any encoding of the contrast."""
+    if len(entries) == 2 and kind in _PAIR_KIND_TO_FEATURE:
         return _order_pair_entries(entries, bundles, kind)
-    ordered_feats = sorted(feats)
-
-    def key(i: int) -> tuple[int, tuple[str, ...]]:
-        bundle = bundles[i]
-        marked = sum(1 for feat in ordered_feats if bundle.get(feat) == "+")
-        return marked, tuple(bundle.get(feat, "0") for feat in ordered_feats)
-
-    order = sorted(range(len(entries)), key=key)
-    return tuple(entries[i] for i in order)
+    return _order_base_first(entries, bundles, feats)
 
 
 def _grid_layout(
@@ -291,9 +286,10 @@ def _grid_layout(
 
 #: Inverse of :py:data:`_PAIR_KIND_FOR_FEATURE`: the single feature
 #: whose ``+`` value marks the right-hand member of each simple pair
-#: kind. PHONATION_PAIR is absent from the source map (it covers the
-#: joint breathy/creaky contrast and orders on modality instead, see
-#: :py:func:`_order_pair_entries`), so it stays absent here.
+#: kind. PHONATION_PAIR is absent from the source map (its dimension
+#: spans several features, so it orders through the shared base-first
+#: rule in :py:func:`_order_base_first` instead), so it stays absent
+#: here.
 _PAIR_KIND_TO_FEATURE: dict[VowelCellDisplayKind, str] = {
     kind: feat for feat, kind in _PAIR_KIND_FOR_FEATURE.items()
 }
@@ -304,39 +300,21 @@ def _order_pair_entries(
     bundles: list[Mapping[str, str]],
     kind: VowelCellDisplayKind,
 ) -> tuple[str, ...]:
-    """Reorder a 2-entry PAIR tuple so the "marked" member sits on
-    the right (canonical reading direction).
+    """Reorder a 2-entry SINGLE-FEATURE pair so the "marked" member
+    sits on the right (canonical reading direction).
 
-    LONG_PAIR / NASAL_PAIR / RHOTIC_PAIR / TONE_PAIR sort by the
-    underlying feature value (``+`` to the right). PHONATION_PAIR
-    puts the modal entry (neither breathy nor creaky) on the left
-    when one exists; otherwise sorts on whichever feature is the
-    single contrast. The reordering is stable: ties keep input
-    order.
+    LONG_PAIR / NASAL_PAIR / RHOTIC_PAIR / TONE_PAIR / PHARYNGEAL_PAIR
+    sort by the underlying feature value (``+`` to the right). The
+    caller routes only ``_PAIR_KIND_TO_FEATURE`` kinds here; phonation
+    (a multi-feature dimension) orders through
+    :py:func:`_order_base_first`. The reordering is stable: ties keep
+    input order.
     """
-    if kind in _PAIR_KIND_TO_FEATURE:
-        feat = _PAIR_KIND_TO_FEATURE[kind]
-        a_val = bundles[0].get(feat)
-        b_val = bundles[1].get(feat)
-        if a_val == "+" and b_val != "+":
-            return (entries[1], entries[0])
-        return entries
-    if kind == VowelCellDisplayKind.PHONATION_PAIR:
-
-        def _is_modal(b: Mapping[str, str]) -> bool:
-            return b.get("breathy") != "+" and b.get("creaky") != "+"
-
-        if _is_modal(bundles[0]) and not _is_modal(bundles[1]):
-            return entries
-        if _is_modal(bundles[1]) and not _is_modal(bundles[0]):
-            return (entries[1], entries[0])
-        for feat in ("breathy", "creaky"):
-            a_val = bundles[0].get(feat)
-            b_val = bundles[1].get(feat)
-            if a_val == "+" and b_val != "+":
-                return (entries[1], entries[0])
-            if b_val == "+" and a_val != "+":
-                return entries
+    feat = _PAIR_KIND_TO_FEATURE[kind]
+    a_val = bundles[0].get(feat)
+    b_val = bundles[1].get(feat)
+    if a_val == "+" and b_val != "+":
+        return (entries[1], entries[0])
     return entries
 
 

@@ -329,7 +329,13 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         group=GROUP_MANNER,
         aliases=("Strident", "strid"),
         systems=_ALL_THREE,
-        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS}),
+        # USE_VOWEL_PAIR: on VOWELS, strident names the epiglottalized
+        # (sphincteric) phonation contrast some Khoisan analyses encode
+        # directly (PHOIBLE spells the same contrast
+        # ``epilaryngealsource``). The vowel-cell classifier only reads
+        # features that DIFFER between co-located vowels, so the tag
+        # never touches the consonant sibilance reading.
+        uses=frozenset({USE_CONSONANT, USE_NATURAL_CLASS, USE_VOWEL_PAIR}),
     ),
     "delrel": FeatureMetadata(
         canonical="delrel",
