@@ -118,28 +118,40 @@ def test_affricate_uniformity_from_delrel_not_phase_count() -> None:
     class comes from a shared feature, not from phase count."""
     delrel_plus = {"delrel": "+"}
     grouped = {
-        seg
-        for seg, tiers in _INV.items()
-        if member_forall(_A, align(_A, tiers), delrel_plus) is True
+        seg for seg, tiers in _INV.items() if member_forall(tiers, delrel_plus)
     }
     assert grouped == {"ts", "tS"}
-    # [-cont] is NOT the discriminator: it holds simplex ts, t, n, not tS
+    # [-cont] is NOT the discriminator: it holds every -continuant-
+    # throughout segment (simplex ts, plain t, nasal n, and the ragged
+    # prenasalized mbw whose cont is constant "-") but not the split tS.
     cont_minus = {"cont": "-"}
     stops = {
-        seg
-        for seg, tiers in _INV.items()
-        if member_forall(_A, align(_A, tiers), cont_minus) is True
+        seg for seg, tiers in _INV.items() if member_forall(tiers, cont_minus)
     }
-    assert stops == {"t", "ts", "n"}
+    assert stops == {"t", "ts", "n", "mbw"}
 
 
-def test_multi_feature_co_occurrence_undetermined_for_ragged() -> None:
-    """Whether +cont and +lab share a phase in mbw is a co-occurrence the
-    source never states, so it is UNDETERMINED, not guessed."""
-    spec = {"cont": "+", "lab": "+"}
-    assert member_exists(_A, align(_A, _INV["mbw"]), spec) is UNDETERMINED
-    # a single-feature query over the same segment stays decidable:
-    assert feature_reaches(_INV["mbw"], "lab", "+")
+def test_forall_is_total_even_for_ragged_segments() -> None:
+    """∀ decomposes over features, so it is decidable for the ragged
+    mbw: it is [-cont] throughout (cont is constant), never UNDETERMINED,
+    and it is NOT [+lab] throughout (lab contours)."""
+    assert member_forall(_INV["mbw"], {"cont": "-"}) is True
+    assert member_forall(_INV["mbw"], {"lab": "+"}) is False
+    assert member_forall(_INV["mbw"], {"cons": "+", "cont": "-"}) is True
+
+
+def test_multi_feature_exists_undetermined_only_when_all_reached() -> None:
+    """∃ co-occurrence over the ragged mbw is UNDETERMINED only when both
+    features are individually reached; a feature it never reaches rules
+    it out definitively, even Misaligned."""
+    mbw, a = _INV["mbw"], align(_A, _INV["mbw"])
+    # +lab is reached (offset), +son is reached (onset): co-occurrence
+    # across the ragged tiers is the fact the source withholds.
+    assert member_exists(_A, mbw, a, {"lab": "+", "son": "+"}) is UNDETERMINED
+    # +cont is NEVER reached (cont is constant "-"): definitively out.
+    assert member_exists(_A, mbw, a, {"cont": "+", "lab": "+"}) is False
+    # single-feature stays decidable
+    assert member_exists(_A, mbw, a, {"lab": "+"}) is True
 
 
 def test_undetermined_is_not_boolean() -> None:

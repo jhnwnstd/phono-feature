@@ -17,20 +17,39 @@ Two views are DERIVED from the tiers and never stored:
   tier. Because every tier spans the whole segment, these anchors are
   TOTAL bundles for any segment, ragged interior or not.
 * :func:`align` reconstructs an ordered sequence of :class:`Phase` s,
-  but ONLY when the varying tiers agree on length. When they disagree
-  (features on independent autosegmental tiers, Goldsmith 1976) it
-  returns :class:`Misaligned`; a multi-feature co-occurrence query over
-  such a segment is :data:`UNDETERMINED`, never guessed.
+  but ONLY when the varying sequences agree on length. When they
+  disagree, the source has stated each feature's own sequence and NO
+  association across them, so :func:`align` returns :class:`Misaligned`
+  and a multi-feature co-occurrence query over such a segment is
+  :data:`UNDETERMINED`, never guessed.
 
-Contour is a derived set predicate over a single tier (:func:`contour_on`),
-computed at query time, never stored as a value. Single-feature reads
-(:func:`feature_reaches`, :func:`feature_throughout`, :func:`contour_on`)
-answer for EVERY segment, ragged or not, because one tier never needs an
-alignment; only multi-feature co-occurrence does.
+Contour is a derived set predicate over a single sequence
+(:func:`contour_on`), computed at query time, never stored as a value.
+Single-feature reads (:func:`feature_reaches`, :func:`feature_throughout`,
+:func:`contour_on`) answer for EVERY segment, ragged or not, because one
+sequence never needs an alignment; only multi-feature co-occurrence does.
 
 The module knows nothing about any particular source's alphabet: it
 works in the canonical three-value vocabulary ``"+"`` / ``"-"`` / ``"0"``,
-and a source adapter is responsible for folding raw cells onto it.
+and a source adapter folds raw cells onto it.
+
+Pedigree, because the informal name "tier" is misleading. These are NOT
+autosegmental tiers. An autosegmental tier (Goldsmith 1976; Sagey 1986)
+is a SUBSTANTIVE primitive carrying association lines, dominance nodes,
+and constraints like no-line-crossing, the phonetic-autonomy commitments
+a substance-free program denies. What is stored here is barer: a plain
+per-feature value SEQUENCE, a set-theoretic object with no association
+lines, no geometry, and no claim about which features pattern together
+(Bale & Reiss 2018; Bale, Reiss & Shen 2016). Each feature runs as its
+own independent sequence and nothing asserts a cross-feature timeline
+unless the data supplies one, which makes this MORE substance-free than
+autosegmental tiers, not less. The four states a feature can take, ``+``,
+``-``, an asserted ``0``, and absence, are the equipollent scheme with a
+silent state read faithfully off the survey (Reiss 2017); a feature
+valued as a sequence is the intrasegmental-change case (Reiss 2021). Any
+harmony/spreading a future grammar layer needs is a feature-restricted
+SEARCH over these sets, not a reified moving tier (Bale, Papillon &
+Reiss 2014).
 """
 
 from __future__ import annotations
@@ -112,12 +131,11 @@ class Aligned:
 
 @dataclass(frozen=True, slots=True)
 class Misaligned:
-    """A segment whose varying tiers disagree on length: the source
-    states each feature's change sequence but no association across them
-    (separate autosegmental tiers). The endpoints (:func:`onset` /
-    :func:`offset`) are still total, but multi-feature co-occurrence in a
-    single interior phase is not derivable, so it is
-    :data:`UNDETERMINED`."""
+    """A segment whose varying sequences disagree on length: the source
+    states each feature's own value sequence and no association across
+    them. The endpoints (:func:`onset` / :func:`offset`) are still total,
+    but multi-feature co-occurrence in a single interior phase is not
+    derivable, so it is :data:`UNDETERMINED`."""
 
     lengths: tuple[int, ...]
     features: tuple[str, ...]
@@ -262,23 +280,44 @@ def bundle_bits(attrs: Attrs, spec: Mapping[str, str]) -> tuple[int, int]:
 
 
 def member_exists(
-    attrs: Attrs, alignment: Alignment, spec: Mapping[str, str]
+    attrs: Attrs,
+    tiers: TierMap,
+    alignment: Alignment,
+    spec: Mapping[str, str],
 ) -> Union[bool, _Undetermined]:
-    """``∃`` co-occurrence: some phase satisfies the whole bundle.
-    :data:`UNDETERMINED` when the segment is :class:`Misaligned` (the
-    source does not state whether the features share a phase)."""
+    """``∃`` co-occurrence: some phase satisfies the WHOLE bundle.
+
+    ``∃`` does NOT decompose over features (a phase with ``f`` and one
+    with ``g`` is not a phase with both), so a multi-feature bundle needs
+    the phases. But a requested feature the segment never reaches rules
+    it out DEFINITIVELY, even when ragged: that single-feature check
+    (:func:`feature_reaches`) needs no alignment. Only when every feature
+    is individually reached AND the segment is :class:`Misaligned` is the
+    co-occurrence :data:`UNDETERMINED` (the source states no shared
+    phase). A single-feature bundle is decided by the reach check alone.
+    """
+    if not all(feature_reaches(tiers, f, w) for f, w in spec.items()):
+        return False
+    if len(spec) <= 1:
+        return True
     if isinstance(alignment, Misaligned):
         return UNDETERMINED
     want = bundle_bits(attrs, spec)
     return any(phase.satisfies(*want) for phase in alignment.phases)
 
 
-def member_forall(
-    attrs: Attrs, alignment: Alignment, spec: Mapping[str, str]
-) -> Union[bool, _Undetermined]:
+def member_forall(tiers: TierMap, spec: Mapping[str, str]) -> bool:
     """``∀`` co-occurrence: every phase satisfies the whole bundle.
-    :data:`UNDETERMINED` for a :class:`Misaligned` segment."""
-    if isinstance(alignment, Misaligned):
-        return UNDETERMINED
-    want = bundle_bits(attrs, spec)
-    return all(phase.satisfies(*want) for phase in alignment.phases)
+
+    This DECOMPOSES over features: every phase has ``f`` AND ``g`` iff
+    ``f`` is its wanted value throughout AND ``g`` is throughout. So it
+    reads the sequences directly (:func:`feature_throughout`), needs no
+    alignment, and is ALWAYS decidable, never :data:`UNDETERMINED` -
+    even for a ragged segment. Natural-class detection, minimal bundles,
+    and the round-trip read this projection, so they stay total over
+    every segment in the inventory.
+    """
+    return all(
+        feature_throughout(tiers, feature, want)
+        for feature, want in spec.items()
+    )
