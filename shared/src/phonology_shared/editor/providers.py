@@ -47,22 +47,31 @@ class GeneratedInventory:
         warnings: Human-readable per-symbol diagnostics. Each entry
             is meant for a log line, not a modal; the dialog reports
             the unresolved count and routes the detail to the log.
-        segment_secondary: Optional secondary feature bundles for
-            vowel diphthongs. Sparse: only PHOIBLE diphthong
-            segments populate this; PanPhon and curated bundles
-            leave it empty. Keys are the same segment strings as in
-            ``segments``; values are the final-state bundle the
-            vowel glides toward. The placement code reads it to mark
-            the segment as a diphthong (listed as a chip below the
-            chart); consumers that ignore the field still get a
-            sensible single-vowel placement from the primary
-            ``segments`` bundle.
+        segment_sequences: Optional per-feature VALUE SEQUENCES for
+            contour segments (affricates, diphthongs, prenasalized
+            stops). Sparse: only PHOIBLE contour segments populate
+            this; PanPhon and curated bundles leave it empty. Keys are
+            the same segment strings as in ``segments``; each value
+            maps an app feature to the verbatim value sequence the
+            source states (only features that change appear). The
+            engine reads these tiers; ``segment_secondary`` is derived
+            from them as a convenience for the vowel chart.
+        segment_secondary: Derived final-state ("offset") bundles for
+            contour segments, one per segment in ``segment_sequences``:
+            the segment's onset bundle with every contour feature
+            overridden by its last value. The vowel chart reads this to
+            place a diphthong's glide target and mark it as a chip;
+            consumers that ignore it still get a sensible single-vowel
+            placement from the primary ``segments`` bundle.
     """
 
     features: tuple[str, ...]
     segments: Mapping[str, Mapping[str, str]]
     unresolved: tuple[str, ...]
     warnings: tuple[str, ...]
+    segment_sequences: Mapping[str, Mapping[str, tuple[str, ...]]] = field(
+        default_factory=dict
+    )
     segment_secondary: Mapping[str, Mapping[str, str]] = field(
         default_factory=dict
     )
@@ -164,36 +173,67 @@ def _restrict_bundles(
     return out
 
 
-def prune_and_restrict(
+def _restrict_sequences(
+    sequences: Mapping[str, Mapping[str, Sequence[str]]],
     features: tuple[str, ...],
-    resolved: Mapping[str, Mapping[str, str]],
-    *,
-    secondary: Mapping[str, Mapping[str, str]] | None = None,
-) -> tuple[
-    tuple[str, ...],
-    dict[str, Mapping[str, str]],
-    dict[str, Mapping[str, str]],
-]:
-    """Prune unused feature columns, then project the bundles onto the
-    survivors. The emptiness guard and the secondary-alignment rule
-    every provider's ``generate`` shares live here once.
+) -> dict[str, dict[str, tuple[str, ...]]]:
+    """Project every value sequence onto the (post-prune) ``features``,
+    dropping any segment left with no contour feature."""
+    keep = set(features)
+    out: dict[str, dict[str, tuple[str, ...]]] = {}
+    for seg, feats in sequences.items():
+        kept = {
+            feat: tuple(vals)
+            for feat, vals in feats.items()
+            if feat in keep
+        }
+        if kept:
+            out[seg] = kept
+    return out
 
-    Returns the inputs unchanged when ``resolved`` is empty.
-    ``secondary`` (PHOIBLE diphthong final-half bundles) counts toward
-    "used" features and is restricted to the same survivors; providers
-    without one pass ``None`` and ignore the empty dict returned for it.
+
+def _offset_bundles(
+    resolved: Mapping[str, Mapping[str, str]],
+    sequences: Mapping[str, Mapping[str, Sequence[str]]],
+) -> dict[str, Mapping[str, str]]:
+    """Derive each contour segment's full final-state ("offset") bundle:
+    its onset bundle (from ``resolved``) with every contour feature
+    (a sequence of length > 1) overridden by its last value.
+
+    This is the vowel chart's ``segment_secondary`` input, reconstructed
+    from the faithful sequences rather than baked separately, so the two
+    can never drift. Only segments with at least one contour feature
+    appear, matching the sparse map the chart expects.
     """
-    sec: Mapping[str, Mapping[str, str]] = secondary or {}
-    if not resolved:
-        return features, dict(resolved), dict(sec)
-    features = _prune_unused_features(
-        features, resolved, extra_bundles=sec.values()
-    )
-    return (
-        features,
-        _restrict_bundles(resolved, features),
-        _restrict_bundles(sec, features),
-    )
+    out: dict[str, Mapping[str, str]] = {}
+    for seg, feats in sequences.items():
+        contour = {
+            feat: vals[-1] for feat, vals in feats.items() if len(vals) > 1
+        }
+        if not contour:
+            continue
+        bundle = dict(resolved.get(seg, {}))
+        bundle.update(contour)
+        out[seg] = bundle
+    return out
+
+
+def _sequence_used_bundles(
+    sequences: Mapping[str, Mapping[str, Sequence[str]]],
+) -> list[Mapping[str, str]]:
+    """One synthetic bundle per contour segment marking a feature as
+    "used" whenever any value in its sequence is ``"+"`` or ``"-"``, so
+    a feature that reaches a polarity only mid-sequence (onset ``"0"``)
+    still survives pruning."""
+    out: list[Mapping[str, str]] = []
+    for feats in sequences.values():
+        marker = {
+            feat: ("+" if ("+" in vals or "-" in vals) else vals[0])
+            for feat, vals in feats.items()
+            if vals
+        }
+        out.append(marker)
+    return out
 
 
 def build_generated_inventory(
@@ -202,23 +242,33 @@ def build_generated_inventory(
     *,
     unresolved: Iterable[str] = (),
     warnings: Iterable[str] = (),
-    secondary: Mapping[str, Mapping[str, str]] | None = None,
+    segment_sequences: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
 ) -> GeneratedInventory:
     """Prune the feature space, then pack the survivors into a
     :py:class:`GeneratedInventory`. Every provider's ``generate``
     ends with this same prune-then-construct step, so it lives here
-    once. ``secondary`` carries the PHOIBLE diphthong final-half
-    bundles; providers without one omit it.
+    once. ``segment_sequences`` carries the PHOIBLE contour value
+    sequences; a feature they reach counts as used (so a contour
+    discriminator is never pruned away), and the vowel chart's
+    ``segment_secondary`` offset bundles are derived from them here.
+    Providers without contours omit the argument.
     """
-    features, resolved, secondary = prune_and_restrict(
-        features, resolved, secondary=secondary
-    )
+    seqs: Mapping[str, Mapping[str, Sequence[str]]] = segment_sequences or {}
+    if resolved:
+        features = _prune_unused_features(
+            features,
+            resolved,
+            extra_bundles=_sequence_used_bundles(seqs),
+        )
+        resolved = _restrict_bundles(resolved, features)
+    restricted_seqs = _restrict_sequences(seqs, features)
     return GeneratedInventory(
         features=features,
         segments=resolved,
         unresolved=tuple(unresolved),
         warnings=tuple(warnings),
-        segment_secondary=secondary,
+        segment_sequences=restricted_seqs,
+        segment_secondary=_offset_bundles(resolved, restricted_seqs),
     )
 
 

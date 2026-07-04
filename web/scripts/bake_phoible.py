@@ -91,20 +91,6 @@ PHOIBLE_CITATION = (
 SCHEMA_VERSION = 1
 ENCODED_VALUES = frozenset({"+", "-", "0"})
 
-#: PHOIBLE column names whose contour is preserved on an OBSTRUENT (as a
-#: primary/secondary phase pair). These are the features an affricate's
-#: stop-to-fricative release traverses: ``continuant`` and
-#: ``delayedRelease`` mark the affrication itself, while ``lateral`` and
-#: ``strident`` on the release distinguish a lateral affricate from a
-#: sibilant one. PHOIBLE contour-codes exactly these on the affricates
-#: its whitelist misses (laterals, alveolo-palatals); keeping them lets
-#: one phase-union rule classify both PHOIBLE affricate encodings. Any
-#: other obstruent contour (e.g. a prenasalized stop's ``nasal``) stays
-#: flattened so it keeps its established manner placement.
-OBSTRUENT_CONTOUR_FEATURES = frozenset(
-    {"continuant", "delayedRelease", "lateral", "strident"}
-)
-
 # Source identity per PHOIBLE source code: a ``(short, description)``
 # pair. ``short`` is the bold heading the picker shows; ``description``
 # is the secondary line that expands opaque acronyms like SPA and
@@ -159,7 +145,12 @@ class PhoibleData(TypedDict):
     version: str
     feature_names: list[str]
     inventories: dict[str, dict[str, str]]
-    segment_secondary: dict[str, dict[str, str]]
+    # Per-inventory contour VALUE SEQUENCES: phoneme -> app_feature ->
+    # the verbatim value list PHOIBLE states (only features that change,
+    # only segments with at least one). The primary ``inventories``
+    # bundle already holds each feature's onset; this restores the full
+    # sequence a consumer needs to read contour/offset/alignment.
+    segment_sequences: dict[str, dict[str, dict[str, list[str]]]]
 
 
 class BakeStats(TypedDict):
@@ -295,9 +286,7 @@ def bake_tables(
     _ensure_shared_on_path()
     from phonology_shared.editor.phoible_features import (
         PHOIBLE_TO_APP_FEATURE,
-        initial_phase_value,
-        normalize_phoible_value,
-        split_contour_value,
+        phoible_row_to_tiers,
     )
 
     if not csv_path.exists():
@@ -318,11 +307,14 @@ def bake_tables(
     # Per-inventory accumulators.
     inv_meta: dict[str, InventoryIndexEntry] = {}
     inv_segments: dict[str, dict[str, str]] = defaultdict(dict)
-    # Per-inventory diphthong secondary bundles: phoneme -> final-state
-    # bundle string in the same positional encoding as inv_segments. The
-    # primary bundle holds the initial state so a consumer ignorant of
-    # diphthongs still sees a conservative single-vowel placement.
-    inv_segment_secondary: dict[str, dict[str, str]] = defaultdict(dict)
+    # Per-inventory contour VALUE SEQUENCES: phoneme -> app_feature ->
+    # the verbatim value list, for every feature that changes within the
+    # segment. The primary ``inv_segments`` bundle holds each feature's
+    # onset (sequence head) so a consumer ignorant of contours still sees
+    # a well-defined single phase; this map restores the whole sequence.
+    inv_segment_sequences: dict[
+        str, dict[str, dict[str, list[str]]]
+    ] = defaultdict(dict)
     # Language-name dedup: the same language often appears under several
     # inventories, but the autocomplete list wants one entry each.
     languages: dict[str, LanguageIndexEntry] = {}
@@ -384,82 +376,49 @@ def bake_tables(
                         "iso": iso,
                     }
 
-            # Build the positional bundle string in feature_columns
-            # order, one character per column. A PHOIBLE cell holding a
-            # contour (``"+,-"``) is split into an initial and a final
-            # polarity: the primary bundle keeps the initial, a parallel
-            # SECONDARY bundle records the final. That turns a contour
-            # into a sequence of ordinary phases (see
-            # ``Inventory.segment_phases``) without breaking the engine's
-            # single-value-per-feature contract.
+            # Convert the raw row into faithful per-feature VALUE
+            # SEQUENCES via the PHOIBLE adapter, the single place that
+            # knows PHOIBLE's ``"+,-"`` contour convention. Nothing is
+            # whitelisted, gated by major class, or reduced here: the
+            # source's facts pass through verbatim and the query layer
+            # decides what to read (onset, offset, or the whole tier).
             #
-            # A contour is preserved only where the segment's class makes
-            # it meaningful: ANY feature on a vowel (a diphthong glides
-            # through both poles), and an obstruent's RELEASE-defining
-            # features (:py:data:`OBSTRUENT_CONTOUR_FEATURES`). An
-            # affricate is a stop closure releasing into a fricative, so
-            # PHOIBLE writes ``continuant``, ``delayedRelease``,
-            # ``lateral`` and ``strident`` as ``"-,+"`` contours on the
-            # contour-coded affricates (the laterals and alveolo-palatals
-            # its special-feature whitelist omits). Keeping all four means
-            # both encodings of an affricate carry the same information:
-            # the closure/release phases needed to detect affrication AND
-            # the release-phase ``lateral`` / ``strident`` that tells a
-            # lateral affricate from a sibilant one. Other consonant
-            # contours (e.g. a prenasalized stop's ``nasal``) still
-            # flatten to ``"0"`` so they keep their manner placement.
-            #
-            # Classify off the INITIAL phase of the major-class features,
-            # since a contour cell classifies by the state it starts in.
-            # The raw cell would misread a falling diphthong (whose
-            # ``syllabic`` is itself a contour ``"+,-"``) as non-vowel
-            # and a prenasalized consonant (``sonorant`` = ``"+,-"``) as
-            # an obstruent, splitting or flattening the wrong cells.
-            is_vowel = initial_phase_value(row.get("syllabic", "0")) == "+"
-            is_obstruent = (
-                initial_phase_value(row.get("consonantal", "0")) == "+"
-                and initial_phase_value(row.get("sonorant", "0")) != "+"
-            )
-            initial_chars: list[str] = []
-            final_chars: list[str] = []
-            has_contour = False
-            for col in feature_columns:
-                raw = row.get(col, "0")
-                allow_contour = is_vowel or (
-                    is_obstruent and col in OBSTRUENT_CONTOUR_FEATURES
-                )
-                contour = split_contour_value(raw) if allow_contour else None
-                if contour is not None:
-                    has_contour = True
-                    initial, final = contour
-                    initial_chars.append(initial)
-                    final_chars.append(final)
-                    contour_normalized += 1
-                else:
-                    normalized = normalize_phoible_value(raw)
-                    if normalized != raw and raw not in ("", "NA"):
-                        contour_normalized += 1
-                    initial_chars.append(normalized)
-                    final_chars.append(normalized)
-
-            bundle_str = _encode_bundle(initial_chars, phoneme, inv_id)
+            # The primary positional bundle keeps each feature's ONSET
+            # (sequence head), in feature_columns order, one character per
+            # column: a consumer ignorant of contours still sees a
+            # well-defined single phase (and a contour cell classifies by
+            # the state it starts in, so a falling diphthong's ``syllabic``
+            # onset stays ``"+"`` and a prenasalized stop's ``sonorant``
+            # onset stays ``"+"``). A feature the source is silent on has
+            # no onset, so the bundle records ``"0"`` in its slot.
+            tiers = phoible_row_to_tiers(row)
+            onset_chars = [
+                (tiers[app][0] if app in tiers else "0")
+                for app in feature_names
+            ]
+            bundle_str = _encode_bundle(onset_chars, phoneme, inv_id)
             if len(bundle_str) != len(feature_names):
                 raise ValueError(
                     f"Encoded {len(bundle_str)} values for "
                     f"{len(feature_names)} features on phoneme {phoneme!r} "
                     f"in inventory {inv_id}"
                 )
+            # The full sequence of every feature that actually changes,
+            # keyed by app feature name; unchanged features live only in
+            # the primary bundle (their onset IS the whole sequence).
+            contour_seqs = {
+                app: list(seq) for app, seq in tiers.items() if len(seq) > 1
+            }
+            contour_normalized += len(contour_seqs)
 
-            # Duplicate rows for one phoneme within an inventory are
-            # very rare; keep the FIRST so the secondary bundle
-            # computed above lines up with the primary.
+            # Duplicate rows for one phoneme within an inventory are very
+            # rare; keep the FIRST so the sequences line up with the
+            # primary bundle.
             if phoneme in inv_segments[inv_id]:
                 continue
             inv_segments[inv_id][phoneme] = bundle_str
-            if has_contour:
-                inv_segment_secondary[inv_id][phoneme] = _encode_bundle(
-                    final_chars, phoneme, inv_id
-                )
+            if contour_seqs:
+                inv_segment_sequences[inv_id][phoneme] = contour_seqs
 
     # Backfill segment_count on each inventory descriptor.
     for inv_id, meta in inv_meta.items():
@@ -499,16 +458,15 @@ def bake_tables(
             inv_id: dict(inv_segments[inv_id])
             for inv_id in sorted(inv_segments.keys(), key=int)
         },
-        # Sparse final-state bundles for contour segments (vowel
-        # diphthongs and obstruent affricates); only inventories with
-        # at least one contour appear. Each value maps phoneme ->
-        # final-state bundle in the same encoding as ``inventories``.
-        # Clients that ignore the field still get sensible single-phase
-        # placement and classification from the primary bundle.
-        "segment_secondary": {
-            inv_id: dict(inv_segment_secondary[inv_id])
-            for inv_id in sorted(inv_segment_secondary.keys(), key=int)
-            if inv_segment_secondary[inv_id]
+        # Sparse contour VALUE SEQUENCES: only inventories with at least
+        # one contour segment appear, and within them only the features
+        # that actually change. Each value maps phoneme -> app_feature ->
+        # the verbatim value list. Clients that ignore the field still
+        # get sensible single-phase placement from the primary bundle.
+        "segment_sequences": {
+            inv_id: dict(inv_segment_sequences[inv_id])
+            for inv_id in sorted(inv_segment_sequences.keys(), key=int)
+            if inv_segment_sequences[inv_id]
         },
     }
 

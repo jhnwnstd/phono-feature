@@ -684,10 +684,12 @@ def _assemble_inventory(
     # Keys that match no declared feature are dropped (the same
     # behaviour segment_phases had); values pass through untouched.
     secondary = metadata.get("segment_secondary")
-    if isinstance(secondary, Mapping):
+    sequences = metadata.get("segment_sequences")
+    if isinstance(secondary, Mapping) or isinstance(sequences, Mapping):
         declared_by_canonical = {
             normalize_feature_key(name): name for name in feature_table.names
         }
+    if isinstance(secondary, Mapping):
         folded_secondary: dict[str, dict[str, Any]] = {}
         for seg, bundle in secondary.items():
             if not isinstance(bundle, Mapping):
@@ -702,6 +704,29 @@ def _assemble_inventory(
             if declared_bundle:
                 folded_secondary[seg] = declared_bundle
         metadata["segment_secondary"] = folded_secondary
+
+    # Fold segment_sequences (contour VALUE SEQUENCES) onto the declared
+    # names the same way, so ``Inventory.sequences`` shares the primary
+    # bundle's key namespace. Values are per-feature value LISTS (the
+    # verbatim source sequence), passed through as tuples; a feature that
+    # matches no declared name is dropped, matching the secondary fold.
+    if isinstance(sequences, Mapping):
+        folded_sequences: dict[str, dict[str, tuple[str, ...]]] = {}
+        for seg, feats in sequences.items():
+            if not isinstance(feats, Mapping):
+                continue
+            declared_feats: dict[str, tuple[str, ...]] = {}
+            for raw_key, seq in feats.items():
+                declared = declared_by_canonical.get(
+                    normalize_feature_key(raw_key)
+                )
+                if declared is not None:
+                    declared_feats[declared] = tuple(
+                        str(v) for v in seq
+                    )
+            if declared_feats:
+                folded_sequences[seg] = declared_feats
+        metadata["segment_sequences"] = folded_sequences
 
     # Inventory name is a display label, not a key, so policy is
     # lighter than segment/feature names: canonicalize and cap, but

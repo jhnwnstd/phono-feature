@@ -189,11 +189,13 @@ class PhoibleProvider:
         self._index_loaded: bool = False
         self._feature_names: tuple[str, ...] = ()
         self._raw_segments_by_inventory: Mapping[str, Any] = {}
-        self._raw_secondary_by_inventory: Mapping[str, Any] = {}
-        # Per-inventory filter caches, populated lazily by generate() so
-        # only materialized inventories pay the per-segment filter cost.
+        self._raw_sequences_by_inventory: Mapping[str, Any] = {}
+        # Per-inventory caches, populated lazily by generate() so only
+        # materialized inventories pay the per-segment cost.
         self._segments_by_inventory: dict[str, Mapping[str, str]] = {}
-        self._segment_secondary_by_inventory: dict[str, Mapping[str, str]] = {}
+        self._sequences_by_inventory: dict[
+            str, Mapping[str, Mapping[str, tuple[str, ...]]]
+        ] = {}
 
         if defer_index:
             # Web bundle: the index is externalized as a lazy ``dist``
@@ -389,12 +391,13 @@ class PhoibleProvider:
                 "rerun bake_phoible to regenerate"
             )
 
-        # Vowel diphthong secondary bundles. Sparse: most inventories
-        # have none. Optional in the bake schema for backward
-        # compatibility with snapshots that predate it.
-        raw_secondary = data.get("segment_secondary")
-        if not isinstance(raw_secondary, Mapping):
-            raw_secondary = {}
+        # Contour value sequences (affricates, diphthongs, prenasalized
+        # stops). Sparse: most inventories have none. Optional in the
+        # bake schema for backward compatibility with snapshots that
+        # predate it.
+        raw_sequences = data.get("segment_sequences")
+        if not isinstance(raw_sequences, Mapping):
+            raw_sequences = {}
 
         # Keep the raw per-inventory maps and defer the per-segment
         # filter + decode to generate() (memoized per id by
@@ -409,20 +412,22 @@ class PhoibleProvider:
         # on a broken payload).
         self._feature_names = names
         self._raw_segments_by_inventory = raw_invs
-        self._raw_secondary_by_inventory = raw_secondary
+        self._raw_sequences_by_inventory = raw_sequences
         self._segments_by_inventory = {}
-        self._segment_secondary_by_inventory = {}
+        self._sequences_by_inventory = {}
 
     def _filtered_segments(
         self, inventory_id: str
-    ) -> tuple[Mapping[str, str], Mapping[str, str]]:
-        """Filter + cache one inventory's encoded primary + secondary
-        segment maps.
+    ) -> tuple[Mapping[str, str], Mapping[str, Mapping[str, tuple[str, ...]]]]:
+        """Filter + cache one inventory's encoded primary bundles plus
+        its contour value sequences.
 
         Deferred from :py:meth:`_ingest_data` so only the inventories a
-        user actually materializes pay the per-segment filter cost.
-        Memoized: a repeat ``generate`` of the same id reuses the cache.
-        Returns ``({}, {})`` for an id absent from the data payload.
+        user actually materializes pay the per-segment cost. Memoized: a
+        repeat ``generate`` of the same id reuses the cache. Returns
+        ``({}, {})`` for an id absent from the data payload. The
+        sequences are a sparse ``{seg: {feat: (v0, v1, ...)}}`` map (no
+        positional decode; the bake ships them as verbatim value lists).
         """
         cached = self._segments_by_inventory.get(inventory_id)
         if cached is None:
@@ -434,13 +439,20 @@ class PhoibleProvider:
                 else {}
             )
             self._segments_by_inventory[inventory_id] = cached
-            raw_sec = self._raw_secondary_by_inventory.get(inventory_id)
-            self._segment_secondary_by_inventory[inventory_id] = (
-                _filter_encoded_bundles(raw_sec, n)
-                if isinstance(raw_sec, Mapping)
+            raw_seq = self._raw_sequences_by_inventory.get(inventory_id)
+            self._sequences_by_inventory[inventory_id] = (
+                {
+                    seg: {
+                        feat: tuple(vals)
+                        for feat, vals in feats.items()
+                    }
+                    for seg, feats in raw_seq.items()
+                    if isinstance(feats, Mapping)
+                }
+                if isinstance(raw_seq, Mapping)
                 else {}
             )
-        return cached, self._segment_secondary_by_inventory[inventory_id]
+        return cached, self._sequences_by_inventory[inventory_id]
 
     # ------------------------------------------------------------------
     # InventoryProvider Protocol
@@ -506,7 +518,7 @@ class PhoibleProvider:
             )
         if inventory_id not in self._inventories:
             raise KeyError(f"unknown PHOIBLE inventory id {inventory_id!r}")
-        encoded_bundles, encoded_secondary = self._filtered_segments(
+        encoded_bundles, raw_sequences = self._filtered_segments(
             inventory_id
         )
 
@@ -515,16 +527,18 @@ class PhoibleProvider:
         for sym, encoded in encoded_bundles.items():
             resolved[sym] = decode_positional_bundle(features, encoded)
 
-        # Pre-prune feature space so secondaries align with primaries
-        # when the column-pruning step below drops sparse features.
-        secondary: dict[str, Mapping[str, str]] = {
-            sym: decode_positional_bundle(features, encoded)
-            for sym, encoded in encoded_secondary.items()
+        # Faithful contour value sequences, restricted to resolved
+        # segments. ``build_generated_inventory`` prunes the feature
+        # space (counting a feature these sequences reach as used) and
+        # derives the vowel chart's offset bundles from them.
+        sequences: dict[str, Mapping[str, tuple[str, ...]]] = {
+            sym: feats
+            for sym, feats in raw_sequences.items()
             if sym in resolved
         }
 
         return build_generated_inventory(
-            features, resolved, secondary=secondary
+            features, resolved, segment_sequences=sequences
         )
 
     # ------------------------------------------------------------------
@@ -623,20 +637,26 @@ def materialize_phoible_inventory(
         # user can edit or delete.
         metadata["source"] = descriptor.source_url
         metadata["phoible_source_url"] = descriptor.source_url
-    if generated.segment_secondary:
+    if generated.segment_sequences:
         # Canonicalise the contour segment KEY (NFC). PHOIBLE ships
         # ~26% of inventories with NFD-form segments (nasal vowels
         # like ``ã`` arrive as ``a + U+0303``); the engine NFC-folds
         # them at parse, so a raw NFD key here would miss the NFC
-        # ``inventory.segments`` key on lookup and the diphthong would
-        # silently render as a monophthong.
+        # ``inventory.segments`` key on lookup and the contour would
+        # silently render as a plain segment.
         #
-        # The feature-bundle keys are already this inventory's declared
-        # feature names (they came from zipping against
-        # ``generated.features``), and ``Inventory.parse`` folds
-        # segment_secondary onto the declared names anyway, so they are
-        # copied as-is here rather than folded to a second namespace
-        # and back.
+        # The feature keys are already this inventory's declared feature
+        # names (they came from zipping against ``generated.features``),
+        # and ``Inventory.parse`` folds both maps onto the declared names
+        # anyway, so they are copied as-is here. ``segment_sequences``
+        # drives the engine's tier reads; ``segment_secondary`` is the
+        # derived offset bundle the vowel chart consumes.
+        metadata["segment_sequences"] = {
+            canonicalize_segment_label(seg): {
+                feat: list(vals) for feat, vals in feats.items()
+            }
+            for seg, feats in generated.segment_sequences.items()
+        }
         metadata["segment_secondary"] = {
             canonicalize_segment_label(seg): dict(bundle)
             for seg, bundle in generated.segment_secondary.items()
