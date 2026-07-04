@@ -846,26 +846,70 @@ class Inventory:
         STRUCTURALLY by two phases disagreeing on ``f``, never by a
         special feature value.
 
-        The final phase comes from the ``segment_secondary`` metadata
-        the PHOIBLE bake records. Its feature names are already folded
-        onto this inventory's declared keys at parse time (see
-        :py:func:`phonology_shared.data._parse._assemble_inventory`),
-        so both phases share one key namespace and this method just
-        returns them. When phases become a first-class, persisted part
-        of the schema this body changes but its contract is stable:
-        callers iterate the returned phases and treat each as a normal
-        bundle.
+        Derived from the per-feature value sequences (:py:meth:`sequences`)
+        by aligning the varying features into ordered columns. When the
+        varying features disagree on length (a ragged segment whose
+        features sit on separate sequences), there is no single aligned
+        phase list, so this returns just the onset anchor as one phase;
+        callers that need the ragged detail read :py:meth:`sequences`
+        directly (per-feature membership never needs an alignment).
 
         Raises :py:class:`KeyError` if ``segment`` is not present.
         """
-        primary = self.segments[segment]
+        seqs = self.sequences(segment)
+        lengths = {len(tier) for tier in seqs.values() if len(tier) > 1}
+        if not lengths:
+            return (dict(self.segments[segment]),)
+        if len(lengths) > 1:
+            # Ragged: expose the (total) onset anchor as a single phase.
+            return ({f: tier[0] for f, tier in seqs.items()},)
+        n = lengths.pop()
+        return tuple(
+            {
+                f: (tier[i] if len(tier) == n else tier[0])
+                for f, tier in seqs.items()
+            }
+            for i in range(n)
+        )
+
+    def sequences(self, segment: str) -> dict[str, tuple[str, ...]]:
+        """Per-feature value SEQUENCES for ``segment`` (the ground rep).
+
+        A feature that does not contour is a length-1 sequence (its
+        primary value); a feature that contours carries its full ordered
+        sequence from the ``segment_sequences`` metadata the source
+        records. Callers read these with the tier helpers in
+        :py:mod:`phonology_shared.data.tiers` (per-feature ``∃`` / ``∀``,
+        :func:`onset` / :func:`offset`, :func:`align`). Faithful for
+        every segment including ragged ones, since each feature keeps its
+        own sequence and nothing is aligned or reduced here.
+
+        Raises :py:class:`KeyError` if ``segment`` is not present.
+        """
+        if segment not in self.segments:
+            raise KeyError(f"Segment '{segment}' not in inventory")
+        result: dict[str, tuple[str, ...]] = {
+            feat: (str(val),) for feat, val in self.segments[segment].items()
+        }
+        seqs = self.metadata.get("segment_sequences")
+        if isinstance(seqs, Mapping):
+            override = seqs.get(segment)
+            if isinstance(override, Mapping):
+                for feat, tier in override.items():
+                    result[feat] = tuple(str(v) for v in tier)
+                return result
+        # Back-compat: reconstruct two-phase sequences from the legacy
+        # ``segment_secondary`` final-state bundle, so an inventory
+        # carrying only the old channel reads identically to before.
         secondary = self.metadata.get("segment_secondary")
-        if not isinstance(secondary, Mapping):
-            return (primary,)
-        final = secondary.get(segment)
-        if not isinstance(final, Mapping) or not final:
-            return (primary,)
-        return (primary, final)
+        if isinstance(secondary, Mapping):
+            final = secondary.get(segment)
+            if isinstance(final, Mapping):
+                for feat, fval in final.items():
+                    onset = result.get(feat, (str(fval),))[0]
+                    if str(fval) != onset:
+                        result[feat] = (onset, str(fval))
+        return result
 
 
 def atomic_write_json(path: str | os.PathLike[str], data: Any) -> None:

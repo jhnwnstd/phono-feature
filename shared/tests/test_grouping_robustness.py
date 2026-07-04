@@ -103,16 +103,16 @@ def test_collapse_encoded_affricate_is_classified() -> None:
 
 
 def test_contour_encoded_affricate_is_classified() -> None:
-    """PHOIBLE ``tɬ`` shape: closure bundle plus a release phase in
-    ``secondary``. group_segments takes the release bundles directly,
-    so no engine is needed to exercise the phase-union rule."""
+    """PHOIBLE ``tɬ`` shape: ``continuant`` and ``delrel`` each carry a
+    value SEQUENCE (closure then fricated release). group_segments reads
+    a feature's whole sequence, so the affricate rule fires."""
     inv = {
         "t": {**_STOP, "DelRel": "-"},
         "s": {**_FRIC, "DelRel": "+"},
         "aff": {**_STOP, "DelRel": "-"},
     }
-    extra_phases = {"aff": [{"continuant": "+", "delrel": "+"}]}
-    groups = group_segments(inv, extra_phases=extra_phases)
+    sequences = {"aff": {"continuant": ("-", "+"), "delrel": ("-", "+")}}
+    groups = group_segments(inv, sequences=sequences)
     place = _placement(groups)
     assert sorted(_flat(groups)) == sorted(inv)
     assert place["aff"] in _AFFRICATE_LABELS, place
@@ -121,25 +121,24 @@ def test_contour_encoded_affricate_is_classified() -> None:
 
 def test_stop_sonorant_cluster_is_not_an_affricate_by_contour() -> None:
     """A closure that releases into a sonorant (``tr`` / ``tl``)
-    contours on ``continuant`` but has no ``[+delrel]`` phase, so it is
+    contours on ``continuant`` but never reaches ``[+delrel]``, so it is
     a Plosive, not an affricate. Guards the over-generation the old
     contour-alone rule committed."""
     inv = {"t": {**_STOP, "DelRel": "-"}, "tr": {**_STOP, "DelRel": "-"}}
-    # sonorant release, no delayed release
-    extra_phases = {"tr": [{"continuant": "+"}]}
-    place = _placement(group_segments(inv, extra_phases=extra_phases))
+    # sonorant release: continuant contours but delrel stays "-"
+    sequences = {"tr": {"continuant": ("-", "+")}}
+    place = _placement(group_segments(inv, sequences=sequences))
     assert place["tr"] not in _AFFRICATE_LABELS, place
 
 
-def test_grouping_unions_over_all_phases_not_just_the_last() -> None:
-    """N-phase readiness: a segment whose distinguishing ``+delrel``
-    sits in a MIDDLE phase (neither the primary nor the last) is still
-    classified on the union over ALL phases. A helper that read only the
-    primary plus the final phase would miss it and misclassify."""
+def test_grouping_reads_the_whole_sequence_including_interior() -> None:
+    """A distinguishing ``+delrel`` in an INTERIOR position of the
+    sequence (neither first nor last) is still seen, because membership
+    is per-feature over the whole value sequence, not just endpoints."""
     inv = {"t": {**_STOP, "DelRel": "-"}, "x": {**_STOP, "DelRel": "-"}}
-    # phase 1 carries the delayed release; phase 2 the fricative opening
-    extra_phases = {"x": [{"delrel": "+"}, {"continuant": "+"}]}
-    place = _placement(group_segments(inv, extra_phases=extra_phases))
+    # delrel reaches "+" only in the middle; continuant closes then opens
+    sequences = {"x": {"continuant": ("-", "-", "+"), "delrel": ("-", "+", "-")}}
+    place = _placement(group_segments(inv, sequences=sequences))
     assert place["x"] in _AFFRICATE_LABELS, place
 
 

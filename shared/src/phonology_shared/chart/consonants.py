@@ -998,7 +998,7 @@ def _is_vocoid(feats: dict[str, str]) -> bool:
 def _break_out_by_spec(
     assignment: dict[str, list[str]],
     norm: Mapping[str, dict[str, str]],
-    extra: Mapping[str, Sequence[Mapping[str, str]]],
+    seqs: Mapping[str, Mapping[str, Sequence[str]]],
     active_features: set[str],
     n: int,
 ) -> None:
@@ -1012,11 +1012,11 @@ def _break_out_by_spec(
     feature the condition needs, so an inventory silent on ``strident``
     never grows an empty Sibilants row.
 
-    The match reads the phase UNION (the primary plus every non-primary
-    phase in ``extra``): a lateral affricate carries its ``[+lateral]``
-    on the fricative release, so the Lateral-Affricates split must see
-    the release phase to fire. For a single-phase segment the union is
-    just its one bundle, so this is identical to a plain value test.
+    The match reads a feature's whole value SEQUENCE: a lateral affricate
+    carries its ``[+lateral]`` on the fricative release, so the
+    Lateral-Affricates split must see the release value to fire. For a
+    non-contour feature the sequence is one value, so this is identical
+    to a plain value test.
     """
     spawned_from: set[str] = set()
     for new_name, parent_name, cond in DERIVED_BREAKOUTS:
@@ -1025,9 +1025,8 @@ def _break_out_by_spec(
 
         def _spec_match(s: str, cond: dict[str, str] = cond) -> bool:
             for f, v in cond.items():
-                vals = {norm[s].get(f, "0")}
-                for phase in extra.get(s, ()):
-                    vals.add(phase.get(f, "0"))
+                tier = seqs.get(s, {}).get(f)
+                vals = set(tier) if tier else {norm[s].get(f, "0")}
                 if v not in vals:
                     return False
             return True
@@ -1267,7 +1266,7 @@ def group_segments(
     inventory: Mapping[str, Mapping[str, str]],
     *,
     normalized: Mapping[str, dict[str, str]] | None = None,
-    extra_phases: Mapping[str, Sequence[Mapping[str, str]]] | None = None,
+    sequences: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
 ) -> dict[str, list[str]]:
     """Assign every segment to a phonological display group.
 
@@ -1280,26 +1279,22 @@ def group_segments(
     re-normalized on every grouping (this sits on the interactive
     inventory-switch path).
 
-    ``extra_phases`` optionally maps each CONTOUR segment to its
-    NON-PRIMARY phase bundles, already normalized (the release of an
-    affricate; the later qualities of a di/triphthong). Together with
-    the primary bundle in ``inventory`` these are the segment's phases
-    (see :py:meth:`Inventory.segment_phases`), so a feature's value
-    across the whole segment is the UNION over every phase. This is what
-    identifies an affricate uniformly: an obstruent is an affricate when
-    some phase is ``[-continuant]`` (a stop closure) AND some phase is
-    ``[+delayed release]`` (a fricated release), which catches both the
-    ``DelRel`` collapse and the ``continuant`` contour PHOIBLE uses for
-    the same segments, and separates a true affricate from a stop that
-    merely releases into a sonorant. A release phase's ``lateral`` /
-    ``strident`` then tell a lateral affricate from a sibilant one.
-    Unioning over ALL phases rather than a single secondary keeps
-    grouping consistent with the query membership cache
-    (:py:meth:`FeatureEngine._build_membership_caches`, which likewise
-    unions over every phase) if the phase model ever carries three or
-    more phases. Callers that pass nothing see every segment as a single
-    phase (its primary bundle), so collapse-encoded affricates still
-    classify; only the contour-encoded ones lose their affricate reading.
+    ``sequences`` optionally maps each segment to its per-feature VALUE
+    SEQUENCES, already keyed in the grouper's namespace (the release of
+    an affricate; the later qualities of a di/triphthong). A feature's
+    value across the whole segment is the SET of values in its sequence.
+    This is what identifies an affricate uniformly: an obstruent is an
+    affricate when some position is ``[-continuant]`` (a stop closure)
+    AND some position is ``[+delayed release]`` (a fricated release),
+    which catches both the ``DelRel`` collapse and the ``continuant``
+    contour PHOIBLE uses for the same segments, and separates a true
+    affricate from a stop that merely releases into a sonorant. A release
+    position's ``lateral`` / ``strident`` then tell a lateral affricate
+    from a sibilant one. Reading each feature's own sequence is faithful
+    for ragged segments too and matches the query membership cache. A
+    caller that passes nothing sees every segment as single-valued (its
+    primary bundle), so collapse-encoded affricates still classify; only
+    the contour-encoded ones lose their affricate reading.
     """
     if not inventory:
         return {}
@@ -1311,25 +1306,26 @@ def group_segments(
             for sym, feats in inventory.items()
         }
     )
-    extra: Mapping[str, Sequence[Mapping[str, str]]] = extra_phases or {}
+    seqs: Mapping[str, Mapping[str, Sequence[str]]] = sequences or {}
 
     def phase_values(sym: str, feat: str) -> set[str]:
-        """The set of values ``feat`` takes across ALL of ``sym``'s
-        phases. A single-phase segment yields ``{primary_value}``; a
-        contour segment adds each later phase's value, so a membership
+        """The set of values ``feat`` takes across ``sym``'s whole value
+        sequence. A non-contour feature yields ``{primary_value}``; a
+        contour feature yields every value it traverses, so a membership
         test (``"+" in phase_values(...)``) reads the whole segment."""
-        vals = {norm[sym].get(feat, "0")}
-        for phase in extra.get(sym, ()):
-            vals.add(phase.get(feat, "0"))
-        return vals
+        tier = seqs.get(sym, {}).get(feat)
+        if tier:
+            return set(tier)
+        return {norm[sym].get(feat, "0")}
 
     active_features: set[str] = set()
-    for feats in (
-        *norm.values(),
-        *(phase for phases in extra.values() for phase in phases),
-    ):
+    for feats in norm.values():
         for k, v in feats.items():
             if v != "0":
+                active_features.add(k)
+    for seg_seqs in seqs.values():
+        for k, tier in seg_seqs.items():
+            if any(v != "0" for v in tier):
                 active_features.add(k)
     # Inventory-level convention flags discovered once and threaded
     # into the per-segment sort key. Mirrors the vowel chart's
@@ -1598,7 +1594,7 @@ def group_segments(
     # above; read them top-to-bottom to trace how the raw per-segment
     # assignment becomes the final class list.
     n = len(inventory)
-    _break_out_by_spec(assignment, norm, extra, active_features, n)
+    _break_out_by_spec(assignment, norm, seqs, active_features, n)
     _break_out_by_laryngeal_kind(assignment, norm, n)
     _relabel_small_origin_sets(assignment, n)
     _merge_small_derived_pairs(assignment, norm, n)

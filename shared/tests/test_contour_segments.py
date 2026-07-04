@@ -269,28 +269,28 @@ def test_plain_stop_and_fricative_are_not_affricates() -> None:
     assert "s" not in groups.get("Plosives", []), groups
 
 
-def test_extra_phases_exposes_release_bundles() -> None:
-    """The engine's per-segment extra-phase map carries every
-    non-primary phase bundle for contour segments and nothing for
-    single-phase ones; the grouper unions them with the primary bundle
-    to see the whole segment."""
+def test_sequences_expose_contour_values() -> None:
+    """The engine's per-segment value sequences carry the full sequence
+    for a contour feature (canonical keys) and a singleton for every
+    non-contour one; the grouper reads these to see the whole segment."""
     eng = FeatureEngine(_obstruent_inv())
-    extra = eng._extra_phases_by_seg
-    cl_phases = extra.get("cl", ())
-    assert len(cl_phases) == 1, cl_phases
-    assert cl_phases[0].get("continuant") == "+"
-    assert cl_phases[0].get("lateral") == "+"
-    assert "ts" not in extra and "t" not in extra and "s" not in extra
+    seqs = eng._sequences_by_seg
+    assert set(seqs["cl"]["continuant"]) == {"-", "+"}
+    assert set(seqs["cl"]["lateral"]) == {"-", "+"}
+    # non-contour segments carry only singleton sequences
+    for seg in ("ts", "t", "s"):
+        assert all(len(tier) == 1 for tier in seqs[seg].values()), seg
 
 
 def test_diphthong_contour_is_not_an_affricate() -> None:
     """The obstruent gate keeps the affricate rule off vowels: the
-    ``ia`` diphthong has a release phase but is ``-consonantal``, so it
-    never enters the Affricates class."""
+    ``ia`` diphthong contours but is ``-consonantal``, so it never enters
+    the Affricates class."""
     eng = FeatureEngine(_contour_inv())
-    assert (
-        "ia" in eng._extra_phases_by_seg
-    ), "diphthong should have a release phase"
+    ia_seqs = eng._sequences_by_seg["ia"]
+    assert any(
+        len(tier) > 1 for tier in ia_seqs.values()
+    ), "diphthong should contour"
     assert "ia" not in eng.grouped_segments.get("Affricates", [])
 
 

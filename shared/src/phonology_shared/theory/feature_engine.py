@@ -355,19 +355,20 @@ class FeatureEngine:
         features = self._inventory.features
         plus: dict[str, set[str]] = {f: set() for f in features}
         minus: dict[str, set[str]] = {f: set() for f in features}
-        # Iterate each phase's OWN items (the features it specifies)
-        # rather than probing all declared features per segment: absent
-        # and ``"0"`` features contribute nothing, so a bundle's keys are
-        # exactly the ones that matter. Phase keys are folded onto the
-        # declared feature set at parse time, so every key indexes an
-        # existing bucket.
+        # Membership is per-feature EXISTENTIAL over the segment's value
+        # sequence: a segment is in ``plus[f]`` iff some position values
+        # ``f`` as ``+``, in ``minus[f]`` iff some position values it
+        # ``-`` (a contour lands in both). This reads each feature's own
+        # sequence, so it is faithful for ragged segments too and never
+        # needs an alignment. ``"0"`` and absent contribute nothing; keys
+        # are folded onto the declared set at parse time, so every key
+        # indexes an existing bucket.
         for seg in self._inventory.segments:
-            for phase in self._inventory.segment_phases(seg):
-                for f, v in phase.items():
-                    if v == "+":
-                        plus[f].add(seg)
-                    elif v == "-":
-                        minus[f].add(seg)
+            for f, tier in self._inventory.sequences(seg).items():
+                if "+" in tier:
+                    plus[f].add(seg)
+                if "-" in tier:
+                    minus[f].add(seg)
         self.plus_segs = {f: frozenset(s) for f, s in plus.items()}
         self.minus_segs = {f: frozenset(s) for f, s in minus.items()}
         # A segment is in ``spec_segs[f]`` iff it is explicitly ``+`` or
@@ -472,32 +473,35 @@ class FeatureEngine:
         return group_segments(
             self._inventory.segments,
             normalized=self.normalized_segment_feats,
-            extra_phases=self._extra_phases_by_seg,
+            sequences=self._sequences_by_seg,
         )
 
     @cached_property
-    def _extra_phases_by_seg(self) -> dict[str, tuple[dict[str, str], ...]]:
-        """Per-segment normalized NON-PRIMARY phase bundles.
+    def _sequences_by_seg(self) -> dict[str, dict[str, tuple[str, ...]]]:
+        """Per-segment value SEQUENCES keyed by canonical feature names.
 
-        For each contour segment (an affricate or di/triphthong that
-        :py:meth:`Inventory.segment_phases` returns as two or more
-        phases), every phase AFTER the primary, folded into the
-        grouper's namespace (lowercase short codes). Single-phase
-        segments contribute nothing. :py:func:`group_segments` unions
-        these with the primary bundle so a feature's value across the
-        whole segment reads as a set over ALL phases, which is how the
-        phase-union affricate rule and the release-phase
-        sub-classification see both the closure and the fricative
-        release. Returning every extra phase (not just the last) keeps
-        grouping consistent with :py:meth:`_build_membership_caches`,
-        which also unions over every phase; see
-        :py:meth:`Inventory.segment_phases`."""
-        out: dict[str, tuple[dict[str, str], ...]] = {}
-        for seg in self._inventory.segments:
-            phases = self._inventory.segment_phases(seg)
-            if len(phases) < 2:
-                continue
-            out[seg] = tuple(normalize_feature_bundle(p) for p in phases[1:])
+        The grouper reads a feature's set of values across a segment
+        (:py:func:`group_segments`' phase-union affricate rule and
+        release-phase sub-classification) from these, in the same
+        lowercase-short-code namespace as
+        :py:attr:`normalized_segment_feats`. A non-contour feature is a
+        length-1 sequence, so the common case is a bundle of singletons;
+        only contour segments carry longer ones. Reading each feature's
+        own sequence keeps grouping consistent with
+        :py:meth:`_build_membership_caches`, and faithful for ragged
+        segments, without ever needing an alignment; see
+        :py:meth:`Inventory.sequences`."""
+        segments = self._inventory.segments
+        canonical = {
+            key: normalize_feature_key(key)
+            for key in {k for bundle in segments.values() for k in bundle}
+        }
+        out: dict[str, dict[str, tuple[str, ...]]] = {}
+        for seg in segments:
+            out[seg] = {
+                canonical.get(f, normalize_feature_key(f)): tuple(tier)
+                for f, tier in self._inventory.sequences(seg).items()
+            }
         return out
 
     @cached_property
