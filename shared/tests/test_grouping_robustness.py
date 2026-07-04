@@ -3,8 +3,10 @@ adversarial inventories, not just PHOIBLE.
 
 The grouper must not over-fit to one source. Its contract:
 
-  1. **Partition.** Every input segment lands in exactly one group;
-     none vanishes and none is duplicated.
+  1. **Cover (multiset).** Every input segment lands in AT LEAST one
+     group; none vanishes, none is invented, and none is listed twice in
+     one group. A segment whose tiers reach several manner classes is a
+     multi-membership segment and appears in each.
   2. **Graceful degradation.** A segment whose features match no
      manner/place spec (a sparse spec, a contradictory one, or a
      feature system the specs do not recognise) routes to the

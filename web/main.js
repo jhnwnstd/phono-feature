@@ -439,7 +439,7 @@ const state = {
     bridge: null,
     // Cached DOM node maps. Iterating these is ~10x cheaper than
     // querySelectorAll in the analysis hot path.
-    seg_buttons: new Map(),  // seg -> HTMLButtonElement
+    seg_buttons: new Map(),  // seg -> HTMLButtonElement[] (one per placement)
     feat_rows: new Map(),    // feat -> { row, badge, plus, minus }
     // Segment-class visibility. ``seg_groups`` / ``seg_vowel_chart``
     // cache the last load's UNFILTERED payload so toggling a class
@@ -1404,9 +1404,11 @@ function _pickEditorHeaderFontSize(text) {
  *  first so the re-measure uses the now-loaded font. */
 function _refitSegButtons() {
     _segFontSizeCache.clear();
-    for (const [seg, btn] of state.seg_buttons) {
+    for (const [seg, btns] of state.seg_buttons) {
         const fit = _pickSegFontSize(seg);
-        btn.style.fontSize = fit !== null ? `${fit}px` : "";
+        for (const btn of btns) {
+            btn.style.fontSize = fit !== null ? `${fit}px` : "";
+        }
     }
 }
 
@@ -1620,8 +1622,19 @@ function renderSegmentGrid(groups, vowelChart) {
     if (vocoids.length) {
         grid.appendChild(_buildVocoidStrip(vocoids));
     }
+    // Membership cardinality per glyph, read straight from the producer
+    // output (``groups`` is the multiset): a glyph in more than one
+    // manner class is a multi-membership consonant. The "reaches N
+    // classes" cue and the placements come from this ONE source, so the
+    // label can never disagree with the rows it marks.
+    const multiCount = new Map();
     for (const group of groups) {
-        grid.appendChild(_buildConsonantGroup(group));
+        for (const seg of group.segments) {
+            multiCount.set(seg, (multiCount.get(seg) || 0) + 1);
+        }
+    }
+    for (const group of groups) {
+        grid.appendChild(_buildConsonantGroup(group, multiCount));
     }
     relayoutSegments();
 }
@@ -1785,14 +1798,25 @@ function onClassPopoverChange(ev) {
         state.hidden_segment_classes.delete(label);
     } else {
         state.hidden_segment_classes.add(label);
-        // Drop the hidden class' segments from the selection so the
-        // analysis can't keep reflecting a segment with no visible,
-        // deselectable button (the ghost-selection contract gap).
-        const inClass = new Set(_segmentsInClass(label));
-        if (inClass.size) {
+        // Drop from the selection only the segments that now have NO
+        // visible, deselectable button (the ghost-selection contract
+        // gap). Under the MULTISET a segment can render in several
+        // classes, so hiding one class must NOT deselect a segment still
+        // shown in another visible class; only a segment left with no
+        // visible placement is pruned.
+        const stillVisible = new Set();
+        for (const other of _segmentClassLabels()) {
+            if (other !== label && !state.hidden_segment_classes.has(other)) {
+                for (const s of _segmentsInClass(other)) stillVisible.add(s);
+            }
+        }
+        const orphaned = new Set(
+            _segmentsInClass(label).filter((s) => !stillVisible.has(s)),
+        );
+        if (orphaned.size) {
             const before = state.selected_segments.length;
             state.selected_segments = state.selected_segments.filter(
-                (s) => !inClass.has(s),
+                (s) => !orphaned.has(s),
             );
             pruned = state.selected_segments.length !== before;
         }
@@ -2045,7 +2069,7 @@ function rebalanceSegmentSpillover() {
     }
 }
 
-function _buildConsonantGroup(group) {
+function _buildConsonantGroup(group, multiCount) {
     const groupEl = document.createElement("div");
     groupEl.className = "seg-group";
     // ``dataset.group`` carries the manner-class name so
@@ -2063,7 +2087,11 @@ function _buildConsonantGroup(group) {
     const row = document.createElement("div");
     row.className = "seg-row";
     for (const seg of group.segments) {
-        row.appendChild(_buildSegmentButton(seg));
+        // Mark a multi-membership glyph so the CSS cue can annotate that
+        // it is ONE segment reaching several classes (not duplicates).
+        const n = multiCount && multiCount.get(seg);
+        const extra = n > 1 ? { "data-multiclass": String(n) } : undefined;
+        row.appendChild(_buildSegmentButton(seg, extra));
     }
     groupEl.appendChild(row);
     return groupEl;
@@ -2121,7 +2149,19 @@ function _buildSegmentButton(seg, extraAttrs) {
             if (k.startsWith("data-")) btn.setAttribute(k, v);
         }
     }
-    state.seg_buttons.set(seg, btn);
+    // A segment can render in SEVERAL places (a multi-membership
+    // consonant appears in every manner class it existentially reaches;
+    // a diphthong doubles as a vowel cell + a chip), so track a LIST of
+    // instances per glyph. The reconcile and refit loops fan state out to
+    // every instance, and the delegated click already flips them all via
+    // querySelectorAll. Without the list only the last-built instance
+    // would update, leaving sibling rows stale.
+    const instances = state.seg_buttons.get(seg);
+    if (instances) {
+        instances.push(btn);
+    } else {
+        state.seg_buttons.set(seg, [btn]);
+    }
     return btn;
 }
 
@@ -3143,14 +3183,16 @@ function activateMode(mode) {
         // state. The seg states will be canonical after runAnalysis.
         if (!state.bridge || !state.selected_segments.length) {
             const selectedSet = new Set(state.selected_segments);
-            for (const [seg, btn] of state.seg_buttons) {
+            for (const [seg, btns] of state.seg_buttons) {
                 const isSelected = selectedSet.has(seg);
                 const target = isSelected ? "selected" : "default";
-                if (btn.dataset.state === target) continue;
-                btn.dataset.state = target;
-                btn.setAttribute(
-                    "aria-pressed", isSelected ? "true" : "false",
-                );
+                for (const btn of btns) {
+                    if (btn.dataset.state === target) continue;
+                    btn.dataset.state = target;
+                    btn.setAttribute(
+                        "aria-pressed", isSelected ? "true" : "false",
+                    );
+                }
             }
         }
     } else {
@@ -3164,10 +3206,12 @@ function activateMode(mode) {
         // Only do the reset when there's no query to follow up
         // with (analysis is a no-op for empty queries).
         if (!state.bridge || !Object.keys(state.selected_features).length) {
-            for (const btn of state.seg_buttons.values()) {
-                if (btn.dataset.state === "selected") {
-                    btn.dataset.state = "default";
-                    btn.setAttribute("aria-pressed", "false");
+            for (const btns of state.seg_buttons.values()) {
+                for (const btn of btns) {
+                    if (btn.dataset.state === "selected") {
+                        btn.dataset.state = "default";
+                        btn.setAttribute("aria-pressed", "false");
+                    }
                 }
             }
         }
@@ -3242,12 +3286,15 @@ function runAnalysis() {
  * construction and immune to dict-fallback ghosts.
  */
 function _applySegmentStates(stateFor) {
-    for (const [seg, btn] of state.seg_buttons) {
+    for (const [seg, btns] of state.seg_buttons) {
         const newState = stateFor(seg);
-        if (btn.dataset.state !== newState) {
-            btn.dataset.state = newState;
-            const pressed = newState === "selected" || newState === "matched";
-            btn.setAttribute("aria-pressed", pressed ? "true" : "false");
+        for (const btn of btns) {
+            if (btn.dataset.state !== newState) {
+                btn.dataset.state = newState;
+                const pressed =
+                    newState === "selected" || newState === "matched";
+                btn.setAttribute("aria-pressed", pressed ? "true" : "false");
+            }
         }
     }
 }

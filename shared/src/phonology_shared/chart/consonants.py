@@ -1750,12 +1750,21 @@ def group_segments(
         # ONE coarse manner class is a genuine multi-membership segment
         # (``mb`` reaches Nasals AND Plosives; a nasal click reaches Clicks
         # AND Nasals), appended to EVERY class it reaches, driven purely by
-        # ``reached_classes`` off the tiers, never a privileged phase. A
-        # vowel-like segment (reaching ``[+syllabic]`` in some phase) stays
-        # on the single-pick path so it routes to the vowel area.
+        # ``reached_classes`` off the tiers, never a privileged phase. Two
+        # single-class routings beat the multiset: a vowel-like segment
+        # (reaching ``[+syllabic]`` in some phase) stays on the single-pick
+        # path so it routes to the vowel area; and an explicit declared
+        # class primitive (``rhotic`` / ``flap`` / ``liquid``), which
+        # ``best_primary`` honours as a definite single class the standard
+        # bundle cannot recover, is not scattered across manner rows.
         reached = reached_classes(feats, seqs.get(sym, {}))
         is_vowelish = "+" in phase_values(sym, "syllabic")
-        if len(reached) > 1 and not is_vowelish:
+        declared = (
+            feats.get("rhotic", "0") == "+"
+            or feats.get("flap", "0") == "+"
+            or feats.get("liquid", "0") == "+"
+        )
+        if len(reached) > 1 and not is_vowelish and not declared:
             multi_reach[sym] = reached
             for group in reached:
                 assignment[group].append(sym)

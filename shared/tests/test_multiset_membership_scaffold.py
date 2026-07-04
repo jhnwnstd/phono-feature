@@ -1,19 +1,16 @@
-"""Scaffold for the DEFERRED multi-membership pass (group_segments
-partition -> multiset). These assertions ENCODE the end state so the
-implementation becomes wiring against tests that already exist, per the
-staged plan. The multiset-dependent cases are ``xfail`` until the flip
-lands (today a contour consonant sits in the provisional
-``Contour Consonants`` tag, not in every class it reaches); they flip to
-``xpass`` when group_segments becomes a multiset, at which point the
-``xfail`` marks come off in the same commit that retires the tag.
+"""Multi-membership (group_segments MULTISET) behaviour.
 
-The END STATE (substance-free): a segment renders in EVERY manner class
-its tiers existentially reach, driven by the engine's quantified
-membership, never by a privileged phase. `mb` reaches a nasal spec in one
-phase and an oral-stop spec in another, so it renders in Nasals AND
-Plosives. The frozen fixture ``fixtures/contour_tag_reach.json`` is the
-validated ground truth for which classes each currently-tagged segment
-must appear in.
+A segment renders in EVERY manner class its tiers existentially reach,
+driven by the engine's quantified membership, never by a privileged
+phase. ``mb`` reaches a nasal spec in one phase and an oral-stop spec in
+another, so it renders in Nasals AND Plosives; a single-phase segment
+stays in exactly one class. The fixture ``fixtures/contour_tag_reach.json``
+is the validated ground truth for which classes each multi-membership
+segment lands in over the whole PHOIBLE corpus.
+
+(Authored as an xfail scaffold before the producer flip landed, so the
+implementation was wiring against tests that already encoded the end
+state; the xfail marks came off when the multiset went green.)
 """
 
 from __future__ import annotations
@@ -33,6 +30,7 @@ from phonology_shared.theory.feature_engine import FeatureEngine
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 _FIXTURE = json.loads((_FIXTURES / "contour_tag_reach.json").read_text())
+
 
 def _mb_engine() -> FeatureEngine:
     feats = ["Consonantal", "Sonorant", "Continuant", "Nasal", "Syllabic"]

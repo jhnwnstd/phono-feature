@@ -1186,6 +1186,9 @@ dialog input[type="text"]:focus-visible {
   justify-content: center;
   line-height: 1;
   overflow: hidden;
+  /* Anchor the multi-membership cue (::after) to the button box;
+     layout-neutral (no offset), so the grid metrics are unchanged. */
+  position: relative;
   /* One radius for every segment button (consonant, vowel chip,
      diphthong / vocoid chip); ``--radius-lg`` stays the crisper
      container corner. */
@@ -1253,6 +1256,28 @@ dialog input[type="text"]:focus-visible {
   background: var(--accent-light);
   color: var(--accent);
   border: var(--border-std) solid var(--accent);
+}
+
+/* Multi-membership cue: a small corner count on a consonant that renders
+   in SEVERAL manner classes, marking that it is ONE segment reaching
+   several classes rather than duplicate segments. The count comes from
+   the producer's multiset output (``data-multiclass``), so the label and
+   the placements it annotates share one source. ``currentColor`` tracks
+   each data-state's text colour, so it stays legible when the button is
+   selected / matched / suggested; drawn inside the box so
+   ``overflow: hidden`` does not clip it. Not a hover tooltip (those were
+   deliberately removed on both platforms). */
+.seg-btn[data-multiclass]::after {
+  content: attr(data-multiclass);
+  position: absolute;
+  top: 0;
+  right: 2px;
+  font-size: 8px;
+  line-height: 1.5;
+  font-weight: 600;
+  opacity: 0.55;
+  color: currentColor;
+  pointer-events: none;
 }
 
 /* ---------- IPA vowel trapezoid ----------

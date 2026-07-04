@@ -94,7 +94,9 @@ def main() -> int:
     dest.write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n")
     print(f"multi-membership occurrences: {totals['multi_occurrences']}")
     print(f"unique glyphs: {totals['unique_glyphs']}")
-    print(f"inventories with a multi segment: {totals['inventories_with_multi']}")
+    print(
+        f"inventories with a multi segment: {totals['inventories_with_multi']}"
+    )
     hist = Counter(len(v) for v in seg_membership.values())
     print("classes-per-glyph histogram:", dict(sorted(hist.items())))
     for g in list(seg_membership)[:15]:
