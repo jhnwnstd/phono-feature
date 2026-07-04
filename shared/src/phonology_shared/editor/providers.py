@@ -183,9 +183,7 @@ def _restrict_sequences(
     out: dict[str, dict[str, tuple[str, ...]]] = {}
     for seg, feats in sequences.items():
         kept = {
-            feat: tuple(vals)
-            for feat, vals in feats.items()
-            if feat in keep
+            feat: tuple(vals) for feat, vals in feats.items() if feat in keep
         }
         if kept:
             out[seg] = kept

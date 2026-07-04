@@ -137,7 +137,9 @@ def test_grouping_reads_the_whole_sequence_including_interior() -> None:
     is per-feature over the whole value sequence, not just endpoints."""
     inv = {"t": {**_STOP, "DelRel": "-"}, "x": {**_STOP, "DelRel": "-"}}
     # delrel reaches "+" only in the middle; continuant closes then opens
-    sequences = {"x": {"continuant": ("-", "-", "+"), "delrel": ("-", "+", "-")}}
+    sequences = {
+        "x": {"continuant": ("-", "-", "+"), "delrel": ("-", "+", "-")}
+    }
     place = _placement(group_segments(inv, sequences=sequences))
     assert place["x"] in _AFFRICATE_LABELS, place
 

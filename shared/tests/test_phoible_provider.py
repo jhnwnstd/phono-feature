@@ -400,11 +400,13 @@ def test_materialize_normalises_segment_secondary_keys_to_engine_form() -> (
                 "ãi": "+-",  # /ãi/ in NFD
             },
         },
-        "segment_secondary": {
+        # New bake format: genuine contour VALUE SEQUENCES. The
+        # falling diphthong glides from syllabic to non-syllabic; the
+        # provider stamps this under segment_sequences and DERIVES the
+        # offset bundle under segment_secondary for the vowel chart.
+        "segment_sequences": {
             "v1": {
-                # Final state of the diphthong: nasal monophthong
-                # values would arrive here in NFD too.
-                "ãi": "+-",
+                "ãi": {"Syllabic": ["+", "-"]},
             },
         },
     }

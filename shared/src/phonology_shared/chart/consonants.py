@@ -70,6 +70,24 @@ TONES_GROUP_NAME = "Tones"
 CONTOID_GROUP_NAME = "Contoids"
 VOCOID_GROUP_NAME = "Vocoids"
 
+#: Display group for a CONSONANT that carries a genuine manner contour
+#: (a value SEQUENCE on a phase-forming feature): a prenasalized stop
+#: (``mb``: ``[+nasal]`` closure then ``[-nasal]`` oral release), a
+#: stop-into-sonorant contour (``tr``, ``ʔj``), a prenasalized affricate
+#: (``ndz``). Such a segment reaches SEVERAL manner classes across its
+#: phases (``mb`` is existentially a nasal and existentially an oral
+#: stop, and universally neither), so no single manner label is faithful
+#: to the source and PHOIBLE ships no fine manner category above the
+#: coarse consonant/vowel/tone class. Rather than pick a phase to label
+#: it by (which the set theory does not license), the grouper names the
+#: honest formal fact: the segment carries a manner contour. This is an
+#: explicit SOURCE-DISPLAY convention, PROVISIONAL: a later pass renders
+#: true multi-membership (the segment in every class it reaches) and
+#: retires this bucket. The tag lives ONLY in this presentation layer;
+#: the engine's membership relations answer the quantified questions from
+#: the tiers and never read this label as a manner feature.
+CONTOUR_GROUP_NAME = "Contour Consonants"
+
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.
 PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
@@ -186,7 +204,12 @@ _FROZEN_GROUPS: set[str] = {"Plosives"}
 # consonant with ``tone`` / ``syllabic`` / ``click`` = 0) reads as zero
 # mismatches and would otherwise let the gated group win by default.
 # This is what stranded a bare ``/h/`` (tone unspecified) in Tones.
-_GATED_GROUPS: set[str] = {"Clicks", VOWEL_GROUP_NAME, TONES_GROUP_NAME}
+_GATED_GROUPS: set[str] = {
+    "Clicks",
+    CONTOUR_GROUP_NAME,
+    VOWEL_GROUP_NAME,
+    TONES_GROUP_NAME,
+}
 DISPLAY_ORDER: list[str] = [
     "Clicks",
     "Plosives",
@@ -211,6 +234,11 @@ DISPLAY_ORDER: list[str] = [
     "Central Approximants",
     "Semivowels",
     "Laryngeals",
+    # Consonants carrying a genuine manner contour (prenasalized stops,
+    # stop-into-sonorant contours): a source-display convention for
+    # segments that reach several manner classes, rendered at the end of
+    # the consonant section. PROVISIONAL; see ``CONTOUR_GROUP_NAME``.
+    CONTOUR_GROUP_NAME,
     # Consonant-area catch-all: renders at the end of the consonant
     # section (before vowels) so an unclassifiable contoid stays visible.
     CONTOID_GROUP_NAME,
@@ -1570,17 +1598,45 @@ def group_segments(
             return ""
         return "Affricates"
 
+    def contour_consonant(sym: str) -> str:
+        """Route a CONSONANT carrying a genuine manner contour to the
+        provisional :data:`CONTOUR_GROUP_NAME` tag instead of any single
+        manner class.
+
+        Such a segment reaches several manner classes across its phases
+        (``mb`` is existentially nasal and existentially an oral stop),
+        so labelling it by one class would privilege a phase the set
+        theory does not rank. The affricate rule already ran and is
+        phase-agnostic (it fires on ``∃[-cont]`` AND ``∃[+delrel]``), so
+        an affricate keeps its definite class; this catches the REMAINING
+        contour consonants whose manner is genuinely multi-valued.
+
+        A vowel-like contour (a diphthong, reaching ``[+syllabic]`` in
+        some phase) is NOT tagged here: it belongs to the vowel area, so
+        it falls through to the vowel/vocoid routing. Major class is read
+        existentially so a rising diphthong (``i̯a``) is not mistaken for
+        a consonant.
+        """
+        if not any(len(t) > 1 for t in seqs.get(sym, {}).values()):
+            return ""  # single-phase: no contour, keep its ordinary bucket
+        if "+" in phase_values(sym, "syllabic"):
+            return ""  # vowel-like: hand to the vowel area
+        return CONTOUR_GROUP_NAME
+
     # Stage 1: assign every segment to a primary group. An affricate
-    # wins first, then the positive-evidence best_primary, then the
-    # mismatch-minimising fallback. A segment that matches no
-    # manner/place spec would otherwise vanish from the grouped payload
-    # (still in the flat segment list, rendered nowhere), so route it to
-    # a catch-all: a vocoid (vowel-like) lands under the vowel chart,
-    # anything else under the consonants.
+    # wins first (a phase-agnostic ∃ rule), then a consonant that still
+    # carries a genuine manner contour is tagged rather than forced into
+    # one manner class, then the positive-evidence best_primary, then the
+    # mismatch-minimising fallback. A segment that matches no manner/place
+    # spec would otherwise vanish from the grouped payload (still in the
+    # flat segment list, rendered nowhere), so route it to a catch-all: a
+    # vocoid (vowel-like) lands under the vowel chart, anything else under
+    # the consonants.
     assignment: dict[str, list[str]] = defaultdict(list)
     for sym, feats in norm.items():
         group = (
             affricate_group(sym, feats)
+            or contour_consonant(sym)
             or best_primary(feats)
             or fallback_assignment(feats)
         )

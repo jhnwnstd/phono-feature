@@ -217,3 +217,77 @@ def tiers_to_cells(
         feat: (vals[0] if len(vals) == 1 else ",".join(vals))
         for feat, vals in tiers.items()
     }
+
+
+#: Features whose value SEQUENCE is a genuine intra-segmental timeline the
+#: source encodes as a temporal contour, split by major class. PHOIBLE's
+#: own convention (dev FEATURES; Moran & McCloy 2019) writes a temporal
+#: contour on a MANNER feature for a consonant (a stop closure releasing
+#: into a fricative writes ``continuant``/``delayedRelease``; a
+#: prenasalized stop writes ``nasal``/``sonorant``) and on a QUALITY
+#: feature for a vowel (a diphthong glides through ``high``/``front``/...).
+#: A comma on any OTHER feature is a secondary articulation the source
+#: composed from a base plus a diacritic (``kʷ`` writes ``labial`` as
+#: ``-,+`` = base ``k`` then the ``ʷ`` modification, ``aˤ`` writes
+#: ``retractedTongueRoot`` for pharyngealization), which co-occurs and is
+#: NOT a timeline. Reading this split is a formal statement about the
+#: source's encoding, not a phonetic claim about what the features mean.
+_CONSONANT_PHASE_FEATURES: frozenset[str] = frozenset(
+    {
+        "Consonantal",
+        "Sonorant",
+        "Continuant",
+        "Nasal",
+        "DelRel",
+        "Approximant",
+        "Tap",
+        "Trill",
+        "Lateral",
+    }
+)
+_VOWEL_PHASE_FEATURES: frozenset[str] = frozenset(
+    {"Syllabic", "High", "Low", "Front", "Back", "Tense", "ATR"}
+)
+
+
+def partition_tiers(
+    tiers: Mapping[str, tuple[str, ...]],
+) -> tuple[dict[str, str], dict[str, tuple[str, ...]]]:
+    """Split a verbatim tier map into a single-value PRIMARY bundle and the
+    GENUINE contour sequences, resolving secondary articulations formally.
+
+    Returns ``(primary, genuine)``. ``primary`` gives every feature one
+    value; ``genuine`` holds only the features whose sequence is a real
+    intra-segmental timeline (:py:data:`_CONSONANT_PHASE_FEATURES` on a
+    consonant, :py:data:`_VOWEL_PHASE_FEATURES` on a vowel), so a consumer
+    reading ``genuine`` sees a phase boundary ONLY where the source
+    licensed one. A feature that varies but is NOT phase-forming is a
+    secondary articulation (a lone ``kʷ`` ``labial`` ``-,+`` or a
+    pharyngealized vowel's ``retractedTongueRoot``): it never appears in
+    ``genuine`` and its ``primary`` value is the source's stated modified
+    value (the sequence's last), so the segment stays single-phase and a
+    query does not see a spurious base polarity.
+
+    Major class is read existentially: a segment is a vowel iff SOME phase
+    is ``[+syllabic]``, so a rising diphthong (``i̯a``, whose onset is
+    the non-syllabic glide) is still a vowel and keeps its quality glide.
+    A phase-forming feature's ``primary`` value is its onset (index 0), an
+    arbitrary but total anchor; the authoritative reading is ``genuine``.
+    """
+    is_vowel = "+" in tiers.get("Syllabic", ())
+    phase_forming = (
+        _VOWEL_PHASE_FEATURES if is_vowel else _CONSONANT_PHASE_FEATURES
+    )
+    primary: dict[str, str] = {}
+    genuine: dict[str, tuple[str, ...]] = {}
+    for feat, tier in tiers.items():
+        if len(tier) == 1:
+            primary[feat] = tier[0]
+        elif feat in phase_forming:
+            genuine[feat] = tier
+            primary[feat] = tier[0]  # onset anchor; genuine is authoritative
+        else:
+            # Secondary articulation: co-occurring, not a timeline. Keep
+            # the source's stated (modified) value and create no phase.
+            primary[feat] = tier[-1]
+    return primary, genuine

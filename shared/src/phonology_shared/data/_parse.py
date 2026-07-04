@@ -721,9 +721,7 @@ def _assemble_inventory(
                     normalize_feature_key(raw_key)
                 )
                 if declared is not None:
-                    declared_feats[declared] = tuple(
-                        str(v) for v in seq
-                    )
+                    declared_feats[declared] = tuple(str(v) for v in seq)
             if declared_feats:
                 folded_sequences[seg] = declared_feats
         metadata["segment_sequences"] = folded_sequences

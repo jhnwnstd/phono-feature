@@ -32,7 +32,6 @@ from phonology_shared.chart.consonants import group_segments
 from phonology_shared.data.inventory import (
     VALID_VALUES,
     Inventory,
-    normalize_feature_bundle,
     normalize_feature_key,
 )
 

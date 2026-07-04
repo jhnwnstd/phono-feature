@@ -286,6 +286,7 @@ def bake_tables(
     _ensure_shared_on_path()
     from phonology_shared.editor.phoible_features import (
         PHOIBLE_TO_APP_FEATURE,
+        partition_tiers,
         phoible_row_to_tiers,
     )
 
@@ -312,9 +313,9 @@ def bake_tables(
     # segment. The primary ``inv_segments`` bundle holds each feature's
     # onset (sequence head) so a consumer ignorant of contours still sees
     # a well-defined single phase; this map restores the whole sequence.
-    inv_segment_sequences: dict[
-        str, dict[str, dict[str, list[str]]]
-    ] = defaultdict(dict)
+    inv_segment_sequences: dict[str, dict[str, dict[str, list[str]]]] = (
+        defaultdict(dict)
+    )
     # Language-name dedup: the same language often appears under several
     # inventories, but the autocomplete list wants one entry each.
     languages: dict[str, LanguageIndexEntry] = {}
@@ -377,37 +378,38 @@ def bake_tables(
                     }
 
             # Convert the raw row into faithful per-feature VALUE
-            # SEQUENCES via the PHOIBLE adapter, the single place that
-            # knows PHOIBLE's ``"+,-"`` contour convention. Nothing is
-            # whitelisted, gated by major class, or reduced here: the
-            # source's facts pass through verbatim and the query layer
-            # decides what to read (onset, offset, or the whole tier).
+            # SEQUENCES via the PHOIBLE adapter, then split them into a
+            # single-value primary bundle and the GENUINE contour
+            # sequences with :py:func:`partition_tiers`. That split reads
+            # PHOIBLE's OWN encoding convention (a temporal contour is a
+            # manner/quality feature changing value; a secondary
+            # articulation like ``kʷ``'s ``labial`` ``-,+`` is a place
+            # feature the source composed from a base plus a diacritic and
+            # is NOT a timeline). Nothing appeals to what a feature means
+            # phonetically: a lone place-feature comma resolves to the
+            # source's stated modified value and creates no phase, so
+            # ``kʷ`` stays single-phase, while a prenasalized stop or an
+            # affricate keeps its manner sequence.
             #
-            # The primary positional bundle keeps each feature's ONSET
-            # (sequence head), in feature_columns order, one character per
-            # column: a consumer ignorant of contours still sees a
-            # well-defined single phase (and a contour cell classifies by
-            # the state it starts in, so a falling diphthong's ``syllabic``
-            # onset stays ``"+"`` and a prenasalized stop's ``sonorant``
-            # onset stays ``"+"``). A feature the source is silent on has
-            # no onset, so the bundle records ``"0"`` in its slot.
-            tiers = phoible_row_to_tiers(row)
-            onset_chars = [
-                (tiers[app][0] if app in tiers else "0")
-                for app in feature_names
-            ]
-            bundle_str = _encode_bundle(onset_chars, phoneme, inv_id)
+            # The primary positional bundle carries one value per feature,
+            # in feature_columns order; a feature the source is silent on
+            # has no value, so the bundle records ``"0"`` in its slot.
+            primary, contour_seqs_map = partition_tiers(
+                phoible_row_to_tiers(row)
+            )
+            primary_chars = [primary.get(app, "0") for app in feature_names]
+            bundle_str = _encode_bundle(primary_chars, phoneme, inv_id)
             if len(bundle_str) != len(feature_names):
                 raise ValueError(
                     f"Encoded {len(bundle_str)} values for "
                     f"{len(feature_names)} features on phoneme {phoneme!r} "
                     f"in inventory {inv_id}"
                 )
-            # The full sequence of every feature that actually changes,
-            # keyed by app feature name; unchanged features live only in
-            # the primary bundle (their onset IS the whole sequence).
+            # Only genuine (phase-forming) contours are recorded as
+            # sequences; secondary articulations live resolved in the
+            # primary bundle.
             contour_seqs = {
-                app: list(seq) for app, seq in tiers.items() if len(seq) > 1
+                app: list(seq) for app, seq in contour_seqs_map.items()
             }
             contour_normalized += len(contour_seqs)
 

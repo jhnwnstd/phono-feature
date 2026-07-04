@@ -442,10 +442,7 @@ class PhoibleProvider:
             raw_seq = self._raw_sequences_by_inventory.get(inventory_id)
             self._sequences_by_inventory[inventory_id] = (
                 {
-                    seg: {
-                        feat: tuple(vals)
-                        for feat, vals in feats.items()
-                    }
+                    seg: {feat: tuple(vals) for feat, vals in feats.items()}
                     for seg, feats in raw_seq.items()
                     if isinstance(feats, Mapping)
                 }
@@ -518,9 +515,7 @@ class PhoibleProvider:
             )
         if inventory_id not in self._inventories:
             raise KeyError(f"unknown PHOIBLE inventory id {inventory_id!r}")
-        encoded_bundles, raw_sequences = self._filtered_segments(
-            inventory_id
-        )
+        encoded_bundles, raw_sequences = self._filtered_segments(inventory_id)
 
         features: tuple[str, ...] = self._feature_names
         resolved: dict[str, Mapping[str, str]] = {}
