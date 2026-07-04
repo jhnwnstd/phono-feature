@@ -244,16 +244,18 @@ def test_plain_stop_and_fricative_are_not_affricates() -> None:
     assert "s" not in groups.get("Plosives", []), groups
 
 
-def test_secondary_feats_exposes_release_bundle() -> None:
-    """The engine's per-segment release map carries the final-phase
-    bundle for contour segments and nothing for single-phase ones; the
-    grouper unions it with the primary bundle to see the whole
-    segment."""
+def test_extra_phases_exposes_release_bundles() -> None:
+    """The engine's per-segment extra-phase map carries every
+    non-primary phase bundle for contour segments and nothing for
+    single-phase ones; the grouper unions them with the primary bundle
+    to see the whole segment."""
     eng = FeatureEngine(_obstruent_inv())
-    sec = eng._secondary_feats_by_seg
-    assert sec.get("cl", {}).get("continuant") == "+"
-    assert sec.get("cl", {}).get("lateral") == "+"
-    assert "ts" not in sec and "t" not in sec and "s" not in sec
+    extra = eng._extra_phases_by_seg
+    cl_phases = extra.get("cl", ())
+    assert len(cl_phases) == 1, cl_phases
+    assert cl_phases[0].get("continuant") == "+"
+    assert cl_phases[0].get("lateral") == "+"
+    assert "ts" not in extra and "t" not in extra and "s" not in extra
 
 
 def test_diphthong_contour_is_not_an_affricate() -> None:
@@ -262,7 +264,7 @@ def test_diphthong_contour_is_not_an_affricate() -> None:
     never enters the Affricates class."""
     eng = FeatureEngine(_contour_inv())
     assert (
-        "ia" in eng._secondary_feats_by_seg
+        "ia" in eng._extra_phases_by_seg
     ), "diphthong should have a release phase"
     assert "ia" not in eng.grouped_segments.get("Affricates", [])
 

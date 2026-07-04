@@ -111,8 +111,8 @@ def test_contour_encoded_affricate_is_classified() -> None:
         "s": {**_FRIC, "DelRel": "+"},
         "aff": {**_STOP, "DelRel": "-"},
     }
-    secondary = {"aff": {"continuant": "+", "delrel": "+"}}
-    groups = group_segments(inv, secondary=secondary)
+    extra_phases = {"aff": [{"continuant": "+", "delrel": "+"}]}
+    groups = group_segments(inv, extra_phases=extra_phases)
     place = _placement(groups)
     assert sorted(_flat(groups)) == sorted(inv)
     assert place["aff"] in _AFFRICATE_LABELS, place
@@ -125,9 +125,22 @@ def test_stop_sonorant_cluster_is_not_an_affricate_by_contour() -> None:
     a Plosive, not an affricate. Guards the over-generation the old
     contour-alone rule committed."""
     inv = {"t": {**_STOP, "DelRel": "-"}, "tr": {**_STOP, "DelRel": "-"}}
-    secondary = {"tr": {"continuant": "+"}}  # sonorant release, no delrel
-    place = _placement(group_segments(inv, secondary=secondary))
+    # sonorant release, no delayed release
+    extra_phases = {"tr": [{"continuant": "+"}]}
+    place = _placement(group_segments(inv, extra_phases=extra_phases))
     assert place["tr"] not in _AFFRICATE_LABELS, place
+
+
+def test_grouping_unions_over_all_phases_not_just_the_last() -> None:
+    """N-phase readiness: a segment whose distinguishing ``+delrel``
+    sits in a MIDDLE phase (neither the primary nor the last) is still
+    classified on the union over ALL phases. A helper that read only the
+    primary plus the final phase would miss it and misclassify."""
+    inv = {"t": {**_STOP, "DelRel": "-"}, "x": {**_STOP, "DelRel": "-"}}
+    # phase 1 carries the delayed release; phase 2 the fricative opening
+    extra_phases = {"x": [{"delrel": "+"}, {"continuant": "+"}]}
+    place = _placement(group_segments(inv, extra_phases=extra_phases))
+    assert place["x"] in _AFFRICATE_LABELS, place
 
 
 # --------------------------------------------------------------------

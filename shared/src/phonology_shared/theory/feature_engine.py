@@ -463,28 +463,32 @@ class FeatureEngine:
         return group_segments(
             self._inventory.segments,
             normalized=self.normalized_segment_feats,
-            secondary=self._secondary_feats_by_seg,
+            extra_phases=self._extra_phases_by_seg,
         )
 
     @cached_property
-    def _secondary_feats_by_seg(self) -> dict[str, dict[str, str]]:
-        """Per-segment normalized RELEASE (final-phase) bundle.
+    def _extra_phases_by_seg(self) -> dict[str, tuple[dict[str, str], ...]]:
+        """Per-segment normalized NON-PRIMARY phase bundles.
 
-        For each contour segment (an affricate or diphthong that
-        :py:meth:`Inventory.segment_phases` returns as two phases), the
-        normalized final phase, folded into the grouper's namespace
-        (lowercase short codes). Single-phase segments contribute
-        nothing. :py:func:`group_segments` unions this with the primary
-        bundle so a feature's value across the whole segment reads as a
-        set, which is how the phase-union affricate rule and the
-        release-phase sub-classification see both the closure and the
-        fricative release; see :py:meth:`Inventory.segment_phases`."""
-        out: dict[str, dict[str, str]] = {}
+        For each contour segment (an affricate or di/triphthong that
+        :py:meth:`Inventory.segment_phases` returns as two or more
+        phases), every phase AFTER the primary, folded into the
+        grouper's namespace (lowercase short codes). Single-phase
+        segments contribute nothing. :py:func:`group_segments` unions
+        these with the primary bundle so a feature's value across the
+        whole segment reads as a set over ALL phases, which is how the
+        phase-union affricate rule and the release-phase
+        sub-classification see both the closure and the fricative
+        release. Returning every extra phase (not just the last) keeps
+        grouping consistent with :py:meth:`_build_membership_caches`,
+        which also unions over every phase; see
+        :py:meth:`Inventory.segment_phases`."""
+        out: dict[str, tuple[dict[str, str], ...]] = {}
         for seg in self._inventory.segments:
             phases = self._inventory.segment_phases(seg)
             if len(phases) < 2:
                 continue
-            out[seg] = normalize_feature_bundle(phases[-1])
+            out[seg] = tuple(normalize_feature_bundle(p) for p in phases[1:])
         return out
 
     @cached_property
