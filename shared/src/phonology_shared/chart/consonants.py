@@ -886,26 +886,43 @@ def _apply_breakout(
     parent_name: str,
     member_pred: Callable[[str], bool],
     inventory_size: int,
-) -> None:
+    *,
+    allow_whole: bool = False,
+) -> bool:
     """Peel the parent's members matching ``member_pred`` into
-    ``new_name`` and leave the rest under the parent.
+    ``new_name`` and leave the rest under the parent. Returns whether a
+    child group was created.
 
-    No-op unless the parent exists, the split is non-trivial (both
-    sides non-empty), and the subgroup clears the breakout threshold.
-    Shared scaffold for the spec-based and fact-based breakout passes;
-    only the membership predicate differs between them.
+    No-op unless the parent exists and the subgroup is non-empty and
+    clears the breakout threshold. When some members do NOT match, the
+    subgroup splits off and the rest stay under the parent. When they
+    ALL match, the group is homogeneous: it is relabelled to
+    ``new_name`` only if ``allow_whole`` is set, which the spec pass
+    turns on once a sibling subclass has already split from this parent
+    (so a contrasting residue, e.g. the lateral affricates left when the
+    sibilant affricates peeled off, gets its specific name while an
+    uncontrasted whole group keeps the general one). Shared scaffold for
+    the spec-based and fact-based breakout passes; only the membership
+    predicate differs between them.
     """
     if parent_name not in assignment:
-        return
+        return False
     parent_members = list(assignment[parent_name])
     subgroup = [s for s in parent_members if member_pred(s)]
-    remainder = [s for s in parent_members if s not in subgroup]
-    if not subgroup or not remainder:
-        return
+    if not subgroup:
+        return False
     if not _should_break_out(len(subgroup), inventory_size):
-        return
-    assignment[parent_name] = remainder
+        return False
+    remainder = [s for s in parent_members if s not in subgroup]
+    if remainder:
+        assignment[parent_name] = remainder
+        assignment[new_name] = subgroup
+        return True
+    if not allow_whole:
+        return False
+    del assignment[parent_name]
     assignment[new_name] = subgroup
+    return True
 
 
 _LARYNGEAL_FEATURES: set[str] = {"spreadgl", "constrgl"}
@@ -1001,6 +1018,7 @@ def _break_out_by_spec(
     release phase to fire. For a single-phase segment the union is just
     its one bundle, so this is identical to a plain value test.
     """
+    spawned_from: set[str] = set()
     for new_name, parent_name, cond in DERIVED_BREAKOUTS:
         if not all(f in active_features for f in cond):
             continue
@@ -1015,7 +1033,16 @@ def _break_out_by_spec(
                     return False
             return True
 
-        _apply_breakout(assignment, new_name, parent_name, _spec_match, n)
+        created = _apply_breakout(
+            assignment,
+            new_name,
+            parent_name,
+            _spec_match,
+            n,
+            allow_whole=parent_name in spawned_from,
+        )
+        if created:
+            spawned_from.add(parent_name)
 
 
 def _break_out_by_laryngeal_kind(

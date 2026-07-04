@@ -145,26 +145,51 @@ def _obstruent_inv() -> Inventory:
     ]
     segments = {
         "t": {
-            "Consonantal": "+", "Sonorant": "-", "Continuant": "-",
-            "DelRel": "-", "Nasal": "-", "Lateral": "-", "Strident": "-",
+            "Consonantal": "+",
+            "Sonorant": "-",
+            "Continuant": "-",
+            "DelRel": "-",
+            "Nasal": "-",
+            "Lateral": "-",
+            "Strident": "-",
         },
         "s": {
-            "Consonantal": "+", "Sonorant": "-", "Continuant": "+",
-            "DelRel": "+", "Nasal": "-", "Lateral": "-", "Strident": "+",
+            "Consonantal": "+",
+            "Sonorant": "-",
+            "Continuant": "+",
+            "DelRel": "+",
+            "Nasal": "-",
+            "Lateral": "-",
+            "Strident": "+",
         },
         "ts": {
-            "Consonantal": "+", "Sonorant": "-", "Continuant": "-",
-            "DelRel": "+", "Nasal": "-", "Lateral": "-", "Strident": "+",
+            "Consonantal": "+",
+            "Sonorant": "-",
+            "Continuant": "-",
+            "DelRel": "+",
+            "Nasal": "-",
+            "Lateral": "-",
+            "Strident": "+",
         },
         # Closure phase of the contour affricate / cluster; the fricated
         # (or sonorant) release lives in ``segment_secondary`` below.
         "cl": {
-            "Consonantal": "+", "Sonorant": "-", "Continuant": "-",
-            "DelRel": "-", "Nasal": "-", "Lateral": "-", "Strident": "-",
+            "Consonantal": "+",
+            "Sonorant": "-",
+            "Continuant": "-",
+            "DelRel": "-",
+            "Nasal": "-",
+            "Lateral": "-",
+            "Strident": "-",
         },
         "tr": {
-            "Consonantal": "+", "Sonorant": "-", "Continuant": "-",
-            "DelRel": "-", "Nasal": "-", "Lateral": "-", "Strident": "-",
+            "Consonantal": "+",
+            "Sonorant": "-",
+            "Continuant": "-",
+            "DelRel": "-",
+            "Nasal": "-",
+            "Lateral": "-",
+            "Strident": "-",
         },
     }
     secondary = {
