@@ -1,0 +1,1149 @@
+{
+  "schema": "contour-tag-reach/1",
+  "note": "The CURRENT 'Contour Consonants' tagged population and, per glyph, the manner classes it existentially reaches (some phase satisfies the class is_member test; plus the affricate ∃-rule). This is the roadmap fixture for the deferred multi-membership pass: when group_segments becomes a multiset, each of these glyphs should render in exactly these classes. Regenerate with shared/tests/fixtures/gen_contour_tag_reach.py.",
+  "class_specs": {
+    "Plosives": {
+      "consonantal": "+",
+      "continuant": "-",
+      "sonorant": "-",
+      "nasal": "-",
+      "delrel": "-"
+    },
+    "Fricatives": {
+      "consonantal": "+",
+      "continuant": "+",
+      "sonorant": "-"
+    },
+    "Nasals": {
+      "nasal": "+"
+    },
+    "Trills": {
+      "trill": "+"
+    },
+    "Taps & Flaps": {
+      "tap": "+"
+    },
+    "Lateral Approximants": {
+      "consonantal": "+",
+      "continuant": "+",
+      "lateral": "+",
+      "sonorant": "+",
+      "tap": "-"
+    },
+    "Central Approximants": {
+      "consonantal": "+",
+      "continuant": "+",
+      "sonorant": "+",
+      "nasal": "-",
+      "lateral": "-",
+      "trill": "-",
+      "tap": "-"
+    },
+    "Semivowels": {
+      "consonantal": "-",
+      "syllabic": "-",
+      "sonorant": "+"
+    }
+  },
+  "totals": {
+    "tagged_occurrences": 2107,
+    "unique_glyphs": 257,
+    "inventories_with_tag": 378
+  },
+  "segments": {
+    "bm": [
+      "Nasals",
+      "Plosives"
+    ],
+    "br": [
+      "Plosives",
+      "Trills"
+    ],
+    "bɾ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "bⁿ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "cn-": [
+      "Nasals",
+      "Plosives"
+    ],
+    "cɲ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "d-ⁿ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "dl": [
+      "Lateral Approximants",
+      "Plosives"
+    ],
+    "dlʷ": [
+      "Lateral Approximants",
+      "Plosives"
+    ],
+    "dn": [
+      "Nasals",
+      "Plosives"
+    ],
+    "dr": [
+      "Plosives",
+      "Trills"
+    ],
+    "dɾ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "d̪l̪": [
+      "Lateral Approximants",
+      "Plosives"
+    ],
+    "d̪n̪": [
+      "Nasals",
+      "Plosives"
+    ],
+    "d̪ⁿ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "dⁿ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "fɾ": [
+      "Fricatives",
+      "Taps & Flaps"
+    ],
+    "kl": [
+      "Lateral Approximants",
+      "Plosives"
+    ],
+    "km": [
+      "Nasals",
+      "Plosives"
+    ],
+    "kŋ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "kǁʰʼ": [
+      "Plosives"
+    ],
+    "kǂ͓ˡ": [
+      "Affricates"
+    ],
+    "kǂ͓ˡx": [
+      "Affricates"
+    ],
+    "kǂ͓ˡʰ": [
+      "Affricates"
+    ],
+    "kɾ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "kʟ̥ʼ": [
+      "Lateral Approximants",
+      "Plosives"
+    ],
+    "kʷɾ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ld": [
+      "Lateral Approximants",
+      "Plosives"
+    ],
+    "mb": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mbv": [
+      "Affricates",
+      "Nasals"
+    ],
+    "mbz": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Plosives"
+    ],
+    "mbɾ": [
+      "Nasals",
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "mbʲ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mbʷ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mbː": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mbˠ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mp": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mpf": [
+      "Affricates",
+      "Nasals"
+    ],
+    "mpfʼ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "mpɾ": [
+      "Nasals",
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "mpʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mpʲ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mpʷ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mpʼ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mv": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "mw": [
+      "Nasals",
+      "Semivowels"
+    ],
+    "mɓ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "mɾ": [
+      "Nasals",
+      "Taps & Flaps"
+    ],
+    "m̤b̤": [
+      "Nasals",
+      "Plosives"
+    ],
+    "m̤b̤v̤": [
+      "Affricates",
+      "Nasals"
+    ],
+    "m̤pʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "m̥p": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n-d-": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n-d-ʒ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n-d-ʒʷ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n-t-": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n-t-ʃ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n-t-ʃɾ": [
+      "Affricates",
+      "Nasals",
+      "Taps & Flaps"
+    ],
+    "n-t-ʃʰ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n-t-ʃʷ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n-t-ʃʼ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n-ʃ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "n-ʃʷ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "n-ʒ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "n-̤d-̤ʒ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n-̥t-ʃ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "nb": [
+      "Nasals",
+      "Plosives"
+    ],
+    "nd": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ndl": [
+      "Lateral Approximants",
+      "Nasals",
+      "Plosives"
+    ],
+    "ndr": [
+      "Nasals",
+      "Plosives",
+      "Trills"
+    ],
+    "ndz": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ndzʲ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ndzʷ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ndɾ": [
+      "Nasals",
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ndʑ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Plosives"
+    ],
+    "ndʲ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ndʷ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ndː": [
+      "Nasals",
+      "Plosives"
+    ],
+    "nd̪": [
+      "Nasals",
+      "Plosives"
+    ],
+    "nd͇z͇": [
+      "Affricates",
+      "Nasals"
+    ],
+    "nl": [
+      "Lateral Approximants",
+      "Nasals"
+    ],
+    "nr": [
+      "Nasals",
+      "Trills"
+    ],
+    "ns": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "nsɾ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Taps & Flaps"
+    ],
+    "nsʰ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "nsʷ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "nt": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ntlʼ": [
+      "Lateral Approximants",
+      "Nasals",
+      "Plosives"
+    ],
+    "nts": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ntsʰ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ntsʼ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ntɕ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Plosives"
+    ],
+    "ntɕʰ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Plosives"
+    ],
+    "ntɾ": [
+      "Nasals",
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ntʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ntʷ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ntʼ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "nt͇s͇ʰ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "nz": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "nzɾ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Taps & Flaps"
+    ],
+    "nzʷ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "nð": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "nɗ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "nɟ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "nɡ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "nɡɾ": [
+      "Nasals",
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "nɬ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "nɮ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "nɾ": [
+      "Nasals",
+      "Taps & Flaps"
+    ],
+    "n̤d̤": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n̤d̤z̤": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n̤d̤ɮ̤": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Plosives"
+    ],
+    "n̤s": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "n̤tʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n̤ɡ̤": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n̥ʃ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "n̪d̪": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n̪d̪z̪": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n̪d̪|nd": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n̪d̪ʲ|ndʲ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n̪d̪ʷ|ndʷ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n̪s̪|ns": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "n̪t̪": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n̪t̪s̪": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n̪t̪s̪|nts": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n̪t̪s̪ʰ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "n̪t̪|nt": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n̪t̪ʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "n̪z̪": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "n̪z̪|nz": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "nθ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "pm": [
+      "Nasals",
+      "Plosives"
+    ],
+    "pɾ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "qm": [
+      "Nasals",
+      "Plosives"
+    ],
+    "qn": [
+      "Nasals",
+      "Plosives"
+    ],
+    "sɾ": [
+      "Fricatives",
+      "Taps & Flaps"
+    ],
+    "t-n-": [
+      "Nasals",
+      "Plosives"
+    ],
+    "tl": [
+      "Lateral Approximants",
+      "Plosives"
+    ],
+    "tlʱ": [
+      "Lateral Approximants",
+      "Plosives"
+    ],
+    "tn": [
+      "Nasals",
+      "Plosives"
+    ],
+    "tr": [
+      "Plosives",
+      "Trills"
+    ],
+    "tɾ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "t̪n̪": [
+      "Nasals",
+      "Plosives"
+    ],
+    "t̪ʙ": [
+      "Plosives",
+      "Trills"
+    ],
+    "vɾ": [
+      "Fricatives",
+      "Taps & Flaps"
+    ],
+    "xʀ̥": [
+      "Fricatives",
+      "Trills"
+    ],
+    "zɾ": [
+      "Fricatives",
+      "Taps & Flaps"
+    ],
+    "ŋb": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋhʲ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ŋhʷ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ŋhᶣ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ŋk": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋkx": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ŋkɾ": [
+      "Nasals",
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ŋkʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋkʲ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋkʷ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋkʼ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋmkp": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋmkpɾ": [
+      "Nasals",
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ŋmɡb": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋxʰ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ŋǂ͓ˡ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ŋɡ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋɡ+": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋɡmb": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋɡʲ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋɡʷ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋɡː": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋɣ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ŋɣʲ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ŋɣʷ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ŋɣᶣ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ŋɾ": [
+      "Nasals",
+      "Taps & Flaps"
+    ],
+    "ŋ̤kʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋ̤ǂ͓ˡ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ŋ̤ɡǃ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋ̤ɡ̤": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ŋ̥ǀ͓xˀ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ŋ̥ǂxˀ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ŋ̥ǂ͓ˡxˀ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ŋ̥ǂ͓ˡʰ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ŋ̥ǂ͓ˡˀ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ȶȵ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɖr": [
+      "Plosives",
+      "Trills"
+    ],
+    "ɖr-": [
+      "Plosives",
+      "Trills"
+    ],
+    "ɖɳ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɖɽ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ɖⁿ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɡm": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɡǁkʰ": [
+      "Plosives"
+    ],
+    "ɡǂ͓ˡ": [
+      "Affricates"
+    ],
+    "ɡɾ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ɡˡ": [
+      "Plosives"
+    ],
+    "ɡ̤ǂ͓ˡ": [
+      "Affricates"
+    ],
+    "ɡⁿ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɢǁqʰ": [
+      "Plosives"
+    ],
+    "ɬl": [
+      "Fricatives",
+      "Lateral Approximants"
+    ],
+    "ɬʟ͓̥": [
+      "Fricatives",
+      "Lateral Approximants"
+    ],
+    "ɱf": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɱfɾ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Taps & Flaps"
+    ],
+    "ɱfʲ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɱfʷ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɱv": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɱvɾ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Taps & Flaps"
+    ],
+    "ɱvʲ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɱð": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɱ̤f": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɱ̥f": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɲ+dʑ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Plosives"
+    ],
+    "ɲ+tɕʰ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Plosives"
+    ],
+    "ɲ+ʝ+": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɲc": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɲcʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɲcʲ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɲcʼ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɲj": [
+      "Nasals",
+      "Semivowels"
+    ],
+    "ɲɟ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɲɟʑ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals",
+      "Plosives"
+    ],
+    "ɲɟʝ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ɲʄ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɲʒ": [
+      "Affricates",
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɲ̤cʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɲ̤ɟ̤": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɳɖ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɳɖr": [
+      "Nasals",
+      "Plosives",
+      "Trills"
+    ],
+    "ɳɖr-": [
+      "Nasals",
+      "Plosives",
+      "Trills"
+    ],
+    "ɳɖɽ": [
+      "Nasals",
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ɳɖʐ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ɳɡ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɳɡʷ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɳʈ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɳʈr-̥": [
+      "Nasals",
+      "Plosives",
+      "Trills"
+    ],
+    "ɳʈɽ̥ʰ": [
+      "Nasals",
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ɳʈʂ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ɳʈʂʰ": [
+      "Affricates",
+      "Nasals"
+    ],
+    "ɳʈʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɴq": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɴqʰ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ɴɢ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ʀʁ": [
+      "Fricatives",
+      "Trills"
+    ],
+    "ʈr": [
+      "Plosives",
+      "Trills"
+    ],
+    "ʈr-̥": [
+      "Plosives",
+      "Trills"
+    ],
+    "ʈɳ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ʈɹ-̥": [
+      "Plosives",
+      "Semivowels"
+    ],
+    "ʈɽ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ʈɽ̥": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ʈɽ̥ʰ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
+    "ʍw": [
+      "Semivowels"
+    ],
+    "ʔj": [
+      "Plosives",
+      "Semivowels"
+    ],
+    "ʔw": [
+      "Plosives",
+      "Semivowels"
+    ],
+    "ʔŋǀ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ʔŋǁ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ʔŋǂ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ʔŋǃ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ʔŋʘ": [
+      "Nasals",
+      "Plosives"
+    ],
+    "ʔɾ": [
+      "Plosives",
+      "Taps & Flaps"
+    ]
+  }
+}
