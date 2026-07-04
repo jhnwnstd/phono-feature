@@ -56,7 +56,11 @@ class SegmentGridWidget(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._groups: dict[str, list[str]] = {}
-        self._buttons: dict[str, SegmentButton] = {}
+        # Keyed by PLACEMENT ``(manner, seg)``: a multi-membership
+        # consonant renders in several manner rows and each needs its own
+        # widget (a Qt widget has one parent), so the same glyph maps to a
+        # distinct button per row.
+        self._buttons: dict[tuple[str, str], SegmentButton] = {}
         self._headers: list[QLabel] = []
         # Last value ``set_headers_active`` styled the headers with,
         # cached so mode toggles short-circuit. Reset whenever fresh
@@ -102,7 +106,7 @@ class SegmentGridWidget(QWidget):
     def set_groups(
         self,
         groups: dict[str, list[str]],
-        buttons: dict[str, SegmentButton],
+        buttons: dict[tuple[str, str], SegmentButton],
     ) -> None:
         """Replace all content.
 
@@ -311,7 +315,7 @@ class SegmentGridWidget(QWidget):
         # one-button orphan rows. Header span is intentionally
         # ``n_cols`` (not the per-group count) so the manner-class
         # titles line up along the same left edge.
-        for main_idx, ((_manner, segs), g_cols) in enumerate(
+        for main_idx, ((manner, segs), g_cols) in enumerate(
             zip(
                 groups_items[:main_count],
                 group_cols_main[:main_count],
@@ -323,7 +327,7 @@ class SegmentGridWidget(QWidget):
             hdr.show()
             grid_row += 1
             for col_i, seg in enumerate(segs):
-                btn = self._buttons[seg]
+                btn = self._buttons[(manner, seg)]
                 button_row = grid_row + col_i // g_cols
                 button_col = col_i % g_cols
                 self._grid.addWidget(btn, button_row, button_col)
@@ -358,7 +362,7 @@ class SegmentGridWidget(QWidget):
             gap_cols = n_spill_cols - 1
             slot_cols = max(1, (n_cols - gap_cols) // n_spill_cols)
             column_next_row = [grid_row] * n_spill_cols
-            for spill_idx, (_manner, segs) in enumerate(spill):
+            for spill_idx, (manner, segs) in enumerate(spill):
                 col_idx = (
                     col_assignment[spill_idx]
                     if spill_idx < len(col_assignment)
@@ -372,7 +376,7 @@ class SegmentGridWidget(QWidget):
                 hdr.show()
                 group_cols = best_segment_n_cols(len(segs), slot_cols)
                 for seg_i, seg in enumerate(segs):
-                    btn = self._buttons[seg]
+                    btn = self._buttons[(manner, seg)]
                     br = slot_row + 1 + seg_i // max(group_cols, 1)
                     bc = col_start + (seg_i % max(group_cols, 1))
                     self._grid.addWidget(btn, br, bc)

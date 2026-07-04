@@ -14,8 +14,14 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QContextMenuEvent, QFont
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import (
+    QColor,
+    QContextMenuEvent,
+    QFont,
+    QPainter,
+    QPaintEvent,
+)
 from PyQt6.QtWidgets import QPushButton, QSizePolicy, QWidget
 
 from phonology_features.gui._themed_style_cache import styles_for_active_theme
@@ -74,6 +80,12 @@ class SegmentButton(QPushButton):
         # faint seam of the shared fill (the "smudge"). Reset alongside
         # ``_in_capsule`` when the pooled button returns to the grid.
         self._capsule_corner: str = ""
+        # Number of manner classes this glyph renders in (a display count
+        # from the producer's grouping): >1 marks a multi-membership
+        # consonant so ``paintEvent`` can annotate that it is ONE segment
+        # reaching several classes, not duplicates. NEVER fed back into
+        # membership; the engine decides which classes a glyph reaches.
+        self._multiclass_count: int = 1
         self.setCheckable(True)
         # No tooltip. The button label already renders the segment,
         # and a hover bubble repeating ``/seg/`` is redundancy that
@@ -216,7 +228,52 @@ class SegmentButton(QPushButton):
         if self._state == new_state:
             return
         self._state = new_state
+        # A state change repaints via the QSS refresh, which does not
+        # redraw the corner cue on its own; force it when a count is shown
+        # so the cue's colour tracks the new state.
+        if self._multiclass_count > 1:
+            self.update()
         self._refresh_css()
+
+    def set_multiclass_count(self, count: int) -> None:
+        """Record how many manner classes this glyph reaches (>1 draws the
+        corner cue). A DISPLAY count from the producer's grouping; it never
+        feeds back into membership."""
+        count = max(1, int(count))
+        if count == self._multiclass_count:
+            return
+        self._multiclass_count = count
+        self.update()
+
+    def paintEvent(self, a0: QPaintEvent | None) -> None:
+        """Paint the button, then a small corner count when the glyph
+        reaches several manner classes (the multi-membership cue). Drawn
+        over the QSS-styled button, so its colour is matched to the state's
+        text colour to stay legible; muted via alpha so it reads as a quiet
+        annotation, not a second glyph. Not a tooltip (removed on both
+        platforms)."""
+        super().paintEvent(a0)
+        if self._multiclass_count <= 1:
+            return
+        painter = QPainter(self)
+        font = QFont(self.font())
+        font.setPointSizeF(6.0)
+        font.setBold(True)
+        painter.setFont(font)
+        # selected / matched paint white text on the accent fill; the rest
+        # use the standard text colour (mirrors the QSS ``color``).
+        if self._state in (SegmentState.SELECTED, SegmentState.MATCHED):
+            color = QColor("#FFFFFF")
+        else:
+            color = QColor(C["text"])
+        color.setAlphaF(0.6)
+        painter.setPen(color)
+        painter.drawText(
+            self.rect().adjusted(0, 1, -2, 0),
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop,
+            str(self._multiclass_count),
+        )
+        painter.end()
 
     def _capsule_style(self, state: SegmentState) -> str:
         """QSS for this button as a cell INSIDE a vowel pair capsule.

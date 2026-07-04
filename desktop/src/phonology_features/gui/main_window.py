@@ -6,6 +6,7 @@ PyQt6 GUI for the Segment & Feature Engine.
 from __future__ import annotations
 
 import os
+from collections import defaultdict
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, cast
@@ -179,11 +180,16 @@ class MainWindow(QMainWindow):
         # ``saved_feat_state``. Reach through ``self._mode_ctrl`` at
         # call sites; do not add forwarding properties here.
         self._mode_ctrl = ModeController(self)
-        # segment -> SegmentButton for the active inventory
-        self._seg_buttons: dict[str, SegmentButton] = {}
-        # Cross-inventory pool keyed by segment symbol. Reused across
-        # loads since /p t k m n s/ etc. are nearly universal; avoids
-        # the QPushButton + setStyleSheet cost on every swap.
+        # glyph -> its SegmentButton INSTANCES for the active inventory. A
+        # multi-membership consonant renders in several manner rows, so a
+        # glyph maps to a LIST; selection / analysis state fans out to
+        # every instance.
+        self._seg_buttons: dict[str, list[SegmentButton]] = {}
+        # Cross-inventory pool keyed by PLACEMENT (see ``_pkey``: area +
+        # manner + glyph), not glyph, so a glyph rendered in two manner
+        # rows owns two widgets (Qt gives a widget one parent). Reused
+        # across loads since /p t k m n s/ etc. are nearly universal;
+        # avoids the QPushButton + setStyleSheet cost on every swap.
         self._seg_button_pool: dict[str, SegmentButton] = {}
         self._feat_rows: dict[str, FeatureRow] = {}  # active subset
         # Watcher, MRU, dropdown population, and delete-fallback all
@@ -1167,19 +1173,39 @@ class MainWindow(QMainWindow):
         # Vowel-like catch-all renders in its own strip under the chart,
         # not in the consonant grid.
         vocoid_segs = groups.pop(VOCOID_GROUP_NAME, [])
-        consonant_buttons: dict[str, SegmentButton] = {}
-        for segs in groups.values():
-            for seg in segs:
-                consonant_buttons[seg] = self._get_or_create_seg_button(seg)
-        self.seg_grid_widget.set_groups(groups, consonant_buttons)
-        vocoid_buttons: dict[str, SegmentButton] = {
-            seg: self._get_or_create_seg_button(seg) for seg in vocoid_segs
+        # glyph -> instances, fanned to every placement below. Rebuilt
+        # each swap (the pool caches the widgets across swaps).
+        seg_buttons: dict[str, list[SegmentButton]] = defaultdict(list)
+        # Consonant grid: a DISTINCT button per (manner, seg) placement so
+        # a multi-membership consonant occupies every manner row it
+        # reaches. The multiclass count (rows the glyph spans) drives the
+        # display cue; it is a DISPLAY count, read from the producer's
+        # grouping, never fed back into membership.
+        multiclass = {
+            seg: sum(seg in segs for segs in groups.values())
+            for segs in groups.values()
+            for seg in segs
         }
+        consonant_buttons: dict[tuple[str, str], SegmentButton] = {}
+        for manner, segs in groups.items():
+            for seg in segs:
+                btn = self._placement_button(self._pkey("c", seg, manner), seg)
+                btn.set_multiclass_count(multiclass.get(seg, 1))
+                consonant_buttons[(manner, seg)] = btn
+                seg_buttons[seg].append(btn)
+        self.seg_grid_widget.set_groups(groups, consonant_buttons)
+        vocoid_buttons: dict[str, SegmentButton] = {}
+        for seg in vocoid_segs:
+            btn = self._placement_button(self._pkey("x", seg), seg)
+            vocoid_buttons[seg] = btn
+            seg_buttons[seg].append(btn)
         self._populate_vocoid_strip(vocoid_buttons)
         vowel_buttons: dict[str, SegmentButton] = {}
         if vowel_segs:
             for seg in vowel_segs:
-                vowel_buttons[seg] = self._get_or_create_seg_button(seg)
+                btn = self._placement_button(self._pkey("v", seg), seg)
+                vowel_buttons[seg] = btn
+                seg_buttons[seg].append(btn)
             if norm_feats is not None:
                 # PHOIBLE-loaded inventories stash their diphthong
                 # secondary bundles in metadata so the chart can
@@ -1201,21 +1227,22 @@ class MainWindow(QMainWindow):
         else:
             self.vowel_chart_widget.clear()
             self.vowel_chart_widget.hide()
-        self._seg_buttons = {
-            **consonant_buttons,
-            **vowel_buttons,
-            **vocoid_buttons,
-        }
+        self._seg_buttons = dict(seg_buttons)
         # Evict pool entries the new inventory does not use: detach AND
         # drop them so the pool cannot grow without bound. Without the
-        # drop, every segment ever loaded stays alive as a hidden orphan,
-        # so a long PHOIBLE-browsing session (thousands of distinct
-        # segments) leaks memory. Shared segments were already reused
-        # above, so only genuinely unused leftovers are pruned.
-        # ``hide()`` before ``setParent(None)`` so a button never briefly
-        # becomes a top-level window; ``deleteLater`` frees it once the
-        # current event cycle unwinds.
-        active = set(self._seg_buttons)
+        # drop, every placement ever rendered stays alive as a hidden
+        # orphan, so a long PHOIBLE-browsing session (thousands of distinct
+        # segments) leaks memory. Shared placements were already reused
+        # above, so only genuinely unused leftovers are pruned. Keyed by
+        # PLACEMENT (see ``_pkey``) so a glyph's other rows are not evicted
+        # when one row is. ``hide()`` before ``setParent(None)`` so a
+        # button never briefly becomes a top-level window; ``deleteLater``
+        # frees it once the current event cycle unwinds.
+        active = (
+            {self._pkey("c", s, m) for m, segs in groups.items() for s in segs}
+            | {self._pkey("x", s) for s in vocoid_segs}
+            | {self._pkey("v", s) for s in vowel_segs}
+        )
         for sym in [s for s in self._seg_button_pool if s not in active]:
             btn = self._seg_button_pool.pop(sym)
             btn.hide()
@@ -1295,8 +1322,7 @@ class MainWindow(QMainWindow):
             # toggle in between (it skips orphaned pool entries), so
             # refresh their palette before they reappear.
             for seg in self.engine.grouped_segments.get(label, []):
-                btn = self._seg_button_pool.get(seg)
-                if btn is not None:
+                for btn in self._seg_buttons.get(seg, []):
                     btn.apply_theme()
         else:
             self._hidden_segment_classes.add(label)
@@ -1304,20 +1330,29 @@ class MainWindow(QMainWindow):
         self._apply_class_visibility()
 
     def _deselect_hidden_class(self, label: str) -> None:
-        """Drop a newly-hidden class' segments from the selection and
-        reset their buttons. Without this a selected segment in a hidden
-        class stays in ``_selected_segments`` (still driving the
-        analysis) with no visible button to deselect. The caller
-        (``_set_class_visible`` -> ``_apply_class_visibility``) re-runs
-        the analysis against the pruned selection, so no refresh here.
+        """Drop from the selection the segments a newly-hidden class
+        ORPHANS, and reset their buttons. Without this a selected segment
+        with no visible button stays in ``_selected_segments`` (still
+        driving the analysis) with nothing to deselect. Under the MULTISET
+        a segment can render in several classes, so hiding one class must
+        NOT deselect a segment still shown in another visible class; only
+        a segment left with no visible placement is dropped. The caller
+        re-runs the analysis against the pruned selection, so no refresh
+        here.
         """
         if self.engine is None:
             return
-        for seg in self.engine.grouped_segments.get(label, []):
+        groups = self.engine.grouped_segments
+        still_visible: set[str] = set()
+        for name, segs in groups.items():
+            if name not in self._hidden_segment_classes:
+                still_visible.update(segs)
+        for seg in groups.get(label, []):
+            if seg in still_visible:
+                continue
             if seg in self._selected_segments:
                 self._selected_segments.remove(seg)
-            btn = self._seg_button_pool.get(seg)
-            if btn is not None:
+            for btn in self._seg_buttons.get(seg, []):
                 btn.setChecked(False)
                 btn.set_state(SegmentState.DEFAULT)
 
@@ -1341,10 +1376,10 @@ class MainWindow(QMainWindow):
         # Vocoids render in their own strip, never in the consonant grid.
         groups.pop(VOCOID_GROUP_NAME, None)
         consonant_buttons = {
-            seg: self._seg_button_pool[seg]
-            for segs in groups.values()
+            (manner, seg): self._seg_button_pool[self._pkey("c", seg, manner)]
+            for manner, segs in groups.items()
             for seg in segs
-            if seg in self._seg_button_pool
+            if self._pkey("c", seg, manner) in self._seg_button_pool
         }
         self.seg_grid_widget.set_groups(groups, consonant_buttons)
         has_vowels = bool(self.engine.grouped_segments.get(VOWEL_GROUP_NAME))
@@ -1359,11 +1394,11 @@ class MainWindow(QMainWindow):
         else:
             self._populate_vocoid_strip(
                 {
-                    seg: self._seg_button_pool[seg]
+                    seg: self._seg_button_pool[self._pkey("x", seg)]
                     for seg in self.engine.grouped_segments.get(
                         VOCOID_GROUP_NAME, []
                     )
-                    if seg in self._seg_button_pool
+                    if self._pkey("x", seg) in self._seg_button_pool
                 }
             )
         # A vowel-chart show/hide changes the consonant grid's width;
@@ -1377,12 +1412,23 @@ class MainWindow(QMainWindow):
         # state until the next unrelated interaction.
         self._mode_ctrl.refresh_analysis()
 
-    def _get_or_create_seg_button(self, seg: str) -> SegmentButton:
-        """Return a SegmentButton for ``seg``, creating it on first use.
-        Reused buttons get reset to DEFAULT since the previous inventory
-        may have left them checked or styled.
+    @staticmethod
+    def _pkey(area: str, seg: str, manner: str = "") -> str:
+        """Pool key for a PLACEMENT (a glyph in one display slot). A
+        multi-membership consonant renders in several manner rows and a Qt
+        widget has ONE parent, so each placement needs its own instance;
+        the pool is keyed by placement, not glyph. ``\\x00`` never appears
+        in an IPA glyph or a manner label, so the parts can't collide."""
+        return f"{area}\x00{manner}\x00{seg}"
+
+    def _placement_button(self, pkey: str, seg: str) -> SegmentButton:
+        """Return the SegmentButton for a placement (see :meth:`_pkey`),
+        creating it on first use. Reused buttons reset to DEFAULT since the
+        previous inventory may have left them checked or styled. Selection
+        / analysis state is fanned out to every placement of a glyph via
+        ``self._seg_buttons`` (glyph -> instances).
         """
-        btn = self._seg_button_pool.get(seg)
+        btn = self._seg_button_pool.get(pkey)
         if btn is None:
             btn = SegmentButton(seg)
             btn.pressed.connect(self._on_segment_pressed)
@@ -1395,7 +1441,7 @@ class MainWindow(QMainWindow):
             # ``aria-label="/x/"`` and desktop's
             # ``setAccessibleName("/x/")`` stay in sync.
             btn.setAccessibleName(format_segment_accessible_label(seg))
-            self._seg_button_pool[seg] = btn
+            self._seg_button_pool[pkey] = btn
             return btn
         # Refresh theme on pool reuse defensively: a button reused from
         # the previously loaded inventory should already carry the
@@ -1735,16 +1781,21 @@ class MainWindow(QMainWindow):
 
     # State changes are immediate; analysis is debounced via _debounce.
     def _on_segment_clicked(self, segment: str, checked: bool) -> None:
+        # Selection is keyed by the GLYPH; the display fans out to every
+        # placement (a multi-membership consonant has one button per
+        # manner row) so its rows never disagree.
+        instances = self._seg_buttons.get(segment, [])
         if self._mode_ctrl.mode != Mode.SEG_TO_FEAT:
             # Real mouse clicks switch mode via _on_segment_pressed
             # before the clicked signal fires; this branch protects
             # programmatic / test callers from mutating state.
-            self._seg_buttons[segment].setChecked(False)
+            for btn in instances:
+                btn.setChecked(False)
             return
-        btn = self._seg_buttons[segment]
-        btn.set_state(
-            SegmentState.SELECTED if checked else SegmentState.DEFAULT
-        )
+        target = SegmentState.SELECTED if checked else SegmentState.DEFAULT
+        for btn in instances:
+            btn.setChecked(checked)
+            btn.set_state(target)
         self._session.toggle_segment(segment, checked)
         self._debounce.start()
 
@@ -1904,8 +1955,10 @@ class MainWindow(QMainWindow):
             )
         seg_states = summary["segment_states"]
         seg_default = summary["default_segment_state"]
-        for seg, btn in self._seg_buttons.items():
-            btn.set_state(seg_states.get(seg, seg_default))
+        for seg, btns in self._seg_buttons.items():
+            state = seg_states.get(seg, seg_default)
+            for btn in btns:
+                btn.set_state(state)
         self._apply_analysis_tabs(summary["analysis_tabs"])
 
     def _update_feat_to_seg(self) -> None:
@@ -1923,8 +1976,10 @@ class MainWindow(QMainWindow):
         )
         seg_states = summary["segment_states"]
         seg_default = summary["default_segment_state"]
-        for seg, btn in self._seg_buttons.items():
-            btn.set_state(seg_states.get(seg, seg_default))
+        for seg, btns in self._seg_buttons.items():
+            state = seg_states.get(seg, seg_default)
+            for btn in btns:
+                btn.set_state(state)
         self._apply_analysis_tabs(summary["analysis_tabs"])
 
     def _apply_analysis_tabs(self, tabs: AnalysisTabsPayload) -> None:
@@ -1981,10 +2036,11 @@ class MainWindow(QMainWindow):
         produces the default placeholder text.
         """
         self._session.reset_selection()
-        for btn in self._seg_buttons.values():
-            if btn._state != SegmentState.DEFAULT:
-                btn.set_state(SegmentState.DEFAULT)
-                btn.setChecked(False)
+        for btns in self._seg_buttons.values():
+            for btn in btns:
+                if btn._state != SegmentState.DEFAULT:
+                    btn.set_state(SegmentState.DEFAULT)
+                    btn.setChecked(False)
         for row in self._feat_rows.values():
             row.reset()
         if not silent:

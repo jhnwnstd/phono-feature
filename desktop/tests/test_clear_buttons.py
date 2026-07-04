@@ -20,11 +20,18 @@ def _selected_feat_rows(window) -> set[str]:
 
 
 def _non_default_seg_buttons(window) -> int:
+    # _seg_buttons maps a glyph to its placement INSTANCES (a multi-
+    # membership consonant renders in several manner rows), so flatten.
     return sum(
         1
-        for b in window._seg_buttons.values()
+        for btns in window._seg_buttons.values()
+        for b in btns
         if b._state != SegmentState.DEFAULT
     )
+
+
+def _total_seg_buttons(window) -> int:
+    return sum(len(btns) for btns in window._seg_buttons.values())
 
 
 def _feat_rows_with_styling(window) -> int:
@@ -61,7 +68,7 @@ def test_clear_features_in_feat_mode_resets_everything(window):
     window._feat_rows["Continuant"]._on_click("-")
     window._run_pending_update()
     # Sanity: every seg button got matched/unmatched styling
-    assert _non_default_seg_buttons(window) == len(window._seg_buttons)
+    assert _non_default_seg_buttons(window) == _total_seg_buttons(window)
     window._clear_features()
     assert window._selected_features == {}
     assert _selected_feat_rows(window) == set()

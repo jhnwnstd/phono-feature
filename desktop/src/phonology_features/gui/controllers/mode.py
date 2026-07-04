@@ -219,19 +219,26 @@ class ModeController:
             # We still need to drop the checked state on previously-
             # selected buttons so the underlying QPushButton model
             # is consistent.
-            for btn in self._w._seg_buttons.values():
-                if btn.isChecked():
-                    btn.setChecked(False)
+            for btns in self._w._seg_buttons.values():
+                for btn in btns:
+                    if btn.isChecked():
+                        btn.setChecked(False)
             return
-        for seg, btn in self._w._seg_buttons.items():
+        # A glyph maps to its placement INSTANCES (a multi-membership
+        # consonant renders in several manner rows); fan the state out to
+        # every instance so its rows never disagree.
+        for seg, btns in self._w._seg_buttons.items():
             if seg in restore_segs:
                 self._w._selected_segments.append(seg)
-                if btn._state != SegmentState.SELECTED:
-                    btn.set_state(SegmentState.SELECTED)
-                    btn.setChecked(True)
-            elif btn._state != SegmentState.DEFAULT:
-                btn.set_state(SegmentState.DEFAULT)
-                btn.setChecked(False)
+                for btn in btns:
+                    if btn._state != SegmentState.SELECTED:
+                        btn.set_state(SegmentState.SELECTED)
+                        btn.setChecked(True)
+            else:
+                for btn in btns:
+                    if btn._state != SegmentState.DEFAULT:
+                        btn.set_state(SegmentState.DEFAULT)
+                        btn.setChecked(False)
 
     def restore_feature_selection(
         self, restore_feats: dict[str, str] | None = None

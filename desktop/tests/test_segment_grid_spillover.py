@@ -24,7 +24,9 @@ def _make_groups(count: int, segs_per: int = 3) -> tuple[dict, dict]:
         segs = [f"s{i}_{j}" for j in range(segs_per)]
         groups[manner] = segs
         for s in segs:
-            buttons[s] = SegmentButton(s)
+            # set_groups is keyed by PLACEMENT (manner, seg) since a
+            # multi-membership consonant renders once per manner row.
+            buttons[(manner, s)] = SegmentButton(s)
     return groups, buttons
 
 

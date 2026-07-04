@@ -66,12 +66,12 @@ def test_show_class_repaints_analysis_state_in_feat_mode(window):
     window._run_pending_update()
     label = _first_consonant_class(window)
     seg = window.engine.grouped_segments[label][0]
-    before = window._seg_buttons[seg]._state
+    before = window._seg_buttons[seg][0]._state
     assert before != SegmentState.DEFAULT  # the query painted it
     window._set_class_visible(label, False)
     window._set_class_visible(label, True)
     # No further interaction between hide+show and this assertion.
-    assert window._seg_buttons[seg]._state == before
+    assert window._seg_buttons[seg][0]._state == before
 
 
 def test_hide_class_prunes_selected_segment(window):
@@ -114,7 +114,9 @@ def test_diphthong_chip_is_pooled_button(window):
     chips = _chips(window)
     assert chips, "German has diphthongs; expected chips"
     for chip in chips:
-        assert chip is window._seg_buttons[chip.text()]
+        # _seg_buttons maps a glyph to its placement instances; the chip
+        # is one of them (the single source of truth for its selection).
+        assert chip in window._seg_buttons[chip.text()]
 
 
 def test_diphthong_chip_resets_on_clear(window):

@@ -47,13 +47,16 @@ def test_segment_button_pool_stays_bounded(window, qapp) -> None:
     for name in names:
         window._load_path(_bundled(name))
         qapp.processEvents()
-        pool = set(window._seg_button_pool)
-        active = set(window._seg_buttons)
+        # Compare button OBJECTS (the pool is placement-keyed, the active
+        # map is glyph -> instances, so key sets don't align): every
+        # pooled widget must be a live placement of the current inventory.
+        pool = set(window._seg_button_pool.values())
+        active = {btn for btns in window._seg_buttons.values() for btn in btns}
         leaked = pool - active
         assert not leaked, (
             f"after loading {name!r} the pool retained {len(leaked)} "
-            f"button(s) not in the current inventory ({sorted(leaked)[:8]}"
-            "...): orphan accumulation reintroduces the memory leak"
+            "button(s) not in the current inventory: orphan accumulation "
+            "reintroduces the memory leak"
         )
         # Every active button is pooled (the pool is the creation cache).
         assert active <= pool
