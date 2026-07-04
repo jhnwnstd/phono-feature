@@ -64,6 +64,15 @@ from phonology_shared.data.limits import (
 if TYPE_CHECKING:
     from phonology_shared.data.inventory import Inventory
 
+#: Value-string -> :py:class:`FeatureValue` member. Bundle validation
+#: coerces one cell per (segment, feature), tens of thousands on a dense
+#: corpus load, and ``FeatureValue(raw)`` pays the full ``EnumType``
+#: lookup each time. A plain dict ``get`` on the three valid strings is
+#: the same coercion without the enum machinery; a miss (``None``) is the
+#: invalid-value case the caller already reports. Derived from the enum
+#: so a new member needs no edit here (mirrors ``VALID_VALUES``).
+_VALUE_BY_STR: dict[str, FeatureValue] = {v.value: v for v in FeatureValue}
+
 
 @dataclass(frozen=True, slots=True)
 class _RawInventory:
@@ -295,6 +304,7 @@ def _canonicalize_segment_key(
 
 def _resolve_bundle_feature_key(
     raw_feature_name: str,
+    canonical_feature: str,
     canonical_seg: str,
     feature_table: _FeatureTable,
     ctx: _ValidationContext,
@@ -303,6 +313,12 @@ def _resolve_bundle_feature_key(
     feature name. Returns ``None`` (with an issue recorded) when the
     key does not match any declared feature, even after alias
     folding.
+
+    ``canonical_feature`` is the caller's already-computed
+    :py:func:`_canonicalize_name` of ``raw_feature_name`` (the caller
+    needs it for its own non-empty guard), passed in so the NFC+strip
+    is not repeated for every one of the tens of thousands of cells on
+    a dense corpus load.
 
     Resolution order: (1) direct canonical match against the
     declared name (NFC+strip); (2) alias-aware match via
@@ -313,7 +329,6 @@ def _resolve_bundle_feature_key(
     only ``Rhotic`` is declared, the bundle key folds onto ``Rhotic``
     so engine code and on-disk storage stay consistent.
     """
-    canonical_feature = _canonicalize_name(raw_feature_name)
     if canonical_feature in feature_table.declared:
         return canonical_feature
     normalized = normalize_feature_key(raw_feature_name)
@@ -395,7 +410,8 @@ def _validate_segment_bundle(
             )
             continue
 
-        if not _canonicalize_name(raw_feature_name):
+        canonical_feature_name = _canonicalize_name(raw_feature_name)
+        if not canonical_feature_name:
             ctx.error(
                 _IssueCodes.BUNDLE_FEATURE_KEY_EMPTY,
                 key_path,
@@ -405,7 +421,11 @@ def _validate_segment_bundle(
             continue
 
         canonical_feature = _resolve_bundle_feature_key(
-            raw_feature_name, canonical_seg, feature_table, ctx
+            raw_feature_name,
+            canonical_feature_name,
+            canonical_seg,
+            feature_table,
+            ctx,
         )
         if canonical_feature is None:
             continue
@@ -434,9 +454,8 @@ def _validate_segment_bundle(
             )
             continue
 
-        try:
-            typed_value = FeatureValue(raw_feature_value)
-        except ValueError:
+        typed_value = _VALUE_BY_STR.get(raw_feature_value)
+        if typed_value is None:
             ctx.error(
                 _IssueCodes.BUNDLE_VALUE_INVALID,
                 key_path,

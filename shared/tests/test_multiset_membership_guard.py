@@ -1,22 +1,22 @@
-"""Standing guards for the PROVISIONAL 'Contour Consonants' display tag.
+"""Standing guards for the multiset consonant membership.
 
-The tag is a presentation-only, source-display convention (a consonant
-that reaches several manner classes gets named honestly instead of
-labelled by a privileged phase). Two properties must hold until the
-deferred multi-membership pass retires it:
+group_segments is a MULTISET: a consonant that reaches several manner
+classes renders in each, driven by ``reached_classes`` off the tiers,
+never by a privileged phase. A provisional "Contour Consonants" bucket
+briefly stood in while the frontends learned to render multi-membership;
+it is retired now, but two properties it protected still hold and are
+frozen here on its literal label (the symbol is gone; the output property
+is not):
 
-1. The tag must NOT leak into the engine's set-membership relations. The
-   engine answers membership from the tiers; the day someone adds a class
-   query they must not be able to source it from the display artifact.
-   These tests fail the moment a membership/query module references the
-   tag, or the engine's ∃ answers depend on it.
+1. No membership/query answer may emit a display group label. The engine
+   answers from the tiers; a class query must never be sourced from the
+   display grouping. These tests fail the moment a data/theory module
+   hardcodes the label, or the engine's ∃ answers depend on it.
 
-2. The captured ∃-reach fixture (``fixtures/contour_tag_reach.json``) must
-   stay faithful to the live engine: every tagged segment reaches exactly
-   the manner classes recorded for it. That fixture is the ground truth
-   the multi-membership pass validates against (each tagged glyph should
-   render in exactly those classes once the partition becomes a multiset),
-   so it is spot-checked here against a live sample.
+2. The captured membership fixture (``fixtures/contour_tag_reach.json``)
+   must stay faithful to the live engine over the whole PHOIBLE corpus:
+   every multi-membership glyph renders in exactly the classes recorded
+   for it. That fixture is the multiset's regression ground truth.
 """
 
 from __future__ import annotations
@@ -27,12 +27,15 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.chart.consonants import (
-    CONTOUR_GROUP_NAME,
-    DISPLAY_ORDER,
-)
+from phonology_shared.chart.consonants import DISPLAY_ORDER
 from phonology_shared.editor.phoible_provider import PhoibleProvider
 from phonology_shared.theory.feature_engine import FeatureEngine
+
+# The retired provisional tag. Its guarantees outlive it: no query-
+# layer module may hardcode this display label, and no membership
+# answer may emit it. Frozen on the literal (not a symbol) so a
+# future module that reinvents the string still fails the check.
+_RETIRED_TAG = "Contour Consonants"
 
 # The committed ∃-reach helper lives beside the fixture (kept out of
 # pytest collection by its non-test name); reuse its exact reach logic so
@@ -69,10 +72,10 @@ def test_query_layer_never_hardcodes_the_display_tag() -> None:
     offenders = []
     for rel_dir in _QUERY_LAYER_DIRS:
         for py in sorted((_SHARED_SRC / rel_dir).rglob("*.py")):
-            if CONTOUR_GROUP_NAME in py.read_text(encoding="utf-8"):
+            if _RETIRED_TAG in py.read_text(encoding="utf-8"):
                 offenders.append(str(py.relative_to(_SHARED_SRC)))
     assert not offenders, (
-        f"display tag {CONTOUR_GROUP_NAME!r} leaked into the query layer: "
+        f"display tag {_RETIRED_TAG!r} leaked into the query layer: "
         f"{offenders}. A membership answer must come from the tiers, never "
         f"a display group label."
     )
@@ -123,9 +126,9 @@ def test_tag_is_not_a_queryable_feature() -> None:
     a query key, and it is absent from the ± membership caches."""
     eng = _mb_engine()
     with pytest.raises((ValueError, KeyError)):
-        eng.find_segments({CONTOUR_GROUP_NAME: "+"})
-    assert CONTOUR_GROUP_NAME not in eng.plus_segs
-    assert CONTOUR_GROUP_NAME not in eng.minus_segs
+        eng.find_segments({_RETIRED_TAG: "+"})
+    assert _RETIRED_TAG not in eng.plus_segs
+    assert _RETIRED_TAG not in eng.minus_segs
 
 
 def test_multiset_membership_reads_tiers_not_a_group_label() -> None:
@@ -141,14 +144,14 @@ def test_multiset_membership_reads_tiers_not_a_group_label() -> None:
     assert "mb" in eng.find_segments({"Sonorant": "-"})
     for value in ("+", "-"):
         for feat in ("Nasal", "Sonorant", "Continuant"):
-            assert CONTOUR_GROUP_NAME not in eng.find_segments({feat: value})
+            assert _RETIRED_TAG not in eng.find_segments({feat: value})
     # A second query surface (natural-class detection) is likewise
     # tier-sourced: the minimal bundles that pick out {mb} are feature
     # bundles, never the display tag, and are found without it.
     bundles = eng.find_all_minimal_bundles(["mb"])
     for bundle in bundles:
-        assert CONTOUR_GROUP_NAME not in bundle
-        assert CONTOUR_GROUP_NAME not in bundle.values()
+        assert _RETIRED_TAG not in bundle
+        assert _RETIRED_TAG not in bundle.values()
 
 
 # --------------------------------------------------------------------

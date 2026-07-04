@@ -15,7 +15,6 @@ membership relations, which keep answering from the tiers.
 
 from __future__ import annotations
 
-from phonology_shared.chart.consonants import CONTOUR_GROUP_NAME
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.data.tiers import (
     Attrs,
@@ -164,7 +163,9 @@ def test_display_multiset_does_not_leak_into_engine_membership():
     groups = eng.grouped_segments
     assert "mb" in groups.get("Nasals", [])
     assert "mb" in groups.get("Plosives", [])
-    assert CONTOUR_GROUP_NAME not in groups  # provisional tag retired
+    # the provisional "Contour Consonants" tag is retired: multi-
+    # membership replaced it, so no such group survives.
+    assert "Contour Consonants" not in groups
     # ∃ over the tiers: mb reaches +nasal (closure) AND -sonorant (oral
     # release); both queries return it, computed from the tiers, never
     # from the display grouping.

@@ -70,23 +70,13 @@ TONES_GROUP_NAME = "Tones"
 CONTOID_GROUP_NAME = "Contoids"
 VOCOID_GROUP_NAME = "Vocoids"
 
-#: Display group for a CONSONANT that carries a genuine manner contour
-#: (a value SEQUENCE on a phase-forming feature): a prenasalized stop
-#: (``mb``: ``[+nasal]`` closure then ``[-nasal]`` oral release), a
-#: stop-into-sonorant contour (``tr``, ``ʔj``), a prenasalized affricate
-#: (``ndz``). Such a segment reaches SEVERAL manner classes across its
-#: phases (``mb`` is existentially a nasal and existentially an oral
-#: stop, and universally neither), so no single manner label is faithful
-#: to the source and PHOIBLE ships no fine manner category above the
-#: coarse consonant/vowel/tone class. Rather than pick a phase to label
-#: it by (which the set theory does not license), the grouper names the
-#: honest formal fact: the segment carries a manner contour. This is an
-#: explicit SOURCE-DISPLAY convention, PROVISIONAL: a later pass renders
-#: true multi-membership (the segment in every class it reaches) and
-#: retires this bucket. The tag lives ONLY in this presentation layer;
-#: the engine's membership relations answer the quantified questions from
-#: the tiers and never read this label as a manner feature.
-CONTOUR_GROUP_NAME = "Contour Consonants"
+# A consonant that reaches SEVERAL manner classes across its phases (a
+# prenasalized stop ``mb`` is existentially a nasal and an oral stop, and
+# universally neither) now renders in EVERY class it reaches: the multiset
+# in ``group_segments`` puts it in each, driven by ``reached_classes`` off
+# the tiers. It briefly sat in a provisional "Contour Consonants" bucket
+# while the frontends learned to render multi-membership; that placeholder
+# is retired now that both do.
 
 # Broad manner classes for the initial assignment pass. Specs use only
 # universal features so they apply across diverse inventories.
@@ -206,7 +196,6 @@ _FROZEN_GROUPS: set[str] = {"Plosives"}
 # This is what stranded a bare ``/h/`` (tone unspecified) in Tones.
 _GATED_GROUPS: set[str] = {
     "Clicks",
-    CONTOUR_GROUP_NAME,
     VOWEL_GROUP_NAME,
     TONES_GROUP_NAME,
 }
@@ -234,11 +223,6 @@ DISPLAY_ORDER: list[str] = [
     "Central Approximants",
     "Semivowels",
     "Laryngeals",
-    # Consonants carrying a genuine manner contour (prenasalized stops,
-    # stop-into-sonorant contours): a source-display convention for
-    # segments that reach several manner classes, rendered at the end of
-    # the consonant section. PROVISIONAL; see ``CONTOUR_GROUP_NAME``.
-    CONTOUR_GROUP_NAME,
     # Consonant-area catch-all: renders at the end of the consonant
     # section (before vowels) so an unclassifiable contoid stays visible.
     CONTOID_GROUP_NAME,
@@ -1339,7 +1323,7 @@ def _reach_phase_bundles(
 
 
 def _reach_bundle_matches(
-    bundle: dict[str, str], spec: dict[str, str], min_pos: int
+    bundle: Mapping[str, str], spec: dict[str, str], min_pos: int
 ) -> bool:
     """is_member's positive-evidence test on one phase bundle: count spec
     features the bundle states matching, require >= min_pos. The major
@@ -1372,12 +1356,27 @@ def reached_classes(
     tiers only; never a group label or a chosen phase. This is the ONE
     source of truth, shared with the ∃-reach fixture generator.
     """
-    tiers: dict[str, tuple[str, ...]] = {
-        f: (v,) for f, v in norm_bundle.items()
-    }
-    for feat, seq in seg_seqs.items():
-        tiers[feat] = tuple(str(v) for v in seq)
-    phases = _reach_phase_bundles(tiers)
+    phases: Sequence[Mapping[str, str]]
+    if any(len(t) > 1 for t in seg_seqs.values()):
+        tiers: dict[str, tuple[str, ...]] = {
+            f: (v,) for f, v in norm_bundle.items()
+        }
+        for feat, seq in seg_seqs.items():
+            tiers[feat] = tuple(str(v) for v in seq)
+        phases = _reach_phase_bundles(tiers)
+        delrel_plus = "+" in tiers.get("delrel", ())
+    else:
+        # No genuine contour (every tier is a single value; ~96% of
+        # segments, since ``_sequences_by_seg`` hands every segment a
+        # bundle of singletons and only true contours are longer). The
+        # one phase IS the normalized bundle: a singleton sequence value
+        # always equals the normalized value (both read the same raw
+        # cell, and normalization folds only the key, never the value),
+        # so overlaying the singletons onto the norm-derived tiers is a
+        # no-op and the tiers -> _reach_phase_bundles round-trip reduces
+        # to exactly this bundle. Skip both allocations.
+        phases = (norm_bundle,)
+        delrel_plus = norm_bundle.get("delrel", "0") == "+"
     reached: set[str] = set()
     if any(b.get("click") == "+" for b in phases):
         reached.add("Clicks")
@@ -1388,7 +1387,7 @@ def reached_classes(
         and b.get("click") != "+"
         for b in phases
     )
-    if has_closure and "+" in tiers.get("delrel", ()):
+    if has_closure and delrel_plus:
         reached.add("Affricates")
     for name, spec in _REACH_SPECS:
         min_pos = _MIN_POSITIVE.get(name, 1)

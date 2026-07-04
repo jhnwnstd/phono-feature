@@ -20,13 +20,16 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.chart.consonants import CONTOUR_GROUP_NAME
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.editor.phoible_provider import (
     PhoibleProvider,
     materialize_phoible_inventory,
 )
 from phonology_shared.theory.feature_engine import FeatureEngine
+
+# The retired provisional tag: multi-membership replaced it, so no
+# such group may survive in the output.
+_RETIRED_TAG = "Contour Consonants"
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 _FIXTURE = json.loads((_FIXTURES / "contour_tag_reach.json").read_text())
@@ -95,13 +98,13 @@ def test_prenasalized_stop_renders_in_nasals_and_plosives() -> None:
     groups = _mb_engine().grouped_segments
     assert "mb" in groups.get("Nasals", [])
     assert "mb" in groups.get("Plosives", [])
-    assert CONTOUR_GROUP_NAME not in groups
+    assert _RETIRED_TAG not in groups
 
 
 def test_no_contour_tag_group_survives_the_multiset() -> None:
     """END STATE: the provisional tag group is gone; multi-membership
     replaces it everywhere."""
-    assert CONTOUR_GROUP_NAME not in _mb_engine().grouped_segments
+    assert _RETIRED_TAG not in _mb_engine().grouped_segments
 
 
 def test_single_phase_segments_stay_in_exactly_one_class() -> None:
@@ -133,7 +136,7 @@ def test_full_corpus_multiset_membership_equals_fixture_reach() -> None:
     for entry in idx["inventories"][:80]:
         inv = materialize_phoible_inventory(provider, entry["id"])
         groups = FeatureEngine(inv).grouped_segments
-        assert CONTOUR_GROUP_NAME not in groups
+        assert _RETIRED_TAG not in groups
         for glyph in recorded:
             if glyph in inv.segments:
                 assert _members(groups, glyph) == set(recorded[glyph]), glyph
