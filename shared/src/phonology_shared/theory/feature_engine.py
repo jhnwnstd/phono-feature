@@ -463,34 +463,28 @@ class FeatureEngine:
         return group_segments(
             self._inventory.segments,
             normalized=self.normalized_segment_feats,
-            contour_feats=self._contour_feats_by_seg,
+            secondary=self._secondary_feats_by_seg,
         )
 
     @cached_property
-    def _contour_feats_by_seg(self) -> dict[str, frozenset[str]]:
-        """Per-segment set of (normalized) features that contour.
+    def _secondary_feats_by_seg(self) -> dict[str, dict[str, str]]:
+        """Per-segment normalized RELEASE (final-phase) bundle.
 
-        For each multi-phase segment, the feature names whose value
-        takes BOTH ``+`` and ``-`` across its phases. Names are folded
-        with :py:func:`normalize_feature_bundle` so they share the
-        grouper's namespace (lowercase short codes). Single-phase
-        segments contribute nothing. The grouper reads it to classify
-        a ``continuant``-contour obstruent as an affricate without a
-        ``DelRel`` feature; see :py:meth:`Inventory.segment_phases`."""
-        out: dict[str, frozenset[str]] = {}
+        For each contour segment (an affricate or diphthong that
+        :py:meth:`Inventory.segment_phases` returns as two phases), the
+        normalized final phase, folded into the grouper's namespace
+        (lowercase short codes). Single-phase segments contribute
+        nothing. :py:func:`group_segments` unions this with the primary
+        bundle so a feature's value across the whole segment reads as a
+        set, which is how the phase-union affricate rule and the
+        release-phase sub-classification see both the closure and the
+        fricative release; see :py:meth:`Inventory.segment_phases`."""
+        out: dict[str, dict[str, str]] = {}
         for seg in self._inventory.segments:
             phases = self._inventory.segment_phases(seg)
             if len(phases) < 2:
                 continue
-            norm_phases = [normalize_feature_bundle(p) for p in phases]
-            keys = {k for p in norm_phases for k in p}
-            contour = frozenset(
-                f
-                for f in keys
-                if {p.get(f, "0") for p in norm_phases} >= {"+", "-"}
-            )
-            if contour:
-                out[seg] = contour
+            out[seg] = normalize_feature_bundle(phases[-1])
         return out
 
     @cached_property

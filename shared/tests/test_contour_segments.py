@@ -95,78 +95,150 @@ def test_monophthongs_stay_in_exactly_one_class() -> None:
         assert "i" in minus_low and "i" not in plus_low, mode
 
 
-def _affricate_inv(*, with_delrel: bool) -> Inventory:
-    """A 3-obstruent inventory: a plain stop ``t``, a fricative ``s``,
-    and ``ts`` whose ``continuant`` contours ``- -> +`` (the affricate,
-    encoded as a second phase). ``with_delrel`` toggles whether the
-    inventory even has a ``DelRel`` column, modelling the two regimes
-    the grouper must handle."""
-    feats = ["Consonantal", "Sonorant", "Continuant"]
-    t = {"Consonantal": "+", "Sonorant": "-", "Continuant": "-"}
-    s = {"Consonantal": "+", "Sonorant": "-", "Continuant": "+"}
-    ts = {"Consonantal": "+", "Sonorant": "-", "Continuant": "-"}
-    if with_delrel:
-        feats.append("DelRel")
-        t["DelRel"] = "-"
-        s["DelRel"] = "-"
-        ts["DelRel"] = "+"
+#: Every label a consonant affricate can wear once the sub-class
+#: breakouts have run, so a test can ask "is this an affricate" without
+#: caring whether the tiny fixture broke a sub-class out.
+_AFFRICATE_LABELS = (
+    "Affricates",
+    "Sibilant Affricates",
+    "Lateral Affricates",
+    "Ejective Affricates",
+)
+
+
+def _affricates(groups: dict[str, list[str]]) -> set[str]:
+    out: set[str] = set()
+    for label in _AFFRICATE_LABELS:
+        out.update(groups.get(label, []))
+    return out
+
+
+def _obstruent_inv() -> Inventory:
+    """Obstruents exercising the phase-union affricate rule.
+
+    An affricate is an obstruent with a ``[-continuant]`` closure phase
+    AND a ``[+delrel]`` (fricated release) phase; that conjunction is
+    the intersection of the delayed-release-stop and contour analyses,
+    so it spans both encodings PHOIBLE uses and, critically, separates
+    a fricated release from a sonorant one. The fixture holds one of
+    each relevant shape:
+
+    - ``t``  plain stop         (continuant -, delrel -)   -> Plosive
+    - ``s``  fricative          (continuant +, delrel +)   -> Fricative
+    - ``ts`` collapse affricate (continuant -, delrel +, one phase:
+             the shape PHOIBLE's whitelist gives ``ts``)   -> Affricate
+    - ``cl`` contour affricate  (continuant / delrel / lateral all
+             ``-,+`` across two phases: the shape PHOIBLE gives the
+             lateral affricate ``tɬ``)                       -> Affricate
+    - ``tr`` stop + sonorant    (continuant ``-,+`` but delrel ``-``:
+             a closure releasing into a sonorant, not a fricated
+             release, i.e. a cluster like ``tr`` / ``tl``)   -> NOT affricate
+    """
+    features = [
+        "Consonantal",
+        "Sonorant",
+        "Continuant",
+        "DelRel",
+        "Nasal",
+        "Lateral",
+        "Strident",
+    ]
+    segments = {
+        "t": {
+            "Consonantal": "+", "Sonorant": "-", "Continuant": "-",
+            "DelRel": "-", "Nasal": "-", "Lateral": "-", "Strident": "-",
+        },
+        "s": {
+            "Consonantal": "+", "Sonorant": "-", "Continuant": "+",
+            "DelRel": "+", "Nasal": "-", "Lateral": "-", "Strident": "+",
+        },
+        "ts": {
+            "Consonantal": "+", "Sonorant": "-", "Continuant": "-",
+            "DelRel": "+", "Nasal": "-", "Lateral": "-", "Strident": "+",
+        },
+        # Closure phase of the contour affricate / cluster; the fricated
+        # (or sonorant) release lives in ``segment_secondary`` below.
+        "cl": {
+            "Consonantal": "+", "Sonorant": "-", "Continuant": "-",
+            "DelRel": "-", "Nasal": "-", "Lateral": "-", "Strident": "-",
+        },
+        "tr": {
+            "Consonantal": "+", "Sonorant": "-", "Continuant": "-",
+            "DelRel": "-", "Nasal": "-", "Lateral": "-", "Strident": "-",
+        },
+    }
+    secondary = {
+        # Fricated lateral release: +continuant, +delrel, +lateral.
+        "cl": {"continuant": "+", "delrel": "+", "lateral": "+"},
+        # Sonorant release: +continuant only, NO delayed release.
+        "tr": {"continuant": "+"},
+    }
     return Inventory.parse(
         {
-            "features": feats,
-            "segments": {"t": t, "s": s, "ts": ts},
-            "metadata": {"segment_secondary": {"ts": {"continuant": "+"}}},
+            "features": features,
+            "segments": segments,
+            "metadata": {"segment_secondary": secondary},
         }
     )
 
 
-def test_continuant_contour_is_affricate_without_delrel() -> None:
-    """The note's case: with no ``DelRel`` feature, a ``continuant``
-    contour is what names an affricate. ``ts`` lands in Affricates;
-    the plain stop ``t`` stays a Plosive and ``s`` a Fricative."""
-    eng = FeatureEngine(_affricate_inv(with_delrel=False))
-    groups = eng.grouped_segments
-    assert "ts" in groups.get("Affricates", []), groups
-    assert "t" in groups.get("Plosives", []), groups
-    assert "s" in groups.get("Fricatives", []), groups
-    # The contour segment must not also linger in Plosives.
+def test_collapse_affricate_is_classified() -> None:
+    """A single-phase ``[-continuant, +delrel]`` obstruent (PHOIBLE's
+    ``ts`` shape) is an affricate."""
+    groups = FeatureEngine(_obstruent_inv()).grouped_segments
+    assert "ts" in _affricates(groups), groups
     assert "ts" not in groups.get("Plosives", []), groups
 
 
-def test_plain_stop_not_affricate_without_delrel() -> None:
-    """Guard against the degenerate path: with ``DelRel`` absent the
-    Affricates spec must not claim plain stops by tie-break. Only the
-    contour segment is an affricate; ``t`` is a Plosive."""
-    eng = FeatureEngine(_affricate_inv(with_delrel=False))
-    assert "t" not in eng.grouped_segments.get("Affricates", [])
+def test_contour_affricate_is_classified() -> None:
+    """A ``continuant`` + ``delrel`` contour obstruent (PHOIBLE's
+    ``tɬ`` shape) is an affricate on the phase union, even though its
+    closure phase alone looks like a plain stop."""
+    groups = FeatureEngine(_obstruent_inv()).grouped_segments
+    assert "cl" in _affricates(groups), groups
+    assert "cl" not in groups.get("Plosives", []), groups
 
 
-def test_delrel_affricate_still_classified_when_present() -> None:
-    """Regression: when ``DelRel`` IS present the existing spec path is
-    untouched. ``ts`` (delrel +) is an affricate, ``t`` (delrel -) a
-    plosive, independent of any contour metadata."""
-    eng = FeatureEngine(_affricate_inv(with_delrel=True))
-    groups = eng.grouped_segments
-    assert "ts" in groups.get("Affricates", []), groups
+def test_stop_sonorant_cluster_is_not_affricate() -> None:
+    """The robustness guard: a stop that releases into a sonorant
+    (``tr`` / ``tl``) contours on ``continuant`` but carries no
+    ``[+delrel]`` phase, so it is NOT an affricate. The old
+    continuant-contour-alone rule wrongly swept these in."""
+    groups = FeatureEngine(_obstruent_inv()).grouped_segments
+    assert "tr" not in _affricates(groups), groups
+
+
+def test_plain_stop_and_fricative_are_not_affricates() -> None:
+    """The rule excludes both neighbours of the affricate class: a
+    plain stop (no ``+delrel`` phase) and a fricative (no
+    ``-continuant`` phase)."""
+    groups = FeatureEngine(_obstruent_inv()).grouped_segments
     assert "t" in groups.get("Plosives", []), groups
+    assert "t" not in _affricates(groups), groups
+    assert "s" not in _affricates(groups), groups
+    assert "s" not in groups.get("Plosives", []), groups
 
 
-def test_contour_feats_exposes_only_contouring_features() -> None:
-    """The engine's contour map names exactly the features that flip
-    polarity across phases: ``continuant`` for ``ts`` and nothing for
-    the single-phase obstruents."""
-    eng = FeatureEngine(_affricate_inv(with_delrel=False))
-    cmap = eng._contour_feats_by_seg
-    assert cmap.get("ts") == frozenset({"continuant"})
-    assert "t" not in cmap and "s" not in cmap
+def test_secondary_feats_exposes_release_bundle() -> None:
+    """The engine's per-segment release map carries the final-phase
+    bundle for contour segments and nothing for single-phase ones; the
+    grouper unions it with the primary bundle to see the whole
+    segment."""
+    eng = FeatureEngine(_obstruent_inv())
+    sec = eng._secondary_feats_by_seg
+    assert sec.get("cl", {}).get("continuant") == "+"
+    assert sec.get("cl", {}).get("lateral") == "+"
+    assert "ts" not in sec and "t" not in sec and "s" not in sec
 
 
 def test_diphthong_contour_is_not_an_affricate() -> None:
     """The obstruent gate keeps the affricate rule off vowels: the
-    ``ia`` diphthong contours (it is in the engine's contour map) but
-    is ``-consonantal``, so ``affricate_by_contour`` refuses it and it
+    ``ia`` diphthong has a release phase but is ``-consonantal``, so it
     never enters the Affricates class."""
     eng = FeatureEngine(_contour_inv())
-    assert "ia" in eng._contour_feats_by_seg, "diphthong should contour"
+    assert (
+        "ia" in eng._secondary_feats_by_seg
+    ), "diphthong should have a release phase"
     assert "ia" not in eng.grouped_segments.get("Affricates", [])
 
 

@@ -128,8 +128,11 @@ def split_contour_value(value: str) -> tuple[str, str] | None:
     vowel qualities this way; an affricate's ``continuant`` runs
     ``"-,+"`` as the stop closure releases into a fricative. Both
     polarities must be members of the app's three-valued vocabulary
-    after stripping whitespace; anything else returns ``None`` so
-    the caller can fall back to :py:func:`normalize_phoible_value`.
+    after stripping whitespace; anything else (including a three-plus
+    phase sequence, which the two-state phase model cannot represent
+    without losing a middle quality and colliding distinct contours)
+    returns ``None`` so the caller falls back to
+    :py:func:`normalize_phoible_value`.
     """
     if "," not in value:
         return None

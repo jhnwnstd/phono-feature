@@ -91,6 +91,20 @@ PHOIBLE_CITATION = (
 SCHEMA_VERSION = 1
 ENCODED_VALUES = frozenset({"+", "-", "0"})
 
+#: PHOIBLE column names whose contour is preserved on an OBSTRUENT (as a
+#: primary/secondary phase pair). These are the features an affricate's
+#: stop-to-fricative release traverses: ``continuant`` and
+#: ``delayedRelease`` mark the affrication itself, while ``lateral`` and
+#: ``strident`` on the release distinguish a lateral affricate from a
+#: sibilant one. PHOIBLE contour-codes exactly these on the affricates
+#: its whitelist misses (laterals, alveolo-palatals); keeping them lets
+#: one phase-union rule classify both PHOIBLE affricate encodings. Any
+#: other obstruent contour (e.g. a prenasalized stop's ``nasal``) stays
+#: flattened so it keeps its established manner placement.
+OBSTRUENT_CONTOUR_FEATURES = frozenset(
+    {"continuant", "delayedRelease", "lateral", "strident"}
+)
+
 # Source identity per PHOIBLE source code: a ``(short, description)``
 # pair. ``short`` is the bold heading the picker shows; ``description``
 # is the secondary line that expands opaque acronyms like SPA and
@@ -381,13 +395,19 @@ def bake_tables(
             #
             # A contour is preserved only where the segment's class makes
             # it meaningful: ANY feature on a vowel (a diphthong glides
-            # through both poles) and ``continuant`` on an obstruent (an
-            # affricate's stop closure releases into a fricative, so its
-            # affrication is recoverable from the continuant contour even
-            # with no ``DelRel`` column). Other consonant contours (e.g.
-            # a prenasalized stop's ``nasal``) stay flattened to ``"0"``
-            # so they keep their established manner-class placement;
-            # widening that is a deliberate later step.
+            # through both poles), and an obstruent's RELEASE-defining
+            # features (:py:data:`OBSTRUENT_CONTOUR_FEATURES`). An
+            # affricate is a stop closure releasing into a fricative, so
+            # PHOIBLE writes ``continuant``, ``delayedRelease``,
+            # ``lateral`` and ``strident`` as ``"-,+"`` contours on the
+            # contour-coded affricates (the laterals and alveolo-palatals
+            # its special-feature whitelist omits). Keeping all four means
+            # both encodings of an affricate carry the same information:
+            # the closure/release phases needed to detect affrication AND
+            # the release-phase ``lateral`` / ``strident`` that tells a
+            # lateral affricate from a sibilant one. Other consonant
+            # contours (e.g. a prenasalized stop's ``nasal``) still
+            # flatten to ``"0"`` so they keep their manner placement.
             #
             # Classify off the INITIAL phase of the major-class features,
             # since a contour cell classifies by the state it starts in.
@@ -406,7 +426,7 @@ def bake_tables(
             for col in feature_columns:
                 raw = row.get(col, "0")
                 allow_contour = is_vowel or (
-                    is_obstruent and col == "continuant"
+                    is_obstruent and col in OBSTRUENT_CONTOUR_FEATURES
                 )
                 contour = split_contour_value(raw) if allow_contour else None
                 if contour is not None:

@@ -74,15 +74,12 @@ VOCOID_GROUP_NAME = "Vocoids"
 # universal features so they apply across diverse inventories.
 PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
     ("Clicks", {"click": "+"}),
-    (
-        "Affricates",
-        {
-            "consonantal": "+",
-            "delrel": "+",
-            "continuant": "-",
-            "sonorant": "-",
-        },
-    ),
+    # Affricates are NOT a spec here: a single ``[-continuant, +delrel]``
+    # bundle cannot tell PHOIBLE's two affricate encodings apart, and it
+    # would wrongly admit a stop that releases into a sonorant. They are
+    # assigned in Stage 1 by the phase-union ``affricate_group`` predicate
+    # (some phase ``-continuant`` AND some phase ``+delrel``); see
+    # :py:func:`group_segments`.
     (
         "Plosives",
         {
@@ -144,7 +141,6 @@ PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
 _MIN_POSITIVE: dict[str, int] = {
     "Plosives": 2,
     "Fricatives": 2,
-    "Affricates": 2,
     "Lateral Approximants": 2,
     "Central Approximants": 2,
     "Semivowels": 2,
@@ -985,6 +981,7 @@ def _is_vocoid(feats: dict[str, str]) -> bool:
 def _break_out_by_spec(
     assignment: dict[str, list[str]],
     norm: Mapping[str, dict[str, str]],
+    secondary: Mapping[str, Mapping[str, str]],
     active_features: set[str],
     n: int,
 ) -> None:
@@ -997,13 +994,26 @@ def _break_out_by_spec(
     keeps a split from firing when the inventory does not carry every
     feature the condition needs, so an inventory silent on ``strident``
     never grows an empty Sibilants row.
+
+    The match reads the phase UNION (primary plus any ``secondary``
+    release bundle): a lateral affricate carries its ``[+lateral]`` on
+    the fricative release, so the Lateral-Affricates split must see the
+    release phase to fire. For a single-phase segment the union is just
+    its one bundle, so this is identical to a plain value test.
     """
     for new_name, parent_name, cond in DERIVED_BREAKOUTS:
         if not all(f in active_features for f in cond):
             continue
 
         def _spec_match(s: str, cond: dict[str, str] = cond) -> bool:
-            return all(norm[s].get(f, "0") == v for f, v in cond.items())
+            for f, v in cond.items():
+                vals = {norm[s].get(f, "0")}
+                release = secondary.get(s)
+                if release is not None:
+                    vals.add(release.get(f, "0"))
+                if v not in vals:
+                    return False
+            return True
 
         _apply_breakout(assignment, new_name, parent_name, _spec_match, n)
 
@@ -1231,7 +1241,7 @@ def group_segments(
     inventory: Mapping[str, Mapping[str, str]],
     *,
     normalized: Mapping[str, dict[str, str]] | None = None,
-    contour_feats: Mapping[str, frozenset[str]] | None = None,
+    secondary: Mapping[str, Mapping[str, str]] | None = None,
 ) -> dict[str, list[str]]:
     """Assign every segment to a phonological display group.
 
@@ -1244,15 +1254,22 @@ def group_segments(
     re-normalized on every grouping (this sits on the interactive
     inventory-switch path).
 
-    ``contour_feats`` optionally maps each segment to the
-    (normalized) feature names that take BOTH ``+`` and ``-`` across
-    its phases, i.e. the features that contour within the segment.
-    It identifies affricates that carry no ``DelRel`` feature: an
-    obstruent whose ``continuant`` contours (stop -> fricative) is an
-    affricate even when nothing marks delayed release. The engine
-    derives it from :py:meth:`Inventory.segment_phases`; callers that
-    pass nothing simply lose contour-based affricate inference (the
-    ``DelRel`` spec path is unaffected).
+    ``secondary`` optionally maps each CONTOUR segment to its
+    final-state (release) bundle, already normalized. Together with
+    the primary bundle in ``inventory`` these are the segment's two
+    phases (see :py:meth:`Inventory.segment_phases`), so a feature's
+    value across the whole segment is the union of the two. This is
+    what identifies an affricate uniformly: an obstruent is an
+    affricate when some phase is ``[-continuant]`` (a stop closure)
+    AND some phase is ``[+delayed release]`` (a fricated release),
+    which catches both the ``DelRel`` collapse and the
+    ``continuant`` contour that PHOIBLE uses for the same segments,
+    and separates a true affricate from a stop that merely releases
+    into a sonorant. The release phase's ``lateral`` / ``strident``
+    then tell a lateral affricate from a sibilant one. Callers that
+    pass nothing see every segment as a single phase (its primary
+    bundle), so the collapse-encoded affricates still classify; only
+    the contour-encoded ones lose their affricate reading.
     """
     if not inventory:
         return {}
@@ -1264,8 +1281,23 @@ def group_segments(
             for sym, feats in inventory.items()
         }
     )
+    sec: Mapping[str, Mapping[str, str]] = secondary or {}
+
+    def phase_values(sym: str, feat: str) -> set[str]:
+        """The set of values ``feat`` takes across ``sym``'s phases.
+
+        A single-phase segment yields ``{primary_value}``; a contour
+        segment adds its release-phase value, so a membership test
+        (``"+" in phase_values(...)``) reads the whole segment.
+        """
+        vals = {norm[sym].get(feat, "0")}
+        release = sec.get(sym)
+        if release is not None:
+            vals.add(release.get(feat, "0"))
+        return vals
+
     active_features: set[str] = set()
-    for feats in norm.values():
+    for feats in (*norm.values(), *sec.values()):
         for k, v in feats.items():
             if v != "0":
                 active_features.add(k)
@@ -1347,17 +1379,6 @@ def group_segments(
         else:
             if is_vowel_phoneme or is_tone_phoneme:
                 return False
-        # Affrication needs a positive signal. With ``DelRel`` active,
-        # the spec's ``delrel: +`` is that signal (a plain stop carries
-        # ``delrel: -`` and is rejected below). With no ``DelRel`` in
-        # the inventory the spec degenerates to a bare stop spec
-        # (``consonantal +, continuant -, sonorant -``) and, sitting
-        # earlier than Plosives, would claim every stop. Refuse the
-        # spec entirely in that case: the only affricates an inventory
-        # without delayed release can name are the ones a ``continuant``
-        # contour marks, handled by ``affricate_by_contour`` below.
-        if group_name == "Affricates" and "delrel" not in active_features:
-            return False
         relevant = [f for f in spec if f in active_features]
         if not relevant:
             return False
@@ -1493,35 +1514,39 @@ def group_segments(
             return ""
         return best_name
 
-    contours = contour_feats or {}
+    def affricate_group(sym: str, seg_feats: dict[str, str]) -> str:
+        """``Affricates`` for an obstruent that closes then fricates.
 
-    def affricate_by_contour(sym: str, seg_feats: dict[str, str]) -> str:
-        """``Affricates`` when ``continuant`` contours within an
-        obstruent, regardless of ``DelRel``.
-
-        Linguists routinely write an affricate as a single segment
-        whose ``continuant`` holds both values (``-`` for the stop
-        closure, ``+`` for the fricative release). That contour is
-        the affrication, so a ``+consonantal`` non-sonorant carrying
-        it is an affricate even with no ``DelRel`` column. The
-        obstruent gate keeps the rule off vowels, sonorants, and
-        clicks; ``DelRel``-bearing affricates still go through the
-        spec path in ``best_primary`` so this only adds the
-        delrel-free case rather than changing the existing one.
+        The one general rule that spans both PHOIBLE affricate
+        encodings and the Hayes / PanPhon feature systems: a
+        non-sonorant, non-click ``+consonantal`` segment is an
+        affricate when some phase is ``[-continuant]`` (a stop
+        closure) AND some phase is ``[+delayed release]`` (a fricated
+        release). It is the intersection of the two standard analyses,
+        the delayed-release stop and the ``[-cont] -> [+cont]``
+        contour, so it accepts the ``[-cont, +delrel]`` collapse
+        (``ts``, ``tʃ``) and the ``continuant`` / ``delayedRelease``
+        contour (``tɬ``, ``tɕ``) alike. The ``+delrel`` phase is what
+        separates a true affricate from a stop that merely releases
+        into a sonorant (``tr``, ``tl``, ``ʔj``): those contour on
+        ``continuant`` but carry no delayed release, so they fall
+        through to ``best_primary`` instead of being mislabelled here.
         """
-        if "continuant" not in contours.get(sym, frozenset()):
-            return ""
         if seg_feats.get("consonantal", "0") != "+":
             return ""
         if seg_feats.get("sonorant", "0") == "+":
             return ""
         if seg_feats.get("click", "0") == "+":
             return ""
+        if "-" not in phase_values(sym, "continuant"):
+            return ""
+        if "+" not in phase_values(sym, "delrel"):
+            return ""
         return "Affricates"
 
-    # Stage 1: assign every segment to a primary group. A contour
-    # affricate wins first, then the positive-evidence best_primary,
-    # then the mismatch-minimising fallback. A segment that matches no
+    # Stage 1: assign every segment to a primary group. An affricate
+    # wins first, then the positive-evidence best_primary, then the
+    # mismatch-minimising fallback. A segment that matches no
     # manner/place spec would otherwise vanish from the grouped payload
     # (still in the flat segment list, rendered nowhere), so route it to
     # a catch-all: a vocoid (vowel-like) lands under the vowel chart,
@@ -1529,7 +1554,7 @@ def group_segments(
     assignment: dict[str, list[str]] = defaultdict(list)
     for sym, feats in norm.items():
         group = (
-            affricate_by_contour(sym, feats)
+            affricate_group(sym, feats)
             or best_primary(feats)
             or fallback_assignment(feats)
         )
@@ -1543,7 +1568,7 @@ def group_segments(
     # above; read them top-to-bottom to trace how the raw per-segment
     # assignment becomes the final class list.
     n = len(inventory)
-    _break_out_by_spec(assignment, norm, active_features, n)
+    _break_out_by_spec(assignment, norm, sec, active_features, n)
     _break_out_by_laryngeal_kind(assignment, norm, n)
     _relabel_small_origin_sets(assignment, n)
     _merge_small_derived_pairs(assignment, norm, n)
