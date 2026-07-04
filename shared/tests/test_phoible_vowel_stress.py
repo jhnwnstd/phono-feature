@@ -147,13 +147,19 @@ def test_phoible_vowel_placement_does_not_collapse(
 def test_phoible_diphthongs_round_trip_secondary_and_flag(
     phoible_provider, language: str, source_short: str
 ) -> None:
-    """Inventories with diphthongs in the bake snapshot must
-    surface them through the placement layer: each diphthong's
-    placement carries a non-null ``secondary`` and the
-    ``DIPHTHONG`` flag, and no two distinct diphthongs share the
-    exact ``(primary_cell, secondary_cell)`` pair (otherwise two
-    distinct contours would be indistinguishable in the chart's
-    grid path)."""
+    """Inventories with contour vowels in the bake snapshot must
+    surface them through the placement layer: each such vowel's
+    placement carries a non-null ``secondary`` and the ``DIPHTHONG``
+    flag, so it renders as a chip in the Diphthongs strip.
+
+    Contour vowels are drawn as distinct GLYPH CHIPS in that strip,
+    never as paths on the grid, so two of them MAY share a
+    ``(primary_cell, secondary_cell)`` endpoint pair without becoming
+    indistinguishable: a triphthong reduces to its first/last endpoints
+    (see :py:func:`split_contour_value`), so e.g. ``/iau/`` and the
+    diphthong ``/iu/`` both span i->u yet stay distinct on screen by
+    glyph. The former per-pair uniqueness assertion was an artefact of
+    the two-phase-only world and is not a rendering requirement."""
     inv_id = _find_inventory_id(phoible_provider, language, source_short)
     if inv_id is None:
         pytest.skip(
@@ -185,28 +191,24 @@ def test_phoible_diphthongs_round_trip_secondary_and_flag(
     diphthongs = [seg for seg in vowels if seg in generated.segment_secondary]
     assert diphthongs, "fixture invariant: this inventory has vowel diphthongs"
 
-    seen_pairs: dict[tuple[tuple[int, int], tuple[int, int]], str] = {}
     for seg in diphthongs:
         p = placements[seg]
         assert (
             p.secondary is not None
-        ), f"{language}: diphthong /{seg}/ has no secondary placement"
+        ), f"{language}: contour vowel /{seg}/ has no secondary placement"
         assert (
             PlacementFlag.DIPHTHONG in p.flags
-        ), f"{language}: diphthong /{seg}/ primary missing DIPHTHONG flag"
+        ), f"{language}: contour vowel /{seg}/ primary missing DIPHTHONG flag"
         assert (
             PlacementFlag.DIPHTHONG in p.secondary.flags
-        ), f"{language}: diphthong /{seg}/ secondary missing DIPHTHONG flag"
-        pair = ((p.row, p.col), (p.secondary.row, p.secondary.col))
-        if pair in seen_pairs:
-            # Same cells, different glyphs: two distinct contours
-            # collapsing to one grid path. Allow only if the glyphs
-            # are identical (a true duplicate that the bake already
-            # de-duped above).
-            assert seen_pairs[pair] == seg, (
-                f"{language}: diphthongs /{seen_pairs[pair]}/ and /{seg}/ "
-                f"both place at the same primary->secondary cell pair "
-                f"{pair}; distinct contours must map to distinct grid paths"
-            )
-        else:
-            seen_pairs[pair] = seg
+        ), f"{language}: contour vowel /{seg}/ secondary missing DIPHTHONG flag"
+        # A contour vowel is drawn as a glyph chip in the Diphthongs
+        # strip, so its endpoint cells need not be unique across the
+        # inventory (a triphthong and a diphthong can share endpoints,
+        # e.g. /iau/ and /iu/); the required invariant is only that each
+        # contour vowel HAS a distinct secondary cell from its primary,
+        # which the placement layer's degeneracy gate already enforces.
+        assert (p.row, p.col) != (
+            p.secondary.row,
+            p.secondary.col,
+        ), f"{language}: contour vowel /{seg}/ has a degenerate secondary"

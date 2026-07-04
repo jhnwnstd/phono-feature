@@ -13,7 +13,10 @@ engine saw only the initial polarity, so a diphthong gliding into
 from __future__ import annotations
 
 from phonology_shared.data import Inventory
-from phonology_shared.editor.phoible_features import initial_phase_value
+from phonology_shared.editor.phoible_features import (
+    initial_phase_value,
+    split_contour_value,
+)
 from phonology_shared.theory.feature_engine import FeatureEngine, MatchMode
 
 
@@ -29,9 +32,31 @@ def test_initial_phase_value_reads_the_starting_polarity() -> None:
     assert initial_phase_value("+") == "+"
     assert initial_phase_value("-") == "-"
     assert initial_phase_value("0") == "0"
-    # Not a valid 2-part contour -> falls back to normalize ("0").
-    assert initial_phase_value("+,-,+") == "0"
+    # A three-phase contour (a triphthong / complex affricate) reads
+    # its INITIAL phase now that the split reduces to first/last.
+    assert initial_phase_value("+,-,+") == "+"
+    assert initial_phase_value("-,+,+") == "-"
     assert initial_phase_value("NA") == "0"
+
+
+def test_split_contour_value_reduces_to_first_last_endpoints() -> None:
+    """A plain cell is not a contour; a two-phase cell returns its
+    pair; a three-plus-phase cell (a triphthong or complex affricate)
+    reduces to its ``(first, last)`` endpoints so it still becomes a
+    single secondary phase. Any non ``+/-/0`` part rejects the whole
+    cell."""
+    assert split_contour_value("+") is None
+    assert split_contour_value("0") is None
+    assert split_contour_value("-,+") == ("-", "+")
+    assert split_contour_value("+,-") == ("+", "-")
+    # three-plus phases collapse to the traversal endpoints
+    assert split_contour_value("-,+,+") == ("-", "+")
+    assert split_contour_value("+,-,+") == ("+", "+")
+    assert split_contour_value("-,-,+") == ("-", "+")
+    assert split_contour_value("+,-,+,-") == ("+", "-")
+    # a malformed part rejects the cell (falls back to normalize)
+    assert split_contour_value("+,x") is None
+    assert split_contour_value("-,+,z") is None
 
 
 def _contour_inv() -> Inventory:

@@ -122,27 +122,31 @@ def split_contour_value(value: str) -> tuple[str, str] | None:
     """Return the ``(initial, final)`` pair of a PHOIBLE contour
     value, or ``None`` if ``value`` is not a contour.
 
-    PHOIBLE encodes a contour by writing the two polarities the
-    segment traverses, separated by a comma: ``"+,-"`` for a feature
-    that starts ``+`` and ends ``-``. A diphthong glides between two
-    vowel qualities this way; an affricate's ``continuant`` runs
-    ``"-,+"`` as the stop closure releases into a fricative. Both
-    polarities must be members of the app's three-valued vocabulary
-    after stripping whitespace; anything else (including a three-plus
-    phase sequence, which the two-state phase model cannot represent
-    without losing a middle quality and colliding distinct contours)
+    PHOIBLE encodes a contour by writing the polarities the segment
+    traverses, separated by commas: ``"+,-"`` for a feature that starts
+    ``+`` and ends ``-``. A diphthong glides between two vowel qualities
+    this way; an affricate's ``continuant`` runs ``"-,+"`` as the stop
+    closure releases into a fricative. A few segments carry three or
+    more phases (a triphthong like ``/uei̯/``, a complex affricate whose
+    ``continuant`` runs ``"-,-,+"``). The phase model that placement +
+    membership consume is two-state, so a longer sequence reduces to its
+    ``(first, last)`` ENDPOINTS. That is faithful for the display: a
+    triphthong renders as a single glyph CHIP in the Diphthongs strip
+    (never as a drawn grid path), so two contours sharing endpoints stay
+    distinct on screen; and the endpoints are what a conservative
+    consumer needs (the net glide, the affricate closure-to-release).
+    The middle quality is not retained here; carrying every phase is the
+    N-phase-schema follow-up. Every phase must be a member of the app's
+    three-valued vocabulary after stripping whitespace; anything else
     returns ``None`` so the caller falls back to
     :py:func:`normalize_phoible_value`.
     """
     if "," not in value:
         return None
-    parts = [p.strip() for p in value.split(",", 1)]
-    if len(parts) != 2:
+    parts = [p.strip() for p in value.split(",")]
+    if len(parts) < 2 or any(p not in ("+", "-", "0") for p in parts):
         return None
-    initial, final = parts
-    if initial not in ("+", "-", "0") or final not in ("+", "-", "0"):
-        return None
-    return initial, final
+    return parts[0], parts[-1]
 
 
 def initial_phase_value(value: str) -> str:
