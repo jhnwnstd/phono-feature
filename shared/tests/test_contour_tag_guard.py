@@ -27,7 +27,10 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.chart.consonants import CONTOUR_GROUP_NAME
+from phonology_shared.chart.consonants import (
+    CONTOUR_GROUP_NAME,
+    DISPLAY_ORDER,
+)
 from phonology_shared.editor.phoible_provider import PhoibleProvider
 from phonology_shared.theory.feature_engine import FeatureEngine
 
@@ -125,13 +128,15 @@ def test_tag_is_not_a_queryable_feature() -> None:
     assert CONTOUR_GROUP_NAME not in eng.minus_segs
 
 
-def test_tagged_segment_membership_reads_tiers_not_the_tag() -> None:
-    """``mb`` is tagged for display, yet the engine's ∃ query returns it
-    for both the nasal closure and the oral release, computed from the
-    tiers. No query result is ever the tag string."""
+def test_multiset_membership_reads_tiers_not_a_group_label() -> None:
+    """``mb`` renders in Nasals AND Plosives (multi-membership), yet the
+    engine's ∃ query returns it for both the nasal closure and the oral
+    release computed from the tiers. No query result is ever a group
+    label."""
     eng = _mb_engine()
-    place = {s: n for n, segs in eng.grouped_segments.items() for s in segs}
-    assert place["mb"] == CONTOUR_GROUP_NAME
+    groups = eng.grouped_segments
+    assert "mb" in groups.get("Nasals", [])
+    assert "mb" in groups.get("Plosives", [])
     assert "mb" in eng.find_segments({"Nasal": "+"})
     assert "mb" in eng.find_segments({"Sonorant": "-"})
     for value in ("+", "-"):
@@ -163,26 +168,26 @@ def _provider() -> tuple[PhoibleProvider, list[dict]]:
 
 
 def test_fixture_is_internally_consistent() -> None:
-    """Schema + totals match the recorded segment map (fast; no corpus)."""
-    assert _FIXTURE["schema"] == "contour-tag-reach/1"
+    """Schema + totals match the recorded membership map (fast; no
+    corpus). Every recorded glyph is a genuine MULTI-membership (>= 2
+    manner classes)."""
+    assert _FIXTURE["schema"] == "contour-multiset-membership/2"
     segs = _FIXTURE["segments"]
     assert _FIXTURE["totals"]["unique_glyphs"] == len(segs)
-    # Every recorded class is a real spec key or the special ∃-rules.
-    known = set(_FIXTURE["class_specs"]) | {"Affricates", "Clicks"}
+    known = set(DISPLAY_ORDER)
     for glyph, classes in segs.items():
-        assert classes, glyph  # a tagged glyph reaches >= 1 class
+        assert len(classes) >= 2, (glyph, classes)  # multi-membership
         assert set(classes) <= known, (glyph, classes)
 
 
 def test_fixture_matches_live_engine_over_full_corpus() -> None:
-    """Recompute the ENTIRE tagged population and its ∃-reach from the
-    live engine and assert it equals the committed fixture, bidirectionally
-    and including the totals. This pins the population against BOTH kinds
-    of drift the sample missed: a gate change that DROPS the tag (the map
-    shrinks) and one that captures MORE (a new glyph appears), each fails
-    loudly here rather than slipping past a partial sample. Slow (full
-    materialize loop) but the fixture is the multi-membership pass's ground
-    truth, so it is pinned exactly."""
+    """Recompute the ENTIRE multiset membership from the live engine and
+    assert it equals the committed fixture, bidirectionally and including
+    the totals. This pins the population against BOTH kinds of drift a
+    sample would miss: a gate change that DROPS memberships (the map
+    shrinks) and one that adds them (a new glyph appears), each fails
+    loudly here. Slow (full materialize loop) but the fixture is the
+    multiset's ground truth, so it is pinned exactly."""
     provider, inventories = _provider()
     seg_reach, totals = build_reach_map(provider, inventories)
     assert seg_reach == _FIXTURE["segments"], _REGEN

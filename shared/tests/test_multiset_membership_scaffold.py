@@ -34,14 +34,6 @@ from phonology_shared.theory.feature_engine import FeatureEngine
 _FIXTURES = Path(__file__).parent / "fixtures"
 _FIXTURE = json.loads((_FIXTURES / "contour_tag_reach.json").read_text())
 
-# Flip these off in the commit that lands the multiset + retires the tag.
-_pending = pytest.mark.xfail(
-    reason="multiset pass pending: contour consonants still sit in the "
-    "provisional Contour Consonants tag, not in every class they reach",
-    strict=False,
-)
-
-
 def _mb_engine() -> FeatureEngine:
     feats = ["Consonantal", "Sonorant", "Continuant", "Nasal", "Syllabic"]
     segs = {
@@ -99,7 +91,6 @@ def _members(groups: dict[str, list[str]], seg: str) -> set[str]:
     return {name for name, segs in groups.items() if seg in segs}
 
 
-@_pending
 def test_prenasalized_stop_renders_in_nasals_and_plosives() -> None:
     """END STATE: `mb` appears in BOTH Nasals and Plosives (∃-nasal,
     ∃-oral-stop), and in NO provisional tag."""
@@ -109,7 +100,6 @@ def test_prenasalized_stop_renders_in_nasals_and_plosives() -> None:
     assert CONTOUR_GROUP_NAME not in groups
 
 
-@_pending
 def test_no_contour_tag_group_survives_the_multiset() -> None:
     """END STATE: the provisional tag group is gone; multi-membership
     replaces it everywhere."""
@@ -128,7 +118,6 @@ def test_single_phase_segments_stay_in_exactly_one_class() -> None:
         assert len(homes) == 1, (seg, homes)
 
 
-@_pending
 def test_full_corpus_multiset_membership_equals_fixture_reach() -> None:
     """END STATE: over PHOIBLE, every currently-tagged glyph renders in
     exactly the manner classes the frozen ∃-reach fixture records for it

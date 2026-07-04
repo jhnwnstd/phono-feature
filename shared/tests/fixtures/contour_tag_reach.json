@@ -1,54 +1,10 @@
 {
-  "schema": "contour-tag-reach/1",
-  "note": "The CURRENT 'Contour Consonants' tagged population and, per glyph, the manner classes it existentially reaches (some phase satisfies the class is_member test; plus the affricate ∃-rule). This is the roadmap fixture for the deferred multi-membership pass: when group_segments becomes a multiset, each of these glyphs should render in exactly these classes. Regenerate with shared/tests/fixtures/gen_contour_tag_reach.py.",
-  "class_specs": {
-    "Plosives": {
-      "consonantal": "+",
-      "continuant": "-",
-      "sonorant": "-",
-      "nasal": "-",
-      "delrel": "-"
-    },
-    "Fricatives": {
-      "consonantal": "+",
-      "continuant": "+",
-      "sonorant": "-"
-    },
-    "Nasals": {
-      "nasal": "+"
-    },
-    "Trills": {
-      "trill": "+"
-    },
-    "Taps & Flaps": {
-      "tap": "+"
-    },
-    "Lateral Approximants": {
-      "consonantal": "+",
-      "continuant": "+",
-      "lateral": "+",
-      "sonorant": "+",
-      "tap": "-"
-    },
-    "Central Approximants": {
-      "consonantal": "+",
-      "continuant": "+",
-      "sonorant": "+",
-      "nasal": "-",
-      "lateral": "-",
-      "trill": "-",
-      "tap": "-"
-    },
-    "Semivowels": {
-      "consonantal": "-",
-      "syllabic": "-",
-      "sonorant": "+"
-    }
-  },
+  "schema": "contour-multiset-membership/2",
+  "note": "Multiset consonant membership over PHOIBLE: each glyph that renders in more than one manner class, and the classes it lands in. group_segments is the source of truth (coarse assignment off reached_classes, then each multi segment is pinned to its existential reach so membership is stable). Regenerate with shared/tests/fixtures/gen_contour_tag_reach.py.",
   "totals": {
-    "tagged_occurrences": 2107,
-    "unique_glyphs": 257,
-    "inventories_with_tag": 378
+    "multi_occurrences": 2244,
+    "unique_glyphs": 301,
+    "inventories_with_multi": 421
   },
   "segments": {
     "bm": [
@@ -119,6 +75,14 @@
       "Fricatives",
       "Taps & Flaps"
     ],
+    "jʔ": [
+      "Plosives",
+      "Semivowels"
+    ],
+    "j̃": [
+      "Nasals",
+      "Semivowels"
+    ],
     "kl": [
       "Lateral Approximants",
       "Plosives"
@@ -127,21 +91,17 @@
       "Nasals",
       "Plosives"
     ],
+    "kpr": [
+      "Plosives",
+      "Trills"
+    ],
+    "kpɾ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
     "kŋ": [
       "Nasals",
       "Plosives"
-    ],
-    "kǁʰʼ": [
-      "Clicks"
-    ],
-    "kǂ͓ˡ": [
-      "Clicks"
-    ],
-    "kǂ͓ˡx": [
-      "Clicks"
-    ],
-    "kǂ͓ˡʰ": [
-      "Clicks"
     ],
     "kɾ": [
       "Plosives",
@@ -158,6 +118,14 @@
     "ld": [
       "Lateral Approximants",
       "Plosives"
+    ],
+    "lʔ": [
+      "Lateral Approximants",
+      "Plosives"
+    ],
+    "l̃": [
+      "Lateral Approximants",
+      "Nasals"
     ],
     "mb": [
       "Nasals",
@@ -608,6 +576,10 @@
       "Nasals",
       "Plosives"
     ],
+    "r̃": [
+      "Nasals",
+      "Trills"
+    ],
     "sɾ": [
       "Fricatives",
       "Taps & Flaps"
@@ -648,6 +620,10 @@
       "Fricatives",
       "Taps & Flaps"
     ],
+    "w̃": [
+      "Nasals",
+      "Semivowels"
+    ],
     "xʀ̥": [
       "Fricatives",
       "Trills"
@@ -656,18 +632,17 @@
       "Fricatives",
       "Taps & Flaps"
     ],
+    "ħ̃ʲ": [
+      "Fricatives",
+      "Nasals"
+    ],
+    "ĩ̯": [
+      "Nasals",
+      "Semivowels"
+    ],
     "ŋb": [
       "Nasals",
       "Plosives"
-    ],
-    "ŋhʲ": [
-      "Nasals"
-    ],
-    "ŋhʷ": [
-      "Nasals"
-    ],
-    "ŋhᶣ": [
-      "Nasals"
     ],
     "ŋk": [
       "Nasals",
@@ -715,7 +690,51 @@
       "Fricatives",
       "Nasals"
     ],
+    "ŋǀ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋǀʱ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋǀ͓": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋǁ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋǁʼ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋǁ͓": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋǂ": [
+      "Clicks",
+      "Nasals"
+    ],
     "ŋǂ͓ˡ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋǃ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋǃ-": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋǃʱ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋǃʼ": [
       "Clicks",
       "Nasals"
     ],
@@ -763,11 +782,55 @@
       "Nasals",
       "Taps & Flaps"
     ],
+    "ŋʘ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̊ǀ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̊ǁ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̊ǂ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̊ǃ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̊ʘ": [
+      "Clicks",
+      "Nasals"
+    ],
     "ŋ̤kʰ": [
       "Nasals",
       "Plosives"
     ],
+    "ŋ̤ǀ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̤ǀ͓": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̤ǁ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̤ǂ": [
+      "Clicks",
+      "Nasals"
+    ],
     "ŋ̤ǂ͓ˡ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̤ǃ": [
       "Clicks",
       "Nasals"
     ],
@@ -783,8 +846,32 @@
       "Fricatives",
       "Nasals"
     ],
+    "ŋ̥ǀ͓ʰ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̥ǀ͓ˀ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̥ǁ͓ʰ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̥ǁ͓ˀ": [
+      "Clicks",
+      "Nasals"
+    ],
     "ŋ̥ǂxˀ": [
       "Fricatives",
+      "Nasals"
+    ],
+    "ŋ̥ǂʰ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̥ǂˀ": [
+      "Clicks",
       "Nasals"
     ],
     "ŋ̥ǂ͓ˡxˀ": [
@@ -798,6 +885,38 @@
     "ŋ̥ǂ͓ˡˀ": [
       "Clicks",
       "Nasals"
+    ],
+    "ŋ̥ǃ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̥ǃ-ʰ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̥ǃ-ˀ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̥ǃˀ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ̥ǃˠˀ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ‼": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ŋ‼ʱ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ũ̯": [
+      "Nasals",
+      "Semivowels"
     ],
     "ȶȵ": [
       "Nasals",
@@ -823,32 +942,29 @@
       "Nasals",
       "Plosives"
     ],
+    "ɡbr": [
+      "Plosives",
+      "Trills"
+    ],
+    "ɡbɾ": [
+      "Plosives",
+      "Taps & Flaps"
+    ],
     "ɡm": [
       "Nasals",
       "Plosives"
-    ],
-    "ɡǁkʰ": [
-      "Plosives"
-    ],
-    "ɡǂ͓ˡ": [
-      "Clicks"
     ],
     "ɡɾ": [
       "Plosives",
       "Taps & Flaps"
     ],
-    "ɡˡ": [
-      "Plosives"
-    ],
-    "ɡ̤ǂ͓ˡ": [
-      "Clicks"
-    ],
     "ɡⁿ": [
       "Nasals",
       "Plosives"
     ],
-    "ɢǁqʰ": [
-      "Plosives"
+    "ɥ̃": [
+      "Nasals",
+      "Semivowels"
     ],
     "ɬl": [
       "Fricatives",
@@ -857,6 +973,10 @@
     "ɬʟ͓̥": [
       "Fricatives",
       "Lateral Approximants"
+    ],
+    "ɰ̃": [
+      "Nasals",
+      "Semivowels"
     ],
     "ɱf": [
       "Fricatives",
@@ -1035,6 +1155,18 @@
       "Nasals",
       "Plosives"
     ],
+    "ɸ̃": [
+      "Fricatives",
+      "Nasals"
+    ],
+    "ɽ̃": [
+      "Nasals",
+      "Taps & Flaps"
+    ],
+    "ɾ̃": [
+      "Nasals",
+      "Taps & Flaps"
+    ],
     "ʀʁ": [
       "Fricatives",
       "Trills"
@@ -1067,9 +1199,6 @@
       "Plosives",
       "Taps & Flaps"
     ],
-    "ʍw": [
-      "Semivowels"
-    ],
     "ʔj": [
       "Plosives",
       "Semivowels"
@@ -1101,6 +1230,22 @@
     "ʔɾ": [
       "Plosives",
       "Taps & Flaps"
+    ],
+    "ʼŋǀ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "ʼŋǃ": [
+      "Clicks",
+      "Nasals"
+    ],
+    "β̃": [
+      "Fricatives",
+      "Nasals"
+    ],
+    "ṽ": [
+      "Fricatives",
+      "Nasals"
     ]
   }
 }

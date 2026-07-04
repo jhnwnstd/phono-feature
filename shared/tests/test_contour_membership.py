@@ -155,18 +155,19 @@ def _mb_inventory() -> Inventory:
     )
 
 
-def test_display_tag_does_not_leak_into_engine_membership():
-    """The display grouper tags ``mb`` as a Contour Consonant, but that
-    is a presentation label: the engine's ∃ query still returns ``mb``
-    for BOTH the nasal feature and the oral-stop feature, answered from
-    the tiers, never from the tag."""
+def test_display_multiset_does_not_leak_into_engine_membership():
+    """The display grouper renders ``mb`` in Nasals AND Plosives (its
+    multi-membership), but that is presentation: the engine's ∃ query
+    still returns ``mb`` for both the nasal closure and the oral release,
+    answered from the tiers, never from a group list."""
     eng = FeatureEngine(_mb_inventory())
-    place = {s: n for n, segs in eng.grouped_segments.items() for s in segs}
-    assert place["mb"] == CONTOUR_GROUP_NAME
-    # ∃ over the tiers: mb reaches +nasal (closure) AND -continuant, so
-    # both queries return it; the tag never enters this computation.
+    groups = eng.grouped_segments
+    assert "mb" in groups.get("Nasals", [])
+    assert "mb" in groups.get("Plosives", [])
+    assert CONTOUR_GROUP_NAME not in groups  # provisional tag retired
+    # ∃ over the tiers: mb reaches +nasal (closure) AND -sonorant (oral
+    # release); both queries return it, computed from the tiers, never
+    # from the display grouping.
     assert "mb" in eng.find_segments({"Nasal": "+"})
     assert "mb" in eng.find_segments({"Continuant": "-"})
-    assert "mb" in eng.find_segments({"Sonorant": "-"})  # oral release
-    # The tag is not a feature the engine can be queried on.
-    assert CONTOUR_GROUP_NAME not in eng.grouped_segments.get("Nasals", [])
+    assert "mb" in eng.find_segments({"Sonorant": "-"})

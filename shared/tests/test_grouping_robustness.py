@@ -64,18 +64,28 @@ def _flat(groups: dict[str, list[str]]) -> list[str]:
     return [seg for segs in groups.values() for seg in segs]
 
 
-def _placement(groups: dict[str, list[str]]) -> dict[str, str]:
-    return {seg: name for name, segs in groups.items() for seg in segs}
+def _membership(groups: dict[str, list[str]]) -> dict[str, set[str]]:
+    """Each segment -> the SET of groups it renders in. group_segments is
+    a MULTISET: a segment reaching several manner classes appears in each,
+    so membership is a set, not a single label."""
+    out: dict[str, set[str]] = {}
+    for name, segs in groups.items():
+        for seg in segs:
+            out.setdefault(seg, set()).add(name)
+    return out
 
 
-def _assert_partitions(inv: dict[str, dict[str, str]]) -> dict[str, str]:
-    """Grouping must place every segment exactly once. Returns the
-    seg -> group placement for further per-segment assertions."""
+def _assert_covers(inv: dict[str, dict[str, str]]) -> dict[str, set[str]]:
+    """Grouping must COVER every segment (place each in >= 1 group, none
+    invented, none listed twice in one group) and may place a
+    multi-membership segment in several groups. Returns the seg -> set of
+    groups membership for further per-segment assertions."""
     groups = group_segments(inv)
     flat = _flat(groups)
-    assert sorted(flat) == sorted(inv), "grouping is not a partition"
-    assert len(flat) == len(set(flat)), "a segment landed in two groups"
-    return _placement(groups)
+    assert set(flat) == set(inv), "grouping dropped or invented a segment"
+    for name, segs in groups.items():
+        assert len(segs) == len(set(segs)), f"{name} lists a segment twice"
+    return _membership(groups)
 
 
 # --------------------------------------------------------------------
@@ -97,9 +107,9 @@ def _hayes_collapse_inv() -> dict[str, dict[str, str]]:
 
 
 def test_collapse_encoded_affricate_is_classified() -> None:
-    place = _assert_partitions(_hayes_collapse_inv())
-    assert place["ts"] in _AFFRICATE_LABELS, place
-    assert place["t"] == "Plosives", place
+    place = _assert_covers(_hayes_collapse_inv())
+    assert place["ts"] & _AFFRICATE_LABELS, place
+    assert "Plosives" in place["t"], place
 
 
 def test_contour_encoded_affricate_is_classified() -> None:
@@ -113,10 +123,10 @@ def test_contour_encoded_affricate_is_classified() -> None:
     }
     sequences = {"aff": {"continuant": ("-", "+"), "delrel": ("-", "+")}}
     groups = group_segments(inv, sequences=sequences)
-    place = _placement(groups)
+    place = _membership(groups)
     assert sorted(_flat(groups)) == sorted(inv)
-    assert place["aff"] in _AFFRICATE_LABELS, place
-    assert place["t"] == "Plosives", place
+    assert place["aff"] & _AFFRICATE_LABELS, place
+    assert "Plosives" in place["t"], place
 
 
 def test_stop_sonorant_cluster_is_not_an_affricate_by_contour() -> None:
@@ -127,8 +137,8 @@ def test_stop_sonorant_cluster_is_not_an_affricate_by_contour() -> None:
     inv = {"t": {**_STOP, "DelRel": "-"}, "tr": {**_STOP, "DelRel": "-"}}
     # sonorant release: continuant contours but delrel stays "-"
     sequences = {"tr": {"continuant": ("-", "+")}}
-    place = _placement(group_segments(inv, sequences=sequences))
-    assert place["tr"] not in _AFFRICATE_LABELS, place
+    place = _membership(group_segments(inv, sequences=sequences))
+    assert not (place["tr"] & _AFFRICATE_LABELS), place
 
 
 def test_grouping_reads_the_whole_sequence_including_interior() -> None:
@@ -140,8 +150,8 @@ def test_grouping_reads_the_whole_sequence_including_interior() -> None:
     sequences = {
         "x": {"continuant": ("-", "-", "+"), "delrel": ("-", "+", "-")}
     }
-    place = _placement(group_segments(inv, sequences=sequences))
-    assert place["x"] in _AFFRICATE_LABELS, place
+    place = _membership(group_segments(inv, sequences=sequences))
+    assert place["x"] & _AFFRICATE_LABELS, place
 
 
 # --------------------------------------------------------------------
@@ -158,9 +168,9 @@ def test_novel_feature_system_degrades_to_catch_alls() -> None:
         "x2": {"Blorp": "-", "Zizz": "+"},
         "x3": {"Quux": "0"},
     }
-    place = _assert_partitions(inv)
+    place = _assert_covers(inv)
     assert all(
-        g in (CONTOID_GROUP_NAME, VOCOID_GROUP_NAME) for g in place.values()
+        m <= {CONTOID_GROUP_NAME, VOCOID_GROUP_NAME} for m in place.values()
     ), place
 
 
@@ -177,7 +187,7 @@ def test_sparse_and_contradictory_segments_do_not_vanish() -> None:
             "Sonorant": "-",
         },
     }
-    _assert_partitions(inv)  # asserts partition + no exception
+    _assert_covers(inv)  # asserts partition + no exception
 
 
 def test_empty_inventory_is_empty() -> None:
@@ -234,7 +244,7 @@ def _random_inventory(draw: st.DrawFn) -> dict[str, dict[str, str]]:
 def test_grouping_always_partitions(inv: dict[str, dict[str, str]]) -> None:
     """No generated inventory makes a segment vanish, duplicate, or
     raise: the grouper always returns a clean partition."""
-    _assert_partitions(inv)
+    _assert_covers(inv)
 
 
 @given(_random_inventory())
@@ -245,7 +255,7 @@ def test_vowel_phonemes_never_in_a_consonant_class(
     """A vowel-phoneme (``Syllabic=+``, not ``Consonantal=+``, not a
     click) is barred from every consonant manner class; it lands in
     Vowels or the Vocoid catch-all."""
-    place = _assert_partitions(inv)
+    place = _assert_covers(inv)
     for seg, bundle in inv.items():
         nb = normalize_feature_bundle(bundle)
         is_vowel_phoneme = (
@@ -254,4 +264,4 @@ def test_vowel_phonemes_never_in_a_consonant_class(
             and nb.get("click") != "+"
         )
         if is_vowel_phoneme:
-            assert place[seg] not in _MANNER_GROUPS, (seg, place[seg])
+            assert place[seg].isdisjoint(_MANNER_GROUPS), (seg, place[seg])

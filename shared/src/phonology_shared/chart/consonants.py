@@ -1029,6 +1029,7 @@ def _break_out_by_spec(
     seqs: Mapping[str, Mapping[str, Sequence[str]]],
     active_features: set[str],
     n: int,
+    multi_segs: frozenset[str] | set[str] = frozenset(),
 ) -> None:
     """Peel spec-defined subclasses off their manner parents.
 
@@ -1052,6 +1053,11 @@ def _break_out_by_spec(
             continue
 
         def _spec_match(s: str, cond: dict[str, str] = cond) -> bool:
+            if s in multi_segs:
+                # A multi-membership segment stays in each coarse class it
+                # reaches; peeling it into an onset-derived sub-class would
+                # privilege a phase.
+                return False
             for f, v in cond.items():
                 tier = seqs.get(s, {}).get(f)
                 vals = set(tier) if tier else {norm[s].get(f, "0")}
@@ -1075,6 +1081,7 @@ def _break_out_by_laryngeal_kind(
     assignment: dict[str, list[str]],
     norm: Mapping[str, dict[str, str]],
     n: int,
+    multi_segs: frozenset[str] | set[str] = frozenset(),
 ) -> None:
     """Peel Implosives / Ejective {Plosives, Fricatives, Affricates}
     off their manner parents using the typed :class:`LaryngealKind`
@@ -1094,6 +1101,8 @@ def _break_out_by_laryngeal_kind(
     for new_name, parent_name, target_kind in _FACT_BREAKOUTS:
 
         def _kind_match(s: str, kind: LaryngealKind = target_kind) -> bool:
+            if s in multi_segs:
+                return False
             return derive_laryngeal_kind(norm[s]) == kind
 
         _apply_breakout(assignment, new_name, parent_name, _kind_match, n)
@@ -1282,12 +1291,125 @@ def _sort_into_display_order(
     are dropped."""
     return {
         name: sorted(
-            assignment[name],
+            # dedup WITHIN a group (a segment may appear in several groups
+            # under the multiset, but never twice in one), order-stable
+            # via the sort key below
+            dict.fromkeys(assignment[name]),
             key=lambda s: _segment_sort_key(norm[s], profile),
         )
         for name in DISPLAY_ORDER
         if assignment.get(name)
     }
+
+
+# The coarse manner specs the ∃-reach considers: PRIMARY_GROUPS minus the
+# hard-gated Clicks / Vowels / Tones. Clicks are handled by an explicit
+# ∃click test (best_primary hard-gates click:+ to Clicks); Vowels/Tones
+# are the major-class split, not a consonant manner reached here.
+_REACH_SPECS: list[tuple[str, dict[str, str]]] = [
+    (name, spec)
+    for name, spec in PRIMARY_GROUPS
+    if name not in ("Clicks", VOWEL_GROUP_NAME, TONES_GROUP_NAME)
+]
+# Pulmonic-obstruent specs a click's oral closure must NOT satisfy: a
+# click is its own (velaric) airstream, so it reaches Clicks, never
+# Plosives/Fricatives. Nasality/sonorance ARE orthogonal (a nasal click
+# IS nasal), so those specs still see a click phase.
+_CLICK_EXCLUDES: frozenset[str] = frozenset({"Plosives", "Fricatives"})
+
+
+def _reach_phase_bundles(
+    tiers: Mapping[str, tuple[str, ...]],
+) -> list[dict[str, str]]:
+    """Every phase of a segment as a ``{feature: value}`` bundle. Aligned
+    tiers give their columns; a ragged (Misaligned) segment gives its two
+    total anchors (onset + offset), the endpoints the source pins even
+    when the interior has no derivable alignment."""
+    varying = {f: t for f, t in tiers.items() if len(t) > 1}
+    lengths = {len(t) for t in varying.values()}
+    if len(lengths) > 1:
+        onset = {f: t[0] for f, t in tiers.items()}
+        offset = {f: t[-1] for f, t in tiers.items()}
+        return [onset, offset]
+    n = lengths.pop() if lengths else 1
+    return [
+        {f: (t[i] if len(t) == n else t[0]) for f, t in tiers.items()}
+        for i in range(n)
+    ]
+
+
+def _reach_bundle_matches(
+    bundle: dict[str, str], spec: dict[str, str], min_pos: int
+) -> bool:
+    """is_member's positive-evidence test on one phase bundle: count spec
+    features the bundle states matching, require >= min_pos. The major
+    class is guarded by the caller."""
+    matched = 0
+    for feat, want in spec.items():
+        val = bundle.get(feat, "0")
+        if val == "0":
+            continue
+        if val != want:
+            return False
+        matched += 1
+    return matched >= min_pos
+
+
+def reached_classes(
+    norm_bundle: Mapping[str, str],
+    seg_seqs: Mapping[str, Sequence[str]],
+) -> set[str]:
+    """The set of COARSE manner classes a segment EXISTENTIALLY reaches:
+    some phase satisfies the class's is_member test (plus the affricate
+    ∃-rule and the click gate). This is the substance-free membership the
+    multiset display renders — a genuinely multi-phase segment reaches
+    several classes and no phase is privileged. ``mb`` reaches Nasals (its
+    nasal phase) and Plosives (its oral-stop phase).
+
+    ``norm_bundle`` is the segment's normalized single-value bundle and
+    ``seg_seqs`` its contour sequences, both keyed by the engine's
+    canonical feature name (so ``Velaric`` reads as ``click``). Reads the
+    tiers only; never a group label or a chosen phase. This is the ONE
+    source of truth, shared with the ∃-reach fixture generator.
+    """
+    tiers: dict[str, tuple[str, ...]] = {
+        f: (v,) for f, v in norm_bundle.items()
+    }
+    for feat, seq in seg_seqs.items():
+        tiers[feat] = tuple(str(v) for v in seq)
+    phases = _reach_phase_bundles(tiers)
+    reached: set[str] = set()
+    if any(b.get("click") == "+" for b in phases):
+        reached.add("Clicks")
+    has_closure = any(
+        b.get("consonantal") == "+"
+        and b.get("sonorant") != "+"
+        and b.get("continuant") == "-"
+        and b.get("click") != "+"
+        for b in phases
+    )
+    if has_closure and "+" in tiers.get("delrel", ()):
+        reached.add("Affricates")
+    for name, spec in _REACH_SPECS:
+        min_pos = _MIN_POSITIVE.get(name, 1)
+        for bundle in phases:
+            if (
+                bundle.get("syllabic") == "+"
+                and bundle.get("consonantal") != "+"
+            ):
+                continue  # vowel phase
+            if (
+                bundle.get("tone") == "+"
+                and bundle.get("consonantal") != "+"
+                and bundle.get("syllabic") != "+"
+            ):
+                continue  # tone phase
+            if bundle.get("click") == "+" and name in _CLICK_EXCLUDES:
+                continue  # a click closure is not a pulmonic obstruent
+            if _reach_bundle_matches(bundle, spec, min_pos):
+                reached.add(name)
+                break
+    return reached
 
 
 def group_segments(
@@ -1598,48 +1720,47 @@ def group_segments(
             return ""
         return "Affricates"
 
-    def contour_consonant(sym: str) -> str:
-        """Route a CONSONANT carrying a genuine manner contour to the
-        provisional :data:`CONTOUR_GROUP_NAME` tag instead of any single
-        manner class.
-
-        Such a segment reaches several manner classes across its phases
-        (``mb`` is existentially nasal and existentially an oral stop),
-        so labelling it by one class would privilege a phase the set
-        theory does not rank. The affricate rule already ran and is
-        phase-agnostic (it fires on ``∃[-cont]`` AND ``∃[+delrel]``), so
-        an affricate keeps its definite class; this catches the REMAINING
-        contour consonants whose manner is genuinely multi-valued.
-
-        A vowel-like contour (a diphthong, reaching ``[+syllabic]`` in
-        some phase) is NOT tagged here: it belongs to the vowel area, so
-        it falls through to the vowel/vocoid routing. Major class is read
-        existentially so a rising diphthong (``i̯a``) is not mistaken for
-        a consonant.
-        """
-        if not any(len(t) > 1 for t in seqs.get(sym, {}).values()):
-            return ""  # single-phase: no contour, keep its ordinary bucket
-        if "+" in phase_values(sym, "syllabic"):
-            return ""  # vowel-like: hand to the vowel area
-        return CONTOUR_GROUP_NAME
-
-    # Stage 1: assign every segment to a primary group. An affricate
-    # wins first (a phase-agnostic ∃ rule), then a consonant that still
-    # carries a genuine manner contour is tagged rather than forced into
-    # one manner class, then the positive-evidence best_primary, then the
-    # mismatch-minimising fallback. A segment that matches no manner/place
-    # spec would otherwise vanish from the grouped payload (still in the
-    # flat segment list, rendered nowhere), so route it to a catch-all: a
-    # vocoid (vowel-like) lands under the vowel chart, anything else under
-    # the consonants.
+    # Stage 1: assign every segment to its display group(s). A CONSONANT
+    # whose tiers existentially reach MORE THAN ONE coarse manner class is
+    # a genuine multi-membership segment (``mb`` reaches Nasals AND
+    # Plosives): it is appended to EVERY class it reaches, driven purely
+    # by ``reached_classes`` off the tiers, never a privileged phase. A
+    # vowel-like segment (reaching ``[+syllabic]`` in some phase, e.g. a
+    # rising diphthong) stays on the single-pick path so it routes to the
+    # vowel area, not into consonant manner rows. Every other segment
+    # (single coarse class) keeps the existing single-pick and refines as
+    # today: an affricate wins first (a phase-agnostic ∃ rule), then the
+    # positive-evidence best_primary, then the mismatch-minimising
+    # fallback, then the Contoid/Vocoid catch-all so nothing vanishes.
     assignment: dict[str, list[str]] = defaultdict(list)
+    multi_reach: dict[str, set[str]] = {}
     for sym, feats in norm.items():
-        group = (
-            affricate_group(sym, feats)
-            or contour_consonant(sym)
-            or best_primary(feats)
-            or fallback_assignment(feats)
-        )
+        # A plain affricate wins first: ``affricate_group`` is a phase-
+        # agnostic ∃ rule giving the SPECIFIC Affricates manner, which
+        # subsumes the stop-then-fricative structure, so a contour
+        # affricate is Affricates rather than scattered into Plosives +
+        # Fricatives. A PRENASALIZED affricate is rejected here (onset
+        # ``[+sonorant]``) and reaches Affricates + Nasals through the
+        # multiset below, where the two are genuinely disjoint classes.
+        aff = affricate_group(sym, feats)
+        if aff:
+            assignment[aff].append(sym)
+            continue
+        # Otherwise: a consonant whose tiers existentially reach MORE THAN
+        # ONE coarse manner class is a genuine multi-membership segment
+        # (``mb`` reaches Nasals AND Plosives; a nasal click reaches Clicks
+        # AND Nasals), appended to EVERY class it reaches, driven purely by
+        # ``reached_classes`` off the tiers, never a privileged phase. A
+        # vowel-like segment (reaching ``[+syllabic]`` in some phase) stays
+        # on the single-pick path so it routes to the vowel area.
+        reached = reached_classes(feats, seqs.get(sym, {}))
+        is_vowelish = "+" in phase_values(sym, "syllabic")
+        if len(reached) > 1 and not is_vowelish:
+            multi_reach[sym] = reached
+            for group in reached:
+                assignment[group].append(sym)
+            continue
+        group = best_primary(feats) or fallback_assignment(feats)
         if not group:
             group = (
                 VOCOID_GROUP_NAME if _is_vocoid(feats) else CONTOID_GROUP_NAME
@@ -1648,15 +1769,38 @@ def group_segments(
 
     # Stages 2-8: reshape the group set. Each stage is a named function
     # above; read them top-to-bottom to trace how the raw per-segment
-    # assignment becomes the final class list.
+    # assignment becomes the final class list. The onset-reading breakouts
+    # SKIP the multi-membership segments (``multi_segs``): a segment that
+    # reaches several coarse classes stays in each of them and must not be
+    # peeled into an onset-derived sub-class, which would privilege a
+    # phase and diverge from its existential reach.
     n = len(inventory)
-    _break_out_by_spec(assignment, norm, seqs, active_features, n)
-    _break_out_by_laryngeal_kind(assignment, norm, n)
+    multi_segs = frozenset(multi_reach)
+    _break_out_by_spec(assignment, norm, seqs, active_features, n, multi_segs)
+    _break_out_by_laryngeal_kind(assignment, norm, n, multi_segs)
     _relabel_small_origin_sets(assignment, n)
     _merge_small_derived_pairs(assignment, norm, n)
     _fold_small_groups_into_parents(assignment, n)
     _relabel_vibrants_to_rhotics(assignment, norm)
     _rescue_laryngeals(assignment, norm, active_features)
+
+    # Pin every multi-membership segment to EXACTLY its coarse ∃-reach
+    # classes. The population-based relabel / merge / fold / rescue stages
+    # above are display covers (small Trills+Taps -> Vibrants -> Rhotics,
+    # etc.) that legitimately apply to single-membership segments but are
+    # inventory-dependent; letting them move a multi-answer segment would
+    # make its membership vary by inventory and diverge from the classes
+    # its tiers determine. So a multi segment follows the set theory, not
+    # the cover: remove it from any class it does not reach and ensure it
+    # is present in each class it does. This is the substance-free pin
+    # (Bale & Reiss 2018; Reiss 2021) and keeps the multiset stable.
+    for sym, target in multi_reach.items():
+        for name in list(assignment):
+            if name not in target and sym in assignment[name]:
+                assignment[name] = [s for s in assignment[name] if s != sym]
+        for name in target:
+            if sym not in assignment[name]:
+                assignment[name].append(sym)
 
     # Stage 9: emit in display order, each group place-sorted.
     return _sort_into_display_order(assignment, norm, profile)

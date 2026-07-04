@@ -60,7 +60,14 @@ def count_segment_classes(
     contract as :py:func:`group_segments`.
     """
     groups = group_segments(inventory, normalized=normalized)
-    n_total = sum(len(segs) for segs in groups.values())
+    # Count DISTINCT symbols: group_segments is a MULTISET (a consonant
+    # that existentially reaches several manner classes appears in each),
+    # so ``sum(len)`` would double-count it and could spuriously trip the
+    # consonant cap. A symbol in a consonant class is never also in Vowels
+    # or Tones (those are the disjoint major classes), so subtracting the
+    # vowel and tone counts from the distinct total yields the distinct
+    # consonant count.
+    n_total = len({s for segs in groups.values() for s in segs})
     n_vowels = len(groups.get(VOWEL_GROUP_NAME, []))
     n_tones = len(groups.get(TONES_GROUP_NAME, []))
     n_consonants = n_total - n_vowels - n_tones
