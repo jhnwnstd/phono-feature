@@ -164,3 +164,56 @@ def initial_phase_value(value: str) -> str:
     return (
         contour[0] if contour is not None else normalize_phoible_value(value)
     )
+
+
+def phoible_row_to_tiers(
+    row: Mapping[str, str],
+) -> dict[str, tuple[str, ...]]:
+    """Convert one raw PHOIBLE feature row into canonical per-feature
+    TIERS ``{app_feature: (value, ...)}``.
+
+    This is the PHOIBLE adapter: the single place that encodes PHOIBLE's
+    facts and commits to nothing above them. It knows the app feature
+    names (:py:data:`PHOIBLE_TO_APP_FEATURE`), the ``+`` / ``-`` / ``0``
+    alphabet, the comma-separated contour convention, and the rule that a
+    feature which does not change is written single-valued (so there is
+    never a constant ``"+,+"`` contour). Each feature maps to the
+    VERBATIM sequence of values PHOIBLE states, in order; nothing is
+    flattened, reduced, or aligned here.
+
+    A PHOIBLE column that is empty or ``"NA"`` is source SILENCE and is
+    omitted, which is distinct from a stated ``"0"`` (an asserted
+    not-applicable, kept as ``("0",)``). :py:func:`ValueError` is raised
+    on a token outside the alphabet or a constant contour, so a
+    malformed source row surfaces instead of being silently patched.
+    """
+    tiers: dict[str, tuple[str, ...]] = {}
+    for phoible_col, app_name in PHOIBLE_TO_APP_FEATURE.items():
+        raw = row.get(phoible_col, "")
+        if raw in ("", "NA"):
+            continue  # source silence: distinct from a stated "0"
+        parts = tuple(p.strip() for p in raw.split(","))
+        bad = [p for p in parts if p not in ("+", "-", "0")]
+        if bad:
+            raise ValueError(
+                f"{app_name}: value(s) {bad!r} outside the +/-/0 alphabet"
+            )
+        if len(parts) > 1 and len(set(parts)) == 1:
+            raise ValueError(
+                f"{app_name}: constant contour {parts!r}; PHOIBLE writes "
+                "a single value for a feature that does not change"
+            )
+        tiers[app_name] = parts
+    return tiers
+
+
+def tiers_to_cells(
+    tiers: Mapping[str, tuple[str, ...]],
+) -> dict[str, str]:
+    """Round-trip a tier map back to PHOIBLE-style cells: join each
+    sequence with commas, a singleton staying single. Order preserved, so
+    ``("-", "+")`` re-emits ``"-,+"`` and never ``"+,-"``."""
+    return {
+        feat: (vals[0] if len(vals) == 1 else ",".join(vals))
+        for feat, vals in tiers.items()
+    }
