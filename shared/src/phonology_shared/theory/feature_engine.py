@@ -33,6 +33,7 @@ from phonology_shared.data.inventory import (
     VALID_VALUES,
     Inventory,
     normalize_feature_bundle,
+    normalize_feature_key,
 )
 
 _log = logging.getLogger(__name__)
@@ -352,22 +353,30 @@ class FeatureEngine:
         for the wildcard path.
         """
         features = self._inventory.features
-        spec: dict[str, set[str]] = {f: set() for f in features}
         plus: dict[str, set[str]] = {f: set() for f in features}
         minus: dict[str, set[str]] = {f: set() for f in features}
+        # Iterate each phase's OWN items (the features it specifies)
+        # rather than probing all declared features per segment: absent
+        # and ``"0"`` features contribute nothing, so a bundle's keys are
+        # exactly the ones that matter. Phase keys are folded onto the
+        # declared feature set at parse time, so every key indexes an
+        # existing bucket.
         for seg in self._inventory.segments:
             for phase in self._inventory.segment_phases(seg):
-                for f in features:
-                    v = phase.get(f, "0")
+                for f, v in phase.items():
                     if v == "+":
-                        spec[f].add(seg)
                         plus[f].add(seg)
                     elif v == "-":
-                        spec[f].add(seg)
                         minus[f].add(seg)
-        self.spec_segs = {f: frozenset(s) for f, s in spec.items()}
         self.plus_segs = {f: frozenset(s) for f, s in plus.items()}
         self.minus_segs = {f: frozenset(s) for f, s in minus.items()}
+        # A segment is in ``spec_segs[f]`` iff it is explicitly ``+`` or
+        # ``-`` there (not ``"0"`` / absent), i.e. the union of the two
+        # polarity sets. Deriving it here drops a per-value set insertion
+        # from the hot inner loop above.
+        self.spec_segs = {
+            f: self.plus_segs[f] | self.minus_segs[f] for f in features
+        }
         self._plus_excl = {
             f: self.plus_segs[f] - self.minus_segs[f] for f in features
         }
@@ -494,12 +503,26 @@ class FeatureEngine:
     @cached_property
     def normalized_segment_feats(self) -> dict[str, dict[str, str]]:
         """Per-segment feature bundles with names normalized to the
-        engine's canonical keys via
-        :py:func:`normalize_feature_bundle`. Same lifetime and
-        invalidation story as :py:attr:`grouped_segments`."""
+        engine's canonical keys. Same lifetime and invalidation story
+        as :py:attr:`grouped_segments`.
+
+        The inventory is parse-validated, so no two raw feature keys
+        fold to one canonical (:py:meth:`Inventory.parse` raises
+        :py:class:`AliasCollisionError` otherwise). That lets us fold
+        each DISTINCT key once and reuse the mapping across every
+        segment, rather than re-folding and re-running the per-bundle
+        collision check inside :py:func:`normalize_feature_bundle` (which
+        must defend the un-validated parse boundary) once per segment.
+        Same output; one fold per key instead of per segment, which
+        matters on the interactive inventory-switch path."""
+        segments = self._inventory.segments
+        canonical = {
+            key: normalize_feature_key(key)
+            for key in {k for bundle in segments.values() for k in bundle}
+        }
         return {
-            seg: normalize_feature_bundle(self._inventory.segments[seg])
-            for seg in self._inventory.segments
+            seg: {canonical[k]: v for k, v in bundle.items()}
+            for seg, bundle in segments.items()
         }
 
     def get_segment_features(self, segment: str) -> dict[str, str]:
