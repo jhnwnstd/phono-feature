@@ -15,7 +15,7 @@ package docstring for the layer table.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 
 from phonology_shared.chart.vowel_space import (
@@ -24,6 +24,7 @@ from phonology_shared.chart.vowel_space import (
     _ROW_LABEL_TO_INDEX,
 )
 from phonology_shared.chart.vowels import (
+    _DIMENSION_KIND_FOR_FEATURE,
     _DISPLAY_CONTRAST_FEATURES,
     _PAIR_KIND_FOR_FEATURE,
     VowelCellDisplayKind,
@@ -79,12 +80,19 @@ def _classify_vowel_cell_display(
     ALREADY-NORMALIZED (lowercase-keyed) bundles; the geometry
     build normalizes the inventory once and shares the result
     between the placer and this classifier. Returns ``(kind,
-    contrast_features, ordered_entries)`` where
+    contrast_features, ordered_entries, grid)`` where
     ``contrast_features`` is the sorted tuple of in-cell-contrast
-    features the entries differ on (``()`` for ``STACK``) and
-    ``ordered_entries`` is the input tuple with the PAIR ordering
-    convention (marked / ``+``-valued member on the right) applied
-    when the kind is a PAIR; otherwise input order is preserved.
+    features the entries differ on (``()`` only for a position-driven
+    stack) and ``ordered_entries`` is the input tuple reordered so the
+    base (unmarked) member leads and the ``+``-valued members trail:
+    the PAIR / capsule convention, and base-first for a contrast-aware
+    stack too.
+
+    An in-cell contrast is a DIMENSION, not a single feature: features
+    that encode the same secondary contrast share one display kind (all
+    phonation features -> PHONATION_PAIR), so the classifier counts
+    dimensions, and any dimension grows to several features the way
+    phonation does.
 
     Decision tree:
       1. < 2 entries -> STACK.
@@ -93,15 +101,18 @@ def _classify_vowel_cell_display(
          a one-sided ``"0"`` does not register as a contrast).
       3. Partition into display features (intersection with
          :py:data:`_DISPLAY_CONTRAST_FEATURES`) and other features.
-      4. If any non-display feature differs -> STACK. The entries
-         differ on a position feature; stacking is the safe layout.
-      5. Two entries differing on exactly one display feature ->
-         the matching PAIR kind (or PHONATION_PAIR for the joint
-         breathy/creaky case).
-      6. Two entries differing on multiple display features OR
-         3-4 entries differing on any display features ->
-         CONTRAST_SET.
-      7. Otherwise -> STACK.
+      4. If any non-display feature differs -> a featureless STACK.
+         The entries differ on a POSITION feature the 2-D quadrilateral
+         cannot resolve; stacking is the honest layout.
+      5. Group the display features by DIMENSION (the kind each maps to
+         via :py:data:`_DIMENSION_KIND_FOR_FEATURE`). ONE dimension ->
+         that dimension's horizontal capsule, however many features or
+         entries encode it (plain / long; plain / breathy / creaky).
+      6. Exactly two differing display FEATURES (two binary dimensions),
+         2-4 entries -> CONTRAST_SET (feature-aligned 2x2).
+      7. Otherwise (3+ dimensions, or a multi-value dimension crossed
+         with another) -> a contrast-AWARE STACK: the contrast features
+         are kept and the entries ordered base-first.
     """
     if len(entries) < 2:
         return VowelCellDisplayKind.STACK, (), entries, ()
@@ -122,51 +133,97 @@ def _classify_vowel_cell_display(
     if differing_other or not differing_display:
         return VowelCellDisplayKind.STACK, (), entries, ()
     contrast = tuple(sorted(differing_display))
-    n_feats = len(differing_display)
-    # ONE secondary contrast (length OR nasal OR rhotic OR phonation OR
-    # tone): a HORIZONTAL variant capsule of any size (2, 3, 4). The
-    # feature keys the display kind; entries order plain -> marked.
-    if n_feats == 1:
-        (only,) = differing_display
-        if only in ("breathy", "creaky"):
-            kind = VowelCellDisplayKind.PHONATION_PAIR
-        else:
-            kind = _PAIR_KIND_FOR_FEATURE.get(
-                only, VowelCellDisplayKind.CONTRAST_SET
-            )
-        ordered = _order_variant_row(entries, bundles, only, kind)
-        return kind, contrast, ordered, ()
-    if differing_display.issubset({"breathy", "creaky"}):
-        # Joint breathy/creaky (two features, but the phonation
-        # dimension) reads as one horizontal phonation capsule.
-        ordered = _order_pair_entries(
-            entries, bundles, VowelCellDisplayKind.PHONATION_PAIR
+    # Group the differing contrast features by their DIMENSION (the display
+    # kind each maps to). Features that encode the SAME secondary contrast
+    # share a dimension (all phonation features -> PHONATION_PAIR); an
+    # unrostered contrast feature is its own single-feature dimension.
+    dimensions = {
+        _DIMENSION_KIND_FOR_FEATURE.get(feat, feat)
+        for feat in differing_display
+    }
+    # ONE dimension, however many features or values encode it: a single
+    # HORIZONTAL variant capsule (plain / long; plain / breathy / creaky;
+    # ...). The kind is the dimension; entries order plain (base) -> marked.
+    if len(dimensions) == 1:
+        (dimension,) = dimensions
+        kind = (
+            dimension
+            if isinstance(dimension, VowelCellDisplayKind)
+            else VowelCellDisplayKind.CONTRAST_SET
         )
-        return VowelCellDisplayKind.PHONATION_PAIR, contrast, ordered, ()
-    # TWO secondary contrasts (e.g. length x nasal): a feature-ALIGNED
-    # 2x2 gridded capsule for 3-4 entries (columns = one contrast,
-    # rows = the other). Dzongkha's u/uː/ũː land here.
-    if n_feats == 2 and 2 <= len(entries) <= 4:
+        ordered = _order_variant_row(entries, bundles, differing_display, kind)
+        return kind, contrast, ordered, ()
+    # TWO binary single-feature dimensions (e.g. length x nasal): a
+    # feature-ALIGNED 2x2 gridded capsule for 3-4 entries (columns = one
+    # contrast, rows = the other). Dzongkha's u/uː/ũː land here. A wider
+    # combination (a multi-value dimension, or 3+ dimensions) stacks.
+    if len(differing_display) == 2 and 2 <= len(entries) <= 4:
         ordered, grid = _grid_layout(entries, bundles, contrast)
         return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid
-    # >2 contrasts, or too many entries: stack (no clean linked layout).
-    return VowelCellDisplayKind.STACK, (), entries, ()
+    # >2 secondary contrasts (or too many entries) for a clean linked
+    # capsule: stack. This is the honest fallback for a cell the 2-D
+    # layouts cannot resolve (e.g. !Xoo's plain / pharyngealised / breathy
+    # / creaky / strident / nasal series at one quality). Keep the contrast
+    # features and order the stack base-form first, then by those features,
+    # so the pile reads as a series a renderer can label rather than an
+    # arbitrary column; only a POSITION-feature difference (the branch
+    # above) yields a truly featureless stack.
+    ordered = _order_stack_entries(entries, bundles, contrast)
+    return VowelCellDisplayKind.STACK, contrast, ordered, ()
+
+
+def _order_stack_entries(
+    entries: tuple[str, ...],
+    bundles: list[Mapping[str, str]],
+    contrast: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Order a stacked cell so it reads as a series, not an arbitrary pile.
+
+    The base form (no ``+`` on any contrast feature) comes first, then the
+    single-feature variants, then any multi-marked entries, and within each
+    tier by the contrast features in ``contrast`` order (already sorted).
+    Deterministic and stable, and it privileges nothing phonological: the
+    key is (count of ``+`` contrast features, the contrast-value tuple), a
+    pure display ordering over the features the entries already carry."""
+
+    def key(i: int) -> tuple[int, tuple[str, ...]]:
+        bundle = bundles[i]
+        marked = sum(1 for feat in contrast if bundle.get(feat) == "+")
+        return marked, tuple(bundle.get(feat, "0") for feat in contrast)
+
+    order = sorted(range(len(entries)), key=key)
+    return tuple(entries[i] for i in order)
 
 
 def _order_variant_row(
     entries: tuple[str, ...],
     bundles: list[Mapping[str, str]],
-    feat: str,
+    feats: Collection[str],
     kind: VowelCellDisplayKind,
 ) -> tuple[str, ...]:
-    """Order a single-feature variant group left-to-right, plain member(s)
-    first and the ``+``-valued (marked) member(s) on the right. Phonation
-    keeps its modal-first ordering."""
-    if kind == VowelCellDisplayKind.PHONATION_PAIR:
+    """Order a single-DIMENSION variant group left-to-right: base
+    (unmarked) member(s) first, ``+``-valued (marked) member(s) to the
+    right. ``feats`` is the dimension's differing features (one for a
+    simple pair, several for phonation).
+
+    A 2-entry group keeps the established pair convention
+    (:py:func:`_order_pair_entries`, incl. phonation modal-first). A wider
+    series orders base-first by mark count then feature value, so a
+    plain / breathy / creaky row reads base -> variants deterministically
+    for any number of entries or encoding features."""
+    if len(entries) == 2 and (
+        kind in _PAIR_KIND_TO_FEATURE
+        or kind == VowelCellDisplayKind.PHONATION_PAIR
+    ):
         return _order_pair_entries(entries, bundles, kind)
-    order = sorted(
-        range(len(entries)), key=lambda i: bundles[i].get(feat) == "+"
-    )
+    ordered_feats = sorted(feats)
+
+    def key(i: int) -> tuple[int, tuple[str, ...]]:
+        bundle = bundles[i]
+        marked = sum(1 for feat in ordered_feats if bundle.get(feat) == "+")
+        return marked, tuple(bundle.get(feat, "0") for feat in ordered_feats)
+
+    order = sorted(range(len(entries)), key=key)
     return tuple(entries[i] for i in order)
 
 

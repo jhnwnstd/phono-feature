@@ -171,21 +171,74 @@ class VowelCellDisplayKind(StrEnum):
 #: entries tagged with ``USE_VOWEL_PAIR`` so the contrast roster
 #: lives next to every other feature-name decision instead of being
 #: duplicated here. The current set: ``{long, nasal, rhotic,
-#: breathy, creaky, tone, rtr}`` (``rtr`` links pharyngealised /
-#: retracted-tongue-root vowels to their plain counterpart).
+#: breathy, creaky, strident, tone, rtr, spreadgl, constrgl,
+#: epilaryngealsource}`` (``rtr`` links pharyngealised /
+#: retracted-tongue-root vowels to their plain counterpart; the
+#: glottal-state trio ``spreadgl`` / ``constrgl`` /
+#: ``epilaryngealsource`` is how PHOIBLE encodes the breathy / creaky
+#: / strident phonation the ``breathy`` / ``creaky`` / ``strident``
+#: canonicals name in other systems).
 _DISPLAY_CONTRAST_FEATURES: frozenset[str] = features_for_use(USE_VOWEL_PAIR)
 
 
 #: PAIR display kinds keyed by the single contrast feature that
 #: produced them. Used in classification and in pair-ordering so
 #: the "marked" (``+``-valued) entry consistently lands on the
-#: right side of the rendered pair.
+#: right side of the rendered pair. The phonation features are not
+#: here: they share one kind (``PHONATION_PAIR``) via
+#: :py:data:`_PHONATION_CONTRAST_FEATURES` rather than a per-feature
+#: mapping, so a plain / breathy / creaky / strident contrast reads as
+#: one phonation capsule whichever feature drove it.
 _PAIR_KIND_FOR_FEATURE: dict[str, VowelCellDisplayKind] = {
     "long": VowelCellDisplayKind.LONG_PAIR,
     "nasal": VowelCellDisplayKind.NASAL_PAIR,
     "rhotic": VowelCellDisplayKind.RHOTIC_PAIR,
     "tone": VowelCellDisplayKind.TONE_PAIR,
     "rtr": VowelCellDisplayKind.PHARYNGEAL_PAIR,
+}
+
+
+#: The laryngeal-phonation contrast features: a vowel cell whose
+#: entries differ only within this set reads as ONE horizontal
+#: phonation capsule (:py:attr:`VowelCellDisplayKind.PHONATION_PAIR`),
+#: regardless of which feature system encoded the contrast. ``breathy``
+#: / ``creaky`` / ``strident`` are the phonation-label canonicals;
+#: ``spreadgl`` / ``constrgl`` / ``epilaryngealsource`` are the PHOIBLE
+#: glottal-state features for the SAME breathy / creaky / strident
+#: voicing (so a PHOIBLE inventory like !Xoo links its phonation series
+#: the same way a ``breathy``-coded one would). Every member is also in
+#: :py:data:`_DISPLAY_CONTRAST_FEATURES` via its ``USE_VOWEL_PAIR`` tag,
+#: so a member that ever loses that tag simply falls back to a stack.
+_PHONATION_CONTRAST_FEATURES: frozenset[str] = frozenset(
+    {
+        "breathy",
+        "creaky",
+        "strident",
+        "spreadgl",
+        "constrgl",
+        "epilaryngealsource",
+    }
+)
+
+
+#: Every in-cell contrast feature mapped to its DIMENSION, identified by
+#: the display kind a cell shows when its entries vary only within that
+#: dimension. Features that encode the SAME secondary contrast share a
+#: kind, so the classifier groups by dimension: a cell varying within one
+#: dimension is that dimension's capsule whichever feature (or feature
+#: system) drove it. Phonation is the dimension that spans several features
+#: today; the others are single-feature but grow the same way if a system
+#: encodes them with more than one name (e.g. a second length or tone
+#: feature). Superset of :py:data:`_PAIR_KIND_FOR_FEATURE`, which stays
+#: phonation-free because its inverse drives 2-entry pair ordering. A
+#: rostered contrast feature absent here is treated by the classifier as
+#: its own single-feature dimension.
+_DIMENSION_KIND_FOR_FEATURE: dict[str, VowelCellDisplayKind] = {
+    **_PAIR_KIND_FOR_FEATURE,
+    **{
+        feat: VowelCellDisplayKind.PHONATION_PAIR
+        for feat in _PHONATION_CONTRAST_FEATURES
+    },
 }
 
 

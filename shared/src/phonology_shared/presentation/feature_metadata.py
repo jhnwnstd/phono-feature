@@ -205,7 +205,12 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         group=GROUP_LARYNGEAL,
         aliases=("SpreadGl", "sg", "spreadGlottis", "spread_glottis", "s.g."),
         systems=_ALL_THREE,
-        uses=frozenset({USE_LARYNGEAL, USE_NATURAL_CLASS}),
+        # USE_VOWEL_PAIR: spread glottis IS the breathy-voice phonation
+        # contrast on vowels. PHOIBLE encodes breathy vowels as
+        # ``spreadgl`` (not the ``breathy`` canonical some systems use),
+        # so without this tag the vowel-cell classifier cannot link a
+        # plain / breathy pair the way it links a ``breathy`` one.
+        uses=frozenset({USE_LARYNGEAL, USE_NATURAL_CLASS, USE_VOWEL_PAIR}),
     ),
     "constrgl": FeatureMetadata(
         canonical="constrgl",
@@ -219,7 +224,10 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
             "c.g.",
         ),
         systems=_ALL_THREE,
-        uses=frozenset({USE_LARYNGEAL, USE_NATURAL_CLASS}),
+        # USE_VOWEL_PAIR: constricted glottis IS the creaky-voice
+        # phonation contrast on vowels, the PHOIBLE-side counterpart of
+        # the ``creaky`` canonical (same reason as ``spreadgl`` above).
+        uses=frozenset({USE_LARYNGEAL, USE_NATURAL_CLASS, USE_VOWEL_PAIR}),
     ),
     "epilaryngealsource": FeatureMetadata(
         canonical="epilaryngealsource",
@@ -233,7 +241,11 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         # reads as a child of ``voice`` in the Feature Pane.
         subgroup="voice",
         systems=_PHOIBLE_ONLY,
-        uses=frozenset({USE_LARYNGEAL}),
+        # USE_VOWEL_PAIR: epilaryngeal (strident / sphincteric) voice is
+        # a vowel phonation contrast (e.g. Taa aᴱ vs a), the PHOIBLE
+        # encoding of the ``strident`` vowel contrast, so the classifier
+        # links it as one more phonation variant.
+        uses=frozenset({USE_LARYNGEAL, USE_VOWEL_PAIR}),
     ),
     "fortis": FeatureMetadata(
         canonical="fortis",

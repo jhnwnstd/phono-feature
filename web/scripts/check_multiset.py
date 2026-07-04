@@ -13,6 +13,7 @@ and asserts:
 
 Run after build.py:  python web/scripts/check_multiset.py
 """
+
 from __future__ import annotations
 
 import http.server
@@ -96,9 +97,7 @@ def run(page) -> int:
     for _ in range(30):
         page.evaluate(fire)
         page.wait_for_timeout(1000)
-        n = page.eval_on_selector(
-            "#phoible-results", "e => e.children.length"
-        )
+        n = page.eval_on_selector("#phoible-results", "e => e.children.length")
         txt = page.eval_on_selector("#phoible-results", "e => e.textContent")
         if n and "match" not in txt.lower():
             typed = True
@@ -139,8 +138,7 @@ def run(page) -> int:
     print(f"  loaded {LANGUAGE}")
 
     # --- 1 + 2: a glyph in >= 2 rows carries the data-multiclass cue ---
-    info = page.evaluate(
-        """() => {
+    info = page.evaluate("""() => {
             const bySeg = {};
             for (const b of document.querySelectorAll(
                     '#seg-grid .seg-btn[data-seg]')) {
@@ -154,8 +152,7 @@ def run(page) -> int:
                 count: btns.length,
                 cues: btns.map((b) => b.dataset.multiclass || null),
             };
-        }"""
-    )
+        }""")
     seg = info["seg"]
     print(f"  multi-membership glyph {seg!r} renders in {info['count']} rows")
     if any(c is None for c in info["cues"]):
@@ -172,11 +169,9 @@ def run(page) -> int:
         f"#seg-grid .seg-btn[data-seg='{seg}']", "el => el.click()"
     )
     page.wait_for_timeout(500)  # let the click flip + bridge reconcile settle
-    states = page.evaluate(
-        f"""() => [...document.querySelectorAll(
+    states = page.evaluate(f"""() => [...document.querySelectorAll(
             '#seg-grid .seg-btn[data-seg=\\'{seg}\\']')]
-            .map((b) => b.dataset.state)"""
-    )
+            .map((b) => b.dataset.state)""")
     if len(set(states)) != 1 or states[0] == "default":
         return _fail(f"{seg!r} instances not synced after click: {states}")
     print(f"  fan-out ok: all instances -> {states[0]!r}")
@@ -186,10 +181,8 @@ def run(page) -> int:
     page.wait_for_timeout(400)
     page.set_viewport_size({"width": 1280, "height": 720})
     page.wait_for_timeout(400)
-    after = page.evaluate(
-        f"""() => [...document.querySelectorAll(
-            '#seg-grid .seg-btn[data-seg=\\'{seg}\\']')].length"""
-    )
+    after = page.evaluate(f"""() => [...document.querySelectorAll(
+            '#seg-grid .seg-btn[data-seg=\\'{seg}\\']')].length""")
     if after != info["count"]:
         return _fail(
             f"refit collapsed {seg!r} placements: {info['count']} -> {after}"

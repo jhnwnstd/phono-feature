@@ -415,6 +415,143 @@ def test_classify_phonation_pair() -> None:
     assert ordered == ("a", "a̤")
 
 
+def test_classify_phonation_pair_phoible_spread_glottis() -> None:
+    """A plain / breathy contrast encoded the PHOIBLE way (``spreadgl``,
+    the glottal-state feature, not the ``breathy`` canonical) links as a
+    PHONATION_PAIR just the same. This is the roster fix: the phonation
+    features a source actually encodes drive the capsule, so an inventory
+    like !Xoo no longer stacks its breathy vowels anonymously."""
+    from phonology_shared.chart.vowel_geometry.display_slots import (
+        _classify_vowel_cell_display,
+    )
+    from phonology_shared.chart.vowels import VowelCellDisplayKind
+
+    feats = _make_classifier_feats(
+        {
+            "a": {"high": "-", "low": "+", "spreadgl": "-"},
+            "a̤": {"high": "-", "low": "+", "spreadgl": "+"},
+        }
+    )
+    kind, contrast, ordered, _ = _classify_vowel_cell_display(
+        ("a", "a̤"), feats
+    )
+    assert kind == VowelCellDisplayKind.PHONATION_PAIR
+    assert contrast == ("spreadgl",)
+    assert ordered == ("a", "a̤")
+
+
+def test_classify_phonation_dimension_groups_several_features() -> None:
+    """A plain / breathy / creaky cell differs on TWO features (``spreadgl``
+    and ``constrgl``) but ONE dimension (phonation), so it reads as a single
+    horizontal phonation capsule, not a 2x2 or a stack. This is the general
+    rule: features that encode the same secondary contrast collapse to one
+    dimension however many there are. Base (modal) orders first."""
+    from phonology_shared.chart.vowel_geometry.display_slots import (
+        _classify_vowel_cell_display,
+    )
+    from phonology_shared.chart.vowels import VowelCellDisplayKind
+
+    feats = _make_classifier_feats(
+        {
+            "a": {"low": "+", "spreadgl": "-", "constrgl": "-"},
+            "a̤": {"low": "+", "spreadgl": "+", "constrgl": "-"},
+            "a̰": {"low": "+", "spreadgl": "-", "constrgl": "+"},
+        }
+    )
+    kind, contrast, ordered, _ = _classify_vowel_cell_display(
+        ("a̤", "a", "a̰"), feats
+    )
+    assert kind == VowelCellDisplayKind.PHONATION_PAIR
+    assert contrast == ("constrgl", "spreadgl")
+    assert ordered[0] == "a"  # base (unmarked) first
+
+
+def test_classify_many_dimension_cell_stacks_with_named_contrast() -> None:
+    """A cell varying on MORE THAN two dimensions (a !Xoo quality: plain /
+    pharyngealised / breathy / creaky / nasal) cannot be a clean linked
+    capsule, so it stacks. But the stack is now contrast-AWARE: it carries
+    the contrast features (so a renderer can name the dimensions) and orders
+    the entries base-first, so the pile reads as a series rather than an
+    arbitrary column. Only a POSITION-feature difference yields a
+    featureless stack."""
+    from phonology_shared.chart.vowel_geometry.display_slots import (
+        _classify_vowel_cell_display,
+    )
+    from phonology_shared.chart.vowels import VowelCellDisplayKind
+
+    feats = _make_classifier_feats(
+        {
+            "a": {
+                "low": "+",
+                "rtr": "-",
+                "spreadgl": "-",
+                "constrgl": "-",
+                "nasal": "-",
+            },
+            "aˤ": {
+                "low": "+",
+                "rtr": "+",
+                "spreadgl": "-",
+                "constrgl": "-",
+                "nasal": "-",
+            },
+            "a̤": {
+                "low": "+",
+                "rtr": "-",
+                "spreadgl": "+",
+                "constrgl": "-",
+                "nasal": "-",
+            },
+            "a̰": {
+                "low": "+",
+                "rtr": "-",
+                "spreadgl": "-",
+                "constrgl": "+",
+                "nasal": "-",
+            },
+            "ã": {
+                "low": "+",
+                "rtr": "-",
+                "spreadgl": "-",
+                "constrgl": "-",
+                "nasal": "+",
+            },
+        }
+    )
+    entries = ("aˤ", "a̤", "a", "a̰", "ã")
+    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+        entries, feats
+    )
+    assert kind == VowelCellDisplayKind.STACK
+    # contrast-aware: the dimensions are named, not discarded.
+    assert contrast == ("constrgl", "nasal", "rtr", "spreadgl")
+    assert grid == ()
+    # base form first, then the marked variants (a stable series).
+    assert ordered[0] == "a"
+    assert set(ordered) == set(entries)
+
+
+def test_classify_position_difference_is_a_featureless_stack() -> None:
+    """A cell whose entries differ on a POSITION feature (here ``high``)
+    still stacks with NO contrast features: the 2-D quadrilateral genuinely
+    cannot resolve it, so there is no secondary dimension to name. This is
+    the honesty valve the contrast-aware stack must not swallow."""
+    from phonology_shared.chart.vowel_geometry.display_slots import (
+        _classify_vowel_cell_display,
+    )
+    from phonology_shared.chart.vowels import VowelCellDisplayKind
+
+    feats = _make_classifier_feats(
+        {
+            "e": {"high": "-", "low": "-", "nasal": "-"},
+            "i": {"high": "+", "low": "-", "nasal": "+"},
+        }
+    )
+    kind, contrast, _, _ = _classify_vowel_cell_display(("e", "i"), feats)
+    assert kind == VowelCellDisplayKind.STACK
+    assert contrast == ()
+
+
 def test_classify_tone_pair() -> None:
     from phonology_shared.chart.vowel_geometry.display_slots import (
         _classify_vowel_cell_display,

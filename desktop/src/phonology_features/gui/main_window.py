@@ -1956,9 +1956,9 @@ class MainWindow(QMainWindow):
         seg_states = summary["segment_states"]
         seg_default = summary["default_segment_state"]
         for seg, btns in self._seg_buttons.items():
-            state = seg_states.get(seg, seg_default)
+            seg_state = seg_states.get(seg, seg_default)
             for btn in btns:
-                btn.set_state(state)
+                btn.set_state(seg_state)
         self._apply_analysis_tabs(summary["analysis_tabs"])
 
     def _update_feat_to_seg(self) -> None:
