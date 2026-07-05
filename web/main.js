@@ -6,6 +6,38 @@
  * wires UI events to bridge calls into api.py.
  */
 
+// Track the last input modality on ``document.body[data-input]`` so
+// hover styles only paint when the user is actively using a mouse /
+// trackpad. On hybrid devices (Chromebook, Surface, iPad + trackpad)
+// ``@media (hover: hover)`` alone is not enough: it matches whenever
+// a hover-capable pointer exists, so a touchscreen tap still fires
+// :hover in CSS and the highlight visually sticks until the user
+// nudges the mouse. This attribute lets style.css gate hover
+// selectors on ``body[data-input="mouse"]``, so a tap flips the
+// mode to ``"touch"`` and clears the paint immediately.
+(function trackInputModality() {
+    if (typeof document === "undefined" || !document.body) {
+        // Body isn't parsed yet at this script's evaluation time on
+        // some browsers; defer to DOMContentLoaded to attach.
+        document.addEventListener("DOMContentLoaded", trackInputModality, {
+            once: true,
+        });
+        return;
+    }
+    const set = (mode) => {
+        if (document.body.dataset.input !== mode) {
+            document.body.dataset.input = mode;
+        }
+    };
+    set("mouse");
+    const onDown = (ev) => set(ev.pointerType === "mouse" ? "mouse" : "touch");
+    const onMove = (ev) => {
+        if (ev.pointerType === "mouse") set("mouse");
+    };
+    document.addEventListener("pointerdown", onDown, { passive: true });
+    document.addEventListener("pointermove", onMove, { passive: true });
+})();
+
 // Content-density tokens are emitted by build.py as
 // ``calc(N * var(--unit, 1px))`` so the layout can scale with viewport
 // (see ``--unit`` in style.css). Custom properties are stored as text,

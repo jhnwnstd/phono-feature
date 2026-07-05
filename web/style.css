@@ -1233,18 +1233,21 @@ dialog input[type="text"]:focus-visible {
      ever bundled, the ``bold`` request then picks it up for real. */
   font-synthesis: none;
 }
-/* Gate hover styling behind ``(hover: hover)`` so touchscreen taps
-   don't leave a stuck :hover on the last-tapped button. The hover
-   fill and border here are visually indistinguishable from the
-   ``data-state="suggested"`` styling below, so a sticky hover on a
-   just-deselected touch tap reads as "this segment is still part of
-   a natural class" -- the same bug the user reported. Desktop
-   pointers still trigger the hover feedback normally. */
-@media (hover: hover) {
-  .seg-btn:hover {
-    background: var(--accent-light);
-    border-color: var(--accent);
-  }
+/* Gate hover styling behind the JS-tracked ``body[data-input="mouse"]``
+   flag so touchscreen taps don't leave a stuck :hover. On hybrid
+   devices (touchscreen + trackpad) ``@media (hover: hover)`` still
+   matches because a hover-capable pointer exists, so a tap fires
+   :hover in CSS and the highlight sticks until the user nudges the
+   mouse. The body flag flips to ``"touch"`` on ``pointerdown`` with
+   ``pointerType: "touch"`` (see ``trackInputModality`` in main.js) so
+   this selector stops matching immediately after the tap. The hover
+   fill + border here are visually indistinguishable from
+   ``data-state="suggested"`` so a sticky hover on a just-deselected
+   touch tap reads as "this segment is still part of a natural class"
+   -- the reported bug. */
+body[data-input="mouse"] .seg-btn:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
 }
 /* Border weight + style + fill together encode the state, so users
    with anomalous color vision can still tell them apart at a glance:
@@ -1917,10 +1920,8 @@ dialog input[type="text"]:focus-visible {
    (below), so only the stated cell is marked and its edge stays crisp --
    no whole-pill frame that reads as "everything selected", no per-cell
    outline stacked concentric inside a frame. */
-@media (hover: hover) {
-  .vowel-capsule > .seg-btn:hover {
-    background: var(--accent-light);
-  }
+body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
+  background: var(--accent-light);
 }
 .vowel-capsule > .seg-btn[data-state="selected"],
 .vowel-capsule > .seg-btn[data-state="matched"] {
@@ -2277,17 +2278,15 @@ dialog input[type="text"]:focus-visible {
   color: var(--minus);
   border-color: var(--minus);
 }
-@media (hover: hover) {
-  .feat-btn[data-polarity="+"]:hover {
-    background: var(--plus-bg);
-    color: var(--plus);
-    border-color: var(--plus);
-  }
-  .feat-btn[data-polarity="-"]:hover {
-    background: var(--minus-bg);
-    color: var(--minus);
-    border-color: var(--minus);
-  }
+body[data-input="mouse"] .feat-btn[data-polarity="+"]:hover {
+  background: var(--plus-bg);
+  color: var(--plus);
+  border-color: var(--plus);
+}
+body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
+  background: var(--minus-bg);
+  color: var(--minus);
+  border-color: var(--minus);
 }
 
 /* The inactive panel is display-only: badge visible, buttons
