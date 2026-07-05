@@ -90,11 +90,8 @@ from phonology_shared.chart.vowel_space import (
     _BACKNESS_ADVANCED_STEP,
     _BACKNESS_GROUP_BY_COL,
     _BACKNESS_RETRACTED_STEP,
-    _BACKNESS_X,
     _HEIGHT_LOWERED_STEP,
     _HEIGHT_RAISED_STEP,
-    _HEIGHT_Y,
-    _PAIR_OFFSET_HALF,
     _PLACE_TO_COLUMN,
     _ROW_LABEL_TO_INDEX,
     ROW_LABELS,
@@ -342,18 +339,6 @@ class VowelProfile:
     has_atr: bool = False
     has_tense: bool = False
     has_coronal: bool = False
-    has_syllabic: bool = False
-    has_consonantal: bool = False
-    has_long: bool = False
-    #: True iff the inventory has at least one ``Long+`` vowel AND
-    #: at least one ``Long-`` vowel. Distinguishes inventories that
-    #: USE Long as a contrast (e.g. Arabic ``/i/`` vs ``/iː/``) from
-    #: inventories where ``Long-`` is just the default polarity on
-    #: every vowel (English's ``Long-`` everywhere does not mean the
-    #: inventory contrasts length). The Long-based Tier 3 height
-    #: refinement only fires when this flag is True so non-contrastive
-    #: inventories keep their canonical placements.
-    has_long_contrast: bool = False
     #: Tongue-root retraction. Third height-split source after
     #: ``tense`` and ``atr``; inverted on the way into
     #: :py:func:`_height_split_value` because ``[+rtr]`` corresponds
@@ -361,8 +346,7 @@ class VowelProfile:
     #: the two roots.
     has_rtr: bool = False
     #: True iff the inventory has at least one ``+tense`` AND at
-    #: least one ``-tense`` vowel. Same shape as
-    #: :py:attr:`has_long_contrast`. The divergence detector
+    #: least one ``-tense`` vowel. The divergence detector
     #: ignores ``tense`` as a height-split source when this is
     #: False, because a uniform polarity (every vowel coded
     #: ``-tense`` in a no-tense-contrast inventory) carries no
@@ -375,15 +359,6 @@ class VowelProfile:
     has_atr_contrast: bool = False
     #: Same contract for RTR.
     has_rtr_contrast: bool = False
-    #: Relative-articulation diacritics. Each lets the refinement
-    #: layer nudge the base row or column one step in the
-    #: corresponding direction.
-    has_raised: bool = False
-    has_lowered: bool = False
-    has_advanced: bool = False
-    has_retracted: bool = False
-    has_centralized: bool = False
-    has_peripheral: bool = False
 
     @property
     def has_height_sub_distinction(self) -> bool:
@@ -461,27 +436,18 @@ class AxisEvidence:
 class VowelPlacement:
     """A vowel's position in the IPA chart.
 
-    Carries two representations of the same placement decision so a
-    future shape-projection layer (trapezoid, triangle) has the
-    data it needs without re-deriving anything:
-
-    * ``row`` / ``col``: discrete grid coordinates the current
-      desktop and web renderers consume. ``row`` is the height
-      tier (index into :py:data:`ROW_LABELS`); ``col`` is the
-      column index (front-unr, front-rnd, central-unr,
-      central-rnd, back-unr, back-rnd, 0-5; plus front-neutral,
-      central-neutral, back-neutral, 6-8). Neutral cols apply to
-      Tier 2 ``0round`` placements that sit at the backness
-      anchor centre with no L/R pair shift.
-    * ``x`` / ``y`` / ``pair_offset``: normalized continuous
-      coordinates in abstract vowel space. ``x`` is the backness
-      anchor (0.0 front, 0.5 central, 1.0 back), ``y`` is the
-      height anchor (0.0 close, 1.0 open), and ``pair_offset`` is
-      the small signed shift within a rounded/unrounded pair
-      (negative for unrounded, positive for rounded, zero when
-      rounding is unknown). A future renderer that wants a
-      trapezoid or triangle reads these floats and projects them;
-      the current grid renderer ignores them.
+    ``row`` / ``col`` are the discrete grid coordinates the
+    projection layer consumes. ``row`` is the height tier (index
+    into :py:data:`ROW_LABELS`); ``col`` is the column index
+    (front-unr, front-rnd, central-unr, central-rnd, back-unr,
+    back-rnd, 0-5; plus front-neutral, central-neutral,
+    back-neutral, 6-8). Neutral cols apply to Tier 2 ``0round``
+    placements that sit at the backness anchor centre with no L/R
+    pair shift. The continuous anchors are derived FROM these by
+    the projection layer (``display_slots`` / ``pipeline`` via
+    ``_BACKNESS_X`` / ``_HEIGHT_Y``); the placement does not carry
+    a float mirror, which would go stale the moment diphthong
+    snapping rewrites ``row`` / ``col``.
 
     Per-axis ``height`` / ``backness`` / ``rounding`` carry the
     evidence each placement decision was made from. Top-level
@@ -491,9 +457,6 @@ class VowelPlacement:
 
     row: int
     col: int
-    x: float
-    y: float
-    pair_offset: float
     confidence: Confidence
     reason: str
     height: AxisEvidence | None = None
@@ -562,7 +525,6 @@ def detect_vowel_profile(
     (``{"advancedTongueRoot": "+", ...}``) and get the same profile.
     """
     active: set[str] = set()
-    long_polarities: set[str] = set()
     tense_polarities: set[str] = set()
     atr_polarities: set[str] = set()
     rtr_polarities: set[str] = set()
@@ -571,9 +533,7 @@ def detect_vowel_profile(
             key = normalize_feature_key(feat)
             if val != "0":
                 active.add(key)
-            if key == "long" and val in ("+", "-"):
-                long_polarities.add(val)
-            elif key == "tense" and val in ("+", "-"):
+            if key == "tense" and val in ("+", "-"):
                 tense_polarities.add(val)
             elif key == "atr" and val in ("+", "-"):
                 atr_polarities.add(val)
@@ -589,22 +549,11 @@ def detect_vowel_profile(
         has_atr="atr" in active,
         has_tense="tense" in active,
         has_coronal="coronal" in active,
-        has_syllabic="syllabic" in active,
-        has_consonantal="consonantal" in active,
-        has_long="long" in active,
-        has_long_contrast=("+" in long_polarities)
-        and ("-" in long_polarities),
         has_rtr="rtr" in active,
         has_tense_contrast=("+" in tense_polarities)
         and ("-" in tense_polarities),
         has_atr_contrast=("+" in atr_polarities) and ("-" in atr_polarities),
         has_rtr_contrast=("+" in rtr_polarities) and ("-" in rtr_polarities),
-        has_raised="raised" in active,
-        has_lowered="lowered" in active,
-        has_advanced="advanced" in active,
-        has_retracted="retracted" in active,
-        has_centralized="centralized" in active,
-        has_peripheral="peripheral" in active,
     )
 
 
@@ -1466,20 +1415,6 @@ def _vowel_grid_pos_normalized(
     else:
         col = base_col
 
-    # Normalized abstract-vowel-space coordinates. Same decision as
-    # ``row`` / ``col`` but expressed as floats so a future trapezoid
-    # or triangle projector can read them without having to recover
-    # axis semantics from a grid index. ``pair_offset`` is signed:
-    # rounded sits to the right of its unrounded mate.
-    y = _HEIGHT_Y[height.value]
-    x = _BACKNESS_X[backness.value]
-    if rounding.value == "rounded":
-        pair_offset = _PAIR_OFFSET_HALF
-    elif rounding.value == "unrounded":
-        pair_offset = -_PAIR_OFFSET_HALF
-    else:
-        pair_offset = 0.0
-
     # IntEnum orders by int; min picks the weakest of the three
     # axes. Including rounding here is more honest than the prior
     # height-and-backness-only summary: a vowel with unspecified
@@ -1506,9 +1441,6 @@ def _vowel_grid_pos_normalized(
     return VowelPlacement(
         row=row,
         col=col,
-        x=x,
-        y=y,
-        pair_offset=pair_offset,
         confidence=confidence,
         reason=reason,
         height=height,

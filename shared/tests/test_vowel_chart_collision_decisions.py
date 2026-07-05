@@ -530,9 +530,71 @@ def test_classify_many_dimension_cell_stacks_with_named_contrast() -> None:
     # contrast-aware: the dimensions are named, not discarded.
     assert contrast == ("constrgl", "nasal", "rtr", "spreadgl")
     assert grid == ()
-    # base form first, then the marked variants (a stable series).
-    assert ordered[0] == "a"
-    assert set(ordered) == set(entries)
+    # The FULL deterministic series: base first, then the marked
+    # variants ordered by the sorted contrast features' value tuple.
+    # Pinned exactly so the visible order cannot silently reshuffle.
+    assert ordered == ("a", "a̰", "ã", "aˤ", "a̤")
+
+
+def test_classify_grid_slot_collision_falls_back_to_stack() -> None:
+    """Two entries that differ on a contrast feature only as ``-`` vs
+    ``0`` are a genuine contrast to the DETECTOR but identical to the
+    aligned grid's ``+``-binning, so they would land on ONE capsule slot
+    and paint on top of each other. The classifier must detect the
+    collision and fall back to the contrast-aware stack instead of
+    emitting a double-booked CONTRAST_SET."""
+    from phonology_shared.chart.vowel_geometry.display_slots import (
+        _classify_vowel_cell_display,
+    )
+    from phonology_shared.chart.vowels import VowelCellDisplayKind
+
+    feats = _make_classifier_feats(
+        {
+            "e1": {"low": "+", "long": "-", "nasal": "-"},
+            "e2": {"low": "+", "long": "0", "nasal": "-"},
+            "e3": {"low": "+", "long": "+", "nasal": "-"},
+            "e4": {"low": "+", "long": "-", "nasal": "+"},
+        }
+    )
+    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+        ("e1", "e2", "e3", "e4"), feats
+    )
+    assert kind == VowelCellDisplayKind.STACK
+    assert contrast == ("long", "nasal")  # contrast-aware, not ()
+    assert grid == ()
+    assert set(ordered) == {"e1", "e2", "e3", "e4"}
+
+
+def test_pair_kind_cells_report_their_true_button_width() -> None:
+    """A PAIR-kind cell lays EVERY entry in one horizontal row, so its
+    button width is its entry count: a 3-entry phonation capsule is 3
+    wide and a 4-way set is 4 wide. The width used to be hardcoded to 2,
+    which under-reserved the row (18 real PHOIBLE cells) and could
+    overlap a neighbouring cell."""
+    from phonology_shared.chart.vowel_geometry.display_slots import (
+        horizontal_button_count,
+    )
+    from phonology_shared.chart.vowels import VowelCellDisplayKind
+
+    kinds = VowelCellDisplayKind
+    assert horizontal_button_count(kinds.PHONATION_PAIR, ("a", "b"), ()) == 2
+    assert (
+        horizontal_button_count(kinds.PHONATION_PAIR, ("a", "b", "c"), ()) == 3
+    )
+    assert (
+        horizontal_button_count(kinds.LONG_PAIR, ("a", "b", "c", "d"), ()) == 4
+    )
+    assert horizontal_button_count(kinds.STACK, ("a", "b", "c"), ()) == 1
+    # CONTRAST_SET spans its grid column extent; canonical 2 without one.
+    assert (
+        horizontal_button_count(
+            kinds.CONTRAST_SET,
+            ("a", "b", "c"),
+            ((0, 0), (1, 0), (2, 0)),
+        )
+        == 3
+    )
+    assert horizontal_button_count(kinds.CONTRAST_SET, ("a", "b"), ()) == 2
 
 
 def test_classify_position_difference_is_a_featureless_stack() -> None:
@@ -653,30 +715,6 @@ def test_classify_partial_contrast_set_centres_the_base_form() -> None:
     assert ordered == ("uː", "u", "ũː")
     # Single horizontal row: three columns, one row.
     assert grid == ((0, 0), (1, 0), (2, 0))
-
-
-def test_classify_differs_on_position_feature_is_stack() -> None:
-    """Entries differing on a position feature (``high``) fall
-    through to ``STACK``; vertical stack is the safe default when
-    a non-display feature distinguishes the entries.
-    """
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
-    )
-    from phonology_shared.chart.vowels import VowelCellDisplayKind
-
-    feats = _make_classifier_feats(
-        {
-            "ə": {"high": "-", "low": "-"},
-            "ɨ": {"high": "+", "low": "-"},
-        }
-    )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
-        ("ə", "ɨ"), feats
-    )
-    assert kind == VowelCellDisplayKind.STACK
-    assert contrast == ()
-    assert ordered == ("ə", "ɨ")
 
 
 def test_pair_ordering_puts_marked_on_right() -> None:

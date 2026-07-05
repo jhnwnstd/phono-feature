@@ -47,26 +47,25 @@ from phonology_shared.presentation.layout import (
     VOWEL_PAIR_SEPARATOR_PX,
 )
 
-# Height axis: each row's label plus its canonical (high, low,
-# tense) signature. The tense column distinguishes the tense/lax
-# split within a height tier (None where the row carries no tense
-# convention). The label column is the row axis; the feature
-# columns are the canonical signature the inference layer compares
-# against. Immutable so importers cannot mutate the shared
-# singleton.
-VOWEL_HEIGHT: tuple[tuple[str, str, str, str | None], ...] = (
-    ("Close", "+", "-", "+"),
-    ("Near-close", "+", "-", "-"),
-    ("Close-mid", "-", "-", "+"),
-    ("Mid", "-", "-", None),
-    ("Open-mid", "-", "-", "-"),
-    ("Near-open", "-", "+", "-"),
-    ("Open", "-", "+", None),
+# Height axis: the seven row labels in display order, Close at the
+# top. The inference layer derives each vowel's row from its feature
+# bundle directly (``_infer_height`` hardcodes its own signature
+# logic; no table lookup), so the labels ARE the axis. Immutable so
+# importers cannot mutate the shared singleton.
+ROW_LABELS: tuple[str, ...] = (
+    "Close",
+    "Near-close",
+    "Close-mid",
+    "Mid",
+    "Open-mid",
+    "Near-open",
+    "Open",
 )
-ROW_LABELS: tuple[str, ...] = tuple(label for label, *_ in VOWEL_HEIGHT)
 
-# Column labels in display order. The rendered chart is 6 columns
-# wide because each place alternates (unrounded, rounded).
+# Column labels in display order. The grid is 9 logical columns
+# (three backness places, each an unrounded / rounded pair slot
+# couple plus a neutral-rounding slot); these three label the
+# backness places.
 COL_LABELS: tuple[str, ...] = ("Front", "Central", "Back")
 
 # Normalized abstract-vowel-space coordinates exposed on
@@ -139,16 +138,6 @@ def _derive_backness_anchors() -> tuple[dict[str, float], float]:
 
 
 _BACKNESS_X, _DERIVED_BOTTOM_WIDTH = _derive_backness_anchors()
-
-#: Half-width of the signed offset that separates the rounded
-#: mate from its unrounded partner inside a backness anchor.
-#: Derived from the pixel constants so the two mates are exactly
-#: one button-width apart centre-to-centre on the widest row of
-#: the trapezoid (no overlap, no gratuitous gap). Signed so a
-#: renderer can apply ``x + pair_offset`` directly.
-_PAIR_OFFSET_HALF: float = (
-    (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _CANONICAL_CONTENT_W_PX
-)
 
 
 # Reverse of ROW_LABELS so a row label ("Close", "Open-mid", ...) maps

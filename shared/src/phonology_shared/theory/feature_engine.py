@@ -342,11 +342,14 @@ class FeatureEngine:
     def _build_membership_caches(self) -> None:
         """Populate the membership sets in one pass.
 
-        Membership UNIONS over a segment's phases (see
-        :py:meth:`Inventory.segment_phases`): a contour segment is a
-        member of ``[+f]`` if ANY phase is ``+f`` and of ``[-f]`` if
-        ANY phase is ``-f``, so a diphthong that glides ``-low`` ->
-        ``+low`` lands in both classes. A single-phase segment indexes
+        Membership reads each feature's own value sequence
+        existentially (see :py:meth:`Inventory.sequences`): a segment
+        joins ``[+f]`` when some position values ``f`` as ``+`` and
+        ``[-f]`` when some position values it ``-``, so a contour
+        segment lands in both and a diphthong that glides ``-low`` ->
+        ``+low`` answers either query. The read never aligns phases,
+        so it stays faithful for ragged segments where features carry
+        different-length sequences. A single-phase segment indexes
         exactly as before. The per-feature ``_plus_excl`` /
         ``_minus_excl`` hold the "exclusively that polarity" segments
         for the wildcard path.
@@ -479,9 +482,9 @@ class FeatureEngine:
     def _sequences_by_seg(self) -> dict[str, dict[str, tuple[str, ...]]]:
         """Per-segment value SEQUENCES keyed by canonical feature names.
 
-        The grouper reads a feature's set of values across a segment
-        (:py:func:`group_segments`' phase-union affricate rule and
-        release-phase sub-classification) from these, in the same
+        The grouper reads each feature's set of values across a
+        segment (:py:func:`group_segments`' existential affricate rule
+        and coarse-class membership) from these, in the same
         lowercase-short-code namespace as
         :py:attr:`normalized_segment_feats`. A non-contour feature is a
         length-1 sequence, so the common case is a bundle of singletons;

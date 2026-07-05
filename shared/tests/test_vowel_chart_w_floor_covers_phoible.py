@@ -66,7 +66,14 @@ def _max_natural_chart_w_across_bundled() -> int:
     """Largest ``natural_data_width_px + chrome`` across every
     bundled inventory. The renderer's floor must be at least this
     large or the densest bundled inventory's back column cells
-    overflow the silhouette."""
+    overflow the silhouette.
+
+    Mirrors the live renderers: BOTH pass ``segment_secondary`` so
+    contour vowels route to the diphthong chip strip instead of a
+    cell. Building without it would measure a chart the app never
+    renders (German's three diphthongs carry bundles identical to
+    ``ɑ`` and would pile into its cell as a phantom 4-entry pair,
+    inflating the "widest natural" the floor is asked to cover)."""
     widest = 0
     for path in sorted(_BUNDLED_DIR.glob("*_features.json")):
         raw = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -79,7 +86,15 @@ def _max_natural_chart_w_across_bundled() -> int:
             s: dict(engine.normalized_segment_feats[s]) for s in vowels
         }
         profile = detect_vowel_profile(vowels, seg_feats)
-        geom = build_vowel_chart_geometry(vowels, profile, seg_feats)
+        secondary = inv.metadata.get("segment_secondary")
+        geom = build_vowel_chart_geometry(
+            vowels,
+            profile,
+            seg_feats,
+            segment_secondary=(
+                secondary if isinstance(secondary, dict) else None
+            ),
+        )
         widest = max(widest, geom.natural_data_width_px + _CHROME_W_PX)
     return widest
 

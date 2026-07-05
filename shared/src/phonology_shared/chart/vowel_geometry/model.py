@@ -185,26 +185,26 @@ class VowelChartRow:
     # from ``label_y``. Defaults to 0 for hand-built test fixtures; the
     # geometry build always populates it.
     content_height_px: int = 0
-    # Silhouette's actual LEFT and RIGHT edge x at this row's
-    # ``label_y`` (normalised ``[0, 1]``), accounting for the
-    # rounded-corner insets at the top + bottom of the polygon.
-    # Evaluated at the LABEL's y (not the cells' chart_y) so the
-    # label-to-outline gap stays constant: label placement is
-    # deliberately divorced from cell positioning, which can sit
-    # off the outline (anchor migration, pair shifts) without
-    # dragging the labels with it.
+    # Silhouette's actual LEFT edge x at this row's ``label_y``
+    # (normalised ``[0, 1]``), accounting for the rounded-corner
+    # insets at the top + bottom of the polygon. Evaluated at the
+    # LABEL's y (not the cells' chart_y) so the label-to-outline gap
+    # stays constant: label placement is deliberately divorced from
+    # cell positioning, which can sit off the outline (anchor
+    # migration, pair shifts) without dragging the labels with it.
+    # (Left only: row labels hug the front edge; nothing consumes a
+    # baked right edge, renderers derive the back edge live from the
+    # silhouette when they need it.)
     #
-    # IMPORTANT: these are stored at the CANONICAL data width
+    # IMPORTANT: baked at the CANONICAL data width
     # (``_VOWEL_CONTENT_W_PX``). For accurate flush at the
     # actual rendered ``dw``, renderers can recompute the
     # silhouette via :py:func:`silhouette_for_data_width` and
-    # then call :py:func:`silhouette_left_at_y` /
-    # :py:func:`silhouette_right_at_y` with the corrected
+    # then call :py:func:`silhouette_left_at_y` with the corrected
     # silhouette. The drift at non-canonical ``dw`` is small
     # (~1 px) so callers that don't need pixel-perfect flush
-    # can use these baked values directly.
+    # can use the baked value directly.
     silhouette_left: float = 0.0
-    silhouette_right: float = 1.0
 
 
 @dataclass(frozen=True)

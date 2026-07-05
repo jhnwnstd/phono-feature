@@ -1589,7 +1589,15 @@ function renderSegmentGrid(groups, vowelChart) {
     _disconnectChartObservers(grid);
     grid.innerHTML = "";
     state.seg_buttons.clear();
-    if (vowelChart && vowelChart.cells && vowelChart.cells.length) {
+    // Render when there is ANYTHING vowel-ish to show: trapezoid cells,
+    // or chip-strip diphthongs alone (an all-diphthong vowel system has
+    // zero cells but must still list its segments; mirrors the desktop,
+    // which gates set_vowels on vowel SEGMENTS, not cells).
+    const hasVowelContent =
+        vowelChart &&
+        ((vowelChart.cells && vowelChart.cells.length) ||
+            (vowelChart.diphthongs && vowelChart.diphthongs.length));
+    if (hasVowelContent) {
         const vowels = document.createElement("div");
         vowels.className = "seg-vowels";
         // Sizing policy: actual width =

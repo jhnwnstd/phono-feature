@@ -281,13 +281,12 @@ def test_diphthong_placement_carries_secondary_and_flag():
 
 
 def test_module_constants_are_tuples():
-    """ROW_LABELS / COL_LABELS / VOWEL_HEIGHT are exported as
-    tuples so importers cannot mutate the shared singletons."""
+    """ROW_LABELS / COL_LABELS are exported as tuples so importers
+    cannot mutate the shared singletons."""
     import phonology_shared.chart.vowel_space as vsp
 
     assert isinstance(vsp.ROW_LABELS, tuple)
     assert isinstance(vsp.COL_LABELS, tuple)
-    assert isinstance(vsp.VOWEL_HEIGHT, tuple)
     # Spot-check shape so a future re-shape is a deliberate break.
     # Seven height tiers since the Tier 2 Mid row landed between
     # Close-mid and Open-mid.
@@ -461,8 +460,6 @@ def profile():
         has_tense=True,
         has_tense_contrast=True,
         has_coronal=True,
-        has_syllabic=True,
-        has_consonantal=True,
     )
 
 
@@ -908,8 +905,6 @@ def test_long_does_not_affect_placement() -> None:
         has_high=True,
         has_low=True,
         has_round=True,
-        has_long=True,
-        has_long_contrast=True,
     )
     common = {"high": "+", "low": "-", "front": "+", "back": "-", "round": "-"}
     feats = {
@@ -921,87 +916,21 @@ def test_long_does_not_affect_placement() -> None:
     assert placements["i"].col == placements["iː"].col
 
 
-def test_has_long_contrast_requires_both_polarities() -> None:
-    """``profile.has_long_contrast`` is True only when the inventory
-    carries at least one ``Long+`` AND at least one ``Long-`` vowel.
-    The display layer reads this to decide whether to surface a
-    length contrast in the rendering; placement never consults it.
-    """
-    from phonology_shared.chart.vowels import detect_vowel_profile
+def test_backness_anchors_are_symmetric_around_centre():
+    """The derived backness anchors keep the invariants the
+    projection layer relies on: front and back symmetric around
+    ``x == 0.5`` (the chart's vertical axis bisects the central
+    column) and central exactly at ``0.5``. Pinned directly on
+    ``_BACKNESS_X`` (the single anchor source the projection reads);
+    exact values are derived from the layout pixel constants, so only
+    the structure is asserted, not the numbers."""
+    from phonology_shared.chart.vowel_space import _BACKNESS_X
 
-    contrastive = detect_vowel_profile(
-        ["a", "b"],
-        {
-            "a": {"long": "+", "high": "+"},
-            "b": {"long": "-", "high": "+"},
-        },
-    )
-    assert contrastive.has_long is True
-    assert contrastive.has_long_contrast is True
-    default_only = detect_vowel_profile(
-        ["a", "b"],
-        {"a": {"long": "-"}, "b": {"long": "-"}},
-    )
-    assert default_only.has_long is True
-    assert default_only.has_long_contrast is False
-
-
-def test_placement_carries_normalized_coordinates(profile):
-    """Every placement carries normalized ``x`` / ``y`` /
-    ``pair_offset`` alongside the existing ``row`` / ``col`` grid
-    coordinates. The float fields feed the trapezoid/triangle
-    projection. Anchor values are derived in
-    :py:func:`_derive_backness_anchors` from the layout pixel
-    constants; this test pins the structural invariants rather
-    than the exact numbers so tuning the pixel constants does
-    not also rewrite the test.
-    """
-    # Close front rounded /y/: top of the chart, leftmost backness,
-    # rounded so pair_offset is positive.
-    close_front_rnd = vowel_grid_pos(
-        {"high": "+", "low": "-", "front": "+", "back": "-", "round": "+"},
-        profile,
-    )
-    assert close_front_rnd.row == 0
-    assert close_front_rnd.col == 1
-    # Anchors are insetted from 0 / 1 so paired mates do not
-    # overshoot the data area on the leftmost or rightmost
-    # backness. The exact values are derived; structural bounds:
-    assert 0.0 < close_front_rnd.x < 0.5
-    assert 0.0 <= close_front_rnd.y < 0.2
-    assert close_front_rnd.pair_offset > 0.0
-
-    # Open back unrounded /ɑ/: bottom of the chart, rightmost
-    # backness, unrounded so pair_offset is negative.
-    open_back_unr = vowel_grid_pos(
-        {"high": "-", "low": "+", "front": "-", "back": "+", "round": "-"},
-        profile,
-    )
-    assert 0.8 < open_back_unr.y <= 1.0
-    assert 0.5 < open_back_unr.x < 1.0
-    assert open_back_unr.pair_offset < 0.0
-
-    # Unrounded and rounded mates sit on the same anchor with
-    # opposite-sign offsets of equal magnitude. A projector relies
-    # on this symmetry.
-    assert open_back_unr.pair_offset == -close_front_rnd.pair_offset
-
-    # Front + back anchors are symmetric around x == 0.5 so the
-    # chart's vertical axis sits in the middle of the central
-    # column regardless of which row.
-    open_front_unr = vowel_grid_pos(
-        {"high": "-", "low": "+", "front": "+", "back": "-", "round": "-"},
-        profile,
-    )
-    assert abs((open_front_unr.x + open_back_unr.x) / 2 - 0.5) < 1e-9
-
-    # Central anchor stays at x == 0.5 regardless of rounding so a
-    # projection layer can use the anchor as the symmetry axis.
-    central_unr = vowel_grid_pos(
-        {"high": "-", "low": "-", "front": "-", "back": "-", "round": "-"},
-        profile,
-    )
-    assert central_unr.x == 0.5
+    assert _BACKNESS_X["central"] == 0.5
+    assert abs((_BACKNESS_X["front"] + _BACKNESS_X["back"]) / 2 - 0.5) < 1e-9
+    # Anchors are insetted from 0 / 1 so paired mates do not overshoot
+    # the data area on the outermost backness columns.
+    assert 0.0 < _BACKNESS_X["front"] < 0.5 < _BACKNESS_X["back"] < 1.0
 
 
 # ---------------------------------------------------------------------------

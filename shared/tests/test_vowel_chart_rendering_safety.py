@@ -36,6 +36,9 @@ from pathlib import Path
 import pytest
 from _inventory_names import BUNDLED_INVENTORY_NAMES
 
+from phonology_shared.chart.vowel_geometry.display_slots import (
+    horizontal_button_count,
+)
 from phonology_shared.chart.vowel_geometry import (
     PAIR_DISPLAY_KINDS,
     build_vowel_chart_geometry,
@@ -66,15 +69,11 @@ _PHOIBLE_SAMPLE = 100
 
 def _cell_half_width_px(cell) -> float:
     """Rendered half-width of a cell box in pixels at the chart's
-    natural width. PAIR cells are two buttons wide; a CONTRAST_SET is as
-    wide as its grid's column extent (a base-centred ``var | base | var``
-    row is three buttons, a 2x2 is two); STACK cells are one button."""
-    if cell.display_kind in PAIR_DISPLAY_KINDS:
-        n = 2
-    elif cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
-        n = (max(c for c, _r in cell.grid) + 1) if cell.grid else 2
-    else:
-        return BTN_W / 2.0
+    natural width, from the SAME button-count definition both renderers
+    (and the shrink solver) consume, so a cell that draws wider than the
+    hand-rolled 2-button pair assumption (a 3-4 entry phonation capsule)
+    is measured at its true width instead of escaping the guard."""
+    n = horizontal_button_count(cell.display_kind, cell.entries, cell.grid)
     return (n * BTN_W + (n - 1) * VOWEL_PAIR_GAP_PX) / 2.0
 
 
@@ -363,7 +362,6 @@ def test_row_label_anchors_divorced_from_cell_positions() -> None:
     from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
         silhouette_left_at_y,
-        silhouette_right_at_y,
     )
     from phonology_shared.chart.vowels import detect_vowel_profile
     from phonology_shared.presentation.layout import SEG_BTN_H
@@ -426,13 +424,10 @@ def test_row_label_anchors_divorced_from_cell_positions() -> None:
         else:
             expected_label_y = row.chart_y
         assert row.label_y == pytest.approx(expected_label_y), row.label
-        # The baked edge fields follow the LABEL's y (evaluated there,
+        # The baked edge field follows the LABEL's y (evaluated there,
         # not at some other anchor), so the label-to-outline gap holds.
         assert row.silhouette_left == pytest.approx(
             silhouette_left_at_y(geom.silhouette, row.label_y)
-        ), row.label
-        assert row.silhouette_right == pytest.approx(
-            silhouette_right_at_y(geom.silhouette, row.label_y)
         ), row.label
 
 

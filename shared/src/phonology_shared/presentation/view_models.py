@@ -677,7 +677,6 @@ def _vowel_chart_summary(
                 # rather than re-deriving the shift.
                 "label_y": row.label_y,
                 "silhouette_left": row.silhouette_left,
-                "silhouette_right": row.silhouette_right,
                 # Row's share of the silhouette span; the renderer's
                 # slot clamp derives per-button heights from it when
                 # the rendered chart is shorter than the natural

@@ -49,6 +49,7 @@ from phonology_features.gui.widgets.vowel_pair_capsule import (
     VowelPairCapsule,
 )
 from phonology_shared.chart.vowel_geometry import (
+    DENSITY_TIER_DENSE_THRESHOLD,
     PAIR_DISPLAY_KINDS,
     VowelChartCell,
     VowelChartGeometry,
@@ -60,10 +61,6 @@ from phonology_shared.chart.vowel_geometry import (
     silhouette_for_data_width,
     silhouette_left_at_y,
     vowel_silhouette,
-)
-from phonology_shared.chart.vowel_space import (
-    COL_LABELS,
-    ROW_LABELS,
 )
 from phonology_shared.chart.vowels import (
     VowelCellDisplayKind,
@@ -144,15 +141,10 @@ class FlowLayout(QLayout):
         self,
         parent: QWidget | None = None,
         gap: int = 0,
-        center: bool = False,
     ) -> None:
         super().__init__(parent)
         self._items: list[QLayoutItem] = []
         self._gap = gap
-        # When True each wrapped line is centered horizontally in the
-        # available width, so a small set of chips sits balanced rather
-        # than packed against the left edge.
-        self._center = center
         self.setContentsMargins(0, 0, 0, 0)
 
     # QLayout plumbing
@@ -227,10 +219,9 @@ class FlowLayout(QLayout):
 
         y = rect.y()
         total = 0
-        for items, width, height in lines:
+        for items, _width, height in lines:
             if apply:
-                offset = (rect.width() - width) // 2 if self._center else 0
-                x = rect.x() + max(0, offset)
+                x = rect.x()
                 for item, hint in items:
                     item.setGeometry(QRect(QPoint(x, y), hint))
                     x += hint.width() + self._gap
@@ -248,9 +239,6 @@ class VowelChartWidget(QWidget):
     detached on :py:meth:`clear` because they belong to the
     caller's button pool.
     """
-
-    _COL_HEADERS: ClassVar[tuple[str, ...]] = COL_LABELS
-    _ROW_HEADERS: ClassVar[tuple[str, ...]] = ROW_LABELS
 
     # Chrome dimensions for the outer rectangular UI space. The title and
     # column headers stack at the top; row labels sit on the left; the
@@ -322,20 +310,14 @@ class VowelChartWidget(QWidget):
         # to chart_y (bottom), or centres on chart_y (middle / only). Web
         # CSS expresses the same decision via ``data-row-tier`` rules with
         # ``translate(..., 0%)`` / ``-100%`` / ``-50%``.
-        # Per-cell tuple:
-        #   (widget, chart_x, chart_y, pair_side, tier, row, col,
-        #    canonical_segment, pair_shift_px, nudge_px)
-        # ``canonical_segment`` is ``entries[0]`` of the source
-        # ``VowelChartCell`` (entries are sorted by descending placement
-        # confidence).
+        # Per-cell tuple: exactly the fields the layout pass reads.
+        #   (widget, chart_x, chart_y, pair_side, tier,
+        #    pair_shift_px, nudge_px)
         self._cells: list[
             tuple[
                 QWidget,
                 float,
                 float,
-                int,
-                str,
-                int,
                 int,
                 str,
                 float,
@@ -414,7 +396,7 @@ class VowelChartWidget(QWidget):
         # ``BTN_GAP`` matches the segment grid's spacing so the chips share
         # the seg-button rhythm.
         self._chip_strip_layout = FlowLayout(
-            self._diphthong_chip_strip, gap=BTN_GAP, center=False
+            self._diphthong_chip_strip, gap=BTN_GAP
         )
         self._diphthong_chip_strip.hide()
         # Floor for ``set_target_width``: the geometry's natural data width
@@ -752,9 +734,6 @@ class VowelChartWidget(QWidget):
                     cell.chart_y,
                     cell.pair_side,
                     tier_by_row.get(cell.row, "middle"),
-                    cell.row,
-                    cell.col,
-                    cell.entries[0] if cell.entries else "",
                     cell.pair_shift_px,
                     cell.nudge_px,
                 )
@@ -937,7 +916,7 @@ class VowelChartWidget(QWidget):
         # tooltip, users read the packing as a rendering bug. Mirror the
         # web's title attribute on the container so hovering anywhere over
         # the stack explains the count.
-        if len(cell.entries) >= 5:
+        if len(cell.entries) >= DENSITY_TIER_DENSE_THRESHOLD:
             container.setToolTip(
                 f"{len(cell.entries)} segments share this cell: "
                 + " ".join(cell.entries)
@@ -1175,9 +1154,6 @@ class VowelChartWidget(QWidget):
             cy,
             pair_side,
             tier,
-            _r,
-            _c,
-            _s,
             cell_ps,
             cell_nudge,
         ) in self._cells:

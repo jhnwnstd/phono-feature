@@ -1208,8 +1208,9 @@ class MainWindow(QMainWindow):
                 seg_buttons[seg].append(btn)
             if norm_feats is not None:
                 # PHOIBLE-loaded inventories stash their diphthong
-                # secondary bundles in metadata so the chart can
-                # draw arrows between primary and secondary cells.
+                # secondary bundles in metadata; the geometry uses
+                # them to detect contour vowels and route them to the
+                # chip strip below the chart instead of a cell.
                 segment_secondary = self.engine.inventory.metadata.get(
                     "segment_secondary"
                 )

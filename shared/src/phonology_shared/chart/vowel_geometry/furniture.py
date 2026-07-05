@@ -27,7 +27,6 @@ from phonology_shared.chart.vowel_geometry.outline import (
     RowPlan,
     project_anchor_x,
     silhouette_left_at_y,
-    silhouette_right_at_y,
 )
 from phonology_shared.chart.vowel_space import (
     _BACKNESS_X,
@@ -149,9 +148,6 @@ def build_rows(
             label_y=label_y_by_row[ri],
             content_height_px=row_plan.weight[ri],
             silhouette_left=silhouette_left_at_y(
-                silhouette, label_y_by_row[ri]
-            ),
-            silhouette_right=silhouette_right_at_y(
                 silhouette, label_y_by_row[ri]
             ),
         )

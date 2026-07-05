@@ -120,9 +120,7 @@ _EXPECTED_VOWEL_CHART_FIELDS = frozenset(
         "cells",
         "diphthongs",
         "natural_data_height_px",
-        # ``bands`` is only emitted when the geometry produced any;
-        # validated separately below so the contract doesn't force
-        # empty-band inventories to carry the key.
+        "natural_data_width_px",
     }
 )
 
@@ -137,9 +135,13 @@ _EXPECTED_SILHOUETTE_FIELDS = frozenset(
         "bottom_right",
         "top_width",
         "bottom_width",
-        # ``front_anchor_at_top`` and ``back_anchor`` are derived
-        # for the cascade flush math; both renderers consume them
-        # so they must travel through the wire payload too.
+        # The cascade flush fields: main.js recomputes the rendered
+        # silhouette from these, so all five must travel the wire.
+        "front_anchor_at_top",
+        "front_anchor_at_bottom",
+        "back_anchor",
+        "cell_outer_extent_px",
+        "front_cell_outer_extent_px",
     }
 )
 
@@ -197,7 +199,6 @@ _EXPECTED_ROW_FIELDS = frozenset(
         # anchor button row instead of the stack edge.
         "label_y",
         "silhouette_left",
-        "silhouette_right",
         # Read by the web slot clamp (``_refreshVowelStackClamp``)
         # to shrink deep stacks when the rendered chart is shorter
         # than the natural request.

@@ -71,8 +71,6 @@ def relative_height_profile() -> VowelProfile:
         has_round=True,
         has_tense=True,
         has_tense_contrast=True,
-        has_raised=True,
-        has_lowered=True,
     )
 
 
@@ -84,10 +82,6 @@ def relative_backness_profile() -> VowelProfile:
         has_front=True,
         has_back=True,
         has_round=True,
-        has_advanced=True,
-        has_retracted=True,
-        has_centralized=True,
-        has_peripheral=True,
     )
 
 
@@ -214,7 +208,7 @@ def test_uniform_polarity_split_source_does_not_drive_divergence() -> None:
     has only ONE polarity across the inventory, treat that polarity
     as semantically vacuous for divergence detection. The
     ``has_<feat>_contrast`` profile flags carry the inventory-level
-    contrast fact (mirrors ``has_long_contrast``).
+    contrast fact.
 
     Theory: a PHOIBLE inventory often codes every vowel ``tense=+``
     and every vowel ``atr=-`` because both features are stored

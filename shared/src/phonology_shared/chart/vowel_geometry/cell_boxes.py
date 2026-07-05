@@ -22,6 +22,7 @@ from dataclasses import replace
 from phonology_shared.chart.vowel_geometry.display_slots import (
     _COL_TO_SLOT,
     PAIR_DISPLAY_KINDS,
+    horizontal_button_count,
 )
 from phonology_shared.chart.vowel_geometry.model import VowelChartCell
 from phonology_shared.chart.vowels import VowelCellDisplayKind
@@ -126,17 +127,13 @@ _INTER_ANCHOR_GAP_PX: float = float(VOWEL_PAIR_SEPARATOR_PX)
 
 
 def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
-    """Horizontal button count contributed by ``cell``. PAIR cells take
-    2 (a horizontal mate pair); a CONTRAST_SET is driven by its ``grid``
-    column extent (a base-centred ``var | base | var`` row is 3 wide, a
-    2x2 is 2 wide), falling back to 2; STACK takes 1. Module-level so both
-    the conflict resolver and the natural-size calc share one
-    definition."""
-    if cell.display_kind in PAIR_DISPLAY_KINDS:
-        return 2
-    if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
-        return _grid_cols_rows(cell.grid)[0]
-    return 1
+    """Horizontal button count contributed by ``cell``. Delegates to
+    :py:func:`display_slots.horizontal_button_count`, the ONE
+    definition of cell width in buttons (a PAIR kind lays every entry
+    in one row, so a 3-entry phonation capsule is 3 wide, not the 2 a
+    hand-coded pair rule used to claim), so the box math here and the
+    shrink solver's row width demands can never disagree."""
+    return horizontal_button_count(cell.display_kind, cell.entries, cell.grid)
 
 
 def _cell_width_px(cell: VowelChartCell) -> int:

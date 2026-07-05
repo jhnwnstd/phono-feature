@@ -243,3 +243,39 @@ def test_archi_pharyngeals_not_treated_as_diphthongs() -> None:
         f"Archi PHOIBLE should have zero diphthongs (pharyngealised "
         f"monophthongs are filtered); got {geom.diphthongs!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# All-diphthong vowel system: the empty-chart shortcut must not eat chips
+# ---------------------------------------------------------------------------
+
+
+def test_diphthong_only_inventory_keeps_its_chips() -> None:
+    """A vowel system made ENTIRELY of diphthongs occupies zero chart
+    cells (diphthongs are excluded from the trapezoid by design), which
+    routes the pipeline through its empty-chart shortcut. That shortcut
+    used to build the degenerate geometry WITHOUT the diphthongs field,
+    silently dropping every vowel from the display; the chips must
+    survive it."""
+    seg_feats = {
+        "ai": {
+            "high": "-",
+            "low": "+",
+            "front": "-",
+            "back": "-",
+        },
+        "au": {
+            "high": "-",
+            "low": "+",
+            "front": "-",
+            "back": "-",
+        },
+    }
+    secondary = {
+        "ai": {"high": "+", "low": "-", "front": "+"},
+        "au": {"high": "+", "low": "-", "back": "+", "round": "+"},
+    }
+    geom = _build_geometry(seg_feats, segment_secondary=secondary)
+    assert geom.cells == ()
+    assert geom.rows == ()
+    assert set(geom.diphthongs) == {"ai", "au"}

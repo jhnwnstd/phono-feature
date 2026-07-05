@@ -173,39 +173,44 @@ def vowel_silhouette(
 
 
 def _min_row_width_for_meta(
-    row_cells: list[tuple[float, int, bool]],
+    row_cells: list[tuple[float, int, int]],
 ) -> float:
     """Lower bound on ``row_width`` such that the row's cells do
     not overlap given back-anchored projection.
 
-    Each tuple is ``(anchor_x, pair_side, is_long_pair)`` where
+    Each tuple is ``(anchor_x, pair_side, n_buttons)`` where
     ``anchor_x`` is the cell's EFFECTIVE backness anchor (after any
-    Open-row central migration); the cell's horizontal extent is
-    its half-width plus its pair-side offset from the row's
-    projected anchor. With back-anchored projection
-    ``chart_x = back + W * (anchor - back)``, the distance between
-    two cells at adjacent anchors scales linearly with ``W``; this
-    function solves for the minimum ``W`` such that every adjacent
-    pair has at least ``_VOWEL_MIN_CELL_GAP_NORM`` between them
-    (zero if a single cell occupies the row).
+    Open-row central migration) and ``n_buttons`` its horizontal
+    button count (``display_slots.horizontal_button_count``); the
+    cell's horizontal extent is its half-width plus its pair-side
+    offset from the row's projected anchor. With back-anchored
+    projection ``chart_x = back + W * (anchor - back)``, the
+    distance between two cells at adjacent anchors scales linearly
+    with ``W``; this function solves for the minimum ``W`` such that
+    every adjacent pair has at least ``_VOWEL_MIN_CELL_GAP_NORM``
+    between them (zero if a single cell occupies the row).
     """
     if len(row_cells) < 2:
         return 0.0
     pair_shift = (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _VOWEL_CONTENT_W_PX
-    single_half = (BTN_W / 2.0) / _VOWEL_CONTENT_W_PX
-    long_pair_half = (
-        (2 * BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _VOWEL_CONTENT_W_PX
-    )
+
+    def half(n_buttons: int) -> float:
+        # n buttons side by side with the pair gap between them, halved:
+        # n=1 reduces to BTN_W/2 and n=2 to the classic pair half-width,
+        # so the 3-4 button capsules reserve exactly what they draw.
+        width_px = n_buttons * BTN_W + (n_buttons - 1) * VOWEL_PAIR_GAP_PX
+        return width_px / 2.0 / _VOWEL_CONTENT_W_PX
+
     sorted_meta = sorted(row_cells, key=lambda c: c[0])
     min_w = 0.0
-    for (anchor_a, ps_a, lp_a), (anchor_b, ps_b, lp_b) in zip(
+    for (anchor_a, ps_a, n_a), (anchor_b, ps_b, n_b) in zip(
         sorted_meta, sorted_meta[1:]
     ):
         if anchor_b <= anchor_a:
             # Same backness slot; pair_side handles separation.
             continue
-        half_a = long_pair_half if lp_a else single_half
-        half_b = long_pair_half if lp_b else single_half
+        half_a = half(n_a)
+        half_b = half(n_b)
         # Center distance at row_width=W = W*(anchor_b - anchor_a)
         # + (ps_b - ps_a) * pair_shift. For non-overlap with a
         # min visible gap, this must be >= half_a + half_b + gap.
@@ -222,7 +227,7 @@ def _min_row_width_for_meta(
 
 
 def _compute_shrunken_widths(
-    cells_meta_by_row: Mapping[int, list[tuple[float, int, bool]]],
+    cells_meta_by_row: Mapping[int, list[tuple[float, int, int]]],
     display_y_by_row: Mapping[int, float],
     top_y: float,
     bottom_y: float,
@@ -624,9 +629,10 @@ def silhouette_right_at_y(
     helper follows the same quadratic Bezier sampled by
     :py:func:`rounded_silhouette_polygon_points`.
 
-    Both renderers consume this via ``VowelChartRow.silhouette_right``
-    (baked per row at geometry build time) so back-edge alignment
-    cues stay in lockstep with the rendered silhouette polygon.
+    The analytic right-edge oracle: the polygon parity tests check
+    the sampled outline against it, and geometry code evaluates it
+    live where a back-edge x is needed (nothing bakes it per row;
+    row labels hug the front edge only).
     """
     sil = silhouette
     span_y = sil.bottom_y - sil.top_y

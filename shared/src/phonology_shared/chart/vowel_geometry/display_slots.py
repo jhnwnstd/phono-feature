@@ -49,18 +49,15 @@ _COL_TO_SLOT: dict[int, int] = {
 #: special-casing (see :py:func:`effective_anchor_x`).
 _OPEN_ROW_INDEX: int = _ROW_LABEL_TO_INDEX["Open"]
 
-#: PAIR display kinds; renderers lay these out as one horizontal
-#: row of two buttons. Shared by ``_cell_natural_size`` and both
-#: renderer dispatches.
+#: PAIR display kinds; renderers lay these out as one horizontal row
+#: of ALL the cell's entries (2 for a plain pair, 3-4 for a phonation
+#: series). Derived from the dimension map rather than hand-listed:
+#: every dimension kind IS a horizontal-capsule kind, which is exactly
+#: the invariant the classifier's single-dimension branch relies on,
+#: so a new dimension can never be forgotten here. Shared by the
+#: ``cell_boxes`` sizing helpers and both renderer dispatches.
 PAIR_DISPLAY_KINDS: frozenset[VowelCellDisplayKind] = frozenset(
-    {
-        VowelCellDisplayKind.LONG_PAIR,
-        VowelCellDisplayKind.NASAL_PAIR,
-        VowelCellDisplayKind.RHOTIC_PAIR,
-        VowelCellDisplayKind.PHONATION_PAIR,
-        VowelCellDisplayKind.TONE_PAIR,
-        VowelCellDisplayKind.PHARYNGEAL_PAIR,
-    }
+    _DIMENSION_KIND_FOR_FEATURE.values()
 )
 
 
@@ -159,7 +156,14 @@ def _classify_vowel_cell_display(
     # combination (a multi-value dimension, or 3+ dimensions) stacks.
     if len(differing_display) == 2 and 2 <= len(entries) <= 4:
         ordered, grid = _grid_layout(entries, bundles, contrast)
-        return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid
+        if len(set(grid)) == len(entries):
+            return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid
+        # Slot collision: the contrast DETECTOR counts a "-" vs "0"
+        # difference as a contrast (only None-only differences are
+        # dropped), but the aligned grid bins each axis by "+" alone, so
+        # two entries differing only as "-" vs "0" land on ONE slot and a
+        # capsule would paint them on top of each other. Fall back to the
+        # same contrast-aware stack the wider combinations use.
     # >2 secondary contrasts (or too many entries) for a clean linked
     # capsule: stack. This is the honest fallback for a cell the 2-D
     # layouts cannot resolve (e.g. !Xoo's plain / pharyngealised / breathy
@@ -424,17 +428,45 @@ class CellSlot:
     grid: tuple[tuple[int, int], ...] = ()
 
 
+def horizontal_button_count(
+    kind: VowelCellDisplayKind,
+    entries: tuple[str, ...],
+    grid: tuple[tuple[int, int], ...],
+) -> int:
+    """Horizontal button count of one cell: how many buttons wide it
+    renders. A PAIR kind lays EVERY entry in one row (the
+    single-dimension capsule: 2 for a plain pair, 3-4 for a
+    plain / breathy / creaky series or a four-way phonation set); a
+    CONTRAST_SET spans its ``grid`` column extent (base-centred row
+    ``var | base | var`` is 3, a 2x2 is 2; canonical 2 when no grid);
+    STACK is 1 wide. The ONE definition of cell width in buttons:
+    ``cell_boxes`` sizing delegates here and the shrink solver's row
+    width demands are built from it, so the box math, the natural
+    sizing, and the shrink floor can never disagree about how wide a
+    cell draws (a 4-entry capsule sized as a 2-button pair used to
+    under-reserve its row and could overlap a neighbour)."""
+    if kind in PAIR_DISPLAY_KINDS:
+        return len(entries)
+    if kind == VowelCellDisplayKind.CONTRAST_SET:
+        if not grid:
+            return 2
+        return max(col for col, _row in grid) + 1
+    return 1
+
+
 @dataclass(frozen=True)
 class SlotPlan:
     """Output of :py:func:`_assign_pair_sides`: the per-cell slots
     the projection consumes, plus the per-row ``(anchor_x,
-    pair_side, is_pair_layout)`` width demands the outline's shrink
-    solver feeds to ``_min_row_width_for_meta``. Carrying the
-    EFFECTIVE anchor keeps the shrink floor consistent with where
-    cells actually render."""
+    pair_side, n_buttons)`` width demands the outline's shrink
+    solver feeds to ``_min_row_width_for_meta`` (``n_buttons`` is
+    :py:func:`horizontal_button_count`, so the shrink floor reserves
+    what the cell actually draws). Carrying the EFFECTIVE anchor
+    keeps the shrink floor consistent with where cells actually
+    render."""
 
     slots: tuple[CellSlot, ...]
-    row_width_demands: Mapping[int, list[tuple[float, int, bool]]]
+    row_width_demands: Mapping[int, list[tuple[float, int, int]]]
 
 
 def _assign_pair_sides(
@@ -454,10 +486,15 @@ def _assign_pair_sides(
     the anchor.
     """
     slots: list[CellSlot] = []
-    cells_meta_by_row: dict[int, list[tuple[float, int, bool]]] = {}
+    cells_meta_by_row: dict[int, list[tuple[float, int, int]]] = {}
     for ri, ci in sorted(occupied):
         classification = classifications[(ri, ci)]
         is_pair_layout = classification.kind in PAIR_DISPLAY_KINDS
+        n_buttons = horizontal_button_count(
+            classification.kind,
+            classification.entries,
+            classification.grid,
+        )
         if ci >= 6:
             # Neutral col baseline: pair_side=0 (anchor centre).
             # Reroute when a paired col at the same anchor is also
@@ -509,6 +546,6 @@ def _assign_pair_sides(
             )
         )
         cells_meta_by_row.setdefault(ri, []).append(
-            (anchor_x, pair_side, is_pair_layout)
+            (anchor_x, pair_side, n_buttons)
         )
     return SlotPlan(slots=tuple(slots), row_width_demands=cells_meta_by_row)

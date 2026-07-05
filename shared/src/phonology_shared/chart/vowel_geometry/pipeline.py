@@ -553,12 +553,15 @@ def build_vowel_chart_geometry(
         segs, profile, norm_feats, policy, segment_secondary
     )
 
-    # Empty case: the inventory has no vowels (consonant-only setup,
-    # or a fresh "New" with the default-segments placeholder which
-    # is all-stops). Return a degenerate geometry with the canonical
+    # Empty case: no vowel occupies a chart cell (consonant-only setup,
+    # a fresh "New" with the all-stops placeholder, or a vowel system
+    # made ENTIRELY of diphthongs, which are excluded from cells by
+    # design). Return a degenerate geometry with the canonical
     # full-range silhouette so renderers can still draw the empty
     # chart chrome (or hide it) by iterating zero-length rows /
-    # cells / cols.
+    # cells / cols. The diphthongs still travel: they render as chips
+    # below the chart, not as cells, so an all-diphthong system must
+    # not lose its segments to this shortcut.
     if not plan.populated_rows:
         return VowelChartGeometry(
             title=VOWEL_CHART_TITLE,
@@ -569,6 +572,7 @@ def build_vowel_chart_geometry(
             cells=(),
             natural_data_width_px=0,
             natural_data_height_px=0,
+            diphthongs=build_diphthong_segments(plan.placements),
         )
 
     # Silhouette: position logic (top/bottom widths) comes from the
