@@ -1,10 +1,15 @@
 """Assign inventory segments to phonological display groups.
 
-Pipeline: primary manner-class assignment, derived breakouts (for
-example Sibilants from Fricatives), relational relabeling (Rhotics,
-Liquids), small-group merging, laryngeal rescue, then sort. Each step
-is keyed to the active feature set so inventories that lack a feature
-skip the related step.
+Pipeline: existential-reach routing (``reached_classes`` over the
+tiers decides Stage 1: a plain affricate takes its specific class, a
+segment reaching several coarse classes renders in EVERY one of them
+as a multiset, a single reach takes that class), derived breakouts
+(for example Sibilants from Fricatives), relational relabeling
+(Rhotics, Liquids), small-group merging, laryngeal rescue, the
+substance-free pin (multi-membership segments are restored to exactly
+their reach after the population-based covers run), then sort. Each
+step is keyed to the active feature set so inventories that lack a
+feature skip the related step.
 
 Place of articulation is derived from distinctive features rather
 than read as a primitive. There is no ``"velar"`` or ``"uvular"``
@@ -85,9 +90,9 @@ PRIMARY_GROUPS: list[tuple[str, dict[str, str]]] = [
     # Affricates are NOT a spec here: a single ``[-continuant, +delrel]``
     # bundle cannot tell PHOIBLE's two affricate encodings apart, and it
     # would wrongly admit a stop that releases into a sonorant. They are
-    # assigned in Stage 1 by the phase-union ``affricate_group`` predicate
-    # (some phase ``-continuant`` AND some phase ``+delrel``); see
-    # :py:func:`group_segments`.
+    # assigned by ``reached_classes``' affricate ∃-rule (some phase is an
+    # oral stop closure AND some phase carries ``+delrel``), which Stage 1
+    # of :py:func:`group_segments` routes on directly.
     (
         "Plosives",
         {
@@ -1025,11 +1030,12 @@ def _break_out_by_spec(
     feature the condition needs, so an inventory silent on ``strident``
     never grows an empty Sibilants row.
 
-    The match reads a feature's whole value SEQUENCE: a lateral affricate
-    carries its ``[+lateral]`` on the fricative release, so the
-    Lateral-Affricates split must see the release value to fire. For a
-    non-contour feature the sequence is one value, so this is identical
-    to a plain value test.
+    The match reads a feature's whole value SEQUENCE, an existential
+    test with no privileged phase: the Lateral-Affricates split fires
+    when SOME phase carries ``[+lateral]`` (for a lateral affricate the
+    source happens to write it on the fricated phase, but the test
+    never asks which). For a non-contour feature the sequence is one
+    value, so this is identical to a plain value test.
     """
     spawned_from: set[str] = set()
     for new_name, parent_name, cond in DERIVED_BREAKOUTS:
@@ -1081,6 +1087,15 @@ def _break_out_by_laryngeal_kind(
     ``PRIMARY_GROUPS``, so the breakouts only see consonants. The
     relabel passes and laryngeal rescue below inherit the same
     guarantee.
+
+    Unlike :func:`_break_out_by_spec` this reads the COLLAPSED bundle
+    (``derive_laryngeal_kind(norm[s])``), not the tiers. That is a
+    deliberate economy, not an oversight: the source never contours a
+    laryngeal feature (verified corpus-wide: zero laryngeal tiers
+    longer than one), so the collapsed value IS the tier singleton for
+    every feature this read consults. If a future source encodes
+    laryngeal contours, lift this to the same ``set(tier)`` existential
+    read the spec breakout uses.
     """
     for new_name, parent_name, target_kind in _FACT_BREAKOUTS:
 
@@ -1689,85 +1704,67 @@ def group_segments(
             return ""
         return best_name
 
-    def affricate_group(sym: str, seg_feats: dict[str, str]) -> str:
-        """``Affricates`` for an obstruent that closes then fricates.
-
-        The one general rule that spans both PHOIBLE affricate
-        encodings and the Hayes / PanPhon feature systems: a
-        non-sonorant, non-click ``+consonantal`` segment is an
-        affricate when some phase is ``[-continuant]`` (a stop
-        closure) AND some phase is ``[+delayed release]`` (a fricated
-        release). It is the intersection of the two standard analyses,
-        the delayed-release stop and the ``[-cont] -> [+cont]``
-        contour, so it accepts the ``[-cont, +delrel]`` collapse
-        (``ts``, ``tʃ``) and the ``continuant`` / ``delayedRelease``
-        contour (``tɬ``, ``tɕ``) alike. The ``+delrel`` phase is what
-        separates a true affricate from a stop that merely releases
-        into a sonorant (``tr``, ``tl``, ``ʔj``): those contour on
-        ``continuant`` but carry no delayed release, so they fall
-        through to ``best_primary`` instead of being mislabelled here.
-        """
-        if seg_feats.get("consonantal", "0") != "+":
-            return ""
-        if seg_feats.get("sonorant", "0") == "+":
-            return ""
-        if seg_feats.get("click", "0") == "+":
-            return ""
-        if "-" not in phase_values(sym, "continuant"):
-            return ""
-        if "+" not in phase_values(sym, "delrel"):
-            return ""
-        return "Affricates"
-
-    # Stage 1: assign every segment to its display group(s). A CONSONANT
-    # whose tiers existentially reach MORE THAN ONE coarse manner class is
-    # a genuine multi-membership segment (``mb`` reaches Nasals AND
-    # Plosives): it is appended to EVERY class it reaches, driven purely
-    # by ``reached_classes`` off the tiers, never a privileged phase. A
-    # vowel-like segment (reaching ``[+syllabic]`` in some phase, e.g. a
-    # rising diphthong) stays on the single-pick path so it routes to the
-    # vowel area, not into consonant manner rows. Every other segment
-    # (single coarse class) keeps the existing single-pick and refines as
-    # today: an affricate wins first (a phase-agnostic ∃ rule), then the
-    # positive-evidence best_primary, then the mismatch-minimising
-    # fallback, then the Contoid/Vocoid catch-all so nothing vanishes.
+    # Stage 1: assign every segment to its display group(s). ONE
+    # membership computation drives every routing decision here:
+    # ``reached_classes``, the same existential read over the tiers the
+    # ∃-reach fixture generator uses. No collapsed-bundle gate sits in
+    # front of it. (The old ``affricate_group`` pre-check read the
+    # COLLAPSED ``sonorant``, so a prenasalized affricate whose collapse
+    # kept the obstruent value was swallowed into Affricates and never
+    # reached Nasals: membership decided by a collapse convention
+    # instead of the tiers.) A vowel-like segment (reaching
+    # ``[+syllabic]`` in some phase, e.g. a rising diphthong) stays on
+    # the single-pick path so it routes to the vowel area, not into
+    # consonant manner rows; a declared class primitive (``rhotic`` /
+    # ``flap`` / ``liquid``), which ``best_primary`` honours as a
+    # definite single class the standard bundle cannot recover, is not
+    # scattered across manner rows. Everything else routes by its reach:
+    # exactly-an-affricate takes the specific class, several classes
+    # take the multiset, one class takes that class, and a reach the
+    # specs cannot name falls to the positive-evidence ``best_primary``,
+    # the mismatch-minimising fallback, then the Contoid / Vocoid
+    # catch-all so nothing vanishes.
     assignment: dict[str, list[str]] = defaultdict(list)
     multi_reach: dict[str, set[str]] = {}
     for sym, feats in norm.items():
-        # A plain affricate wins first: ``affricate_group`` is a phase-
-        # agnostic ∃ rule giving the SPECIFIC Affricates manner, which
-        # subsumes the stop-then-fricative structure, so a contour
-        # affricate is Affricates rather than scattered into Plosives +
-        # Fricatives. A PRENASALIZED affricate is rejected here (onset
-        # ``[+sonorant]``) and reaches Affricates + Nasals through the
-        # multiset below, where the two are genuinely disjoint classes.
-        aff = affricate_group(sym, feats)
-        if aff:
-            assignment[aff].append(sym)
-            continue
-        # Otherwise: a consonant whose tiers existentially reach MORE THAN
-        # ONE coarse manner class is a genuine multi-membership segment
-        # (``mb`` reaches Nasals AND Plosives; a nasal click reaches Clicks
-        # AND Nasals), appended to EVERY class it reaches, driven purely by
-        # ``reached_classes`` off the tiers, never a privileged phase. Two
-        # single-class routings beat the multiset: a vowel-like segment
-        # (reaching ``[+syllabic]`` in some phase) stays on the single-pick
-        # path so it routes to the vowel area; and an explicit declared
-        # class primitive (``rhotic`` / ``flap`` / ``liquid``), which
-        # ``best_primary`` honours as a definite single class the standard
-        # bundle cannot recover, is not scattered across manner rows.
         reached = reached_classes(feats, seqs.get(sym, {}))
+        # A PLAIN affricate is a segment whose reach beyond Plosives /
+        # Fricatives is exactly Affricates. Its closure phase
+        # necessarily satisfies the Plosives spec and a fricated
+        # release the Fricatives spec, but those are the affricate's
+        # OWN phases (the structure the ∃-rule is defined by), not
+        # further memberships, so it displays as the single specific
+        # class rather than scattering. Any OTHER class alongside
+        # Affricates (a nasal onset ``ndz``, a tap release ``d-ʒɾ``)
+        # is genuinely disjoint and routes through the multiset below,
+        # whatever the collapsed bundle happens to say.
+        if reached - {"Plosives", "Fricatives"} == {"Affricates"}:
+            assignment["Affricates"].append(sym)
+            continue
         is_vowelish = "+" in phase_values(sym, "syllabic")
         declared = (
             feats.get("rhotic", "0") == "+"
             or feats.get("flap", "0") == "+"
             or feats.get("liquid", "0") == "+"
         )
-        if len(reached) > 1 and not is_vowelish and not declared:
-            multi_reach[sym] = reached
-            for group in reached:
-                assignment[group].append(sym)
-            continue
+        if not is_vowelish and not declared:
+            if len(reached) > 1:
+                # Genuine multi-membership (``mb`` reaches Nasals AND
+                # Plosives; a nasal click reaches Clicks AND Nasals):
+                # appended to EVERY class it reaches, never a
+                # privileged phase.
+                multi_reach[sym] = reached
+                for group in reached:
+                    assignment[group].append(sym)
+                continue
+            if len(reached) == 1:
+                # Single existential reach: the tiers name the class
+                # directly. For a single-phase segment this is provably
+                # the ``best_primary`` answer (same specs, same
+                # values); for a manner contour it keeps the pick on
+                # the tiers where the collapsed bundle could disagree.
+                assignment[next(iter(reached))].append(sym)
+                continue
         group = best_primary(feats) or fallback_assignment(feats)
         if not group:
             group = (
@@ -1777,11 +1774,21 @@ def group_segments(
 
     # Stages 2-8: reshape the group set. Each stage is a named function
     # above; read them top-to-bottom to trace how the raw per-segment
-    # assignment becomes the final class list. The onset-reading breakouts
-    # SKIP the multi-membership segments (``multi_segs``): a segment that
-    # reaches several coarse classes stays in each of them and must not be
-    # peeled into an onset-derived sub-class, which would privilege a
-    # phase and diverge from its existential reach.
+    # assignment becomes the final class list. The breakouts SKIP the
+    # multi-membership segments (``multi_segs``): a segment that reaches
+    # several coarse classes stays in each of them and must not be
+    # peeled into a sub-class, which would privilege a phase and diverge
+    # from its existential reach.
+    #
+    # The population-based covers (relabel / merge / fold / rescue) are
+    # PROVISIONAL single-membership display logic: they move a segment
+    # off its exact reach by inventory-dependent co-occurrence (a lone
+    # trill can display under Vibrants or Rhotics). Only ``multi_reach``
+    # segments are pinned back to their reach below; singles follow the
+    # cover. The full multi-membership display pass, where EVERY
+    # segment's placement is driven by ``reached_classes``, retires
+    # these covers; until then they are display convenience, and none
+    # of this feeds the engine's membership relations.
     n = len(inventory)
     multi_segs = frozenset(multi_reach)
     _break_out_by_spec(assignment, norm, seqs, active_features, n, multi_segs)

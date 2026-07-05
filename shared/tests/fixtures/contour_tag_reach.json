@@ -2,9 +2,9 @@
   "schema": "contour-multiset-membership/2",
   "note": "Multiset consonant membership over PHOIBLE: each glyph that renders in more than one manner class, and the classes it lands in. group_segments is the source of truth (coarse assignment off reached_classes, then each multi segment is pinned to its existential reach so membership is stable). Regenerate with shared/tests/fixtures/gen_contour_tag_reach.py.",
   "totals": {
-    "multi_occurrences": 2244,
-    "unique_glyphs": 301,
-    "inventories_with_multi": 421
+    "multi_occurrences": 2248,
+    "unique_glyphs": 305,
+    "inventories_with_multi": 422
   },
   "segments": {
     "bm": [
@@ -30,6 +30,10 @@
     "cɲ": [
       "Nasals",
       "Plosives"
+    ],
+    "d-ʒɾ": [
+      "Affricates",
+      "Taps & Flaps"
     ],
     "d-ⁿ": [
       "Nasals",
@@ -108,6 +112,11 @@
       "Taps & Flaps"
     ],
     "kʟ̥ʼ": [
+      "Lateral Approximants",
+      "Plosives"
+    ],
+    "kʟ͓̥ʼ": [
+      "Affricates",
       "Lateral Approximants",
       "Plosives"
     ],
@@ -588,6 +597,10 @@
       "Nasals",
       "Plosives"
     ],
+    "t-ʃɾ": [
+      "Affricates",
+      "Taps & Flaps"
+    ],
     "tl": [
       "Lateral Approximants",
       "Plosives"
@@ -927,6 +940,11 @@
       "Trills"
     ],
     "ɖr-": [
+      "Plosives",
+      "Trills"
+    ],
+    "ɖr-͓": [
+      "Affricates",
       "Plosives",
       "Trills"
     ],

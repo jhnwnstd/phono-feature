@@ -172,3 +172,70 @@ def test_display_multiset_does_not_leak_into_engine_membership():
     assert "mb" in eng.find_segments({"Nasal": "+"})
     assert "mb" in eng.find_segments({"Continuant": "-"})
     assert "mb" in eng.find_segments({"Sonorant": "-"})
+
+
+def test_prenasalized_affricate_reaches_the_multiset_despite_collapse():
+    """A prenasalized affricate must render in Affricates AND Nasals no
+    matter which phase the source's COLLAPSE convention kept. Here the
+    collapsed bundle carries the obstruent values (``Sonorant=-``,
+    ``Nasal=-``); only the tiers know about the nasal onset. The old
+    Stage 1 gated affricates on the collapsed ``sonorant``, so exactly
+    this segment was swallowed into bare Affricates and never reached
+    Nasals: membership decided by a collapse convention instead of the
+    tiers (the PHOIBLE glyphs ``d-ʒɾ`` / ``kʟ͓̥ʼ`` hit this live, with
+    tap / lateral releases). Routing now reads ``reached_classes``
+    only."""
+    feats = [
+        "Consonantal",
+        "Sonorant",
+        "Continuant",
+        "Nasal",
+        "DelRel",
+        "Syllabic",
+    ]
+    segs = {
+        "ndz": {
+            "Consonantal": "+",
+            "Sonorant": "-",  # collapse kept the OBSTRUENT phase
+            "Continuant": "-",
+            "Nasal": "-",
+            "DelRel": "+",
+            "Syllabic": "-",
+        },
+        "n": {
+            "Consonantal": "+",
+            "Sonorant": "+",
+            "Continuant": "-",
+            "Nasal": "+",
+            "DelRel": "-",
+            "Syllabic": "-",
+        },
+        "a": {
+            "Consonantal": "-",
+            "Sonorant": "+",
+            "Continuant": "+",
+            "Nasal": "-",
+            "DelRel": "-",
+            "Syllabic": "+",
+        },
+    }
+    inv = Inventory.from_grid(
+        name="t",
+        features=feats,
+        segments=segs,
+        metadata={
+            "segment_sequences": {
+                "ndz": {
+                    "Sonorant": ["+", "-"],
+                    "Nasal": ["+", "-"],
+                    "Continuant": ["-", "-"],
+                }
+            }
+        },
+    )
+    groups = FeatureEngine(inv).grouped_segments
+    assert "ndz" in groups.get("Affricates", [])
+    assert "ndz" in groups.get("Nasals", [])
+    # The affricate's own closure / release structure is subsumed by
+    # Affricates, not scattered.
+    assert "ndz" not in groups.get("Plosives", [])
