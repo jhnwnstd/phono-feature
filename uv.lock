@@ -592,7 +592,7 @@ requires-dist = [
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=7" },
     { name = "flake8-bugbear", marker = "extra == 'dev'", specifier = ">=24" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = "==2.1.0" },
     { name = "panphon", marker = "extra == 'panphon'", specifier = ">=0.20" },
     { name = "phonology-shared", editable = "shared" },
     { name = "pyqt6", specifier = ">=6.6.0" },

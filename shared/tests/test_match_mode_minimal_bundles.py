@@ -275,3 +275,121 @@ def test_mode_argument_is_keyword_only() -> None:
         engine.find_all_minimal_bundles(
             ["a"], MatchMode.WILDCARD  # type: ignore[misc]
         )
+
+
+def _contour_wildcard_inv() -> Inventory:
+    """A(f+), C(f-), and contour B whose ``f`` runs ``+,-``: the shape
+    where the wildcard EXCLUDERS and the wildcard MATCHER used to read
+    different sets. B sits in both ``plus_segs[f]`` and
+    ``minus_segs[f]`` (tier-true membership) but in NEITHER exclusive
+    set, so no wildcard constraint can rule B out."""
+    return Inventory.parse(
+        {
+            "features": ["F", "G"],
+            "segments": {
+                "A": {"F": "+", "G": "+"},
+                "B": {"F": "+", "G": "-"},
+                "C": {"F": "-", "G": "-"},
+            },
+            "metadata": {"segment_sequences": {"B": {"F": ["+", "-"]}}},
+        }
+    )
+
+
+def test_wildcard_bundles_round_trip_with_contour_outside_segment():
+    """EVERY bundle the wildcard search emits must round-trip: typing
+    it back into ``find_segments`` under wildcard yields exactly the
+    input selection. The old excluders read the full polarity sets, so
+    for the selection {A} they counted the contour B as excludable by
+    ``(F, '+')`` while the matcher (subtracting only the EXCLUSIVE
+    sets) kept B, and the emitted ``{F: '+'}`` over-matched to {A, B}.
+    Both halves of the query must share one membership relation. This
+    test fails on the pre-fix excluders and pins the repaired
+    round-trip."""
+    eng = FeatureEngine(_contour_wildcard_inv())
+    for selection in (["A"], ["B"], ["C"], ["A", "B"], ["B", "C"]):
+        bundles = eng.find_all_minimal_bundles(
+            selection, mode=MatchMode.WILDCARD
+        )
+        for bundle in bundles:
+            matched = set(
+                eng.find_segments(dict(bundle), mode=MatchMode.WILDCARD)
+            )
+            assert matched == set(selection), (
+                f"wildcard bundle {dict(bundle)} for {selection} "
+                f"over-matches to {sorted(matched)}"
+            )
+
+
+def test_wildcard_selection_indistinct_from_contour_is_not_a_class():
+    """{A} alone cannot be a wildcard natural class in this inventory
+    on ``F`` grounds: the contour B is compatible with either polarity
+    of ``F``, so only ``G`` separates them. The emitted bundles must
+    lean on ``G``, never on an ``F`` constraint that pretends to
+    exclude B."""
+    eng = FeatureEngine(_contour_wildcard_inv())
+    bundles = eng.find_all_minimal_bundles(["A"], mode=MatchMode.WILDCARD)
+    assert bundles, "G:+ separates A from B and C under wildcard"
+    for bundle in bundles:
+        spec = dict(bundle)
+        if spec.get("F") == "+" and len(spec) == 1:
+            raise AssertionError(
+                f"{spec} cannot characterize {{A}}: contour B matches it"
+            )
+
+
+def test_strict_contour_singleton_is_the_class_its_minus_bundle_names():
+    """{B} where B contours on F (A is exclusively +F): by the module's
+    own definition ``{F: '-'}`` characterizes {B} exactly under strict
+    (``minus_segs[F] == {B}``), so ``is_natural_class(['B'])`` must be
+    True and the bundle must be emitted. The old candidate dict kept
+    one pair per feature and the ``elif`` privileged ``+``, so the
+    equally valid minus candidate was silently dropped and strict
+    detection denied a class ``find_segments`` characterizes."""
+    inv = Inventory.parse(
+        {
+            "features": ["F", "G"],
+            "segments": {
+                "A": {"F": "+", "G": "+"},
+                "B": {"F": "+", "G": "+"},
+            },
+            "metadata": {"segment_sequences": {"B": {"F": ["+", "-"]}}},
+        }
+    )
+    eng = FeatureEngine(inv)
+    # ground truth the bundle language must recover:
+    assert eng.find_segments({"F": "-"}, mode=MatchMode.STRICT) == ["B"]
+    ok, bundles = eng.is_natural_class(["B"], mode=MatchMode.STRICT)
+    assert ok, "strict detection denied a class find_segments characterizes"
+    assert {"F": "-"} in [dict(b) for b in bundles]
+    # and every emitted bundle round-trips exactly:
+    for b in bundles:
+        assert eng.find_segments(dict(b), mode=MatchMode.STRICT) == ["B"]
+
+
+def test_bundle_never_collapses_both_polarities_of_one_feature():
+    """A cover that needs BOTH (F,+) and (F,-) is not expressible in
+    the dict bundle language (a dict holds one value per feature), so
+    the search must reject it rather than emit a silently collapsed
+    over-matching bundle. Here only conjoining both polarities of F
+    would isolate the contour B (no G contrast exists), so {B} is
+    correctly NOT a strict natural class in the bundle language."""
+    inv = Inventory.parse(
+        {
+            "features": ["F"],
+            "segments": {
+                "A": {"F": "+"},
+                "B": {"F": "+"},
+                "C": {"F": "-"},
+            },
+            "metadata": {"segment_sequences": {"B": {"F": ["+", "-"]}}},
+        }
+    )
+    eng = FeatureEngine(inv)
+    ok, bundles = eng.is_natural_class(["B"], mode=MatchMode.STRICT)
+    assert not ok, (
+        f"emitted {bundles}; no single-valued F spec matches exactly B "
+        f"(F:+ matches A,B; F:- matches B,C)"
+    )
+    for b in bundles:
+        assert eng.find_segments(dict(b), mode=MatchMode.STRICT) == ["B"]

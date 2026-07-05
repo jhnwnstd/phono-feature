@@ -59,9 +59,13 @@ class MatchMode(StrEnum):
     exactly the input set.
 
     ``WILDCARD`` (surfaced to users as underspecified matching): a
-    segment matches a requested ``+``/``-`` unless its own feature
-    value is the OPPOSITE explicit value. ``"0"`` on a segment is
-    compatible with either polarity. A request of ``"0"`` carries no
+    segment matches a requested ``+``/``-`` unless it is EXCLUSIVELY
+    the opposite explicit polarity. ``"0"`` on a segment is compatible
+    with either polarity, and a contour segment that reaches both
+    polarities is excluded by neither request (it carries the wanted
+    value in some phase). Both the matcher and the bundle search read
+    the same exclusive sets, so an emitted bundle matches exactly what
+    the search believed it matched. A request of ``"0"`` carries no
     constraint at all: wildcard mode reads it as "don't care about
     this feature," not "show me unspecified segments." Users who want
     the latter stay in strict mode.
@@ -113,9 +117,13 @@ class FeatureCategory(StrEnum):
       it distinctly from ``EXPLICIT_CONFLICT``.
 
     Strict natural-class detection (the contract the round-trip
-    invariant rests on) only considers ``ALL_PLUS`` and ``ALL_MINUS``
-    features as bundle candidates. That restriction ensures any spec
-    the engine LISTS round-trips exactly through
+    invariant rests on) draws its bundle candidates from the same
+    tier-true subset tests: every ``(feature, value)`` pair the whole
+    selection reaches. A feature the selection contours on classifies
+    ``EXPLICIT_CONFLICT`` here yet still contributes BOTH pairs to the
+    search (each round-trips on its own); only a pair some member
+    fails is never a candidate, which is what keeps every spec the
+    engine LISTS round-tripping exactly through
     :py:meth:`find_segments`.
     """
 
@@ -652,22 +660,27 @@ class FeatureEngine:
         # of outside segments that constraint rules out.
         if mode is MatchMode.WILDCARD:
             candidate_pairs = self._wildcard_candidate_constraints(selected)
-            # A wildcard constraint excludes the OPPOSITE-explicit
-            # segments: (f, "+") rules out only minus_segs[f], (f, "-")
-            # rules out only plus_segs[f]. ``"0"`` outside segments are
-            # NOT excluded by any constraint; wildcard tolerates them
-            # everywhere.
+            # A wildcard constraint excludes the EXCLUSIVELY-opposite
+            # segments: (f, "+") rules out only ``_minus_excl[f]``,
+            # (f, "-") only ``_plus_excl[f]`` the SAME sets the
+            # wildcard matcher subtracts, so a bundle the search emits
+            # matches exactly what the search believed it matched. A
+            # contour segment carries both polarities, sits in neither
+            # exclusive set, and is excluded by no constraint (reading
+            # the full ``minus_segs`` here once counted it as
+            # excludable and the emitted bundle over-matched). ``"0"``
+            # outside segments are likewise never excluded; wildcard
+            # tolerates them everywhere.
             excludes_lookup: list[frozenset[str]] = [
                 (
-                    (minus_segs[f] & outside_set)
+                    (self._minus_excl[f] & outside_set)
                     if v == "+"
-                    else (plus_segs[f] & outside_set)
+                    else (self._plus_excl[f] & outside_set)
                 )
                 for f, v in candidate_pairs
             ]
         else:
-            strict_candidates = self._strict_candidate_constraints(selected)
-            candidate_pairs = list(strict_candidates.items())
+            candidate_pairs = self._strict_candidate_constraints(selected)
             # Strict excluders: outside segment t is excluded by
             # (f, +) iff t is not explicitly + on f.
             excludes_lookup = [
@@ -755,12 +768,21 @@ class FeatureEngine:
         ) -> bool:
             nonlocal best_size
             if not uncovered:
+                bundle = _bits_to_bundle(chosen_bits)
+                if len(bundle) < depth:
+                    # The cover chose BOTH polarities of one feature.
+                    # That conjunction is not expressible in the
+                    # single-valued bundle language (the dict would
+                    # keep whichever pair came last and the emitted
+                    # bundle would over-match), so reject the cover
+                    # and keep searching; it must not set best_size.
+                    return True
                 if best_size is None or depth < best_size:
                     best_size = depth
                     results.clear()
-                    results.append(_bits_to_bundle(chosen_bits))
+                    results.append(bundle)
                 elif depth == best_size:
-                    results.append(_bits_to_bundle(chosen_bits))
+                    results.append(bundle)
                 return len(results) < max_bundles
             if best_size is not None and depth >= best_size:
                 return True
@@ -894,35 +916,52 @@ class FeatureEngine:
         return out
 
     def common_features(self, segments: list[str]) -> dict[str, str]:
-        """Features whose ``'+'`` or ``'-'`` value is shared by every
+        """Features whose single explicit value is shared by every
         given segment.
 
-        Identical to the strict natural-class candidate rule: a
-        feature is "shared" iff every selected segment has the same
-        explicit value on it. Delegates to
-        :py:meth:`_strict_candidate_constraints` so the strict-NC
-        contract has one source of truth across this method,
+        Delegates to :py:meth:`_strict_candidate_constraints` so the
+        strict-NC contract has one source of truth across this method,
         :py:meth:`find_all_minimal_bundles`, and
-        :py:meth:`complete_to_minimal_natural_class`.
+        :py:meth:`complete_to_minimal_natural_class`. A feature the
+        whole selection CONTOURS on contributes both polarity pairs to
+        the bundle search, but it has no SINGLE shared value to report
+        here, so it is omitted (the readout renders it as ``±`` via
+        ``EXPLICIT_CONFLICT``, never as one value).
         """
         if not segments:
             return {}
         for seg in segments:
             self._validate_segment(seg)
-        return self._strict_candidate_constraints(frozenset(segments))
+        shared: dict[str, str] = {}
+        dual: set[str] = set()
+        for feat, val in self._strict_candidate_constraints(
+            frozenset(segments)
+        ):
+            if feat in dual:
+                continue
+            if feat in shared:
+                del shared[feat]
+                dual.add(feat)
+            else:
+                shared[feat] = val
+        return shared
 
     def _strict_candidate_constraints(
         self, selected: frozenset[str]
-    ) -> dict[str, str]:
+    ) -> list[tuple[str, str]]:
         """Strict candidate constraints of ``selected``.
 
-        Returns ``{feature: value}`` for every feature where
+        Returns every ``(feature, value)`` pair where
         ``selected ⊆ plus_segs[f]`` (value ``'+'``) or
-        ``selected ⊆ minus_segs[f]`` (value ``'-'``). These are the
-        only (feature, value) pairs a strict natural-class bundle
-        can use without disqualifying some member of ``selected``,
-        and are also exactly the features whose value is shared by
-        every member.
+        ``selected ⊆ minus_segs[f]`` (value ``'-'``): the only pairs a
+        strict natural-class bundle can use without disqualifying some
+        member of ``selected``. The membership caches are TIER-TRUE, so
+        a feature every member CONTOURS on satisfies BOTH subset tests
+        and contributes both pairs (the same pair-list shape as the
+        wildcard variant); a feature-to-value dict with a first-match
+        ``elif`` used to keep only the plus pair here, silently
+        dropping an equally valid minus bundle, so strict detection
+        denied classes ``find_segments`` characterizes.
 
         Does not validate ``selected``; callers that need an
         ``ValueError`` on unknown segments must do that check first
@@ -930,12 +969,12 @@ class FeatureEngine:
         """
         plus_segs = self.plus_segs
         minus_segs = self.minus_segs
-        candidates: dict[str, str] = {}
+        candidates: list[tuple[str, str]] = []
         for feature in self._inventory.features:
             if selected <= plus_segs[feature]:
-                candidates[feature] = "+"
-            elif selected <= minus_segs[feature]:
-                candidates[feature] = "-"
+                candidates.append((feature, "+"))
+            if selected <= minus_segs[feature]:
+                candidates.append((feature, "-"))
         return candidates
 
     def _wildcard_candidate_constraints(
@@ -1063,9 +1102,7 @@ class FeatureEngine:
                 if not (selected & plus_segs[feat]):
                     smallest_class -= plus_segs[feat]
         else:
-            for feat, val in self._strict_candidate_constraints(
-                selected
-            ).items():
+            for feat, val in self._strict_candidate_constraints(selected):
                 if val == "+":
                     smallest_class &= plus_segs[feat]
                 else:

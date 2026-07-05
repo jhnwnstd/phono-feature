@@ -46,7 +46,7 @@ dependencies = [
 dev = [
     "pytest>=7",
     "pytest-mock>=3.12",
-    "mypy>=1.8",
+    "mypy==2.1.0",
     "isort>=5",
     "black>=24",
     "flake8>=7",
