@@ -32,7 +32,7 @@ MAX_SEGMENTS: int = 180
 # Per-class caps, enforced wherever a grid becomes an Inventory and
 # on load. Classification is feature-driven (the chart layer's
 # ``group_segments`` is the single source), so these are checked by
-# ``chart.consonants.validate_class_caps`` rather than the parse
+# ``chart.segment_classes.validate_class_caps`` rather than the parse
 # layer (data must not import chart). "Consonant" excludes tone
 # letters, which group_segments routes to their own ``Tones`` class
 # (counted toward MAX_SEGMENTS, never toward MAX_CONSONANTS). Sized

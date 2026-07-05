@@ -155,11 +155,13 @@ def test_phoible_diphthongs_round_trip_secondary_and_flag(
     Contour vowels are drawn as distinct GLYPH CHIPS in that strip,
     never as paths on the grid, so two of them MAY share a
     ``(primary_cell, secondary_cell)`` endpoint pair without becoming
-    indistinguishable: a triphthong reduces to its first/last endpoints
-    (see :py:func:`split_contour_value`), so e.g. ``/iau/`` and the
-    diphthong ``/iu/`` both span i->u yet stay distinct on screen by
-    glyph. The former per-pair uniqueness assertion was an artefact of
-    the two-phase-only world and is not a rendering requirement."""
+    indistinguishable: the PLACEMENT layer anchors a contour vowel by
+    its endpoint cells even when the tiers carry more phases (the
+    ground ``segment_sequences`` keep every phase verbatim), so e.g.
+    ``/iau/`` and the diphthong ``/iu/`` both span i->u yet stay
+    distinct on screen by glyph. The former per-pair uniqueness
+    assertion was an artefact of the two-phase-only world and is not a
+    rendering requirement."""
     inv_id = _find_inventory_id(phoible_provider, language, source_short)
     if inv_id is None:
         pytest.skip(

@@ -307,7 +307,7 @@ def enforce_class_caps(
     editor, the web editor, PHOIBLE materialization, and JSON
     opens all reject an over-class inventory with identical wording.
     Delegates the counting to
-    :py:func:`phonology_shared.chart.consonants.validate_class_caps`
+    :py:func:`phonology_shared.chart.segment_classes.validate_class_caps`
     (the classifier is the single source of "what is a vowel") and
     wraps the messages in the same exception type the structural
     parse validation raises, so callers need only one except clause.

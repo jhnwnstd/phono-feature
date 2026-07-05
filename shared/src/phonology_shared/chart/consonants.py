@@ -628,8 +628,11 @@ def derive_laryngeal_kind(feats: dict[str, str]) -> LaryngealKind:
          only fill in when the inventory does not supply enough
          standard Laryngeal-node evidence.
 
-    Not wired into the grouper yet; introduced here so unit tests can
-    pin the semantics before any group-output change is requested.
+    Wired into the grouper: the fact-based breakouts
+    (:py:data:`_FACT_BREAKOUTS`, applied by
+    :py:func:`_break_out_by_laryngeal_kind`) call this per segment, so
+    a change to the derivation changes which display sub-groups the
+    Ejective / Implosive breakouts form.
     """
     voice = feats.get("voice", "0")
     spread = feats.get("spreadgl", "0")
@@ -708,8 +711,9 @@ class SecondaryKind(StrEnum):
     Derived from real distinctive features, never from an invented
     ``"velarized"`` / ``"palatalized"`` primitive: there is no
     ``velarized`` feature in standard distinctive feature theory.
-    The flat names below are the DISPLAY labels the grouper emits,
-    not the input vocabulary.
+    The flat names below are typed display facts kept for renderers
+    to consume, never the input vocabulary; the grouping pipeline does
+    not currently emit them (only the unit tests read the derivation).
 
     Evidence the derivation accepts:
 
@@ -1452,10 +1456,12 @@ def group_segments(
     AND some position is ``[+delayed release]`` (a fricated release),
     which catches both the ``DelRel`` collapse and the ``continuant``
     contour PHOIBLE uses for the same segments, and separates a true
-    affricate from a stop that merely releases into a sonorant. A release
-    position's ``lateral`` / ``strident`` then tell a lateral affricate
-    from a sibilant one. Reading each feature's own sequence is faithful
-    for ragged segments too and matches the query membership cache. A
+    affricate from a stop that merely releases into a sonorant. The sequence's
+    ``lateral`` / ``strident`` values then tell a lateral affricate
+    from a sibilant one (the source happens to write them on the
+    fricated phase; the test is existential and never asks which).
+    Reading each feature's own sequence is faithful for ragged
+    segments too and matches the query membership cache. A
     caller that passes nothing sees every segment as single-valued (its
     primary bundle), so collapse-encoded affricates still classify; only
     the contour-encoded ones lose their affricate reading.
@@ -1523,9 +1529,10 @@ def group_segments(
 
         - **Vowel-phonemes**: ``Syllabic=+`` AND ``Consonantal!=+``
           (true vowels including nasalised vowels like ``ã``)
-        - **Tone-phonemes**: ``HighTone=+`` AND no positive
-          consonant/vowel major-class features (Chao tone letters
-          ``˥˦˧˨˩`` shipped by PHOIBLE)
+        - **Tone-phonemes**: a positive tone marker (generic
+          ``tone`` as PHOIBLE states it, or ``hightone`` as PanPhon
+          does) AND no positive consonant/vowel major-class features
+          (Chao tone letters ``˥˦˧˨˩`` shipped by PHOIBLE)
         - **Consonants**: everything else, including syllabic
           consonants like ``m̩``/``n̩``
 

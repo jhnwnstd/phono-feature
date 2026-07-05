@@ -1,6 +1,6 @@
 """Render-ready wire types for the vowel chart (layer: model).
 
-The seven frozen dataclasses below are the complete contract both
+The frozen dataclasses below are the complete contract both
 renderers consume: the desktop walks them directly, the web receives
 them flattened by ``view_models._vowel_chart_summary``. Everything
 that crosses the renderer boundary lives in this one module so "what
@@ -57,10 +57,12 @@ class VowelChartCell:
       those fields below) so paired mates stay exactly tangent
       regardless of the row's effective width.
 
-    ``row`` / ``col`` are the abstract logical placement (0..5
-    each). ``entries`` is the segments occupying this cell, ordered
-    by descending placement confidence (ties broken by ascending
-    segment string).
+    ``row`` / ``col`` are the abstract logical placement (``row``
+    0..6 into ``ROW_LABELS``; ``col`` 0..8: pair slots 0-5 plus
+    neutral-rounding slots 6-8). ``entries`` is the segments
+    occupying this cell: base-first in the classifier's order for a
+    contrast-bearing cell, descending placement confidence (ties by
+    ascending segment string) for a featureless stack.
 
     ``display_kind`` tells the renderer how to arrange the entries
     inside the cell. ``STACK`` is the default vertical-stack
@@ -72,7 +74,9 @@ class VowelChartCell:
     multiple display features.
 
     ``contrast_features`` is the sorted tuple of display-contrast
-    features that drove the kind choice (``()`` for ``STACK``).
+    features that drove the kind choice (``()`` only for a
+    position-driven featureless stack; a contrast-aware stack keeps
+    its dimension names).
 
     Invariants pinned by :py:mod:`tests.test_phoible_vowel_rendering_stress`
     across the full PHOIBLE catalogue:
@@ -373,8 +377,10 @@ class VowelChartGeometry:
     cells: tuple[VowelChartCell, ...]
     natural_data_width_px: int
     natural_data_height_px: int
-    # Diphthong segments (PHOIBLE contour vowels whose encoding spans
-    # two cells). They are NOT placed in the trapezoid; renderers list
+    # Diphthong segments: contour vowels whose two chart placements
+    # resolve to DISTINCT cells (the placer's snap + degeneracy filter
+    # has already demoted same-cell contours to ordinary monophthong
+    # rendering). They are NOT placed in the trapezoid; renderers list
     # them as labelled chips below the vowel space. Empty for
     # monophthong-only inventories.
     diphthongs: tuple[str, ...] = ()

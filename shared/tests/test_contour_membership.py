@@ -8,9 +8,10 @@ segment by. These assertions name only quantifiers and specs, never a
 privileged onset or offset, which is how they stay inside the
 substance-free commitment (Bale & Reiss 2018; Reiss 2021).
 
-The display grouper's ``Contour Consonants`` tag is a separate,
-presentation-only convention: it must NOT leak into the engine's
-membership relations, which keep answering from the tiers.
+The display grouper's provisional ``Contour Consonants`` tag (now
+RETIRED; multi-membership replaced it) was a presentation-only
+convention: these tests keep asserting it never leaks into the
+engine's membership relations, which answer from the tiers.
 """
 
 from __future__ import annotations

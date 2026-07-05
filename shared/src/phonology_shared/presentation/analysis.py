@@ -362,7 +362,9 @@ def compute_contrastive(
     segs: list[str],
 ) -> dict[str, dict[str, list[str]]]:
     """For each feature with both '+' and '-' among ``segs``, bucket
-    the segments by their value.
+    the segments by membership in the engine's existential value sets:
+    a segment lists under '+' when some phase reaches ``[+feat]`` (a
+    contour segment can list under BOTH polarities).
 
     Returns ``{feat: {'+': [...], '-': [...], '0': [...]}}``. The '0'
     bucket appears only when some segments are underspecified. Bucket

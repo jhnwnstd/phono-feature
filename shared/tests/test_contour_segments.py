@@ -3,60 +3,18 @@ as a sequence of ordinary +/-/0 phases, and the feature engine unions
 membership over those phases so a contour segment belongs to BOTH the
 [+f] and [-f] natural class for any feature its phases disagree on.
 
-This pins the interim phase model (the final phase comes from the
-``segment_secondary`` metadata) and the engine's union + wildcard
-behaviour. PHOIBLE encodes the contour as ``"+,-"``; before this, the
-engine saw only the initial polarity, so a diphthong gliding into
-``[+low]`` never answered a ``[+low]`` query.
+This pins the LEGACY ``segment_secondary`` channel (a final-state
+bundle the parser reconstructs into a two-value tier; the live ground
+is the ``segment_sequences`` verbatim tiers) and the engine's union +
+wildcard behaviour over it. Historically the engine saw only the
+initial polarity, so a diphthong gliding into ``[+low]`` never
+answered a ``[+low]`` query; these tests hold that fix in place.
 """
 
 from __future__ import annotations
 
 from phonology_shared.data import Inventory
-from phonology_shared.editor.phoible_features import (
-    initial_phase_value,
-    split_contour_value,
-)
 from phonology_shared.theory.feature_engine import FeatureEngine, MatchMode
-
-
-def test_initial_phase_value_reads_the_starting_polarity() -> None:
-    """The bake's vowel/obstruent gate reads this to classify a
-    segment by the state it STARTS in. A contour returns its initial
-    polarity; a plain cell normalizes as usual. This is what keeps a
-    falling diphthong (``syllabic="+,-"``) read as a vowel and a
-    prenasalized consonant (``sonorant="+,-"``) read as a sonorant,
-    instead of the raw ``"+,-" == "+"`` comparison misreading both."""
-    assert initial_phase_value("+,-") == "+"
-    assert initial_phase_value("-,+") == "-"
-    assert initial_phase_value("+") == "+"
-    assert initial_phase_value("-") == "-"
-    assert initial_phase_value("0") == "0"
-    # A three-phase contour (a triphthong / complex affricate) reads
-    # its INITIAL phase now that the split reduces to first/last.
-    assert initial_phase_value("+,-,+") == "+"
-    assert initial_phase_value("-,+,+") == "-"
-    assert initial_phase_value("NA") == "0"
-
-
-def test_split_contour_value_reduces_to_first_last_endpoints() -> None:
-    """A plain cell is not a contour; a two-phase cell returns its
-    pair; a three-plus-phase cell (a triphthong or complex affricate)
-    reduces to its ``(first, last)`` endpoints so it still becomes a
-    single secondary phase. Any non ``+/-/0`` part rejects the whole
-    cell."""
-    assert split_contour_value("+") is None
-    assert split_contour_value("0") is None
-    assert split_contour_value("-,+") == ("-", "+")
-    assert split_contour_value("+,-") == ("+", "-")
-    # three-plus phases collapse to the traversal endpoints
-    assert split_contour_value("-,+,+") == ("-", "+")
-    assert split_contour_value("+,-,+") == ("+", "+")
-    assert split_contour_value("-,-,+") == ("-", "+")
-    assert split_contour_value("+,-,+,-") == ("+", "-")
-    # a malformed part rejects the cell (falls back to normalize)
-    assert split_contour_value("+,x") is None
-    assert split_contour_value("-,+,z") is None
 
 
 def _contour_inv() -> Inventory:

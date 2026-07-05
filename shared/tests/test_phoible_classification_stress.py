@@ -159,10 +159,12 @@ def test_b2_only_vowel_phonemes_land_in_vowels(
 def test_b3_classifier_assigns_every_segment(
     phoible_provider, phoible_label_for, phoible_inventory_ids_full: list[str]
 ) -> None:
-    """Every segment must land in exactly one group; an empty
-    "Other" fallback or unassigned segment would surface a
-    silently-broken classifier. Sampled to keep runtime bounded
-    (the B1/B2 sweeps cover the full set with cheaper checks)."""
+    """Every segment must land in at least one group (the grouping is
+    a MULTISET: a contour consonant renders in every class it
+    existentially reaches, so more than one group is legitimate); an
+    unassigned segment would surface a silently-broken classifier.
+    Sampled to keep runtime bounded (the B1/B2 sweeps cover the full
+    set with cheaper checks)."""
     # Stride-sampled subset of the full corpus (~200 inventories).
     # ``phoible_inventory_ids_sample`` would have worked too; the
     # stride keeps this test independent of the conftest seed.

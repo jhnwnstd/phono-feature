@@ -83,19 +83,22 @@ class FeatureCategory(StrEnum):
     """Semantic classification of one feature against a selected set.
 
     The seven categories capture every possible mix of ``+``/``-``/``'0'``
-    values across the selection. They are the single source of truth
-    for what "shared" and "contrastive" mean and which features can
-    contribute to a natural-class specification:
+    the selection REACHES, read from the tier-true membership caches
+    (a contour segment reaches both polarities of a feature its
+    phases disagree on). They are the single source of truth for what
+    "shared" and "contrastive" mean in the readout:
 
-    * ``ALL_PLUS`` / ``ALL_MINUS``: every selected segment has the
-      same explicit value. The feature contributes to a STRICT
-      minimal specification.
+    * ``ALL_PLUS`` / ``ALL_MINUS``: every selected segment reaches
+      the explicit value and none reaches its opposite. The feature
+      contributes to a STRICT minimal specification.
     * ``ALL_ZERO``: every selected segment is ``'0'``. The feature
       carries no information about the selection; it cannot
       contribute to any spec.
-    * ``EXPLICIT_CONFLICT``: some selected segments are ``'+'`` and
-      others are ``'-'``; none is ``'0'``. The feature explicitly
-      splits the selection; cannot contribute to a shared spec.
+    * ``EXPLICIT_CONFLICT``: the selection reaches BOTH explicit
+      polarities and none of it is ``'0'``: different segments split
+      between ``'+'`` and ``'-'``, or a single contour segment's own
+      value sequence carries both. Cannot contribute to a shared
+      spec; the readout renders it as ``±``.
     * ``UNDERSPEC_PLUS`` / ``UNDERSPEC_MINUS``: some selected
       segments have the explicit value, the rest are ``'0'``. The
       feature could contribute to an underspec-tolerant spec but
@@ -849,9 +852,20 @@ class FeatureEngine:
             spec_hit = len(selected & spec_segs[feat])
             all_specified = spec_hit == n
             if all_specified:
-                if plus_hit == n:
+                # The membership caches are TIER-TRUE: a contour segment
+                # reaches both polarities and sits in plus_segs AND
+                # minus_segs, so both hit counts can equal ``n`` at
+                # once. Classify by the value SET, never by which test
+                # runs first: ALL_PLUS states the selection's reach is
+                # EXACTLY {+}. A selection containing a contour segment
+                # on its contouring feature holds both polarities and
+                # is an EXPLICIT_CONFLICT, which is what the ± readout
+                # renders. (A first-match ``if/elif`` here silently
+                # privileged ``+``, the last single-phase read left
+                # after the multiset pass.)
+                if plus_hit == n and minus_hit == 0:
                     out[feat] = FeatureCategory.ALL_PLUS
-                elif minus_hit == n:
+                elif minus_hit == n and plus_hit == 0:
                     out[feat] = FeatureCategory.ALL_MINUS
                 else:
                     out[feat] = FeatureCategory.EXPLICIT_CONFLICT

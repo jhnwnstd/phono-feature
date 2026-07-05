@@ -127,20 +127,22 @@ class VowelCellDisplayKind(StrEnum):
     backness) grid; this enum chooses the layout INSIDE the cell
     once two or more vowels share the same slot.
 
-    * ``STACK`` (default): vertical stack, one button per row. Used
-      when the entries differ on a non-display feature (or on no
-      feature at all) so vertical stacking is the safe arrangement.
+    * ``STACK`` (default): vertical stack, one button per row. Two
+      flavours: a FEATURELESS stack (entries differ on a position
+      feature the 2-D grid cannot resolve; ``contrast_features`` is
+      empty) and a CONTRAST-AWARE stack (3+ secondary dimensions, the
+      !Xoo-style series: ``contrast_features`` names the dimensions
+      and the entries order base-first).
     * ``LONG_PAIR`` / ``NASAL_PAIR`` / ``RHOTIC_PAIR`` /
-      ``PHONATION_PAIR`` / ``TONE_PAIR`` / ``PHARYNGEAL_PAIR``
-      (side-by-side): two buttons in a horizontal row, marked member
-      on the right. The PAIR kinds share the same physical layout;
-      the kind records WHICH non-position feature drove the contrast
-      so the renderer (or downstream tooling) can read it without
-      re-deriving from the entries.
-    * ``CONTRAST_SET``: 2x2 grid (for 3-4 entries) when the
-      entries differ on more than one display feature (e.g. long x
-      nasal). Renderer decides the 2D arrangement; ``entries`` is
-      passed through in input order.
+      ``PHONATION_PAIR`` / ``TONE_PAIR`` / ``PHARYNGEAL_PAIR``: one
+      horizontal capsule of ALL the entries varying within a single
+      contrast DIMENSION (2 for a plain pair, 3-4 for a phonation
+      series), base (unmarked) first, marked members to the right.
+      The kind records WHICH dimension drove the contrast so the
+      renderer can read it without re-deriving from the entries.
+    * ``CONTRAST_SET``: feature-aligned grid for 3-4 entries crossing
+      two single-feature dimensions (e.g. long x nasal). Renderers
+      place entries from ``grid``.
 
     StrEnum so the value serializes verbatim through the
     presentation bridge into the web payload.
@@ -266,8 +268,11 @@ class FeatureState(StrEnum):
 
     Hayes (2009) treats ``"0"`` as a deliberate "don't care" value,
     distinct from a missing key (feature not in the inventory or
-    not supplied for this segment). Collapsing the two erases the
-    author's intent on underspecification. Inference paths that
+    not supplied for this segment). Some display-inference gates read
+    that distinction; the QUERY surface deliberately collapses the two
+    (see ``FeatureValue.ZERO`` in ``data.inventory``), because neither
+    asserts a polarity. Collapsing them HERE would erase the intent
+    the placement gates consult. Inference paths that
     need the distinction route through :py:func:`_feature_state`;
     paths that only care about "any explicit value" still get away
     with ``feats.get(key, "0")``.
@@ -373,11 +378,12 @@ class VowelProfile:
 class PlacementPolicy:
     """Knobs for theory-laden inference decisions.
 
-    Defaults preserve the module's pre-policy behavior so existing
-    inventories keep their placements; per-inventory overrides let
-    callers opt into the paper-recommended stricter defaults
-    (``allow_coronal_front_fallback=False``,
-    ``split_low_by_tense=False``).
+    Most defaults preserve the module's pre-policy behavior so
+    existing inventories keep their placements;
+    ``allow_coronal_front_fallback`` already ships at the
+    paper-recommended strict setting (``False``). Per-inventory
+    overrides change the remaining theory-laden knobs (for example
+    ``split_low_by_tense``).
     """
 
     #: Allow ``[+labial]`` to infer rounding when the inventory has
@@ -1125,9 +1131,9 @@ def compute_placements(
     """Place every vowel and group by (row, col) cell.
 
     ``policy`` defaults to :py:class:`PlacementPolicy` with the
-    module-level defaults; pass one explicitly to enable the
-    paper-recommended stricter settings (``coronal_front``
-    disabled, low-vowel split off, etc.).
+    module-level defaults (the coronal-front fallback already ships
+    disabled); pass one explicitly to change the remaining
+    theory-laden knobs (for example the low-vowel tense split).
 
     ``segment_secondary`` carries final-state feature bundles for
     diphthong segments (PHOIBLE's contour rows). Segments that
@@ -1242,10 +1248,11 @@ def _snap_diphthong_secondaries(
     """Re-target each diphthong's PRIMARY and SECONDARY placement
     to the closest matching monophthong cell.
 
-    Both endpoints suffer the same PHOIBLE encoding drift: the
-    contour-vowel feature bundles carry overlaid features that
-    shift the placer's column verdict away from the standalone
-    monophthong. Concretely for Korean /io/, the primary bundle
+    Both endpoints share the same shape: a contour vowel's
+    single-value bundle overlays features from more than one phase,
+    so the placer's column verdict can land at a virtual position
+    where no standalone monophthong sits. Concretely for Korean
+    /io/, the primary bundle
     encodes ``front +, round +`` which lands at front-rounded
     (col 1, a virtual position with no /i/-like button), even
     though semantically /io/ starts at /i/ (col 6). Same shape

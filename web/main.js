@@ -2158,8 +2158,8 @@ function _buildSegmentButton(seg, extraAttrs) {
         }
     }
     // A segment can render in SEVERAL places (a multi-membership
-    // consonant appears in every manner class it existentially reaches;
-    // a diphthong doubles as a vowel cell + a chip), so track a LIST of
+    // consonant appears in every manner class it existentially
+    // reaches), so track a LIST of
     // instances per glyph. The reconcile and refit loops fan state out to
     // every instance, and the delegated click already flips them all via
     // querySelectorAll. Without the list only the last-built instance
@@ -2615,7 +2615,9 @@ function _buildVowelChart(chart) {
         // Multiple vowels can map to the same chart cell (the
         // classic case is ə / ɜ / ɚ all landing in open-mid central
         // for the General inventory). The bridge groups them into
-        // ``cell.segs``, sorted by descending placement confidence.
+        // ``cell.segs`` in the shared classifier's order: base form
+        // first for a contrast-bearing cell, descending placement
+        // confidence for a featureless stack.
         const segs = cell.segs;
         if (!Array.isArray(segs) || segs.length === 0) continue;
         let target;
@@ -2748,8 +2750,10 @@ function _buildVowelCellButton(seg) {
 /** Build a stacked vertical container for a vowel-chart cell that
  *  holds multiple vowels. Mirrors the desktop's
  *  :py:meth:`VowelChartWidget._build_cell` collision-cell handling:
- *  the entries arrive sorted by descending placement confidence,
- *  so the highest-confidence vowel sits on top.
+ *  the entries arrive in the shared classifier's stack order (base
+ *  form first for a contrast-aware stack; descending placement
+ *  confidence for a featureless one), so the leading entry sits on
+ *  top.
  *
  *  Children are PLAIN ``_buildSegmentButton`` results (no
  *  ``.vowel-chart-cell`` class). The cell class carries

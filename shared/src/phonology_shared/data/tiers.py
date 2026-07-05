@@ -233,8 +233,8 @@ def align(attrs: Attrs, tiers: TierMap) -> Alignment:
 
     A single-value tier is a constant and broadcasts across the shared
     length (licensed by the source convention that one value means "does
-    not change"). Two varying tiers of different lengths express separate
-    autosegmental tiers with no stated association, so alignment refuses
+    not change"). Two varying tiers of different lengths express independent
+    value sequences with no stated association, so alignment refuses
     rather than inventing one.
     """
     varying = {f: t for f, t in tiers.items() if len(t) > 1}
@@ -313,9 +313,10 @@ def member_forall(tiers: TierMap, spec: Mapping[str, str]) -> bool:
     ``f`` is its wanted value throughout AND ``g`` is throughout. So it
     reads the sequences directly (:func:`feature_throughout`), needs no
     alignment, and is ALWAYS decidable, never :data:`UNDETERMINED` -
-    even for a ragged segment. Natural-class detection, minimal bundles,
-    and the round-trip read this projection, so they stay total over
-    every segment in the inventory.
+    even for a ragged segment. The engine's query surfaces stay total
+    the same way, by decomposing per feature, though they read their
+    own membership caches rather than calling this helper; this is the
+    formal statement those caches implement.
     """
     return all(
         feature_throughout(tiers, feature, want)

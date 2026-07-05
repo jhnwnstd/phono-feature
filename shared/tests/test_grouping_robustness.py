@@ -14,8 +14,8 @@ The grouper must not over-fit to one source. Its contract:
      being force-fit to a class it has no positive evidence for.
   3. **Encoding-agnostic affrication.** An affricate is classified the
      same whether its source encodes it as a ``[-continuant, +delrel]``
-     collapse (Hayes / PanPhon / PHOIBLE-whitelisted ``ts``) or as a
-     ``continuant`` / ``delrel`` contour (PHOIBLE ``tɬ``).
+     collapse (the Hayes / PanPhon shape, and PHOIBLE's for ``ts``) or
+     as a ``continuant`` / ``delrel`` contour (PHOIBLE ``tɬ``).
   4. **Major-class disjointness.** A vowel-phoneme never lands in a
      consonant manner class.
 

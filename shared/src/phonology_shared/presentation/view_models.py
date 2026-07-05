@@ -302,7 +302,18 @@ def summarize_segment_selection(
         for feat in engine.features:
             value = feats.get(feat, "0")
             cat = categories.get(feat, FeatureCategory.ALL_ZERO)
-            if value in ("+", "-"):
+            if cat is FeatureCategory.EXPLICIT_CONFLICT:
+                # A single-segment "conflict" is a CONTOUR feature: the
+                # segment's own value sequence reaches both polarities
+                # (the engine caches are tier-true), so the row renders
+                # the set (± badge), never one phase's collapsed value.
+                # One source, two renderings: queries and this readout
+                # both answer from the same membership caches.
+                row_states[feat] = _feature_row_state(
+                    contrastive=True,
+                    category=cat,
+                )
+            elif value in ("+", "-"):
                 row_states[feat] = _feature_row_state(
                     value=value,
                     shared=True,

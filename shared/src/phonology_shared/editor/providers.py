@@ -141,9 +141,10 @@ def _prune_unused_features(
     carry every column the source ships). Returns ``features``
     unchanged when ``resolved`` is empty so an empty inventory
     still has columns to show. ``extra_bundles`` lets the PHOIBLE
-    provider count its diphthong secondary bundles as used;
-    otherwise a diphthong distinguished only by its final half
-    would lose its discriminator.
+    provider count a feature as used when any contour segment's
+    value SEQUENCE reaches a polarity on it; otherwise a contour
+    segment distinguished only within its sequence would lose its
+    discriminating feature.
     """
     if not resolved:
         return features

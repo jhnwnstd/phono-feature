@@ -588,11 +588,13 @@ def materialize_phoible_inventory(
     * ``feature_source`` metadata records the PHOIBLE provenance
       ("PHOIBLE 2.0 / Korean / SPA") so a saved file is debuggable;
       the field is plain text and the user can edit or delete it.
-    * Contour secondary bundles (vowel diphthongs and obstruent
-      affricates) get stamped under ``segment_secondary`` so the
-      vowel chart can list diphthongs as chips and the engine can
-      read affricate phases, without a new bridge endpoint or
-      parameter.
+    * Faithful contour VALUE SEQUENCES (any manner/quality contour
+      the source states: diphthongs, affricates, prenasalized stops)
+      get stamped under ``segment_sequences``, the tier ground the
+      engine reads for membership; the derived final-state bundles
+      under ``segment_secondary`` are the vowel chart's display
+      channel (diphthong chips), not a membership source. Both ride
+      metadata, without a new bridge endpoint or parameter.
 
     Raises :py:class:`KeyError` for an unknown ``inventory_id``;
     callers translate the failure into whatever the platform's
