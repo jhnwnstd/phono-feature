@@ -176,20 +176,18 @@ _MERGE_PARENT: dict[str, str] = {
     "Sibilants": "Fricatives",
     "Lateral Fricatives": "Fricatives",
     "Lateral Flaps": "Taps & Flaps",
-    # A small Trills or Taps group merges up into Vibrants (the
-    # feature-justified trill+tap cover), NOT Central Approximants: a
-    # trill/tap is not an approximant, and routing it through Central
-    # Approximants was the path that let a place-blind trill (e.g. the
-    # bilabial /ʙ/) drift on into a Liquids relabel. Rhoticity is not
-    # recoverable from the features, so Trills/Taps never imply liquid.
-    "Trills": "Vibrants",
-    "Taps & Flaps": "Vibrants",
+    # No entry for Trills or Taps & Flaps: those ARE coarse reached
+    # classes, not refinements of one, so a small trill row keeps its
+    # own reach-labeled identity rather than escaping into a
+    # population cover (rhoticity is not recoverable from the
+    # features, and display membership never leaves a segment's
+    # reached-class subtree).
     "Implosives": "Plosives",
     "Ejective Plosives": "Plosives",
     "Ejective Fricatives": "Fricatives",
     "Ejective Affricates": "Affricates",
 }
-# Exempt from upward merging; laryngeal rescue can still peel members.
+# Exempt from upward merging.
 _FROZEN_GROUPS: set[str] = {"Plosives"}
 # Groups whose membership is a HARD per-segment gate (a click, a vowel
 # phoneme, a tone letter), decided by ``best_primary`` / ``is_member``,
@@ -218,7 +216,6 @@ DISPLAY_ORDER: list[str] = [
     "Lateral Affricates",
     "Ejective Affricates",
     "Nasals",
-    "Vibrants",
     "Trills",
     "Taps & Flaps",
     "Lateral Flaps",
@@ -227,7 +224,6 @@ DISPLAY_ORDER: list[str] = [
     "Liquids",
     "Central Approximants",
     "Semivowels",
-    "Laryngeals",
     # Consonant-area catch-all: renders at the end of the consonant
     # section (before vowels) so an unclassifiable contoid stays visible.
     CONTOID_GROUP_NAME,
@@ -238,51 +234,6 @@ DISPLAY_ORDER: list[str] = [
     # Tones render after the segmental classes so the chart reads
     # consonants first, then vowels, then the suprasegmental tier.
     TONES_GROUP_NAME,
-]
-# Origin-set -> display label for relational relabeling.
-#
-# "Liquids" only forms when Central Approximants participate. A central
-# approximant is the best feature-system proxy for an r-like rhotic
-# approximant, so its presence is what licenses calling a lateral +
-# vibrant cluster a liquid system. The features establish "trill",
-# "tap", and "lateral approximant"; they do NOT establish that a trill
-# or tap is rhotic. So "Lateral Approximants + Trills" (and the tap and
-# trill+tap variants) are deliberately absent here: relabeling those to
-# Liquids with no central-approximant anchor is what swept the place-
-# blind bilabial trill /ʙ/ into Liquids. Trills + Taps still merge to
-# the feature-justified "Vibrants" below.
-_RELABEL_PATTERNS: dict[frozenset[str], str] = {
-    frozenset({"Trills", "Taps & Flaps"}): "Vibrants",
-    frozenset({"Trills", "Central Approximants"}): "Rhotics",
-    frozenset({"Taps & Flaps", "Central Approximants"}): "Rhotics",
-    frozenset({"Trills", "Taps & Flaps", "Central Approximants"}): "Rhotics",
-    frozenset({"Lateral Approximants", "Central Approximants"}): "Liquids",
-    frozenset(
-        {"Lateral Approximants", "Central Approximants", "Trills"}
-    ): "Liquids",
-    frozenset(
-        {"Lateral Approximants", "Central Approximants", "Taps & Flaps"}
-    ): "Liquids",
-    frozenset(
-        {
-            "Lateral Approximants",
-            "Central Approximants",
-            "Trills",
-            "Taps & Flaps",
-        }
-    ): "Liquids",
-}
-_DERIVED_MERGES: list[tuple[frozenset[str], str]] = [
-    # Vibrants fold into an EXISTING Liquids (which only forms when a
-    # central approximant participated, see _RELABEL_PATTERNS), and
-    # Rhotics (already central-approximant-anchored) fold into Liquids
-    # with laterals. There is deliberately NO Vibrants + Lateral
-    # Approximants -> Liquids merge: that is "any lateral + any vibrant
-    # -> liquid" with nothing establishing rhoticity, the path that
-    # re-leaked /ʙ/ into Liquids after the relabel pass produced a
-    # Vibrants group.
-    (frozenset({"Vibrants", "Liquids"}), "Liquids"),
-    (frozenset({"Rhotics", "Lateral Approximants"}), "Liquids"),
 ]
 
 
@@ -946,41 +897,6 @@ def _apply_breakout(
     return True
 
 
-_LARYNGEAL_FEATURES: set[str] = {"spreadgl", "constrgl"}
-_PLACE_FEATURES: set[str] = {
-    "labial",
-    "coronal",
-    "dorsal",
-    "pharyngeal",
-    "constrpharynx",
-}
-
-
-def _is_laryngeal_candidate(feats: dict[str, str]) -> bool:
-    has_laryngeal = any(feats.get(f, "0") == "+" for f in _LARYNGEAL_FEATURES)
-    has_place = any(feats.get(f, "0") == "+" for f in _PLACE_FEATURES)
-    is_vowel = feats.get("syllabic", "0") == "+"
-    is_click = feats.get("click", "0") == "+"
-    # Tone-phonemes (Chao tone letters, possibly with phonation
-    # diacritics like ``˥˧̰``) belong in the Tones group regardless
-    # of their laryngeal-feature surface; without this guard the
-    # laryngeal rescue below would pull a creaky-toned segment out
-    # of Tones into Laryngeals. Mirrors the tone-phoneme guard in
-    # ``is_member``.
-    is_tone = (
-        (feats.get("tone", "0") == "+" or feats.get("hightone", "0") == "+")
-        and feats.get("consonantal", "0") != "+"
-        and not is_vowel
-    )
-    return (
-        has_laryngeal
-        and not has_place
-        and not is_vowel
-        and not is_click
-        and not is_tone
-    )
-
-
 def _is_vocoid(feats: dict[str, str]) -> bool:
     """Pike's vocoid test for the no-class catch-all routing only.
 
@@ -1111,76 +1027,6 @@ def _break_out_by_laryngeal_kind(
         _apply_breakout(assignment, new_name, parent_name, _kind_match, n)
 
 
-def _relabel_small_origin_sets(
-    assignment: dict[str, list[str]],
-    n: int,
-) -> None:
-    """Relabel a set of co-occurring small manner groups to one cover.
-
-    Each :data:`_RELABEL_PATTERNS` entry maps an origin set (e.g.
-    Trills + Taps & Flaps) to a cover label (Vibrants). The relabel
-    fires only when EVERY origin group is present AND each is small
-    enough to merge up, so a large, well-populated Trills row keeps its
-    own identity. Frozen groups never participate.
-    """
-    for origin_set, new_label in _RELABEL_PATTERNS.items():
-        present = [g for g in sorted(origin_set) if g in assignment]
-        if len(present) < 2:
-            continue
-        if any(not _should_merge_up(len(assignment[g]), n) for g in present):
-            continue
-        if any(g in _FROZEN_GROUPS for g in present):
-            continue
-        merged: list[str] = []
-        for g in present:
-            merged.extend(assignment.pop(g))
-        assignment.setdefault(new_label, []).extend(merged)
-
-
-def _merge_small_derived_pairs(
-    assignment: dict[str, list[str]],
-    norm: Mapping[str, dict[str, str]],
-    n: int,
-) -> None:
-    """Merge co-occurring small group pairs into a cover label (the
-    :data:`_DERIVED_MERGES` table, e.g. folding into Liquids).
-
-    Fires when both groups are present, at least one is small enough to
-    merge up, and none is frozen. The Liquids cover carries an extra
-    guard: a group whose every member is explicitly ``liquid:-`` is a
-    declaration that they are NOT liquids, so it is never forced into
-    the cover (a no-op unless the inventory marks ``liquid``).
-
-    Relabel-by-origin happens ONLY in :func:`_relabel_small_origin_sets`
-    and here. Groups combined later by ``_MERGE_PARENT`` keep the
-    parent's label (a small Trills group folds up as Vibrants, never as
-    Liquids), and the place-aware pass then recovers Rhotics from a
-    Vibrants cover. A second origin-set relabel pass once sat after this
-    one, but it rebuilt its origin map from the already-merged
-    assignment and so could never fire; the grouping snapshot pins that.
-    """
-    for pair, label in _DERIVED_MERGES:
-        present = [g for g in sorted(pair) if g in assignment]
-        if label == "Liquids":
-            present = [
-                g
-                for g in present
-                if not all(
-                    norm[s].get("liquid", "0") == "-" for s in assignment[g]
-                )
-            ]
-        if len(present) < 2:
-            continue
-        if any(g in _FROZEN_GROUPS for g in present):
-            continue
-        if not any(_should_merge_up(len(assignment[g]), n) for g in present):
-            continue
-        merged: list[str] = []
-        for g in present:
-            merged.extend(assignment.pop(g))
-        assignment.setdefault(label, []).extend(merged)
-
-
 def _fold_small_groups_into_parents(
     assignment: dict[str, list[str]],
     n: int,
@@ -1189,9 +1035,12 @@ def _fold_small_groups_into_parents(
     :data:`_MERGE_PARENT` until nothing else qualifies.
 
     A group under the merge threshold is absorbed into its parent (a
-    lone Trills group folds up as Vibrants, its parent); the loop
-    repeats so a fold that leaves the parent itself small can cascade.
-    Frozen groups (Plosives) never fold.
+    lone Sibilants group folds back into Fricatives); every
+    ``_MERGE_PARENT`` edge points a tier-driven refinement at its
+    reach parent, so folding only coarsens granularity and never moves
+    a segment off its reached-class subtree. The loop repeats so a
+    fold that leaves the parent itself small can cascade. Frozen
+    groups (Plosives) never fold.
     """
     changed = True
     while changed:
@@ -1205,82 +1054,6 @@ def _fold_small_groups_into_parents(
             if parent is not None:
                 assignment.setdefault(parent, []).extend(assignment.pop(gname))
                 changed = True
-
-
-def _relabel_vibrants_to_rhotics(
-    assignment: dict[str, list[str]],
-    norm: Mapping[str, dict[str, str]],
-) -> None:
-    """Relabel a place-recoverable Vibrants cover to Rhotics.
-
-    Both the trill+tap cover relabel and the lone-trill/tap
-    ``_MERGE_PARENT`` fold land in the place-neutral Vibrants group,
-    because a trill or tap is not rhotic by manner alone: a bilabial
-    trill /ʙ/ or labiodental flap /ⱱ/ is a vibrant, not a rhotic. But a
-    Vibrants cover whose members are ALL non-labial and non-lateral IS a
-    rhotic system (coronal/uvular trills, taps, flaps), recoverable from
-    the standard place features without a declared ``rhotic`` primitive.
-    Relabel such a cover to Rhotics; a cover that includes any labial
-    vibrant (/ʙ/, /ⱱ/) or a lateral flap (/ɺ/) keeps the neutral
-    Vibrants label.
-
-    Runs AFTER the merge passes, so a feature-derived rhotic system
-    stays its own row (e.g. Hindi: Rhotics beside Lateral Approximants)
-    instead of folding into the Liquids cover, which stays reserved for
-    the declared / central-approximant-anchored path.
-    """
-    vibrants = assignment.get("Vibrants")
-    if vibrants and all(
-        norm[s].get("labial", "0") != "+"
-        and norm[s].get("lateral", "0") != "+"
-        for s in vibrants
-    ):
-        assignment.setdefault("Rhotics", []).extend(assignment.pop("Vibrants"))
-
-
-def _rescue_laryngeals(
-    assignment: dict[str, list[str]],
-    norm: Mapping[str, dict[str, str]],
-    active_features: set[str],
-) -> None:
-    """Regroup h / ɦ / ʔ into a single Laryngeals row when worthwhile.
-
-    The Laryngeals row (laryngeals pulled out of their manner classes)
-    is a convenience regroup, so it must not make the display WORSE by
-    leaving a singleton behind. Two guards, in the spirit of the
-    ``_should_break_out`` discipline the manner breakouts use:
-
-      * stranding: never peel a group's laryngeals if that would leave
-        the group with exactly one member. A lone /ɦ/ reads better
-        beside the other fricatives than stranding /f/ alone in a
-        singleton Fricatives row (the Hindi case). Emptying the group
-        (it was all laryngeal) is fine.
-      * worthwhileness: only raise the row once >= 2 members qualify; a
-        single laryngeal stays in its manner home.
-
-    When a guard blocks the peel the laryngeals stay where they are
-    (h/ɦ among the fricatives, ʔ among the plosives), the standard
-    manner-by-place chart layout anyway.
-    """
-    if not (_LARYNGEAL_FEATURES & active_features):
-        return
-    peelable: dict[str, list[str]] = {}
-    for gname in list(assignment.keys()):
-        if gname == "Laryngeals":
-            continue
-        members = assignment[gname]
-        cands = [s for s in members if _is_laryngeal_candidate(norm[s])]
-        if cands and len(members) - len(cands) != 1:
-            peelable[gname] = cands
-    if sum(len(c) for c in peelable.values()) >= 2:
-        laryngeal_segs: list[str] = []
-        for gname, cands in peelable.items():
-            for sym in cands:
-                assignment[gname].remove(sym)
-            laryngeal_segs.extend(cands)
-            if not assignment[gname]:
-                del assignment[gname]
-        assignment.setdefault("Laryngeals", []).extend(laryngeal_segs)
 
 
 def _sort_into_display_order(
@@ -1799,34 +1572,32 @@ def group_segments(
     # peeled into a sub-class, which would privilege a phase and diverge
     # from its existential reach.
     #
-    # The population-based covers (relabel / merge / fold / rescue) are
-    # PROVISIONAL single-membership display logic: they move a segment
-    # off its exact reach by inventory-dependent co-occurrence (a lone
-    # trill can display under Vibrants or Rhotics). Only ``multi_reach``
-    # segments are pinned back to their reach below; singles follow the
-    # cover. The full multi-membership display pass, where EVERY
-    # segment's placement is driven by ``reached_classes``, retires
-    # these covers; until then they are display convenience, and none
-    # of this feeds the engine's membership relations.
+    # Display membership is REACH-FAITHFUL: every label a segment
+    # displays under is a coarse class it existentially reaches, a
+    # tier-driven refinement of one (the breakouts), or the fold of
+    # such a refinement back into its reach parent. Population size
+    # may decide GRANULARITY (whether a reach class is subdivided or
+    # folded back), never MEMBERSHIP: the retired population covers
+    # (Trills+Taps -> Vibrants -> Rhotics relabels, the derived-pair
+    # Liquids merges, the laryngeal rescue) moved single-membership
+    # segments off their reached-class subtree by inventory-dependent
+    # co-occurrence, so the same trill displayed under different
+    # labels in different inventories. Rhotics / Liquids / Taps &
+    # Flaps remain reachable ONLY through the declared primitives
+    # (``rhotic`` / ``liquid`` / ``flap``), which are source
+    # assertions, not covers.
     n = len(inventory)
     multi_segs = frozenset(multi_reach)
     _break_out_by_spec(assignment, norm, seqs, active_features, n, multi_segs)
     _break_out_by_laryngeal_kind(assignment, norm, n, multi_segs)
-    _relabel_small_origin_sets(assignment, n)
-    _merge_small_derived_pairs(assignment, norm, n)
     _fold_small_groups_into_parents(assignment, n)
-    _relabel_vibrants_to_rhotics(assignment, norm)
-    _rescue_laryngeals(assignment, norm, active_features)
 
     # Pin every multi-membership segment to EXACTLY its coarse ∃-reach
-    # classes. The population-based relabel / merge / fold / rescue stages
-    # above are display covers (small Trills+Taps -> Vibrants -> Rhotics,
-    # etc.) that legitimately apply to single-membership segments but are
-    # inventory-dependent; letting them move a multi-answer segment would
-    # make its membership vary by inventory and diverge from the classes
-    # its tiers determine. So a multi segment follows the set theory, not
-    # the cover: remove it from any class it does not reach and ensure it
-    # is present in each class it does. This is the substance-free pin
+    # classes. The pin runs AFTER every surviving display stage (the
+    # breakouts and the parent folds), so no stage, present or future,
+    # can move a multi-answer segment off the classes its tiers
+    # determine: a multi segment follows the set theory, never a
+    # display convenience. This is the substance-free pin
     # (Bale & Reiss 2018; Reiss 2021) and keeps the multiset stable.
     for sym, target in multi_reach.items():
         for name in list(assignment):

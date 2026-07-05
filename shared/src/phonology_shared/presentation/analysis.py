@@ -1,7 +1,7 @@
-"""HTML rendering for the AnalysisPanel. Returns HTML strings;
-holds no GUI state. Every interpolation of inventory-provided text
-goes through ``html.escape``; nothing else in the project
-sanitizes segment symbols or feature names.
+"""HTML rendering for the AnalysisPanel. Returns HTML strings and
+holds no GUI state. Every interpolation of inventory-provided text in
+this module goes through ``html.escape``, so segment symbols and
+feature names are escaped at each interpolation site here.
 """
 
 from __future__ import annotations
@@ -45,20 +45,20 @@ from phonology_shared.theory.feature_engine import (  # noqa: E402
 def _tag_cached(text: str, colour: TagColor, _version: int) -> str:
     """Memoised inner body of :py:func:`_tag`. The ``_version`` arg
     is the palette ``theme_version``, threaded through so a theme
-    toggle invalidates the cache. Working set is bounded (~300
-    entries per inventory: segments x 2 colours + features x 2
-    signs), so maxsize=2048 covers the worst PHOIBLE inventory plus
-    headroom."""
+    toggle invalidates the cache. Working set is bounded (about 300
+    entries per inventory, segments times two colours plus features
+    times two signs), so maxsize=2048 covers the worst PHOIBLE
+    inventory plus headroom."""
     return f"{tag_prefix(colour)}{html.escape(text)}</span>"
 
 
 def _tag(text: str, colour: TagColor) -> str:
     """Render a coloured inline chip. ``text`` is escaped here.
 
-    ``white-space: nowrap`` keeps the chip atomic: browsers treat
-    ``/`` as a soft break point (same heuristic that lets long URLs
-    wrap), so without nowrap a chip like ``/ɪ/`` can end up split
-    across lines with ``/`` on one line and ``ɪ/`` on the next.
+    ``white-space: nowrap`` keeps the chip atomic, since browsers
+    treat ``/`` as a soft break point (the same heuristic that lets
+    long URLs wrap), so without nowrap a chip like ``/ɪ/`` can end up
+    split across lines with ``/`` on one line and ``ɪ/`` on the next.
     """
     return _tag_cached(text, colour, _palette.theme_version)
 
@@ -72,8 +72,8 @@ def _segment_chip_strip(
     segs: Sequence[str], colour: TagColor = TagColor.SEGMENT
 ) -> str:
     """Render ``segs`` as a single space-joined chip strip. Passing a
-    list (not a generator) to ``str.join`` lets it pre-size the result
-    buffer and avoids generator overhead; this ran at 7 inlined sites.
+    list rather than a generator to ``str.join`` lets it pre-size the
+    result buffer and avoids generator overhead.
     """
     return " ".join([_segment_chip(seg, colour) for seg in segs])
 
@@ -119,8 +119,8 @@ def _muted_italic_p(text: str) -> str:
 
 
 def _plural(n: int, singular: str, plural: str | None = None) -> str:
-    """English pluralisation: ``_plural(1, "segment")`` -> "segment",
-    ``_plural(2, "segment")`` -> "segments"."""
+    """English pluralisation. ``_plural(1, "segment")`` returns
+    "segment" and ``_plural(2, "segment")`` returns "segments"."""
     if n == 1:
         return singular
     return plural if plural is not None else singular + "s"
@@ -132,9 +132,9 @@ def _plural(n: int, singular: str, plural: str | None = None) -> str:
 _STRICT_SPEC_LABEL_SINGULAR = "Minimal specification"
 _STRICT_SPEC_LABEL_PLURAL = "Minimal specifications"
 # Wildcard bundles are minimal COMPATIBILITY specifications, not
-# minimal strict specs: they characterise the selection under
-# wildcard matching (a "+f" constraint excludes only explicit -f).
-# The distinct label keeps users from reading them as strict
+# minimal strict specs, since they characterise the selection under
+# wildcard matching (a plus f constraint excludes only explicit
+# minus f). The distinct label keeps users from reading them as strict
 # bundles that would round-trip in the feat pane's default mode.
 _WILDCARD_SPEC_LABEL_SINGULAR = "Minimal compatible specification"
 _WILDCARD_SPEC_LABEL_PLURAL = "Minimal compatible specifications"
@@ -148,37 +148,42 @@ def _spec_labels(mode: "MatchMode") -> tuple[str, str]:
     return _STRICT_SPEC_LABEL_SINGULAR, _STRICT_SPEC_LABEL_PLURAL
 
 
-# Spec-grid cell style. ``vertical-align:top`` + a right-hand gap gives
-# the columns air; ``white-space:nowrap`` keeps each minimal spec on one
-# line so the column-major rows stay a uniform height (a wrapping spec
-# would desync the grid and its row count). Mirrors the Contrasts table's
-# cell conventions so both tables read the same in the Qt rich-text pane.
+# Spec-grid cell style. ``vertical-align:top`` plus a right-hand gap
+# gives the columns air. ``white-space:nowrap`` keeps each minimal spec
+# on one line so the column-major rows stay a uniform height (a wrapping
+# spec would desync the grid and its row count). Mirrors the Contrasts
+# table's cell conventions so both tables read the same in the Qt
+# rich-text pane.
 _SPEC_CELL_STYLE: str = (
     "vertical-align:top; padding-right:18px; white-space:nowrap;"
+)
+
+# Shared open tag for both analysis tables (spec grid + contrast grid)
+# so the border geometry lives in one place and the two cannot drift.
+_ANALYSIS_TABLE_OPEN: str = (
+    "<table cellpadding='3' cellspacing='0'"
+    " style='border-collapse:separate; border-spacing:0 2px;'>"
 )
 
 
 def _render_spec_table(
     chip_rows: Sequence[str], rows_per_column: int | None
 ) -> str:
-    """Arrange numbered ``chip_rows`` into a COLUMN-MAJOR HTML table.
+    """Arrange numbered ``chip_rows`` into a column-major HTML table.
 
-    Each ``<td>`` is one COLUMN holding up to ``rows_per_column`` specs
-    stacked top-to-bottom; the columns sit side by side. Entries fill
-    DOWN the first column (toward the pane's bottom edge) before the
-    next column starts, so ``1, 2, 3 ...`` read top-to-bottom then
-    left-to-right.
+    Each ``<td>`` is one column holding up to ``rows_per_column`` specs
+    stacked top to bottom, and the columns sit side by side. Entries
+    fill down the first column before the next column starts, so
+    ``1, 2, 3`` read top to bottom then left to right. Laying each
+    column out as one multi-line cell rather than a grid of one-spec
+    cells keeps the numbering intact on copy, since a table serializes
+    cell by cell and yields the specs in column order.
 
-    Laying each column out as a single multi-line cell (rather than a
-    grid of one-spec cells) means the numbering survives a copy: a table
-    serializes cell-by-cell, so selecting and copying yields the specs
-    in column order (1, 2, 3 ... down each column then the next) instead
-    of the row-by-row jumble a rows x columns grid would produce.
-
-    Rendered as a ``<table>`` (not CSS multi-column) so it lays out
-    identically in the web ``<div>`` and the desktop Qt rich-text pane,
-    which supports tables but not CSS ``columns``. When the columns are
-    wider than the pane each surface scrolls horizontally on its own.
+    Rendered as a ``<table>`` rather than CSS multi-column so it lays
+    out identically in the web ``<div>`` and the desktop Qt rich-text
+    pane, which supports tables but not CSS ``columns``. When the
+    columns are wider than the pane each surface scrolls horizontally
+    on its own.
     """
     n = len(chip_rows)
     rows = (
@@ -196,11 +201,7 @@ def _render_spec_table(
         columns.append(
             f"<td style='{_SPEC_CELL_STYLE}'>" + "<br>".join(items) + "</td>"
         )
-    return (
-        "<table cellpadding='3' cellspacing='0'"
-        " style='border-collapse:separate; border-spacing:0 2px;'>"
-        "<tr>" + "".join(columns) + "</tr></table>"
-    )
+    return _ANALYSIS_TABLE_OPEN + "<tr>" + "".join(columns) + "</tr></table>"
 
 
 def _order_specs_for_scan(
@@ -252,14 +253,13 @@ def _render_spec_list(
     similar rows adjacent) and fill a COLUMN-MAJOR table (see
     :py:func:`_render_spec_table`) so the fixed-height pane uses its
     horizontal space before scrolling. ``rows_per_column`` is how many
-    specs fit vertically before a column wraps; it defaults to
+    specs fit vertically before a column wraps. It defaults to
     :py:data:`ANALYSIS_MIN_VISIBLE_ROWS` (the pane's guaranteed-visible
     count) and each frontend passes the row count its own live pane fits.
 
-    ``mode`` selects the heading label: strict bundles read
-    "Minimal specification:" while wildcard bundles read
-    "Minimal compatible specification:" so the two flavours are
-    visually distinct.
+    ``mode`` selects the heading label. Strict bundles read
+    "Minimal specification" while wildcard bundles read "Minimal
+    compatible specification" so the two flavours are visually distinct.
     """
     singular, plural = _spec_labels(mode)
     seen: set[tuple[tuple[str, str], ...]] = set()
@@ -325,9 +325,9 @@ def _render_matching_segments(
 ) -> str:
     """HTML for the matching-segments answer of a feature query.
 
-    Strict: "Matching N segment(s):". Underspecified matching tacks
-    a qualifier onto the heading so the relaxed result reads as
-    visually distinct from a strict match.
+    Under strict matching the heading counts the matches. Underspecified
+    matching adds a qualifier so the relaxed result reads as visually
+    distinct from a strict match.
     """
     if not matching:
         return f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
@@ -346,7 +346,7 @@ def render_validation_report(issues: Sequence[str]) -> str:
     """HTML for the validation-error banner shown on a failed
     inventory load. Single source of truth so the Class tab on
     web and the analysis pane on desktop produce identical markup
-    (red heading + one paragraph per issue). Every issue is
+    (red heading plus one paragraph per issue). Every issue is
     HTML-escaped because inventory data is user-supplied.
     """
     parts = [
@@ -362,8 +362,8 @@ def compute_contrastive(
     segs: list[str],
 ) -> dict[str, dict[str, list[str]]]:
     """For each feature with both '+' and '-' among ``segs``, bucket
-    the segments by membership in the engine's existential value sets:
-    a segment lists under '+' when some phase reaches ``[+feat]`` (a
+    the segments by membership in the engine's existential value sets,
+    so a segment lists under '+' when some phase reaches ``[+feat]`` (a
     contour segment can list under BOTH polarities).
 
     Returns ``{feat: {'+': [...], '-': [...], '0': [...]}}``. The '0'
@@ -417,7 +417,7 @@ def _render_completion_body(
     """Class-pane content for a single selection's completion under
     ``mode``.
 
-    Two cases:
+    It handles two cases.
 
     * ``already_natural_class`` renders ``selected_minimal_bundles``,
       the minimal strict or compatible bundles per ``mode``.
@@ -478,14 +478,13 @@ def _render_contrast_section(
         )
         return (
             "<p><b>Contrasting features:</b></p>"
-            "<table cellpadding='3' cellspacing='0'"
-            " style='border-collapse:separate; border-spacing:0 2px;'>"
-            f"{body}"
-            "</table>"
+            + _ANALYSIS_TABLE_OPEN
+            + body
+            + "</table>"
         )
 
-    # No contrastive features. Distinguish "actually identical"
-    # from "only differ in unspecified features": the latter is a
+    # No contrastive features. Distinguish "actually identical" from
+    # "only differ in unspecified features", since the latter is a
     # common source of "why do these look the same?" confusion.
     def _has_mixed_underspec(feat: str) -> bool:
         vals = {engine.segments[seg].get(feat, "0") for seg in segs}
@@ -506,26 +505,34 @@ _CONTRAST_CELL_BASE: str = "vertical-align:top; padding-right:14px;"
 _CONTRAST_NAME_CELL: str = _CONTRAST_CELL_BASE + " white-space:nowrap;"
 
 
+def _sign_glyph(value: str) -> str:
+    """Coloured ``+`` or ``−`` marker glyph for a contrast cell. One
+    home for the plus/minus colour decision shared by both cells."""
+    if value == "+":
+        return f"<span style='color:{C['plus']};font-weight:bold'>+</span>"
+    return (
+        f"<span style='color:{C['minus']};font-weight:bold'>"
+        f"{MINUS_SIGN}</span>"
+    )
+
+
 def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
     """One ``<tr>`` for the contrastive-features table.
 
-    Columns: feature | + segments | − segments | (0 segments,
-    only when the row has underspecified data). Omitting the empty
-    third column prevents a selectable empty cell from showing
-    up as a phantom highlight.
+    The columns are feature, plus segments, minus segments, and
+    optionally zero segments when the row has underspecified data.
+    Omitting the empty third column prevents a selectable empty cell
+    from showing up as a phantom highlight.
 
-    A non-breaking space sits between each +/-/0 glyph and its
-    first chip so the marker can't end up orphaned on its own
-    line; chip-to-chip gaps stay breakable.
+    A non-breaking space sits between each +/-/0 glyph and its first
+    chip so the marker cannot end up orphaned on its own line, while
+    chip-to-chip gaps stay breakable.
     """
     name_html = f"<b>{html.escape(feat)}</b>"
     plus_chips = _segment_chip_strip(groups["+"])
     minus_chips = _segment_chip_strip(groups["-"])
-    plus_glyph = f"<span style='color:{C['plus']};font-weight:bold'>+</span>"
-    minus_glyph = (
-        f"<span style='color:{C['minus']};font-weight:bold'>"
-        f"{MINUS_SIGN}</span>"
-    )
+    plus_glyph = _sign_glyph("+")
+    minus_glyph = _sign_glyph("-")
     cells = [
         f"<td style='{_CONTRAST_NAME_CELL}'>{name_html}</td>",
         f"<td style='{_CONTRAST_CELL_BASE}'>{plus_glyph}&nbsp;{plus_chips}</td>",
@@ -542,7 +549,7 @@ def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Per-tab renderers: one HTML string per analysis tab in the UI.
+# Per-tab renderers. One HTML string per analysis tab in the UI.
 #
 # The desktop's tabbed analysis panel and the web's tabbed layout
 # consume these per-tab variants so each tab gets exactly its
@@ -573,7 +580,7 @@ def render_selection_summary_seg(segs: list[str]) -> str:
     Beyond :py:data:`SELECTION_HEADER_MAX_CHIPS`, only the first N
     chips render inline with a muted ``"+M more"`` standing in for the
     rest. The full count stays in the header label so the user always
-    sees how many segments are in play; truncation governs only the
+    sees how many segments are in play, and truncation governs only the
     chip rendering.
     """
     if not segs:
@@ -596,6 +603,15 @@ def _wildcard_badge() -> str:
     return f"<p>{_tag('underspecified matching', TagColor.NEUTRAL)}</p>"
 
 
+def _with_mode_badge(body: str, mode: "MatchMode") -> str:
+    """Prefix ``body`` with the wildcard badge under wildcard mode, and
+    return ``body`` unchanged under strict. One home for the badge rule
+    shared by the SEG and FEAT Class tabs."""
+    if mode is _MatchMode.WILDCARD:
+        return _wildcard_badge() + body
+    return body
+
+
 def render_class_tab_seg(
     segs: list[str],
     completion: NaturalClassCompletion,
@@ -612,16 +628,14 @@ def render_class_tab_seg(
 
     ``rows_per_column`` is forwarded to the minimal-spec renderer so a
     long list of minimal specs fills the pane's height then wraps into
-    columns; each frontend passes the count its live pane fits.
+    columns, and each frontend passes the count its live pane fits.
     """
     if not segs:
         return _muted_italic_p("Click a segment to inspect it.")
     body = _render_completion_body(
         completion, mode=mode, rows_per_column=rows_per_column
     )
-    if mode is _MatchMode.WILDCARD:
-        return _wildcard_badge() + body
-    return body
+    return _with_mode_badge(body, mode)
 
 
 def render_class_tab_feat(
@@ -630,22 +644,20 @@ def render_class_tab_feat(
     *,
     mode: "MatchMode" = _MatchMode.STRICT,
 ) -> str:
-    """Class tab content for FEAT mode under ``mode``: list of
-    matching segments (the result of the query) + count.
+    """Class tab content for FEAT mode under ``mode``. It lists the
+    matching segments (the result of the query) and their count.
 
     Wildcard FEAT-mode queries get the ``underspecified matching``
-    badge for the same reason SEG-mode wildcard verdicts do: the
-    matching set differs in meaning even when it happens to
-    coincide with the strict result.
+    badge for the same reason SEG-mode wildcard verdicts do, since the
+    matching set differs in meaning even when it happens to coincide
+    with the strict result.
     """
     if not feature_dict:
         return _muted_italic_p(
             "Set + or − on a feature to find matching segments."
         )
     body = _render_matching_segments(matching, mode=mode)
-    if mode is _MatchMode.WILDCARD:
-        return _wildcard_badge() + body
-    return body
+    return _with_mode_badge(body, mode)
 
 
 def render_features_tab_seg(
@@ -653,9 +665,9 @@ def render_features_tab_seg(
     segs: list[str],
     common: dict[str, str],
 ) -> str:
-    """Features tab content for SEG mode: full feature bundle for a
-    single segment, or the shared features (intersection) for a
-    multi-segment selection.
+    """Features tab content for SEG mode. It shows the full feature
+    bundle for a single segment, or the shared features (intersection)
+    for a multi-segment selection.
     """
     if not segs:
         return _muted_italic_p("Click a segment to view its features.")
@@ -683,10 +695,10 @@ def render_features_tab_seg(
 
 
 def render_features_tab_feat(feature_dict: dict[str, str]) -> str:
-    """Features tab content for FEAT mode: the active query
-    visualised as chips, plus the count. Lighter than the desktop's
-    feature pane (which has the interactive +/- buttons); this tab
-    is for at-a-glance "what am I querying?" review.
+    """Features tab content for FEAT mode. It shows the active query as
+    chips plus the count. Lighter than the desktop's feature pane,
+    which has the interactive +/− buttons, so this tab supports
+    at-a-glance review of the current query.
     """
     if not feature_dict:
         return _muted_italic_p("No features set yet.")
@@ -703,10 +715,10 @@ def render_contrasts_tab_seg(
     segs: list[str],
     contrastive: dict[str, dict[str, list[str]]],
 ) -> str:
-    """Contrasts tab content for SEG mode: feature-by-feature
-    breakdown of how the selection splits. Only meaningful for
-    multi-segment selections; the under-two-segments case shows a
-    short hint pointing the user at the next step.
+    """Contrasts tab content for SEG mode. It gives a feature by
+    feature breakdown of how the selection splits. It is only
+    meaningful for multi-segment selections, and the under-two-segments
+    case shows a short hint pointing the user at the next step.
     """
     if not segs:
         return _muted_italic_p("Select two or more segments to compare.")
@@ -716,9 +728,9 @@ def render_contrasts_tab_seg(
 
 
 def render_contrasts_tab_feat() -> str:
-    """Contrasts tab in FEAT mode is not meaningful: the user is
+    """Contrasts tab in FEAT mode is not meaningful, since the user is
     asking which segments match a feature spec, not how segments
-    differ. Stable placeholder so the tab still exists and the user
-    isn't left wondering whether they broke something.
+    differ. Stable placeholder so the tab still exists and the user is
+    not left wondering whether they broke something.
     """
     return _muted_italic_p("Switch to segment mode to compare segments.")

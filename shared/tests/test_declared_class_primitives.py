@@ -36,11 +36,11 @@ def _group_of(inv: dict[str, dict[str, str]], seg: str) -> str | None:
 
 @pytest.fixture
 def no_merges(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Disable the relabel / merge cascade so a single segment's BASE
-    group (what ``best_primary`` routes it to) is observable without
-    the small-group cover merges collapsing a tiny test inventory."""
-    monkeypatch.setattr(consonants, "_RELABEL_PATTERNS", {})
-    monkeypatch.setattr(consonants, "_DERIVED_MERGES", [])
+    """Disable the parent folds so a single segment's BASE group (what
+    ``best_primary`` routes it to) is observable without the
+    granularity fold collapsing a tiny test inventory. (The population
+    covers this fixture also used to blank are retired: display
+    membership never leaves the reached-class subtree now.)"""
     monkeypatch.setattr(consonants, "_MERGE_PARENT", {})
 
 
@@ -110,11 +110,18 @@ def test_rhotic_minus_liquid_is_not_forced_into_liquids() -> None:
     assert "Liquids" not in groups
 
 
-def test_rhotic_plus_liquid_is_eligible_for_the_liquids_merge() -> None:
+def test_declared_classes_survive_beside_other_small_groups() -> None:
+    """A declared rhotic stays in Rhotics even when a small lateral
+    group co-occurs: the population merge that used to fold the pair
+    into a Liquids cover is retired (display membership never leaves
+    the reached-class subtree; ``Liquids`` remains reachable only
+    through the declared ``liquid`` primitive, per
+    ``test_explicit_liquid_anchors_liquids_over_central_approximant``)."""
     inv = {
         "r": _cons(rhotic="+", liquid="+", trill="+"),
         "l": _cons(lateral="+", approximant="+", tap="-"),
     }
     groups = group_segments(inv)
-    assert "r" in groups.get("Liquids", [])
-    assert "l" in groups.get("Liquids", [])
+    assert "r" in groups.get("Rhotics", [])
+    assert "l" in groups.get("Lateral Approximants", [])
+    assert "Liquids" not in groups

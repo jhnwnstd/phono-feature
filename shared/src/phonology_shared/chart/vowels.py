@@ -267,15 +267,16 @@ class FeatureState(StrEnum):
     """Four-state value model for a feature on a segment.
 
     Hayes (2009) treats ``"0"`` as a deliberate "don't care" value,
-    distinct from a missing key (feature not in the inventory or
-    not supplied for this segment). Some display-inference gates read
-    that distinction; the QUERY surface deliberately collapses the two
-    (see ``FeatureValue.ZERO`` in ``data.inventory``), because neither
-    asserts a polarity. Collapsing them HERE would erase the intent
-    the placement gates consult. Inference paths that
-    need the distinction route through :py:func:`_feature_state`;
-    paths that only care about "any explicit value" still get away
-    with ``feats.get(key, "0")``.
+    distinct from a missing key (the feature is not in the inventory
+    or not supplied for this segment). Some display-inference gates
+    read that distinction, so this module keeps the two states apart.
+    ``FeatureValue.ZERO`` in ``data.inventory`` owns the complementary
+    decision for the query surface, which collapses them because
+    neither asserts a polarity. Collapsing them HERE would erase the
+    intent the placement gates consult, so inference paths that need
+    the distinction route through :py:func:`_feature_state`, while
+    paths that only care about "any explicit value" still use
+    ``feats.get(key, "0")``.
     """
 
     POS = "+"
@@ -1001,6 +1002,40 @@ def _infer_rounding(
     )
 
 
+def _apply_relative_step(
+    base: AxisEvidence,
+    *,
+    conflict: bool,
+    target: str | None,
+    direction: str | None,
+    source_suffix: str,
+) -> AxisEvidence:
+    """Apply one relative-feature nudge to ``base`` and return the
+    result. Shared core of the height and backness refinements.
+
+    Returns ``base`` with :py:attr:`PlacementFlag.CONFLICT` unioned
+    when ``conflict`` is set, which is the case where two opposing
+    positive features cancel. Otherwise returns stepped evidence tagged
+    :py:attr:`PlacementFlag.REFINED` when both ``target`` and
+    ``direction`` are present, and ``base`` unchanged when the step has
+    no destination. ``source_suffix`` distinguishes the height and
+    backness provenance on the resulting ``source`` string.
+    """
+    if conflict:
+        return replace(
+            base, flags=base.flags | frozenset({PlacementFlag.CONFLICT})
+        )
+    if target is None or direction is None:
+        return base
+    return AxisEvidence(
+        value=target,
+        confidence=base.confidence,
+        source=f"{base.source}{source_suffix}",
+        reason=f"{target}: {base.value} refined by [{direction}]",
+        flags=base.flags | frozenset({PlacementFlag.REFINED}),
+    )
+
+
 def _refine_height_with_relative_features(
     base: AxisEvidence,
     feats: Mapping[str, str],
@@ -1025,12 +1060,6 @@ def _refine_height_with_relative_features(
         return base
     raised = _nonzero(feats.get("raised"))
     lowered = _nonzero(feats.get("lowered"))
-    if raised is None and lowered is None:
-        return base
-    if raised == "+" and lowered == "+":
-        return replace(
-            base, flags=base.flags | frozenset({PlacementFlag.CONFLICT})
-        )
     target: str | None = None
     direction: str | None = None
     if raised == "+":
@@ -1039,16 +1068,12 @@ def _refine_height_with_relative_features(
     elif lowered == "+":
         target = _HEIGHT_LOWERED_STEP.get(base.value)
         direction = "+lowered"
-    if target is None or direction is None:
-        return base
-    new_reason = f"{target}: {base.value} refined by [{direction}]"
-    new_source = f"{base.source}+relative-height"
-    return AxisEvidence(
-        value=target,
-        confidence=base.confidence,
-        source=new_source,
-        reason=new_reason,
-        flags=base.flags | frozenset({PlacementFlag.REFINED}),
+    return _apply_relative_step(
+        base,
+        conflict=(raised == "+" and lowered == "+"),
+        target=target,
+        direction=direction,
+        source_suffix="+relative-height",
     )
 
 
@@ -1076,10 +1101,7 @@ def _refine_backness_with_relative_features(
     retracted = _nonzero(feats.get("retracted"))
     centralized = _nonzero(feats.get("centralized"))
     peripheral = _nonzero(feats.get("peripheral"))
-    if advanced == "+" and retracted == "+":
-        return replace(
-            base, flags=base.flags | frozenset({PlacementFlag.CONFLICT})
-        )
+    conflict = advanced == "+" and retracted == "+"
     target: str | None = None
     direction: str | None = None
     if advanced == "+":
@@ -1088,19 +1110,20 @@ def _refine_backness_with_relative_features(
     elif retracted == "+":
         target = _BACKNESS_RETRACTED_STEP.get(base.value)
         direction = "+retracted"
-    elif centralized == "+":
-        if base.value != "central":
-            target = "central"
-            direction = "+centralized"
-    refined = base
-    if target is not None and direction is not None:
-        refined = AxisEvidence(
-            value=target,
-            confidence=base.confidence,
-            source=f"{base.source}+relative-backness",
-            reason=f"{target}: {base.value} refined by [{direction}]",
-            flags=base.flags | frozenset({PlacementFlag.REFINED}),
-        )
+    elif centralized == "+" and base.value != "central":
+        target = "central"
+        direction = "+centralized"
+    refined = _apply_relative_step(
+        base,
+        conflict=conflict,
+        target=target,
+        direction=direction,
+        source_suffix="+relative-backness",
+    )
+    # A conflict short-circuits exactly as the height refinement does,
+    # so the peripheral tiebreak never runs on a conflicted base.
+    if conflict:
+        return refined
     if peripheral is not None and policy.allow_peripheral_tiebreak:
         is_direct = PlacementFlag.DIRECT in refined.flags
         if peripheral == "-" and not is_direct and refined.value != "central":
@@ -1148,19 +1171,19 @@ def compute_placements(
     the same bundles to the display classifier) pass it to skip a
     second full normalization pass over the inventory.
 
-    Degenerate-secondary suppression: when the secondary projection
-    collapses to the SAME ``(row, col)`` cell as the primary (PHOIBLE
-    pharyngealised vowels like ``iˤ`` whose contour halves differ
-    only on features the placement code does not read for grid
-    position), the secondary is dropped and the segment is treated
-    as a monophthong. Without this, the segment would be pulled out
-    of the trapezoid into the diphthong chip strip despite having no
-    contour to distinguish, misleading the user about its behaviour.
-    Today this affects 84 segments across 20 PHOIBLE languages
-    (ARCHI/UPSID, Northern Qiang/EA, !Xun/PHOIBLE, etc.). After this
-    gate, every ``geom.diphthongs`` entry honours the contract that
-    its primary and secondary cells are distinct, which the rendering
-    stress suite asserts.
+    Degenerate-secondary suppression removes a contour that has
+    nothing to show. When the secondary projection collapses to the
+    SAME ``(row, col)`` cell as the primary (PHOIBLE pharyngealised
+    vowels like ``iˤ`` whose contour halves differ only on features the
+    placement code does not read for grid position), the secondary is
+    dropped and the segment is treated as a monophthong. Without this,
+    the segment would be pulled out of the trapezoid into the diphthong
+    chip strip despite having no contour to distinguish, which misleads
+    the user about its behaviour. The gate affects a bounded set of
+    PHOIBLE pharyngealised and contour vowels, and the rendering stress
+    suite pins the exact set. After the gate, every ``geom.diphthongs``
+    entry honours the contract that its primary and secondary cells are
+    distinct.
 
     Returns ``(occupied, placements)``. Cells are sorted by
     descending placement confidence (highest first); ties break on
@@ -1248,17 +1271,16 @@ def _snap_diphthong_secondaries(
     """Re-target each diphthong's PRIMARY and SECONDARY placement
     to the closest matching monophthong cell.
 
-    Both endpoints share the same shape: a contour vowel's
+    Both endpoints share the same shape. A contour vowel's
     single-value bundle overlays features from more than one phase,
     so the placer's column verdict can land at a virtual position
-    where no standalone monophthong sits. Concretely for Korean
-    /io/, the primary bundle
-    encodes ``front +, round +`` which lands at front-rounded
-    (col 1, a virtual position with no /i/-like button), even
-    though semantically /io/ starts at /i/ (col 6). Same shape
-    for the secondary side (already documented).
+    where no standalone monophthong sits. Concretely for Korean /io/,
+    the primary bundle encodes ``front +, round +`` which lands at
+    front-rounded (col 1, a virtual position with no /i/-like button),
+    even though semantically /io/ starts at /i/ (col 6). The secondary
+    side follows the same shape.
 
-    Snap rule (applied to both primary and secondary):
+    The snap rule applies to both primary and secondary.
 
     1. Groups monophthong cells by backness (front / central /
        back); the rounding distinction collapses since /a/

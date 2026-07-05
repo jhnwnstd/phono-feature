@@ -61,14 +61,12 @@ _CONSONANT_GROUP_NAMES: frozenset[str] = frozenset(
         "Nasals",
         "Trills",
         "Taps & Flaps",
-        "Vibrants",
         "Lateral Approximants",
         "Lateral Flaps",
         "Central Approximants",
         "Semivowels",
         "Rhotics",
         "Liquids",
-        "Laryngeals",
     }
 )
 
