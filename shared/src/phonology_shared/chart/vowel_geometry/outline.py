@@ -955,7 +955,7 @@ def distribute_rows(
             # Middle rows anchor at the centre of their slot.
             display_y[ri] = cursor + height / 2
         cursor += height
-    tier = {ri: "middle" for ri in populated_rows}
+    tier = dict.fromkeys(populated_rows, "middle")
     tier[populated_rows[0]] = "top"
     tier[populated_rows[-1]] = "bottom"
     return RowPlan(

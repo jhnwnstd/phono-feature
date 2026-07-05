@@ -55,7 +55,7 @@ def test_no_engine_returns_four_field_shape(
         engine=None,
     )
     assert isinstance(result, ModeTransition)
-    field_names = {f for f in result.__dataclass_fields__}
+    field_names = set(result.__dataclass_fields__)
     assert field_names == REQUIRED_FIELDS, (
         "ModeTransition fields drifted from the JS fallback's "
         "expected shape; update the pre-bridge branch in "

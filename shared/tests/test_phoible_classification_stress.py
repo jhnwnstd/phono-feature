@@ -255,7 +255,7 @@ def _build_synthetic_nasal_vowel_inventory(
     those by name; the surrounding column count does not change
     the result.
     """
-    base: dict[str, str] = {f: "0" for f in features}
+    base: dict[str, str] = dict.fromkeys(features, "0")
     a_nasal: dict[str, str] = dict(base)
     a_nasal.update(
         {
@@ -427,7 +427,7 @@ def test_b7_chao_tone_letter_lands_in_tones_for_every_feature_shape(
             f"{shape_name} shape records no tone marker; tone"
             " classification is a no-op there"
         )
-    base: dict[str, str] = {f: "0" for f in features}
+    base: dict[str, str] = dict.fromkeys(features, "0")
     tone_seg: dict[str, str] = dict(base)
     tone_seg[marker] = "+"
     inv = Inventory.from_grid(

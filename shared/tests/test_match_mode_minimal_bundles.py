@@ -213,8 +213,8 @@ def _many_bundles_inventory() -> Inventory:
         name="many_bundles",
         features=features,
         segments={
-            "a": {f: "+" for f in features},
-            "b": {f: "-" for f in features},
+            "a": dict.fromkeys(features, "+"),
+            "b": dict.fromkeys(features, "-"),
         },
     )
 

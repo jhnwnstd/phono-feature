@@ -746,8 +746,8 @@ def _grouped_features(features: list[str]) -> list[dict[str, Any]]:
         sizes,
         group_order=group_order,
     )
-    column_of = {name: 0 for name in left_names}
-    column_of.update({name: 1 for name in right_names})
+    column_of = dict.fromkeys(left_names, 0)
+    column_of.update(dict.fromkeys(right_names, 1))
     for card in cards:
         card["column"] = column_of.get(card["name"], 0)
     return cards
