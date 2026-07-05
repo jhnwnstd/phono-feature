@@ -1,13 +1,13 @@
 """The abstract vowel-space coordinate system (chart foundation).
 
 This module defines the COORDINATE SYSTEM the vowel chart is drawn
-on, independent of any particular inventory: the discrete height and
-backness axes, their normalized ``[0, 1]`` anchor positions, the
-trapezoid widths, and the axis-adjacency tables. None of it depends
-on which segments an inventory contains; it is pure structure
-derived once from the layout's pixel constants.
+on, independent of any particular inventory. It holds the discrete
+height and backness axes, their normalized ``[0, 1]`` anchor
+positions, the trapezoid widths, and the axis-adjacency tables. None
+of it depends on which segments an inventory contains; it is pure
+structure derived once from the layout's pixel constants.
 
-It is the LOW layer two higher layers sit on:
+It is the LOW layer two higher layers sit on.
 
 * :py:mod:`phonology_shared.chart.vowels` (inference) reads this
   structure to place feature bundles onto the axes.
@@ -18,18 +18,18 @@ Keeping it separate is what lets both of those import the same
 coordinate definitions without the rendering layer reaching up into
 the inference module for them.
 
-NATURAL CONSTRAINTS this module upholds:
+NATURAL CONSTRAINTS this module upholds.
 
-* All anchors are normalized fractions in ``[0, 1]``: backness x
-  (:py:data:`_BACKNESS_X`) and height y (:py:data:`_HEIGHT_Y`).
-* The axes are fixed-size: 7 height rows (:py:data:`ROW_LABELS`),
-  3 backness columns (:py:data:`COL_LABELS`), and the rendered grid
-  is 9 logical columns (0/1, 2/3, 4/5 pair slots + 6/7/8 neutral),
+* All anchors are normalized fractions in ``[0, 1]``, the backness x
+  on :py:data:`_BACKNESS_X` and the height y on :py:data:`_HEIGHT_Y`.
+* The axes are fixed-size, with 7 height rows (:py:data:`ROW_LABELS`),
+  3 backness columns (:py:data:`COL_LABELS`), and a rendered grid of
+  9 logical columns (0/1, 2/3, 4/5 pair slots plus 6/7/8 neutral),
   mapped to backness by :py:data:`_BACKNESS_GROUP_BY_COL`.
 * Every fraction is DERIVED from the layout pixel constants
   (``BTN_W``, ``VOWEL_PAIR_GAP_PX``, ``VOWEL_PAIR_SEPARATOR_PX``)
-  via :py:func:`_derive_backness_anchors`; there are no hand-picked
-  magic fractions.
+  via :py:func:`_derive_backness_anchors`, so there are no
+  hand-picked magic fractions.
 
 This module imports ONLY presentation pixel constants. It must not
 import :py:mod:`~phonology_shared.chart.vowels`,
@@ -47,11 +47,15 @@ from phonology_shared.presentation.layout import (
     VOWEL_PAIR_SEPARATOR_PX,
 )
 
-# Height axis: the seven row labels in display order, Close at the
-# top. The inference layer derives each vowel's row from its feature
-# bundle directly (``_infer_height`` hardcodes its own signature
-# logic; no table lookup), so the labels ARE the axis. Immutable so
-# importers cannot mutate the shared singleton.
+# ---------------------------------------------------------------------------
+# Height axis. The row labels, the label-to-index map, the normalized y
+# anchors, and the discrete lowered/raised adjacency the inference layer
+# walks. This block is self-contained and depends on no pixel constant.
+# ---------------------------------------------------------------------------
+
+# Height axis. The seven row labels in display order, Close at the top.
+# The labels are the height axis itself. Immutable so importers cannot
+# mutate the shared singleton.
 ROW_LABELS: tuple[str, ...] = (
     "Close",
     "Near-close",
@@ -62,11 +66,11 @@ ROW_LABELS: tuple[str, ...] = (
     "Open",
 )
 
-# Column labels in display order. The grid is 9 logical columns
-# (three backness places, each an unrounded / rounded pair slot
-# couple plus a neutral-rounding slot); these three label the
-# backness places.
-COL_LABELS: tuple[str, ...] = ("Front", "Central", "Back")
+# Reverse of ROW_LABELS so a row label ("Close", "Open-mid", ...) maps
+# back to its row index without an O(n) scan on every placement.
+_ROW_LABEL_TO_INDEX: dict[str, int] = {
+    label: i for i, label in enumerate(ROW_LABELS)
+}
 
 # Normalized abstract-vowel-space coordinates exposed on
 # :py:class:`phonology_shared.chart.vowels.VowelPlacement`. Seven
@@ -88,8 +92,41 @@ _HEIGHT_Y: dict[str, float] = {
     "Open": 0.95,
 }
 
+#: Single-step "lowered" move on the height axis. Each key is the base
+#: row, and its value is the row one step more open. Rows at the bottom
+#: of the chart (``Open``) have no further lowering target. This is the
+#: discrete adjacency of the height axis, and the inference layer's
+#: relative-feature refinement walks it.
+_HEIGHT_LOWERED_STEP: dict[str, str] = {
+    "Close": "Near-close",
+    "Near-close": "Close-mid",
+    "Close-mid": "Mid",
+    "Mid": "Open-mid",
+    "Open-mid": "Near-open",
+    "Near-open": "Open",
+}
 
-#: Canonical content width in pixels: three backness pair slots
+#: Inverse of :py:data:`_HEIGHT_LOWERED_STEP` ("raised" goes one
+#: step more close). Computed once so the refinement helper does
+#: not rebuild the table on every call.
+_HEIGHT_RAISED_STEP: dict[str, str] = {
+    v: k for k, v in _HEIGHT_LOWERED_STEP.items()
+}
+
+
+# ---------------------------------------------------------------------------
+# Backness axis. The column labels, the canonical content width every
+# fraction derives from, the x anchors and trapezoid widths, and the
+# discrete advanced/retracted adjacency plus the grid-column maps.
+# ---------------------------------------------------------------------------
+
+# Column labels in display order. The grid is 9 logical columns
+# (three backness places, each an unrounded / rounded pair slot
+# couple plus a neutral-rounding slot); these three label the
+# backness places.
+COL_LABELS: tuple[str, ...] = ("Front", "Central", "Back")
+
+#: Canonical content width in pixels. Three backness pair slots
 #: (each an unrounded + rounded button pair) plus the two
 #: inter-slot separators. The single definition every normalised
 #: fraction below divides by; the outline module re-exports it as
@@ -107,7 +144,7 @@ def _derive_backness_anchors() -> tuple[dict[str, float], float]:
     (front, central, back), each holding an unrounded + rounded
     pair of segment buttons, plus a separator between adjacent
     backness columns. The BOTTOM row of the trapezoid needs to fit
-    at least two backness columns + one separator so a typical
+    at least two backness columns plus one separator so a typical
     open-row inventory (front + back, no central) still has room
     for its cells.
 
@@ -119,8 +156,8 @@ def _derive_backness_anchors() -> tuple[dict[str, float], float]:
         as a fraction of the top edge.
 
     The numbers fall out of the existing pixel constants
-    (``BTN_W``, ``VOWEL_PAIR_GAP_PX``, ``VOWEL_PAIR_SEPARATOR_PX``):
-    no hand-picked fractions, no magic numbers.
+    (``BTN_W``, ``VOWEL_PAIR_GAP_PX``, ``VOWEL_PAIR_SEPARATOR_PX``).
+    There are no hand-picked fractions and no magic numbers.
     """
     backness_w = 2 * BTN_W + VOWEL_PAIR_GAP_PX
     content_w = _CANONICAL_CONTENT_W_PX
@@ -139,20 +176,12 @@ def _derive_backness_anchors() -> tuple[dict[str, float], float]:
 
 _BACKNESS_X, _DERIVED_BOTTOM_WIDTH = _derive_backness_anchors()
 
-
-# Reverse of ROW_LABELS so a row label ("Close", "Open-mid", ...) maps
-# back to its row index without an O(n) scan on every placement.
-_ROW_LABEL_TO_INDEX: dict[str, int] = {
-    label: i for i, label in enumerate(ROW_LABELS)
-}
-
-
 #: Width of the trapezoid's bottom edge as a fraction of its top
 #: edge. Derived (:py:func:`_derive_backness_anchors`) from the
 #: pixel constants so the bottom row has just enough room for two
 #: backness columns plus the inter-column separator.
 TRAPEZOID_BOTTOM_WIDTH: float = _DERIVED_BOTTOM_WIDTH
-#: Triangle bottom edge: one backness column wide. Derived from
+#: Triangle bottom edge, one backness column wide. Derived from
 #: the same pixel constants so the lowest row of a triangle chart
 #: still has finite horizontal extent for a single vowel pair.
 TRIANGLE_BOTTOM_WIDTH: float = (
@@ -168,32 +197,9 @@ _PAIR_OUTER_EXTENT: float = (
     (BTN_W + VOWEL_PAIR_GAP_PX) / 2 + BTN_W / 2
 ) / _CANONICAL_CONTENT_W_PX
 
-
-#: Single-step "lowered" move on the height axis: each key is the
-#: base row, value is the row one step more open. Rows at the
-#: bottom of the chart (``Open``) have no further lowering target.
-#: This is the discrete adjacency of the height axis; the inference
-#: layer's relative-feature refinement walks it.
-_HEIGHT_LOWERED_STEP: dict[str, str] = {
-    "Close": "Near-close",
-    "Near-close": "Close-mid",
-    "Close-mid": "Mid",
-    "Mid": "Open-mid",
-    "Open-mid": "Near-open",
-    "Near-open": "Open",
-}
-
-#: Inverse of :py:data:`_HEIGHT_LOWERED_STEP` ("raised" goes one
-#: step more close). Computed once so the refinement helper does
-#: not rebuild the table on every call.
-_HEIGHT_RAISED_STEP: dict[str, str] = {
-    v: k for k, v in _HEIGHT_LOWERED_STEP.items()
-}
-
-
-#: Single-step "advance" move on the backness axis: each key is the
-#: base column, value is the column one step more front. ``front``
-#: has no further advancement target.
+#: Single-step "advance" move on the backness axis. Each key is the
+#: base column, and its value is the column one step more front.
+#: ``front`` has no further advancement target.
 _BACKNESS_ADVANCED_STEP: dict[str, str] = {
     "back": "central",
     "central": "front",
@@ -205,10 +211,9 @@ _BACKNESS_RETRACTED_STEP: dict[str, str] = {
     v: k for k, v in _BACKNESS_ADVANCED_STEP.items()
 }
 
-
-#: Logical grid column -> backness group. The rendered grid is 9
-#: columns: 0/1 front pair, 2/3 central pair, 4/5 back pair, and
-#: 6/7/8 the neutral-rounding column for each backness. The single
+#: Logical grid column mapped to its backness group. The rendered
+#: grid is 9 columns, 0/1 front pair, 2/3 central pair, 4/5 back pair,
+#: and 6/7/8 the neutral-rounding column for each backness. The single
 #: source mapping a column index back to its backness slot.
 _BACKNESS_GROUP_BY_COL: Mapping[int, str] = {
     0: "front",
@@ -222,9 +227,8 @@ _BACKNESS_GROUP_BY_COL: Mapping[int, str] = {
     8: "back",
 }
 
-
-#: Backness axis verdict -> its unrounded-pair column index; the
-#: rounded mate is ``base + 1`` and the neutral-rounding row is
-#: ``6 + base // 2``. Module-level so it isn't rebuilt per placement
+#: Backness axis verdict mapped to its unrounded-pair column index.
+#: The rounded mate is ``base + 1`` and the neutral-rounding row is
+#: ``6 + base // 2``. Module-level so it is not rebuilt per placement
 #: call.
 _PLACE_TO_COLUMN: Mapping[str, int] = {"front": 0, "central": 2, "back": 4}
