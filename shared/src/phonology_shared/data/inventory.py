@@ -64,6 +64,14 @@ class FeatureValue(StrEnum):
     :py:class:`FeatureState` in
     :py:mod:`phonology_shared.chart.vowels` for the four-state model
     that further distinguishes "absent key" from "explicit zero".
+    At the QUERY surface that four-way distinction deliberately
+    collapses to three: :py:meth:`Inventory.feature_value` and the
+    engine's membership caches read an ABSENT feature and an explicit
+    ``"0"`` as the same ``ZERO``, because neither asserts a polarity
+    (underspecification is the absence of a value, not a third
+    polarity; Archangeli 1988). The on-disk distinction is preserved
+    for round-trip, so the collapse is a read-side decision, not
+    data loss.
     """
 
     PLUS = "+"
@@ -832,7 +840,13 @@ class Inventory:
         # Bundles carry FeatureValue by the parse invariant
         # (parse/from_grid are the only producers). The enum call is
         # an identity lookup for members; it narrows the declared
-        # ``Mapping[str, str]`` field type to the typed enum.
+        # ``Mapping[str, str]`` field type to the typed enum. The
+        # StrEnum contract (member == its string value) is what keeps
+        # this dual representation safe: the engine's membership
+        # caches key on the STRING value while this accessor returns
+        # the typed member, and both answer the same set-membership
+        # question only because the two compare equal. An enum member
+        # whose string did not round-trip would silently fork them.
         return FeatureValue(self.segments[segment].get(feature, "0"))
 
     def sequences(self, segment: str) -> dict[str, tuple[str, ...]]:
@@ -864,6 +878,13 @@ class Inventory:
         # Back-compat: reconstruct two-phase sequences from the legacy
         # ``segment_secondary`` final-state bundle, so an inventory
         # carrying only the old channel reads identically to before.
+        # The onset-then-final ORDER is recovered, not invented: the
+        # legacy channel encoded a FINAL state relative to the primary
+        # (initial) bundle by construction, so initial-then-final is
+        # the order the source implied. This is a documented migration
+        # decision, not the method choosing a timeline the source
+        # never asserted (the same distinction as the parser's
+        # undeclared-key drop).
         secondary = self.metadata.get("segment_secondary")
         if isinstance(secondary, Mapping):
             final = secondary.get(segment)
